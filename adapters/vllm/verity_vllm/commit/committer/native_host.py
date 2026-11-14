@@ -31,7 +31,6 @@ regenerate the values to answer a challenge; the bytes are reported as `values_r
 from __future__ import annotations
 
 import ctypes
-import gc
 import json
 import math
 import os
@@ -39,11 +38,6 @@ import queue
 import threading
 import time
 from typing import Any
-
-try:
-    import torch
-except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
-    torch = None  # type: ignore[assignment]
 
 from verity_vllm import settings
 from verity_vllm.acquire.committer_api import (
@@ -65,12 +59,17 @@ from verity_vllm.commit.committer.acquired import (
     skip_classes_of_env,
 )
 from verity_vllm.commit.committer.acquired import GPU_CHUNK_BYTES as GPU_CHUNK_BYTES
+from verity_vllm.commit.committer.device_arena import _DeviceArena
+from verity_vllm.commit.committer.footprint import GcPauses as GcPauses
+from verity_vllm.commit.committer.footprint import _Footprint
+from verity_vllm.commit.committer.footprint import value_family as value_family
 from verity_vllm.commit.committer.identity_check import (
     CALL_DEPENDENT_RE,
     TP_PARTIAL_RE,
     is_hidden_value_row,
 )
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
+from verity_vllm.commit.committer.optional_torch import torch
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.committer.staging_bounds import _ARENA_MIN, step_bound_bytes
 from verity_vllm.commit.committer.staging_bounds import _ARENA_ROUND as _ARENA_ROUND
@@ -95,86 +94,10 @@ __all__ = ["GPU_CHUNK_BYTES", "NativeHostCommitter", "bounded_host_bound", "haza
            "value_family"]
 
 
-class _DeviceArena:
-    """Device (GPU) staging blocks, one per in-flight step.  A hook copies every acquired tensor D2D into the step's block ON THE
-    COMPUTE STREAM (stream-ordered => the snapshot is taken before any later kernel overwrites the tensor in place, e.g. the fused
-    add+RMSNorm residual), so the worker can move / hash the packed step stream from a SIDE stream while the engine runs on.
-    Blocks are allocated once (warm-up) and recycled when the worker releases them."""
-
-    def __init__(self, block_bytes: int, n_blocks: int = 2, extra_blocks: list[int] | None = None) -> None:
-        self.block_bytes = block_bytes
-        self.free: list[Any] = []
-        self.all: list[Any] = []
-        self.allocs = 0
-        self.alloc_s = 0.0
-        self._n_init = n_blocks
-        self._extra = list(extra_blocks or [])       # additional preallocated blocks of other sizes (one prefill-sized block)
-        self._lock = threading.Lock()
-        self._cv = threading.Condition(self._lock)
-        self.waits = 0                                # backpressure: how often / how long the serving thread waited for a block
-        self.wait_s = 0.0
-
-    def prealloc(self) -> None:
-        for _ in range(self._n_init):
-            self.free.append(self._alloc(self.block_bytes))
-        for nb in self._extra:
-            self.free.append(self._alloc(nb))
-
-    def _alloc(self, nbytes: int) -> Any:
-        t0 = time.perf_counter()
-        blk = torch.empty(nbytes, dtype=torch.uint8, device="cuda")
-        self.all.append(blk)
-        self.allocs += 1
-        self.alloc_s += time.perf_counter() - t0
-        return blk
-
-    # Backpressure: the ring never grows past its preallocation while a fitting block is merely BUSY; the serving thread waits for
-    # the worker to release one (the engine stalls instead of the collector OOMing).  Growth only when NO block of the ring can ever fit (a
-    # step larger than every block), with VERITY_ARENA_GROW=1, or `wait=False`: the worker, the only releaser, must not wait on itself.
-    GROW = bool(settings.VERITY_ARENA_GROW)
-    WAIT_TIMEOUT_S = settings.VERITY_ARENA_WAIT_S
-
-    def _best_free(self, min_bytes: int) -> int:
-        best = -1
-        for i, b in enumerate(self.free):
-            if b.numel() >= min_bytes and (best < 0 or b.numel() < self.free[best].numel()):
-                best = i
-        return best
-
-    def take(self, min_bytes: int = 0, *, wait: bool = True) -> Any:
-        # best fit: the SMALLEST free block that holds the step (decode steps must not consume the prefill-sized block)
-        with self._cv:
-            best = self._best_free(min_bytes)
-            if best >= 0:
-                return self.free.pop(best)
-            if wait and not self.GROW and any(b.numel() >= min_bytes for b in self.all):
-                t0 = time.perf_counter()
-                while best < 0:
-                    if not self._cv.wait(timeout=1.0) and time.perf_counter() - t0 > self.WAIT_TIMEOUT_S:
-                        raise RuntimeError(f"native collector arena: waited {self.WAIT_TIMEOUT_S:.0f}s for a free block >= {min_bytes} B "
-                                           f"(ring {[int(b.numel()) >> 20 for b in self.all]} MiB, all busy): the worker is not releasing blocks")
-                    best = self._best_free(min_bytes)
-                self.waits += 1
-                self.wait_s += time.perf_counter() - t0
-                return self.free.pop(best)
-        return self._alloc(max(self.block_bytes, min_bytes))
-
-    def release(self, blk: Any) -> None:
-        with self._cv:
-            self.free.append(blk)
-            self._cv.notify_all()
-
-    @property
-    def bytes_total(self) -> int:
-        return sum(int(b.numel()) for b in self.all)
-
-
 # ---------------------------------------------------------------------------------------------------------------------------------
 # Collector footprint.  Two things, both OFF by default (roots/layouts/openings are unchanged in every mode):
 #
-#  * `VERITY_FOOTPRINT=<path.jsonl>` -- a per-step device-memory timeline written from the serving thread (begin/end of step) and the worker
-#    (absorb = hashing done, release = arena block back in the pool): bytes staged by value family, arena block sizes, retained copies and
-#    tree levels, torch allocated/reserved.  Design input for the streaming absorb/release work; no effect on what is bound.
+#  * `VERITY_FOOTPRINT=<path.jsonl>` -- the per-step device-memory timeline of `footprint._Footprint`.
 #  * retention policy `VERITY_RETAIN=device|host|none` (commit_delta `--retain`): WHERE the raw staged bytes live after the step is
 #    cryptographically absorbed (leaves + tree computed, root bound).  `device` = a compact device copy per step, kept
 #    for lazy openings (~9.2 GB/seq, which OOMs Llama 1024/128 at B=2); `host` = the copy goes to host memory (D2H on the side
@@ -199,93 +122,6 @@ def hazard_of_record(name: str, HAZARD_LEAVES: tuple[str, ...] | frozenset[str] 
     if leaf in HAZARD_LEAVES or "embed" in leaf:                 # the caller's table (NativeHostCommitter.HAZARD_LEAVES of record); named so the by-name lint sees the rule
         return True
     return idx == "1" and "norm" in leaf.lower()
-
-
-FAMILY_RULES = (   # (substring of the tensor name -> value family) for the footprint profile; first match wins
-    ("fa2.m1/", "fa2_hidden_m1"), ("fa3.m1/", "fa3_hidden_m1"), ("sampled_token_ids", "sampled_ids"), ("logits", "logits"), ("embed_tokens/in", "input_ids"),
-    ("embed_tokens", "embedding"), ("qkv_proj", "gemm_qkv"), ("o_proj", "gemm_o"), ("gate_up_proj", "gemm_gate_up"), ("down_proj", "gemm_down"),
-    ("lm_head", "gemm_lm_head"), ("norm", "norm"), ("rotary", "rope"), ("act_fn", "act"), ("attn", "attention_out"),
-)
-
-
-def value_family(name: str) -> str:
-    for sub, fam in FAMILY_RULES:
-        if sub in name:
-            return fam
-    return "other"
-
-
-class GcPauses:
-    """`gc.callbacks` while a run is installed: each collection of at least `min_s`, as (generation, start, seconds, thread), the start on
-    `time.perf_counter` like the steps' `t_step_end`, so a pause lands on its step.
-
-    `install` first collects and freezes the heap, as vLLM does once its warm-up is done (`gc_utils.freeze_gc_heap`): the committer, its
-    sources and the manifests they hold are built after that freeze, and a full collection over them took 720-960 ms on every rank's
-    serving thread of GLM-5.3 TP8, stalling all ranks behind the next all-reduce.  Collections never touch a value."""
-
-    def __init__(self, min_s: float = 1e-3) -> None:
-        self.min_s = min_s
-        self.pauses: list[tuple[int, float, float, str]] = []
-        self.freeze_s: list[float] = []
-        self._t0 = 0.0
-
-    def __call__(self, phase: str, info: dict) -> None:
-        if phase == "start":
-            self._t0 = time.perf_counter()
-        elif (dt := time.perf_counter() - self._t0) >= self.min_s:
-            self.pauses.append((int(info["generation"]), self._t0, dt, threading.current_thread().name))
-
-    def install(self) -> None:
-        if self in gc.callbacks:
-            return
-        t0 = time.perf_counter()
-        gc.collect()
-        gc.freeze()
-        self.freeze_s.append(time.perf_counter() - t0)
-        gc.callbacks.append(self)
-
-    def uninstall(self) -> None:
-        if self in gc.callbacks:
-            gc.callbacks.remove(self)
-
-    def record(self) -> dict[str, Any]:
-        return {"min_s": self.min_s, "pauses": list(self.pauses), "total_s": sum(p[2] for p in self.pauses), "freeze_s": list(self.freeze_s)}
-
-
-class _Footprint:
-    """Per-step device-memory timeline (`VERITY_FOOTPRINT`).  One JSON line per event; `t` is perf_counter seconds since the profiler was
-    created.  Events: begin_step, end_step (serving thread), absorbed (leaves + levels computed and the copy taken; the arena block is released
-    right after), plus `run` summaries written by the committer's finalize."""
-
-    def __init__(self, path: str) -> None:
-        self.path = path
-        self.t0 = time.perf_counter()
-        with open(path, "a"):   # the file is made here, or the path refused here, before any step; each event opens it again
-            pass
-        self._lock = threading.Lock()
-
-    @staticmethod
-    def cuda() -> dict[str, int]:
-        if torch is None or not torch.cuda.is_available():
-            return {}
-        free, total = torch.cuda.mem_get_info()
-        return {"allocated": int(torch.cuda.memory_allocated()), "reserved": int(torch.cuda.memory_reserved()),
-                "device_free": int(free), "device_total": int(total)}
-
-    def event(self, kind: str, **kw: Any) -> None:
-        rec = {"t": round(time.perf_counter() - self.t0, 6), "event": kind, "thread": threading.current_thread().name, **kw, "cuda": self.cuda()}
-        line = json.dumps(rec, default=str) + "\n"
-        with self._lock, open(self.path, "a") as f:
-            f.write(line)
-
-    @staticmethod
-    def families(metas: list[TensorMeta]) -> dict[str, dict[str, int]]:
-        out: dict[str, dict[str, int]] = {}
-        for m in metas:
-            d = out.setdefault(value_family(m.name), {"bytes": 0, "tensors": 0})
-            d["bytes"] += int(m.nbytes)
-            d["tensors"] += 1
-        return out
 
 
 def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: str, retain_exclude: set[str] | frozenset[str] | list[str],
@@ -705,8 +541,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         return step_rows.ctx_digest(self.run_id, step)
 
     def _select_modules(self) -> list[tuple[str, Any]]:
+        model = self.model
+        assert model is not None, "no model to select modules of: give the committer an engine, or set `model` on the offline core"
         out = []
-        for name, m in self.model.named_modules():
+        for name, m in model.named_modules():
             names = _mro_names(m)
             if names & SKIP_CLASSES:
                 continue
@@ -770,13 +608,14 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         """The manifest's consumer modules the committer did NOT select (no acquire class): their input is acquired, their
         output is not (it is no identity of the Program).  Sorted by name; a consumer that is not a module of the built model is skipped
         here and left unbound (coverage names it).  [v2 acquire] under a plan: the plan's consumer-input sites not among the selected modules."""
-        if getattr(self, "model", None) is None:
+        model = getattr(self, "model", None)
+        if model is None:
             return []
         wanted = self.plan_inputs if self.plan_inputs is not None else set(self.acquire_inputs)
         if not wanted:
             return []
         selected = {n for n, _m in self._modules}
-        mods = dict(self.model.named_modules())
+        mods = dict(model.named_modules())
         return [(n, mods[n]) for n in sorted(wanted) if n not in selected and n in mods]
 
     def layout_digest(self, metas: list[TensorMeta]) -> bytes:
@@ -799,7 +638,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         roots: list[Any]
         roots, names, n_bytes, checked = [], [], 0, 0
         seen: set[int] = set()
-        items = list(self.model.named_parameters()) + list(self.model.named_buffers())
+        model = self.model
+        assert model is not None, "no model to register the weights of: give the committer an engine, or set `model` on the offline core"
+        items = list(model.named_parameters()) + list(model.named_buffers())
         for name, p in items:
             if not isinstance(p, torch.Tensor) or id(p) in seen or p.numel() == 0:
                 continue
@@ -1162,12 +1003,13 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         import os as _os
 
         cands = glob.glob(_os.path.join(_os.path.dirname(torch.__file__), "lib", "libcudart*.so*"))
+        tried: list[str] = []                    # each place that gave no runtime, with what it raised: the error's text when none loads
         try:
             import nvidia.cuda_runtime  # type: ignore
 
             cands += glob.glob(_os.path.join(_os.path.dirname(nvidia.cuda_runtime.__file__), "lib", "libcudart.so*"))
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            tried.append(f"nvidia.cuda_runtime ({type(e).__name__}: {e})")
         cands += ["libcudart.so", "libcudart.so.12", "libcudart.so.13"]
         for c in cands:
             try:
@@ -1177,9 +1019,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                 rt.cudaMemsetAsync.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t, ctypes.c_void_p]
                 rt.cudaMemsetAsync.restype = ctypes.c_int
                 return rt, c
-            except Exception:  # noqa: BLE001
-                continue
-        raise RuntimeError("libcudart not found")
+            except Exception as e:  # noqa: BLE001
+                tried.append(f"{c} ({type(e).__name__}: {e})")
+        raise RuntimeError("libcudart not found; tried " + ", ".join(tried))
 
     def _side_stream(self):
         if self._side is None:
@@ -1341,6 +1183,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             off = -(-len(buf) // self.ALIGN) * self.ALIGN
             buf += b"\0" * (off - len(buf))
             m.stream_off = off
+            assert m.host is not None, f"{m.name}: no host copy to pack (the direct staging path packs each tensor's host bytes)"
             buf += bytes(m.host)
         return memoryview(bytes(buf))
 

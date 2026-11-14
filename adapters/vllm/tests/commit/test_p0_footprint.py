@@ -155,8 +155,10 @@ def test_the_footprint_file_takes_one_whole_json_line_an_event(tmp_path: Path, m
     line, whole in the file when `event` returns, after the lines the file held: nothing is truncated, by a second profiler on the
     same path either. Its `t` is the clock's seconds since the profiler was made, and a value JSON has no form for is written as
     its `str`."""
+    from verity_vllm.commit.committer import footprint
+
     readings = itertools.count()
-    monkeypatch.setattr(nh, "time", SimpleNamespace(perf_counter=lambda: 100.0 + next(readings) / 4))   # a quarter second a reading
+    monkeypatch.setattr(footprint, "time", SimpleNamespace(perf_counter=lambda: 100.0 + next(readings) / 4))   # a quarter second a reading
     path = tmp_path / "footprint.jsonl"
     path.write_text('{"event": "earlier"}\n')
     fp = nh._Footprint(str(path))
