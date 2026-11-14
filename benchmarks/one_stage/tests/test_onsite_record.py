@@ -461,7 +461,7 @@ def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list
              registration: dict | None = PUBLISHED, coins: str | None = GATE,
              draws: dict | None = ALL, params: dict | None = None, onsite: bool = True) -> Path:
     """A run whose network certifier accepted ``public``, its case the period's of ``windows`` execution phases at
-    ``schedule``, whose caps are the schedule's (`Schedule.caps`) unless given, the network certifier's key, LMS
+    ``schedule``, whose caps are the schedule's (`Schedule.rowsCells`) unless given, the network certifier's key, LMS
     parameters and session the auditor's record's (`CERTIFIER`) and any other ``params``, and whose commitment holds
     ``audits``' registrations, with ``registration`` its published advice registration, none where None, ``coins`` its
     COINS line's sampled-proofs part (`served_out`), ``draws`` its chain report, none where None, and remote's
@@ -1216,10 +1216,10 @@ def test_eps_is_pooled_over_each_monitoring_period_at_its_windows_with_the_tied_
 
 @pytest.mark.parametrize("caps", [[], [4, 4], [5] * (4 * 63)])
 def test_a_case_whose_caps_arent_its_schedules_is_the_connections_error(tmp_path, caps):
-    """The period's check refuses caps that aren't the schedule's (`Schedule.caps`), an empty list included, so a
+    """The period's check refuses caps that aren't the schedule's (`Schedule.rowsCells`), an empty list included, so a
     case's other caps beside an accepted answer leave the connections and the periods unfilled."""
     rec = record(accepted(tmp_path, caps=caps))
-    why = (f"{OR.CASE}: ValueError: the case's {len(caps)} caps aren't its schedule's (Schedule.caps: egress_cells = 4 "
+    why = (f"{OR.CASE}: ValueError: the case's {len(caps)} caps aren't its schedule's (Schedule.rowsCells: egress_cells = 4 "
            "for each of its lanes · m · T = 252 connections), which the period's check refuses")
     assert rec["bound"]["K"] == K and rec["bound"]["connections"] == {"error": why} and rec["periods"] == {"error": why}
 

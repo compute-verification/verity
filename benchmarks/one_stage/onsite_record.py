@@ -241,11 +241,11 @@ ADVICE = ("not in this record: the realized advice length |a_j| is a value. The 
           "committed and compiled at its own length, so |a_j| is hidden only once it is padded to ℓ_a before it is "
           "committed; the bound's ℓ_{a,j} holds no advice length (`CHARGED`)")
 OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the "
-             "schedule can carry (`Schedule.caps`), whatever the traffic, and each connection's cell count twice, in "
+             "schedule can carry (`Schedule.rowsCells`), whatever the traffic, and each connection's cell count twice, in "
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
              "run coincide; K is PeriodLeakAccepted's count as it states it")
 CONNECTIONS = ("the caps of the certifier's case's params (``cells``), one a connection: the period's check refuses any "
-               "but its schedule's (`NetworkCheck.Period.Schedule.caps`), egress_cells for each of the lanes · m · T "
+               "but its schedule's (`NetworkCheck.Period.Schedule.rowsCells`), egress_cells for each of the lanes · m · T "
                "connections the network certifier can carry over the period's m execution phases, so this counts the "
                "connections the schedule can carry, not those served")
 EPS = {"is": "δ_net's δ part alone: m · δ and each charged audit's δ",
@@ -1115,7 +1115,7 @@ def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int, int]:
         raise TypeError(f"the case's cells are its caps, a list, not {type(caps).__name__}")
     n = int(s["lanes"]) * phases * int(s["window"])
     if caps != [int(s["egress_cells"])] * n:
-        raise ValueError(f"the case's {len(caps)} caps aren't its schedule's (Schedule.caps: egress_cells = "
+        raise ValueError(f"the case's {len(caps)} caps aren't its schedule's (Schedule.rowsCells: egress_cells = "
                          f"{s['egress_cells']} for each of its lanes · m · T = {n} connections), which the period's "
                          "check refuses")
     T = int(s["window"])
