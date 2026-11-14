@@ -577,7 +577,7 @@ def test_a_sparse_header_gives_the_table_rows_the_instances_read_and_changes_no_
     k = next(j for j, m in enumerate(w.members) if m.wired)
     mem = doc["members"][k]
     full_head, full_body = _staged(tmp_path, mem, k, tmp_path / "full")
-    assert _staged(tmp_path, mem, k, tmp_path / "every", sparse=True) == (full_head, full_body)
+    assert _staged(tmp_path, mem, k, tmp_path / "every", sparse=True, keyed=()) == (full_head, full_body)
     assert all(FI.TABLE_ROWS not in e for e in full_head["registered"].values())
     rows, j = int(mem["shared_rows"]["x"]), [p for p, _w in mem["ports"]].index("x")
     assert rows > 1 and sorted(set(w.held_leaves(w.members[k], "x"))) == list(range(rows))
@@ -586,7 +586,7 @@ def test_a_sparse_header_gives_the_table_rows_the_instances_read_and_changes_no_
     refs[:, j] = rows - 1
     body[len(body) - refs.nbytes:] = refs.astype("<u4").tobytes()
     (tmp_path / f"m{k}-public.bin").write_bytes(bytes(body))
-    head, got = _staged(tmp_path, mem, k, tmp_path / "one", sparse=True)
+    head, got = _staged(tmp_path, mem, k, tmp_path / "one", sparse=True, keyed=())
     e, x = head["registered"]["x"], full_head["registered"]["x"]
     assert got == bytes(body) and head["frame_v3"] == full_head["frame_v3"] == mem["frame_v3"]
     assert {f: v for f, v in head.items() if f != "registered"} == {f: v for f, v in full_head.items() if f != "registered"}
@@ -599,7 +599,7 @@ def test_a_sparse_header_gives_the_table_rows_the_instances_read_and_changes_no_
         return bytes(body[:len(body) - r.nbytes]) + r.astype("<u4").tobytes()
 
     for col in (np.zeros(mem["n"]), np.full(mem["n"], rows - 1), np.arange(mem["n"])[::-1] % (rows - 1)):
-        t = (s := FI.read_rows(full_head["registered"], mem, with_refs(col))["x"])[FI.TABLE_ROWS]
+        t = (s := FI.read_rows(full_head["registered"], mem, with_refs(col), keyed=())["x"])[FI.TABLE_ROWS]
         assert t == sorted(set(t)) and t == sorted(set(col.astype(int).tolist())) and len(t) < rows
         assert len(t) == len(s["positions"]) == len(s["paths"])
         assert [(x["positions"][r], x["paths"][r]) for r in t] == list(zip(s["positions"], s["paths"]))
@@ -607,7 +607,46 @@ def test_a_sparse_header_gives_the_table_rows_the_instances_read_and_changes_no_
                             (full_head["registered"], with_refs(np.full(mem["n"], rows)), "past its table"),
                             (full_head["registered"], c.public_body(k)[:-1], "a public body of")]:
         with pytest.raises(ValueError, match=why):
-            FI.read_rows(entries, mem, b)
+            FI.read_rows(entries, mem, b, keyed=())
+
+
+def test_a_sparse_header_lists_no_table_rows_for_a_read_at_a_hidden_key_and_refuses_to(tmp_path, monkeypatch):
+    """A port a table opening reads at a hidden key (`flock_inputs.keyed_ports`: its key, wired or not, its opened row's
+    ports and its verdict) is chosen by a committed value, so its sparse entry is the full form's, never ``table_rows``,
+    though its instances read one row; an entry that lists them for it is refused by name, and so is ``sparse`` with no
+    say of which ports are keyed. The same body's public-position read is listed, as `read_rows` lists it."""
+    w, c, doc = _held_window(tmp_path, monkeypatch)
+    k = next(j for j, m in enumerate(w.members) if m.wired)
+    mem = doc["members"][k]
+    full_head, _ = _staged(tmp_path, mem, k, tmp_path / "full")
+    j = [p for p, _w in mem["ports"]].index("x")
+    body = bytearray(c.public_body(k))
+    refs = np.frombuffer(body, dtype="<u4", offset=len(body) - 4 * mem["n"] * len(mem["ports"])).reshape(mem["n"], -1).copy()
+    refs[:, j] = 0
+    body[len(body) - refs.nbytes:] = refs.astype("<u4").tobytes()
+    (tmp_path / f"m{k}-public.bin").write_bytes(bytes(body))
+    listed, _ = _staged(tmp_path, mem, k, tmp_path / "listed", sparse=True, keyed=())
+    hidden, got = _staged(tmp_path, mem, k, tmp_path / "hidden", sparse=True, keyed={"x"})
+    assert listed["registered"]["x"][FI.TABLE_ROWS] == [0]
+    assert got == bytes(body) and hidden == full_head
+    asked = {**full_head["registered"], "x": listed["registered"]["x"]}
+    with pytest.raises(ValueError, match="x: a read at a hidden key lists no table_rows"):
+        FI.read_rows(asked, mem, bytes(body), keyed={"x"})
+    with pytest.raises(ValueError, match="keyed"):
+        _staged(tmp_path, mem, k, tmp_path / "unsaid", sparse=True)
+
+
+def test_the_keyed_ports_are_an_openings_key_ports_and_verdict_on_the_members_it_covers():
+    """`flock_inputs.keyed_ports`: of a circuit record's ``registered.openings`` (`interface.TableOpening`'s docs), each
+    one's ``key``, ``ports`` and ``verdict``, for each member of its reader template whose units its ``[at, at + units)``
+    (from the template's first unit) meets; none for a member of another template or of units it doesn't reach."""
+    win = {"members": [{"template": "a", "base": 0, "n": 4}, {"template": "a", "base": 4, "n": 4},
+                       {"template": "a", "base": 8, "n": 2}, {"template": "b", "base": 10, "n": 2}]}
+    opens = [{"reader": "a", "table": "t", "key": "k", "ports": ["row", "salt", "path"], "verdict": "ok", "at": 4, "units": 4},
+             {"reader": "b", "table": "t", "key": "id", "ports": ["e"], "verdict": "v", "at": 1, "units": 1}]
+    assert [FI.keyed_ports(opens, win, k) for k in range(4)] == [
+        frozenset(), frozenset({"k", "row", "salt", "path", "ok"}), frozenset(), frozenset({"id", "e", "v"})]
+    assert [FI.keyed_ports((), win, k) for k in range(4)] == [frozenset()] * 4
 
 
 def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_verifier_reads(tmp_path, monkeypatch):
