@@ -32,8 +32,8 @@ The run:
 - **The verify passes** (``--retain``): after the timing, the first timed prefill prompt and the decode prompts are replayed
   in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
-  `verify_run.py` after the execution phase: the first two must be replay-verified (development shortcut; the protocol's check is
-  a ZK proof, PouwCheck) and the control rejected (the panel's rule).
+  `verify.sh` after the execution phase, whose verdict on each is the Lean's: the first two must be replay-verified
+  (development shortcut; the protocol's check is a ZK proof, PouwCheck) and the control rejected (the panel's rule).
 - **The panel's shapes:** `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
@@ -926,7 +926,7 @@ def state_entropy(path: str):
 
 def epoch_coins(args, epoch: int) -> Coins:
     """The run's execution-phase coins, committed before any engine starts; with ``--retain`` the commitment is published beside the
-    passes (``coins.json``), where `verify_run.py --coins` reads it.  ``POUW_COIN_STATE`` names a file holding the
+    passes (``coins.json``), where `verify.sh` reads it.  ``POUW_COIN_STATE`` names a file holding the
     challenger's entropy (`state_entropy`)."""
     state = settings.POUW_COIN_STATE
     coins = Coins(epoch, state_entropy(state)) if state else Coins(epoch)
