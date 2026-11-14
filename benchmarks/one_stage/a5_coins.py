@@ -67,7 +67,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable, Mapping
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from multiprocessing import get_context
 from multiprocessing.managers import BaseManager
 from pathlib import Path
@@ -405,12 +405,12 @@ class Draws:
         return self._evidence
 
 
-def held(draws: Any) -> dict[str, Any]:
-    """`service.Stream`'s ``key`` and ``main`` for a stream on the coins of ``draws``' session (a `Draws`): the
+def held(turns: Any) -> dict[str, Any]:
+    """`service.Stream`'s ``key`` and ``main`` for a stream on the coins of ``turns``' session (a `Draws`): the
     challenger's key and the verifier's copy of main's first-parent history, as `start` had them before the session
     opened. A stream is made with them: no evidence names a key, and the history an evidence carries is held to
     this one."""
-    got = draws.held()
+    got = turns.held()
     return {"key": Ch.ChallengerKey.from_json(got["key"]), "main": got["main"]}
 
 
@@ -629,7 +629,7 @@ class Local:
         pins = lines(self.host.pins) if self.host.pins.exists() else []
         if not pins or json.loads(pins[-1]).get("commit") != self.pin:  # the pins log only grows, as the host's does
             with open(self.host.pins, "a", encoding="utf-8") as log:
-                log.write(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
+                log.write(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(UTC))) + "\n")
         self.params = lms.Params(64, *params)
         self.signer = A.key_signer(self.host, self.params, workers=workers)
         self.key = Ch.ChallengerKey(self.params.W, self.params.H, (self.host.key / "public").read_bytes())
@@ -642,14 +642,14 @@ class Local:
         argv = A.serve_argv(host, session, body)
         argv[argv.index("--port") + 1] = "0"
         argv += ["--params", f"{self.params.W},{self.params.H}", "--keygen-workers", "1"]
-        A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(timezone.utc), argv=argv)
+        A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(UTC), argv=argv)
 
     def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME,
              withhold: bool = False) -> tuple[str, str, str | None]:
         """Reserve and open the session on `root` with the coins `layout` of `scheme`, as the gate does, a withheld one
         when `withhold`: (address, secret, commitment), the commitment None on a withheld session (the gate holds its
         root until the session's end)."""
-        A, host, now = self.A, self.host, datetime.now(timezone.utc)
+        A, host, now = self.A, self.host, datetime.now(UTC)
         hooks = dict(by=self.by, now=now, own=lambda p: None, token=secrets.token_hex(2),
                      reserve=lambda s: A.reserve(host, s, signer=self.signer, pinned=self.pin, now=now))
         rc, out = A.gate(["reserve", "--peer", LOCAL_PEER, "--scheme", scheme, "--families", json.dumps(layout),

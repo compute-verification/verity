@@ -23,7 +23,9 @@ Vy-nebius-1 sat ~0% GPU-busy for a week and the H200s had no usage record at all
 quotas stopped launches with no warning. A VM's rate and address come from the machines registry (`research
 pods register`, <notes>/machines.d); one not registered is recorded from the API with rate None. A VM that can't be read is
 recorded as RUNNING and unread, never idle. Runs on infra's VM, which holds the Slack credential (the control pod holds none).
-Nebius calls go through pods/nebius/common.sh's `nebius_auth`, the way launch.sh makes them.
+Nebius calls go through pods/nebius/common.sh's `nebius_auth`, the way launch.sh makes them. The tenant's id is the
+environment's ($NEBIUS_TENANT_ID, or the loop's own $FLEET_TENANT), as is the jump host of a machine at a private address
+($FLEET_JUMP, USER@HOST): no file holds either, and a pass without the tenant's id fails naming the variable.
 
 A RUNNING VM that no sample has read for `UNREACH_S` (a soft lockup, a full disk, sshd refusing) is alerted on once in
 #agent-alerts with its serial console's tail, any kernel trouble in it named, and is marked `unreachable_since` in its registry
@@ -59,9 +61,7 @@ from research import metrics
 HERE = Path(__file__).resolve().parent
 FLEET_DIR = Path(os.environ.get("FLEET_DIR", str(Path.home() / ".research" / "fleet")))
 MACHINES_D = Path(os.environ.get("FLEET_MACHINES_D", str(Path.home() / ".research" / "notes" / "machines.d")))
-TENANT = os.environ.get("FLEET_TENANT", "tenant-e00g3zymmem3epgq3a")
 SSH_KEY = os.environ.get("FLEET_SSH_KEY", str(Path.home() / ".ssh" / "research_key"))
-JUMP = os.environ.get("FLEET_JUMP", "research@81.85.2.165")        # a private address (10.*) is reached through it
 INTERVAL_S, QUOTA_EVERY_S, REPORT_HOUR_UTC = 300, 1800, 15
 BUSY_PCT, IDLE_LOAD_SHARE, QUOTA_ALERT = 5, 0.1, 0.8
 # a memory-bound job (a few busy cores of 192 and hundreds of GB of memory in use) is not idle
@@ -119,7 +119,7 @@ def registry() -> dict[str, dict]:
 def instances() -> list[dict]:
     """Every VM in the tenant's projects: name, id, state, platform, preset, region."""
     out = []
-    for proj in nb("iam", "project", "list", "--parent-id", TENANT, "--page-size", "100").get("items", []):
+    for proj in nb("iam", "project", "list", "--parent-id", settings.tenant(), "--page-size", "100").get("items", []):
         pid, region = proj["metadata"]["id"], (proj.get("status") or {}).get("region") or proj["metadata"].get("labels", {}).get("region")
         for i in nb("compute", "instance", "list", "--parent-id", pid, "--page-size", "200").get("items", []):
             r = (i.get("spec") or {}).get("resources") or {}
@@ -141,7 +141,11 @@ def probe(host: str, user: str) -> dict | None:
     ssh = ["ssh", "-i", SSH_KEY, "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-o", "StrictHostKeyChecking=no", "-o",
            "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR"]
     if host.startswith("10."):
-        ssh += ["-J", JUMP]
+        if not (jump := settings.jump()):
+            print("fleet.py: FLEET_JUMP is unset: a machine at a private address is reached through it (USER@HOST), so "
+                  "this one is unread", file=sys.stderr, flush=True)
+            return None
+        ssh += ["-J", jump]
     try:
         p = subprocess.run([*ssh, f"{user}@{host}", PROBE], capture_output=True, text=True, timeout=60)
     except subprocess.TimeoutExpired:
@@ -391,7 +395,7 @@ def daily(now: float, send: Callable[[list[str], str], str | None] | None = None
 
 def quota_findings() -> list[dict]:
     out = []
-    for q in nb("quotas", "quota-allowance", "list", "--parent-id", TENANT, "--page-size", "999").get("items", []):
+    for q in nb("quotas", "quota-allowance", "list", "--parent-id", settings.tenant(), "--page-size", "999").get("items", []):
         spec, st = q.get("spec") or {}, q.get("status") or {}
         limit, usage = int(spec.get("limit") or 0), int(st.get("usage") or 0)
         if limit > 0 and usage >= QUOTA_ALERT * limit:

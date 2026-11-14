@@ -1,0 +1,8 @@
+{
+ "binding_peaks": {
+  "_model_roots:FlashMlaBlock_v2": 3.35,
+  "_model_roots:FlashMlaDecodeHead_v2": 3.83,
+  "_model_roots:FlashMlaDecode_v2": 4.6,
+  "_model_roots:FlashMlaSplit_v2": 3.93
+ }
+}

@@ -35,7 +35,7 @@ says. These are the directories that have one:
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network certifier's calibration |
 | `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a measured cell, the reference checker |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
-| `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.sh` or else its `run.py`; given no NAME, the names |
+| `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.py` or else its `run.sh`; given no NAME, the names |
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
 | `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
@@ -123,6 +123,17 @@ value reaches the tab up to an hour after its run is preserved. Its keys:
 Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
 writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
 and also writes as the first of its `inputs`, where the tab reads it until it reads `mark`.
+
+A value over a span of time or of compute says which, each as its own field of the measurement, held only where
+given: `period`, one of `phase`, `week`, `month` or `year` (`kit.PERIODS`), and `over`, `world` or `datacenter`
+(`kit.OVER`). A run's result holds one measurement a name, period and `over`, and the writer refuses a second, so one
+id may give a value for each period and scope it is computed at, each in its own unit (`verity bench exfiltration`'s
+three, over a week, a month and a year of a datacenter's and of the world's compute). Its `title` and `unit` are those
+of the period and scope it is named for (`exfiltration-gb-world-year`'s, the `year` over the `world`), which the
+benchmark writes last of its name, so a reader that keys measurements by name alone reads that one; one that keys on
+the name, period and `over` reads the others. A value for one member of a set (a deployed guarantee, a lead) names it
+as `member`, a non-empty string held only where given, and the writer keys on it too, so one id gives a value for each
+member (`lean/trust-gap`'s, one a deployed guarantee).
 
 The tab lists each number under every top goal its `goal` is or sits under, a top goal being a goal on the Goals page
 that nothing waits on, other than `top/parked`. A number whose goal sits under `top/parked` and under no top goal reads
@@ -267,6 +278,14 @@ How long the team's own changes take to reach `main`: measured on the verified q
 | --- | --- | --- |
 | `landing/` | mark to `main`: for each PR the verified queue landed in the last 7 days, the hours from its ready mark at the head that landed to the move of `main` that holds it, split as the queue batches (plain, Lean), each class's p90, median, count and share within 2 h | maintained |
 
+### Communication
+
+How fast the team's leads answer each other: measured on Linear's comments, not on a protocol.
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `communication/` | over the last 24 hours, the minutes from a Linear comment ringing at most three lanes to each rung lane's answer on the issue, as a 90th percentile, and the asks open over 30 minutes (`response.py`, on `research msg linear response`) | maintained |
+
 ### Census data
 
 | Directory | What it measures | Status |
@@ -277,4 +296,6 @@ How long the team's own changes take to reach `main`: measured on the verified q
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
+| `dashboard/` | the top goals of the console's Metrics dashboard whose own number has a target, a value younger than its `every` and a mark, out of the top goals it lists (`run.py`) | maintained |
 | `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`) | maintained |
+| `proof_status/` | the proofs' status as the Lean locks record it (`verity lean deployed`): the deployed guarantees, those at a trust gap of zero, each one's gap, and each lead's open premises and guarantees with no honest witness (`run.py`) | maintained |

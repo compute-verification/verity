@@ -8,6 +8,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from research.pods.nebius import fleet as F
 
 
@@ -207,9 +208,45 @@ def test_a_quota_at_80_percent_of_its_limit_is_a_finding(monkeypatch):
              {"metadata": {"name": "vpc.ipv4-address.public.count"}, "spec": {"limit": "6", "region": "eu-north1"},
               "status": {"usage": "3"}},
              {"metadata": {"name": "compute.disk.count"}, "spec": {"limit": "0", "region": "eu-north2"}, "status": {}}]
-    monkeypatch.setattr(F, "nb", lambda *a, **k: {"items": items})
+    asked: list[tuple] = []
+    monkeypatch.setattr(F, "nb", lambda *a, **k: asked.append(a) or {"items": items})
+    monkeypatch.setenv("NEBIUS_TENANT_ID", "tenant-e00example")
+    monkeypatch.delenv("FLEET_TENANT", raising=False)
     assert F.quota_findings() == [{"quota": "compute.instance.non-gpu.vcpu", "region": "uk-south2", "usage": 576, "limit": 600,
                                    "share": 0.96}]
+    assert asked == [("quotas", "quota-allowance", "list", "--parent-id", "tenant-e00example", "--page-size", "999")]
+
+
+def test_the_tenants_id_is_the_environments_and_unset_a_read_fails_naming_the_variable(monkeypatch):
+    """No file holds the tenant's id: the quota watch and the VM list read it from $FLEET_TENANT, else $NEBIUS_TENANT_ID,
+    and with neither set they ask Nebius nothing and fail naming the variable, which the loop logs as a failed pass."""
+    asked: list[tuple] = []
+    monkeypatch.setattr(F, "nb", lambda *a, **k: asked.append(a) or {"items": []})
+    monkeypatch.delenv("NEBIUS_TENANT_ID", raising=False)
+    monkeypatch.delenv("FLEET_TENANT", raising=False)
+    for read in (F.quota_findings, F.instances):
+        with pytest.raises(RuntimeError, match="^NEBIUS_TENANT_ID is unset: the id of the tenant"):
+            read()
+    assert asked == []
+    monkeypatch.setenv("NEBIUS_TENANT_ID", "tenant-e00example")
+    monkeypatch.setenv("FLEET_TENANT", "tenant-e00loop")
+    assert F.instances() == [] and asked == [("iam", "project", "list", "--parent-id", "tenant-e00loop", "--page-size", "100")]
+
+
+def test_a_machine_at_a_private_address_is_read_through_the_environments_jump_host_and_unread_without_one(monkeypatch, capsys):
+    ran: list[list[str]] = []
+
+    class Ran:
+        returncode, stdout = 0, "gpu=\ncores=192\nload=3.5\ndeadline=\nmem=68,755\n"
+
+    monkeypatch.setattr(F.subprocess, "run", lambda argv, **k: ran.append(argv) or Ran())
+    monkeypatch.delenv("FLEET_JUMP", raising=False)
+    assert F.probe("10.0.0.7", "research") is None and ran == []
+    assert "FLEET_JUMP is unset" in capsys.readouterr().err
+    monkeypatch.setenv("FLEET_JUMP", "research@192.0.2.11")
+    assert F.probe("10.0.0.7", "research")["cores"] == 192
+    assert ran[0][ran[0].index("-J") + 1] == "research@192.0.2.11" and ran[0][-2] == "research@10.0.0.7"
+    assert F.probe("192.0.2.30", "research")["cores"] == 192 and "-J" not in ran[1]
 
 
 def test_a_restarted_loop_doesnt_post_a_quota_alert_it_already_posted_that_day(tmp_path, monkeypatch):
