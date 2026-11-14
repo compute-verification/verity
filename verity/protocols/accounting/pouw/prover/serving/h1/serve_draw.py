@@ -31,8 +31,8 @@ def drawn_units(commits: Mapping[str, Any], layout: Mapping[str, Any], k: int, s
     draw = commits.get("draw")                              # None: the window committed no sample root
     if draw is None or draw.get("coin") is None:
         raise ValueError("the window opened no draw coin" + (f" ({draw['refused']})" if draw and draw.get("refused") else ""))
-    got, why = CR.drawn(LiveOpening.from_json(draw["coin"]).coin.hex(), stream, draw.get("root"),
-                        {"receipts": draw.get("receipts")}, dict(layout), k)
+    got, why = CR.drawn_twin(LiveOpening.from_json(draw["coin"]).coin.hex(), stream, draw.get("root"),
+                             {"receipts": draw.get("receipts")}, dict(layout), k)
     if why is not None:
         raise ValueError(f"{why[0]}: {why[1]}")
     return list(got)

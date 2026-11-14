@@ -2440,7 +2440,17 @@
     },
     {
       "paths": {
+        "fixtures/typed-obligation-v0/": "benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0/"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/proofs/recursion/verifier/recursive/": "verity/protocols/proofs/spot_flock/verifier/lean/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
       }
     },
     {

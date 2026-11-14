@@ -339,7 +339,7 @@ the inner statement `st` set up from the files' circuit and public file, as `Acc
 holds, check 5's verdict included (its sparse refusals and its inner shape). -/
 theorem c3_of_checks (hsp : ish.sparse.isSome = true)
     (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := obj) (program := prog) =
-      .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.m = .ok p)
+      .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.wideLeaf st.m = .ok p)
     (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonParse.parse rt = .ok reg)
     (hcs : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs)
     (hin : RecSetup.checkInner (some ish) (some (.files f)) bound = .ok ())
@@ -376,7 +376,7 @@ theorem c3_of_checks (hsp : ish.sparse.isSome = true)
 theorem acceptsC3_of_verify {I : Exec.Inputs} {r : String} {spec' : SessionSpec}
     (hset : Exec.setupOf I r = .ok (spec', sts)) (hsp : ish.sparse.isSome = true)
     (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := obj) (program := prog) =
-      .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.m = .ok p)
+      .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.wideLeaf st.m = .ok p)
     (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonParse.parse rt = .ok reg)
     (hcs : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs)
     (hin : RecSetup.checkInner (some ish) (some (.files f)) bound = .ok ())

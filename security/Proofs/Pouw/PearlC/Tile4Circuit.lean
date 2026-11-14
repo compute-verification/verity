@@ -7,6 +7,7 @@ import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Core.Circuit
 import Proofs.Pouw.PearlC.TileValues
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Pearl-C4's tile unit computes `C̃` and `U` (proofs)
