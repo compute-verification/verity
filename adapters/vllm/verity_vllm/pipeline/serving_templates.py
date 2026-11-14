@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import math
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -53,8 +54,11 @@ SLICES = {"LlBf16DotprodGemm_v1": (("N",), ((None,), (0,))), "Gemm_v2": (("N",),
 #: ``("mid", name)`` the row's intermediate) and what it returns (``j`` the row's committed output member j, ``name`` an
 #: intermediate: a value the row's Definition computes and serving never stores, which the reader computes by its twin,
 #: `part_rows.MIDS`, and the window wires to every part that reads it, `part_rows.wire`); together they return every output
-#: once, and the row computes what they compose to (tests/program/test_tp_allreduce_parts.py).  A ``COLS`` part is read in
-#: column blocks, a ``COORDS`` part in coordinates, any other one whole (the ``part`` layout).
+#: element once (`cut_refused`), and the row computes what they compose to (tests/program/test_tp_allreduce_parts.py).  A read
+#: of an argument group or member, or a return of a member, may take a span of its elements, ``("arg", g, lo, hi)``,
+#: ``("out", j, lo, hi)`` or ``(j, lo, hi)``, each bound an element index or a row static, ``hi`` None the end (`reads`,
+#: `returns`, `bounds`).  A ``COLS`` part is read in column blocks (each port in blocks of its own width, `part_rows.blocks`), a
+#: ``COORDS`` part in coordinates, any other one whole (the ``part`` layout).
 #: `tp_allreduce.AllReduceRmsNormMnnvl`: its all-reduce and residual add (r), then its norm of the committed r.
 #: `deepgemm.DeepGemmFp8Linear`: its quantisation of x (q, s), then its GEMM of the committed q and s.
 #: `deepgemm.FlashInferFp8Linear`: its quantisation of x once (q, s, which FlashInfer keeps in its workspace), then the same GEMM
@@ -141,6 +145,45 @@ COL_SPANS = {"RMSNormApplyCudaVector8_v1": "N", "RMSNormFusedApplyCudaVector8_v1
 def col_span(fam: str) -> str:
     """The row static a ``COLS`` family's column blocks divide: its own axis, or the row's ``COL_SPANS`` static."""
     return COL_SPANS.get(fam, COLS[fam])
+
+
+def reads(p: tuple) -> tuple[tuple[str, int | str, tuple | None], ...]:
+    """A ``PARTS`` part's reads in order, each (source, index or name, its span or None for the whole)."""
+    return tuple((x[0], x[1], tuple(x[2:]) or None) for x in p[1])
+
+
+def returns(p: tuple) -> tuple[tuple[int | str, tuple | None], ...]:
+    """A ``PARTS`` part's returns in order, each (member index or intermediate's name, its span or None for the whole)."""
+    return tuple((j[0], tuple(j[1:])) if isinstance(j, tuple) else (j, None) for j in p[2])
+
+
+def bounds(span: tuple | None, statics: Mapping[str, Any], n: int, what: str) -> tuple[int, int]:
+    """The elements [lo, hi) of ``what``'s ``n`` that ``span`` names at a row's ``statics`` (the whole when None)."""
+    if span is None:
+        return 0, n
+    lo, hi = (n if b is None else int(statics[b]) if isinstance(b, str) else int(b) for b in span)
+    if not 0 <= lo < hi <= n:
+        raise ValueError(f"{what}: span {list(span)} is [{lo}, {hi}), not a run inside its {n} elements")
+    return lo, hi
+
+
+def cut_refused(row: str, p: tuple, statics: Mapping[str, Any], widths: Sequence[int], names: Sequence[str]) -> str | None:
+    """Why the cut of row family ``row`` holding part ``p`` (its ``PARTS`` cut, else its ``FINAL`` cut) does not return each
+    element of each of the row's outputs (``widths`` elements, named ``names``) exactly once at its ``statics``, or None."""
+    cut = PARTS[row] if p in PARTS.get(row, ()) else FINAL[row]
+    for j, (n, name) in enumerate(zip(widths, names, strict=True)):
+        got = sorted((*bounds(span, statics, n, f"{row}'s output {name}"), q[0]) for q in cut for k, span in returns(q) if k == j)
+        at, by = 0, None
+        for lo, hi, fam in got:
+            if lo > at:
+                return f"{row}'s output {name}: elements [{at}, {lo}) are returned by no part of its cut"
+            if lo < at:
+                return (f"{row}'s output {name}: elements [{lo}, {min(at, hi)}) are returned by more than one part of its cut "
+                        f"({by} and {fam})")
+            at, by = hi, fam
+        if at < n:
+            return f"{row}'s output {name}: elements [{at}, {n}) are returned by no part of its cut"
+    return None
 #: the chunk families that cut a ``COORDS`` family's coordinate along K (the ``kchunk`` layout, `kchunk_rows`), by the row family:
 #: a coordinate of K weights is C = K / k chunks of k (whole scale blocks and tiles), chunk 0 FIRST, chunk C - 1 LAST, each
 #: continuing the one before's f32 accumulator (`fp8_moe_experts.MoeExpertFp8CoordinateChunk_v1`, the w13 launch)

@@ -19,7 +19,8 @@ import numpy as np
 
 from verity.commitments.windows import rows as CS
 from verity_vllm.pipeline import slice_rows as SL
-from verity_vllm.pipeline.serving_templates import COORDS, PART_STATICS, PARTS, coord_width, part, template
+from verity_vllm.pipeline.serving_templates import (COORDS, PART_STATICS, PARTS, bounds, coord_width, cut_refused, part, reads,
+                                                    returns, template)
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 Row = tuple[str, Any, dict, dict]
@@ -109,9 +110,42 @@ def mids(pi: Any, r: dict, d: dict, store: Any, weights: Callable, rid: str, arr
     return got
 
 
-def output_name(d: dict, j: int | str) -> str:
-    """What a part's return ``j`` is called: the row's committed member j's name, or the intermediate's."""
+def output_name(d: dict, j: int | str | tuple) -> str:
+    """What a part's return ``j`` is called: the row's committed member j's name (a span of it too), or the intermediate's."""
+    j = j[0] if isinstance(j, tuple) else j
     return j if isinstance(j, str) else str(d["members"][j][0])
+
+
+def check_cut(r: dict, d: dict, p: tuple) -> None:
+    """Refuse row ``r`` (description ``d``) when the cut holding its part ``p`` does not return each element of each of its
+    outputs once (`serving_templates.cut_refused`)."""
+    from verity_vllm.query.program_view import spec_base
+
+    why = cut_refused(spec_base(r["spec"]), p, d["statics"], [int(m[1]) for m in d["members"]], [str(m[0]) for m in d["members"]])
+    if why is not None:
+        raise ValueError(f"row {r['i']} ({d['op_path']}): {why}")
+
+
+def blocks(a: np.ndarray, bits: int, nh: int, what: str) -> np.ndarray:
+    """A packed port's u16 words ``a`` of ``bits``-bit elements as ``nh`` blocks of its own width, block j its elements
+    [jn, (j + 1)n) for n = its elements / nh; refused when a block would end inside an element or a u16 word."""
+    n = a.size * 16 // bits
+    if n % nh:
+        raise ValueError(f"{what} is {n} {bits}-bit elements, which its {nh} blocks would cut inside an element")
+    if a.size % nh:
+        raise ValueError(f"{what} is {n} {bits}-bit elements, which its {nh} blocks would cut inside a u16 word")
+    return a.reshape(nh, a.size // nh)
+
+
+def _take(parts: Sequence[np.ndarray], lo: int, hi: int) -> list[np.ndarray]:
+    """Elements [lo, hi) of the concatenation of ``parts``, as pieces of them."""
+    out, at = [], 0
+    for a in parts:
+        a = np.asarray(a).reshape(-1)
+        if at < hi and at + a.size > lo:
+            out.append(a[max(lo - at, 0):min(hi - at, a.size)])
+        at += a.size
+    return out
 
 
 def read_coord(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arrivals: dict[str, int] | None,
@@ -158,7 +192,11 @@ def read_coord(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable,
         if N % c:
             raise ValueError(f"row {r['i']} ({d['op_path']}): N = {N} outputs are no whole coordinates of {c} (member {m.key})")
         U = N // c
-        srcs = p[1] if p else tuple(("arg", g) for g in range(len(r["args"])))
+        if p and (any(span for *_x, span in reads(p)) or any(span for _j, span in returns(p))):
+            raise ValueError(f"row {r['i']} ({d['op_path']}): member {m.key} is a COORDS part, whose ports take no span")
+        if p:
+            check_cut(r, d, p)
+        srcs = tuple((src, g) for src, g, _span in reads(p)) if p else tuple(("arg", g) for g in range(len(r["args"])))
         if len(srcs) != len(m.rows):
             raise ValueError(f"row {r['i']} ({d['op_path']}): {len(srcs)} operands, not member {m.key}'s {len(m.rows)} ports")
         *lead, (kw, gw), (ks, gs) = srcs
@@ -223,17 +261,19 @@ def read_part(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, 
     for rid, pi, r, d in rows:
         arrive = int((arrivals or {}).get(rid, 0))
         p = part(tp.word, r["spec"])
-        srcs = p[1] if p else tuple(("arg", g) for g in range(len(r["args"])))
-        mine = list(p[2]) if p else list(range(len(d["members"])))
+        if p:
+            check_cut(r, d, p)
+        srcs = reads(p) if p else tuple(("arg", g, None) for g in range(len(r["args"])))
+        mine = returns(p) if p else tuple((j, None) for j in range(len(d["members"])))
         if len(srcs) + len(mine) != len(tp.packed):
             raise ValueError(f"row {r['i']} ({d['op_path']}): {len(srcs)} operands and {len(mine)} outputs, not template "
                              f"{tp.id}'s {len(tp.packed)} ports")
-        mid = mids(pi, r, d, store, weights, rid, arrive, slices, packed) if any(isinstance(j, str) for j in mine) or any(
-            src == "mid" for src, _g in srcs) else {}
-        ops = [operand(pi, r, d, src, g, b, k, store, weights, rid, arrive, slices, packed, mid) for k, ((src, g), b) in
+        mid = mids(pi, r, d, store, weights, rid, arrive, slices, packed) if any(isinstance(j, str) for j, _s in mine) or any(
+            src == "mid" for src, _g, _s in srcs) else {}
+        ops = [operand(pi, r, d, src, g, b, k, store, weights, rid, arrive, slices, packed, mid, span) for k, ((src, g, span), b) in
                enumerate(zip(srcs, tp.packed))]
-        outs = [operand(pi, r, d, "mid" if isinstance(j, str) else "out", j, b, j, store, weights, rid, arrive, slices, packed, mid)
-                for j, b in zip(mine, tp.packed[len(srcs):], strict=True)]
+        outs = [operand(pi, r, d, "mid" if isinstance(j, str) else "out", j, b, j, store, weights, rid, arrive, slices, packed, mid,
+                        span) for (j, span), b in zip(mine, tp.packed[len(srcs):], strict=True)]
         got = ([len(a) for a in ops], [len(a) for a in outs])
         if got != ([w for _, w in m.rows], [w for _, w in m.outs]):
             raise ValueError(f"row {r['i']} ({d['op_path']}): inputs {got[0]} and outputs {got[1]} words, not member {m.key}'s "
@@ -244,7 +284,7 @@ def read_part(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, 
             cols[port].append(a.reshape(1, -1))
         layer = _LAYER.search(d["op_path"])
         entries.append([lo, lo + 1, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"],
-                        ",".join(output_name(d, j) for j in mine), int(d["row"]), int(r["i"])])
+                        ",".join(output_name(d, j) for j, _s in mine), int(d["row"]), int(r["i"])])
         lo += 1
     if lo - m.base != m.n:
         raise ValueError(f"{m.key}: its rows hold {lo - m.base} units, not its {m.n}")
@@ -255,10 +295,11 @@ def read_part(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, 
 def read_cols(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arrivals: dict[str, int] | None,
               slices: Callable, packed: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
     """A packed ``COLS`` part's units (the ``cols`` layout: a norm's apply blocks), row by row, then block: on a row it is a part
-    of (`part`), whose `serving_templates.col_span` static is W, the template's axis w and nh = W / w, block j reads columns
-    [jw, jw + w) of each argument group and committed output the part names (W elements of 16 bits each) and its intermediates
-    whole (``MIDS``: the norm's scale, every block's), and returns columns [jw, jw + w) of the outputs it returns.  Every port is
-    its elements' bytes (``Template.packed``).  One index entry per row, the range of its nh units, naming those outputs."""
+    of (`part`), whose `serving_templates.col_span` static is W, the template's axis w and nh = W / w, block j reads block j of
+    each argument group and committed output the part names, or the span of it the part names, each in nh blocks of its own
+    width (`blocks`: of n elements, [jn/nh, (j + 1)n/nh); a norm's W columns, [jw, jw + w)) and its intermediates whole
+    (``MIDS``: the norm's scale, every block's), and returns block j of the outputs it returns.  Every port is its elements'
+    bytes (``Template.packed``).  One index entry per row, the range of its nh units, naming those outputs."""
     from verity_vllm.pipeline.serving_templates import COLS, col_span
     from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -278,21 +319,19 @@ def read_cols(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, 
             raise ValueError(f"row {r['i']} ({d['op_path']}): {col_span(fam)}={W} is no whole number of member {m.key}'s "
                              f"{COLS[fam]}={w} columns")
         nh = W // w
-        mid = mids(pi, r, d, store, weights, rid, arrive, slices, packed) if any(src == "mid" for src, _g in p[1]) else {}
-        ports = [*((src, g) for src, g in p[1]), *(("out", j) for j in p[2])]
+        check_cut(r, d, p)
+        mid = mids(pi, r, d, store, weights, rid, arrive, slices, packed) if any(src == "mid" for src, _g, _s in reads(p)) else {}
+        ports = [*reads(p), *(("out", j, span) for j, span in returns(p))]
         if len(ports) != len(tp.packed):
             raise ValueError(f"row {r['i']} ({d['op_path']}): {len(ports)} operands and outputs, not template {tp.id}'s "
                              f"{len(tp.packed)} ports")
         got = []
-        for (src, g), b, (port, width) in zip(ports, tp.packed, m.rows + m.outs, strict=True):
-            a = operand(pi, r, d, src, g, b, g, store, weights, rid, arrive, slices, packed, mid)
+        for (src, g, span), b, (port, width) in zip(ports, tp.packed, m.rows + m.outs, strict=True):
+            a = operand(pi, r, d, src, g, b, g, store, weights, rid, arrive, slices, packed, mid, span)
             if src == "mid":
                 block = np.broadcast_to(a.reshape(1, -1), (nh, a.size))
-            elif b != 16 or a.size != W:
-                raise ValueError(f"row {r['i']} ({d['op_path']}): its {src} {g} is {a.size} words of {b}-bit elements, not the "
-                                 f"{W} 16-bit columns member {m.key}'s blocks divide")
             else:
-                block = a.reshape(nh, w)
+                block = blocks(a, b, nh, f"row {r['i']} ({d['op_path']}): its {src} {g}")
             got.append(block.shape[1])
             cols[port].append(block)
         if got != [n for _, n in m.rows + m.outs]:
@@ -300,7 +339,7 @@ def read_cols(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, 
                              f"{list(m.rows)} and {list(m.outs)}")
         layer = _LAYER.search(d["op_path"])
         entries.append([lo, lo + nh, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"],
-                        ",".join(output_name(d, j) for j in p[2]), int(d["row"]), int(r["i"])])
+                        ",".join(output_name(d, j) for j, _s in returns(p)), int(d["row"]), int(r["i"])])
         lo += nh
     if lo - m.base != m.n:
         raise ValueError(f"{m.key}: its rows hold {lo - m.base} units, not its {m.n} (a chunk is read with its template's others, "
@@ -311,21 +350,27 @@ def read_cols(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, 
 
 
 def operand(pi: Any, r: dict, d: dict, src: str, g: int | str, bits: int, k: int | str, store: Any, weights: Callable, rid: str,
-            arrive: int, slices: Callable, packed: Callable, mid: dict[str, np.ndarray]) -> np.ndarray:
+            arrive: int, slices: Callable, packed: Callable, mid: dict[str, np.ndarray], span: tuple | None = None) -> np.ndarray:
     """What a part reads or returns (``src`` ``"arg"``, ``"out"`` or ``"mid"``, `serving_templates.PARTS`) as a packed port of
     ``bits``-bit elements: row ``r``'s argument group ``g``, its committed output member ``g``, or its intermediate ``g`` in
-    ``mid`` (`mids`); ``k`` names it in a refusal."""
-    if src == "arg":
-        return packed(slices(pi, store, weights, rid, arrive, r["args"][g]), bits, f"row {r['i']} argument {k}")
-    if src == "mid":
-        return packed([mid[g]], bits, f"row {r['i']} intermediate {g}")
-    return committed(store, rid, arrive, r, d, g, bits, packed)
+    ``mid`` (`mids`), or the elements of it ``span`` names at the row's statics (`serving_templates.bounds`); ``k`` names it in
+    a refusal."""
+    if src == "out":
+        return committed(store, rid, arrive, r, d, g, bits, packed, span)
+    what = f"row {r['i']} argument {k}" if src == "arg" else f"row {r['i']} intermediate {g}"
+    parts = slices(pi, store, weights, rid, arrive, r["args"][g]) if src == "arg" else [mid[g]]
+    if span is not None:
+        parts = _take(parts, *bounds(span, d["statics"], sum(np.asarray(a).size for a in parts), what))
+    return packed(parts, bits, what)
 
 
-def committed(store: Any, rid: str, arrive: int, r: dict, d: dict, j: int, bits: int, packed: Callable) -> np.ndarray:
-    """Row ``r``'s committed output member ``j`` as a packed port of ``bits``-bit elements (``packed``)."""
+def committed(store: Any, rid: str, arrive: int, r: dict, d: dict, j: int, bits: int, packed: Callable,
+              span: tuple | None = None) -> np.ndarray:
+    """Row ``r``'s committed output member ``j`` as a packed port of ``bits``-bit elements (``packed``), or the elements of it
+    ``span`` names at the row's statics."""
     member, width, _dt = d["members"][j]
-    w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
+    lo, hi = bounds(span, d["statics"], int(width), f"row {r['i']} output {member}")
+    w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width) + lo, d["row"] * int(width) + hi)
     if w is None:
         raise LookupError(f"row {r['i']} output {member}: {why}")
     return packed([w], bits, f"row {r['i']} output {member}")
@@ -344,7 +389,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
 
     ps = [p for row in PARTS.values() for p in row]
     writes = {p[0] for p in ps if any(isinstance(j, str) for j in p[2])}
-    reads = {p[0] for p in ps if any(src == "mid" for src, _ in p[1])}
+    reads = {p[0] for p in ps if any(x[0] == "mid" for x in p[1])}
     word = {t: spec_base(template(t).word) for t in tmpls}
     if not any(word[t] in reads for t in tmpls):
         return list(ms)
@@ -373,7 +418,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
         for rid, _pi, r, d in rs:
             p = part(template(t).word, r["spec"])
             got = []
-            for k, (src, name) in enumerate(p[1] if p else ()):
+            for k, (src, name, *_span) in enumerate(p[1] if p else ()):
                 if src != "mid":
                     continue
                 w = writer.get((rid, int(r["i"]), name))

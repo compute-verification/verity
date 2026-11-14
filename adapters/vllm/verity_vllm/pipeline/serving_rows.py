@@ -146,7 +146,7 @@ from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
                                                     SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
-                                                    chain_ways, final_hits, part, template, unit_templates)
+                                                    chain_ways, final_hits, part, reads, returns, template, unit_templates)
 from verity_vllm.pipeline.window_law import law_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
@@ -523,7 +523,11 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
                         else np.asarray(w, dtype=np.uint16))
         mine = list(range(len(outs)))
         if (p := part(tp.word, r["spec"])) is not None:
-            ops, outs, mine = [(ops if src == "arg" else outs)[g] for src, g in p[1]], [outs[j] for j in p[2]], list(p[2])
+            PR.check_cut(r, d, p)
+            if any(span for *_x, span in reads(p)) or any(span for _j, span in returns(p)):
+                raise ValueError(f"row {r['i']} ({d['op_path']}): member {m.key} is a part of unpacked ports, which take no span")
+            mine = [j for j, _s in returns(p)]
+            ops, outs = [(ops if src == "arg" else outs)[g] for src, g, _s in reads(p)], [outs[j] for j in mine]
         if layout == "rope":
             nh = int(d["statics"]["NHEADS"])
             cols["x"].append(np.asarray(ops[0], dtype=np.uint16).reshape(nh, D))

@@ -13,7 +13,7 @@ from typing import Any
 
 from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS
-from verity_vllm.pipeline.serving_templates import part, template
+from verity_vllm.pipeline.serving_templates import part, reads, template
 from verity_vllm.program.compact import runs_from_file_items
 
 Row = tuple[str, Any, dict, dict]
@@ -30,7 +30,7 @@ def sources(t: str, r: Mapping[str, Any]) -> dict[str, list[int]]:
     if tp.layout == "s8":
         return {"x": [0, 1]}
     p = part(tp.word, r["spec"])
-    srcs = p[1] if p else tuple(("arg", g) for g in range(len(r["args"])))
+    srcs = tuple((src, g) for src, g, _span in reads(p)) if p else tuple(("arg", g) for g in range(len(r["args"])))
     names = ("x", "cs") if tp.layout == "rope" else tuple(f"in{k}" for k in range(len(srcs)))
     return {nm: [int(g)] for nm, (src, g) in zip(names, srcs) if src == "arg"}
 

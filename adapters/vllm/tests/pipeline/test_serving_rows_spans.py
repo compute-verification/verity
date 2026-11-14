@@ -99,7 +99,7 @@ def test_a_cols_port_is_cut_into_its_own_width_of_any_element_width():
     assert PR.blocks(a, 16, 4, "x").tolist() == a.reshape(4, 4).tolist()
     assert PR.blocks(a, 32, 8, "x").tolist() == a.reshape(8, 2).tolist()
     assert PR.blocks(a, 8, 16, "x").tolist() == a.reshape(16, 1).tolist()
-    with pytest.raises(ValueError, match=r"x is 16 32-bit elements, which its 16 blocks would cut inside an element"):
+    with pytest.raises(ValueError, match=r"x is 16 32-bit elements, which its 32 blocks would cut inside an element"):
         PR.blocks(np.arange(32, dtype=np.uint16), 32, 32, "x")
     with pytest.raises(ValueError, match=r"x is 32 8-bit elements, which its 32 blocks would cut inside a u16 word"):
         PR.blocks(a, 8, 32, "x")
