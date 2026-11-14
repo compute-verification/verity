@@ -116,7 +116,7 @@ def test_canonical_spellings_and_coercion():
     assert vocab.is_known("finding") and vocab.is_known("level") and vocab.is_known("anchor")
 
 
-def vocce(*a):  # noqa: N802  (a typo-guard: the one call site above means vocab.coerce)
+def vocce(*a):  # a typo-guard: the one call site above means vocab.coerce
     return vocab.coerce(*a)
 
 

@@ -77,9 +77,9 @@ def test_cancel_terms_the_workloads_group_records_a_manual_cancel_and_leaves_the
 def test_cancel_says_how_long_the_run_ran_and_how_much_of_it_waited_for_a_check_slot():
     """A run launched at 16:56Z that waits in node 1's check line until 18:31Z and is cancelled at 18:43Z is 107 minutes in by
     its state, which reads `running` from launch, but 12 of checking."""
-    from datetime import datetime, timezone
+    from datetime import UTC, datetime
 
-    now = datetime(2026, 10, 10, 18, 43, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 10, 18, 43, tzinfo=UTC)
     s = {"started_utc": "2026-10-10T16:56:00.120Z", "slot": {"state": "held", "since": "2026-10-10T16:56:10Z", "took": "2026-10-10T18:31:00Z",
                                                               "slot": "a", "cores": "0-79"}}
     assert cli._ran_text(s, now) == ("ran 107 min since 2026-10-10T16:56Z: waited 95 min for a check slot, then checked 12 min in "
@@ -258,7 +258,7 @@ def test_cancel_of_a_run_held_for_disk_ends_the_hold_and_records_it_withdrawn(tm
         assert cli.R.summarize(local)["state"] == "refused"
         out = capsys.readouterr().out
         assert f"withdrawn before it started: SIGTERM to its hold (research disk-hold pid {hold.pid})" in out
-        assert f"removed what its launch staged: " in out and str(mem) in out
+        assert "removed what its launch staged: " in out and str(mem) in out
         assert f"research cancel: withdrawn from its disk-hold (pid {hold.pid}): superseded" in (d / "launcher.log").read_text()
 
         assert cli.main(["cancel", str(local), "--reason", "again", "--runs-dir", str(local.parent)]) == 1

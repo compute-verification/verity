@@ -67,7 +67,7 @@ def test_a_claimed_run_needs_no_remote_of_its_own(tmp_path, monkeypatch):
 def test_env_and_spaces_reach_the_workload(tmp_path):
     req, runs_root = _request(tmp_path, "r2", [PY, "-c", "import os, sys; print(os.environ['FOO'], '|', sys.argv[1])", "two  words"], env={"FOO": "bar baz"})
     assert remote.launch_request(req)["started"]
-    s = _wait_terminal(runs_root / "r2")
+    _wait_terminal(runs_root / "r2")
     assert (runs_root / "r2" / "stdout.log").read_text() == "bar baz | two  words\n"
 
 

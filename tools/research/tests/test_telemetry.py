@@ -1228,7 +1228,7 @@ def _vllm_world(tmp_path, **kw):
     beside it another run's process and a system daemon."""
     rd = str(tmp_path / RID)
     py = ["python3", "-c", "..."]
-    procs = {B + 2: (1, B + 2, B + 2, f"/user.slice/user-1001.slice/user@1001.service/init.scope", None, ["systemd", "--user"]),
+    procs = {B + 2: (1, B + 2, B + 2, "/user.slice/user-1001.slice/user@1001.service/init.scope", None, ["systemd", "--user"]),
              B + 50: (B + 2, B + 50, B + 50, QUEUE, rd, ["python3", "-m", "research", "run", "--runs-dir", "x", "--id", RID]),
              B + 51: (B + 50, B + 51, B + 51, QUEUE, rd, ["python3", "-m", "research.telemetry", "sample"]),
              B + 100: (B + 50, B + 100, B + 100, QUEUE, rd, ["bash", "/usr/local/bin/gpu-lease", "8", "--wait", "--", "vllm"]),

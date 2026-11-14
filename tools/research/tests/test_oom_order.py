@@ -6,14 +6,14 @@ from __future__ import annotations
 import ast
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from research.pods.nebius import oom_order as O
 
-T0 = datetime(2026, 10, 19, 11, 30, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 19, 11, 30, tzinfo=UTC)
 GB = 10**9
 TOTAL = 1000 * GB
 

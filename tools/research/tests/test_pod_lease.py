@@ -151,7 +151,8 @@ def test_pods_extend_runs_lease_sh_in_the_machines_own_lease_dir(tmp_path):
     env = lease_env(tmp_path, LEASE_NOW=str(NOW))
     Path(env["LEASE_DIR"]).mkdir()
     (Path(env["LEASE_DIR"]) / "lease.sh").write_bytes(L.LEASE_SH.read_bytes())
-    over_ssh = lambda argv: subprocess.run(["sh", "-c", " ".join(shlex.quote(a) for a in argv)], env=env, capture_output=True, text=True)
+    def over_ssh(argv):
+        return subprocess.run(["sh", "-c", " ".join(shlex.quote(a) for a in argv)], env=env, capture_output=True, text=True)
     assert over_ssh(L.remote_argv("extend", "3600", "lane")).stdout.split()[::2] == [str(NOW + 3600), "lane"]
     assert over_ssh(L.remote_argv("show")).stdout.startswith(f"{NOW + 3600} ")
     del env["LEASE_DIR"]

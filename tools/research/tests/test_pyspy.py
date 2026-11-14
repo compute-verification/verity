@@ -95,7 +95,8 @@ def _watch(d: Path, monkeypatch, *, which=lambda _: "/x/py-spy"):
     clock, stamps = Clock(), iter(["20261007T030000Z", "20261007T050000Z"])
     monkeypatch.setattr(trun, "clock", clock)
     (d / "stdout.log").write_text("loading\n")
-    run = lambda argv, **kw: subprocess.CompletedProcess(argv, 0, STACK.encode(), b"")
+    def run(argv, **kw):
+        return subprocess.CompletedProcess(argv, 0, STACK.encode(), b"")
     w = trun._StallWatch(d, Emitter(d, proc="tele-run"), "run", 900.0, [], lambda: [(7, "python3")], run=run, which=which,
                          stamp=lambda: next(stamps))
     return w, clock

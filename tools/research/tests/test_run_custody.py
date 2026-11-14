@@ -21,7 +21,6 @@ from research.store import custody as CU
 from research.store import preserved as P
 from research.store.cli import main as data_main
 from research.store.local import LocalStore
-from research.store.model import Label
 from research.telemetry.job import set_status
 
 from test_pod_guard_daemon import QUIET, _env, idle_since

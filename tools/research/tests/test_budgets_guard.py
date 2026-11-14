@@ -31,7 +31,7 @@ exempt = ["vy-control-"]
 
 
 def pod(pid: str, name: str, rate: float, age_min: float, status: str = "RUNNING") -> dict:
-    t = dt.datetime.fromtimestamp(T0 - age_min * 60, dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3] + " +0000 UTC"
+    t = dt.datetime.fromtimestamp(T0 - age_min * 60, dt.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3] + " +0000 UTC"
     return {"id": pid, "name": f"{name}-veritor-campaign", "costPerHr": rate, "createdAt": t, "lastStartedAt": t, "desiredStatus": status}
 
 

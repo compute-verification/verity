@@ -436,7 +436,8 @@ def test_a_newly_pinned_dependency_bundle_is_a_lean_input_and_a_rekeyed_or_dropp
     """Every definition that reads Mathlib or ArkLib is built against the bundle `lean-deps.json` pins: pinning another one with
     no manifest change would otherwise show only as `rehashed`. Re-keying a bundle or dropping a pin is no Lean input."""
     repo = _repo(tmp_path)
-    pins = lambda **deps: {"deps": {k: {"package": "pkg", "sha256": s} for k, s in deps.items()}}
+    def pins(**deps):
+        return {"deps": {k: {"package": "pkg", "sha256": s} for k, s in deps.items()}}
     _commit(repo, spec.DEPS_PINS, pins(k1=H1, k2=H2), "pins")
     old = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H1}), "base")
     _commit(repo, spec.DEPS_PINS, pins(k3=H1), "re-key one bundle, drop the other")

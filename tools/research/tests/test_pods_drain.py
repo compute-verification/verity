@@ -73,7 +73,7 @@ def test_unpreserved_lists_attempts_on_the_machine_that_the_gate_refuses(fs_stor
     by_pod = "r20260923-100000-0004"                                                  # started ON the pod: only cost.pod_id ties it
     st.put_attempt(_attempt(run_id=by_pod, execution={"start_utc": "2026-09-23T10:00:00Z", "host": "c0ffee"}, cost={"provider": "runpod", "pod_id": "pod-tp2"}))
     st.push_attempt(by_pod)
-    elsewhere = _on(st, "r20260923-100000-0005", local_only, machine="vy-other", host="other-host")
+    _on(st, "r20260923-100000-0005", local_only, machine="vy-other", host="other-host")         # on another machine: not linked below
     linked = D.attempts_on(st, "vy-tp2", "pod-tp2", hostname="c0ffee")
     assert set(linked) == {ok, bad, legacy, by_pod}, "vy-other's attempt is not on this machine"
     assert linked[ok] == ["exec.machine", "execution.machine", "hw.hostname"] and linked[legacy] == ["execution.remote.machine", "cost.pod_id", "hw.hostname"]
