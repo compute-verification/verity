@@ -207,7 +207,8 @@ theorem certified_run_accepts :
   · exact MemoryChallenger.Properties.SecurityProofs.verdict_accepted_of
       (p := Lms.deployed) (m := certifiedRecordMessage)
       (by simp [certifiedRecord, MemoryChallenger.SCHEMES]) (by simp [certifiedRecord])
-      certifiedRecordMessage_spec hv (commitment_beq_self _) rfl
+      certifiedRecordMessage_spec hv
+      (MemoryChallenger.Properties.SecurityProofs.commitment_beq_self _) rfl
       (by simp [certifiedRecord, honestRounds, honestCommitment])
       (rounds_honest certifiedPublic.root
         (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt))

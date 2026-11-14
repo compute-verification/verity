@@ -221,11 +221,6 @@ def honestCommitment (root : ByteArray) : ChallengePhaseCommitment :=
   ⟨honestSid, honestCoinRoot, honestCoinKey, PousCheck.P2.Params.deployed.blocks, 105,
     PousCheck.Run.DEPLOYED.limitNs, PousCheck.P2.Params.deployed.blockBytes, root⟩
 
-theorem commitment_beq_self (c : ChallengePhaseCommitment) : (c == c) = true := by
-  cases c
-  simp only [BEq.beq]
-  simp [instBEqChallengePhaseCommitment.beq]
-
 theorem verifyCoin_honest (root : ByteArray) {j : Nat} (hj : j < 105) :
     verifyCoin (honestCommitment root) (honestOpening j) = true := by
   unfold verifyCoin
