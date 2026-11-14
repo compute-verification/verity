@@ -73,6 +73,7 @@ ALLOWLIST = {
     "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
     "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
     "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    "benchmarks/sampling_plan/glm53_blocks.json": 448 * 1024,  # the planner's card glm53.py loads: one entry a unit Definition
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
