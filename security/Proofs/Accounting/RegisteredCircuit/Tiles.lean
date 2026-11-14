@@ -1,7 +1,7 @@
 module
 
 public import Mathlib
-public import Definitions.Accounting.Carrier
+public import Definitions.Registration.Carrier
 public import Proofs.Poub.RateAudit.DeployedSketchSum
 
 /-!

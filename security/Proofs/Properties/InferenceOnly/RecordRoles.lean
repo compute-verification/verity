@@ -47,7 +47,7 @@ open InferenceOnlyCheck.Theta (getD strAt digest lastWith Trusted trustedOf)
 open InferenceOnlyCheck.Properties (Chained)
 open InferenceOnlyCheck.Record (Case Front Layout front finish rolesOf layoutOf pinOf isTheta openingHeld covered)
 open InferenceOnlyCheck.Record.SecurityProofs (read_front finish_text mem_of_lookup)
-open InferenceOnlyCheck.RecordText (Row Tmpl Decl Fill Inputs Table TableRead Opening Held Declared inputsOf fillAt)
+open Spot.RecordText (Row Tmpl Decl Fill Inputs Table TableRead Opening Held Declared inputsOf fillAt)
 open InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps (forIn_each trustedOf_ok findIdx_eq)
 
 /-! ## The trusted input and the run -/

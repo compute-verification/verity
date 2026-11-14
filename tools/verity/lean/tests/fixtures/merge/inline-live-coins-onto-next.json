@@ -19,7 +19,7 @@
    }
   },
   "reads": {
-   "Definitions.Accounting.Guarantees.RemoteDraw": {
+   "Definitions.Compose.Guarantees.RemoteDraw": {
     "digest": "3750881ce56287e04fc6af3d9cf28ea7e949afd27dee4d941102245ac6f60d0f",
     "definitions": {
      "Accounting.Guarantees.Remote.LiveCoinsDrawn": "37fc0bde3801b80a420d5f06e13c2455f585130eb46ef88376288048dce7b543"
@@ -69,7 +69,7 @@
    }
   },
   "reads": {
-   "Definitions.Accounting.Guarantees.RemoteDraw": {
+   "Definitions.Compose.Guarantees.RemoteDraw": {
     "digest": "dac47e8f64f6553895f49a78d1408c9653ce463209f2eaf1657f064deef0a3c8",
     "definitions": {
      "Accounting.Guarantees.Remote.LiveCoinsDrawn": "16a0103450fbd8cb8bfd7b7e22df67df48a080042d429395e9c0d90b7e50474f"
@@ -119,7 +119,7 @@
    }
   },
   "reads": {
-   "Definitions.Accounting.Guarantees.RemoteDraw": {
+   "Definitions.Compose.Guarantees.RemoteDraw": {
     "digest": "3750881ce56287e04fc6af3d9cf28ea7e949afd27dee4d941102245ac6f60d0f",
     "definitions": {
      "Accounting.Guarantees.Remote.LiveCoinsDrawn": "37fc0bde3801b80a420d5f06e13c2455f585130eb46ef88376288048dce7b543"

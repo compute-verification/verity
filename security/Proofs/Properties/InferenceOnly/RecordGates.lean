@@ -37,13 +37,13 @@ nodes the root's, no root node calls a composite keyed as an input, and its root
 key. -/
 def ReadProg (P : Prog) : Prop :=
   (∃ bytes, Flock.Program.decode bytes = .ok P) ∧ P.orderViolation = none ∧ Desc.rootLaidOut P = true ∧
-    Desc.inputsAtRoot P = true ∧ Desc.walkable P = true ∧ InferenceOnlyCheck.RecordText.keyedAsInput P = false ∧ RootFirst P
+    Desc.inputsAtRoot P = true ∧ Desc.walkable P = true ∧ Spot.RecordText.keyedAsInput P = false ∧ RootFirst P
 
 /-- **A decoded Program that passes the check's reads is one the record check reads**: the decoder puts no
 Definition of the root's key before the root (`DecodeKeys.root_first`). -/
 theorem readProg_of_decode {bytes : ByteArray} {P : Prog} (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (hl : Desc.rootLaidOut P = true) (hin : Desc.inputsAtRoot P = true)
-    (hwk : Desc.walkable P = true) (hkey : InferenceOnlyCheck.RecordText.keyedAsInput P = false) : ReadProg P :=
+    (hwk : Desc.walkable P = true) (hkey : Spot.RecordText.keyedAsInput P = false) : ReadProg P :=
   ⟨⟨bytes, hdec⟩, hov, hl, hin, hwk, hkey, DecodeKeys.root_first bytes P hdec⟩
 
 /-- **The template query passes over the input nodes of a Program the record check reads**: a root node's callee is

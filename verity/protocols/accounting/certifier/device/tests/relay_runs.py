@@ -14,7 +14,7 @@ from verity.protocols.accounting.certifier.device import runner_parts as rp, war
 from verity.protocols.accounting.certifier.verifier import relay_check as RC, warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
-from verity.protocols.accounting.certifier.verifier.warden import (END, INTEGER_FIELDS, REFUSED, Shim, Warden,
+from verity.protocols.accounting.certifier.verifier.warden import (END, INTEGER_FIELDS, REFUSED, W63K4, Shim, Warden,
                                                     WardenParams, cells, read_cell)
 
 #: a text rehearsal's schedule: its responses are vLLM's stock framing, so its egress form is bytes
@@ -211,11 +211,6 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0, id_payload))
     (out / "client.json").write_text(json.dumps({"connections": log}))
     return warden
-
-
-#: the scan's w63k4 schedule (`scan_zk.W63K4`), the gate's relay sessions' in `_session_argv`
-W63K4 = WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
-                     ingress_buckets=12, egress_cells=5, every=16)
 
 
 def _session_argv(out: Path, windows: int, listen_fd: int | None = None) -> list[str]:

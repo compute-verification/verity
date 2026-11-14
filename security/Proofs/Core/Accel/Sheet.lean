@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Accel.Card
-public import Definitions.Accounting.Sheets.H200
+public import Definitions.Registration.Sheets.H200
 public import Mathlib.Tactic.NormNum
 
 /-!

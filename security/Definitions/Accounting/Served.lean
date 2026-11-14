@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Compose
+public import Definitions.Compose.Compose
 public import Definitions.Accounting.Gates.Declared
 public import Definitions.Pouw.Game.Deadline
 import Mathlib.Algebra.Order.Floor.Extended
