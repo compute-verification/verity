@@ -308,7 +308,7 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     draws = -(-n // per_coin)
     if ch is None or op is None or len(ch["released"]) < n or len(op["after"]) < draws:
         want = (f"one of each for each of {n} groups" if per_coin == 1 else
-                f"one challenge coin for each of {n} groups and one openings coin for each of their {draws} draws")
+                f"one challenge coin for each of {n} groups and one openings coin for each of their {draws} samples")
         raise ValueError(f"the release log holds {len((ch or {}).get('released', ()))} challenge and "
                          f"{len((op or {}).get('after', ()))} openings coins, not {want}")
     out, by = [], {}
@@ -1017,8 +1017,8 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                                       "period credits its window", bound)
             d = Path(c["dir"]) if Path(c["dir"]).is_dir() else ch_dir / c["session"]
         else:
-            row["credit"] = no_credit("its coins were drawn in the verifier's process: no challenger, no ledger", bound)
-            row["skipped"] = "no challenger log: coins drawn in the verifier's process"
+            row["credit"] = no_credit("its coins were flipped in the verifier's process: no challenger, no ledger", bound)
+            row["skipped"] = "no challenger log: coins flipped in the verifier's process"
             continue
         try:
             log, row["trust"] = signed_lines(d, c["challenger"], R, heads or [], key, period)
