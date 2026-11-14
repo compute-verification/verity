@@ -179,14 +179,13 @@ files = ["adapters/vllm/tests/pipeline/served_tp.py", "adapters/vllm/tests/pipel
          "verity/protocols/accounting/pouw/verifier/tests/test_circuit_plan.py",
          "verity/protocols/accounting/pouw/verifier/tests/test_pouw_credit.py",
          "verity/protocols/accounting/pouw/verifier/window.py",
-         "verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py",
-         "verity/protocols/tests/tests/test_profile.py"]
+         "verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py"]
 [words_in.words]
 "laws" = "sampling_designs"
 "law" = "sampling_design"
 
 [rewrite]
-exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+exclude = ["tools/move/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
            "**/*.lock", "**/lean-audit.json", "**/lakefile.*", "**/lake-manifest.json",
            "verity/protocols/proofs/**", "benchmarks/one_stage/**", "benchmarks/remote_session/**",
            "benchmarks/commitments/**", "benchmarks/dsa_topk/**", "benchmarks/flock_kernels/**",
