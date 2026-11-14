@@ -4501,7 +4501,6 @@
     {"file": "verity/protocols/proofs/flock/prover/agreement/upstream-build.sh", "count": 2},
     {"file": "verity/protocols/proofs/flock/prover/verity_unit.rs", "count": 10},
     {"file": "verity/circuits/kernels/tc.py", "count": 1},
-    {"file": "verity/circuits/kernels/tests/cuda_build.py", "count": 3},
     {"file": "verity/circuits/private_circuits/README.md", "count": 2},
     {"file": "verity/circuits/private_circuits/tests/test_boolean_universal.py", "count": 16},
     {"file": "verity/circuits/private_circuits/universal.py", "count": 14},
@@ -4701,6 +4700,7 @@
     {"file": "security/Proofs/Flock/Soundness/Discharge/DecodeZL/LIG.lean", "count": 55},
     {"file": "security/Proofs/Flock/Soundness/Refine/WideLeafChecks.lean", "count": 2},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/Test/ZkIdentity.lean", "count": 2},
-    {"file": "benchmarks/pouw/served_h1/commit_variants.sh", "count": 53}
+    {"file": "benchmarks/pouw/served_h1/commit_variants.sh", "count": 53},
+    {"file": "verity/commitments/cuda/tests/cuda_build.py", "count": 3}
   ]
 }

@@ -2460,6 +2460,14 @@
         "benchmarks/pouw/floored_gemm/": "verity/protocols/accounting/pouw/prover/kernels/floored_gemm/",
         "benchmarks/pouw/gpu_kit/": "verity/protocols/accounting/pouw/prover/kernels/gpu_kit/"
       }
+    },
+    {
+      "paths": {
+        "verity/circuits/kernels/sha512.cuh": "verity/commitments/cuda/sha512.cuh",
+        "verity/circuits/kernels/row_commit.cuh": "verity/commitments/cuda/row_commit.cuh",
+        "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",
+        "verity/circuits/kernels/pyproject.toml": "verity/commitments/cuda/pyproject.toml"
+      }
     }
   ]
 }
