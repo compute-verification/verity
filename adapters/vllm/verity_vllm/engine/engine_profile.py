@@ -29,8 +29,6 @@ __all__ = ["ENGINE_SEED", "apply_env", "checkpoint_for", "engine_kwargs", "profi
 
 logger = init_logger(__name__)
 
-DECLARED_ENV = env.ENGINE
-
 MAX_MODEL_LEN = 4096
 GPU_MEMORY_UTILIZATION = 0.80
 
@@ -108,12 +106,12 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager:
                   max_num_batched_tokens: int | None = None,
                   tensor_parallel_size: int | None = 1, quantization: str | None = None) -> dict[str, Any]:
     """LLM(...) kwargs: stock defaults (``enforce_eager`` is a declared flag for the
-    eager-production profile row, §15.5; ``custom_ops`` = ``"all"`` keeps vLLM's CUDA custom ops
+    eager serving profile row, §15.5; ``custom_ops`` = ``"all"`` keeps vLLM's CUDA custom ops
     inside the compiled forward instead of inductor-generated kernels, another declared flag / new
     profile row; ``max_num_batched_tokens`` is a declared scheduler flag, used by the varied-batch
     cases (M2) to change batch composition).
     ``tensor_parallel_size`` > 1 (a profile port's
-    ``parallelism.tensor_parallel_size``) is a declared production flag: the model is sharded over that
+    ``parallelism.tensor_parallel_size``) is a declared serving flag: the model is sharded over that
     many GPUs (vLLM's multiprocess executor; the engine core stays in-process). The key is absent at 1 so
     earlier profile ids are unchanged.
     ``replay`` is False at every call and True is refused: there is no replay engine, the replay
@@ -134,7 +132,7 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager:
         kw["tensor_parallel_size"] = int(tensor_parallel_size)
     if quantization:
         # `--quantization fp8` (the b1-fp8 port) is a declared
-        # production flag (LLM(quantization=...)); the key is absent when unset so earlier profile ids are unchanged.
+        # serving flag (LLM(quantization=...)); the key is absent when unset so earlier profile ids are unchanged.
         kw["quantization"] = str(quantization)
     if max_num_batched_tokens is not None:
         kw["max_num_batched_tokens"] = int(max_num_batched_tokens)
@@ -157,12 +155,13 @@ def gpu_info() -> dict[str, Any]:
 
     props = torch.cuda.get_device_properties(0)
     drv = _run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"])
+    pod = settings.raw("RUNPOD_POD_ID")
     return {
         "name": props.name,
         "count": torch.cuda.device_count(),
         "driver": drv,
         "compute_capability": f"{props.major}.{props.minor}",
-        "pod": os.environ.get("RUNPOD_POD_ID", os.uname().nodename),
+        "pod": os.uname().nodename if pod is None else pod,
         "total_memory_gb": round(props.total_memory / 2**30, 2),
         # W1cF F7/F10: the batch-invariant GEMM specialises on the SM count (NUM_SMS); a verifier on a
         # different device reports `specialised: NUM_SMS` for its PTX rather than a mismatch.
@@ -277,7 +276,7 @@ def effective_compilation(llm: Any) -> dict[str, Any]:
 
 def cache_info(llm: Any) -> dict[str, Any]:
     """Effective KV-cache flags (§15.8: 'prefix caching enabled' is recorded as the effective
-    value, and whether the recorded workload hit it is in production/workload_exercised.json)."""
+    value, and whether the recorded workload hit it is the served run's `workload_exercised.json`)."""
     vc = handle.engine_of(llm).vllm_config
     cc = vc.cache_config
     return {
@@ -328,8 +327,8 @@ def _backends_probe(worker: Any) -> dict[str, Any]:
             "quick_allreduce": getattr(comm, "qr_comm", None) is not None and not getattr(getattr(comm, "qr_comm", None), "disabled", True),
             "flashinfer_allreduce": getattr(comm, "fi_allreduce_fusion", None) is not None,
             "pynccl": getattr(comm, "pynccl_comm", None) is not None and not getattr(getattr(comm, "pynccl_comm", None), "disabled", True),
-            "nccl_env": {k: os.environ.get(k) for k in ("NCCL_ALGO", "NCCL_PROTO", "NCCL_MIN_NCHANNELS", "NCCL_MAX_NCHANNELS", "NCCL_NTHREADS",
-                                                      "NCCL_BUFFSIZE", "NCCL_LAUNCH_MODE") if os.environ.get(k) is not None},
+            "nccl_env": {k: held for k in ("NCCL_ALGO", "NCCL_PROTO", "NCCL_MIN_NCHANNELS", "NCCL_MAX_NCHANNELS", "NCCL_NTHREADS",
+                                           "NCCL_BUFFSIZE", "NCCL_LAUNCH_MODE") if (held := settings.raw(k)) is not None},
         }
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)

@@ -84,7 +84,7 @@ def _item(j) -> bytes:
 
 
 def _schedule(s) -> dict:
-    """`Flock.Firewall.schedule`: `rec_live.check_schedule`, and, since Lean's firewall holds no registered top, a root for
+    """`Flock.Firewall.schedule`: `rec_live.check_schedule`, and, since Lean's ZK server holds no registered top, a root for
     each table a stream without a parent or a copy of level 0's top names."""
     try:
         RL.check_schedule(s)

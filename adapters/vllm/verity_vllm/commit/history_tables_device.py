@@ -140,14 +140,15 @@ class Table:
             self._check("rt_hist_append_host", _host().rt_hist_append_host(
                 ctypes.byref(self._h), at, k, host.ctypes.data, D._hm(), D._prefixes(), self._tree, bcs, ys))
         else:
-            self._device_append(rows if on_device else None, host, at, k, bcs, ys)
+            self._device_append(self._dev, rows if on_device else None, host, at, k, bcs, ys)
         self.rows += [r.copy() for r in host]
         self.salts += [salt[SALT_BYTES * i:SALT_BYTES * (i + 1)] for i in range(k)]
         self.bcs += [_bytes(bcs[16 * i:16 * i + 16], ">u8") for i in range(k)]
         return range(at, at + k)
 
-    def _device_append(self, rows: Any, host: np.ndarray, at: int, k: int, bcs: np.ndarray, ys: np.ndarray) -> None:
-        torch, d = self._torch, self._dev
+    def _device_append(self, d: D.DeviceLibrary, rows: Any, host: np.ndarray, at: int, k: int, bcs: np.ndarray,
+                       ys: np.ndarray) -> None:
+        torch = self._torch
         written = torch.cuda.Event()
         written.record(torch.cuda.current_stream(d.hm.device))
         d.stream.wait_event(written)

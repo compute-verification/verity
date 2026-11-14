@@ -436,11 +436,11 @@ class TpRow(Row):
         else:
             shutil.rmtree(f"{M}/fold_match", ignore_errors=True)      # an earlier capture's folds and stages, which --match-reuse must never keep
             rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
-                                  lease_dir=f"{M}/lease/capture", kept=GL.MATCH_LEG_KEPT)
+                                  lease_dir=f"{M}/lease/capture", kept=GL.MATCH_STAGE_KEPT)
             ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdecimal() and ":" in s[11:]))
             self.log(f"match capture rc={rc_cap} {(ranks + ' ' if ranks else '')[:300]}")
             rc_ctl = self.run_gpu("match.control", to_m, f"{M}/control.log", [*cap, "--no-observer", "--out", f"{M}/control"],
-                                  lease_dir=f"{M}/lease/control", kept=GL.MATCH_LEG_KEPT)
+                                  lease_dir=f"{M}/lease/control", kept=GL.MATCH_STAGE_KEPT)
             with open(f"{M}/gpu_legs.json", "w") as f:
                 json.dump({"capture_rc": rc_cap, "control_rc": rc_ctl}, f)
         if phase == "gpu":

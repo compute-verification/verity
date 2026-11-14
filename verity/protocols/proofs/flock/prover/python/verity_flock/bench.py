@@ -3,7 +3,7 @@
     python -m verity_flock.bench --relation bf16-hopper --bin target/release/flock-pure --out-dir D \\
         [--start 1024] [--max 65536] [--runs 5] [--verifier HOST:PORT] [--procs N]
 
-Each point writes its instance set range (``verity_flock.instances``), starts a live verifier on loopback (unless
+Each point writes its input set's range (``verity_flock.instances``), starts a live verifier on loopback (unless
 ``--verifier`` names one that serves the same range), and runs ``flock-pure prove --warm 1 --runs R --dump``: one untimed
 session, then ``R`` timed sessions, each committing its batch afresh (row digests and the three frame-v3 roots) before
 proving. A session's time is its prover's end to end: commitment, rows, both reps with their coin waits; the verifier's

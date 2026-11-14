@@ -622,7 +622,7 @@ fn run_case(st: &Arc<PureStmt>, inst: &Arc<Instances>, name: &str, gpu: bool) ->
            "both_reps_required": want.2, "why": v["why"], "prover_stopped": v["prover_stopped"], "reps_ok": reps, "prove_s": v["prove_s"]})
 }
 
-/// NV1–NV3: an instance file or netlist pairing that admission must refuse (before any coin), each by its own check.
+/// NV1–NV3: an instance file or circuit description pairing that admission must refuse (before any coin), each by its own check.
 fn admission_negatives(st: &PureStmt, inst: &Instances) -> Vec<Value> {
     use flock_live::pure_block::admit;
     let mut y_tampered = inst.clone();
@@ -816,7 +816,7 @@ fn f128_of_hex(s: &str) -> F128 {
     F128::new(u64::from_str_radix(&s[16..32], 16).unwrap(), u64::from_str_radix(&s[..16], 16).unwrap())
 }
 
-/// Re-verify a verifier's recorded session from files with this machine's own statement (instance set, pinned lowering,
+/// Re-verify a verifier's recorded session from files with this machine's own statement (input set, pinned lowering,
 /// frame-v3 roots, honest publics): the coins are the recorded ones, so this is not transferable evidence, but every
 /// message the proofs carry must hash to what the verifier recorded before issuing each coin, the link exchange must
 /// hash to the recorded link_sha256, and the Flock verifier must accept both reps on one committed root.

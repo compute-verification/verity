@@ -123,7 +123,7 @@ def cdiv(a: int, b: int) -> int:
 class Cfg(tuple):
     """(TM, BN, CTAs, group, cluster, splits); `Cfg.parse("128x256:c0:g8")`, `"128x256:c0:g8:m2"`, `"64x64:c0:g8:k0"`.
     CTAs 0: as many as keep the rounds (`Lib.grid`). Cluster 2: s8mm2_*, CTA pairs on M-adjacent tiles sharing W's box by
-    multicast (the group counts pairs of tile rows, the CTAs stay a cap: half as many pairs). Splits of K (cluster 1
+    multicast (the group counts pairs of tile rows, the CTAs stay a limit: half as many pairs). Splits of K (cluster 1
     only, and only where the tiles leave SMs idle, `splits_for`): their s32 sums meet in a workspace, exactly
     (`Lib.workspace`); 0: as many as fill the SMs (`auto_splits`)."""
 
@@ -268,10 +268,10 @@ class Lib:
         """At most `ctas` (0: every SM) CTAs, and of those the fewest that keep the same rounds of units: tiles, or with
         `most` (the clusters the card holds) pairs of tiles, two CTAs each."""
         if most is None:
-            cap = min(ctas or self.sms, self.sms)
-            return cdiv(units, cdiv(units, cap))
-        cap = min(ctas // 2 or most, most)
-        return 2 * cdiv(units, cdiv(units, cap))
+            limit = min(ctas or self.sms, self.sms)
+            return cdiv(units, cdiv(units, limit))
+        limit = min(ctas // 2 or most, most)
+        return 2 * cdiv(units, cdiv(units, limit))
 
     def workspace(self, m: int, n: int, tm: int, units: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Split K's s32 partial sums [M, N] and a counter a consumer warp of each tile, allocated zero once a shape and

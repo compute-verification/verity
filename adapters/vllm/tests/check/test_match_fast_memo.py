@@ -122,6 +122,23 @@ def test_unfolding_a_padded_program_against_a_flat_one_is_the_records_comparison
     assert (stats["compare_steps_miss"], stats["canonical_hash_miss"], stats["canonical_hash_hit"]) == (1, 2, 0)
 
 
+@FORMS
+@pytest.mark.parametrize("unfolded_first", [False, True], ids=["as it stands first", "unfolded first"])
+def test_one_pair_compared_as_it_stands_and_unfolded_is_kept_as_two_comparisons(compact, unfolded_first, stats):
+    """A comparison is kept by whether its first side is unfolded.  The padded Program differs from the flat one as it stands and
+    equals it unfolded; each document is the record's, in whichever order the two are asked, and a second ask of either is a hit."""
+    def sides():
+        return reads._mux_reader([("n", reads.M, 0, 2)], compact=compact), reads._flat_reader([("n", reads.E, 2, 4)], compact=False)
+    A, B = sides()
+    got = {unfold: gmf._compare_steps_memo(A, B, unfold_a=unfold) for unfold in (unfolded_first, not unfolded_first)}
+    for unfold in (False, True):
+        assert got[unfold] == C.compare_steps(*sides(), unfold_a=unfold) and got[unfold]["canonical_sha256"]["equal"] is unfold
+    assert (got[False]["steps"][0]["n_a"], got[True]["steps"][0]["n_a"]) == (7, 3)
+    assert gmf._compare_steps_memo(A, B) is got[False] and gmf._compare_steps_memo(A, B, unfold_a=True) is got[True]
+    # the flat side's hash is the same either way and is read the second time; the padded side's is computed for each
+    assert (stats["compare_steps_miss"], stats["compare_steps_hit"], stats["canonical_hash_miss"], stats["canonical_hash_hit"]) == (2, 2, 3, 1)
+
+
 # ------------------------------------------------------------------------------------------------ operands relative to a step sequence
 
 READ, LAST = reads.READ - 2, reads.READ - 1                      # the padded step's reader and its select, as instances

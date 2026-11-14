@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1] / "hash" / "exactlin"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "hash" / "exactlin"))
 import kbench  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 

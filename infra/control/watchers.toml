@@ -84,7 +84,7 @@ env = { RESEARCH_STORE = "/root/watchers-preflight-store" }
 # reads --state, and rings infra when it shows no outcome for 36 h
 [[loop]]
 name = "nightly-check"
-argv = ["python3.12", "-s", "{src}/infra/control/nightly_check.py", "--on", "vy-nebius-cpu-8", "--pool", "nightly",
+argv = ["python3.12", "-s", "{src}/infra/control/nightly_check.py", "--on", "vy-nebius-cpu-14", "--pool", "nightly",
         "--timeout", "36000", "--hour", "9", "--work", "/root/fast/nightly-check", "--state", "{dir}/nightly-check.json",
         "--tmp", "{dir}/nightly-check/tmp"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]

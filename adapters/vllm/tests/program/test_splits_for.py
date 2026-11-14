@@ -6,7 +6,7 @@ with `registered_splits(num_SMs)` (`engine.topp_pin`).  CPU, torch-free.
   * range: a power of two in 1..32, non-increasing in n, non-decreasing in num_SMs; `registered_splits` is its value at n = 1 and
     refuses a num_SMs that is no target profile;
   * the real record: the B8 staggered workload served UNPINNED (157 engine steps, 526 sampled rows, 8 requests arriving 0..44 with
-    caps 2..128): the mask kernel's constexpr S at every step == splits_for(live count at that step, 142), flipping
+    max_tokens 2..128): the mask kernel's constexpr S at every step == splits_for(live count at that step, 142), flipping
     (step 0, live 1, S 32) -> (step 32, live 5, S 16) -> (step 101, live 4, S 32) -- the batch-dependence the pin removes.
 """
 from __future__ import annotations

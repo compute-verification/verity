@@ -101,7 +101,7 @@ def test_profile_module_for_case_is_derived_not_looked_up():
 
 
 def test_derived_b0_is_the_protected_base_profile_behind_the_tuned_gemm():
-    """The golden corpus's profile (`vllm_d9105ea80_sm89_eager`) is what the generic constructor derives from SmolLM2's config.json: the
+    """The protected base profile (`vllm_d9105ea80_sm89_eager`) is what the generic constructor derives from SmolLM2's config.json: the
     same C up to the identity fields and unset keys, the same pattern list after the target's tuned-GEMM specialization."""
     derived = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B0").PROFILE
 
@@ -128,7 +128,7 @@ def test_every_hand_fact_cites_where_vllm_hard_codes_it():
     for fam, f in FF.FAMILY_FACTS.items():
         for key, fact in f["facts"].items():
             assert fact.get("provenance"), (fam, key)
-            assert FF.VLLM in fact["provenance"] or "vllm/" in fact["provenance"] or "csrc/" in fact["provenance"], (fam, key, fact["provenance"])
+            assert "vllm/" in fact["provenance"] or "csrc/" in fact["provenance"], (fam, key, fact["provenance"])
             assert sum(k in fact for k in ("const", "key", "derive")) == 1, (fam, key, "exactly one of const / key / derive")
         for p in ("params",):
             if f.get(p):

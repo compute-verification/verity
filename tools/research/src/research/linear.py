@@ -241,6 +241,15 @@ def _lane(i: dict, owners: dict[str, str]) -> str:
     return _lane_label(i) or owners.get(i["team"]["key"]) or NO_LANE
 
 
+def lane(i: dict, reg: dict) -> str | None:
+    """The handle an issue (with its `team { key }` and `labels { nodes { name } }`) belongs to: its `lane:` label's when
+    the Slack registry `reg` has that handle, else its team's handle (`owners`), else None."""
+    label = _lane_label(i)
+    if label and any(h["handle"] == label for h in reg.get("handles", [])):
+        return label
+    return owners(reg).get(i["team"]["key"])
+
+
 def ask_open(a: dict) -> bool:
     """Whether a person's ask (`Linear.asks`) is not delivered: open, parked, or canceled without its asker's yes."""
     return a["type"] in (*OPEN_TYPES, "backlog") or a["type"] == "canceled" and not a["ok"]

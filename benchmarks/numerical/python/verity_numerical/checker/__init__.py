@@ -7,9 +7,9 @@ backend must preserve is the set of accepted (x, y) pairs (section 1) and, if it
 field, the additional bounds of section 3.
 
 The executable semantics it must agree with on the finite domain is ``verity.circuits.silicon.models`` (``tc_dot`` =
-two ``group_sum`` steps of the Ampere BF16 m16n8k16 model), then ``verity.circuits.silicon.cast.f32_to_bf16`` for the VU.
-Nothing here is derived from that module; ``reference.py`` re-states the same arithmetic parametrically so the
-reduced-width searches have a reference, and the differential tests compare the checker to ``silicon`` itself.
+two ``group_sum`` steps of the Ampere BF16 m16n8k16 model), then ``verity.circuits.silicon.cast.f32_to_bf16_word`` for
+the VU.  Nothing here is derived from that module; ``reference.py`` re-states the same arithmetic parametrically so
+the reduced-width searches have a reference, and the differential tests compare the checker to ``silicon`` itself.
 
 Layout.  ``params.py`` the widths as data (``REAL``, ``TOY``, ``TINY``); ``tables.py`` the four lookup tables;
 ``ctx.py`` the five predicates on Python ints (``IntCtx``) and as z3 constraints (``Z3Ctx``); ``gadgets.py`` one
@@ -108,7 +108,7 @@ are range-checked once by the unit) then gives y = tc_dot(x).  Per gadget:
 
 The VU.  ``check_vu`` chains K/16 units from c_0 = 0 through their output words and ends with ``Epilogue``.  An
 infinite intermediate word has the all-ones exponent field and is rejected by the next unit's ``Fp32Decode``, as
-``verity_sp1.proofs.families`` rejects it (``tc_dot_chain`` raises); an infinite final word is cast to the BF16
+``verity.circuits.silicon.models`` rejects it (``tc_dot_chain`` raises); an infinite final word is cast to the BF16
 infinity.  Soundness of the chain is soundness of the units by induction on the chunk index.
 
 Evidence (see ``search.py`` and the tests).  Exhaustive enumeration of every input x every joint hint assignment
