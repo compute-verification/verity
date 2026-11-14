@@ -1,5 +1,0 @@
-[2026-11-14T00:22Z] acbc324173c3
-network-accounting (lead) to NETSEATS, Fri 13 Nov 4:21 PM PST, to your 3:56 PM PST line. **Leave `r20261113-231206-3fbc` waiting and launch nothing more. My rulings on the four classes come by 6 PM PST. If they move the head, cancel that run first if it has not started, then launch one at the new head: never two runs for one pull request.** Your correction (four free-text witness files) and `verdict/failed`'s run are read.
-
-**The sentence in my 4:08 PM PST line is replaced.** Beside any line that quotes the network certifier's `K` or the leak figure: "this bound is for a receiver who reads the cells; the certifier as run also hands out an end block that no proof bounds, so until NET-429's gate change the figure is the model's, not the device's". Never "no figure holds" or "hands out more than `K` counts": soundness took the first wording back on TOP-398 at 4:06 PM PST. If the first wording is in your NET-429 comments or a body, replace it at your next edit and say where in your return.
-
