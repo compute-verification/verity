@@ -149,6 +149,7 @@ untraced = [
 # tools/verity/graph/verity_graph/contract.py): test_vqueue_slim loads it (`vqueue_slim._declaration`), whose declaration names
 # a candidate's Lean inputs. tools/move/rename.py,
 # layout.py and restack.py: test_queue_moves_carry commits them into its origin and restacks a head across the moves they make.
+# tools/verity/check/lean_prebuild.py: the loop launches it (`vqueue_prebuild`), and test_vqueue_prebuild reads the flags it parses.
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "benchmarks/numerical/bench-instances", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/circuits/kernels",
           "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
           "pyproject.toml", "tools/config/pyproject.toml", "verity/protocols/proofs/flock/prover/pyproject.toml", "benchmarks/numerical/pyproject.toml",
@@ -162,7 +163,7 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "bench
           "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/headers.py",
           "tools/verity/lean/settings.py", "tools/verity/check/common.py",
           "tools/verity/graph/verity_graph/contract.py",
-          "tools/verity/graph/verity_graph/__init__.py"]
+          "tools/verity/graph/verity_graph/__init__.py", "tools/verity/check/lean_prebuild.py"]
 parallel = true
 # What the suites of packages depending on research read of it, and so key on in place of this directory: the store and its
 # telemetry, running and recording a run (`python -m research`, its CLI's other commands imported only when run), the merge

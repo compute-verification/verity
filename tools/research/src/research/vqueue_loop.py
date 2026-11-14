@@ -217,7 +217,7 @@ from operator import or_
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import carry, policy, vqueue, vqueue_records
+from . import carry, policy, vqueue, vqueue_prebuild, vqueue_records
 from .landing import CI, JOB_OF_KIND, SLIM_STEPS, SUITES_KIND, Landing, authed, cancel_runs, gating, merge_thread_post
 from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
@@ -2512,8 +2512,9 @@ class Loop:
     `research.vqueue_records` (its `start`, `judge` and `commit`), or None to start every candidate's check at once, with no
     records run before it (`vqueue.Snapshot.records`).  Where the check gates, graph2's readings stand ``g2_read_s`` between
     ticks (`Shadow`), and a tick reads at most ``g2_fresh`` afresh that nothing forces (`_read`).  ``after`` is the tick's own command, which the steps after `main` moved run detached as, with
-    `--after-landing` (`_moved`); None runs them in the tick.  Each tick gives ``timing`` a line of its steps' seconds on
-    ``clock`` and the peak resident size after each (``peak``, `Steps`)."""
+    `--after-landing` (`_moved`); None runs them in the tick.  ``prebuild`` is a `research.vqueue_prebuild.Prebuilds`, which
+    each tick builds the ready Lean changes on ahead of their candidates (`_prebuilds`), or None for none.  Each tick gives
+    ``timing`` a line of its steps' seconds on ``clock`` and the peak resident size after each (``peak``, `Steps`)."""
 
     def __init__(self, world: World, log: Path, *, decide: Callable[[Snapshot], list[Action]] = vqueue.decide,
                  shadow: bool = False, dry_run: bool = False, batch: int = BATCH, depth: int = DEPTH, lean: int = LEAN,
@@ -2523,7 +2524,7 @@ class Loop:
                  g2_read_s: float = G2_READ_S, g2_fresh: int = G2_FRESH, after: list[str] | None = None,
                  clock: Callable[[], float] = time.monotonic,
                  peak: Callable[[], float] = _peak_gb, timing: Callable[[str], None] = print,
-                 left_out: Callable[[Snapshot], list[Leave]] | None = vqueue.left_out):
+                 left_out: Callable[[Snapshot], list[Leave]] | None = vqueue.left_out, prebuild=None):
         if gate not in GATES or gate == CHECK_GATE and (slim is None or not _sharded(slim, shards)):
             raise ValueError(f"gate {gate!r} with {shards} shard(s){'' if slim is not None else ' and no run beside a check'}: "
                              f"a gate is one of {', '.join(GATES)}, and `{CHECK_GATE}` is the run beside each check "
@@ -2536,7 +2537,7 @@ class Loop:
         self.graph2_shadow = graph2_shadow or gate != CHECK_GATE
         self.now, self.out, self.state, self.tree_ejects, self.records = now, out, state, tree_ejects, records
         self.after, self.clock, self.peak, self.timing, self.steps = after, clock, peak, timing, Steps(clock, peak)
-        self.left_out = left_out
+        self.left_out, self.prebuild = left_out, prebuild
         self.reads = Shadow(self.log_path.parent / G2_READS, now, g2_read_s, out) \
             if gate == CHECK_GATE and graph2_shadow else None
         if world is not None:
@@ -2914,6 +2915,14 @@ class Loop:
         except (QueueError, OSError, subprocess.SubprocessError) as e:
             self.out(f"research queue vqueue: tick {t.n}: mapping old heads across `main`'s moves failed: {e}")
         steps.lap("mapped")
+        if self.prebuild is not None and not self.shadow:
+            try:
+                for rec in self._prebuilds(t):
+                    self.write(rec)
+                    logged.append(rec)
+            except (QueueError, OSError, subprocess.SubprocessError, ValueError) as e:
+                self.out(f"research queue vqueue: tick {t.n}: the Lean prebuilds failed: {e}")
+            steps.lap("prebuild")
         if not stopped and self.left_out is not None:       # last: a failure here skips none of the tick's bookkeeping
             for rec in self._leaves(t):
                 self.write(rec)
@@ -2992,6 +3001,19 @@ class Loop:
             end = f.seek(0, 2)
             torn = end > 0 and (f.seek(end - 1), f.read(1))[1] != b"\n"     # a crash's torn line stays a line of its own
             f.write((("\n" if torn else "") + json.dumps(rec, sort_keys=True) + "\n").encode())
+
+    def _prebuilds(self, t: Tick) -> list[dict]:
+        """A `prebuild` line for each Lean build of a ready PR that ``prebuild`` started or saw end this tick
+        (`research.vqueue_prebuild`), ahead of the candidate that will hold it: none without one, and none in the shadow,
+        whose candidates are no queue's."""
+        from .vqueue_slim import lean_key
+
+        if self.prebuild is None or self.shadow:
+            return []
+        held = {m for c in t.snap.candidates for m in c.members}
+        key = lean_key(self.world.repo, t.main)
+        return [self.record(t, "prebuild", **kw)
+                for kw in self.prebuild.tick(t.past.of("prebuild"), t.snap.ready, held, t.main, key)]
 
     def _leaves(self, t: Tick) -> list[dict]:
         """A `leave` line for each PR marked ready that this tick's candidates leave out: of those `World.ready` admits and
@@ -4145,6 +4167,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--heavy-on", default="", help="the machines a heavy PR's candidate's heavy runs take, a comma list, each "
                                                    "run the first free of them (--heavy-file); empty, the default, turns heavy "
                                                    "PRs off")
+    ap.add_argument("--prebuild-on", default="", help="the machines each ready PR's Lean change is built on ahead of its "
+                                                      "candidate, one at a time each, in their pool `research` "
+                                                      "(research.vqueue_prebuild, tools/verity/check/lean_prebuild.py), a comma "
+                                                      "list; empty, the default, builds none ahead")
     ap.add_argument("--pending-hours", type=float, default=4.0,
                     help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
                          "again; rung at twice that (default 4)")
@@ -4243,7 +4269,8 @@ def main(argv: list[str]) -> int:
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
                     shards=a.shards, records=None if a.no_records else vqueue_records, graph2_shadow=not a.no_graph2_shadow,
-                    after=after)
+                    after=after, prebuild=vqueue_prebuild.Prebuilds(a.prebuild_on.split(","), a.repo.resolve())
+                    if a.prebuild_on else None)
         if a.once or a.dry_run:
             loop.tick()
             return 0
