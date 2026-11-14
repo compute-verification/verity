@@ -12,7 +12,7 @@ untraced = ["tests/test_minutes.py", "tests/test_onsite_minutes.py"]
 inputs = [
     "tools/verity/cli/verity_cli/served_table.py",
     # test_no_pin_literal.py: the committed configurations and the code it holds to having none of their pins as a literal
-    "tests/configurations.toml",
+    "tools/verity/cli/verity_cli/configurations.toml",
     "demos",
     "verity/protocols/accounting",
     "benchmarks/pous",

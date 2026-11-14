@@ -167,7 +167,7 @@ key that isn't on the node, and kills nothing. Its verdict trusts the one challe
 SHA-512 of the wipe party's public key, by default the one the run's configuration pins for the memory challenger's wipe,
 `VERITY_PINS`): a session signed under another is rejected, and with none pinned the piece refuses before it asks for a
 card. Its record says `trusted-device` holds only under a committed configuration (`VERITY_CONFIGURATION`, in
-`tests/configurations.toml`) for a key its pins give the wipe; a session accepted under any other is a rehearsal, no
+`tools/verity/cli/verity_cli/configurations.toml`) for a key its pins give the wipe; a session accepted under any other is a rehearsal, no
 bound. Its header lists the challenger's
 settings. `tests/test_pous_served_wipe.py` runs it on a CPU, with one segment in host memory.
 

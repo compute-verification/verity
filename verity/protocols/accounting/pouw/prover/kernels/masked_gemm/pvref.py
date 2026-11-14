@@ -1,6 +1,7 @@
 """CPU reference for pvgemm.cu's gate dump: every noise, edited operand, product and receipt bit for bit against hashlib.
 
-python3 pvref.py DIR prints one JSON line of checks and exits 0 only if every check passes.
+PYTHONPATH=. python3 verity/protocols/accounting/pouw/prover/kernels/masked_gemm/pvref.py DIR, from the repository root,
+prints one JSON line of checks and exits 0 only if every check passes.
 
 From the dumped P, V^T, Q, K and the seed alone (sref.py's sigma and patch noise, for pm1, u17, u17w, u17p, u17wp): the shared E
 (s x s, A's tag) against genP's buffer; V's fresh noise (H 128 x s, B's tag) against editV's V' and genV's folded words;
@@ -17,10 +18,15 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from mref import duo_receipts, words
-from sref import fold, noise, sigma
+from verity.protocols.accounting.pouw.prover.kernels.masked_gemm.mref import (
+    duo_receipts,
+    words,
+)
+from verity.protocols.accounting.pouw.prover.kernels.masked_gemm.sref import (
+    fold,
+    noise,
+    sigma,
+)
 
 ALS = {"pm1": 1, "u17": 2, "u17w": 3, "u17p": 2, "u17wp": 3}   # u17p, u17wp: the noise of u17, u17w, five lanes a patch
 HD = 128
