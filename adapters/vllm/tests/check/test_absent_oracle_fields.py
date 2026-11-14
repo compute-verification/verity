@@ -186,7 +186,7 @@ def refused(e: pytest.ExceptionInfo[RecordError], field: str, stated: Any) -> bo
     return (e.value.where, e.value.field) == (MO.VIEW, field) and e.value.why.startswith(f"is {said!r}, not a number (the view: {{")
 
 
-def first_view(views: str, field: str, stated: Any) -> Callable[[list[dict[str, Any]]], None]:
+def first_view(views: str, field: str, stated: Any) -> Callable[[list[dict[str, Any]]], object]:
     """The first view of `views` of the embedding's first instance (request r1's first row), with `stated` under `field`."""
     return lambda lines: put(embed_instances(lines)[0][views][0], (field,), stated)
 
@@ -263,7 +263,11 @@ def test_a_null_in_place_of_an_operands_view_is_refused_by_no_name(tmp_path):
     assert o.member_bytes(0, EMBED, "out", "r1")[1:] == (None, 3) and o.member_bytes(0, EMBED, "in", "r0")[1:] == (None, 5)
     fed_by = {"spec": "X_v1", "operand": "X_v1"}
     whole = oracle(tmp_path / "whole", "instances", two_whole_producers_a_row()).member_bytes(0, EMBED, "out", "r1", producer=fed_by)
-    two = oracle(tmp_path / "two", "instances", lambda lines: [two_whole_producers_a_row()(lines), no_operand_view(lines)])
+    def both(lines: list[dict[str, Any]]) -> None:
+        two_whole_producers_a_row()(lines)
+        no_operand_view(lines)
+
+    two = oracle(tmp_path / "two", "instances", both)
     assert two.member_bytes(0, EMBED, "out", "r1", producer=fed_by) == whole and whole[0] is None     # fed by nothing, as an operand of no producer
 
 
