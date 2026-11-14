@@ -765,7 +765,7 @@ def _anti() -> Program:
 @pytest.mark.parametrize("make,full", [(_xzero, (T - 1) * K * N), (_anti, (T - 1) * 2 * K * N)], ids=["xzero", "anti"])
 def test_every_mac_reading_a_zero_row_is_left_out(make, full, monkeypatch):
     """A zero operand of one row (``xzero``), which has no pair to compare, and two operands whose zero rows are in
-    different members of a batch both per member (``anti``), so no row of one meets a zero row of the other: every
+    different members of a batch both per member (``anti``), so no zero row of one meets a zero row of the other: every
     MAC reads a zero row, so none is charged. Without the point the product is charged whole."""
     w = WK.read(make(), KB)
     monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
