@@ -1517,7 +1517,8 @@ def test_a_points_numbers_are_measurements_of_its_result(tmp_path, monkeypatch):
     monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": "none"})
     (tmp_path / "result.json").write_text(json.dumps({"schema": "research/result/v0.1", "kind": "verity-vllm-benchmark/v1",
                                                      "run_id": "r1", "measurements": []}))
-    result_format.record(doc, tmp_path, "r1", "out/benchmark.json")
+    result_format.record(doc, result_format.kit.Writer(tmp_path, "r1", result_format.kit.host_stamp()),
+                         "out/benchmark.json")
     held = json.loads((tmp_path / "result.json").read_text())
     assert held["kind"] == "verity-vllm-benchmark/v1"
     got = {m["name"]: m for m in held["measurements"]}
