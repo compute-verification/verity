@@ -14,12 +14,10 @@ A *run directory* is what `bench/run_config.py` produces for one configuration (
     RUN_DIR/control/tokens.json      the `--no-observer` control run: THE token reference of every gate
     RUN_DIR/resolution.json          `bench.resolve_log --out RUN_DIR/resolution`
     RUN_DIR/fold_summary.json        this module's `FOLD_SUMMARY_SCHEMA` (written twice: `fold_summary_2.json`)
-    RUN_DIR/census/census.json       GPU census;  RUN_DIR/census_reconcile.json  its torch-free reconciliation
-    RUN_DIR/nonint/noninterference.json
-    RUN_DIR/golden.json              `verity_vllm.properties.golden --check` (integrator)
     RUN_DIR/quarantine.json          differential tests of newly registered definitions (when the run uses any)
-    RUN_DIR/holdouts.json            written by the ORCHESTRATOR: the same gates G1..G6 over holdout workloads
     RUN_DIR/compare.json             `verity_vllm.check.fold_compare` (tokens, boundary, subcircuits, structure)
+    RUN_DIR/census/census.json, census_reconcile.json, nonint/noninterference.json, golden.json, holdouts.json (the same
+    gates G1..G6 over holdout workloads),
     RUN_DIR/wiring.json, replay_a.json, replay_chain.json, replay_b_step<N>.json, root_policy.json, provenance.json
                                      no producer in this tree: a gate that reads one is skipped with the file missing as
                                      its reason

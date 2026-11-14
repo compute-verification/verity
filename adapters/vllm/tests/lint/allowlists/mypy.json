@@ -330,8 +330,6 @@
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "override", "symbol": "SeededWithPeers.forward", "detail": ""},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "union-attr", "symbol": "attention_impls", "detail": ""},
     {"file": "verity_vllm/program/predict/template_counts.py", "kind": "override", "symbol": "TemplateCounts._attention", "detail": "", "count": 3},
-    {"file": "verity_vllm/properties/census.py", "kind": "attr-defined", "symbol": "run_census.profiled_run", "detail": ""},
-    {"file": "verity_vllm/properties/noninterference.py", "kind": "union-attr", "symbol": "run_observer_variant.HashOnlyCapture._flush_snapshots", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/h1/prover.py", "kind": "index", "symbol": "Writer.keep", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/h1/registered_device.py", "kind": "union-attr", "symbol": "device_hash", "detail": "", "count": 2},
     {"file": "tests/commit/test_lead_rows_cuda.py", "kind": "name-defined", "symbol": "_dev", "detail": ""},

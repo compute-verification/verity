@@ -7,7 +7,7 @@ There is no per-model profile module and no role -> module table.  A checkpoint 
 `verity_vllm.observe.fold.profiles.derived_<ROLE>[_tp<W>]` (and the legacy name `dense_<ROLE>`) is materialised on import by the
 finder below, so every `importlib.import_module(f"verity_vllm.observe.fold.profiles.{name}")` consumer (resolve_log, compare, gates, run_config,
 tp2_fold_match, cb_a) works unchanged in a fresh process.  The two protected base modules (`vllm_d9105ea80_sm89_eager`, `..._qwen15`) stay
-as the κ pin record and the golden corpus's profiles; `derived_B0` is the base module's profile derived from config.json, behind the
+as the κ pin record; `derived_B0` is the base module's profile derived from config.json, behind the
 target's tuned GEMM (`tests/engine/test_profiles_generic.py` pins the agreement)."""
 
 import importlib

@@ -20,7 +20,7 @@ from typing import Any
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.program import quarantine as _quarantine
-from verity_vllm.records.property_record import seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 ROOT = Path(_quarantine.__file__).parent
 FORBIDDEN_IMPORTS = ("os", "sys", "time", "datetime", "random", "secrets", "pathlib", "io", "json", "pickle", "subprocess", "socket",
@@ -93,6 +93,6 @@ def lint(root: Path = ROOT) -> dict[str, Any]:
     ids = [r["semantic_id"] for r in reports if r["semantic_id"] and not r["adapter"]]
     dup = sorted({i for i in ids if ids.count(i) > 1})
     ok = all(r["status"] == "pass" for r in reports) and not dup
-    return seal({"schema": "verity-gen/quarantine-lint/v1", "root": str(root), "n_files": len(files), "status": "pass" if ok else "fail",
+    return seal({"schema": REGISTRY["quarantine_lint"].schema, "root": str(root), "n_files": len(files), "status": "pass" if ok else "fail",
                  "duplicate_semantic_ids": dup, "files": reports}, ok)
 

@@ -1,1 +1,1 @@
-"""Property harnesses: non-interference, kernel census, golden and holdout corpora, admission difftests and the quarantine lint."""
+"""Property harnesses: admission difftests, the quarantine lint and the kernel allowlist."""
