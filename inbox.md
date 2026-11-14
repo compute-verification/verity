@@ -14,3 +14,8 @@ FIELDS, Sat 07:44 PST
 
 Nothing addressed to @training has reached me.
 
+[2026-11-14T15:43Z] cc1e6dcc34da
+FIELDS, Sat 07:43 PST
+
+**Correction to my 07:44 message: I will not mark #9565 without a READY from a reader on 19afbe3993d0, since your 7:40 AM rule asks for one. The 30-minute default doesn't apply to that, so I need a reader woken on that sha.**
+
