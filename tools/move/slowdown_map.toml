@@ -4,7 +4,9 @@
 # - `Dampener` becomes `Slowdown` as a word or one part of a name: the modules `Dampener.lean`, the namespace of the
 #   slowdown's vocabulary (`Nci.Dampener`), its guarantees and proofs (`Dampener`, `DampenerRemote`,
 #   `DampenerRemotePeriod`, `DampenerThreaded`, `DampenerThreadedSlots`, `DampenerWindows`, with their `_honest` and
-#   `_nontrivial`) and `remoteDampener`, with every mention of them outside Lean.
+#   `_nontrivial`) and `remoteDampener`, with every mention of them outside Lean. `DampenerRemotePeriod` becomes
+#   `SlowdownRemoteMonitoringPeriod`, since a Lean `*Period*` name for the stretch a bound is about says monitoring
+#   period (GLOSSARY.md, Older names); it stands before `Dampener`, which would match first.
 # - The proofs' three lemmas that spell it in lower case, each by its whole name.
 # What stays, each for a change of its own (`move_check.py` certifies a word that renames a path, a module or a Lean
 # declaration to a name its base never spells, and `slowdown` in lower case is spelled already): Python's
@@ -14,6 +16,7 @@
 # `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints.
 
 [words]
+"DampenerRemotePeriod" = "SlowdownRemoteMonitoringPeriod"
 "Dampener" = "Slowdown"
 "dampener_core" = "slowdown_core"
 "dampener_attained" = "slowdown_attained"
