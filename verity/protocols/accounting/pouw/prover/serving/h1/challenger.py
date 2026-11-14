@@ -111,7 +111,7 @@ from verity.protocols.proofs.spot.device.challenger import (
 
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.accounting.pouw.prover.serving.h1.draw import (
+from verity.protocols.accounting.pouw.prover.serving.h1.sample import (
     NO_DRAW_SESSION,
     draw_files,
     draw_reason,

@@ -451,7 +451,7 @@ def cmd_zk_point(a) -> int:
     """``zk-point``: the ZK point's result (``job.sh ZK=1``) from its records; exit 0 when it passed."""
     from . import zk
 
-    doc = zk.point(Path(a.dir), workload(a.workload), a.B, zk.firewall_on(), os.environ.get("RESEARCH_RUN_ID"))
+    doc = zk.point(Path(a.dir), workload(a.workload), a.B, zk.zk_server_on(), os.environ.get("RESEARCH_RUN_ID"))
     Path(a.out).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     print(json.dumps({"status": doc["validation"]["status"], "detail": doc["validation"]["detail"]}
                      | {m["name"]: m["value"] for m in doc["measurements"]}))

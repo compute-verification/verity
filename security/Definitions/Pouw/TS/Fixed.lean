@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.TS.Drawn
+public import Definitions.Pouw.TS.Sampled
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

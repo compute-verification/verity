@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Pouw.TS.Drawn
+import Proofs.Pouw.TS.Sampled
 import Proofs.Pouw.RelativeSecurity
 import Proofs.Pous.Prob
 

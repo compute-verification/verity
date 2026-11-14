@@ -15,6 +15,7 @@ from verity.protocols.accounting.certifier.verifier import out_commit as O
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.runtime.framing import decode, encode
 
 LINK = "node0/uplink0"
 SCHEDULE = WardenParams(window=4, bucket_ms=10)
@@ -76,7 +77,7 @@ def _encoded(actions) -> list[tuple[str, str]]:
     for a in actions:
         if isinstance(a, Send):
             types = NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, a.channel)
-            assert types.decode(types.encode(a.message)) == a.message
+            assert decode(types, encode(types, a.message)) == a.message
             sent.append((a.channel, a.message.type))
     return sent
 
