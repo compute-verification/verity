@@ -27,7 +27,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`).
     `spot_flock/verifier/lean/` is SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's two lists
-    for the proofs, with the recursive audit. The inference-only policy's check (`inference_only/verifier/inference_only/`),
+    for the proofs, with the recursive audit. The inference-only policy's check (`inference_only/verifier/lean/`),
     `spot_flock/`, `remote/` and `onsite/` are Lean only; the policy's Python is its
     manifest alone (`inference_only/verifier/parties.py`: the verifier, no channel). `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below

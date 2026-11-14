@@ -1,5 +1,5 @@
-"""`registration_log.write` is a log nci-check's full check accepts: on a Program whose θ is registered, its record, provenance
-and trusted input pass `inference_only_reference.check_baseline` (`InferenceOnlyCheck.Theta`'s reference), each entry is the one one-stage's
+"""`registration_log.write` is a log inference-only-check's full check accepts: on a Program whose θ is registered, its record, provenance
+and trusted input pass `inference_only_reference.check_theta` (`InferenceOnlyCheck.Theta`'s reference), each entry is the one one-stage's
 `Registered.commit` makes of the parameter's rows, and each break is refused with the code the check names."""
 import copy
 import importlib.util
@@ -48,7 +48,7 @@ def _case(registered=("w8", "sc"), program_digest=None):
 
 def test_the_log_passes_the_full_check_and_theta_carries_the_weights_reads():
     program, inst, out = _case()
-    assert REF.check_baseline(inst, out["trusted"]) == {"gates": program.gates, "ius": [[1, 16]], "complies": True,
+    assert REF.check_theta(inst, out["trusted"]) == {"gates": program.gates, "ius": [[1, 16]], "complies": True,
                                                         "failure": None}
     # read as novel, the weights' 8 + 32 bits break α: θ is what the log makes complying
     assert REF.check_desc(inst | {"theta": [], "provenance": []})["failure"] == [0, "nci"]
@@ -73,11 +73,11 @@ def test_each_break_is_refused_with_its_code():
     _p, inst, out = _case()
     bad = copy.deepcopy(inst)
     bad["provenance"][0]["root"] = "00" * 64
-    assert REF.check_baseline(bad, out["trusted"]) == {"error": "theta-root"}
+    assert REF.check_theta(bad, out["trusted"]) == {"error": "theta-root"}
     _p, inst, out = _case(program_digest="cd" * 64)             # a log registered for another Program
-    assert REF.check_baseline(inst, out["trusted"]) == {"error": "run-program"}
+    assert REF.check_theta(inst, out["trusted"]) == {"error": "run-program"}
     _p, inst, out = _case(registered=())                         # θ bound per run: the Program the builder made before
-    assert REF.check_baseline(inst, out["trusted"]) == {"error": "theta-not-registered"}
+    assert REF.check_theta(inst, out["trusted"]) == {"error": "theta-not-registered"}
 
 
 def test_record_takes_entries_committed_elsewhere_and_refuses_any_that_is_not_its_parameters():
