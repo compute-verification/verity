@@ -46,8 +46,20 @@ structure Prices where
   bf16 : ℚ
   costs : Costs
 
-/-- The H100's prices (Rounds 10–11): an FP32 add costs 32, a BF16 MAC 2, and §5's forming `Costs.adopted`. -/
+/-- The H100's prices (Rounds 10–11): an FP32 add costs 32, a BF16 MAC 2, and §5's forming `Costs.adopted`. An FP32 add's
+32 is the default clock reading, both pipes at `h100SmMHz` (CMP-438). -/
 def Prices.h100 : Prices := ⟨32, 2, Costs.adopted⟩
+
+/-- The H100's SM clock, 1980 MHz: `clock.sm` in `hardware/cards/h200-sxm-141gb.toml` (the H200 is the same GH100), from
+NVIDIA's H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, the boost clock its FP32 and FP64 non-tensor peaks
+are quoted at. With the tensor pipe at it too, it is the default reading of the prices (CMP-438). -/
+def h100SmMHz : ℚ := 1980
+
+/-- The H100's tensor clock, 1830 MHz: `clock.tensor` in the same card file, from the whitepaper's Table 3, the boost
+clock for FP8, FP16, BF16 and TF32 tensor-core operations, which the H200 data sheet's dense tensor peaks are quoted
+at. The prices at it (`W1.W1Prices.h100Tensor`) are the second reading, which holds only if the tensor pipe never
+exceeds it. -/
+def h100TensorMHz : ℚ := 1830
 
 /-- **A device record** for Pearl-C: the promotion period `G` (0: none), the prices, and the device's maps on a unit's
 noisy codes (A′, B̃): the ticket words C̃, the useful words U from the codes, F's codes and the peel's noise rows, the
