@@ -298,8 +298,8 @@ def rows_wf_refusal(s: WardenParams, windows: int) -> str:
 
 def connection_rows(s: WardenParams) -> bool:
     """`Schedule.connectionRows`: whether the schedule registers connection rows, its lengths rows, which a schedule
-    with content rows has too."""
-    return s.lengths is not None or s.content is not None
+    with content rows has too, as one with request words has content rows. Each is asked, as the Lean asks it."""
+    return s.lengths is not None or s.content is not None or s.request_words is not None
 
 
 def _classes(j) -> tuple[tuple[int, ...], ...]:
@@ -311,10 +311,14 @@ def _classes(j) -> tuple[tuple[int, ...], ...]:
 def _schedule(j) -> WardenParams:
     """`scheduleOf`: `WardenParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
     u32s, in the id egress form, and each optional field the schedule sets (`OPTIONAL_SCHEDULE_KEYS`), as
-    `WardenParams` holds it."""
+    `WardenParams` holds it. `request_words` is the JSON `true` or it is refused: `WardenParams` reads `None` as
+    unset, and `scheduleOf` refuses a key that is there and not `true`."""
     keys = sorted(SCHEDULE_KEYS + [k for k in OPTIONAL_SCHEDULE_KEYS if isinstance(j, dict) and k in j])
     _exactly(j, keys, "schedule")
-    values = {k: _classes(j[k]) if k == "content" else _nat(j[k], "schedule") for k in keys}
+    if "request_words" in keys and j["request_words"] is not True:
+        raise D.Reject("schedule: request_words is true, for a schedule with request words, or unset")
+    values = {k: _classes(j[k]) if k == "content" else j[k] if k == "request_words" else _nat(j[k], "schedule")
+              for k in keys}
     try:
         s = WardenParams(**values)
     except ValueError as e:
@@ -2453,14 +2457,23 @@ def _lengths_schedule(s: dict) -> dict:
                 "egress_cells": min(s["egress_cells"], s["slots"] * s["window"])}
 
 
+def _words_schedule(s: dict) -> dict:
+    """A schedule with lengths rows `s` (`_lengths_schedule`) with request words: content rows under the lengths
+    rows' form 2, `max_tokens_cap` 1 below at least two egress cells, which a connection of a window of two buckets
+    or more still ends within, and a cell that holds an id request's `max_tokens`."""
+    return s | {"cell_bytes": max(s["cell_bytes"], CAPPED_CELL), "egress_cells": max(s["egress_cells"], 2),
+                "lengths": 2, "content": [[2, 2]], "max_tokens_cap": 1, "request_words": True}
+
+
 def connection_rows_params(p: dict) -> list[dict]:
     """Rows-form parameters whose schedule has connection rows, each one change to `p`'s uncapped schedule
-    (`_lengths_schedule`): lengths rows of each form, and content rows of the form's classes with them. Each is a
-    schedule `scheduleOf` reads, as `WardenParams` builds it, and one the check refuses by name (`CONNECTION_ROWS`)."""
+    (`_lengths_schedule`): lengths rows of each form, content rows of the form's classes with them, and request
+    words with form 2's (`_words_schedule`). Each is a schedule `scheduleOf` reads, as `WardenParams` builds it, and
+    one the check refuses by name (`CONNECTION_ROWS`)."""
     s = _lengths_schedule(p["schedule"])
     return [p | {"schedule": s | rows} for rows in (
         {"lengths": 1}, {"lengths": 2}, {"lengths": 1, "content": [[2, 2, 1]]}, {"lengths": 2, "content": [[2, 2]]},
-        {"lengths": 2, "content": [[2, 4], [4, 2]]})]
+        {"lengths": 2, "content": [[2, 4], [4, 2]]})] + [p | {"schedule": _words_schedule(s)}]
 
 
 def bad_lengths(p: dict) -> list[dict]:
@@ -2470,8 +2483,10 @@ def bad_lengths(p: dict) -> list[dict]:
     cell that doesn't hold an id request's first prompt id, and a slot stride of more releases than a lengths row
     has slots. Content rows: without lengths rows, of no class, of the other form's numbers, of a size that is no
     power of two, of more ids than a response row has, of more prompt ids than a request has bytes, of no row or of
-    more rows than the lengths table has slots, and classes that are no list of lists of naturals."""
+    more rows than the lengths table has slots, and classes that are no list of lists of naturals. Request words
+    (`_words_schedule`): not `true`, under form 1, without content rows, and without `max_tokens_cap`."""
     s = _lengths_schedule(p["schedule"])
+    words = _words_schedule(s)
     one, two = s | {"lengths": 1}, s | {"lengths": 2}
     slots = s["window"] // s["every"] * WardenParams(**one).stride_releases
     past = 1 << (s["ingress_cells"] * (s["cell_bytes"] - HEADER.size)).bit_length()
@@ -2482,7 +2497,10 @@ def bad_lengths(p: dict) -> list[dict]:
             (s, [[2, 2]]), (two, []), (two, [[2, 2, 1]]), (one, [[2, 2]]), (two, [[3, 2]]), (two, [[2, 1]]),
             (two, [[2, 2 * content_rows.most_ids()]]), (two, [[past, 2]]), (one, [[2, 2, 0]]),
             (one, [[2, 2, slots + 1]]), (two, "x"), (two, [2, 2]), (two, [[True, 2]]), (two, [[2, -1]]),
-            (two, [[2]]), (one, [[2, 2, 1, 1]]))]
+            (two, [[2]]), (one, [[2, 2, 1, 1]]))] + [
+        words | {"request_words": v} for v in (False, 1, "true", None)] + [
+        words | {"lengths": 1, "content": [[2, 2, 1]]}, {k: v for k, v in words.items() if k != "content"},
+        {k: v for k, v in words.items() if k != "max_tokens_cap"}]
     return [p | {"schedule": schedule} for schedule in schedules]
 
 

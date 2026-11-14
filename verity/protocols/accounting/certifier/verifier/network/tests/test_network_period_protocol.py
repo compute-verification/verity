@@ -190,8 +190,9 @@ def test_a_bad_response_cap_is_refused(server):
 
 
 def test_a_schedule_with_connection_rows_is_refused_by_name(server):
-    """A schedule with lengths rows, of either form, with content rows or without, is one the network certifier
-    builds (`WardenParams`), and the period check reads it and refuses it by name at the parameters, Lean as the
+    """A schedule with lengths rows, of either form, with content rows or without, and with request words, is one
+    the network certifier builds (`WardenParams`), and the period check reads it and refuses it by name at the
+    parameters, Lean as the
     mirror: the check reads no connection rows' registration, so it accepts no period under one. The check refuses
     it too (`connectionRowsCheck`), which the mirror's check shows at an empty period under each schedule, accepted
     under the honest one: no parameters `params` reads reach it."""
@@ -211,8 +212,9 @@ def test_a_schedule_with_connection_rows_is_refused_by_name(server):
 
 
 def test_bad_lengths_rows_and_content_rows_are_refused_as_the_schedules(server):
-    """A schedule whose lengths rows or content rows `WardenParams` refuses (`PC.bad_lengths`) is refused at the
-    parameters as no schedule, by Lean as by the mirror, and not by the name a schedule with connection rows is."""
+    """A schedule whose lengths rows, content rows or request words `WardenParams` refuses (`PC.bad_lengths`) is
+    refused at the parameters as no schedule, by Lean as by the mirror, and not by the name a schedule with
+    connection rows is."""
     case = build("rows-honest", 0, small=True)
     for params in PC.bad_lengths(case["params"]):
         bad = case | {"params": params}
