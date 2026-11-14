@@ -1,0 +1,79 @@
+# A draft: the `*Period*` names the period maps (`period_map.toml`, `period_net_map.toml`, `period_proofs_map.toml`,
+# `period_soundness_map.toml` and their second stages) left in the areas they didn't take, renamed by
+# `tools/move/rename.py --map tools/move/period_areas_map.toml` after `inference_only_map.toml`. The rule is theirs
+# (`period_map.toml`'s header): a "period" that is the stretch of time a bound is about becomes "monitoring period"
+# (GLOSSARY.md, Older names: the `*Horizon*` and `*Period*` row); a certification period, an execution phase, PoUS's
+# and the attested period, a span of ticks and a period of the core's vocabulary keep the word (ARCHITECTURE.md,
+# Period). A name that already says `MonitoringPeriod` is the term, not a site.
+# - The inference-only policy's remote slowdown over a monitoring period: `DampenerRemotePeriod` and its module
+#   `RemotePeriod` (training's; `slowdown_map.toml` renames its `Dampener`).
+# - WeightSecurity's bounds over `T` windows: `PeriodReg`, `PeriodTwo*`, `periodReg*`, `periodTwo*` and the modules
+#   `RegPeriod`, `TwoRegPeriod`, `TwoProdPeriod` (proofs').
+# - Flock's bounds over `T` sampling blocks: `IntegrityPeriod`, `IntegrityPeriodLog` and the namespace `JointPeriodV5`
+#   (proofs'). GLOSSARY.md's served-span row names `IntegrityPeriod` for "execution phase"; its statement pools `T`
+#   sampling blocks, which is a monitoring period's bound.
+# - PoUW's checked credit over a period's windows, each an instance of `CircuitWorkMonitoringPeriod` or
+#   `CircuitCreditMonitoringPeriod` (`security/Proofs/Pouw/Period.lean`'s docstring): the namespaces and modules
+#   `Properties.Pouw.Period`, `PeriodJ10R`, `PeriodJ10RStrata`, `CheckedWorkPeriod`, `*CheckedCreditPeriod*`,
+#   `skipPeriod` and `onePeriod_*` (compute-accounting's and compute-research's).
+# Not here: Dither's `Pouw.Dither.Period`, written bare inside its namespace, which a part-word row can't tell from the
+# core's `Period`; and the verifier's `PouwCheck.Period` and `PeriodCredit`, the code of `verity/pouw/period/v1`, which
+# keep the word until a format version.
+# Declarations keep their place in the locks' records: `rename.py --moves` prints the renames `check.py --update
+# --moved` takes.
+
+[words]
+# Module paths and namespaces named for the word alone, longest first.
+"Pouw/Period" = "Pouw/MonitoringPeriod"
+"Pouw.Period" = "Pouw.MonitoringPeriod"
+# Declarations and modules whose name holds the word with other parts, each renamed wherever it stands (no other
+# declaration holds it in another sense).
+"onePeriod_pos" = "oneMonitoringPeriod_pos"
+"onePeriod_cont" = "oneMonitoringPeriod_cont"
+"TwoProdPeriod" = "TwoProdMonitoringPeriod"
+"JointPeriodV5" = "JointMonitoringPeriodV5"
+"RemotePeriod" = "RemoteMonitoringPeriod"
+"skipPeriod" = "skipMonitoringPeriod"
+"RegPeriod" = "RegMonitoringPeriod"
+"PeriodReg" = "MonitoringPeriodReg"
+"periodReg" = "monitoringPeriodReg"
+"PeriodTwo" = "MonitoringPeriodTwo"
+"periodTwo" = "monitoringPeriodTwo"
+
+# Whole names: each new name, as one part of a longer name, already stands at the base (`CircuitCreditMonitoringPeriod`,
+# `WorkOfH1CheckedCreditMonitoringPeriod`, `IntegrityOfIntegrityMonitoringPeriod`), where `move_check.py` takes no
+# part-word rename to it.
+[[words_in]]
+files = ["*"]
+[words_in.words]
+"H1J10RCheckedCreditPeriodStrata" = "H1J10RCheckedCreditMonitoringPeriodStrata"
+"h1J10RCheckedCreditPeriodStrata" = "h1J10RCheckedCreditMonitoringPeriodStrata"
+"H1J10RCheckedCreditPeriod" = "H1J10RCheckedCreditMonitoringPeriod"
+"h1J10RCheckedCreditPeriod" = "h1J10RCheckedCreditMonitoringPeriod"
+"H1CheckedCreditPeriod" = "H1CheckedCreditMonitoringPeriod"
+"h1CheckedCreditPeriod" = "h1CheckedCreditMonitoringPeriod"
+"CheckedCreditPeriod" = "CheckedCreditMonitoringPeriod"
+"checkedCreditPeriod" = "checkedCreditMonitoringPeriod"
+"CheckedWorkPeriod" = "CheckedWorkMonitoringPeriod"
+"checkedWorkPeriod" = "checkedWorkMonitoringPeriod"
+"IntegrityPeriodLog" = "IntegrityMonitoringPeriodLog"
+"IntegrityPeriod" = "IntegrityMonitoringPeriod"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the retired-terms
+# lints' own examples, the frozen backends, files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line
+# itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tests/test_retired_terms.py",
+           "tests/lint/test_repo_retired_terms.py"]
+
+[keep]
+# Format ids, notes, art ids, branches and lanes; the record keys and domain tags that keep the word until a format
+# version.
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '"(?:period|periods)"']
+# GLOSSARY.md's row of older names that lists `IntegrityPeriod`; and the new names that hold their old word after a
+# lowercase letter, where it would match again, kept so that running the map again on its move changes nothing
+# (`stage.py`'s rerun).
+strings = ['a served span: "window", `IntegrityPeriod`', "MonitoringPeriodReg", "monitoringPeriodReg",
+           "MonitoringPeriodTwo", "monitoringPeriodTwo"]
