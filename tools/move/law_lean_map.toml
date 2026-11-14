@@ -426,7 +426,7 @@ files = ["benchmarks/network_traces/tests/test_scan_zk.py"]
 words = { "params_law" = "params_sampling_design" }
 
 [[words_in]]
-files = ["demos/onsite_served/served_table.py"]
+files = ["tools/verity/cli/verity_cli/served_table.py"]
 words = { "Law" = "SamplingDesign" }
 
 [[words_in]]
