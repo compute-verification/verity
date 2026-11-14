@@ -9,7 +9,7 @@ sample, its coins fixed, and ``lean``, which writes the Lean's answer to the pie
 is the Python's.
 
 The compose's earlier conditions (the live salt session, the lane's period and reserve, the live sample and its published
-coin, the window's registration) are `test_served_verdicts._pearlplus_piece`'s stand-ins, since this toy's coins are an
+coin, the window's docket) are `test_served_verdicts._pearlplus_piece`'s stand-ins, since this toy's coins are an
 in-process challenger's and its sample the node's (a live run is `pearlplus_local_e2e.py`'s); Pearl+'s answer, W and the
 Lean's answer are this run's. The Lean is given W (``--tie W``) and holds the passes to it, the warm-up's round among
 the coin record's dropped. The row then reaches the Lean condition and reads the Lean's answer: without one it names

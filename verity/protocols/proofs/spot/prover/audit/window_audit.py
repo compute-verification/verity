@@ -1,5 +1,5 @@
 """One-stage audit, run A5: a deferred Commit's window, a stand-in, or a TP Commit's windows, one per rank, each `served` or a stand-in. The
-registration is over serving rows of the Commit's own values, and the sampled proof blocks go to M0's prover and the Lean verifier.
+docket is over serving rows of the Commit's own values, and the sampled proof blocks go to M0's prover and the Lean verifier.
 
 A deferred Commit's window is committed after serving from its sealed replay bundle opened against its record and bound to its run
 root. Serving's commitment is the record's roots, under the scheme the record was committed in (rows-sha512 by default, vllm-v1 an
@@ -34,7 +34,7 @@ A deferred Commit's run takes its window in the other form too, `served` (`a5.sh
 `c2_replay.serving_rows`), serving's own commitment, made before any sample. A5 takes it only over a
 SHA-512 run root of record (64 bytes: serving's record is hm96-sha512 rows in frame-v3-sha512 trees), so a vllm-v1 run's served
 window is refused by name (`source`: `sha512`), and only when the record's weights root, the tree its rows' weights were opened
-against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_rows.weights_tree`). The summary reports the form
+against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weights_tree`). The summary reports the form
 (`source`) and the commitment it names (`commitment`).
 
 * **Serving's files.** `--window DIR` (a TP Commit: `--windows DIR`'s `rank<r>/`) is what serving wrote: for a deferred Commit,
@@ -58,10 +58,10 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   end, column end or combine, `CHAINS`, or a row template the partition's `chunk_cap` names), by Flock's `UnitStager` on the rows the window lays out
   (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
-  the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
+  the registered roots and served domains. Then R1-R7 run over the docket with the leaf layer over the public bodies it holds
   (`serving_rows.leaf_layer`), with a window's history tables (`audit`'s ``history``, `ml.windows.history.params`), each
   table's root the verifier computes from its writers' public bodies, to which it holds the window's registered
-  root, in its check before the sample and in the stream's registrations its run of record reads (a root both its verifiers
+  root, in its check before the sample and in the stream's dockets its run of record reads (a root both its verifiers
   refuse is `registration.HISTORY`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
   either kind names the record's commitment, and it is a stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the
   run root of record, the digest of the bundle's manifest it opened and that commitment, or a served window whose run is the run
@@ -70,20 +70,20 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   `tp.serving_rows.stand_in` over the bundle the record names for the rank, under a SHA-512 TP run root, its run, `tp` and served
   Programs the record's.
 * **Advice windows** (``--advice-opening``, a TP Commit, network certification under arbitrary vLLM usage): the advice (I1's
-  canonical encoding: everything serving made unpredictable) is private, and the registration binds the root of its hiding
+  canonical encoding: everything serving made unpredictable) is private, and the docket binds the root of its hiding
   commitment and its bits (`advice_windows.commit_advice`). The verifier is handed the commitment's opening, the named gap until
   the compiler's wiring is proved in zero knowledge, and derives rank r's window from the record, the advice it opens and its own
   copy of the registered compiler alone (`advice_windows.of_opening`, `window_of_advice`; ``--compiler traced``, the stand-in,
-  the Build's Programs of record), not from the workload; `source` holds the registration's ``compiler`` (name and digest) and
-  ``advice`` (root and bits) to the verifier's, so the stream's registration, which the sample comes after, fixes both. The
+  the Build's Programs of record), not from the workload; `source` holds the docket's ``compiler`` (name and digest) and
+  ``advice`` (root and bits) to the verifier's, so the stream's docket, which the sample comes after, fixes both. The
   prover's windows come from the bundles (`verity-vllm advice-windows`). Negatives (`advice_negatives`), each refused before the
-  sample: the registration naming another compiler or another advice root, the opening under another salt, the verifier opening
+  sample: the docket naming another compiler or another advice root, the opening under another salt, the verifier opening
   other advice (``--other-advice-opening``: `source` and R2), and a unit committed under other advice (``--other-windows``: R4
   and its roots). With ``--transfer-gate`` (the templates the compiler lists as holding transfer gates), the window's
   work sampling design (``work-rate:NUM/DEN``) proves every unit of theirs (`serving_rows.work_table_of`: work 0, floor all its units) beside the sampled
   rest, the stream registering with that work table; its negatives (`transfer_gate_negatives`, and in `advice_negatives` the
-  registration under the compiler listing none, `source`): the proved set less a transfer-gate unit (`check_proved`), a sample
-  trading one for a unit of the rest (`check_draw`), and the registration's sampling design sampling them as the rest is (R1).
+  docket under the compiler listing none, `source`): the proved set less a transfer-gate unit (`check_proved`), a sample
+  trading one for a unit of the rest (`check_draw`), and the docket's sampling design sampling them as the rest is (R1).
 * **One sample per window** by the registered sampling design (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `verity-verify-proof draw`; a TP Commit samples each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol; without it Lean accepts a subset sample only at hidden outputs and one
@@ -127,7 +127,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   stratified Spec over their mixed population, its sampling design the partition file's rule, a rate such as
   `stratified-rate:NUM/DEN`), on the session's coins (`coins.ChallengerCoins` over
   `remote.RemoteChallenger`). The stream registers the rank's window at its counts under the TP run root (`register`), the
-  coins commit to the registration's digest, and the stream samples once (`select`: Lean's `Select.select` on the bytes it
+  coins commit to the docket's digest, and the stream samples once (`select`: Lean's `Select.select` on the bytes it
   read, then `check_draw`). Once the session has ended, the stream takes the proof (`deliver`) and its outcome (`outcome`)
   with the coins' evidence (ledger, main, pins, segment, session, which names no key: the stream reads it under the
   challenger's key the session's start had, `a5_coins.held`; ``--main`` the verifier's own first-parent history of
@@ -135,7 +135,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   Lean verifier (`Run.run`), which fails `run` unless it is the Python's. `coins.coins_reason`
   (Python's `read_reason`) holds the evidence too, the audit record failing `coins` where it refuses. Negatives, each its own
   stream's outcome on the honest sample's bytes: the evidence with a tampered opening, with the coin opened before the
-  registration, with a segment that skips a released coin, with the pin off main, with no pins log, none, and for another
+  docket, with a segment that skips a released coin, with the pin off main, with no pins log, none, and for another
   window. Every rank of the step samples from the one session, so `--jobs` covers every rank. The verifier samples no coins of
   its own: a stream's sample is the challenger's (`service.NO_OWN_COINS`). The audit's case for `Spot.OneStageZk`
   (``case-v2.json``, `write_case`) names that challenger, the family and the window's root and carries the coins' evidence
@@ -155,9 +155,9 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   covers a shared-row public file only where it holds its own registered reads (``--registered``, `Flock.ProvedScope.
   sharedRowsOk`): each chunk reads one table, so a5 gives each linked chunk's verify the reads of its ``x`` port
   (`tables.registered_reads`: its table's root as the members' strings recompute it, which the check above tied to the
-  registration and the step roots, and the row each unit reads), and the chunk's header gives each ``x`` row a path to that
+  docket and the step roots, and the row each unit reads), and the chunk's header gives each ``x`` row a path to that
   root. Lean takes registered reads only when they name every port of the circuit (`Flock.Registered.checkComplete`), so
-  each such member's reads also name its other ports, each as rows of its own tree at the registration's root, unit
+  each such member's reads also name its other ports, each as rows of its own tree at the docket's root, unit
   ``base + i`` its row i (`rows.own_reads`), and its header gives their paths (`rows.own_entries`). The audit record's
   ``registered_reads`` carries each sampled chunk's table and root from that file beside the
   ``registered`` finding Lean's verdict reports opening its rows against (`tables.reported_reads`), and a5 accepts only
@@ -173,15 +173,15 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's key blocks read the state before them, and its combines its splits' partials and lses, the same way
   (`pipeline.chain_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
   two of a combine's slots, and flip a wired row's string in its reader's public body.
-* **Values tied to an earlier registration** (``a.tie``, records_audit's ``--tie``): a window whose population program takes
+* **Values tied to an earlier docket** (``a.tie``, records_audit's ``--tie``): a window whose population program takes
   values ahead of its templates' parameters (`program_values`, a served window's H1 tables or Pearl+'s committed rows)
   registers them as the values of the earlier record that registered them first (one-stage's ``outputs``: PoUW H1's
-  registration W of the window, or Pearl+'s window record W, which the registration is chained right after), so R1-R7 run
+  docket W of the window, or Pearl+'s window record W, which the docket is chained right after), so R1-R7 run
   with W as the log, each value's words, W's entry of it and its row
   format (`tie`), on the stream too, which takes the values and W as its log (`stream_of`). Its proof blocks read the values
   as registered reads at W's roots (``registered``).
 * **A declared day** (``a.declared``, records_audit's ``--day``): the window's day and the registration log's declarations,
-  which the registration check takes (`declared`), so R2 refuses a program other than the day's declared one; a negative
+  which the docket check takes (`declared`), so R2 refuses a program other than the day's declared one; a negative
   moves the day's declaration to another program (``program-not-the-days-declared``). The stream doesn't take them.
 """
 from __future__ import annotations
@@ -278,7 +278,7 @@ CHALLENGER = "a5.py on the auditor's challenger's coins"
 
 
 def tie(a: argparse.Namespace) -> dict[str, Any]:
-    """The window's tie to the earlier registration of the values its program takes (``a.tie``, records_audit's
+    """The window's tie to the earlier docket of the values its program takes (``a.tie``, records_audit's
     ``--tie``): one-stage's ``log`` (that record), ``registered`` (each value's words), ``outputs`` (each value that
     record's) and ``schemas`` (their row formats), as `verifier.check` takes them; empty without one."""
     return dict(getattr(a, "tie", None) or {})
@@ -286,7 +286,7 @@ def tie(a: argparse.Namespace) -> dict[str, Any]:
 
 def declared(a: argparse.Namespace) -> dict[str, Any]:
     """The window's declared day (``a.declared``, records_audit's ``--day``): one-stage's ``day`` and ``declarations``, as
-    `verifier.check` takes them, so R2 holds the registration's program to the day's one declaration; empty without."""
+    `verifier.check` takes them, so R2 holds the docket's program to the day's one declaration; empty without."""
     return dict(getattr(a, "declared", None) or {})
 
 
@@ -308,7 +308,7 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     `challenger` naming which): its unit the window's templates in their order (the one
     template's Definition where the window's query is `Q_template_instance`), the Spec's values the window's ports (a
     row-table window's `row-table` port a tree over its steps' roots, `service.ROOTS` over row-seg leaves), its public
-    items what the registration shows (N, each template's stratum, the window, the leaf layer and each port's and registered
+    items what the docket shows (N, each template's stratum, the window, the leaf layer and each port's and registered
     value's layout, a value's word width where it isn't 16 bits), its selection the partition file's rule, and its proof deadline every member's session. A program that
     takes values (`program_values`) has them registered beside the ports, on a stream that takes them and the tie's log
     (`tie`). Under a challenger's session (``a.coins``) the stream is made with the challenger's key and the verifier's
@@ -389,7 +389,7 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, me
     the window's counts), and samples once (`select`: Lean's `Select.select` on the bytes read, then `check_draw`), on the
     challenger's coins (``a.coins``), with the window's history tables (``history``): the rank first plans its sample's
     coins from its window (`a5_coins.need`), which opens
-    the step's one session once every rank has planned (`a5_coins.Draws.plan`); then the coins commit to the registration's
+    the step's one session once every rank has planned (`a5_coins.Draws.plan`); then the coins commit to the docket's
     digest and the stream reads them in the rank's turn on the step's one client. ``hold``: the rank holds the session
     open past its sample, for its sessions' coin trees (`a5_coins`' `hold`), until the caller's `release`. -> (the
     stream, its sample, `register`'s counts, the coins (their `read`: the bytes read), the challenger coins' segment, why it
@@ -755,7 +755,7 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
 
 def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | str:
     """What the per-member form holds each member's public file to (`members.population_why`), read off the verifier's
-    window ``mine`` and the registration ``rec``: the registration's strata and each member's slice of the record
+    window ``mine`` and the docket ``rec``: the docket's strata and each member's slice of the record
     (`members.slices`, Lean's `OneStageZk.Member.slice`: its units, the roots the record names under its name, the
     scheme), or Lean's reason why there is none. A member's public file names a root for each of its ports, so the
     record does too, a wired port with no tree of its own under its reader's name at its writer's root
@@ -772,12 +772,12 @@ def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | s
 def bound_reads(file: Mapping[str, Any], m: CS.Member, ports: Iterable[str], roots: Mapping[str, Mapping[str, Any]],
                 want: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     """Member ``m``'s ``--registered`` file ``file`` with each of its header's ``ports`` the file names no read for bound
-    (`REG.bind_ports`) to the port's own tree: the root the registration holds for ``<member>/<port>`` (``roots``, its
+    (`REG.bind_ports`) to the port's own tree: the root the docket holds for ``<member>/<port>`` (``roots``, its
     entries by port) and the domain the verifier's window derives for it (``want``), which the audit's check before the
     sample held the header's to (``header``, the per-member form's rule). A wired port with no tree of its own
     (`rows.Member.wired_trees`) has none: its rows are leaves of its writer's output tree, which the verifier's file names
     it a read of, each unit at its writer unit's leaf (`rows.Binding.held_leaves`: `rows.own_reads`, the two-stage
-    audit's `verifier_reads`), the read the Lean verifier holds each session to. The window and the registration name
+    audit's `verifier_reads`), the read the Lean verifier holds each session to. The window and the docket name
     that tree under the reader's name too (``want``'s entry says so, ``wired``: `rows.wired_ports`), and a root under
     that name is its writer's, no tree of the port's own. So it is never bound, and a file that leaves it out is refused
     (ValueError, `REG.bind_ports`'s)."""
@@ -792,7 +792,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
           ports: int | None = None, drawn: tuple[dict, dict, dict] | None = None,
           history: Callable[[dict[str, bytes]], dict | None] | None = None) -> tuple[dict, bool]:
-    """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its registration's ``window`` to
+    """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its docket's ``window`` to
     ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
     ``step_roots``, what serving recorded before each step's coin, `tables.check_row_tables`), one Lean sample by its sampling design
     (on a stream, `streamed`: TP rank ``rank``'s sample of record by its `service.Stream`, on the challenger's coins
@@ -804,15 +804,15 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
     (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
-    registration (a two-stage design's second stage of its interior registration), its sample, sampling design and receipt, proved in
+    docket (a two-stage design's second stage of its interior docket), its sample, sampling design and receipt, proved in
     place of a5's own; the audit record and its negatives are then decided as that stream decides the interior's
-    (`audit.less_own_reads`, which `verifier.audit_record` always applies: a session's read of one of the registration's
+    (`audit.less_own_reads`, which `verifier.audit_record` always applies: a session's read of one of the docket's
     own ports at its own root is no registered read, its rows being round 2's to hold), ``audit.json`` says so
     (``own_reads``), and the summary's
     ``handed`` is what the audit record took (its verdicts, statement, sessions,
     proved units, instances, served units and session roots), for the caller's stream's outcome. ``history``: the
     verifier's history tables from the members' public bodies by key (`ml.windows.history.params`), to which the
-    registration's check holds the window's registered roots before the sample, and the stream's registrations for its run
+    docket's check holds the window's registered roots before the sample, and the stream's dockets for its run
     of record; None for a window with none."""
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
@@ -885,7 +885,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         header = a0.public_header(st_dir, m.n)
         if (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
             programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
-        # the header against the member's slice of the registration: the per-member form's rule, in its one Python
+        # the header against the member's slice of the docket: the per-member form's rule, in its one Python
         why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key])
         ok = {"pin": header.get("circuit_sha512") == made["pin"],
               "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
@@ -933,14 +933,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         print("A5 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return summary, False
-    # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the registration;
+    # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the docket;
     # a member reading an outside registered value, against the root its owner signed; and either's other ports, against the
-    # registration's own roots, since Lean takes registered reads only when they name every port or bind the rest: a port
-    # those reads leave out is bound to the registration's root and domain of its rows, which the checks above held its
+    # docket's own roots, since Lean takes registered reads only when they name every port or bind the rest: a port
+    # those reads leave out is bound to the docket's root and domain of its rows, which the checks above held its
     # header's to (`REG.bind_ports`), never a port the window's registered circuit record declares registered
     # (`--interface`: the record the audit holds by SHA-512); a member holding a wired port in its writer's tree (no tree
     # of its own) reads it at its writer's root, a registered read those reads name and so never bound, its other ports
-    # at their own; the registration's root and domain of such a port's rows are its writer's port's (`Binding.held`)
+    # at their own; the docket's root and domain of such a port's rows are its writer's port's (`Binding.held`)
     held = {m.key: {"format": REG.READS_V1, "ports": {}} for m in mine.members if m.wired and not m.wired_trees}
     reads = CS.own_reads({**held, **(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}),
                           **(registered or {})}, mine, roots, registered=REG)
@@ -1312,7 +1312,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
 
 def outside_the_partition(sample: dict, rec: dict, design: dict, n: int) -> V.Verdict:
-    """The verifier on ``sample`` with its last unit made ``n``, the first index past the ``n`` units the registration
+    """The verifier on ``sample`` with its last unit made ``n``, the first index past the ``n`` units the docket
     ``rec`` partitions, under the sampling design ``design``."""
     return V.check_draw({**sample, "units": sample["units"][:-1] + [n]}, rec, design)
 
@@ -1322,7 +1322,7 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
     """A window whose registered compiler lists ``transfer_gates`` (`advice_windows`: every unit of theirs proved, an All stratum of
     the work sampling design beside the sampled rest): each way a transfer-gate unit is left out of the proved set, refused. The proved set less
     one (`check_proved`); a sample that trades one for an unsampled unit of the rest, the same count (`check_draw`: its stratum samples
-    every unit); and a registration whose sampling design samples the transfer-gate templates as the rest is, work 1 and floor 1 (R1: the
+    every unit); and a docket whose sampling design samples the transfer-gate templates as the rest is, work 1 and floor 1 (R1: the
     verifier's own sampling design, under its own work table, proves them whole), checked with the window's ``tied`` values (`tie`)."""
     gates = [u for s in drawn_law.get("strata") or () if s["template"] in set(transfer_gates) for lo, hi in s["units"]
              for u in range(lo, hi)]
@@ -1355,7 +1355,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                partition: dict | None = None, tied: dict | None = None, per_member: dict | str | None = None,
                coins: dict | None = None, window_root: str | None = None, family: str | None = None,
                member_trees: bool = False, challenger_key: dict | None = None) -> None:
-    """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
+    """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the docket, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
     in ``out/case.json``, and the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2``
@@ -1368,7 +1368,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case. With ``coins``
     (the sample's coin evidence, `a5_coins.evidence`'s, of an audit sampled on the auditor's challenger's coins), the
     challenger's key ``challenger_key`` as its session's start had it (`a5_coins.held`'s, which no evidence names), the
-    family ``family`` the sample read them from (its registration's own, `a5_coins.family`) and the window's root
+    family ``family`` the sample read them from (its docket's own, `a5_coins.family`) and the window's root
     ``window_root``, the v2 case names the challenger and carries its coins (`case_coins`), and so its one-stage form:
     v2 reads a sample's coins under the challenger and the family its parameters name, and refuses a case that names
     none. The per-member case does where the sessions ran on the window's challenger session too (``member_trees``,
@@ -1426,8 +1426,8 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables its circuit looks up (`proofs.circuit_lookups`,
     which v2 holds them to), which onsite reads after the evidence (`compose.onsite_check`). v2 holds the public file's
-    header to the registration (`registration.matches_public`, and its ``units.indices`` the population's units in
-    order), so it refuses a windowed registration, whose ports are its members' (``<member>/<port>``).
+    header to the docket (`registration.matches_public`, and its ``units.indices`` the population's units in
+    order), so it refuses a windowed docket, whose ports are its members' (``<member>/<port>``).
 
     When ``public`` was taken is the caller's to say, and nothing here checks it. `audit`'s is the digest it took when
     it staged the file: before the sample it takes itself, and after one its caller handed it. `v2_case.py`'s is that
@@ -1515,25 +1515,25 @@ def draw_ran_out(law: dict, population: int, read: bytes) -> bool | str:
 
 
 def link_members(members: Sequence[dict]) -> list[tuple[list[list[int]], int]]:
-    """The window's staged members as the registration's `link-points` reads them (`link_points.Member`): each its
+    """The window's staged members as the docket's `link-points` reads them (`link_points.Member`): each its
     units ``[base, base + n)`` and its circuit's units a proof block."""
     return [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
 
 
 def per_member(members: Sequence[dict], zk: bool) -> bool:
     """Whether the audit's case is of the per-member form (`members_proof`): a window of several members, its sessions
-    `--zk`. Its registration's check reads the members (`link_members`), as v2's check of that case does
+    `--zk`. Its docket's check reads the members (`link_members`), as v2's check of that case does
     (`OneStageZk.membersParamsOfJson`); the one statement's form names none."""
     return len(members) >= 2 and zk
 
 
 def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
-    """The registration's `link-points` (`link_points.refused`) over the window's staged members, each its units
+    """The docket's `link-points` (`link_points.refused`) over the window's staged members, each its units
     ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest and most
     sampled proof blocks under the sampled sampling design over the samples that end (one that runs out of coins fails the window:
     `draw_ran_out`): one a sample misses, its fewest none, and one whose fewest and most open different link points. Or
     why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
-    Recorded here for every window; the registration's check refuses them where the audit's case is of the per-member
+    Recorded here for every window; the docket's check refuses them where the audit's case is of the per-member
     form (`per_member`)."""
     from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
 
@@ -1820,10 +1820,10 @@ def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
 
 def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: CS.Binding, held: dict, served: Path,
                      opening: dict) -> dict[str, dict]:
-    """An advice window's refusals, each before the sample: its registration's window naming another compiler or another advice
+    """An advice window's refusals, each before the sample: its docket's window naming another compiler or another advice
     root (`source`); the advice's opening under another salt, which opens no registered root (`source`); the verifier opening other
-    advice (``--other-advice-opening``), whose window from it the registration fails (`source` and R2); and a unit committed under
-    other advice (``--other-windows``: member 0's public file from that window in place of serving's), which the registration's
+    advice (``--other-advice-opening``), whose window from it the docket fails (`source` and R2); and a unit committed under
+    other advice (``--other-windows``: member 0's public file from that window in place of serving's), which the docket's
     leaf layer refuses (R4) and whose roots are not the registered ones."""
     from verity_vllm.pipeline import advice_windows as AW
     from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -1922,7 +1922,7 @@ def tp_ranks(a: argparse.Namespace, sets: dict, out: Path, world: int, ranks: li
 
 def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     """Every rank's window of the TP Commit ``--tp-commit`` (or the ranks ``--ranks``), each audited on its own under ``out/rank<r>``,
-    and ``out/summary.json`` over them; a rank's audit also refuses another rank's registration as its own."""
+    and ``out/summary.json`` over them; a rank's audit also refuses another rank's docket as its own."""
     from verity_vllm.pipeline.tp import serving_rows as SRT
 
     rec = SRT.record(a.tp_commit)

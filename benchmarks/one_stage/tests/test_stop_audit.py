@@ -164,9 +164,9 @@ def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_
 
 def test_the_stop_streams_answer_carries_its_audit_records_complete(tmp_path, monkeypatch):
     """`answer_of` is one-stage's answer of the stop stream's outcome. The record that accepts with three entries null
-    gives an accept of the stop registration over the stop sample whose public ``complete`` is false, which a reader
+    gives an accept of the stop docket over the stop sample whose public ``complete`` is false, which a reader
     that wants a complete audit refuses (`audit.answer_complete`). The same record saying complete gives one it takes:
-    the field is the record's own. A session Lean's verdict refuses gives a reject of that registration with no public
+    the field is the record's own. A session Lean's verdict refuses gives a reject of that docket with no public
     outputs, naming the failed checks and the two verdicts that did not accept: Lean's, and the registered reads'
     entry, which is Lean's verdict held to the verifier's file."""
     first = _handoff(tmp_path, monkeypatch, "answer")
@@ -187,7 +187,7 @@ def test_the_stop_streams_answer_carries_its_audit_records_complete(tmp_path, mo
 
 
 def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
-    """`answer_of` on outcomes written by hand, of a stream that holds only its δ and its registration's digest: a
+    """`answer_of` on outcomes written by hand, of a stream that holds only its δ and its docket's digest: a
     record that did not accept for a verdict alone names the verdict; an outcome the stream refused, which has no
     audit record, says so; an outcome that did not accept beside a record that did is a reject."""
     r = NS(stream=NS(delta=0.5), registration=NS(digest="ab" * 64))
@@ -203,10 +203,10 @@ def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
 
 def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path, monkeypatch):
     """One hand-off, audited on a stream built again each time. Refused: a session Lean's verdict refuses (a length
-    that is not the rule's); a boundary stream's outcome that did not accept, that is another registration's, or
+    that is not the rule's); a boundary stream's outcome that did not accept, that is another docket's, or
     whose audit record Lean's verdict refuses (case 3); a verdict that names another ``--registered`` file than the
     verifier's, or reports another root for a port; and an order the challenger's signed log does not show, here a
-    log with no coin after the stop registration (case 2), and the hand-off's own evidence before a verifier that holds
+    log with no coin after the stop docket (case 2), and the hand-off's own evidence before a verifier that holds
     another challenger's key, no key, or another copy of main's history (case 2, and the stream's own run refuses the
     coins). With a boundary outcome that accepted and is complete the
     entry accepts and names the audit record (case 1), and the record is still not complete; the record handed is
@@ -303,16 +303,16 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     `boundary_audit` on the outcome record, and ``case`` against the four. Fourteen written cases: no input is random,
     and none is one the Lean refuses, so the two sides are held to each other on these and no further. Case 1: the
     hand-off with a boundary outcome that accepted and is complete, on the first stage's session and on one made by
-    hand, the two registrations' coins each in a family of its own. Case 2: a stop record on a
+    hand, the two dockets' coins each in a family of its own. Case 2: a stop record on a
     boundary record never logged; an empty log; and, on sessions of the test's challenger that received the two
-    registrations by hand, the stop registration's coins released first, no receipt of the boundary registration, a
+    dockets by hand, the stop docket's coins released first, no receipt of the boundary docket, a
     coin opened and not read, no evidence, no family named, and the boundary stream's family named for the stop
     sample's coins, which are held to the family named and not to the one their evidence names; and the hand-off's
     own evidence read by a verifier that holds another challenger's key, no key, or another copy of main's history,
     and evidence that names a key, the verifier's own. The family is the one `link` names, the stop blocks' place's;
     a case that names its own gives it to Lean and to the Python by hand, since `link` takes none from a hand-off.
     Case 3: the boundary
-    stream's audit record missing, refused, and another registration's. Case 4: that audit record accepted with an
+    stream's audit record missing, refused, and another docket's. Case 4: that audit record accepted with an
     entry that did not run."""
     handoff = _handoff(tmp_path, monkeypatch, "across")
     r, s = _resume(handoff), handoff["stop"]
@@ -412,7 +412,7 @@ def test_lean_and_the_python_agree_on_a_list_of_reads_across_streams(tmp_path, m
     Python, on the stop stream alone and on a chain of three records. The stop stream alone is the class as it is
     audited today: one read, the stop record's on the boundary stream, with that stream's audit record, accepted and
     complete, and as the last stream's own the audit record `decide` wrote for the stop stream: it accepted, and two
-    of its entries, the request row and the stop rule, did not run. The chain adds a third registration chained after
+    of its entries, the request row and the stop rule, did not run. The chain adds a third docket chained after
     the stop record, the three received in that order by one session of the test's challenger: its second read is
     the third record's on the stop stream, whose log holds the stop record and whose audit record is `decide`'s, and
     the last stream is then the third record's, its audit record written here, since no stream after the stop
@@ -432,7 +432,7 @@ def test_lean_and_the_python_agree_on_a_list_of_reads_across_streams(tmp_path, m
     coins released before the stop record's, and a second read that rests on a record the list does not hold, which
     leaves the list two ends and no one last record. Case 3: the first read's audit record missing, whether or not
     the second's is complete; no audit record of the third record; and the stop stream's handed in its place.
-    Refused: an empty list, a boundary that is not hex, a read whose later registration names no previous record, by
+    Refused: an empty list, a boundary that is not hex, a read whose later docket names no previous record, by
     its index, and a list without its ``last``."""
     handoff = _handoff(tmp_path, monkeypatch, "across-all")
     r, s = _resume(handoff), handoff["stop"]
@@ -533,7 +533,7 @@ def test_lean_and_the_python_agree_on_a_list_of_reads_across_streams(tmp_path, m
 
 
 def test_the_boundary_audit_entry_reads_the_boundary_streams_outcome_record():
-    """`boundary_entry` alone: null without a record; an outcome record on the class's boundary registration whose
+    """`boundary_entry` alone: null without a record; an outcome record on the class's boundary docket whose
     audit record accepted and is complete gives its symbol's verdict and the audit record's SHA-512, and needs Lean's
     verdict on the audit record, its ``accepted`` and its ``complete``, when one is given; one whose audit record
     accepted and is not complete, by the driver's reading or by Lean's, has no verdict and says why; anything else is
