@@ -57,6 +57,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "tools/config/verity_config/
           "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/circuits", "verity/commitments", "verity/hardware/__init__.py",
           "verity/definitions", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/tool.py",
-          "verity/protocols/__init__.py", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/pouw/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/pouw/__init__.py",
           # the distribution the settings registry's move puts it in, which importing the registry then reads
           "tools/config/verity_config"]
