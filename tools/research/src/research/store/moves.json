@@ -2454,6 +2454,11 @@
     },
     {
       "paths": {
+        "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/torch_gpu/s8_linear/": "benchmarks/kernels/s8_linear/",
         "benchmarks/hash/exactlin/": "benchmarks/kernels/exactlin/",
         "benchmarks/torch_gpu/ship.sh": "benchmarks/kernels/ship.sh",
@@ -2472,11 +2477,6 @@
       "paths": {
         "benchmarks/hash/dither/numabind.py": "benchmarks/kernels/numabind/numabind.py",
         "benchmarks/hash/dither/tests/test_numabind.py": "benchmarks/kernels/numabind/tests/test_numabind.py"
-      }
-    },
-    {
-      "paths": {
-        "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
       }
     }
   ]

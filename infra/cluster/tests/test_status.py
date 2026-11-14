@@ -279,3 +279,23 @@ def test_cli_status_reports_a_node_it_cannot_read_and_exits_1(capsys, monkeypatc
     monkeypatch.setattr(status, "main", lambda nodes, owner, as_json, main=status.main: main(nodes, owner, as_json, runner=runner))
     assert cli.main(["status", "--on", "nebius-2"]) == 1
     assert capsys.readouterr().out == "vy-nebius-2: could not read: ReadError: vy-nebius-2: ssh: connect to host: Connection timed out\n"
+
+
+def test_a_nodes_address_is_the_environments_and_unset_its_read_fails_naming_the_variable(capsys, monkeypatch):
+    """No file holds a node's address: `reach` sends each command to research@ the address the node's variable holds,
+    and with it unset the read fails as an unreachable node does, naming the variable, and nothing is sent."""
+    sent: list[list[str]] = []
+
+    class Ran:
+        returncode, stdout, stderr = 0, DF, ""
+
+    monkeypatch.setattr(status.subprocess, "run", lambda argv, **kw: sent.append(argv) or Ran())
+    monkeypatch.setenv("VY_NEBIUS_1_HOST", "192.0.2.11")
+    monkeypatch.delenv("VY_NEBIUS_2_HOST", raising=False)
+    assert status.reach(nebius1.NODE, None)("df -P /workspace") == DF
+    assert [argv[-2:] for argv in sent] == [["research@192.0.2.11", "df -P /workspace"]]
+    monkeypatch.setattr(status, "clock", lambda: T)
+    assert cli.main(["status", "--on", "nebius-2"]) == 1
+    assert capsys.readouterr().out == ("vy-nebius-2: could not read: ReadError: VY_NEBIUS_2_HOST is unset: vy-nebius-2's "
+                                       "address, which machines.d/vy-nebius-2.toml registers as host\n")
+    assert len(sent) == 1
