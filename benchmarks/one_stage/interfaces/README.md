@@ -62,8 +62,9 @@ for one server block and the Lean check's answer for it. It extends the all-prot
   its answer's profile names it, and a bandwidth answer that names none is refused: no entry is built from it, and
   `check` and the schema refuse a record whose bandwidth entry has none. The error, its certificates at each δ and
   every sum over it read with the term beside them (`error_form`, the ledger's `DELTA_FORM` with the error for δ);
-- the composed verdict, which is the answer's: the Lean check of the block's product (`CHECKS`: `verity/onsite/v0` or
-  `verity/remote/v0`, as the composite Lean check writes its `answer.json`), `accept`, `reject` or `undecided`, and
+- the composed verdict, which is the answer's: the Lean check of the block's product (`CHECKS`: `verity/onsite/v0`, or
+  `verity/remote/v0` or remote's composite of record `verity/remote/v1`, as the composite Lean check writes its
+  `answer.json` and `composite.py` its public `composite.json`), `accept`, `reject` or `undecided`, and
   `undecided` with no answer. Nothing in Python combines the subprotocols' verdicts;
 - what the product's subprotocols say (`compose`) and the error of `Accounting.Guarantees.JointPooledLive` over the
   block: the accepted subprotocols' errors summed, with `joint_horizon.named_terms` naming, by subprotocol, the terms

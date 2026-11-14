@@ -90,7 +90,7 @@
     "dropped": {"type": "array", "items": {"type": "string"}},
     "answer": {"oneOf": [{"type": "null"},
                          {"type": "object", "required": ["protocol", "verdict", "reason", "commitment"], "additionalProperties": false,
-                          "properties": {"protocol": {"enum": ["verity/onsite/v0", "verity/remote/v0"]},
+                          "properties": {"protocol": {"enum": ["verity/onsite/v0", "verity/remote/v0", "verity/remote/v1"]},
                                          "verdict": {"enum": ["accept", "reject", "undecided"]},
                                          "reason": {"type": ["string", "null"]},
                                          "commitment": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^([0-9a-f]{2})*$"}]}}}]},

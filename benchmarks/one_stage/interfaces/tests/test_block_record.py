@@ -240,10 +240,20 @@ def test_remote_composes_spot_and_pouw_alone_its_other_legs_dropped() -> None:
     decided = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=remote, product="remote")
     jsonschema.Draft202012Validator(SCHEMA).validate(decided)
     assert R.check(decided) == {} and decided["composed"]["verdict"] == "accept"
+    v1 = {**ONSITE, "protocol": "verity/remote/v1", "verdict": "reject", "reason": "components"}
+    by_v1 = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=v1, product="remote")
+    jsonschema.Draft202012Validator(SCHEMA).validate(by_v1)
+    assert R.check(by_v1) == {} and (by_v1["composed"]["verdict"], by_v1["composed"]["answer"]["protocol"]) == (
+        "reject", "verity/remote/v1")
     with pytest.raises(ValueError, match="not an answer of the remote check"):
         R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=ONSITE, product="remote")
     with pytest.raises(ValueError, match="not an answer of the onsite check"):
         R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=remote)
+    with pytest.raises(ValueError, match="not an answer of the onsite check"):
+        R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=v1)
+    as_onsite = copy.deepcopy(by_v1)
+    as_onsite["composed"]["product"] = "onsite"
+    assert "composed:answer" in R.check(as_onsite)
     onsite = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE)["composed"]
     assert (onsite["verdict"], onsite["missing"]) == ("undecided", ["bandwidth", "certifier", "pous", "wipe"])
     full, wipe = _accepting_report()
