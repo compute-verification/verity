@@ -10,6 +10,7 @@ public import Proofs.Properties.InferenceOnly.DigestDecode
 public import Proofs.Properties.InferenceOnly.DigestRefs
 public import Proofs.Properties.InferenceOnly.DigestParts
 public import Proofs.Properties.InferenceOnly.DigestPins
+public import Proofs.Properties.InferenceOnly.DigestReads
 public import Proofs.Properties.InferenceOnly.DecodeEmpty
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
@@ -27,7 +28,8 @@ that one closure digest gives one canonical entry for each Definition reached (`
 what the decoder reads alike from equivalent entries (`Proofs.Properties.InferenceOnly.DigestDecode`) and that its references are
 the canonical entry's flat parts (`Proofs.Properties.InferenceOnly.DigestRefs`), equivalent one by one in equivalent entries
 (`Proofs.Properties.InferenceOnly.DigestParts`), and `DigestPins` from the statement that equivalent entries pin the decoded
-Definition (`Proofs.Properties.InferenceOnly.DigestPins`), which no statement here reads.
+Definition (`Proofs.Properties.InferenceOnly.DigestPins`), and that statement by induction from what the decoder reads
+of each entry (`Proofs.Properties.InferenceOnly.DigestReads`), which no statement here reads.
 -/
 
 @[expose] public section
