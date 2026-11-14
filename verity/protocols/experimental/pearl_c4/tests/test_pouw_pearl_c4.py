@@ -20,20 +20,25 @@ from pathlib import Path
 import pytest
 
 import epoch_coins as E
+import identifier_vectors as IV
 
 import pearl_c4_vectors as V
+import test_pouw_pearl_c_work as PCW
+import test_pouw_registration as TR
 from verity.errors import InvalidArtifact
 from verity.circuits.silicon import fp32
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
 from verity.protocols.accounting.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
 from verity.protocols.accounting.pouw.prover.schemes import get
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.verifier import identifier as I
+from verity.protocols.accounting.pouw.verifier import registration as R
 
 # the clear audit is a reference tool (verity/protocols/accounting/pouw/prover/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "prover" / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "accounting" / "pouw" / "prover" / "clear"))
 from clear_audit import Prover
 import clear_work as CW
 
@@ -845,7 +850,7 @@ def test_f2_depth_cost_is_the_pinned_catalogue_minimum():
 def test_f2_c_l_table_takes_the_lower_value_between_its_points():
     """The pinned table never lies above Strassen's formula and falls in each of m, k and n, so a shape between tabled
     points reads the next tabled point up in each dimension, whose c_L is the lower one."""
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_c4_c_L as CL
+    from verity.protocols.experimental.pearl_c4.prover import pearl_c4_c_L as CL
     for (i, m), (j, k), (l, n) in itertools.product(enumerate(CL.MS), enumerate(CL.KS), enumerate(CL.NS)):
         v = CL.C_L[i][j][l]
         assert v / 10_000 <= strassen_c_L(m, k, n) + 1e-12
@@ -1249,3 +1254,53 @@ def test_pinned_vectors_production_tile():
     for case, want in zip(V.CASES, pinned["cases"]):
         if not case[5]:
             assert V.case_vector(*case) == want
+
+
+# ---- beside Pearl-C (FP8): the parts of its tests that read both ------------------------------------------------------
+
+def test_pearl_c4s_per_element_term_3_is_a_no_op_on_pearl_c(monkeypatch):
+    """Pearl-C4's debit (item 3 per element on the witness, `pearl_c4.tile_debit`) is its own: Pearl-C (FP8) brings no
+    `tile_cap`, so its audit never reaches Pearl-C4's witness or debit and accepts as before."""
+
+    def unreachable(*args, **kwargs):
+        raise AssertionError("Pearl-C reached Pearl-C4's debit")
+
+    monkeypatch.setattr(F, "tile_debit", unreachable)
+    monkeypatch.setattr(F, "salt_dead", unreachable)
+    epoch, prover, tr, rows_a, rows_b = PCW.lifecycle()
+    assert not hasattr(PCW.S, "tile_cap")
+    records = PCW.CW.declare(PCW.S, epoch, {3: rows_a}, {9: rows_b}, PCW.SPLITS, real_rows={3: 20})
+    assert PCW.CW.audit(PCW.S, epoch, prover, tr, PCW.SPLITS, records, PCW.E.challenger(), 4).audit.accepted
+
+
+def test_h3_is_the_default_and_h0_is_named():
+    """As Pearl-C's (`test_pouw_pearl_c`): what leaves its hashing unnamed gets h3, and Pearl-C4's registered name h0."""
+    assert C.PearlC(forming="v1").hashing == F.PearlC4().hashing == "h3"
+    assert get("pearl-c-nvfp4-v0").hashing == "h0"
+
+
+def test_the_h0_caps_are_one_400th():
+    """Pearl-C4's own cap is Pearl-C's at sm_120's prices, 1/400 (`test_pouw_pearl_c_sm120`)."""
+    assert C.PearlC(forming="v1", prices=C.SM120_PRICES, hashing="h0").cap == Fraction(1, 400) == F.PearlC4(hashing="h0").cap
+
+
+def test_both_constructions_take_the_one_shared_rule():
+    """Pearl-C4 and served FP8 read the same function, so every declared stack meets the same verdict under both."""
+    assert C.check_registration is F.check_registration is R.check_registration
+    assert (F.ROTATION_8, F.GAMMA_FOLD, F.REGISTRATION_STACKS) == (R.ROTATION_8, R.GAMMA_FOLD, R.REGISTRATION_STACKS)
+    fp8, fp4 = get(TR.FP8), get("pearl-c-nvfp4-v0")
+    assert isinstance(fp8, C.PearlC) and not isinstance(fp8, F.PearlC4)
+    for t, curated, fold in itertools.product(TR.STACKS, (False, True), (False, True)):
+        assert TR._outcome(fp8, t, curated, fold) == TR._outcome(fp4, t, curated, fold), (t, curated, fold)
+
+
+def test_the_identifier_vectors_pearl_c4_cases_are_its_shapes():
+    """PoUW's identifier vectors name Pearl-C4 without checking its shapes (`schemes.EXPERIMENTAL`): each of its cases'
+    matmuls is one the scheme takes, and the scheme is named by its registered name."""
+    cases = [c for c in IV.CASES if c[1] == "pearl-c-nvfp4-v0"]
+    assert len(cases) == 2
+    for case, scheme, matmuls in cases:
+        epoch, s = IV.epoch_of(case, matmuls), get(scheme)
+        for u in epoch.workload.matmuls:
+            s.check(u)
+        assert I.identifier_bytes(s, epoch) == I.identifier_bytes(scheme, epoch)

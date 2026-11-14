@@ -36,7 +36,7 @@ from verity_vllm.definitions.registry import fp8_moe
 from verity_vllm.definitions.registry import moe as MOE
 
 from verity_vllm.program.frontend import targets as TG
-from verity_torch.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_iface as _vi  # noqa: F401  (defines the vllm_iface stand-ins)

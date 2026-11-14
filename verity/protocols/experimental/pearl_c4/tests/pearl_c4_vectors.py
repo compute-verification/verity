@@ -1,4 +1,4 @@
-"""Pinned vectors for ``pearl-c-nvfp4-v0`` and ``pearl-c-mxfp4-v0``: ``uv run python verity/protocols/accounting/pouw/verifier/tests/pearl_c4_vectors.py``
+"""Pinned vectors for ``pearl-c-nvfp4-v0`` and ``pearl-c-mxfp4-v0``: ``uv run python verity/protocols/experimental/pearl_c4/tests/pearl_c4_vectors.py``
 rewrites ``tests/vectors/pearl_c4.json``.  A change to that file is a change to the scheme and needs a reason in the PR.
 
 Inputs are derived, not stored: word t of row i of operand ``name`` in case ``c`` is the BF16 value with sign bit b0 >> 7,
@@ -15,7 +15,7 @@ import json
 import struct
 from pathlib import Path
 
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
 
