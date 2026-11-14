@@ -86,17 +86,21 @@ EOF
   done <<< "$NODES"
   cat <<EOF
 
-L2  (infra, 15 min) a PR: drop \`staged\` from [nodes.$first]$( [ "$names" = "$first " ] || echo " and the others'") in deploy.toml; add each node's line
-    to pods/nebius/peers (outside uk-south2 a node has no private address there: its public IP, port 22 open to all); mark it ready.
-    Until it lands, install from the PR's pushed head (--ref origin/BRANCH): install reads that commit's own deploy.toml.$quota_note
+L2  (infra, 15 min) a PR: drop \`staged\` from [nodes.$first]$( [ "$names" = "$first " ] || echo " and the others'") in deploy.toml; mark it ready.
+    No file takes a node's address: /etc/vy/peers is made at each install from the register of machines, where L1's --register
+    put the node. Until it lands, install from the PR's pushed head (--ref origin/BRANCH): install reads that commit's own deploy.toml.$quota_note
 
-L3  (infra, 5 min a node) install every entry, then prepare the check pod:
+L3  (infra, 5 min a node) the peers' key, then every entry (the node's own /etc/vy/peers among them, and the key taken from each
+    machine it names), then every other node's list, then prepare the check pod:
 EOF
   for n in $names; do
+    echo "    research pods ssh vy-nebius-2 -- 'tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | research pods ssh $n -- 'umask 077; tar -C ~/.ssh -xf -'   # peers' key and its .pub, node to node: copied, never printed"
     echo "    research deploy install $n --by infra --ref $REF --apply"
     echo "    research pods ssh $n -- 'cd /etc/systemd/system && for t in vy-*.timer; do sudo systemctl enable --now \$t; done'   # install enables none"
-    echo "    research pods ssh vy-nebius-2 -- 'tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | research pods ssh $n -- 'umask 077; tar -C ~/.ssh -xf -'   # peers' key and its .pub, node to node: copied, never printed"
-    echo "    research pods ssh $n -- 'echo from=\\\"IPS\\\" \$(cat ~/.ssh/vy-cluster.pub) >> ~/.ssh/authorized_keys'   # IPS: each node's egress (curl ifconfig.me)"
+  done
+  echo "    research deploy roll /etc/vy/peers --by infra --ref $REF           # a dry run: the machines each node's list names now and after"
+  echo "    research deploy roll /etc/vy/peers --by infra --ref $REF --apply   # every node takes the key from the new one, then each node's list, one at a time"
+  for n in $names; do
     echo "    research run --on $n --project verity --source . --cwd source -- bash tools/verity/check/pod_setup.sh"
   done
   echo
@@ -106,7 +110,6 @@ EOF
   done <<< "$NODES"
   cat <<EOF
     research pods ssh $first -- 'printf "%s\n" "# NAME N: Lean audit slots (tools/check/lean_slot.py), n1s moved here (INF-57)" "check 3" "audit 2" "build 3" > /workspace/research/locks/lean-slots'
-    and every node's /etc/vy/peers from L2's file: research deploy install NODE --by infra --ref $REF --apply on each live node.
 
 L5  (infra for lean, 10 min, then the first build ~40 min in the background) lean's cache publisher on $first: its R2 key goes
     root to root, never through a terminal (it is 401 until lean's re-carded key lands; copy it after):

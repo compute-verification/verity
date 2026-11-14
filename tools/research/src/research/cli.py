@@ -85,6 +85,8 @@
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
   research deploy drift [--on N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
                                                  # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (`ops deploy`, verity_ops/deploy.py)
+  research deploy roll PATH --by WHO [--on N ...] [--keys-only] [--apply]   # a file made from the register of machines
+                                                 # (/etc/vy/peers), put on every node that lists it: each node takes the list's key first, then each file, one node at a time
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
   research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]

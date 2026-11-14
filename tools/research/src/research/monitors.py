@@ -1570,7 +1570,8 @@ MONITORS: list[Monitor] = [
             "line's head is a waiter no run passes (slot.py's line rule: one that would start if the runs that passed it "
             "ended, a priority one, or one whose ticket names no ask), and it holds those behind; where they don't, set "
             "`peaks=` on them. Lean: the machine's Lean slots. "
-            "Peers: put every CPU machine in the /etc/vy/peers of each machine it names, with the key accepted.",
+            "Peers: `research deploy roll /etc/vy/peers --by WHO` (a dry run; `--apply` does it) writes each machine's "
+            "/etc/vy/peers from the register of machines and has it take the key from every machine its list names.",
             every_s=120, clear_s=300),
 ]
 BY_ID = {m.id: m for m in MONITORS}
