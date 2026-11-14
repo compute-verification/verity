@@ -11,8 +11,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.accounting.certifier.verifier import id_form as IDF, io_tie as IT, release as REL
-from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
+from verity.protocols.accounting.certifier.prover.workload import FRAME_HEADER, id_request
+from verity.protocols.accounting.certifier.verifier import io_tie as IT, release as REL
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
 
@@ -225,10 +225,10 @@ ID_PAYLOAD = 503
 
 
 def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | None:
-    """The fields (`id_form.id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
+    """The fields (`workload.id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
     request as the network certifier forwards it: without the release headers it puts on the server's copy
-    (`release.with_release`), exactly `id_form.id_request` of its own fields in the scan's B = P + 9-byte cells (P =
-    ``payload``), from their first byte (``offset`` 0). None for anything else."""
+    (`release.with_release`), exactly `workload.id_request` of its own fields in the scan's B = P + 9-byte cells (P =
+    ``payload``). None for anything else."""
     head, _, body = request.partition(b"\r\n\r\n")
     line, *fields = head.split(b"\r\n")
     kept = b"".join(f + b"\r\n" for f in fields
@@ -236,7 +236,7 @@ def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | None:
     try:
         b = json.loads(body)
         got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
-        canonical = IDF.id_request(**got, frame_bytes=payload + HEADER.size, offset=0)
+        canonical = id_request(**got, frame_bytes=payload + FRAME_HEADER.size)
         return got if canonical == line + b"\r\n" + kept + b"\r\n" + body else None
     except (ValueError, KeyError, TypeError):
         return None
