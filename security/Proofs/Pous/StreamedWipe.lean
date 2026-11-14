@@ -24,7 +24,7 @@ import Mathlib.Tactic.Positivity.Finset
 * `StreamedWipe/Family.lean`: `StreamedWipeMeetsReads`, `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` bits at
   `2^-128` for every `k` reads with `(1 − 1/r)^k ≤ 2^-129` and every fill
   (`PousStreamedWipe.streamed_wipe_meets_reads`); its instances `StreamedWipeMeetsFamily`, `⌈M/19⌉ + E` bits with 2152 reads for every fill of a segment or more
-  (`PousStreamedWipe.streamed_wipe_meets_family`, with its own instance at 96 GiB, `StreamedWipeMeets96GiB`), and
+  (`PousStreamedWipe.streamed_wipe_meets_family`, with its own instance at a card's device memory, `StreamedWipeMeets96GiB`), and
   `StreamedWipeMeetsH200`, an H200's whole memory at
   5 GB with 2906 reads (`PousStreamedWipe.streamed_wipe_meets_H200`).
 * `StreamedWipe/Server.lean`: `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsReads` with the count of the missing

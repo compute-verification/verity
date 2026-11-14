@@ -3181,6 +3181,34 @@
       "paths": {
         "benchmarks/vllm_encoded/paged.cu": "verity/protocols/accounting/poub/prover/word_codec/paged.cu"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/egemm_depthr_check.py": "benchmarks/pouw/theory/egemm_depthr_check.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_egemm_depthr.py": "benchmarks/pouw/tests/test_theory_egemm_depthr.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/eps_profile.py": "benchmarks/pouw/edited_gemm_profile/eps_profile.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/vprod_profile.py": "benchmarks/pouw/edited_gemm_profile/vprod_profile.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/flash_ref.py": "benchmarks/pouw/edited_gemm_profile/flash_ref.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_eps_profile.py": "benchmarks/pouw/tests/test_edited_gemm_eps_profile.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_vprod_profile.py": "benchmarks/pouw/tests/test_edited_gemm_vprod_profile.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/interface/CoreProtocol/SiteV2Guards.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteV2Guards.lean"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/program/test_train_step.py": "adapters/torch/tests/frontend/test_train_step.py",
+        "adapters/vllm/tests/program/train_step_lf.py": "adapters/torch/tests/frontend/train_step_lf.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_core.py": "benchmarks/pouw/served_zk/replay_core.py",
+        "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py": "benchmarks/pouw/served_zk/replay_window.py"
+      }
     }
   ]
 }

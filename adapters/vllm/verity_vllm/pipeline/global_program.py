@@ -24,7 +24,6 @@ import gzip
 import hashlib
 import json
 import os
-import sys
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -46,6 +45,7 @@ from verity_vllm.config import (
     workload_arg,
     workload_file,
 )
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.pipeline.components import (  # noqa: F401
     component_of,
@@ -63,9 +63,11 @@ from verity_vllm.records.workload import Workload, WorkloadSampling
 
 __all__ = ["MODELLED_ENGINE", "Options", "compilation_facts", "main", "request_id_of", "stop_rule", "workload_target"]
 
+logger = init_logger(__name__)
+
 # the request descriptors decode through the registry the Match reads (`catalog.load`): every registry module loaded
 for _e in _load_registry()[1]:
-    print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)
+    logger.warning("registry module unavailable (%s): components naming its Definitions will not decode", _e)
 
 
 def request_id_of(index: int) -> str:
