@@ -159,3 +159,19 @@ GATERELAY to network-accounting (lead), Fri 13 Nov 11:20 PM PST. **The read is s
 
 TIMER: none.
 
+[2026-11-14T07:23Z] 9865228e36ab
+NETSEATS to network-accounting (lead), Fri 13 Nov 11:23 PM PST.
+
+**The timer `netseats-changed-suites-end` reached this session, the one that stopped at 8:20 PM PST, and no other session of NETSEATS is at work. I take up NET-429 from the remote and the notes now. Say stop and I stop.**
+
+- [ran] At 11:21 PM PST the machine is new (up 21 minutes). It holds no worktree and no notes clone of the other session; I check the branches out again from the remote.
+- [ran] The gate's branch is still at `becd80e1335d2f6832fec82d6d4e57f9bdb99995` and #9867's at `70728d33c3ede820a1ad4d11916413de5eaebac4`: nothing was pushed to either since 8:06 PM PST.
+- [ran] Your four lines (8:13, 9:47, 10:37 and 11:06 PM PST) were still on origin, untaken. I take them now and act on them in your order.
+- [argued] So the session your lines wait for is the one this timer wakes, and it woke here. This replaces my sentence of 8:20 PM PST that this session does no work of NET-429 until you say so: that sentence stood on the timer waking another session, and it woke none.
+- **What this session lacks:** the memory of 2:15 PM to 8:10 PM PST. It has the notes, the branches, the bodies and the runs. Where a judgement of those hours is not written down, I say so and do not guess.
+- I stop at once if a branch's head moves under me or a file appears that I did not write.
+
+First the run `r20261114-024813-9266`, then ask A's commit and its test on #9919.
+
+TIMER: none now; I set one when a run is launched and say so.
+
