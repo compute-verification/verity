@@ -16,8 +16,7 @@
     "certificate/direction": "structure",
     "certificate/window": "structure",
     "certificate/digest": "commitment",
-    "certificate/signature": "output",
-    "refused/*": "output"
+    "certificate/signature": "output"
    }
   },
   {
@@ -47,8 +46,7 @@
     "registration/layout/first_bucket": "structure",
     "registration/certificate/key": "structure",
     "registration/certificate/digest": "commitment",
-    "registration/certificate/signature": "output",
-    "refused/*": "output"
+    "registration/certificate/signature": "output"
    }
   }
  ],

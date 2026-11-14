@@ -45,10 +45,11 @@ def test_the_declared_lists_load_and_each_names_its_writer_in_the_tree():
 
 
 def test_the_gates_lists_are_what_the_gate_publishes_of_a_line():
-    """The list of a gate run's cells' registrations names exactly the keys the gate publishes of a line (`ROW_LINE`'s
-    PUBLIC ones), so a key the gate starts publishing fails a record until the list gives it a kind, and the list
-    holds none the gate leaves out. The certificates' list names exactly a certificate's fields as the gate writes
-    them of a row registration (`row_certificate`), and the execution phase a line was refused for."""
+    """The list of a gate run's cells' registrations names exactly the keys the gate publishes of a certified line
+    (`ROW_LINE`'s PUBLIC ones), so a key the gate starts publishing fails a record until the list gives it a kind,
+    and the list holds none the gate leaves out. The certificates' list names exactly a certificate's fields as the
+    gate writes them of a row registration (`row_certificate`). Neither names the execution phase a line was refused
+    for: which ones the signer refused is the traffic's, so a line that says it is not declared."""
     sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
     import auditor as A
 
@@ -63,22 +64,23 @@ def test_the_gates_lists_are_what_the_gate_publishes_of_a_line():
 
     lists = RK.load()
     listing = lists.listing(f"gates/c0/r0/out/{A.ROW_REGISTRATIONS['cells.jsonl']}")
-    assert declared(listing) == public(A.ROW_LINE)
+    assert declared(listing) == public(A.ROW_LINE) - {"refused"}
     line = {"registration": {"format": "f", "wiring": "w", "link": "l", "direction": "ingress", "window": 2,
                              "layout": {"buckets": 1}, "certificate": {"key": "k", "digest": "d", "signature": "s"}},
             "cost": {"s": 1}}
     refused = {"refused": ["l", "ingress", 3], "withheld": True}
     assert listing.undeclared(A.row_registration(json.dumps(line)).encode()) == {}
     assert set(listing.undeclared(json.dumps(line).encode())) == {"registration/wiring", "cost"}
-    assert listing.undeclared(A.row_registration(json.dumps(refused)).encode()) == {}
+    assert listing.undeclared(A.row_registration(json.dumps(refused)).encode()) == {"refused": 1}
     certificates = {lists.listing(f"gates/c0/r0/out/{f}").name
                     for f in ("certificates.jsonl", *A.ROW_CERTIFICATES.values())}
     assert len(certificates) == 1
     listing = lists.listing("gates/c0/r0/out/certificates.jsonl")
     written = A.row_certificate(line)
-    assert declared(listing) == {f"certificate/{k}" for k in written["certificate"]} | {"refused"}
-    for doc in (written, A.row_certificate(refused), A.row_certificate({A.ROWS_NO_HEAD: line["registration"]})):
+    assert declared(listing) == {f"certificate/{k}" for k in written["certificate"]}
+    for doc in (written, A.row_certificate({A.ROWS_NO_HEAD: line["registration"]})):
         assert listing.undeclared(json.dumps(doc).encode()) == {}
+    assert listing.undeclared(json.dumps(A.row_certificate(refused)).encode()) == {"refused": 1}
     assert set(listing.undeclared(json.dumps(line).encode())) == {"registration", "cost"}
 
 
@@ -227,8 +229,7 @@ def test_a_released_file_with_one_undeclared_key_fails_the_record(tmp_path):
     outside out/ is counted and not read by key."""
     run = tmp_path / "run"
     certs = "out/gates/c0/r0/out/certificates.jsonl"
-    _put(run, {certs: (json.dumps({"certificate": CERTIFICATE}) + "\n" + json.dumps({"refused": [0, "egress", 1]})
-                       + "\n").encode(),
+    _put(run, {certs: (json.dumps({"certificate": CERTIFICATE}) + "\n").encode(),
                "out/n2/outcome.json": {"verdict": "accept"}, "out/n2/prove.log": b"text", "resources.jsonl": b"{}\n"})
     rc, report, _ = _guard(tmp_path)
     assert rc == 0 and report["verdict"] == "clean" and report["found"] == []
@@ -249,6 +250,28 @@ def test_a_released_file_with_one_undeclared_key_fails_the_record(tmp_path):
     rc, report, _ = LG.main([str(run), str(tmp_path / "q"), "--report", str(tmp_path / "report.json")]), json.loads(
         (tmp_path / "report.json").read_text()), None
     assert rc == 0 and "keys" not in report
+
+
+def test_a_gate_runs_file_that_says_an_execution_phase_was_refused_fails_the_record(tmp_path):
+    """Which execution phases the signer refused depends on what the node sent and when, and no list declares the
+    key that says it. So a record of a gate run with one refused line fails (exit 3) on that file alone, by the key
+    and its count, and a record is released only of a run whose every execution phase was certified."""
+    run = tmp_path / "run"
+    files = [f"out/gates/c0/r0/out/{name}" for name in ("certificates.jsonl", "cells-certificates.jsonl",
+                                                         "rows-certificates.jsonl", "cells-registrations.jsonl")]
+    refused = (json.dumps({"refused": ["l", "egress", 1]}) + "\n").encode()
+    _put(run, {files[0]: (json.dumps({"certificate": CERTIFICATE}) + "\n").encode(), **dict.fromkeys(files[1:], b"")})
+    rc, report, _ = _guard(tmp_path)
+    assert rc == 0 and report["keys"]["checked"] == 4 and report["keys"]["undeclared"] == 0
+    for path in files:
+        (run / path).write_bytes((run / path).read_bytes() + refused)
+    rc, report, held = _guard(tmp_path)
+    assert rc == 3 and report["verdict"] == "refused" and report["keys"]["undeclared"] == 4
+    assert sorted(f["path"] for f in report["found"]) == sorted(files)
+    for found in held["found"]:
+        [bad] = found["keys_undeclared"]
+        assert (bad["key"], bad["count"]) == ("refused", 1) and "is not declared public" in bad["fix"]
+    assert not any((run / path).exists() for path in files)
 
 
 def test_a_held_file_with_an_undeclared_key_is_not_released(tmp_path, capsys):
