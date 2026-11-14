@@ -101,6 +101,7 @@
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Nci.RecordRead",
   "Proofs.Properties.Nci.Record",
+  "Proofs.Properties.Nci.Lemmas.Opening",
   "Proofs.Properties.Nci.RecordForm",
   "Proofs.Properties.Nci.RecordCounts",
   "Proofs.Properties.Nci.DecodeKeys",

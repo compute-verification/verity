@@ -117,7 +117,7 @@ def test_a_premise_is_overdue_only_when_its_due_date_is_before_today(due, overdu
 
 
 def test_a_lock_without_owners_issues_or_dates_reads_as_nulls():
-    """The public export ships locks without `owner`, `issue` or `due`."""
+    """A lock may leave out `owner`, `issue` and `due`."""
     bare = {"guarantees": {"N.G": {"premises": {"open": ["N.P"]}}}, "deployed": ["N.G"], "open": {"N.P": {"digest": "d"}},
             "assumptions": {"N.A": "not an object"}}
     out = run({"pkg/lean-audit.json": bare})

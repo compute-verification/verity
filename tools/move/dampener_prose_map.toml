@@ -1,0 +1,30 @@
+# The slowdown in prose: what `tools/move/rename.py --map tools/move/dampener_prose_map.toml` renames, the older name
+# "dampener" where a comment, a docstring or Markdown's text says it (GLOSSARY.md, Older names: "dampener", "compute
+# dampener" D, now the slowdown). The names in paths and Lean are `slowdown_map.toml`'s.
+#
+# This move renames prose only (`scope = "prose"`): never code, a string, backticks or a data file, so it moves no path,
+# renames no declaration and leaves every lock and pin as it is. "The compute dampener" is "the slowdown", and "dampener"
+# with any other word before it ("the remote dampener", "the training dampener") is "slowdown".
+# What it leaves: a cited page's title ([keep]), and, each for a hand edit, the word in a string (a figure's label) and
+# in a name (`fit_dampener`, `statement.dampener`).
+scope = "prose"
+
+[words]
+"compute dampener" = "slowdown"
+"Compute dampener" = "Slowdown"
+"dampener" = "slowdown"
+
+[rewrite]
+# Never rewritten: the term source and the lints and tables that spell the old words on purpose, records of what was
+# (the earlier moves and their maps, changelogs, the rulings), the move tools' own tests, the frozen backends, replicated
+# fixtures, files whose bytes a digest pins and lock files.
+exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/move/**", "tools/verity/check/tests/test_move_check.py",
+           "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/lake-manifest.json"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
+            'lanes/[\w.-]+']
+# A cited page's title.
+strings = ["The compute dampener: claims, model and tiers"]
