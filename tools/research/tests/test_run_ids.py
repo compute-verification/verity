@@ -1,0 +1,91 @@
+"""`research run` takes its run dir by making it (`runs.take_run_dir`): a fresh id whose dir exists, which two runs in one
+second draw once in 65,536 pairs, is drawn again a bounded number of times; an id the caller gives whose dir exists is refused
+as before. Each test fixes the id source (`runs.new_run_id`), so none depends on the clock or on chance."""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+from research import cli, remote
+from research import runs as R
+
+A, B = "r20261114-022254-f9c5", "r20261114-022254-0b1d"
+GIVEN = "research run: {} already exists; a rerun gets a fresh id"
+
+
+def _ids(monkeypatch, *ids: str) -> list[str]:
+    """Fix the id source to return ``ids`` in order (the last one ever after); returns the list of ids it handed out."""
+    handed: list[str] = []
+
+    def new_run_id(now=None):
+        handed.append(ids[min(len(handed), len(ids) - 1)])
+        return handed[-1]
+
+    monkeypatch.setattr(R, "new_run_id", new_run_id)
+    return handed
+
+
+def _run(runs: Path, *flags: str) -> int:
+    return cli.main(["run", "--runs-dir", str(runs), "--no-sampler", *flags, "--", sys.executable, "-c", "pass"])
+
+
+def test_two_runs_that_draw_the_same_fresh_id_both_start_with_different_ids(tmp_path, monkeypatch, capsys):
+    handed = _ids(monkeypatch, A, A, B)
+    runs = tmp_path / "runs"
+    assert _run(runs) == 0 and _run(runs) == 0
+    assert handed == [A, A, B], "the second run met the first's dir and drew again"
+    assert sorted(d.name for d in runs.iterdir()) == sorted([A, B])
+    assert {json.loads((runs / i / "job.json").read_text())["run"]["id"] for i in (A, B)} == {A, B}
+    assert "already exists" not in capsys.readouterr().err
+
+
+def test_an_id_the_caller_gives_whose_dir_exists_is_refused_here_on_a_machine_and_on_the_queue(tmp_path, monkeypatch, capsys):
+    _ids(monkeypatch, A)
+    runs = tmp_path / "runs"
+    assert _run(runs) == 0
+    job = (runs / A / "job.json").read_text()
+    capsys.readouterr()
+    launched, placed = [], []
+    monkeypatch.setattr(remote, "launch", lambda **kw: launched.append(kw))
+    monkeypatch.setattr(remote, "queue_placement", lambda *a: placed.append(a))
+    for where in ([], ["--on", "m", "--project", "p", "--no-custody-r2"],
+                  ["--queue", "--project", "p", "--source", str(tmp_path), "--max-min", "1"]):
+        assert _run(runs, "--id", A, *where) == 2, where
+        assert GIVEN.format(runs / A) in capsys.readouterr().err, where
+    assert launched == placed == [] and (runs / A / "job.json").read_text() == job, "nothing launched, the first run's dir untouched"
+
+
+def test_fresh_ids_are_drawn_a_bounded_number_of_times_then_the_run_is_refused(tmp_path, monkeypatch, capsys):
+    handed = _ids(monkeypatch, A)
+    runs = tmp_path / "runs"
+    (runs / A).mkdir(parents=True)
+    assert _run(runs) == 2
+    err = capsys.readouterr().err
+    assert f"research run: refused: {R.FRESH_ID_TRIES} fresh run ids in a row each named a run dir that already exists" in err
+    assert len(handed) == R.FRESH_ID_TRIES and [d.name for d in runs.iterdir()] == [A]
+
+
+def test_a_launch_gets_its_fresh_dir_made_and_empty_and_a_refused_one_leaves_none(tmp_path, monkeypatch, capsys):
+    """`--on` and `--queue` take the dir as a local run does: the queue books the job under the id it took, the launch writes
+    into that dir, and a run refused after the take leaves no dir behind."""
+    _ids(monkeypatch, A, A, B)
+    runs = tmp_path / "runs"
+    (runs / A).mkdir(parents=True)
+    seen = []
+
+    def launch(**kw):
+        seen.append((kw["run_id"], kw["local_dir"], kw["taken"], kw["local_dir"].is_dir() and not any(kw["local_dir"].iterdir())))
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+
+    def place(source, run_id, spec):
+        seen.append(run_id)
+        raise remote.Refused("placement refused")
+
+    monkeypatch.setattr(remote, "launch", launch)
+    monkeypatch.setattr(remote, "queue_placement", place)
+    assert _run(runs, "--on", "m", "--project", "p", "--no-custody-r2") == 0
+    assert seen == [(B, runs / B, True, True)]
+    assert _run(runs, "--queue", "--project", "p", "--source", str(tmp_path), "--max-min", "1") == 3
+    assert seen[1] == B and "placement refused" in capsys.readouterr().err
+    assert [d.name for d in runs.iterdir()] == [A], "neither run wrote in its dir (the launch is a stand-in), so neither stays"
