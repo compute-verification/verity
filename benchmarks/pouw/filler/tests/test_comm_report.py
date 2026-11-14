@@ -4,6 +4,7 @@ are skipped, and a point whose KV cache wrapped is flagged."""
 
 from __future__ import annotations
 
+import functools
 import json
 import sys
 
@@ -69,6 +70,12 @@ def test_wrapped_kv_is_flagged(tmp_path, capsys):
     assert "2048 (KV wrapped)" in capsys.readouterr().out
 
 
+def _tp(rank, B, served, arm, reps, **kw):
+    """A rank's tp record of one arm at batch B, as its line: the arm's reps and what else the run wrote into it."""
+    return json.dumps({"mode": "tp", "tp": 2, "rank": rank, "B": B, "L": 2048, "arm": arm, "mhz": MHZ,
+                       "served_macs": served, "reps": [[ms, MHZ, 300] for ms in reps], **kw})
+
+
 def _write_pfill(tmp_path, *, mma="IMMA.16832.S8.S8", app="2430", slow=41):
     """A pfill-k run: MMA-counted fill, every run-level gate's file."""
     d = tmp_path / "set0"
@@ -76,10 +83,7 @@ def _write_pfill(tmp_path, *, mma="IMMA.16832.S8.S8", app="2430", slow=41):
     (d / "settings.txt").write_text("NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64\n")
     served = 1e11
     for r in (0, 1):
-        def rec(arm, reps, **kw):
-            x = {"mode": "tp", "tp": 2, "rank": r, "B": 32, "L": 2048, "arm": arm, "mhz": MHZ, "served_macs": served,
-                 "reps": [[ms, MHZ, 300] for ms in reps], **kw}
-            return json.dumps(x)
+        rec = functools.partial(_tp, r, 32, served)
         lines = [json.dumps({"mode": "pf_gate", "kind": k, "rank": r, "ok": True}) for k in ("fixed", "up", "cut")]
         lines += [rec("base", [40, 40, 40]), rec("nocomm", [30, 30, 30]), rec("comm", [8, 8, 8]),
                   rec("phase", [slow] * 3, fill_mmas_rep=4e7, fill_macs_rep=4e7 * 4096.0, fill_mmas_full_rep=1e7,
@@ -98,6 +102,19 @@ def _write_pfill(tmp_path, *, mma="IMMA.16832.S8.S8", app="2430", slow=41):
         f'"{i}","bw_read(...)","gpu__time_duration.sum","msecond","0.7"\n' for i in range(3)))
     (tmp_path / "gpu.txt").write_text(f"4, GPU-x, 2092, 2430, 300, 600, {app}, 2430, 0x0\n" * 2)
     return served
+
+
+def test_each_point_has_its_own_row(tmp_path):
+    for name, settings, points in (("set0", "TPC_S=64", {32: 40, 64: 80}), ("set1", "TPC_S=32", {32: 50})):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "settings.txt").write_text(settings + "\n")
+        for r in (0, 1):
+            lines = [_tp(r, B, 1e11, arm, [ms] * 3)
+                     for B, base in points.items() for arm, ms in (("base", base), ("nocomm", base - 10))]
+            (d / f"rank{r}.jsonl").write_text("\n".join(lines) + "\n")
+    got = [(row["set"], row["settings"], row["B"], row["base_ms"], row["nocomm_ms"]) for row in R.rows(str(tmp_path))]
+    assert got == [("set0", "TPC_S=64", 32, 40, 30), ("set0", "TPC_S=64", 64, 80, 70), ("set1", "TPC_S=32", 32, 50, 40)]
 
 
 def test_pfill_fill_counts_mmas_and_reads_k(tmp_path):
@@ -142,9 +159,7 @@ def _write_defer(tmp_path, nc, xin, store_bytes=25e9):
     (d / "settings.txt").write_text("NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64 TPC_DT=8192\n")
     served = 1e11
     for r in (0, 1):
-        def rec(arm, reps, **kw):
-            return json.dumps({"mode": "tp", "tp": 2, "rank": r, "B": 256, "L": 2048, "arm": arm, "mhz": MHZ,
-                               "served_macs": served, "reps": [[ms, MHZ, 300] for ms in reps], **kw})
+        rec = functools.partial(_tp, r, 256, served)
         lines = [rec("base", [80, 80, 80]),
                  rec("defer", [88, 88, 88], fill_macs_rep=1e7, defer_demand_macs=served, defer_gap_macs_rep=served,
                      defer_drain_macs_rep=0.0, dcap=10, dSd=64, dT=8192, defer_store_bytes=store_bytes,
