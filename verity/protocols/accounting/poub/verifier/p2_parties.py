@@ -34,6 +34,13 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
   8,224 bytes each, over the session's span. `core_answer` puts it in the core interface's form.
 
+The two sides are parties of the deployment layer (`MANIFEST`): the verifier and its challenger (`Verifier`, here) and
+the prover (`verity/protocols/accounting/poub/prover/p2_party_prover.py`'s `Prover`). Each message is one line, carried
+whole as its body (`Lines`), so the Lean reads every line the prover sent as it sent it, and the verifier takes the line
+it waits for whatever its key, one it can't name as `Malformed`. `session` and the prover's `prove` step each side over
+the channel with PoUS's loop (`drive`, `challenger_session.run`), the verifier's side handed a failed write as its
+channel failing (`broken`).
+
 The verifier is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
 untrusted provenance, and Python is never trusted: the process `remote-audit-verifier` (`p2_lean.py`,
 `RemoteAudit.P2Session`) holds the registration file's bytes, recomputes the registration's digest from its fields, and
@@ -54,8 +61,7 @@ on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
 (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s party verbs), where it keeps each session's case's
 digest too, a line of `private/case-digests.txt` (`CASE_DIGESTS`, `case_digest`; 0700, the file 0600), and none of the
-case's values. The prover's side is `verity/protocols/accounting/poub/prover/p2_party_prover.py`'s `prove`, which
-reads the lines this module writes (`send`, `recv`).
+case's values.
 """
 
 from __future__ import annotations
