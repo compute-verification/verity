@@ -47,7 +47,8 @@ per-member parse returned, and the two stages' coin families are apart (`familie
 theorem paramsOfJson_audit {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
     (∃ j', OneStageZk.membersParamsOfJson j' = .ok p.audit) ∧
       (!familiesApart (p.boundary.challenger.map (·.2)) (p.audit.base.challenger.map (·.2))) ≠ true := by
-  unfold paramsOfJson at h
+  replace h := (paramsOfJson_ok h).1
+  unfold paramsParsed at h
   simp only [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   repeat' split at h
   all_goals try contradiction

@@ -65,7 +65,8 @@ theorem evidence_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Par
 /-- The form's evidence parses only with the first stage's coin evidence not `null`: `evidenceOf` refuses it. -/
 private theorem evidence_coins {b : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence}
     (h : VStar.Recursive.SampledTwo.evidenceOf b = .ok e) : e.coins ≠ Json.null := by
-  unfold VStar.Recursive.SampledTwo.evidenceOf at h
+  replace h := (VStar.Recursive.SampledTwo.evidenceOf_ok h).1
+  unfold VStar.Recursive.SampledTwo.evidenceParsed at h
   obtain ⟨j₀, -, h⟩ := bind_ok h
   obtain ⟨j, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h

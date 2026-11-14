@@ -25,7 +25,12 @@ package's audit builds and reads it.
     `Run.templateCircuits`); the replay block's program object; the Spec's interior values; and the interior audit's
     members (one-stage v2's `proofs.members`, `OneStageZk.membersOf`), each member's circuit one a template names
     (`MEMBER_CIRCUIT`). The interior audit's parameters are the interior's with `proofs` its members
-    (`OneStageZk.membersParamsOfJson`).
+    (`OneStageZk.membersParamsOfJson`);
+  * the two stages are on two windows (`windowsApart`, `ONE_WINDOW`): the interior audit's window root is not the
+    boundary registration's. Of the two windows the run of record lets an interior registration name
+    (`Run.interiorWindowOk`), the form reads only the one the verifier computes, a challenger session of the second
+    stage's own: on one window one session releases both stages' coins, and nothing the form checks holds the
+    first stage's to be released before a coin tree's round is opened.
 * **commitment**: the boundary registration's record (`OneStage.commitmentOf`).
 * **evidence**: exactly `{"coins", "interior", "received", "record", "source", "statements"}`: the first stage's coins'
   evidence, its receipt's place in the log and the bytes it read (hex); the interior audit's evidence in v2's
@@ -36,7 +41,8 @@ package's audit builds and reads it.
   its registration's parameters name. The copy of main's first-parent history they are read under is the first
   stage's evidence's own, as one-stage v2 reads its evidence's, and the second stage's must be the same copy
   (`Challenger.COINS_MAIN`); the verifier's own copy, as a parameter, is the open fix. The first stage's coin
-  evidence is never `null`, on one window as on two (`FIRST_COINS_NULL`): a two-stage audit's first stage reads coins.
+  evidence is never `null` (`FIRST_COINS_NULL`): a two-stage audit's first stage reads coins. The statements are
+  fewer than `2^64` (`stmtsFit`, `STMTS_COUNT`), the most a list's 8-byte length word counts.
 * **check** (`checkBlobsAt`), in order:
   1. the interior audit's commitment (`OneStage.commitmentOf` of the interior record) and its coins
      (`OneStageZk.coinsOf`);
@@ -190,8 +196,9 @@ def split (j : Json) (what : String) : V Json := do
   if form != TWO_STAGE then throw s!"the {what} name the form {form}, not \"{TWO_STAGE}\""
   pure (Json.mkObj (without j "form"))
 
-/-- The parameters (module docstring, **params**). -/
-def paramsOfJson (j : Json) : V Params := do
+/-- The parameters' parse (module docstring, **params**), before the two stages' windows are held apart
+(`paramsOfJson`). -/
+def paramsParsed (j : Json) : V Params := do
   let j ← split j "parameters"
   keysAre j #["boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"] "the parameters"
   let .arr os := getD j "outputs" | throw "outputs is not a list"
@@ -223,12 +230,73 @@ def paramsOfJson (j : Json) : V Params := do
          delta := getD j "delta", interior, circuits, replay,
          interiorValues := ← valuesOf (getD it "values") "the interior's values", audit, members }
 
-def FIRST_COINS_NULL : String :=
-  "the first stage's coin evidence is null: a two-stage audit's first stage reads the challenger's coins, on one " ++
-    "window as on two"
+/-- The refusal of an interior audit on the boundary registration's window (`windowsApart`). -/
+def ONE_WINDOW : String :=
+  "the interior audit's window is the boundary registration's: the two-stage form reads a two-stage audit on two " ++
+    "windows, each stage's coins a challenger session's of its own, and nothing it checks on one window holds the " ++
+    "first stage's coins to be released before a coin tree's round is opened"
 
-/-- The evidence (module docstring, **evidence**). -/
-def evidenceOf (b : ByteArray) : V Evidence := do
+/-- **The two stages are on two windows** (`ONE_WINDOW`): the interior audit's window root `interior` is not the
+boundary registration's `boundary`. The run of record lets the interior registration's window be the boundary's or
+the one the verifier computes from the boundary registration's digest and its replay sample
+(`Run.interiorWindowOk`); the form refuses the first, and with it a boundary and an interior that name no window. -/
+def windowsApart (boundary interior : Option String) : V Unit :=
+  if boundary = interior then .error ONE_WINDOW else .ok ()
+
+#guard (windowsApart (some "aa") (some "bb")).toOption.isSome
+#guard (windowsApart (some "aa") none).toOption.isSome
+#guard (windowsApart none (some "bb")).toOption.isSome
+#guard (windowsApart (some "aa") (some "aa")).toOption.isNone
+#guard (windowsApart none none).toOption.isNone
+
+/-- The parameters (module docstring, **params**): `paramsParsed`'s, the boundary registration's window and the
+interior audit's held apart (`windowsApart`). -/
+def paramsOfJson (j : Json) : V Params :=
+  match paramsParsed j with
+  | .error err => .error err
+  | .ok p =>
+    match windowsApart p.boundary.verifier.windowRoot p.audit.base.verifier.windowRoot with
+    | .error err => .error err
+    | .ok () => .ok p
+
+theorem windowsApart_ok {boundary interior : Option String} (h : windowsApart boundary interior = .ok ()) :
+    boundary ≠ interior := by
+  unfold windowsApart at h
+  split at h
+  · cases h
+  · assumption
+
+/-- **Parameters the form reads are `paramsParsed`'s, on two windows.** -/
+theorem paramsOfJson_ok {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
+    paramsParsed j = .ok p ∧ p.boundary.verifier.windowRoot ≠ p.audit.base.verifier.windowRoot := by
+  unfold paramsOfJson at h
+  split at h
+  · cases h
+  · next q hq =>
+    split at h
+    · cases h
+    · next hw =>
+      cases h
+      exact ⟨hq, windowsApart_ok hw⟩
+
+def FIRST_COINS_NULL : String :=
+  "the first stage's coin evidence is null: a two-stage audit's first stage reads the challenger's coins"
+
+/-- The refusal of evidence whose statements are too many for the word a list's length is written in
+(`stmtsFit`). -/
+def STMTS_COUNT : String :=
+  "the evidence holds 2^64 statements or more, past the 8-byte word a list of statements holds its length in"
+
+/-- **The statements' count fits a word** (`STMTS_COUNT`): `n` statements are fewer than `limit`. -/
+def stmtsFit (limit n : Nat) : V Unit :=
+  if limit ≤ n then .error STMTS_COUNT else .ok ()
+
+#guard (stmtsFit 2 1).toOption.isSome
+#guard (stmtsFit 2 2).toOption.isNone
+#guard (stmtsFit OneStageZk.WORD 0).toOption.isSome
+
+/-- The evidence's parse (module docstring, **evidence**), before its statements are counted (`evidenceOf`). -/
+def evidenceParsed (b : ByteArray) : V Evidence := do
   let j ← split (← Core.canonicalJson b) "evidence"
   keysAre j #["coins", "interior", "received", "record", "source", "statements"] "the evidence"
   if getD j "coins" matches .null then throw FIRST_COINS_NULL
@@ -241,6 +309,35 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   let some statements := interior.statements | throw "the interior audit's evidence names no statements"
   pure { received, source, coins := getD j "coins", interior, statements, record := getD j "record",
          stmts }
+
+/-- The evidence (module docstring, **evidence**): `evidenceParsed`'s, its statements fewer than `2^64`
+(`stmtsFit` at `OneStageZk.WORD`). -/
+def evidenceOf (b : ByteArray) : V Evidence :=
+  match evidenceParsed b with
+  | .error err => .error err
+  | .ok e =>
+    match stmtsFit OneStageZk.WORD e.stmts.size with
+    | .error err => .error err
+    | .ok () => .ok e
+
+theorem stmtsFit_ok {limit n : Nat} (h : stmtsFit limit n = .ok ()) : n < limit := by
+  unfold stmtsFit at h
+  split at h
+  · cases h
+  · next hn => exact Nat.lt_of_not_le hn
+
+/-- **Evidence the form reads is `evidenceParsed`'s, of fewer than `2^64` statements.** -/
+theorem evidenceOf_ok {b : ByteArray} {e : Evidence} (h : evidenceOf b = .ok e) :
+    evidenceParsed b = .ok e ∧ e.stmts.size < 2 ^ 64 := by
+  unfold evidenceOf at h
+  split at h
+  · cases h
+  · next q hq =>
+    split at h
+    · cases h
+    · next hw =>
+      cases h
+      exact ⟨hq, stmtsFit_ok hw⟩
 
 /-- The ports of the registration `record`'s roots. -/
 def portsOf (record : Json) : Array String :=

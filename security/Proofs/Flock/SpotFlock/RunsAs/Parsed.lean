@@ -24,7 +24,8 @@ open Properties.Spot.SecurityProofs (bind_eq_ok)
 /-- **The form's parameters have a two-stage rule**: parameters `paramsOfJson` returns carry `Select.Rule.twoStage`. -/
 theorem paramsOfJson_twoStage {j : Json} {p : VStar.Recursive.SampledTwo.Params}
     (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) : ∃ grain replay k, p.rule = .twoStage grain replay k := by
-  unfold VStar.Recursive.SampledTwo.paramsOfJson at h
+  replace h := (VStar.Recursive.SampledTwo.paramsOfJson_ok h).1
+  unfold VStar.Recursive.SampledTwo.paramsParsed at h
   repeat'
     first
     | (cases h; done)
