@@ -1,7 +1,7 @@
 module
 
-public import Properties.Nci.Opening
-public import Properties.Nci.RecordForm
+public import Properties.InferenceOnly.Opening
+public import Properties.InferenceOnly.RecordForm
 public import Properties.Flock.Circuit.UnitInst
 public import Properties.Verity.Sha512
 public import Definitions.Hash.EmbeddingRead
@@ -16,7 +16,7 @@ the verdict bit 1; `ReturnsRow`, that the unit returns its table's row, the fill
 `PinnedReadBinds`, that a pinned read returns its row; `PinnedReadNontrivial`, that at the verdict bit 0 some pinned
 read does not; `PinnedReadHonest`, that the check's own form (`NciCheck.Record.SecurityProofs.form`) has a pinned
 read; and `OpenedRowReturned`, that an opening's declared row is the row its reader returns. The proofs are
-`Proofs.Properties.Nci.Lemmas.Opening`'s.
+`Proofs.Properties.InferenceOnly.Lemmas.Opening`'s.
 -/
 
 @[expose] public section

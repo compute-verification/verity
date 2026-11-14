@@ -80,7 +80,7 @@ A reject's reason opens with the name of what refused, and a colon follows where
 3. `circuits`: `circuits` does not name the record's templates, each once, in the record's order.
 4. `circuit-file`: for a template, in the record's order, no blob has the digest `circuits` names, or the file
    cannot be counted. A file that cannot be counted is never counted as no rows.
-5. `size`, then `nci`: the rule in rows. A block has more than `Γ` rows; else its fresh bits exceed `α` times its
+5. `size`, then `inference_only`: the rule in rows. A block has more than `Γ` rows; else its fresh bits exceed `α` times its
    rows.
 -/
 
@@ -178,7 +178,7 @@ def NO_ROWS : String := "one unit of the file has no computed row"
 /-- A failure of the rule in rows, by `RecordRows.rate`'s code. -/
 def failureOf (code : String) : String :=
   if code == "size" then "size: a block has more than Γ rows"
-  else "nci: a block reads more than α fresh bits a row"
+  else "inference_only: a block reads more than α fresh bits a row"
 
 /-! ## The record -/
 

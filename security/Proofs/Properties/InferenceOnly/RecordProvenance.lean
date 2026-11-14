@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Properties.Nci.RecordForm
-public import Proofs.Properties.Nci.RecordRoles
-public import Proofs.Properties.Nci.RecordTemplates
+public import Proofs.Properties.InferenceOnly.RecordForm
+public import Proofs.Properties.InferenceOnly.RecordRoles
+public import Proofs.Properties.InferenceOnly.RecordTemplates
 
 /-!
 # Every row the record check holds is registered, for the record check's own form

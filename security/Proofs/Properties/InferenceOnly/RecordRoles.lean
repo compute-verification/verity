@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Properties.Nci.RecordBlocks
-public import Proofs.Properties.Nci.RecordDeclared
+public import Proofs.Properties.InferenceOnly.RecordBlocks
+public import Proofs.Properties.InferenceOnly.RecordDeclared
 
 /-!
 # What the record check holds a row by

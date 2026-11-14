@@ -3,12 +3,12 @@ module
 public import Properties.InferenceOnly.Record
 public import Proofs.Properties.InferenceOnly.RecordRead
 public import Proofs.Properties.InferenceOnly.Lemmas
-public import Properties.Nci.RecordForm
+public import Properties.InferenceOnly.RecordForm
 
 /-!
 # What the record check's own form carries and rates
 
-`form` (`Properties.Nci.RecordForm`) is the record check as a `Properties.Record.Form`. `form_rate`: on a record's
+`form` (`Properties.InferenceOnly.RecordForm`) is the record check as a `Properties.Record.Form`. `form_rate`: on a record's
 summary the form's rate rule is `rate`, the one `evaluate` decides by.
 
 Two of the four statements `Properties.Record.Complies` follows from, of this form:

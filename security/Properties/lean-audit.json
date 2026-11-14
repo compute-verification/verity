@@ -104,7 +104,7 @@
   "Properties.Challenger",
   "Properties.ZkServer",
   "Properties.Core.Site",
-  "Properties.Nci.Opening"
+  "Properties.InferenceOnly.Opening"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
@@ -2555,15 +2555,15 @@
    "except": [],
    "why": "a history table's registered root is stated against the root check's own functions (`Spot.HistoryTable`), the hash area's history-table root (`Definitions.Hash.HistoryTable`) and the verifier's SHA-512 as a model hash (`Verity.sha512`), never a proof"
   },
-  "Properties.Nci.Opening": {
+  "Properties.InferenceOnly.Opening": {
    "imports": [
-    "Properties.Nci.Record",
+    "Properties.InferenceOnly.Record",
     "Properties.Flock.Circuit.CircuitOf",
     "Definitions.Accounting.ReadUnit",
     "Spot.Bits"
    ],
    "except": [],
-   "why": "a reader's ports as gates are stated over the record's roles (Properties.Nci.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), a read unit's gates (Definitions.Accounting.ReadUnit) and SPOT's map from a Definition's parameters to a file's gates (Spot.Bits), never over a proof",
+   "why": "a reader's ports as gates are stated over the record's roles (Properties.InferenceOnly.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), a read unit's gates (Definitions.Accounting.ReadUnit) and SPOT's map from a Definition's parameters to a file's gates (Spot.Bits), never over a proof",
    "sealed": true
   },
   "Properties.Pouw.PearlPlusTie": {

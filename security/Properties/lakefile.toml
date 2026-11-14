@@ -121,5 +121,5 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Verity.Sha512", "Properties.Verity.Idle", "Properties.Verity.Subprotocols", "Properties.Verity.Coupling",
   "Properties.Flock.Nets", "Properties.Remote", "Properties.InferenceOnly.Record", "Properties.Pous.WipeSigned",
   "Properties.Challenger", "Properties.ZkServer", "Properties.Core.Site", "Properties.Flock.ReadNet",
-  "Properties.Assumptions", "Properties.Verity.WindowFiles", "Properties.Nci.Opening", "Properties.Nci.PinnedRead",
-  "Properties.Nci.RecordForm"]
+  "Properties.Assumptions", "Properties.Verity.WindowFiles", "Properties.InferenceOnly.Opening", "Properties.InferenceOnly.PinnedRead",
+  "Properties.InferenceOnly.RecordForm"]

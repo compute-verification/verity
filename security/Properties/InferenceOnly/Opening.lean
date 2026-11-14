@@ -1,6 +1,6 @@
 module
 
-public import Properties.Nci.Record
+public import Properties.InferenceOnly.Record
 public import Properties.Flock.Circuit.CircuitOf
 public import Definitions.Accounting.ReadUnit
 public import Spot.Bits

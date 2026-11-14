@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Properties.Nci.RecordInputs
-public import Proofs.Properties.Nci.ThetaSteps
+public import Proofs.Properties.InferenceOnly.RecordInputs
+public import Proofs.Properties.InferenceOnly.ThetaSteps
 
 /-!
 # What a table read and an opening declare

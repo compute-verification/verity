@@ -1,17 +1,17 @@
 module
 
-public import Properties.Nci.Opening
-public import Properties.Nci.PinnedRead
+public import Properties.InferenceOnly.Opening
+public import Properties.InferenceOnly.PinnedRead
 public import Properties.Verity.Sha512
 public import Flock.Hm96
 public import Proofs.Accounting.ReadUnit
 public import Proofs.Accounting.ReadUnit.BitsPorts
-public import Proofs.Properties.Nci.RecordForm
+public import Proofs.Properties.InferenceOnly.RecordForm
 
 /-!
 # A pinned reader's unit returns its table's row
 
-`PinnedReadBinds` (`Properties.Nci.PinnedRead`) is a lemma, proved here by `pinnedReadBinds`: no lock lists it and
+`PinnedReadBinds` (`Properties.InferenceOnly.PinnedRead`) is a lemma, proved here by `pinnedReadBinds`: no lock lists it and
 nothing reads it. Let a check hold a record's row as an opening under a pin, and let its reader's circuit file parse
 to a templated statement whose unit template the read's check accepts (`Flock.ReadNet.check`) and whose unit returns
 the circuit's outputs. Let the file's unit be the record's (`laidOutAs`), with the read unit's gates `q` at the
@@ -20,7 +20,7 @@ verdict bit is 1 there, and a table is committed under the root and the domain i
 row the unit returns in its local evaluation is that table's row at the key its key gates hold, or the fill row where
 the key is at or past the table's count, or SHA-512 collides on what the unit's check and the table's opening hashed.
 
-The record's names reach the circuit's gates by `Properties.Nci.Opening`'s map alone, and the map's gates are the
+The record's names reach the circuit's gates by `Properties.InferenceOnly.Opening`'s map alone, and the map's gates are the
 ones the read's check proves the read at:
 
 * `portsAtGates_spec`: which gates `portsAtGates`'s are, bit by bit; `portsAtGates_eq`: so they are the gates at any

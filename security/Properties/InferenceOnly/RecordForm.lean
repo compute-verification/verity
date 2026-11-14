@@ -1,6 +1,6 @@
 module
 
-public import Properties.Nci.Record
+public import Properties.InferenceOnly.Record
 public import NciCheck.Record
 
 /-!
@@ -10,7 +10,7 @@ public import NciCheck.Record
 check's own. Its instance is the one `read` parsed, its wiring, slots and held rows the ones `read` gives, an
 opened row's output row the `row` its opening declares, its summary the two counts of `summarize` that the rate rule
 reads, its rate rule `failure` on that one pair, and its layout `layoutOf`'s. What it carries and rates is
-`Proofs.Properties.Nci.RecordForm`'s.
+`Proofs.Properties.InferenceOnly.RecordForm`'s.
 -/
 
 @[expose] public section
