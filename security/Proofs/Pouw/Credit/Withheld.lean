@@ -19,18 +19,18 @@ the credit bit set, whose Commit record registers no value, with the honest sess
 * `commit_read`: `commitOf?` reads the canonical text of a plain record of the registration format with no
   registered value as its digest under the format.
 * `key_read`: `ChallengerKey.ofJson` reads a key of the deployed parameters back from its JSON.
-* `root_one`, `draw_ok`: the two halves of `credited`, each from what its readers return: the sample root of a
+* `root_one`, `sample_ok`: the two halves of `credited`, each from what its readers return: the sample root of a
   window of one credited call and one round, and the sample's session.
 * `credited_play`: `credited` accepts an honest play of the family `pouw/draw` whose challenge answers the window's
   sample root and whose session the ledger opens on it, and returns the calls `creditedRoot` names.
 * `CallRow`, `roundOf`: a credited manifest row and a round's entry as their writers build them, with what
   `creditedRoot` reads of each (`row_plain`, `row_index`, `row_bit`, `row_z`, `round_root`, `round_coin`).
 * `credited_one`: `credited_play` on the window of one call.
-* `drawWithheld_honest`: the same at a key `Lms.keygen` derives at the deployed parameters.
+* `sampleWithheld_honest`: the same at a key `Lms.keygen` derives at the deployed parameters.
 
 `credited` is one step of the window's check: it reads a round's opened challenge and checks it against nothing,
 which is `roundsCheck`'s to do, and what it returns is the credit bits whatever the proofs' outcome. So
-`drawWithheld_honest` shows that this step returns call 0, and not that the window's check credits it.
+`sampleWithheld_honest` shows that this step returns call 0, and not that the window's check credits it.
 
 SHA-512 stays opaque and no signature is evaluated: the play's signatures verify by LMS's correctness
 (`Properties.Challenger.Withheld.exists_honest`).
@@ -239,17 +239,17 @@ theorem pub_size {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.dep
 is call 0, has its credit bit set and commits its product's table, and any round whose root is a digest and whose
 opened challenge reads, the verifier's key, call 0, and the sample root of the salt, the row, the Commit record's
 digest, the receipts' root, and the round's root and challenge. -/
-theorem root_one {key salt commit draw row x : Json} {k : ChallengerKey} {s rc z rr : ByteArray}
+theorem root_one {key salt commit sample row x : Json} {k : ChallengerKey} {s rc z rr : ByteArray}
     {cd : ByteArray × Array Json} {o : LiveOpening} (hk : ChallengerKey.ofJson key = .ok k)
-    (hs : digest? salt = some s) (hc : commitOf? commit = some cd) (ho : PouwCheck.Credit.isObj draw = true)
-    (hr : digest? (PouwCheck.get draw "receipts") = some rc) (h1 : PouwCheck.Credit.isObj row = true)
+    (hs : digest? salt = some s) (hc : commitOf? commit = some cd) (ho : PouwCheck.Credit.isObj sample = true)
+    (hr : digest? (PouwCheck.get sample "receipts") = some rc) (h1 : PouwCheck.Credit.isObj row = true)
     (h2 : PouwCheck.Credit.plain PouwCheck.Credit.DEPTH row = true)
     (h3 : PouwWindow.intOf? (PouwCheck.get row "index") = some 0)
     (h4 : PouwCheck.get row PouwCheck.Credit.CREDIT = .bool true)
     (h5 : digest? (PouwCheck.get (PouwCheck.get row "tables") "z") = some z)
     (h6 : PouwCheck.Credit.isObj x = true) (h7 : digest? (PouwCheck.get x "root") = some rr)
     (h8 : LiveOpening.ofJson (PouwCheck.get x "coin") = .ok o) :
-    Internal.creditedRoot key salt (.arr #[row]) .null commit (.arr #[x]) draw =
+    Internal.creditedRoot key salt (.arr #[row]) .null commit (.arr #[x]) sample =
       .ok (k, [0], PouwCommit.tagged DRAW_TAG
         [.bytes (callsRoot s [row] none (some cd.1)), .bytes rc, .bytes rr, .bytes o.coin]) := by
   unfold Internal.creditedRoot
@@ -259,13 +259,13 @@ theorem root_one {key salt commit draw row x : Json} {k : ChallengerKey} {s rc z
   rfl
 
 /-- **`creditedDraw` on a sample whose session released its one challenge after the sample root.** -/
-theorem draw_ok {ledger pins main draw : Json} {k : ChallengerKey} {root : ByteArray} {c : LiveCommitment}
-    {o : LiveOpening} (hroot : PouwCheck.str? (PouwCheck.get draw "root") = some (Flock.hexOf root))
-    (hsess : PouwCheck.Credit.drawSession ledger k pins main (PouwCheck.get draw "session") (Flock.hexOf root) =
+theorem sample_ok {ledger pins main sample : Json} {k : ChallengerKey} {root : ByteArray} {c : LiveCommitment}
+    {o : LiveOpening} (hroot : PouwCheck.str? (PouwCheck.get sample "root") = some (Flock.hexOf root))
+    (hsess : PouwCheck.Credit.drawSession ledger k pins main (PouwCheck.get sample "session") (Flock.hexOf root) =
       .ok (c, [(PouwWindow.DRAW, [root])]))
-    (hopen : LiveOpening.ofJson (PouwCheck.get draw "coin") = .ok o)
+    (hopen : LiveOpening.ofJson (PouwCheck.get sample "coin") = .ok o)
     (hlive : liveReason c o PouwWindow.DRAW 0 root = .ok none) :
-    Internal.creditedDraw ledger k pins main draw root = .ok () := by
+    Internal.creditedDraw ledger k pins main sample root = .ok () := by
   have hl : (([(PouwWindow.DRAW, [root])] : Roots).lookup PouwWindow.DRAW).getD [] = [root] := by
     rw [List.lookup_cons, beq_self_eq_true]
     rfl
@@ -276,21 +276,21 @@ theorem draw_ok {ledger pins main draw : Json} {k : ChallengerKey} {root : ByteA
 
 /-! ## An honest play credited -/
 
-theorem draw_name : isName PouwWindow.DRAW = true := by
+theorem family_name : isName PouwWindow.DRAW = true := by
   rw [isName, String.all_bool_eq]
   decide
 
-theorem draw_plain : PlainStr PouwWindow.DRAW := by decide
+theorem family_plain : PlainStr PouwWindow.DRAW := by decide
 
-theorem draw_short : PouwWindow.DRAW.length ≤ 128 := by decide
+theorem family_short : PouwWindow.DRAW.length ≤ 128 := by decide
 
 /-- The window's sample: the play's opened challenge, the receipts' root, the sample root, and the session's files. -/
-def drawOf (p : Play) (receipts : ByteArray) : Json :=
+def sampleOf (p : Play) (receipts : ByteArray) : Json :=
   Json.mkObj [("coin", p.opening.toJson), ("receipts", .str (Flock.hexOf receipts)),
     ("root", .str (Flock.hexOf p.window)), ("session", p.session)]
 
-theorem draw_receipts (p : Play) (receipts : ByteArray) :
-    PouwCheck.get (drawOf p receipts) "receipts" = .str (Flock.hexOf receipts) :=
+theorem sample_receipts (p : Play) (receipts : ByteArray) :
+    PouwCheck.get (sampleOf p receipts) "receipts" = .str (Flock.hexOf receipts) :=
   (get_getD _ _).trans rfl
 
 /-- **`credited` accepts an honest play of the sample's family**: under the play's key, a window whose sample root
@@ -298,17 +298,17 @@ theorem draw_receipts (p : Play) (receipts : ByteArray) :
 returns the calls `creditedRoot` names. -/
 theorem credited_play {I : ByteArray} {p : Play} (h : p.Honest I) {salt calls served commit rounds : Json}
     {receipts root : ByteArray} {out : List Nat} (hl : p.label = PouwWindow.DRAW)
-    (hroot : Internal.creditedRoot p.key.toJson salt calls served commit rounds (drawOf p receipts) =
+    (hroot : Internal.creditedRoot p.key.toJson salt calls served commit rounds (sampleOf p receipts) =
       .ok (p.key, out, root))
     (ha : p.after = root) (hw : p.window = root) :
     Internal.credited p.key.toJson (.arr #[.str p.openText, .str p.endText]) (.arr #[.str p.pinText])
-      (.arr #[.str (Flock.hexOf p.pin)]) salt calls served commit rounds (drawOf p receipts) = .ok out := by
+      (.arr #[.str (Flock.hexOf p.pin)]) salt calls served commit rounds (sampleOf p receipts) = .ok out := by
   obtain ⟨ht, hwo⟩ := Properties.Challenger.Withheld.trusted h
-  have g2 : PouwCheck.get (drawOf p receipts) "root" = .str (Flock.hexOf p.window) := (get_getD _ _).trans rfl
-  have g3 : PouwCheck.get (drawOf p receipts) "session" = p.session := (get_getD _ _).trans rfl
-  have g4 : PouwCheck.get (drawOf p receipts) "coin" = p.opening.toJson := (get_getD _ _).trans rfl
+  have g2 : PouwCheck.get (sampleOf p receipts) "root" = .str (Flock.hexOf p.window) := (get_getD _ _).trans rfl
+  have g3 : PouwCheck.get (sampleOf p receipts) "session" = p.session := (get_getD _ _).trans rfl
+  have g4 : PouwCheck.get (sampleOf p receipts) "coin" = p.opening.toJson := (get_getD _ _).trans rfl
   have hsess : PouwCheck.Credit.drawSession (.arr #[.str p.openText, .str p.endText]) p.key (.arr #[.str p.pinText])
-      (.arr #[.str (Flock.hexOf p.pin)]) (PouwCheck.get (drawOf p receipts) "session") (Flock.hexOf root) =
+      (.arr #[.str (Flock.hexOf p.pin)]) (PouwCheck.get (sampleOf p receipts) "session") (Flock.hexOf root) =
         .ok (p.commitment, [(PouwWindow.DRAW, [root])]) := by
     have hd := Properties.Pouw.Credit.SecurityProofs.drawSession_honest ht hwo
     rw [hl, ha, hw] at hd
@@ -317,7 +317,7 @@ theorem credited_play {I : ByteArray} {p : Play} (h : p.Honest I) {salt calls se
   have hlive : liveReason p.commitment p.opening p.label 0 p.after = .ok none :=
     Files.liveReason_one p.after h.domain h.coinSize h.saltSize
   rw [hl, ha] at hlive
-  have hdraw := draw_ok (draw := drawOf p receipts) (root := root)
+  have hsample := sample_ok (sample := sampleOf p receipts) (root := root)
     (by
       rw [g2, hw]
       rfl)
@@ -328,7 +328,7 @@ theorem credited_play {I : ByteArray} {p : Play} (h : p.Honest I) {salt calls se
     hlive
   unfold Internal.credited
   rw [hroot]
-  simp only [bind, Except.bind, hdraw]
+  simp only [bind, Except.bind, hsample]
   rfl
 
 /-! ## A window of one call -/
@@ -437,10 +437,10 @@ theorem credited_one {I : ByteArray} {p : Play} (h : p.Honest I) {salt receipts 
     (hw : p.window = rootOne salt receipts text r round coin) :
     Internal.credited p.key.toJson (.arr #[.str p.openText, .str p.endText]) (.arr #[.str p.pinText])
       (.arr #[.str (Flock.hexOf p.pin)]) (.str (Flock.hexOf salt)) (.arr #[r.toJson]) .null
-      (.str (Flock.hexOf text.toUTF8)) (.arr #[roundOf round coin csalt]) (drawOf p receipts) = .ok [0] := by
-  have hroot := root_one (draw := drawOf p receipts) (key_read hps) (digest_hex hs) hc rfl
+      (.str (Flock.hexOf text.toUTF8)) (.arr #[roundOf round coin csalt]) (sampleOf p receipts) = .ok [0] := by
+  have hroot := root_one (sample := sampleOf p receipts) (key_read hps) (digest_hex hs) hc rfl
     (by
-      rw [draw_receipts]
+      rw [sample_receipts]
       exact digest_hex hr)
     rfl (row_plain r) (row_index r) (row_bit r) (row_z r hz) rfl (round_root coin csalt hrd)
     (round_coin round coin csalt)
@@ -479,17 +479,17 @@ set and its product's table committed, the round log's one entry is a round's ro
 the Commit record registers no value. `credited` under that key accepts the window and returns call 0. It is one
 step of the window's check, which reads the round's challenge and does not check it: that the window's check
 credits the call is not shown here. -/
-theorem drawWithheld_honest :
-    ∃ (seed : ByteArray) (k : Lms.PrivateKey) (ledger pins main salt calls served commit rounds draw : Json),
+theorem sampleWithheld_honest :
+    ∃ (seed : ByteArray) (k : Lms.PrivateKey) (ledger pins main salt calls served commit rounds sample : Json),
       Lms.keygen Lms.deployed seed = .ok k ∧
         PouwCheck.Credit.Internal.credited (ChallengerKey.toJson ⟨Lms.deployed, k.publicKey⟩) ledger pins main salt
-          calls served commit rounds draw = .ok [0] := by
+          calls served commit rounds sample = .ok [0] := by
   obtain ⟨k, hkg, I, hk⟩ := Properties.Challenger.Withheld.keygen_ok (seed := ⟨Array.replicate 64 0⟩)
     (Properties.Challenger.Withheld.zeros_size 64)
   obtain ⟨text, htext⟩ := FlockComplete.JsonRT.canon_ok_some _
     (Properties.Challenger.Entry.good_of_plain Withheld.commit_plain)
-  obtain ⟨p, hpub, hlab, -, haft, hwin, -, h⟩ := Properties.Challenger.Withheld.exists_honest hk Withheld.draw_name
-    Withheld.draw_plain Withheld.draw_short 0 (Properties.Challenger.Withheld.zeros_size 64)
+  obtain ⟨p, hpub, hlab, -, haft, hwin, -, h⟩ := Properties.Challenger.Withheld.exists_honest hk Withheld.family_name
+    Withheld.family_plain Withheld.family_short 0 (Properties.Challenger.Withheld.zeros_size 64)
     (Properties.Challenger.Withheld.zeros_size 192)
     (Withheld.rootOne_size ⟨Array.replicate 64 0⟩ ⟨Array.replicate 64 0⟩ text Withheld.call
       ⟨Array.replicate 64 0⟩ ⟨Array.replicate 64 0⟩)

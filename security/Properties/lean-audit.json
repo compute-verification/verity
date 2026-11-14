@@ -1162,7 +1162,7 @@
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial"
   },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
-   "honest": ["Properties.Pouw.Credit.SecurityProofs.drawWithheld_honest"],
+   "honest": ["Properties.Pouw.Credit.SecurityProofs.sampleWithheld_honest"],
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
   },
   "Properties.Site.refuses": {
@@ -6847,36 +6847,6 @@
    "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
    "unfolded_hash": "1c50962c1922c6ddacfb9742353e1de96fdd113bca73ae42a82d7c5ad0282b33"
   },
-  "Properties.Pouw.Credit.SecurityProofs.drawWithheld_honest": {
-   "owner": "@proofs",
-   "signature": [
-    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_honest :",
-    "  Exists fun seed =>",
-    "    Exists fun k =>",
-    "      Exists fun ledger =>",
-    "        Exists fun pins =>",
-    "          Exists fun main =>",
-    "            Exists fun salt =>",
-    "              Exists fun calls =>",
-    "                Exists fun served =>",
-    "                  Exists fun commit =>",
-    "                    Exists fun rounds =>",
-    "                      Exists fun draw =>",
-    "                        And (Eq (Lms.keygen Lms.deployed seed) (Except.ok k))",
-    "                          (Eq",
-    "                            (PouwCheck.Credit.Internal.credited { params := Lms.deployed, pub := k.publicKey }.toJson",
-    "                              ledger pins main salt calls served commit rounds draw)",
-    "                            (Except.ok (List.cons 0 List.nil)))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "f4df8411b5532943a218ace2a84ce72d094f5a3d3b7abb8a2c81aaa547eafcff"
-  },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial": {
    "owner": "@compute-accounting",
    "signature": [
@@ -6993,6 +6963,36 @@
     "reads": []
    },
    "type_hash": "12f3ca8e98677f6e6995ec42d2279e8296183c03f73be651e8240633b2e19f09"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.sampleWithheld_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_honest :",
+    "  Exists fun seed =>",
+    "    Exists fun k =>",
+    "      Exists fun ledger =>",
+    "        Exists fun pins =>",
+    "          Exists fun main =>",
+    "            Exists fun salt =>",
+    "              Exists fun calls =>",
+    "                Exists fun served =>",
+    "                  Exists fun commit =>",
+    "                    Exists fun rounds =>",
+    "                      Exists fun draw =>",
+    "                        And (Eq (Lms.keygen Lms.deployed seed) (Except.ok k))",
+    "                          (Eq",
+    "                            (PouwCheck.Credit.Internal.credited { params := Lms.deployed, pub := k.publicKey }.toJson",
+    "                              ledger pins main salt calls served commit rounds draw)",
+    "                            (Except.ok (List.cons 0 List.nil)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "f4df8411b5532943a218ace2a84ce72d094f5a3d3b7abb8a2c81aaa547eafcff"
   },
   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
    "owner": "@compute-accounting",
