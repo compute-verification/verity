@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from conftest import load
 
-from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 
 derive = load("floored_gemm/derive.py")
 
