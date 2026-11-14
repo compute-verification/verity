@@ -58,13 +58,15 @@ candidate and those above it are built again without them in the same tick.
                                                    fix: the queue refuses whichever of the two it merges second); a check it
                                                    couldn't run it names under "checks skipped";
                                                    --no-preflight skips it
-    research queue review [N (--land [--ref NOTE] | --hold REASON) --by LANE] [--sha SHA] [--json]
+    research queue review [N (--land [--ref NOTE] | --hold REASON) --by LANE] [--sha SHA] [--over MINUTES] [--json]
                                                    without N: the open PRs onto `main` marked at their head and not on `main`
                                                    that no land verdict there lands, oldest mark first, those the verified
-                                                   queue waits on a reviewer for (number, head, owner, mark time, files, whether
+                                                   queue waits on a reviewer for (number, head, owner, mark time, minutes
+                                                   since it: `waited_min`, files, whether
                                                    it is a Lean change: `lean_change`, and why: a hold, no land verdict, or
                                                    `low-risk: lands on its mark` for a head the loop's low-risk rule takes on
-                                                   its mark alone, `lands_on_mark`); with N: a reviewer's verdict, a `reviewed` label on
+                                                   its mark alone, `lands_on_mark`); --over MINUTES: only those marked longer
+                                                   ago; with N: a reviewer's verdict, a `reviewed` label on
                                                    `pr:N@HEAD` (its head, or --sha, a full or short SHA), which the verified
                                                    queue counts unless LANE is the PR's owner, its handle or its ready mark's
                                                    author, refused here; without --sha, refused when GitHub has another head
@@ -304,6 +306,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import calendar
 import concurrent.futures
 import contextlib
 import dataclasses
@@ -6263,10 +6266,20 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
     return 1 if lost else 0
 
 
+def waited_min(marked: str | None, now: float) -> int | None:
+    """Whole minutes from a mark's label time ``marked`` (`labelauth.TS_FORMAT`) to ``now``; None for no mark time."""
+    if not marked:
+        return None
+    return int((now - calendar.timegm(time.strptime(marked, "%Y-%m-%dT%H:%M:%SZ"))) // 60)
+
+
 def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | None, ref: str | None, by: str | None,
-           sha: str | None = None, as_json: bool = False) -> int:
+           sha: str | None = None, as_json: bool = False, over: float | None = None,
+           now: Callable[[], float] = time.time) -> int:
     """`research queue review`: without ``pr``, list the open PRs onto `main` marked ready at their head and not on `main` that no
-    land verdict at their head lands (`unreviewed`), oldest mark first: those the verified queue waits on a reviewer for, but
+    land verdict at their head lands (`unreviewed`), oldest mark first, each with the minutes since its mark (`waited_min`;
+    with ``over``, only those marked more than ``over`` minutes ago, or at a time not known): those the verified queue waits on a
+    reviewer for, but
     for one its loop takes on its mark alone, whose row says so (`LOWRISK_ROW`, by the loop's rule: `lands_on_mark` under
     drive.toml at `main`, of the files its row lists); with it, write ``verdict`` (`land` or `hold`, ``ref`` its note or
     reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner.  Under
@@ -6300,18 +6313,23 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
             if refused := labels.refusals(p.number, p.head, vocab.REVIEWED):
                 why += f"; not authenticated: {'; '.join(refused)}"
             base = _out(q.workdir, "merge-base", main, p.head)
+            marked = q.marked_at(p.number, p.head) if q.marked_at else None
             rows.append({"pr": p.number, "head": p.head, "owner": p.owner, "lean": lean_change(q.workdir, p.head, base),
-                         "files": sorted(files), "why": why,
-                         "marked": q.marked_at(p.number, p.head) if q.marked_at else None})
+                         "files": sorted(files), "why": why, "marked": marked, "waited_min": waited_min(marked, now())})
         rows.sort(key=lambda r: (r["marked"] or "", r["pr"]))
+        lacking = len(rows)
+        if over is not None:
+            rows = [r for r in rows if r["waited_min"] is None or r["waited_min"] > over]
         if as_json:
             print(json.dumps(rows, indent=1))
         else:
             for r in rows:
                 shown = ", ".join(r["files"][:8]) + (f" (+{len(r['files']) - 8} more)" if len(r["files"]) > 8 else "")
+                ago = f" ({r['waited_min']} min ago)" if r["waited_min"] is not None else ""
                 print(f"#{r['pr']} {r['head'][:12]} {r['owner']} Lean change: {'yes' if r['lean'] else 'no'}, marked "
-                      f"{r['marked'] or '?'}: {r['why']}\n    {shown}")
-            print(f"research queue review: {len(rows)} marked PR(s) not on `main` lack a land verdict")
+                      f"{r['marked'] or '?'}{ago}: {r['why']}\n    {shown}")
+            print(f"research queue review: {lacking} marked PR(s) not on `main` lack a land verdict"
+                  + (f"; {len(rows)} of them marked over {over:g} min ago or at a time not known" if over is not None else ""))
         return 0
     q.fetch()
     chain = [] if land_into_key(q.workdir, "refs/remotes/origin/main") == "main" else q.chain()
@@ -6946,6 +6964,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--hold", metavar="REASON", help="review N: the verdict that keeps it, and every PR containing it, out of "
                                                      "the verified queue's candidates")
     ap.add_argument("--ref", help="review N --land: the note or reason the verdict rests on")
+    ap.add_argument("--over", type=float, metavar="MINUTES", help="review: list only the PRs marked more than MINUTES ago (or at "
+                                                                  "a time not known)")
     ap.add_argument("--head", help="open: the pushed branch to open a PR for")
     ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head); ready: mark only "
                                   "this head, refusing when GitHub still shows another after a few reads (push && ready, safely); "
@@ -7080,6 +7100,8 @@ def main(argv: list[str]) -> int:
         ap.error(f"{a.command} writes the owner's ready mark: pass --by <lane> (or set $RESEARCH_LANE)")
     if (a.land or a.hold is not None or a.ref) and not (a.command == "review" and a.pr):
         ap.error("--land, --hold and --ref are for review N only")
+    if a.over is not None and not (a.command == "review" and not a.pr):
+        ap.error("--over is for the review listing only (review with no PR number)")
     if a.command == "review" and a.pr and (a.land == (a.hold is not None) or not a.by):
         ap.error("review N records one verdict: --land [--ref NOTE] or --hold REASON, with --by <reviewer lane> (or $RESEARCH_LANE)")
     if a.command == "delegate" and not (a.pr and a.by):
@@ -7157,7 +7179,8 @@ def main(argv: list[str]) -> int:
             if a.pr is None and here and signed_at(Path(here), main_ref) == "on":
                 labels.verify = label_verifier(Path(here), main_ref, keys, lambda s: print(f"research queue: {s}", file=sys.stderr))
             return review(q, label_signer(store, Path(here) if here else None) if a.pr else store, labels, a.pr,
-                          "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by, sha=a.sha, as_json=a.json)
+                          "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by, sha=a.sha, as_json=a.json,
+                          over=a.over)
         from .merge import off_drive, on_drive
 
         if a.command == "sync" and not (a.dry_run or on_drive()):
