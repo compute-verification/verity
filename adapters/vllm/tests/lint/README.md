@@ -156,7 +156,8 @@ importing only the standard library and this directory.
 and `tests.regression.checks.attempt_provenance` (`DEFAULT_QUERY`). Two are this directory's: `_imports`, for `core` and
 `core_less_definitions` (which modules of `verity` are core), which `conftest.py`'s guard and the four boundary tests of
 `tests/program/` read, and `vllm_surface`, for `SURFACE` (what the library imports from vLLM), which the stand-in is
-built from and `tests/test_fake_vllm.py` imports entry by entry. Two files run as
+built from and `tests/test_fake_vllm.py` imports entry by entry. `core` answers from a table of prefixes, and
+`test_core_modules.py` warns on a row that names no package or module of the tree. Two files run as
 commands: `python -m tests.regression.rebaseline run`, from `verity_vllm/ops/epoch_row.sh`, and
 `tests/lint/merge_allowlist.py`, git's merge driver for the lists (`.gitattributes`).
 The check runs `tests/regression` by its marks: the T0 tier in `check`, and the checks marked `rebuild` once per landing
