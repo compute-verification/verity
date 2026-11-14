@@ -1,6 +1,6 @@
 """The int8 attention's two Triton kernels (`int8_attention_triton.kv_rows` and `lut_rows`) held to Int8KvQuant_v1 and
 Int8LutAttentionRow_v1 at the PTX and SASS level, as `int8_fused.ptx_check` holds the fused linears at the PTX level and
-verity/protocols/pouw/prover/sass_gate.py holds the PoUW kernels' SASS.  Each kernel is compiled by Triton for sm_120 and sm_90
+verity/protocols/accounting/pouw/prover/sass_gate.py holds the PoUW kernels' SASS.  Each kernel is compiled by Triton for sm_120 and sm_90
 (no GPU needed: Triton's own ptxas and nvdisasm) under `int8_fused.OPTS`, the options it is launched with, or taken from a
 GPU process's JIT cache after a launch (`launched`).
 
@@ -47,7 +47,7 @@ from types import ModuleType
 from typing import Any
 
 SCHEMA = "verity-vllm/int8-attention-sass/v1"
-HARNESS = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "pouw" / "prover" / "sass_gate.py"
+HARNESS = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "sass_gate.py"
 ARCHES = (120, 90)
 #: ptxas's IEEE subroutines (div.rn.f32's slow path; div.s64 / div.u64 / rem for integer division by a 64-bit divisor)
 IEEE_SUBROUTINES = frozenset({"__cuda_sm3x_div_rn_noftz_f32_slowpath", "__cuda_sm20_div_s64", "__cuda_sm20_div_u64",
@@ -76,7 +76,7 @@ class ToolMissing(RuntimeError):
 
 @functools.cache
 def harness() -> ModuleType:
-    """verity/protocols/pouw/prover/sass_gate.py: its nvdisasm parser, `Function` (subroutine regions) and `flagged`."""
+    """verity/protocols/accounting/pouw/prover/sass_gate.py: its nvdisasm parser, `Function` (subroutine regions) and `flagged`."""
     spec = importlib.util.spec_from_file_location("pouw_harness_sass_gate", HARNESS)
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
