@@ -3197,7 +3197,7 @@
     {"file": "adapters/vllm/verity_vllm/program/gemm_target_correspondence.py", "count": 7},
     {"file": "adapters/vllm/verity_vllm/program/layer_norm_difftest.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/program/lifting/continuation.py", "count": 26},
-    {"file": "adapters/vllm/verity_vllm/program/mla_capture.py", "count": 1},
+    {"file": "adapters/vllm/tests/program/mla_inputs.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/program/moe_difftest.py", "count": 3},
     {"file": "adapters/vllm/verity_vllm/program/predict/batch.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/program/predict/block_counts.py", "count": 7},

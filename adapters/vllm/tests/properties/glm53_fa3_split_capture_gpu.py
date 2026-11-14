@@ -279,14 +279,14 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 def _mufu(op: str, x: np.ndarray) -> np.ndarray:
     import torch
 
-    from verity_vllm.program import mla_capture as MC
+    from tests.program import mla_inputs as MC
 
     return MC._mufu(op, torch.from_numpy(x.view(np.float32).copy()).to("cuda")).cpu().numpy().view(np.uint32)
 
 
 def sweep_words() -> np.ndarray:
     """The sm_120 measurement's sweep (`mla_capture.mufu_probe`)."""
-    from verity_vllm.program import mla_capture as MC
+    from tests.program import mla_inputs as MC
 
     return MC._splitmix(np.arange(1 << 20, dtype=np.uint64) + (np.uint64(0xABC) << np.uint64(40))).astype(np.uint32)
 
