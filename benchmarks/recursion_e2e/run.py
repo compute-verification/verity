@@ -30,12 +30,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+import rec_profile as RP
+import rec_table as RT
+import settings as RS
 
-import rec_profile as RP  # noqa: E402
-import rec_table as RT  # noqa: E402
-import settings as RS  # noqa: E402
+HERE = Path(__file__).resolve().parent
 
 #: the job's command before its KEY=VALUE arguments, run from the tree's root; a caller of `main` may wrap it (`job`)
 JOB = ("bash", "benchmarks/recursion_e2e/job.sh")

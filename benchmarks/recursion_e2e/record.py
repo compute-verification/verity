@@ -19,7 +19,6 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
 sys.path += [str(HERE.parent / "harness"), str(HERE.parents[1] / "tools" / "config")]
 
 import rec_table as RT  # noqa: E402
