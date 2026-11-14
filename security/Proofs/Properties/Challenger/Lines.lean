@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Challenger.Window
-import Proofs.Properties.Nci.RecordJson
+import Proofs.Properties.InferenceOnly.RecordJson
 
 /-!
 # Each line of a ledger `checked` accepts is numbered by its place and is the device's own, or a break
@@ -166,7 +166,7 @@ theorem seq_of_text {line line' : Json} {e e' : LedgerEntry} (he : ledgerEntry? 
 
 theorem getD_ledger (ledger : Json) : getD (Json.mkObj [("ledger", ledger)]) "ledger" = ledger := by
   have h : (Json.mkObj [("ledger", ledger)]).getObjVal? "ledger" = .ok ledger :=
-    (NciCheck.Record.SecurityProofs.Json.getObjVal?_mkObj (by simp) "ledger" ledger).2 (by simp)
+    (InferenceOnlyCheck.Record.SecurityProofs.Json.getObjVal?_mkObj (by simp) "ledger" ledger).2 (by simp)
   simp only [getD, field?, h, Except.toOption, Option.getD_some]
 
 /-- **A presented line is an entry under its place's number that says what a line of the device's own ledger
