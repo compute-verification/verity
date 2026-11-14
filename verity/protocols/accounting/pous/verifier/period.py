@@ -65,7 +65,6 @@ SETUP_ACCEPTED = ("the store at the published root is the encoding of the regist
                   "commitment and salt (SetupAccepted)")
 """`PousCheck.SignedRun.SETUP_ACCEPTED`: setup's acceptance, an open premise of the signed run, among its certificate's
 hypotheses."""
-SETUP_PROTOCOL = "verity/pous/p2/v4/setup"
 SESSION_DOMAIN = "verity/pous-period/session/v1"
 W, C0 = 1024, 105
 """The small point's width: a 1,024-bit prime `2^w − c0` of P2's ladder, 126 payload bytes a 128-byte block."""
@@ -282,10 +281,6 @@ class Run:
         return Fraction(self.answer["public"]["eps"]) if self.verdict == "accept" else Fraction(0)
 
 
-Period = Run
-"""`Run`, under the name some of its readers still use; it goes when none does."""
-
-
 def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]:
     """`EXE [ARGS] serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI). The lines go
     as bytes, so a served case (gigabytes) is held once beside its own JSON, not again as text."""
@@ -338,7 +333,7 @@ SETUP_WORKERS = 32
 CPUs each may run on (`period_prover.setup_store`; `onsite.device_key`, from `challenger_party.main`)."""
 
 
-__all__ = ["DEPLOYMENT", "NO_JUDGE", "PIN_FIELDS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS", "SIGNED_PROTOCOL",
-           "Period", "Run", "SetupInputs", "answer", "answer_signed", "case", "case_signed", "certificate", "certify",
-           "deployment", "gaps", "openings_of", "point_for", "point_of", "profile", "profile_signed",
+__all__ = ["DEPLOYMENT", "NO_JUDGE", "PIN_FIELDS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS",
+           "SIGNED_PROTOCOL", "Run", "SetupInputs", "answer", "answer_signed", "case", "case_signed", "certificate",
+           "certify", "deployment", "gaps", "openings_of", "point_for", "point_of", "profile", "profile_signed",
            "serve", "setup_case", "setup_inputs", "tie", "unjudged"]

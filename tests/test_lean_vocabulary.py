@@ -819,8 +819,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
     "verity/protocols/accounting/pous/verifier/layout.py::Placement":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/accounting/pous/verifier/period.py::Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes one `Core` period case, not one per protocol (memory-accounting)",
     "verity/protocols/accounting/pous/verifier/period.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it: PoUS's view of the store entry (memory-accounting)",
     "verity/protocols/accounting/pous/verifier/protocol.py::Certificate":
@@ -893,8 +891,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `poub`'s own type: becomes one type per concept, parameterised by codec (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/p2.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/accounting/poub/verifier/period.py::Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes one `Core` period case (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
     "verity/protocols/proofs/spot/verifier/one_stage/verdict.py::Verdict":

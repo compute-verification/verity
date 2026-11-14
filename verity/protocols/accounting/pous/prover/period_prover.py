@@ -51,7 +51,6 @@ from verity.protocols.accounting.pous.verifier.period import (
     SESSION_DOMAIN,
     SETUP_WORKERS,
     W,
-    Period,
     Run,
     answer,
     case,
@@ -152,7 +151,7 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
 def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
-          party: challenger_session.Side | None = None, session: Session | None = None) -> Period:
+          party: challenger_session.Side | None = None, session: Session | None = None) -> Run:
     """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's
     session under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the
     tie on the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of
@@ -185,7 +184,7 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
         point: R.Point | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
         clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
-        party: challenger_session.Side | None = None, session: Session | None = None) -> Period:
+        party: challenger_session.Side | None = None, session: Session | None = None) -> Run:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
     verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
