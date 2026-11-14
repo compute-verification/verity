@@ -31,7 +31,7 @@ is the four partials' sum, so the bound is on the unit.
 sectors (`SketchRank 16 257 12`), the hash budget (`KeyBudget`), and `Receipted`, `Present`, and the store uniform (the
 outcome's coins). P2's `C*` is the encode of the public `W`, so a uniform store is the ideal encoding model: a sector the
 device never held, read, took in or rebuilt is uniform to it. A device that rebuilds a unit obtains it (`Present`
-counts it), and what rebuilding costs, in part or whole, is the codec's, the memory line's debit
+counts it), and what rebuilding costs, in part or whole, is the codec's, the memory line's charge
 (`Accounting.Assumptions.WorkHardnessP2`, `SquaringCeilingP2`).
 
 **Drafted, not decided**: the claims await a ruling; `audit.ledger` refuses a P2 record
