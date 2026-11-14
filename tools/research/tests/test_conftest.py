@@ -32,18 +32,18 @@ def test_the_tests_and_the_pythons_they_start_import_this_trees_research():
     assert Path(child.stdout.strip()).resolve() == TREE / "src" / "research" / "__init__.py"
 
 
-def test_a_research_first_on_pythonpath_is_not_what_the_tests_check(tmp_path):
+def test_a_research_first_on_pythonpath_is_not_what_the_tests_check(tmp_path, monkeypatch):
     """A `research run` job puts its tool snapshot, a `research` with no store.pod.toml beside it, first on PYTHONPATH: a test
     run there with pytest alone must still check this tree, and read the files beside its code."""
     decoy = tmp_path / "decoy"
     (decoy / "research" / "pods").mkdir(parents=True)
     for f in ("__init__.py", "pods/__init__.py", "pods/registry.py"):
         (decoy / "research" / f).write_text("")
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(decoy), os.environ.get("PYTHONPATH")]))}
+    monkeypatch.setenv("PYTHONPATH", str(decoy), prepend=os.pathsep)
     seen = subprocess.run([sys.executable, "-c", "import research; print(research.__file__)"], capture_output=True, text=True,
-                          check=True, cwd="/", env=env)
+                          check=True, cwd="/")
     assert Path(seen.stdout.strip()) == decoy / "research" / "__init__.py", "the decoy is what a Python on this PYTHONPATH imports"
     probe = f"{Path(__file__).name}::test_the_tests_and_the_pythons_they_start_import_this_trees_research"
     run = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", f"--basetemp={tmp_path / 'probe'}",
-                          f"tests/{probe}"], capture_output=True, text=True, cwd=TREE, env=env)
+                          f"tests/{probe}"], capture_output=True, text=True, cwd=TREE)
     assert run.returncode == 0, run.stdout[-3000:] + run.stderr[-2000:]
