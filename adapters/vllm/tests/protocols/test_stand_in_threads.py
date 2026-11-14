@@ -1,8 +1,8 @@
 """A stand-in challenger serves its challenge phase in a thread, and that thread is a daemon.
 
-A test that fails with the challenge phase open never ends it: its traceback keeps the client's socket, so the thread
-waits for the client for good. Python ends only once every thread that is no daemon has, so a run with one such failure
-would print its failures and then never end."""
+A test that fails with the challenge phase open never ends it. The thread holds the stand-in and so the client's socket,
+which nothing then closes, and it waits for the client for good. Python ends only once every thread that is no daemon
+has, so a run with one such failure would print its failures and then never end."""
 import ast
 from pathlib import Path
 
