@@ -237,6 +237,7 @@ def front(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
     try:
+        a.gate = SS.gate_at(a.gate)
         if a.prompts > SS.A.SCAN["--lanes"]:
             raise SS.Refused(f"--prompts {a.prompts}: one group, at most the scan's {SS.A.SCAN['--lanes']} lanes")
         if SS.A.scan_group_windows(a.tokens) != 1:

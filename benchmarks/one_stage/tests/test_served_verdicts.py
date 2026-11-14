@@ -1040,6 +1040,8 @@ def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_tak
 
 SID = "s20261026T221500Z-ab12"
 GATE = "ssh -i KEY -o BatchMode=yes research@gate"
+#: the challenger host's address as the environment holds it (VY_CHALLENGER_1_HOST), here a documentation address
+CHALLENGER_HOST = "192.0.2.21"
 
 
 def _h1_serve_dir(tmp_path: Path, coin_source: str = "challenger", tied: bool = True) -> Path:
@@ -2619,7 +2621,8 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
            "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
            "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512",
-           "MAIN_FILE": str(tmp_path / "main.txt"), "DEVELOPMENT": "1", "COMPOSITE": "", "PEARLPLUS_INODES": "0"}
+           "MAIN_FILE": str(tmp_path / "main.txt"), "DEVELOPMENT": "1", "COMPOSITE": "", "PEARLPLUS_INODES": "0",
+           "VY_CHALLENGER_1_HOST": CHALLENGER_HOST}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
@@ -3470,7 +3473,7 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
     _rc, default = _serve_argv(tmp_path / "default", {k: v for k, v in {**PEARL_TIES, **cubin}.items()
                                                       if k != "PEARLC_CHALLENGER_GATE"})
     assert default[default.index("--challenger-gate") + 1] == (
-        f"ssh -i {tmp_path / 'default'}/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84")
+        f"ssh -i {tmp_path / 'default'}/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@{CHALLENGER_HOST}")
     assert (default[default.index("--challenger-peer") + 1], default[default.index("--challenger-lane") + 1]) == (
         "vy-dc-h200", "vllm")
 
@@ -4673,8 +4676,9 @@ print(json.dumps({"pinned": "c0" * 20, "pin": {"on": "remote"},
 def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3cs_audit_ran(tmp_path):
     """`served_verdicts.sh gate-compose PIECES VERDICT HOST` on a deferral's serve dir (its follow-on's copy, V3c's audit
     there) writes the hand-off at the settings the deferral recorded, not the environment's, HOST where V3c's audit ran,
-    and sends it to the compose gate. Without HOST where the serve dir holds V3c's audit, or with a setting other than
-    the deferral's, it is refused and sends nothing."""
+    and sends it to the compose gate. Without HOST where the serve dir holds V3c's audit, with a setting other than
+    the deferral's, or on the default gate command while VY_AUDITOR_2_HOST, the compose node's address, is unset, it is
+    refused and sends nothing."""
     verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept"}
     (tmp_path / "served-out" / "record").mkdir(parents=True)
     (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
@@ -4701,6 +4705,10 @@ def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3
     assert gate_compose("clash", "cpu-6", K="8") == (3, [
         "GATE-COMPOSE refused: the hand-off is written at the deferral's settings (the serve dir's "
         "private/deferred/deferred.env), and the environment sets another K: unset it"])
+    assert gate_compose("no-address", "cpu-6", COMPOSE_GATE="") == (3, [
+        "PREFLIGHT: VY_AUDITOR_2_HOST is unset, the address of the host the default gate command reaches (ssh -i "
+        f"{tmp_path}/.ssh/vllm_gate_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes research@): set it, or give the gate's "
+        "whole command"])
     assert not seen.exists() and not dc.exists()
     assert gate_compose("out", "cpu-6") == (0, [
         HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6} (on remote): exit 0, "
@@ -5804,7 +5812,8 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
 
 def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
     """`served_verdicts.sh serve` in a toy tree whose venv python records serve-openai's argv and exits before listening,
-    under a no-op `sleep`: the exit status and that argv."""
+    under a no-op `sleep`, the challenger host's address in its environment: the exit status and that argv (none when
+    serve-openai wasn't started)."""
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "adapters" / "vllm", bin_, venv):
         d.mkdir(parents=True)
@@ -5816,10 +5825,46 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
-           "OUT": str(tmp_path / "out"), **env}
+           "OUT": str(tmp_path / "out"), "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, **env}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
-    return rc, (tmp_path / "argv").read_text().splitlines()
+    return rc, (tmp_path / "argv").read_text().splitlines() if (tmp_path / "argv").exists() else []
+
+
+NO_HOST = ("PREFLIGHT: VY_CHALLENGER_1_HOST is unset, the address of the host the default gate command reaches (ssh -i "
+           "{home}/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@): set it, or give the gate's "
+           "whole command")
+
+
+@pytest.mark.parametrize("env", [{}, {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_KERNEL": "pearl_c_sm90",
+                                      "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin"}], ids=["h1", "pearlplus"])
+def test_a_serve_on_the_lanes_default_gate_reads_the_challenger_hosts_address_from_the_environment(tmp_path, env):
+    """No file holds the challenger host's address: the lane's default gate command (H1_GATE's under h1,
+    PEARLC_CHALLENGER_GATE's under pearlplus) is research@ the address VY_CHALLENGER_1_HOST holds, and with it unset the
+    serve is refused by the variable's name before serve-openai starts. A gate given whole, or none, reads no address."""
+    rc, argv = _serve_argv(tmp_path / "held", env)
+    assert rc == 10 and argv[argv.index("--challenger-gate") + 1].endswith(f" research@{CHALLENGER_HOST}"), (rc, argv)
+    rc, argv = _serve_argv(tmp_path / "unset", {**env, "VY_CHALLENGER_1_HOST": ""})
+    assert (rc, argv) == (3, [])
+    said = (tmp_path / "unset" / "out" / "verdicts.txt").read_text().splitlines()
+    assert said == [NO_HOST.format(home=tmp_path / "unset")]
+    name = "PEARLC_CHALLENGER_GATE" if env else "H1_GATE"
+    for gate in (GATE, ""):
+        rc, argv = _serve_argv(tmp_path / f"given-{bool(gate)}", {**env, name: gate, "VY_CHALLENGER_1_HOST": ""})
+        assert rc == 10 and ("--challenger-gate" in argv) == bool(gate), (rc, argv)
+        assert not gate or argv[argv.index("--challenger-gate") + 1] == GATE
+
+
+def test_the_preflight_refuses_a_run_on_the_lanes_default_gate_without_the_challenger_hosts_address(tmp_path):
+    """The run that serves asks the gate before it leases the card, so its preflight refuses the lane's default gate
+    command while VY_CHALLENGER_1_HOST is unset, and passes with it; V3c alone on a kept serve dir asks no gate and runs
+    without the address."""
+    rc, lines, order, _limits = _v3c(tmp_path / "unset", (), PREFLIGHT_ONLY="1", H1_GATE=None, VY_CHALLENGER_1_HOST=None)
+    assert (rc, lines, order) == (3, [NO_HOST.format(home=tmp_path / "unset")], [])
+    rc, lines, order, _limits = _v3c(tmp_path / "held", (), PREFLIGHT_ONLY="1", H1_GATE=None)
+    assert (rc, order) == (0, []) and lines[0].startswith("PREFLIGHT passed"), lines
+    rc, lines, _order, _limits = _v3c(tmp_path / "v3c", H1_GATE=None, VY_CHALLENGER_1_HOST=None)
+    assert not [line for line in lines if "VY_CHALLENGER_1_HOST" in line], lines
 
 
 @pytest.mark.parametrize("env, budget", [

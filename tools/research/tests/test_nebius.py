@@ -961,6 +961,53 @@ def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_not
     assert not re.search(r"\bcat [^|'>]*(\.ssh/vy-cluster'|lean-cache\.env)", r.stdout)       # a key or env file is copied, never printed
     assert r.stdout.count("tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | ") == nodes and "sudo tar -C /etc/verity -cf - lean-cache.env' | " in r.stdout
     assert subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", "elsewhere"], capture_output=True).returncode == 2
+    # no file holds a project's id: each create reads it from the variable of its node's region
+    projects = re.findall(r"NEBIUS_REGION=(\S+) NEBIUS_PROJECT_ID=(\S+) ", r.stdout)
+    assert len(projects) == nodes and all(p == "$NEBIUS_PROJECT_ID_" + region.upper().replace("-", "_") for region, p in projects)
+
+
+@pytest.mark.parametrize("held, missing", [
+    ({}, "NEBIUS_PROJECT_ID_EU_WEST2 is unset: the id of the project"),
+    ({"NEBIUS_PROJECT_ID_EU_WEST2": "project-e00west", "NEBIUS_PROJECT_ID_UK_SOUTH1": "project-e00south"},
+     "NEBIUS_TENANT_ID is unset: the id of the tenant"),
+    ({"NEBIUS_PROJECT_ID_EU_WEST2": "project-e00west", "NEBIUS_PROJECT_ID_UK_SOUTH1": "project-e00south",
+      "N1R_TENANT": "tenant-e00example"}, "VY_NEBIUS_1_HOST is unset: vy-nebius-1's address"),
+])
+def test_n1s_replacement_preflight_ends_naming_the_first_id_or_address_the_environment_lacks(tmp_path, held, missing):
+    """The provider's ids and n1's address are the environment's: preflight ends naming the first one unset, before it
+    makes any Nebius call or opens any ssh."""
+    called = tmp_path / "called"
+    for name in ("nebius", "ssh"):
+        (tmp_path / name).write_text(f"#!/bin/bash\ntouch {called}\nexit 1\n")
+        (tmp_path / name).chmod(0o755)
+    base = {k: v for k, v in os.environ.items() if not k.startswith(("NEBIUS_", "N1R_", "VY_"))}
+    r = subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "preflight", "now"], capture_output=True, text=True,
+                       env={**base, "NEBIUS_BIN": str(tmp_path / "nebius"), "PATH": f"{tmp_path}:/usr/bin:/bin", **held})
+    assert r.returncode == 2 and r.stderr.startswith(f"n1_replacement: {missing}"), r.stderr
+    assert r.stdout == "" and not called.exists()
+
+
+def test_resolve_project_refuses_to_go_on_without_the_projects_id(tmp_path):
+    """No file holds a project's id: with NEBIUS_PROJECT_ID unset, launch.sh's and teardown.sh's resolve_project ends naming
+    it before any Nebius call; set, it is the project; set empty, the project is looked up by name, as before."""
+    script = (f". {NEBIUS / 'common.sh'}; nb() {{ echo \"$*\" >> \"$CALLS\"; echo '{{\"items\": []}}'; }}; "
+              "resolve_project && echo \"project $PROJECT_ID\"")
+    calls = tmp_path / "calls"
+    held = {k: v for k, v in os.environ.items() if not k.startswith("NEBIUS_")}
+
+    def resolve(**env: str) -> subprocess.CompletedProcess:
+        calls.unlink(missing_ok=True)
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                              env={**held, "CALLS": str(calls), "XDG_RUNTIME_DIR": str(tmp_path), **env})
+
+    r = resolve()
+    assert r.returncode == 1 and r.stderr.startswith("nebius: NEBIUS_PROJECT_ID is not set: the id of the project") and not calls.exists()
+    r = resolve(NEBIUS_PROJECT_ID="project-e00example")
+    assert (r.returncode, r.stdout) == (0, "project project-e00example\n"), r.stderr
+    assert calls.read_text() == "compute instance list --parent-id project-e00example\n"
+    r = resolve(NEBIUS_PROJECT_ID="", NEBIUS_TENANT_ID="tenant-e00example")
+    assert r.returncode == 1 and "no project named vy-nebius in tenant tenant-e00example" in r.stderr
+    assert calls.read_text() == "iam v2 project list --parent-id tenant-e00example --all\n"
 
 
 def test_launch_refuses_to_spend_without_yes_and_a_lease():
