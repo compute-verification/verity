@@ -485,8 +485,14 @@ def test_the_parallel_residual_family_s_layers_and_its_final_norm_are_each_read_
     norm = [e for e in events if getattr(e, "id", None) == 31]
     rec = _one_step(tmp_path / "layers", [e for e in events if e not in norm], entries)
     assert rec["hidden"] == {0: "sum0", 1: "sum1"} and rec["final"] is None and rec["logits"] == "logits" and rec["problems"] == []
-    rec = _one_step(tmp_path / "norm", norm, entries)
-    assert rec["hidden"] == {} and rec["final"] == "final" and rec["problems"] == []
+    rec = _one_step(tmp_path / "norm", norm, [_entry(0, 31, "outs[0]", "the first output")])
+    assert rec["hidden"] == {} and rec["final"] == "the first output" and rec["problems"] == [], "a snapshot filed under the norm's first output"
+
+
+def test_the_parallel_residual_rule_reads_dispatches_alone(tmp_path):
+    events, entries = _parallel_step()
+    rec = _one_step(tmp_path, [*events, _launch(33, 0, "forward", "gpt_neox.final_layer_norm")], entries)
+    assert rec["final"] == "final" and rec["hidden"] == {0: "sum0", 1: "sum1"} and rec["problems"] == [], "a launch in the norm's module is not its output"
 
 
 @pytest.mark.parametrize("found,hidden", [("hidden", {0: "launch"}), ("final", {})])
