@@ -270,7 +270,7 @@ def _build_kind(settings, M, N=H, rows=None):
     the launch's M (one request's)."""
     from types import SimpleNamespace
 
-    from verity.definitions.registry import tp_allreduce as T
+    from verity_vllm.definitions.registry import tp_allreduce as T
 
     from verity_vllm.program.frontend.rules.vllm_bindings import collectives as BC
     from verity_vllm.program.frontend.rules.vocab import vocabulary_for

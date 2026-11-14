@@ -567,9 +567,9 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
         raise ValueError("a simulated run has a seed and runs every party here, in this process")
     state = Path(state_dir) if state_dir is not None else None
 
-    def identity(p: str) -> Identity:
+    def identity(p: str, clock: str | None = None) -> Identity:
         return Identity(p, entries.get(p, {}).get("instance", p), conf, keys.get(p),
-                        None if state is None else state / p, (capabilities or {}).get(p, {}))
+                        None if state is None else state / p, (capabilities or {}).get(p, {}), clock)
 
     if mode == "replay":
         src = Path(replay_dir) if replay_dir is not None else None
@@ -619,7 +619,7 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
     for a in here:
         role = m.role(a)
         given = (sources or {}).get(a, {})
-        clock = None
+        clock, clock_name = None, None
         for need in SOURCES:
             if need not in role.needs:
                 continue
@@ -630,7 +630,7 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
             elif src is None:
                 src = S.seeded(seed, a, "coins") if seed is not None else S.OsCoins()
             if need == "clock":
-                clock = src.now
+                clock, clock_name = src.now, src.name
             mine, theirs = MemoryPipe.pair(S.VirtualTime())
             pipes[a][need] = mine
             rt.sources.append(_Source(a, need, src, theirs))
@@ -645,7 +645,7 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
             handshakes[b] = Handshake(party=a, peer=b, protocol=pid, version=m.version, configuration=conf, nonce=nonce,
                                       key=keys[a], verify=verify, peer_key=None if peer_key is None else bytes.fromhex(peer_key))
         t = PartyLog(a, None if tdir is None else tdir / f"{a}.transcript")
-        rt.hosts[a] = Host(a, protocol.parties[a](), identity(a), config.get("params", {}), t,
+        rt.hosts[a] = Host(a, protocol.parties[a](), identity(a, clock_name), config.get("params", {}), t,
                            _endpoints(m, a, pipes[a], handshakes), rt.transmit, rt.finished, clock)
     from .process import spawn  # here, since process imports this module
 

@@ -51,9 +51,9 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import derived_rows as DR
 from verity.circuits.ops import mufu as MU
-from verity.definitions.registry import moe
+from verity_vllm.definitions.registry import moe
 
 SCHEMA = "verity-vllm/sigmoid-router-capture/v2"
 RECORD = "sigmoid_router_capture.json"

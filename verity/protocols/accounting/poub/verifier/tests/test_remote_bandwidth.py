@@ -15,6 +15,7 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.commitments.randomness import frame
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import (
     audit,
     codec,
@@ -36,6 +37,7 @@ SCHEDULE = timing.honest(1000, 3, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_n
 A = 20 + 30 + 2 * 5 + 300 + 10
 APPENDS = 8
 """The append coins a test session's challenger commits to: these sessions append none, so a few keep it quick."""
+FIGURES = timing.RTX_PRO_6000_NODE
 
 
 def payload(j: int) -> bytes:
@@ -46,17 +48,17 @@ def payload(j: int) -> bytes:
 
 
 @pytest.fixture(scope="module")
-def store() -> audit.Store:
+def store() -> audit_prover.Store:
     """The store under the fallback codec, p1024 masked at k = 2: about 4 s to encode where the default's k = 3 takes 6.
     Nothing here depends on k; the vectors' session runs at the default."""
     payloads = [payload(j) for j in range(N)]
     salts = [Entropy(b"payload salts")(receipts.SALT_BYTES * N)[receipts.SALT_BYTES * j:receipts.SALT_BYTES * (j + 1)]
              for j in range(N)]
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32)), payloads, salts)
+    return audit_prover.Store(audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32)), payloads, salts)
 
 
-def registered(store: audit.Store, receipt: str, bind: bool, rows: int | None = None) -> audit.Store:
+def registered(store: audit_prover.Store, receipt: str, bind: bool, rows: int | None = None) -> audit_prover.Store:
     """`store` registered under `receipt`, `bind` and `rows` with the same nonce: none is in the codec seed's context,
     so its blocks are `store`'s, and only the registration and its digest differ."""
     reg = audit.register(SOURCE, NODE, N, store.registration.payload_root, codec.FALLBACK, receipt, bind=bind,
@@ -68,7 +70,7 @@ def registered(store: audit.Store, receipt: str, bind: bool, rows: int | None = 
 
 
 @pytest.fixture(scope="module")
-def stores(store) -> dict[tuple[str, bool], audit.Store]:
+def stores(store) -> dict[tuple[str, bool], audit_prover.Store]:
     """`store` under each receipt kind, with its receipts of the block alone and binding z: four registrations, four
     digests, one set of blocks."""
     out = {(kind, bind): registered(store, kind, bind) for kind in receipts.KINDS for bind in (False, True)}
@@ -77,19 +79,19 @@ def stores(store) -> dict[tuple[str, bool], audit.Store]:
 
 
 @pytest.fixture(scope="module")
-def sketch_store(stores) -> audit.Store:
+def sketch_store(stores) -> audit_prover.Store:
     """The default registration's store, named by its kind for the tests that are about it."""
     return stores[receipts.SKETCH_SHA512, False]
 
 
 @pytest.fixture(scope="module")
-def block_store(stores) -> audit.Store:
+def block_store(stores) -> audit_prover.Store:
     """block-sha512, the kind kept for comparison."""
     return stores[receipts.BLOCK_SHA512, False]
 
 
 @pytest.fixture(scope="module")
-def rows64_store(store) -> audit.Store:
+def rows64_store(store) -> audit_prover.Store:
     """sketch-sha512 at 64 rows, of the block alone."""
     return registered(store, receipts.SKETCH_SHA512, False, 64)
 
@@ -104,7 +106,7 @@ def no_rebuild(r: audit.Record) -> audit.Rebuild:
     return audit.Rebuild(r.codec, 0.0)
 
 
-def params_of(st: audit.Store, **kw) -> Params:
+def params_of(st: audit_prover.Store, **kw) -> Params:
     """`params` under `st`'s receipt kind, `bind` and rows."""
     return params(receipt=st.registration.receipt, bind=st.registration.bind, rows=st.registration.rows, **kw)
 
@@ -128,7 +130,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     clock = Clock()
     s = AuditRun(p, store.registration, verifier_tiles or tiles, coins_ or challenger(store, p, label), not_before_ns=0,
                  clock=clock)
-    prover = audit.Prover(store, tiles, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(store, tiles, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in schedule.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
@@ -147,7 +149,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     return s, prover, passes, clock
 
 
-def finish(s: AuditRun, prover: audit.Prover, passes, clock: Clock, open_=None):
+def finish(s: AuditRun, prover: audit_prover.Prover, passes, clock: Clock, open_=None):
     clock.now = max(clock.now, s.deadline(len(s.windows) - 1) + 1)
     out = []
     for t in range(s.params.windows):
@@ -265,7 +267,7 @@ def test_a_receipt_depends_on_its_block_not_its_position(stores, bind) -> None:
     """The plan's order is only the tree's: the same blocks listed in another order give each block the same receipt
     (z, when the receipts bind it, is the tile before the block's read), and a different root."""
     store = stores[receipts.DEFAULT, bind]
-    prover = audit.Prover(store, audit.NoiseTiles(96) if bind else None, entropy=Entropy(b"s"))
+    prover = audit_prover.Prover(store, audit.NoiseTiles(96) if bind else None, entropy=Entropy(b"s"))
     seed = receipts.seed(bytes(range(32)), 0, store.registration.digest)
     a = prover.pass_under(0, 0, seed, receipts.Plan(((0, 10),), N))
     b = prover.pass_under(0, 0, seed, receipts.Plan.of(list(reversed(range(10))), N))
@@ -563,7 +565,7 @@ def test_tiles_are_taken_only_by_a_registration_that_binds_z(store, stores) -> N
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
             AuditRun(params_of(st), st.registration, tiles, challenger(st, params()), not_before_ns=0, clock=Clock())
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
-            audit.Prover(st, tiles)
+            audit_prover.Prover(st, tiles)
 
 
 def test_payload_leaves_hide_the_payload_under_their_salts(store) -> None:
@@ -694,7 +696,7 @@ def committed_with(receipter):
         r, tiles = receipter(seed, prover), prover.tiles
         ys = tuple(r(j, prover.store.blocks[j], None if tiles is None else tiles.output(seed, j)) for j in plan)
         salts = tuple(prover.entropy(receipts.SALT_BYTES) for _ in range(receipts.leaves(plan.length)))
-        return audit.Pass(t, i, seed, plan, ys, salts, receipts.tree(seed, plan, ys, salts))
+        return audit_prover.Pass(t, i, seed, plan, ys, salts, receipts.tree(seed, plan, ys, salts))
     return run
 
 
@@ -737,7 +739,7 @@ def test_each_pass_is_seeded_by_the_chain_from_its_windows_coin(store) -> None:
             == "coin does not open against the epoch's coin commitment")
     with pytest.raises(ValueError, match="sent again, another coin"):
         prover.run(forged, 0, store.registration.digest)
-    fresh = audit.Prover(store, None, entropy=Entropy(b"fresh"))
+    fresh = audit_prover.Prover(store, None, entropy=Entropy(b"fresh"))
     fresh.run(forged, 0, store.registration.digest)
     with pytest.raises(ValueError, match="does not open"):
         fresh.end(c.commitment, (forged,))
@@ -1035,26 +1037,26 @@ def test_the_stated_reading_in_every_window_and_for_the_horizons_sampling_term()
     cancels in what is certified.  The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.74–5.77%.
     The 20 s option at 28,004 openings has μ_sample under 0.25% and a whole γ_t over 1%, and the 1 s option's
     μ_sample alone is under 1%, at 7,001."""
-    s, store = audit.SAMPLES, timing.spanning(94 * 10 ** 9)
+    s, store = audit.SAMPLES, timing.spanning(94 * 10 ** 9, FIGURES)
     assert 789.0e9 < store < 789.1e9
     assert (timing.samples_for(0.0025, audit.DELTA), timing.samples_for(0.01, audit.DELTA)) == (28_004, 7_001)
     assert s == 33_273 and audit.WINDOW_NS == 60 * timing.S
     idle = timing.HOST_READ_BYTES_PER_S / timing.READ_BYTES_PER_S
     for rtt in (1, 20):
-        g = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s)
+        g = timing.stated(store, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=s)
         assert 0.0020 < g.worst.sample < 0.0021 and 0.0107 < g.worst.gamma < 0.01103
         assert 0.00164 < g.counting < 0.00165 and g.chip > 0.0015
         assert g.horizon < 3e-4 and 0.0072 < g.gamma_horizon < 0.0074
-        spec = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
+        spec = timing.stated(store, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=s,
                              capacity_bytes_per_s=timing.SPEC_BYTES_PER_S).worst
         assert spec.gamma == pytest.approx(1 - (1 - g.worst.gamma) * timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
-        assert 0.0599 < spec.gamma < 0.0603
-        hbm = timing.stated(timing.GPUS * 94 * 10 ** 9, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
-                            read_bytes_per_s=timing.GPUS * timing.GPU_READ_BYTES_PER_S).worst
+        assert 0.0602 < spec.gamma < 0.0606
+        hbm = timing.stated(timing.GPUS * 94 * 10 ** 9, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS,
+                            samples=s, read_bytes_per_s=timing.GPUS * timing.GPU_READ_BYTES_PER_S).worst
         assert hbm.timing > idle and 0.0573 < hbm.gamma < 0.0578
-        twenty = timing.stated(store, 20 * timing.S, 30, rtt_ns=rtt * timing.MS, samples=28_004).worst
+        twenty = timing.stated(store, 20 * timing.S, 30, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=28_004).worst
         assert twenty.sample < 0.0025 and 0.013 < twenty.gamma < 0.0141
-        one = timing.stated(store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=7_001).worst
+        one = timing.stated(store, timing.S, 600, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=7_001).worst
         assert one.sample < 0.01 < 0.09 < one.gamma
 
 
@@ -1062,13 +1064,13 @@ def test_the_node_constants_are_the_sums_over_its_devices() -> None:
     """R, S_chip, the squaring ceiling and the SHA-512 rate are the node's: its 8 GPUs' and its host's, every
     tier, each GPU's value kept apart for the benches that read one GPU."""
     assert timing.GPUS == 8
-    assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597e12 + 819.2e9
+    assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597568e12 + 819.2e9
     assert timing.CHIP_BYTES == 8 * 263_163_904 + 1_000_341_504 == 3_105_652_736
     assert timing.HOST_CHIP_BYTES == 2 * (336 * 2 ** 20 + 2 * 2 ** 20 + 64 * (2 * 2 ** 20 + (48 + 64 + 64) * 2 ** 10))
     assert {w: 8 * r for w, r in timing.GPU_SQUARINGS_PER_S.items()} == timing.SQUARINGS_PER_S
     assert timing.SHA512_PER_S == 8 * timing.GPU_SHA512_PER_S
     gpu = 94 * 10 ** 9
-    host = timing.spanning(gpu) - 8 * gpu
+    host = timing.spanning(gpu, FIGURES) - 8 * gpu
     assert host / timing.HOST_READ_BYTES_PER_S == pytest.approx(gpu / timing.GPU_READ_BYTES_PER_S)
 
 
@@ -1078,7 +1080,7 @@ def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
     the device and 56.39 streamed in (`write.cu`), the host's 207.69 (`write_host.c`).  Each docstring names its
     benches; a fill of derived codec labels is bounded by the labeller, about 1.05 GB/s a GPU under the default codec,
     and no DPU's is stated."""
-    assert timing.GPU_WRITE_BYTES_PER_S == timing.GPU_SPEC_BYTES_PER_S == 1.597e12 > 1528.98e9 > 56.39e9
+    assert timing.GPU_WRITE_BYTES_PER_S == timing.GPU_SPEC_BYTES_PER_S == 1.597568e12 > 1528.98e9 > 56.39e9
     assert timing.HOST_WRITE_BYTES_PER_S == timing.HOST_SPEC_BYTES_PER_S == 819.2e9 > 207.69e9
     body = ast.parse(Path(timing.__file__).read_text()).body
     docs = {a.targets[0].id: b.value.value for a, b in zip(body, body[1:])
@@ -1111,7 +1113,7 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
         assert timing._named_bits(k, q_log2, True) == named and timing._named_bits(k, q_log2, False) == k * q_log2
     k = 94 * 10 ** 9 // codec.BLOCK_BYTES
     assert audit.QUERIES_LOG2 == 80 and 56.98 < audit.named_bits(k) / k < 57.0 and audit.named_bits(k) < 80 * k
-    k = timing.spanning(94 * 10 ** 9) // codec.BLOCK_BYTES
+    k = timing.spanning(94 * 10 ** 9, FIGURES) // codec.BLOCK_BYTES
     assert 53.92 < audit.named_bits(k) / k < 53.93
     for bad in (-1, 1.0, True):
         with pytest.raises(ValueError, match="nonnegative integers"):
@@ -1133,10 +1135,11 @@ def test_below_the_store_floor_no_window_meets_one_percent() -> None:
     """`store_floor`'s closed form against the ledger: a single 20 min window at 555 openings a second, whose μ_sample
     and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor
     is μ_chip, λ and μ_rebuild alone, about 405 GB over the node's every tier."""
-    assert 404.4e9 < timing.store_floor() < 404.6e9 and 487.3e9 < timing.store_floor(50 * timing.US) < 487.4e9
+    assert 404.4e9 < timing.store_floor(figures=FIGURES) < 404.6e9
+    assert 487.3e9 < timing.store_floor(50 * timing.US, figures=FIGURES) < 487.4e9
     for scale, over in ((0.98, True), (1.02, False)):
-        g = timing.stated(round(scale * timing.store_floor(50 * timing.US)), 1200 * timing.S, 1, rtt_ns=timing.MS,
-                          samples=555 * 1200)
+        g = timing.stated(round(scale * timing.store_floor(50 * timing.US, figures=FIGURES)), 1200 * timing.S, 1,
+                          figures=FIGURES, rtt_ns=timing.MS, samples=555 * 1200)
         assert (g.worst.gamma > 0.01) is over
 
 

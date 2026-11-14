@@ -17,7 +17,8 @@ covers, so stating a default changes no hash.
 
 The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
 composite's (`COMPOSITES`): onsite's, or remote's (SPOT, the inference-only policy and Pearl+'s run verdict,
-``pearl-plus``). Protocol soundness covers only those two, and `check` refuses any set that is no composite's
+``pearl-plus``). Protocol soundness covers only those two. `check` also reads onsite's two smaller sets, each a
+deployment with an id of its own (`UNACCEPTED`), which `verity run` doesn't run yet, and refuses any other set
 (``composite``), H1's development composite's among them.
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
@@ -75,6 +76,11 @@ LOCAL = "local"
 COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs",
                                     "wipe"),
               "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs")}
+#: onsite's two smaller sets, by id (`demos/onsite_network.toml`, `demos/onsite_compute.toml`): each a deployment of its
+#: own with its own claim, so that an accepted one is never read as onsite. No composite `Core.Composites.ofIds` accepts
+#: is one, so `check` reads and hashes them and `verity run` runs neither (`NotImplementedError`)
+UNACCEPTED = {"verity/onsite-network/v0": ("certifier", "sampled-proofs", "wipe"),
+              "verity/onsite-compute/v0": ("certifier", "inference-only", "pouw", "sampled-proofs", "wipe")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 _SHA512 = re.compile(r"[0-9a-f]{128}")
@@ -263,9 +269,10 @@ def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
 
 
 def composite(names: Sequence[str], components: Mapping[str, Component]) -> str:
-    """The id of the composite the listed subprotocols ``names`` make (`COMPOSITES`), or `Refused` (``composite``)."""
+    """The id of the composite the listed subprotocols ``names`` make (`COMPOSITES`), or of onsite's smaller set they are
+    (`UNACCEPTED`), or `Refused` (``composite``)."""
     taken = sorted(n for n in names if components[n].product)
-    for cid, want in COMPOSITES.items():
+    for cid, want in {**COMPOSITES, **UNACCEPTED}.items():
         if taken == sorted(want):
             return cid
     covered = " and ".join(f"{c} ({', '.join(w)})" for c, w in COMPOSITES.items())
@@ -455,5 +462,5 @@ def render(cfg: Mapping[str, Any], header: Sequence[str] = ()) -> str:
 
 
 __all__ = ["AUDITOR", "CHANNEL", "COMPOSITES", "FORMAT", "LOCAL", "PARTY", "PIN", "REQUIRED", "SCHEMES", "TOP",
-           "TRANSPORT", "Component", "Workload", "canonical", "check", "composite", "declared", "digest", "hashed", "new",
-           "parse", "render"]
+           "TRANSPORT", "UNACCEPTED", "Component", "Workload", "canonical", "check", "composite", "declared", "digest",
+           "hashed", "new", "parse", "render"]

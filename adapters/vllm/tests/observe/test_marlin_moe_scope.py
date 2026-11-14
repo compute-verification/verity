@@ -24,7 +24,7 @@ import math
 import re
 
 import pytest
-from verity.definitions.numerics import marlin_moe_rows as MR
+from verity_vllm.definitions.numerics import marlin_moe_rows as MR
 
 from verity_vllm.observe.events import (
     DispatchEnter,

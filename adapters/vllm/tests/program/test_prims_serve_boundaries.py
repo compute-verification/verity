@@ -14,7 +14,7 @@ import pytest
 
 from tests.lint._imports import core_less_definitions as _core
 
-REG = "verity.definitions.registry"
+REG = "verity_vllm.definitions.registry"
 _SPEC = importlib.util.find_spec(REG)
 assert _SPEC is not None and _SPEC.origin is not None, REG
 REGISTRY = Path(_SPEC.origin).parent
@@ -28,7 +28,7 @@ THIRD_PARTY = {"numpy"}
 #: which holds the kernels and the private circuits too
 CATALOG = ("verity.circuits.ops", "verity.circuits.silicon", "verity.circuits.targets")
 #: `evidence.json`'s ids, read with the standard library only
-EVIDENCE = "verity.definitions.evidence"
+EVIDENCE = "verity_vllm.definitions.evidence"
 #: (module, what it imports outside the rule) -> why it stays
 EXCEPTIONS: dict[tuple[str, str], str] = {}
 

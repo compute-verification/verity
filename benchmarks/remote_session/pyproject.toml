@@ -1,4 +1,4 @@
-# The remote bandwidth audit's sessions end to end: the verifier's process (`verifier_process.py`, which runs
+# PoUB's sessions end to end: the verifier's process (`verifier_process.py`, which runs
 # `verity/protocols/accounting/poub/verifier/session/verifier.py`, their wire `wire.py` beside it) and the prover's
 # (`prover.py`, its GPU backend `device.py` and `session.cu`). Not a package: `run.sh` runs both on a GPU node, and the suite
 # runs both over a loopback socket with the driver's reference as the prover's backend
@@ -11,7 +11,7 @@
 # its period committed the verifier that ran it, it and its period closed complete, the Lean accepted it, the host's pins
 # log records its pin as main's, and the verifier bound the store to the pinned model; every line says it is conditional
 # on NoOutsideCompute. That store, what a pinned
-# checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are the remote audit's own
+# checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are PoUB's own
 # (`verity/protocols/accounting/poub/verifier/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -31,7 +31,8 @@ untraced = [
     "tests/test_session.py",
     "tests/test_store_layout.py",
 ]
-inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py",
+inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/prover/__init__.py",
+          "verity/protocols/accounting/poub/prover/audit_prover.py",
           "verity/protocols/accounting/poub/prover/remote_session/device.py",
           "verity/protocols/accounting/poub/prover/remote_session/session.cu", "verity/__init__.py",
           "tools/config/verity_config/verity_settings.py", "verity/errors.py",
@@ -41,13 +42,13 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py",
           # the challenger's coins name their claim instance (spot/challenger.py's `coin_claim`)
           "verity/claims/__init__.py",
           # the Lean verifier the sessions run beside audit.AuditRun, which computes auditor_line.py's line
-          # (lean_verifier.py): what `lake build remote-audit-verifier` reads, the remote audit's package and its
+          # (lean_verifier.py): what `lake build remote-audit-verifier` reads, PoUB's package and its
           # path requires
           "verity/protocols/proofs/flock/verifier/Flock", "verity/protocols/proofs/flock/verifier/lakefile.toml",
           "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/randomness", "verity/circuits/difftest",
-          # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
+          # a transcript replayed through both verifiers (PoUB's lean/tests/replay.py, over the difftest)
           "tools/difftest/python",
           # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader
           # test_host_read.py imports device.py, which names its ABI beside the reader's and the sketch's constants;
@@ -61,6 +62,8 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py",
           # test_host_read_tiers.py: host_read_tiers.sh's lease, asked of the tree's own gpu-lease over faked cards
           "tools/research/src/research/pods/sh/gpu_lease.sh",
           "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py",
+          # sheets.py: the node's figures, read from its node file and cards
+          "verity/device.py", "hardware/cards", "hardware/nodes",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit; and the
           # ledger and credit checks' Lean verifier, `sampled-proofs-verifier` (`coins.lean_answer`), with the
           # interface its package requires

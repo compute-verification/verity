@@ -177,7 +177,7 @@ def test_the_sketch_charges_the_provers_budget() -> None:
     total = 0.0
     for name in ledger.DELTA_PARTS:  # one float add a part in `memory`'s order, which `sum` doesn't promise
         total += parts[name]
-    assert [x.delta for x in ledger.memory(record, ledger.Node.stated())] == [total] * 3
+    assert [x.delta for x in ledger.memory(record, ledger.Node.stated(timing.RTX_PRO_6000_NODE))] == [total] * 3
     assert round(math.log2(total), 2) == -15.12, "the ledger's, typed to check it"
     for bad in (0, -1, 1.5, 2.0 ** 80):
         with pytest.raises(ValueError, match="budget Q"):

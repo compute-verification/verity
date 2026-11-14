@@ -35,12 +35,12 @@ from verity.circuits import Program, bind
 from verity.circuits.codec import decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.types import Array, RecordType, Tuple, Value
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry import b1, serve3
-from verity.definitions.registry import lifted as L
-from verity.definitions.registry import pad_prims as PP
-from verity.definitions.registry import prims as P
-from verity.definitions.registry.b1 import weights_type
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import b1, serve3
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import pad_prims as PP
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.b1 import weights_type
 
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
 
@@ -307,7 +307,7 @@ def test_every_registered_gather_family_is_specified_with_its_own_extension():
     reference gather `GatherF32x{V}_v1` (ref_prims, OOR 0x7FC00000) lifts to `LGatherRow32x{V}` with ITS extension, read from
     the original; a strict lift would let an unselected ⊥ row poison an Active read (A5).  Two originals of one `(w, N)` with
     different extensions cannot share the id: refused by name."""
-    from verity.definitions.registry import ref_prims as R
+    from verity_vllm.definitions.registry import ref_prims as R
     g32 = R.gather_f32(4)
     lg = L.lifted_prim_v1(g32)
     assert lg is L.l_gather_row(32, 4) and lg.id == "LGatherRow32x4_v1" and getattr(lg, "lift_class", None) == "specified"
@@ -787,11 +787,11 @@ def test_codec_round_trip_of_a_lifted_program():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Phase 1 of the padded acceptance: a test for each named item
+# Part 1 of the padded acceptance: a test for each named item
 # ---------------------------------------------------------------------------------------------------------
 
 
-def test_phase1_state_step_is_select_update_new_old_and_preserves_old_bit_identically():
+def test_part1_state_step_is_select_update_new_old_and_preserves_old_bit_identically():
     """Phase-1 item 4 'state preservation' as a tiny circuit: the state transition is `Select(update, new, old)` (LSelect, non-strict) --
     with `update = Active(0)` the state is the OLD word bit for bit even when the pending `new` value is bot (nothing happened, so the
     state is not bot); with `update = Active(1)` it is the new word; an inactive `update` (the request itself inactive) is bot, which
@@ -807,7 +807,7 @@ def test_phase1_state_step_is_select_update_new_old_and_preserves_old_bit_identi
         assert st.evaluate(0, L.enc_bot(w), L.enc_bot(w)) == L.enc_bot(w)  # never-written state of an inactive request stays bot
 
 
-def test_phase1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_reads_as_bot():
+def test_part1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_reads_as_bot():
     """Phase-1 item 5 'malformed encodings': flip ONE payload bit of a bot word -> the word is `1||nonzero`; every class of
     the lifted relation names it (INV out; the encoding predicates say neither Active nor bot); it is never rewritten (the operand the
     evaluator saw is the raw word; the caller still holds the raw bits to commit)."""
@@ -842,7 +842,7 @@ def test_phase1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_re
 
 
 @pytest.mark.slow
-def test_phase1_reference_evaluator_exposes_the_complete_assignment_every_gate_with_its_reading(tmp_path):
+def test_part1_reference_evaluator_exposes_the_complete_assignment_every_gate_with_its_reading(tmp_path):
     """Phase-1 cross-cutting: `serve3_reference.materialize` assigns EVERY gate (not only outputs); `lifted_dump.rows` reads the complete
     assignment back with each gate's class / width / raw word / A3 reading; on the tiny serve fixture with EOS at the raw event the
     bot population is exactly the inactive suffix of the transcript and no INV word exists anywhere."""
@@ -863,7 +863,7 @@ def test_phase1_reference_evaluator_exposes_the_complete_assignment_every_gate_w
     assert s2 == s and n_lines == prog.gates
 
 
-def test_phase1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_named_revb_3a_3c():
+def test_part1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_named_revb_3a_3c():
     """`FixedSelect(r_j, z_0..z_{E-1})` as the specified member `LFixedSelect<E>x<w>_v1` (MOE-PAD-SPEC §2), against
     Phase 1 item 3 of the padded acceptance: (a) one object for every route -- the same Definition (id, params, ret, evaluator) whatever `r`
     is; (b) output = `z_r` for every admitted `r`, INCLUDING an inactive slot (-> bot), an unselected bot slot never poisons the read;
@@ -921,7 +921,7 @@ def test_phase1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
     assert program_digest(dec) == d0
 
 
-def test_phase1_cold_decode_resolves_the_continuation_members_by_id():
+def test_part1_cold_decode_resolves_the_continuation_members_by_id():
     """`LIsEOS<E>_v1` / `LEmitNext[H=h]_v1` and `LFixedSelect<E>x<w>_v1` resolve through the codec's lazy family table -- a Program
     decoded in a fresh registry state (no prior materialisation) finds them by id; the digest round-trips."""
     from verity.circuits.codec import _lookup_primitive
@@ -989,7 +989,7 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
     from verity.circuits.codec import decode_program, encode_program
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.refs import coll_concat
-    from verity.definitions.registry.prims import I32
+    from verity_vllm.definitions.registry.prims import I32
 
     def twin_sig(S):
         return (("x", Array(S.N, I32)),), Array(S.N, I32)

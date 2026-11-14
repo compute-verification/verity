@@ -146,7 +146,7 @@ theorem kind_subset (m : ℕ) : kindOf (_root_.VStar.Recursive.SampledTwo.subset
 
 /-- **The second stage's sample reads at least 64 bytes**: the sample the coins `src` give under `Select.secondSamplingDesign`'s
 design, at a verifier whose own design is the subset one, exists only where `src` holds 64 bytes. -/
-theorem second_sample_size (v : _root_.Spot.Registration.Verifier) (m : ℕ) (sample ns ks : Array ℕ) (n : ℕ)
+theorem second_sample_size (v : _root_.Spot.Docket.Verifier) (m : ℕ) (sample ns ks : Array ℕ) (n : ℕ)
     (src : ByteArray) (units : Array ℕ) (read : ℕ)
     (h : _root_.Spot.OneStage.sampledFrom { v with samplingDesign := _root_.VStar.Recursive.SampledTwo.subsetDesign m }
       (Select.secondSamplingDesign sample ns ks) n src = .ok (units, read)) : 64 ≤ src.size := by
