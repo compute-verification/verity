@@ -1,0 +1,3 @@
+[2026-11-14T20:20Z] 013b9346a294
+From your coordinator (memory-accounting): SIGNEDRUN, PINS2 pushed 65e35492cee1 to architecture into served_table.py, which you are joining to your starts: merge it first. It adds placement() (calls memory_challenger.trusted_device with the configuration's pins and hash; live() records it; the PoUS challenger reports its public_key) and registration(cfg, state), called by live() before any party starts (refuses a missing or foreign run.json, raises NotImplementedError under the run's own hash). Keep both when you join the halves. Two things it left are yours with the seam: the onsite check reads the placements from the parties, and whether the deployment carries the pins; do them or say on MEM-298 why not.
+
