@@ -122,6 +122,22 @@ def test_a_marked_wipe_is_certified_on_its_count_and_nothing_else_is(counted_ser
         assert _both(uncounted, uncounted_server, c)["verdict"] == "accept"
 
 
+def test_the_counted_check_rejects_a_session_with_no_end_message(monkeypatch):
+    """Where the signed session's end message can't be formed (a batch record past a field's width), `named` raises
+    and the counted check rejects, as the Lean's `checkCounted` does where its `named` refuses. `outcome` accepts no
+    such session, its signature being over that message, so here `outcome` is made to accept it."""
+    params = sw.WipeParams(8, 3, 1, 1_000, (("gpu", 8 * sw.LABEL_BYTES),))
+    signed = WC.run(params, M.test_signer(M.SECRETS[0], 1, 0)).signed
+    c, (b0, *rest) = signed.commitment, signed.batches
+    wide = dataclasses.replace(signed, batches=(dataclasses.replace(b0, b=2 ** 32), *rest))
+    with pytest.raises(OverflowError):
+        WP.named(c, wide, 2)
+    monkeypatch.setattr(WP, "outcome", lambda *a, **kw: ("accept", WP.uncounted(c.params), WP.profile(c.params, 2)))
+    verdict, reason = WP.outcome_counted(c.server, c.session, [], c, wide, egress_mib=2)
+    assert verdict == "reject" and reason not in (WP.NO_COUNT, WP.NO_MARK), reason
+    assert WP.outcome_counted(c.server, c.session, [], c, signed, egress_mib=2) == ("reject", WP.NO_MARK)
+
+
 @st.composite
 def named_inputs(draw) -> dict:
     """A sampled session's commitment, its signed session or none, and a sampled egress; now and then a field dropped,
