@@ -42,7 +42,7 @@ conjectures bound the work: (H) and (E) (`Definitions.Assumptions`). The guarant
 
 @[expose] public section
 
-namespace InferenceOnly.Cut
+namespace Slowdown.Cut
 
 open Verity Finset
 
@@ -207,4 +207,4 @@ def Arrays {C : Circuit} {ι ρ : Type} (W : Work C ι) (G : SimpleGraph ρ) (A 
 def CostsAtLeast {ι ρ : Type} (e : ι → ρ × ρ) (β : ρ → ℝ) (q : ℝ) : Prop :=
   ∀ a, q ≤ β (e a).1 * β (e a).2
 
-end InferenceOnly.Cut
+end Slowdown.Cut
