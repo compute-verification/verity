@@ -7,7 +7,7 @@ The honest worker's requests in an inner session (live PROTOCOL.md §10.3), as a
 ZK server (`Flock.ZkServer.run`), from the pinned schedule and what the worker brings beyond it (`Honest`).
 `ZkServerHonest` proves the ZK server finishes on them, and `zk-server-honest-difftest` (`verity/core/difftest`) holds
 `rec_live`'s requests on a real prover's recorded session to them, byte for byte
-(`verity/ml/flock/tests/test_honest_reqs.py`).
+(`verity/protocols/proofs/flock/prover/tests/test_honest_reqs.py`).
 -/
 
 @[expose] public section

@@ -20,7 +20,7 @@ node add under its capacity. 𝓜 (`Verity.Accel.Machine`) gives the capacity pa
 Neither takes an assumption. 𝓜 has no time inside a run, so the windows these bound are blocks of a period's runs, each
 a period itself: a block of the runs `es` meets `AccelRate`'s hypothesis when `es` does.
 
-The proofs are in `Security/Proofs/Compose/Additive.lean`.
+The proofs are in `security/Proofs/Compose/Additive.lean`.
 -/
 
 @[expose] public section

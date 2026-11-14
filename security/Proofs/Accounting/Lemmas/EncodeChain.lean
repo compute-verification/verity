@@ -8,7 +8,7 @@ public import Definitions.Accounting.Gates.Codec
 It is no longer a named assumption: no guarantee rests on it, and it stays beside the proof that refutes it
 (`Proofs.Accounting.Lemmas.GatesBitwise`).
 
-**Falsified.** `Accounting.SecurityProofs.Gates.EncodeChainRefuted` (`Security/Proofs/Accounting/Gates/Bitwise.lean`)
+**Falsified.** `Accounting.SecurityProofs.Gates.EncodeChainRefuted` (`security/Proofs/Accounting/Gates/Bitwise.lean`)
 proves it false inside its floor at every `E ≥ 1` and every `B`, p1024 at `k = 3` among the fields: an AND of two bits
 is a free s8-family step, so a circuit of bits computes any number of words for the key's gather units
 (`benchmarks/property_redteam/bitwise_codec.py` builds it, its test runs it). It stays listed, marked `falsified` under

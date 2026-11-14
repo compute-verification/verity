@@ -8,8 +8,8 @@ public import Mathlib.Tactic.NormNum
 /-!
 # The training formalism v2: honest and nontrivial lemmas
 
-The proofs of `Security/Definitions/Slowdown/Guarantees/Formalism/Witnesses.lean`, at the instances of
-`Security/Definitions/Slowdown/Formalism/Instances.lean`. Their gates, reads and token blocks are small finite sets, which
+The proofs of `security/Definitions/Slowdown/Guarantees/Formalism/Witnesses.lean`, at the instances of
+`security/Definitions/Slowdown/Formalism/Instances.lean`. Their gates, reads and token blocks are small finite sets, which
 `decide` computes. At `Chain`, the inference blocks at `(c, k) = (1, 1)` are the empty block and the blocks of one gate
 (`ib_cases`), so A1 is five counts and every block holds at most one gate (`entryWork_le`). Each family of witness
 blocks has one, so A1's values are its reads (`stateAt_of_eq`, `readsAt_of_eq`), and `u_I` is the new weight, one

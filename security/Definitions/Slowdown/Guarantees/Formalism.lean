@@ -7,7 +7,7 @@ public import Definitions.Assumptions
 
 The theorems of the training formalism v2 (`Definitions.Slowdown.Formalism`), §5, proved in
 `Slowdown.Formalism.SecurityProofs`. Its two lemmas, reconstruction (§1) and the three kinds of a block's inputs (§2), are
-`Slowdown.Formalism.reconstruction` and `Slowdown.Formalism.reads_split` in `Security/Proofs/Slowdown/Formalism/Reconstruction.lean`.
+`Slowdown.Formalism.reconstruction` and `Slowdown.Formalism.reads_split` in `security/Proofs/Slowdown/Formalism/Reconstruction.lean`.
 
 A lower bound on `ρ` is stated, as each is proved, for every partition `𝓘` of `C` into inference blocks:
 `X ≤ |𝓘| c / |C|` for each is `X ≤ ρ` (`Slowdown.Formalism.le_slowdown_iff`). The slowdown is one counting bound over kinds

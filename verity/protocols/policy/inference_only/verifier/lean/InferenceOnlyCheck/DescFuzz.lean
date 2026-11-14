@@ -7,7 +7,7 @@ public import Std.Data.HashSet
 # The desc fuzzer: the statements behind `DescAgrees`, decided on generated Programs
 
 `InferenceOnlyCheck.Properties.DescAgrees` (`Desc.check` agrees with the unrolled `InferenceOnlyCheck.evaluate`) follows from three
-statements (`Fresh.descAgrees_of_open`), each proved in `Security/Proofs/Properties/InferenceOnly/` (`Resolve.bodiesOk`,
+statements (`Fresh.descAgrees_of_open`), each proved in `security/Proofs/Properties/InferenceOnly/` (`Resolve.bodiesOk`,
 `OperandsResolve.operandsResolve_of`, `Fresh.readsExact`), so `DescAgrees` is proved (`SecurityProofs.DescAgrees`), and
 the fuzzer decides the statements as a cross-check of those proofs. Each is a `∀` over Programs that pass
 `Desc.evaluate`'s refusals: `decode`, `orderViolation = none`, `Desc.rootLaidOut`, `Desc.inputsAtRoot`,

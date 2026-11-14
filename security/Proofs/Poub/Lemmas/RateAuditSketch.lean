@@ -40,7 +40,7 @@ def RateSketchHonest : Prop :=
 
 /-- **Outside the verbatim class the sketch rate audit charges a prover only for its digest: the table.** For every
 digest `dig σ` of a tile of `m` sectors that takes at most `2^d` values, there is a prover of `LayoutDevice`'s class
-(`Security/Definitions/Poub/RateAuditSketchLayout.lean`: memory laid out before the signs as any function of
+(`security/Definitions/Poub/RateAuditSketchLayout.lean`: memory laid out before the signs as any function of
 the store and read one bit at an address, nothing held on chip, a side link that carries the certified stream's `ρ`
 sectors and nothing else, nothing rebuilt) whose memory is `|Sig|·N·d` bits, the table `T[σ, t] = dig σ (tile t)` over
 every signs `σ` and tile `t`, and which, at every signs, oracle and data, commits every tile's right tag, so is
