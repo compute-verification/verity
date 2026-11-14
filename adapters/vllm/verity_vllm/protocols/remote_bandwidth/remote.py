@@ -595,7 +595,7 @@ class Lockstep:
 
 
 class CommitSession:
-    """The Commit's PoUB session (``--remote-verifier HOST:PORT``, `pipeline.commit`), on its engine:
+    """The Commit's remote bandwidth session (``--remote-verifier HOST:PORT``, `pipeline.commit`), on its engine:
 
     ~~~text
     engine_args  before the build: one GPU, synchronous scheduling, no prefix caching (refusing anything else), the KV
