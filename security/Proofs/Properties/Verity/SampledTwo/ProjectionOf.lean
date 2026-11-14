@@ -19,7 +19,7 @@ bookkeeping over the pieces' `Prop`s, and reads nothing of the form's check but 
    the check read is the device's (`Good`), or a sampled accept with `¬ Good`, which the cut bounds by `terms`
    (`CutBound`).
 2. The first is moved to the frame's plays, at a uniform tape and uniform run coins where the coin map's agreement
-   `Ag` holds, by the coin map's distribution (`CoinMapLaw`), at the cost `hide`.
+   `Ag` holds, by the coin map's distribution (`CoinMapDistribution`), at the cost `hide`.
 3. On a frame play with `Acc ∧ Good` and `Ag`, each read round's coin read agrees with the run's (`ReadAgrees`;
    `projection_core`'s one premise about coins). There, either a message the check reads differs from the frame's
    prover's, which the messages' piece bounds by `miss`, or the run at the same tape and coins accepts: the check reads
@@ -155,7 +155,7 @@ theorem projection_core (V : Vocab d α) (k : Verity.Registration.Composite) (A 
     (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (Ag : Verity.Exchange → Coins A x → Prop)
     (hide miss terms : ℝ≥0∞)
     (hAcc : ∀ o, o.params = θ → V.Verdict k .sampled o → Acc o)
-    (hLaw : CoinMapLaw V A x θ F c σ Fr Ag hide)
+    (hDistribution : CoinMapDistribution V A x θ F c σ Fr Ag hide)
     (hCoins : ∀ (ω : TapeOf V θ F c σ) (r : Coins A x), Acc (Fr.out ω r) → Good (Fr.out ω r) →
       Ag (Fr.out ω r) r → ∀ i : Fin (A.L.V.k x), Rd.reads i.val →
         ∀ c', Rd.coin (Fr.out ω r) i.val = some c' → Rd.agree (Fr.out ω r) i.val c' (r i))
@@ -200,7 +200,7 @@ theorem projection_core (V : Vocab d α) (k : Verity.Registration.Composite) (A 
           Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Good o) (V.game θ F c) σ := hsplit
     _ ≤ (ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x =>
             (Acc (Fr.out s.1 s.2) ∧ Good (Fr.out s.1 s.2)) ∧ Ag (Fr.out s.1 s.2) s.2) + hide) + terms :=
-          add_le_add (hLaw fun o => Acc o ∧ Good o) hCut
+          add_le_add (hDistribution fun o => Acc o ∧ Good o) hCut
     _ ≤ (ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x =>
             (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2).out = .acc) + miss + hide) + terms :=
           add_le_add (add_le_add ((ENNReal.ofReal_le_ofReal hgood).trans
@@ -216,13 +216,13 @@ theorem projection_agreed (V : Vocab d α) (k : Verity.Registration.Composite) (
     (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (Ag : Verity.Exchange → Coins A x → Prop)
     (hide miss terms : ℝ≥0∞)
     (hAcc : ∀ o, o.params = θ → V.Verdict k .sampled o → Acc o)
-    (hLaw : CoinMapLaw V A x θ F c σ Fr Ag hide) (hDev : DevAgrees A x Rd Acc Good Ag)
+    (hDistribution : CoinMapDistribution V A x θ F c σ Fr Ag hide) (hDev : DevAgrees A x Rd Acc Good Ag)
     (hFirst : CoinsAgree A Rd Acc Good .first) (hSecond : CoinsAgree A Rd Acc Good .second)
     (hSessions : CoinsAgree A Rd Acc Good .sessions) (hStmt : StmtReadsNone A Rd)
     (hMsg : MessagesFixedAgreed V A x θ F c σ Fr Rd Acc Good miss) (hCut : CutBound V k θ F c σ Good terms)
     (hRun : AcceptsRun A x Rd (fun o => Acc o ∧ Good o)) (hAt : StmtAt V A x θ F c σ Fr Rd Acc) :
     ProjectionBound V k A x θ F c σ Fr (hide + miss + terms) := by
-  refine projection_core V k A x θ F c σ Fr Rd Acc Good Ag hide miss terms hAcc hLaw
+  refine projection_core V k A x θ F c σ Fr Rd Acc Good Ag hide miss terms hAcc hDistribution
     (fun ω r ha hg hag i hi c' hc => ?_) hMsg hCut hRun hAt
   have hd : ∀ e, Rd.dev (Fr.out ω r).log i.val = some e → Rd.agree (Fr.out ω r) i.val e (r i) :=
     fun e he => hDev _ ha hg r hag i hi e he
@@ -237,8 +237,8 @@ statement, committed files, commitment and strategy. -/
 theorem projection_of (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) :
     ProjectionOf V k A x θ F c σ := by
-  intro Fr Rd Acc Good Ag hide miss terms hAcc hLaw hDev hFirst hSecond hSessions hStmt hMsg hCut hRun hAt
-  exact projection_agreed V k A x θ F c σ Fr Rd Acc Good Ag hide miss terms hAcc hLaw hDev hFirst hSecond hSessions
+  intro Fr Rd Acc Good Ag hide miss terms hAcc hDistribution hDev hFirst hSecond hSessions hStmt hMsg hCut hRun hAt
+  exact projection_agreed V k A x θ F c σ Fr Rd Acc Good Ag hide miss terms hAcc hDistribution hDev hFirst hSecond hSessions
     hStmt (messagesFixedAgreed_of_fixed hMsg) hCut (fun o h => hRun o h.1) hAt
 
 end Verity.SampledTwo

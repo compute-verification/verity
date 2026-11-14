@@ -281,7 +281,7 @@ def test_a_session_ends_at_its_finish(loop):
     assert auditor.got == [[REGISTER], [REGISTER]]
 
 
-def test_a_draw_that_is_not_json(junk):
+def test_a_sample_that_is_not_json(junk):
     lp = Loop(Auditor(lambda f: draw("{")), junk)
     s = lp.connect()
     assert reason(call(s, REGISTER)).startswith(STOP + "the draw is not JSON")
@@ -334,7 +334,7 @@ def test_a_frame_starts_only_as_a_live_sessions_rep(loop, line, why):
 
 
 @pytest.mark.slow
-def test_each_reps_frame_draws_its_own(zk):
+def test_each_reps_frame_samples_its_own(zk):
     """Each rep's frame the loop starts for a live session samples its own randomness at the statement's start, and starts
     once, and only once the session's level 0 is sampled: a rep before it is refused, so the pads' root, a sample of the
     loop's, reaches the prover only after every table's witness is in. Each answer is the pads' root alone (the samples never
@@ -486,9 +486,9 @@ def level0(lp: Loop, tables: list[tuple[int, bytes]], name: str = "00" * 64):
     ([(25, b"\0" * 16)], f"err a level-0 request for a session the loop is not serving (id {'00' * 64})"),
     ([], f"err a request `level0 {'00' * 64}`"),
 ])
-def test_a_level_0_the_loop_cannot_draw(loop, tables, why):
+def test_a_level_0_the_loop_cannot_sample(loop, tables, why):
     """A level-0 request is a witness of whole words for each of a live session's tables; anything else is refused before
-    the loop samples (`test_the_loop_draws_level_0_at_the_statement_with_its_own_mask_words` takes a live session's)."""
+    the loop samples (`test_the_loop_samples_level_0_at_the_statement_with_its_own_mask_words` takes a live session's)."""
     _, lp = loop
     assert level0(lp, tables) == why
 
@@ -513,7 +513,7 @@ def _mask_words(m: int) -> int:
 
 
 @pytest.mark.slow
-def test_the_loop_draws_level_0_at_the_statement_with_its_own_mask_words(zk):
+def test_the_loop_samples_level_0_at_the_statement_with_its_own_mask_words(zk):
     """The loop samples a table's level 0 only at its statement's `m`, on a witness of that `m`'s words, and writes the mask
     slot's words itself: its answer leads with them, a word for each of the slot's, fresh for each sample and never the
     witness's, whatever the prover's witness held there. So the prover has no say in the words that hide the claims'
@@ -601,7 +601,7 @@ def test_a_commit_answered_without_coins_ends_the_session(zk, answer, said):
 
 
 @pytest.mark.slow
-def test_the_loop_draws_level_0_only_once_every_tables_witness_is_in(zk):
+def test_the_loop_samples_level_0_only_once_every_tables_witness_is_in(zk):
     """In a session of two tables the loop samples neither table's level 0 until it holds both witnesses: a request carrying
     one table's witness, or three, is refused with nothing sampled, and so is a rep's start, so none of the session's samples
     (level 0's mask words, hiding and salts, a rep's pads) reaches the prover before both witnesses are its. On both it
@@ -674,7 +674,7 @@ def test_the_loops_finish_needs_a_statement(loop):
 
 
 @pytest.mark.slow
-def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
+def test_the_loops_finish_reads_its_level_0_and_samples_each_reps_salts(zk):
     """The loop's finish (`Finish.serveLoop`) takes a table's level 0 from the loop, by its root, and only one the loop sampled
     at the table's `m`, for a session it still serves; its answer is that root. A rep's request before its salts for levels
     ≥ 1 is refused, and so are the salts of a rep whose frame has not taken its algebraic phase's last coins, here one whose
@@ -804,12 +804,12 @@ def test_a_schedule_the_setup_refuses(junk):
 def test_the_schedule_is_the_recorded_rounds(zk, name, public, tables):
     """At a recorded session's statement and sample, the openings the loop asks for after the session stream's are the record's
     rounds: each rep stream's coin counts in order, the streams one after another in table order, rep 0 before rep 1."""
-    _, _, draw_ = _record(zk, name)
+    _, _, sample_ = _record(zk, name)
     d = zk / "sessions" / name
     if "/" not in name:
         [d] = [p for p in d.iterdir() if p.is_dir()]
     rec = json.loads((d / "session.json").read_text())
-    lines = _schedule(_args(zk, public, tables), draw_)
+    lines = _schedule(_args(zk, public, tables), sample_)
     assert lines[0] == f"ok {len(lines) - 1}", lines[:2]
     plan = [(s, int(n)) for s, n in (line.rsplit(" ", 1) for line in lines[1:])]
     order = [s for i, (s, _) in enumerate(plan) if i == 0 or plan[i - 1][0] != s]
@@ -845,7 +845,7 @@ HM = hm96.SHA512
 class CoinTree:
     """The verifier's coin tree, `coin-tree/hm96-sha512/v2` (`live/src/coin_tree.rs`'s `CoinTree`, checked by
     `Flock/ZkServer/Coins.lean`): sampled at `Hello` under the prover's nonce `nonce` and a fresh session key, per stream and
-    round a block of `spec["block"]` coins, `edit(stream, round, block)` choosing some first (`CoinTree::draw_with`). Every
+    round a block of `spec["block"]` coins, `edit(stream, round, block)` choosing some first (`CoinTree::sample_with`). Every
     SHA-512 input is prefixed by the nonce; a block commits through its chain `T_i = H(CHAIN ‖ c_i ‖ T_{i+1})` from
     `T_block = H(TAIL)` into a keyed hm96 leaf, each stream's rounds are a subtree, and the streams' roots, padded to a power
     of two, are one more."""

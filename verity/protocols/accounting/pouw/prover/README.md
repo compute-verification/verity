@@ -6,7 +6,9 @@
 holds each scheme's Definitions with their word and Boolean forms and reference evaluators, an execution phase's
 Program and sampling design, and the leaves, seeds and anchors a call's rows are committed under.
 `schemes/` holds the named schemes (NCP, Pearl's FP8 scheme, Pearl-C and Pearl-C4), each a
-`verity.protocols.accounting.pouw.verifier.protocol.PoUWScheme`, and Pearl-C's device record. A caller imports a module by its own
+`verity.protocols.accounting.pouw.verifier.protocol.PoUWScheme`, and Pearl-C's device record. `serving/` is what runs
+beside a served model, one directory a scheme (its README): a workload's adapter reaches it through `run_matmul` and
+`observe_matmul` and the other names `serving` exports, and through no deeper module. A caller imports a module by its own
 name and takes the names its `__all__` lists: `schemes.get(name)` returns a configured scheme, and
 `circuit.traced_as(scheme, m, k, n)` its traced circuit. Target, not yet: every name another file reads is in its
 module's `__all__`. Four modules of `schemes/` state none, and six lists are short of what is read (`circuit.h1tile`,
@@ -15,9 +17,10 @@ imports, which a test, a sidecar or a benchmark reads through it, and `circuit.l
 `schemes.pearl_c4` by two that are retired terms. The package is stated over the
 verifier's parameters: it imports `verity.circuits`, `verity.definitions`, `verity.commitments`,
 `verity.protocols.accounting.pouw.verifier` and SPOT's verifier (`verity.protocols.proofs.spot.verifier`, for a window's Program and
-sampling design), with `verity.errors`, and nothing else of the workspace. Outside `kernels/` it reads no file and no environment
-variable, and nothing under `benchmarks/` or `adapters/`. Its tests are in `tests/` and in
-`verity/protocols/accounting/pouw/verifier/tests/`.
+sampling design), with `verity.errors`, and nothing else of the workspace, except that `serving/` also imports SPOT's
+device code, torch and `verity_flock` (inside functions, and torch at import in `serving/h1/receipts.py`). It reads no environment variable outside `kernels/`, and nothing under
+`benchmarks/` or `adapters/`; outside `kernels/` and `serving/` it reads no file. Its tests are in `tests/` and in
+`verity/protocols/accounting/pouw/verifier/tests/`; the vLLM adapter's own tests drive `serving/` on its engine.
 
 `kernels/` holds the device code, one directory each:
 
@@ -35,10 +38,6 @@ variable, and nothing under `benchmarks/` or `adapters/`. Its tests are in `test
 - `masked_gemm/`: `floored_gemm/`'s GEMM with its operands hidden, one kernel for each way of hiding them.
 - `edited_gemm/`: the served linear and attention products on dithered or edited int8 operands, with receipts, on
   `masked_gemm/`'s mainloop.
-- `nvfp4_sm120/`: the plain NVFP4 and FP8 GEMMs on sm_120a, with no proof of work, the baseline on the same mainloop
-  that a Pearl-C4 or Pearl-C kernel is timed against.
-- `harness/native/`: the sources of the GPU harness's device library (`libpouw_harness.so`: fills, flushes, events,
-  graphs, cuBLASLt and the CUTLASS baselines), which its `build.sh` builds with `nvfp4_sm120/`'s plain GEMMs.
 - `gpu_kit/`: the kernel-engineering skill's timing protocol as code (poisoning, clock reads, SASS checks), for a
   standalone `.cu` bench to include.
 - `served_zk/`: a served Pearl-C window's rows committed as hm96-sha512 leaves in the ZK statement's format, and that

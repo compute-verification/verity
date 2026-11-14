@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.RecordDraw
 /-!
 # The sample, then the link, then the other rounds, on the device's log
 
-The record's sample (`recordDraw_firstStop`) and the first stop (`link_pts`, `firstStop_rootB`) take the order
+The record's sample (`recordSample_firstStop`) and the first stop (`link_pts`, `firstStop_rootB`) take the order
 `SampleLinkFirst` states on the device's log: no release of a coin of the sample's family after the registration's
 digest follows an opening, and the first opening is of the stream `Spot.Challenger.TREE_SESSION`. It holds
 where v2's case accepts and the log v2's check read is the device's, since v2's check accepts only where the challenger

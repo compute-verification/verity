@@ -8,10 +8,10 @@ import torch
 from verity.circuits.refs import Coll
 from verity.definitions.registry.dsa_norm import check_block
 
-from verity_vllm.program.frontend.derive import Alloc
+from verity_torch.frontend.derive import Alloc
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.rules.base import InPlaceRule, RuleInfo
+from verity_torch.frontend.rules.common import (
     dtype_is,
     from_rows,
     known,
@@ -29,7 +29,7 @@ from verity_vllm.program.frontend.rules.triton_iface import (
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
 )
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import (
+from verity_torch.frontend.rules.bindings.operands import (
     _strides,
     _untransposed,
 )
@@ -44,8 +44,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings.pins import (
     gemm_pins_for,
     lookup_key,
 )
-from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
+from verity_torch.frontend.strided_views import _tensor_type
+from verity_torch.frontend.value_types import shape_of
 
 __all__ = ["QKV_ARGS", "TRITON_DIVISIBILITY", "qkv_rms_launch"]
 
@@ -362,11 +362,11 @@ def _pouw_scheme(node) -> str | None:
     """The PoUW scheme a launch is lowered under: the active target's ``pouw:<scheme>`` when that scheme has a circuit
     (`verity.protocols.accounting.pouw.prover.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
     module in the node's module stack)."""
-    from verity.protocols.accounting.pouw.prover import circuit
+    from verity.protocols.accounting.pouw.prover.serving import NCP_CIRCUIT_SCHEMES
 
     entries = dict(e.split(":", 1) for e in (active_target_profile().protocols or ()))
     scheme = entries.get("pouw")
-    if scheme not in circuit.SCHEMES:
+    if scheme not in NCP_CIRCUIT_SCHEMES:
         return None
     stack = node.meta.get("nn_module_stack")    # a node no module call made (a placeholder, an output) has none
     cls = module_type(list(stack.values())[-1][1]) if stack else None

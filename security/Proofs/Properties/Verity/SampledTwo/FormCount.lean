@@ -64,7 +64,7 @@ theorem parts_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Jso
     ∃ own q, own.parts = some (partsAt h q) ∧ (Spot.SecondStage.check true own it.statements).codes = #[] := by
   obtain ⟨hcl, workTable, resolved, draw, rest, read, ht, hres, hsel, -, grain, replay, k, ns, ids, ks, draw₂, read₂,
     strata, hrule, -, -, -, -, -, hstrata, hcodes⟩ := accepted_steps ha
-  obtain ⟨n, rule, law, workTable', resolved', -, -, -, ht', hres', hreg⟩ := hm.first
+  obtain ⟨n, rule, samplingDesign, workTable', resolved', -, -, -, ht', hres', hreg⟩ := hm.first
   have hwt : workTable' = workTable := Except.ok.inj (ht'.symm.trans ht)
   have hrs : resolved' = resolved := Except.ok.inj (hres'.symm.trans hres)
   subst hwt hrs
@@ -109,7 +109,8 @@ theorem stmts_of_accepts {k : Case} {p : VStar.Recursive.SampledTwo.Params}
 `heldOf` builds from the play's run (`HeldOfAt`) and their parts are the interior program's strata's
 (`PartsHeldAt`). The run's second-stage check read the evidence's statements (`stmts_of_accepts`) against the held
 copies' parts (`RunsAs.parts_of_accepted`), one statement a part (`RunsAs.count_of_parts`). -/
-theorem stmtsCount_of {A : Live₂} {C : CaseOf} (Good : Verity.Exchange → Prop) (hof : HeldOfAt A C)
+theorem stmtsCount_of {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (Good : Verity.Exchange → Prop)
+    (hof : HeldOfAt A C)
     (hparts : PartsHeldAt A C) : StmtsCount A C Good := by
   intro o k p e hA _ hk hf
   have hA₀ := hA

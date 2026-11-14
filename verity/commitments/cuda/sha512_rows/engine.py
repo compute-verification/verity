@@ -4,7 +4,7 @@ frame-v3-sha512 leaves, nodes and pads a level at a time, bit for bit the refere
 A digest is 8 u64 words, each the big-endian value of its 8 bytes (int64 tensors on a device, uint64 arrays on the host):
 ``digests(words)`` gives the bytes, ``words(digests)`` the words. ::
 
-    E = Engine()                                         # the current CUDA device; Engine("host") is the host twin
+    E = Engine("host", build=DIR)                        # the host twin; a CUDA device takes a subclass's runtime()
     rows = E.rows([[(0, 0, 32768)], [(1, 0, 16384), (2, 0, 4)]], tensors)   # parts (tensor, byte offset, bytes), at most 2
     x = E.row_digests(rows, slots)                       # (G, S, 8): SHA-512(P(8 nbytes) || row g of slot s)
     lt = E.leaf_table(dids, did_of_row, rank, position, salt_row)   # each row's frame leaf and its salt's index
@@ -19,12 +19,15 @@ of a slot's row. The salt comes from the caller: ``SaltKey(key, nonce0)`` derive
 chunks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (Flock's ``hm96_salt``, commit_slots'
 ``row_salts``), or ``salts`` gives every y. Calls run on the current torch stream and don't synchronize.
 
+On a CUDA device the calls run on a tensor runtime (torch) that verity doesn't import: ``Engine.runtime`` raises here, and a
+subclass supplies it (the benchmarks' ``benchmarks/torch_gpu/sha512_rows/torch_engine.py``).
+
 The host twin counts what it hashes (``counts()``: compressions, those over a constant schedule, ChaCha20 chunks), so the
 tests hold each call to its compressions a digest.
 
-Builds are cached by a hash of the sources, flags and compiler version under ``~/.cache/verity/sha512_rows``
-(``$SHA512_ROWS_BUILD``); nvcc and g++ are the ones on the path. ``SHA512_ROWS_V`` (a variant name, e.g. ``2211``) picks the
-compression of every kernel but the row kernel, which takes ``variant=``.
+Builds are cached by a hash of the sources, flags and compiler version under the caller's ``build`` directory; nvcc and g++
+are the ones on the path. ``default`` (a variant name, e.g. ``2211``) picks the compression of every kernel but the row
+kernel, which takes ``variant=``. The engine reads no settings: the benchmarks that run it read theirs and pass them in.
 """
 from __future__ import annotations
 
@@ -40,7 +43,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity_config.settings import of
 
 from verity.commitments import hm96
 from verity.commitments.merkle import merkle_depth
@@ -55,9 +57,11 @@ HOST_SOURCES = (SHA512, ROW_COMMIT, HERE / "rows.cuh", HERE / "rows_host.cpp")
 #: no -lineinfo: nothing reads a line table, and with one the cubin holds the source's path
 NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared", "-Xptxas", "-v")
 CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")
-settings = of(__file__)
-BUILD_DIR = Path(settings.SHA512_ROWS_BUILD or Path.home() / ".cache" / "verity" / "sha512_rows")
-DEFAULT_VARIANT = settings.SHA512_ROWS_V
+DEFAULT_VARIANT = "0000"
+#: what ``Engine.runtime`` raises until a subclass supplies it
+NEEDS_RUNTIME = ("the engine on a CUDA device runs on a tensor runtime (torch) that verity doesn't import "
+                 "(kernels/gpu-code-out-of-benchmarks): use a subclass whose runtime() returns it, as the benchmarks' "
+                 "torch_engine.Engine does")
 
 INST = hm96.SHA512
 KEY = INST.default_key
@@ -92,13 +96,13 @@ def variant_flags(name: str) -> tuple[str, ...]:
     return (f"-DSX_V={v}", f"-DSX_ROLL={roll}")
 
 
-def _build(tool: str, sources: Sequence[Path], flags: Sequence[str], name: str) -> ctypes.CDLL:
+def _build(build: Path, tool: str, sources: Sequence[Path], flags: Sequence[str], name: str) -> ctypes.CDLL:
     h = hashlib.sha256()
     for s in sources:
         h.update(s.name.encode() + b"\0" + s.read_bytes() + b"\0")
     version = subprocess.run([tool, "--version"], capture_output=True, text=True, check=True).stdout
     h.update(" ".join(flags).encode() + b"\0" + version.encode())
-    lib = BUILD_DIR / h.hexdigest()[:12] / name
+    lib = Path(build) / h.hexdigest()[:12] / name
     if not lib.exists():
         lib.parent.mkdir(parents=True, exist_ok=True)
         tmp = lib.with_suffix(f".{os.getpid()}.tmp")
@@ -138,22 +142,23 @@ def _abi(dll: ctypes.CDLL, path: Path) -> ctypes.CDLL:
 
 
 @cache
-def host_lib() -> ctypes.CDLL:
-    """``rows_host.cpp`` built with the system C++ compiler."""
+def host_lib(build: Path) -> ctypes.CDLL:
+    """``rows_host.cpp`` built with the system C++ compiler, cached under ``build``."""
     cxx = next((c for c in ("g++", "c++", "clang++") if shutil.which(c)), None)
     if cxx is None:
         raise RuntimeError("no C++ compiler on the path")
-    return _build(cxx, HOST_SOURCES, CFLAGS, "libsha512_rows_host.so")
+    return _build(build, cxx, HOST_SOURCES, CFLAGS, "libsha512_rows_host.so")
 
 
 @cache
-def device_lib(arch: str, default: str = DEFAULT_VARIANT) -> ctypes.CDLL:
-    """``rows.cu`` built with nvcc for ``sm_<arch>`` (``"90a"``: the H200), its kernels but the row kernel on ``default``."""
+def device_lib(build: Path, arch: str, default: str = DEFAULT_VARIANT) -> ctypes.CDLL:
+    """``rows.cu`` built with nvcc for ``sm_<arch>`` (``"90a"``: the H200), its kernels but the row kernel on ``default``,
+    cached under ``build``."""
     tool = shutil.which("nvcc")
     if tool is None:
         raise RuntimeError("no nvcc on the path")
     flags = (*NVCC_FLAGS, *variant_flags(default), f"-gencode=arch=compute_{arch},code=sm_{arch}")
-    return _build(tool, DEVICE_SOURCES, flags, "libsha512_rows_cuda.so")
+    return _build(build, tool, DEVICE_SOURCES, flags, "libsha512_rows_cuda.so")
 
 
 def words(digests: Sequence[bytes] | bytes) -> np.ndarray:
@@ -231,28 +236,34 @@ def _did_words(dids: Any) -> np.ndarray:
 
 
 class Engine:
-    """The engine's calls on ``device``: a CUDA device (torch tensors), or ``"host"`` for the host twin (numpy arrays)."""
+    """The engine's calls on ``device``: a CUDA device (torch tensors), or ``"host"`` for the host twin (numpy arrays), its
+    builds cached under ``build``."""
 
-    def __init__(self, device: Any = "cuda", arch: str | None = None, key: bytes = KEY, default: str = DEFAULT_VARIANT) -> None:
+    def __init__(self, device: Any, arch: str | None = None, key: bytes = KEY, default: str = DEFAULT_VARIANT, *,
+                 build: Path) -> None:
         self._schemas: dict[str, tuple[Any, int]] = {}
         self.host = device == "host"
         if self.host:
-            self.torch, self.device, self.lib = None, "host", host_lib()
+            self.torch, self.device, self.lib = None, "host", host_lib(build)
         else:
-            import torch
+            torch = self.runtime()
             self.torch, self.device = torch, torch.device(device)
             if self.device.index is None:
                 self.device = torch.device("cuda", torch.cuda.current_device())
             if arch is None:
                 major, minor = torch.cuda.get_device_capability(self.device)
                 arch = f"{major}{minor}" + ("a" if major in (9, 10, 12) else "")
-            self.lib = device_lib(arch, default)
+            self.lib = device_lib(build, arch, default)
         self.variants = [self.lib.sxr_variant_name(i).decode() for i in range(self.lib.sxr_variants())]
         self.default = self.lib.sxr_default().decode()
         self.key = INST.check_key(key)
         self.table = self._up(hankel_table(self.key).reshape(-1))
         self.ms_salt = self.midstate(INST.salt_prefix)
         self.ms_leaf = self.midstate(INST.leaf_prefix(self.key))
+
+    def runtime(self) -> Any:
+        """The tensor module a CUDA device's calls run on (torch): raises here, and a subclass supplies it."""
+        raise NotImplementedError(NEEDS_RUNTIME)
 
     # --- memory ----------------------------------------------------------------------------------------------------------
 

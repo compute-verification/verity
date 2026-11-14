@@ -276,7 +276,7 @@ theorem outputs_committed_v2' : OutputsCommittedV2 := by
     rw [getElem!_eq_getD'] at this
     exact this
   rw [← msg_bytesAll L L0 F0 hda hrows hz o hzero hg hj, ← hbc, ← bytesAt_bc L R regs z o hg hpl]
-  exact (bc_drawnH h hpop hpt hD hlt L regs hregs hz o hg hg2 hpl hr).symm
+  exact (bc_sampledH h hpop hpt hD hlt L regs hregs hz o hg hg2 hpl hr).symm
 
 /-- **`OutputsBindingV2` from `OutputsCommittedV2`**. -/
 theorem outputs_binding_v2_of (hC : OutputsCommittedV2) : OutputsBindingV2 := by

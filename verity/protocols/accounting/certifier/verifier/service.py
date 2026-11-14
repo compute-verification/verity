@@ -31,7 +31,7 @@ uniform K-subset's exact bound, one-stage's `wrong_units` over windows), so ε =
 is Python's
 (`service.select_draw`), which records the coin bytes it read (`read`); the sample of record is the Lean
 verifier's on those bytes (`lean_draw`: Flock's `verity-verify-proof draw --population n --k K --stream-file`, the Lean
-`draw` the one-stage drivers run, `Flock.Draw.drawOn`), which the network verdict runs itself, as a registration's own
+`draw` the one-stage drivers run, `Flock.Draw.sampleOn`), which the network verdict runs itself, as a registration's own
 sample is the Lean's `Select.select` on the bytes it read. The verdict accepts only when the windows registered and
 proved are exactly that sample's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever proof blocks the sample
 object it is handed lists. Selection `All` (K None) samples every window and reads no coin, and K = n leaves nothing to
@@ -421,8 +421,8 @@ def _root_of(record: Any) -> Any:
 def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
     """The period's sample of record: Flock's Lean verifier (`proofs.executable`, which verifies the
     windows' proofs) sampling `subset:k` of n on `read`, the coin bytes the period sample read, in order
-    (``verity-verify-proof draw --population n --k k --stream-file``, `Flock.Draw.drawOn`, which `select_draw`'s sampler is
-    byte for byte: `test_lean_verifier.test_unit_draw_samplers_are_the_exact_reduction` and `test_coins`); its ``DRAW``
+    (``verity-verify-proof draw --population n --k k --stream-file``, `Flock.Draw.sampleOn`, which `select_draw`'s sampler is
+    byte for byte: `test_lean_verifier.test_unit_sample_samplers_are_the_exact_reduction` and `test_coins`); its ``DRAW``
     object, or ``{"refused": why}`` where the bytes run out or the Lean refuses or can't run."""
     try:
         with tempfile.TemporaryDirectory(prefix="verity-period-draw-") as d:

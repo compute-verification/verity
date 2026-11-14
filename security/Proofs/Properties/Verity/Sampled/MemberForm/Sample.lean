@@ -177,24 +177,24 @@ theorem WindowOn.population {ι : Type} {d : Accounting.Device ι} {α : Type} [
 /-! ## The record's sample is a subset sample -/
 
 /-- **A session whose verdict passes has a record whose sample decodes by the subset sampling design**: the verdict
-refuses a record without a sample (`verdictOf_drawn`), the setup at the record's own sample refuses a sampling
-design a soundness claim doesn't sample by at `--zk` (`setupAt_drawLaw`, `lawWhy_zk`), and a session set up without
+refuses a record without a sample (`verdictOf_sampled`), the setup at the record's own sample refuses a sampling
+design a soundness claim doesn't sample by at `--zk` (`setupAt_sampleDesign`, `samplingDesignWhy_zk`), and a session set up without
 a stratified input refuses a stratified sample (`setupTables_stratified`). -/
 theorem sessionVerdict_subset {a : StepAt} {bs : _root_.Core.Blobs} {keys : Array String}
     {s : _root_.Spot.OneStageZk.RunFiles} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} {units : Array ℕ}
     (h : SessionVerdict a bs keys s record spec tabs rest proofs units) :
-    ∃ dj D kd, Flock.Witness.recordDraw record = some dj ∧ Flock.Draw.UnitDraw.ofJson dj = .ok D ∧
-      D.law = .subset kd ∧
+    ∃ dj D kd, Flock.Witness.recordDraw record = some dj ∧ Flock.Draw.UnitSample.ofJson dj = .ok D ∧
+      D.samplingDesign = .subset kd ∧
       ∃ sts, Flock.Stmt.setupTables (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.publicFile
         (Flock.Witness.zkCoins a.I) a.I.count a.I.tables (some dj) a.I.partition a.I.program = .ok (spec, sts) := by
-  obtain ⟨dj, hdj⟩ := Option.isSome_iff_exists.1 (verdictOf_drawn h.verdict)
+  obtain ⟨dj, hdj⟩ := Option.isSome_iff_exists.1 (verdictOf_sampled h.verdict)
   have hst := h.setup
   rw [hdj] at hst
-  obtain ⟨D, hD, hw⟩ := drawLaw_ok (setupAt_drawLaw hst)
+  obtain ⟨D, hD, hw⟩ := sampleDesign_ok (setupAt_sampleDesign hst)
   obtain ⟨sts, hss, -⟩ := setupAt_ok hst
   obtain ⟨hset, -⟩ := sessionAt_ok hss
-  rcases lawWhy_zk hw with ⟨kd, hk⟩ | ⟨K, St, hk⟩
+  rcases samplingDesignWhy_zk hw with ⟨kd, hk⟩ | ⟨K, St, hk⟩
   · exact ⟨dj, D, kd, hdj, hD, hk, sts, hset⟩
   · exact (setupTables_stratified hset hD hk).elim
 
@@ -312,7 +312,7 @@ range `[lo, hi)`, a session whose verdict passes at the statement the form read 
 registration, has a record whose sample is the subset print of slots `us`, ascending below `vm`'s count, over
 `vm`'s count; and the units it proved are `lo + u` for `u` in `us`, in that order.
 
-The record's sample is a subset sample, its own print (`sessionVerdict_subset`, `recordDrawn_of_subset`); its
+The record's sample is a subset sample, its own print (`sessionVerdict_subset`, `recordSampled_of_subset`); its
 population is the count the session's rows load the public file to (`setupTables_population`), which the member's
 population check holds to `vm`'s count (`row_count`); and the units the record proves are the public file's unit
 indices at the sample's slots (`provedUnits_at`), which the same check holds to `vm`'s units (`population_units`),
@@ -325,12 +325,12 @@ theorem session_sample {vm : _root_.Spot.OneStageZk.Member} {rec : Json}
     (hv : SessionVerdict (stepAt a) bs keys s record spec tabs rest proofs units) :
     ∃ us : Array ℕ, unitsAscending vm.count us = true ∧
       Flock.Witness.recordDraw record =
-        some (Flock.Draw.UnitDraw.toJson ⟨.subset us.size, vm.count, us, #[]⟩) ∧
+        some (Flock.Draw.UnitSample.toJson ⟨.subset us.size, vm.count, us, #[]⟩) ∧
       units = us.map (lo + ·) := by
   obtain ⟨tags0, circuitB, pubB, names, -, -, -, -, -, hI⟩ := statement_reads hs
   obtain ⟨-, epop⟩ := statement_checks hs
   obtain ⟨dj, D, kd, hdj, hD, hl, sts, hset⟩ := sessionVerdict_subset hv
-  obtain ⟨hasc, hprint⟩ := recordDrawn_of_subset hdj hD hl
+  obtain ⟨hasc, hprint⟩ := recordSampled_of_subset hdj hD hl
   have hpc : a.population = .ok () := verdictOf_population hv.verdict
   have hpop : vm.population (vm.slice rec roots) a.I.publicFile = .ok () := epop.symm.trans hpc
   have hc1 : a.I.count = 1 := by
@@ -344,8 +344,8 @@ theorem session_sample {vm : _root_.Spot.OneStageZk.Member} {rec : Json}
   have hn : D.population = vm.count := hDp.trans (row_count hpop hlp)
   obtain ⟨hd, hh, hheld⟩ := population_units hpop
   have hinds := indicesOf_of_unitsHeld hheld
-  obtain ⟨j, d, hj, hjd, hwd, hdn⟩ := recordDraw_raw hdj
-  have hdjp : dj = Flock.Draw.UnitDraw.toJson ⟨.subset D.units.size, D.population, D.units, #[]⟩ :=
+  obtain ⟨j, d, hj, hjd, hwd, hdn⟩ := recordSample_raw hdj
+  have hdjp : dj = Flock.Draw.UnitSample.toJson ⟨.subset D.units.size, D.population, D.units, #[]⟩ :=
     Option.some.inj (hdj.symm.trans hprint)
   have hunits : _root_.Spot.getD (_root_.Spot.getD j "unit_draw") "units" =
       .arr (D.units.map fun x => Lean.toJson x) := by

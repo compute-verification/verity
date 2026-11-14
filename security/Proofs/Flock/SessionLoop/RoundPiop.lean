@@ -516,12 +516,12 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     try rfl
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have hjjT : a + 1 < piopNR tb.st.m tb.st.fold.kLog := by rw [htm, htk']; exact hjj
   have hjjT' : a < piopNR tb.st.m tb.st.fold.kLog := by omega
   have hb : (piopV tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.ZkServer.Finish.flat tb.cm0.cap) Sched.root0
       (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0) (fun _ => 0) (a + 1)).length ≤ c'.order.size := by
-    rw [hc', Loop.ofDraws_order, absorbed_size]
+    rw [hc', Loop.ofSamples_order, absorbed_size]
     exact le_trans (piopV_length_le lay (by omega) (by omega) hnM hnL hjjT.le) (by omega)
   have hdg : tb.st.digest.size < 2 ^ 64 := by
     rw [hts']
@@ -666,7 +666,7 @@ theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
   have hc : ∀ p, p < ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size →
       ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order[p]! <
         ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).h.size :=
-    Claims.ZKServer.ofDraws_order _ _ _
+    Claims.ZKServer.ofSamples_order _ _ _
   have hNO : ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).nPiop ≤
       ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size := by
     rw [hnP, hord]
@@ -692,10 +692,10 @@ theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
   have hrf' := hrf
   rw [← hvG, ← hcoins''] at hrf'
   have hRS : Loop.RepSrc L₀ src x w := (show Loop.Level0Src src x w ∧ Loop.RepSrc L₀ src x w from hS).2
-  have hz := Loop.RepSrc.size hRS (ofLoopLink L₀ src real) (LeanRelease.draws_ofLoopLink src real) ν t j r hlay
-  have hH := (cfg_tapeOfDraws (ofLoopLink L₀ src real) x (ν, t) ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t) Loop.frepOf
+  have hz := Loop.RepSrc.size hRS (ofLoopLink L₀ src real) (LeanRelease.samples_ofLoopLink src real) ν t j r hlay
+  have hH := (cfg_tapeOfSamples (ofLoopLink L₀ src real) x (ν, t) ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t) Loop.frepOf
     j.val r.val hrep' hz).1
-  rw [hlay, ← Loop.RepSrc.pads hRS (ofLoopLink L₀ src real) (LeanRelease.draws_ofLoopLink src real) ν t j r hlay
+  rw [hlay, ← Loop.RepSrc.pads hRS (ofLoopLink L₀ src real) (LeanRelease.samples_ofLoopLink src real) ν t j r hlay
     (Masked.UE.tapeZk t)] at hH
   have hhab : (Masked.layE x j).hab = (Masked.layE x j).fa + 3 + 2 * (Masked.layE x j).nLc + 64 +
       (Masked.layE x j).nOod0 + 4 * (Masked.layE x j).k0 + 4 := rfl

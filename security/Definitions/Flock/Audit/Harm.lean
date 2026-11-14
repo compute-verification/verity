@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Flock.Audit.Law
+public import Definitions.Flock.Audit.SamplingDesign
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
@@ -25,7 +25,7 @@ variable {n : ℕ}
 
 /-- **`harm_bound`'s specification**: every incorrect set that escapes with probability at least `δ` has harm at most
 `H`. -/
-def IsHarmBound (L : Law n) (h : Fin n → ℝ) (δ : ℝ≥0∞) (H : ℝ) : Prop :=
+def IsHarmBound (L : SamplingDesign n) (h : Fin n → ℝ) (δ : ℝ≥0∞) (H : ℝ) : Prop :=
   ∀ B : Finset (Fin n), δ ≤ L.escape B → ∑ u ∈ B, h u ≤ H
 
 end FlockSoundness.Audit

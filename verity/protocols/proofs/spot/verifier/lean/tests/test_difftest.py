@@ -9,7 +9,7 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 one, `coins.law_problem`), for the `select` piece the challenger's sample from a Spec's selection rule on
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
 `slots` piece that sample in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
-nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
+nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_sample` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
 `service.check_verdicts`), for the `second_statements` piece round 2's statement check (`second_stage.check_twin`) on the
 second-stage sessions' statements over one and two templates' interiors, for the `fits` piece v2's refusal of a length
@@ -69,7 +69,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     caller as C,
     draw as DR,
     hello as H,
-    hidden_draw as HD,
+    hidden_sample as HD,
     link_points as LP,
     partition as P,
     produced as PD,
@@ -90,7 +90,7 @@ from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.window import window_binding
 
-from test_challenger_difftest import DEPLOYED, DRAW_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
+from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
 
 PACKAGE = Path(__file__).resolve().parents[1]
 CALLER_PACKAGE = PACKAGE.parents[2] / "spot_flock/verifier/lean"
@@ -695,7 +695,7 @@ def _registered_reads(verdicts: dict) -> None:
             raise D.Reject("a verifier of record reports registered reads that are not objects with a string value and a root")
 
 
-def _registration_verdict(p: dict, rec) -> Verdict:
+def _docket_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
@@ -704,7 +704,7 @@ def _registration_verdict(p: dict, rec) -> Verdict:
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
-    return _registration_verdict(p, rec).codes
+    return _docket_verdict(p, rec).codes
 
 
 def _caller_verdict(p: dict, rec) -> Verdict:
@@ -873,7 +873,7 @@ def registration(j):
     p = _params_of(j)
     if "members" in j:
         p = {**p, "link_members": _link_members(j["members"])}
-    v = _registration_verdict(p, j.get("record"))
+    v = _docket_verdict(p, j.get("record"))
     return {"codes": list(v.codes), **({} if v.fanout is None else {"fanout": v.fanout}),
             **({"rests_on_period_check": list(v.rests_on_period_check)} if v.rests_on_period_check else {})}
 
@@ -1210,7 +1210,7 @@ def _unhex(x) -> bytes:
 
 
 def fits(j):
-    """`OneStageZk.fitsWhy` and `drawFitsWhy` at ``limit`` (`proofs.fits_why`, `proofs.draw_fits_why`): the files hex,
+    """`OneStageZk.fitsWhy` and `sampleFitsWhy` at ``limit`` (`proofs.fits_why`, `proofs.draw_fits_why`): the files hex,
     the tables ``[name, hex]`` pairs, the program hex or null, and the partition object, registered reads and sample null
     for none."""
     j = _json(j)
@@ -1497,7 +1497,7 @@ def _record_input(j) -> Fraction:
     _exactly(j, RECORD_INPUT_KEYS | ({"certified"} & set(j) if isinstance(j, dict) else set()), "the record's input")
     if not (isinstance(j.get("certified", []), list) and all(isinstance(v, str) for v in j.get("certified", []))):
         raise D.Reject("certified is not a list of strings")
-    reg, draw_ = j["registration"], j["draw"]
+    reg, sample_ = j["registration"], j["draw"]
     if not (isinstance(reg, dict) and all(k in reg for k in REGISTRATION_KEYS) and _int(reg["population"])
             and isinstance(reg["anchors"], list) and isinstance(reg["roots"], list)
             and all(isinstance(r, dict) and isinstance(r.get("port"), str) and "root" in r and "leaves" in r for r in reg["roots"])
@@ -1505,9 +1505,9 @@ def _record_input(j) -> Fraction:
                 isinstance(e, dict) and isinstance(e.get("value"), str) and all(k in e for k in ("root", "leaves", "domain"))
                 for e in reg["registered"]))):
         raise D.Reject("the registration")
-    if not (isinstance(j["receipt"], dict) and isinstance(draw_, dict) and ints(draw_.get("units"))
-            and ("closure" not in draw_ or ints(draw_["closure"])) and ("population" not in draw_ or _int(draw_["population"]))
-            and (draw_.get("law") != "subset" or "k" in draw_) and isinstance(j["law"], dict)):
+    if not (isinstance(j["receipt"], dict) and isinstance(sample_, dict) and ints(sample_.get("units"))
+            and ("closure" not in sample_ or ints(sample_["closure"])) and ("population" not in sample_ or _int(sample_["population"]))
+            and (sample_.get("law") != "subset" or "k" in sample_) and isinstance(j["law"], dict)):
         raise D.Reject("the receipt, the draw or the law")
     if not (ints(j["proved_units"]) and _int(j["instances"]) and isinstance(j["statement"], dict)
             and isinstance(j["verdicts"], dict) and all(isinstance(v, dict) for v in j["verdicts"].values())
@@ -2133,7 +2133,7 @@ DRAW = [
     _draw(lambda d, x: {**d, "strata": d["strata"][::-1]} if "strata" in d else d),
     _draw(lambda d, x: [None, 5, [], "draw"][x % 4]),
 ]
-DRAW_CHANGES = DRAW  # `DRAW` is the sample piece's port below
+SAMPLE_CHANGES = DRAW  # `DRAW` is the sample piece's port below
 EVIDENCE = [
     _set("evidence", "receipt", lambda a, x: [{**a["evidence"]["receipt"], "registration": "00" * 64}, {}, 5][x % 3]),
     _set("evidence", "proved_units", lambda a, x: [a["evidence"]["proved_units"][:-1], a["evidence"]["proved_units"][::-1],
@@ -2720,7 +2720,7 @@ def decode_params_v2(j) -> dict:
     return subset_design(parsed_params_v2(j))
 
 
-def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
+def _challenger_sample(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
                      keys: list[str] | None = None, seed: int = 0, order: str = "honest",
                      **shape: bool) -> tuple[Drawn, dict, dict]:
     """A sample under `law` from the coins of a challenger session its ledger opens withheld, under the key of `seed` at
@@ -2773,7 +2773,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
 
     def audit(trees: int, keys: list[str] | None = None) -> tuple[Drawn, dict, dict, dict]:
-        ch, d, coins = _challenger_draw(rng, s, law, rec, trees, keys)
+        ch, d, coins = _challenger_sample(rng, s, law, rec, trees, keys)
         proved = DR.proved(d)
         evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
@@ -2857,7 +2857,7 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
-    ch, d, coins = _challenger_draw(random.Random(seed), s, law, rec)
+    ch, d, coins = _challenger_sample(random.Random(seed), s, law, rec)
     proved = DR.proved(d)
     base = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
             "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
@@ -2988,7 +2988,7 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
                    WINDOW, leaf_layer=LEAF)
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     for order in ORDERS:
-        ch, d, coins = _challenger_draw(random.Random(f"v2-order-{order}"), s, law, rec, 1, order=order)
+        ch, d, coins = _challenger_sample(random.Random(f"v2-order-{order}"), s, law, rec, 1, order=order)
         proved = DR.proved(d)
         evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
@@ -3013,7 +3013,7 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
             "reject", "verdict flock-verify/s did not accept" if want is None else f"proofs: {want}"), order
 
 
-def test_link_points_refuses_a_law_none_of_whose_draws_ends():
+def test_link_points_refuses_a_law_none_of_whose_samples_ends():
     """`link_points.refused` refuses a sampling design no sample of which ends (`NEVER_ENDS`, `ends`): `subset:11` over 10 units, a
     Bernoulli sampling design of denominator 0, a stratum sampling more units than it has; `subset:10` and `bernoulli 0/0` end. These
     are `LinkPoints`' `#guard`s. The `link_points` piece can't reach them, since `Draw.flockLaw` (`coins.law_problem`)
@@ -3026,7 +3026,7 @@ def test_link_points_refuses_a_law_none_of_whose_draws_ends():
             LP.refused(law, 10, [([[0, 10]], 1)])
 
 
-def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
+def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
     """v2 reads its sample's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
     challenger under a key at the deployed parameters: parameters naming none, one without a window (`NO_CHALLENGER`) or
     one whose key is at other parameters (`KEY_PARAMS`) are refused, as are parameters whose sampling design is no
@@ -3135,15 +3135,15 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
 
     for seed in range(3):
         rng = random.Random(f"one-stage-v2-coins/{seed}")
-        d, draw, coins = _challenger_draw(rng, s, law, rec)
+        d, draw, coins = _challenger_sample(rng, s, law, rec)
         honest = audit_of(d, draw, coins)
         assert (python(honest), lean(honest)) == ("verdict", "verdict")
-        other = next(x for x in (_challenger_draw(rng, s, law, rec)[1] for _ in range(64)) if x["units"] != draw["units"])
-        stranger = _challenger_draw(rng, s, law, rec, seed=1)[0]
+        other = next(x for x in (_challenger_sample(rng, s, law, rec)[1] for _ in range(64)) if x["units"] != draw["units"])
+        stranger = _challenger_sample(rng, s, law, rec, seed=1)[0]
         assert stranger.s.key != d.s.key
         elsewhere = Drawn(rng, reads=lambda c: c(COIN_BYTES), params=[DEPLOYED])
         bare = Drawn(rng, after=after, reads=lambda c: c(COIN_BYTES), withheld=False, params=[DEPLOYED])
-        again = {shape: _challenger_draw(rng, s, law, rec, **{shape: True}) for shape in ("before", "later")}
+        again = {shape: _challenger_sample(rng, s, law, rec, **{shape: True}) for shape in ("before", "later")}
         undeployed = {**d.s.key.to_json(), **rng.choice([{"H": 6}, {"W": 2}, {"W": 4, "H": 10}])}
         cases = {
             "no challenger": ("params", audit_of(d, draw, coins, challenger=None)),
@@ -3172,7 +3172,7 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
             "before": ("coins", audit_of(again["before"][0], again["before"][1], {
                 **again["before"][2], "segment": _mutated(rng, again["before"][0], "before")[0]})),
         } | {name: ("coins", audit_of(d, draw, {**coins, "segment": _mutated(rng, d, name)[0]}))
-             for name in DRAW_MUTATIONS if name not in ("before", "unread", "read-tampered", "other-after")}
+             for name in SAMPLE_MUTATIONS if name not in ("before", "unread", "read-tampered", "other-after")}
         for name, (want, a) in cases.items():
             assert (python(a), lean(a)) == (want, want), (seed, name)
         for name, (other, work, kind) in uncovered.items():
@@ -3417,7 +3417,7 @@ DOMAIN = D.Port(PIECES, "domain", domain, st.one_of(
     _domains([0, 8, 24, 48]),
     st.builds(lambda k, v: {"leaves": 3, "program": "p", "value": "W", "word_bits": 16, "words": 2, k: v},
               st.sampled_from(["leaves", "program", "value", "word_bits", "words"]), JSON), JSON)), package=PACKAGE)
-PRODUCED_REG, PRODUCED_DRAW, PRODUCED_OTHER = "c3" * 64, "d4" * 64, "e0" * 64
+PRODUCED_REG, PRODUCED_SAMPLE, PRODUCED_OTHER = "c3" * 64, "d4" * 64, "e0" * 64
 
 
 def _bc(*parts) -> str:
@@ -3446,7 +3446,7 @@ def _produced_case(names, sizes, roots) -> dict:
 
     verdicts = {f"s{x}": verdict({"p": (v, ops[v][-1:])}) for x, v in enumerate(mine)}
     verdicts["sA"] = verdict({"a0": ("A", ops["A"]), "o0": ("ok", [(0, _bc("ok", 0))])})
-    return {"record": PD.record(PRODUCED_REG, PRODUCED_DRAW, es, ops), "registration": PRODUCED_REG, "draw": PRODUCED_DRAW,
+    return {"record": PD.record(PRODUCED_REG, PRODUCED_SAMPLE, es, ops), "registration": PRODUCED_REG, "draw": PRODUCED_SAMPLE,
             "mine": mine, "opened": {e["value"]: e["root"] for e in es}, "known": known, "verdicts": verdicts}
 
 
@@ -3555,7 +3555,7 @@ KNOWN_PORT = D.Port(PIECES, "known_port", known_port, st.one_of(
     st.builds(lambda k, v: {"program": "p", "value": "ok", "row": [1], "salt": KNOWN_SALT, "registration": PRODUCED_REG,
                             "word_bits": 16, k: v},
               st.sampled_from(["program", "value", "row", "salt", "registration", "word_bits"]), JSON), JSON), package=PACKAGE)
-CHECK_DRAW = D.Port(PIECES, "check_draw", check_draw, st.one_of(
+CHECK_SAMPLE = D.Port(PIECES, "check_draw", check_draw, st.one_of(
     st.builds(lambda a, dn, other: {"draw": a["evidence"]["draw"], "law": other or a["record"]["law"],
                                     "population": a["record"]["population"] + dn},
               changed_audits([DRAW], 2), st.sampled_from([0, 0, 0, 1, -1]),
@@ -3599,7 +3599,7 @@ def _changed_law(law: dict, change, x: int) -> dict:
         return law
 
 
-DRAW_INPUTS = st.one_of(
+SAMPLE_INPUTS = st.one_of(
     st.builds(lambda a, src: {"law": a["record"]["law"], "population": a["record"]["population"], "source": src},
               changed_audits(most=0), SOURCE),
     st.builds(lambda a, f, x, dn, src: {"law": _changed_law(a["record"]["law"], f, x),
@@ -3611,8 +3611,8 @@ DRAW_INPUTS = st.one_of(
               st.integers(0, 40), SHORT_SOURCE),
     st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, JSON, st.integers(0, 6) | JSON,
               SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON))
-DRAW = D.Port(PIECES, "draw", draw, DRAW_INPUTS, package=PACKAGE)
-RAN_OUT = D.Port(PIECES, "ran_out", ran_out, DRAW_INPUTS, package=PACKAGE)
+DRAW = D.Port(PIECES, "draw", draw, SAMPLE_INPUTS, package=PACKAGE)
+RAN_OUT = D.Port(PIECES, "ran_out", ran_out, SAMPLE_INPUTS, package=PACKAGE)
 #: Sampling design texts `draw.parse_design` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
 #: second separator, leading zeros, a missing or zero argument.
 ODD_LAW_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "stratified:\uff11", "bernoulli:1/\u0662",
@@ -3946,7 +3946,7 @@ LINK_SETUPS = [Setup(P.population_program(PAIR, 24), P.template_instance_query(P
 PROGRAMS.update({s.sha512: s.program for s in LINK_SETUPS})
 
 
-def _registration_members(a: dict, cut: int, gs: list[int], bad: int) -> dict:
+def _docket_members(a: dict, cut: int, gs: list[int], bad: int) -> dict:
     """The `registration` piece's input of the audit `a` with the per-member form's members: the record's population
     cut in two at `cut`, or whole where it holds under two units, each `gs` units a proof block, one broken where
     `bad` says (`_cut_members`)."""
@@ -3958,7 +3958,7 @@ def _registration_members(a: dict, cut: int, gs: list[int], bad: int) -> dict:
 
 #: `registration` inputs with members: audits of `LINK_SETUPS`' windows and of the small ones, with at most one change.
 REGISTRATIONS_WITH_MEMBERS = st.one_of(
-    *[st.builds(_registration_members, changed_audits(most=1, setups=setups), st.integers(0, 60),
+    *[st.builds(_docket_members, changed_audits(most=1, setups=setups), st.integers(0, 60),
                 st.lists(st.sampled_from([1, 1, 2]), min_size=1, max_size=2), st.integers(0, 20))
       for setups in (LINK_SETUPS, LINK_SETUPS, LINK_SETUPS, SETUPS)],
     st.builds(lambda a, ms: {**_REGISTRATION_OF(a), "members": ms}, changed_audits(most=0), JSON))
@@ -4099,6 +4099,40 @@ MATCHES_PUBLIC = D.Port(PIECES, "matches_public", matches_public, st.one_of(
     st.builds(_public, changed_audits(most=0), st.sampled_from(PUBLIC_CHANGES), st.integers(0, 63)),
     st.builds(_public, changed_audits([RECORD], most=1, least=1), st.sampled_from(PUBLIC_CHANGES[:2]), st.integers(0, 63)),
     st.builds(lambda a, x: _public(a, PUBLIC_CHANGES[0], x), changed_audits([ENTRIES], 1, 1, REGISTERED_SETUPS), st.integers(0, 3)),
+    JSON), package=PACKAGE)
+
+
+def public_ports(j):
+    j = _json(j)
+    rec = j.get("record") if isinstance(j, dict) else None
+    roots = rec.get("roots") if isinstance(rec, dict) else None
+    if not isinstance(roots, list):
+        raise D.Reject("the record's roots are not a list")
+    if not all(isinstance(r, dict) and isinstance(r.get("port"), str) for r in roots):
+        raise D.Reject("a registered root is not an object with a string port")
+    try:
+        return _json(R.public_ports(rec))
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+
+
+def _roots(ports: list[str], x: int) -> list[dict]:
+    """A registration's roots at `ports`, every fifth with no domain or leaves."""
+    return [{"domain": f"d{i}", "leaves": i + x % 3, "port": p, "root": f"r{i}"} if (x + i) % 5 else
+            {"port": p, "root": f"r{i}"} for i, p in enumerate(ports)]
+
+
+#: Port names a member's roots carry (one holding a `/`), and members' names (one template's two chunks, another's, one
+#: with no `/`)
+OWN_PORTS = st.sampled_from(["x", "sx", "o0", "w/row"])
+MEMBER_NAMES = st.sampled_from(["T{K=1}/c0", "T{K=1}/c1", "A/c0", "T"])
+PUBLIC_PORTS = D.Port(PIECES, "public_ports", public_ports, st.one_of(
+    st.builds(lambda ps, x: {"record": {"roots": _roots(ps, x)}}, st.lists(OWN_PORTS, max_size=4), st.integers(0, 63)),
+    st.builds(lambda m, ps, x: {"record": {"roots": _roots([f"{m}/{p}" for p in ps], x)}}, MEMBER_NAMES,
+              st.lists(OWN_PORTS, min_size=1, max_size=4), st.integers(0, 63)),
+    st.builds(lambda ps, x: {"record": {"roots": _roots(ps, x)}}, st.lists(st.one_of(
+        OWN_PORTS, st.builds("{}/{}".format, MEMBER_NAMES, OWN_PORTS), st.sampled_from(["row-table", "row-table/s0/t"])),
+        min_size=1, max_size=4), st.integers(0, 63)),
     JSON), package=PACKAGE)
 
 
@@ -4254,7 +4288,7 @@ RECORD_PORT = D.Port(PIECES, "record", record, st.one_of(
     st.builds(_own_reads_case, changed_audits([REGISTERED_EVIDENCE], 1, 0, REGISTERED_SETUPS), st.integers(0, 63)),
     st.builds(_certified_case, changed_audits(most=0), st.integers(0, 63)),
     st.builds(_certified_case, changed_audits([REGISTERED_EVIDENCE], 1, 0, REGISTERED_SETUPS), st.integers(0, 63)),
-    st.builds(_record_case, changed_audits([EVIDENCE, DRAW_CHANGES, VERDICTS_OF, REGISTERED_EVIDENCE], 1, 1), EXACT_DELTA),
+    st.builds(_record_case, changed_audits([EVIDENCE, SAMPLE_CHANGES, VERDICTS_OF, REGISTERED_EVIDENCE], 1, 1), EXACT_DELTA),
     st.builds(_record_case, changed_audits([RECORD, ENTRIES, REGISTERED_EVIDENCE], 1, 1, REGISTERED_SETUPS), EXACT_DELTA),
     st.builds(_record_case, changed_audits(most=2, least=2), EXACT_DELTA),
     st.builds(_record_case, changed_audits(most=0), st.sampled_from(["0", "1", "3/2", "a", "1/0", "2/4", 5, None])),
@@ -6402,10 +6436,11 @@ callers = D.server_fixture(CALLER)
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
+              (CHECK_SAMPLE, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
               (FILE_POPULATION, 400), (TABLES_HELD, 300), (OWN_TABLES, 300), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
-              (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
+              (MATCHES_PUBLIC, 400), (PUBLIC_PORTS, 300), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500),
+              (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
               (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (SECOND_INTERIOR_READS, 200),
               (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_WIDTHS, 300), (REPLAY_RETURNS, 200), (REPLAY_RETURNED, 300),
@@ -6547,7 +6582,7 @@ def test_the_runs_hello_and_its_one_tree(pieces, name, change, code):
     assert out["codes"] == ([] if code is None else [code]) and out["ok"] == (code is None), (name, out)
 
 
-def test_the_select_piece_draws_every_rule(pieces):
+def test_the_select_piece_samples_every_rule(pieces):
     """One sample under each rule `select_draw` samples (the stream's run refuses a Bernoulli sampling design and a closure
     map before it), on a partition whose `PAIR` stratum is two ranges apart, Lean's the Python's whole: `All` every unit,
     reading no coins, and each rate's sample (a work rate's with its closure) reading them, each stratum's count its k,
@@ -6598,7 +6633,7 @@ def test_the_select_piece_draws_every_rule(pieces):
             select(case)
 
 
-def test_a_work_draws_design_is_cores(pieces):
+def test_a_work_samples_design_is_cores(pieces):
     """C-Flock's work sampling design held to `Core.SamplingDesign`: a work sample's sampling design, Lean's (`Spot.Pieces.designOfLaw`) the Python's
     (`audit.design`), is the profile's `work` case with each stratum's works and floor, and its sample's design is the
     stratified one at its k_s."""
@@ -6725,7 +6760,7 @@ def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
     its partition over these templates takes more memory than a suite has."""
     from verity.circuits.population import mixed_population_program
     from verity.definitions.registry.catalog import load
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
 
     load()
     total = sum(c for _t, c in REAL_TEMPLATES)
@@ -8771,7 +8806,7 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
             assert out["step"] == "register" and code in out["codes"], (code, out)
         tampered = bytearray(d.read)
         tampered[rng.randrange(len(tampered))] ^= 1 << rng.randrange(8)
-        selects = [case_of(d, _mutated(rng, d, name)[0], d.read) for name in DRAW_MUTATIONS
+        selects = [case_of(d, _mutated(rng, d, name)[0], d.read) for name in SAMPLE_MUTATIONS
                    if name not in ("before", "unread", "read-tampered", "other-after")]
         selects.append(case_of(d, d.segment.to_json(), bytes(tampered)))
         elsewhere = Drawn(rng, reads=reads)
@@ -8797,9 +8832,9 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
                 assert out.get("step") == "select" and out.get("codes") in (["coins"], ["family"]), out
 
 
-def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
+def test_the_audit_reads_its_sample_from_the_challengers_coins(server):
     """A one-stage audit whose verifier names the auditor's challenger (`challenger`, with `window_root`) reads its sample's
-    coins through `Challenger.drawCoins` (`coins.draw_coins`): under the verifier's key, on its window, of its family,
+    coins through `Challenger.sampleCoins` (`coins.draw_coins`): under the verifier's key, on its window, of its family,
     released after the docket's digest, Lean's the Python's. The sample from those coins is accepted; it is rejected
     for another sample, the evidence's coins carrying a key (`coins_reason`'s form, where the prover named the key), none,
     coins under another key, on another window, of another family, opened after another digest, each mutation of the
@@ -8868,7 +8903,7 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
                     audit_of(elsewhere, drawn_from(elsewhere.read),
                              elsewhere.evidence(elsewhere.segment.to_json())),
                     audit_of(d, draw, coins, challenger=None)]
-        rejected += [audit_of(d, draw, {**coins, "segment": _mutated(rng, d, name)[0]}) for name in DRAW_MUTATIONS
+        rejected += [audit_of(d, draw, {**coins, "segment": _mutated(rng, d, name)[0]}) for name in SAMPLE_MUTATIONS
                      if name not in ("before", "unread", "read-tampered", "other-after")]
         for shape in ("before", "later"):
             again = Drawn(rng, after=after, reads=reads, **{shape: True})

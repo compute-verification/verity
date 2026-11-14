@@ -51,7 +51,7 @@ namespace TwoGuard
 open SpotFlock
 
 /-- `SpotFlock.secondDraw` at the stages' bytes `s₀` and `s₁`. -/
-def secondDrawAt (h : Held) (s₀ s₁ : ByteArray) : Option Json :=
+def secondSampleAt (h : Held) (s₀ s₁ : ByteArray) : Option Json :=
   match Spot.Select.selectSecond (h.reg.sample s₀) h.reg.ns h.reg.ks s₁ with
   | .ok (draw, _) => some draw
   | .error _ => none
@@ -64,7 +64,7 @@ def ownOfAt (h : Held) (st : Roots) (rec draw : Json) (s₀ : ByteArray) : Spot.
 
 /-- `SpotFlock.readsOk` at the stages' bytes. -/
 def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (s₀ s₁ : ByteArray) : Bool :=
-  match decode x, jsonMsg m₁, secondDrawAt h s₀ s₁, FlockDeploy.decode xS with
+  match decode x, jsonMsg m₁, secondSampleAt h s₀ s₁, FlockDeploy.decode xS with
   | some st, some rec, some draw, some w =>
     let own := ownOfAt h st rec draw s₀
     Spot.SecondStage.interiorOrderOk own && Spot.SecondStage.namesOk own &&
@@ -401,7 +401,7 @@ def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Op
   let interiorNames ← namesOf held "interior_names"
   if hz : 0 < refs.size ∧ (List.range refs.size).all (fun t => zkOk (refs.getD t [])) = true then
     let verifier : Spot.Registration.Verifier :=
-      { program := P, query := queryJ, law := .null, workTable := table, scheme := "", ports := #[], leafLayer := none,
+      { program := P, query := queryJ, samplingDesign := .null, workTable := table, scheme := "", ports := #[], leafLayer := none,
         anchors := #[], log := #[], partition := none }
     let h₀ : Held :=
       { desc, vus, query, k, names, links, wires, rows, boundaryNames, interiorNames, xS₀ := refAt refs,
@@ -525,7 +525,7 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
   let xs := xs?.getD []
   let (rec?, _) ← timed "jsonMsg m₁" (fun _ => jsonMsg m₁) (fun r => b r.isSome)
   let _ ← timed "recordsOk" (fun _ => recordsOk h x m₁) b
-  let (sd, _) ← timed "secondDraw" (fun _ => secondDrawAt h s₀ s₁) fun d => (d.map (·.compress)).getD "none"
+  let (sd, _) ← timed "secondDraw" (fun _ => secondSampleAt h s₀ s₁) fun d => (d.map (·.compress)).getD "none"
   let _ ← timed "replay sample" (fun _ => h.reg.sample s₀) toString
   let (refs, _) ← timed "refsOf" (fun _ => refsOf h) (fun r => toString r.size)
   let (refReads, _) ← timed "refRegisteredOf" (fun _ => refRegisteredOf h) fun r =>

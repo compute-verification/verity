@@ -45,14 +45,14 @@ committed coins, which read the tape and what was public before the session).
   simulator doesn't read, so the second step follows the first.
 * `tablesOK_of_sessions`: V*'s tables pass `CoinedOK` where each is `coinedOf` at a table of `verify --zk`'s
   hidden-output session of the session's data at a sample, where it sets that table up (`coinedOf_setup_of`; every such
-  setup avoids the mask slot, `FailClosed.DrawSetupZHJ.avoidsMask`).
+  setup avoids the mask slot, `FailClosed.SampleSetupZHJ.avoidsMask`).
 * `vstar_outer_zk`: `_hOuter` at `Sessions.view` and `Sessions.sim`, with `ε_o = errAt δ`, at the ZK server's
   commitments under live inner coins (`zkServerCommits`); `Flock.SecurityProofs.RecursiveZkServerPrivate`
   (`Proofs.Flock.Recursive.ZkServerZK`) takes it at `proverExe` and the pinned key's hiding gap, with no hypothesis on
   the abort.
 
 Left to the instance at V*'s staging: that each session's table is `coinedOf` at a table of its data and sample (with a
-`ZkHidden.DrawSetupZHJ` there), its sizes fixed by V*'s statement (`hz`, `hR`, `hS`), and the honest witnesses
+`ZkHidden.SampleSetupZHJ` there), its sizes fixed by V*'s statement (`hz`, `hR`, `hS`), and the honest witnesses
 (`Honest`, which (ii)'s `honest` carries).
 -/
 
@@ -207,12 +207,12 @@ end Sessions
 
 /-- **V*'s session tables pass `CoinedOK`** where each is `coinedOf` at a table of `verify --zk`'s hidden-output session
 of the session's data at a sample, where `verify --zk` sets that table up (`coinedOf_setup_of`); every such setup is a
-`MaskSetup` (`ZkHidden.maskSetup_of_setupHidden`) and avoids the mask slot (`FailClosed.DrawSetupZHJ.avoidsMask`). -/
+`MaskSetup` (`ZkHidden.maskSetup_of_setupHidden`) and avoids the mask slot (`FailClosed.SampleSetupZHJ.avoidsMask`). -/
 theorem tablesOK_of_sessions {Ctx Pub : Type} (V : Sessions Ctx Pub) (P : LigProver) (Vs : Fin V.S → VStmt)
     {Reg' : Type} (D : Pub → (Fin V.n₂ → ZkView.Bits × ByteArray) → (j : Fin V.S) → (Vs j).OuterD Reg')
     (draw : (j : Fin V.S) → Pub → (Fin V.n₂ → ZkView.Bits × ByteArray) → Finset (Fin (Vs j).nv))
     (tab : ∀ j pc l, Fin (nTab (D pc l j).I))
-    (y : ∀ j pc l, ZkHidden.DrawSetupZHJ (inputsJ (D pc l j).I (tab j pc l)) (Vs j).mPts
+    (y : ∀ j pc l, ZkHidden.SampleSetupZHJ (inputsJ (D pc l j).I (tab j pc l)) (Vs j).mPts
       (partS (D pc l j).I ((D pc l j).dj (draw j pc l)) (draw j pc l) (tab j pc l))
       (drawJ (D pc l j).I ((D pc l j).dj (draw j pc l)) (tab j pc l)))
     (hC : ∀ j pc l, V.C j pc l =
@@ -221,10 +221,10 @@ theorem tablesOK_of_sessions {Ctx Pub : Type} (V : Sessions Ctx Pub) (P : LigPro
   intro j pc l
   rw [hC j pc l]
   exact (coinedOf_setup_of P _ (y j pc l).x.st (y j pc l).x.wf.1
-    (by rw [ZkHidden.tableZHJ, dif_pos ⟨y j pc l⟩, ZkHidden.DrawSetupZHJ.table_eq _ (y j pc l)]; rfl)
+    (by rw [ZkHidden.tableZHJ, dif_pos ⟨y j pc l⟩, ZkHidden.SampleSetupZHJ.table_eq _ (y j pc l)]; rfl)
     (ZkHidden.maskSetup_of_setupHidden ((FlockSoundness.Discharge.Exec.tagsAt_typed _ _ _).trans
       ((FlockSoundness.Discharge.ZkExec.zkTags_typed _).trans (D pc l j).ht)) (y j pc l).x.h)
-    (FailClosed.DrawSetupZHJ.avoidsMask (y j pc l))).2.2.2.2.2
+    (FailClosed.SampleSetupZHJ.avoidsMask (y j pc l))).2.2.2.2.2
 
 /-- **V*'s sessions give (ii) its `_hOuter`**, with `ε_o = errAt δ` at any hm96 hiding bound `δ`: the view
 `Sessions.view` at the honest context, the simulator `Sessions.sim` at the public context `pubS` reads (the owed

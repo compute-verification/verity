@@ -28,7 +28,7 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit
 
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[6] / "benchmarks" / "prove_path")))
 from verity.protocols.proofs.spot.prover.cost import class_rows as CR
@@ -63,7 +63,7 @@ def test_tinys_census_rebuilt_is_class_rows_total_and_its_private_bodies_its_byt
     assert sum(u.compressions(W.CENSUS) for u in us) == doc["total"]["compressions"]
     t = doc["total"]
     rows = sum(v for k, v in t.items() if k.startswith("rows."))
-    assert W.RegistrationSize.of(us, False).private_bytes == sum(v for k, v in t.items() if k.startswith("bytes.")) + \
+    assert W.DocketSize.of(us, False).private_bytes == sum(v for k, v in t.items() if k.startswith("bytes.")) + \
         rows * W.SALT_BYTES
     assert sum(u.n * (u.ins + u.out) for u in us) == rows
 

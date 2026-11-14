@@ -21,7 +21,7 @@ This module takes the order from the ledger the check read, in three steps.
   evidence carries holds an open of the first window for a session `a`, an `end` of `a`, an open of the second window
   for a session `b` and a `reserve` of `b`, the end's `seq` below the reserve's. It is a hypothesis of `order_binds`
   and `cutBound_order`, and `CutAccept.orderShown` derives it from the form's acceptance.
-* **Each of those lines is the device's** (`line_device`, `entry_device`): a line of a ledger `drawCoins` accepted is
+* **Each of those lines is the device's** (`line_device`, `entry_device`): a line of a ledger `sampleCoins` accepted is
   signed under the key (`Window.verifyLedger_sig`), so the device's own ledger holds a line with the same text apart
   from its signature, or the finder outputs a break from that session's record. `Window.run_opens` is this for the
   one open a sample reads. Two lines of one text apart from their signatures have one kind, one `seq`, one window root
@@ -246,10 +246,10 @@ theorem line_device {ls : Array Json} {l : Json} {e : LedgerEntry} {m : ByteArra
       · exact .inr b
   · exact .inr b
 
-/-- **Every entry of a ledger `drawCoins` accepted is a line of it, signed under the key**: `drawCoins` reads its
+/-- **Every entry of a ledger `sampleCoins` accepted is a line of it, signed under the key**: `sampleCoins` reads its
 session through `checked`, and `verifyLedger` checked each entry's signature over its message
 (`Window.verifyLedger_sig`). -/
-theorem lines_signed {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ)
+theorem lines_signed {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ)
     {e : LedgerEntry} (he : e ∈ Properties.Pouw.LiveSalt.entries (Spot.getD coins "ledger")) :
     ∃ ls l m, Spot.getD coins "ledger" = .arr ls ∧ l ∈ ls.toList ∧ ledgerEntry? l = some e ∧
       ledgerMessage (ident key.pub) e.entry = .ok m ∧ LmsVerifies key m e.sig := by
@@ -272,9 +272,9 @@ theorem lines_signed {w : String} {after ξ : ByteArray} (h : drawCoins key w la
     · simp at he
   exact ⟨ls, l, m, hc, hl, hle, hm, Properties.Challenger.ChallengePhase.lms_of_check hv⟩
 
-/-- **An entry of a ledger `drawCoins` accepted is one of the device's own ledger's**, with its kind, its `seq`, its
+/-- **An entry of a ledger `sampleCoins` accepted is one of the device's own ledger's**, with its kind, its `seq`, its
 window root and, an open, an end or a reserve, its session; or the finder outputs a break. -/
-theorem entry_device {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ)
+theorem entry_device {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ)
     {e : LedgerEntry} (he : e ∈ Properties.Pouw.LiveSalt.entries (Spot.getD coins "ledger")) :
     (∃ line ∈ dev.ledger key.pub, ∃ e', ledgerEntry? line = some e' ∧ e'.kind = e.kind ∧ e'.seq = e.seq ∧
         openedRoot e' = openedRoot e ∧
@@ -326,12 +326,12 @@ def OrderShown (θ : ByteArray) : Prop :=
         o₂.kind = "open" ∧ openedRoot o₂ = w₂ ∧ rv.kind = "reserve" ∧ rv.session = o₂.session ∧ e₁.seq < rv.seq
 
 /-- **The device printed the play's log in its two sessions, or the record carries a break**, on two windows: where
-`drawCoins` accepted the coin evidence `coins` under `key`, its ledger shows an open of `w₁`, an `end` of that open's
+`sampleCoins` accepted the coin evidence `coins` under `key`, its ledger shows an open of `w₁`, an `end` of that open's
 session, an open of `w₂` and a `reserve` of that open's session, the end's `seq` below the reserve's, and the device
 printed the log in its ledger's order (`PrintsInOrder`). Each of the four lines is the device's own (`entry_device`),
 so its ledger opens the two windows and ends the first's session before it reserves the second's. -/
 theorem printsTwo_of_order {dev : History} {key : ChallengerKey} {label : String} {coins : Json} {w : String}
-    {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) {w₁ w₂ : String} (hne : w₁ ≠ w₂)
+    {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ) {w₁ w₂ : String} (hne : w₁ ≠ w₂)
     {log : List Release} (hP : PrintsInOrder dev w₁ w₂ log) {o₁ e₁ rv o₂ : LedgerEntry}
     (ho₁ : o₁ ∈ Properties.Pouw.LiveSalt.entries (Spot.getD coins "ledger"))
     (he₁ : e₁ ∈ Properties.Pouw.LiveSalt.entries (Spot.getD coins "ledger"))
@@ -442,8 +442,8 @@ theorem order_binds (dev : Exchange → History) (θ : ByteArray) (hF : FirstRea
       | exact hcom
       | simpa [bind, Except.bind] using hcom
   obtain ⟨d₂, hd₂⟩ := oneStageZk_source h7
-  have h6 : secondDraws p e = some d₂ := by
-    unfold secondDraws
+  have h6 : secondSamples p e = some d₂ := by
+    unfold secondSamples
     rw [h5]
     first
       | exact hd₂

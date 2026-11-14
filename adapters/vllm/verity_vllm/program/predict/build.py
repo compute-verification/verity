@@ -41,8 +41,8 @@ from verity.circuits.types import Array, RecordType, Type, Value
 from verity.definitions.replay import replayer
 
 from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
-from verity_vllm.program.inputs import check_params
-from verity_vllm.program.prune import dead_free as dead_free_form
+from verity_torch.inputs import check_params
+from verity_torch.prune import dead_free as dead_free_form
 
 from .common import (
     Unexpressible,
