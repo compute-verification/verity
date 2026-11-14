@@ -7,6 +7,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceRev1Gap
 import Proofs.Pouw.Prob
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # TT_OUT over U alone: it asserts more than the (C̃, U) row, and g from it

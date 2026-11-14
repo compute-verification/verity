@@ -8,6 +8,7 @@ public import Definitions.Pouw.Guarantees.Eps1
 public import Definitions.Pouw.Guarantees.Game
 public import Definitions.Pouw.Guarantees.NCP
 public import Definitions.Pouw.Guarantees.OnsiteFreed
+public import Definitions.Pouw.Guarantees.PearlCS8
 public import Definitions.Pouw.Guarantees.PearlCDev
 public import Definitions.Pouw.Guarantees.PearlCTileCheck
 public import Definitions.Pouw.Guarantees.Receipt
