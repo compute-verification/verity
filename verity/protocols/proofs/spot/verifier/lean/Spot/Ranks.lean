@@ -1,5 +1,5 @@
 /-
-**A joined circuit's ranks** (`verity.commitments.windows.interface.Ranks`, the record's `ranks`): the record of a node's
+**A joined circuit's ranks** (`verity.commitments.periods.interface.Ranks`, the record's `ranks`): the record of a node's
 circuit joined from its ranks states, in rank order, each rank's window by its circuit's digest `H_r` (the SHA-512 of the
 canonical JSON of its record less its run's fields, `circuit_of`), its units of each template and the count of the joined
 wires that are its own. Serving commits one window a rank, never the join; the verifier reads the joined record as its

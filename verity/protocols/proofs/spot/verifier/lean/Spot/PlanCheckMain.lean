@@ -8,7 +8,7 @@ public import Spot.TwoStageCheck
 /-!
 # `spot-plancheck`: the planner's designs, checked
 
-One JSON object a line on stdin, one answer a line on stdout (`verity.core.protocols.spot.plancheck`). Every
+One JSON object a line on stdin, one answer a line on stdout (`verity.protocols.proofs.spot.prover.plancheck`). Every
 number is a string, a natural number or a rational `"num/den"`, so none passes through a float:
 
 * `{"kind": "leak", "units", "width", "q": "num/den", "count", "delta"}` answers `{"bound": "num/den"}`, what

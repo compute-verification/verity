@@ -8,7 +8,7 @@ public import Mathlib.Tactic.FinCases
 # Serving-block layouts: the honest instance and the counter-examples (trusted)
 
 The instances the honest and nontrivial lemmas of `Accounting.Guarantees.ServingBlocks` are stated at
-(`Security/Definitions/Slowdown/Guarantees/ServingBlocks/Witnesses.lean`). Each is a small Boolean declaration with its
+(`security/Definitions/Slowdown/Guarantees/ServingBlocks/Witnesses.lean`). Each is a small Boolean declaration with its
 registered input gates, a partition into serving blocks and the dark remainder, its inference blocks, counted operations
 and caps. In each, the inference blocks are the serving blocks themselves (`refl`), one inference block per serving block,
 and a constant is a registered input gate.

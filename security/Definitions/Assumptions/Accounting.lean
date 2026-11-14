@@ -50,7 +50,7 @@ bits costs at least `(2x/b)·c_root`. A completion measured below that, by a fac
 term divided by `θ`.
 
 **The stated instance is the deployed codec's**, Sloth over `p = 2^1024 − 105`, masked, at `k = 3` (`codec.DEFAULT`
-of `verity/core/protocols/poub/codec.py`, as ruled; `k = 2` at the same width the
+of `verity/protocols/accounting/poub/verifier/codec.py`, as ruled; `k = 2` at the same width the
 fallback): `WorkHardness 1024 3 c_root cost`, `x` of a word's 1,024 bits at `(3x/b)·c_root`. The `Prop` reads the codec
 only through `b`, `rounds` and `c_root`, so the mask changes no statement, only what the price rests on. The
 guarantees hold at every `rounds`; `k = 3` is the one they are read at.
@@ -116,7 +116,7 @@ values `p` and above (`2^n − p` of `2^n`, at `p = 2^n − c`). Not covered: a 
 choice among the registrations, which the one live registration rules out; and a layout chosen from the encodings
 after the coins, which the stacked guarantees fix before. Under the seed's key alone a writer picks an appended
 block's encoding by writing its decoding: measured in
-`verity/core/protocols/poub/tests/test_key_binding.py`, which also fails 64 tries under the bound key and
+`verity/protocols/accounting/poub/verifier/tests/test_key_binding.py`, which also fails 64 tries under the bound key and
 keys a block under each coin apart. -/
 def KeyBinding {Ω Ca Ch B : Type} [Fintype Ω] [Fintype Ca] [Fintype B] (T M : ℕ) (δ : ℝ≥0∞)
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → B) : Prop :=

@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The coin rules give (H-μ)'s view independence (trusted)
 
-The statements, over `Definitions/Pouw/CoinFlow.lean`. The proofs are in `Security/Proofs/Pouw/CoinFlow/`.
+The statements, over `Definitions/Pouw/CoinFlow.lean`. The proofs are in `security/Proofs/Pouw/CoinFlow/`.
 Each holds of every Program the Build admits (`FlowGraph.admits`), with no hypothesis on its nodes' operations.
 
 * `ViewIndependent`, from rule (b): a noise injection's fresh coins reach no value outside its forward cone. Every node

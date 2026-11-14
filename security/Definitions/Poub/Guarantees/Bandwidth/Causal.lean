@@ -20,7 +20,7 @@ constraints on such a strategy:
 - the oracle is a location the chip asks at most `qt` queries a tick (`OracleLocation`).
 
 The chip's state is charged `M + 1` bits, its length included, so at `e = 0` the row's floor is
-`k·b − M_chip − 1 − c_side − λ`. The proofs are in `Security/Proofs/Poub/Bandwidth/Causal.lean` and
+`k·b − M_chip − 1 − c_side − λ`. The proofs are in `security/Proofs/Poub/Bandwidth/Causal.lean` and
 `CausalJoint.lean`: the chip of such a run is the tick transducer `Ticked.Chip`, whose bounds are the game's
 `AuditInteractive`, `AuditInteractiveRO` and `AuditJoint`.
 -/

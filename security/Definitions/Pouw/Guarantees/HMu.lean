@@ -5,7 +5,7 @@ public import Definitions.Pouw.HMu
 /-!
 # (H-μ⁺) from the coins: Lemma B, the point mass of fresh noise, and Lemma B′ for persistent patterns (trusted)
 
-The statements, over `Definitions/Pouw/HMu.lean`. The proofs are in `Security/Proofs/Pouw/HMu/`.
+The statements, over `Definitions/Pouw/HMu.lean`. The proofs are in `security/Proofs/Pouw/HMu/`.
 
 * `CoinPointMass`: a skipped value `a + Σ_j [e_j]·v_j` with `u` fresh uniform bits `e` and nonzero integer weights has
   probability at most `C(u, ⌊u/2⌋)/2^u` at any value, given any view that doesn't read `e` (Erdős's Littlewood–Offord
