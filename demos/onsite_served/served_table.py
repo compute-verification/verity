@@ -37,6 +37,8 @@ from typing import Any
 from verity import config as K
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
+from verity.protocols.accounting.certifier.verifier import parties as NC
+from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.accounting.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
@@ -55,7 +57,7 @@ ONSITE = "verity/onsite/v0"
 BINDINGS = "bindings.json"
 WORKERS, FIREWALL, PROVER, VERIFIER = SP.WORKERS, SP.FIREWALL, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_CHALLENGER = SP.CHALLENGER, WP.CHALLENGER
-BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", "network-certifier"
+BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", NC.NETWORK_CERTIFIER
 #: served_verdicts.py's record reads each piece's answer by its runner name
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
@@ -118,7 +120,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
-    Component("inference-only", SP.IDS["inference-only"], parties=(_VERIFIER,), requires=("sampled-proofs",)),
+    Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(_MEMORY_CHALLENGER, _PROVER, _VERIFIER),
               channels=(Channel(PROVER, MEMORY_CHALLENGER, ("Setup", "Response")),
                         Channel(MEMORY_CHALLENGER, PROVER, ("Challenge",), carries_coins=True),
@@ -131,10 +133,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                                 after=("Register",)),
                         Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
               needs=frozenset({"receipts"})),
-    Component("certifier", SP.IDS["certifier"],
-              parties=(Role(NETWORK_CERTIFIER, "auditor", needs=("coins", "signing-key")), _VERIFIER),
-              channels=(Channel(NETWORK_CERTIFIER, WORKERS, ("out-opening",)),
-                        Channel(NETWORK_CERTIFIER, VERIFIER, ("out-record",))),
+    Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=((CHALLENGER, NETWORK_CERTIFIER),)),
     Component("wipe", "verity/wipe/v0", parties=(*WP.MANIFEST.parties, _VERIFIER),
@@ -319,10 +318,12 @@ PARTIES: dict[str, dict[str, Piece]] = {
         VERIFIER: Piece("bandwidth", VERIFIER, CHECK, "PoUB's row"),
     },
     "certifier": {
+        WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the certifier's developer side: its front before the "
+                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece, the chain and the "
+                       "period check on the kept warden run", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
+                       binds=("gate",), hooks=_certifier_piece),
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate: its "
-                                 "warden in front of serve-openai before the requests (CERTIFIER_FRONT, which the served "
-                                 "window runs), and its piece, the chain and the period check on the kept warden run",
-                                 scripts=(CERTIFIER_PIECE,), binds=("gate",), hooks=_certifier_piece),
+                                 "warden in front of serve-openai before the requests"),
         VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),
     },
     "wipe": {
