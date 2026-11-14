@@ -26,7 +26,9 @@ differ in their id and subprotocols. Each composite's executable is the core CLI
 These are the only composites a verifier runs. `product IDS id | check | serve` (`verity/protocols/compose/verifier/onsite/CoreComposites.lean`,
 `Core.Composites.ofIds`), which `verity run`'s verifier runs over a configuration's subprotocols, is each composite's
 CLI for its subprotocols, in any order, and refuses every other set, since protocol soundness covers only onsite and
-`verity/remote/v1`: H1's `verity/remote/v0` is refused, and runs only as its development executable.
+`verity/remote/v1`: H1's `verity/remote/v0` is refused, and runs only as its development executable. Remote's plain
+sibling (`Core.Site.Registration.Composite.plain`, the inference-only policy's rows check in v0's place) is refused by
+name until its soundness is proved (`Core.Composites.plainRefusal`).
 
 Their security argument, layer by layer from one proof to the training slowdown, is the remote protocol's README
 (`verity/protocols/compose/verifier/remote/README.md`, "The security argument, end to end"); onsite shares its layers and adds its own subprotocols'.
