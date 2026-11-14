@@ -907,9 +907,15 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
             "cases": cases}
 
 
-#: how the ZK server's reason for a message it holds back opens (its Lean's own text), which the prover's record of its
-#: session gives as why it stopped (``prover_stopped``; live PROTOCOL.md, the ZK server's send check)
-ZK_SERVER_REFUSED = "FIREWALL-REFUSED"
+def zk_server_refused() -> str:
+    """How the ZK server's reason for a message it holds back opens (its Lean's own text, under the prover's name for
+    it, `rec_live.refused`), which the prover's record of its session gives as why it stopped (``prover_stopped``; live
+    PROTOCOL.md, the ZK server's send check)."""
+    from verity_flock import rec_live
+
+    return rec_live.refused("")
+
+
 #: how a Lean verdict's reason opens where a file of the session's (its record, a rep's proof) was not there to read
 #: (`FlockVerify`'s ``verify``): like a refusal at setup, which `a0.lean_refused` leaves out, the verifier read no proof
 NO_SESSION_FILES = "session files:"
@@ -953,10 +959,11 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
     record rejects, and the window was stopped where what it forges is. The caller says what that is, a false unit or
     (``read``) a registered read, and the window passes on the one check that calls for, never on another's:
 
-    * a false unit behind the ZK server (the summary names its binary), no proof of which may leave the prover:
+    * a false unit behind the ZK server (the summary's ``arm`` is ``fw``, which a5 writes where the sessions ran behind
+      its binary and nowhere else), no proof of which may leave the prover:
       ``no_proof_released``, the session of the member holding the forged unit (``member``; any sampled member's where
       None) has no proof in the verifier's record of it, and the prover's record gives the ZK server's refusal as why it
-      stopped (`session_proofs`, `ZK_SERVER_REFUSED`). The Lean verifier refuses that session too, for want of its files:
+      stopped (`session_proofs`, `zk_server_refused`). The Lean verifier refuses that session too, for want of its files:
       a verdict on no proof.
     * a false unit behind none (a plain audit), whose proof leaves, and Lean's own verdict must refuse it:
       ``lean_refused``, the Lean verifier refused a proof it read (`a0.lean_refused`, and not for want of the session's
@@ -972,7 +979,7 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
     ``sessions`` is what each session read records (`session_proofs`), and ``why`` the audit's reasons."""
     import a0
 
-    audit, behind, no_value = s.get("audit") or {}, bool(s.get("firewall")), {}
+    audit, behind, no_value = s.get("audit") or {}, s.get("arm") == "fw", {}
     record = json.loads((wdir / "audit.json").read_text()) if (wdir / "audit.json").is_file() else {}
     lean = {k: v for k, v in (record.get("verdicts") or {}).items() if k.startswith("lean-verify/") and v.get("accepted") is not True}
     on_proof = [k for k, v in lean.items() if a0.lean_refused(v) and not v["why"].startswith(NO_SESSION_FILES)]
@@ -983,12 +990,13 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
             f"{k}: {(v.get('why') or 'no reason given').split(chr(10), 1)[0]}" for k, v in sorted(lean.items()))
     dirs = sorted(wdir.glob("session-m*")) if member is None else [wdir / f"session-m{member}"]
     sessions = {d.name.removeprefix("session-"): session_proofs(d) for d in dirs}
-    released: bool | None = None
+    no_proof_released: bool | None = None
     if behind:
-        released = any(x["proofs"] == 0 and str(x["prover_stopped"] or "").startswith(ZK_SERVER_REFUSED) for x in sessions.values())
+        no_proof_released = any(x["proofs"] == 0 and str(x["prover_stopped"] or "").startswith(zk_server_refused())
+                                for x in sessions.values())
     else:
         no_value["no_proof_released"] = "the sessions ran behind no ZK server"
-    stopped = {"no_proof_released": released, "lean_refused": refused,
+    stopped = {"no_proof_released": no_proof_released, "lean_refused": refused,
                "read_refused": any(a0.lean_refused(v, READ_OPENS_NO_ROOT) for v in lean.values())}
     on = "read_refused" if read else "no_proof_released" if behind else "lean_refused"
     checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()), **(more or {}),

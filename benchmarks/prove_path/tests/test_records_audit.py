@@ -69,6 +69,14 @@ def _rate(window: Path) -> str:
     return f"stratified-rate:2/{json.loads((window / 'registration.json').read_text())['population']}"
 
 
+def _audit_args(w: SimpleNamespace) -> list[str]:
+    """`audit`'s arguments for written window ``w`` at the circuit it registers, on a development challenger's coins with
+    the negatives skipped: all but ``--out``."""
+    return ["audit", "--window", str(w.dir), "--law", _rate(w.dir), "--circuit", w.rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
+            "local", "--main", "m.txt"]
+
+
 COMPILER = {"name": "test/compiler", "digest": "cd" * 64}
 ADVICE = bytes(range(40))
 
@@ -811,9 +819,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setattr(RA, "output_class", output_class)
-    base = ["audit", "--window", str(got.dir), "--law", _rate(got.dir), "--circuit", got.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
-            "local", "--main", "m.txt"]
+    base = _audit_args(got)
     for extra, why in (([], "tie the audit to it"), (["--tie", str(got.w_file)], "give --tie-prefix"),
                        (["--tie", str(got.w_file), "--tie-prefix", "g/"], "0 times")):
         assert RA.main([*base, "--out", str(tmp_path / "refused"), *extra]) == 1
@@ -1122,9 +1128,7 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setattr(RA, "output_class", lambda circuit, given=(), own=frozenset(): [])
-    base = ["audit", "--window", str(got.dir), "--law", _rate(got.dir), "--circuit", got.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
-            "local", "--main", "m.txt"]
+    base = _audit_args(got)
     assert RA.main([*base, "--out", str(tmp_path / "out")]) == 1
     hist = seen["history"](got.publics)
     assert hist["registered"] == {"latent": got.table.root.hex()} == IF.registered_roots(got.rec["window"])
@@ -1465,7 +1469,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
         (out / "audit.json").write_text(json.dumps({"accepted": False, "verdicts": verdicts}))
         (out / "registration.json").write_text("{}")
         (out / "receipt.json").write_text(json.dumps({"registration": RA.R.digest({}), "verifier": A5.CHALLENGER}))
-        return {"draw": [0], "firewall": a.firewall, "checks_before_draw": {"registration": True},
+        return {"draw": [0], "arm": "fw", "checks_before_draw": {"registration": True},
                 "audit": {"accepted": False, "why": {"lean-verify/m0": why}}}, False
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
@@ -1473,9 +1477,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setenv("FC_ZK_SELF_CHECK", "stop")
-    args = ["audit", "--window", str(written.dir), "--law", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger", "local",
-            "--main", "m.txt"]
+    args = _audit_args(written)
 
     def run(*told: str) -> tuple[int, dict]:
         capsys.readouterr()
@@ -1483,11 +1485,18 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
         (line,) = (x for x in capsys.readouterr().out.splitlines() if x.startswith("RECORDS "))
         return rc, json.loads(line.removeprefix("RECORDS "))
 
+    def stopped(row: dict) -> dict:
+        """The forged verdict's three checks on where the window was stopped, its two others holding: the one on the
+        checks before the sample, and the record rejecting."""
+        checks = dict(row["forged"]["checks"])
+        got = {k: checks.pop(k) for k in ("no_proof_released", "lean_refused", "read_refused")}
+        assert list(checks.values()) == [True, True], row
+        return got
+
     rc, row = run("--forged-read")
     assert rc == 0 and row["ok"] is True and row["accepted"] is False, row
     assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (True, "read_refused"), row
-    assert row["forged"]["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": False,
-                                       "lean_refused": None, "read_refused": True}, row
+    assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
     summary = json.loads((tmp_path / "out--forged-read" / "summary.json").read_text())
     assert summary["ok"] is True and summary["forged"] == row["forged"] and summary["audit"]["accepted"] is False, summary
     rc, row = run()
@@ -1496,8 +1505,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     rc, row = run("--forged")
     assert rc == 1 and row["ok"] is False, row
     assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (False, "no_proof_released"), row
-    assert row["forged"]["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": False,
-                                       "lean_refused": None, "read_refused": True}, row
+    assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
     assert self_checks == ["stop", "stop", "skip"]
     with pytest.raises(SystemExit) as refused:
         RA.main([*args, "--out", str(tmp_path / "both"), "--forged", "--forged-read"])

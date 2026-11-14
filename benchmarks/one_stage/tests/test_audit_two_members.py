@@ -306,7 +306,7 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
                                 "lean_refused": None, "read_refused": False}, forged
     assert forged["passes_on"] == "no_proof_released" and forged["sessions"]["m0"]["prover_stopped"] is None, forged
     assert forged["sessions"]["m1"]["proofs"] == 0, forged
-    assert forged["sessions"]["m1"]["prover_stopped"].startswith(RA.ZK_SERVER_REFUSED), forged
+    assert forged["sessions"]["m1"]["prover_stopped"].startswith(RA.zk_server_refused()), forged
     assert forged["no_value"]["lean_refused"].startswith(
         f"the Lean verifier read no proof: lean-verify/m1: {RA.NO_SESSION_FILES}"), forged
     assert row["draw"] == [0, 1] and row["audit"]["accepted"] is False

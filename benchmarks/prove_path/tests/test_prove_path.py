@@ -278,15 +278,33 @@ def test_an_audit_listens_on_ports_no_other_audit_holds():
 
 
 #: the ZK server's reason for holding back a forged unit's proof, as the prover's record of the session gives it
-HELD = f"{RA.ZK_SERVER_REFUSED}: circuit: the constraints lincheck final fail on a rep's pads"
+HELD = RA.zk_server_refused() + "circuit: the constraints lincheck final fail on a rep's pads"
 #: the verifier's reason on a session whose proof never arrived
 NO_PROOF = "R7: no proof for circuit/rep0 (lone rep)"
 #: Lean's refusals on no proof: for want of a session's proof file, and at the statement's setup
 NO_FILE = "session files: no such file or directory (error code: 2)\n  file: session-m0/sessions/l0000/circuit.rep0.bin"
-AT_SETUP = "setup: U2: the draw's K is 4, not the verifier's 1"
+AT_SETUP = "setup: one statement per table expected"
 #: Lean's refusal of a forged unit's proof it read, and the verifier's own of the same proof
 ON_THE_PROOF = "lincheck: ConsistencyFailed (sumcheck-final)"
 PROOF_FAILS = 'Lincheck(ConsistencyFailed { which: "sumcheck-final" })'
+#: a forged window's three checks on where it was stopped (`records_audit.forged_outcome`)
+STOPPED = ("no_proof_released", "lean_refused", "read_refused")
+
+
+def _summary(sample: list[int], before: bool = True) -> dict:
+    """What a5's summary of an audit of one member of 8 units says of its sample, ``sample``, and of the checks before
+    it: each passed, but the registration's where not ``before``."""
+    return {"members": [{"k": 0, "template": "T", "n": 8, "base": 0}], "draw": sample,
+            "checks_before_draw": {"registration": before, "source": True}}
+
+
+def _stopped(row: dict) -> dict:
+    """A forged window's verdict ``row``'s three checks on where it was stopped (`STOPPED`), its two others holding: the
+    one on the checks before the sample, and the record rejecting."""
+    checks = dict(row["checks"])
+    stopped = {k: checks.pop(k) for k in STOPPED}
+    assert list(checks.values()) == [True, True], row
+    return stopped
 
 
 def _forged(d: Path, lean_why: str | None, *, zk_server: bool, proofs: int | None = 0, stopped: str | None = None,
@@ -310,18 +328,16 @@ def _forged(d: Path, lean_why: str | None, *, zk_server: bool, proofs: int | Non
     live = {"accepted": accepted, "why": m0_why or "", **({"prover_stopped": stopped} if stopped else {})}
     a0.run([sys.executable, "-c", f"print({'LIVE' + chr(9) + json.dumps(live)!r})"], session / "prove.log")
     verdicts = {"m0-verifier/m0": {"accepted": accepted, "why": m0_why},
-                "lean-draw/m0": {"accepted": accepted},
                 "lean-verify/m0": {"accepted": accepted, "why": lean_why, "of_record": True,
                                    "digest": "ab" * 64 if digest else None}}
     (d / "audit.json").write_text(json.dumps({"accepted": accepted, "verdicts": verdicts}))
-    return {"members": [{"k": 0, "template": "T", "n": 8, "base": 0}], "draw": list(sample),
-            "firewall": "the ZK server's binary" if zk_server else None, **({} if zk_server else {"plain": {"coins": "tree"}}),
-            "checks_before_draw": {"registration": before, "source": True},
+    return {**_summary(list(sample), before),
+            "arm": "fw" if zk_server else None, **({} if zk_server else {"plain": {"coins": "tree"}}),
             "audit": {"accepted": accepted, "verdicts": {k: v["accepted"] for k, v in verdicts.items()},
                       "why": {k: v.get("why") for k, v in verdicts.items() if not v["accepted"]}}}
 
 
-@pytest.mark.parametrize("lean_why, kw, ok, released, lean", [
+@pytest.mark.parametrize("lean_why, kw, ok, no_proof, lean", [
     (NO_FILE, {"stopped": HELD}, True, True, None),
     (AT_SETUP, {"stopped": HELD}, True, True, None),
     (NO_FILE, {}, False, False, None),
@@ -332,7 +348,7 @@ def _forged(d: Path, lean_why: str | None, *, zk_server: bool, proofs: int | Non
     (NO_FILE, {"stopped": HELD, "before": False}, False, True, None),
 ], ids=["no-proof-released", "lean-refused-at-setup", "the-prover-stopped-on-its-own", "no-session-recorded",
         "a-proof-left-and-lean-refused-it", "accepted", "forged-unit-not-sampled", "refused-before-the-sample"])
-def test_behind_the_zk_server_a_forged_rank_passes_on_no_proof_released(tmp_path, lean_why, kw, ok, released, lean):
+def test_behind_the_zk_server_a_forged_rank_passes_on_no_proof_released(tmp_path, lean_why, kw, ok, no_proof, lean):
     """Under `--zk` the ZK server holds a false member's proof back, so the rank passes on that: the verifier's record of
     the forged unit's session lists no proof and the prover's gives the ZK server's refusal. Lean's verdict on that session
     is on no proof, at setup or for want of the session's files, and is no value of ``lean_refused``; a proof that left
@@ -340,8 +356,10 @@ def test_behind_the_zk_server_a_forged_rank_passes_on_no_proof_released(tmp_path
     row = PP.forged_row(_forged(tmp_path, lean_why, zk_server=True, **kw), {"member": 0, "unit": 1}, tmp_path)
     checks = row["checks"]
     assert (row["ok"], row["passes_on"]) == (ok, "no_proof_released"), row
-    assert (checks["no_proof_released"], checks["lean_refused"]) == (released, lean), row
-    assert checks["rejected"] is (lean_why is not None) and checks["forged_unit_drawn"] is ("sample" not in kw)
+    assert (checks["no_proof_released"], checks["lean_refused"]) == (no_proof, lean), row
+    before, sampled = (v for k, v in checks.items() if k not in ("rejected", *STOPPED))
+    assert (before, sampled) == ("before" not in kw, "sample" not in kw), row
+    assert checks["rejected"] is (lean_why is not None)
     assert sorted(row["no_value"]) == (["lean_refused"] if lean is None else []), row
     if lean is None:
         assert row["no_value"]["lean_refused"] == f"the Lean verifier read no proof: lean-verify/m0: {lean_why.splitlines()[0]}"
@@ -394,8 +412,7 @@ def test_a_forged_window_of_several_members_passes_on_the_one_whose_proof_was_he
 
     s, d = _two_members(tmp_path)
     row = RA.forged_outcome(s, d)
-    assert row["ok"] is True and row["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": True,
-                                                   "lean_refused": None, "read_refused": False}, row
+    assert row["ok"] is True and _stopped(row) == {"no_proof_released": True, "lean_refused": None, "read_refused": False}, row
     assert row["sessions"] == {"m0": {"proofs": 2, "prover_stopped": None}, "m1": {"proofs": 0, "prover_stopped": HELD}}
     assert row["no_value"] == {"lean_refused": "the Lean verifier read no proof: lean-verify/m1: " + NO_FILE.splitlines()[0]}
     (d / "session-m1" / "prove.log").write_text((d / "session-m0" / "prove.log").read_text())
@@ -429,8 +446,7 @@ def test_a_session_the_audits_proof_server_proved_has_its_stop_in_that_servers_p
 
     assert RA.forged_outcome(s, d)["ok"] is False, "a window with no prover's log anywhere"
     row = served((m0, None), (m1, HELD))
-    assert row["ok"] is True and row["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": True,
-                                                   "lean_refused": None, "read_refused": False}, row
+    assert row["ok"] is True and _stopped(row) == {"no_proof_released": True, "lean_refused": None, "read_refused": False}, row
     assert row["sessions"] == {"m0": {"proofs": 2, "prover_stopped": None}, "m1": {"proofs": 0, "prover_stopped": HELD}}
     for lives in (((m0, None), (tmp_path / "other" / "session-m1", HELD)), ((m0, HELD), (m1, None)), ((m0, None),)):
         row = served(*lives)
@@ -473,14 +489,14 @@ def _served_as_registered(d: Path, whys: Mapping[int, str], *, accepted: bool | 
             "proof_sha512": [{"stream": f"circuit/rep{r}", "bytes": 9, "sha512": "cd" * 64} for r in range(2)],
             "verdict": {"accepted": True, "why": ""}}))
         lives.append(f"prove: a line of the prover's stderr\nLIVE\t{json.dumps({'accepted': True, 'label': str(session.resolve())})}\n")
-        verdicts |= {f"m0-verifier/m{k}": {"accepted": True, "why": None}, f"lean-draw/m{k}": {"accepted": True},
+        verdicts |= {f"m0-verifier/m{k}": {"accepted": True, "why": None},
                      f"lean-verify/m{k}": {"accepted": k not in whys, "why": whys.get(k), "of_record": True,
                                            "digest": "ab" * 64 if digest else None}}
     (d / "proof-server").mkdir()
     (d / "proof-server" / "prover-cpu.log").write_text("".join(lives))
     (d / "audit.json").write_text(json.dumps({"accepted": accepted, "verdicts": verdicts}))
-    return {"members": [{"k": k, "template": "T", "n": 8, "base": 8 * k} for k in range(3)], "draw": list(range(24)),
-            "firewall": "the ZK server's binary", "checks_before_draw": {"registration": before, "source": True},
+    return {**_summary(list(range(24)), before), "arm": "fw",
+            "members": [{"k": k, "template": "T", "n": 8, "base": 8 * k} for k in range(3)],
             "audit": {"accepted": accepted, "verdicts": {k: v["accepted"] for k, v in verdicts.items()},
                       "why": {k: v.get("why") for k, v in verdicts.items() if not v["accepted"]}}}
 
@@ -500,14 +516,13 @@ def test_a_window_whose_registered_read_opens_no_pinned_root_passes_on_lean_refu
     no_proof = {"lean_refused": "the Lean verifier read no proof: " + "; ".join(f"lean-verify/m{k}: {why}" for k, why in reads.items())}
     row = RA.forged_outcome(s, tmp_path, read=True)
     assert (row["ok"], row["passes_on"]) == (True, "read_refused"), row
-    assert row["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": False, "lean_refused": None,
-                             "read_refused": True}, row
+    assert _stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
     assert (row["sessions"], row["no_value"], row["why"]) == (left, no_proof, s["audit"]["why"]), row
-    plain = RA.forged_outcome({**s, "firewall": None}, tmp_path, read=True)
+    plain = RA.forged_outcome({**s, "arm": None}, tmp_path, read=True)
     assert (plain["ok"], plain["passes_on"]) == (True, "read_refused"), plain
     assert plain["checks"] == {**row["checks"], "no_proof_released": None}, plain
     for zk_server, on in ((True, "no_proof_released"), (False, "lean_refused")):
-        unit = RA.forged_outcome({**s, "firewall": s["firewall"] if zk_server else None}, tmp_path)
+        unit = RA.forged_outcome({**s, "arm": s["arm"] if zk_server else None}, tmp_path)
         assert (unit["ok"], unit["passes_on"]) == (False, on), unit
         assert unit["checks"]["read_refused"] is True and unit["sessions"] == left, unit
     (tmp_path / "session-m1" / "sessions" / "l0000" / "session.json").write_text(json.dumps({"proof_sha512": []}))
@@ -532,7 +547,7 @@ def test_a_forged_read_passes_on_nothing_but_lean_refusing_at_setup_a_read_that_
     """Told the window forges a registered read, the audit passes on one thing: a Lean verdict of its own that refuses a
     session on a row of a registered read not opening the verifier's root. It does not pass where Lean refused nothing,
     refused only for want of a session's files, refused a proof it read, or refused at setup on something else: the
-    sample, or the registered reads where the verifier held no root to open a row against. A reason a0 wrote in place of
+    statement's tables, or the registered reads where the verifier held no root to open a row against. A reason a0 wrote in place of
     a verdict Lean never gave is not Lean's refusal. Nor does the refusal pass a record that accepts, or a window a check
     before the sample failed."""
     import records_audit as RA
@@ -551,8 +566,7 @@ def test_a_false_units_record_does_not_pass_as_a_forged_read(tmp_path):
     s, d = _two_members(tmp_path)
     row = RA.forged_outcome(s, d, read=True)
     assert (row["ok"], row["passes_on"]) == (False, "read_refused"), row
-    assert row["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": True, "lean_refused": None,
-                             "read_refused": False}, row
+    assert _stopped(row) == {"no_proof_released": True, "lean_refused": None, "read_refused": False}, row
     assert RA.forged_outcome(s, d)["ok"] is True
 
 
