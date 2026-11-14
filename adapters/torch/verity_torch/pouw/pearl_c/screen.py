@@ -55,7 +55,7 @@ def scatter_into(x: Any, alpha: Any, aux: Any, rows: int, flags_to: Any, leaves:
     pair is row at[i]'s, of x and of its α and (s, ρ)."""
     import torch
 
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c.screen_kernels import scatter
+    from verity_torch.pouw.pearl_c.screen_kernels import scatter
     k, n, B = x.shape[1], leaves.numel(), SCATTER_BLOCK
     scatter[(rows - (-n // B) + 1,)](x, alpha.view(torch.float32), aux.view(torch.float32), rows, k, len(range(0, k, C.S5_STRIDE)),
                                      P.SIGMA_MIN, BAND, flags_to, leaves, leaves_to, root, roots_to, offs, n, root.numel(),
@@ -68,7 +68,7 @@ def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:
     import torch
     rows, k = x.shape
     if fused:
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c.screen_kernels import screen as kernel
+        from verity_torch.pouw.pearl_c.screen_kernels import screen as kernel
         launch(kernel, rows, (x, alpha.view(torch.float32), aux.view(torch.float32), out, k, len(range(0, k, C.S5_STRIDE)),
                               P.SIGMA_MIN, BAND), SCATTER_BLOCK)
     else:

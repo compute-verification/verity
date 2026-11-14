@@ -106,14 +106,14 @@ import verity.protocols.accounting.pouw.prover.serving.h1.live as LV
 import verity.protocols.accounting.pouw.prover.serving.h1.model_key as MK
 import verity.protocols.accounting.pouw.prover.serving.h1.prover as PV
 import verity_vllm.protocols.pouw.h1_ranks as PHR
-import verity.protocols.accounting.pouw.prover.serving.h1.receipts as RC
+import verity_torch.pouw.h1.receipts as RC
 import verity.protocols.accounting.pouw.prover.serving.h1.registered as NR
-import verity.protocols.accounting.pouw.prover.serving.h1.registered_device as RGD
+import verity_torch.pouw.h1.registered_device as RGD
 import verity.protocols.accounting.pouw.prover.serving.h1.requests as RQ
 import verity.protocols.accounting.pouw.prover.serving.h1.served as SV
 import verity.protocols.accounting.pouw.prover.serving.h1.served_files as SF
 import verity.protocols.accounting.pouw.prover.serving.h1.static as ST
-import verity.protocols.accounting.pouw.prover.serving.h1.tables_device as TBD
+import verity_torch.pouw.h1.tables_device as TBD
 import verity.protocols.accounting.pouw.prover.serving.h1.window as PHW
 import verity.protocols.accounting.pouw.prover.serving.h1.words as W
 from tests.protocols import challenger_host as CH

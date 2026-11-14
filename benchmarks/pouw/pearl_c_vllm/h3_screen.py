@@ -49,7 +49,7 @@ def capture(args) -> int:
     from verity.protocols.accounting.pouw.verifier import verifier
     from verity.protocols.accounting.pouw.verifier.coins import Challenger
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     out, dev = Path(args.out), torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261006)

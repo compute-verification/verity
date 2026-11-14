@@ -27,7 +27,7 @@ from collections.abc import Callable
 from typing import Any
 
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import ROW_ALIGN
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.graphs import GRAPH_ROWS
+from verity_torch.pouw.pearl_c.graphs import GRAPH_ROWS
 
 __all__ = ["WholeStep"]
 

@@ -27,16 +27,16 @@ from typing import Any, cast
 
 import numpy as np
 
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.ends import _RunState, _Stages
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import (
+from verity_torch.pouw.pearl_c.ends import _RunState, _Stages
+from verity_torch.pouw.pearl_c.host import (
     _Driver,
     _event,
     _Lane,
     _zeros,
     torch_uint8,
 )
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.screen import scatter_into
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.whole_calls import WholeCall, WholeCalls
+from verity_torch.pouw.pearl_c.screen import scatter_into
+from verity_torch.pouw.pearl_c.whole_calls import WholeCall, WholeCalls
 
 __all__ = ["GRAPH_ROWS"]
 

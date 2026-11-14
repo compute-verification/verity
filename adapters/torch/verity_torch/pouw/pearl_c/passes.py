@@ -18,7 +18,7 @@ from typing import Any
 
 from verity.protocols.accounting.pouw.verifier.protocol import CALL_RANGE
 
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.ends import _RunState
+from verity_torch.pouw.pearl_c.ends import _RunState
 
 #: vLLM's GPU model runner modules (V1's and Model Runner V2's), each with its ``GPUModelRunner`` (as `store.binder.RUNNERS`)
 MODEL_RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")

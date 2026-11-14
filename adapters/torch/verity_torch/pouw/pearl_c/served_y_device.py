@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import _bytes, _put, _stream, _zeros
+from verity_torch.pouw.pearl_c.host import _bytes, _put, _stream, _zeros
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.served_y import (
     Y_CHECK_ROWS,
     chunk_rows,

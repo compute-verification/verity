@@ -25,7 +25,7 @@ from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 
 from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
-from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
+from verity_torch.pouw.h1 import receipts as RC
 from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
 from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 

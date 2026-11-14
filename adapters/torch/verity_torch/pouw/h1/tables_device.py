@@ -253,7 +253,7 @@ def row_words(t: Any, m: int, dtype: str) -> np.ndarray:
 def _fuses(run: Any, records: Any) -> bool:
     """Whether the call's z table, over ``records`` (on the GPU), waits for its registered ``zy@<c>`` (`take_z`)."""
     from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
-    from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as D
+    from verity_torch.pouw.h1 import registered_device as D
 
     return (FUSE and getattr(run, "served", None) is not None and records.dim() == 2 and records.is_contiguous()
             and records.data_ptr() % 16 == 0 and D.zy_fits(*(int(d) for d in records.shape)) and NR.path() == "gpu"

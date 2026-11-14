@@ -3812,7 +3812,7 @@
     {"file": "verity/protocols/accounting/pouw/prover/serving/h1/window.py", "count": 41},
     {"file": "verity/protocols/accounting/pouw/prover/serving/lead/__init__.py", "count": 3},
     {"file": "verity/protocols/accounting/pouw/prover/serving/lead/feed.py", "count": 1},
-    {"file": "verity/protocols/accounting/pouw/prover/serving/pearl_c/host.py", "count": 2},
+    {"file": "adapters/torch/verity_torch/pouw/pearl_c/host.py", "count": 2},
     {"file": "verity/protocols/accounting/pouw/prover/serving/pearl_c/manifest.py", "count": 1},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/receipt_folds_r9.py", "count": 1},
     {"file": "verity/commitments/cuda/tests/cuda_build.py", "count": 3},
