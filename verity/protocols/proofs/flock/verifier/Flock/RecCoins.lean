@@ -745,13 +745,13 @@ def checkLink (st : Stmt) (own : Option (Array Registered.Port)) (files : Option
   if let some (l, N) := cap then
     if l == 0 then
       if lk.root.size != N then
-        throw s!"rec-coins: {unit}: holds {N} nodes of the cap, and the coin server's {lk.table} root_B has {lk.root.size}"
+        throw s!"rec-coins: {unit}: holds {N} nodes of the cap, and the challenger's live-coin part's {lk.table} root_B has {lk.root.size}"
     else
       match lk.tops[0]?.bind (·[l - 1]?), lk.tops[1]?.bind (·[l - 1]?) with
       | some (_, t0), some (_, t1) =>
         if t0.size + t1.size != N then
-          throw s!"rec-coins: {unit}: holds {N} nodes of level {l}'s tops, and the coin server's reps' level {l} tops have {t0.size + t1.size}"
-      | _, _ => throw s!"rec-coins: {unit}: the coin server's record has no level {l} top of both reps"
+          throw s!"rec-coins: {unit}: holds {N} nodes of level {l}'s tops, and the challenger's live-coin part's reps' level {l} tops have {t0.size + t1.size}"
+      | _, _ => throw s!"rec-coins: {unit}: the challenger's live-coin part's record has no level {l} top of both reps"
     return
   let some (LANES, H) := o | return
   let some own := own

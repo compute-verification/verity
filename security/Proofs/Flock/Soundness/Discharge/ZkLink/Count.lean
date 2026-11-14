@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.Binding.E2E
 
 `extraction_audit_count` at the compiled analysis `analysisZC`, in the shape of `Binding.flock_e2e_count_hm96` and of
 `zk_flock_count_execOS_m1` at the interactive-oracle layer:
-$$\Pr[\text{accept}\wedge\text{at least }K\text{ incorrect units}]\le\mathrm{miss}(K)+\varepsilon_{\rm ks}+\delta_{\rm link}
+$$\Pr[\text{accept}\wedge\text{at least }K\text{ incorrect proof blocks}]\le\mathrm{miss}(K)+\varepsilon_{\rm ks}+\delta_{\rm link}
 +\delta_{\rm tree},$$
 with
 * `miss(K)`: the sampling design's count curve (`zk_flock_countC`), or `SamplingDesign.stratified`'s at the live sample under A3
@@ -55,7 +55,7 @@ theorem zk_flock_countC {L : SamplingDesign n} (hlow : LoweringSoundZK A P planZ
 `Flock.Draw.drawWith`'s stratified sampling design on a byte source that A3 makes uniform (`hA3`, the challenger's coins), and an
 acceptance event `execAccept` whose excess over the compiled session's acceptance a rewinding at the serving roots
 covers (`tr`, under A1 through `hT`):
-`Pr[execAccept ∧ at least K incorrect units] ≤ miss(K) + ε_ks + ε_bind + δ_tree`, `miss(K)` `SamplingDesign.stratified`'s count
+`Pr[execAccept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind + δ_tree`, `miss(K)` `SamplingDesign.stratified`'s count
 curve. -/
 theorem zk_flock_countC_execOS (hlow : LoweringSoundZK A P planZ tab decode)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)

@@ -289,7 +289,8 @@ def test_an_unpaced_session_declares_its_snapshot_line_and_no_time_held_line(mon
     assert d["accepted"] and d["windows"] == 3
     assert d["gamma"]["spec"]["gamma"] == lg["spec"]["gamma"] and d["gamma"]["measured"]["gamma"] == lg["measured"]["gamma"]
     assert [w["window"] for w in d["gamma"]["spec"]["windows"]] == [0, 1, 2]
-    assert 0 <= d["memory"][ledger.SNAPSHOT]["epsilon"] <= 1 and d["memory"][ledger.SNAPSHOT]["delta"] > 0
+    assert 0 <= d["memory"][ledger.SNAPSHOT]["epsilon"] <= 1 and Fraction(d["memory"][ledger.SNAPSHOT]["delta"]) > 0
+    assert type(d["memory"][ledger.SNAPSHOT]["delta"]) is str, "the line of record states its δ exactly, as ratio text"
     assert "unpaced" in d["memory"][ledger.TIME_HELD]["refused"]
 
 
@@ -322,7 +323,7 @@ def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(mo
     assert [w["span_ns"] for w in ws] == [T] * (len(ws) - 1) + [span - (len(ws) - 1) * T]
     d = r["ledger"]["declared"]
     for form in ledger.FORMS:
-        assert 0 <= d["memory"][form]["epsilon"] <= 1 and d["memory"][form]["delta"] > 0, form
+        assert 0 <= d["memory"][form]["epsilon"] <= 1 and Fraction(d["memory"][form]["delta"]) > 0, form
 
 
 @pytest.mark.parametrize("k", [1, 3])

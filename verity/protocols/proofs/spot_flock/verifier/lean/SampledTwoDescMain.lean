@@ -97,7 +97,7 @@ def sizes (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : S
         let c := circAt cs t
         s!"template {t}: unitLog {c.unit.unitLog}, upv {c.upv}, inWords {c.unit.inWords}, " ++
           s!"constPos {c.unit.constPos}, unitIns {unitIns c}, outBits {outBits c}, " ++
-          s!"bound {Spot.OneStageZk.UNIT_CLASS_MAX}, memberOk {memberOk c}, requests {requests l}, " ++
+          s!"bound {Spot.OneStageZk.SIZE_CLASS_MAX}, memberOk {memberOk c}, requests {requests l}, " ++
           s!"cells {ns.getD t 0}, count {ks.getD t 0}, units {unitsAt (requests l) ns it.circuits.size t}"
     | none => []
   | _, _, _ => []

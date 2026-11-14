@@ -67,7 +67,7 @@ bound `Dj`, at `δ`, with the claim at `K`. Every field is a property of the dep
   certifier's record of the window (`obs`);
 * the claim at `K` is that every window meets `ExecutionPhaseGood` (`comm_iff`): that is the event whose secrets
   `MonitoringPeriodLeakAccepted`'s count bounds, so `K` is the bits of that count,
-  `log2 (#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i)`. No field ties the
+  `log2 (#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i)`. No field ties the
   number `K` to the count yet (the follow-up: `Properties.NetworkPeriod.rowsKBoundsCount`, that the rows form's `K` is
   at least `⌈log2⌉` of the count);
 * the statements are in the sampled audit's scope (`scope`): the registration refuses any other;

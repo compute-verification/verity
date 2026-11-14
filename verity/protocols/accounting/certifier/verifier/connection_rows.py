@@ -55,7 +55,7 @@ same call of the rule as the tables. No verifier reads it and no guarantee rests
 release each row of the head's tables is of.
 
 **A row's slots** (`check_slots`): the lengths row's proof block returns the whole row after its two words, and a
-proof block's outputs fit one public size class, so a row has at most (`UNIT_CLASS_MAX` − 2·16) / 96 slots. It is the
+proof block's outputs fit one public size class, so a row has at most (`SIZE_CLASS_MAX` − 2·16) / 96 slots. It is the
 one statement of that bound: a schedule with lengths rows whose slot stride releases more is refused when its
 parameters are built (`WardenParams`), and the proof block's shape refuses the same K.
 
@@ -152,7 +152,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
-from verity.circuits.partition_v2 import UNIT_CLASS_MAX
+from verity.circuits.partition_v2 import SIZE_CLASS_MAX
 from verity.commitments import hm96
 from verity.commitments.identity import identity_digest_sha512, tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
@@ -191,11 +191,11 @@ def check_slots(K: int, fix: Callable[[int], str] | None = None) -> None:
     slots"). `fix(most)` is what the caller's refusal says to change, given the most slots a row has; without one it
     says what any schedule changes."""
     bits = 8 * SLOT[LENGTHS].size
-    most = (UNIT_CLASS_MAX - BLOCK_WORDS * WORD_BITS) // bits
+    most = (SIZE_CLASS_MAX - BLOCK_WORDS * WORD_BITS) // bits
     if not 1 <= K <= most:
         raise ValueError(f"a lengths row is 1 <= K <= {most} slots, not K={K!r}: its proof block returns the whole "
                          f"row, {bits} bits a slot, after its {BLOCK_WORDS} words, in a public size class of at most "
-                         f"{UNIT_CLASS_MAX} bits; "
+                         f"{SIZE_CLASS_MAX} bits; "
                          + (fix(most) if fix else "a schedule's slot stride releases at most that many (fewer lanes "
                                                   "or a shorter stride)"))
 

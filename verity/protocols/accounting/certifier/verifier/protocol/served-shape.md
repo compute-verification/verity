@@ -3,7 +3,7 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 ## The replay at the served shape
 
 How a real served window becomes `CompileSlice_v1`'s input, and what the replay's parts cost at the shapes served
-windows need: `ReplayStep_v1` (`replay_step`), with `replay_chain`'s `ReplayAdvance` beside each step and `ReplayLoad`
+windows need: `ReplayStep_v1` (`verity_vllm.compiler.replay_step`), with `verity_vllm.compiler.replay_chain`'s `ReplayAdvance` beside each step and `ReplayLoad`
 once a window.
 
 **A served window as the slice's input** (`benchmarks/network_e2e/encodings/replay_vectors.py`):
@@ -65,10 +65,10 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
   proves every window at one class, padded with idle steps and empty slots, and that shows only the session's
   maximum: 8eb1's engine class in the table below.
 
-**Cost at the served shapes** (`replay_step.size` and `replay_chain.size`). A step proof block is `ReplayStep_v1` and
+**Cost at the served shapes** (`verity_vllm.compiler.replay_step.size` and `verity_vllm.compiler.replay_chain.size`). A step proof block is `ReplayStep_v1` and
 `ReplayAdvance`, and a window is P step proof blocks and one `ReplayLoad`. Under async scheduling a proof block is a
 `schedule()` and the update of the step before it, so P counts proof blocks, a few more than the steps. The AS and EW
-rows are the chain at those statics (`replay_chain.Shape`'s AS and EW), its rows `ReplayStep_v1`'s fields. EW =
+rows are the chain at those statics (`verity_vllm.compiler.replay_chain.Shape`'s AS and EW), its rows `ReplayStep_v1`'s fields. EW =
 bitlen(NB): the walk entries matter only with prefix caching, and while the no-eviction bound holds the table has N = NB
 − 1 entries. 8eb1 serves without prefix caching, so its EW = 17 row is what it would cost with it.
 
@@ -105,14 +105,14 @@ bitlen(NB): the walk entries matter only with prefix caching, and while the no-e
 **Splitting a window into proof blocks.** The slice holds a whole window in one proof block, its state rows wires
 between the steps. That works for 8eb1's windows: at its engine class a window's replay is at most 841,628 ANDs. The
 async heavy window is 651 step proof blocks of 739,906 ANDs, 4.8 × 10^8 in all, so it splits into the proof blocks
-`replay_chain` already defines, linked by its rows:
+`verity_vllm.compiler.replay_chain` already defines, linked by its rows:
 - **Proof block 0, the load:** `ReplayLoad`, 815,362 ANDs. It reads state rows 0 and 1 and window rows 0 and 1, and the
   window's K certified arrivals and D decisions at public positions.
 - **Proof block u = 1 … P, one step:** `ReplayStep_v1` and `ReplayAdvance`, 739,906 ANDs (647,330 and 92,576). It reads
   state rows u and u + 1 and window row 1. A step past the window's executed count is idle and costs the same.
 - **The links:** a window commits P + 2 state rows of 20,320 bits and two window rows of 37,024 bits, and makes
   3P + 4 = 1,957 reads, each a frame-v3 path of depth 10.
-- **k steps a proof block** (not built; `replay_chain` is k = 1 and the slice is k = P): a proof block reads state row j
+- **k steps a proof block** (not built; `verity_vllm.compiler.replay_chain` is k = 1 and the slice is k = P): a proof block reads state row j
   and writes row j + k, the k − 1 rows between them wires. That divides the state rows and reads by k at k step proof
   blocks a proof block.
 - **What the split adds to the slice:** no charge state crosses step proof blocks. The charge is the load proof block's,
@@ -121,7 +121,7 @@ async heavy window is 651 step proof blocks of 739,906 ANDs, 4.8 × 10^8 in all,
 
 **For the 25 async windows.** Their sync replay isn't the served schedule, so `slice_inputs` refuses them at AS = 0.
 At AS = 1 the step also reads `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free` and `arr_cap A×1` after
-`arr_O`. `replay_chain`'s rows carry them at its AS (PROTOCOL.md, "The rows'"), with an arrival's cap as `q_cap` in the
+`arr_O`. `verity_vllm.compiler.replay_chain`'s rows carry them at its AS (PROTOCOL.md, "The rows'"), with an arrival's cap as `q_cap` in the
 window row and `a_cap` in the network certifier's slots. The slice takes its chain's shape from its statics
 (`compile_slice.chain`), so at an async engine its rows widen and its circuit hands the step these fields.
 **w1** is the smallest of them with more than one request: window 1, requests 4–7 of the session, decisions
@@ -134,7 +134,7 @@ window row and `a_cap` in the network certifier's slots. The slice takes its cha
 - `ReplayStep_v1` at AS = 1 and the class is w1's served scheduler on all 39 of its async units, circuit and reference
   (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
 - `CompileSlice_v1` takes it at AS = 1, with two parts that sync didn't need:
-  - **The reference at AS = 1.** It reads its entries by `replay_chain`'s names at its shape (`running_names`,
+  - **The reference at AS = 1.** It reads its entries by `verity_vllm.compiler.replay_chain`'s names at its shape (`running_names`,
     `waiting_names`, `arrival_names`) in `_state`, `_row`, `_inputs` and `check`'s decoding of `cert` and `arr`,
     where it built sync tuples and `case` raised `MalformedRow` on w1's first state row. The build fed the step by
     name already.

@@ -11,19 +11,19 @@ axis-1 and strided batch arguments.  Small statics keep the whole file well unde
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits import boundary as B
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.circuits.liveness import Liveness
 from verity.circuits.layout import FunctionCall, Scope
-from verity.circuits.query_ast import oracle_gateset, oracle_in, oracle_out
+from verity.circuits.liveness import Liveness
 from verity.circuits.parts import Limits, Part, Unsupported, n_members
 from verity.circuits.program import Program
+from verity.circuits.query_ast import oracle_gateset, oracle_in, oracle_out
 from verity.circuits.refs import Coll, array_of, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.prims import BF16, F32
-from verity.circuits.types import Array, Tuple
+from verity_vllm.definitions.registry.prims import F32
 
 # --------------------------------------------------------------------------------------------------------------
 # oracle
@@ -142,7 +142,7 @@ def check_used_against_liveness(spec) -> None:
     reads = Liveness().analyse(spec, ((0, n),) if n else ()).reads
     assert B.used_param_intervals(spec) == reads
     leaves = B.used_param_leaves(spec)
-    assert leaves == frozenset((pi, l) for pi, iv in enumerate(reads) for lo, hi in iv for l in range(lo, hi))
+    assert leaves == frozenset((pi, leaf) for pi, iv in enumerate(reads) for lo, hi in iv for leaf in range(lo, hi))
 
 
 # --------------------------------------------------------------------------------------------------------------
@@ -575,7 +575,7 @@ def test_two_dimensional_strided_member_reads():
             majors = {d.major for v in ix.edges.values() for _, d in v if isinstance(d, B._Aff2)}
             assert majors == {"m", "i"}
         else:  # the views read a parameter: only the used-leaf intervals are recorded
-            assert B.used_param_leaves(scope.spec) == frozenset((0, l) for l in {0, 4, 6, 10, 12, 16, 18, 22}  # gap: elements 0, 4 of each row
+            assert B.used_param_leaves(scope.spec) == frozenset((0, leaf) for leaf in {0, 4, 6, 10, 12, 16, 18, 22}  # gap: elements 0, 4 of each row
                                                                  | {6, 8, 10, 18, 20, 22}  # cols: rows 1 and 3 of columns 0, 2, 4
                                                                  | {6, 11})  # row6 on row 1
             check_used_against_liveness(scope.spec)
@@ -715,7 +715,7 @@ def test_partial_member_reads_of_nested_parameters():
     for m in range(2):
         parts += body_parts(outer.child(0, m))
     run_family("nested partial parameter reads (deep: outer batch of mid, returned twice)", oracle, parts)
-    assert B.used_param_leaves(outer.spec) == frozenset({(0, l) for l in (0, 2, 4, 6, 8, 10)} | {(1, l) for l in (0, 1, 2, 6, 7, 8)})
+    assert B.used_param_leaves(outer.spec) == frozenset({(0, leaf) for leaf in (0, 2, 4, 6, 8, 10)} | {(1, leaf) for leaf in (0, 1, 2, 6, 7, 8)})
     check_used_against_liveness(outer.spec)
 
 
@@ -876,7 +876,7 @@ def test_serve_v4_tiny_program():
     LayerPre/LayerPost per position and layer, Attention_v3{T=1..5} with Strided KV-cache views, Final, Input gates).
     Root nodes/members, one activation of every composite at root and one level below, and merged root pairs, all
     against the oracle."""
-    tiny = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+    tiny: dict[str, object] = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
             "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True,
             "tie_word_embeddings": True, "profile": {}}
     P_ = Program(bind(b1.ServeV4, C=tiny, LP=3, STEPS=2, BN=16))

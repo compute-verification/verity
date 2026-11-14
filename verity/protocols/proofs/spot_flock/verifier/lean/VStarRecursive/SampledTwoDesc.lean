@@ -228,10 +228,10 @@ def unitIns (c : Circuit) : Nat := c.upv * min (c.unit.inWords * WORD) c.unit.co
 def outBits (c : Circuit) : Nat := ((List.range c.upv).map fun k => 16 * (c.leavesOut.getD k #[]).size).sum
 
 /-- **A member fits the two-stage scope**: `unitLog ≤ 32`, an instance a unit at least, and a unit's inputs and
-returned output bits, the most one unit's proof block commits, at most `UNIT_CLASS_MAX`, whatever its count of units. -/
+returned output bits, the most one unit's proof block commits, at most `SIZE_CLASS_MAX`, whatever its count of units. -/
 def memberOk (c : Circuit) : Bool :=
   decide (c.unit.unitLog ≤ 32) && decide (0 < c.upv) &&
-    decide (unitIns c + outBits c ≤ Spot.OneStageZk.UNIT_CLASS_MAX)
+    decide (unitIns c + outBits c ≤ Spot.OneStageZk.SIZE_CLASS_MAX)
 
 /-! ## The registered wiring -/
 
@@ -434,7 +434,7 @@ def wiringOk (T : Nat) (names : List String) (links : Option (Array Spot.SecondS
 /-- **The two-stage descriptor check** (module docstring), at the form's params `p`, its blobs `bs`, and the run of
 record's input `i` and interior `it`. Its bound on a unit (`memberOk`) is stricter than `Spot.Partition`'s, which counts
 a unit's returned output bits alone: this one counts its input bits too, so it refuses a unit whose returned bits fit a
-size class and whose inputs with them pass `UNIT_CLASS_MAX`. A unit of 2,048 input bits returning 48 counts 2,096 here,
+size class and whose inputs with them pass `SIZE_CLASS_MAX`. A unit of 2,048 input bits returning 48 counts 2,096 here,
 and one of 4,096 returning 32 counts 4,128. What it refuses beyond `Spot.Partition` costs completeness alone. -/
 def descOk (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) : Bool :=
   match firstOf i, cellsOf i it, refsOf p bs with

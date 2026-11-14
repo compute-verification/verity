@@ -593,11 +593,11 @@ KNOWN: dict[str, str] = {
     "security/Proofs/Flock/Claims/Complete/Prover/Piop.lean::FlockComplete.Trace":
         "homonym, a table's witness bits for the completeness prover (its addresses, `A·z` and `B·z`): rename (proofs)",
     "security/Proofs/Flock/Claims/Complete/Replay/Lincheck.lean::FlockComplete.Replay.Lc.Coins":
-        "homonym, the coins C-Flock's lincheck reads in one proof: rename (proofs)",
+        "homonym, the coins Flock's lincheck reads in one proof: rename (proofs)",
     "security/Proofs/Flock/Claims/Complete/Replay/RingSwitch.lean::FlockComplete.Replay.Rs.Coins":
-        "homonym, the coins C-Flock's ring switch reads in one proof: rename (proofs)",
+        "homonym, the coins Flock's ring switch reads in one proof: rename (proofs)",
     "security/Proofs/Flock/Claims/Complete/Replay/Zerocheck.lean::FlockComplete.Replay.Zc.Coins":
-        "homonym, the coins C-Flock's zerocheck reads in one proof: rename (proofs)",
+        "homonym, the coins Flock's zerocheck reads in one proof: rename (proofs)",
     "security/Proofs/Flock/Claims/Complete/Zk/InnerGo.lean::FlockComplete.Replay.InZ.Coins":
         "homonym, the ZK inner proof's coins, each a reply to its send: rename (proofs)",
     "security/Proofs/Flock/Claims/GS/RR.lean::Claims.GS.Node": "homonym, a search node: rename (proofs)",
@@ -926,7 +926,7 @@ KNOWN: dict[str, str] = {
         "homonym, the ZK server loop's frames: rename (proofs)",
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Level0.lean::Flock.ZkServer.Level0.Registry":
         "homonym, the ZK server loop's tables: rename (proofs)",
-    "verity/protocols/proofs/flock/verifier/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
+    "verity/protocols/proofs/flock/verifier/Flock/Layout.lean::Flock.Layout": "homonym, Flock's block-type layout: rename (proofs)",
     "verity/circuits/lean/Circuits/Program.lean::Flock.Program.Node":
         "homonym, a circuit program's node: rename (proofs)",
     "verity/protocols/proofs/flock/verifier/Flock/RecLinks.lean::Flock.RecLinks.Link":

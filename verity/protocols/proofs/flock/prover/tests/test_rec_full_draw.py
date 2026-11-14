@@ -26,7 +26,7 @@ DRAW = {"law": "stratified", "population": 2, "k": 2, "strata": [{"template": "t
 
 
 def _proxy(draw=None):
-    return RL.Proxy(RL.CoinServer(T._counter_rand()), T._salts(), schedule=T.SCHEDULE, draw=draw)
+    return RL.Proxy(RL.LiveCoinPart(T._counter_rand()), T._salts(), schedule=T.SCHEDULE, draw=draw)
 
 
 def test_register_is_answered_with_the_verifiers_sample_and_the_record_keeps_it():

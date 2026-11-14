@@ -532,7 +532,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
     # ------------------------------------------------------------------ static context
 
     def _model_geo_digest(self) -> bytes:
-        hf = self.engine.llm.llm_engine.vllm_config.model_config.hf_config
+        hf = self.engine.vllm_config.model_config.hf_config
         doc = {k: getattr(hf, k, None) for k in ("hidden_size", "num_hidden_layers", "num_attention_heads", "num_key_value_heads",
                                                  "head_dim", "intermediate_size", "vocab_size", "model_type")}
         doc["repo"] = self.engine.cp.get("repo")

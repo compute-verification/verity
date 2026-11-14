@@ -276,7 +276,7 @@ COMPOSITE_UNVALUED = ("each subprotocol's ε_forge(t, Q) and its loss at its fin
                       "error has no number here, and ``stated`` is the sum of the δs the run states, a lower bound on it")
 NO_NCI_DELTA = "no published file states it: each composite publishes each case's params by their SHA-512 alone"
 DELTA = ("what sets eps: m · δ_scan, every phase's scan at one δ, its one-stage answer's stated δ (its integrity "
-         "profile's, a sampling-design parameter in (0, 1) and not C-Flock's soundness error, which is in ε_ks), plus "
+         "profile's, a sampling-design parameter in (0, 1) and not Flock's soundness error, which is in ε_ks), plus "
          "δ_i for each tied audit drawn in part (NetworkCheck.Period's chargedOf). Where the public lists those "
          "readings (`charged`: each audit's draw read at δ_i, with its bound b there), δ_i is the period check's own "
          "constant, fixed before any coin, and the same draw read at its answer's δ stays sampled proofs' term of the "
@@ -697,7 +697,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "established (`NOT_ESTABLISHED`), and its bound is conditional on it (`UNCHARGED`)",
                       "discharged_by": (), "stated_by": PERIOD_REGISTERED, "checked": AUDITOR_RECORD},
     "windows-placed": {"is": "ExecutionPhasesPlaced, MonitoringPeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
-                             "the period read, and each of its faulty sets at δ commits at most the bits β the period "
+                             "the period read, and each of its incorrect sets at δ commits at most the bits β the period "
                              "charges it, from the period check's acceptance of the scan; the tied audits' half is "
                              "`tied-exposed`",
                        "discharged_by": ("Properties.NetworkPeriod.scanWindowsPlaced",)},

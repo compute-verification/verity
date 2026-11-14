@@ -15,18 +15,18 @@ import Proofs.Flock.Soundness.Game
 /-!
 # Influence through a separator
 
-An accepted audit bounds which units are incorrect; this file bounds what the incorrect units can make the audited computation
+An accepted audit bounds which units are incorrect; this file bounds what the incorrect proof blocks can make the audited computation
 deliver. `D` is the set of delivered wires: what the consumer receives (the served tokens). It can be smaller than the
 circuit's outputs, since commitments and leaves are outputs that the verifier sees and nobody is delivered.
 
 * `Circuit.FeedsAvoiding K g t`: `g` feeds `t` along a path none of whose gates is in `K`.
 * `Partition.Separates K B D` (a downstream cut): `K` meets every path from a gate of a unit of `B` to a wire of `D`.
-* `outputs_eq_of_separates`, **the influence cap**: two transcripts with the anchors' inputs, whose incorrect units lie in
+* `outputs_eq_of_separates`, **the influence cap**: two transcripts with the anchors' inputs, whose incorrect proof blocks lie in
   `B`, and that agree on a committed separator of `B`, deliver the same values on `D`. So they deliver at most `2^|K|`
   values on `D` (`card_delivered_le`): in a Boolean circuit a gate is one bit, and `|K|` is the separator's width.
 * `separates_exits`: the committed wires of the units of `B` separate `B`. For a replay unit, those are its exports.
   `Separates.mono` and `Separates.union` build separators for larger sets from smaller ones.
-* `influenceSet D e a δ`: what the transcripts with the anchors' inputs deliver on `D` when their incorrect units form a set
+* `influenceSet D e a δ`: what the transcripts with the anchors' inputs deliver on `D` when their incorrect proof blocks form a set
   whose missProb `e B` is at least `δ`. It is fixed by the circuit, the partition, the anchors, the samplingDesign and `δ`, never by
   the prover, and `card_influenceSet_le` bounds its size by `∑_{B : δ ≤ e B} 2^|K B|`.
 * `audit_influence`: the audit accepts while the delivered values lie outside the influence set with probability at most
@@ -162,7 +162,7 @@ theorem separator_induction {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Fin
     exact hB u hu
   · rw [hX g hi, hY g hi]
 
-/-- **The influence cap**: two transcripts with the anchors' inputs, whose incorrect units lie in `B`, and that agree on a
+/-- **The influence cap**: two transcripts with the anchors' inputs, whose incorrect proof blocks lie in `B`, and that agree on a
 committed separator `K` of `B` from the committed delivered wires `D`, deliver the same values on `D`. -/
 theorem outputs_eq_of_separates {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}
     (hK : K ⊆ P.committed) (hD : D ⊆ P.committed) (hsep : P.Separates K B D) {X Y a : Fin C.N → Bool}
@@ -177,7 +177,7 @@ theorem outputs_eq_of_separates {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D :
 def out (D : Finset (Fin C.N)) (X : Fin C.N → Bool) : D → Bool := fun t => X t
 
 open Classical in
-/-- What the transcripts with the anchors' inputs whose incorrect units lie in `B` deliver on `D`. -/
+/-- What the transcripts with the anchors' inputs whose incorrect proof blocks lie in `B` deliver on `D`. -/
 noncomputable def delivered (D : Finset (Fin C.N)) (a : Fin C.N → Bool) (B : Finset (Fin n)) : Finset (D → Bool) :=
   univ.filter fun y => ∃ X, C.InputsAgree X a ∧ P.incorrect X ⊆ B ∧ out D X = y
 
@@ -205,7 +205,7 @@ theorem card_delivered_le {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finse
     _ = 2 ^ K.card := by rw [card_univ, Fintype.card_fun, Fintype.card_bool, Fintype.card_coe]
 
 open Classical in
-/-- **The influence set at `δ`**: what is delivered on `D` with the incorrect units of some set whose missProb `e B` is at
+/-- **The influence set at `δ`**: what is delivered on `D` with the incorrect proof blocks of some set whose missProb `e B` is at
 least `δ`. -/
 noncomputable def influenceSet (D : Finset (Fin C.N)) (e : Finset (Fin n) → ℝ≥0∞) (a : Fin C.N → Bool)
     (δ : ℝ≥0∞) : Finset (D → Bool) :=

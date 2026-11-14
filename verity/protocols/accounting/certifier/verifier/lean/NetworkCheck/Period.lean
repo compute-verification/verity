@@ -992,7 +992,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
       s.lanes * nb * bitsOf ety)
     "scan: an input gate that is no template's row, state or egress parameter, nor one of the slot entries"
   need (InferenceOnlyCheck.Desc.rootLaidOut prog && InferenceOnlyCheck.Desc.inputsAtRoot prog && InferenceOnlyCheck.Desc.walkable prog)
-    "scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks \
+    "scan: not laid out as Flock's decoder lays a Program out, or past what its resolution walks \
       (NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)"
   let ke := (templateNodes prog).getLast?.getD 0
   need (root.body.ret.parts.any fun q => match q with
@@ -1926,20 +1926,20 @@ def atMost (n b : Nat) : Nat := Id.run do
 structure AuditTerms where
   facts : Facts
   free : Nat
-  faultySets : Nat
+  incorrectSets : Nat
   faultyBits : Nat
   jitter : Nat
   /-- The slot entries' bits a tied audit's incorrect proof blocks can set (`β_w`). -/
   faultyEntries : Nat := 0
 
-def AuditTerms.bits (t : AuditTerms) : Nat := t.free + t.faultySets + t.faultyBits + t.jitter + t.faultyEntries
+def AuditTerms.bits (t : AuditTerms) : Nat := t.free + t.incorrectSets + t.faultyBits + t.jitter + t.faultyEntries
 
 /-- An execution phase's scan's terms in the rows form, from the scan's terms, its facts, its tied audits' free inputs
 (`tied`: the egress renders their outputs, so the bits the prover chose of them are the execution phase's free inputs), the
 slot entries' bits its tied audits' incorrect proof blocks can set (`faulty`, `faultyEntries`) and the jitter bound: each of its
 at most `b` incorrect proof blocks commits at most the wider instance's bits. -/
 def Scan.terms (s : Scan) (f : Facts) (tied faulty jitter : Nat) : AuditTerms :=
-  { facts := f, free := s.free + tied, faultySets := clog2 (atMost f.units f.wrong),
+  { facts := f, free := s.free + tied, incorrectSets := clog2 (atMost f.units f.wrong),
     faultyBits := f.wrong * max s.ingress s.egress, jitter := clog2 (jitter ^ s.steps), faultyEntries := faulty }
 
 structure Public where
@@ -2054,7 +2054,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
 def termsJson (ts : Array AuditTerms) : Json :=
   .arr <| ts.map fun t => Json.mkObj [
     ("delta", .str t.facts.delta.toString), ("drawn", toJson t.facts.drawn), ("faulty_bits", toJson t.faultyBits),
-    ("faulty_entries", toJson t.faultyEntries), ("faulty_sets", toJson t.faultySets), ("free", toJson t.free),
+    ("faulty_entries", toJson t.faultyEntries), ("faulty_sets", toJson t.incorrectSets), ("free", toJson t.free),
     ("jitter", toJson t.jitter), ("units", toJson t.facts.units), ("wrong_units", toJson t.facts.wrong)]
 
 def factsJson (fs : Array Facts) : Json :=
