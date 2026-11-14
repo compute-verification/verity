@@ -9,7 +9,7 @@ At `groups_per_coin` g, windows cg … min((c + 1)g, W) − 1 are sample c, samp
 the last root of the sample's last window: the session's coins are its W challenges, then ⌈W/g⌉ openings coins, coin c
 at W + c. `close` is `Session.close` for a sample: only the sample's last window closes, once its roots are final, which
 makes every window of the sample final; each is rejected `few` in order; and the sample's `s` receipts are sampled over
-its passes in order (`draws`, under the key of window c), numbered across its windows, each window keeping its own
+its passes in order (`samples`, under the key of window c), numbered across its windows, each window keeping its own
 share, (pass, position) in it, which `Session.verify` checks. A window whose share is none has nothing to open: the
 close accepts it, and `Session.verify` refuses it, as it refuses any window with a verdict.
 
