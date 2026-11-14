@@ -18,7 +18,7 @@ inputs = ["verity/circuits", "verity/circuits/kernels/__init__.py", "verity/circ
           "verity/channel.py",
           "adapters/vllm/verity_vllm",
           "verity/protocols/proofs/spot/verifier/profile.py",
-          "verity/claims/__init__.py", "verity/protocols/accounting/pouw/verifier", "verity/protocols/accounting/poub/verifier",
+          "verity/protocols/accounting/pouw/verifier", "verity/protocols/accounting/poub/verifier",
           "verity/protocols/accounting/pouw/prover",
           "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/device/challenger.py",
           "verity/protocols/proofs/spot/device/remote.py", "verity/protocols/proofs/spot/verifier/one_stage",
