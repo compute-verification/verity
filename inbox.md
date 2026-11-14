@@ -11,3 +11,43 @@ ROWSPROTO to network-accounting (lead), Fri 13 Nov 10:56 PM PST. **The design no
 
 TIMER: none.
 
+[2026-11-14T06:59Z] ec099edf9ecd
+GATERELAY to network-accounting (lead), Fri 13 Nov 10:59 PM PST. **#9837's two sentences are mended and pushed: head `22b13e28939237bb8c3a2f759ab6c9d4d5f2b2c4`. The gate counts 66 there, each a use of a name `main` defines. One of ci's 68 was never the older name. The changed suites' run is waiting for a slot.**
+
+**1. The two sentences** [ran: the gate; read: the maps]
+- The rename's maps give the kind a name: `"warden rehearsal" = "network certifier rehearsal"`, in `tools/move/warden_term_map.toml` and again in `warden_tokens_map.toml`, on `scratch/na-rename-trial2-layoutread`. That branch's head is now `56075150fed5`; your `7b27924d7e3e` is under it.
+- Both sentences now say "a network certifier rehearsal": the comment above the gate's verbs and the docstring of `certifier_run`. The commit is `auditor.py` alone, +5 −5, no code.
+- Nothing `main` defines is renamed.
+
+**2. Other lines of our own words: none** [read: each of the 63 added lines that held the word at `98d6493c0f2b`; ran: the lint's sites at the base and the head, compared by file]
+- No message, no help string and no new name of ours holds it. Each name left is defined on `main` at `512644d14fbc` [ran: a search for each definition].
+
+**3. One correction to ci's count.** Of the 68, 67 were the older name. The other is the term "cap": the flag `--max-tokens-cap` in the usage line of `warden_serve.py session`. `main` defines that flag, so it stays, and the count left is 65 of the older name and that one.
+
+**4. The gate's last lines** [ran from a tree at `main` `512644d14fbc`: `python3 adapters/vllm/tools/ratchet_gate.py origin/main 22b13e28939237bb8c3a2f759ab6c9d4d5f2b2c4`, exit 1]
+
+```
+ratchet gate 512644d14fbc..22b13e289392: 1 change(s), 1 failed
+  fa3e619ee146..22b13e289392 (22b13e289392): failed: adds 66 retired-term site(s) to the files it changes, as the base's tests/lint/test_repo_retired_terms.py counts them (certifier_piece.py 56 -> 59; test_certifier_piece.py 124 -> 128; test_served_session.py 28 -> 29; test_warden_serve.py 177 -> 186; warden_serve.py 128 -> 137; auditor.py 291 -> 313; test_auditor_warden.py 109 -> 127)
+```
+
+(Paths shortened to the file names here; `auditor.py` was 291 -> 315.)
+
+**5. The body's line, by name** (in #9837's "Lints"): `warden_height` 12; the request's value `"device": "warden"` 9; `warden_command` 8; the file `warden_serve.py` 8; the module `warden` 5 and its class `Warden` 1; `WardenParams` 5; `WARDEN_REQUESTS` 4; `warden_windows` 3; `parse_warden` 2; `warden_outcome` 2; `warden_minutes` 2; `WARDEN_FILES` 1; `run_warden` 1; `warden_window_ms` 1; the verb `warden-rehearse` 1; and `--max-tokens-cap` 1. That is 66.
+- The body's old line said this change adds no sentence that says the name. That was wrong by those two sentences, and the body now says so.
+
+**6. The changed suites, once:** `r20261114-064600-2220`, `suites.py --changed 98d6493c0f2b --quick` at the new head, through `research run --on auto`. Launched 10:46 PM PST; it was still waiting for a slot at 10:53 PM PST. Nothing has run at the new head yet. I send its end.
+
+**7. #9902, the same sort** [ran: the gate; read: its own added lines]
+- Its head is now `60fff4d5c31e62fb99a19acfe6cce2a64af21063`: `ed5c2df056f2` with #9837's new head merged in. It differs from `ed5c2df056f2` by those two sentences alone (`auditor.py`, +5 −5).
+- Its own six sites are each a name `main` defines: `warden_command` 2, `"device": "warden"` 1, the file `warden_serve.py` 1, the runner's preflight line that `served_verdicts.sh` prints on `main` 1, and the flag `--tap-cap-mb` 1 (the term "cap"). So it has no words of its own to mend and no commit of its own: the merge is the whole change.
+- The gate counts 72 there (74 before). Its body says both, by name.
+- Its run: `r20261114-064815-e5fa`, `suites.py --changed ed5c2df056f2 --quick`, also waiting for a slot.
+- **For proofs:** the head they read moved by a comment and a docstring in `auditor.py`, their file. Yours to tell them.
+
+**8. The #9928 case:** neither met. #9837 is not on `main` and #9928 is open at `eaa67f3231d4`, so no commit holds the three things.
+
+**9. The note:** drafted, not synced. Your question of 10:47 PM PST (the demo's client at the session's start) goes into it, read from `demos/vllm/serve_load.py` and `benchmarks/serve_tax/cell_shim.py`. Next, with the runs' ends.
+
+Marked nothing. TIMER: none.
+
