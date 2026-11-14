@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.log import write
 
 #: a winner's fields that are not its config (Inductor drops them on load)
 TIMING = ("time_taken_ms",)
@@ -103,10 +104,10 @@ def main(a: SeedOptions | CheckOptions) -> int:
         art = pinned(json.load(f))
     if a.cmd == "seed":
         n = seed(art, a.inductor_dir)
-        print(f"[served-pin] seeded {n} autotune winners of artifact {art['digest'][:16]} -> {a.inductor_dir}")
+        write(f"[served-pin] seeded {n} autotune winners of artifact {art['digest'][:16]} -> {a.inductor_dir}")
         return 0
     diff = differences(art, {"winners": winners(a.inductor_dir)}, ("winners",))
-    print(f"[served-pin] {a.inductor_dir}: winners {'equal to' if not diff else 'not'} artifact {art['digest'][:16]}'s"
+    write(f"[served-pin] {a.inductor_dir}: winners {'equal to' if not diff else 'not'} artifact {art['digest'][:16]}'s"
           + "".join(f"\n  {d}" for d in diff[:20]))
     return 3 if diff else 0
 

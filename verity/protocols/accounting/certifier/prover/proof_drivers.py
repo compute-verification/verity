@@ -23,6 +23,8 @@ class ProofDrivers(Protocol):
     a8: Any
     #: the auditor's challenger's sessions: ``start``, ``RankCoins``, ``evidence``, ``negatives``, ``Replay``
     a5_coins: Any
+    #: the development challenger on this machine, which ``start`` takes for ``--challenger local``: ``Local``
+    local_challenger: Any
     #: the proof subprotocol: ``frame_ports`` over a statement's tables
     prove_subprotocol: Any
     #: Flock's circuit writer (``verity_flock.circuit``)
