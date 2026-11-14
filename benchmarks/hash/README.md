@@ -22,7 +22,6 @@ word to another directory. The vLLM integration loads nothing from here.
 | File | What is loaded | Loaded by |
 |---|---|---|
 | `dither/pin.sh` | run as a script: the int8 pin in a node's model cache | `benchmarks/harness/setup/int8_pin.sh` |
-| `dither/numabind.py` | run as a script, from a copy sent with a job | `benchmarks/pouw/pearl_c_sm120/card.sh`; `benchmarks/pouw/pearl_c_vllm/served_step.sh` |
 
 Tests of `benchmarks/pouw` import `dither/dither_one.py`, `dither_a.py`, `j10r_units.py` and `forms.py` by name, and its
 suite declares them and what they import as inputs. A test's import fixes a file's path, nothing more.
