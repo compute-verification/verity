@@ -178,7 +178,7 @@ def test_under_pearlplus_tie_w_is_chained_after_the_serves_first_registration_re
 
 def test_under_pearlplus_tie_w_names_the_day_the_serve_declared(tmp_path):
     """Where the window serve declared a day's program (serve-openai's --day: SERVE_DIR/declaration.json), `retain` gets
-    that file as ``--day-declaration`` beside ``--window-record W``, so W names the day as the windows' registrations do
+    that file as ``--day-declaration`` beside ``--window-record W``, so W names the day as the windows' dockets do
     and the audit tied to W holds it to that day; a serve that declared none leaves W naming none (the tests above)."""
     run, sd, _tree = _piece(tmp_path, _epoch(), declared={"day": 3, "declaration": "5d" * 64})
     assert run.returncode == 0, (run.stdout, run.stderr)

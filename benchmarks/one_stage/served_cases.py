@@ -11,7 +11,7 @@ bare case too:
 ``--audit`` is the window's `records_audit.py audit --circuit --registered` out directory (`served_verdicts.sh`'s
 ``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case, and reads the serve's H1 log
 (``D/h1/log.jsonl``, `H1_LOG`), PoUW's period case (``D/private/pouw/period``, `PERIOD_PIECE`), Pearl+'s case's
-parts (``D/private/pearlplus/case``, `PEARL_PLUS_PIECE`) and the serve's first registration record
+parts (``D/private/pearlplus/case``, `PEARL_PLUS_PIECE`) and the serve's first docket
 (``D/deployment-registration.json``, `DEPLOYMENT`) where it holds them.
 Every case commits to the same record R, ``window/case.json``'s commitment, the record the audit sampled against (under
 H1's tie, `served_verdicts.sh`'s H1_TIE, the record H1 named as the window's Commit record before its sample coin,
@@ -187,7 +187,7 @@ DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inf
 H1_LOG = Path("h1/log.jsonl")
 PERIOD_PIECE = Path("private/pouw/period")
 PEARL_PLUS_PIECE = Path("private/pearlplus/case")
-#: Under ``--serve-dir``: the serve's first registration record, where the serve wrote one before its first request
+#: Under ``--serve-dir``: the serve's first docket, where the serve wrote one before its first request
 #: (`served_verdicts.sh`'s weights step: every weight's root, chained after nothing)
 DEPLOYMENT = Path("deployment-registration.json")
 CASE_KEYS = {"commitment", "evidence", "params"}
@@ -489,7 +489,7 @@ def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
 def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
     """The deployment's records before ``rec``, oldest first, on a serve whose window record is Pearl+'s: the record W
     Pearl+'s case's parts (``parts``, `pearlplus_of`) hold its passes to, which ``rec`` is chained right after (the tie
-    `Core.Remote.V1.window` checks), and before it the serve's first registration record (`DEPLOYMENT` under ``serve``)
+    `Core.Remote.V1.window` checks), and before it the serve's first docket (`DEPLOYMENT` under ``serve``)
     where W is chained after one. Each is taken by the digest the record after it names, so a W or a first record that
     isn't the one named is no part of the log, and the refusal says the log doesn't reach the deployment's first record.
     Empty when ``rec`` names no previous record."""
