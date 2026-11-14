@@ -44,6 +44,7 @@ from verity_vllm.pipeline.build_sampling import (
     sampler_geometry,
     sampling_policy,
 )
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.tp.links import (  # noqa: F401 (read through here)
     module_in_model_vocabulary,
     read_tp_links,
@@ -455,9 +456,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # the derive's module paths are the wrapper's `named_modules()` vocabulary, the recorder's are `model.named_modules()`;
             # the root is recorded as DATA so no reader spells the wrapper prefix
             model_root = next((n for n, m in mod.named_modules() if m is model), None) if tp > 1 else None
-            write = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch, tp=tp, model_root=model_root)
+            write_program = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch, tp=tp, model_root=model_root)
             pre = copy.deepcopy(res) if emit is not None else {}        # rank r's `res` before its writer: the template's, at rank r
-            write(out, res, rep, rank=rank)
+            write_program(out, res, rep, rank=rank)
             if emit is not None:
                 from verity_vllm.pipeline.tp import emit_ranks
                 from verity_vllm.program.frontend.export_ops import (
@@ -466,7 +467,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 del rep                                                    # the template's descriptor and correspondence: freed
                 emit_ranks.emit(emit, out, pre, session[0] if session else None, shards=lambda r: rank_embedding_shards(model, r),
                                 context=lambda: _derive_context(vm, cfg, ntok, target, model, apply_target=True),
-                                post=derived if target.ir == "boolean" else None, write=write)
+                                post=derived if target.ir == "boolean" else None, write=write_program)
 
 
 def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling: dict, launch: dict | None, tp: int, rank: int,
@@ -720,7 +721,7 @@ def main(a: Options) -> int:
     target, artifact = res.get("target"), res.get("artifact")   # a Build that crashed before its construction states neither
     summary["target"] = {k: target.get(k) if target else None for k in ("declared", "applied")}
     summary["artifact_identity"] = artifact.get("identity") if artifact else None
-    print(json.dumps(summary, indent=1, default=str))
+    write(json.dumps(summary, indent=1, default=str))
     if res.get("ok"):
-        print(json.dumps(res["spec_histogram"], indent=1))
+        write(json.dumps(res["spec_histogram"], indent=1))
     return 0 if res.get("ok") else 1

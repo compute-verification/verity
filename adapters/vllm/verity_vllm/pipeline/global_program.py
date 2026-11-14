@@ -47,6 +47,7 @@ from verity_vllm.config import (
 )
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import layout as build_paths
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.components import (  # noqa: F401
     component_of,
     component_provenance,
@@ -692,9 +693,9 @@ def main(a: Options) -> int:
             return 5
     res = build(a.workload, a.derived, a.out, checkpoint_dir=a.checkpoint_dir, eos_token_ids=eos, artifact_root=a.artifact_root, early=early, canon=canon, theta_registered=a.theta_registered)
     if not res.get("ok"):
-        print(json.dumps({k: res[k] for k in ("reason", "message", "missing_derived") if k in res}))
+        write(json.dumps({k: res[k] for k in ("reason", "message", "missing_derived") if k in res}))
         return 4
-    print(json.dumps({"workload_digest": res["workload_digest"], "gates": res["gates"], "input_gates": res["input_gates"],
+    write(json.dumps({"workload_digest": res["workload_digest"], "gates": res["gates"], "input_gates": res["input_gates"],
                       "requests": len(res["requests"]), "descriptor_bytes": res["descriptor"]["bytes"], "cost": res["cost"],
                       "eos_token_ids": _stated(res, "stop_rule", "eos_token_ids"),
                       "lag": _stated(res, "lag", "value"), "async_scheduling": _stated(res, "lag", "async_scheduling"),
