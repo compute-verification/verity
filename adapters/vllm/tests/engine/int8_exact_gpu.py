@@ -1,5 +1,5 @@
 """On one GPU: Llama served with `TargetProfile.int8_exact` (`--int8-exact linears|attention|all`, default all), checked end
-to end on the CPU: the linears against `benchmarks/ppl/steps.py`, the attention against compute accounting's LUT softmax
+to end on the CPU: the linears against the registered Definition's equations, the attention against compute accounting's LUT softmax
 (`benchmarks/pouw/edited_gemm/fattn_ref.py`, `apv_ref.py`).
 
 One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, `<out>/pin_entry.json`, the int8 pin's entry):
@@ -14,7 +14,7 @@ One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, 
   generate  greedy (temperature 0) on PROMPTS, batched and one by one; the texts, token ids, and which prompts' tokens differ.
   equal     (linears) forward hooks on the first four linears and the last one keep (x, y) of their first calls in the batched
             run and in every solo run (prefill and decode, so the M < 17 padding too).  Each served y, bit for bit, against
-              oracle  steps.py's `int8_linear` on the CPU (`tests/engine/ppl_oracle.int8_linear`) from x and the BF16 base pin's
+              oracle  the Definition's equations on the CPU (`tests/engine/ppl_oracle.int8_linear`) from x and the BF16 base pin's
                       own weight (q, k, v and gate, up concatenated by rows for vLLM's merged modules)
               cpu     `int8_exact.plain_linear` on the CPU on the served int8 weight and scales
               rerun   `int8_exact.plain_linear` again on the GPU

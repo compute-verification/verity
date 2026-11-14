@@ -1,11 +1,11 @@
-"""`engine.int8_exact` (with `engine.int8_checkpoint`'s weights) equals the perplexity bench's plain `int8` linear step,
-`benchmarks/ppl/steps.py`'s `int8_linear` run on the CPU (`tests/engine/ppl_oracle.py`), word for word.
+"""`engine.int8_exact` (with `engine.int8_checkpoint`'s weights) equals the registered Definition's equations (`Int8RowQuant`
+then `ScaledMmS8`, `tests/engine/ppl_oracle.py`) on the CPU, word for word.
 
-Inputs: random bf16 activations and weights at several magnitudes, and the edges: zero rows and rows under steps.py's 1e-30
+Inputs: random bf16 activations and weights at several magnitudes, and the edges: zero rows and rows under the Definition's 1e-30
 scale floor, ties at .5 under s = 1, |x| at the row's max (+-127), constant weight rows (|W| = 127 everywhere), products past
 2^24 (RN32(Y) rounds), M on both sides of the padding row count, and a row's value against the same row served alone (a row
 does not depend on its batch).  Two discriminating checks: the other dequantization order and the reciprocal scale both
-differ from steps.py somewhere on the inputs used here."""
+differ from the Definition somewhere on the inputs used here."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -56,7 +56,7 @@ def _random(rng: np.random.Generator, m: int, n: int, k: int, scale: float) -> t
 
 @pytest.mark.parametrize("m", [1, 5, 16, 17, 40])
 @pytest.mark.parametrize("scale", [1e-3, 1.0, 300.0])
-def test_random_inputs_equal_steps_py(m, scale):
+def test_random_inputs_equal_the_definition(m, scale):
     rng = np.random.default_rng(1000 * m + int(scale * 7))
     _check(*_random(rng, m, 64, 256, scale))
 
@@ -107,8 +107,8 @@ def test_products_past_two_to_the_24_round_once():
     _check(x, w)
 
 
-def test_dequantization_is_steps_py_order_on_four_million_products():
-    """steps.int8_linear's scaling of an integer product (the step with its chain returning a given int32 Y), on 2048 x 2048
+def test_dequantization_is_the_definitions_order_on_four_million_products():
+    """The Definition's scaling of an integer product (`ppl_oracle.int8_linear_scaled` of a given int32 Y), on 2048 x 2048
     words: equal to `dequantize`, and the other order, Y * RN32(s_a s_w), differs from it on some of them."""
     rng = np.random.default_rng(12)
     x, w = _random(rng, 2048, 2048, 16, 1.0)

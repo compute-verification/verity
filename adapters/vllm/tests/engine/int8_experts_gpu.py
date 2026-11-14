@@ -13,7 +13,7 @@ One process writes `<out>/int8_experts_gpu.json` and `<out>/pin_entry.json` (the
   experts   the first and last MoE layers' first `--keep-calls` calls per phase keep x, the router's top-k ids and weights, the
             served output and every expert GEMM's call (its bf16 rows, s8 rows, scales, y and the tokens they are).  On the CPU:
               gemm      each expert GEMM's served y against `int8_exact.plain_linear` on the CPU on the served int8 weight, and
-                        against steps.py's `int8_linear` (`ppl_oracle`) from the BF16 base pin's own expert weight (gate and
+                        against the Definition's equations (`ppl_oracle`) from the BF16 base pin's own expert weight (gate and
                         up concatenated by rows); its s8 rows and scales against `quantize_rows` of its rows
               calls     every (expert, projection) called once per layer call in the static order, its rows the tokens
                         `int8_experts.routes` gives, an idle expert's call reaching ``observe`` with zero rows
