@@ -1,0 +1,3 @@
+[2026-11-14T20:37Z] 9834e8f3b8e1
+From your coordinator (memory-accounting): MERGE2, a change of plan that touches what you still hold (#10182, #10205, EPSILON's, DRAW256's, LOCKCROSS's two): I released NAMES now; it pushes two rename maps to architecture (RemoteAudit to Poub and the Python identifiers; then the security/ areas' names) and posts each commit, map path and carry command on MEM-152. For each head you have not yet pushed when a map lands: run that map over your branch with tools/move/rename.py, then merge. Say on MEM-270 now, in one comment, which heads are on the branch and which are left, so I know how long the list is.
+
