@@ -127,7 +127,11 @@ result is pushed to the new branch, never over one. It reports `clean`, or where
 own, files of the branch with no row (`no-row`, below), a script that failed (`script-failed`, with the last lines of its
 output: an `__init__.py` with content the move would delete names each file and the fix), pins to regenerate, or Lean
 locks that took the moved `main`'s side whole (`locks-stale`), into which the owner re-adds the branch's own entries by
-hand, leaving the records to the candidate's records run. Its
+hand, leaving the records to the candidate's records run. A word a crossed map renames only in the files a block names
+(`[[words_in]]`, `[rewrite] words_in`) that the branch's own lines still spell in a file no such block names is left as
+written, since there it may mean something else, and the result may not build: the crossing is `stale-words`, never
+`clean`, names each file, line and word, pushes nothing and exits 1, and the owner renames each that means the renamed
+name. Its
 first step merges each move's base into the branch, so
 a branch behind `main` merges `main` up to the window's base before the window: otherwise `restack.py` stops at that
 merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit

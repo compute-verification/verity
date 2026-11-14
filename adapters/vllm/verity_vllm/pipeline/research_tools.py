@@ -200,10 +200,9 @@ def parse(argv: list[str], *, stage: str) -> dict[str, Any]:
         argv_stage = None
         if name == "row" and rest[:1] == ["run"]:
             rest = rest[1:]
-        elif name in ("row", "run_row_v2.sh"):
-            if rest[:1] == ["stage"] and len(rest) >= 2:
-                argv_stage = rest[1]
-                rest = rest[2:]
+        elif name in ("row", "run_row_v2.sh") and rest[:1] == ["stage"] and len(rest) >= 2:
+            argv_stage = rest[1]
+            rest = rest[2:]
     positional: list[str] = []
     while rest and not rest[0].startswith("--"):
         positional.append(rest.pop(0))

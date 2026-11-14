@@ -14,7 +14,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits", "verity/d
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness/__init__.py", "verity/commitments/windows",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "verity/circuits/kernels/sha512.cuh",
           "verity/protocols/proofs/spot/verifier/profile.py",
-          "verity/hardware/record.py", "verity/claims/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py",
+          "verity/channel.py", "verity/claims/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage", "verity/protocols/proofs/spot/verifier/service.py",
           "verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proofs/spot/device/challenger.py",
           "verity/protocols/proofs/spot/device/remote.py", "verity/protocols/proofs/spot/verifier/second_stage.py",
