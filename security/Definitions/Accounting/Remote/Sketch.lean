@@ -40,7 +40,7 @@ abbrev Key (N m h ks : ℕ) : Type := SketchSigns ks m × Oracle N 0 h Sector (F
 abbrev Keys (P N m h ks : ℕ) (G : Fin P → ℕ) : Type := (j : Fin P) → Fin (G j) → Key N m h ks
 
 /-- The model's coins: the prover's own, the registered store, and the keys. Not the live coins (`Verity.Coins`): they
-hold no index draw, and the prover's own coins are among them. -/
+hold no index sample, and the prover's own coins are among them. -/
 abbrev ModelCoins (β : Type) (P N m h ks : ℕ) (G : Fin P → ℕ) : Type := β × Data N m 0 Sector × Keys P N m h ks G
 
 /-- A session's outcome: the prover's own coins, the registered store, and `Hs`, what SHA-512's outputs are read

@@ -8,8 +8,8 @@ public import Lms.Sign
 public import Proofs.Properties.Accounting.InProofs
 public import Proofs.Properties.Pous.MemoryChallenger
 import Proofs.Properties.Pous.WipeSigned
-import Proofs.Properties.Certifier.Device.Lms
 import Proofs.Properties.Pous.MemoryChallenger.Session
+import Proofs.Properties.Hash.Lms
 
 /-!
 # PoUS's session inside proofs: an accepted run gives a session `verdict` accepts

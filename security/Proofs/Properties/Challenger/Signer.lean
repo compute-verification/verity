@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Certifier.Device.Lms
+public import Proofs.Properties.Hash.Lms
 public import Proofs.Properties.Accounting.Remote.Schedule
 public import Spot.ChallengerSession
 

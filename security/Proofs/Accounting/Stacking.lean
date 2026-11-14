@@ -878,7 +878,7 @@ theorem pr_unpaidOn_le {Ω : Type} [Fintype Ω] (A : SketchDeployedRun n P N m �
           ring
 
 /-- **The samples are causal in any correct sets that read each window's earlier windows, signs and passes**, on any `ω`
-sampled before the session: both pooled-draw readings of `pr_samples_le_map`, for correct sets `cor` in place of one
+sampled before the session: both pooled-sample readings of `pr_samples_le_map`, for correct sets `cor` in place of one
 store's. -/
 theorem pr_samples_causal_le {Ω : Type} [Fintype Ω]
     (cor : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → Finset (Fin P × Fin N))

@@ -13,7 +13,7 @@ order; `verity/protocols/accounting/poub/prover/period_prover.py`'s `run` plays 
    (`audit_prover.Prover`) under each window's challenge, sent as its value and the root it was opened after
    (`coins.Released`), each root sent before the window's boundary; the verifier waits each window out on its clock
    (`window_ns`) and each last deadline (`deadline_ns`) before it closes the window;
-3. the verifier draws each window's openings, the prover opens them, and the verifier verifies them;
+3. the verifier samples each window's openings, the prover opens them, and the verifier verifies them;
 4. once the session has its outcome, the verifier sends the prover the coin commitment and every released coin's
    opening (`audit.AuditRun.disclose`), and the prover checks each challenge it was sent against them (`Peer.end`).
 
@@ -205,7 +205,7 @@ def session(node: str, prover: Peer, coins: bytes, *, windows: int = 2, passes: 
             verify: int | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until) -> Period:
     """The verifier's side of the period's session on `node` against `prover` (`run`'s, wherever the prover is): the
-    registration it draws from `coins`, its challenger's coins, its clock and its log, which are the case."""
+    registration it samples from `coins`, its challenger's coins, its clock and its log, which are the case."""
     n, root = prover.register()
     reg = audit.register(coins, node.encode(), n, root, codec_)
     held = _Held()

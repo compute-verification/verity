@@ -96,7 +96,7 @@ serve` starts.
 
     python verifier_process.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
                                [--registry REGISTRY.json] [--lean-exe PATH]
-                               [--paced K:T_MS:DRAWS:WINDOWS[:F] ...] [--transcript DIR]
+                               [--paced K:T_MS:SAMPLES:WINDOWS[:F] ...] [--transcript DIR]
                                [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
                                [--groups-per-coin G]
                                [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512

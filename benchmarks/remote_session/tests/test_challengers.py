@@ -650,7 +650,7 @@ def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record
     session and a prover that skips half its reads, each paced in twelve windows sampled on three openings coins, which
     the gate reserves and releases (⌈12/4⌉). The period closes complete; the honest session, which the Lean accepts
     and whose record names g, is credited, its twelve windows' last roots read on the challenger's clock off its
-    three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three draws
+    three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three samples
     (`line.draws_of`), and the Lean verifier's line is line.py's; the skipper, rejected at a receipt, earns none."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run"
@@ -997,7 +997,7 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     sample's rejection it didn't charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
     which dominates (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), δs, the rest,
     which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 at the session's samples,
-    which every window drew (2118·48 = 101,664 draws, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its
+    which every window drew (2118·48 = 101,664 samples, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its
     slack is split at it: at 140 bits the total is 2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995
     and 2^-40.0000 before the rejection."""
     passes, delta, sketch_log2, drawn = GATE_RUNS[run, k]
