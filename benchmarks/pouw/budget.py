@@ -222,9 +222,9 @@ def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     samples a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the
     linears' cut. ≈ 2 s a regime."""
     tree = Path(tree).resolve()
-    sys.path[:0] = [str(tree), str(tree / "benchmarks" / "sampling_plan")]
+    sys.path[:0] = [str(tree)]
     from verity.protocols.proofs.spot.prover.cost import int8_llama as P
-    from inputs import I
+    from verity.protocols.proofs.spot.prover.cost.inputs import I
 
     P.DELTA = math.exp(-LN_INV_DELTA)
     v = {k: i.value for k, i in I.items()}

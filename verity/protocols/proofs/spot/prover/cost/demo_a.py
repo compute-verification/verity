@@ -49,13 +49,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import ceil, comb, floor, inf, log, log2, nextafter
 from pathlib import Path
-
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "sampling_plan")))
 
 from verity.protocols.proofs.spot.prover.cost import h200 as H
 
