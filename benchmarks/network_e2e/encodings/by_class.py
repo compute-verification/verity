@@ -41,10 +41,17 @@ of releases, as a scaled figure.
 and ℓ (`codec.Registered`) are Python's. ℓ bounds the whole string, every window's charge together, and is printed
 beside each.
 
+**With a draft** (the server's ``--speculative-config``, which the reader takes from its arguments:
+`replay.read_corpus_trace`) a row emits its token and the drafts it kept, so no I1 v0 says the serve. The trace is
+coded as its schedule (`v1.schedule_of`, through `schedule_code`), each emitting row's kept count read off the tokens
+the model runner sampled for it, and the replay runs on those counts. The kept drafts are then one more class
+(`by_class.KEPT_CLASS`: each window's second segment), with its own events (`KEPT_EVENTS`: the rows whose counts the
+window sends, those that kept a draft and the drafts they kept) and column, and its rule's line beside its bits
+(`kept_drafts`). A draft the replay doesn't model (`schedule.speculative`) is refused by name. The trace's first
+line says whether it was served with a draft, and with how many a row.
+
 **The serve** (`serve_of`), read from the directory without the reader: the served model's name, its cards, the vLLM
-version the server's log prints, where the network certifier ran, and whether the server had a draft. The reader
-takes no draft from the server's arguments, so its replay of such a serve would be of another one: the trace is
-refused, and a trace that has a table was served with the draft off, which its first line says. With
+version the server's log prints, where the network certifier ran, and whether the server had a draft. With
 ``--beside LABEL=DIR`` a second serve's trace is read the same way and set beside each trace that has a table
 (`beside`): each class the trace did not exercise, with the other serve's counts of its events; each event of the
 classes it did exercise that happened in the other serve only; then what the two serves share and where they
@@ -53,7 +60,8 @@ under its own registered stop ids (``--beside-stops``, where they are not ``--st
 and under the first serve's its record is refused, which leaves it no table. A refused serve's line says why.
 
 Per trace it also reports the engine's own record of the hits it admitted from (the trace's `cache_hit`) and the round
-trip (`decode(encode(a)) == a`, the streams too). Where the decoder refuses the string or decodes it to another advice,
+trip (`decode(encode(a)) == a`, the streams too; under a draft a is the schedule: its arrival order, each step's rows
+and each row's kept count). Where the decoder refuses the string or decodes it to another advice,
 the report says which, and gives the first step at which the replay the decoder runs differs from the engine's
 schedule, with its window.
 
@@ -68,12 +76,15 @@ import importlib.util
 import json
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from contextlib import nullcontext
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.pipeline.advice_code import by_class as BC
+from verity_vllm.pipeline.advice_code import kept as KP
+from verity_vllm.pipeline.advice_code import schedule_code as SC
 from verity_vllm.pipeline.advice_code.codec import (
     AdviceCodeError, arrival_order, bits_by_window, charged, decode_full, encode, length_widths, lengths, Record, Registered,
     replay_record, streams, windows,
@@ -107,6 +118,15 @@ OF = {"hits": ("lookups_hit", "admissions_cut"), "admission": ("waited", "preemp
 #: a batch is full where one of these holds a step's waiting requests (`by_class.WHY`)
 FULL = ("max_num_seqs", "tokens")
 
+#: under a draft, a window's counts of the kept drafts' events (`by_class.KeptRows`): the rows whose kept counts it
+#: sends, those of them that kept a draft, and the drafts they kept
+KEPT_EVENTS = ("kept_rows", "rows_kept", "drafts_kept")
+
+#: and their class's events, as `OF` has the other classes'
+KEPT_OF = {BC.KEPT_CLASS: ("kept_rows",)}
+
+Rows = list[list[tuple[int, int, int]]]
+
 
 def registration(trace: Any, stop_ids: Sequence[int], T: int) -> Registered:
     """The trace's registration: under the certified tick, its tick and the code's own book (`codec.TICK_CAPS`'s, the
@@ -116,23 +136,47 @@ def registration(trace: Any, stop_ids: Sequence[int], T: int) -> Registered:
     return Registered(trace.engine, tuple(stop_ids), T=T, book=CV.Book.uniform(V.TABLE_CAPS))
 
 
-def replayed(advice: Any, record: Record, reg: Registered) -> tuple[Any, list[int], list[list[Any]], list[BC.Seen], list[int], list[int]]:
-    """The replay v1 encodes the advice under (`codec.replay_record`, each request arrived from its first row's step
-    on), the arrival order, each step's lookups and what its scheduler and pool did (`by_class.Seen`), and A5's window
-    of each step and of each arrival (`codec.charged`)."""
-    order = arrival_order(advice, record, reg.row_order)
-    index = {record.requests[k].id: e for e, k in enumerate(order)}
+def coded(served: Any, record: Record, reg: Registered) -> tuple[bytes, list[int], Rows, Callable[[], bool]]:
+    """A serve's v1 string, its arrival order, its steps' rows (a request its place in that order), and whether the
+    string decodes back to the serve, which refuses as the decoder does. `served` is the trace's I1 v0 advice, held
+    to with its streams; or under a draft its schedule (`schedule_code.Schedule`), held to in its arrival order, its
+    rows' kept counts and each step's rows as a set: their order is derived, and no bit of the string says it."""
+    if type(served) is SC.Schedule:
+        data, order = SC.encode(served, record, reg, check=False), list(served.arrival)
+        place = {k: e for e, k in enumerate(order)}
+        rows = [[(place[k], start, n) for k, start, n in st] for st in served.steps]
+
+        def back() -> bool:
+            got = SC.decode(data, record, reg)
+            return (got.arrival, got.kept) == (served.arrival, served.kept) and (
+                [sorted(st) for st in got.steps] == [sorted(st) for st in served.steps])
+    else:
+        data, order = encode(served, record, reg, check=False), arrival_order(served, record, reg.row_order)
+        place = {record.requests[k].id: e for e, k in enumerate(order)}
+        rows = [[(place[served.requests[x.request].id], x.start, x.n) for x in st.rows] for st in served.steps]
+
+        def back() -> bool:
+            got = decode_full(data, record, reg)
+            return got.advice == served and got.streams == streams(served, record)
+    return data, order, rows, back
+
+
+def replayed(order: Sequence[int], rows: Rows, record: Record, reg: Registered,
+             kept: Sequence[Sequence[int]] | None = None) -> tuple[Any, list[list[Any]], list[BC.Seen], list[int], list[int]]:
+    """The replay v1 encodes the serve under (`codec.replay_record`: each request, in the arrival order `order`,
+    arrived from the step of its first of `rows` on; under a draft it runs on `kept`, each request's rows' kept
+    counts), each step's lookups and what its scheduler and pool did (`by_class.Seen`), and A5's window of each step
+    and of each arrival (`codec.charged`)."""
     first = [-1] * len(order)
-    for s, st in enumerate(advice.steps):
-        for x in st.rows:
-            e = index[advice.requests[x.request].id]
+    for s, st in enumerate(rows):
+        for e, _, _ in st:
             if first[e] < 0:
                 first[e] = s
-    with BC.observing() as seen:
-        rp, _, looks = replay_record(record, reg, reg.engine, order, lambda i, k: k >= first[i])
+    with BC.observing() as seen, KP.emitting() if kept is not None else nullcontext() as emitted:
+        rp, _, looks = replay_record(record, reg, reg.engine, order, lambda i, k: k >= first[i], kept)
     if len(seen) != len(rp.steps):
         raise ValueError(f"{len(seen)} observed steps for the replay's {len(rp.steps)}")
-    return rp, order, looks, seen, *charged(record, reg, order, rp, windows(record, reg.T))
+    return rp, looks, seen, *charged(record, reg, order, rp, windows(record, reg.T), emitted)
 
 
 def classes(reg: Registered) -> dict[str, dict[str, Any]]:
@@ -147,7 +191,7 @@ def classes(reg: Registered) -> dict[str, dict[str, Any]]:
 
     shut = BC.closed(reg)
     out: dict[str, dict[str, Any]] = {}
-    for name, fields in BC.CLASSES.items():
+    for name, fields in BC.classes(reg).items():
         if all(f in shut for f in fields):
             out[name] = {"standing": "0 by construction", "rules": cite([r for f in fields for r in shut[f]])}
         else:
@@ -218,16 +262,15 @@ def serve_of(d: Path) -> dict[str, Any]:
 
 
 def report(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client") -> dict[str, Any]:
-    """One trace-corpus trace's report (the module's docstring); for a trace the reader or the code refuses, or one
-    served with a draft, the refusal (`error`); either way what the directory says of the serve (`serve`) and of its
-    aborts."""
+    """One trace-corpus trace's report (the module's docstring), read as `v1.py` reads one and, where it was served
+    with a draft, as its schedule; for a trace the reader or the code refuses, the refusal (`error`); either way what
+    the directory says of the serve (`serve`) and of its aborts."""
     seen, serve = aborts(Path(path), T), serve_of(Path(path))
     try:
-        if serve["draft"]:
-            raise ValueError("the server had a draft, which the reader doesn't take from its arguments: the replay "
-                             "would be of a serve without one")
-        tr, rec, adv = V._trace(path, stop_ids, ingress)
-        row = split(label, tr, rec, adv, registration(tr, stop_ids, T))
+        tr = R.read_corpus_trace(path, ingress=ingress)
+        rec = V.record_of(tr, stop_ids, bucket_s=V._bucket_s(tr))
+        served = V.schedule_of(tr, rec) if tr.engine.num_speculative_tokens else V.advice_of(tr, rec)
+        row = split(label, tr, rec, served, registration(tr, stop_ids, T))
     except (ValueError, RuntimeError) as e:
         row = {"trace": label, "error": str(e), "T": T}
     return {**row, "serve": serve, "aborts": seen}
@@ -255,22 +298,36 @@ def length_terms(record: Record, reg: Registered, bucket_s: float) -> dict[str, 
             "release_span_s": span}
 
 
-def split(label: str, trace: Any, record: Record, advice: Any, reg: Registered) -> dict[str, Any]:
-    """`report` of a trace already read, under the registration `reg`."""
-    data = encode(advice, record, reg, check=False)
+def kept_drafts(K: int, total: dict[str, Any]) -> dict[str, Any]:
+    """Under a draft of `K` tokens a row, the kept drafts' charge as its rule (`by_class.RULES`' "kept count", with its
+    line): over the trace (`total`), the rows that sent a count, those of them that kept a draft, the drafts they
+    kept, and the class's bits."""
+    file, line = BC.where("kept count")
+    ev = total["events"]
+    return {"num_speculative_tokens": K,
+            "rule": {"rule": "kept count", "why": BC.RULES["kept count"].why, "file": f"advice_code/{file}", "line": line},
+            "rows": ev["kept_rows"], "rows_kept": ev["rows_kept"], "drafts_kept": ev["drafts_kept"],
+            "bits": total["classes"][BC.KEPT_CLASS]}
+
+
+def split(label: str, trace: Any, record: Record, served: Any, reg: Registered) -> dict[str, Any]:
+    """`report` of a trace already read, under the registration `reg`: `served` is its I1 v0 advice or, under a
+    draft, its schedule (`coded`)."""
+    K = reg.engine.num_speculative_tokens
+    data, order, theirs, same = coded(served, record, reg)
     refused = None
     try:
-        got = decode_full(data, record, reg)
-        back = got.advice == advice and got.streams == streams(advice, record)
+        back = same()
     except AdviceCodeError as e:
         back, refused = False, str(e)
     charge, parts = bits_by_window(data, record, reg), BC.bits_by_class(data, record, reg)
-    rp, order, looks, seen, at, arrived = replayed(advice, record, reg)
-    B = reg.engine.block_size
+    rp, looks, seen, at, arrived = replayed(order, theirs, record, reg, served.kept if K else None)
+    kept = BC.kept_rows(data, record, reg) if K else {}
+    B, events = reg.engine.block_size, EVENTS + KEPT_EVENTS if K else EVENTS
     rows = [{"window": w, "charge": charge[w], "fields": parts[w],
-             "classes": {c: sum(parts[w][f] for f in fs) for c, fs in BC.CLASSES.items()},
-             "events": dict.fromkeys(EVENTS, 0), "steps_waiting": dict.fromkeys(BC.WHY, 0)} for w in sorted(charge)]
-    total = {"events": dict.fromkeys(EVENTS, 0), "steps_waiting": dict.fromkeys(BC.WHY, 0)}
+             "classes": {c: sum(parts[w][f] for f in fs) for c, fs in BC.classes(reg).items()},
+             "events": dict.fromkeys(events, 0), "steps_waiting": dict.fromkeys(BC.WHY, 0)} for w in sorted(charge)]
+    total = {"events": dict.fromkeys(events, 0), "steps_waiting": dict.fromkeys(BC.WHY, 0)}
     waited: list[tuple[set[int], set[int]]] = [(set(), set()) for _ in (*rows, None)]
     buckets: list[set[int]] = [set() for _ in (*rows, None)]
     index = {record.requests[k].id: e for e, k in enumerate(order)}
@@ -280,6 +337,8 @@ def split(label: str, trace: Any, record: Record, advice: Any, reg: Registered) 
         ev = r["events"]
         ev["length_terms"] = len(ks)
         ev["segments"] = int(any(r["fields"][f] for f in BC.SYMBOLS.values()))
+        if K:
+            ev.update(zip(KEPT_EVENTS, kept[r["window"]]))
         for k in ks:
             stop = rp.finish[index[record.requests[k].id]] == "stop"
             ev["ended_stop" if stop else "ended_length"] += 1
@@ -315,9 +374,10 @@ def split(label: str, trace: Any, record: Record, advice: Any, reg: Registered) 
                     full.update(sn.waiting)
     for r, (any_, full), bs in zip(rows, waited, buckets):
         r["events"].update(waited=len(any_), waited_full=len(full), release_buckets=len(bs))
-    total["events"] = {e: sum(r["events"][e] for r in rows) for e in EVENTS}
+    total["events"] = {e: sum(r["events"][e] for r in rows) for e in events}
     total["events"].update(waited=len(waited[-1][0]), waited_full=len(waited[-1][1]), release_buckets=len(buckets[-1]))
-    theirs = [[(index[advice.requests[x.request].id], x.start, x.n) for x in st.rows] for st in advice.steps]
+    total = {"charge": sum(charge.values()), "classes": {c: sum(r["classes"][c] for r in rows) for c in BC.classes(reg)},
+             "fields": {f: sum(r["fields"][f] for r in rows) for f in BC.fields(reg)}, **total}
     m = R.compare(rp.steps, [R.Step(rows=r) for r in theirs])
     differs = None
     if m.first_mismatch is not None:
@@ -334,10 +394,7 @@ def split(label: str, trace: Any, record: Record, advice: Any, reg: Registered) 
                        "max_num_batched_tokens": e.max_num_batched_tokens, "async_scheduling": e.async_scheduling},
             "windows": len(rows), "bits": sum(charge.values()), "bytes": len(data), "book": V.book_of(reg).digest(),
             "round_trip": back, "refused": refused, "first_step_that_differs": differs,
-            "classes": classes(reg), "by_window": rows,
-            "total": {"charge": sum(charge.values()),
-                      "classes": {c: sum(r["classes"][c] for r in rows) for c in BC.CLASSES},
-                      "fields": {f: sum(r["fields"][f] for r in rows) for f in BC.FIELDS}, **total},
+            "classes": classes(reg), "by_window": rows, "total": total, **({"draft": kept_drafts(K, total)} if K else {}),
             "engine_hits": {"admissions_hit": len(hits), "hit_blocks": sum(k // B for k in hits), "hit_tokens": sum(hits)}}
 
 
@@ -356,12 +413,16 @@ COLUMNS = (("hits", (("lookups_hit", "lookups that hit"), ("admissions_cut", "ad
            ("resumes and lag", (("resumptions", "resumptions"), ("lagged", "ended `stop` under async scheduling"))),
            ("segment end", ()))
 
+#: and under a draft, one more: the kept drafts' (`KEPT_EVENTS`)
+KEPT_COLUMN = (BC.KEPT_CLASS, (("kept_rows", "rows that sent a count"), ("rows_kept", "of them kept a draft"),
+                               ("drafts_kept", "drafts kept")))
+
 
 def _cell(name: str, r: dict[str, Any]) -> str:
     """A class's cell in a window's row: its bits, `no field`, or `not exercised` where it has no bits and none of its
     events happened."""
     bits = r["classes"].get(name)
-    if not bits and not any(r["events"][e] for e in OF[name]):
+    if not bits and not any(r["events"][e] for e in (OF | KEPT_OF)[name]):
         return "not exercised"
     return "no field" if bits is None else f"{bits:,}"
 
@@ -415,6 +476,8 @@ def _facts(row: dict[str, Any]) -> dict[str, str]:
                 "admission": tick, "the prefix cache": "on" if row["prefix_caching"] else "off",
                 "the registered codebook": f"`{row['book'][:16]}`", "ℓ": f"{row['ell']:,} bits",
                 "T": f"{row['T']} buckets"}
+        if "draft" in row:
+            out["drafts a row"] = f"at most {row['draft']['num_speculative_tokens']}"
     return out
 
 
@@ -464,10 +527,10 @@ def _beside(b: dict[str, Any]) -> list[str]:
 
 def render(row: dict[str, Any], standing: bool = True) -> str:
     """One trace's report as Markdown: the table by window, each class's bits with its events' counts beside them and ℓ
-    beside each charge, what holds the charge, the lengths' rule and the charge scaled to the monitoring periods, the
-    pool's and the scheduler's other counts, the round trip, the aborts, each serve it is set beside and, with
-    ``standing``, each class's standing with its rules. A trace that was refused is its refusal, its aborts and what
-    of the run they leave unshown."""
+    beside each charge, what holds the charge, the lengths' rule, under a draft the kept drafts' rule, the charge
+    scaled to the monitoring periods, the pool's and the scheduler's other counts, the round trip, the aborts, each
+    serve it is set beside and, with ``standing``, each class's standing with its rules. A trace that was refused is
+    its refusal, its aborts and what of the run they leave unshown."""
     if "error" in row:
         out = f"**{row['trace']}**: refused, so it has no table: {row['error']}\n"
         if row.get("aborts") is not None:
@@ -475,9 +538,11 @@ def render(row: dict[str, Any], standing: bool = True) -> str:
         return out
     tick = "under the certified tick" if row["tick"] else "admitted on arrival"
     cache = "on" if row["prefix_caching"] else "off"
-    t, g = row["total"], row["engine"]
-    columns = ["window", "charge", "ℓ"] + [h for name, events in COLUMNS for h in (name, *(head for _, head in events))]
-    out = [f"**{row['trace']}**: {row['requests']:,} requests, {row['steps']:,} steps, {tick}, served with the draft off, "
+    t, g, kept = row["total"], row["engine"], row.get("draft")
+    draft = "off" if kept is None else f"on ({kept['num_speculative_tokens']} drafts a row)"
+    table = COLUMNS if kept is None else (*COLUMNS, KEPT_COLUMN)
+    columns = ["window", "charge", "ℓ"] + [h for name, events in table for h in (name, *(head for _, head in events))]
+    out = [f"**{row['trace']}**: {row['requests']:,} requests, {row['steps']:,} steps, {tick}, served with the draft {draft}, "
            f"the prefix cache {cache}; "
            f"a pool of {g['num_gpu_blocks']:,} blocks of {g['block_size']} tokens, at most {g['max_num_seqs']} requests "
            f"and {g['max_num_batched_tokens']:,} tokens a step; {row['windows']} window{'s' if row['windows'] != 1 else ''} "
@@ -485,7 +550,7 @@ def render(row: dict[str, Any], standing: bool = True) -> str:
            "| " + " | ".join(columns) + " |", "|" + "---|" * len(columns)]
 
     def line(head: str, r: dict[str, Any]) -> str:
-        cells = [c for name, events in COLUMNS for c in (_cell(name, r), *(f"{r['events'][e]:,}" for e, _ in events))]
+        cells = [c for name, events in table for c in (_cell(name, r), *(f"{r['events'][e]:,}" for e, _ in events))]
         return f"| {head} | {r['charge']:,} | {row['ell']:,} | " + " | ".join(cells) + " |"
 
     out += [line(str(r["window"]), r) for r in row["by_window"]]
@@ -503,6 +568,12 @@ def render(row: dict[str, Any], standing: bool = True) -> str:
                    f"{w['mean']:.3f}; {n['terms']:,} terms are {n['bits']:,} bits, {n['bits'] / n['terms']:.3f} a request.")
     else:
         out.append("The lengths: the registration sends none.")
+    if kept is not None:
+        r = kept["rule"]
+        each = f", {kept['bits'] / kept['rows']:.3f} a row" if kept["rows"] else ""
+        out.append(f"The kept drafts: {r['why']} (`{r['file']}:{r['line']}`). {kept['rows']:,} rows sent a count, "
+                   f"{kept['rows_kept']:,} of them kept a draft, {kept['drafts_kept']:,} drafts in all; the counts are "
+                   f"{kept['bits']:,} bits{each}.")
     k = row["scaled"]
     cards = row["serve"]["cards"]
     out.append(f"Scaled, not measured: at this serve's own rate on its {cards} card{'s' if cards != 1 else ''}, its "
