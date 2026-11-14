@@ -12,12 +12,23 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.refs import runs
-from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_export_facts, observe_target_profile
+
+from tests.program.test_norm_chain import (
+    BF,
+    GemmaNorm,
+    _bi_facts,
+    _derive,
+    _emitted,
+    _evaluate,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings import (
+    clear_observations,
+    observe_export_facts,
+    observe_target_profile,
+)
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from tests.program.test_norm_chain import BF, GemmaNorm, _bi_facts, _derive, _emitted, _evaluate
 
 H = 16
 FORWARDS = 3
