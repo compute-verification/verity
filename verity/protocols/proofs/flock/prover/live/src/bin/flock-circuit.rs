@@ -5636,38 +5636,39 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "device_walk_matches_host" {
         // the units as the device's level walk builds them (fc_walk_units from working arrays of 0xA5 bytes) are
         // Stmt::slot_zab's word for word, on every unit of every block; the control, the same slots without the levels,
-        // must differ, so the compare reads what the levels wrote
+        // must differ, so the compare reads what the levels wrote. Skipped, saying which: a build without the device, a
+        // device build not asked for it, no device present, or a statement whose unit no device walks; once a device is
+        // asked, a device error or a walk that differs, in any chunk, fails (`ir_block::walk_verdict`)
         #[cfg(feature = "gpu")]
         if gpu {
             use rayon::prelude::*;
+            if flock_live::gpu::device_count() < 1 {
+                return json!({"case": name, "gpu": true, "pass": true, "skipped": "no device present: a device build, asked for the device, with no CUDA device"});
+            }
+            if let Some(why) = flock_live::gpu_circuit::unit_walk_off(st) {
+                return json!({"case": name, "gpu": true, "pass": true, "skipped": format!("no device walks this statement's unit: {why}")});
+            }
             let w = wit(st, inst, &Plan::default(), false, ProverSeed::from_os(), 0);
             let ins = st.converge(&*w.inputs, &*w.rowin, &w.nets);
             let (ni, net) = (st.c.unit_net, st.c.unit());
             let levels = flock_live::ir_block::schedule(net).levels();
-            let mut checked = 0;
-            for (k, chunk) in ins[ni].chunks(300).enumerate() {
-                let host = st.slot_zab(ni, net, chunk);
-                let same = |dev: &[(Vec<F128>, Vec<F128>, Vec<F128>)]| {
-                    host.len() == chunk.len() && host.par_iter().all(|(x, z, a, b)| dev[*x].0 == *z && dev[*x].1 == *a && dev[*x].2 == *b)
-                };
-                match flock_live::gpu_circuit::device_unit_walk(st, chunk, true) {
-                    Ok(dev) if same(&dev) => {}
-                    Ok(_) => return json!({"case": name, "gpu": true, "pass": false, "units_checked": checked, "why": "a unit's words differ"}),
-                    Err(e) => return json!({"case": name, "gpu": true, "pass": true, "skipped": e}),
-                }
-                if k == 0 && levels > 0 {
-                    match flock_live::gpu_circuit::device_unit_walk(st, chunk, false) {
-                        Ok(dev) if !same(&dev) => {}
-                        Ok(_) => return json!({"case": name, "gpu": true, "pass": false, "why": "the control without the levels equals the host's"}),
-                        Err(e) => return json!({"case": name, "gpu": true, "pass": false, "why": e}),
-                    }
-                }
-                checked += chunk.len();
-            }
-            return json!({"case": name, "gpu": true, "expect": "the device's level walk's units equal the host's, and not without the levels",
-                          "units": checked, "levels": levels, "pass": checked > 0 && checked == ins[ni].len()});
+            let chunks: Vec<&[Vec<F128>]> = ins[ni].chunks(300).collect();
+            let sizes: Vec<usize> = chunks.iter().map(|c| c.len()).collect();
+            let same = |k: usize, dev: &Vec<(Vec<F128>, Vec<F128>, Vec<F128>)>| {
+                let host = st.slot_zab(ni, net, chunks[k]);
+                host.len() == chunks[k].len() && host.par_iter().all(|(x, z, a, b)| dev[*x].0 == *z && dev[*x].1 == *a && dev[*x].2 == *b)
+            };
+            let walk = |k: usize, walked: bool| flock_live::gpu_circuit::device_unit_walk(st, chunks[k], walked);
+            return match flock_live::ir_block::walk_verdict(&sizes, levels, walk, same) {
+                flock_live::ir_block::WalkVerdict::Equal { units } => json!({"case": name, "gpu": true,
+                    "expect": "the device's level walk's units equal the host's in every chunk, and not without the levels",
+                    "units": units, "chunks": sizes.len(), "levels": levels, "pass": units > 0 && units == ins[ni].len()}),
+                flock_live::ir_block::WalkVerdict::Fails { chunk, units_checked, why } => json!({"case": name, "gpu": true, "pass": false,
+                    "chunk": chunk, "chunks": sizes.len(), "units_checked": units_checked, "levels": levels, "why": why}),
+            };
         }
-        return json!({"case": name, "pass": true, "skipped": "a check of the GPU build"});
+        let why = if cfg!(feature = "gpu") { "a device build not asked for the device (--gpu)" } else { "a build without the device" };
+        return json!({"case": name, "pass": true, "skipped": why});
     }
     if name == "device_salts_match_host" {
         #[cfg(all(feature = "gpu", feature = "sha512"))]

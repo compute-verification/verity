@@ -1335,9 +1335,71 @@ pub fn check_order(net: &IrUnitNet) -> Result<(), String> {
     Ok(())
 }
 
+/// The verdict of the selftest's `device_walk_matches_host`: the device's level walk against the host's units.
+#[derive(Debug, PartialEq)]
+pub enum WalkVerdict {
+    /// every chunk's walk is the host's word for word, `units` units in all
+    Equal { units: usize },
+    /// chunk `chunk` failed, after `units_checked` units of the chunks before it matched
+    Fails { chunk: usize, units_checked: usize, why: String },
+}
+
+/// [`WalkVerdict`] over every chunk, `sizes[k]` units in chunk `k`. `walk(k, walked)` is chunk `k` as the device builds it
+/// (`walked` false: the control, the same slots without the levels) and `same(k, w)` whether `w` is the host's word for word.
+/// A device error or a walk that differs, in any chunk, fails and names the chunk; so does chunk 0's control where the unit
+/// has levels and the control equals the host's (the compare must read what the levels wrote). It never skips: whether there
+/// is a device to ask is decided before it.
+pub fn walk_verdict<W>(sizes: &[usize], levels: usize, mut walk: impl FnMut(usize, bool) -> Result<W, String>,
+                       same: impl Fn(usize, &W) -> bool) -> WalkVerdict {
+    let mut checked = 0;
+    for (k, &n) in sizes.iter().enumerate() {
+        let fails = |why: String| WalkVerdict::Fails { chunk: k, units_checked: checked, why };
+        match walk(k, true) {
+            Ok(w) if same(k, &w) => {}
+            Ok(_) => return fails("a unit's words differ".into()),
+            Err(e) => return fails(format!("the device's level walk: {e}")),
+        }
+        if k == 0 && levels > 0 {
+            match walk(k, false) {
+                Ok(w) if !same(k, &w) => {}
+                Ok(_) => return fails("the control without the levels equals the host's".into()),
+                Err(e) => return fails(format!("the device's control without the levels: {e}")),
+            }
+        }
+        checked += n;
+    }
+    WalkVerdict::Equal { units: checked }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `device_walk_matches_host`'s verdict with stand-ins for the device: a device error or a differing walk in a later
+    /// chunk fails and names it, as does a control that equals the host's; every chunk is walked before it is equal
+    #[test]
+    fn the_walk_verdict_fails_on_a_device_error_or_a_differing_chunk_in_any_chunk() {
+        let sizes = [300, 300, 7];
+        let host = |k: usize| k as u64;
+        let device = |bad: Option<(usize, Result<u64, String>)>| move |k: usize, walked: bool| match &bad {
+            Some((b, r)) if *b == k && walked => r.clone(),
+            _ if !walked => Ok(u64::MAX),
+            _ => Ok(host(k)),
+        };
+        let same = |k: usize, w: &u64| *w == host(k);
+        assert_eq!(walk_verdict(&sizes, 3, device(None), same), WalkVerdict::Equal { units: 607 });
+        assert_eq!(walk_verdict(&sizes, 3, device(Some((2, Err("the device's level walk failed (700)".into())))), same),
+                   WalkVerdict::Fails { chunk: 2, units_checked: 600, why: "the device's level walk: the device's level walk failed (700)".into() });
+        assert_eq!(walk_verdict(&sizes, 3, device(Some((1, Ok(99)))), same),
+                   WalkVerdict::Fails { chunk: 1, units_checked: 300, why: "a unit's words differ".into() });
+        let control_equal = |k: usize, _walked: bool| Ok::<u64, String>(host(k));
+        assert_eq!(walk_verdict(&sizes, 3, control_equal, same),
+                   WalkVerdict::Fails { chunk: 0, units_checked: 0, why: "the control without the levels equals the host's".into() });
+        assert_eq!(walk_verdict(&sizes, 0, control_equal, same), WalkVerdict::Equal { units: 607 });
+        let mut walked = Vec::new();
+        let _ = walk_verdict(&sizes, 3, |k, w| { walked.push((k, w)); device(None)(k, w) }, same);
+        assert_eq!(walked, [(0, true), (0, false), (1, true), (2, true)]);
+    }
 
     fn next(s: &mut u64, m: usize) -> usize {
         *s ^= *s << 13;

@@ -417,6 +417,16 @@ pub fn unit_walk(st: &Stmt) -> bool {
     asked && walk_rows_shared(st)
 }
 
+/// Why the unit's level walk is off for `st` on any device, read from the statement alone (no device is asked); None where
+/// the walk can run.
+pub fn unit_walk_off(st: &Stmt) -> Option<String> {
+    let unit = st.c.unit();
+    if unit.order.is_some() {
+        return Some(format!("{} is committed at a position map (ORDER)", unit.name));
+    }
+    WalkRows::of(unit, &schedule(unit)).is_none().then(|| format!("{} has no one-pass form, or is a cut unit", unit.name))
+}
+
 /// Whether the device holds the unit's level walk's rows as the GPU's shared copy, put there at the first ask.
 fn walk_rows_shared(st: &Stmt) -> bool {
     let unit = st.c.unit();
