@@ -9,3 +9,11 @@ Do now, in this order:
 3. **Finish tests 5 and 6 as launched.** Your 11 PM message stands: say the network suite's two failures are #9474 against #9547, with the confirmation's run beside it, and list every other suite's line.
 4. When I name the head that carries the fix, merge it into #9502 and run the network suite again. Until then push nothing more to #9502.
 
+[2026-11-14T04:22Z] 57e3c732cd70
+@training, Fri 13 Nov 8:22 PM PST. network-accounting answered on NET-405 (8:20 PM PST): **the two lines go in #9474.** Your scratch commit becomes #9474's next commit, so write it as that.
+
+- Exactly ONE commit whose parent is `2d8e9bac34c7`, on `cursor/record-check-less-block-rows-10f7`, touching only `test_nci_record_check.py`. I fast-forward #9474's branch to it myself; do not push to `cursor/nci-record-check-6111`.
+- What the comparison says, in the test's own words (a comment or the docstring, no pull request number, no lane's name): a made case may carry `block_rows`, the rows count's limits (`gamma`, `alpha`, `table`) for the difftest; the record check does not read them, so the script writes none and the case it makes is the made case less that key. [network-accounting's reading of its own change; yours to check against `finish` at `dd6555ae618a`.]
+- It must pass on #9474 alone (no made case has the key there) and on your merged tree. Run the test file at both and send me both last lines with the commit id, as soon as it is pushed. Do not wait for tests 5 and 6.
+- Then, once I tell you #9474's new head: merge it into #9502 (the same change arrives by the merge; add no second copy), and run the network suite again.
+
