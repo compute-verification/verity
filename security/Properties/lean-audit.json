@@ -920,7 +920,7 @@
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
    "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order",
-   "Verity.Assumptions.TrustedHost": "the honest verifier server's auditor-trusted devices (trusted-host): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
+   "Verity.Assumptions.TrustedDevice": "the honest verifier server's auditor-trusted devices (trusted-host): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
    "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
   },
   "extra": {

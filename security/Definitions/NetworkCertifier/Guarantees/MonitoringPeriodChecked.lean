@@ -142,7 +142,7 @@ def MonitoringPeriodLeakChecked : Prop :=
     {Conn Cell Srv Dev Z Par : Type} (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (rd : Par → (Fin n → List (Obs L K S)) → Conn → List (ℕ × CellView Cell))
     (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
     (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)

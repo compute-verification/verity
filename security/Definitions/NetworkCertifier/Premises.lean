@@ -4,7 +4,7 @@ module
 # The network certifier's premises
 
 What a property of the network certifier may take besides its acceptance (the lean-proofs skill, "One shape"): one
-physical premise, `DeviceIntact`. It is the listed `trusted-host` (`Verity.Assumptions.TrustedHost`) read
+physical premise, `DeviceIntact`. It is the listed `trusted-host` (`Verity.Assumptions.TrustedDevice`) read
 for the certifier device: the device runs its code as built. Nothing is assumed of SHA-512 or LMS: a property that relies
 on the device's hashes or signatures concludes its claim or a break the run itself carries.
 -/
