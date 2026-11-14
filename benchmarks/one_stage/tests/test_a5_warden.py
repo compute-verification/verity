@@ -199,6 +199,8 @@ def test_the_audits_case_is_written_where_replay_names_the_network_certifiers_mo
     it) holds a module with none of what a5 writes an audit's case with. a5 reads the `replay.py` beside it by its
     path, so the case is written and no error stands in its place."""
     import a5
+    # two directories hold a `replay.py`: `active_replay`'s own `import replay` takes the first on the path, and needs
+    # `network_traces`' one
     monkeypatch.syspath_prepend(str(HERE.parent / "network_traces"))
     import active_replay
 
