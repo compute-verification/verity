@@ -22,8 +22,8 @@ from verity.commitments import hm96
 from verity.commitments.gates.frame_v3 import root_ref
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
-from verity.protocols.accounting.certifier.verifier.service import (HEADS, OUTPUTS, PUBLIC_WARDEN, SCHEMA, VALUE, TransferBlocks,
-                                                                      encode, rows)
+from verity.protocols.accounting.certifier.verifier.service import (HEADS, OUTPUTS, PUBLIC, SCHEMA, VALUE, TransferBlocks, encode,
+                                                                      rows)
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
@@ -200,7 +200,7 @@ def test_the_spec_declares_each_public_item_with_its_reason(tmp_path):
         "population": "structure", "window": "structure", f"leaves:{VALUE}": "structure",
         f"domain:{VALUE}": "structure", VALUE: "commitment", "parameters": "structure", "verdict": "output",
         "deadline": "output", "warden": "structure"}
-    assert lw.spec.public == PUBLIC_WARDEN and lw.spec.check.public_outputs == OUTPUTS and isinstance(lw.spec.selection, S.All)
+    assert lw.spec.public == PUBLIC and lw.spec.check.public_outputs == OUTPUTS and isinstance(lw.spec.selection, S.All)
     assert lw.spec.check.program == P.program_sha512(Program(lw.unit))
     assert lw.spec.digest() != replace(lw, run="another").spec.digest()
     assert lw.spec.digest() != replace(lw, certifier_session=signers.OTHER_SESSION).spec.digest()
@@ -314,7 +314,7 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     honest = prove(opening, "honest")
     v = verdict(honest)
     assert v["accepted"] and v["public"] == {"verdict": 1, "deadline": 1} and v["decided_by"] == "proof"
-    assert v["by"] == SVC.OF_RECORD[lw.kind] == "lean" and v["reference"] == {"accepted": True}
+    assert v["by"] == SVC.OF_RECORD == "lean" and v["reference"] == {"accepted": True}
     assert "clear" not in v and verdict(honest, opening=opening)["clear"] == {"accepted": True}
     assert set(honest.salts) == {"pub", "o0"} and honest.output == 0b11
     eg, ig = opening.records
@@ -366,8 +366,7 @@ def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path)
     assert swapped.id != gate.id and swapped.signature() == gate.signature() and HC.expand(swapped, forged) is forged
 
     registered, query = lw._partition["program"], lw.query
-    other = bind(SVC._units(lambda *k: swapped if k == key else HC.gate(*k), SVC.SV.gate)[0], EGRESS=key,
-                 INGRESS=lw.head_key(1))
+    other = bind(SVC._unit(lambda *k: swapped if k == key else HC.gate(*k)), EGRESS=key, INGRESS=lw.head_key(1))
     program = P.partition(P.population_program(other, 1), query)["program"]
     assert other.id == lw.unit.id and program != registered and lw._partition["program"] == registered
     assert lw.proved([_finding(registered)])
@@ -596,20 +595,20 @@ def test_the_opening_must_be_the_registered_phases(tmp_path):
             run.lw.commit(0, *opening.records, salts=salts)
 
 
-def test_a_wardens_link_has_both_heads_under_its_digest_and_no_sync(tmp_path):
-    """A warden's link (`WardenProfile`) is the network certifier's records: its public items are `PUBLIC_WARDEN`, a
-    window whose two records the network certifier certified under its parameters digest is accepted with no sync
-    declared, by the Lean's verdict of record, the Python beside it and the in-the-clear check alike, and a window whose
-    egress record was certified under a shaper's digest instead is a reject. A link that is neither a warden's nor
-    served is refused, and a warden link's two ends are one grid."""
+def test_a_link_is_a_wardens_with_both_heads_under_its_digest_and_no_sync(tmp_path):
+    """A link (`WardenProfile`) is the network certifier's records: its public items are `PUBLIC`, a window whose two
+    records the network certifier certified under its parameters digest is accepted with no sync declared, by the
+    Lean's verdict of record, the Python beside it and the in-the-clear check alike, and a window whose egress record was
+    certified under a shaper's digest instead is a reject. A link without a `WardenProfile` has no verdict, and its two
+    ends are one grid."""
     run = Run(tmp_path)
     lw = run.lw
-    assert lw.spec.public == PUBLIC_WARDEN and lw.windows == 3 and lw.kind == "warden" and SVC.OF_RECORD[lw.kind] == "lean"
+    assert lw.spec.public == SVC.PUBLIC and lw.windows == 3 and SVC.OF_RECORD == "lean"
     honest = run.honest(0)
     draw = run.stream.select(run.register(honest))
     out = standin.decide(lw, run.stream, draw, honest, (), tmp_path / "p0")
     assert out.accepted and out.public == {"verdict": 1, "deadline": 1}
-    assert lw.clear(honest, draw, ())["accepted"]
+    assert lw.clear(honest, draw)["accepted"]
     verdict = run.stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
     assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": True}
     shaped = run.issuer.certify(egress_records()[1], EGRESS, PARAMS, parameters_digest(PARAMS, SYNC_SET))
@@ -617,7 +616,7 @@ def test_a_wardens_link_has_both_heads_under_its_digest_and_no_sync(tmp_path):
     assert reject(standin.decide(lw, run.stream, run.stream.select(run.register(other)), other, (), tmp_path / "p1"))
     verdict = run.stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
     assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": False}
-    with pytest.raises(ValueError, match="a link is served"):
+    with pytest.raises(ValueError, match="the network certifier's"):
         replace(lw, warden=None)
     with pytest.raises(ValueError, match="one grid"):
         replace(lw, ingress=replace(PARAMS, buckets=PARAMS.buckets + 1))

@@ -90,7 +90,7 @@ public import Definitions.Pouw.PearlC.TileCheck
 public import Definitions.Pouw.PearlC.TileCheck8
 public import Definitions.Pouw.PearlC.TileCheck4
 public import Definitions.Pouw.PearlC.TileCircuit
-public import Definitions.Pouw.PearlC.TileDraw
+public import Definitions.Pouw.PearlC.TileSample
 public import Definitions.Pouw.PearlC.Unscale
 public import Definitions.Pouw.PearlC.W1
 public import Definitions.Pouw.PearlC.W1Stop
@@ -162,7 +162,7 @@ modules keep their basenames in `Definitions.Pouw`, `Definitions.Pouw.Assumption
   `Tile`) on their primitives' word views.
 * `PearlC`: Pearl-C's Π (`Defs`), its game (`Game`) and its named protocol and error (`Instance`). The device record
   is `Device` (the records at a card's numbers are `Proofs.Pouw.PearlC.Records`'), the hidden audit `Hidden` and
-  `HiddenTileGame`, and the sampled audit `Tile`, `TileDraw` and `Completeness`. The units as core circuits are
+  `HiddenTileGame`, and the sampled audit `Tile`, `TileSample` and `Completeness`. The units as core circuits are
   `RowCircuit`, `TileCircuit` and `WholeCircuit`, and Pearl-C4's FP4 step and chain `Fp4` and `Fp4Chain`.
 * `Receipt`: the receipt folds `Duo`, `Fx1` (sm_120's) and `Li`, after
   `verity/protocols/pouw/receipts/receipt_folds.py`. Their binding statements are `Definitions.Pouw.Guarantees.Receipt`.

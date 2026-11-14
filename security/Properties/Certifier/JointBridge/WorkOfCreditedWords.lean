@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 `Accounting.PeriodRun.Sound` at `.pouw` is the joint period's PoUW guarantee, in priced ops: the probability over PoUW's
 own coins that it accepts while the compute account did less than the work certificate `W` at price `p` is at most its
 error. A PoUW source statement credits words instead: the probability that its game accepts while its words fixed right
-fall below its credit is at most its error (`Properties.Pouw.Period.H1CheckedCreditPeriod`, at
+fall below its credit is at most its error (`Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, at
 `δ_s + n·(δ_bind + δ_ks)`).
 
 `WorkOfCreditedWords` turns the second into the first at the same error, for every price `p`, when the work certificate

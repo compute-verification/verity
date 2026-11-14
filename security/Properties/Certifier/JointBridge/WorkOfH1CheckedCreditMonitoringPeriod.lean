@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Assumptions.CreditedWords
-public import Properties.Pouw.Period
+public import Properties.Pouw.MonitoringPeriod
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -41,7 +41,7 @@ Each audit's per-period guarantee in the coins model is `Accounting.PeriodRun.So
 couple into the causal game (`Accounting.PeriodLive`). `WorkOfH1CheckedCreditMonitoringPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
 for a period whose PoUW audit credits H1's checked words (`Accounting.RealizesCreditedWords` at the play's acceptance
 and the check's credit over the accepted prefix, `m = Accounting.Compose.minWordMacs Sc Cd macs` multiply-adds a word,
-`u` a unit and `b_unit` bits a unit), from `Properties.Pouw.Period.H1CheckedCreditPeriod` and its premises, with its
+`u` a unit and `b_unit` bits a unit), from `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod` and its premises, with its
 error `δ_s + n·(δ_bind + δ_ks)`. It is `Properties.Certifier.JointBridge.WorkOfCreditedWords` at H1's instance.
 `WorkOfH1CheckedCreditMonitoringPeriod` is it at every price, word and unit count and unit width. Its instance at the H200's INT8
 price is a corollary, stated beside its proof.
@@ -61,7 +61,7 @@ most `K / b_unit` units (`Accounting.Assumptions.HelpWithinCertifier`).
 
 namespace Properties.Certifier.JointBridge
 
-open Properties.Pouw.Period PouwCheck
+open Properties.Pouw.MonitoringPeriod PouwCheck
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **PoUW's per-period guarantee in the joint period, from H1's checked credit on the torch loop, at price `p`,
@@ -72,7 +72,7 @@ check's credit at `m = minWordMacs Sc Cd macs` multiply-adds a word, less the `K
 certifier's bits can carry at `u` multiply-adds each, all at `p .tc`), each right word of a unit the device didn't
 outsource costing `m` multiply-adds of priced work (`WordCostsMacs` at `n` times the run's fixed words and `help`
 outsourced units), at most `K / b_unit` units outsourced (`HelpWithinCertifier`), and the source's instance at each
-value `ξ` of the coins meeting `H1CheckedCreditPeriod`'s premises: PoUW's per-period guarantee holds at certificates
+value `ξ` of the coins meeting `H1CheckedCreditMonitoringPeriod`'s premises: PoUW's per-period guarantee holds at certificates
 `c`, price `p` and error `δ_s + n·(δ_bind + δ_ks)`, i.e. at any value of the other coins, the probability over PoUW's
 own coins that it accepts while the compute account did less than `W` of work at `p` is at most that. -/
 def WorkOfH1CheckedCreditMonitoringPeriodAt (p : Accounting.Price) (macs : Accounting.Compose.Kind → ℕ) (u bUnit : ℕ) : Prop :=
