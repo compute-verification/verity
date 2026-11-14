@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Pous.Memory.Counting
+public import Proofs.Pous.Accounting.Memory.Counting
 public import Proofs.Pous.Thm1.Theorem1iiSeq
-public import Definitions.Pous.Guarantees.Memory
+public import Definitions.Pous.Accounting.Guarantees.Memory
 
 /-!
 # Memory adds: the composition with PoUS's guarantee

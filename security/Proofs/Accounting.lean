@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Pous.Memory
+public import Proofs.Pous.Accounting.Memory
 public import Proofs.Registration.Device
 public import Proofs.Accounting.Gates
 public import Proofs.Pouw.FillerLuck
@@ -45,7 +45,7 @@ public import Proofs.Poub.ReadUnit.Binding
 public import Proofs.Poub.ReadUnit.BitsPorts
 public import Proofs.Poub.ReadUnit.Witnesses
 public import Proofs.Poub.BoundReceipt
-public import Proofs.Registration.Capacity
+public import Proofs.Pous.Accounting.Capacity
 public import Proofs.Accounting.RegisteredCircuit
 public import Proofs.Accounting.RegisteredCircuit.Tiles
 public import Proofs.Accounting.RegisteredCircuit.Credit
@@ -109,8 +109,8 @@ public import Proofs.Pouw.TS.Session.Tile.Computes
 public import Proofs.Pouw.TS.TileSound
 public import Proofs.Pouw.TS.PeriodSound
 public import Proofs.Accounting.Actual
-public import Proofs.Pous.Responder
-public import Proofs.Pous.Responder.Latency
+public import Proofs.Pous.Accounting.Responder
+public import Proofs.Pous.Accounting.Responder.Latency
 public import Proofs.Pouw.HMu
 public import Proofs.Pouw.CoinFlow
 public import Proofs.Compose.Compose

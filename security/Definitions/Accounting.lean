@@ -8,7 +8,7 @@ public import Definitions.Poub.BandwidthAudit
 public import Definitions.Poub.BoundReceipt
 public import Definitions.Poub.BoundSketch
 public import Definitions.Certifier.Bridge
-public import Definitions.Registration.Capacity
+public import Definitions.Pous.Accounting.Capacity
 public import Definitions.Pouw.CoinFlow
 public import Definitions.Poub.Carrier
 public import Definitions.Compose.Compose
@@ -30,7 +30,7 @@ public import Definitions.Certifier.JointBridge.CommOfMonitoringPeriodLeakAccept
 public import Definitions.Certifier.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Certifier.JointBridge.CommOfPooledLeakAcceptedWitness
 public import Definitions.Compose.JointLive
-public import Definitions.Pous.Memory
+public import Definitions.Pous.Accounting.Memory
 public import Definitions.Pouw.PerRun
 public import Definitions.Compose.PeriodBinding
 public import Definitions.Registration.Physical
@@ -58,7 +58,7 @@ public import Definitions.Poub.Remote.Deployed
 public import Definitions.Poub.Remote.DrawInstances
 public import Definitions.Accounting.Requirement
 public import Definitions.Accounting.Requirement.Placed
-public import Definitions.Pous.Responder
+public import Definitions.Pous.Accounting.Responder
 public import Definitions.Accounting.Schedule
 public import Definitions.Accounting.Served
 public import Definitions.Slowdown.ServingBlocks
@@ -66,8 +66,8 @@ public import Definitions.Slowdown.ServingBlocks.Instances
 public import Definitions.Poub.Tag
 public import Definitions.Pouw.TS
 public import Definitions.Pouw.TS.Fixed
-public import Definitions.Accounting.Window
-public import Definitions.Pous.Wipe
+public import Definitions.Pous.Accounting.Window
+public import Definitions.Pous.Accounting.Wipe
 
 /-!
 # Resource accounting's definitions (trusted)

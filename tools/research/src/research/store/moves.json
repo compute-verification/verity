@@ -4214,6 +4214,24 @@
         "security/Properties/Compose/Remote/Subprotocol.lean": "security/Properties/Poub/Remote/Subprotocol.lean",
         "security/Properties/Compose/Remote/SubprotocolDeployed.lean": "security/Properties/Poub/Remote/SubprotocolDeployed.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Accounting/Window.lean": "security/Definitions/Pous/Accounting/Window.lean",
+        "security/Definitions/Pous/Guarantees/Memory.lean": "security/Definitions/Pous/Accounting/Guarantees/Memory.lean",
+        "security/Definitions/Pous/Guarantees/Responder.lean": "security/Definitions/Pous/Accounting/Guarantees/Responder.lean",
+        "security/Definitions/Pous/Memory.lean": "security/Definitions/Pous/Accounting/Memory.lean",
+        "security/Definitions/Pous/Responder.lean": "security/Definitions/Pous/Accounting/Responder.lean",
+        "security/Definitions/Pous/Wipe.lean": "security/Definitions/Pous/Accounting/Wipe.lean",
+        "security/Definitions/Registration/Capacity.lean": "security/Definitions/Pous/Accounting/Capacity.lean",
+        "security/Definitions/Registration/Guarantees/Capacity.lean": "security/Definitions/Pous/Accounting/Guarantees/Capacity.lean",
+        "security/Proofs/Pous/Memory.lean": "security/Proofs/Pous/Accounting/Memory.lean",
+        "security/Proofs/Pous/Memory/Adds.lean": "security/Proofs/Pous/Accounting/Memory/Adds.lean",
+        "security/Proofs/Pous/Memory/Counting.lean": "security/Proofs/Pous/Accounting/Memory/Counting.lean",
+        "security/Proofs/Pous/Responder.lean": "security/Proofs/Pous/Accounting/Responder.lean",
+        "security/Proofs/Pous/Responder/Latency.lean": "security/Proofs/Pous/Accounting/Responder/Latency.lean",
+        "security/Proofs/Registration/Capacity.lean": "security/Proofs/Pous/Accounting/Capacity.lean"
+      }
     }
   ]
 }
