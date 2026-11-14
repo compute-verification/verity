@@ -18,7 +18,11 @@ nodes = "a B200 node: one card a VM (art:a597e0beaf00: nvidia-smi -q and the clo
 count = { value = 148, unit = "SM", mark = "ceiling", source = "the SMs the firmware enables, as the device reports them: cudaDeviceProp.multiProcessorCount 148, and each of the DC-100 census's 43 probes ran its 148 blocks on 148 distinct SMs, on this board and vBIOS (art:175d28515b3b); no NVIDIA document read gives the B200's count (Technical Brief V2.1 Table 3 says only '16 Blackwell Die for 8 GPUs')" }
 warps = { value = 64, unit = "warp/SM", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.2 Table 28, 'Maximum number of resident warps per SM', CC 10.x: 64 (and 2048 resident threads, 32 a warp); store.reg_extra counts its uniform registers and predicates at this many" }
 
+# The clocks, in MHz. default names the reading of the tensor's clock (verity.device.READINGS: sm or tensor) that
+# every figure of the card is stated at unless it names the other: the higher tensor ceiling (CMP-438), where
+# readings(card) is largest.
 [clock]
+default = "sm"
 sm = { value = 1965, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (nvidia-smi -q: max, application, default application and max customer boost clocks 1965 MHz; NVML GPC and memory clock VF offset ranges [0, 0]; supported graphics clocks top at 1965; every lock, application clock and offset above 1965 MHz clamped or refused); no NVIDIA document states a B200 clock" }
 tensor = { value = 1965, unit = "MHz", mark = "ceiling", source = "clock.sm: the tensor cores run on the SM clock, which bounds them; the data sheets' rates imply 1854 MHz (Accounting.TS.Sheets.B200's impliedMHz), which no document states as a clock, and no lower tensor clock is measured on this card" }
 memory = { value = 3996, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (max, application and default application memory clock 3996 MHz; supported memory clocks top at 3996; memory VF offset range [0, 0], a +500 MHz offset refused)" }
@@ -70,11 +74,12 @@ f64 = { value = 128, unit = "tensor unit/MAC", mark = "ceiling", source = "the d
 
 # What an operation costs in tensor units (rate.tensor's unit). The unit (CMP-438): each operation is charged in seconds
 # at its own pipe's data-sheet ceiling, so a program's time is at least the sum of its operations over their pipes'
-# ceilings. fp32 is an FP32 add's price with both pipes on the one SM clock, the default; fp32_tensor_clock is fp32,
-# since the tensor cores run on the SM clock. fp32_loop is a timed loop's price, at or above fp32.
+# ceilings. An FP32 add's price is keyed by its clock reading's name: fp32.sm, both pipes on the one SM clock, the
+# default (clock.default); fp32.tensor is fp32.sm, since the tensor cores run on the SM clock. fp32_loop is a timed
+# loop's price, at or above fp32.sm.
 [price]
-fp32 = { value = 64, unit = "tensor unit/add", mark = "measurement", source = "the default reading: the tensor and the FP32 pipe both on clock.sm (clock.tensor is clock.sm), so an add is rate.tensor / (32 x rate.issue) = 8192 / 128 = 64 tensor units, a SM-clock each; rate.tensor is measured (art:bf3d67eee74a), so this is too" }
-fp32_tensor_clock = { value = 64, unit = "tensor unit/add", mark = "measurement", source = "fp32: the tensor cores run on the SM clock (clock.tensor), so the card has no second clock reading; rate.tensor is measured (art:bf3d67eee74a)" }
+fp32.sm = { value = 64, unit = "tensor unit/add", mark = "measurement", source = "the default reading (clock.default): the tensor and the FP32 pipe both on clock.sm (clock.tensor is clock.sm), so an add is rate.tensor / (32 x rate.issue) = 8192 / 128 = 64 tensor units, a SM-clock each; rate.tensor is measured (art:bf3d67eee74a), so this is too" }
+fp32.tensor = { value = 64, unit = "tensor unit/add", mark = "measurement", source = "fp32.sm: the tensor cores run on the SM clock (clock.tensor), so the card has no second clock reading; rate.tensor is measured (art:bf3d67eee74a)" }
 fp32_loop = { value = 67, unit = "tensor unit/add", mark = "placeholder", source = "no run read times an FP32 add in a loop on this card: this is the loop of 64 adds and 3 loop instructions at the card's rates, rate.tensor / (32 x rate.issue) x 67 / 64, a SM-clock each, and the add alone is 64; a run of that loop on a B200 closes it" }
 
 # The model's own ranges (Accel.Card's exact and text).

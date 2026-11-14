@@ -11,13 +11,13 @@ reading. The tables give the maximum by clock, arm and operand class, each clock
 the fills and bursts compared; each point is joined to the nvidia-smi samples taken inside its host interval.
 
 `--arms fp32-beside` reads run.sh's FP32-beside-tensor points (beside.jsonl, duty.cu's arms A to D) instead, and judges
-each of the card's two clock readings of an FP32 add's price (`price_readings`: `price.fp32`, 32, both pipes at
-clock.sm, the default; `price.fp32_tensor_clock`, 29.58, the tensor at clock.tensor) under the unit CMP-438 rules: each
-operation charged in seconds at its own pipe's data-sheet ceiling. A reading is refuted by a point, of any arm, whose
-MACs over its host interval lengthened by a stamp exceed the tensor's ceiling at that reading's tensor clock, or whose
-adds over it exceed the FP32 pipe's, 32 x rate.issue at clock.sm; it is undecided when a point does so only over its
-interval shortened by a stamp, and survives otherwise. It exits 0 only when every reading is decided. Each point's clock
-is the one it held (nvidia-smi's mean over its interval, else clock64), never the one the run asked nvidia-smi to lock.
+each of the card's two clock readings of an FP32 add's price (`price_readings`: `price.fp32.sm`, 32, both pipes at
+clock.sm, the card's `clock.default`; `price.fp32.tensor`, 29.58, the tensor at clock.tensor) under the unit CMP-438
+rules: each operation charged in seconds at its own pipe's data-sheet ceiling. A reading is refuted by a point, of any
+arm, whose MACs over its host interval lengthened by a stamp exceed the tensor's ceiling at that reading's tensor clock,
+or whose adds over it exceed the FP32 pipe's, 32 x rate.issue at clock.sm; it is undecided when a point does so only
+over its interval shortened by a stamp, and survives otherwise. It exits 0 only when every reading is decided. Each
+point's clock is the one it held (nvidia-smi's mean over its interval, else clock64), never the one the run asked nvidia-smi to lock.
 
 Beside the verdicts, a diagnostic judged against nothing: p = R_t,alone / R_f,mixed for each point of arms B, C and D,
 the time price of an add in the tensor pipe's own time, the unit CMP-438 refused. R_t,alone is the highest arm A point's
@@ -37,7 +37,8 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from verity.device import load_card, number, rate
+from verity.device import READINGS, load_card, number, rate
+from verity.device import readings as card_readings
 
 SKU = "h200-sxm-141gb"
 #: the resolution of duty.cu's host stamps, which it prints to the millisecond
@@ -227,19 +228,21 @@ def fp32_rate(r: dict, pad: float = 0.0) -> float:
 
 
 def price_readings(sku: str = SKU) -> list[dict]:
-    """The card's two clock readings of an FP32 add's price in tensor units, the default first, each with its pipes'
-    ceilings: the tensor's e4m3 MACs a second at the reading's tensor clock, and the FP32 pipe's adds a second, 32 x
-    rate.issue at clock.sm."""
+    """The card's clock readings of an FP32 add's price in tensor units (`price.fp32.<reading>`, by `READINGS`), its
+    `clock.default` first, each with its pipes' ceilings: the tensor's e4m3 MACs a second under the reading
+    (`verity.device.readings`), and the FP32 pipe's adds a second, 32 x rate.issue at clock.sm."""
     card = load_card(sku)
-    sm, tensor = card["clock"]["sm"]["value"], card["clock"]["tensor"]["value"]
+    clock, default = card["clock"], card["clock"]["default"]
+    sm = clock["sm"]["value"]
     adds = 32 * float(rate(card, "issue"))
-    rows = [("sm-clock", "fp32", sm, f"the default: both pipes at clock.sm's {sm} MHz"),
-            ("tensor-clock", "fp32_tensor_clock", tensor,
-             f"the tensor at clock.tensor's {tensor} MHz beside FP32 at clock.sm's {sm} MHz; it holds only if the "
-             f"tensor pipe never exceeds {tensor} MHz")]
-    return [{"reading": n, "price": float(number(card["price"][key])), "default": key == "fp32", "tensor_mhz": mhz,
-             "tensor_ceiling": float(rate(card, fmt="e4m3", mhz=mhz)), "fp32_ceiling": adds, "source": src}
-            for n, key, mhz, src in rows]
+    peaks = card_readings(card, fmt="e4m3")
+    source = {"sm": f"both pipes at clock.sm's {sm} MHz",
+              "tensor": f"the tensor at clock.tensor's {clock['tensor']['value']} MHz beside FP32 at clock.sm's {sm} "
+                        f"MHz; it holds only if the tensor pipe never exceeds {clock['tensor']['value']} MHz"}
+    order = [default, *(r for r in READINGS if r != default)]
+    return [{"reading": r, "price": float(number(card["price"]["fp32"][r])), "default": r == default,
+             "tensor_mhz": clock[r]["value"], "tensor_ceiling": float(peaks[r]), "fp32_ceiling": adds,
+             "source": ("the default: " if r == default else "") + source[r]} for r in order]
 
 
 def over(r: dict, rd: dict, pad: float) -> bool:

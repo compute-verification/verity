@@ -52,8 +52,7 @@ def verdicts(v: dict) -> dict[str, str]:
 def test_the_two_readings_and_their_ceilings_come_from_the_card() -> None:
     """The default first, then the tensor-clock reading, each with its ceilings; no third reading."""
     rd = S.price_readings()
-    assert [(r["reading"], r["price"], r["default"]) for r in rd] == [("sm-clock", 32, True),
-                                                                      ("tensor-clock", 29.58, False)]
+    assert [(r["reading"], r["price"], r["default"]) for r in rd] == [("sm", 32, True), ("tensor", 29.58, False)]
     assert [r["tensor_ceiling"] for r in rd] == pytest.approx([R_1980, R_1830])
     assert [r["fp32_ceiling"] for r in rd] == pytest.approx([F_1980, F_1980])
     assert "never exceeds 1830 MHz" in rd[1]["source"]
@@ -70,7 +69,7 @@ def test_points_under_every_ceiling_refute_neither_reading_whatever_p_reads(tmp_
                 bpoint("C", x=128, p=29.0, share=0.25, macs_s=0.9 * R_1830),
                 bpoint("D", x=10, p=28.5, share=0.5, macs_s=0.5 * R_1830), smi=smi)
     assert (rc, v["decided"]) == (0, True)
-    assert verdicts(v) == {"sm-clock": "survives", "tensor-clock": "survives"}
+    assert verdicts(v) == {"sm": "survives", "tensor": "survives"}
     c = next(r for r in v["rows"] if r["arm"] == "C")
     assert c["p"] == pytest.approx(29.0) and c["p_lo"] < c["p"] < c["p_hi"]
     assert c["r_f_mixed"] == pytest.approx(R_A / 29.0) and c["adds_per_s"] == pytest.approx(R_A / 29.0 * 0.25)
@@ -82,13 +81,13 @@ def test_a_tensor_rate_between_the_two_clocks_refutes_only_the_1830_reading(tmp_
     """MACs at 95% of the 1980 MHz ceiling are above the 1830 MHz one: the tensor-clock reading falls, the default
     stands."""
     rc, v = run(tmp_path, bpoint("A", macs_s=0.95 * R_1980), bpoint("C", x=8, p=33.5, share=1.0))
-    assert (rc, verdicts(v)) == (0, {"sm-clock": "survives", "tensor-clock": "refuted"})
+    assert (rc, verdicts(v)) == (0, {"sm": "survives", "tensor": "refuted"})
     assert v["verdicts"][1]["refuting"] == 1
 
 
 def test_adds_over_the_fp32_ceiling_refute_both_readings(tmp_path: Path) -> None:
     rc, v = run(tmp_path, bpoint("A"), bpoint("B", adds_s=1.01 * F_1980, share=1.0))
-    assert (rc, verdicts(v)) == (0, {"sm-clock": "refuted", "tensor-clock": "refuted"})
+    assert (rc, verdicts(v)) == (0, {"sm": "refuted", "tensor": "refuted"})
 
 
 def test_a_point_within_the_stamps_of_a_ceiling_is_undecided(tmp_path: Path) -> None:
@@ -96,7 +95,7 @@ def test_a_point_within_the_stamps_of_a_ceiling_is_undecided(tmp_path: Path) -> 
     leaves that reading undecided, and the run exits 1."""
     for f in (1.0005, 0.9995):
         rc, v = run(tmp_path, bpoint("A", macs_s=f * R_1830), name=str(f))
-        assert (rc, verdicts(v)) == (1, {"sm-clock": "survives", "tensor-clock": "undecided"})
+        assert (rc, verdicts(v)) == (1, {"sm": "survives", "tensor": "undecided"})
 
 
 def test_p_is_a_diagnostic_and_decides_nothing(tmp_path: Path) -> None:
@@ -112,7 +111,7 @@ def test_p_is_a_diagnostic_and_decides_nothing(tmp_path: Path) -> None:
     b = next(r for r in v["rows"] if r["arm"] == "B")
     assert c["p"] == pytest.approx(33.5) and zero["p"] is None and b["p"] == pytest.approx(34.0)
     assert b["undersaturated"] and b["saturation"] == pytest.approx(104.67 / IDEAL) and v["undersaturated"]
-    assert (rc, verdicts(v)) == (0, {"sm-clock": "survives", "tensor-clock": "survives"})
+    assert (rc, verdicts(v)) == (0, {"sm": "survives", "tensor": "survives"})
 
 
 def test_no_beside_points_is_no_verdict(tmp_path: Path) -> None:

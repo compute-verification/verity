@@ -62,7 +62,7 @@ protocol `P`: whether a unit is correct is `P`'s `Correct` on the transcript the
 **Prices per device** (`W1Prices`, in the record's unit: one dense E4M3 MAC with FP32 accumulation for the FP8
 records, one NVFP4 MAC for the FP4 record). The unit (CMP-438): each operation is charged in seconds at its own pipe's
 data-sheet ceiling, so a program's time is at least the sum of its operations over their pipes' ceilings. Each card's
-FP32 price is stated at two readings (the card files' `price.fp32`, `price.fp32_tensor_clock` and `price.fp32_loop`):
+FP32 price is stated at two readings (the card files' `price.fp32.sm`, `price.fp32.tensor` and `price.fp32_loop`):
 the higher-ceiling one is the default, a statement over the prices reads it unless it says it rests on the other.
 - The H100 and the H200: `W1Prices.h100` (FP32 32, both pipes at `h100SmMHz`, 1980 MHz) is the default;
   `W1Prices.h100Tensor` (FP32 `976/33` = 29.58, the tensor pipe at `h100TensorMHz`, 1830 MHz) credits more and holds
@@ -173,7 +173,7 @@ structure W1Prices where
 
 /-- **sm_120's W1 prices**, issue-bound (node 2, locked 2,100 MHz):
 E4M3 1, BF16 2 and NVFP4 0.5 per MAC; FP32 8; a cast 16 per instruction (8 per code); INT32 16. FP32's 8 is the default
-reading (the card file's `price.fp32`): the add at its pipe's issue ceiling, both pipes on the one SM clock.
+reading (the card file's `price.fp32.sm`): the add at its pipe's issue ceiling, both pipes on the one SM clock.
 
 S8 is 1 per MAC, from the data sheet; those runs did not measure it. NVIDIA's RTX PRO Blackwell GPU Architecture
 whitepaper v1.1, Appendix A, Table 4 (the RTX PRO 6000 Blackwell Workstation Edition, the same 188-SM GB202; the source
@@ -198,7 +198,7 @@ def W1Prices.sm120Loop (sha fetch : ℚ) : W1Prices := { W1Prices.sm120 sha fetc
 /-- **The H100's W1 prices** (`Dimension.H100.h100Nominal`, the datasheet): E4M3 1, BF16 2 and S8 1 per MAC (the H100
 has no E2M1 fragment, so that price is never read); FP32 32; a cast 64 per instruction (32 per code); INT32 64.
 
-These are the default reading (CMP-438; the card file's `price.fp32`): both pipes at `h100SmMHz`, 1980 MHz, the higher
+These are the default reading (CMP-438; the card file's `price.fp32.sm`): both pipes at `h100SmMHz`, 1980 MHz, the higher
 tensor ceiling. A unit is an FP8 MAC's time at 1980 MHz, and an SM-pipe instruction 32 MACs' time at the same clock.
 
 S8's 1 (`nominalMac .s8`) is the data sheets' ratio, the same on the H100 and the H200 (one GH100; they differ in memory
@@ -214,7 +214,7 @@ def W1Prices.h100 (sha fetch : ℚ) : W1Prices where
   sha512 := sha
   fetch := fetch
 
-/-- **The H100's W1 prices at the tensor-clock reading** (CMP-438; the card file's `price.fp32_tensor_clock`):
+/-- **The H100's W1 prices at the tensor-clock reading** (CMP-438; the card file's `price.fp32.tensor`):
 `W1Prices.h100` with FP32, a cast and INT32 times `h100TensorMHz / h100SmMHz` (1830/1980 = 61/66, the card file's
 `clock.tensor` over `clock.sm`): FP32 `976/33` (29.58), a cast `1952/33` per instruction and INT32 `1952/33`; the
 tensor-core prices, a compression and a first fetch are `W1Prices.h100`'s. A unit is an FP8 MAC's time with the tensor

@@ -19,7 +19,11 @@ nodes = "an RTX PRO 6000 node: eight cards, all this SKU and vBIOS (art:06209264
 count = { value = 188, unit = "SM", mark = "ceiling", source = "NVIDIA RTX PRO Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4: 188 SMs (the Workstation Edition, the same GB202)" }
 warps = { value = 48, unit = "warp/SM", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.2 Table 28, 'Maximum number of resident warps per SM', CC 12.0: 48 (and 1536 resident threads, 32 a warp); store.reg_extra counts its uniform registers and predicates at this many" }
 
+# The clocks, in MHz. default names the reading of the tensor's clock (verity.device.READINGS: sm or tensor) that
+# every figure of the card is stated at unless it names the other: the higher tensor ceiling (CMP-438), where
+# readings(card) is largest.
 [clock]
+default = "sm"
 sm = { value = 2430, unit = "MHz", mark = "ceiling", source = "art:0620926423e6 (nvidia-smi -q, all eight cards: max, application, default application and max customer boost clocks 2430 MHz); art:529e118ea9ea (NVML: SM and memory clock offset ranges [0, 0], supported graphics clocks top at 2430); art:198a12d9c2e8 (every lock, application clock and offset above 2430 MHz refused or clamped)" }
 tensor = { value = 2430, unit = "MHz", mark = "ceiling", source = "clock.sm: the tensor cores run on the SM clock, and no source gives this card a lower tensor clock" }
 memory = { value = 12481, unit = "MHz", mark = "ceiling", source = "art:0620926423e6 (max and application memory clock 12481 MHz); art:529e118ea9ea (supported memory clocks [12481, 405], offset range [0, 0]); art:198a12d9c2e8 (a memory clock lock at 12981 MHz clamped, NVML still reading 12481 MHz, and a +500 MHz memory offset refused; no application clock above 12481 MHz was tried)" }
@@ -79,14 +83,14 @@ f64 = { value = 32, unit = "tensor unit/MAC", mark = "measurement", source = "no
 
 # What an operation costs in tensor units (rate.tensor's unit). The unit (CMP-438): each operation is charged in seconds
 # at its own pipe's data-sheet ceiling, so a program's time is at least the sum of its operations over their pipes'
-# ceilings. An FP32 add is priced at two readings: fp32, the add at the FP32 pipe's issue ceiling with both pipes on
-# the one SM clock, the higher ceiling and the default, which a credit is claimed under unless it says it rests on the
-# other; and fp32_loop, the add in a timed loop at a locked 2100 MHz. fp32_tensor_clock is fp32: the tensor cores run
-# on the SM clock.
+# ceilings. An FP32 add is priced at two readings: fp32.sm, the add at the FP32 pipe's issue ceiling with both pipes
+# on the one SM clock, the higher ceiling and the default (clock.default), which a credit is claimed under unless it
+# says it rests on the other; and fp32_loop, the add in a timed loop at a locked 2100 MHz. fp32.tensor, the add at
+# the tensor's clock reading, is fp32.sm: the tensor cores run on the SM clock.
 [price]
-fp32 = { value = 8, unit = "tensor unit/add", mark = "ceiling", source = "the default reading: the tensor and the FP32 pipe both on clock.sm (clock.tensor is clock.sm), 2430 MHz or any one clock, so an add is rate.tensor / (32 x rate.issue) = 1024 / 128 = 8 tensor units, a SM-clock each, the issue ceiling's 128 adds a SM-clock; W1's FP32 price Pouw.PearlC.W1.W1Prices.sm120. A credit is claimed at this reading unless it says it rests on fp32_loop" }
-fp32_tensor_clock = { value = 8, unit = "tensor unit/add", mark = "ceiling", source = "fp32: the tensor cores run on the SM clock (clock.tensor), so the card has no second clock reading" }
-fp32_loop = { value = 8.376, unit = "tensor unit/add", mark = "measurement", source = "the second reading: an FP32 add (FADD) in a loop of 64 adds and 3 loop instructions, measured against the E4M3 MAC with both pipes on the SM clock locked at 2100 MHz: 8.3757 in each of two runs on one card (art:72a1cf64686a, art:887b4b2c911b: 122.26 adds and 1023.98 MACs a SM-clock), here to three decimals; at the ceilings the same loop is rate.tensor / (32 x rate.issue) x 67 / 64 = 8.375, and the add alone fp32's 8. W1's FP32 price Pouw.PearlC.W1.W1Prices.sm120Loop. It holds for an add issued in that loop, the loop's instructions charged to its adds; a figure that rests on it says so" }
+fp32.sm = { value = 8, unit = "tensor unit/add", mark = "ceiling", source = "the default reading (clock.default): the tensor and the FP32 pipe both on clock.sm (clock.tensor is clock.sm), 2430 MHz or any one clock, so an add is rate.tensor / (32 x rate.issue) = 1024 / 128 = 8 tensor units, a SM-clock each, the issue ceiling's 128 adds a SM-clock; W1's FP32 price Pouw.PearlC.W1.W1Prices.sm120. A credit is claimed at this reading unless it says it rests on fp32_loop" }
+fp32.tensor = { value = 8, unit = "tensor unit/add", mark = "ceiling", source = "fp32.sm: the tensor cores run on the SM clock (clock.tensor), so the card has no second clock reading" }
+fp32_loop = { value = 8.376, unit = "tensor unit/add", mark = "measurement", source = "the second reading: an FP32 add (FADD) in a loop of 64 adds and 3 loop instructions, measured against the E4M3 MAC with both pipes on the SM clock locked at 2100 MHz: 8.3757 in each of two runs on one card (art:72a1cf64686a, art:887b4b2c911b: 122.26 adds and 1023.98 MACs a SM-clock), here to three decimals; at the ceilings the same loop is rate.tensor / (32 x rate.issue) x 67 / 64 = 8.375, and the add alone fp32.sm's 8. W1's FP32 price Pouw.PearlC.W1.W1Prices.sm120Loop. It holds for an add issued in that loop, the loop's instructions charged to its adds; a figure that rests on it says so" }
 
 # The model's own ranges (Accel.Card's exact and text).
 [model]

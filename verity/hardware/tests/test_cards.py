@@ -177,26 +177,40 @@ def test_the_caches_a_run_found_are_one_cards() -> None:
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
+def test_the_default_reading_is_the_higher_ceiling(sku: str) -> None:
+    """`clock.default` names the reading of `readings(card)` every figure of the card is stated at unless it names the
+    other: one of `READINGS`, and the one whose tensor peak is the highest (soundness's ruling on CMP-438), so that a
+    reader that takes `readings(card)[card["clock"]["default"]]` credits no more than either reading would."""
+    card = load_card(sku)
+    peaks = S.readings(card)
+    assert card["clock"]["default"] in S.READINGS, f"set clock.default to one of {S.READINGS}"
+    assert peaks[card["clock"]["default"]] == max(peaks.values())
+
+
+@pytest.mark.parametrize("sku", skus("gpu"))
 def test_an_fp32_add_at_each_clock_reading(sku: str) -> None:
-    """`price.fp32`, the default reading, is an FP32 add's price at the card's ceilings with both pipes at `clock.sm`:
-    a SM-clock's tensor units over the adds it issues, 32 lanes a warp instruction. `price.fp32_tensor_clock` is the
-    same with the tensor at `clock.tensor`, to the card's two places, and `price.fp32_loop`, a timed loop's, is at
-    least the default."""
+    """`price.fp32` is an FP32 add's price at the card's ceilings under each reading of `readings(card)`, keyed by its
+    name: a SM-clock's tensor units over the adds it issues, 32 lanes a warp instruction, scaled by the reading's tensor
+    peak over the peak at `clock.sm`, to the card's two places. `price.fp32_loop`, a timed loop's, is at least the
+    default's."""
     card = load_card(sku)
     add = value(card, "rate.tensor") / (32 * value(card, "rate.issue"))
-    assert value(card, "price.fp32") == add and "default" in card["price"]["fp32"]["source"]
-    at_tensor = add * value(card, "clock.tensor") / value(card, "clock.sm")
-    assert abs(value(card, "price.fp32_tensor_clock") - at_tensor) <= Fraction(1, 200)
-    assert value(card, "price.fp32_loop") >= add
+    peaks = S.readings(card)
+    assert set(card["price"]["fp32"]) == set(S.READINGS)
+    for r, peak in peaks.items():
+        assert abs(value(card, f"price.fp32.{r}") - add * peak / peaks["sm"]) <= Fraction(1, 200), r
+    assert value(card, "price.fp32_loop") >= value(card, f"price.fp32.{card['clock']['default']}")
 
 
 def test_the_h200s_two_readings() -> None:
     """The H200's FP32 add at both clock readings (CMP-438), pinned so that a change to either is deliberate: 32 with
     both pipes at 1980 MHz, the default, and 29.58 with the tensor pipe at 1830 MHz, each naming its W1 price."""
-    price = load_card("h200-sxm-141gb")["price"]
-    assert [value(price, k) for k in ("fp32", "fp32_tensor_clock")] == [32, Fraction("29.58")]
-    assert "Pouw.PearlC.W1.W1Prices.h100." in price["fp32"]["source"]
-    assert "Pouw.PearlC.W1.W1Prices.h100Tensor." in price["fp32_tensor_clock"]["source"]
+    card = load_card("h200-sxm-141gb")
+    fp32 = card["price"]["fp32"]
+    assert card["clock"]["default"] == "sm"
+    assert {r: value(fp32, r) for r in S.READINGS} == {"tensor": Fraction("29.58"), "sm": 32}
+    assert "Pouw.PearlC.W1.W1Prices.h100." in fp32["sm"]["source"]
+    assert "Pouw.PearlC.W1.W1Prices.h100Tensor." in fp32["tensor"]["source"]
 
 
 @pytest.mark.parametrize("sku", skus("host"))
