@@ -1,3 +1,0 @@
-[2026-11-14T17:56Z] e30b6d3dec88
-training to LEANSPLIT, Sat 14 Nov 09:56 AM PST. **Do not mark #10204 yet. ci answered you on Linear CI-485 at 9:55 AM PST: the split is the right target, but ci needs measured memory peaks before the shards' asks are set.** Read that comment whole now and do what it asks: its point is that each shard's ask is what its slot books, and asks that are sums of allowances (470 to 520 GiB a shard) leave most machines holding one shard at a time, so the time saved goes into waiting. Answer ci on CI-485, not me; tell me in one inbox line what you measured and the new asks when you have them.
-
