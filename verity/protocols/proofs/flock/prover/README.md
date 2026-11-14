@@ -95,6 +95,23 @@ check's three GPU cases run at once, each in its own process, while three times 
 `74-gemm-hill.sh`) fits the GPU's free memory, else one after another; its record (`selftest.per_case`, `selftest.run`) has
 each case's wall time, exit code and peak device memory, and why it fell back.
 
+## Verdicts of record
+
+Python returns no accept of its own. Each question a verifier answers is Lean's, and a Python path that once answered it is
+the difftest's reference (`_twin`, read by no deciding path) or raises `NotImplementedError` naming its goal.
+
+| Question | Lean that answers it | Python |
+| --- | --- | --- |
+| One outer session | `verity-verify-proof verify --zk` (`Flock`'s verifier, `verity/protocols/proofs/flock/verifier/`) | none |
+| V*'s statements of a recursive session | `verity-verify-proof verify --zk --rec-part J` (`VStar`) | `rec_vstar.check_twin` |
+| V*'s parts composed | `verity-verify-proof rec-compose` (`Flock.RecCompose.check`) | `rec_compose.check_twin` |
+| V*'s verdict on a session directory | none yet | `rec_vstar.main` raises `proofs/recursion-vstar-of-record`; `rec_vstar.session_twin` |
+| An outer session's release | `core-zk-server session` (`Core.ZkServer.Loop`) | none |
+
+Readers, which carry a verdict of record and add only refusals: `proof_server.Session.accepted` (both sides' verdicts,
+conjoined), `zk_server_transcript.Session.accepted` (the challenger's Finish, refused on a proxy stop), `class_statement`'s
+sweep (every session's verdict and the prover's exit), and `agreement/` (compares the verifiers' verdicts and decides none).
+
 ## Tests
 
 ~~~sh

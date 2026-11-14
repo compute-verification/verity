@@ -294,8 +294,19 @@ refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
 | A two-stage outcome's completeness | `second_stage.complete` | none yet | `complete_twin` |
 
 A two-stage run whose stages read no coin bytes gives `Run.run` nothing to read, so `_audit_two` raises rather than
-join its records. `parties`' `_held` and `one_stage.proofs`' `ks_form_why`, `template_why` and `population_why` are
-guards: they only turn an accept into a refusal, never accept.
+join its records.
+
+### Guards
+
+Each takes a verdict of record or files Lean then checks, and can only refuse: none returns an accept a Lean verdict did
+not give.
+
+| Guard | Why it can only refuse |
+| --- | --- |
+| `parties`' `_held` | returns a reject answer unchanged, and turns an accept into a reject when its commitment or interior is not the registration sent; otherwise returns the answer it was given |
+| `one_stage.proofs.ks_form_why` | a reason or None for a circuit outside the form `verify --zk` covers (`Flock.KsScope.filesWhy`); a reason refuses a session, None leaves the binary's verdict |
+| `one_stage.proofs.template_why` | a reason or None for a circuit the template refuses, read only before `members.files_why`'s other refusals; None decides nothing |
+| `one_stage.proofs.population_why` | a reason or None for a public file whose units are not the docket's population in order (`Spot.FilePart.why`); None leaves `verify`'s verdict |
 
 ## Core API
 
