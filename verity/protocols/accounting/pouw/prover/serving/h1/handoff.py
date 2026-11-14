@@ -170,17 +170,23 @@ def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tupl
         r = x["round"]
         if (run._tables[r].commitment.root.hex(), run._slot_tables[r].commitment.root.hex()) != (x["requests"], x["slots"]):
             raise ValueError(f"{run.entry}: round {r}'s request or slot table, rebuilt, is not the one its root is over")
-    client = Resumed(socket.socket(fileno=fd), LiveCommitment.from_json(doc["commitment"]))
-    run.listeners, run._opener, run._recorded = [], None, None
-    run.rounds, run.draw = _live(rounds, client), _draw_of(draw, client, gate)
-    ts = tensors()
-    run._weights = {w: (ts.put(c), ts.put(s)) for w, (c, s) in weights.items()}
-    if served is not None:
-        kind, sstate, layers = served
-        run.served = kind.__new__(kind)
-        run.served.__dict__.update(sstate)
-        run.served._weights = {w: (run._weights[w][0], weights[w][0]) for w in layers}
-        _declare(run.served, run)
+    sock = socket.socket(fileno=fd)
+    try:
+        client = Resumed(sock, LiveCommitment.from_json(doc["commitment"]))
+        run.listeners, run._opener, run._recorded = [], None, None
+        run.rounds, run.draw = _live(rounds, client), _draw_of(draw, client, gate)
+        ts = tensors()
+        run._weights = {w: (ts.put(c), ts.put(s)) for w, (c, s) in weights.items()}
+        if served is not None:
+            kind, sstate, layers = served
+            run.served = kind.__new__(kind)
+            run.served.__dict__.update(sstate)
+            run.served._weights = {w: (run._weights[w][0], weights[w][0]) for w in layers}
+            _declare(run.served, run)
+    except BaseException:
+        # the stream, not the session: `client.close()` would end the challenger's session
+        sock.close()
+        raise
     return run, client
 
 
