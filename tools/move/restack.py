@@ -35,7 +35,7 @@ restack across a move pays for the check and the rest don't. The file's key is e
 A move commit's record is corrected in `tools/move/move_lines.toml` (`MOVE_LINES`), under the commit's full id, which every
 reader of a move line reads before the commit's message: `line`, the move line it ran by, and `hand`, the paths where its
 tree is, by hand, not what that script writes on B (a word put back in prose, the map the script rewrote left as it was),
-each entry with its `reason`; a malformed entry, or one of a commit the clone lacks, stops everything. A move with `hand`
+each entry with its `reason`; a malformed entry stops everything. A move with `hand`
 passes the check only where it differs from the script's tree in exactly those paths, and after step 2 its hand changes are
 merged into the branch's moved tree with the script's tree on B as the merge base (step `hand`; a hand change to a line the
 branch changed is `conflicted` there). Without that merge, step 3, with M as its base, would undo them. Nothing is skipped:
@@ -480,10 +480,11 @@ def keep_generated(key: dict, tree: str) -> None:
                 os.unlink(tmp)
 
 
-def corrections(cwd: str | None) -> dict[str, dict]:
+def corrections() -> dict[str, dict]:
     """`MOVE_LINES`'s entries by commit id (none without the file). Refused, with the fix, unless every key is a full 40-hex
-    id of a commit this clone has and every entry holds a `reason` and a `line` that is a move line (`MOVE_LINE`), a
-    `hand` that lists paths, or both, and nothing else."""
+    id and every entry holds a `reason` and a `line` that is a move line (`MOVE_LINE`), a `hand` that lists paths, or both,
+    and nothing else. A clone without an entry's commit never looks it up (every lookup is by a commit the clone has), and a
+    toy clone runs this file too, so only the suite holds each id to a commit of the repository's."""
     if not os.path.isfile(MOVE_LINES):
         return {}
     with open(MOVE_LINES, "rb") as f:
@@ -507,10 +508,6 @@ def corrections(cwd: str | None) -> dict[str, dict]:
                                   and all(isinstance(p, str) and p for p in e["hand"])):
             bad.append(f'["{sha}"] hand {e["hand"]!r} is no list of paths: list each path where the commit\'s tree is not '
                        "what its script writes on its base")
-    if not bad and data:
-        p = git("cat-file", "--batch-check", cwd=cwd, input="".join(f"{s}^{{commit}}\n" for s in data).encode())
-        bad = [f'["{line.split("^")[0]}"] is no commit this clone has: fetch it (git fetch origin), or fix the id'
-               for line in p.stdout.decode().splitlines() if line.endswith(" missing")]
     if bad:
         raise SystemExit(f"{MOVE_LINES}: " + "\n  ".join(bad))
     return data
@@ -518,7 +515,7 @@ def corrections(cwd: str | None) -> dict[str, dict]:
 
 def hand_of(move: str, cwd: str | None) -> list[str]:
     """The paths where ``move``'s tree is, by hand, not what its script writes on its base (`MOVE_LINES`' `hand`)."""
-    return sorted(corrections(cwd).get(move, {}).get("hand", []))
+    return sorted(corrections().get(move, {}).get("hand", []))
 
 
 def check_generated(move: str, base: str, python: str, cwd: str | None) -> str:
@@ -681,7 +678,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
 def move_line(commit: str, cwd: str | None) -> tuple[str, tuple[str, ...]] | None:
     """The script and arguments ``commit``'s move line names, its `MOVE_LINES` entry's where it has one, or None when it has
     none."""
-    m = MOVE_LINE.search(corrections(cwd).get(rev(commit, cwd), {}).get("line")
+    m = MOVE_LINE.search(corrections().get(rev(commit, cwd), {}).get("line")
                          or out("log", "-1", "--format=%B", commit, cwd=cwd))
     return (LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())) if m else None
 
@@ -690,7 +687,7 @@ def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple
     """The moves ``ref`` has and ``head`` lacks, oldest first: (commit, script, arguments) of each commit with a move line,
     its `MOVE_LINES` entry's where it has one."""
     log = out("log", "--topo-order", "--reverse", "--no-merges", "--format=%H%x00%B%x1e", ref, f"^{head}", cwd=cwd)
-    found, lines = [], corrections(cwd)
+    found, lines = [], corrections()
     for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
         commit, body = rec.split("\x00", 1)
         if m := MOVE_LINE.search(lines.get(commit, {}).get("line") or body):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import fcntl
 import importlib.util
 import json
+import re
 import os
 import shlex
 import shutil
@@ -49,6 +50,13 @@ def cache(monkeypatch, tmp_path):
     monkeypatch.setattr(RS, "KEPT_DIR", str(tmp_path / "kept"))
     monkeypatch.setattr(RS, "_GENERATED", {})
     return tmp_path / "kept"
+
+
+@pytest.fixture(autouse=True)
+def lines(monkeypatch, tmp_path):
+    """A corrections table that is the test's own, absent until a test writes it: the tree's names commits no toy repo has."""
+    monkeypatch.setattr(RS, "MOVE_LINES", str(tmp_path / "move_lines.toml"))
+    return tmp_path / "move_lines.toml"
 
 
 @pytest.fixture
@@ -1355,3 +1363,97 @@ def test_a_word_two_blocks_rename_in_disjoint_files_counts_only_outside_both(tmp
     result = commit(repo, "the branch's own lines", {"Net/One.lean": lines, "Net/Two.lean": lines, "Net/Three.lean": lines})
     words = RS.stale_words(result, move, [(move, RS.LINE_SCRIPT["Move"], ("--map", WORDS_MAP))], str(repo))
     assert [(w["file"], w["line"], w["word"], w["new"]) for w in words] == [("Net/Three.lean", 1, "Session", "ChallengePhase")]
+
+
+def correct(lines: Path, entries: dict[str, dict]) -> None:
+    """``entries`` as the corrections table, each under its commit's id."""
+    lines.write_text("".join(f'["{sha}"]\n' + "".join(f"{k} = {json.dumps(v)}\n" for k, v in e.items()) + "\n"
+                             for sha, e in entries.items()))
+
+
+def test_a_corrected_line_is_read_by_both_readers_before_the_commit_s_own(repo, lines):
+    """The move has no move line and is given one; a later commit's own line, without `--no-lock`, is corrected to it."""
+    move = RS.rev("move", str(repo))
+    later = commit(repo, "a move that ran with --no-lock and says not" + LINE)
+    ran = ("--map", "tools/move/layout_map.toml", "--no-lock")
+    correct(lines, {move: {"line": "Layout-move: tools/move/layout_map.toml", "reason": "Its message names no map."},
+                    later: {"line": "Layout-move: tools/move/layout_map.toml --no-lock", "reason": "It ran with --no-lock."}})
+    assert RS.move_line(move, str(repo)) == (RS.LINE_SCRIPT["Layout-move"], ran[:2])
+    assert RS.move_line("HEAD", str(repo)) == (RS.LINE_SCRIPT["Layout-move"], ran)
+    assert RS.moves_on("main", "pr", str(repo)) == [(move, RS.LINE_SCRIPT["Layout-move"], ran[:2]),
+                                                     (later, RS.LINE_SCRIPT["Layout-move"], ran)]
+
+
+@pytest.mark.parametrize("entry, fix", [
+    ({"id": "f7b30e1f7ce9", "line": "Move: tools/move/m.toml", "reason": "r"}, "the commit's 40-hex id"),
+    ({"line": "Move: tools/move/m.toml --lock", "reason": "r"}, "is no move line"),
+    ({"line": "Layout-move: m.toml", "reason": "r"}, "is no move line"),
+    ({"line": "Move: tools/move/m.toml"}, "has no `reason`"),
+    ({"line": "Move: tools/move/m.toml", "reason": " "}, "has no `reason`"),
+    ({"reason": "r"}, "a `line`, a `hand` or both"),
+    ({"line": "Move: tools/move/m.toml", "reason": "r", "why": "x"}, "and nothing else"),
+    ({"hand": "README.md", "reason": "r"}, "is no list of paths"),
+    ({"hand": [], "reason": "r"}, "is no list of paths")])
+def test_a_malformed_entry_is_refused_with_the_fix(repo, lines, entry, fix):
+    correct(lines, {entry.pop("id", RS.rev("move", str(repo))): entry})
+    with pytest.raises(SystemExit, match=re.escape(fix)):
+        RS.move_line("move", str(repo))
+    with pytest.raises(SystemExit, match=re.escape(fix)):
+        RS.moves_on("main", "pr", str(repo))
+
+
+def test_the_tree_s_table_is_well_formed_and_each_entry_is_a_commit_of_the_repository(monkeypatch):
+    monkeypatch.setattr(RS, "MOVE_LINES", str(HERE.parent / "move_lines.toml"))
+    table = RS.corrections()
+    p = subprocess.run(["git", "cat-file", "--batch-check"], cwd=HERE, input="".join(f"{s}^{{commit}}\n" for s in table),
+                       capture_output=True, text=True, check=True)
+    assert table and [line for line in p.stdout.splitlines() if line.endswith(" missing")] == []
+
+
+def hand_move(repo: Path, files: dict[str, str]) -> str:
+    """A move commit on `base`: the toy script's output with ``files`` changed by hand beside it."""
+    git(repo, "checkout", "-q", "-b", "hand", "base")
+    subprocess.run(["python3", "tools/move/layout.py"], cwd=repo, check=True)
+    sha = commit(repo, "layout, and a hand change beside it" + LINE, files)
+    git(repo, "checkout", "-q", "main")
+    return sha
+
+
+def test_a_move_with_hand_changes_is_refused_unless_its_entry_lists_exactly_their_paths(repo, lines):
+    move = hand_move(repo, {"README.md": "readme, by hand\n"})
+    on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    with pytest.raises(SystemExit, match="list these paths as its `hand` in"):
+        RS.restack("pr", move, cwd=str(repo))
+    for hand, unlisted, listed in ([["NOTES.md"], ["README.md"], ["NOTES.md"]], [["NOTES.md", "README.md"], [], ["NOTES.md"]]):
+        RS._GENERATED.clear()
+        correct(lines, {move: {"hand": hand, "reason": "A line by hand."}})
+        with pytest.raises(SystemExit, match=re.escape(f"differ, unlisted: {unlisted}\n  listed, not differing: {listed}")):
+            RS.restack("pr", move, cwd=str(repo))
+
+
+def test_a_listed_hand_change_rides_with_the_crossing_and_the_script_still_runs_on_the_branch_s_own_lines(repo, lines,
+                                                                                                         kept, on_base):
+    """Without the `hand` step the last merge, with the move as its base, would put the README back. A hand move's check is
+    never kept: its crossing needs the script's own tree, so a second restack runs the script on the base again."""
+    move = hand_move(repo, {"README.md": "readme, by hand\n"})
+    correct(lines, {move: {"hand": ["README.md"], "reason": "A line by hand."}})
+    on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}),
+       ("add extra", {"app/extra.py": "from app.util import f3\n"}))
+    r = RS.restack("pr", move, cwd=str(repo))
+    assert r["status"] == "clean", r
+    assert [s["step"] for s in r["steps"]] == ["base", "script", "hand", "moved"]
+    assert show(repo, r["result"], "README.md") == "readme, by hand\n"
+    assert show(repo, r["result"], "app/core/util.py") == edit(UTIL, "return 5", "return 50")
+    assert show(repo, r["result"], "app/extra.py") == "from app.core.util import f3\n"
+    assert list(kept.glob("*.json")) == [] and len(on_base) == 1
+    on_base.again()
+    again = RS.restack("pr", move, cwd=str(repo))["result"]
+    assert RS.tree_of(again, str(repo)) == RS.tree_of(r["result"], str(repo)) and len(on_base) == 1
+
+
+def test_a_hand_change_to_a_line_the_branch_changed_is_conflicted_at_hand(repo, lines):
+    move = hand_move(repo, {"README.md": "readme, by hand\n"})
+    correct(lines, {move: {"hand": ["README.md"], "reason": "A line by hand."}})
+    on(repo, "pr", ("readme", {"README.md": "readme, the branch's\n"}))
+    r = RS.restack("pr", move, cwd=str(repo))
+    assert (r["status"], r["step"], r["files"]) == ("conflicted", "hand", ["README.md"])
