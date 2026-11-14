@@ -127,7 +127,7 @@ theorem pous_record_size {c : MemoryChallenger.SessionCommitment} {ended : Strin
     {rounds : Array MemoryChallenger.Round} {r : ByteArray} (h : MemoryChallenger.message c ended rounds = .ok r) :
     r.size = 64 := by
   unfold MemoryChallenger.message at h
-  cases hr : MemoryChallenger.recordsRoot c.session rounds <;> simp [hr, bind, Except.bind, pure, Except.pure] at h
+  cases hr : MemoryChallenger.recordsDigest rounds <;> simp [hr, bind, Except.bind, pure, Except.pure] at h
   subst h
   exact hash_size _
 
