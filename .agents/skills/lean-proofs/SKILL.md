@@ -158,7 +158,8 @@ Their history is in the decisions log.
 - One adversary class: every prover strategy τ, no budget class.
   `Pr[accept ∧ the claim fails on E^τ's values] ≤ δ + f(Pr[B^τ exhibits a SHA-512 collision])` (+ LMS forgery), with
   `E` a fixed named extractor and `B` a finder built from τ in about τ's time (`XplurZC`, `outCZC`). Collision
-  resistance is applied to `B` alone, outside the theorem.
+  resistance is applied to `B` alone, outside the theorem. A `B` that picks its pair by choice makes that say nothing:
+  write it as a search of data it holds, or the check refuses it (the lock's `choosing`).
 - Soundness is stated for the system as deployed: for recursion, challenges fixed at the start, hidden in a commitment
   and revealed round by round, resting on its hiding. The sampled audits' (`SpotSound`, from Flock's live
   chain) may take the generic SHA-512 collision bound at each prover-built finder (`TableCRZ`, `LinkCRZC`), its budget

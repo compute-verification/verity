@@ -305,7 +305,9 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   witness must conclude it). Each deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's
   collision resistance, uniform randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on
   (`trust.extra`, each with its reason), only on the premises its `trust_gap` entry lists, which `--update` never adds
-  to; the check prints each one's gap, the number Daniel drives to zero.
+  to; the check prints each one's gap, the number Daniel drives to zero. A finder a guarantee hands a collision premise
+  (`tools/verity/lean/finder-walk.json`) that picks by choice is refused unless the lock's `choosing` lists the
+  definition it picks through, with its owner, issue and due date, a list `--update` never adds to.
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record, which a PR's
   own check regenerates rather than fails on and a candidate's records commit carries (`vqueue_records`).

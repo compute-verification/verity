@@ -178,6 +178,19 @@ keeps or drops from and never adds to.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
   from; the report prints each gap (`trust_failures`, `trust_gaps`). `verity lean deployed [--rev REV]` prints every lock's
   deployed guarantees with each one's gap and its premises, counted once by name across the locks, as JSON from git alone.
+- `choosing`: {definition: {`owner`, `issue`, `due`}}, the definitions a collision finder picks its pair by choice
+  through, which only a person adds to (`choosing_failures`). `Facts.lean`'s walk (`finderFacts`) follows each finder a
+  statement hands a collision premise into the definitions it unfolds to, reading values only, by the table
+  `finder-walk.json`: the premises with their finder arguments (`heads`), the constructors of which it reads some fields
+  (`fields`), and the constants it refuses (`refuse`) and passes (`pass`) by name. A guarantee's record lists what its
+  finders reach under `premises.choosing`, a record difference when it changes. A definition the section doesn't list
+  fails (`choosing.unlisted`: restate it as a search of data the finder holds, or soundness lists it); an entry no finder
+  reaches fails until `--update` or the records run drops it (`choosing.passed`); a malformed entry, or a walk that hit
+  its bound, always fails (`choosing.form`, `choosing.unfinished`). A deployed guarantee's gap holds `choice:<head>` for
+  each premise under which it, or a guarantee it cites, hands a finder reaching a listed definition. `finder_dates.py
+  --today YYYY-MM-DD [--base REV]` fails on an entry past its `due`, and `finder_gate.py MAIN HEAD` on a change that
+  refuses less or lists more (a `pass` row added; a `refuse` row, head or position dropped; a `fields` row added or
+  narrowed; an entry added; a `due` moved later), each from git alone.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside (`record_scope`).
 - `escapes`: every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`,
