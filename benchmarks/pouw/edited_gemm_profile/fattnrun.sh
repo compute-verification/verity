@@ -10,7 +10,7 @@
 # and ncu's sections on FA_NCU at FA_NCU_SHAPES (out/ncu/, read by eps_profile.py, whose TOML ends the run); with
 # FA_GATES_ONLY set, the run ends after the gates. Clocks are read, never set.
 #   research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-#     -- bash verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattnrun.sh
+#     -- bash benchmarks/pouw/edited_gemm_profile/fattnrun.sh
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH

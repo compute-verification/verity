@@ -266,7 +266,7 @@ def drawOf (j : Json) : V Flock.Draw.UnitSample := do
     | "bernoulli" => pure ["law", "p", "population", "units"]
     | "stratified" => pure ["k", "law", "population", "strata", "units"]
     | "work" => pure ((if Flock.J.has d "closure" then ["closure"] else []) ++ ["k", "law", "population", "strata", "units"])
-    | _ => throw s!"{ctx}.samplingDesign: not subset, bernoulli, stratified or work"
+    | _ => throw s!"{ctx}.law: not subset, bernoulli, stratified or work"
   keysAre d ks ctx
   let population ← Flock.J.nat d "population" ctx
   let (l, closure) ← match samplingDesign with

@@ -12,9 +12,11 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-IMPORTER_NAME = "verity_torch.frontend.derive.derive"
+IMPORTER_NAME = "verity_vllm.program.frontend.vllm_derive.derive"
 
 OUT_PATH = os.environ.get("XFER_OUT") or "/tmp/xfer/transfer-derive.jsonl"
+
+
 def _git_head() -> str:
     if os.environ.get("XFER_HEAD"):
         return os.environ["XFER_HEAD"]

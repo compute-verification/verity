@@ -17,9 +17,9 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.commitments import row_table as RT
+from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as K
 
 from verity_vllm.commit import row_tables as RTB
-from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as K
 from verity_vllm.commit import row_tables_device as D
 
 CTX, KEY = bytes(range(64)), bytes(range(100, 132))
@@ -125,7 +125,6 @@ def test_every_build_takes_its_sources_from_the_one_directory_of_pouws_prover():
     file there, the device builds' too, which only nvcc compiles and no test without it reads."""
     pytest.importorskip("torch")
     from verity.protocols.accounting.pouw import prover
-
     from verity.protocols.accounting.pouw.prover.serving import device as PD
     from verity_torch.pouw.h1 import receipts
     from verity_torch.pouw.h1 import registered_device as RD
