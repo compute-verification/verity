@@ -68,9 +68,13 @@ nvf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "the 
 mxf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "as nvf4 (kind::mxf4, measured at the same rate, unpriced_fp4.cu)" }
 f64 = { value = 128, unit = "tensor unit/MAC", mark = "ceiling", source = "the data sheets' FP64 Tensor Core 37 teraFLOPS over 148 SMs at 1965 MHz is 63.6 DMMA MACs a SM-clock; measured 64 (DMMA.8x8x4, benchmarks/pouw/sass_census/unpriced.cu), sharing the tensor pipe's time with the other formats; 8192 / 64" }
 
-# What an operation costs in tensor units (rate.tensor's unit) in a timed loop. A measured price is that loop's, at or
-# above the operation's price at the card's ceilings, which the rates above give.
+# What an operation costs in tensor units (rate.tensor's unit). The unit (CMP-438): each operation is charged in seconds
+# at its own pipe's data-sheet ceiling, so a program's time is at least the sum of its operations over their pipes'
+# ceilings. fp32 is an FP32 add's price with both pipes on the one SM clock, the default; fp32_tensor_clock is fp32,
+# since the tensor cores run on the SM clock. fp32_loop is a timed loop's price, at or above fp32.
 [price]
+fp32 = { value = 64, unit = "tensor unit/add", mark = "measurement", source = "the default reading: the tensor and the FP32 pipe both on clock.sm (clock.tensor is clock.sm), so an add is rate.tensor / (32 x rate.issue) = 8192 / 128 = 64 tensor units, a SM-clock each; rate.tensor is measured (art:bf3d67eee74a), so this is too" }
+fp32_tensor_clock = { value = 64, unit = "tensor unit/add", mark = "measurement", source = "fp32: the tensor cores run on the SM clock (clock.tensor), so the card has no second clock reading; rate.tensor is measured (art:bf3d67eee74a)" }
 fp32_loop = { value = 67, unit = "tensor unit/add", mark = "placeholder", source = "no run read times an FP32 add in a loop on this card: this is the loop of 64 adds and 3 loop instructions at the card's rates, rate.tensor / (32 x rate.issue) x 67 / 64, a SM-clock each, and the add alone is 64; a run of that loop on a B200 closes it" }
 
 # The model's own ranges (Accel.Card's exact and text).

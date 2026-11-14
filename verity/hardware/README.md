@@ -32,9 +32,12 @@ and `dram_installed` the memory on the board, a second reading at or above it; a
 caches an SM serves code and constants from, `l15`, `l1i`, `l0i` and `const_l0`, which the RTX PRO 6000's card has),
 `rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth, and `read`, the
 fastest read of it measured, which stands at the bandwidth as a placeholder where none is), `weight` (the tensor
-units a MAC of each format uses), `price` (what an operation costs in tensor units in a timed loop: `fp32_loop`, an FP32
-add in a loop of 64 adds and 3 loop instructions, at or above the add's price at the card's ceilings, `rate.tensor` over
-32 lanes of `rate.issue`) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (the
+units a MAC of each format uses), `price` (what an operation costs in tensor units, each operation charged in seconds at
+its own pipe's data-sheet ceiling (CMP-438): `fp32`, an FP32 add with both pipes at `clock.sm`, `rate.tensor` over 32
+lanes of `rate.issue`, the default reading every credit is claimed under unless it says otherwise; `fp32_tensor_clock`,
+the same with the tensor at `clock.tensor`, which differs only on the H200, 29.58 there and holding only if its tensor
+pipe never exceeds 1830 MHz; and `fp32_loop`, an FP32 add in a loop of 64 adds and 3 loop instructions, at or above
+`fp32`) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (the
 server's sockets and cores, and `vm_cores`, the cores a GPU that a node's VM gives: a measurement of our nodes, not a
 number of the server), `clock`, `rate` (AMX MACs and SHA-512 compressions a cycle a core, and the host's op peak),
 `memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling, and `speed_max`, `bandwidth_max` and

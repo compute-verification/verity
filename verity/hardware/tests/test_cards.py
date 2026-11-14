@@ -177,11 +177,26 @@ def test_the_caches_a_run_found_are_one_cards() -> None:
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
-def test_an_add_in_a_loop_costs_no_less_than_the_add_alone(sku: str) -> None:
-    """`price.fp32_loop` is an FP32 add's price in a timed loop, so it is at least the add's price at the card's
-    ceilings: a SM-clock's tensor units over the adds it issues, 32 lanes a warp instruction."""
+def test_an_fp32_add_at_each_clock_reading(sku: str) -> None:
+    """`price.fp32`, the default reading, is an FP32 add's price at the card's ceilings with both pipes at `clock.sm`:
+    a SM-clock's tensor units over the adds it issues, 32 lanes a warp instruction. `price.fp32_tensor_clock` is the
+    same with the tensor at `clock.tensor`, to the card's two places, and `price.fp32_loop`, a timed loop's, is at
+    least the default."""
     card = load_card(sku)
-    assert value(card, "price.fp32_loop") >= value(card, "rate.tensor") / (32 * value(card, "rate.issue"))
+    add = value(card, "rate.tensor") / (32 * value(card, "rate.issue"))
+    assert value(card, "price.fp32") == add and "default" in card["price"]["fp32"]["source"]
+    at_tensor = add * value(card, "clock.tensor") / value(card, "clock.sm")
+    assert abs(value(card, "price.fp32_tensor_clock") - at_tensor) <= Fraction(1, 200)
+    assert value(card, "price.fp32_loop") >= add
+
+
+def test_the_h200s_two_readings() -> None:
+    """The H200's FP32 add at both clock readings (CMP-438), pinned so that a change to either is deliberate: 32 with
+    both pipes at 1980 MHz, the default, and 29.58 with the tensor pipe at 1830 MHz, each naming its W1 price."""
+    price = load_card("h200-sxm-141gb")["price"]
+    assert [value(price, k) for k in ("fp32", "fp32_tensor_clock")] == [32, Fraction("29.58")]
+    assert "Pouw.PearlC.W1.W1Prices.h100." in price["fp32"]["source"]
+    assert "Pouw.PearlC.W1.W1Prices.h100Tensor." in price["fp32_tensor_clock"]["source"]
 
 
 @pytest.mark.parametrize("sku", skus("host"))
