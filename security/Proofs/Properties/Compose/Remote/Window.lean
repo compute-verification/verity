@@ -68,10 +68,10 @@ def Cached (reg : Registration) (w : WindowRecord) (m : Std.HashMap Nat Receipte
   ∀ i r, m.get? i = some r → r = receipterOf reg w i
 
 theorem checkWindow_accept {reg : Registration} {digest : ByteArray} {appends : Array Append} {w : WindowRecord}
-    {drawn : Array (Nat × Nat)} {openings : Array Opening}
-    (h : checkWindow reg digest appends w drawn openings = .accept) :
-    openings.size = drawn.size ∧ ∀ k (hk : k < drawn.size),
-      checkOpening reg digest appends w (receipterOf reg w drawn[k].1) drawn[k].1 drawn[k].2 openings[k]! = none := by
+    {sampled : Array (Nat × Nat)} {openings : Array Opening}
+    (h : checkWindow reg digest appends w sampled openings = .accept) :
+    openings.size = sampled.size ∧ ∀ k (hk : k < sampled.size),
+      checkOpening reg digest appends w (receipterOf reg w sampled[k].1) sampled[k].1 sampled[k].2 openings[k]! = none := by
   unfold checkWindow at h
   simp only [Id.run] at h
   split at h
@@ -82,18 +82,18 @@ theorem checkWindow_accept {reg : Registration} {digest : ByteArray} {appends : 
   generalize hL : (forIn (m := Id) (List.range' _ _ _) ((none, ∅) : Option Verdict × Std.HashMap Nat Receipter) _ :
     Id _) = L at h
   have key := hL ▸ forIn_good (Cached reg w)
-    (fun k => ∀ hk : k < drawn.size,
-      checkOpening reg digest appends w (receipterOf reg w drawn[k].1) drawn[k].1 drawn[k].2 openings[k]! = none)
+    (fun k => ∀ hk : k < sampled.size,
+      checkOpening reg digest appends w (receipterOf reg w sampled[k].1) sampled[k].1 sampled[k].2 openings[k]! = none)
     (fun v => v ≠ Verdict.accept) _ ?_ _ ∅ (by intro i r hr; simp at hr)
   · intro k m hm
-    have hg : m.get? drawn[k]!.1 = none ∨ m.get? drawn[k]!.1 = some (receipterOf reg w drawn[k]!.1) := by
-      cases hg : m.get? drawn[k]!.1 with
+    have hg : m.get? sampled[k]!.1 = none ∨ m.get? sampled[k]!.1 = some (receipterOf reg w sampled[k]!.1) := by
+      cases hg : m.get? sampled[k]!.1 with
       | none => exact Or.inl rfl
       | some r => exact Or.inr (by rw [hm _ _ hg])
-    have hstep : ∀ hk : k < drawn.size, drawn[k]! = drawn[k] := fun hk => getElem!_pos drawn k hk
+    have hstep : ∀ hk : k < sampled.size, sampled[k]! = sampled[k] := fun hk => getElem!_pos sampled k hk
     rcases hg with hg | hg <;> simp only [hg] <;> simp only [receipterOf] at hm ⊢ <;>
-    cases hc : checkOpening reg digest appends w (receipter reg.receipt (w.seedOf drawn[k]!.1) reg.rows)
-      drawn[k]!.1 drawn[k]!.2 openings[k]! <;>
+    cases hc : checkOpening reg digest appends w (receipter reg.receipt (w.seedOf sampled[k]!.1) reg.rows)
+      sampled[k]!.1 sampled[k]!.2 openings[k]! <;>
     first
       | (right; exact ⟨_, _, by simp, rfl⟩)
       | (left
@@ -117,17 +117,17 @@ theorem checkWindow_accept {reg : Registration} {digest : ByteArray} {appends : 
 
 theorem verifyWindow_accept {reg : Registration} {appends : Array Append} {w : WindowRecord} {coin : ByteArray}
     {samples : Nat} {openings : Array Opening} (h : verifyWindow reg appends w coin samples openings = some .accept) :
-    ∃ drawn, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some drawn ∧
-      checkWindow reg reg.digest appends w drawn openings = .accept := by
+    ∃ sampled, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some sampled ∧
+      checkWindow reg reg.digest appends w sampled openings = .accept := by
   unfold verifyWindow at h
   cases hd : receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) with
   | none => simp [hd] at h
-  | some drawn => simp [hd] at h; exact ⟨drawn, rfl, h⟩
+  | some sampled => simp [hd] at h; exact ⟨sampled, rfl, h⟩
 
 theorem acceptChecksOpenings : AcceptChecksOpenings := by
   intro reg appends w coin samples openings h
-  obtain ⟨drawn, hd, hc⟩ := verifyWindow_accept h
-  exact ⟨drawn, hd, checkWindow_accept hc⟩
+  obtain ⟨sampled, hd, hc⟩ := verifyWindow_accept h
+  exact ⟨sampled, hd, checkWindow_accept hc⟩
 
 theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : WindowRecord} {i p : Nat} {o : Opening}
     (h : checkOpening reg reg.digest appends w (receipterOf reg w i) i p o = none) :
@@ -201,8 +201,8 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
 
 theorem acceptOpensSamples : AcceptOpensSamples := by
   intro reg appends w coin samples openings h
-  obtain ⟨drawn, hd, hsize, hk⟩ := acceptChecksOpenings reg appends w coin samples openings h
-  exact ⟨drawn, hd, hsize, fun k hk' => checkOpening_none (hk k hk')⟩
+  obtain ⟨sampled, hd, hsize, hk⟩ := acceptChecksOpenings reg appends w coin samples openings h
+  exact ⟨sampled, hd, hsize, fun k hk' => checkOpening_none (hk k hk')⟩
 
 /-! ## The chunked check -/
 
@@ -241,24 +241,24 @@ theorem findSome?_flatMap {α β γ : Type} (F : α → List β) (g : β → Opt
 
 /-- Sample `k`'s rejection as `checkWindow` writes it, or none when its opening checks. -/
 def rejectAt (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
-    (drawn : Array (Nat × Nat)) (openings : Array Opening) (k : Nat) : Option Verdict :=
-  (checkOpening reg digest appends w (receipterOf reg w drawn[k]!.1) drawn[k]!.1 drawn[k]!.2 openings[k]!).map
-    fun f => .reject f (some (drawn[k]!.1, drawn[k]!.2))
+    (sampled : Array (Nat × Nat)) (openings : Array Opening) (k : Nat) : Option Verdict :=
+  (checkOpening reg digest appends w (receipterOf reg w sampled[k]!.1) sampled[k]!.1 sampled[k]!.2 openings[k]!).map
+    fun f => .reject f (some (sampled[k]!.1, sampled[k]!.2))
 
 theorem rejectAt_reject {reg : Registration} {digest : ByteArray} {appends : Array Append} {w : WindowRecord}
-    {drawn : Array (Nat × Nat)} {openings : Array Opening} {k : Nat} {v : Verdict}
-    (h : rejectAt reg digest appends w drawn openings k = some v) : ∃ f at?, v = .reject f at? := by
+    {sampled : Array (Nat × Nat)} {openings : Array Opening} {k : Nat} {v : Verdict}
+    (h : rejectAt reg digest appends w sampled openings k = some v) : ∃ f at?, v = .reject f at? := by
   unfold rejectAt at h
-  cases hc : checkOpening reg digest appends w (receipterOf reg w drawn[k]!.1) drawn[k]!.1 drawn[k]!.2 openings[k]! <;>
+  cases hc : checkOpening reg digest appends w (receipterOf reg w sampled[k]!.1) sampled[k]!.1 sampled[k]!.2 openings[k]! <;>
     simp [hc] at h
   exact ⟨_, _, h.symm⟩
 
 /-- `checkWindow` is its first rejection in sample order (`rejectAt`), or accept. -/
 theorem checkWindow_eq (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
-    (drawn : Array (Nat × Nat)) (openings : Array Opening) :
-    checkWindow reg digest appends w drawn openings =
-      if openings.size ≠ drawn.size then .reject .malformed none
-      else ((List.range drawn.size).findSome? (rejectAt reg digest appends w drawn openings)).getD .accept := by
+    (sampled : Array (Nat × Nat)) (openings : Array Opening) :
+    checkWindow reg digest appends w sampled openings =
+      if openings.size ≠ sampled.size then .reject .malformed none
+      else ((List.range sampled.size).findSome? (rejectAt reg digest appends w sampled openings)).getD .accept := by
   unfold checkWindow
   simp only [Id.run]
   split
@@ -266,14 +266,14 @@ theorem checkWindow_eq (reg : Registration) (digest : ByteArray) (appends : Arra
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   generalize hL : (forIn (m := Id) (List.range' _ _ _) ((none, ∅) : Option Verdict × Std.HashMap Nat Receipter) _ :
     Id _) = L
-  have key := hL ▸ forIn_findSome (Cached reg w) (rejectAt reg digest appends w drawn openings) _ ?_ _ ∅
+  have key := hL ▸ forIn_findSome (Cached reg w) (rejectAt reg digest appends w sampled openings) _ ?_ _ ∅
     (by intro i r hr; simp at hr)
   · intro k m hm
-    have hg : m.get? drawn[k]!.1 = none ∨ m.get? drawn[k]!.1 = some (receipterOf reg w drawn[k]!.1) := by
-      cases hg : m.get? drawn[k]!.1 with
+    have hg : m.get? sampled[k]!.1 = none ∨ m.get? sampled[k]!.1 = some (receipterOf reg w sampled[k]!.1) := by
+      cases hg : m.get? sampled[k]!.1 with
       | none => exact Or.inl rfl
       | some r => exact Or.inr (by rw [hm _ _ hg])
-    have hc : Cached reg w (m.insert drawn[k]!.1 (receipterOf reg w drawn[k]!.1)) := by
+    have hc : Cached reg w (m.insert sampled[k]!.1 (receipterOf reg w sampled[k]!.1)) := by
       intro i r hi
       rw [Std.HashMap.get?_insert] at hi
       split at hi
@@ -283,32 +283,32 @@ theorem checkWindow_eq (reg : Registration) (digest : ByteArray) (appends : Arra
       · exact hm i r hi
     unfold rejectAt
     rcases hg with hg | hg <;> simp only [hg] <;> simp only [receipterOf] at hc ⊢ <;>
-    cases hco : checkOpening reg digest appends w (receipter reg.receipt (w.seedOf drawn[k]!.1) reg.rows)
-      drawn[k]!.1 drawn[k]!.2 openings[k]! <;>
+    cases hco : checkOpening reg digest appends w (receipter reg.receipt (w.seedOf sampled[k]!.1) reg.rows)
+      sampled[k]!.1 sampled[k]!.2 openings[k]! <;>
     first
       | (right; exact ⟨_, _, by simp, rfl⟩)
       | (left; exact ⟨by simp, _, hc, rfl⟩)
-  · have hr : List.range' [:drawn.size].start [:drawn.size].size [:drawn.size].step = List.range drawn.size := by
+  · have hr : List.range' [:sampled.size].start [:sampled.size].size [:sampled.size].step = List.range sampled.size := by
       simp [Std.Legacy.Range.size, List.range_eq_range']
     rw [hr] at key
     rcases L with ⟨o, m⟩
     simp only [Id.run] at key
     subst key
-    cases List.findSome? (rejectAt reg digest appends w drawn openings) (List.range drawn.size) <;> rfl
+    cases List.findSome? (rejectAt reg digest appends w sampled openings) (List.range sampled.size) <;> rfl
 
 /-- A window's samples `[a, b)` and their openings, checked alone, give the first rejection among those samples in the
 whole window's order. -/
 theorem checkWindow_extract (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
-    (drawn : Array (Nat × Nat)) (openings : Array Opening) (hsize : openings.size = drawn.size) (a b : Nat) :
-    checkWindow reg digest appends w (drawn.extract a b) (openings.extract a b) =
-      ((List.range' a (min b drawn.size - a)).findSome? (rejectAt reg digest appends w drawn openings)).getD
+    (sampled : Array (Nat × Nat)) (openings : Array Opening) (hsize : openings.size = sampled.size) (a b : Nat) :
+    checkWindow reg digest appends w (sampled.extract a b) (openings.extract a b) =
+      ((List.range' a (min b sampled.size - a)).findSome? (rejectAt reg digest appends w sampled openings)).getD
         .accept := by
   rw [checkWindow_eq]
   simp only [Array.size_extract, hsize, ne_eq, not_true_eq_false, ↓reduceIte]
   rw [List.range'_eq_map_range, List.findSome?_map]
   refine congrArg (Option.getD · Verdict.accept) (findSome?_congr fun k hk => ?_)
-  have hk : k < min b drawn.size - a := List.mem_range.1 hk
-  have hd : (drawn.extract a b)[k]! = drawn[a + k]! := by
+  have hk : k < min b sampled.size - a := List.mem_range.1 hk
+  have hd : (sampled.extract a b)[k]! = sampled[a + k]! := by
     rw [getElem!_pos _ _ (by rw [Array.size_extract]; omega), getElem!_pos _ _ (by omega), Array.getElem_extract]
   have ho : (openings.extract a b)[k]! = openings[a + k]! := by
     rw [getElem!_pos _ _ (by rw [Array.size_extract]; omega), getElem!_pos _ _ (by omega), Array.getElem_extract]
@@ -341,14 +341,14 @@ theorem le_ceil_mul (n s : Nat) (hs : 0 < s) : n ≤ (n + s - 1) / s * s := by
   omega
 
 theorem chunkedIsWhole : ChunkedIsWhole := by
-  intro size reg digest appends w drawn openings
+  intro size reg digest appends w sampled openings
   rw [checkWindow_eq]
   unfold checkWindowChunked
   simp only [Id.run]
   split
   · rfl
   rename_i hsize
-  have hsize : openings.size = drawn.size := by simpa using hsize
+  have hsize : openings.size = sampled.size := by simpa using hsize
   generalize hs : max 1 size = s
   have hs0 : 0 < s := by omega
   generalize hL : (forIn (m := Id) (List.map _ _) ((none, ()) : Option Verdict × Unit) _ : Id _) = L
@@ -361,14 +361,14 @@ theorem chunkedIsWhole : ChunkedIsWhole := by
     · right; simp [h]
   · rw [List.findSome?_map] at key
     have hc : ∀ c, ((fun t : Task Verdict => if t.get ≠ Verdict.accept then some t.get else none) ∘ fun c =>
-        Task.spawn (fun _ => checkWindow reg digest appends w (drawn.extract (c * s) ((c + 1) * s))
+        Task.spawn (fun _ => checkWindow reg digest appends w (sampled.extract (c * s) ((c + 1) * s))
           (openings.extract (c * s) ((c + 1) * s))) Task.Priority.dedicated) c =
-        (List.range' (c * s) (min ((c + 1) * s) drawn.size - c * s)).findSome?
-          (rejectAt reg digest appends w drawn openings) := by
+        (List.range' (c * s) (min ((c + 1) * s) sampled.size - c * s)).findSome?
+          (rejectAt reg digest appends w sampled openings) := by
       intro c
-      simp only [Function.comp, Task.spawn, checkWindow_extract reg digest appends w drawn openings hsize]
-      cases h : (List.range' (c * s) (min ((c + 1) * s) drawn.size - c * s)).findSome?
-          (rejectAt reg digest appends w drawn openings) with
+      simp only [Function.comp, Task.spawn, checkWindow_extract reg digest appends w sampled openings hsize]
+      cases h : (List.range' (c * s) (min ((c + 1) * s) sampled.size - c * s)).findSome?
+          (rejectAt reg digest appends w sampled openings) with
       | none => simp
       | some v =>
         obtain ⟨k, _, hk⟩ := List.exists_of_findSome?_eq_some h
@@ -379,6 +379,6 @@ theorem chunkedIsWhole : ChunkedIsWhole := by
     rcases L with ⟨o, u⟩
     simp only [Id.run] at key
     subst key
-    cases List.findSome? (rejectAt reg digest appends w drawn openings) (List.range drawn.size) <;> rfl
+    cases List.findSome? (rejectAt reg digest appends w sampled openings) (List.range sampled.size) <;> rfl
 
 end Properties.Poub

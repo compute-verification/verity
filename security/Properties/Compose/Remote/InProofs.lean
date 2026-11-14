@@ -71,11 +71,11 @@ def RowsBind : Prop :=
 /-- **The SHA-512 inputs a span's openings read**, at the units `us`: for each sample (i, p) and each of its `pub`,
 `signs` and `o0` rows (of the bits the auditor's layout gives), the unit's row and the row `checkSpan` holds it to (the
 verifier's own, or the verdict word sent), and the two salts. -/
-def spanInputs (a : Auditor) (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) (sp : Span)
+def spanInputs (a : Auditor) (reg : Registration) (w : WindowRecord) (sampled : Array (Nat × Nat)) (sp : Span)
     (us : Array UnitVals) : List Hash.Msg :=
   let bitsOf name := ((a.layout.port? name).map (·.2)).getD 0
-  (List.range drawn.size).flatMap fun k =>
-    let (i, p) := drawn[k]!
+  (List.range sampled.size).flatMap fun k =>
+    let (i, p) := sampled[k]!
     let u := us[k]!
     let ins := (instances sp)[k]!
     [rowInput (bitsOf "pub") u.pub, rowInput (bitsOf "pub") (publicWords reg w i p),
@@ -86,19 +86,19 @@ def spanInputs (a : Auditor) (reg : Registration) (w : WindowRecord) (drawn : Ar
 
 /-- **PoUB's read session proved in zero knowledge, as deployed: stated and unproved**; proofs'
 `IntegrityAllProvedCarried` (the period form of V5, every unit proved) closes it through `spanGives`. For the auditor `a`,
-the registration `reg`, window `w` and its samples `drawn`, a session verifier `V` that accepts only a span (`spanOf`)
+the registration `reg`, window `w` and its samples `sampled`, a session verifier `V` that accepts only a span (`spanOf`)
 of at most `n` statements that `checkSpan` accepts, and the premise `RowsBind` for the rows it opens: a fixed extractor
 `E` recovers, by rerunning any prover, one unit a sample such that `checkWindow` accepts their openings, except when the
 SHA-512 inputs the span's openings read at those units hold a collision, `n · (εKs + εBind)` and `Claims.KS`'s collision
 term at `γ`. -/
 def SpanInProofsDeployed (H : Claims.Msg → Claims.Msg) (εKs εBind γ : ℝ) : Prop :=
-  ∀ (a : Auditor) (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) (n : ℕ)
+  ∀ (a : Auditor) (reg : Registration) (w : WindowRecord) (sampled : Array (Nat × Nat)) (n : ℕ)
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Claims.Verifier Coin)
     (spanOf : List Claims.Msg → Option Span),
     (∀ (x : Claims.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin),
       (Claims.run H P V x ω r).out = .acc →
         ∃ sp, spanOf ((Claims.run H P V x ω r).msgs.map Prod.fst) = some sp ∧ sp.statements.size ≤ n ∧
-          checkSpan a reg w drawn sp = .accept) →
+          checkSpan a reg w sampled sp = .accept) →
     RowsBind →
     ∃ E : Claims.Extractor Coin (Array UnitVals) V,
       ∀ (x : Claims.Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
@@ -107,8 +107,8 @@ def SpanInProofsDeployed (H : Claims.Msg → Claims.Msg) (εKs εBind γ : ℝ) 
           t.out = .acc ∧ ∃ sp, spanOf (t.msgs.map Prod.fst) = some sp ∧
             match (E.eval H P x s.1 s.2.1 s.2.2).1 with
             | none => True
-            | some us => checkWindow reg reg.digest #[] w drawn (us.map (·.opening)) ≠ .accept ∧
-                ¬ Hash.CollisionIn Verity.sha512 (spanInputs a reg w drawn sp us)) ≤
+            | some us => checkWindow reg reg.digest #[] w sampled (us.map (·.opening)) ≠ .accept ∧
+                ¬ Hash.CollisionIn Verity.sha512 (spanInputs a reg w sampled sp us)) ≤
           n * (εKs + εBind) + Real.sqrt (γ * Claims.PrB H V P x)
 
 end Properties.Poub.SpanDeployed

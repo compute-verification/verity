@@ -12,7 +12,7 @@ public import Proofs.Properties.Compose.Remote.Pooled
 # PoUB's verifier: its properties, proved (`Properties.Compose.Remote`)
 
 `Window`: an accepted window checks every sampled opening (`acceptChecksOpenings`, `acceptOpensSamples`), and the
-verifier's process's chunked check is the whole window's (`chunkedIsWhole`). `Draw`: the samples
+verifier's process's chunked check is the whole window's (`chunkedIsWhole`). `Sample`: the samples
 are the sampler's subset mapped to distinct receipts (`sampleIsSubset`), on `Bisect` (`bisectRight`, running ends) and
 `Sort` (`Array.qsort` permutes). `Plan`: an accepted plan reads distinct blocks (`planReadsDistinct`,
 `changedReadsDistinct`). `Session`: one invariant of every state a run reaches, and from it the session's statements

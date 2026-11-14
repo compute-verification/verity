@@ -43,10 +43,10 @@ bound from its windows' receipts `U_t` and samples `s_t` at `δ`, in exact ratio
 certified rational root, and W by the fractional knapsack's greedy. The sample's model reads the bound as a supremum
 (`Accounting.Remote.Sample.pooled`, which `Accounting.Guarantees.Remote.PooledSample` reads).
 
-* `PooledCovers`: whenever the code computes a bound, its W is at least `Draw.pooled` of the same windows at the same
+* `PooledCovers`: whenever the code computes a bound, its W is at least `Sample.pooled` of the same windows at the same
   `δ`: its budget is at least `S·(1 − δ^(1/S))`, and its greedy reaches the supremum over every share vector the sample
   allows.
-* `PooledCoversRun`: the same at a session's sizes and sample counts (`Draw.Run.pooled`), the windows given as
+* `PooledCoversRun`: the same at a session's sizes and sample counts (`Sample.Run.pooled`), the windows given as
   `(U_t, min(s_t, U_t))`.
 * `LineCoversRun`: whenever the memory line gives a line for those windows, the W it reads (`Line.wrong`, every
   stretch's) is at least the session's pooled bound.
@@ -69,8 +69,8 @@ def PooledCovers : Prop :=
       Accounting.Remote.Sample.pooled n U d δ ≤ b.wrong
 
 /-- Whenever `pooled` gives a bound for a session's windows at outcome `ω`, each window's size and sample count
-(`Draw.Run.samples`, `min(s_t, U_t)`), its wrong receipts are at least the session's pooled bound at `δ`
-(`Draw.Run.pooled`). -/
+(`Sample.Run.samples`, `min(s_t, U_t)`), its wrong receipts are at least the session's pooled bound at `δ`
+(`Sample.Run.pooled`). -/
 def PooledCoversRun : Prop :=
   ∀ (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) (D : Accounting.Remote.Sample.Run n m s κ X)
     (ω : Accounting.Remote.Sample.SampleCoins n κ X) (δ : ℚ) (b : Pooled.Bound),
@@ -78,7 +78,7 @@ def PooledCoversRun : Prop :=
       D.pooled δ ω ≤ b.wrong
 
 /-- Whenever the memory line (`Poub.Line.line`) gives a line for a session's windows at outcome `ω` at `δ`, the
-wrong receipts it reads are at least the session's pooled bound at `δ` (`Draw.Run.pooled`). -/
+wrong receipts it reads are at least the session's pooled bound at `δ` (`Sample.Run.pooled`). -/
 def LineCoversRun : Prop :=
   ∀ (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) (D : Accounting.Remote.Sample.Run n m s κ X)
     (ω : Accounting.Remote.Sample.SampleCoins n κ X) (δ : ℚ) (gs : Array Line.Group)

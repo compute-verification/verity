@@ -49,8 +49,8 @@ def sampleW (now : Nat) (mine : Array (Nat × Nat)) (w : Win) : Win :=
   { w with drawn := some mine, openedNs := some now, verdict := if mine.isEmpty then some .accept else w.verdict }
 
 /-- One step of `Shared.close`'s second fold. -/
-def sampleStep (drawn : Array (Nat × Nat)) (now : Nat) (acc : Array Win × Nat) (u : Nat) : Array Win × Nat :=
-  (acc.1.modify u (sampleW now (shareOf drawn acc.2 acc.1[u]!.plans.size)), acc.2 + acc.1[u]!.plans.size)
+def sampleStep (sampled : Array (Nat × Nat)) (now : Nat) (acc : Array Win × Nat) (u : Nat) : Array Win × Nat :=
+  (acc.1.modify u (sampleW now (shareOf sampled acc.2 acc.1[u]!.plans.size)), acc.2 + acc.1[u]!.plans.size)
 
 theorem size_finalize_range (first m : Nat) (ws : Array Win) :
     (finalize ((List.range m).map (first + ·)) ws).size = ws.size := by
@@ -82,12 +82,12 @@ theorem passesIn_succ (ws : Array Win) (first m : Nat) :
     passesIn ws first (m + 1) = passesIn ws first m + ws[first + m]!.plans.size := by
   simp [passesIn, List.range_succ, List.sum_append]
 
-theorem sampleFold_range (drawn : Array (Nat × Nat)) (now first b : Nat) (ws : Array Win) (m : Nat) :
-    (((List.range m).map (first + ·)).foldl (sampleStep drawn now) (ws, b)).1.size = ws.size ∧
-    (((List.range m).map (first + ·)).foldl (sampleStep drawn now) (ws, b)).2 = b + passesIn ws first m ∧
-    ∀ v, (((List.range m).map (first + ·)).foldl (sampleStep drawn now) (ws, b)).1[v]! =
+theorem sampleFold_range (sampled : Array (Nat × Nat)) (now first b : Nat) (ws : Array Win) (m : Nat) :
+    (((List.range m).map (first + ·)).foldl (sampleStep sampled now) (ws, b)).1.size = ws.size ∧
+    (((List.range m).map (first + ·)).foldl (sampleStep sampled now) (ws, b)).2 = b + passesIn ws first m ∧
+    ∀ v, (((List.range m).map (first + ·)).foldl (sampleStep sampled now) (ws, b)).1[v]! =
       if first ≤ v ∧ v < first + m ∧ v < ws.size then
-        sampleW now (shareOf drawn (b + passesIn ws first (v - first)) ws[v]!.plans.size) ws[v]!
+        sampleW now (shareOf sampled (b + passesIn ws first (v - first)) ws[v]!.plans.size) ws[v]!
       else ws[v]! := by
   induction m with
   | zero => refine ⟨rfl, by simp [passesIn], fun v => ?_⟩; simp; omega
@@ -95,7 +95,7 @@ theorem sampleFold_range (drawn : Array (Nat × Nat)) (now first b : Nat) (ws : 
     obtain ⟨ih1, ih2, ih3⟩ := ih
     rw [List.range_succ, List.map_append, List.foldl_append]
     simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil]
-    generalize ((List.range m).map (first + ·)).foldl (sampleStep drawn now) (ws, b) = out at ih1 ih2 ih3
+    generalize ((List.range m).map (first + ·)).foldl (sampleStep sampled now) (ws, b) = out at ih1 ih2 ih3
     have hx : out.1[first + m]! = ws[first + m]! := by rw [ih3]; rw [ite_eq_right (by omega)]
     refine ⟨by simp [sampleStep, ih1], ?_, fun v => ?_⟩
     · simp only [sampleStep]; rw [ih2, hx, passesIn_succ, Nat.add_assoc]
@@ -135,13 +135,13 @@ theorem sclose_spec {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s'
     (h : Shared.close g s t now = .ok (r, s')) :
     ((∃ why, r = .refused why) ∧ s' = s) ∨
     (∃ u f, r = .rejected u f none ∧ s' = ({ s with windows := finalize (grp g t.toNat) s.windows }.fail u f).2) ∨
-    (∃ drawn, r = .drew drawn ∧ 0 ≤ t ∧ t.toNat < s.windows.size ∧ s.windows[t.toNat]!.drawn = none ∧
+    (∃ sampled, r = .drew sampled ∧ 0 ≤ t ∧ t.toNat < s.windows.size ∧ s.windows[t.toNat]!.drawn = none ∧
       t.toNat + 1 = min (t.toNat / g * g + g) s.params.windows ∧
       (∀ j, j < t.toNat / g * g → (dr s.windows j).isSome) ∧
       (∀ u ∈ grp g t.toNat, s.params.minPasses ≤ s.windows[u]!.roots.size) ∧
       receiptSample s.digest (t.toNat / g) s.coins[s.params.windows + t.toNat / g]! s.params.samples
-        (sampleLengths g s (t.toNat / g)) = some drawn ∧
-      s' = { s with windows := ((grp g t.toNat).foldl (sampleStep drawn now)
+        (sampleLengths g s (t.toNat / g)) = some sampled ∧
+      s' = { s with windows := ((grp g t.toNat).foldl (sampleStep sampled now)
         (finalize (grp g t.toNat) s.windows, 0)).1 }) := by
   unfold Shared.close at h
   dsimp only at h
@@ -193,7 +193,7 @@ theorem sclose_spec {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s'
       exact hdraws
 
 theorem sampleIsSubset : SampleIsSubset := by
-  intro g s t now drawn s' h
+  intro g s t now sampled s' h
   rcases sclose_spec h with ⟨⟨_, hr⟩, -⟩ | ⟨_, _, hr, -⟩ | ⟨d, hr, ht0, hts, hund, hm, hpre, hfew, hdraws, rfl⟩
   · cases hr
   · cases hr
@@ -205,7 +205,7 @@ theorem sampleIsSubset : SampleIsSubset := by
   have hle : t.toNat / g * g ≤ t.toNat := Nat.div_mul_le_self _ _
   show dr _ _ = _
   rw [dr_eq]
-  obtain ⟨-, -, h3⟩ := sampleFold_range drawn now (t.toNat / g * g) 0 (finalize (grp g t.toNat) s.windows)
+  obtain ⟨-, -, h3⟩ := sampleFold_range sampled now (t.toNat / g * g) 0 (finalize (grp g t.toNat) s.windows)
     (t.toNat + 1 - t.toNat / g * g)
   have h3' := h3 (t.toNat / g * g + j)
   unfold grp at h3' ⊢
@@ -273,44 +273,44 @@ theorem getElem!_mid (A B C : List Nat) (i : Nat) (h1 : A.length ≤ i) (h2 : i 
   rw [getElem!_pos (A ++ (B ++ C)).toArray i (by simp; omega), List.getElem_toArray,
     List.getElem_append_right h1, List.getElem_append_left]
 
-theorem shareOf_mem (drawn : Array (Nat × Nat)) (base n k : Nat) (hk : k < drawn.size) (h1 : base ≤ drawn[k].1)
-    (h2 : drawn[k].1 < base + n) : (drawn[k].1 - base, drawn[k].2) ∈ shareOf drawn base n := by
+theorem shareOf_mem (sampled : Array (Nat × Nat)) (base n k : Nat) (hk : k < sampled.size) (h1 : base ≤ sampled[k].1)
+    (h2 : sampled[k].1 < base + n) : (sampled[k].1 - base, sampled[k].2) ∈ shareOf sampled base n := by
   unfold shareOf
   rw [Array.mem_filterMap]
-  refine ⟨drawn[k], Array.getElem_mem hk, ?_⟩
-  generalize drawn[k] = q at h1 h2 ⊢
+  refine ⟨sampled[k], Array.getElem_mem hk, ?_⟩
+  generalize sampled[k] = q at h1 h2 ⊢
   obtain ⟨a, b⟩ := q
   simp only at h1 h2 ⊢
   rw [ite_eq_left (by simp; omega)]
 
 theorem acceptSamplesOpenable : AcceptSamplesOpenable := by
-  intro reg appends c coin samples ws drawn hd
+  intro reg appends c coin samples ws sampled hd
   obtain ⟨L, us, hs, hsz, -, hrange, -⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hd
   refine ⟨L, us, hs, fun openings hacc v hv => ?_⟩
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hv
-  have hjd : j < drawn.size := by omega
+  have hjd : j < sampled.size := by omega
   obtain ⟨hi, hp, hidx⟩ := hrange j hjd
   rw [getElem!_pos us j hj] at hidx
   have hsize : (lengthsOf ws).size = passCount ws := by simp [lengthsOf, passCount_eq]
-  obtain ⟨k, hk, hk1, hk2⟩ := locatePass ws drawn[j].1 (by omega)
+  obtain ⟨k, hk, hk1, hk2⟩ := locatePass ws sampled[j].1 (by omega)
   have hsplit := flatMap_split ws k hk
   have hA : ((ws.take k).flatMap lens).length = passCount (ws.take k) := (passCount_eq _).symm
   have hB : (lens ws[k]).length = ws[k].passes.size := length_lens _
   have hlist : (lengthsOf ws).toList = (ws.flatMap lens) := rfl
-  have hmem := shareOf_mem drawn (passCount (ws.take k)) ws[k].passes.size j hjd hk1 hk2
+  have hmem := shareOf_mem sampled (passCount (ws.take k)) ws[k].passes.size j hjd hk1 hk2
   rcases hacc k hk with he | hc
   · rw [he] at hmem; simp at hmem
   obtain ⟨-, hchk⟩ := checkWindow_accept hc
   obtain ⟨m, hm, hme⟩ := Array.mem_iff_getElem.1 hmem
   have hck := hchk m hm
   simp only [hme] at hck
-  have hi' : drawn[j].1 - passCount (ws.take k) < ws[k].passes.size := by omega
-  refine ⟨k, hk, ?_, drawn[j].1 - passCount (ws.take k), drawn[j].2, (openings k)[m]!, hi', ?_, ?_, hck⟩
+  have hi' : sampled[j].1 - passCount (ws.take k) < ws[k].passes.size := by omega
+  refine ⟨k, hk, ?_, sampled[j].1 - passCount (ws.take k), sampled[j].2, (openings k)[m]!, hi', ?_, ?_, hck⟩
   · rw [← hidx]
     unfold receiptIndex
     rw [hlist, hsplit, sum_take_mid _ _ _ _ (by omega) (by omega), receiptCount_eq]
     omega
-  · have e := getElem!_mid ((ws.take k).flatMap lens) (lens ws[k]) ((ws.drop (k + 1)).flatMap lens) drawn[j].1
+  · have e := getElem!_mid ((ws.take k).flatMap lens) (lens ws[k]) ((ws.drop (k + 1)).flatMap lens) sampled[j].1
       (by omega) (by omega)
     have hl : lengthsOf ws =
         ((ws.take k).flatMap lens ++ (lens ws[k] ++ (ws.drop (k + 1)).flatMap lens)).toArray := by
@@ -331,8 +331,8 @@ theorem filterMap_self {f : Nat × Nat → Option (Nat × Nat)} :
     rw [List.filterMap_cons, h x (by simp), filterMap_self l fun y hy => h y (by simp [hy])]
 
 /-- A window's share of a sample over its passes alone is the whole sample. -/
-theorem shareOf_all (drawn : Array (Nat × Nat)) (n : Nat) (h : ∀ k (hk : k < drawn.size), drawn[k].1 < n) :
-    shareOf drawn 0 n = drawn := by
+theorem shareOf_all (sampled : Array (Nat × Nat)) (n : Nat) (h : ∀ k (hk : k < sampled.size), sampled[k].1 < n) :
+    shareOf sampled 0 n = sampled := by
   unfold shareOf
   apply Array.ext'
   rw [Array.toList_filterMap]
@@ -340,7 +340,7 @@ theorem shareOf_all (drawn : Array (Nat × Nat)) (n : Nat) (h : ∀ k (hk : k < 
   intro x hx
   obtain ⟨k, hk, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hx)
   have := h k hk
-  generalize drawn[k] = q at this ⊢
+  generalize sampled[k] = q at this ⊢
   obtain ⟨a, b⟩ := q
   simp only at this ⊢
   rw [ite_eq_left (by simp; omega)]
@@ -396,7 +396,7 @@ theorem sclose_coins {g : Nat} {s : State} {c : Array ByteArray} {t : Int} {now 
     · rename_i h; rw [ite_eq_left h] at hres; cases h₁; cases hres; rfl
     rename_i h; rw [ite_eq_right h] at hres
     split at h₁
-    · rename_i drawn hd
+    · rename_i sampled hd
       cases h₁
       rw [hc ⟨_, rfl⟩, hd] at hres
       cases hres
@@ -417,14 +417,14 @@ theorem dr_fail (s : State) (u : Nat) (f : Failure) (v : Nat) : dr (s.fail u f).
   · rfl
 
 /-- In the sample, window `v`'s sample is new exactly when `v` is in the group. -/
-theorem dr_sampled {g : Nat} {s : State} {t : Int} {drawn : Array (Nat × Nat)} {now : Nat} (v : Nat) :
-    dr ((grp g t.toNat).foldl (sampleStep drawn now) (finalize (grp g t.toNat) s.windows, 0)).1 v =
+theorem dr_sampled {g : Nat} {s : State} {t : Int} {sampled : Array (Nat × Nat)} {now : Nat} (v : Nat) :
+    dr ((grp g t.toNat).foldl (sampleStep sampled now) (finalize (grp g t.toNat) s.windows, 0)).1 v =
       if t.toNat / g * g ≤ v ∧ v < t.toNat + 1 ∧ v < s.windows.size then
-        some (shareOf drawn (passesIn (finalize (grp g t.toNat) s.windows) (t.toNat / g * g) (v - t.toNat / g * g))
+        some (shareOf sampled (passesIn (finalize (grp g t.toNat) s.windows) (t.toNat / g * g) (v - t.toNat / g * g))
           s.windows[v]!.plans.size)
       else dr s.windows v := by
   have hle : t.toNat / g * g ≤ t.toNat := Nat.div_mul_le_self _ _
-  obtain ⟨-, -, h3⟩ := sampleFold_range drawn now (t.toNat / g * g) 0 (finalize (grp g t.toNat) s.windows)
+  obtain ⟨-, -, h3⟩ := sampleFold_range sampled now (t.toNat / g * g) 0 (finalize (grp g t.toNat) s.windows)
     (t.toNat + 1 - t.toNat / g * g)
   rw [dr_eq]
   unfold grp at h3 ⊢
@@ -916,12 +916,12 @@ theorem liveUnder_one (params : Params) (reg : Registration) (appendCoins : Arra
 /-- A sample of one window is `verifyWindow`'s: its share is the whole sample, and its receipts are numbered from 0. -/
 theorem acceptSamplesOpenable_one (h : AcceptSamplesOpenable) : Properties.Poub.AcceptSamplesOpenable := by
   intro reg appends w coin samples openings hv
-  obtain ⟨drawn, hd, hc⟩ := verifyWindow_accept hv
+  obtain ⟨sampled, hd, hc⟩ := verifyWindow_accept hv
   have hl : lengthsOf [w] = w.passes.map (·.plan.length) := by apply Array.ext'; simp [lengthsOf]
   obtain ⟨_, _, _, _, _, hrange, _⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hd
-  have hsh : shareOf drawn 0 w.passes.size = drawn :=
-    shareOf_all drawn _ fun k hk => by simpa using (hrange k hk).1
-  obtain ⟨L, us, hs, hus⟩ := h reg appends w.index coin samples [w] drawn (by rw [hl]; exact hd)
+  have hsh : shareOf sampled 0 w.passes.size = sampled :=
+    shareOf_all sampled _ fun k hk => by simpa using (hrange k hk).1
+  obtain ⟨L, us, hs, hus⟩ := h reg appends w.index coin samples [w] sampled (by rw [hl]; exact hd)
   rw [hl] at hs
   refine ⟨L, us, hs, fun v hv => ?_⟩
   obtain ⟨k, hk, -, ho⟩ := hus (fun _ => openings) (fun k hk => by
