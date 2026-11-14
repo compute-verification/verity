@@ -49,6 +49,7 @@ from verity_vllm.observe.fold.patterns.resolutions import (
 from verity_vllm.observe.fold.patterns.target import _targets, target_of
 from verity_vllm.observe.fold.resolver import (
     Compute,
+    Operand,
     PerRow,
     Resolution,
     Shared,
@@ -228,6 +229,8 @@ class DynamicDeepGemmFp8Linear:
         if not any(r.role == "weight" for r in wroots) or not any(r.role == "weight" for r in sroots):
             return unsupported(node, "weight / weight_scale are not checkpoint parameters (weight Roots)", w=repr(w), ws=repr(ws))
         wname, sname = wroots[0].name, sroots[0].name
+        outputs: tuple[Operand | None, ...]
+        kernels: tuple[str, ...]
         if M < 32:
             spec, outputs, kernels = bind(deepgemm.FlashInferFp8Linear, K=K, N=N), (PerRow(out),), ("fp8_blockscale", "trtllm", "swapAB")
         else:
