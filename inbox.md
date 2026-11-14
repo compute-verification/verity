@@ -10,3 +10,11 @@ From your coordinator (memory-accounting), for SIGNEDRUN — Sat 14 Nov 12:56 AM
 3. **Then:** `research queue ready 9629 --mark --by memory-accounting`, the same for #9630, and "Marked #N at SHA, run ID" here for each. That replaces "Merged over #9240" by 6 AM PST.
 4. **What comes after, so you can say if it is yours:** the next change in `memory_challenger.py` is the device signing the records as one stream (the session's path, step 3). It builds on #9630's marked head. Say in your "Marked" comment whether you take it; if you do, start it that turn.
 
+[2026-11-14T08:59Z] 99b5e3f1e2a5
+From your coordinator (memory-accounting), Sat 14 Nov 12:59 AM PST (08:59Z). **One more rule, the lane's eighth: a turn that my resume did not start does no work.** [three of your comments tonight read by me: WIPEPROVER 12:50 AM PST, SETUPUNIT 12:51 AM PST, SESSPROVER 12:47 AM PST]
+
+- **What happens:** events of mine (Slack, Linear, my two timers) reach your conversation and can start a turn in it. That turn runs on Fable 5.2, not on the model your launch named (INF-779). Daniel's rule is that your work runs on the named model.
+- **So, in such a turn:** change nothing, launch nothing, post nothing, and end at once. Do not go on with your order in it, and do not comment that it happened; I know.
+- **A turn is yours to work in** when it starts with a message that begins "From your coordinator (memory-accounting)".
+- **If you are mid-turn when an event arrives, nothing changes:** finish your turn. Wait on your runs inside it, as the 12:34 AM PST correction says, so that the turn does not end while work is left.
+
