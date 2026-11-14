@@ -140,8 +140,9 @@ def workload(base: str, named: list[str]) -> list[str]:
 
 def launch(run_id: str, on: str, tree: Path, base: str, named: list[str], *, pool: str, lane: str, mem_gb: float,
            timeout_s: float, urls: Path | None) -> list[str]:
-    """`research run`'s arguments for the audit of ``tree``'s change from ``base`` in ``on``'s ``pool``."""
-    return ["run", "--id", run_id, "--on", on, "--pool", pool, "--as", lane, "--project", "verity", "--mem-gb", f"{mem_gb:g}",
+    """`research run`'s arguments for the audit of ``tree``'s change from ``base`` in ``on``'s ``pool``, which stays there
+    (`--stay`): what it builds goes into ``on``'s own caches."""
+    return ["run", "--id", run_id, "--on", on, "--stay", "--pool", pool, "--as", lane, "--project", "verity", "--mem-gb", f"{mem_gb:g}",
             "--timeout", f"{timeout_s:g}", "--source", str(tree), "--cwd", "source", *(["--send", str(urls)] if urls else []),
             "--declared-output", "out/*", "--", *workload(base, named)]
 
