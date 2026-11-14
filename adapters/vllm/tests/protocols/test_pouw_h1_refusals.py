@@ -837,7 +837,7 @@ def test_only_a_window_on_the_auditor_hosts_coins_hands_off_and_only_a_saved_win
 
 
 def test_a_window_with_the_commit_in_its_engine_does_not_hand_off(tmp_path, monkeypatch):
-    """`client_of`, and so `suspend`, refuses an open, unclosed window on the auditor host's session whose served trees
+    """`client_of`, and so `suspend`, refuses an open, unclosed window on the auditor device's session whose served trees
     hold the Commit's tap, asked here inside its first forward: the tap holds the engine's committer, which no other
     process resumes, so the window closes where it served, nothing is saved, and it closes as it would have."""
     monkeypatch.setattr(pouw, "linear_types", lambda: (TC.Linear,))
