@@ -509,7 +509,7 @@ print(json.dumps(doc, sort_keys=True))
 EOF
 
   # the Lean the three verbs run
-  step lean-flock 50m bash -c 'cd verity/protocols/proofs/flock/verifier && lake build Flock verity-verify-proof flock-firewall'
+  step lean-flock 50m bash -c 'cd verity/protocols/proofs/flock/verifier && lake build Flock verity-verify-proof flock-zk-server'
   step link-lean 5m env PY="$PY" bash "$SELF" link-test "$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof" "$scratch/link"
   step lean-pearlplus 40m bash -c 'cd verity/protocols/accounting/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus'
   step lean-remote-v1 40m bash -c 'cd verity/protocols/compose/verifier/remote && lake build remote-v1'
