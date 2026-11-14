@@ -156,14 +156,13 @@ def test_the_composition_installs_innermost_first_and_unwinds_to_the_model_as_it
     _fake_adapter(monkeypatch, "pous", _pous(log), schemes=("band-chain/d12/v1",))
     model = Model()
     before = hooks.live()
-    comp = PO.install(model, _serve("pous:band-chain/d12/v1", "pouw:ncp-v1"))
-    assert comp.entries == ALL[:2] and log == ["pouw", "responder up", "pous"]
-    layer = model.layers[0]
-    assert layer.quant_method.apply(layer, "x") == ("pouw", 2, "x")          # PoUW's GEMM reads the weight POUS decoded
-    assert [e.tag for e in hooks.live()[len(before):]] == ["pouw:ncp-v1"] * 2 + ["pous:band-chain/d12/v1"] * 3
-    assert len(hooks.live("pous:band-chain/d12/v1")) == 3 and PO.undeclared(comp.entries) == ()
-    assert PO.undeclared(("pous:band-chain/d12/v1",)) == ("pouw:ncp-v1",)
-    comp.close()
+    with PO.install(model, _serve("pous:band-chain/d12/v1", "pouw:ncp-v1")) as comp:
+        assert comp.entries == ALL[:2] and log == ["pouw", "responder up", "pous"]
+        layer = model.layers[0]
+        assert layer.quant_method.apply(layer, "x") == ("pouw", 2, "x")      # PoUW's GEMM reads the weight POUS decoded
+        assert [e.tag for e in hooks.live()[len(before):]] == ["pouw:ncp-v1"] * 2 + ["pous:band-chain/d12/v1"] * 3
+        assert len(hooks.live("pous:band-chain/d12/v1")) == 3 and PO.undeclared(comp.entries) == ()
+        assert PO.undeclared(("pous:band-chain/d12/v1",)) == ("pouw:ncp-v1",)
     comp.close()
     assert log[3:] == ["responder down handle", "pous released"]
     assert all("apply" not in vars(m.quant_method) for m in model.layers) and hooks.live() == before
