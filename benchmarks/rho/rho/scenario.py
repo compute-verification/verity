@@ -210,7 +210,7 @@ def _cut_cites(partition: Partition, s: Overhead) -> tuple[str, ...]:
 
 
 def _binding_ks(partition: Partition, s: Overhead) -> tuple[float, ...]:
-    """The novel bits of each block in the cuts that set the server blocks' shares, least first: where premises must
+    """The fresh input bits of each block in the cuts that set the server blocks' shares, least first: where premises must
     hold."""
     cuts = _cuts(partition)
     return tuple(sorted({b.budget.inputs for name, share in s.serving.items() if (name, share.cut) in cuts
@@ -218,7 +218,7 @@ def _binding_ks(partition: Partition, s: Overhead) -> tuple[float, ...]:
 
 
 def _binding_k(partition: Partition, s: Overhead) -> float:
-    """The most novel bits of any block in the cuts that set the server blocks' shares."""
+    """The most fresh input bits of any block in the cuts that set the server blocks' shares."""
     return max(_binding_ks(partition, s), default=0.0)
 
 

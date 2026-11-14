@@ -11,7 +11,7 @@ public import Proofs.InferenceOnly.Threads
 divides the developer's region over `[0, t)` into `n ⌈t/ω⌉` windows of at most `Φ_X ω ≤ Γ` gates, each reading in the
 containment's image at most the state at its start plus `β_X ω`, so at most `K = R + r ω` (`serverBlocks_small`). Pulled back
 through the containment (`InferenceOnly.SecurityProofs.pull`), the windows divide the reference circuit into pieces no larger whose
-novel reads are at most their windows' reads in the image (`InferenceOnly.SecurityProofs.freshInput_pull_le_readsIn`, which needs
+fresh input bits are at most their windows' reads in the image (`InferenceOnly.SecurityProofs.freshInput_pull_le_readsIn`, which needs
 no condition on the baselines), each small at `(Γ, K)`, and Theorem 1 (`InferenceOnly.SecurityProofs.ThreadedReads`) bounds each
 piece's counted multiplications by `K Λ(K) / b_a`; every counted multiplication lies in one piece (`card_M_eq_sum`).
 Through a partial containment the windows divide only the gates the declaration computes (`InferenceOnly.SecurityProofs.piece`),

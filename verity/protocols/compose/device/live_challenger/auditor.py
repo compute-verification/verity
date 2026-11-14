@@ -715,7 +715,7 @@ def policy_name_of(s: str) -> str:
 
 
 def alpha_of(s: str) -> list[int]:
-    """A period-open's α (`--alpha N/D`, written as `alpha`, ``[N, D]``): the most novel bits a gate the inference-only
+    """A period-open's α (`--alpha N/D`, written as `alpha`, ``[N, D]``): the most fresh input bits a gate the inference-only
     policy lets an inference block read, as its check's params read it (`InferenceOnlyCheck.Protocol`: naturals, D at least 1). It
     is signed as given, never reduced; or Refused."""
     n, slash, d = s.partition("/")
