@@ -28,7 +28,7 @@ if [ "${SETUP:-0}" = 1 ]; then
   bash benchmarks/pouw/pearl_c_vllm/setup.sh > "$OUT/setup.log" 2>&1 || { stamp "SETUP_FAIL"; tail -20 "$OUT/setup.log"; exit 10; }
   tail -2 "$OUT/setup.log"
 fi
-KTREE=$(git rev-parse HEAD:benchmarks/pouw/pearl_c_sm120); SHIPS=${SHIPS:-/workspace/pouw/noise-sweep/ships}
+KTREE=$(git rev-parse HEAD:benchmarks/pouw/pearl_c_sm120 HEAD:verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120 | git hash-object --stdin); SHIPS=${SHIPS:-/workspace/pouw/noise-sweep/ships}
 export SHIP_TAR=$SHIPS/$KTREE.tar
 if [ -f "$SHIP_TAR" ]; then
   stamp "ship of kernel tree $KTREE from $SHIP_TAR"

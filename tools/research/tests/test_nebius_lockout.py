@@ -121,7 +121,7 @@ def test_the_seal_rule_is_custodys_own(roots):
     assert [d.name for d in sorted(r.iterdir()) if SR.not_ended(d) is None] == ["a", "f", "g", "j"]
 
 
-def test_a_pass_seals_ended_quiet_runs_up_to_its_cap_and_a_dry_run_changes_nothing(roots, tmp_path):
+def test_a_pass_seals_ended_quiet_runs_up_to_its_limit_and_a_dry_run_changes_nothing(roots, tmp_path):
     ended = [run(roots[0], n) for n in ("r1", "r2")] + [run(roots[1], "r3")]
     live = run(roots[0], "r0", state="running")
     fresh = run(roots[0], "r4")
@@ -136,7 +136,7 @@ def test_a_pass_seals_ended_quiet_runs_up_to_its_cap_and_a_dry_run_changes_nothi
     assert all(os.stat(d).st_mode & 0o200 for d in ended) and not ledger.exists(), "a dry run changes nothing"
 
     rep = SR.seal_pass([str(r) for r in roots], dry_run=False, max_dirs=2, **kw)
-    assert rep["sealed"] == [str(ended[0]), str(ended[1])] and any("cap of 2" in ln for ln in lines)
+    assert rep["sealed"] == [str(ended[0]), str(ended[1])] and any("limit of 2" in ln for ln in lines)
     for d in ended[:2]:
         for base, dirs, fs in os.walk(d):
             assert stat.S_IMODE(os.stat(base).st_mode) == 0o555

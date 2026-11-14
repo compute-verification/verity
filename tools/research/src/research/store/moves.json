@@ -2560,6 +2560,30 @@
         "security/Proofs/Properties/NetworkCertifier/": "security/Proofs/Properties/Certifier/",
         "security/Properties/NetworkCertifier/": "security/Properties/Certifier/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/pearl_c/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c/",
+        "benchmarks/pouw/pearl_c_sm120/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/",
+        "benchmarks/pouw/pearl_c_sm120/fixture.py": "benchmarks/pouw/pearl_c_sm120/fixture.py",
+        "benchmarks/pouw/pearl_c_sm120/ship.sh": "benchmarks/pouw/pearl_c_sm120/ship.sh",
+        "benchmarks/pouw/pearl_c_sm120/card.sh": "benchmarks/pouw/pearl_c_sm120/card.sh",
+        "benchmarks/pouw/pearl_c_sm90/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/",
+        "benchmarks/pouw/pearl_c_sm90/fixture.py": "benchmarks/pouw/pearl_c_sm90/fixture.py",
+        "benchmarks/pouw/pearl_c_sm90/ship.sh": "benchmarks/pouw/pearl_c_sm90/ship.sh",
+        "benchmarks/pouw/pearl_c_sm90/debit.py": "benchmarks/pouw/pearl_c_sm90/debit.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53.py": "benchmarks/pouw/pearl_c_sm90/glm53.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_passes.py": "benchmarks/pouw/pearl_c_sm90/glm53_passes.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_profile.py": "benchmarks/pouw/pearl_c_sm90/glm53_profile.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_slices.py": "benchmarks/pouw/pearl_c_sm90/glm53_slices.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_timing.py": "benchmarks/pouw/pearl_c_sm90/glm53_timing.py",
+        "benchmarks/pouw/pearl_c_sm90/grouped_check.py": "benchmarks/pouw/pearl_c_sm90/grouped_check.py",
+        "benchmarks/pouw/pearl_c_sm90/llama32_1b.py": "benchmarks/pouw/pearl_c_sm90/llama32_1b.py",
+        "benchmarks/pouw/pearl_c_sm90/overhead_arm.py": "benchmarks/pouw/pearl_c_sm90/overhead_arm.py",
+        "benchmarks/pouw/pearl_c_sm90/overhead_arm.json": "benchmarks/pouw/pearl_c_sm90/overhead_arm.json",
+        "benchmarks/pouw/pearl_c_sm90/h200.sh": "benchmarks/pouw/pearl_c_sm90/h200.sh",
+        "benchmarks/pouw/harness/ieee_pin.cu": "verity/protocols/accounting/pouw/prover/ieee_pin.cu"
+      }
     }
   ]
 }

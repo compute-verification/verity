@@ -31,5 +31,5 @@ KERNEL_ALLOWLIST = (
 )
 
 #: Declared name -> why its launch count may differ from its declaring events.  An entry lets an untraced launch of that
-#: kernel overwrite a Call's output unseen, so its reason must hold for every launch on every row of record.
+#: kernel overwrite a Call's output unseen, so its reason must hold for every launch on every workload of record.
 LAUNCH_COUNT_ALLOWLIST: dict[str, str] = {}
