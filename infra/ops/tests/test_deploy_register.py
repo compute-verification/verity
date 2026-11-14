@@ -6,6 +6,7 @@ one at a time. The register is a directory of this test's, and each node is a di
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Callable
@@ -292,6 +293,12 @@ def test_the_lists_key_is_taken_from_every_machine_it_names_and_no_other_line_ch
 
     ak.write_text(f"{KEY}\n")                               # no from=: taken from anywhere already, and never narrowed
     assert _install(fleet)["files"][0]["accept"]["line"] == "kept" and _keys(fleet) == [KEY]
+
+    if os.geteuid():                                        # a login that can't read the key's directory (vy-admin on a
+        ak.parent.chmod(0)                                  # locked-out node): the dry run says so, and --apply reads as root
+        assert _main(fleet, "install", "a", "--by", "lane-x", "/NODE/etc/peers") == 0
+        assert "its key can't be read here (PermissionError: --apply reads it as root)" in capsys.readouterr().out
+        ak.parent.chmod(0o700)
 
     (ak.parent / "k.pub").unlink()                          # no key here: refused before the list is touched
     (fleet["tmp"] / "a" / "etc" / "peers").write_text("by hand\n")

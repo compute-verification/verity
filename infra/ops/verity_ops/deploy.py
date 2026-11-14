@@ -389,11 +389,18 @@ stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 def refuse(why):
     print(why, file=sys.stderr)
     sys.exit(3)
+def unread(path, e):
+    if req["apply"]:
+        refuse(f"{path} can't be read ({type(e).__name__})")
+    print(json.dumps({"unread": f"{type(e).__name__}: --apply reads it as root"}))
+    sys.exit(0)
 if not want:
     refuse(f"no machine to take the key at {key} from")
 try:
     with open(key) as f:
         kind, body, *comment = f.read().split()
+except PermissionError as e:
+    unread(key, e)
 except (OSError, ValueError) as e:
     refuse(f"no public key at {key} ({type(e).__name__}): copy the key and its public half to this machine first")
 try:
@@ -403,10 +410,7 @@ try:
 except FileNotFoundError:
     lines, st = [], None
 except OSError as e:
-    if req["apply"]:
-        refuse(f"{ak} can't be read ({type(e).__name__})")
-    print(json.dumps({"unread": f"{type(e).__name__}: --apply reads it as root"}))
-    sys.exit(0)
+    unread(ak, e)
 FROM = re.compile(r'(?:^|,)from="([^"]*)"')
 def parts(line):
     """(its options, the key and what follows it) for a line that holds the key, else None."""
