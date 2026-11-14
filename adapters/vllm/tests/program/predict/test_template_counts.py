@@ -26,7 +26,7 @@ from verity_vllm.program.predict.common import _Stochastic, kind, select_token
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered, plan_steps, policy_of, request_program
 from verity_vllm.program.predict.template_counts import TemplateCounts
-from verity_vllm.program.prune import swapped
+from verity_torch.prune import swapped
 from tests.program.predict.test_node import _first_layers
 from tests.program.predict.test_steps import _b8_window, _class_g, _spec
 
