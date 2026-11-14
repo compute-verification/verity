@@ -1822,6 +1822,19 @@ src = "tools/research/src/research/pods/nebius/vqueue/bin/gh"
 nodes = ["vy-nebius-cpu-13"]
 owner = "infra"
 
+# loop.sh runs each at its call (graph2's CLI, the Lean cache's publish after a landing): nothing to restart
+[[file]]
+path = "/usr/local/lib/vy-vqueue/graph2.sh"
+src = "tools/research/src/research/pods/nebius/vqueue/graph2.sh"
+nodes = ["vy-nebius-cpu-13"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-vqueue/lean_publish.sh"
+src = "tools/research/src/research/pods/nebius/vqueue/lean_publish.sh"
+nodes = ["vy-nebius-cpu-13"]
+owner = "infra"
+
 [[file]]
 path = "/usr/local/sbin/vy-vqueue-setup"
 src = "tools/research/src/research/pods/nebius/vqueue/setup.sh"
