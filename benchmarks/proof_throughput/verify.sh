@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# proof_throughput's verifier point: the compiled Lean verifier (`flock-verify verify --coins tree`) on every session of one prover
+# proof_throughput's verifier point: the compiled Lean verifier (`verity-verify-proof verify --coins tree`) on every session of one prover
 # point's bundle (job.sh's out/bundle.json), each under /usr/bin/time, then the point's contract result from the prover's records
 # and these verdicts. The verifier's `--partition` is its own: derived from the workload's program and checked against the
 # digest the circuit binds (`partition`), never read from the bundle. Runs in a proofs-pool slot of vy-nebius-cpu-3 or -cpu-2,
@@ -31,12 +31,12 @@ KEY=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verit
 L=$W/lean-$KEY
 (
   exec 8>"$W/lean.lock"; flock 8
-  if [ ! -x "$L/.lake/build/bin/flock-verify" ]; then
+  if [ ! -x "$L/.lake/build/bin/verity-verify-proof" ]; then
     rm -rf "$L.tmp" && P=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier "$L.tmp") && ln -s "${P#"$L.tmp/"}/.lake" "$L.tmp/.lake" \
-      && (cd "$P" && lake build flock-verify) > "$O/lake-build.log" 2>&1 && rm -rf "$L" && mv "$L.tmp" "$L"
+      && (cd "$P" && lake build verity-verify-proof) > "$O/lake-build.log" 2>&1 && rm -rf "$L" && mv "$L.tmp" "$L"
   fi
 )
-LEAN=$L/.lake/build/bin/flock-verify
+LEAN=$L/.lake/build/bin/verity-verify-proof
 . "$REPO/verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh"
 [ -x "$LEAN" ] || { tail -20 "$O/lake-build.log"; log "Lean build failed"; exit 1; }
 sha256sum "$LEAN" | cut -d' ' -f1 > "$O/lean.sha256"; echo "$KEY" > "$O/lean.key"

@@ -127,7 +127,7 @@ for s in ${STEPS//,/ }; do
     # the forgeries the ZK server stops before release, made on the honest releases after proving and put to Lean with the
     # lean step's own flags (forge_after.py; out/forge-after.json)
     forge-after)
-      lo=$O/steps/lean/r1/out; fv=$L/lean-$LSHA/flock-verify
+      lo=$O/steps/lean/r1/out; fv=$L/lean-$LSHA/verity-verify-proof
       timed forge-after 1 env OUT=$O/steps/forge-after/r1/out python3 benchmarks/recursion_e2e/forge_after.py \
         --work "$FLOCK_WORK" --tag "$TAG" --run-out "$lo" --kinds "${FORGE_AFTER:-coef,dirs,message}" --jobs "${LEAN_JOBS:-4}" \
         --bin "$([ -f $lo/lean/own-L0.txt ] || [ -f $lo/lean/own-alg-p0.txt ] && echo run || echo lean)=$fv" || rc=1 ;;

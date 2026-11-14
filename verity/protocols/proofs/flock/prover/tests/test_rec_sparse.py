@@ -379,7 +379,7 @@ def test_the_copy_rows_at_the_binding_shape():
     assert RS.copy_rows(RS.Shape(2, 6, 1, 1)) == 6 * 2187 + 128 * 35 == 17_602
 
 
-BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier" / ".lake" / "build" / "bin" / "verity-verify-proof"
 
 
 def _lean_statement(d: Path):

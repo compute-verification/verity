@@ -51,7 +51,7 @@ verifier's `Spot.Select` ports, held to them by its difftest on fixed coins.
 **A two-stage sampling design** (`TwoStage(grain, replay, k)`, `Stream(replay=)`). The registration is the boundary
 commitment: its population is the replay blocks, the instances of the replay block's Definition under the replay grain's
 query, and its roots are the boundary values (phase `serve`). The first stage (`select`) samples replay blocks by the
-`replay` law, a rate law: the replay sample. The prover then replays each sampled replay block and commits its
+`replay` sampling design, a rate sampling design: the replay sample. The prover then replays each sampled replay block and commits its
 interior (phase `interior`) in the interior registration (`register_interiors`), over the Q·n_rho proof blocks of the Q
 sampled replay blocks, registered after the registration (`previous`) and before the second stage's coins. A replay
 block holds n_t instances of each template t of the check (`replay_cells`, the check naming them in the order of their
@@ -77,7 +77,7 @@ run where the params are made), and reproduces the file from public data
 alone: the template's Definition and rows, the interior's
 partition and program digests, the values it reads (`reads`), its AND gates per stage (`stage_ands`) and the leaf
 scheme, in a process where `FLOCK_PACK_WORDS`, `FLOCK_CORE_ROWS`, `FLOCK_PLAIN_LEAVES`, `FLOCK_OWN_ROWS` and
-`FLOCK_GEMM_TILE` are unset, since each changes the file. The interior's digests depend on Q, which a rate law samples, so
+`FLOCK_GEMM_TILE` are unset, since each changes the file. The interior's digests depend on Q, which a rate sampling design samples, so
 the names are each run's and are handed to `outcome`.
 
 **The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
@@ -334,7 +334,8 @@ def _grain(g: Any) -> bool:
 
 
 def _replay_law(text: Any) -> bool:
-    """`Select.replayLaw?`: a rate law, a uniform sample of replay blocks at the rate however many the prover registers."""
+    """`Select.replayLaw?`: a rate sampling design, a uniform sample of replay blocks at the rate however many the prover
+    registers."""
     return D.parse_rate(text) is not None
 
 
@@ -342,7 +343,7 @@ def _replay_law(text: Any) -> bool:
 class TwoStage:
     """A two-stage sampling design (the module docstring). `grain`: the replay grain, the replay partition's query,
     `Q_template_instance` over the replay block's Definition (`partition.template_instance_query`), whose instances in the
-    registration's program are its replay blocks. `replay`: the first stage's law over them, a rate law.
+    registration's program are its replay blocks. `replay`: the first stage's sampling design over them, a rate sampling design.
     `k`: the proof blocks the second stage samples in each cell (a sampled replay block's instances of one template), on
     fresh coins after the interior registration: one count for every template, or `{template's descriptor id: k_t}`
     naming each of the check's templates once. A cell of fewer proof blocks than its count is proved whole
@@ -1539,7 +1540,7 @@ class Stream:
     (`coins.coins_reason`), so whoever wrote it, an accepted sample's coins are a session's under the key the stream
     holds, and a stream made without a key rejects every sample that read coins (failing `run`). A stream that reads no coins (`All`, or one a
     `sampler` samples for) needs none and reads none it is given. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
-    their own. `sampler`, when given, samples instead of the coins (`flock-verify draw` in a process of its own, say), never
+    their own. `sampler`, when given, samples instead of the coins (`verity-verify-proof draw` in a process of its own, say), never
     beside the challenger's: it takes the challenger's sampling design and N, and its sample is held to them like any
     other. `prover`, when given, is the identity the challenger registered the stream's prover under
     (lowercase hex): the stream's digest names it, and every registration is bound to the stream and the prover
@@ -2236,7 +2237,7 @@ class Stream:
             raise _refuse("place", {"family": self._coins.label, "place": mine})
 
     def _family(self, read: bytes | None) -> str | None:
-        """The challenger's family a sample that read `read` took its coins from: the stream's own coin source's at the
+        """The challenger's family a sample that read `read` took its coins from: the stream's own live-coin part's at the
         sample (`coins.ChallengerCoins.label`), which the verifier's run holds the coins' evidence to, so the evidence
         names no family of its own; None for a sample that read none."""
         return self._coins.label if read and isinstance(self._coins, ChallengerCoins) else None
@@ -2481,7 +2482,7 @@ class Stream:
         sources as the registration's check read them (`registration.resolved`: a history table's root and domain
         id as bytes), and those it pinned or holds to an earlier record, and the templates the params record as table
         reads, `template_reads`), and the registration's over the replay sample,
-        each taking the sessions' reads of its own ports at their own roots (`own_reads`), both failing `run` where
+        each taking the sessions' reads of its own ports at their own roots (`audit.less_own_reads`), both failing `run` where
         the whole run isn't the verifier's; and the public outputs."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
         reg, first, ireg, second = e.registration, e.draw, e.interior, e.second
@@ -2497,7 +2498,7 @@ class Stream:
         replayed = D.proved(first.draw)
         rec = V.audit_record(ireg.record, ireg.receipt, second.draw, second.law, proved,
                              len(proved) if instances is None else instances, statement, verdicts, self.delta,
-                             e.sessions, served, session_roots, own_reads=True)
+                             e.sessions, served, session_roots)
         named = template_circuits(proofs, self.spec.check.query)
         own = SS.Own(tuple(replayed), SS.parts(len(replayed), P.strata(e.interior_program, self.spec.check.query)),
                      ireg.record, reg.record, tuple(D.proved(second.draw)),
@@ -2512,7 +2513,7 @@ class Stream:
                      reads=template_reads(proofs))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
-                                  verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)
+                                  verdicts, self.delta, e.sessions, None, replay_session_roots)
         accepted = rec["accepted"] and boundary["accepted"]
         if e.read is not None and e.second_read is not None and rec["verifiers"]["agree"] and \
                 boundary["verifiers"]["agree"]:

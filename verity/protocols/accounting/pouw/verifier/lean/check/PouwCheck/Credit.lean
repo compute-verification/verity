@@ -725,7 +725,7 @@ def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array 
   let some units ← port (workUnits coin st reg kvs (← law ss k)) | throw ("sampler", "the draw's stream ran out")
   pure units
 
-/-- `credit._finding`: a session's registered finding (flock-verify's `registered`, `{port: {value, root}}`: each
+/-- `credit._finding`: a session's registered finding (verity-verify-proof's `registered`, `{port: {value, root}}`: each
 registered port's value and the root its reads were opened against) as `(port, value, root)` in port order. -/
 def finding? (x : Json) : Option (List (String × String × String)) :=
   if isObj x then (fields x).mapM fun (port, e) =>

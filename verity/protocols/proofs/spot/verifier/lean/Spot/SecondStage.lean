@@ -248,6 +248,10 @@ def OWN_SOURCES : List String := ["bytes"]
 /-- The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1. -/
 def VERDICT_ONE : Array (String × String) := #[("bytes", "00000001")]
 
+/-- `VERDICT_ONE` as one 16-bit leaf, the width of the verdict value's row: the bytes of 1 as one 16-bit half
+(`Supplied.halfLeaves`). `openedRow` doesn't read it until `halfLeaves` is written. -/
+def VERDICT_ONE_LEAF : Array (String × String) := #[("bytes", "0001")]
+
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
 structure Part where
   template : String
@@ -290,7 +294,7 @@ def Stmt.ofJson? (j : Json) : Option Stmt :=
   | .str t, .obj h, .obj d, .obj r => some ⟨t, .obj h, .obj d, .obj r⟩
   | _, _, _, _ => none
 
-/-- What an accepted verdict of record names of the session it checked (`flock-verify verify`'s verdict): the digests
+/-- What an accepted verdict of record names of the session it checked (`verity-verify-proof verify`'s verdict): the digests
 of the public file's header and of the `--registered` file it checked the session against (`public_header_sha512`,
 `registered_sha512`, null for none), the sample it checked it at (`unit_draw`) and the number of tables it set the
 session up as (`session_tables`). -/

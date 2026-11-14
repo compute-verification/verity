@@ -1836,7 +1836,7 @@ def test_wide_file_and_pins_file_name_the_files_the_world_reads_each_tick_by_def
 @pytest.mark.parametrize("heavy, on", [("1\n", "big"), ("1\n", ""), ("*\n", "big")], ids=["big", "off", "every"])
 def test_a_heavy_pr_is_wide_its_batch_taking_no_other_lean_member_while_heavy_on_names_machines(env, heavy, on):
     """`--heavy-file` (`World.heavy`) is read into `Snapshot.wide` each tick beside the wide file, so a heavy PR's batch takes
-    no other Lean member; with no `--heavy-on` it is no heavy PR, and the `lean` cap alone makes the batch, as it does when
+    no other Lean member; with no `--heavy-on` it is no heavy PR, and the `lean` limit alone makes the batch, as it does when
     the file's `*` makes every candidate heavy, which makes no PR wide."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
     env.put(1, {"pkg/A.lean": "-- b\n"})
@@ -1951,8 +1951,8 @@ def test_the_snapshot_reads_the_clock_lean_and_pending_hours_and_a_check_pending
     assert seen[-1].candidates[0].enqueued == T0 and seen[-1].candidates[0].tries == 2
 
 
-def test_a_member_counts_toward_the_lean_cap_only_when_its_lean_change_compiles(env):
-    """`--lean` caps a candidate's members whose Lean change compiles: a Lean source's of a package with a lock, the spec's,
+def test_a_member_counts_toward_the_lean_limit_only_when_its_lean_change_compiles(env):
+    """`--lean` limits a candidate's members whose Lean change compiles: a Lean source's of a package with a lock, the spec's,
     or a proof's beside a lock's records.  A change to a lock's records alone (`lean-audit.json`) compiles nothing, and
     counts no more than a change with no Lean."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
@@ -1968,9 +1968,9 @@ def test_a_member_counts_toward_the_lean_cap_only_when_its_lean_change_compiles(
 
 def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that_isnt_a_pr_number_fails_the_tick(env):
     """`--wide-file` (`World.wide`) is read into `Snapshot.wide` each tick with the priority file's parsing
-    (`queue.priority_list`): one PR number a line, none while the file is missing or empty, so the `lean` cap alone makes the
+    (`queue.priority_list`): one PR number a line, none while the file is missing or empty, so the `lean` limit alone makes the
     Lean batch, and a line that isn't a PR number is refused, naming the file and the line, so the tick fails until it is
-    fixed.  A wide PR fills its batch's cap; the PR with no Lean change goes in a batch of its own."""
+    fixed.  A wide PR fills its batch's limit; the PR with no Lean change goes in a batch of its own."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
     env.put(1, {"pkg/A.lean": "-- b\n"})
     env.put(2, {"security/Definitions/D.lean": "-- d\n"})
@@ -2017,12 +2017,12 @@ def test_the_pins_file_is_read_each_tick_with_its_comments_and_a_word_that_isnt_
 
 
 @pytest.mark.parametrize("priority", [None, "", "99\n", "1\n"], ids=["none", "empty", "stale", "lean first"])
-def test_at_lean_0_a_lean_pr_opens_no_batch_whatever_its_rank_until_the_pins_file_names_it_and_under_a_cap_it_opens_one(
+def test_at_lean_0_a_lean_pr_opens_no_batch_whatever_its_rank_until_the_pins_file_names_it_and_under_a_limit_it_opens_one(
         env, priority):
     """Rank is the priority file, then mark time: with none, an empty one, a stale one naming only PRs gone, or one listing
     the Lean PR first, the Lean PR marked longest ago ranks first.  At `--lean 0` it still goes in no batch, and the PR with
     no Lean change is built; once the pins file names it, it goes in a batch of its own, leaving that PR for the next.
-    Under a `--lean` cap above 0 it opens that batch with no pin."""
+    Under a `--lean` limit above 0 it opens that batch with no pin."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
     env.put(1, {"pkg/A.lean": "-- b\n"})
     env.put(3, {"a.txt": "3\n"})
@@ -2171,7 +2171,7 @@ def test_the_failing_tests_graph2_s_verdict_names_count_beside_its_result_s_for_
     script = env.graph2_script(loop, {"state": PENDING})
     (built,) = loop.tick()
     sha = built["sha"]
-    t, node, more = "lean-suites:verity-flock:6/6", "tests/test_rec_full_draw.py::test_draw", "tests/test_x.py::test_y"
+    t, node, more = "lean-suites:verity-flock:6/6", "tests/test_rec_full.py::test_full", "tests/test_x.py::test_y"
     env.listed(main, {t: ["f.py"]}, keys={t: "sha512:base-f"})
     keys = env.listed(sha, {"pytest:a": ["a.txt"], t: ["f.py"]})
     env.result(keys["pytest:a"], "pytest:a", "pass")
@@ -2188,7 +2188,7 @@ def test_the_failing_tests_graph2_s_verdict_names_count_beside_its_result_s_for_
 
 
 #: a lean-suites result's row of a suite that failed on one test and nothing more
-ROW = {"name": "verity-flock", "suite": "verity/protocols/proofs/flock/prover", "failed_tests": ["tests/test_d.py::test_draw"], "beyond_tests": False}
+ROW = {"name": "verity-flock", "suite": "verity/protocols/proofs/flock/prover", "failed_tests": ["tests/test_d.py::test_d"], "beyond_tests": False}
 #: the test a fail for more than the tests it names adds, of the candidate's key alone
 BEYOND = "fault:suite {} failed beyond the tests it names, at sha512:t1"
 
@@ -2653,7 +2653,7 @@ def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for
     runs after lean-build stand for lean-suites (`_job`): the graph lacks no job `main` waits for, and the lean-suites tasks
     its base lists may go.  A candidate whose base's check isn't listed waits for it."""
     env.gates = ["pytest", "lean-build", "lean-suites"]
-    lean, exe = "verity/protocols/proofs/flock/verifier", {"name": "flock-verify", "path": "verity/protocols/proofs/flock/verifier/.lake/build/bin/v"}
+    lean, exe = "verity/protocols/proofs/flock/verifier", {"name": "verity-verify-proof", "path": "verity/protocols/proofs/flock/verifier/.lake/build/bin/v"}
     build, outs = f"lean-build:{lean}", [exe, {"name": "build", "path": f"{lean}/.lake/build.tar.gz"}]
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy)
@@ -2663,14 +2663,14 @@ def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for
     env.graph2.list_graph(f"ready:{main}", _graph(main, [
         a, {"id": build, "kind": "lean-build", "inputs": [f"{lean}/Main.lean"], "key": "sha512:b0", "outputs": [exe]},
         {"id": "lean-suites:verity-flock", "kind": "lean-suites", "inputs": ["f/test_f.py"],
-         "reads": [{"task": build, "output": "flock-verify"}]}]))
+         "reads": [{"task": build, "output": "verity-verify-proof"}]}]))
     env.graph2.list_graph(f"ready:{sha}", _graph(sha, [
         a, {"id": build, "kind": "lean-build", "inputs": [f"{lean}/Main.lean"], "key": "sha512:b1", "outputs": outs},
         {"id": "test-file:f/test_f.py", "kind": "test-file", "inputs": ["f/test_f.py"],
          "reads": [{"task": build, "output": o["name"]} for o in outs]}]))
     env.result("sha512:a", "pytest:a", PASS)
     env.graph2.finish_result({"key": "sha512:b1", "task": build, "status": PASS,
-                              "outputs": {"flock-verify": "sha512:v", "build": "sha512:t"}})
+                              "outputs": {"verity-verify-proof": "sha512:v", "build": "sha512:t"}})
     _, made, _ = w._settled(w.tasks.graph_v2(f"ready:{sha}")[1])
     env.result(made["test-file:f/test_f.py"], "test-file:f/test_f.py", PASS)
     j = w.verdict(sha, main)
@@ -4126,7 +4126,7 @@ def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_an
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("take no cap (--pins-file)", 3))), said
+    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("take no limit (--pins-file)", 3))), said
     loop = Loop(None, tmp_path / "log")
     assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
 
@@ -4149,7 +4149,7 @@ def test_merged_root_takes_the_codemod_s_worktrees_off_tmpdir_and_sweeps_one_a_k
     main = _move_main(o, {**_tooling(tmp_path / "argv", f"import os\nPath({str(ran)!r}).write_text(os.getcwd())\n"),
                           "Lib/A.lean": "import Init\n"})
     _git(tmp_path, "clone", "-q", str(o.origin), str(clone := tmp_path / "clone"))
-    (left := fast / f"{Q.MERGED_PREFIX}999999999-x" / "tree").mkdir(parents=True)     # no such pid: Linux's cap is 2**22
+    (left := fast / f"{Q.MERGED_PREFIX}999999999-x" / "tree").mkdir(parents=True)     # no such pid: Linux's limit is 2**22
     ported = []
 
     def tick(self):
@@ -5489,10 +5489,10 @@ def test_under_gate_check_a_warn_step_s_red_rings_its_owner_in_ci_toml_else_ci(e
     assert rings == {"flock-rust-tests": (["@proofs"], ["flock-rust-tests"]), "lean-audit": (["@ci"], ["lean-audit"])}
 
 
-@pytest.mark.parametrize("cap", [2, 3])
-def test_under_gate_check_a_ring_off_the_gate_quotes_its_first_failures_in_the_log_s_order_each_cut_short(env, monkeypatch, cap):
+@pytest.mark.parametrize("limit", [2, 3])
+def test_under_gate_check_a_ring_off_the_gate_quotes_its_first_failures_in_the_log_s_order_each_cut_short(env, monkeypatch, limit):
     """A ring quotes the first `OFF_SAID` failures in the log's order, each cut at 200 characters, and counts the rest."""
-    monkeypatch.setattr(L, "OFF_SAID", cap)
+    monkeypatch.setattr(L, "OFF_SAID", limit)
     loop, runs, main, sha = _off(env, monkeypatch, OTHER)
     runs.end(main)
     said = [f"lowering/pin-mismatch {ROPE} " + "y" * 300, f"lowering/pin-mismatch {HEAD} it differs", "lowering/dead Other_v1"]
@@ -5500,8 +5500,8 @@ def test_under_gate_check_a_ring_off_the_gate_quotes_its_first_failures_in_the_l
     (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
     assert ring["failures"] == [f"lowering/pin-mismatch {ROPE}", f"lowering/pin-mismatch {HEAD}", "lowering/dead Other_v1"]
     assert ring["to"] == ["@heads", "@circuits"]
-    assert ring["text"] == _off_said(sha, "#1", "circuit-check", main, said[0][:200], *said[1:cap]).replace(
-        ". Nothing", f"{'; and 1 more' if cap == 2 else ''}. Nothing")
+    assert ring["text"] == _off_said(sha, "#1", "circuit-check", main, said[0][:200], *said[1:limit]).replace(
+        ". Nothing", f"{'; and 1 more' if limit == 2 else ''}. Nothing")
 
 
 def test_under_gate_check_the_steps_off_the_gate_are_its_bases_and_the_allowances_and_owners_the_candidate_s_own(

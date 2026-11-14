@@ -5,7 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 public import Proofs.Flock.Soundness.Discharge.Exec.Retained
 
 /-!
-# The target statements of flock-verify `--zk`'s acceptance and its refinement
+# The target statements of verity-verify-proof `--zk`'s acceptance and its refinement
 
 Each statement is a `Prop` here; its theorem (`theorem … : G`) is in the file that proves it.
 
@@ -27,11 +27,11 @@ Each statement is a `Prop` here; its theorem (`theorem … : G`) is in the file 
 * `AcceptsZKRetained`: under tags that retain rounds, every stream of the accepted record retained every round's bytes.
 
 **Refinement** (one table, against the compiled `--zk` table `G, out, acc` named in `Live.lean`):
-* `ExecRefinesZKOne`: the refinement at `--zk`: against any live prover, flock-verify `--zk`'s acceptance is no likelier
+* `ExecRefinesZKOne`: the refinement at `--zk`: against any live prover, verity-verify-proof `--zk`'s acceptance is no likelier
   than the compiled table's acceptance against the simulated prover `simAuditZK … τ`, with `bad = ⊥`, given `DecodesZK`.
-* `ZkHeadlineExecOne`: the `--zk` headline at flock-verify's acceptance, carried from any bound `B` on the compiled
+* `ZkHeadlineExecOne`: the `--zk` headline at verity-verify-proof's acceptance, carried from any bound `B` on the compiled
   audit's `Pr[accept ∧ Q]` at the simulated prover, for any event `Q` of that prover (at least `K` incorrect proof blocks of its
-  committed values): `Pr[flock-verify --zk accepts ∧ Q] ≤ B`.
+  committed values): `Pr[verity-verify-proof --zk accepts ∧ Q] ≤ B`.
 -/
 
 @[expose] public section
@@ -170,7 +170,7 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {P Cp Op Out : Finset (Fin n) → R
   (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ) (L : Law n)
 
 /-- **The refinement at `--zk`, one table**: against any live prover `τ` of the live audit (`liveTable` written out by
-`wr`), flock-verify `--zk`'s acceptance is no likelier than the compiled `--zk` table's acceptance against the simulated
+`wr`), verity-verify-proof `--zk`'s acceptance is no likelier than the compiled `--zk` table's acceptance against the simulated
 prover `simAuditZK … τ`, with no live event added, whenever every rep's game has a strategy (`hinh`) and the decoder is
 right on accepted sessions (`DecodesZK`). -/
 def ExecRefinesZKOne : Prop :=
@@ -179,9 +179,9 @@ def ExecRefinesZKOne : Prop :=
     ExecRefines (auditLive L Reg (liveOf dg mPts N wr)) τ (LiveAcceptsZK I) (fun _ => False)
       (audit L Reg (sessionZC G out acc)) (simAuditZK G out acc I wr opn dg dec one fin capOf N hinh hdec τ)
 
-/-- **The `--zk` headline at flock-verify's acceptance, one table**, from a bound on the compiled audit: for any event
+/-- **The `--zk` headline at verity-verify-proof's acceptance, one table**, from a bound on the compiled audit: for any event
 `Q` of the simulated prover (at least `K` incorrect proof blocks of its committed values, say), if the compiled `--zk` audit
-accepts with `Q` with probability at most `B` against `simAuditZK … τ`, then flock-verify `--zk` accepts the live
+accepts with `Q` with probability at most `B` against `simAuditZK … τ`, then verity-verify-proof `--zk` accepts the live
 audit's transcript with `Q` with probability at most `B`. -/
 def ZkHeadlineExecOne : Prop :=
   ∀ (hinh : ∀ S R pts r, AllInh (G S R pts r)) (hdec : DecodesZK G out acc I wr opn dec one fin capOf)

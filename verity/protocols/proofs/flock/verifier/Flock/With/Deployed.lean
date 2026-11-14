@@ -18,7 +18,7 @@ Every table the deployed verifier sets up has the registry's Merkle scheme of it
 `MerkleScheme.find?` and nowhere else, and `Setup.ofCircuit` keeps it. So on every session `Stmt.setupTables` sets up,
 `verify` and `Zk.verify` are `verifyWith Sha512.hash` and `Zk.verifyWith Sha512.hash`, with no hypothesis left
 (`verify_eq_verifyWith_of_setupTables`, `Zk.verify_eq_verifyWith_of_setupTables`, and `flock-witness`'s
-`Witness.acceptsZKRAt_setupOf`). `flock-verify`'s own builders, `buildStmt` and `buildSession`, get the same in
+`Witness.acceptsZKRAt_setupOf`). `verity-verify-proof`'s own builders, `buildStmt` and `buildSession`, get the same in
 `FlockVerify`.
 
 `Returns x P` (`Flock.With.Returns`): every value `x` returns satisfies `P`. `returns_walk` (`Flock.With.ReturnsWalk`)

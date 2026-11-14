@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The fixture of verify --zk's form refusals (form_refusals.py), on a CPU machine, on hidden_zk's builds (its job.sh,
-# sourced: Flock's flock-circuit, the Lean flock-verify and the prover's flock-tmpl-unit, cached under $FP_CACHE). From a
+# sourced: Flock's flock-circuit, the Lean verity-verify-proof and the prover's flock-tmpl-unit, cached under $FP_CACHE). From a
 # clone:
 #   FP_CACHE=/workspace/research/cache/pouw-hidden-zk bash benchmarks/one_stage/form_refusals.sh
 #   (a job run from a clone of the tree, 8 CPUs, 32 GB)

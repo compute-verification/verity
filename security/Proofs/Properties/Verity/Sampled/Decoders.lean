@@ -638,7 +638,7 @@ theorem proofs_of_sent {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) 
 
 /-! ## What the decoders read, against the record v2 decodes -/
 
-/-- **The session `flock-verify --zk` sets up at one table**: one table, `Σ` a SHA-512 digest, rounds retained, and
+/-- **The session `verity-verify-proof --zk` sets up at one table**: one table, `Σ` a SHA-512 digest, rounds retained, and
 two link points. -/
 theorem setup_one {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteArray} {record : String}
     {spec : SessionSpec} {sts : Array Flock.Stmt} (hT : TagsOkZHJ I) (hc : I.count = 1)
