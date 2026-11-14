@@ -115,9 +115,10 @@ A run of record that is superseded, or holds no rows of the case, is left out an
 
 Under a research run, a runner that names metric ids for the figures (`benchmarks/exfiltration/run.py`'s `METRICS`)
 has `record` write them through the harness kit (`measurements`): the headline figure, the compute audit's part and
-the network certifier's, each over the world's year at the share, with its mark at the head of its first input and its
-error over the world's year in the next, the document as `DOCUMENT` and what ran in the fingerprint. What it prints is
-the same in a run as outside one.
+the network certifier's, each over every monitoring period of the document it has a value over at the share (the
+world's year always, and last, the dashboard's headline), each with its `period` and the compute it is `over`, its mark
+at the head of its first input and its error over that period in the next, the document as `DOCUMENT` and what ran in
+the fingerprint. What it prints is the same in a run as outside one.
 """
 
 from __future__ import annotations
@@ -312,8 +313,8 @@ NUMERALS = {"T": "calls a run", "e": "reruns a session (e_s)", "Ns": "sessions (
 LEAN_BOUND = "CompiledTwo.eventTwoX_le_cls_at_budget"
 #: printed where no Lean theorem gives a number at a design's sizes
 NOT_PROVED = "not proved at these sizes"
-#: the figures a runner records under a research run (`record`), each over the world's year at the share: the one the
-#: command calls the headline, the compute audit's part and the network certifier's
+#: the figures a runner records under a research run (`record`), each over every monitoring period at the share: the
+#: one the command calls the headline, the compute audit's part and the network certifier's
 FIGURES = ("headline", "compute_audit", "network_certifier")
 #: the document a run's result keeps beside its measurements, relative to the run's directory
 DOCUMENT = "out/exfiltration.json"
@@ -1667,40 +1668,50 @@ def render(doc: Mapping[str, Any]) -> str:
 
 
 def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dict]:
-    """The kit writer's measurements of a document (`build`), one a metric id of `metrics`: the figure of `FIGURES`
-    its value names, over the world's year at the document's share, in GB. Each has its `mark`, which also heads its
-    first input, then its error over the world's year (the compute audit's δ; the network certifier's ε at its scans'
-    δ; the headline's, the compute audit's part, its δ), then the runs of record it read. The network certifier's part
-    is modeled, with the mark its calculator gives the `scan` row where it gives one; where its ε is 1 or more it has no
-    value, and `NO_BOUND` with that ε is its why."""
+    """The kit writer's measurements of a document (`build`), one a metric id of `metrics` and monitoring period of the
+    document's (`periods`), its `period` and the compute it is `over` (the world's or a datacenter's): the figure of
+    `FIGURES` its value names, over that period at the document's share, in GB. The other periods come in the
+    document's order and the world's year last, so a reader that keys a result's measurements by name alone, the last
+    of a name winning, reads the world's year. Each has its `mark`, which also heads its first input, then its error
+    over its period (the compute audit's δ; the network certifier's ε at its scans' δ; the headline's, the compute
+    audit's part, its δ), then the runs of record it read. The network certifier's part is modeled, with the mark its
+    calculator gives the `scan` row where it gives one. A figure with no value over a period (a period no run of record
+    holds, or the network certifier's where its ε is 1 or more) is left out, but over the world's year, where it has
+    no value and says why: `NO_BOUND` with that ε."""
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):
         raise ValueError(f"no figure of the document is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
-    share, cert = doc["share"], doc["certifier"]
-    head = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
-    year = next(p for p in doc["periods"] if (p["compute"], p["period"]) == ("world", "year"))
-    unit = f"GB a world year at {_pct(share)} of compute"
-    label = doc["label"] or head.get("note")
-    audit = (f"the planner's row `{doc['row']}`{f', {label}' if label else ''}, read where its total is {_pct(share)} of "
-             f"compute, β = {_part(head['beta'])}{'' if head['inside'] else ' (extrapolated)'}: λ = {_n(head['lambda'])} "
-             f"times its bound, {_n(head['bound']['GB'])} GB")
-    delta = f"its error: δ = {_n(head['delta'])} over the world's year, the compute audit's"
-    scan, eps = cert["legend"]["scan"].get("mark"), year["eps"]
+    share, cert, runs = doc["share"], doc["certifier"], list(doc["runs"])
+    scan = cert["legend"]["scan"].get("mark")
     term = (f"the network certifier's term of record, its `scan` row {TOGETHER['scan']} at D_j = {cert['of_record']}, on "
             f"an assumed class of at most {_n(cert['response_ids'])} ids a response")
-    error = (f"its error: ε = {_p(eps)} over the world's year, at a scan's δ of {_p(cert['scan_delta']['value'])} "
-             f"({cert['scan_delta']['mark']})")
-    runs = list(doc["runs"])
-    figures = {"headline": (doc["value"], doc["status"], f"{doc['status']}: the headline figure, {audit}", delta, runs),
-               "compute_audit": (year["compute_audit"]["GB"], "modeled", f"modeled: the compute audit's part, {audit}",
-                                 delta, runs),
-               "network_certifier": (year["together"]["scan"]["certifier_GB"], "modeled",
-                                     f"modeled{f' ({scan})' if scan else ''}: {term}", error, [])}
     out = []
-    for name, figure in metrics.items():
-        value, mark, said, err, read = figures[figure]
-        m = {"name": name, "value": value, "unit": unit, "mark": mark, "inputs": [said, err, *read]}
-        out.append(m if value is not None else m | {"why": f"{NO_BOUND}: ε = {_n(eps)} over the world's year"})
+    for p in sorted(doc["periods"], key=lambda p: (p["compute"], p["period"]) == ("world", "year")):
+        scope, span, eps = f"{p['compute']} {p['period']}", f"{p['compute']}'s {p['period']}", p["eps"]
+        error = (f"its error: ε = {_p(eps)} over the {span}, at a scan's δ of {_p(cert['scan_delta']['value'])} "
+                 f"({cert['scan_delta']['mark']})")
+        figures = {"network_certifier": (p["together"]["scan"]["certifier_GB"], "modeled",
+                                         [f"modeled{f' ({scan})' if scan else ''}: {term}", error],
+                                         f"{NO_BOUND}: ε = {_n(eps)} over the {span}")}
+        head = next((x for x in doc["compute_audit"] if x["scope"] == scope), None)
+        for figure, mark, what in (("headline", doc["status"], "the headline figure"),
+                                   ("compute_audit", "modeled", "the compute audit's part")):
+            if head is None:
+                continue
+            label = (_row_label(head) if doc["row"] == ASSUMED_ROW else None) or head.get("note")
+            audit = (f"the planner's row `{doc['row']}`{f', {label}' if label else ''}, read where its total is "
+                     f"{_pct(share)} of compute, β = {_part(head['beta'])}{'' if head['inside'] else ' (extrapolated)'}: "
+                     f"λ = {_n(head['lambda'])} times its bound, {_n(head['bound']['GB'])} GB")
+            figures[figure] = (head["GB"], mark, [f"{mark}: {what}, {audit}",
+                                                  f"its error: δ = {_n(head['delta'])} over the {span}, the compute "
+                                                  "audit's", *runs], None)
+        for name, figure in metrics.items():
+            value, mark, inputs, why = figures.get(figure, (None,) * 4)
+            if value is None and scope != "world year":
+                continue
+            m = {"name": name, "value": value, "unit": f"GB a {scope} at {_pct(share)} of compute", "mark": mark,
+                 "period": p["period"], "over": p["compute"], "inputs": inputs}
+            out.append(m if value is not None else m | {"why": why})
     return out
 
 
@@ -1721,8 +1732,7 @@ def record(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
                        served_run=doc["compute_share"]["run"], runs=list(doc["runs"]))
     writer.measurement_file(DOCUMENT)
     for m in measurements(doc, metrics):
-        # the kit takes no `mark` yet: it heads the first input, where the Metrics tab reads it
-        writer.measurement(**{k: v for k, v in m.items() if k != "mark"})
+        writer.measurement(**m)
     writer.validation("passed", "verity_bench.exfiltration.build",
                       "the two parts cover the same GPU-seconds and requests over every scope both hold, and the same "
                       f"weights; each of the {len(doc['inputs'])} inputs carries one of {', '.join(MARKS)} with its "

@@ -293,8 +293,7 @@ active network certifier's records, both ends at the network certifier's grid an
 
 Stated in Lean: `NetworkCheck.Period` (`verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
-and the bound `K` it publishes. The period check is not in the public tree, because it reads the inference-only
-policy's layout check, which is withheld.
+and the bound `K` it publishes. The period check reads the inference-only policy's layout check.
 
 ## A served link (`served`)
 
@@ -2364,8 +2363,15 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   it is cut (`malformed`): it has no place in the release order and no byte for the server. A request line that ends
   past the first cell is read at the request's `END`, with the request whole, before that cell is cut: its earlier
   cells are in the ingress record, and it too has no `END`, no place in the release order and no byte for the server.
-  Past a request's first line the network certifier reads nothing here: a second request on a connection is the
-  server's to refuse.
+- A connection's bytes are one request. A server reads as many requests in a release as its bytes hold, and a second
+  one would reach it behind the first with no release headers but its sender's own, to any path, the watermark's
+  included. So the request is read whole at its `END`, before that cell is cut (`release.one_request`), and refused
+  there as the watermark's is (`malformed`) unless it is at most one request to a server: bytes that open none (a
+  first line of one word, or no head's end), or a request whose head is the one the headers go in, each field a name,
+  a colon and a value on one line, with no transfer coding and at most one `content-length`, a decimal count, and
+  with no byte past the body that length gives it. A line of the body that looks like a request line is the body's.
+  A head read any other way is one servers end differently, and is refused whole: line breaks that aren't CRLF or
+  come before the request line, a folded field, a space before a colon, a chunked body, two lengths.
 - The headers and the stream are on the server's side only. No cell or record holds them, so the cell counts, the
   prompt lengths and the I/O tie's request frames are unchanged. They reach the server, never the client, so the leak
   bound is unchanged. N, a and n are functions of the signed ingress record, which the prover holds as witness, a
