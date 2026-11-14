@@ -14,3 +14,4 @@ launched r20261113-224628-6189 (replay) at e57b2921aa
 launched r20261113-230750-f188 (circuit-check) at e57b2921aa
 23:13Z cancelled r20261113-230750-f188 (no slot on cpu-14); circuit-check on vy-nebius-cpu-9
 launched r20261113-231251-c271 (circuit-check, vy-nebius-cpu-9) at e57b2921aa
+00:10Z e57b2921aa: circuit-check c271 and replay 6189 green; checks e9e5 still running; masked-row not fast-forwarded, PR body not replaced
