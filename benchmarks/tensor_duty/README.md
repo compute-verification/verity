@@ -7,7 +7,7 @@ maximum, ever moves more dense tensor MACs a second than the card's tensor rate,
 refutes the card. A full tensor pipe is not the only case: a pipe busy part of the time, with the rest idle or
 non-tensor work, could run its tensor phases at a higher clock. So each point holds the dense tensor MMA at a duty
 cycle from 50% to 100% (5% steps to 90%, 1% steps above), for an operand class, a fill and a burst (SM-cycles of tensor
-work a period), with the SM clock locked to the card's `clock.sm` (`nvidia-smi -lgc`) and again at the driver's default.
+work a period), with the SM clock locked to 1980 MHz (`nvidia-smi -lgc`) and again at the driver's default.
 
 Throughput rests on the host's wall clock alone: a point's MACs over the host's interval around its kernel of at least
 a second. The host stamps are printed to the millisecond, so `summarize.py` refutes the card only on a point over the
@@ -46,7 +46,7 @@ way.
 
 ~~~text
 research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-  --env CLOCKS="MHZ default" -- bash benchmarks/tensor_duty/run.sh
+  -- bash benchmarks/tensor_duty/run.sh
 PYTHONPATH=. python3 benchmarks/tensor_duty/summarize.py ~/.research/runs/RUN/out
 ~~~
 
