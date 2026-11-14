@@ -29,7 +29,7 @@ namespace InferenceOnlyCheck.Properties.Record
 
 open Lean (Json)
 open Flock.Program (Prog Defn)
-open InferenceOnlyCheck.RecordText (Row Held)
+open Spot.RecordText (Row Held)
 open Accounting
 
 /-- **A pinned read at the verdict bit `ok`, as a check holds it and its circuit file lays it out**: the hypotheses of

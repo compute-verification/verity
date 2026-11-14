@@ -729,7 +729,8 @@ def one_try(cls: str, run: Path, args, clock=time.monotonic) -> float:
     payload = WardenParams(cell_bytes=args.cell_bytes).payload
     requests = args.bucket_requests if cls == "bucket" else args.requests
     start, procs, env, name = clock(), [], dict(os.environ), args.front_env
-    me, relay = [sys.executable, str(HERE / "deviations.py")], [sys.executable, str(HERE / "warden_serve.py")]
+    me = [sys.executable, str(HERE / "deviations.py")]
+    relay = [sys.executable, "-m", "verity.protocols.accounting.certifier.device.warden_serve"]
     try:
         if args.stand_in:
             fake = subprocess.Popen(relay + ["fake", "--listen", "127.0.0.1:0", "--id-payload", str(payload),

@@ -640,7 +640,7 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
         tmp_path, monkeypatch, capsys):
     """`serve --listen-fd FD` through `main` and `serve` themselves, on the command `session` issues for a listener
     its caller holds: `main` makes the socket FD names, and `serve` gives it to the relay's server. The relay, its
-    publisher and the process's preparation are stood in for, so nothing ticks: the relay here ends
+    publisher, the stall probe and the process's preparation are stood in for, so nothing ticks: the relay here ends
     once its handler has answered one connection. That connection is one made to the caller's listener before
     `serve` started, the deployment and the line `serve` prints name the caller's port, and the caller's socket
     still listens once `serve` has returned. With either link cut, the flag to the socket or the socket to the
@@ -705,6 +705,7 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
     monkeypatch.setattr(ws, "PublisherProcess", Publisher)
     monkeypatch.setattr(ws, "Warden", Relay)
     monkeypatch.setattr(ws, "prepare_process", lambda params: {})
+    monkeypatch.setattr(ws, "stall_probe", types.SimpleNamespace(start=lambda *a: None, stop=lambda *a: None))
     monkeypatch.setattr(ws, "_quiet_runtime", lambda: None)
     for name in ("PYTHONMALLOC", ws.C_ALLOCATOR):
         monkeypatch.delenv(name, raising=False)
