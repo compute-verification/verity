@@ -124,7 +124,7 @@ SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
 OPTIONAL_SCHEDULE_KEYS = sorted(OPTIONAL_FIELDS)
 #: what the check says of a schedule with connection rows (`connectionRowsRefusal`)
 CONNECTION_ROWS = ("schedule: connection rows: the check reads no connection rows' registration, so it refuses a "
-                   "schedule with lengths rows or content rows (connectionRowsCheck)")
+                   "schedule with lengths rows, content rows or request words (connectionRowsCheck)")
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
 ROWS_WINDOW_KEYS = ["answer", "certificates", "registrations"]
