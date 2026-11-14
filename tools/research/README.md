@@ -279,9 +279,11 @@ runner and the workload get the tree's `PYTHONPATH` derived from its root
 `pyproject.toml` workspace members and each member's build config
 (`src/`, `python/`, flat), with a user `--env PYTHONPATH` appended; job.json
 records it (`run.remote.pythonpath`). `research env --source TREE` prints the
-same line for a local checkout. The machine claims the run directory by run id and
+same line for a local checkout. The launcher stages its request in a directory it
+makes by run id, never one another launch staged; the machine claims the run directory by run id and
 starts the runner detached; re-delivering a launch after an ssh drop finds
-the claim and reports state. The runner's argv carries the workload's command, so a
+the claim its own request made and reports state. A run directory another launch's request
+claimed is refused, and a launch that picked its id picks a new one. The runner's argv carries the workload's command, so a
 `pkill -f` aimed at the workload matches it too: it logs SIGTERM/SIGHUP to
 launcher.log and keeps supervising, so the run still records its end and
 publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
