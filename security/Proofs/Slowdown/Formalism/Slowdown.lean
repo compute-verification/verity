@@ -29,11 +29,11 @@ Each lower bound `X ≤ ρ` is proved as `X ≤ m c / |C|` for a partition `P` i
 
 @[expose] public section
 
-namespace InferenceOnly.Formalism
+namespace Slowdown.Formalism
 
 open Finset
 open Verity (RegisteredCircuit Partition)
-open InferenceOnly.Formalism.Assumptions
+open Slowdown.Formalism.Assumptions
 open scoped NNReal ENNReal
 
 variable {d : RegisteredCircuit} {L : Type} [Fintype L]
@@ -201,4 +201,4 @@ theorem Security : Guarantees.Security := by
 
 end SecurityProofs
 
-end InferenceOnly.Formalism
+end Slowdown.Formalism

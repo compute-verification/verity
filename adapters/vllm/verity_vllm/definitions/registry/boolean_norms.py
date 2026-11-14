@@ -218,7 +218,7 @@ def _on_bits(name: str, version: int, statics: list[str], signature: Callable, w
              word_statics: dict | None = None):
     """Decorator: the Boolean composite ``name_v{version}``, documented by its body's docstring, whose word view
     (`trace.word_of`) is ``word`` of its bindings. ``word_statics`` names, for each MUFU static, the word Definition it
-    computes; the switch (`verity_vllm.definitions.boolean`) binds that static to the Definition's Boolean version."""
+    computes; the switch (`verity.circuits.ops.boolean.versions`) binds that static to the Definition's Boolean version."""
     def deco(body: Callable) -> CompositeDefinition:
         d = CompositeDefinition(name, version, tuple(statics), signature, body, doc=body.__doc__ or "",
                                 conformance="exact-model-tested")

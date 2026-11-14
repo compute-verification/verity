@@ -9,7 +9,7 @@ public import Definitions.Assumptions
 # The slowdown, remote protocol: the guarantees
 
 The remote slowdown `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and
-T2: `residual_share`, `fit.residual_with_lag` and `fit.slowdown`, and `benchmarks/slowdown`'s
+T2: `free_share`, `fit.free_with_lag` and `fit.slowdown`, and `benchmarks/slowdown`'s
 `theorem.multiple_bound`), with its two terms that `SlowdownThreaded` takes inside its residual's hypothesis derived,
 and the two that SPOT and PoUW's deficit add:
 
@@ -20,7 +20,7 @@ and the two that SPOT and PoUW's deficit add:
   detected incorrect proof block and its halt `Δ` later is at most `(JΔ/H) C`, so all faulty blocks skip at most that plus
   what the blocks accepted before their identity's first detection (`escaped`) skip;
 * `SlowdownRemote` composes them with the declared computation's bound on its count verdict
-  (`InferenceOnly.Cut.Guarantees.CountHE`: `CompliesAtMost c k n`, with (H) and (E) on its charged work), charging the escaped
+  (`Slowdown.Cut.Guarantees.CountHE`: `CompliesAtMost c k n`, with (H) and (E) on its charged work), charging the escaped
   blocks by Markov's inequality on their expected work, at most `((1 − q)/q) B` per identity when each faulty block is
   caught with probability at least `q` whatever came before (`SampledDetection`), and PoUW's deficit `ε_W` through the
   certified work: with probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)`,
@@ -35,9 +35,11 @@ and the two that SPOT and PoUW's deficit add:
 
 open Verity.Game renaming prPMFReal → prob
 
-namespace InferenceOnly.Guarantees
+open InferenceOnly
 
-open Verity InferenceOnly.Slowdown
+namespace Slowdown.Guarantees
+
+open Verity Slowdown.Slowdown
 
 /-- **The certificate slack** ([CERTIFICATE-SLACK]). PoUW certifies each of `N` windows, window `i` of capacity
 `c_i ≥ 0`, `∑ c_i ≤ C`, and each window's certificate is incorrect with probability at most `p ≥ 0` under the outcomes'
@@ -111,4 +113,4 @@ def SlowdownRemote : Prop :=
               efficiency κ (Cut.workHE n k (βw * βx) b Wd.O) C U + χ) ≤
           hardwareMultiple mfu κ (M ω) C U)
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

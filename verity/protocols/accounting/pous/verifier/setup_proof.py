@@ -7,7 +7,7 @@ at its place (`verity/protocols/accounting/pous/prover/window.py`, one instance 
 and the check takes the `Claim`: the parameters and commitment as today, the store's root, the unit's Program digest
 and SPOT's outcome.  The Lean check `PousCheck.SetupInProofs.check` decides; Python only carries the claim.
 
-Each sampled unit's base and slot are rows the verifier makes from its own `expand_prefix` and the sample (`supplied`),
+Each sampled block's base and slot are rows the verifier makes from its own `expand_prefix` and the sample (`supplied`),
 which SPOT's one-stage verifier takes as its ``supplied`` values (`BASE`, `SLOT`), so a sampled block is tied to its
 index. Each unit's ok output reads the verifier's row 1 (`OK`), as an opening's verdict reads its table's supplied 1: a
 unit whose ok is 0 commits a row that opens no root the verifier pins, so its proof is refused inside the proof system.
@@ -23,7 +23,7 @@ from typing import Any
 from .schemes.p2 import P2Params, expand_prefix
 
 GOAL = "memory-accounting/pous-setup-as-proof"
-#: the supplied values a sampled unit reads: its expansion base and its slot in its row of W, and the 1 its ok output
+#: the supplied values a sampled block reads: its expansion base and its slot in its row of W, and the 1 its ok output
 #: is held to
 BASE, SLOT, OK = "setup/base", "setup/slot", "setup/ok"
 #: the blocks the challenger samples: a uniform 8,828-subset misses ⌊B/100⌋ + 1 wrong blocks with probability at most
@@ -55,7 +55,7 @@ def leaf_bytes(data: bytes) -> bytes:
 
 
 def supplied(params: P2Params, salt: bytes, row_bytes: int, sample: Sequence[int]) -> dict[str, list[list[dict[str, str]]]]:
-    """The rows the verifier makes for the sampled units, in sample order, as SPOT's one-stage verifier takes its
+    """The rows the verifier makes for the sampled blocks, in sample order, as SPOT's one-stage verifier takes its
     ``supplied`` values: each unit's base (`base`, from the verifier's own `expand_prefix`) as one ``{"bytes": hex}``
     source of its port's words (`leaf_bytes`), and its slot u mod n, n the ⌈N/P⌉ slots of a row of `row_bytes` bytes, as
     one big-endian 16-bit leaf; and one row for every unit's ok output, the word 1."""

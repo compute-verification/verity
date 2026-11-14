@@ -15,7 +15,9 @@ is its case of one slot per weight gate.
 
 @[expose] public section
 
-namespace InferenceOnly.Guarantees
+open InferenceOnly
+
+namespace Slowdown.Guarantees
 
 open Verity
 
@@ -41,4 +43,4 @@ def FitBoundSlots : Prop :=
     Assumptions.ReachSlots c T σ Nstar → Assumptions.FitsSlots c T σ P start b_w w_e →
     4 * w_e * (Nstar * b_w - S) * T.M.card ≤ k * T.reuse * Nstar * S ^ 2
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

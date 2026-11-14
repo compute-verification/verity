@@ -13,9 +13,9 @@ multiplication blocks are any disjoint gate sets with an output gate.
 
 @[expose] public section
 
-namespace InferenceOnly.Guarantees
+namespace Slowdown.Guarantees
 
-open Verity InferenceOnly.Covering
+open Verity Slowdown.Covering
 
 /-- **The covering bound** ([COVERING-BOUND]): if `C` is `(s, r, b)`-parameter-hard (`Assumptions.ParameterHard`) and
 `c D > k` with `c = r · b`, every `(s, k)`-covering `𝓘` of `C` by `n` blocks has `|𝓜*| ≤ n · ((k / c)² + k)`, where `𝓜*`
@@ -36,4 +36,4 @@ def CoveringBound : Prop :=
       ((Assumptions.chainedBlocks d B D r b).card : ℝ) ≤ n * ((k / (r * b)) ^ 2 + k) ∧
       ((Assumptions.chainedBlocks d B D r b).card : ℝ) / d.D.N * s / ((k / (r * b)) ^ 2 + k) ≤ s * n / d.D.N
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

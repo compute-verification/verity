@@ -17,7 +17,7 @@ sizes of its pieces (`compute_reads_le`, `training_reads_le`).
 
 @[expose] public section
 
-namespace InferenceOnly.Formalism
+namespace Slowdown.Formalism
 
 open Finset
 open Verity (RegisteredCircuit Partition)
@@ -122,4 +122,4 @@ theorem FitTraining : Guarantees.FitTraining := by
 
 end SecurityProofs
 
-end InferenceOnly.Formalism
+end Slowdown.Formalism

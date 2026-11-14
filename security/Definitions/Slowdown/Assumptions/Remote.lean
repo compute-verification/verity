@@ -8,16 +8,16 @@ public import Definitions.Slowdown.Remote
 The remote slowdown's three derived terms each rest on one: the certificate slack on PoUW's soundness per window
 (`PouwSound`, [POUW-SOUND]), the verdict lag on detection being terminal (`TerminalDetection`, [TERMINAL-DETECTION]),
 and the escape slack on SPOT catching each faulty block whatever came before (`SampledDetection`,
-[SAMPLED-DETECTION]), from which `InferenceOnly.SecurityProofs.sampled_escape` bounds what each identity's escaped blocks skip.
+[SAMPLED-DETECTION]), from which `Slowdown.SecurityProofs.sampled_escape` bounds what each identity's escaped blocks skip.
 -/
 
 @[expose] public section
 
 open Verity.Game renaming prPMFReal → prob
 
-namespace InferenceOnly.Assumptions
+namespace Slowdown.Assumptions
 
-open InferenceOnly.Slowdown
+open Slowdown.Slowdown
 
 /-- **PoUW's certificates are sound** ([POUW-SOUND]; PoUW's `CircuitCredit`): over the outcomes `Ω` of a
 deployment, sampled from `μ` (the verifier's coins, the developer's strategy fixed), the certificate of each of the `N`
@@ -105,4 +105,4 @@ def IdentitySchedule {T : ℕ} {Ξ β ι : Type} [DecidableEq ι] (bad : Ξ → 
     (∀ ξ j s, ∑ b ∈ bad ξ with idW (win b) = j ∧ s ≤ τw (win b) ∧ τw (win b) ≤ s + Δ, w b ≤ Φ * Δ) ∧
     ∀ ξ, ∀ b ∈ bad ξ, w b ≤ B
 
-end InferenceOnly.Assumptions
+end Slowdown.Assumptions

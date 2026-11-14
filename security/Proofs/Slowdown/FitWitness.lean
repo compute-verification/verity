@@ -17,7 +17,9 @@ Each window reads 3 bits (a weight and the activation), so `S = 3 < N* b_w = 2 �
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs.FitWitness
+open InferenceOnly
+
+namespace Slowdown.SecurityProofs.FitWitness
 
 open Verity Finset
 
@@ -81,4 +83,4 @@ theorem fits : Assumptions.Fits decl threading executionPhases start 2 1 := by
 theorem bound : 4 * (1 : ℝ) * ((2 : ℕ) * 2 - 3) * threading.M.card ≤ (2 : ℕ) * threading.reuse * (2 : ℕ) * (3 : ℝ) ^ 2 :=
   FitBound decl threading 2 executionPhases start 2 3 2 1 gap reads_le reach fits
 
-end InferenceOnly.SecurityProofs.FitWitness
+end Slowdown.SecurityProofs.FitWitness

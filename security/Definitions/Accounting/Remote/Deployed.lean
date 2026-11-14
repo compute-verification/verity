@@ -14,7 +14,7 @@ the session's `n·P·N·b` bits, which the guarantees over it take as a hypothes
 
 Each field is the game's quantity, or its bound where the game proves only a bound:
 
-* `accepts`: every window's pooled draw lands on correct receipts; `correct`: the correct receipts over the session;
+* `accepts`: every window's pooled sample lands on correct receipts; `correct`: the correct receipts over the session;
   `committed`: every receipt, `n·P·N`.
 * `read ω m`: the device's reads of tier `m`, summed over the session's passes.
 * `state`: the on-chip state, `S` bits a pass (the game's `Bits S`).
@@ -26,7 +26,7 @@ Each field is the game's quantity, or its bound where the game proves only a bou
 * `stateOut`, `rebuiltOut`: `0`; the game's outside is the side sources, counted in `readOut`.
 
 `Run.ofDeployedWindow` is the same at one window `w`: its `P` passes, its correct receipts and reads, accepting when
-every window's draw passes.
+every window's sample passes.
 
 The game does not model the rest (the node's priced work, the signals over its boundary, the bound `z`, the outside's
 work, Mbw's independent data): each is `0`, and no route proved for this run reads one.
@@ -62,7 +62,7 @@ def Run.ofDeployed (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → 
   other _ := 0
 
 /-- Window `w` of a deployed session as a run of PoUB on node `Nd` with parameters `a`, over the session's
-coins: `Run.ofDeployed`'s fields at window `w`'s `P` passes, accepting when every window's draw passes. -/
+coins: `Run.ofDeployed`'s fields at window `w`'s `P` passes, accepting when every window's sample passes. -/
 def Run.ofDeployedWindow (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ) (X : ℕ)
     (Nd : Node (Fin τ)) (a : Audit) : Run Nd a (Store N b × (Fin n → WindowCoins P N b h ρ r s d)) where
   accepts x := ∀ v t, (x.2 v).2 t ∈ (A.win v x.2).correctAll x.1 (x.2 v).1

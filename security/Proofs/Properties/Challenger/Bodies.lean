@@ -64,14 +64,14 @@ theorem digests_alike {l : List (String × Json)} (hs : (l.map (·.1)).Pairwise 
     exact Built.isDigest_hex hb
 
 /-- The body of the open of a window withheld. -/
-def openBody (auditor host pins : String) (keyHash pin window : ByteArray) : Json :=
+def openBody (auditor device pins : String) (keyHash pin window : ByteArray) : Json :=
   Json.mkObj [("by", .str auditor), ("host", .str host), ("key_sha512", .str (Flock.hexOf keyHash)),
     ("pinned", .str (Flock.hexOf pin)), ("pins", Json.mkObj [("lines", Lean.toJson (1 : Nat)), ("sha512", .str pins)]),
     ("window", Json.mkObj [("root", .str (Flock.hexOf window))]), ("withheld", .bool true)]
 
 /-- **A value alike the open's body is an open's body.** -/
-theorem openBody_alike {auditor host pins : String} {keyHash pin window : ByteArray} {b : Json}
-    (h : Same (openBody auditor host pins keyHash pin window) b) (hh : isHost host = true)
+theorem openBody_alike {auditor device pins : String} {keyHash pin window : ByteArray} {b : Json}
+    (h : Same (openBody auditor device pins keyHash pin window) b) (hh : isHost host = true)
     (hk : keyHash.size = 64) (hp : pin.size = 20) (hw : window.size = 64) : isBodyOf "open" true b = true := by
   have hwin : isRun (getD b "window") = true := by
     have hsw := Entry.same_getD h "window"

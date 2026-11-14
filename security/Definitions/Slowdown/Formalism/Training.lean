@@ -18,7 +18,7 @@ update rule reads and writes (a straight-through run's latents; `Δ_t = Δ` for 
 application block reads beside the reduced state (`UpdateBlock`); and `d` is the decoder's gates, the room a block
 leaves it beside at least `c - d` gates of the computation (`SessionBlocks`).
 
-A1 (`InferenceOnly.Formalism.Assumptions.CutCost`) prices an inference block `I` by where its work on each token begins, at values
+A1 (`Slowdown.Formalism.Assumptions.CutCost`) prices an inference block `I` by where its work on each token begins, at values
 a finite family `𝒲` of witness blocks of the circuit sets. What a set of gates `S` reads beyond `θ` is `in(S) \ θ`, as
 the policy counts it. A witness block **enters** token `T` at `x` (`Enters`) when its gates are of `𝒲`, its work is on
 `T` alone, and that work begins at `x`. What it reads is `T`'s own state, the gates of `T`'s block it reads and doesn't
@@ -48,12 +48,12 @@ token from its inputs reaches). Defined from it and A1's values:
 
 That a cap bounds the token work within A1's budget, `Σ_{T ∈ S} W_T(f_T, ν) ≤ cap` wherever
 `ν + Σ_{T ∈ S} a_T(f_T) ≤ k`, is the named assumption `training-token-work`
-(`InferenceOnly.Formalism.Assumptions.TokenWork`): A1 prices a block's reads and says nothing of how much token work they reach.
+(`Slowdown.Formalism.Assumptions.TokenWork`): A1 prices a block's reads and says nothing of how much token work they reach.
 -/
 
 @[expose] public section
 
-namespace InferenceOnly.Formalism
+namespace Slowdown.Formalism
 
 open Finset
 open Verity (Circuit RegisteredCircuit)
@@ -140,4 +140,4 @@ end Annotation
 `k - ν` its shared bits leave, at `r(ν)` a bit. -/
 def PeakAtMost (k : ℕ) (r : ℕ → ℝ≥0) (M : ℝ≥0) : Prop := ∀ ν : ℕ, ((k - ν : ℕ) : ℝ≥0) * r ν ≤ M
 
-end InferenceOnly.Formalism
+end Slowdown.Formalism

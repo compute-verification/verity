@@ -1,7 +1,7 @@
-"""The verifier host's gate (`host.py`) with its root steps (chown, systemctl) and the clock injected, on the deployed
-`verifier.json` with a dummy challenger ssh: a run is held to the whitelist, written as its request and started as its
-one unit, and its command line is one verifier.py's own parser reads as the request; the gate refuses any other verb,
-any other form of its forced command, a parameter the whitelist doesn't hold, and a read-only key's run; a run is
+"""The verifier host's gate (`host.py`) with its root steps (chown, systemctl) and the clock injected, on `verifier.json`
+here, the deployed one's shape with a dummy challenger ssh (infra's packaging test holds the deployed one to it): a run
+is held to the whitelist, written as its request and started as its one unit, and its command line is one verifier.py's
+own parser reads as the request; the gate refuses any other verb, any other form of its forced command, a parameter the whitelist doesn't hold, and a read-only key's run; a run is
 stopped only by its lane or vy-admin, a replay or a close waits for no unit to run, and a run whose pin moved, or on a
 host with no first-parent list of main, doesn't run. The slow test runs a run through the stub verifier
 (`stub_verifier.py`, a real paced session): its out/ is verifier.py's, which `auditor_line.py` reads, `fetch` ships it
@@ -28,7 +28,6 @@ import pytest
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[7]
 RS = ROOT / "benchmarks" / "remote_session"
-PACKAGING = ROOT / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "verifier"
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(RS))
 sys.path.insert(0, str(ROOT))
@@ -57,10 +56,7 @@ SESSIONS = ["run", "--peer", "gpu-node", "--port", "7958", "--period", "memory-l
 
 @pytest.fixture
 def svc(tmp_path) -> H.Host:
-    settings = json.loads((PACKAGING / "verifier.json").read_text())
-    settings["challenger"].update(ssh=SSH, peer="auditor-host")
-    settings["peers"] = {"gpu-node": {**next(iter(settings["peers"].values())), "addresses": [NODE_ADDRESS]}}
-    (tmp_path / "verifier.json").write_text(json.dumps(settings))
+    (tmp_path / "verifier.json").write_text((HERE / "verifier.json").read_text())
     (tmp_path / "var" / "runs").mkdir(parents=True)
     host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl",
                   main=tmp_path / "main-first-parent.txt")
@@ -202,18 +198,10 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
         V.pace_of(spec, 17.0)
 
 
-def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
-    conf = (PACKAGING / "12-vy-verifier.conf").read_text()
-    prover = conf.split("Match User prover")[1].split("Match User")[0]
-    opened = re.search(r"^\s*PermitOpen (.*)$", prover, re.M).group(1).split()
-    assert opened == [f"127.0.0.1:{p}" for p in H.PORTS]
-    challenger = conf.split("Match User challenger")[1]
-    listened = re.search(r"^\s*PermitListen (.*)$", challenger, re.M).group(1).split()
-    assert listened == [f"127.0.0.1:{p}" for p in challengers.GATE_PORTS] and H.GATE_PORTS == challengers.GATE_PORTS
-    assert not set(H.PORTS) & set(H.GATE_PORTS)
-    tunnel = (PACKAGING / "vy-verifier-tunnel").read_text()
-    pattern = re.search(r"\$4 ~ /\^(.*)\$/", tunnel).group(1).replace("\\.", ".")
-    assert [p for p in range(7000, 8000) if re.fullmatch(pattern, f"127.0.0.1:{p}")] == list(H.PORTS)
+def test_the_runs_ports_are_not_the_challenger_gates():
+    """The deployed sshd and tunnel files are held to these ports by infra's packaging test
+    (`tools/research/tests/test_nebius_verifier_packaging.py`)."""
+    assert H.GATE_PORTS == challengers.GATE_PORTS and not set(H.PORTS) & set(H.GATE_PORTS)
 
 
 @pytest.mark.parametrize("words, why", [
@@ -389,23 +377,10 @@ def test_each_pin_is_a_line_of_the_sealed_log_and_a_run_starts_only_from_its_las
     assert [(p["line"], p["commit"]) for p in json.loads(out)["pins"]] == [(0, PIN), (1, "d" * 40), (2, PIN)]
 
 
-def test_pin_sh_runs_no_unpinned_code_and_logs_each_pin_before_current_names_it():
-    """Infra's review: elan is a release, its archive checked against a pinned sha256 before it runs (never a
-    script fetched from a branch), and the pin is logged (`host.py pinned`) before `current` moves to it."""
-    code = "\n".join(ln for ln in (PACKAGING / "pin.sh").read_text().splitlines() if not ln.lstrip().startswith("#"))
-    assert "raw.githubusercontent.com" not in code and not re.search(r"\|\s*(ba)?sh\b", code)
-    assert re.search(r"^ELAN=v\d+\.\d+\.\d+ ELAN_SHA256=[0-9a-f]{64}$", code, re.M)
-    assert "https://github.com/leanprover/elan/releases/download/$ELAN/" in code
-    assert code.index('echo "$ELAN_SHA256  $e/elan.tar.gz" | sha256sum -c') < code.index('"$e/elan-init"')
-    assert code.index('host.py" pinned "$c"') < code.index('ln -sfn "$c" "$O/current.tmp"')
-
-
-def test_a_tunnel_key_gets_a_pty_only_while_the_challengers_pinned_client_forces_one():
+def test_the_provers_tunnel_client_asks_no_pty_and_the_challengers_forces_one():
     """ssh ends a session whose forced pty (`-tt`) the server refuses (OpenSSH 9.6, checked against a real sshd), so the
     prover's key, whose client is run.sh's `ssh -T`, has no `pty`, and the challenger's keeps it only while serve.py
-    forces one."""
-    setup = (PACKAGING / "setup.sh").read_text()
-    assert "opts=restrict,port-forwarding\n" in setup and '[ "$acct" = prover ] || opts+=,pty\n' in setup
+    forces one; infra's packaging test holds the keys `setup.sh` writes to the same."""
     verifier_host = (RS / "run.sh").read_text().split('[ -n "${VERIFIER_SSH:-}" ]; then')[1].split("\nelif ")[0]
     assert re.search(r"\bssh -T\b", verifier_host) and "-tt" not in verifier_host
     serve = (ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "serve.py").read_text()
@@ -424,18 +399,17 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
     assert call(svc, PACED)[0] == 0
     (svc.runs / RUN / "end.json").write_text(json.dumps({"rc": 0, "ended_utc": "2026-10-21T13:30:00Z"}))
     got = []
-    assert H.publish(svc, RUN, put=lambda argv: got.append(argv) or 0) == 0
-    (argv,) = got
-    assert argv[:2] == ["put", "--kind"] and argv[2] == "verifier-run/v1" and argv[-3:] == [
-        "--tree", str(svc.runs / RUN), "--preserve"]
-    assert json.loads(argv[argv.index("--meta") + 1]) == {
+    assert H.publish(svc, RUN, put=lambda *a: got.append(a) or 0) == 0
+    ((kind, meta, tree),) = got
+    assert (kind, tree) == ("verifier-run/v1", svc.runs / RUN)
+    assert meta == {
         "run": RUN, "by": LANE, "pinned": PIN, "peer": "gpu-node", "period": "memory-line-1",
         "requested_utc": "2026-10-21T13:00:00Z", "end": {"rc": 0, "ended_utc": "2026-10-21T13:30:00Z"}, "replay": None}
 
 
 @pytest.mark.parametrize("code", [
     "print(host.replay_module().__file__)",
-    "sys.path.insert(0, str(host.RESEARCH)); from research.store import cli; print(cli.__file__)",
+    "sys.path.insert(0, str(host.RESEARCH)); from research.store import local; print(local.__file__)",
     "sys.argv = ['verifier.py', '--help']; runpy.run_path(str(host.VERIFIER), run_name='__main__')",
     "sys.argv = ['auditor_line.py', '--help']; "
     "runpy.run_path(str(host.TREE / 'benchmarks' / 'remote_session' / 'auditor_line.py'), "

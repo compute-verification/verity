@@ -7,7 +7,7 @@ public import Definitions.Slowdown.Capability.Toy
 /-!
 # Local bounds: their witnesses
 
-Each local bound has two witnesses at the toy instance (`InferenceOnly.Capability.Toy`), listed under the lock's `witnesses`:
+Each local bound has two witnesses at the toy instance (`Slowdown.Capability.Toy`), listed under the lock's `witnesses`:
 
 * `XHonest`: the bound's premises, every one, hold together at the toy, at the parameters its conclusion is read at;
 * `XNontrivial`: its conclusion fails at the toy where a premise is dropped, so the conclusion is not a tautology.
@@ -27,9 +27,9 @@ for the product's value, a uniform bit.
 
 @[expose] public section
 
-namespace InferenceOnly.Guarantees
+namespace Slowdown.Guarantees
 
-open Verity Finset InferenceOnly.Capability InferenceOnly.Capability.Toy
+open Verity Finset Slowdown.Capability Slowdown.Capability.Toy
 
 /-- **`HeldBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `aBlk = 3`, `Λ = 1` and the value of
 gates `2` and `3` priced two bits: every held selection has an evaluator of at most three bits, and description hardness
@@ -122,4 +122,4 @@ consumer's required gates. -/
 def RecomputeByStateNontrivial : Prop :=
   HeldPriceAtMost R1 W2 2 ∧ ¬ K2.RequiresState W2 2 ∧ ¬ ∀ (u : Fin R1.d.n) (c : Fin 1), ¬ K2.G c ⊆ R1.d.𝓘.gates u
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

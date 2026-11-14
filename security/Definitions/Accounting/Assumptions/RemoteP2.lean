@@ -10,7 +10,7 @@ import Mathlib.Basic.ENNReal.Real
 PoUB's P2 mode (`verity/protocols/accounting/poub/verifier/p2.py`, its `PROTOCOL.md` §11) audits
 PoUS's `C*`: the weights `W` encoded under P2 (`p2-16448/v4`, `p = 2^16448 − 21065`), a block 2,056 bytes, and a
 receipt of a unit of four blocks (8,224 bytes, 257 sectors), the trace's block (`Accounting.Remote.Held.Trace`). Its
-memory line debits what the node's compute can re-encode, as the Sloth store's does, and these are the codec's terms at
+memory line charges what the node's compute can re-encode, as the Sloth store's does, and these are the codec's terms at
 P2's form, each a named `Prop`:
 
 * `WorkHardnessP2 c_root cost`: `WorkHardness` (`rate-codec-work`'s form) at P2's block, `b = 16,448` bits and two

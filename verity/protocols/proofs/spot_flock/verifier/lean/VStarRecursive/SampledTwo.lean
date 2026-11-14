@@ -103,9 +103,17 @@ Its refusals carry `OneStage.check`'s step prefixes, so a reason names the same 
 -/
 module
 
-public import VStarRecursive.Protocol
+public import CoreProtocol.Blobs
+public import Spot.ChallengerInnerTrees
+public import Flock
+public import Flock.RecLinkPart
+public import Spot.OneStageZk
+public import VStarRecursive.Caller
 public import Spot.Run
-meta import VStarRecursive.Protocol
+meta import CoreProtocol.Blobs
+meta import Spot.ChallengerInnerTrees
+meta import Flock
+meta import Spot.OneStageZk
 meta import Spot.Run
 
 @[expose] public section

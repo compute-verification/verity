@@ -22,7 +22,7 @@ the links' capacity (`linkCapacity`), not the intake a run measures.
 
 @[expose] public section
 
-namespace InferenceOnly.Guarantees
+namespace Slowdown.Guarantees
 
 open Verity Accounting Finset
 
@@ -55,4 +55,4 @@ def FitRate : Prop :=
       ∀ ω₀ : ℕ, (∀ j : Fin κ.J, ω₀ ≤ κ.τ j.succ - κ.τ j.castSucc) →
         ω₀ * (4 * w_e * (Nstar * b_w - (R + r * ω)) * T.M.card) ≤ n * t * T.reuse * Nstar * (R + r * ω) ^ 2
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

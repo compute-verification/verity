@@ -21,7 +21,7 @@ containment, total or partial, takes as a hypothesis.
 
 @[expose] public section
 
-namespace InferenceOnly
+namespace Slowdown
 
 open Verity
 
@@ -70,4 +70,4 @@ def PartialContainment.ofContainment {c d : RegisteredCircuit} (M : Containment 
     by_contra hne
     exact h (Finset.mem_filter.2 ⟨Finset.mem_univ _, by simpa using hne⟩)
 
-end InferenceOnly
+end Slowdown

@@ -9,7 +9,7 @@ import copy
 import hashlib
 
 import pytest
-from remote_bandwidth_fakes import Entropy
+from poub_fakes import Entropy
 from test_appends import N, Run, pages, salts, store
 
 from verity.protocols.accounting.poub.prover import audit_prover

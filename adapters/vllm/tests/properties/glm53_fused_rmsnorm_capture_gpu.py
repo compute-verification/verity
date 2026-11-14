@@ -53,7 +53,7 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions import boolean as SW
+from verity.circuits.ops.boolean import versions as SW
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import dsa_norm_rows as NR
 from verity_vllm.definitions.registry import dsa_norm as DN

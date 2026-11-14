@@ -23,7 +23,7 @@ derives them:
 
 * **The parameters** (`program_of_paramsAt`): the verifier's program is the one a descriptor parses to, as v2's
   parameters decode it (`Spot.OneStage.paramsParsed`).
-* **The sampling design** (`lawAt_designAt`): where v2 samples, the design `samplingDesignAt` reads off its parameters is
+* **The sampling design** (`samplingDesignAt_designAt`): where v2 samples, the design `samplingDesignAt` reads off its parameters is
   `designAt`'s at the verifier's descriptor, query, sampling design object and work table.
 * **The lookup tables** (`pinnedTables_eq`): on blobs that hold the registered circuit's lookup tables and no other
   pinned table (`HoldsRegisteredTables`), each at its registered file (`TablesSent`), where the deployment registers a
@@ -96,7 +96,7 @@ theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp
 to, under the sampling design object `Draw.derive` writes, a sample `sampledFrom` makes is under `sampledDesign`'s design
 (`samplesUnder_of_sampledFrom`), which is `designAt`'s there and the one `samplingDesignAt` reads: the design `deriveSamplingDesign` expands,
 else the one `flockSamplingDesign` parses from the object. -/
-theorem lawAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Docket.Verifier} {lo : Json}
+theorem samplingDesignAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Docket.Verifier} {lo : Json}
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
     (hlo : _root_.Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : _root_.Spot.OneStage.sampledFrom v lo n src = .ok r) :
@@ -490,7 +490,7 @@ open FlockSoundness.Discharge.Recursion.Witness (toExec) in
 files `F` at the parameters `θ`, v2's parameters `p` in `θ` set its session up at the statement's tags on `F`'s
 circuit and public files (`checkBlobsAt_event`, `get_named`), whose lookup tables are the ones the circuit file
 registers where the blobs hold each at its registered file (`pinnedTables_eq`), and a descriptor of the verifier's
-program reads the session's sampling design off `designAt` (`lawAt_designAt`). -/
+program reads the session's sampling design off `designAt` (`samplingDesignAt_designAt`). -/
 theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD : DigestsAt V T θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
     (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
@@ -564,7 +564,7 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
   have hdrew : Drew k o.sent dr (derived.getD fl) n ξ (sampledBlocks ev.base.draw) :=
     ⟨a, b, e, p₀, cm, ev, hcase, hacc0, ⟨lo, derived, fl, hlo, hnn ▸ hn', hder, hfl, rfl⟩, rfl, read, hdu⟩
   have hrd := sampleHeld k o.sent dr _ n ξ _ recS hv.2.1 hdrew hrecS
-  have hlawD := lawAt_designAt hdesc hlo hdf
+  have hlawD := samplingDesignAt_designAt hdesc hlo hdf
   have hlawL : samplingDesignAt p₀.base.verifier n = .ok (derived.getD fl) := by
     simp only [samplingDesignAt, hlo, hder, hfl, ok_bind]
     rfl
@@ -577,7 +577,7 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
 
 open FlockSoundness.Discharge.Recursion.Witness (toExec) in
 /-- **The session's inputs, descriptor, public file and population on an accepted play** (`accepted_parts`): the inputs
-v2 hands `flock-verify` on the committed files, whose tags are untyped and hidden-output with retained rounds and
+v2 hands `verity-verify-proof` on the committed files, whose tags are untyped and hidden-output with retained rounds and
 `hm96-sha512/v1` leaves (`FailClosed.check_ok` at v2's statement check under `--zk`), the descriptor and public file
 its ports check reads (`desc_of_ports`), in `Layout.scopeOkH` (`scopeH_of_form`), with the record's population, which the program's proof blocks under the
 verifier's query are in order (`popMatches_of_popOk`). -/

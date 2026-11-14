@@ -9,13 +9,13 @@ public import Mathlib.Data.Finset.Union
 
 `UpdateHardness` is the cover theorem's one assumption about the world: a block that computes whole products must be
 handed `b` bits for each distinct updated parameter they use, the analogue on a bare wiring of the covering bound's
-parameter-hardness at cost `b` (`InferenceOnly.Assumptions.ParameterHardAt`). It is a statement about the training circuit `C`
+parameter-hardness at cost `b` (`Slowdown.Assumptions.ParameterHardAt`). It is a statement about the training circuit `C`
 and its products, at block size `s`.
 -/
 
 @[expose] public section
 
-namespace InferenceOnly.Cover.Assumptions
+namespace Slowdown.Cover.Assumptions
 
 /-- **Update hardness** ([UPDATE-HARDNESS]) at block size `s`, `b` bits per updated parameter: every set `S` of at
 most `s` gates that computes all of the products `B ⊆ Pall` is handed at least `b` bits, besides the registered
@@ -36,4 +36,4 @@ def UpdateHardness {C : Circuit} {J L : Type*} [DecidableEq L] (M : MulBlocks C 
   ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ B ⊆ M.Pall, (∀ p ∈ B, M.m p ⊆ C.computed S) →
     b * (B.image Prod.snd).card ≤ (C.inputs S \ C.θ).card
 
-end InferenceOnly.Cover.Assumptions
+end Slowdown.Cover.Assumptions

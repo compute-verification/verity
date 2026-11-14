@@ -186,10 +186,10 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
     assert set(K.TRANSPORT["party"]) <= set(K.PARTY) and set(K.TRANSPORT["channel"]) <= set(K.CHANNEL)
 
 
-#: The onsite configuration's hash before the network certifier's bound on a response's tokens and its lengths rows' form were
-#: parameters: a configuration that sets neither keeps it.
-UNBOUNDED_ONSITE = ("8bb037ee67cf0b2fd8475458194d5d0ea79d7e9ed1285b398a9b20420e1f6e64"
-                   "cbb336535923a6320f0cf3f717ddecfccd9ff8cef279e1eb20d992ab719fb9b8")
+#: The onsite configuration's hash with neither the network certifier's bound on a response's tokens nor its lengths
+#: rows' form set: a configuration that sets neither keeps it.
+UNBOUNDED_ONSITE = ("1cd21b0103bf0bf930af8d251e8d8f0a12153d66d56dfbc7d1583b1d3133c87f"
+                    "151b5f774ed98718aabd3453ed9e947fbab982e2b8a107459dbfc1d1d099e17a")
 
 
 def bounded(tokens):
