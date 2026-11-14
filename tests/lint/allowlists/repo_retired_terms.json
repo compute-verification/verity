@@ -5266,7 +5266,7 @@
     {"file": "security/Proofs/Poub/RemoteHeld/SketchLine.lean", "count": 1},
     {"file": "security/Proofs/Accounting/Requirement.lean", "count": 1},
     {"file": "security/Proofs/Accounting/RequirementPouw.lean", "count": 1},
-    {"file": "security/Proofs/Accounting/Responder/Latency.lean", "count": 18},
+    {"file": "security/Proofs/Pous/Responder/Latency.lean", "count": 18},
     {"file": "security/Proofs/Accounting/ServingBlocks.lean", "count": 15},
     {"file": "security/Proofs/Accounting/ServingBlocks/Witnesses.lean", "count": 51},
     {"file": "security/Proofs/Poub/Stacking.lean", "count": 18},
