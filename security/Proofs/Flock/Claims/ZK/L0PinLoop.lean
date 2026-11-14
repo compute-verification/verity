@@ -395,7 +395,7 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
           (fun p e => (wordsAt x (ops.map fun q => ZKMal.CoinLayer.rd q.2) (J - 1 + p))[e]!) 0 []
           T₁ (FlockComplete.flat tr.cm0.toC.cap) tr.sch tr.g (FlockComplete.basisVals sws (tr.st.m - 7))
           (_root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0)
-          ((ofLoop T L₀ real).drawsAt x ρ (2 * j + r)).h ((2 * j + r) % 2) tr.extra (fun _ _ => 0) i)) ∧
+          ((ofLoop T L₀ real).samplesAt x ρ (2 * j + r)).h ((2 * j + r) % 2) tr.extra (fun _ _ => 0) i)) ∧
       J = FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) +
           (3 + (tr.st.m - 6) + 3 + (tr.st.fold.kLog - 6)) + (2 + (_root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[(2 * j + r) / 2]!
             (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[(2 * j + r) / 2]!
@@ -584,7 +584,7 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
   -- the frame's state at the binding
   rw [show P - 1 + 1 = alg.size + (xs.size + 2) + 1 by omega] at hAJ
   obtain ⟨hdA, honA, -, hl0A, hiA, hpA, -⟩ := Bind.repState_opened
-    (by rw [hc']; exact ofDraws_order _ _ _) hal hm14 hmb hdg (placeholder_cap hph) (hdm ▸ hdom') hmk hxb hk0 hn hq
+    (by rw [hc']; exact ofSamples_order _ _ _) hal hm14 hmb hdg (placeholder_cap hph) (hdm ▸ hdom') hmk hxb hk0 hn hq
     (by simp only [Array.size_push, Array.size_map, Array.size_range]; omega) hAJ
   have hcfg := (ofLoop_cfg_place T L₀ real x ρ (((m₀, ρ₀) :: ops).take J) hsx (q := J - 2) (j := P - 1)
     (by rw [List.length_take]; omega) (by rw [hloc (J - 2) (P - 1 + 1) (by omega) (by omega)]) hph).1

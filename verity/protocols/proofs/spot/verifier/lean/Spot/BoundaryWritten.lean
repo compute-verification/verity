@@ -46,10 +46,10 @@ def extent? (base : Int) (digits : List (Nat × Int)) (row : Nat) : Option (Int 
   if row == 0 || digits.any (·.1 == 0) then none
   else (chain row (moving digits)).map fun n => (base, base + n)
 
-/-- Whether extents sorted by their first leaf lay `[at, leaves)` end to end. -/
+/-- Whether extents sorted by their first leaf lay `[pos, leaves)` end to end. -/
 def tilesFrom : Int → List (Int × Int) → Nat → Bool
-  | at, [], leaves => at == leaves
-  | at, (lo, hi) :: t, leaves => lo == at && tilesFrom hi t leaves
+  | pos, [], leaves => pos == (leaves : Int)
+  | pos, (lo, hi) :: t, leaves => lo == pos && tilesFrom hi t leaves
 
 /-- `link-written` for one output field of `leaves` leaves: every read is dense, and together they write each leaf of
 `[0, leaves)` once. Every extent holds a leaf, so two that meet can't both start where the one before ends. -/
@@ -60,15 +60,15 @@ def written (leaves : Nat) (reads : List Read) : Bool :=
 
 /-- A read's leaves, every reader index's row listed. -/
 def leavesRef (base : Int) (digits : List (Nat × Int)) (row : Nat) : List Int :=
-  let srcs := digits.foldl (fun acc (r, s) => acc.flatMap fun x => (List.range r).map fun d => x + d * s) [base]
-  srcs.flatMap fun x => (List.range row).map fun k => x + k
+  let srcs := digits.foldl (fun acc (r, s) => acc.flatMap fun x => (List.range r).map fun (d : Nat) => x + d * s) [base]
+  srcs.flatMap fun x => (List.range row).map fun (k : Nat) => x + k
 
 /-- Whether a read is dense, read off its leaves: a leaf, no digit of radix 0 or negative step but at radix 1, and its
 leaves a run from the least, each once. -/
 def denseRef (base : Int) (digits : List (Nat × Int)) (row : Nat) : Bool :=
   let ls := (leavesRef base digits row).mergeSort fun a b => decide (a ≤ b)
   !ls.isEmpty && digits.all (fun (r, s) => r ≥ 1 && (r == 1 || s ≥ 0)) &&
-    ls == (List.range ls.length).map fun k => ls.headD 0 + k
+    ls == (List.range ls.length).map fun (k : Nat) => ls.headD 0 + k
 
 /-- `extent?`'s reference: a dense read's least leaf and one past its last, read off its leaves. -/
 def extentRef? (base : Int) (digits : List (Nat × Int)) (row : Nat) : Option (Int × Int) :=

@@ -1,4 +1,4 @@
-"""Replay every recorded one-stage run through sampled proofs' Lean protocol and the current Python, against the verdict the
+"""Replay every recorded one-stage run through SPOT's Lean protocol and the current Python, against the verdict the
 run recorded.
 
     python benchmarks/one_stage/replay.py --index INDEX.json --runs DIR [--fetch] --lean EXE --out DIR [--only RUN ...]
@@ -1158,7 +1158,7 @@ def a3(run: Run) -> Iterator[Case]:
                                                                 f"{base}/session-{name}/archive-put.log")
     leaf_layer = hashlib.sha512(DT.canonical(publics).encode()).hexdigest()
     split = a.get("split") or {}
-    draw_file = "--draw-file" in split.get("rule", "")
+    sample_file = "--draw-file" in split.get("rule", "")
     with_roots = "served_is_lean_draw" in split
     instances, session_roots, sessions = 0, {}, []
     for name, *_ in mem:
@@ -1169,15 +1169,15 @@ def a3(run: Run) -> Iterator[Case]:
         session_roots.update({f"{name}/{p}": r for p, r in (live.get("roots") or {}).items()})
         sessions += session_digests(run, f"{base}/session-{name}")
     sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or sessions
-    if draw_file and not split.get("served_is_lean_draw"):
+    if sample_file and not split.get("served_is_lean_draw"):
         raise Gap("the sessions' served units are not the Lean draw, and the run kept no other copy of them")
-    served = sorted(a["draw"]["units"]) if draw_file else None
+    served = sorted(a["draw"]["units"]) if sample_file else None
     law = {"k": summary["k"], "law": "subset"}
     p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
     e = evidence(a, instances=instances, sessions=sessions, session_roots=session_roots if with_roots else None,
                  served=served)
     prov["evidence"] = ("audit.json; instances and session roots from each session's prove.log LIVE line"
-                        + ("; served = the Lean draw (--draw-file)" if draw_file else
+                        + ("; served = the Lean draw (--draw-file)" if sample_file else
                            "; the era's audit took neither the served draw nor the sessions' roots"))
     c = Case(run.id, "a3", rec["format"], "audit", "audit", program, p, rec, e, recorded_audit(a, f"{base}/audit.json"), prov)
     yield c

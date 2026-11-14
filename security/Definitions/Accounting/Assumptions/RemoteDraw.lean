@@ -59,7 +59,7 @@ verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a ses
   receipts of the window it ran in.
 
 The draw is the deployed one, not a premise: each window's openings are `Key.subset` on the first blocks its coin gives
-(`Run.opened`), the sampler exact on each draw's first word and the rest free. The openings coins are uniform and
+(`Run.opened`), the sampler exact on each draw's first block and the rest free. The openings coins are uniform and
 independent of the other coins, as the challenger draws them (the trace's uniform measure on `DrawCoins`).
 -/
 

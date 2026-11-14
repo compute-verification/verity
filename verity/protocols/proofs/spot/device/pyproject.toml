@@ -11,7 +11,7 @@ untraced = [
 ]
 artifacts = [
     "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
-    "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-firewall",
+    "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-zk-server",
 ]
 # The scripts under `benchmarks/` the moved audit commands still load off `sys.path`, and what their `benchmarks/` suites read
 inputs = [
@@ -42,12 +42,12 @@ inputs = [
     "tools/verity/circuit_check/src/circuit_check/entries.py",
     "tools/verity/circuit_check/src/circuit_check/targets.py",
     "benchmarks/one_stage/interfaces/verity_e2e_demo",
-    "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py",
+    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
     "verity/commitments/cuda/commit_slots/slots.py",
-    "demos/vllm/serve_load.py",
-    "demos/vllm/serve.sh",
-    "demos/vllm/commit.sh",
-    "demos/vllm/published.sh",
+    "adapters/vllm/tools/served_run/serve_load.py",
+    "adapters/vllm/tools/served_run/serve.sh",
+    "adapters/vllm/tools/served_run/commit.sh",
+    "adapters/vllm/tools/served_run/published.sh",
     "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json",
     "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin",
     "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json",

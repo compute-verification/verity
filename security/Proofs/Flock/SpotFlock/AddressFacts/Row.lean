@@ -16,8 +16,8 @@ registered branch (`CheckedRun.addressHolds_reads`), so the registered branch is
 
 * **The instance** (`InstanceFact`). A template's session statement lists every slot of its part as its population, in
   order (`second-population`, `SecondStage.populationOk`), and its sample is the second sample's slots in the part
-  (`second-sample`, `SecondStage.ownDraw`). Flock sets the session up at the sample (`HmRow.drawn`), so instance `n` is
-  the sample's `n`-th unit and is labelled with the population's label there, slot `lo + unitOf draw n` (`drawSlot`,
+  (`second-sample`, `SecondStage.ownSample`). Flock sets the session up at the sample (`HmRow.drawn`), so instance `n` is
+  the sample's `n`-th unit and is labelled with the population's label there, slot `lo + unitOf draw n` (`sampleSlot`,
   `LabelledAt`). With no proof block always checked (`Held.noAlways`), a checked unit's instance (`rankAt`) is then
   counted, and the registration maps its slot to the unit (`RegTwo.blockAt`).
 * **The row round 2 holds a slot to** (`placedRow`, `ReadFact`). At a port a link or a wire names, and at a template's
@@ -28,7 +28,7 @@ registered branch (`CheckedRun.addressHolds_reads`), so the registered branch is
   reads them: `RefRows`, a property of the auditor's copies alone, is a hypothesis.
 * **The header's position is the read's** (`PositionFact`): at any slot map that labels the session's instances
   (`LabelledAt σ`), the position the header gives instance `n`'s row is the registered read's at label `σ n`
-  (`rows_open`). The slot map is a parameter: `drawSlot` at a staging of every slot of the part, another at a staging
+  (`rows_open`). The slot map is a parameter: `sampleSlot` at a staging of every slot of the part, another at a staging
   of the sampled slots alone. `ParsedFact`: the registered read Flock parses reads at a label what round 2's entry for its
   name reads there.
 * **The slot's leaf** (`rowShape`, `LeafFact`): the slot's position, stride and units, fixed before the run from the
@@ -138,7 +138,7 @@ def PositionFact : Prop :=
 
 /-- **Friday's slot map**: instance `n` of part `p`'s session is the slot of its sample's `n`-th unit, the session's
 population being the part's slots in order. -/
-def drawSlot (p : Spot.SecondStage.Part) (draw : Option Json) (n : ℕ) : ℕ := p.lo + unitOf draw n
+def sampleSlot (p : Spot.SecondStage.Part) (draw : Option Json) (n : ℕ) : ℕ := p.lo + unitOf draw n
 
 /-- **The replay sample of a checked run**: the first stage's, on round 0's coin. -/
 def sampleOf (r : CheckedRun h.stage) : Array ℕ := h.reg.sample (src r.c₀)
@@ -149,13 +149,13 @@ def partOf (r : CheckedRun h.stage) : Spot.SecondStage.Part :=
 
 /-- **Round 2 puts each checked unit at a counted instance of a slot of its**: with no proof block always checked, at
 an accepted run's checked unit, the unit's instance (`rankAt`) is one of its session's (`Counted`), the session's
-instances are labelled by their slots (`LabelledAt` at `drawSlot`), and the instance's slot is one of its part's that
+instances are labelled by their slots (`LabelledAt` at `sampleSlot`), and the instance's slot is one of its part's that
 the registration maps to the unit (`RegTwo.blockAt`). -/
 def InstanceFact : Prop :=
   (∀ v, h.reg.always v = false) → ∀ r : CheckedRun h.stage, r.Ok h →
-    r.Counted h ∧ LabelledAt (drawSlot (partOf h r) r.ins.read.draw) r.sts ∧
+    r.Counted h ∧ LabelledAt (sampleSlot (partOf h r) r.ins.read.draw) r.sts ∧
       unitOf r.ins.read.draw (r.n h) < (sampleOf h r).size * (partOf h r).n ∧
-      h.reg.blockAt (sampleOf h r) (drawSlot (partOf h r) r.ins.read.draw (r.n h)) = r.u
+      h.reg.blockAt (sampleOf h r) (sampleSlot (partOf h r) r.ins.read.draw (r.n h)) = r.u
 
 /-- **The registered read Flock parses reads what round 2's entry for its name reads**: at an accepted run's checked
 unit, each registered read `reg` of its session reads at each label `u` the position that the entry of `reg`'s name
@@ -275,7 +275,7 @@ def LeafFact (R : ℕ → String → ℕ → ℕ) : Prop :=
     kindAt h r.x r.m₁ r.c₀ r.c₁ (templateOf h.ms r.u) reg.name reg.value ≠ .registered →
     ∃ st rec draw row, decode r.x = some st ∧ jsonMsg r.m₁ = some rec ∧ secondDraw h r.c₀ r.c₁ = some draw ∧
       placedRow (ownOf h st rec draw r.c₀) (partOf h r) reg.name reg.value reg.leaves
-        (drawSlot (partOf h r) r.ins.read.draw (r.n h)) = some row ∧
+        (sampleSlot (partOf h r) r.ins.read.draw (r.n h)) = some row ∧
       ∀ s : Slot, (rowShape h R r.u reg.name
           (kindAt h r.x r.m₁ r.c₀ r.c₁ (templateOf h.ms r.u) reg.name reg.value)).Fits s →
         ∀ e, entryAt (readRoots h r.x r.m₁ r.c₀ r.c₁ r.ρ (templateOf h.ms r.u) reg.name reg.value) s = some e →

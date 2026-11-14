@@ -12,7 +12,7 @@ takes from v2's parameters and evidence.
   parameters the game's signature verifier reads: `paramsOfJson_deployed`, from bytes `params_deployed`, and so the key
   v2's samples are read under (`oneStageZkSource`) is at them, `source_deployed`.
 * **Coins within limits.** v2's evidence parses only with its coins within `LIMITS` (`evidenceOf_within`). In coins
-  within limits `l`, `drawCoins` checks at most `signaturesAt l` signatures (`signatures_le`) and SHA-512 hashes at most
+  within limits `l`, `sampleCoins` checks at most `signaturesAt l` signatures (`signatures_le`) and SHA-512 hashes at most
   `readsAt l` strings as it reads them (`readHashed_le`, counted through `readHashed_eq`'s parts). So one v2 record's
   reading costs at most a constant at `LIMITS` and `Lms.deployed` (`record_calls_le`).
 -/
@@ -327,16 +327,16 @@ theorem pinsHashed_length (l : Limits) (coins : Json) (h : withinAt l coins = tr
 
 /-! ## The counts -/
 
-/-- At most how many signatures `drawCoins` checks in coins within `l`: the record's, the close's and one per ledger
+/-- At most how many signatures `sampleCoins` checks in coins within `l`: the record's, the close's and one per ledger
 line. -/
 def signaturesAt (l : Limits) : Nat := 2 + l.ledger
 
-/-- At most how many strings SHA-512 hashes as `drawCoins` reads coins within `l`: the record's and close's five; each
+/-- At most how many strings SHA-512 hashes as `sampleCoins` reads coins within `l`: the record's and close's five; each
 release log line, each refused hello and each pins log line, and two more per log; each opening's domain, leaf and
 path; and two per ledger line. -/
 def readsAt (l : Limits) : Nat := 11 + l.log + l.hellos + l.openings * (7 + l.path) + 2 * l.ledger + l.pins
 
-/-- **`drawCoins` checks at most `signaturesAt l` signatures in coins within `l`.** -/
+/-- **`sampleCoins` checks at most `signaturesAt l` signatures in coins within `l`.** -/
 theorem signatures_le (l : Limits) (key : ChallengerKey) (coins : Json) (h : withinAt l coins = true) :
     (signatures key coins).length ≤ signaturesAt l := by
   obtain ⟨-, -, hled, -⟩ := withinAt_spec h
@@ -353,7 +353,7 @@ theorem signatures_le (l : Limits) (key : ChallengerKey) (coins : Json) (h : wit
        simp only [Array.length_toList]
        omega)
 
-/-- **SHA-512 hashes at most `readsAt l` strings as `drawCoins` reads coins within `l`.** -/
+/-- **SHA-512 hashes at most `readsAt l` strings as `sampleCoins` reads coins within `l`.** -/
 theorem readHashed_le (l : Limits) (key : ChallengerKey) (label : String) (coins : Json)
     (h : withinAt l coins = true) :
     (readHashed key label coins).length ≤ readsAt l := by
@@ -396,7 +396,7 @@ theorem source_deployed {a : ByteArray} {p : OneStageZk.Params} {c : OneStage.Co
   | some w => rw [hw] at hd; cases hd; exact hk
 
 /-- **One v2 record's reading costs at most a constant**: where v2 decodes the parameters `a` and the evidence `b`
-and reads the samples `d` under them, the signatures `drawCoins` checks in the evidence's coins, at `L` each under the
+and reads the samples `d` under them, the signatures `sampleCoins` checks in the evidence's coins, at `L` each under the
 key's parameters, and the strings SHA-512 hashes as it reads them are at most `LIMITS`' counts at `Lms.deployed`. -/
 theorem record_calls_le (L : Lms.Params → Nat) {a b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment}
     {e : OneStageZk.Evidence} {d : Draws} (hp : (Core.canonicalJson a >>= OneStageZk.paramsEitherOfJson) = .ok p)

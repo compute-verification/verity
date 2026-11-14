@@ -27,7 +27,7 @@ from tests.program import test_dsa_derive as T
 from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.program.frontend.emit import NAMESPACE
+from verity_torch.frontend.emit import NAMESPACE
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.frontend.rules.vocab import PROFILES

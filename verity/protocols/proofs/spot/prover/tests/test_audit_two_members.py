@@ -60,7 +60,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "one_stage")
 ROOT = HERE.parents[1]
@@ -68,7 +68,7 @@ sys.path.insert(0, str(HERE.parent / "prove_path"))
 sys.path.insert(0, str(HERE))
 from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import records_audit as RA  # noqa: E402
 
 LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
 BUILD = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh"
@@ -116,7 +116,7 @@ def _window(d: Path, flipped: bool = False) -> Path:
 @pytest.fixture(scope="module")
 def binaries(tmp_path_factory) -> dict[str, Path]:
     """The prover, the Lean verifier and the ZK server's Lean (module docstring)."""
-    lean = {"lean": LEAN / "verity-verify-proof", "firewall": LEAN / "flock-firewall"}
+    lean = {"lean": LEAN / "verity-verify-proof", "firewall": LEAN / "flock-zk-server"}
     if not all(p.is_file() for p in lean.values()):
         pytest.skip(f"no {' or '.join(p.name for p in lean.values())} under {LEAN}: check's lean-build step builds them")
     prover = tmp_path_factory.mktemp("flock-circuit") / "flock-circuit"
@@ -128,17 +128,17 @@ def binaries(tmp_path_factory) -> dict[str, Path]:
 
 
 def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str,
-           more: dict[str, str] | None = None) -> tuple[int, dict, Path, str]:
+           more: dict[str, str] | None = None, design: str = DESIGN) -> tuple[int, dict, Path, str]:
     """``records_audit.py audit`` of ``window`` into ``tmp/audit`` as `v3c_audit` runs it, on a local challenger's coins,
-    with ``more`` added to its environment -> (its exit code, its summary, its out directory, the end of its output for
-    a failure's message)."""
+    under the sampling design ``design`` (``--law``), with ``more`` added to its environment -> (its exit code, its
+    summary, its out directory, the end of its output for a failure's message)."""
     out, main = tmp / "audit", tmp / "main.txt"
     main.write_text(subprocess.run(["git", "-C", str(ROOT), "rev-list", "--first-parent", "HEAD"], capture_output=True,
                                    text=True, check=True).stdout)
     m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python",
                                                  "verity/protocols/proofs/flock/prover/python", "adapters/vllm"))
-    argv = [sys.executable, str(ROOT / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "one_stage" / "records_audit.py"), "audit", "--window", str(window),
-            "--law", RULE, "--circuit", hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
+    argv = [sys.executable, str(ROOT / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "records_audit.py"), "audit", "--window", str(window),
+            "--law", design, "--circuit", hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, *(x for k, p in binaries.items()
                                                                                     for x in (f"--{k}", str(p))),
             "--ports", "2", "--out", str(out), *flags]

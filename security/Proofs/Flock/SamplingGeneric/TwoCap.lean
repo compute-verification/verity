@@ -40,7 +40,7 @@ block escapes with probability at most `1 − r₂`, since a cell with one incor
 namespace Claims.Sampling
 
 open Finset
-open Claims.Sampling.EndToEndDraw (SubsetInputsDesign)
+open Claims.Sampling.EndToEndSample (SubsetInputsDesign)
 
 /-- A footprint counts at most its cell's proof blocks. -/
 theorem footprint_le_card (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)

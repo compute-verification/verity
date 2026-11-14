@@ -1,4 +1,4 @@
-"""Sampled proofs v2's case (`verity/sampled-proofs/one-stage/v2`) of a served window from the files its run kept, for
+"""SPOT v2's case (`verity/sampled-proofs/one-stage/v2`) of a served window from the files its run kept, for
 `composite.py --cases`, and with ``--exe`` its own Lean answer on it.
 
     v2_case.py --window DIR --out DIR --scratch DIR [--exe PATH]
@@ -84,7 +84,7 @@ def rebuild(c: dict, scratch: Path) -> tuple[Path | None, str]:
     try:
         subprocess.run([py, "-m", "verity_numerical.bench.generate", "--subcircuit", c["subcircuit"], "--n", "4",
                         "--seed", "1", "--out", str(sets)], check=True, capture_output=True, cwd=TREE)
-        argv = [py, "verity/protocols/proofs/spot/verifier/one_stage/compose_circuit.py", "--input-set", str(sets / "sets" / c["set"]), "--out", str(f)]
+        argv = [py, "verity/protocols/proofs/spot/prover/audit/compose_circuit.py", "--input-set", str(sets / "sets" / c["set"]), "--out", str(f)]
         argv += [x for k in ("partition", "program") if c[k] for x in (f"--{k}", c[k])]
         subprocess.run(argv, check=True, capture_output=True, cwd=TREE)
     except subprocess.CalledProcessError as x:

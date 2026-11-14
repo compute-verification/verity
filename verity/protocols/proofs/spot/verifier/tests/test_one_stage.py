@@ -347,7 +347,7 @@ def test_the_window_says_served_or_stand_in():
     assert rec["window"]["kind"] == "stand-in" and _check(rec, prog, q).ok
 
 
-def test_draw_checks():
+def test_sample_checks():
     _, _, rec = _registration(6)
     law = D.parse_design("subset:2")
     assert law == LAW
@@ -384,7 +384,7 @@ def test_the_rate_law_is_its_rate_rounded_up_to_its_tables():
     assert (D.rate_count(1, 3, 4, 20), D.rate_count(1, 5, 4, 12), D.rate_count(1, 3, 2, 60)) == (8, 4, 20)
 
 
-def test_proved_units_are_the_draw():
+def test_proved_units_are_the_sample():
     good = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     assert D.check_proved(good, [1, 4], 2).ok
     assert D.check_proved(good, [1, 5], 2).codes == ("units",)
@@ -527,7 +527,7 @@ def test_an_answer_is_complete_only_as_an_accept_that_says_so():
         assert not audit.answer_complete(no_answer), no_answer
 
 
-def test_audit_record_holds_the_served_draw_and_the_sessions_roots():
+def test_audit_record_holds_the_served_sample_and_the_sessions_roots():
     """The sessions must have been served exactly the verifier's sample, and each session's root must be the registered one."""
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
@@ -637,7 +637,7 @@ def test_r1_holds_the_registered_strata_to_the_verifiers_own():
     assert _check(rec, prog, q, law=LAW).codes == ("R1-law",)
 
 
-def test_stratified_draw_checks():
+def test_stratified_sample_checks():
     prog, q, rule, rec = _stratified_docket()
     law = D.derive(prog, q, rule)
     good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
@@ -661,7 +661,7 @@ def test_stratified_draw_checks():
         assert D.strata_problem({"k": 4, "strata": problem}, 6) is not None
 
 
-def test_one_stratified_draw_splits_over_several_tables():
+def test_one_stratified_sample_splits_over_several_tables():
     """A session of J tables splits one sample (Lean `Draw.tablesWhy`): a stratified sample whose sum of k_s is a positive
     multiple of J, as a subset sample's k must be; a Bernoulli or work sampling design never, whatever its count."""
     prog, q, rule, rec = _stratified_docket()
@@ -980,7 +980,7 @@ def test_r1_holds_a_work_law_to_the_verifiers_own_table():
     assert _check(rec, prog, q, law=D.parse_design("stratified:4")).codes == ("R1-law",)
 
 
-def test_work_draw_checks_and_closures():
+def test_work_sample_checks_and_closures():
     prog, q, rule, table, rec = _work_docket()
     law = D.derive(prog, q, rule, table)
     good = {"law": "work", "population": 6, "k": 4, "strata": law["strata"], "units": [2, 3, 4, 5]}
@@ -1021,7 +1021,7 @@ def test_audit_record_under_the_work_law():
 
 
 def test_work_sizes_are_the_lean_verifiers():
-    """The sizes `verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py::test_work_draw_from_the_verifiers_own_program` pins for
+    """The sizes `verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py::test_work_sample_from_the_verifiers_own_program` pins for
     `verity-verify-proof draw --work K`: strata of 3, 3 and 4 proof blocks doing 3, 1 and 0 (W = 12), and its floor cases."""
     sizes, works = (3, 3, 4), (3, 1, 0)
     total = sum(w * n for w, n in zip(works, sizes))

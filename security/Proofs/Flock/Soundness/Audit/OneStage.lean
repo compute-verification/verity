@@ -1,10 +1,10 @@
 module
 
-public import Definitions.Flock.Audit.Law
+public import Definitions.Flock.Audit.SamplingDesign
 public import Definitions.Flock.Circuit
 public import Definitions.Flock.Game
 public import Proofs.Flock.Soundness.Audit.Circuit
-public import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Audit.SamplingDesign
 public import Proofs.Flock.Soundness.Game
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
@@ -36,7 +36,7 @@ theorems take once averaged over the prover's state; neither needs to hold state
 $$\Pr[\text{accept} \wedge E(X, S)] \le \Pr_S[E(X, S) \wedge S \cap \mathrm{wrong}(X) = \emptyset]
   + \varepsilon_{ks} + \delta_{link}.$$
 Its corollaries are the integrity profile (`audit_profile`), the count curve
-`δ(K) = miss K + ε_ks + δ_link` (`audit_count`), and the sampled proof blocks (`audit_drawn`).
+`δ(K) = miss K + ε_ks + δ_link` (`audit_count`), and the sampled proof blocks (`audit_sampled`).
 -/
 
 @[expose] public section
@@ -57,14 +57,14 @@ theorem prCoin_eq_one_of {C : Type} [Fintype C] [Nonempty C] {p : C → Prop} (h
 
 /-- **The one-stage audit.** The prover registers `R : Reg`; the verifier samples `S` by `L`; the
 session on the sampled proof blocks runs against `R`. Output: the verdict and the sample. -/
-def audit (L : Law n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool) :
+def audit (L : SamplingDesign n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool) :
     Game (Bool × Finset (Fin n)) :=
   .send Reg fun R => .coin L.Ω fun ω => (session (L.draw ω) R).map fun ok => (ok, L.draw ω)
 
-variable {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
+variable {L : SamplingDesign n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
 /-- A prover's state after registering `R`: its session strategy for every sample. -/
-abbrev Cont (L : Law n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool) (R : Reg) :=
+abbrev Cont (L : SamplingDesign n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool) (R : Reg) :=
   ∀ ω : L.Ω, Strategy (session (L.draw ω) R)
 
 /-- The registration of an audit strategy. -/
@@ -80,7 +80,7 @@ def cont (σ : Strategy (audit L Reg session)) : Cont L Reg session (reg σ) :=
 * `ksFail S R τ u`: extraction of sampled proof block `u` from the session state `τ` fails;
 * `linkFail S R τ u X`: it succeeds, but disagrees with `X` on `u`'s wires;
 * `cover`: a unit wrong in `X` fails one way or the other, from every state. -/
-structure Analysis (L : Law n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool) where
+structure Analysis (L : SamplingDesign n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool) where
   Tr : Type
   wrong : Tr → Finset (Fin n)
   committed : (R : Reg) → Cont L Reg session R → Tr
@@ -197,7 +197,7 @@ theorem audit_count (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks
 
 /-- **Sampled proof blocks are correct up to `ε_ks + δ_link`**, even for a consumer who looks after the
 sample. -/
-theorem audit_drawn (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+theorem audit_sampled (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound δlink) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (A.wrong (A.committedOf σ)) o.2) (audit L Reg session) σ ≤
       εks + δlink := by
@@ -423,9 +423,9 @@ theorem oracle_profile (hs : P.SessionSound session' ε) (𝓑 : Finset (Fin n) 
   rwa [add_zero] at this
 
 /-- **The design's drawn-unit bound, at the oracle layer.** -/
-theorem oracle_drawn (hs : P.SessionSound session' ε) (σ : Strategy (audit L (Fin C.N → Bool) session')) :
+theorem oracle_sampled (hs : P.SessionSound session' ε) (σ : Strategy (audit L (Fin C.N → Bool) session')) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (reg σ)) o.2) (audit L _ session') σ ≤ ε := by
-  have := audit_drawn (P.oracle session') (P.oracle_knowledgeSound hs) P.oracle_linkSound σ
+  have := audit_sampled (P.oracle session') (P.oracle_knowledgeSound hs) P.oracle_linkSound σ
   rwa [add_zero] at this
 
 /-- **The design's cone bound, at the oracle layer.** -/

@@ -58,7 +58,7 @@ theorem stmtCodes_eq_nil {own : Spot.SecondStage.Own} {named : Bool} {k : ℕ} {
     (h₄ : Spot.SecondStage.populationOk own.sample.size p s.header = true)
     (h₅ : Spot.SecondStage.rootsOk named own.interior s.template s.header
       ((Spot.entries (Spot.getD s.registered "ports")).map (·.1)) = true)
-    (h₆ : Spot.jeq s.draw (Spot.SecondStage.ownDraw own.sample.size p own.drawn) = true)
+    (h₆ : Spot.jeq s.draw (Spot.SecondStage.ownSample own.sample.size p own.drawn) = true)
     (h₇ : ∀ port e, (port, e) ∈ Spot.entries (Spot.getD s.registered "ports") →
       Spot.SecondStage.readOk own named p port e = true)
     (h₈ : Spot.SecondStage.linkedRead own p.template (Spot.entries (Spot.getD s.registered "ports")) = true)
@@ -210,7 +210,7 @@ theorem readsOk_held {x m₁ : Msg} {st : Roots} {rec : Json} {w : FlockDeploy.R
       Spot.SecondStage.headerOk own (Spot.SecondStage.byTemplate rec) 0 S.template S.header = true ∧
       Spot.SecondStage.populationOk 1 p S.header = true ∧
       Spot.SecondStage.rootsOk (Spot.SecondStage.byTemplate rec) rec S.template S.header (reads.map (·.1)) = true ∧
-      Spot.jeq S.draw (Spot.SecondStage.ownDraw 1 p #[0]) = true ∧
+      Spot.jeq S.draw (Spot.SecondStage.ownSample 1 p #[0]) = true ∧
       (∀ port e, (port, e) ∈ reads →
         Spot.SecondStage.readOk own (Spot.SecondStage.byTemplate rec) p port e = true) ∧
       Spot.SecondStage.linkedRead own R.name reads = true ∧ Spot.SecondStage.wiredRead own R.name reads = true ∧
@@ -227,7 +227,7 @@ theorem readsOk_held {x m₁ : Msg} {st : Roots} {rec : Json} {w : FlockDeploy.R
   · show Spot.SecondStage.populationOk (ownOf (held R bnd0 desc q c₀) st rec draw coin0).sample.size _ _ = true
     rw [hsz]
     exact h₄
-  · show Spot.jeq S.draw (Spot.SecondStage.ownDraw (ownOf (held R bnd0 desc q c₀) st rec draw coin0).sample.size _
+  · show Spot.jeq S.draw (Spot.SecondStage.ownSample (ownOf (held R bnd0 desc q c₀) st rec draw coin0).sample.size _
       (ownOf (held R bnd0 desc q c₀) st rec draw coin0).drawn) = true
     rw [hsz, ownOf_drawn R desc q c₀ st rec hp]
     exact h₆

@@ -23,7 +23,7 @@ plays.
   (`bindFinder`) runs the frame twice, independently, and returns it.
 * **The bound** (`majorityBound`): where the claim fails on the majority, more than `ε · n` units are unbound in it and
   at most `ε · n` in an accepted witness's transcript, so the witness binds a unit the majority doesn't and differs from
-  it at one of the unit's boundary bits (`Majority.unbound_drawn`); such plays weigh at most
+  it at one of the unit's boundary bits (`Majority.unbound_sampled`); such plays weigh at most
   `√(min(W, 2n) · K)`, `K` the binding finder's collision probability (`Majority.Plays.ex_off_le`), and at most
   `√(min(W, 2n) · E[cost] / 2^256)` under `ecr/sha-512` at it (`majorityBound_ecr`).
 
@@ -198,7 +198,7 @@ theorem off_of_accepts (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     have h' := huW
     simp only [Accounting.unbound, Finset.mem_filter, Finset.mem_univ, true_and, not_or, not_exists, not_and,
       not_not] at h'
-    obtain ⟨g, hg, i, hi, hbit⟩ := Majority.unbound_drawn (V.partsOf θ F) (V.Opens θ F c) h'.1 h'.2 huX
+    obtain ⟨g, hg, i, hi, hbit⟩ := Majority.unbound_sampled (V.partsOf θ F) (V.Opens θ F c) h'.1 h'.2 huX
     exact ⟨u, hacc, ⟨wt, hw, huW⟩, wt, hw, hR', g, hg, i, hi, hbit⟩
 
 /-- **The witness fixed at registration**: where the vocabulary's transcript is the majority (`hX`), the claim holds on

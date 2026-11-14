@@ -37,7 +37,7 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 under its tags at its part of the record's sample, `drawJ I d j` (`ZkHidden.setupOf_tableJH`, from `setupTables_partsH`),
 over `HmOut.drawn c pub (drawJ I d j)`. A read `(u, q)` is at the table `u` is sampled into (`OwnReadsHJ`), so it is that
 table's registered check at its sample (`checkRegistered_ok`, `checkPort_at`): the sampled instance at `u`'s rank in the
-table's sample holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the hidden layout's registered
+table's sample holds the population's row of `u` (`Hidden.sampled_digestW`), whose leaf is the hidden layout's registered
 leaf at `(u, q)`, which reads the population alone, whatever the table.
 -/
 
@@ -56,7 +56,7 @@ layout of `J` tables that is the verifier's own at the sample of the table its u
 registered leaf open the root `own` holds at the position `own` gives, through `regPathsHJ`. -/
 theorem checked_of_acceptsHJ (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (hTags : TagsOkZHJ I) (o : Reg × Finset (Fin n) × Exec.Transcript) (hacc : LiveAcceptsZKR I own o)
@@ -90,7 +90,7 @@ theorem checked_of_acceptsHJ (I : Inputs) (ht : I.tags.typed = false) (own : Arr
   obtain ⟨p', positions, paths, hp', hent, hall⟩ := checkPort_at (hports _ hmem)
   rw [hfind] at hp'
   cases hp'
-  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdpR
+  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.sampled_spec hdpR
   rw [hD] at hD'
   cases hD'
   have hi : D.proved.idxOf u.val < D.proved.size := Array.idxOf_lt_length_of_mem hu
@@ -115,7 +115,7 @@ theorem checked_of_acceptsHJ (I : Inputs) (ht : I.tags.typed = false) (own : Arr
     exact this
   have hdig : pub.digest u.val q.val c.ports.size =
       Registered.tableRow dp tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
-    have h1 := Hidden.drawn_digestW (Hidden.loadPublic_nil hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
+    have h1 := Hidden.sampled_digestW (Hidden.loadPublic_nil hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
     rw [hget] at h1
     rw [← h1]
     simp only [Public.digest, htb, Registered.tableRow, Registered.ref]

@@ -2,13 +2,13 @@
  "verdicts": {
   "lean-verify": {
    "what": "each session's proof",
-   "verifier": "flock-verify verify",
+   "verifier": "verity-verify-proof verify",
    "decided_by": "lean",
    "proved_by": "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
   },
   "lean-draw": {
    "what": "each session's sample, checked against its statement",
-   "verifier": "flock-verify draw-test",
+   "verifier": "verity-verify-proof draw-test",
    "decided_by": "lean",
    "proved_by": null
   },
@@ -37,7 +37,7 @@
   },
   "registered_reads": {
    "what": "each session's Lean verdict reports the registered values and roots the verifier's own file names",
-   "verifier": "verity/commitments/windows/tables.py",
+   "verifier": "verity/commitments/periods/tables.py",
    "decided_by": "python"
   },
   "complete": {

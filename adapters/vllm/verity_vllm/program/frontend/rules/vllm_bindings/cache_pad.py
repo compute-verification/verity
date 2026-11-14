@@ -6,10 +6,10 @@ import torch
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Value
 
-from verity_vllm.program.frontend.derive import refuse
-from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import dtype_is, known, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16
+from verity_torch.frontend.derive import refuse
+from verity_torch.frontend.rules.base import RuleInfo, StateRule
+from verity_torch.frontend.rules.common import dtype_is, known, shape
+from verity_torch.frontend.rules.bindings.operands import BF16
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
 # -- the padded engine's step-boundary cache clear over implicit KV state ----------------------------------------------------
@@ -34,7 +34,7 @@ class CachePadRule(StateRule):
 
     def applies(self, node, ctx):
         live, zero, slot = node.args[:3]
-        from verity_vllm.program.frontend.rules.padding import _bit_value, _static_bit
+        from verity_torch.frontend.rules.padding import _bit_value, _static_bit
         if _bit_value(ctx, live) is None and _static_bit(ctx, live) is None:
             return "live is neither a bool value collection nor a statically known bool tensor"
         if not isinstance(zero, torch.fx.Node) or not isinstance(ctx.val(zero), Coll) or not dtype_is(ctx, zero, BF16):
@@ -49,7 +49,7 @@ class CachePadRule(StateRule):
         return True
 
     def emit(self, node, ctx):
-        from verity_vllm.program.frontend.rules.padding import (
+        from verity_torch.frontend.rules.padding import (
             _materialize_bits,
             _scalar_of,
         )

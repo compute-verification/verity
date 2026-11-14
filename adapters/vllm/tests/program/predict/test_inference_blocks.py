@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from verity.circuits import partition_v2 as PV2
 from verity.commitments import advice as AC
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import WINDOW, _circuit, _labels, held
