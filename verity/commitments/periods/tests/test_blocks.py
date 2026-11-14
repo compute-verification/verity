@@ -22,7 +22,7 @@ GID, RUN = TI.GID, TI.RUN
 
 
 def held(*params: str) -> dict[str, dict[str, str]]:
-    """`interface.input_count`'s pins and the window's roots holding ``params``: each pinned at the root the window records."""
+    """`interface.input_count`'s pins and the period's roots holding ``params``: each pinned at the root the period records."""
     pins = {p: "ab" * 64 for p in params}
     return {"pins": pins, "roots": pins}
 
@@ -40,8 +40,8 @@ def blocked(blocks: I.Blocks | None = None) -> I.Circuit:
 
 def test_the_blocks_ride_in_the_circuit_record_and_the_verifier_holds_their_proof_block_to_it():
     """The record's ``blocks`` is the circuit's (`Circuit.blocks_record`): its proof block the record's units and partition
-    digest, the plan carried. The verifier rebuilds the window from it and refuses a proof block that isn't the record's, a
-    malformed one, and blocks in a record that lists its members. Two windows of the class, under other runs, record
+    digest, the plan carried. The verifier rebuilds the period from it and refuses a proof block that isn't the record's, a
+    malformed one, and blocks in a record that lists its members. Two periods of the class, under other runs, record
     byte-identical blocks."""
     plan = "ab" * 32
     win = I.Window(blocked(chain_blocks(plan=plan)), RUN, TI.LAW, 2)
@@ -198,7 +198,7 @@ def test_cmp92s_class_circuit_has_one_inference_and_nothing_free(circuit):
 
 def test_cmp92s_members_come_from_its_record_and_its_blocks_are_the_same_under_any_run(circuit):
     """The layer row units are one statement (their one wire covers both layers), and the verifier derives the same members
-    from the descriptor record; the window's blocks are byte-identical under any run. The members are the circuit's without
+    from the descriptor record; the period's blocks are byte-identical under any run. The members are the circuit's without
     its registered reads: `members` fills tables for uncut reads of whole registered rows over whole members only, and the
     class circuit's weight reads start mid-row."""
     cap = 1 << 20

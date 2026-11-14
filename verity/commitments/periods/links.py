@@ -1,8 +1,8 @@
-"""Registered ports: a statement's table rows read as the rows of a port of a registered window's record, as a two-stage
+"""Registered ports: a statement's table rows read as the rows of a port of a registered period's record, as a two-stage
 audit's sessions read every row they prove: the link templates' at the boundary registration, from inside the interior
 registration's proof blocks, and every other at the interior registration.
 
-A committed window's port (`rows.Committed`) is a tree of hiding row leaves under its window domain, each leaf framed as a
+A committed period's port (`rows.Committed`) is a tree of hiding row leaves under its window domain, each leaf framed as a
 registered value's (`rowleaf.row_leaf` of the row's ``b || c`` under the port's schema), so a later statement reads its rows as
 it reads a registered value's (`Port`):
 
@@ -34,7 +34,7 @@ __all__ = ["Port", "reads", "reads_file"]
 
 @dataclass(frozen=True)
 class Port:
-    """Port ``value`` of an earlier window, as a later statement reads it: its row schema, words a row, domain and every
+    """Port ``value`` of an earlier period, as a later statement reads it: its row schema, words a row, domain and every
     row's ``b || c`` (public), and for the prover its rows (``(leaves, words)`` u16) and salts (one a row, concatenated)."""
 
     value: str
@@ -47,15 +47,15 @@ class Port:
 
     @classmethod
     def of(cls, c: CS.Committed, value: str) -> "Port":
-        """Port ``value`` (``<member>/<port>``) of the committed window ``c``, its rows and salts the committer's."""
+        """Port ``value`` (``<member>/<port>``) of the committed period ``c``, its rows and salts the committer's."""
         found = [(m, p) for m in c.window.members for p, _ in m.all_rows if m.port(p) == value]
         if len(found) != 1 or value not in c.roots:
-            raise ValueError(f"{value!r} is no row port of the window (its ports: {sorted(c.roots)[:6]})")
+            raise ValueError(f"{value!r} is no row port of the period (its ports: {sorted(c.roots)[:6]})")
         (m, p), = found
         rows = np.asarray(c.rows[value], dtype=np.uint16)
         port = cls(value, m.schema(p), int(rows.shape[1]), c.domains[value], bytes(c.bc[value]), rows, bytes(c.salts[value]))
         if port.root != c.roots[value]:
-            raise ValueError(f"{value}: its leaves' tree is not the window's root")
+            raise ValueError(f"{value}: its leaves' tree is not the period's root")
         return port
 
     @property
