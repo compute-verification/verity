@@ -61,9 +61,9 @@ def plan(workload: dict[str, Any]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = [{"cached": 0, "producers": []} for _ in reqs]
     for k, r in enumerate(order):
         ids = reqs[r]["prompt_token_ids"]
-        n_full = (len(ids) - 1) // bs
+        whole = (len(ids) - 1) // bs
         producers: list[int] = []
-        for b in range(n_full):
+        for b in range(whole):
             hi = (b + 1) * bs
             q = next((q for q in order[:k] if len(reqs[q]["prompt_token_ids"]) >= hi
                       and _common(reqs[q]["prompt_token_ids"][:hi], ids[:hi]) == hi), None)
