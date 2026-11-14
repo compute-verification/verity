@@ -1,15 +1,19 @@
-"""PoUS's session checked inside proofs: the unit that accepts the memory challenger's signature, and the unit that
-accepts one round's answer, so that the auditor never reads the record the memory challenger signed.
+"""PoUS's session checked inside proofs: the unit that accepts the memory challenger's signature, the unit that computes
+the digest it signs, and the unit that accepts one round's answer, so that the auditor never reads the record the memory
+challenger signed.
 
-    PousSessionSig_v1{N, W, H}   (key: Array<8(16 + N)>, m: Array<512>, sig: Array<8S>) -> Array<1>
-                                 S = 4 + N(1 + P + H), the signature's bytes (`lms.Params.signature_bytes`)
-    PousRound_v1{N, SLOT}        (row: Array<8N>, records: Array<1472>, j: Array<32>, i: Array<64>) -> Array<1>
+    PousSessionSig_v1{N, W, H}          (key: B<16 + N>, m: B<64>, sig: B<S>) -> Array<1>
+                                        S = 4 + N(1 + P + H), the signature's bytes (`lms.Params.signature_bytes`)
+    PousSessionDigest_v1{K, HEAD, LIMIT} (head: B<HEAD + HEAD mod 2>, domain: B<64>, ctx: B<106>, r0 ... rT−1: B<184>)
+                                        -> (ok: Array<1>, m: B<64>, r0 ... rT−1: B<184>), T = ⌈K/2⌉
+    PousRound_v1{N, SLOT}               (row: B<N>, records: B<184>, j: B<4>, i: B<8>) -> Array<1>
 
-Every array is of `Value<1>`.  A byte string is bits in byte order, bit t being bit t mod 8 of byte ⌊t/8⌋ (a
-``sha512/row/v2`` row's order, `verity.commitments.rowleaf.bit_row`), and an integer is bits least significant first.
+B<n> is n bytes, ``Array<n, Array<8, Value<1>>>`` (`octets`), each byte's bits least significant first, so a row's bits
+are in byte order, bit t being bit t mod 8 of byte ⌊t/8⌋ (a ``sha512/row/v2`` row's order,
+`verity.commitments.rowleaf.bit_row`); an integer (j, i) is its bytes little-endian, so its bits least significant first.
 Flock stages a Definition as one ``hm96-sha512/row/v2`` row per parameter and one per output
-(`verity.commitments.windows.interface.unit_rows`), so each parameter here is one row, holding the bytes as the memory
-challenger writes them.
+(`verity.commitments.windows.interface.unit_rows`), whole u16 words of one element width, so each parameter here is one
+row, holding the bytes as the memory challenger writes them.
 
 **The signature's unit.** `PousSessionSig_v1{N, W, H}` is 1 iff ``sig`` is an LMS signature (`lms.Signature.encode`:
 ``u32be(q) ‖ C ‖ y ‖ path``) of the 64-byte message ``m`` under the public key ``key`` (``I ‖ root``, `lms.public_key`)
@@ -32,6 +36,17 @@ index the memory challenger drew for it, a u32 and a u64), and is 1 iff record j
 j and i against the record's fields.  These are the per-round checks of `memory_challenger.verdict` but the time: the
 record names round j, its index is round j's coin, and its digest is that of the block at the index.  R_even and R_odd
 are ``PousRound_v1{2056, 0}`` and ``PousRound_v1{2056, 1}``, two Programs.
+
+**The signed digest's unit.** `PousSessionDigest_v1{K, HEAD, LIMIT}` reads the signed header (``head``, HEAD bytes and a
+zero byte when HEAD is odd), the records tree's domain id (``domain``, `memory_challenger._domain`'s 64-byte id), the
+signed context (``ctx``, `signed_context`: what `lms.memory_challenger_message` hashes before the record) and the K records
+in their rows. It outputs m, ``SHA-512(ctx ‖ u64be(64) ‖ record)`` of the record ``SHA-512(SESSION_TAG ‖ u64be(HEAD) ‖
+head ‖ root)``, root the frame-v3-sha512 root of the records (a ``PousRecordLeaf_v1`` a record, a ``PousRecordPad_v1`` a
+pad up to a power of two, ``FrameV3Node_v1{1}`` above), so m is the digest the signature's unit verifies; ok, 1 iff every
+record names its round, its receipt is not before its send and receipt − send ≤ LIMIT (``PousVerdict_v1{K, 0, LIMIT}``
+against the records' own digests); and the records rows as read. The signature's unit reads m and round j's unit its
+records row ⌊j/2⌋ by wire (`window.SessionIntegration`), so the three kinds of proof are linked only by committed rows.
+K is at most `MAX_ROUNDS`, so every rank, pad rank, level and node index is one byte of its uint.
 """
 from __future__ import annotations
 
