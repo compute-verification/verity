@@ -45,7 +45,8 @@ constant gate is registered as 1 and is among `u`'s inputs, and copy `j`'s verdi
 at copy `j` refine `Hash.EmbeddingRead` (`ReadUnit.GatesRefine`), at the ports through the copy's gates
 (`Flock.Bridge.copyGate`). The values are the unit's local evaluation, where every copy holds the unit net's rows
 (`Flock.Bridge.rows_localEval`), so the read's row need not be committed: a block that consumes it inside itself binds
-it as a block that commits it does.
+it as a block that commits it does. `gatesRefine_layout` discharges its constant and verdict premises from the parsed
+file's layout, for one copy.
 
 `readUnitDrawn_partsOf` is the read's binding at the parsed file: `Accounting.SecurityProofs.readUnitDrawnCR` at
 `partsOf`, for reads each at one copy's gates in its unit, with its gate premise discharged by `gatesRefine_partsOf` at
@@ -88,6 +89,28 @@ theorem gatesRefine_partsOf (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : 
     (fun tr _ hconsts => ?_) (fun c hc hu => absurd hu (Flock.Bridge.copyGate_input D hU n u hj c hc)) (fun _ => hok)
   obtain ⟨z, hsat, hz1, hz⟩ := Flock.Bridge.rows_localEval D hU n tr u hj
   exact ⟨fun c => z c.val, hsat, hz1.trans (hconsts _ hone_io true hone), fun c _ => hz c, fun i _ => hz _⟩
+
+/-- **`gatesRefine_partsOf` at the parsed file's layout.** Its premises that the unit's constant gate is among its
+inputs and copy `j`'s verdict gate is committed hold where the stack has a copy (`hupv`), the read has more than `16 H`
+outputs (`hlen`), and its verdict, output `16 H`, sits on bit 0 of copy `j`'s returned leaf `H` (`hout`, `hleaf`):
+`readUnitDrawn_layout`'s two steps, for one copy and with no probability. -/
+theorem gatesRefine_layout (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
+    (n : ℕ) {run : (List Lin × Lin) × St}
+    (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
+    (hsound : ReadSound key V H hr) (hupv : 0 < D.unroll.upv) (hlen : 16 * H < (run.1.1 ++ [run.1.2]).length)
+    (hout : (hr.out (16 * H)).val = FlockSoundness.Discharge.Layout.outCol D.unroll H 0)
+    (consts : Fin (Flock.Bridge.circuitOf D hU n).N → Option Bool) (u : Fin n)
+    (hone : consts (Flock.Bridge.constGate D hU n u) = some true) {j : ℕ} (hj : j < D.unroll.upv)
+    (hleaf : H < (D.unroll.leavesOut.getD j #[]).size) :
+    ReadUnit.GatesRefine Verity.sha512 Verity.sha512 key consts (Flock.Bridge.partsOf D hU n) u
+      (readPorts (Flock.Bridge.copyGate D hU n u hj) hr V H) := by
+  obtain ⟨i, hi⟩ := hr.output (16 * H) hlen
+  have hcol : (hr.out (16 * H)).val = (FlockSoundness.Rows.ofNet hU).nIn + i.val := by
+    rw [hi]
+    rfl
+  have hlt := i.isLt
+  exact gatesRefine_partsOf key D hU n hr hsound consts u hj hone (Flock.Bridge.constGate_mem_io D hU n u hupv)
+    (Flock.Bridge.copyGate_mem_committed D hU n u hj (hr.out (16 * H)) hleaf (by omega) hout (by omega) (by omega))
 
 /-- **Each read of a sampled proof block of the parsed circuit file returns its table's row at its index**, but with probability
 at most the layer below's `ε` plus the chance of finding a SHA-512 collision. At the parsed file's partition
