@@ -311,6 +311,10 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
     assert view.value("weights") == WEIGHTS and view.theta == ITEMS[:2] and view.builder == ITEMS[2]
     assert view.site.locs == LOCS
     assert view.declared(0) == DAY0 and view.declared(1) is None
+    log = chain("onsite", EXAMPLE)
+    heads = [{"entries": 0, "head": S.genesis("onsite")},
+             *({"entries": i + 1, "head": _digest(e)} for i, e in enumerate(log))]
+    assert reference(case("onsite", log))["public"]["heads"] == heads
     malformed = {**chain("onsite", EXAMPLE)[2].to_json(), "program": "1"}
     with pytest.raises(G.Malformed, match="program"):
         G.entry_of(malformed)
@@ -346,5 +350,18 @@ def test_a_reference_that_takes_a_second_declaration_of_a_day_is_caught(monkeypa
         return None if r == "duplicate-declaration" else r
 
     monkeypatch.setattr(G.State, "refusal", lax)
+    with pytest.raises(D.Mismatch):
+        D.run(PORT, examples=1000, seed=0)
+
+
+def test_a_reference_that_publishes_other_heads_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Python whose public view drops the empty prefix's head disagrees with the Lean on some sampled log: the Lean's
+    `View.toJson` publishes every prefix head (`Properties.Registration.PublishesHeads`)."""
+    real = G.View.to_json
+
+    def lax(self):
+        return {**real(self), "heads": real(self)["heads"][1:]}
+
+    monkeypatch.setattr(G.View, "to_json", lax)
     with pytest.raises(D.Mismatch):
         D.run(PORT, examples=1000, seed=0)

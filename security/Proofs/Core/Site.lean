@@ -352,22 +352,21 @@ theorem remote_refusals :
       later.map (fun x => if x.2 = some .uncertified ∨ x.2 = some .challengerReach then none else x.2) := by
   decide +kernel
 
-/-- Day 0's circuit: a program and its one block Definition. -/
-def day0 : Declared := ⟨0, "program0", ["block0"]⟩
+/-- Day 0's circuit: its program. -/
+def day0 : Declared := ⟨0, "program0"⟩
 
 /-- The onsite site, then its declaration of day 0. -/
 def declaredLog : Registration := [onsite, .declaration "genesis+" day0]
 
-/-- The onsite site with day 0 declared is valid, and day 0's declared circuit is `day0`, a nonempty one. -/
-theorem declaredLog_valid : Valid digests auditor .onsite declaredLog ∧ declared declaredLog 0 = some day0 ∧
-    day0.blocks ≠ [] := by
-  refine ⟨by decide +kernel, rfl, by simp [day0]⟩
+/-- The onsite site with day 0 declared is valid, and day 0's declared circuit is `day0`. -/
+theorem declaredLog_valid : Valid digests auditor .onsite declaredLog ∧ declared declaredLog 0 = some day0 :=
+  ⟨by decide +kernel, rfl⟩
 
 /-- A second declaration of day 0 is refused, by `duplicateDeclaration`, and a declaration of day 1 is not; a
 declaration that follows no head is refused by `previous` first. -/
 theorem declaration_refusals :
-    [Entry.declaration "genesis++" ⟨0, "program1", ["block0"]⟩, .declaration "genesis++" ⟨1, "program1", ["block1"]⟩,
-      .declaration "genesis+" ⟨0, "program1", ["block0"]⟩].map (refusal digests auditor .onsite declaredLog) =
+    [Entry.declaration "genesis++" ⟨0, "program1"⟩, .declaration "genesis++" ⟨1, "program1"⟩,
+      .declaration "genesis+" ⟨0, "program1"⟩].map (refusal digests auditor .onsite declaredLog) =
       [some .duplicateDeclaration, none, some .previous] := by
   decide +kernel
 

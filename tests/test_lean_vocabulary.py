@@ -63,7 +63,7 @@ FIX = "see AGENTS.md 'One vocabulary' and this module's docstring"
 CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "Netlist", "Partition", "Coins", "CoinTree", "Draw", "Law", "Stmt",
             "Statement", "Witness", "Digest", "Commitment", "Merkle", "Collision", "Device", "InteractiveDevice", "Dag",
             "Transcript", "Hash", "Signature",
-            "Site", "Layout", "Hardware", "Machine", "Node", "Card", "Link", "Registration", "Registry", "Period",
+            "Site", "Layout", "Hardware", "Machine", "Node", "Card", "Sheet", "Link", "Registration", "Registry", "Period",
             "Window", "Session", "Block", "Verdict", "Outcome", "Answer", "Record", "Ledger", "Opening", "Challenger",
             "Certificate", "Store", "Placement", "Game", "Strategy", "Protocol", "Trace")
 #: The concepts that are propositions, so a `def … : Prop` of their name defines them too.
@@ -123,6 +123,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
                      f"{SITE_PY}::Registration"),
     "Registry": (),
     "Session": (f"{CORE}Period.lean::Verity.Play",),
+    "Sheet": (),
     "Signature": ("verity/commitments/lms/lean/Lms/Verify.lean::Lms.Signature", "verity/commitments/crypto/lms.py::Signature"),
     "Site": (f"{CORE}Site.lean::Verity.Site", f"{SITE_LEAN}::Core.Site", f"{SITE_PY}::Site"),
     "Statement": (),
@@ -420,7 +421,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 418
+KNOWN_MAX = 424
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -492,6 +493,8 @@ KNOWN: dict[str, str] = {
         "homonym, a tile shape: rename (compute-accounting)",
     "security/Definitions/Accounting/TS/Machine.lean::Accounting.TS.Machine":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
+    "security/Definitions/Accounting/TS/Sheet.lean::Accounting.TS.Sheet":
+        "duplicate of the data sheet (`Verity.Site.Sheet`; `Verity.Accel.Card`): becomes a reading of the one data-sheet type in Core (compute-accounting)",
     "security/Definitions/Accounting/Wipe.lean::Accounting.Wipe.Strategy":
         "homonym, a device's play in the wipe (its fill, egress and spot-read answers): rename (lean)",
     "security/Definitions/Claims.lean::Claims.Flock.Stmt": "duplicate of `Flock.Stmt`: becomes its spec, in Core (lean)",
@@ -513,6 +516,8 @@ KNOWN: dict[str, str] = {
         "homonym, a run in parts (a first part, then sessions) that RecZK reads: rename (lean)",
     "security/Definitions/Core/Interaction.lean::Claims.Transcript":
         "homonym, a run's messages, oracle calls and decision, which the Glossary calls a transcript: rename, then the canonical transcript (proofs)",
+    "security/Definitions/Core/Site.lean::Verity.Site.Sheet":
+        "duplicate of the data sheet (`Verity.Accel.Card`; `Accounting.TS.Sheet`): becomes the one data-sheet type, in Core, which the other two read (proofs)",
     "security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
         "duplicate of `Flock.Stmt`: becomes a reading of its shape (lean)",
     "security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Partition":
@@ -690,8 +695,11 @@ KNOWN: dict[str, str] = {
         "homonym, a capacity model's window and node cell: rename (compute-accounting)",
     "benchmarks/machine_model/verity_machine_model/eps.py::Machine":
         "homonym, a machine model's Π: rename (compute-accounting)",
+    "benchmarks/machine_model/verity_machine_model/sheet.py::Sheet":
+        "duplicate of the data sheet (`Accounting.TS.Sheet`'s Python mirror; `Verity.Accel.Card`): becomes a reading of the one data-sheet type in Core (compute-accounting)",
     "benchmarks/pouw/pearl_c_vllm/e2e.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
+    "benchmarks/pouw/proved_ticks.py::Sheet": "homonym, a family's priced headline design: rename (compute-accounting)",
     "benchmarks/pouw/served_h1/coins.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/served_h1/coins.py::Session":
@@ -794,10 +802,14 @@ KNOWN: dict[str, str] = {
         "homonym, one window's timing advice: rename (network-accounting)",
     "verity/protocols/accounting/certifier/prover/window_charge.py::Window":
         "homonym, one sampling block's charge: rename (network-accounting)",
+    "verity/device.py::Sheet":
+        "duplicate of the data sheet (`Verity.Site.Sheet`'s Python mirror; `Verity.Accel.Card`): becomes the one data-sheet type, in Core, which the other two read (proofs)",
     "verity/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
     "verity/protocols/interface/CoreProtocol/Record.lean::Core.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
+    "verity/protocols/interface/CoreProtocol/Site.lean::Core.Site.Sheet":
+        "duplicate of the data sheet (`Verity.Site.Sheet`'s code mirror; `Verity.Accel.Card`): becomes the one data-sheet type, in Core, which the other two read (proofs)",
     "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Link":
         "homonym, one egress link's opening: rename (proofs)",
     "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean::NetworkCheck.TransferBlocks.Verdict":
