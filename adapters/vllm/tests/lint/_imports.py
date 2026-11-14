@@ -37,7 +37,7 @@ LAYER = {
     "verity_vllm.protocols": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
     "verity_vllm.observe": "observe|commit",
     "verity_vllm.commit": "observe|commit",
-    "verity_vllm.protocols.remote_bandwidth": "observe|commit",                     # the node's store: registry, codecs, receipts, vLLM binder
+    "verity_vllm.protocols.remote_bandwidth": "observe|commit",                     # PoUB's node store on the engine: the binder and the Commit's session
     "verity_vllm.engine": "engine",
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.correspondence": "query|correspondence",

@@ -16,10 +16,10 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.commitments import history as HT
+from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as K
 
 from verity_vllm.commit import history_tables as H
 from verity_vllm.commit import history_tables_device as HD
-from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as K
 from verity_torch.pouw import row_table_device as RTL
 
 PROGRAM, VALUE = "ab" * 64, H.name("r0", 3)

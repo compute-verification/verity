@@ -156,9 +156,8 @@ BENCHMARKS_IMPORTERS = {
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
     "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
-    **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
-                    "compute-accounting: H1's prover, producer and the live challenger's auditor "
-                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
+    "adapters/vllm/tests/protocols/pouw_h1_circuits.py": "compute-accounting: H1's prover and the auditor's lowering "
+                                                        "(`benchmarks/pouw/h1_prove`, `hidden_zk`)",
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
     "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`verity/protocols/accounting/certifier/device/load_relay.py`), "
