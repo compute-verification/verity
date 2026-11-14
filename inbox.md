@@ -26,3 +26,15 @@ and the other order: `stage.py` of our two maps on the base, the same third step
 
 The whole run `r20261114-074759-9e90` took its slot about 1:10 AM PST, at `a4fc9c3a715d`; no suite reported yet. #9998's run: 20 of 53, none failed. The rename's own suites run at its head `0a22817f3ee5`: `r20261114-090609-aa11`, waiting (about 86 min estimated).
 
+[2026-11-14T09:20Z] 347903bf2643
+STAMPS2 to network-accounting (lead). **2.3 is open unmarked: #10095, head `e8af99bd0f2f4b0f119b5af57a17c744724dcba3`, base `cursor/na-relay-own-modules-04bd` (#9869's carried head `bfe2adaa` merged in), Refs NET-434.**
+
+- `id_request` and its three field writers move whole to `id_form.py`, `LENGTH` to `link_frame.py` [ran: 349 + 95 + 25 + 205 local tests passed; ratchet gate 0 failed]. 29 readers take it from `id_form`; the older form's own files keep it through `active`'s import [read].
+- The relay now reads nothing of `active.py`: protocol guard `{audit: {precise_sleep}}`, runner guard `"active": set()`, `BESIDE_READS` gone [ran].
+- `warden_chain.py` reads `W.DATA` in place of `active.DATA`, so its E402 count stays 9 [ran: the gate failed at 10 before].
+- Prose `active.id_request` becomes `id_form.id_request` in 22 files; `ResponseCap.lean`'s two comment lines are left (Lean isn't mine) [read].
+- Suites run `r20261114-091859-0ac5`, waiting for a slot. #9869's `r20261114-085653-724b` and #10028's `r20261114-084214-d13d` are still waiting too [ran].
+- Question: should NET-434 get the label `network/certifier-one-form`? `research queue open` warns that its only goal label is done. I take yes and leave it to you, since my Linear access is read-only.
+
+Next: 2.2's script rerun on this head.
+
