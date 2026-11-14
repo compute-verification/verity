@@ -587,11 +587,11 @@ class Reader:
                 got = pairs.get(p)
                 if got is None:
                     got = pairs[p] = self.pair(x)
-                words = fused_unit(t, table, got["e"], got["xq"], got["sx"], got["g"], got["ws"][b * nb // G],
-                                   got["y"][b * nb:(b + 1) * nb])
-                if not np.array_equal(words["in3"], np.ascontiguousarray(got["w"][b * nb:(b + 1) * nb]).reshape(-1).view("<u2")):
+                unit = fused_unit(t, table, got["e"], got["xq"], got["sx"], got["g"], got["ws"][b * nb // G],
+                                  got["y"][b * nb:(b + 1) * nb])
+                if not np.array_equal(unit["in3"], np.ascontiguousarray(got["w"][b * nb:(b + 1) * nb]).reshape(-1).view("<u2")):
                     raise ValueError(f"{t} unit {u}: its table's row at expert {got['e']} is not row {x[2]['i']}'s block {b} of rows")
-                put(u, [words[q] for q in names], f"unit {u}")
+                put(u, [unit[q] for q in names], f"unit {u}")
                 entries.append(_entry(b0 + u, b0 + u + 1, x, got["arrive"], got["member"]))
         ends = [e[1] for e in entries]
         res = []

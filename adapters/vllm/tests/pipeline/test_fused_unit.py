@@ -5,6 +5,7 @@ template is refused."""
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import numpy as np
 import pytest
@@ -61,10 +62,11 @@ def test_an_operand_that_does_not_fit_the_template_is_refused(monkeypatch):
     p, b, _read = got[0]
     table, ok = tables[EX.table_param(SX.PROJ["w2"].w, SX.NR * SX.K // 2, b)], operands(ns, "w2", p, b, SX.NR)
     unweighted = SX.PROJ["w13"].fused
-    for bad, why in [({"g": None}, "weighted fused block given no routed weight"), ({"e": SX.E}, f"expert {SX.E} of a table"),
-                     ({"e": -1}, "expert -1 of a table"), ({"xq": ok["xq"][1:]}, "its xq is"),
-                     ({"sx": np.append(ok["sx"], 0)}, "its sx is"), ({"ws": ok["ws"][:1]}, "its ws is"),
-                     ({"y": ok["y"][:1]}, "its y is")]:
+    cases: list[tuple[dict[str, Any], str]] = [
+        ({"g": None}, "weighted fused block given no routed weight"), ({"e": SX.E}, f"expert {SX.E} of a table"),
+        ({"e": -1}, "expert -1 of a table"), ({"xq": ok["xq"][1:]}, "its xq is"), ({"sx": np.append(ok["sx"], 0)}, "its sx is"),
+        ({"ws": ok["ws"][:1]}, "its ws is"), ({"y": ok["y"][:1]}, "its y is")]
+    for bad, why in cases:
         with pytest.raises(ValueError, match=why):
             EX.fused_unit(t, table, **{**ok, **bad})
     with pytest.raises(ValueError, match="unweighted fused block given a routed weight"):

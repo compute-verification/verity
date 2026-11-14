@@ -220,7 +220,7 @@
     {"file": "verity_vllm/pipeline/expert_rows.py", "kind": "arg-type", "symbol": "commit_tables", "detail": ""},
     {"file": "verity_vllm/pipeline/expert_rows.py", "kind": "assignment", "symbol": "Plan.__init__", "detail": ""},
     {"file": "verity_vllm/pipeline/expert_rows.py", "kind": "assignment", "symbol": "Reader.read", "detail": ""},
-    {"file": "verity_vllm/pipeline/expert_rows.py", "kind": "union-attr", "symbol": "Reader.read", "detail": "", "count": 6},
+    {"file": "verity_vllm/pipeline/expert_rows.py", "kind": "union-attr", "symbol": "Reader.read", "detail": "", "count": 3},
     {"file": "verity_vllm/pipeline/expert_rows.py", "kind": "var-annotated", "symbol": "Reader.read", "detail": ""},
     {"file": "verity_vllm/pipeline/expert_tables.py", "kind": "arg-type", "symbol": "register", "detail": "", "count": 5},
     {"file": "verity_vllm/pipeline/expert_tables.py", "kind": "attr-defined", "symbol": "register", "detail": ""},
