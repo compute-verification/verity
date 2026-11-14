@@ -3,6 +3,9 @@ module
 public import Properties.Accounting.Registration.Code
 public import Proofs.Properties.Core.Site
 public import Proofs.Accounting.Registration.Sound
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The registration log's check is the spec's: the proofs
@@ -366,7 +369,7 @@ theorem view_congr {D D' : Verity.Registration.Digests} (hg : D.genesis = D'.gen
     intro k
     rcases (L.take k).eq_nil_or_concat with hk | ⟨q, x, hk⟩
     · rw [hk, Verity.Registration.head_nil, Verity.Registration.head_nil, hg]
-    · rw [hk, Verity.Registration.head_concat, Verity.Registration.head_concat]
+    · rw [hk, List.concat_eq_append, Verity.Registration.head_concat, Verity.Registration.head_concat]
       exact he x (List.mem_of_mem_take (by rw [hk]; simp))
   have h0 : Verity.Registration.head D c L = Verity.Registration.head D' c L := by simpa using hh L.length
   simp only [Verity.Registration.view, Verity.Registration.heads, h0, hh]
@@ -376,7 +379,7 @@ heads, so what an answer reads at a prefix's head does not depend on the entries
 theorem view_take_names (c : Core.Site.Registration.Composite) (l : Core.Registration.Log) (n : ℕ) :
     Verity.Registration.view (digests (names B l)) (composite c) (log B (l.take n)) =
       Verity.Registration.view (digests (names B (l.take n))) (composite c) (log B (l.take n)) :=
-  view_congr rfl _ fun _ hx => names_take B l n hx
+  view_congr (D := digests (names B l)) (D' := digests (names B (l.take n))) rfl _ fun _ hx => names_take B l n hx
 
 theorem publishesHeads : PublishesHeads := fun _ _ => rfl
 
@@ -555,7 +558,8 @@ theorem example_refusal :
   have hSheets : Core.Site.Entry.Sheets Core.Site.Registration.sha512 auditor ⟨[], [], []⟩ ⟨[sheet], locs, links⟩ := by
     refine ⟨by decide +kernel, fun x hx hd => ?_⟩
     simp only [locs, List.mem_cons, List.mem_nil_iff, or_false] at hx
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl <;> (try simp at hd) <;> simp [Core.Site.add]
+    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl <;> (try simp at hd)
+    simp [Core.Site.add]
   have hFigures : Core.Site.Entry.Figures auditor ⟨[sheet], locs, links⟩ := by decide +kernel
   have hCapacity : Core.Site.Entry.Capacity Core.Site.Registration.sha512 ⟨[], [], []⟩ ⟨[sheet], locs, links⟩ := by
     refine ⟨by decide +kernel, fun x hx hd k hk => ?_⟩
@@ -569,14 +573,14 @@ theorem example_refusal :
   have hReached : Core.Site.Entry.Reached .onsite ⟨[], [], []⟩ ⟨[sheet], locs, links⟩ := by decide +kernel
   unfold Core.Site.Entry.refusal
   simp only [hFresh, hRefs, hKinds, hSheets, hFigures, hCapacity, hOwners, hCovered, hReached, not_true_eq_false,
-    if_false]
+    ite_false]
 
 theorem siteEntry_refusal :
     Core.Registration.Entry.refusal Core.Registration.Example.auditor .onsite (Core.Registration.State.empty .onsite)
       siteEntry = none := by
   simp only [siteEntry, Core.Registration.Entry.refusal, Core.Registration.State.empty,
     Core.Site.Registration.Entry.refusal, Core.Site.Registration.Entry.kindRefusal, Core.Site.Registration.Entry.previous,
-    ne_eq, not_true_eq_false, if_false, example_refusal, Option.map_none]
+    ne_eq, not_true_eq_false, ite_false, example_refusal, Option.map_none]
 
 theorem check_honestLog :
     (Core.Registration.check Core.Registration.Example.auditor .onsite honestLog).toOption.isSome := by
