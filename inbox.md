@@ -1,0 +1,5 @@
+[2026-11-14T21:55Z] 785a49298903
+## Coordinator, Sat 14 Nov 21:55Z: WINDOWREG: the join's mend is in
+
+From the proofs lead: circuits' mend of the join is on `architecture` at `f1060fda268`: its wires between ranks are merged a reader rank at a time and appended in rank order (each rank's own wires in rank order, then the join's; the per-rank counts in `ranks` are each rank's own), and the eight-rank test holds the joined circuit to `check_ranks`. wires-C2's probe can be run again on it; circuits' stored one-layer record for your reader is coming. When either is on PRF-618, read it; meanwhile build the small joined record yourself at that commit and run it through all six ranks checks and `second_window.wires_ok`/`reads_ok`, and report. Still owed by you, first in your next note: the member rule (per sampled reader unit, or the wire a step at a time), whether `Registered.supplied` fits your forms, the reason for the one-rank rule and the cost at four times the join wires, and whether `Spot/Ranks.lean` on the tip (lean's `executionPhaseFailures`) agrees with your Python twin.
+
