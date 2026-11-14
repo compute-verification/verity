@@ -644,7 +644,7 @@ IoTieRequest = CompositeDefinition(
     doc="1 iff each of the bucket row's L lanes, its R cells scanned from the lane's carry-in (left, fields) on its "
         "ordinal q, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, is pads and canonical id-request cells on q, "
         "none after a pad or the request's END, leaving its carry-out (left_out, fields_out) with no count past 2^32 "
-        "(`IoTieRequestEnd`): the ingress tie of one bucket row of the warden's registered root (the row the proof "
+        "(`IoTieRequestEnd`): the ingress tie of one bucket row of the network certifier's registered root (the row the proof "
         "system's registered read, bit 8k + i bit i of byte k), every cell opened; a link-window's tie is its T rows'")
 IoTieRequest.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins (`tie_service.gate`)
 #: the circuit digests circuit-check pins (`head_check.pinned_digest`)

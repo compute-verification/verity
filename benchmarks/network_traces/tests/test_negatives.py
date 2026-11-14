@@ -187,7 +187,7 @@ def test_the_suite_reports_each_negative_for_the_one_command(runs, tmp_path):
     assert list(rows) == list(NG.NEGATIVES)
     assert {k for k, r in rows.items() if r.get("ok")} == {"late", "extra", "drop", "head", "token"}
     assert rows["head"]["run"] == str(tmp_path / "head") and rows["head"]["refused_windows"] == [0]
-    assert rows["token"]["n2_accepted"] and rows["token"]["waits"] == ["the I/O tie", "the warden's cells"]
+    assert rows["token"]["n2_accepted"] and rows["token"]["waits"] == ["the I/O tie", "the network certifier's cells"]
     assert all("tie" not in r for r in rows.values())
     assert all(not r["ran"] and ("--advice" in r["why"] or "--commit" in r["why"])
                for r in rows.values() if r["tampers"] in ("advice", "commit"))
@@ -221,7 +221,7 @@ def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_
     assert all(verify_frame(root, params, k, f, open_frame(frames, params, k)) for k, f in enumerate(frames))
     assert not verify_frame(root, params, 2, bad[2], open_frame(frames, params, 2))
     assert not verify_frame(root, params, 2, bad[2], open_frame(bad, params, 2))
-    with pytest.raises(NG.NotApplicable, match="the warden's"):
+    with pytest.raises(NG.NotApplicable, match="the network certifier's"):
         NG.make("frame", tmp_path, tmp_path / "out")
 
 
@@ -768,11 +768,11 @@ def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_r
     assert json.loads((written / "commit.json").read_text()) == NG.wrong_token(commit)
 
 
-def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root():
+def test_a_changed_byte_of_a_network_certifiers_committed_cell_doesnt_read_under_its_root():
     """On the relay's bucket rows: connection 1's data cell and pad in bucket 0's row, bucket 1 empty. The
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
-    WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
+    WR = pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
     from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD
     from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, BlockGrid
     from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams, cell
@@ -792,11 +792,11 @@ def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root()
 
 
 def test_frame_on_a_network_certifier_run_reads_its_data_cells_row_and_refuses_the_changed_byte(tmp_path):
-    """`network_certifier_frame` on a warden-serve run driven tick by tick (`test_network_certifier_serve._run`): its egress registration
+    """`network_certifier_frame` on a network-certifier-serve run driven tick by tick (`test_network_certifier_serve._run`): its egress registration
     (v2) is read under the network certifier's key and the schedule, its bucket rows and signed wiring are committed
     under the run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest
     and not with a payload byte changed; a run that kept no salts is not applicable."""
-    pytest.importorskip(NG.WARDEN_ROWS_MODULE)
+    pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
     sys.path.insert(0, str(HERE / "tests"))
     import test_network_certifier_serve as tws
 

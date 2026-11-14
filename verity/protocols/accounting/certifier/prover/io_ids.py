@@ -557,7 +557,7 @@ IoTieRequestIds = CompositeDefinition(
         "ordinal to its carry-out), and the bucket's prompt fields (`IoTieIdsSlots`), each given its class by the "
         "routed records (`IoTieRoute`, `IoTieIdsKeys`), and the entries of the S Commit rows of P input ids, sorted by "
         "class by the switches (`IoTieRoute`), hold one value a class, each class starting with a field "
-        "(`IoTieIdsChain`): the ingress-ids tie of one bucket row of the warden's registered root, every cell opened, "
+        "(`IoTieIdsChain`): the ingress-ids tie of one bucket row of the network certifier's registered root, every cell opened, "
         "the row and the Commit's rows at the bucket's steps each the proof system's registered read")
 
 

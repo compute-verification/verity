@@ -75,7 +75,7 @@ def test_a_request_parses_to_its_prompt_length(B):
         assert (left, fields) == (0, n)
 
 
-def test_every_bucket_of_the_wardens_ingress_is_accepted(link):
+def test_every_bucket_of_the_network_certifiers_ingress_is_accepted(link):
     """The link served through the network certifier's own ingress (`network_certifier.NetworkCertifier._ingress`): every bucket row is
     accepted on the verifier's lanes, which chain each connection from (0, 0) to (0, n) over its buckets. Requests
     trickle in over three buckets, two connections share buckets, and a connection moves to lane 0 when the one before
@@ -142,7 +142,7 @@ def test_the_advice_order_names_each_requests_connection():
         Q.lanes(SHAPE, advice, link.releases, 0, (1, 1, 0))
 
 
-def test_the_lanes_refuse_a_release_other_than_the_wardens(link):
+def test_the_lanes_refuse_a_release_other_than_the_network_certifiers(link):
     """`lanes` raises where the release isn't the network certifier's schedule: ordinals out of order or admitted out of
     order, a connection with no advice request, cells that aren't its request's or past R a bucket, no `END` in its last
     bucket, or more live connections than lanes."""
@@ -296,7 +296,7 @@ def test_a_client_that_ends_after_its_last_byte_is_refused():
     assert Q.reference(shape, Q.Instance(late, (lane,))) == 0
 
 
-def test_each_buckets_row_is_the_wardens_registered_row(link):
+def test_each_buckets_row_is_the_network_certifiers_registered_row(link):
     """The proof block's row is the network certifier's registration v2 (`network_certifier_rows`): bucket t's row is row t of the
     ingress record the grid closed, the rows open the network certifier's root, the verifier's port (`bucket_port`) has
     proof block t read row t, and the host's registered read refuses rows out of place or edited."""

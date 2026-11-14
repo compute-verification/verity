@@ -376,7 +376,7 @@ guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`)
 the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
 whole; a SIGKILL leaves the hold where it is, out of the record.
 
-**The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
+**The relay path** (`CR_PATH=warden`, `chain_record.NETWORK_CERTIFIER`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `network_certifier_chain.py`), and a proxy rehearsal's run, whose records come
 through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The certificates step reruns
 the relay's own offline check on its witness (`network_certifier_serve.check`) and holds the public `certificates.jsonl` to the
@@ -495,5 +495,5 @@ K also rests on these conditions:
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the execution phase's free inputs above.
 
-The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
+The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `NETWORK_CERTIFIER_STUBBED` and
 `POOLED_CONDITION`) and what the theorem doesn't cover (its `uncovered`).

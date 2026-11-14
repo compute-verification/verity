@@ -61,7 +61,7 @@ def _work_law(law: str, params: Mapping[str, Any]) -> None:
 def _network_certifier(params: Mapping[str, Any]) -> dict[str, Any]:
     """The network certifier's parameters: `NetworkCertifierParams`' fields, and ``tie``, which is true. A field that is unset
     by default (``max_tokens_cap``, ``lengths``, ``content``, ``request_words``) stays out of the table while unset
-    (`WARDEN_DEFAULTS`), as it stays out of `NetworkCertifierParams.digest`, so a configuration that sets none has the form
+    (`NETWORK_CERTIFIER_DEFAULTS`), as it stays out of `NetworkCertifierParams.digest`, so a configuration that sets none has the form
     and hash it had before any was a parameter."""
     names = [f.name for f in fields(NetworkCertifierParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
@@ -79,7 +79,7 @@ def _network_certifier(params: Mapping[str, Any]) -> dict[str, Any]:
 
 #: The network certifier's defaults: `NetworkCertifierParams`' but the fields unset by default (the response cap, the lengths
 #: rows' form, the content rows' classes, the request words), and ``tie``.
-WARDEN_DEFAULTS = {**{k: v for k, v in asdict(NetworkCertifierParams()).items() if v is not None}, "tie": True}
+NETWORK_CERTIFIER_DEFAULTS = {**{k: v for k, v in asdict(NetworkCertifierParams()).items() if v is not None}, "tie": True}
 
 
 def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -117,7 +117,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("certifier", SP.IDS["certifier"], parties=_CERTIFIER, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_network_certifier,
-              default_params=WARDEN_DEFAULTS, law=_work_law, default_law="work:64"),
+              default_params=NETWORK_CERTIFIER_DEFAULTS, law=_work_law, default_law="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay", "noise", "store", "receipts"}), (Role("workers", "developer"),),

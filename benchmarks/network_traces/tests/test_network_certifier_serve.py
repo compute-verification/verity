@@ -1,4 +1,4 @@
-"""warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
+"""network-certifier-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
 the offline check of a run whose network certifier is driven tick by tick on a `VirtualClock`, its records certified by
 an LMS key: the check accepts the run, whose server got each request with its release order and bucket under the run
 id `deployment.json` names, and refuses a record that isn't what was certified, a cell that reached its client in
@@ -80,13 +80,13 @@ def test_the_gates_network_certifier_rehearsal_is_a_rehearse_and_its_least_minut
         ("rehearse", ("127.0.0.1", 40001), False, tmp_path, 7, 64, 20)
     assert ws.parser().parse_args(A.network_certifier_command({"requests": 7, "height": 10}, tmp_path, "http://h:1")[2:]).height \
         == 10
-    assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
+    assert (args.rate, args.seed, args.tail) == (A.NETWORK_CERTIFIER_RATE, A.NETWORK_CERTIFIER_SEED, A.NETWORK_CERTIFIER_TAIL_S)
     assert ws.parser().parse_args(A.network_certifier_command({"requests": 7}, tmp_path, "http://h:1")[2:]).max_tokens == 256
     window_s = args.window * args.bucket_ms / 1000
-    most = ws.varied_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
-    assert ws.varied_traffic(400, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED) == most[:400]
-    for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
-        took = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
+    most = ws.varied_traffic(A.NETWORK_CERTIFIER_REQUESTS[1], model="m", rate=A.NETWORK_CERTIFIER_RATE, seed=A.NETWORK_CERTIFIER_SEED)
+    assert ws.varied_traffic(400, model="m", rate=A.NETWORK_CERTIFIER_RATE, seed=A.NETWORK_CERTIFIER_SEED) == most[:400]
+    for n in range(A.NETWORK_CERTIFIER_REQUESTS[0], A.NETWORK_CERTIFIER_REQUESTS[1] + 1):
+        took = math.ceil((most[n - 1]["at"] + A.NETWORK_CERTIFIER_TAIL_S) / window_s) * window_s + args.start_in + 30
         assert took <= A.network_certifier_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
@@ -125,7 +125,7 @@ def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_tr
         A.network_certifier_command({"requests": 7, "temperature": 0.6, "top_p": 0.9}, tmp_path, "http://h:1")[2:])
     plain = ws.parser().parse_args(A.network_certifier_command({"requests": 7}, tmp_path, "http://h:1")[2:])
     assert (plain.temperature, plain.top_p, given.temperature, given.top_p) == (0.0, 1.0, 0.6, 0.9)
-    varied = ws.varied_traffic(7, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
+    varied = ws.varied_traffic(7, model="m", rate=A.NETWORK_CERTIFIER_RATE, seed=A.NETWORK_CERTIFIER_SEED)
 
     def rest(traffic):
         return [{**x, "body": {k: v for k, v in x["body"].items() if k not in ("temperature", "top_p")}}
@@ -157,11 +157,11 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
     sz.CLASS.serves(p)
     assert (p.every, p.program_slots, p.window_programs, p.delay) == (16, 4, 8, 27)
     assert args.prompt_max <= sz.CLASS.KI and min(args.max_tokens, p.egress_cells - 1) == sz.CLASS.KO
-    assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
+    assert (args.rate, args.seed, args.tail) == (A.NETWORK_CERTIFIER_RATE, A.NETWORK_CERTIFIER_SEED, A.NETWORK_CERTIFIER_TAIL_S)
     assert sz.main(["schedule"]) == 0 and capsys.readouterr().out.split() == list(A.SCAN_SCHEDULE)
     traffic = ws.traffic_of(args, "m")
     assert {(x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(0.6, 0.9)}
-    drawn = ws.id_traffic(7, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED, max_tokens=(1, 64))
+    drawn = ws.id_traffic(7, model="m", rate=A.NETWORK_CERTIFIER_RATE, seed=A.NETWORK_CERTIFIER_SEED, max_tokens=(1, 64))
 
     def rest(t):
         return [{**x, "ids": {k: v for k, v in x["ids"].items() if k not in ("temperature", "top_p")}} for x in t]
@@ -170,10 +170,10 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
     assert {(x["ids"]["temperature"], x["ids"]["top_p"]) for x in ws.traffic_of(plain, "m")} == {(0.0, 1.0)}
 
     window_s = sz.PARAMS.window * sz.PARAMS.bucket_ms / 1000
-    most = ws.id_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED,
+    most = ws.id_traffic(A.NETWORK_CERTIFIER_REQUESTS[1], model="m", rate=A.NETWORK_CERTIFIER_RATE, seed=A.NETWORK_CERTIFIER_SEED,
                          max_tokens=(1, sz.PARAMS.egress_cells - 1))
-    for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
-        took = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
+    for n in range(A.NETWORK_CERTIFIER_REQUESTS[0], A.NETWORK_CERTIFIER_REQUESTS[1] + 1):
+        took = math.ceil((most[n - 1]["at"] + A.NETWORK_CERTIFIER_TAIL_S) / window_s) * window_s + args.start_in + 30
         assert took <= A.network_certifier_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
@@ -210,27 +210,27 @@ def test_the_gates_network_certifier_windows_are_at_least_every_request_counts_l
     """The gate sizes a network certifier rehearsal's key on `network_certifier_windows` of its requests (`network_certifier_height`), so for
     every request count it takes, those are at least the execution phases `rehearse` runs (its traffic's last arrival
     and tail): at the scan's schedule on the gate's id traffic and on `--prompts`' arrivals, and at `network_certifier_serve.py`'s
-    default (`WARDEN_WINDOW_MS`) on its varied traffic; a request count's traffic is the first of the most's. The gate's
+    default (`NETWORK_CERTIFIER_WINDOW_MS`) on its varied traffic; a request count's traffic is the first of the most's. The gate's
     most requests are 1064 execution phases of `--prompts`, about 57 minutes, which height 13 signs and 12 doesn't."""
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
     import auditor as A
     import scan_zk as sz
     plain = ws.parser().parse_args(A.network_certifier_command({"requests": 7}, tmp_path, "http://h:1")[2:])
-    assert A.WARDEN_WINDOW_MS == plain.window * plain.bucket_ms
+    assert A.NETWORK_CERTIFIER_WINDOW_MS == plain.window * plain.bucket_ms
     assert A.SCAN["--window"] * A.SCAN["--bucket-ms"] == sz.PARAMS.window * sz.PARAMS.bucket_ms
-    most, at = A.WARDEN_REQUESTS[1], dict(rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
+    most, at = A.NETWORK_CERTIFIER_REQUESTS[1], dict(rate=A.NETWORK_CERTIFIER_RATE, seed=A.NETWORK_CERTIFIER_SEED)
     scan = {"ids": ws.id_traffic(most, model="m", max_tokens=(1, sz.PARAMS.egress_cells - 1), **at),
             "prompts": ws.prompt_traffic([[1]], most, model="m", params=sz.PARAMS, max_tokens=24, **at)}
     varied = ws.varied_traffic(most, model="m", **at)
     assert ws.prompt_traffic([[1]], 400, model="m", params=sz.PARAMS, max_tokens=24, **at) == scan["prompts"][:400]
 
     def windows(traffic, n, window_ms):
-        return math.ceil((traffic[n - 1]["at"] + A.WARDEN_TAIL_S) * 1000 / window_ms)
+        return math.ceil((traffic[n - 1]["at"] + A.NETWORK_CERTIFIER_TAIL_S) * 1000 / window_ms)
     scan_ms = sz.PARAMS.window * sz.PARAMS.bucket_ms
-    for n in range(A.WARDEN_REQUESTS[0], most + 1):
+    for n in range(A.NETWORK_CERTIFIER_REQUESTS[0], most + 1):
         assert all(windows(t, n, scan_ms) <= A.network_certifier_windows(n) for t in scan.values()), n
-        assert windows(varied, n, A.WARDEN_WINDOW_MS) <= A.network_certifier_windows(n, scan=False), n
+        assert windows(varied, n, A.NETWORK_CERTIFIER_WINDOW_MS) <= A.network_certifier_windows(n, scan=False), n
     assert (windows(scan["prompts"], 400, scan_ms), windows(scan["prompts"], most, scan_ms)) == (259, 1064)
     assert A.network_certifier_height(windows(scan["prompts"], most, scan_ms)) == A.network_certifier_height(A.network_certifier_windows(most)) == 13
 
@@ -255,8 +255,8 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
         (True, True, tmp_path / A.PROMPTS, 2, 7)
     params = ws._params(args)
     assert params == sz.PARAMS
-    assert [ws.group_windows(params, t) for t in range(1, A.WARDEN_PROMPT_TOKENS[1] + 1)] == \
-        [A.scan_group_windows(t) for t in range(1, A.WARDEN_PROMPT_TOKENS[1] + 1)]
+    assert [ws.group_windows(params, t) for t in range(1, A.NETWORK_CERTIFIER_PROMPT_TOKENS[1] + 1)] == \
+        [A.scan_group_windows(t) for t in range(1, A.NETWORK_CERTIFIER_PROMPT_TOKENS[1] + 1)]
     G, window_s = A.scan_group_windows(2), params.window * params.bucket_ms / 1000
     traffic = ws.traffic_of(args, "torch-loop/mlp-w8a8-h128")
     assert [x["ids"]["prompt"] for x in traffic] == [prompts[j % 3] for j in range(7)]
@@ -265,8 +265,8 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
     assert [x["ids"]["user"] for x in traffic] == [f"user-{j}" for j in range(7)]
     assert ws.groups(7, 3, params, 2) == [{"group": g, "requests": list(range(3 * g, min(7, 3 * g + 3))),
                                            "windows": [g * G, (g + 1) * G]} for g in range(3)]
-    for groups in range(1, A.WARDEN_PROMPT_REQUESTS[1] + 1):
-        for tokens in (1, 2, A.WARDEN_PROMPT_TOKENS[1]):
+    for groups in range(1, A.NETWORK_CERTIFIER_PROMPT_REQUESTS[1] + 1):
+        for tokens in (1, 2, A.NETWORK_CERTIFIER_PROMPT_TOKENS[1]):
             took = groups * ws.group_windows(params, tokens) * window_s + args.start_in + 30
             assert took <= A.network_certifier_group_minutes(groups, tokens, A.REHEARSAL_HEIGHT[0]) * 60, (groups, tokens)
 
@@ -291,7 +291,7 @@ def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_
     import scan_zk as sz
     lo, hi = A.SCAN_BUCKET_MS
     assert lo == sz.PARAMS.bucket_ms and hi * sz.PARAMS.window > 60_000
-    most = ws.id_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED,
+    most = ws.id_traffic(A.NETWORK_CERTIFIER_REQUESTS[1], model="m", rate=A.NETWORK_CERTIFIER_RATE, seed=A.NETWORK_CERTIFIER_SEED,
                          max_tokens=(1, sz.PARAMS.egress_cells - 1))
     height = A.REHEARSAL_HEIGHT[0]
     for tick in range(lo, hi + 1, 100):
@@ -302,20 +302,20 @@ def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_
         sz.CLASS.serves(params)
         window_s = params.window * tick / 1000
         assert A.network_certifier_window_ms(req) == params.window * tick
-        for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
-            blocks = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s)
+        for n in range(A.NETWORK_CERTIFIER_REQUESTS[0], A.NETWORK_CERTIFIER_REQUESTS[1] + 1):
+            blocks = math.ceil((most[n - 1]["at"] + A.NETWORK_CERTIFIER_TAIL_S) / window_s)
             assert blocks * window_s + args.start_in + 30 <= A.network_certifier_minutes(n, height, params.window * tick) * 60, \
                 (tick, n)
             assert blocks <= A.network_certifier_windows(n, bucket_ms=tick), (tick, n)
-        for groups in range(1, A.WARDEN_PROMPT_REQUESTS[1] + 1):
-            for tokens in (1, 4, A.WARDEN_PROMPT_TOKENS[1]):
+        for groups in range(1, A.NETWORK_CERTIFIER_PROMPT_REQUESTS[1] + 1):
+            for tokens in (1, 4, A.NETWORK_CERTIFIER_PROMPT_TOKENS[1]):
                 took = groups * ws.group_windows(params, tokens) * window_s + args.start_in + 30
                 assert took <= A.network_certifier_group_minutes(groups, tokens, height, tick) * 60, (tick, groups, tokens)
 
 
 def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_groups_only_with_what_they_need(tmp_path):
     """`read_prompts` takes a JSON array of non-empty arrays of ids below 2^17 whose id requests the schedule's ingress
-    bound holds, the gate's longest (`WARDEN_PROMPT_IDS` ids of 17 bits, 62-byte names) among them at the scan's, and
+    bound holds, the gate's longest (`NETWORK_CERTIFIER_PROMPT_IDS` ids of 17 bits, 62-byte names) among them at the scan's, and
     the gate's most prompt ids and tokens the scan's KI and KO;
     `rehearse` takes `--prompts` only with `--ids` and `--window-per-group` only with `--prompts`, and a group is at most
     `lanes` prompts."""
@@ -323,9 +323,9 @@ def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_group
     sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
     import auditor as A
     import scan_zk as sz
-    longest = [[(1 << A.WARDEN_PROMPT_ID_BITS) - 1] * A.WARDEN_PROMPT_IDS[1]]
-    assert A.WARDEN_PROMPT_ID_BITS == ws.PROMPT_ID_BITS
-    assert (A.WARDEN_PROMPT_IDS[1], A.WARDEN_PROMPT_TOKENS[1]) == (sz.CLASS.KI, sz.CLASS.KO)
+    longest = [[(1 << A.NETWORK_CERTIFIER_PROMPT_ID_BITS) - 1] * A.NETWORK_CERTIFIER_PROMPT_IDS[1]]
+    assert A.NETWORK_CERTIFIER_PROMPT_ID_BITS == ws.PROMPT_ID_BITS
+    assert (A.NETWORK_CERTIFIER_PROMPT_IDS[1], A.NETWORK_CERTIFIER_PROMPT_TOKENS[1]) == (sz.CLASS.KI, sz.CLASS.KO)
     assert ws.read_prompts(json.dumps(longest).encode(), sz.PARAMS) == longest
     with pytest.raises(SystemExit, match=f"takes 48 ingress cells, past the schedule's {sz.PARAMS.ingress_cells}"):
         ws.read_prompts(json.dumps([[0] * 2098]).encode(), sz.PARAMS)
@@ -350,7 +350,7 @@ def test_the_network_certifier_always_paces_and_serve_and_rehearse_refuse_a_rele
              "--session", "00" * 32, "--windows", "1", "--out", str(tmp_path / "run")]
     for paced in ("0", "25", "100"):
         for argv in (serve, ["rehearse", "--fake", "--out", str(tmp_path / "run")]):
-            with pytest.raises(SystemExit, match="the warden always paces"):
+            with pytest.raises(SystemExit, match="the network certifier always paces"):
                 ws.main([*argv, "--paced-ms", paced])
     assert not (tmp_path / "run").exists()
 

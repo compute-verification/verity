@@ -322,7 +322,7 @@ def test_the_scans_root_reads_each_units_slot_entries_at_one_root():
         sz.entry_reads(skewed, query, members, cls, nb)
 
 
-def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
+def published(out: Path, setup=sz.W63, seed: bytes = b"network-certifier-run", windows: int | None = None,
               late: tuple[int, ...] = ()) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
     network_certifier_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
@@ -349,7 +349,7 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
 def test_a_network_certifier_runs_rows_are_read_under_its_deployments_key(tmp_path):
     h = sz.host(tmp_path / "host", published(tmp_path / "run"), draw=16)
     assert set(h.rounds) == {"block", "honest", "chain", "tampered", "unread"} and h.at.run_id == "00" * 32
-    assert "warden run" in h.at.source and h.at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
+    assert "network certifier run" in h.at.source and h.at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
     assert h.at.outputs == {q: r for q, r in enumerate(sz.W63.responses, 1)}
     assert h.at.tampered.key_of == "the driver's own"
     syn = sz.host(tmp_path / "syn")
@@ -835,11 +835,11 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     _rewrite(run / "responses.records", [WS.ar.pack_record(replace(rec, grid=tuple(tuple(r) for r in grid))),
                                          *blobs[1:]])
     with pytest.raises(SystemExit, match="egress link-window 0's record under cells.salts isn't the rows whose root "
-                                         "the warden signed"):
+                                         "the network certifier signed"):
         sz.host(tmp_path / "h1", run)
 
     run = published(tmp_path / "run2")
-    other = published(tmp_path / "other", seed=b"another warden")
+    other = published(tmp_path / "other", seed=b"another network certifier")
     dep = json.loads((run / "deployment.json").read_text())
     dep["key"] = json.loads((other / "deployment.json").read_text())["key"]
     (run / "deployment.json").write_text(json.dumps(dep))
@@ -867,7 +867,7 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
     (run / "check.json").write_text(json.dumps({"problems": ["audit: connection 7 failed closed (late) at egress cell 2",
                                                              "connection 7: fail, HTTP None, complete False"]}))
     _rewrite(run / "fails.records", [WS.ar.pack_record(replace(rec, grid=grid, window=0))])
-    with pytest.raises(SystemExit, match=re.escape(f"egress buckets [] hold a FAIL and the warden's fails record has a "
+    with pytest.raises(SystemExit, match=re.escape(f"egress buckets [] hold a FAIL and the network certifier's fails record has a "
                                                    f"reason in buckets [{t}], not the same: a failed connection's "
                                                    "reason is in its FAIL's bucket (connection 7 failed closed (late) "
                                                    "at egress cell 2)")):
@@ -891,7 +891,7 @@ def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_run
     assert re.search(why, capsys.readouterr().err) and not (tmp_path / "out").exists()
 
 
-def test_the_window_root_is_the_wardens_signed_link_windows(tmp_path):
+def test_the_window_root_is_the_network_certifiers_signed_link_windows(tmp_path):
     """Each run's root is its own (the synthetic run's registrations carry fresh salts), a network certifier run's is
     read from its published registrations alone, and a group's covers each of its execution phases."""
     syn = sz.link(tmp_path / "syn")

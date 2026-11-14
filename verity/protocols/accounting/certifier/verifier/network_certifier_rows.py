@@ -473,7 +473,7 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
     if cert.digest != head.digest():
         raise ValueError("the registration's certificate doesn't sign its head")
     if not cert.verify(key, session):
-        raise ValueError("the registration's certificate doesn't verify under the warden's key in the session")
+        raise ValueError("the registration's certificate doesn't verify under the network certifier's key in the session")
     return head, dom
 
 
@@ -500,7 +500,7 @@ def port(head: CellsHead, wiring_: Wiring, params: NetworkCertifierParams, reads
     name."""
     _schedules(head, params)
     if wiring_.digest() != head.wiring:
-        raise ValueError("the wiring isn't the one the warden signed")
+        raise ValueError("the wiring isn't the one the network certifier signed")
     units = reads if isinstance(reads, Units) else None
     rows = [t for t, _ in wiring_.place(params, reads if units is None else units.cells)]
     return _port(head, head.value if units is None else units.value(head), rows, reads_from)

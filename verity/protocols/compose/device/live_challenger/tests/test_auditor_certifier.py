@@ -462,7 +462,7 @@ def test_a_varied_rehearsal_takes_its_prompts_off_stdin_into_its_witness_and_reh
                                                    "of 1 to 2048 token ids below 2^17"))
       for bad in (b"", b"[]", b"[[]]", b"[1]", b"[[1.0]]", b"[[131072]]", b"[[-1]]", b'{"p": [[1]]}',
                   json.dumps([[1]] * 401).encode(), json.dumps([[0] * 2049]).encode())],
-    (["--traffic", "varied", "--prompts"], b" " * A.WARDEN_PROMPTS_BYTES + b"[[1]]",
+    (["--traffic", "varied", "--prompts"], b" " * A.NETWORK_CERTIFIER_PROMPTS_BYTES + b"[[1]]",
      "--prompts: over 1048576 bytes on stdin"),
 ])
 def test_the_gate_refuses_a_varied_rehearsals_prompts_it_cant_check_and_writes_nothing(host, argv, stdin, why):

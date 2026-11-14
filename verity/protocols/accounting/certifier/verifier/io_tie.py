@@ -308,13 +308,13 @@ def window_map(shape: Shape, outputs: Sequence[Output], release: Sequence[int], 
     arrival = sorted(range(n_req), key=lambda i: order[i])
     for a, b in zip(arrival, arrival[1:]):
         if _count("an admission bucket", admitted[b], 0) < _count("an admission bucket", admitted[a], 0):
-            raise ValueError(f"the warden admits in arrival order: request {b} (stream {order[b] + 1}) is admitted at "
+            raise ValueError(f"the network certifier admits in arrival order: request {b} (stream {order[b] + 1}) is admitted at "
                              f"bucket {admitted[b]}, before request {a} (stream {order[a] + 1}) at {admitted[a]}")
     outs: list[dict[int, Output]] = [{} for _ in range(n_req)]
     for o, b in zip(outputs, release):
         want = admitted[o.request] + D + o.index // r
         if b != want:
-            raise ValueError(f"request {o.request}'s output {o.index} is released at bucket {b}, not the warden's {want}")
+            raise ValueError(f"request {o.request}'s output {o.index} is released at bucket {b}, not the network certifier's {want}")
         if o.index in outs[o.request] or not 0 <= o.row < sh.P:
             raise ValueError(f"an output is its request's once, at a batch row below P = {sh.P}, not {o}")
         outs[o.request][o.index] = o
@@ -825,7 +825,7 @@ def _body_bucket(B, S, row, mp, port, switches_):
 
 IoTieBucket = CompositeDefinition(
     "IoTieBucket", 1, ("B", "R", "P", "S"), _sig_bucket, _body_bucket, conformance="exact-model-tested",
-    doc="1 iff every cell of the bucket row (the warden's registered row, read by the proof system: bit 8k + i is bit i "
+    doc="1 iff every cell of the bucket row (the network certifier's registered row, read by the proof system: bit 8k + i is bit i "
         "of byte k) is its map record's, with a DATA cell's id the entry the record names of the S port rows (the "
         "Commit's registered rows at the bucket's steps, read by the proof system) (`IoTieContent`): the I/O tie of "
         "one egress bucket row, every cell opened; a link-window's tie is its T rows'")
