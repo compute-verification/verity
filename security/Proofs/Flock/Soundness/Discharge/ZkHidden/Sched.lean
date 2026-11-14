@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Statements
+public import Proofs.Flock.Soundness.Refine.WideLeafChecks
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import all Init.Data.Nat.Power2.Basic
@@ -22,10 +23,11 @@ import Proofs.Flock.Soundness.Game
 /-!
 # `ZkSchedOK`: `Zk.schedule`'s facts at a statement the `--zk` shape check passes
 
-* The schedule half reads only `m`, which `Zk.schedule` accepts only from 25 to 35 (`schedule_range`); at each of
-  those `zkSchedFacts` is checked by the kernel (`zkSchedFacts_all`, `decide +kernel`).
+* The schedule half reads only the statement's version and `m`, which `Zk.schedule` accepts only from 25 to 35
+  (`schedule_range`); at each version and each of those `zkSchedFacts` is checked by the kernel (`zkSchedFacts_all`,
+  `decide +kernel`).
 * `PadOK`'s radius: `100·(2^cols + t) ≤ 98·2^logLen` puts the padded rate at most `0.98 < 0.995²`.
-* The inner code: `len` is at most `400` (`m ≤ 35`, `kLog ≤ m`, `k0 ≤ 6`), so `innerN ≤ 2^13`; it is a power of two,
+* The inner code: `len` is at most `400` (`m ≤ 35`, `kLog ≤ m`, `k0 ≤ 10`), so `innerN ≤ 2^13`; it is a power of two,
   so `w.lo mod innerN` is uniform (level3's `lo_balanced`).
 -/
 
@@ -38,19 +40,30 @@ open scoped ENNReal NNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- `Zk.schedule` accepts only an `m` with a `fast100` schedule. -/
-theorem fast100_of_schedule {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule m = .ok p) :
-    ∃ s, Flock.fast100 m = some s := by
+variable {wideLeaf : Bool}
+
+/-- `Zk.schedule` accepts only an `m` at which the statement's version has a schedule (`fast100At`). -/
+theorem fast100At_of_schedule {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule wideLeaf m = .ok p) :
+    ∃ s, Flock.fast100At wideLeaf m = some s := by
   unfold Flock.Zk.schedule at h
-  cases hq : Flock.Zk.queries0 m with
+  cases hq : Flock.Zk.queries0 wideLeaf m with
   | error e => rw [hq] at h; cases h
   | ok q =>
-    cases hf : Flock.fast100 m with
+    cases hf : Flock.fast100At wideLeaf m with
     | none => rw [hq] at h; simp [hf, Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
     | some s => exact ⟨s, rfl⟩
 
+/-- `Zk.schedule` accepts only an `m` with a `fast100` schedule: the two versions' tables cover the same `m`
+(`fast100At_isSome`). -/
+theorem fast100_of_schedule {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule wideLeaf m = .ok p) :
+    ∃ s, Flock.fast100 m = some s := by
+  obtain ⟨s, hs⟩ := fast100At_of_schedule h
+  have hsome := fast100At_isSome (wide := wideLeaf) m
+  rw [hs] at hsome
+  exact Option.isSome_iff_exists.1 hsome.symm
+
 /-- `Zk.schedule` accepts `m` only from 25 to 35. -/
-theorem schedule_range {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule m = .ok p) : 25 ≤ m ∧ m ≤ 35 := by
+theorem schedule_range {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule wideLeaf m = .ok p) : 25 ≤ m ∧ m ≤ 35 := by
   refine ⟨?_, ?_⟩
   · by_contra hc
     unfold Flock.Zk.schedule Flock.Zk.queries0 at h
@@ -60,22 +73,36 @@ theorem schedule_range {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.sched
     unfold Flock.fast100 at hf
     simp [show 35 < m by omega] at hf
 
-/-- The schedule facts `DrawSetupZK` records, with `PadOK`'s decidable parts and `k0 ≤ 6`, as one check per `m`. -/
-def zkSchedFacts (m : ℕ) : Bool :=
-  match Zk.schedule m with
+/-- `Zk.schedule` has a schedule at every `m` from 25 to 35, at either statement version: the two versions serve the
+same tables. -/
+theorem schedule_ok_of_range (w : Bool) {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) : ∃ p, Flock.Zk.schedule w m = .ok p := by
+  have key : ∀ (w : Bool) (k : Fin 11), (match Flock.Zk.schedule w (k.val + 25) with
+      | .ok _ => true
+      | .error _ => false) = true := by
+    decide +kernel
+  have hk := key w ⟨m - 25, by omega⟩
+  simp only [show m - 25 + 25 = m by omega] at hk
+  cases hs : Flock.Zk.schedule w m with
+  | ok p => exact ⟨p, rfl⟩
+  | error e => simp [hs] at hk
+
+/-- The schedule facts `DrawSetupZK` records, with `PadOK`'s decidable parts and `k0 ≤ 10`, as one check per version
+and `m`. -/
+def zkSchedFacts (wideLeaf : Bool) (m : ℕ) : Bool :=
+  match Zk.schedule wideLeaf m with
   | .ok (s, t) =>
     let a := schedOf s
     let l := a.levels.headD default
     decide (2 ≤ a.levels.length) && decide (l.lanes = a.k0) && decide (a.m - 7 = a.k0 + l.logCols) &&
       levelsChained a.levels a.ext && decide (a.m = m) && decide (l.logLen ≤ 40) && decide (t ≤ 2 ^ l.logCols) &&
       decide (2 ^ l.logCols + t ≤ 2 ^ l.logLen) && decide (1 < 2 ^ l.logCols + t) &&
-      decide (100 * (2 ^ l.logCols + t) ≤ 98 * 2 ^ l.logLen) && decide (s.k0 ≤ 6)
+      decide (100 * (2 ^ l.logCols + t) ≤ 98 * 2 ^ l.logLen) && decide (s.k0 ≤ 10)
   | .error _ => true
 
 set_option maxRecDepth 100000 in
-theorem zkSchedFacts_all : ∀ m, 25 ≤ m → m ≤ 35 → zkSchedFacts m = true := by
+theorem zkSchedFacts_all : ∀ m, 25 ≤ m → m ≤ 35 → zkSchedFacts wideLeaf m = true := by
   intro m h1 h2
-  interval_cases m <;> decide +kernel
+  cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 /-- **The padded radius is positive** when the padded rate is at most `0.98`. -/
 theorem padRadius_pos {l : Accounting.Level} {t : ℕ} (h : 100 * (2 ^ l.logCols + t) ≤ 98 * 2 ^ l.logLen) :
@@ -90,8 +117,8 @@ theorem padRadius_pos {l : Accounting.Level} {t : ℕ} (h : 100 * (2 ^ l.logCols
     (Real.sqrt_lt' (by norm_num)).2 (lt_of_le_of_lt hr (by norm_num))
   linarith
 
-/-- The pads layout's length at `m ≤ 35`, `kLog ≤ m` and `k0 ≤ 6`. -/
-theorem len_le {m kLog k0 : ℕ} (hm : m ≤ 35) (hk : kLog ≤ m) (h0 : k0 ≤ 6) :
+/-- The pads layout's length at `m ≤ 35`, `kLog ≤ m` and `k0 ≤ 10`. -/
+theorem len_le {m kLog k0 : ℕ} (hm : m ≤ 35) (hk : kLog ≤ m) (h0 : k0 ≤ 10) :
     (Zk.PadLayout.new m kLog k0).len ≤ 400 := by
   simp only [Zk.PadLayout.new, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.hab, Zk.PadLayout.zp,
     Zk.PadLayout.lc, Zk.PadLayout.fc, Zk.PadLayout.fa]
@@ -128,7 +155,7 @@ theorem prCoin_innerPos_le {b : ℕ} (hb : b ≤ 64) (hN : 0 < 2 ^ b) (D : Finse
 theorem zk_schedOK' : ZkSchedOK := by
   intro st sch tPad hwf _ _ _ hz
   obtain ⟨h1, h2⟩ := schedule_range hz
-  have hf := zkSchedFacts_all _ h1 h2
+  have hf := zkSchedFacts_all (wideLeaf := st.wideLeaf) _ h1 h2
   simp only [zkSchedFacts, hz, Bool.and_eq_true, decide_eq_true_eq] at hf
   obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨a1, a2⟩, a3⟩, a4⟩, a5⟩, b1⟩, b2⟩, b3⟩, b4⟩, b5⟩, hk0⟩ := hf
   have hlen := len_le h2 hwf.hk hk0

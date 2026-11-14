@@ -242,8 +242,8 @@ end Zk
 
 /-- **A masked rep's rounds are `repRounds`** at the `--zk` schedule. -/
 theorem zkRepNsOf_length {spec : SessionSpec} {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ}
-    (hz : Zk.schedule st.m = .ok (sch, tPad)) : (zkRepNsOf spec st).length = repRounds true spec st := by
-  obtain ⟨h25, -, -, -, -, ⟨-, h2, -⟩, -⟩ := ZkExec.zk_schedule_seams _ _ _ hz
+    (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) : (zkRepNsOf spec st).length = repRounds true spec st := by
+  obtain ⟨h25, -, -, -, -, ⟨-, h2, -⟩, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ hz
   rw [repRounds_zk hz]
   unfold zkRepNsOf zkPre zkLig
   rw [hz]
@@ -293,7 +293,7 @@ theorem mem_fromS (Rf : ℕ → ℕ) : ∀ t d p, p ∈ fromS Rf t d → 2 * t �
 section Deploy
 
 variable {spec : SessionSpec} {sts : Array Stmt}
-  (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+  (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
 
 include hz in
 /-- **The streams of the deployed rounds** are each table's rep 0 `repRounds` times, then its rep 1, table by table. -/

@@ -188,9 +188,9 @@ open Flock FlockSoundness
 /-- **A table's weight pays for its masked fork events with level 0's and its share of `k`**: the fork events'
 weights are `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, level 0's included, within the table's
 `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2 + 4·2^{d₀}/e` when `N_p` is at most the deployed pads' domain. -/
-theorem cZW_sum_le_tableWeight {st : Stmt} {sch : FlockSoundness.Accounting.Schedule} (hsch : sch = Accounting.m1Schedule st.m)
+theorem cZW_sum_le_tableWeight {st : Stmt} {sch : FlockSoundness.Accounting.Schedule} (hsch : sch = Accounting.m1Schedule st.wideLeaf st.m)
     (Np : ℕ)
-    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)) :
+    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0)) :
     4 * tableLen true st / Real.exp 1 + ∑ i, Claims.Flock.cZW sch Np i ≤ tableWeight true st := by
   set f : Accounting.Level → ℝ := fun l => 2 ^ l.logLen * l.queries with hf
   have hd : (default : Accounting.Level).queries = 0 := rfl
@@ -202,19 +202,19 @@ theorem cZW_sum_le_tableWeight {st : Stmt} {sch : FlockSoundness.Accounting.Sche
     simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, Nat.cast_ofNat, hf]
     unfold Claims.Flock.cOf
     ring
-  set pd := Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)
+  set pd := Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0)
   have htw : tableWeight true st = Claims.Flock.Numbers.weightOf sch pd := by
     simp only [tableWeight, ↓reduceIte, hsch, pd]
   have hNp2 : (Np : ℝ) * Np ≤ (pd : ℝ) ^ 2 := by
     have := Nat.mul_le_mul hNp hNp
     rw [sq]
     exact_mod_cast this
-  have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.m).d := rfl
-  have hfits := kFits_all true st.m
+  have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d := rfl
+  have hfits := kFits_all (wideLeaf := st.wideLeaf) true st.m
   simp only [level0, wSched, ↓reduceIte, ← hsch] at hfits
-  have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
+  have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
     pow_le_pow_right₀ (by norm_num) hfits
-  have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 ≤
+  have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d / Real.exp 1 ≤
       4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
     gcongr
   rw [hsum, hlen, htw, Claims.Flock.Numbers.weightOf, weightNat_cast, ← hhead]
@@ -228,10 +228,10 @@ theorem joinEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω 
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (h25 : ∀ j < (tables true x).length, 25 ≤ (st j).m) (h35 : ∀ j < (tables true x).length, (st j).m ≤ 35)
-    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
-        (Claims.Flock.zkSched (st j).m).1.k0))
+        (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
     (hinj : ∀ j, Function.Injective (rd j))
     (ev : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
@@ -246,7 +246,7 @@ theorem joinEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω 
   set n := (tables true x).length with hn
   have hq : ∀ j < n, 1 ≤ (FlockSoundness.lvOf (sch j) 0).queries := fun j hj => by
     rw [Claims.Flock.lvOf_zero, hsch j hj]
-    have := m1_queries₀_pos ⟨(st j).m - 25, by have := h35 j hj; omega⟩
+    have := m1_queries₀_pos (wideLeaf := (st j).wideLeaf) ⟨(st j).m - 25, by have := h35 j hj; omega⟩
     simp only [Nat.sub_add_cancel (h25 j hj)] at this
     exact this
   refine Claims.Flock.joinEscW_fitsForkR n sch Np rd ev ev₁ tied tied₁ hinj hq _ _ (V_k_pos true x) ?_

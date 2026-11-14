@@ -16,6 +16,8 @@ from typing import Any
 
 from verity.circuits.codec import canonical_json
 
+__all__ = ["PropertyRecord", "REGISTRY", "citations", "digest_of", "seal"]
+
 DIR = "properties"
 
 
@@ -108,6 +110,13 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "read from, and every q_c and kv_c word of GLM-5.3's MLA RMSNorms (N 2048 and 512, eps 1e-5) on served and on probe rows "
              "equals DsaRMSNorm_v1{N,EPS=1e-05}, bit for bit, the MLA cache holding the kv_c words, while each competing model "
              "(RMSNormTriton_v1's reduction and epilogue among them) is refuted."),
+    Property("glm53_index_share_capture", "verity-vllm/glm53-index-share-capture/v1",
+             "On the capture's Hopper GPU at vLLM's defaults (read back as glm53_dsa_capture reads them), with FLASH_ATTN_MLA_SPARSE "
+             "and the bf16 query selected, GLM-5.3's layers without an indexer (the IndexShare layers and the MTP draft's later "
+             "steps) run one specialisation each of _fused_norm_rope_kernel and _fused_q_kernel at has_indexer=False, and on served "
+             "and probe rows every q_c and kv_c word equals DsaRMSNorm_v1{N,EPS=1e-05} at N 2048 and 512, each competing model "
+             "refuted, every k_pe and q_pe word is RoPEHeadGptJ_v2{D=64}'s contraction, bit for bit, each written MLA cache row "
+             "holds [kv_c | k_pe], and the top-k buffer is left as it was."),
     Property("dsv4_marlin_capture", "verity-vllm/dsv4-marlin-capture/v3",
              "On the capture's Hopper GPU and driver (the capture map's target.driver), vLLM selects MARLIN (MarlinExperts) for "
              "the 384-expert TP8 row's MXFP4 experts at bf16 activations and defaults the LLM entrypoint's max_num_seqs to 1024, "
