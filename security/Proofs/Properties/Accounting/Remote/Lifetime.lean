@@ -17,9 +17,9 @@ windows. The invariant (`Life`): every block past `N` a recorded pass in window 
 
 @[expose] public section
 
-open RemoteAudit RemoteAudit.Session
+open Poub Poub.Session
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-! ## The store's appends -/
 
@@ -432,4 +432,4 @@ theorem lifetimeCapped : LifetimeCapped := by
     obtain rfl := appends_unique hi.firsts hk'' hk ⟨h3, h4⟩ ⟨h1, h2⟩
     exact absurd hk' hj
 
-end Properties.RemoteAudit
+end Properties.Poub

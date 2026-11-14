@@ -89,8 +89,8 @@ def test_e1_drafts_match_its_numbers():
     for beta_v, overhead in ((0.18, 2.8e4), (0.63, 9.8e4)):
         assert math.isclose(e1(classes.output_premise(K, 7168, 7168, 2.5, 0.87, beta_v)), overhead, rel_tol=0.03)
     h = (17 + 2700) / 7168, (17 + 6200) / 7168
-    assert math.isclose(classes.output_cap(7168, 0.06, h[0], 0.63) / 8e6, 0.9, rel_tol=0.05)
-    assert math.isclose(classes.output_cap(7168, 0.19, h[1], 0.18) / 8e6, 23, rel_tol=0.05)
+    assert math.isclose(classes.output_threshold(7168, 0.06, h[0], 0.63) / 8e6, 0.9, rel_tol=0.05)
+    assert math.isclose(classes.output_threshold(7168, 0.19, h[1], 0.18) / 8e6, 23, rel_tol=0.05)
     assert classes.output_premise(1e9, 7168, 7168, 0.06, h[0], 0.63) == math.inf
 
 
@@ -121,7 +121,7 @@ def test_a_count_on_another_set_is_converted_to_the_profiles_counted_products_an
         assert arg.counts in Profile.__dataclass_fields__
 
 
-def test_at_the_server_block_only_the_linear_counts_cap():
+def test_at_the_server_block_only_the_linear_set_a_yield():
     finite = {n for n, arg in CLASSES.items() if arg.allowance(KIMI)(WINDOW) < KIMI.kappa * WINDOW.compute / 2}
     assert finite == {"fanout-priced", "fanout-split"}
 
@@ -185,8 +185,8 @@ def test_a_structure_states_mu_and_none_defaults_it():
         classes.structure(without, "reference")
 
 
-def test_a_class_caps_a_block_of_gates_through_the_one_conversion():
-    """`q_T(c, k)` on gates is the FLOP-model statement at `c / G` FLOPs, and a gate holds `w = κ / (2G)`: the capacity
+def test_a_class_bounds_a_block_of_gates_through_the_one_conversion():
+    """`q(c, k)` on gates is the FLOP-model statement at `c / G` FLOPs, and a gate holds `w = κ / (2G)`: the capacity
     `w c` is `κ/2` a FLOP."""
     u = hardware.units(Registry.load())
     a = CLASSES["fanout-priced"].allowance(KIMI)

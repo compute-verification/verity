@@ -45,7 +45,9 @@ BINDINGS = {
 UNBOUND = sorted(f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c, ks in cs.items() for k in ks)
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
-    "CERTIFIER_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py piece "$1" "$2" "$3"',
+    "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py chain "$@"',
+    "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py period "$@"',
+    "CLASSES": "4,32,4 8,32,4,4,16", "V3C_CLASS": "8,32,4,4,16",
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" '
                        "--gate user@gate-1",
     "DEVELOPMENT": "1", "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
@@ -157,8 +159,8 @@ def test_a_memory_challengers_placement_reads_the_configurations_pins_under_its_
 
 def test_the_registration_names_the_runs_own_configuration_and_is_not_written_yet(tmp_path):
     """The run's registration reads the configuration's hash from ``run.json``: no ``run.json``, or one under another
-    hash, is refused; under this configuration's own hash it raises with its goal, since no log item names a
-    configuration yet."""
+    hash, is refused; under this configuration's own hash it raises through the registration log's writer of the
+    configuration item, which isn't written yet."""
     cfg = R.load(CONFIG, REG)
     with pytest.raises(Refused) as no_run:
         T.registration(cfg, tmp_path)
@@ -167,8 +169,20 @@ def test_the_registration_names_the_runs_own_configuration_and_is_not_written_ye
     with pytest.raises(Refused):
         T.registration(cfg, tmp_path)
     (tmp_path / "run.json").write_text(json.dumps({"configuration": K.digest(cfg)}))
+    with pytest.raises(NotImplementedError, match="proofs/architecture-on-branch"):
+        T.registration(cfg, tmp_path)
+
+
+def test_the_registration_writes_the_logs_configuration_item_of_the_runs_hash(tmp_path, monkeypatch):
+    """The item is the registration log's, written by its writer from the configuration's hash; past it, the run's log
+    that holds it is ours and isn't written yet."""
+    cfg, asked = R.load(CONFIG, REG), []
+    monkeypatch.setattr(T.RL, "configuration", lambda digest: asked.append(digest) or {"kind": "configuration",
+                                                                                         "digest": digest})
+    (tmp_path / "run.json").write_text(json.dumps({"configuration": K.digest(cfg)}))
     with pytest.raises(NotImplementedError, match=T.REGISTRATION_GOAL):
         T.registration(cfg, tmp_path)
+    assert asked == [K.digest(cfg)]
 
 
 def test_the_parties_are_the_manifests_names_and_onsite_is_the_product():
@@ -270,7 +284,7 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     unbound = T.variables(cfg, {})
     assert set(unbound) == set(VARIABLES) | set(deployed)
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>'")
-    assert unbound["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
+    assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
 
 
 def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_one(tmp_path, capsys):
@@ -278,7 +292,8 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
     side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_CERTIFIER]
     assert (side.runs, side.scripts, side.reaches, side.binds) == (T.SERVED_WINDOW, (T.CERTIFIER_PIECE,),
                                                                     NC.NETWORK_CERTIFIER, ("gate",))
-    assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CMD"}
+    assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD",
+                                                    "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
     gates = [e for ps in REG.parties.values() for e in ps.values() if e.runs == T.GATE]
     assert len(gates) == 3
@@ -476,7 +491,7 @@ def stand_in(tmp: Path, name: str, body: str) -> str:
 
 
 RUNNER = """mkdir -p "$OUT"
-env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|POUS_CMD|POUS_ARGS|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z]+)=' \
+env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+)=' \
   | sort > "$OUT/hooks.txt"
 """
 
@@ -495,7 +510,8 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert SamplingDesign(hooks["V3C_LAW"]).text == K.parse(CONFIG.read_text())["service"]["law"]
     kept = set(VARIABLES) - {"PRECISION", "WINDOW_STEPS", "DEVELOPMENT"}
     assert {k: hooks.get(k) for k in kept} == {k: VARIABLES[k] for k in kept}
-    assert {"SERVE_ARGS", "H1_GATE", "CERTIFIER_FRONT", "CERTIFIER_CMD"} <= set(hooks)
+    assert {"SERVE_ARGS", "H1_GATE", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} <= set(hooks) \
+        and "CERTIFIER_CMD" not in hooks
     assert json.loads((state / "bindings.json").read_text()) == BINDINGS
     assert "192.0.2.1" not in json.dumps(json.loads((state / "run.json").read_text()))
     assert hooks["SERVE_ARGS"] == "--protocol ids --id-payload 503"

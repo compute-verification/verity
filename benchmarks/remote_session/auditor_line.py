@@ -2,10 +2,10 @@
 (time-held and link-charged, each read held over time and at the passes, exact) with its groups' times read from what
 the auditor's device signed rather than from the verifier's stamps.
 
-**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
-`RemoteAudit.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `RemoteAudit.Pooled` over the
+**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`poub-verifier`'s `line_record` request,
+`Poub.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `Poub.Pooled` over the
 record's samples) computes each session's line off its record from
-the inputs `verifier.recorded_inputs` reads, and `remote_bandwidth.line` computes it beside it from the same JSON
+the inputs `verifier.recorded_inputs` reads, and `poub.line` computes it beside it from the same JSON
 (`line.line_of_record`):
 the two are compared exactly, every rational as text in lowest terms and every integer, and a session where they
 differ refuses the run's line, naming both values (`Disagree`). Floats appear only as the exact shares correctly
@@ -19,7 +19,7 @@ k-th root (its boundary leaves before it), so that request leaves as the root ar
 names the same root too. At one window in flight (`audit.Pace.in_flight` 1) chal_(g+1)'s request names it and openings
 coin g's leaves once chal_(g+1) is back, so this reading, which doesn't take f, ends L_g about a round trip to the
 challenger past s_(g+1). Sampled G > 1 windows a coin (`groups_per_coin`), openings coin c's request names only the last
-root of draw c's last window, and another window's A_g is the first request that leaves after its last root,
+root of sample c's last window, and another window's A_g is the first request that leaves after its last root,
 chal_(g+2)'s at the earliest, which above k = 1 names a root of window g + 1 and so ends L_g later than the window did.
 Both times are the challenger's monotonic clock in its release log, whose lines its close signs
 (`challenger.session_of`), and whose close, record and refused hellos the auditor's ledger sealed at the session's end
@@ -27,7 +27,7 @@ Both times are the challenger's monotonic clock in its release log, whose lines 
 after its coin, whose seed they take, and before its last root, which chains them.
 
 Beside the times the line reads the Lean verifier's record of the session (`verifier.lean_record`, `verifier.json`'s
-`lean_record`): each group's passes, its windows' receipts and draws, whose pooled bound (`remote_bandwidth.pooled`)
+`lean_record`): each group's passes, its windows' receipts and samples, whose pooled bound (`poub.pooled`)
 is its wrong receipts, and its registered blocks, the registration's; and the verifier's verdict, and each group's
 held bytes by kind (`ledger.memory`), which the record doesn't hold (they need each pass's plan and the store's
 regions). The verifier runs on the audit's machine, not
@@ -75,7 +75,7 @@ ledger's windows and periods (`periods_answer`, past `verify_ledger` and `verify
 **The store** (`bound_check`, the run's, so every session's, reported as `bound`). The verifier holds no checkpoint, so
 a run's registered store is the developer's choice. A record made while the verifier could bind it carries
 verifier.json's `binding`: the registered store is bound to the model when that binding held, refusing any hello whose
-payload root isn't that of the store the pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited*
+payload root isn't that of the store the pinned checkpoint lays out (`poub.store`, in the tree *credited*
 names, so the period's circuit commits to the code that decided it), the Lean verifier deciding it (`hold`, the
 binding's `lean`), the binding's root is the registration's, and its model, name and checkpoint_sha512, is the one the
 audit's period signs (its open's `model`), or with no period's, `--model-pin`'s. A run whose record carries no
@@ -103,7 +103,9 @@ rejection added to the total of a record whose ledger didn't charge them). The t
 advantages Σ_t adv_t, which nothing prices and the line doesn't assume: every error names them (`NAMED_TERMS`, claim
 prf/sha-512) with no number, in no total, and reads `ledger.DELTA_FORM` where printed. The line at each T, and the line of record over every T
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
-whichever session the run made least, so the union bound holds where a maximum wouldn't.
+whichever session the run made least, so the union bound holds where a maximum wouldn't. A sum of 1 or more bounds
+nothing: the line at that T holds no share and says "no bound at this period" with the sum (its `no_bound`,
+`verity.protocol`'s rule for every row's error), and the sentence of who earned credit says so.
 
 **Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) reads statement C in full
 from the network certifiers' record of the node's ingress (`Covered`, `IngressCounted`), which this line doesn't
@@ -156,6 +158,7 @@ from verity.protocols.accounting.poub.verifier.session import verifier as V  # n
 from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, pooled, timing  # noqa: E402
+from verity.protocol import no_bound  # noqa: E402
 from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger as Ch  # noqa: E402
 from verity.protocols.proofs.spot.device import remote  # noqa: E402
@@ -298,7 +301,7 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     naming the same value (chal_(g+1)'s, or another window's) would.
 
     Sampled `per_coin` G > 1 windows a coin (`groups_per_coin`), only a sample's last window closes, so openings coin c's
-    request names the last root of draw c's last window and no request names another window's by place. A_g is then
+    request names the last root of sample c's last window and no request names another window's by place. A_g is then
     the first receipt of the requests that leave only once window g's last root has come: openings coin g // G's and
     chal_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
     That time is at or after A_g, so L_g is at least window g's own and the line credits no more."""
@@ -474,7 +477,7 @@ def session_error(session: dict) -> dict:
     that didn't charge the hiding, the binding or the rejection (no such part) has it added to its total: the hiding
     from its windows (`recorded_windows`, as `ledger.hiding` reads them), the binding at the session's bounds
     (`recorded_binding`, as `ledger.binding` reads them), reading Q off the record's sketch term (`sketch_failure`),
-    so a record with none has no binding term here, and the rejection at its windows' requested draws (the session's
+    so a record with none has no binding term here, and the rejection at its windows' requested samples (the session's
     `samples` in each, as `ledger.rejection` reads them off the record). Each in floats and exact beside them
     (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
     total. `{"undecided": why}` where the ledger's declared outputs are undecided."""
@@ -1081,21 +1084,26 @@ def credited_line(rows: list[dict]) -> tuple[dict, dict]:
     """The line of record, on the auditor's clock: at each T and in each form the least share of weights held among
     the credited sessions there (exact, the first on a tie), with that session's filler held beside it, or zero with
     every session's reasons, and its error (`union_error` of those sessions); and who earned credit, who didn't and
-    why, in a sentence, with the error of the line over every T."""
+    why, in a sentence, with the error of the line over every T. A line's error is its credited sessions' summed, and
+    one of 1 or more bounds nothing (`protocol.no_bound`): that T's line holds no share, zero in each form, and says
+    why under `no_bound`, beside the sessions it would have credited and the error."""
     out: dict = {}
     lined = []
     for t in sorted({r["T"] for r in rows if r.get("T")}):
         at = [r for r in rows if r.get("T") == t]
         ok = [r for r in at if r["credit"]["ok"]]
         lined += ok
-        if ok:
+        error = union_error(ok)
+        why = no_bound(line.number(error["exact"]))
+        if ok and why is None:
             out[t] = {f: min(({"k": r["k"], **{n: r["shares_auditor_clock"][f][n] for n in (*SHARES, "exact")}}
                               for r in ok), key=lambda x: line.number(x["exact"]["time"])) for f in line.FORMS}
             out[t]["credited_sessions"] = [r["k"] for r in ok]
         else:
             out[t] = {**{f: {**dict.fromkeys(SHARES, 0.0), "exact": dict.fromkeys(SHARES, "0")} for f in line.FORMS},
-                      "credited_sessions": [], "zero": {r["k"]: r["credit"]["zero"] for r in at}}
-        out[t]["error"] = union_error(ok)
+                      "credited_sessions": [r["k"] for r in ok],
+                      **({"no_bound": why} if ok else {"zero": {r["k"]: r["credit"]["zero"] for r in at}})}
+        out[t]["error"] = error
     credited = [r["k"] for r in rows if r["credit"]["ok"]]
     zero = {r["k"]: r["credit"]["zero"] for r in rows if not r["credit"]["ok"]}
     if not credited:
@@ -1103,33 +1111,39 @@ def credited_line(rows: list[dict]) -> tuple[dict, dict]:
     else:
         said = (f"the line credits session(s) {', '.join(map(str, credited))}"
                 + (f"; session(s) {', '.join(map(str, zero))} earn none" if zero else ""))
+    none = {t: row["no_bound"] for t, row in out.items() if "no_bound" in row}
     return out, {"credited_sessions": credited, "zero": zero, "error": union_error(lined), "summary": said + "".join(
-        f"; session {k}: {'; '.join(why)}" for k, why in zero.items())}
+        f"; session {k}: {'; '.join(why)}" for k, why in zero.items()) + "".join(
+        f"; the line at {t} holds no share: {why}" for t, why in none.items()), **({"no_bound": none} if none else {})}
 
 
 def table(doc: dict) -> str:
     """`analyse`'s doc as Markdown: each session's four checks (`CHECKS`), with the reason of each that failed, and
     its credit, weights held then filler held; then the store (`store_text`), the line at each T, time-held (labelled as under Identity, which
     nothing the verifier checks establishes) / link-charged with the snapshot forms, weights and filler apart, and its
-    error when it credits a session."""
+    error when it credits a session. A line whose error is 1 or more (its `no_bound`), and a session's credit where the
+    session's own is, print `protocol.NO_BOUND` with the error and no share."""
     b = line.FORMS
     out = ["| session | T | " + " | ".join(CHECKS) + " | credit |", "|---|---|" + "---|" * len(CHECKS) + "---|"]
     for s in doc["sessions"]:
         c = s["credit"]
         cells = ["-" if n not in c else "yes" if c[n]["ok"] else f"no: {c[n]['reason']}" for n in CHECKS]
         mine = {x: (s.get("shares_auditor_clock") or {}).get(x) for x in b}
-        credit = ("credited: weights " + " / ".join(f"{mine[x]['time']:.4%}" for x in b) + ", filler "
+        why = no_bound(line.number(s["error"]["exact"]["total"])) if "error" in s else None
+        credit = (f"credited: {why}" if c["ok"] and why else
+                  "credited: weights " + " / ".join(f"{mine[x]['time']:.4%}" for x in b) + ", filler "
                   + " / ".join(f"{mine[x]['filler_time']:.4%}" for x in b) if c["ok"] and all(mine.values())
                   else "zero")
         out.append(f"| {s['k']} | {s.get('T') or '-'} | " + " | ".join(cells) + f" | {credit} |")
     out += ["", *([f"store bound: {store_text(doc['bound'])}"] if "premise" in (doc.get("bound") or {}) else [])]
     for t, row in doc["line"].items():
-        out.append(f"line {t}: credited {row['credited_sessions']}, time-held (under Identity: no block over the "
-                   "boundary links) / link-charged weights "
-                   + " / ".join(f"{row[x]['time']:.4%}" for x in b) + ", filler "
-                   + " / ".join(f"{row[x]['filler_time']:.4%}" for x in b) + " (snapshot weights "
-                   + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
-                   + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")"
+        out.append(f"line {t}: credited {row['credited_sessions']}, "
+                   + (f"{row['no_bound']}: the line holds no share" if row.get("no_bound") else
+                      "time-held (under Identity: no block over the boundary links) / link-charged weights "
+                      + " / ".join(f"{row[x]['time']:.4%}" for x in b) + ", filler "
+                      + " / ".join(f"{row[x]['filler_time']:.4%}" for x in b) + " (snapshot weights "
+                      + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
+                      + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")")
                    + (f", error {ledger.DELTA_FORM}, δ = {row['error']['total']:.3g} "
                       f"(2^{row['error']['log2']:.2f}): the ledger's δ "
                       "(profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the credited "
@@ -1163,7 +1177,7 @@ def main(argv: list[str] | None = None) -> int:
                     "line (`git rev-list --first-parent origin/main` in its checkout): without it no session is pinned")
     ap.add_argument("--model-pin", type=Path, metavar="FILE",
                     help="the model the store must be bound to when the audit's period signs none: a pin in the "
-                         "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either the store is "
+                         "auditor's model registry's shape (`poub.store.read_pin`); without either the store is "
                          "unbound and the line conditional on DeveloperStore")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
     ap.add_argument("--lane", default=LANE)
@@ -1180,7 +1194,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="compute each line in the Lean verifier, held exactly to line.py's (the line of record), or in "
                          "line.py alone (a reading, not of record)")
     ap.add_argument("--lean-exe", type=Path, metavar="PATH",
-                    help="the remote-audit-verifier executable (default: `lake build` it in PoUB's package)")
+                    help="the poub-verifier executable (default: `lake build` it in PoUB's package)")
     ap.add_argument("--lockdown", type=Path, metavar="FILE",
                     help="infra's record of the provider's lockdown of the gate node (`read_lockdown`): a gate "
                          "session whose signed span lies inside an applied interval is conditional on "

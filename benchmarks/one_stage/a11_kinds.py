@@ -40,7 +40,7 @@ sys.setrecursionlimit(100000)
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.program import input_id, is_input  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity_vllm.definitions.boolean import load_program  # noqa: E402
+from verity.circuits.ops.boolean.versions import load_program  # noqa: E402
 import verity_vllm.definitions  # noqa: E402, F401  (registers the vLLM registry with the Boolean-versions lookup)
 
 #: flock-circuit's spec shape: a statement's m = k_log + nbl, nbl >= 3, is at most 35 (`a6.M_MAX`)
@@ -218,7 +218,7 @@ def descend(ch: list[tuple[object, int]]) -> tuple[list[dict], list[dict]]:
 def boolean_route(fn, unit_gates: int) -> dict:
     """`descend` on fn's Boolean version's chain (`program.boolean.boolean_version`, descending into Boolean callees); with the
     version's id (``boolean``) and its unit when one lowers, empty when fn has no Boolean version."""
-    from verity_vllm.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
     try:
         bv = boolean_version(fn)
     except LookupError:

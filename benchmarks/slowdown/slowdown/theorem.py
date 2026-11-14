@@ -15,7 +15,7 @@ of its cuts (the local minimum), and the unregistered leaves `q_U(|A[L_unreg]|)`
 (`Accounting.Guarantees.ServingBlocks.ServingBlockBound`; `ServingBlockBoundRemote`, the inference cut alone, for a
 remote regime):
 
-    Σ_v ω_v ≤ Σ_S min{q_T(c_S, k_S) + ω_max μ k_S, n_S q_T(c, k) + q_U(S)} + q_U(unregistered)
+    Σ_v ω_v ≤ Σ_S min{q(c_S, k_S) + ω_max μ k_S, n_S q(c, k) + q_U(S)} + q_U(unregistered)
 
 With `aggregate=True` the minimum is of the global sums instead (each cut name summed over every server block), the
 bound to use where only aggregate bounds exist. Remote has no wipe or certifier, so its server blocks are a server over
@@ -58,7 +58,7 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class Budget:
-    """`(c, k)`: a block's gates and its unregistered input bits, and the bits that may cross its narrowest declared
+    """`(c, k)`: a block's gates and its fresh input bits, and the bits that may cross its narrowest declared
     forward cut (`math.inf` where the policy declares none: an inference block; an episode of the proof of forward
     computation, whose operators form a one-way chain, has `n_max` positions times the write allowance)."""
 
@@ -83,7 +83,7 @@ class Blocks:
 
 @dataclass(frozen=True)
 class Cut:
-    """One valid partition of a server block: its blocks, and its uncertified gates by route (`U`, which no block
+    """One valid partition of a server block: its blocks, and its free compute by route (`U`, which no block
     constrains), valid under `cites` (the Lean guarantees and premises that put every gate in a block or in `U`)."""
 
     name: str
@@ -276,7 +276,7 @@ def padded(unregistered: float, g: float, efficiency: float = 1.0, eps_unreg: fl
 
 def multiple_bound(mfu: float, s: float, x: float, reference_efficiency: bool = True) -> float:
     """`max(1, 1/(s + a x))`: the hardware multiple a developer needs over an unconstrained one at `MFU₀ = mfu`
-    (`hardwareMultiple`), when the unmonitored share `s` trains like it and the other terms `x`, shares of capacity,
+    (`hardwareMultiple`), when the unregistered share `s` trains like it and the other terms `x`, shares of capacity,
     convert into its work at `a`. Under reference efficiency (`GLOSSARY.md`: no run uses the hardware more efficiently
     than the reference) free compute runs at `MFU₀` too, so `a = 1`; without it `x` counts at peak, `a = 1/MFU₀`, Lean's
     `Slowdown.Slowdown.remoteSlowdown mfu s x` (`Slowdown.Guarantees.SlowdownRemote`, `SlowdownRemoteMonitoringPeriod`). Below

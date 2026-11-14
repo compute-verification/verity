@@ -162,7 +162,7 @@ def _public_inputs_files(to: Path) -> tuple[Path, Path, dict]:
 def test_the_v2_audit_refuses_a_circuit_with_a_public_input_port(tmp_path):
     """v2 sets its session up without the verifier's own recomputation of public input words (`OneStageZk.buildSessionOf`
     passes no `--public-inputs`), so a circuit naming a public input port is refused at setup (`HmIn.checkOwn`), before
-    any proof is read, on the audit's own run and not only at `flock-verify`'s command; the session is a record and no
+    any proof is read, on the audit's own run and not only at `verity-verify-proof`'s command; the session is a record and no
     proof file. `Verity.Sampled.pub_of_setup` reads off that refusal that every session v2 accepts has no public input
     port."""
     circuit, public, partition = _public_inputs_files(tmp_path)

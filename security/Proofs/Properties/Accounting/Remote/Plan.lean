@@ -20,17 +20,17 @@ builds, or `none` (`changed_make`).
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open RemoteAudit
+open Poub
 
-open private RemoteAudit.endsOf RemoteAudit.lexLt from RemoteAudit.Plan
+open private Poub.endsOf Poub.lexLt from Poub.Plan
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-- Two runs that don't overlap. -/
 def Apart (x y : Nat × Nat) : Prop := x.1 + x.2 ≤ y.1 ∨ y.1 + y.2 ≤ x.1
 
-theorem endsOf_prefix (rs : Array (Nat × Nat)) : PrefixSums (RemoteAudit.endsOf rs) (rs.toList.map (·.2)) := by
-  unfold RemoteAudit.endsOf
+theorem endsOf_prefix (rs : Array (Nat × Nat)) : PrefixSums (Poub.endsOf rs) (rs.toList.map (·.2)) := by
+  unfold Poub.endsOf
   exact prefixSums_fold (·.2) rs
 
 theorem block_spec (blocks : Nat) (rs : Array (Nat × Nat)) (ends : Array Nat)
@@ -105,11 +105,11 @@ theorem chain_pairwise (l : List (Nat × Nat)) (h : ∀ k (hk : k + 1 < l.length
 /-- Runs inside the store whose sort by `lexLt` chains are pairwise apart, and a plan of them reads distinct blocks. -/
 theorem readsDistinct_sorted (blocks blocks' : Nat) (rs : Array (Nat × Nat))
     (hin : ∀ x ∈ rs.toList, x.1 + x.2 ≤ blocks)
-    (hord : ∀ k, k < (rs.qsort RemoteAudit.lexLt).size - 1 →
-      ¬ ((rs.qsort RemoteAudit.lexLt)[k]!.1 + (rs.qsort RemoteAudit.lexLt)[k]!.2 > (rs.qsort RemoteAudit.lexLt)[k + 1]!.1)) :
-    ReadsDistinct ⟨blocks', rs, RemoteAudit.endsOf rs⟩ blocks := by
+    (hord : ∀ k, k < (rs.qsort Poub.lexLt).size - 1 →
+      ¬ ((rs.qsort Poub.lexLt)[k]!.1 + (rs.qsort Poub.lexLt)[k]!.2 > (rs.qsort Poub.lexLt)[k + 1]!.1)) :
+    ReadsDistinct ⟨blocks', rs, Poub.endsOf rs⟩ blocks := by
   refine readsDistinct_of blocks blocks' rs _ (endsOf_prefix rs) hin ?_
-  have hp := qsort_toList_perm rs RemoteAudit.lexLt
+  have hp := qsort_toList_perm rs Poub.lexLt
   refine (hp.pairwise_iff (fun {x y} hxy => Or.symm hxy)).1 (chain_pairwise _ fun k hk => ?_)
   simp only [Array.length_toList] at hk
   have := hord k (by omega)
@@ -230,4 +230,4 @@ theorem changedReadsDistinct : ChangedReadsDistinct := by
   · rw [h1] at h
     exact planReadsDistinct runs blocks pl' h
 
-end Properties.RemoteAudit
+end Properties.Poub

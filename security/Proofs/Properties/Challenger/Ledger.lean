@@ -106,8 +106,8 @@ theorem canon_files (close hellos record log : ByteArray) :
   simp only [List.sum_cons, List.sum_nil] at hlen
   exact ⟨t, ht, by omega⟩
 
-theorem plainAt_openBody {auditor host pins : String} (keyHash pin window : ByteArray) (ha : PlainStr auditor)
-    (hh : PlainStr host) (hp : PlainStr pins) : PlainAt 3 (openBody auditor host pins keyHash pin window) :=
+theorem plainAt_openBody {auditor device pins : String} (keyHash pin window : ByteArray) (ha : PlainStr auditor)
+    (hh : PlainStr host) (hp : PlainStr pins) : PlainAt 3 (openBody auditor device pins keyHash pin window) :=
   plainAt_built (ks := ["by", "host", "key_sha512", "pinned", "pins", "window", "withheld"]) rfl (by decide)
     (by decide) (by
       intro p hm
@@ -130,9 +130,9 @@ theorem plainAt_openBody {auditor host pins : String} (keyHash pin window : Byte
           exact .str 0 (plain_hexOf _))
       · exact .bool 1 true)
 
-theorem canon_openBody {auditor host pins : String} (keyHash pin window : ByteArray) (ha : PlainStr auditor)
+theorem canon_openBody {auditor device pins : String} (keyHash pin window : ByteArray) (ha : PlainStr auditor)
     (hh : PlainStr host) (hp : PlainStr pins) :
-    ∃ t, Flock.canon (openBody auditor host pins keyHash pin window) = .ok t ∧
+    ∃ t, Flock.canon (openBody auditor device pins keyHash pin window) = .ok t ∧
       t.length ≤ 118 + auditor.length + host.length + pins.length + (Flock.hexOf keyHash).length +
         (Flock.hexOf pin).length + (Flock.hexOf window).length := by
   obtain ⟨tp, htp, hlp⟩ := canon_mkObj_le (l := [("lines", Lean.toJson (1 : Nat)), ("sha512", .str pins)])

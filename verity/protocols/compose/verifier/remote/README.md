@@ -21,7 +21,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 **Which "remote".** Five things in the tree are called "remote", and this page means the first:
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v1`; v0 is development);
-- PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/accounting/poub/verifier/`, `RemoteAudit`,
+- PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/accounting/poub/verifier/`, `Poub`,
   `Accounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
 - `RemoteChallenger` (`verity/protocols/proofs/spot/device/remote.py`), a remote challenger's client;
 - `CertifierClient` (`verity/protocols/accounting/certifier/verifier/active.py`), onsite's network certifier, over the network;

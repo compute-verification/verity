@@ -49,7 +49,7 @@ case " $* " in
   *" -c "*torch.version.cuda*) [ -n "${STUB_TORCH_CUDA:-}" ] || exit 1; echo "$STUB_TORCH_CUDA"; exit 0 ;;
   *" -c "*lean_verifier*)
     echo "lean-build" >> "$STUB_DIR/calls"
-    [ -n "${STUB_LEAN:-}" ] || { echo "lake build remote-audit-verifier failed" >&2; exit 1; }
+    [ -n "${STUB_LEAN:-}" ] || { echo "lake build poub-verifier failed" >&2; exit 1; }
     echo "$STUB_LEAN"; exit 0 ;;
   *" -c "*config.row_file*)
     [ -n "${STUB_ROW_FILE:-}" ] || { echo "UsageError: the row has a file in two directories" >&2; exit 1; }
@@ -218,7 +218,7 @@ class Node:
         (self.stub / "prover.py").write_text(PROVER)
         self.venv(venv)
         self.lease = program(self.stub / "gpu-lease", LEASE)
-        self.lean = program(self.stub / "remote-audit-verifier", "#!/bin/bash\n")
+        self.lean = program(self.stub / "poub-verifier", "#!/bin/bash\n")
         program(self.bin / "nvcc", NVCC)
         program(self.bin / "ss", SS)
         program(self.bin / "nvidia-smi", NVIDIA_SMI)

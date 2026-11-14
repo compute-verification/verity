@@ -93,7 +93,7 @@ class Scenario:
 
     @property
     def reference(self) -> float:
-        """`T_0`: the reference circuit's gates to the run's target (its FLOPs through `hardware.Units`)."""
+        """`T_0`: the reference training algorithm's gates to the run's target (its FLOPs through `hardware.Units`)."""
         return self.context.units.gates(self.run.target(self.model))
 
     def seconds(self, overhead: float) -> float:
@@ -132,7 +132,7 @@ class Estimate:
     #: where its premises stand at the largest block that bounds it (`classes.premise_status`: supported, assumed,
     #: contested, refuted); empty for an attack
     premise: str = ""
-    #: the overhead inside one inference block `(c, k)` alone: `w c / q_T(c, k)`, the declared circuit's overhead
+    #: the overhead inside one inference block `(c, k)` alone: `w c / q(c, k)`, the registered circuit's overhead
     declared: float = math.nan
     #: every bound at once only: the bounds left out at a block that binds, their premises refuted there
     excluded: tuple[str, ...] = ()
