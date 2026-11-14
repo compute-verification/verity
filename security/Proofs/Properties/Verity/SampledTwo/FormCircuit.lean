@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.FormAgreed
 public import Proofs.Properties.Verity.SampledTwo.FormSetup
 public import Proofs.Properties.Verity.SampledTwo.FormCount
+public import Proofs.Properties.Verity.SampledTwo.FormStmts
 
 /-!
 # The messages' piece at the form's reading, at the circuit statement's table
@@ -20,12 +21,15 @@ piece at that table, where the three are theorems, and with them the statements'
   `StmtsCount`, and `SessionCoins.StmtsPrint`, `SessionCoins.StmtsFit` and `SessionCoins.SessionsLive`.
 * `StmtsFixed` is `stmtsFixed_of_each` (`StmtsRound.lean`), from `StmtsCount`, `StmtAtFixed` and each case being the
   one sent (`CaseIsSent`).
+* `StmtAtFixed` is `stmtAtFixed_of` (`FormStmts.lean`), from `StmtsRead`, `StmtsCount`, `CaseIsSent`, and
+  `MemberAtFixed` and `DrawAtFixed`.
 
 The reading's statements and messages are taken to be the case's (`hS`, `hM`), which holds by definition at
 `SessionMsgs.sessionReading`.
 
 **Not established here**: `StmtsRead`, `PartsHeldAt`, `SessionCoins.StmtsPrint`, `SessionCoins.StmtsFit`,
-`SessionCoins.SessionsLive`, `StmtAtFixed`, `LinkFixed` and `LastFixed`, each a hypothesis, and `agreed_form`'s `hR`.
+`SessionCoins.SessionsLive`, `MemberAtFixed`, `DrawAtFixed`, `LinkFixed` and `LastFixed`, each a hypothesis, and
+`agreed_form`'s `hR`.
 -/
 
 @[expose] public section
@@ -43,7 +47,8 @@ and messages are the case's. Its hypotheses on the sessions' records are theorem
 (`SessionCoins.logRising_of`), the check read a record for every template (`SessionCoins.recordsCover_of`), and each
 record is its session's, accepted at its statement's setup (`SessionCoins.msgsOfRecords_form`). The evidence holds one
 statement a template (`stmtsCount_of`), so the statements' message is fixed where each template's statement is
-(`stmtsFixed_of_each`). -/
+(`stmtsFixed_of_each`), which it is where the member it names and the sample its record prints are
+(`stmtAtFixed_of`). -/
 theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
@@ -57,9 +62,9 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     (hplay : PlayAccepts A C S P') (hsess : SessionMsgs A C S P') (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hparts : PartsHeldAt A C)
     (hprint : SessionCoins.StmtsPrint C Good) (hfit : SessionCoins.StmtsFit C Good)
-    (hlive : SessionCoins.SessionsLive C Good) (hsent : CaseIsSent C) (hEach : StmtAtFixed A C Good L)
-    (hLink : LinkFixed A C S Good L) (hLast : LastFixed A C S Good L) (hC : CaseCommits C)
-    (hx : stmtOf c = some x)
+    (hlive : SessionCoins.SessionsLive C Good) (hsent : CaseIsSent C) (hmemb : MemberAtFixed A C Good L)
+    (hdraw : DrawAtFixed A C Good L) (hLink : LinkFixed A C S Good L) (hLast : LastFixed A C S Good L)
+    (hC : CaseCommits C) (hx : stmtOf c = some x)
     (hR : ∀ (ω : TapeOf V θ F c σ) (r : Coins A x),
       FormAccepts C ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
       Good ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
@@ -78,6 +83,8 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     (SessionCoins.logRising_of (SessionCoins.located_rising A C _ hsz) hlog (SessionCoins.interiorReads C hsz))
     (SessionCoins.recordsCover_of hsz hS hst hcount)
     (SessionCoins.msgsOfRecords_form hS hM hof hst hrounds hscope hcount hprint hfit hlive) hplay hsess hof hst
-    hrounds hscope (stmtsFixed_of_each A C S Good L hS hsent hcount hEach) hLink hLast hC hx hR
+    hrounds hscope
+    (stmtsFixed_of_each A C S Good L hS hsent hcount (stmtAtFixed_of A C S Good L hS hsent hst hcount hmemb hdraw))
+    hLink hLast hC hx hR
 
 end Verity.SampledTwo
