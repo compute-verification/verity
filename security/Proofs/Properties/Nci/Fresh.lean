@@ -23,14 +23,14 @@ import Proofs.Properties.Nci.Lemmas
 import Std.Data.HashSet.Lemmas
 
 /-!
-# The novel reads, from what `Desc.analyze` and `Desc.novelWidth` compute
+# The novel reads, from what `Desc.analyze` and `Desc.freshWidth` compute
 
-Toward `NovelExact`. A segment names gates with their widths (`Width.segGates`). `Desc.intoOf`
+Toward `FreshExact`. A segment names gates with their widths (`Width.segGates`). `Desc.intoOf`
 collects, per IU, the segments its root nodes read whose first piece is in a root node of another IU and outside θ's
 nodes (`intoOf_spec`), and `NciCheck.ius` sums the widths of the gates outside an IU that its gates read, θ's taken out
-(`ius_snd`, `hashSet_fold_sum'`), and `Desc.novelWidth` sums the widths of the distinct gates of those segments
-(`Width.novelWidthExact`). So `NovelExact` holds wherever one smaller statement does, a named `Prop` here
-(`novelExact_of`): `ReadsExact`, that on a Program `Desc.evaluate` reads, the segments `Desc.analyze` gives a root node
+(`ius_snd`, `hashSet_fold_sum'`), and `Desc.freshWidth` sums the widths of the distinct gates of those segments
+(`Width.freshWidthExact`). So `FreshExact` holds wherever one smaller statement does, a named `Prop` here
+(`freshExact_of`): `ReadsExact`, that on a Program `Desc.evaluate` reads, the segments `Desc.analyze` gives a root node
 name, as gates with their widths, exactly the gates outside the node that its gates read, each in the root node of its
 segment's first piece. `readsExact` (`Proofs.Properties.Nci.Agrees`) proves it.
 
@@ -40,7 +40,7 @@ segment's first piece. `readsExact` (`Proofs.Properties.Nci.Agrees`) proves it.
 
 @[expose] public section
 
-namespace NciCheck.Properties.SecurityProofs.Novel
+namespace NciCheck.Properties.SecurityProofs.Fresh
 
 open DescAgree
 open Flock.Program (Prog GateTable)
@@ -247,12 +247,12 @@ theorem segGates_ps {s : Desc.Seg} {x : ℤ × ℕ} (h : x ∈ segGates s) : ∃
     · simp [piecesGates, Desc.Seg.copy, Desc.shiftGates, Array.toList_map, h0] at h
   · exact ⟨q, rfl⟩
 
-/-! ## `NovelExact` -/
+/-! ## `FreshExact` -/
 
-/-- **`NovelExact`, from `analyze`'s reads and `novelWidth`'s union**: the segments `intoOf` collects for an IU name, with
-their widths, the gates outside it that its gates read, θ's taken out, each once; `novelWidth` sums their widths, and so
+/-- **`FreshExact`, from `analyze`'s reads and `freshWidth`'s union**: the segments `intoOf` collects for an IU name, with
+their widths, the gates outside it that its gates read, θ's taken out, each once; `freshWidth` sums their widths, and so
 does `NciCheck.ius`. -/
-theorem novelExact_of (hR : ReadsExact) : NovelExact := by
+theorem freshExact_of (hR : ReadsExact) : FreshExact := by
   intro bytes P reads mask own c dv hdec hov hlo hin hwk han hc hms hos hdsz hmask hown hdiv hn u hu
   obtain ⟨-, h0, hK, hmono⟩ := rootLaidOut_spec P hlo
   obtain ⟨hcN, -, -, -, -⟩ := circuitOf_ok P c hc
@@ -291,8 +291,8 @@ theorem novelExact_of (hR : ReadsExact) : NovelExact := by
     have hab : (a : ℤ) = b := hxy
     have : a = b := by exact_mod_cast hab
     subst this; rfl
-  have e1 : Desc.novelWidth segs = ∑ x ∈ (segsGates segs).toFinset, x.2 := by
-    rw [Width.novelWidthExact segs hnn hcons, dedup_sum]
+  have e1 : Desc.freshWidth segs = ∑ x ∈ (segsGates segs).toFinset, x.2 := by
+    rw [Width.freshWidthExact segs hnn hcons, dedup_sum]
   have e2 : (ius c dv)[u]!.2 =
       ∑ a ∈ (tally c dv)[u]!.2.toList.toFinset, if dv.theta.contains a = true then 0 else c.w[a]! := by
     rw [ius_snd c dv hu]; exact hashSet_fold_sum' _ _ _
@@ -353,9 +353,9 @@ theorem novelExact_of (hR : ReadsExact) : NovelExact := by
 /-- **`DescAgrees`, from three statements** (`Resolve.bodiesOk` proves the second, and
 `OperandsResolve.operandsResolve_of` the first from it):
 `Walk.OperandsResolve` and `Resolve.BodiesOk` give `GatesLocated`
-(`Resolve.operandsEarlier_of`, `Walk.gatesLocated_of`), and `ReadsExact` gives `NovelExact` (`novelExact_of`). -/
+(`Resolve.operandsEarlier_of`, `Walk.gatesLocated_of`), and `ReadsExact` gives `FreshExact` (`freshExact_of`). -/
 theorem descAgrees_of_open (hO : Walk.OperandsResolve) (hB : Resolve.BodiesOk) (hR : ReadsExact) :
     Properties.DescAgrees :=
-  Walk.descAgrees_of_gaps hO (Resolve.operandsEarlier_of hB) (novelExact_of hR)
+  Walk.descAgrees_of_gaps hO (Resolve.operandsEarlier_of hB) (freshExact_of hR)
 
-end NciCheck.Properties.SecurityProofs.Novel
+end NciCheck.Properties.SecurityProofs.Fresh

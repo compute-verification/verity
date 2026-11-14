@@ -28,7 +28,7 @@ The `Slots` forms (`ThreadedRuntimeSlots`, `ThreadedRateSlots`, `ThreadedRuntime
 weights incompressible per parameter slot (`Nci.Assumptions.WeightsIncompressibleSlots`), so that a window spanning
 several optimizer steps on a parameter is charged for it once, with the same bounds.
 
-All count reads by width: `Placed.state` and `novelReads` are widths of the gates read. A wipe bounds information, what
+All count reads by width: `Placed.state` and `freshInput` are widths of the gates read. A wipe bounds information, what
 the state can determine, not the width of the gates a window reads from before its start, so composing these with a wipe
 needs the read bound in its determination form.
 -/
@@ -48,7 +48,7 @@ a window (`Φ_{X i} ω ≤ Γ`), its link capacity is at most `r`, and its state
 window, `Λ = T.bound`:
 `b_a |T.M| ≤ n ⌈t/ω⌉ K Λ(K)`, so `t ≥ ω (b_a |T.M| / (n K Λ(K)) − 1)`.
 
-Reads are counted by width (`Placed.state`, `novelReads`); a wipe bounds information, so composing this with a wipe
+Reads are counted by width (`Placed.state`, `freshInput`); a wipe bounds information, so composing this with a wipe
 needs the determination form of the read bound. -/
 def ThreadedRuntime : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
