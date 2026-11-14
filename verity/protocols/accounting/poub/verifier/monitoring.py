@@ -1,27 +1,27 @@
 """PoUB over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
-answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + ⌈W/g⌉·s/2^64 (δ₀
-the openings' pooled bound's δ, 2^-40, and ⌈W/g⌉·s/2^64 the draw term, the session's openings coins at its `samples` s
-each, `LineHeldAtComponent`'s).
+answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes`, the receipts not shown wrong in bytes, at `eps` =
+δ₀ + ⌈W/g⌉·s/2^64 (δ₀ the openings' pooled bound's δ, 2^-101, and ⌈W/g⌉·s/2^64 the sample term, the session's
+openings coins at its `samples` s each, `LineHeldAtSubprotocol`'s).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
 T = machines·⌊period/window_s⌋ sessions in a period (the core's `block_count`), each on its own live coins, against one
 adaptive prover.
 
 - **Pooled** (`pooled_step`): the count bound `FlockSoundness.Audit.Periods.prCoin_count_le_choose`. When each
-  session, given the earlier ones, is accepted and short of its `q_bytes` with probability at most p = `eps`, at least M
-  of the T are with probability at most C(T, M)·p^M. M is the least count within δ (`short_sessions`), so except with δ
-  at least T − M + 1 sessions certify their `q_bytes`: the period certifies at least (T − M + 1)·`q_bytes`, and at most
-  (M − 1)/T of its sessions are uncovered.
+  session, given the earlier ones, is accepted with its `q_bytes` more than its right receipts' bytes with probability
+  at most p = `eps`, at least M of the T are with probability at most C(T, M)·p^M. M is the least count within δ
+  (`short_sessions`), so except with δ at least T − M + 1 sessions' `q_bytes` are right receipts' bytes: the period has
+  at least (T − M + 1)·`q_bytes` of them, and at most (M − 1)/T of its sessions are uncovered.
 - **Per window** (`per_window`): the session's openings bound at δ/T instead of δ₀ (`pooled.bound` of its windows),
-  so that every one of the T sessions certifies that much at once, except with δ + T·(eps − δ₀), each session's draw
+  so that every one of the T sessions holds that much at once, except with δ + T·(eps − δ₀), each session's sample
   term once.
 
 Both leave out (`EXCEPT`) each session's Σ_t adv_t, its windows' PRF advantages (SHA-512 stream as PRF: not priced,
-not assumed), so every δ and `eps` of this module reads δ + Σ_t adv_t over the period's sessions; a session's sample
-has no hiding term, since its prover is sent the coin commitment only at the session's end. What the session proves is
-its verdict and outputs, by the Lean verifier; what is scaled is the
-number of sessions and that each is audited as this one was."""
+not assumed), and its binding term, the receipts' (`Receipts.binding`, not priced), so every δ and `eps` of this
+module reads δ + Σ_t adv_t + each session's binding term over the period's sessions; a session's hiding term is 0
+where its records read no commitment. What the session proves is its verdict and outputs, by the Lean verifier; what
+is scaled is the number of sessions and that each is audited as this one was."""
 
 from __future__ import annotations
 
@@ -43,7 +43,8 @@ FORMAT = "verity/remote-bandwidth-monitoring-period/v1"
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
              "file": "security/Proofs/Flock/Soundness/Audit/Periods.lean"}
 EXCEPT = ("Σ_t adv_t, the PRF advantage of each window of each of the period's sessions (SHA-512 stream as PRF: not "
-          "priced, not assumed): every δ and eps here reads δ + Σ_t adv_t")
+          "priced, not assumed), and each session's binding term (not priced): every δ and eps here reads "
+          "δ + Σ_t adv_t + the sessions' binding terms")
 """What every δ and `eps` of a table leaves out, which the table carries beside them (`except_also`)."""
 
 
@@ -70,8 +71,8 @@ def pooled_step(t: int, q_bytes: int, eps: Fraction, delta: Fraction) -> dict[st
 
 
 def per_window(t: int, windows: Sequence[tuple[int, int]], delta: Fraction, draw_term: Fraction) -> dict[str, Any]:
-    """Each of `t` sessions at δ/t: its openings' pooled bound at that δ, the reads it certifies and the period's total,
-    except with δ and each session's `draw_term` (its eps less its δ₀)."""
+    """Each of `t` sessions at δ/t: its openings' pooled bound at that δ, the receipts not shown wrong and the period's
+    total, except with δ and each session's `draw_term` (its eps less its δ₀)."""
     b = pooled.bound(windows, delta / t)
     wrong = -(-b.wrong.numerator // b.wrong.denominator)
     each = (sum(u for u, _ in windows) - wrong) * codec.BLOCK_BYTES

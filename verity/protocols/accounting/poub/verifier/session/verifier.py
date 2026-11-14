@@ -387,22 +387,29 @@ def memory_error(ledgers: dict) -> float | None:
     return None
 
 
-def sketch_at(session: dict, registration: dict, outside: int | None = None) -> dict | None:
-    """A session's SketchBound δs from its record (`Verifier.ledgers`' `sketch_failure`) against Q = F·C queries, C the
-    compressions the verifier charged the node over the span and F the outside-compute factor: the record's (1 for one
-    written before F was recorded, which charged the node's alone), or `outside` to read it at another; with the memory
-    line's error there, the horizon's plus δs (`memory_error` at F).  None for a session whose record has no sketch
-    term."""
+def recorded_queries(sketch_failure: dict) -> int:
+    """Q, the SHA-512 compressions a record's sketch term (`Verifier.ledgers`' `sketch_failure`) charged the prover:
+    2^`queries_log2`, the prover's budget, or, in a record written before the budget was one constant, F·C, C the
+    compressions the verifier charged the node over the span and F its outside-compute factor (1 for one written
+    before F was recorded, which charged the node's alone)."""
+    if "queries_log2" in sketch_failure:
+        return 2 ** sketch_failure["queries_log2"]
+    return sketch_failure.get("outside", 1) * sketch_failure["compressions"]
+
+
+def sketch_at(session: dict, registration: dict, queries: int | None = None) -> dict | None:
+    """A session's SketchBound δs from its record (`Verifier.ledgers`' `sketch_failure`) against Q queries: the
+    record's (`recorded_queries`), or `queries` to read it at another; with the memory line's error there, the
+    horizon's plus δs (`memory_error` at Q).  None for a session whose record has no sketch term."""
     lg = session.get("ledger") or {}
     sf, inputs = lg.get("sketch_failure"), lg.get("inputs") or {}
     if not sf or not inputs.get("rows"):
         return None
-    f = sf.get("outside", 1) if outside is None else outside
-    c = sf["compressions"]
-    d = timing.sketch_failure(c, inputs["passes"], inputs["rows"], blocks=registration["blocks"], outside=f)
+    q = recorded_queries(sf) if queries is None else queries
+    d = timing.sketch_failure(inputs["passes"], inputs["rows"], blocks=registration["blocks"], queries=q)
     horizon = next((lg[n]["error"]["horizon"] for n in ("spec", "measured") if "error" in lg.get(n, {})), None)
-    return {"outside": f, "compressions": c, "queries": f * c, "log2": timing.log2(d),
-            "error": None if horizon is None else horizon + float(d), "named": ledger.NAMED_TERMS}
+    return {"queries": q, "log2": timing.log2(d), "error": None if horizon is None else horizon + float(d),
+            "named": ledger.NAMED_TERMS}
 
 
 def node_line(mem: dict, *, host_bytes: int) -> dict:
@@ -1495,17 +1502,15 @@ class Verifier:
                          "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
             if parts:
                 out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
-        out["delta"] = ledger.delta_parts(record, stated)
+        out["delta"] = ledger.delta_parts(record)
         out["named"] = ledger.NAMED_TERMS
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
                            if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
                                                                        if n not in readings)})
-        # SketchBound's δ: every compression the prover could make over the span a guess or a key, Q = F·C.
-        compressions, outside = ledger.compressions(record, stated), stated.sketch_outside
-        out["sketch_failure"] = {"compressions": compressions, "outside": outside,
-                                 "log2": timing.log2(timing.sketch_failure(compressions, record.passes, record.rows,
-                                                                           blocks=record.blocks, outside=outside))}
+        out["sketch_failure"] = {"queries_log2": audit.QUERIES_LOG2,
+                                 "log2": timing.log2(timing.sketch_failure(record.passes, record.rows,
+                                                                           blocks=record.blocks))}
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild,
                                    chip_bytes=stated.chip_bytes)
@@ -1542,7 +1547,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
     ap.add_argument("--windows", type=int, default=7)
     ap.add_argument("--window-ms", type=float, default=1000.0)
     ap.add_argument("--samples", type=int, default=2773)
-    ap.add_argument("--delta-log2", type=float, default=-40.0)
+    ap.add_argument("--delta-log2", type=float, default=math.log2(audit.DELTA))
     ap.add_argument("--jitter-ms", type=float, default=2.0)
     ap.add_argument("--sessions", type=int, default=1)
     ap.add_argument("--lifetime", type=int,
@@ -1799,5 +1804,5 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
 __all__ = ["AVERAGE", "GPU_HBM_BYTES", "HBM_BYTES", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
            "WORST_PASS", "ingress_bursts", "lean_record", "load_registry", "main", "memory", "memory_error",
            "node_line", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
-           "recorded_paced", "recorded_rates", "recorded_windows", "regions_of", "save_registry", "sketch_at",
-           "timing_parts"]
+           "recorded_paced", "recorded_queries", "recorded_rates", "recorded_windows", "regions_of", "save_registry",
+           "sketch_at", "timing_parts"]

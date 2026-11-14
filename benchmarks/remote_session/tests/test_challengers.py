@@ -375,21 +375,24 @@ def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes
                       lockdown=lockdown)
 
 
-def test_the_line_reads_the_sketch_at_its_outside_factor() -> None:
-    """`sketch_at` reads a session's SketchBound δ at F times the compressions its verifier charged the node
-    (gate run 8's session 0: 2^-51.59 at F = 1, the red team's 2^-41.59 at 2^10), at the record's F unless asked
-    another (1 for a record written before F), and the line's error there is the horizon's plus it; a session with no
-    sketch term has none."""
+def test_the_line_reads_the_sketch_at_the_queries_its_record_charged() -> None:
+    """`sketch_at` reads a session's SketchBound δ at the Q its record charged (`recorded_queries`) unless asked
+    another: 2^`queries_log2`, the prover's budget, in a record that states it (2^-15.12 at 2^80 over P = 2,118 passes
+    of N = 97,517,568 blocks), and F·C in one written before, C the compressions its verifier charged the node and F
+    its outside-compute factor, 1 where the record states none (2^-51.59 at F = 1, 2^-41.59 at 2^10).  The line's error
+    there is the horizon's plus it; a session with no sketch term has none."""
     c, p, n, horizon = 12_708_215_084_432, 2118, 97_517_568, 9.64e-10
     sf = {"compressions": c, "log2": -51.59}
     s = {"ledger": {"sketch_failure": sf, "inputs": {"passes": p, "rows": 16}, "spec": {"error": {"horizon": horizon}}}}
-    for f, want in ((1, -51.59), (2 ** 10, -41.59), (2 ** 20, -31.59)):
-        got = verifier.sketch_at(s, {"blocks": n}, f)
-        assert (got["outside"], got["compressions"], got["queries"], round(got["log2"], 2)) == (f, c, f * c, want)
+    for q, want in ((c, -51.59), (2 ** 10 * c, -41.59), (2 ** 80, -15.12)):
+        got = verifier.sketch_at(s, {"blocks": n}, q)
+        assert (got["queries"], round(got["log2"], 2)) == (q, want)
         assert got["error"] == pytest.approx(horizon + 2.0 ** got["log2"])
-    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 1)
+    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, c)
     sf["outside"] = 2 ** 10
-    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 2 ** 10)
+    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 2 ** 10 * c)
+    s["ledger"]["sketch_failure"] = {"queries_log2": al.audit.QUERIES_LOG2, "log2": -15.12}
+    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 2 ** 80)
     assert verifier.sketch_at({"ledger": {}}, {"blocks": n}) is None
 
 
@@ -427,7 +430,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     assert json.loads(closed)["body"]["complete"] is defer_openings
     doc = line("lean")
     honest, dropper = doc["sessions"]
-    assert doc["sketch_outside"] == [2 ** 20] and honest["sketch"]["outside"] == 2 ** 20
+    assert doc["sketch_queries"] == [2 ** 80] and honest["sketch"]["queries"] == 2 ** 80
     assert honest["of_record"] and dropper["of_record"] and honest["credit"]["credited"]["ok"]
     assert dropper["credit"]["accepted"]["reason"] == "the Lean refused it (receipt)"
     for s in (honest, dropper):
@@ -1022,7 +1025,7 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     which dominates (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), δs, the rest,
     which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 at the session's samples,
     which every window drew (2118·48 = 101,664 draws, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its
-    slack is split at it: at 67 bits the total is 2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995
+    slack is split at it: at 140 bits the total is 2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995
     and 2^-40.0000 before the rejection."""
     passes, delta, sketch_log2, drawn = GATE_RUNS[run, k]
     window = {"lengths": [2 ** 27], "profile": {"delta": 2.0 ** -40, "drawn": {"receipt": drawn}}}
@@ -1045,6 +1048,6 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     stated["ledger"]["inputs"]["slack_log2"] = al.audit.SLACK_LOG2
     slack = al.line.number(al.session_error(stated)["exact"]["delta_slack"])
     assert slack == Fraction(passes, 2 ** al.audit.SLACK_LOG2) and al.timing.log2(slack) < -55.9
-    at67 = parts["profile"] + slack + parts["sketch"]
-    assert al.timing.log2(at67) == pytest.approx(-39.9995 if passes == 2118 else -40.0000, abs=1e-4)
-    assert al.timing.log2(at67 + rejection) == pytest.approx(-39.9908 if passes == 2118 else -39.9981, abs=1e-4)
+    stated_total = parts["profile"] + slack + parts["sketch"]
+    assert al.timing.log2(stated_total) == pytest.approx(-39.9995 if passes == 2118 else -40.0000, abs=1e-4)
+    assert al.timing.log2(stated_total + rejection) == pytest.approx(-39.9908 if passes == 2118 else -39.9981, abs=1e-4)
