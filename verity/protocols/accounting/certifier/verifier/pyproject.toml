@@ -14,6 +14,10 @@ untraced = [
     "tests/test_network_certifier_tie_service.py",
 ]
 inputs = ["verity"]
+# check runs it as three parts by test id (`lean-suites:verity/protocols/accounting/certifier/verifier:K/3`, `suites.py`'s
+# `id_part_of`), each collecting every file and running the tests whose node id hashes to K, so that ci.toml's plans spread it
+# over three shards: in one process it ran longest of the one-process suites beside the security analysis's audit
+parts = 3
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
