@@ -38,7 +38,9 @@ endpoint."""
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
+import functools
 import gzip
 import hashlib
 import importlib.util
@@ -6189,3 +6191,56 @@ def test_serve_load_varied_writes_each_requests_timings_beside_its_record(tmp_pa
         assert 0 < t["send_s"] < t["first_token_s"] < t["done_s"]
         assert r["response"] == {"token_ids": list(range(500, 500 + r["max_tokens"])), "finish_reason": "length"}
         assert t["tokens"] == r["max_tokens"]
+
+
+@functools.cache
+def _workspace_reach(*modules: str) -> dict[str, str]:
+    """Each workspace package an import statement reaches from `modules`, theirs or a reached module's, in a function
+    too, by top-level name: its import root relative to the workspace's root (where `verity` is), as this environment
+    imports it. A name this environment doesn't import from the workspace is not followed."""
+    repo = Path(importlib.util.find_spec("verity").origin).parents[1]
+    roots: dict[str, Path | None] = {}
+
+    def root(top: str) -> Path | None:
+        if top not in roots:
+            spec = importlib.util.find_spec(top)
+            where = (Path(spec.origin).parent if spec and spec.origin else None)
+            where = where.parent if where and spec.submodule_search_locations else where
+            roots[top] = where if where and where.is_relative_to(repo) else None
+        return roots[top]
+
+    def source(mod: str) -> Path | None:
+        top = root(mod.split(".")[0])
+        base = top.joinpath(*mod.split(".")) if top else None
+        return next((f for f in (base.with_suffix(".py"), base / "__init__.py") if f.is_file()), None) if base else None
+
+    seen: set[str] = set()
+    todo = list(modules)
+    while todo:
+        mod = todo.pop()
+        if mod in seen or not (f := source(mod)):
+            continue
+        seen.add(mod)
+        pkg = mod if f.name == "__init__.py" else mod.rpartition(".")[0]
+        for node in ast.walk(ast.parse(f.read_text())):
+            if isinstance(node, ast.Import):
+                todo += [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                base = ".".join([*pkg.split(".")[:len(pkg.split(".")) - node.level + 1]] * bool(node.level)
+                                + [node.module] * bool(node.module))
+                todo += [base, *(f"{base}.{a.name}" for a in node.names)]
+    return {top: str(roots[top].relative_to(repo)) for top in {m.split(".")[0] for m in seen}}
+
+
+@pytest.mark.parametrize("script", ["served_verdicts.sh", "served_util.sh", "served_stock.sh"])
+def test_the_serve_steps_python_path_names_the_import_root_of_every_workspace_package_it_reaches(script):
+    """The serve step runs `verity_vllm.pipeline.cli serve-openai` under vLLM's venv, which holds none of the workspace,
+    so it imports each workspace package from the PYTHONPATH the script exports: that path names the import root of every
+    package serve-openai's imports reach, a function's included (`verity_vllm.engine.spec`'s `verity_config`, which it
+    reaches only once it serves, and H1's drawn proofs' `verity_flock`)."""
+    m = re.search(r"^export PYTHONPATH=(\S+)$", (HERE.parent / script).read_text(), re.M)
+    assert m, f"{script} exports no PYTHONPATH"
+    named = {p.removeprefix("$TREE").lstrip("/") or "." for p in m.group(1).split(":")}
+    reached = _workspace_reach("verity_vllm.pipeline.cli", "verity_vllm.pipeline.serve_openai")
+    assert {"verity", "verity_vllm", "verity_config"} <= set(reached), reached
+    assert sorted(f"{top} ({where})" for top, where in reached.items() if where not in named) == []
