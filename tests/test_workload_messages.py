@@ -276,12 +276,8 @@ EXCEPTIONS_MAX = 38
 
 #: The programs outside ``adapters/`` that still spell the name of a file they write or read, each with the messages
 #: whose names it spells.  Delete a line when its file takes the names from the list, and lower ``PROGRAMS_MAX`` with it.
-SPELLED_BY_PROGRAMS: dict[str, tuple[str, ...]] = {
-    "benchmarks/one_stage/served_verdicts.sh": ("Circuit", "Settings", "Window", "Io", "Advice", "Weights", "WindowProgram"),
-    "benchmarks/prove_path/run.sh": ("Settings", "Window"),
-    "demos/vllm/serve.sh": ("Circuit", "Settings", "Window", "Io", "Summary", "Weights"),
-}
-PROGRAMS_MAX = 3
+SPELLED_BY_PROGRAMS: dict[str, tuple[str, ...]] = {}
+PROGRAMS_MAX = 0
 
 #: The same for the files under ``adapters/``, with ``ADAPTERS_MAX``.
 SPELLED_BY_ADAPTERS: dict[str, tuple[str, ...]] = {

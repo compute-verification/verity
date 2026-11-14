@@ -85,6 +85,8 @@ for v in PP_LLAMA PP_SERVE_RUN PP_SERVE_ROWS; do
     "directory on this node (a DIR)"; exit 2;; esac
 done
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
+# The serve dir's files that carry a message, by the names the list states (tests/test_workload_messages.py).
+F_SETTINGS=serve.json F_WINDOW=windows.jsonl
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
 LROW=llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
@@ -200,7 +202,7 @@ print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[2:]}}))' $
     ${PP_TARGET:+--target $PP_TARGET} --partition $(realpath $part) "${TG[@]}" > $O/$name/compilers.json || return 1
   local root law
   root=$($PY -c 'import json, sys
-print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["window"]) == int(sys.argv[2])))' $REC_RUN/windows.jsonl $REC_K) || return 1
+print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["window"]) == int(sys.argv[2])))' $REC_RUN/$F_WINDOW $REC_K) || return 1
   law=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["law"])' $part) || return 1
   $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-windows/rank0 --law $law --run $root \
     --opening $REC_RUN/advice/w$REC_K/private/opening.json --compilers $O/$name/compilers.json --template-sets $W/sets \
@@ -225,7 +227,7 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
   STEP1=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json STEP24=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24.json
   served() {  # NAME SERVE_RUN K: the served window's honest and forged audits, its public records and its compiler kept
     mkdir -p $O/$1-records
-    cp $2/serve.json $2/windows.jsonl $2/advice/w$3/registration.json $O/$1-records/
+    cp $2/$F_SETTINGS $2/$F_WINDOW $2/advice/w$3/registration.json $O/$1-records/
     $PP compiler --serve-run $2 ${PP_TARGET:+--target $PP_TARGET} "${TG[@]}" | tee $O/$1-records/compiler.json || return 1
     local src="--serve-run $2 --window $3 --row-dir $D ${PP_TARGET:+--target $PP_TARGET}"
     REC_NAME=$1 REC_RUN=$2 REC_K=$3

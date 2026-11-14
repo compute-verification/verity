@@ -40,6 +40,8 @@
 # Needs on the node: vLLM's venv, the checkpoint in HF_HOME and CUDA (the collector's JIT build). The serve dir D (workload dirs, bundles) stays on the node under `research keep`; $OUT keeps the records and logs.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
+# The files that carry a message, by the names the list states (tests/test_workload_messages.py).
+F_CIRCUIT=predicted.json F_SETTINGS=serve.json F_WINDOW=windows.jsonl F_SUMMARY=summary.json F_WEIGHTS=weights_registration.json
 PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
 for v in REPO REV ROW HIDDEN_SO NORM_TAP_SO VENV CUDA_HOME HF_HOME SERVE_ROOT; do
   [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`verity demo vllm serve\` (demos/vllm/run.sh)"; exit 2; }
@@ -78,7 +80,7 @@ if [ -n "${READVICE:-}" ]; then     # a served dir's advice again (every closed 
   K=${WINDOW:-5}
   CA=$(compiler_args "$READVICE") && [ -n "$CA" ] || { echo "no registered compiler for $READVICE (prove_path.py compiler)"; exit 16; }
   echo "registered compiler: $CA" | tee "$OUT/compiler.txt"
-  WA=$(weights_args "$READVICE" "$OUT/weights_registration.json") || no_weights "$READVICE"
+  WA=$(weights_args "$READVICE" "$OUT/$F_WEIGHTS") || no_weights "$READVICE"
   # shellcheck disable=SC2086
   vv advice "$READVICE" --cap "$CAP" $CA $WA 2>&1 | tee "$OUT/advice.log"
   "$PY" tools/advice_compile.py "$READVICE" --window "$K" > "$OUT/compile_w$K.log" 2>&1
@@ -90,7 +92,7 @@ fi
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-300}; floor=$((DISK_FLOOR_GB * 1048576))
 under_floor() { [ "$(df --output=avail -k "$ROOT" | tail -1)" -lt "$floor" ]; }
 keep_records() {
-  for f in serve.json windows.jsonl seals.jsonl pauses.jsonl summary.json; do
+  for f in "$F_SETTINGS" "$F_WINDOW" seals.jsonl pauses.jsonl "$F_SUMMARY"; do
     [ -f "$D/$f" ] && cp "$D/$f" "$OUT/.$f.tmp" 2>/dev/null && mv "$OUT/.$f.tmp" "$OUT/$f"
   done
 }
@@ -99,8 +101,8 @@ under_floor && { df -h "$ROOT"; echo "DISK FLOOR: under $DISK_FLOOR_GB GB free o
 PRED=$D/predicted
 vv predict row --row "${ROW##*/}" --out "$PRED" > "$OUT/predict_row.json" 2> "$OUT/predict_row.err" \
   || { tail -5 "$OUT/predict_row.err"; echo "PREDICT-ROW refused: no Build of record to serve under"; exit 17; }
-cp "$PRED/predicted.json" "$OUT/"
-CONFIG=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["config"])' "$PRED/predicted.json")
+cp "$PRED/$F_CIRCUIT" "$OUT/"
+CONFIG=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["config"])' "$PRED/$F_CIRCUIT")
 vv predict compare "$ROW" --row "${ROW##*/}" --config "$CONFIG" --predicted "$PRED" --out "$OUT/predict_compare.json" \
   > "$OUT/predict_compare.log" 2>&1 \
   || { tail -5 "$OUT/predict_compare.log"; echo "PREDICT-COMPARE: predict's Build of record is not ROW's traced Build"; exit 18; }
@@ -131,16 +133,16 @@ for _ in $(seq 1 600); do
   sleep 2
 done
 grep "SERVE-OPENAI listening" "$OUT/serve.log" || { tail -40 "$OUT/serve.log"; echo "SERVER NOT LISTENING"; kill "$SRV"; exit 11; }
-cp "$D/serve.json" "$OUT/" 2>/dev/null
+cp "$D/$F_SETTINGS" "$OUT/" 2>/dev/null
 CA=$(compiler_args "$D") && [ -n "$CA" ] || { echo "no registered compiler for $D (prove_path.py compiler)"; kill -TERM "$SRV"; wait "$SRV"; exit 16; }
 echo "registered compiler: $CA" | tee "$OUT/compiler.txt"
-WA=$(weights_args "$D" "$D/weights_registration.json") || no_weights "$D"
-cp "$D/weights_registration.json" "$OUT/" 2>/dev/null
+WA=$(weights_args "$D" "$D/$F_WEIGHTS") || no_weights "$D"
+cp "$D/$F_WEIGHTS" "$OUT/" 2>/dev/null
 
 # Each window's advice committed once, at serve time, as its windows.jsonl line lands: `advice --window K` into advice/.w<K>,
 # moved to advice/w<K>, and advice/windows.json the union of every window's index (committed and refused), its registration
 # recording each weight's registered root (`--weights-of-record`, `prove_path.py weights-registration`).
-closed() { "$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl" 2>/dev/null; }
+closed() { "$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/$F_WINDOW" 2>/dev/null; }
 advice_pass() {
   for k in $(closed); do
     [ -f "$D/advice/.w$k/windows.json" ] && continue
@@ -171,6 +173,7 @@ if [ "$ADMIT" = release-order ]; then   # releases 1 then 0 of a fresh release r
   "$PY" - "$PORT" "$REPO" "$D" <<'EOF2' 2>&1 | tee "$OUT/admit_smoke.txt"
 import json, sys, threading, time, urllib.request, uuid
 from pathlib import Path
+from verity.protocols.proofs.spot.verifier.workload import FILES
 port, model, d = sys.argv[1], sys.argv[2], Path(sys.argv[3])
 run = uuid.uuid4().hex[:16]
 sent = {}
@@ -186,8 +189,8 @@ t1 = threading.Thread(target=post, args=(1,)); t1.start(); time.sleep(1.0)
 t0 = threading.Thread(target=post, args=(0,)); t0.start(); t0.join(); t1.join()
 recs = {}
 for _ in range(120):
-    recs = {r["user"]: r for r in map(json.loads, (d / "requests.jsonl").read_text().splitlines()) if r.get("user", "").startswith("admit-smoke-")} \
-        if (d / "requests.jsonl").exists() else {}
+    recs = {r["user"]: r for r in map(json.loads, (d / FILES["Io"]).read_text().splitlines()) if r.get("user", "").startswith("admit-smoke-")} \
+        if (d / FILES["Io"]).exists() else {}
     if len(recs) == 2:
         break
     time.sleep(1)
@@ -211,6 +214,7 @@ if [ "$MAX_MODEL_LEN" -gt 512 ]; then  # one request filling the context: MAX_MO
   "$PY" - "$PORT" "$REPO" "$D" "$MAX_MODEL_LEN" <<'EOF2' 2>&1 | tee "$OUT/long_smoke.txt"
 import json, sys, time, urllib.request
 from pathlib import Path
+from verity.protocols.proofs.spot.verifier.workload import FILES
 port, model, d, L = sys.argv[1], sys.argv[2], Path(sys.argv[3]), int(sys.argv[4])
 P = L - 64
 body = {"model": model, "user": "long-smoke", "prompt": [128000] + [1000 + (7 * i) % 100000 for i in range(P - 1)],
@@ -225,11 +229,11 @@ def at(name, w):   # the window's line of windows.jsonl, or of seals.jsonl, wher
     return next((x for x in map(json.loads, f.read_text().splitlines()) if x["window"] == w), {}) if f.exists() else {}
 rec, line, seal = {}, {}, {}
 for _ in range(300):
-    if (d / "requests.jsonl").exists():
-        rec = next((r for r in map(json.loads, (d / "requests.jsonl").read_text().splitlines()) if r.get("user") == "long-smoke"), {})
+    if (d / FILES["Io"]).exists():
+        rec = next((r for r in map(json.loads, (d / FILES["Io"]).read_text().splitlines()) if r.get("user") == "long-smoke"), {})
     if rec and rec.get("windows"):
         w = rec["windows"][-1]
-        line, seal = at("windows.jsonl", w), at("seals.jsonl", w)
+        line, seal = at(FILES["Window"], w), at("seals.jsonl", w)
         if line and seal:
             break
     time.sleep(1)
@@ -249,7 +253,7 @@ for _ in $(seq 1 120); do                                   # the load's windows
   pending=0; for k in $(closed); do [ -f "$D/advice/.w$k/windows.json" ] || pending=1; done
   [ "$pending" = 0 ] && break; sleep 5
 done
-cp "$D/windows.jsonl" "$D/advice/windows.json" "$OUT/" 2>/dev/null
+cp "$D/$F_WINDOW" "$D/advice/windows.json" "$OUT/" 2>/dev/null
 WS=$("$PY" -c "import json,sys; print(' '.join(sorted(json.load(open('$D/advice/windows.json'))['windows'], key=int)))" 2>/dev/null)
 FIRST=${WINDOW:-5}
 for k in $FIRST $WS; do

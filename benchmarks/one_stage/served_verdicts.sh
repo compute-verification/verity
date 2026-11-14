@@ -496,7 +496,11 @@ case $PRODUCT in
   *) say "PREFLIGHT: PRODUCT is onsite or remote, not $PRODUCT"; exit 3 ;;
 esac
 case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default) or 0, not $COMPOSE_OFF_NODE"; exit 3 ;; esac
-CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
+# The files that carry a message between the workload and the prover, by the names the list states
+# (tests/test_workload_messages.py).
+F_CIRCUIT=predicted.json F_SETTINGS=serve.json F_WINDOW=windows.jsonl F_IO=requests.jsonl F_ADVICE=advice.bin
+F_WEIGHTS=weights_registration.json F_WINDOW_PROGRAM=window-program.json.gz
+CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/$F_WEIGHTS
 # the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
 DREG=$D/deployment-registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
@@ -590,7 +594,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
   # off the GPU, which none leases here or the engine holds under the tie: the weights hashed by h1.registered's NumPy
   # path, the reference
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" benchmarks/prove_path/prove_path.py window-commit --serve-run "$D" \
-    --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
+    --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/$F_ADVICE" --class "$V3C" \
     --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --law "$V3C_LAW" --out "$VW/window" "$@") > "$json" 2> "$err"
   rc=$?
   if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then echo "timed out after V3C_TIMEOUT=$V3C_TIMEOUT (exit $rc)"
@@ -760,7 +764,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   local run leanb m0 rc gl tie=() day=() cache=() ch=(--challenger "$V3C_CHALLENGER") ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
   [ -n "${DAY:-}" ] && day=(--day "$DAY" --day-log "$DAY_LOG" ${DAY_PARAMS:+--day-params "$DAY_PARAMS"})
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
-    "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
+    "$D/$F_WINDOW" "$K") || { say "V3C-AUDIT: no run root for the window in $F_WINDOW"; return 1; }
   mkdir -p "$OUT/v3c-audit"
   if [ -n "${MAIN_FILE:-}" ]; then  # main's first-parent line, which the audit's challenger session pins on
     [ -s "$MAIN_FILE" ] || { say "V3C-AUDIT: MAIN_FILE $MAIN_FILE, main's first-parent line its challenger session pins on, is missing or empty"; return 1; }
@@ -866,7 +870,7 @@ tie() {  # serve-openai's --h1-window-commit (`serve_tie`) at window $2's close,
   if [ "$rc" = 3 ]; then
     echo "TIE: the window's advice is pending: a request of it runs on past its close, with no Commit record yet"; return 14
   fi
-  [ -f "$D/advice/w$K/private/advice.bin" ] || { echo "TIE: no advice (verity-vllm advice exit $rc; the serve dir's advice.log)"; return 14; }
+  [ -f "$D/advice/w$K/private/$F_ADVICE" ] || { echo "TIE: no advice (verity-vllm advice exit $rc; the serve dir's advice.log)"; return 14; }
   why=$(window_commit "$D/h1/w$K/window-commit.json" "$D/h1/w$K/window-commit.err" --window-registration "$3" \
     --h1-key "$5/key") || { echo "TIE: window-commit class $V3C $why"; return 16; }
   cp "$VW/window/registration.json" "$4" || { echo "TIE: window-commit class $V3C wrote no registration"; return 16; }
@@ -884,7 +888,7 @@ pearl_tie() {  # served_pearlplus.sh's PEARLPLUS_TIE_CMD once Pearl+'s W is writ
   [ -f "$WREG" ] || { echo "PEARL-TIE: $NO_WEIGHTS"; return 13; }
   ca=$(compiler_args) && [ -n "$ca" ] || { echo "PEARL-TIE: no registered compiler (prove_path.py compiler)"; return 13; }
   advice_of "$K" "$ca"; rc=$?
-  [ -f "$D/advice/w$K/private/advice.bin" ] || { echo "PEARL-TIE: no advice (verity-vllm advice exit $rc; the serve dir's advice.log)"; return 14; }
+  [ -f "$D/advice/w$K/private/$F_ADVICE" ] || { echo "PEARL-TIE: no advice (verity-vllm advice exit $rc; the serve dir's advice.log)"; return 14; }
   mkdir -p "$dir" && cp "$3" "$dir/registration.json" || { echo "PEARL-TIE: W $3 can't be kept in $dir"; return 3; }
   why=$(window_commit "$dir/window-commit.json" "$dir/window-commit.err" --window-registration "$dir/registration.json" \
     --pearl-passes "$4") || { echo "PEARL-TIE: window-commit class $V3C $why"; return 16; }
@@ -1008,11 +1012,11 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       || echo "not every request answered (the serve dir's load.log, on the node)")"
     [ -f "$D/load.timings.json" ] || say "TIMINGS: no $D/load.timings.json"
   fi
-  c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
+  c=$(count "$D/$F_WINDOW"); s=$(count "$D/seals.jsonl")
   # a front that failed before a window closed sent the run's only requests, so none will
   if [ "$LOAD" != front ] || [ "$rc" = 0 ] || [ "$c" -gt 0 ]; then
     for _ in $(seq 1 "$polls"); do     # every closed window's seal line
-      c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
+      c=$(count "$D/$F_WINDOW"); s=$(count "$D/seals.jsonl")
       [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break
       sleep 2
     done
@@ -1040,7 +1044,7 @@ circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line h
   [ -f "$WREG" ] && pins=(--pins "$WREG") wp="at the weights registration's pins"
   f=$D/window-circuit-w$K-$tag.json
   timeout "${2#*=}" "$PY" benchmarks/prove_path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
-    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" "${pins[@]}" ${PIN:+--pin "$PIN"} \
+    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/$F_ADVICE" --out "$f" "${pins[@]}" ${PIN:+--pin "$PIN"} \
     "${cls[@]}" "${tie[@]}" > "$D/window-circuit-$tag.count.json" 2> "$D/window-circuit-$tag.err"
   rc=$?
   if [ "$rc" = 0 ]; then  # the count's `bits` is the advice's length, which stays on the node
@@ -1073,7 +1077,7 @@ block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each
   local c tag f pins=() day decl=${IO_POLICY:-$OUT/inference-only-policy.json}
   [ -f "$decl" ] || { say "BLOCK-COUNTS: none, since the run declares no c, k and n"; return 0; }
   [ -f "$WREG" ] && pins=(--pins "$WREG")
-  day=$("$PY" -c 'import datetime, json, sys; t = json.load(open(sys.argv[1]))["clocks"]["time"]; print(datetime.datetime.fromtimestamp(t, datetime.timezone.utc).date())' "$D/serve.json") || return 0
+  day=$("$PY" -c 'import datetime, json, sys; t = json.load(open(sys.argv[1]))["clocks"]["time"]; print(datetime.datetime.fromtimestamp(t, datetime.timezone.utc).date())' "$D/$F_SETTINGS") || return 0
   (umask 077; mkdir -p "$D/private")
   for c in $CLASSES; do
     tag=${c//,/-}; [ "$c" = record ] && tag=record
@@ -1172,8 +1176,8 @@ private_pieces() {
 # follow-on runs at. Each is listed where it exists.
 deferred_inputs() {
   {
-    printf '%s\n' weights_registration.json deployment-registration.json "$(v3c_record)" windows.jsonl seals.jsonl \
-      requests.jsonl declaration.json \
+    printf '%s\n' "$F_WEIGHTS" deployment-registration.json "$(v3c_record)" "$F_WINDOW" seals.jsonl \
+      "$F_IO" declaration.json \
       h1/log.jsonl "h1/w$K/window-commit.json" sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
       sampled-proofs-served/window/registration.json sampled-proofs-served/runs.json private/pouw/period/case.json \
       private/pouw/period/answer.json private/deferred/inference-only.json "pearlplus/w$K/registration.json" \
@@ -1725,7 +1729,7 @@ if [ -n "$COMPOSE" ]; then compose; exit $?; fi
 if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its advice written (step 3); V3c alone
   say "COINS V3c's audit: $(v3c_coins)"
   if [ -n "$FOLLOW" ]; then follow; exit $?; fi
-  [ -n "${K:-}" ] && [ -f "$D/advice/w$K/private/advice.bin" ] || { say "V3C: set D and K, a serve dir and its window with advice"; exit 3; }
+  [ -n "${K:-}" ] && [ -f "$D/advice/w$K/private/$F_ADVICE" ] || { say "V3C: set D and K, a serve dir and its window with advice"; exit 3; }
   [ -f "$WREG" ] || CUDA_VISIBLE_DEVICES='' weights
   [ -f "$WREG" ] || exit 13
   # the verifier's record at the class from this tree, whatever an earlier run left in D (under H1_TIE reading H1's tables)
@@ -1784,16 +1788,16 @@ say "COINS ${LEAD}sampled proofs: $COINS the bandwidth audit's: vy-auditor-2's b
 # 0. B: the row's Build of record from its declared inputs, before the lease; the traced Build only its cross-check
 vv predict row --row "$ROW_ID" --out "$PRED" > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
 rc=$?
-[ "$rc" = 0 ] && [ -f "$PRED/predicted.json" ] \
+[ "$rc" = 0 ] && [ -f "$PRED/$F_CIRCUIT" ] \
   || { say "PREDICT-ROW $ROW_ID refused (exit $rc): $(grep -v '^\[predict\]' "$OUT/predict_row.err" | tail -2 | cut -c1-600)"; stop predict 17; }
-cp "$PRED/predicted.json" "$OUT/"
+cp "$PRED/$F_CIRCUIT" "$OUT/"
 say "PREDICT-ROW $ROW_ID: $(cut -c1-600 "$OUT/predict_row.json")"
-CONFIG=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["config"])' "$PRED/predicted.json")
+CONFIG=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["config"])' "$PRED/$F_CIRCUIT")
 # the config the Build was predicted from, kept beside it for the served compare (served_compare.py's CONFIG_COPY): the
 # path predicted.json names is in this run's tree, which a run's own clone takes with it, and a kept serve dir is
 # compared again after that
 cp "$CONFIG" "$PRED/checkpoint_config.json" \
-  || { say "PREDICT-ROW $ROW_ID: its checkpoint config $CONFIG can't be kept beside predicted.json, where the served compare reads it"; stop predict 17; }
+  || { say "PREDICT-ROW $ROW_ID: its checkpoint config $CONFIG can't be kept beside $F_CIRCUIT, where the served compare reads it"; stop predict 17; }
 vv predict compare "$ROW" --row "$ROW_ID" --config "$CONFIG" --predicted "$PRED" --out "$OUT/predict_compare.json" \
   > "$OUT/predict_compare.log" 2>&1
 rc=$?
@@ -1825,11 +1829,12 @@ rc=$?
 "$PY" - "$D" "$PRED" "$D/private/seal.txt" <<'EOF' 2>&1 | publish_lines
 import json, os, sys
 from pathlib import Path
+from verity.protocols.proofs.spot.verifier.workload import FILES
 from verity_vllm.pipeline import deferred_rows as DR
 d, pred, held = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
-predicted = json.loads((pred / "predicted.json").read_text())
+predicted = json.loads((pred / FILES["Circuit"]).read_text())
 b_of_record = (str((pred / "manifest.json").resolve()), predicted["program_digest"])
-serve = json.loads((d / "serve.json").read_text())
+serve = json.loads((d / FILES["Settings"]).read_text())
 seals = [json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if x.strip()] if (d / "seals.jsonl").exists() else []
 sealed_ok = bound_ok = bool(seals)
 lines, why, committers, unbound = [], set(), set(), []
@@ -1875,7 +1880,7 @@ for s in seals:
         why.add("a sealed record binds another Build than predict row's")
     lines.append(f"WINDOW w{k}: commit_scheme {v.get('commit_scheme')}, committer {c.get('committer')}, run root {rr[:16]}… "
                  f"({len(rr) // 2} bytes); bundle {opened}: {'PASS' if good else 'FAIL'}")
-    whose = "predict row's Build of record (its predicted.json's)" if b else f"not predict row's {b_of_record[0]}"
+    whose = f"predict row's Build of record (its {FILES['Circuit']}'s)" if b else f"not predict row's {b_of_record[0]}"
     lines.append(f"B-OF-RECORD w{k}: the sealed record binds {bound.get('path')}, program digest "
                  f"{str(bound.get('program_digest'))[:16]}…{by}: {whose}: {'PASS' if b else 'FAIL'}")
 ok = sealed_ok and bound_ok and serve.get("scheme") == "rows-sha512"
@@ -1895,7 +1900,7 @@ EOF
 # serve.json (the window's request count and prefill tokens) and the windows' PoUW calls records (their requests) stay
 # in the serve dir, where PoUW's piece and the record read them; the period and the window Program are public
 cp "$D/period.json" "$OUT/serve/" 2>/dev/null
-[ -d "$D/h1" ] && (cd "$D" && cp --parents h1/window-program.json.gz h1/window-program.meta.json "$OUT/serve/" 2>/dev/null)
+[ -d "$D/h1" ] && (cd "$D" && cp --parents "h1/$F_WINDOW_PROGRAM" h1/window-program.meta.json "$OUT/serve/" 2>/dev/null)
 [ -n "${H1_CIRCUITS:-}" ] && [ -f "$H1_CIRCUITS/circuit-files.json" ] && cp "$H1_CIRCUITS/circuit-files.json" "$OUT/serve/"
 # the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate,
 # in full in the serve dir's private/out/serve once `publish` holds the load's counts and span.
@@ -1930,7 +1935,7 @@ CA=$(compiler_args)
 echo "registered compiler: $CA" > "$OUT/compiler.txt"
 WA=()
 [ -f "$WREG" ] && WA=(--weights-of-record "$WREG")
-for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl"); do
+for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/$F_WINDOW"); do
   advice_of "$k" "$CA"
   [ "$k" = "$K" ] && break
 done
@@ -1964,7 +1969,7 @@ rm -rf "$SP"; [ ! -d "$OUT/sampled-proofs/served" ] || { mv "$OUT/sampled-proofs
 # run.sh's records copy holds the window's request lists (windows.jsonl), its request count and prefill tokens
 # (serve.json) and the advice's length (registration.json): the published copy is the registration's public form alone
 SR=$OUT/sampled-proofs/served-records
-rm -f "$SR/windows.jsonl" "$SR/serve.json"
+rm -f "$SR/$F_WINDOW" "$SR/$F_SETTINGS"
 if [ -f "$SR/registration.json" ]; then
   "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$SR/registration.json" > "$SR/registration.public.json" \
     && mv "$SR/registration.public.json" "$SR/registration.json" || rm -f "$SR/registration.json" "$SR/registration.public.json"
