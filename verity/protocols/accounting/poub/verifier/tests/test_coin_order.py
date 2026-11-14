@@ -1,7 +1,7 @@
 """The coin commitment reaches the prover only at the session's end: soundness takes no hiding premise on a challenger's
 root, so the prover is sent each coin as its value and the root it was opened after (`coins.Released`, no salt or
 path), and once the session has its outcome the verifier discloses the commitment and every released coin's opening
-(`audit.AuditRun.disclose`, refused before), against which the prover checks each coin it was sent (`audit.Prover.end`).
+(`audit.AuditRun.disclose`, refused before), against which the prover checks each coin it was sent (`audit_prover.Prover.end`).
 In one process (`period.session`) and across a connection (`verifier_party`) no message before the end carries the
 commitment, and at the end a coin the commitment doesn't open as it was sent is refused."""
 
@@ -15,6 +15,8 @@ import threading
 
 import pytest
 
+from verity.protocols.accounting.poub.prover import period_prover as PP
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, verifier_party
 from verity.protocols.accounting.poub.verifier import coins as C
 from verity.protocols.accounting.poub.verifier import period as P
@@ -51,7 +53,7 @@ class Entropy:
         return out[:n]
 
 
-class Recorded(P.Local):
+class Recorded(PP.Local):
     """The in-process prover, each call it takes kept in order (`calls`)."""
 
     def __init__(self, *args, **kw) -> None:
@@ -108,7 +110,7 @@ def test_a_session_left_undecided_discloses_nothing() -> None:
 
 
 def test_the_disclosure_is_refused_until_the_session_has_its_outcome() -> None:
-    n, root = P.Local("n0", STORE, entropy=Entropy(b"salts")).register()
+    n, root = PP.Local("n0", STORE, entropy=Entropy(b"salts")).register()
     reg = audit.register(COINS, b"n0", n, root)
     params = audit.Params(blocks=reg.blocks, deadline_ns=500_000_000, windows=2, window_ns=100_000_000, codec=reg.codec,
                           receipt=reg.receipt, rows=reg.rows)
@@ -147,7 +149,7 @@ def test_the_end_refuses_a_coin_the_commitment_doesnt_open_as_it_was_sent(ended)
 def test_a_prover_is_refused_a_second_coin_for_a_window(ended) -> None:
     _, prover = ended
     sent = prover.prover.received[0]
-    again = audit.Prover(prover.prover.store, None, entropy=Entropy(b"again"))
+    again = audit_prover.Prover(prover.prover.store, None, entropy=Entropy(b"again"))
     again.run(sent, 0, prover.prover.store.registration.digest)
     with pytest.raises(ValueError, match="sent again, another coin"):
         again.run(dataclasses.replace(sent, coin=bytes(64)), 1, prover.prover.store.registration.digest)
@@ -203,7 +205,7 @@ def test_across_the_connection_no_message_before_the_end_carries_the_commitment(
     prover = Recorded("n0", STORE, entropy=Entropy(b"salts"))
     with b, b.makefile("rwb") as f:
         tee = Tee(f)
-        verifier_party.prove(tee, prover)
+        PP.prove(tee, prover)
     th.join()
     assert got["period"].verdict == "accept"
     *during, last = tee.lines

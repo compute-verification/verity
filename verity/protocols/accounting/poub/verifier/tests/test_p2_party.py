@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.protocols.accounting.poub.prover import p2_prover
 from verity.protocols.accounting.poub.verifier import coins, p2, p2_party, receipts
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -54,7 +55,7 @@ def test_the_registration_and_openings_round_trip_their_json(store) -> None:
     bad = p2_party.registration_json(reg) | {"rows": 64}
     with pytest.raises(ValueError, match="digest"):
         p2_party.registration_of(bad)
-    prover = p2.Prover(store, entropy=Entropy(b"s"))
+    prover = p2_prover.Prover(store, entropy=Entropy(b"s"))
     ps = prover.pass_under(0, 0, b"\x01" * 64)
     o = prover.open(ps, 1)
     assert p2_party.opening_of(json.loads(json.dumps(p2_party.opening_json(o)))) == o

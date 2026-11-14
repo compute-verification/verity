@@ -80,6 +80,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
+from verity.protocols.accounting.poub.prover import audit_prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
 from verity.protocols.accounting.poub.verifier import schedule as SC  # noqa: E402
 from verity.protocols.accounting.poub.verifier.receipts import Plan  # noqa: E402
@@ -328,7 +329,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     clock = Clock()
     s = audit.AuditRun(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
                        not_before_ns=0, clock=clock)
-    prover = audit.Prover(rs, None, entropy=Entropy(b"a7 receipt salts"))
+    prover = audit_prover.Prover(rs, None, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)
     replay = MM.Replay(head, rs.registration)
     slot_of, free_slots, nxt_slot, record, index = {}, [], NR, [], {}

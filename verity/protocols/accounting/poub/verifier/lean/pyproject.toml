@@ -49,6 +49,10 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # to PoUS's store; the configurations of pous_check's other requires, which `lake` reads to resolve them; and
           # the committed C*, whose registration, openings and a session test_p2.py replays
           "verity/protocols/accounting/poub/verifier/p2.py", "verity/protocols/accounting/poub/verifier/p2_party.py",
+          # the honest provers and the period's prover side (`period_prover.py`, on `verifier_party.py`'s lines)
+          "verity/protocols/accounting/poub/prover/__init__.py", "verity/protocols/accounting/poub/prover/audit_prover.py",
+          "verity/protocols/accounting/poub/prover/p2_prover.py", "verity/protocols/accounting/poub/prover/period_prover.py",
+          "verity/protocols/accounting/poub/verifier/verifier_party.py",
           "verity/protocols/accounting/poub/verifier/p2_lean.py", "verity/protocols/accounting/poub/verifier/p2_case.py",
           "verity/protocols/accounting/pous",
           "verity/protocols/accounting/pous/prover",

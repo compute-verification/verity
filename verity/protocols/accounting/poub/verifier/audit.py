@@ -19,7 +19,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    which the challenger's signed log keeps (`AuditRun.released_reason`), and the prover is sent its value and that root
    (`coins.Released`).  The commitment, a function of every coin, reaches the prover only once the session has its
    outcome, with every released coin's opening (`AuditRun.disclose`), and the prover checks each coin it was sent
-   against them then (`Prover.end`).
+   against them then (`poub/prover/audit_prover.py`'s `Prover.end`).
 3. A session of `windows` windows.  The verifier releases `chal_0` (`AuditRun.start`), and at each window's end the next
    window's challenge, or the close after the last (`AuditRun.boundary`), one-way.  A window lasts at least the stated
    `T` (`Params.window_ns`, 60 s by default).
@@ -53,10 +53,10 @@ many reads of a node's registered blocks the node made in each window, from rece
 6. Openings.  Once window t's roots are final (the next window's first root has arrived, `D_t` has passed, or, in a
    paced session, the window holds its k roots and its boundary has left), the
    challenger releases the window's openings coin, and the verifier samples `s = samples` distinct receipts uniformly
-   from the window's `U_t = Σ_i L_i` with it (`AuditRun.close`).  The prover opens each (`Prover.open`): the block, its
-   receipt leaf with its salt and path to the pass's root, the payload's salt and path to the payload root, and, under a
-   registration that binds z, PoUW's evidence for the tile before it; a block appended after the seed carries its
-   payload's digest `d_j` too, its path going to its append's root.
+   from the window's `U_t = Σ_i L_i` with it (`AuditRun.close`).  The prover opens each (`audit_prover.Prover.open`):
+   the block, its receipt leaf with its salt and path to the pass's root, the payload's salt and path to the payload
+   root, and, under a registration that binds z, PoUW's evidence for the tile before it; a block appended after the
+   seed carries its payload's digest `d_j` too, its path going to its append's root.
 7. Verification (`AuditRun.verify`), each opening: the leaf's path under the pass's root; the block's words canonical
    and their decoding (under the bound key of the `d_j` it carries and its append's coin, for an appended block) on
    its path under the payload root or its append's; under a registration that binds z, `z` recomputed by PoUW's tile
@@ -650,60 +650,6 @@ class PositionSample:
         return min(receipts.PER_LEAF, self.plan.length - receipts.PER_LEAF * self.leaf)
 
 
-class Prover:
-    """The honest prover: each pass reads its plan's blocks (every block by default), computes their receipts and
-    commits them, each leaf under a fresh salt from `entropy`.  `tiles` is PoUW's if the registration binds z, and
-    None if it does not.  It keeps every challenge it is sent (`received`) and checks them at the session's end
-    against the commitment it gets only then (`end`)."""
-
-    def __init__(self, store: Store, tiles: Tiles | None, *, entropy: Callable[[int], bytes] = os.urandom) -> None:
-        self.store, self.entropy = store, entropy
-        self.tiles = _tiles(tiles, store.registration.bind)
-        self.received: dict[int, coins.Released] = {}
-
-    def run(self, challenge: coins.Released | coins.LiveOpening, i: int, previous: bytes, plan: Plan | None = None,
-            *, head: bytes | None = None) -> Pass:
-        """Pass i of the window whose challenge is `challenge` (`coins.released`), after the root `previous`, its seed
-        binding `head`, the chain over every append the verifier will have received before this pass's root
-        (`chained`; None without one, the honest prover's `Store.head`): refused unless the coin is a window's challenge,
-        the one it was sent for that window before if any."""
-        try:
-            got = coins.released(challenge)
-        except coins.CoinError as e:
-            raise ValueError(str(e)) from None
-        if got.label != coins.CHALLENGE or got.index < 0:
-            raise ValueError(f"not a window's challenge: {got.label} coin {got.index}")
-        if self.received.setdefault(got.index, got) != got:
-            raise ValueError(f"window {got.index}'s challenge was sent again, another coin")
-        return self.pass_under(got.index, i, receipts.seed(coins.coin(got), i, chained(previous, head)), plan)
-
-    def end(self, commitment: coins.LiveCommitment, openings: Sequence[coins.LiveOpening]) -> None:
-        """The session's end: `commitment` and every released coin's opening, as the verifier sends them
-        (`AuditRun.disclose`), refused (ValueError) unless every challenge this prover was sent opens against it with
-        the value and the root it was sent with (`coins.received_reason`)."""
-        reason = coins.received_reason(commitment, tuple(self.received[t] for t in sorted(self.received)), openings)
-        if reason is not None:
-            raise ValueError(reason)
-
-    def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> Pass:
-        """Pass i of `window`'s receipts and tree under `seed`, however it was derived."""
-        plan = plan or Plan.whole(self.store.registration.blocks)
-        reg = self.store.registration
-        receipter, tiles = receipts.receipter(reg.receipt, seed, reg.rows), self.tiles
-        ys = tuple(receipter(j, self.store.blocks[j], None if tiles is None else tiles.output(seed, j)) for j in plan)
-        salts = tuple(self.entropy(SALT_BYTES) for _ in range(receipts.leaves(plan.length)))
-        return Pass(window, i, seed, plan, ys, salts, receipts.tree(seed, plan, ys, salts))
-
-    def open(self, ps: Pass, p: int) -> Opening:
-        j = ps.plan.block(p)
-        c = p // receipts.PER_LEAF
-        leaf = ps.tree.open(c)
-        salt, path, d = self.store.committed(j)
-        return Opening(ps.index, p, self.store.blocks[j], b"".join(ps.receipts[receipts.PER_LEAF * c:receipts.PER_LEAF * (c + 1)]),
-                       ps.salts[c], leaf.path, salt, path, b"" if self.tiles is None else self.tiles.evidence(ps.seed, j),
-                       d)
-
-
 @dataclass(frozen=True, slots=True)
 class Verdict:
     """A window's outcome.  `failure` is one of `FAILURES`, `at` the failing sample (pass, position) when there is one."""
@@ -1010,9 +956,9 @@ class AuditRun:
 
     def disclose(self) -> tuple[coins.LiveCommitment, tuple[coins.LiveOpening, ...]]:
         """The coin commitment and every coin released so far, opened, family by family: what the verifier sends the
-        prover at the session's end, for it to check every coin it was sent (`Prover.end`).  Refused while the
-        session has no outcome: once it is accepted or rejected no root joins its record, so the commitment, a
-        function of every coin, reaches the prover only after its last root."""
+        prover at the session's end, for it to check every coin it was sent (`audit_prover.Prover.end`).  Refused
+        while the session has no outcome: once it is accepted or rejected no root joins its record, so the commitment,
+        a function of every coin, reaches the prover only after its last root."""
         if self.outcome is None:
             raise SessionError("the session's coins are disclosed at its end, once it is accepted or rejected")
         c = self.coins
@@ -2031,7 +1977,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
 
 
 __all__ = ["Append", "AuditRun", "Closed", "DELTA", "LEDGER_SOURCES", "NODE_BYTES", "NoiseTiles", "Opening",
-           "PAYLOAD_SCHEMA", "PROTOCOL_ID", "Pace", "Params", "Pass", "Prover", "REGISTRY_SCHEMA", "Rebuild", "Record",
+           "PAYLOAD_SCHEMA", "PROTOCOL_ID", "Pace", "Params", "Pass", "REGISTRY_SCHEMA", "Rebuild", "Record",
            "Registration", "Registry", "RegistryError", "SLACK_LOG2", "STEP_LIMIT", "Scheduled", "SessionError",
            "Store", "Tiles", "UNENDED", "Verdict", "WINDOW_NS", "append_domain", "append_head", "append_tree",
            "chained", "floors", "ledger", "lifetime_windows", "linked_bits", "payload_domain", "payload_tree", "pooled",

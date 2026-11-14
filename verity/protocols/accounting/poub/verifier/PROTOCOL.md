@@ -401,7 +401,7 @@ first-parent line is refused.
 
 The verifier releases \(\text{chal}_0\) at the session's start (`AuditRun.start`). At window \(t\)'s end it sends the
 boundary message, which is \(\text{chal}_{t+1}\), or the close after the last window (`AuditRun.boundary`). Each is
-one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`Prover.run`). Pass \(i\) of
+one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`audit_prover.Prover.run`). Pass \(i\) of
 window \(t\) (`receipts.py`):
 
 ~~~text
@@ -503,7 +503,7 @@ sketches of other blocks (64 bytes a block at 16 rows, 64 blocks a page), and th
 page's bytes without reading them, a red-team finding whose
 test is `test_append_order.py`. A page that relayed any receipt of a pass whose seed binds it would be a fixed point
 of SHA-512. The prover therefore sends a pass's appends before its root and computes the seed after they're sent
-(`Store.head`, `Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
+(`Store.head`, `audit_prover.Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
 fails every receipt of the pass. While a session has no appends the seeds are unchanged, so the GPU passes, which
 append nothing, derive them as before.
 
@@ -560,7 +560,7 @@ and under a registration that binds \(z\), PoUW's noise for the pass (§8).
 Every receipt of its sessions is of that kind, the weights' and the KV pages' alike (§8). sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for.
 block-sha512 is kept as a second kind, for comparison only; it is not the stated receipt.
 The GPU kernels' sketch-sha512 receipts are held byte for byte to `receipts.SketchReceipter`
-(`benchmarks/codec_tensor/sketch_receipt.py` lays its signs out for them), and the suite pins its outputs at both row counts.
+(`verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py` lays its signs out for them), and the suite pins its outputs at both row counts.
 Each kind's receipt is 64 bytes, so leaves, salts and the tree don't change. The difference is what is hashed after
 the seed's block: sketch-sha512 hashes \(j\) and the sketch, one compression at 16 rows (64 bytes) and three at 64
 (256 bytes); block-sha512 hashes \(j\) and the 4,096 bytes, 33 SHA-512 compressions. The sketch's signs come from the
@@ -848,7 +848,7 @@ It would also void the horizon reading (§10), whose proof takes each window's s
 prover did in that window, unless that is re-proved for a grinding prover. The coin costs one message a window, sent
 after the roots, which the verifier is waiting for anyway. So the protocol keeps it.
 
-The prover opens each sample (`Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
+The prover opens each sample (`audit_prover.Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
 leaf's receipts \(v_c\) with the leaf's salt and path to \(\text{root}_{(t,i)}\), the payload's salt and path to the
 payload root (to its append's root, for a block appended after the seed, which also carries its payload's digest
 \(d_j\)), and under a registration that binds \(z\), PoUW's evidence for \(z_{(i,j)}\). Openings aren't timed,
@@ -1149,7 +1149,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     (I4). The verifier here checks only that each pass names a step above the last.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
     pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
-    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `benchmarks/remote_session/prover.py`),
+    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `verity/protocols/accounting/poub/prover/remote_session/prover.py`),
     at most \(k\) steps past the pass in flight, \(k\) its own choice: each pass covers the newest step serving has
     handed, the steps serving ran past in between have no pass and are credited nothing, and the pass at \(s\) reads
     the store resident at \(s\) while serving executes later steps. That store must still be in place as the pass
@@ -1621,7 +1621,7 @@ y_g        SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ σ_
            one compression after the pass's 128-byte prefix, whose midstate every unit shares
 ~~~
 
-The host commits the \(y_g\) in plan order as §4's tree (`p2.Prover.commit`). The partial is a function of the bytes
+The host commits the \(y_g\) in plan order as §4's tree (`p2_prover.Prover.commit`). The partial is a function of the bytes
 the decode read, so the receipt binds the read the decode made; computing it from the decoded `W`, or from a second
 read, is another protocol. Per block it is \(16 \times 2056\) sign-and-add steps beside the decode's two 16,448-bit
 squarings. The fixture kernels build against comes from the serving loop over the toy `C*` (`serve.py fixture`,
