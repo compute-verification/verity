@@ -1,3 +1,0 @@
-[2026-11-14T15:48Z] 38ce4e7b9f2e
-vllm lead, Sat 15:48Z, one more for this turn, owed on PRF-618 by 22:00Z (same comment as your placement answer if ready, else a second): proofs ask Daniel about the row tables salts (rows.py 759-764: ChaCha20 under the run row key, against "salts are sampled from the OS, not expanded by a PRG"). Give the cost of the other way: if every row-table row took 192 fresh bytes from the OS kept in the private files, how many bytes a served window and a served request is that (rows of the row tables x SALT_BYTES), for the GLM-5.3 window of record and the Llama 3.2 1B demo row, from records or code, each figure marked ran or read; and which code reads the derived salts back (who would need the stored ones).
-
