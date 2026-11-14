@@ -580,10 +580,12 @@ def result(tok: float) -> dict:
 
 
 def bench_arm(out: Path, name: str, passes: dict[str, list[float]], ids: str | None = None,
-              argv: tuple[str, ...] = ("--max-model-len", "4096")) -> None:
+              argv: tuple[str, ...] = ("--max-model-len", "4096"), meta: dict | None = None, schedule: dict | None = None,
+              t0: float = 1000.0) -> None:
     """An arm's directory as `serve_tax.py run` leaves it under vLLM's client, which keeps no request's ids; with
     ``ids``, the arm's server kept them for rep 1 of that pass (a line a request, gzipped as the runner leaves them),
-    beside its step trace."""
+    beside its step trace. ``meta`` is more of its record, ``schedule`` the engine's counters each of its passes'
+    records hold, and ``t0`` when its first pass began, each next one 200 s on."""
     d = out / name
     d.mkdir(parents=True)
     (d / "meta.json").write_text(json.dumps({
@@ -591,15 +593,15 @@ def bench_arm(out: Path, name: str, passes: dict[str, list[float]], ids: str | N
         "run_id": "r-1", "commit": "c" * 40, "server_argv": list(argv), "startup_s": 300.0,
         "passes": {p: {"load": p.rpartition("@")[0], "concurrency": int(p.rpartition("@")[2])} for p in passes},
         "loads": [{"load": p, "rep": i, "rate": None, "requests": 200, "unfinished": 0}
-                  for p, toks in passes.items() for i in range(1, len(toks) + 1)]}))
+                  for p, toks in passes.items() for i in range(1, len(toks) + 1)]} | (meta or {})))
     for p, toks in passes.items():
         for i, tok in enumerate(toks, 1):
             tag = f"{p}-r{i}"
             (d / p / f"rep-{i}").mkdir(parents=True)
             (d / p / f"rep-{i}" / "result.json").write_text(json.dumps(result(tok)))
             (d / p / f"rep-{i}" / "meta.json").write_text(json.dumps(
-                {"tag": tag, "rate": None, "concurrency": int(p.rpartition("@")[2]), "unfinished": 0, "t0_unix": 1000.0,
-                 "wall_s": 105.0}))
+                {"tag": tag, "rate": None, "concurrency": int(p.rpartition("@")[2]), "unfinished": 0,
+                 "t0_unix": t0 + 200.0 * (i - 1), "wall_s": 105.0} | ({"schedule": schedule} if schedule else {})))
             if (p, i) == (ids, 1):
                 step_trace(out, d, tag, {"enable_prefix_caching": True, "max_model_len": 4096})
                 with gzip.open(d / "server" / "ids.9.jsonl.gz", "wt") as f:
@@ -898,25 +900,128 @@ def test_the_report_says_what_the_replays_engine_ran_under_and_what_the_top_k_co
     # directory's; a replay none of whose processes kept any shows nothing of the top-k having run there
     topk_log(private / "prod-record/topk-log", 21, 9000, (60, 3, 1))
     txt, engine = said("--private", str(private))
-    assert engine["engine"]["topk"] == {"kept": True, "replay": None, "served": {"processes": 1, "calls": 9000, "rows_long": 60}}
+    assert engine["engine"]["topk"] == {"kept": True, "replay": None, "served": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3}}
     assert ("  the canonical top-k in the replay: NO process kept counters: nothing shows it ran there\n"
             "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, "
-            "60 rows of more than its keys rewritten\n") in txt
+            "60 rows of more than its keys rewritten, 3 of them with a tie across the k-th key\n") in txt
     topk_log(private / "replay-compiled/topk-log", 11, 5000, (40, 2, 1))
     topk_log(private / "replay-compiled/topk-log", 12, 3000, (10, 0, 0))
     txt, engine = said("--private", str(private))
-    assert engine["engine"]["topk"]["replay"] == {"processes": 2, "calls": 8000, "rows_long": 50}
+    assert engine["engine"]["topk"]["replay"] == {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2}
     assert ("  the canonical top-k in the replay: 2 processes kept counters: at least 8,000 calls of the indexer's top-k, "
-            "50 rows of more than its keys rewritten\n") in txt
+            "50 rows of more than its keys rewritten, 2 of them with a tie across the k-th key\n") in txt
     # the report keeps the counts in OUT, where a later reading of the job finds them once the node's directory is gone
     kept = json.loads((out / P.TOPK_KEPT).read_text())
-    assert kept == {"replay": {"processes": 2, "calls": 8000, "rows_long": 50}, "served": {"processes": 1, "calls": 9000, "rows_long": 60}}
+    assert kept == {"replay": {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2},
+                    "served": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3}}
     shutil.rmtree(private)
     assert said()[1]["engine"]["topk"] == {"kept": True, **kept}
+    # counters an earlier report kept before it kept the ties are printed without them
+    (out / P.TOPK_KEPT).write_text(json.dumps({"replay": None, "served": {"processes": 1, "calls": 9000, "rows_long": 60}}))
+    assert ("  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, "
+            "60 rows of more than its keys rewritten\n") in said()[0]
     # counters that can't be read end that part alone
     (out / P.TOPK_KEPT).write_text("not json")
     assert P.main(argv) == 0 and "  the replay's engine: the replay's engine can't be read from the job's files: JSONDecodeError" in (
         out / "prod_repro.txt").read_text()
+
+
+def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_counters(tmp_path: Path):
+    """A job that served arms beside stock and ours (the runner's --arms): each is in what ran; every pass has a line
+    with its engine's counters, in the order served; under them, how each arm's requests were sampled and what the
+    canonical top-k counted in each directory; and the three lines are of stock and ours alone."""
+    out, private = tmp_path / "out", tmp_path / "private"
+    sampled = {"sampled": {"temperature": 1.0, "top_p": 0.95}}
+    topk = {"env": {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": "{private}/topk-log"}}
+
+    def counters(steps: int, drafts: int, accepted: int) -> dict:
+        return {"steps": float(steps), "step_tokens": 30000.0, "generation_tokens": 28000.0, "prompt_tokens": 51200.0,
+                "prompt_tokens_cached": 25600.0, "preemptions": 0.0, "drafts": float(drafts), "draft_tokens": 5.0 * drafts,
+                "accepted_tokens": float(accepted)}
+
+    # served in the order stock, stock sent the seeds, ours, ours with the top-k off: the report is told ours third
+    bench_arm(out, "prod", {"chat@16": [300.0]}, meta=sampled | {"seeded": False}, schedule=counters(2089, 4992, 693), t0=1000.0)
+    bench_arm(out, "prod-seeded", {"chat@16": [300.0]}, meta=sampled | {"seeded": True}, schedule=counters(2100, 5000, 650),
+              t0=2000.0)
+    bench_arm(out, "prod-record", {"chat@16": [300.0]}, meta=sampled | topk | {"seeded": True},
+              schedule=counters(2204, 5569, 117), t0=3000.0)
+    bench_arm(out, "prod-trace", {"chat@16": [300.0]}, meta=sampled | {"seeded": True}, schedule=counters(2110, 5010, 640),
+              t0=4000.0)
+    argv = ["report", str(out), "--load", "chat", "--stock", "prod", "--again", "", "--ours", "prod-record",
+            "--beside", "prod-seeded", "prod-trace"]
+
+    def said(*more: str) -> tuple[str, dict]:
+        assert P.main([*argv, *more]) == 0
+        return (out / "prod_repro.txt").read_text(), json.loads((out / "prod_repro.json").read_text())
+
+    block = ("each pass, by the engine's counters read before and after it (in no verdict):\n"
+             "  every arm's are the server's own on /metrics, one reader: the draft tokens accepted are "
+             "vllm:spec_decode_num_accepted_tokens_total over vllm:spec_decode_num_draft_tokens_total, the tokens its drafts "
+             "proposed\n"
+             "  prod chat@16 rep 1: 2,089 engine steps, 4,992 drafts, 693 of their 24,960 tokens accepted (2.78%); 30,000 output tokens in 100.0 s\n"
+             "  prod-seeded chat@16 rep 1: 2,100 engine steps, 5,000 drafts, 650 of their 25,000 tokens accepted (2.60%); 30,000 output tokens "
+             "in 100.0 s\n"
+             "  prod-record chat@16 rep 1: 2,204 engine steps, 5,569 drafts, 117 of their 27,845 tokens accepted (0.42%); 30,000 output tokens "
+             "in 100.0 s\n"
+             "  prod-trace chat@16 rep 1: 2,110 engine steps, 5,010 drafts, 640 of their 25,050 tokens accepted (2.55%); 30,000 output tokens "
+             "in 100.0 s\n"
+             "  the requests: sampled with no seed sent (prod); sampled, each under a seed its client sent (prod-record, "
+             "prod-seeded and prod-trace)\n"
+             "  the canonical top-k, by directory: ")
+    off = "not on for prod, prod-seeded and prod-trace (no VERITY_DSA_TOPK in the environment their records name)\n"
+    # a job that named no private directory kept no counters: the record's environment still says where it was on
+    txt, r = said()
+    assert block + "prod-record on, its counters not kept (the job named no PRIVATE directory); " + off in txt
+    assert r["arms"]["beside"] == ["prod-seeded", "prod-trace"] and r["arms"]["served"] == sorted(r["ran"]["arms"])
+    assert [x["dir"] for x in r["ran"]["passes"]["passes"]] == ["prod", "prod-seeded", "prod-record", "prod-trace"]
+    assert ("what ran:\n"
+            "  prod: up in 300 s; the load served 1 time, 200 requests, every one finished\n"
+            "  prod-record: up in 300 s; the load served 1 time, 200 requests, every one finished\n"
+            "  prod-seeded: up in 300 s; the load served 1 time, 200 requests, every one finished\n"
+            "  prod-trace: up in 300 s; the load served 1 time, 200 requests, every one finished\n"
+            "  the replay: none was asked for\n") in txt
+    # the three lines are of stock and ours: an arm beside them is in none
+    assert "cost: prod-record over prod +0.00%" in txt and txt.endswith("prod_repro: 1 of 3 lines measured\n")
+    assert all("prod-seeded" not in x and "prod-trace" not in x for x in txt[txt.index("settings of prod-record"):].splitlines())
+    # a directory on the top-k none of whose processes kept counters shows nothing of it having run there
+    private.mkdir()
+    assert block + "prod-record on, and NO process kept counters: nothing shows it ran there; " + off in said("--private", str(private))[0]
+    # with the job's private directory, each directory's processes' counters, kept in OUT for a later reading
+    topk_log(private / "prod-record/topk-log", 21, 9000, (60, 3, 1))
+    counted = ("prod-record 1 process kept counters: at least 9,000 calls of the indexer's top-k, 60 rows of more than its "
+               "keys rewritten, 3 of them with a tie across the k-th key; ")
+    txt, r = said("--private", str(private))
+    assert block + counted + off in txt
+    assert json.loads((out / P.TOPK_KEPT).read_text()) == {"dirs": {"prod-record": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3}}}
+    assert r["ran"]["passes"]["topk"]["on"] == {"prod": False, "prod-record": True, "prod-seeded": False, "prod-trace": False}
+    # a later reading has no private directory, and one whose private directory holds none for it has the kept ones
+    shutil.rmtree(private)
+    assert block + counted + off in said()[0]
+    private.mkdir()
+    assert block + counted + off in said("--private", str(private))[0]
+    # a job that served none beside the three prints no such lines, and its JSON holds its passes all the same
+    assert P.main(argv[:-3]) == 0
+    r = json.loads((out / "prod_repro.json").read_text())
+    assert "each pass" not in (out / "prod_repro.txt").read_text() and "beside" not in r["arms"]
+    assert [x["dir"] for x in r["ran"]["passes"]["passes"]] == ["prod", "prod-record"]
+    # a lifetime's warm-up is marked, a pass whose record holds no counters says so, and an engine that drafted none too
+    out = tmp_path / "lifetimes"
+    one = {"lifetime": 1, "left_out": 1, "reps": 2}
+    bench_arm(out, "prod.1", {"chat@16": [300.0, 300.0]}, meta=one | {"arm": "prod"})
+    bench_arm(out, "prod-record.1", {"chat@16": [300.0, 300.0]}, meta=one | {"arm": "prod-record"},
+              schedule=counters(2040, 0, 0), t0=2000.0)
+    bench_arm(out, "prod-trace.1", {"chat@16": [300.0, 300.0]}, meta=one | {"arm": "prod-trace"}, t0=3000.0)
+    assert P.main(["report", str(out), "--load", "chat", "--stock", "prod", "--again", "", "--ours", "prod-record",
+                   "--beside", "prod-trace"]) == 0
+    assert ("  prod.1 chat@16 rep 1, left out: its record holds no counters of the engine's; 30,000 output tokens in 100.0 s\n"
+            "  prod.1 chat@16 rep 2: its record holds no counters of the engine's; 30,000 output tokens in 100.0 s\n"
+            "  prod-record.1 chat@16 rep 1, left out: 2,040 engine steps, no drafts; 30,000 output tokens in 100.0 s\n"
+            "  prod-record.1 chat@16 rep 2: 2,040 engine steps, no drafts; 30,000 output tokens in 100.0 s\n"
+            "  prod-trace.1 chat@16 rep 1, left out: its record holds no counters of the engine's; 30,000 output tokens in 100.0 s\n"
+            "  prod-trace.1 chat@16 rep 2: its record holds no counters of the engine's; 30,000 output tokens in 100.0 s\n"
+            "  the requests: greedy (prod, prod-record and prod-trace)\n"
+            "  the canonical top-k, by directory: not on for prod.1, prod-record.1 and prod-trace.1 (no VERITY_DSA_TOPK in the "
+            "environment their records name)\n") in (out / "prod_repro.txt").read_text()
 
 
 def test_the_first_line_says_the_limit_and_what_is_known_of_leaving_it_to_vllm(tmp_path: Path):
@@ -1113,8 +1218,8 @@ def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: st
 
 def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_where_it_stands(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """The cost line of `prod-record` over `prod` on GLM-5.3 is the measurement benchmarks/metrics.toml names, the
-    figure the report prints, beside the benchmark's own: where the benchmark's own cost stands (`serve_tax.result_of`)
+    """The cost line of `prod-record` over `prod` on GLM-5.3 is the measurement benchmarks/prod_repro/metrics.toml
+    names, the figure the report prints, beside the benchmark's own: where the benchmark's own cost stands (`serve_tax.result_of`)
     and the arms are at the same settings. Where it does not, the result holds no entry under the id."""
     theirs = {"name": S.AGENTIC, "value": 0.5}
     # three lifetimes an arm whose costs agree: the cost stands and is under the target
@@ -1124,7 +1229,11 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
     assert got == [theirs, {
         "name": "vllm/prod-serving-cost-glm53", "value": own["value"], "unit": "percent of stock's serving time",
         "better": "lower", "target": 1.0, "ci95": own["ci95"], "verdict": "under", "load": S.AGENTIC, "stock": "prod",
-        "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1"}]
+        "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1",
+        "inputs": [f"measured: prod-record's serving time over prod's on the {S.AGENTIC} load, the mean over 3 server "
+                   "lifetimes an arm"]}]
+    # the first input opens with the entry's mark, which the Metrics tab shows beside the value
+    assert got[1]["inputs"][0].startswith("measured: ")
     assert P._pct(c["value"]) == f"{got[1]['value']:+.2f}%" == "+0.52%"
     # one lifetime an arm: the benchmark's own cost stands as a value with no interval, and so does the line's
     ours = [1.99, 1.988, 1.992, 1.99, 1.989, 1.991]
@@ -1133,6 +1242,7 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
     got = declared(tmp_path, monkeypatch, c)
     assert [(x["name"], x["value"]) for x in got] == [(S.AGENTIC, 0.5), ("vllm/prod-serving-cost-glm53", 0.5)]
     assert (got[1]["ci95"], got[1]["verdict"], got[1]["lifetimes"]) == (None, "not shown", 1)
+    assert got[1]["inputs"][0].startswith("measured: ") and got[1]["inputs"][0].endswith("over 1 server lifetime an arm")
     # the arms at other settings: the figure is not our changes' cost, and the entry an earlier report wrote is dropped
     assert declared(tmp_path, monkeypatch, c | {"settings_differ": ["the context limit"]}) == [theirs]
     # the arms did not do the same work: the benchmark's own cost does not stand, nor does the line
@@ -1166,8 +1276,8 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
 def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where_they_stand(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Of `prod-record` on GLM-5.3, the share of the replayed window's served tokens the replay gave back before each
-    request's first difference and the advice in bits a request are the measurements benchmarks/metrics.toml names
-    beside the cost: the match where the replay's record agrees with what it kept, the advice where the line is
+    request's first difference and the advice in bits a request are the measurements
+    benchmarks/prod_repro/metrics.toml names beside the cost: the match where the replay's record agrees with what it kept, the advice where the line is
     measured. Another arm as ours or another model names no id, and an earlier report's entry under an id whose figure
     does not stand is dropped."""
     # a token after a request's first difference is not given back, though it is equal at its position
@@ -1234,9 +1344,13 @@ def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_b
     assert P.main(["arms", "--model", "glm53"]) == 0 and capsys.readouterr().out == "prod prod-again prod-record\n"
     monkeypatch.setattr(S, "ARMS", {k: v for k, v in S.ARMS.items() if k != "prod-record"})
     assert P.default_arms("glm53") == P.TODAY
-    # an earlier job's out/ is read as the arms it served
+    # an earlier job's out/ is read as the arms it served, and a job that lists its arms as the set the list is of
     assert P.default_arms("glm53", tmp_path) == P.TODAY
+    assert P.default_arms("glm53", tmp_path, ("prod", "prod-seeded", "prod-record")) == P.PROD
+    assert P.main(["arms", "--out", str(tmp_path), "--among", "prod", "prod-record"]) == 0
+    assert capsys.readouterr().out == "prod prod-again prod-record\n"
     (tmp_path / "prod-record").mkdir()
+    assert P.default_arms("glm53", tmp_path, ("compiled", "record")) == P.TODAY
     assert P.default_arms("moonlight", tmp_path) == P.PROD
     assert P.main(["arms", "--out", str(tmp_path)]) == 0 and capsys.readouterr().out == "prod prod-again prod-record\n"
 
@@ -1250,7 +1364,7 @@ STAND_IN = """#!/usr/bin/env bash
     PASS_PROMPTS STOP_AT SAMPLED PRIVATE LIFETIMES LEAVE_OUT; do echo "$k=${!k-unset}"; done; } > "$RESEARCH_RUN_DIR/started"
 if [ -n "${STAND_IN_TOPK:-}" ]; then
   mkdir -p "$PRIVATE/replay-compiled/topk-log"
-  echo '{"pid": 1, "calls": {"persistent_topk": 7}, "launches": {"persistent_topk": 3}, "rows": {"cuda:0": {"rows_long": 5}}}' \\
+  echo '{"pid": 1, "calls": {"persistent_topk": 7}, "launches": {"persistent_topk": 3}, "rows": {"cuda:0": {"rows_long": 5, "rows_tied": 2}}}' \\
     > "$PRIVATE/replay-compiled/topk-log/dsa_topk.1.json"
 fi
 [ -z "${STAND_IN_TERM:-}" ] || kill -TERM "$PPID"
@@ -1327,6 +1441,46 @@ def test_the_runner_serves_the_three_arms_a_burst_and_replays_ours_then_reports(
     assert "the replay's engine" not in p.stdout
 
 
+def test_the_runner_serves_the_arms_it_is_named_in_their_order_and_the_others_beside_the_three(tmp_path: Path):
+    script, run_dir = runner(tmp_path), tmp_path / "run"
+    four = "prod prod-seeded prod-record prod-trace"
+    for k, name in enumerate(four.split()):
+        bench_arm(run_dir / "out", name, {"chat@16": [300.0]}, t0=1000.0 * k)
+    line = ("--client", "vllm-bench", "--load", "chat=16", "--model", "glm53", "--reps", "1")
+    p = bash(script, *line, "--arms", four, run_dir=run_dir)
+    assert p.returncode == 0, p.stdout + p.stderr
+    # every arm named is served, in the order named; stock again is not among them, so it is not served
+    assert started(run_dir)["argv"] == f"--model glm53 --arms {four} --loads chat=16 --reps 1"
+    assert "prod-again" not in p.stdout
+    # the arms beside the three are in what ran and among the passes, in the order served; the cost is ours's over stock
+    for name in ("prod-seeded", "prod-trace"):
+        assert f"  {name}: up in 300 s; the load served 1 time" in p.stdout
+    assert [x.split()[0] for x in p.stdout.splitlines() if " chat@16 rep 1: " in x] == four.split()
+    assert "cost: prod-record over prod " in p.stdout
+    # read again from its out/ under the same arms, it is the same report
+    q = bash(script, "--report", str(run_dir / "out"), "--load", "chat", "--model", "glm53", "--arms", four)
+    assert q.returncode == 0 and q.stdout == (run_dir / "out/prod_repro.txt").read_text() and q.stdout in p.stdout
+    # an out/ that holds nothing of ours is still read as the arms the list names, each not served
+    (tmp_path / "empty").mkdir()
+    q = bash(script, "--report", str(tmp_path / "empty"), "--load", "chat", "--model", "glm53", "--arms", four)
+    assert q.returncode == 0 and all(f"  {a}: NOT SERVED" in q.stdout for a in four.split()), q.stdout + q.stderr
+    # stock again is served where the list holds it
+    bash(script, *line, "--arms", "prod prod-again prod-record", run_dir=run_dir)
+    assert started(run_dir)["argv"] == "--model glm53 --arms prod prod-again prod-record --loads chat=16 --reps 1"
+    # the list names every arm served, so one without ours or without stock serves nothing; nor does a replay alone
+    for arms, missing in (("prod prod-seeded", "prod-record"), ("prod-record prod-trace", "prod")):
+        p = bash(script, *line, "--arms", arms, run_dir=run_dir)
+        assert p.returncode == 2 and f'prod_repro: --arms "{arms}" holds no {missing}: ' in p.stdout
+        assert not (run_dir / "started").exists()
+    p = bash(script, "--replay-of", str(run_dir / "out"), "--load", "chat", "--replay", "chat@16", "--model", "glm53",
+             "--arms", four, run_dir=run_dir)
+    assert p.returncode == 2 and "--replay-of serves nothing: --arms is of a job that serves its arms" in p.stdout
+    assert not (run_dir / "started").exists()
+    # with no stock arm, the list holds ours and whatever is served beside it
+    p = bash(script, *line, "--stock", "none", "--arms", "prod-record prod-trace", run_dir=run_dir)
+    assert started(run_dir)["argv"] == "--model glm53 --arms prod-record prod-trace --loads chat=16 --reps 1"
+
+
 def test_the_runner_hands_vllms_client_the_load_and_asks_for_no_replay(tmp_path: Path):
     script, run_dir = runner(tmp_path), tmp_path / "run"
     stock = [300.0, 301.0, 299.0, 300.5, 299.5, 300.0]
@@ -1387,10 +1541,10 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
                                "requests at once, vLLM does not start this model")
     # the job's report reads the top-k's counters where its processes kept them, and keeps the counts in the run's
     assert ("  the canonical top-k in the replay: 1 process kept counters: at least 7 calls of the indexer's top-k, 5 rows "
-            "of more than its keys rewritten\n"
+            "of more than its keys rewritten, 2 of them with a tie across the k-th key\n"
             "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, 60 "
-            "rows of more than its keys rewritten\n") in p.stdout
-    assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {"processes": 1, "calls": 7, "rows_long": 5}
+            "rows of more than its keys rewritten, 0 of them with a tie across the k-th key\n") in p.stdout
+    assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {"processes": 1, "calls": 7, "rows_long": 5, "rows_tied": 2}
     assert "stock prod, stock again not served, ours prod-record" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
     assert "advice: not measured: the scheduler replay refuses the pass: " in p.stdout
     # read again without a GPU and without the node's directory, the earlier job says the same
@@ -1479,11 +1633,11 @@ def test_the_runner_replays_an_earlier_jobs_pass_and_serves_nothing(tmp_path: Pa
     p = bash(script, *argv, run_dir=run_dir, PRIVATE=str(tmp_path / "private"), STAND_IN_TOPK="1")
     assert p.returncode == 0, p.stdout + p.stderr
     assert ("  the canonical top-k in the replay: 1 process kept counters: at least 7 calls of the indexer's top-k, 5 rows "
-            "of more than its keys rewritten\n"
+            "of more than its keys rewritten, 2 of them with a tie across the k-th key\n"
             "  the canonical top-k while serving: 9 processes kept counters: at least 65,536 calls of the indexer's top-k, "
             "20,496,064 rows of more than its keys rewritten\n") in p.stdout
     assert json.loads((run_dir / "out/topk_counters.json").read_text()) == {
-        "replay": {"processes": 1, "calls": 7, "rows_long": 5}, "served": served}
+        "replay": {"processes": 1, "calls": 7, "rows_long": 5, "rows_tied": 2}, "served": served}
     # and where this job's replay kept none, the earlier job's replay's are not shown as its own
     p = bash(script, *argv, run_dir=run_dir, PRIVATE=str(tmp_path / "private-2"))
     assert "  the canonical top-k in the replay: NO process kept counters: nothing shows it ran there\n" in p.stdout

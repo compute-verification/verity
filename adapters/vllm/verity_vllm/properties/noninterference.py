@@ -16,7 +16,7 @@ sequentially by this module's orchestrator (`subprocess`), then a torch-free com
                              tensors D2H asynchronously into fresh pinned buffers (stream-ordered right after the module,
                              i.e. before the next layer's in-place `fused_add_rms_norm` overwrites them); after every
                              `engine.step()` the driver synchronises once and hashes.  Output: `hooks.json`, `tokens.json`.
-  (c) `bench/m1_capture.py --no-observer`  fully bare (nothing installed, `vllm_adapter.run_requests`): `tokens.json`.
+  (c) `m1-capture --no-observer`  fully bare (nothing installed, `vllm_adapter.run_requests`): `tokens.json`.
 
 Tensors compared, per step s and layer L (values are bf16 row-major `[M, H]`, M = token rows of the step):
   hidden[s, L]   = `LlamaDecoderLayer.forward` return[0] = the MLP `down_proj` output.
@@ -33,8 +33,8 @@ Tensors compared, per step s and layer L (values are bf16 row-major `[M, H]`, M 
 The observer's snapshot bytes are the *spanned storage bytes* of the view; for these contiguous tensors that is exactly the
 tensor's bytes, which is what (b) hashes (`tensor.contiguous()` bytes; contiguity is recorded and asserted).
 
-Comparison (`--compare DIR`, torch-free; also run automatically by the orchestrator): tokens (a) == (b) == (c) == the accepted
-record (`bench.m1_capture.ACCEPTED_TOKENS`, and `data/logs/m1_ctl_tokens.json` when present); per step the sampled
+Comparison (`--compare --out DIR`, torch-free; also run automatically by the orchestrator): tokens (a) == (b) == (c) == the
+clean control run's (`--accepted-ctl`, by default `data/logs/m1_ctl_tokens.json`; (c)'s own when absent); per step the sampled
 ids of (a)'s `SampleEnd` == (b)'s engine outputs; hashes (a) == (b) for every (step, layer, hidden|residual) + final + logits.
 Writes DIR/noninterference.json and DIR/noninterference.md; exit status 1 on any mismatch.
 
@@ -66,7 +66,7 @@ from verity_vllm.properties.noninterference_families import (
     parallel_residual_boundaries,
     unfused_norm_boundaries,
 )
-from verity_vllm.properties.record import REGISTRY, seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 # the decoder-layer module and the final norm under their family's vLLM names: Llama-style
 # `model.layers.N` / `model.norm` (SmolLM2, Qwen, Gemma-2, Phi-3, the MoE families) and GPT-NeoX `gpt_neox.layers.N` /
@@ -276,9 +276,9 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
 
 
 def _write_tokens(out: Path, wl: dict, tokens: dict, timing: dict, accepted: dict, per_step: dict | None, variant: str) -> None:
-    doc = {"requests": [], "per_step_sampled": per_step, "timing": timing, "variant": variant,
-           "serving_profile": wl.get("serving_profile"), "context_class": wl.get("context_class"),
-           "expected_engine_steps": wl.get("expected_engine_steps"), "engine_steps": timing.get("engine_steps")}
+    doc: dict = {"requests": [], "per_step_sampled": per_step, "timing": timing, "variant": variant,
+                 "serving_profile": wl.get("serving_profile"), "context_class": wl.get("context_class"),
+                 "expected_engine_steps": wl.get("expected_engine_steps"), "engine_steps": timing.get("engine_steps")}
     all_eq = True
     per_req = timing.get("requests") or {}
     for r in wl["requests"]:
@@ -323,7 +323,7 @@ def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
             continue
         se = step_events(step)
         s = se.start.step
-        rec = {"hidden": {}, "residual": {}, "final": None, "logits": None, "rows": len(se.start.rows)}
+        rec: dict = {"hidden": {}, "residual": {}, "final": None, "logits": None, "rows": len(se.start.rows)}
         if se.sample is not None:
             sample_ids[s] = list(se.sample.sampled_token_ids)
             sample_rows[s] = [str(r) for r, _ in se.start.logits_rows]
@@ -388,7 +388,7 @@ def hooks_boundary_hashes(b_dir: Path) -> tuple[dict, list[str]]:
     for s in doc["steps"]:
         if s.get("step") is None:
             continue
-        rec = {"hidden": {}, "residual": {}, "final": None, "logits": None, "rows": None, "noncontiguous": []}
+        rec: dict = {"hidden": {}, "residual": {}, "final": None, "logits": None, "rows": None, "noncontiguous": []}
         for r in s["records"]:
             if not r["contiguous"]:
                 rec["noncontiguous"].append(f"{r['module']}[{r['index']}]")

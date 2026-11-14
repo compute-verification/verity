@@ -23,7 +23,8 @@ from typing import Any
 
 from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, AcquisitionSite
 from verity_vllm.engine import hooks as engine_hooks
-from verity_vllm.observe.runtime_tree import RUNNER_PATH
+from verity_vllm.records.runtime_tree import RUNNER_PATH
+from verity_vllm.records.schema_ids import ACQUISITION_OBSERVED_SCHEMA
 
 Sink = Callable[[tuple[str, str, str], Any], None]
 
@@ -101,7 +102,7 @@ class OccurrenceSink:
 
     def to_json(self) -> dict[str, Any]:
         keys = sorted(set(self.counts) | set(self.non_tensor))
-        return {"schema": "verity-vllm/acquisition-observed/v1", "sites": [
+        return {"schema": ACQUISITION_OBSERVED_SCHEMA, "sites": [
             {"module": k[0], "kind": k[1], "slot": k[2], "occurrences": self.counts.get(k, 0), "shapes": self.shapes.get(k, []),
              "dtypes": sorted(self.dtypes.get(k, ())), "non_tensor": self.non_tensor.get(k, 0)} for k in keys]}
 

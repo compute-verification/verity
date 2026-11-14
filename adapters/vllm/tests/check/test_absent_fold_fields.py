@@ -2,7 +2,7 @@
 
 `compare_tokens` reads the accepted tokens of each request from the capture's tokens file, and `compare_structure` the
 extra nodes from the matcher's report, which lists them only for a superset.  Each test leaves the field out (absent,
-null or empty) and states what the comparison then reports.
+null, empty, or any other value that tests false: `left_out`) and states what the comparison then reports.
 """
 from __future__ import annotations
 
@@ -18,8 +18,6 @@ from tests.observe.test_fold_synthetic import (
     REQ,
     SAMPLED,
     C,
-    _real_memory_available,
-    install_stub_memory,
     toy_log,
     toy_profile,
 )
@@ -31,8 +29,6 @@ TOKENS = [int(t) for t in SAMPLED]
 
 @pytest.fixture(scope="module")
 def folded() -> FoldResult:
-    if not _real_memory_available():
-        install_stub_memory()
     return fold(toy_log(), toy_profile(), strict=True)
 
 

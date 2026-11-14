@@ -1,5 +1,6 @@
 """`program-compare`'s `main` run in process: the document it writes at `--out`, the brief it prints, and the padding audit of an
-unfolded side. The Programs are the two-rank toy's (`test_tp2_d90_fixture`): rank 0's fold and its rank Program."""
+unfolded side. The Programs are the two-rank toy's (`test_tp2_d90_fixture`): rank 0's fold and its rank Program.  Two parts of
+the module are held on values built by hand: the padding audit, and the window of a step's divergence report."""
 from __future__ import annotations
 
 import json
@@ -11,6 +12,7 @@ from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import program_compare as PC
 from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.config import UsageError
+from verity_vllm.program.compact import from_runs
 from verity_vllm.records.schema_ids import PROGRAM_COMPARE_SCHEMA
 
 FOLD_KEYS = ["fold_form", "oracle_segmentation_mismatches", "oracle_weight_map"]   # what `main` adds when B is a fold's record
@@ -71,6 +73,24 @@ def test_main_reports_a_rank_program_that_reads_another_collectives_peer(tmp_pat
     assert brief["canonical_equal"] is False and brief["totals"] == cmp["totals"]
 
 
+@pytest.mark.parametrize("row", [1, 24], ids=["the first instance's", "the last instance's"])
+def test_main_counts_a_folds_row_that_states_another_step_than_its_sampling_events_cut(tmp_path, capsys, row):
+    """The fold's record states each instance's engine step; the view cuts its steps at the sampling events.  `main` counts the
+    instances whose row states another step than the cut, and compares as before: nothing else of the document moves."""
+    a, b = _dirs(tmp_path)
+    as_persisted, _brief, _ = _run(tmp_path, capsys, a=a, b=b)
+    assert as_persisted["oracle_segmentation_mismatches"] == 0
+    rows = tmp_path / "fold" / "instances.jsonl"
+    lines = rows.read_text().splitlines()               # the header, then a row an instance
+    stated = json.loads(lines[row])
+    stated["step"] = 1 - stated["step"]                 # the toy's fold has two steps
+    lines[row] = json.dumps(stated, separators=(",", ":"))
+    rows.write_text("\n".join(lines) + "\n")
+    doc, _brief, _ = _run(tmp_path, capsys, a=a, b=b)
+    assert len(lines) == 25 and doc["oracle_segmentation_mismatches"] == 1
+    assert {k for k in doc if doc[k] != as_persisted[k]} <= {"oracle_segmentation_mismatches", "utc", "seconds"}
+
+
 def test_two_rank_program_directories_are_compared_without_the_folds_keys(tmp_path, capsys):
     a, _b = _dirs(tmp_path)
     doc, _brief, _ = _run(tmp_path, capsys, a=a, b=a)
@@ -85,6 +105,15 @@ def test_unfolding_a_adds_its_padding_audit(tmp_path, capsys):
     assert doc["padding_audit_a"] == {"per_step": [{"step": 0, "muxes": 0}, {"step": 1, "muxes": 0}]}
 
 
+def test_the_padding_audit_is_of_the_unfolded_side(tmp_path, capsys, monkeypatch):
+    """Neither Program of the toy holds a mux, so the two sides' audits are the same rows; the view `main` hands the audit is told
+    here by its label."""
+    a, b = _dirs(tmp_path)
+    monkeypatch.setattr(PC, "audit_padding", lambda P: {"of": P.label})
+    doc, _brief, _ = _run(tmp_path, capsys, a=a, b=b, unfold_a=True, label_a="rank", label_b="fold")
+    assert doc["padding_audit_a"] == {"of": "rank"}
+
+
 def test_progressions_refuse_an_unfolded_side_before_a_directory_is_read(tmp_path):
     out = tmp_path / "match_compare.json"
     with pytest.raises(UsageError, match="compares without unfolding only"):
@@ -92,11 +121,13 @@ def test_progressions_refuse_an_unfolded_side_before_a_directory_is_read(tmp_pat
     assert not out.exists()
 
 
-def test_the_padding_audit_counts_a_steps_muxes_their_live_bit_and_zero_row_and_its_guards():
-    """A view of what `audit_padding` reads and nothing more: the second step holds one event's guard and its three muxes."""
+@pytest.mark.parametrize("compact", [False, True], ids=["record", "compact"])
+def test_the_padding_audit_counts_a_steps_muxes_their_live_bit_and_zero_row_and_its_guards(compact):
+    """A view of what `audit_padding` reads and nothing more: the second step holds one event's guard and its three muxes.  The
+    audit is the same of the record's runs and of the compact form's progressions (`compact.from_runs`)."""
     live, zero = [("n", 3, 0, 1)], ("n", 0, 0, 16)
     P = RootView.__new__(RootView)
-    P.compact = False
+    P.compact = compact
     P.inst = [{"spec": "TokenSelect_v1{V=8}", "args": [[("n", 1, 0, 8)]]},
               {"spec": "I32Eq_v1", "args": [[("n", 2, 0, 1)], [("n", 2, 1, 2)]]},
               {"spec": "BitNot_v1", "args": [[("n", 5, 0, 1)]]},
@@ -105,8 +136,26 @@ def test_the_padding_audit_counts_a_steps_muxes_their_live_bit_and_zero_row_and_
               {"spec": "SelectBf16_v1{N=16}", "args": [live, [("n", 8, 0, 16)], [zero, ("n", 9, 0, 16)]]},
               {"spec": "SelectBf16_v1{N=16}", "args": [live, [("n", 8, 16, 32)], [zero, ("n", 9, 16, 32)]]},
               {"spec": "TokenSelect_v1{V=8}", "args": [[("n", 10, 0, 8)]]}]
+    if compact:
+        P.inst = [dict(r, args=[from_runs(a) for a in r["args"]]) for r in P.inst]
     P.steps = [[0], [1, 2, 3, 4, 5, 6, 7]]
     assert PC.audit_padding(P) == {"per_step": [
         {"step": 0, "muxes": 0},
         {"step": 1, "muxes": 3, "mux_kinds": {"SelectI32_v1": 1, "SelectBf16_v1{N=16}": 2}, "distinct_live_refs": 1, "distinct_zero_refs": 1,
          "guards_and_consts": {"I32Eq_v1": 1, "BitNot_v1": 1, "BitAnd_v1": 1}}]}
+
+
+
+def test_a_core_past_the_window_on_one_side_alone_is_reported_cut(monkeypatch):
+    """A step's two spec sequences differ between a common prefix and a common suffix.  The report matches at most a window of each
+    side's differing core, and says so by name when either core is longer, with both cores' lengths; its ranges stay in the whole
+    sequences' coordinates."""
+    monkeypatch.setattr(PC, "_DIVERGENCE_WINDOW", 4)
+    long, short = ["e", "a", "b", "c", "d", "f", "g", "t"], ["e", "x", "t"]
+    assert PC._divergence_report(long, short) == {
+        "ops": [("replace", 1, 5, 1, 2)],
+        "window": {"common_prefix": 1, "common_suffix": 1, "core_a": 6, "core_b": 1, "window": 4, "truncated": True}}
+    assert PC._divergence_report(short, long) == {
+        "ops": [("replace", 1, 2, 1, 5)],
+        "window": {"common_prefix": 1, "common_suffix": 1, "core_a": 1, "core_b": 6, "window": 4, "truncated": True}}
+    assert PC._divergence_report(["e", "a", "b", "c", "d", "t"], short) == {"ops": [("replace", 1, 5, 1, 2)]}   # a core of the window's length is whole

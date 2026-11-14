@@ -40,7 +40,6 @@ and writes the `gates.FOLD_SUMMARY_SCHEMA` summary.
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 import json
 import shlex
@@ -61,12 +60,6 @@ from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline.match_fold import (
     INSTANCES_FORM_ENV as INSTANCES_FORM_ENV,  # read through this module
-)
-from verity_vllm.pipeline.match_fold import (
-    INSTANCES_SCHEMA as INSTANCES_SCHEMA,  # read through this module
-)
-from verity_vllm.pipeline.match_fold import (
-    INSTANCES_SCHEMA_V2 as INSTANCES_SCHEMA_V2,  # read through this module
 )
 from verity_vllm.pipeline.match_fold import (
     _jsonable,
@@ -92,9 +85,9 @@ __all__ = ["Options", "fold_construction_args", "main"]
 logger = init_logger(__name__)
 
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
-TIER_B_STEPS = (0, 1, 2, 3)            # --full-replay (diagnostic): prefill + three decode steps
+DEFAULT_TIER_B_STEPS = "0,1,2,3"       # --full-replay (diagnostic): prefill + three decode steps
 DEFAULT_K = 10                         # tier a: instances per (specialization, regime) stratum (gate minimum TIER_A_K)
-SAMPLING_CHAINS = 3                       # run.json's sampling.chains (no stage reads it)
+DEFAULT_CHAINS = 3                     # tier chain: connected slices replayed with computed intermediate values
 DEFAULT_PARALLEL_REPLAY = 4            # run.json's `parallel_replay` (1 with --laptop)
 DEFAULT_CHECKPOINTS = "manifests/checkpoints.json"
 SNAPSHOT_CAP_FLOOR = 32 << 20          # m1_capture's fixed per-tensor snapshot cap, the floor of the derived one
@@ -136,7 +129,9 @@ class Plan:
         if not self.steps or self.steps[0] != 0 or self.steps != list(range(len(self.steps))):
             raise SystemExit(f"--snapshot-steps must be contiguous from 0 (got {a.snapshot_steps}): replay of step N needs every earlier KV producer")
         # --full-replay (diagnostic): tier b replays step 0 and these decode steps; every one must be a snapshot step
-        self.tier_b_steps = sorted({0, *a.tier_b_steps} & set(self.steps)) if getattr(a, "full_replay", False) else []
+        tb = [int(x) for x in str(a.tier_b_steps).split(",") if x.strip() != ""] if a.tier_b_steps else list(self.steps)
+        self.tier_b_steps = sorted({0, *tb} & set(self.steps)) if getattr(a, "full_replay", False) else []
+        self.verify_weights = not a.no_verify_weights
         self.parallel = 1 if (a.laptop or a.parallel is not None and a.parallel <= 1) else (a.parallel or DEFAULT_PARALLEL_REPLAY)
         self.capture_dir = self.run / "capture"
         self.log = Path(a.log).resolve() if a.log else self.capture_dir / "log.jsonl.gz"
@@ -207,13 +202,13 @@ class Plan:
         common_gpu += [f"--engine-arg={x}" for x in self.engine_args()]   # [GEN batch SHARED-CODE] scheduler/memory knobs -> build_engine
         if stage == "capture":
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "m1-capture", *common_gpu, "--out", str(self.capture_dir),
-                    "--snapshot-steps", ",".join(map(str, self.steps)), "--verify-weights"] + \
+                    "--snapshot-steps", ",".join(map(str, self.steps))] + (["--verify-weights"] if self.verify_weights else []) + \
                    (["--snapshot-max-bytes", str(a.snapshot_max_bytes)] if a.snapshot_max_bytes is not None else []) + \
                    (["--snapshot-max-bytes-op", str(a.snapshot_max_bytes_op)] if a.snapshot_max_bytes_op is not None else [])
         if stage == "control":
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "m1-capture", *common_gpu, "--out", str(self.control_dir), "--no-observer"]
         if stage == "census":
-            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "census", *common_gpu, "--out", str(self.census_dir), "--no-traces"]
+            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "census", *common_gpu, "--out", str(self.census_dir)] + ([] if a.keep_traces else ["--no-traces"])
         if stage == "nonint":
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "noninterference", *common_gpu, "--out", str(self.nonint_dir), "--python", self.py_gpu,
                     "--accepted-ctl", str(self.control_tokens_path())]
@@ -278,13 +273,6 @@ def profile_config(name: str) -> dict | None:
 # ---------------------------------------------------------------------------------------------------------
 
 
-def _sha256_file(p: Path) -> str | None:
-    try:
-        return hashlib.sha256(p.read_bytes()).hexdigest()
-    except OSError:
-        return None
-
-
 def _hf_config_of(a: Options, C: dict | None) -> dict | None:
     """`program.model.config_of(<hf config.json>)` when an HF config is available."""
     cfg = None
@@ -329,8 +317,8 @@ def write_manifest(plan: Plan, a: Options) -> dict:
         "schema": MATCH_RUN_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "config_id": a.config_id,
         "profile": a.profile, "case": a.case, "workload_path": a.workload, "workload": workload_summary(a.workload),
         "C": C, "hf_config": _hf_config_of(a, C), "laptop": plan.laptop, "snapshot_steps": plan.steps, "tier_b_steps": plan.tier_b_steps,
-        "verify_weights": True, "parallel_replay": plan.parallel, "phase": a.phase,
-        "sampling": {"seed": a.seed, "k": a.k, "chains": SAMPLING_CHAINS, "full_replay": bool(getattr(a, "full_replay", False))},
+        "verify_weights": plan.verify_weights, "parallel_replay": plan.parallel, "phase": a.phase,
+        "sampling": {"seed": a.seed, "k": a.k, "chains": a.chains, "full_replay": bool(getattr(a, "full_replay", False))},
         "python_gpu": plan.py_gpu, "python_cpu": plan.py_cpu,
         "engine_args_requested": {"max_num_seqs": a.max_num_seqs, "enforce_eager": _workload_enforce_eager(a.workload), **_engine_arg_dict(plan.engine_args())},   # from the workload's execution
         "declared_execution": _workload_execution(a.workload),
@@ -395,19 +383,19 @@ def write_realized(plan: Plan) -> dict | None:
     generated length, the arrival / first / finish engine steps and finish reason (from capture/tokens.json), the engine-step
     count of the observed and the control run, and the snapshot steps that actually happened.  "Record the exact realized
     input/output lengths in every run artifact": run.json is the artifact every gate and the card read first."""
-    cap_p = plan.snapshots / "tokens.json" if plan.a.log else plan.capture_dir / "tokens.json"
+    obs_p = plan.snapshots / "tokens.json" if plan.a.log else plan.capture_dir / "tokens.json"
     ctl_p = plan.control_tokens_path()
     try:
-        cap = json.loads(cap_p.read_text()) if cap_p.exists() else None
+        obs = json.loads(obs_p.read_text()) if obs_p.exists() else None
     except (OSError, ValueError, RecursionError):   # unreadable, not JSON, or nested past what the parser reads: no record
-        cap = None
+        obs = None
     try:
         ctl = json.loads(ctl_p.read_text()) if ctl_p.exists() else None
     except (OSError, ValueError, RecursionError):
         ctl = None
-    src = cap or ctl
-    if src is None:
+    if obs is None and ctl is None:
         return None
+    src: Any = obs or ctl   # an empty capture document beside no control's is no record's source: its read below raises
     reqs = []
     for r in src.get("requests", []):
         prompt, generated = r.get("prompt_token_ids"), r.get("generated_token_ids")   # counted where the record states no count
@@ -425,7 +413,7 @@ def write_realized(plan: Plan) -> dict | None:
         except (OSError, ValueError, RecursionError, OverflowError, AttributeError, TypeError):   # unreadable, or no list of whole steps (an infinite one is none)
             snaps = None
     real = {"requests": reqs, "prompt_lens": [r["prompt_len"] for r in reqs], "n_generated": [r["n_generated"] for r in reqs],
-            "engine_steps_capture": _engine_steps(cap), "engine_steps_control": _engine_steps(ctl),
+            "engine_steps_capture": _engine_steps(obs), "engine_steps_control": _engine_steps(ctl),
             "expected_engine_steps_declared": src.get("expected_engine_steps"), "serving_profile": src.get("serving_profile"),
             "context_class": src.get("context_class"), "snapshot_steps_realized": snaps,
             "max_concurrent_requests": _max_concurrent(reqs)}
@@ -444,13 +432,9 @@ def _engine_steps(tokens: dict | None) -> Any:
 
 def _max_concurrent(reqs: list[dict]) -> int | None:
     """Peak number of requests active in one engine step, from the realized first/finish steps."""
-    spans: list[tuple[int, int]] = []
-    for r in reqs:
-        first, finish = r.get("first_step"), r.get("finish_step")
-        if first is None or finish is None:
-            return None
-        spans.append((first, finish))
-    if not spans:
+    stated = [(r.get("first_step"), r.get("finish_step")) for r in reqs]
+    spans = [(a, b) for a, b in stated if a is not None and b is not None]
+    if not spans or len(spans) != len(stated):
         return None
     hi = max(b for _, b in spans)
     return max(sum(1 for a, b in spans if a <= s <= b) for s in range(hi + 1))
@@ -514,8 +498,9 @@ class Options:
     python_cpu: str | None = option("--python-cpu", default=None, help="the torch-free 3.12 python (default: sys.executable)")
     snapshot_steps: str = option("--snapshot-steps", default=DEFAULT_SNAPSHOT_STEPS, help="contiguous from 0, or `all` = every step of the workload (default all)")
     full_replay: bool = option("--full-replay", default=False, action="store_true", help="run.json's sampling.full_replay (no stage reads it)")
-    #: with --full-replay: run.json's tier_b_steps; no flag sets it, and a --run-dir re-run keeps the ones its run.json records
-    tier_b_steps: tuple[int, ...] = field(default=TIER_B_STEPS, init=False)
+    tier_b_steps: str = option("--tier-b-steps", default=DEFAULT_TIER_B_STEPS, help="with --full-replay: run.json's tier_b_steps (default 0,1,2,3; must be snapshot steps)")
+    chains: int = option("--chains", type=int, default=DEFAULT_CHAINS, help="run.json's sampling.chains (no stage reads it)")
+    no_verify_weights: bool = option("--no-verify-weights", default=False, action="store_true", help="skip the checkpoint sha verification at engine build (root policy weight identity then fails)")
     parallel: int | None = option("--parallel", type=int, default=None, help="run.json's parallel_replay (default 4; 1 with --laptop)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] = option("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
@@ -537,6 +522,7 @@ class Options:
     stage_timeout: float | None = option("--stage-timeout", type=float, default=None, help="kill a stage above this wall time in s (default 180 with --laptop)")
     dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the exact command lines, run nothing")
     skip: str = option("--skip", default="", help="comma list of stages/groups to skip")
+    keep_traces: bool = option("--keep-traces", default=False, action="store_true", help="census: keep the per-step Chrome traces")
     cards_dir: str = option("--cards-dir", default="out/gen/cards")
     tree: str = option("--tree", default=".", help="the tree that runs, whose version experiment.json records: its EXPORT.json, else its git head (default: the working directory)")
     k: int = option("--k", type=int, default=DEFAULT_K, help="run.json's sampling.k (no stage reads it)")
@@ -671,8 +657,8 @@ def _defaults_from_run_dir(a: Options) -> None:
             setattr(a, arg, man[key])
     if a.snapshot_steps == DEFAULT_SNAPSHOT_STEPS and man.get("snapshot_steps"):
         a.snapshot_steps = ",".join(map(str, man["snapshot_steps"]))
-    if man.get("tier_b_steps"):
-        a.tier_b_steps = tuple(int(s) for s in man["tier_b_steps"])
+    if a.tier_b_steps == DEFAULT_TIER_B_STEPS and man.get("tier_b_steps"):
+        a.tier_b_steps = ",".join(map(str, man["tier_b_steps"]))
     if a.snapshot_max_bytes is None and man.get("snapshot_max_bytes"):
         # a CPU-phase re-run keeps the cap the capture RAN with (and its derivation), never a re-derived one
         a.snapshot_max_bytes = int(man["snapshot_max_bytes"])
