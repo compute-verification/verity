@@ -1,4 +1,4 @@
-"""A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in Flock's statement row leaf
+"""A period's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a period's units in Flock's statement row leaf
 format (``verity_flock.circuit``'s statement rows), with the registration, Flock's public and prover files and the
 labels the one-stage audit binds (``verity.protocols.proofs.spot.verifier.one_stage``).
 
@@ -8,7 +8,7 @@ query the template query over them, so the partition (``verity/partition/v1``, `
 over that program, and the registration is core's ``verity/registration/v1`` record with ``window = {"kind": "served" |
 "stand-in", "run": <the record's run root>, ...provenance}`` (``registration``), made by the ``registrar`` the caller passes
 (core's ``one_stage.docket``): this module imports no core.  Any other program an integration ran is provenance in the
-window: no query of core's selects template instances inside another Program (the template queries need every root node to be
+period: no query of core's selects template instances inside another Program (the template queries need every root node to be
 an instance).
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, or a template's units in
@@ -32,19 +32,19 @@ Each port ``<member>/<port>`` is one tree under ``CommitmentDomain(binding, -1, 
 window-domain rule (``verity.commitments.window``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
 schema, leaves, run})``, every field a registration field and ``run`` the record's run root, so the verifier recomputes every domain
 from the registration and the Commit's record (``expected_ports``).  The leaf layer is the SHA-512 of the canonical map from each
-member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
+member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a period
 directory ``registration.json``, ``index.json`` (the integration's labels of the units, opaque here and prover only, with its
-salt in ``index-salt.bin``; the window's provenance names its hiding leaf, `index_leaf`), per member
+salt in ``index-salt.bin``; the period's provenance names its hiding leaf, `index_leaf`), per member
 ``m<k>-public.bin`` and ``m<k>-private.bin`` (the circuit prover's public and prover bodies; the private one is prover
 only, less the rows and salts of a port given as a registered value's, which ``v<j>-private.bin`` holds once for the
-window, and of a wired port, which its writers' own files hold) and ``m<k>-units.json`` (its global unit indices), and
+period, and of a wired port, which its writers' own files hold) and ``m<k>-units.json`` (its global unit indices), and
 ``window.json``; ``flock_inputs.flock_input_files`` wraps member ``k``'s bodies as the circuit prover's
 ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin`` (`Bodies`).
 
-A window may carry row tables (:class:`RowTable`, ``Binding.row_tables``): shared tables of rows several units read, each a tree
+A period may carry row tables (:class:`RowTable`, ``Binding.row_tables``): shared tables of rows several units read, each a tree
 of ``hm96-sha512/row-seg/v1`` leaves, committed in segments, each segment's root given before that segment's live coin: a
-segment's tables in the order the integration gives them, under the ``table_domain`` of the window's ``context``, salted by
-``segment_salts`` under the run's row key, and the segment's root the tree over their roots.  The window registers one port for
+segment's tables in the order the integration gives them, under the ``table_domain`` of the period's ``context``, salted by
+``segment_salts`` under the run's row key, and the segment's root the tree over their roots.  The period registers one port for
 them, ``row-table``: the tree over its segments' roots (window-domain rule, leaf schema ``ROOTS_SCHEMA``), so no row is committed
 twice.  Its linked members (``Member.links``) are shared-row chunks whose ``x`` table holds the distinct rows they read, each
 under its row table row's salt (so the same ``b || c``), read by offset; the integration's verifier side ties them to the
@@ -103,7 +103,7 @@ BC_BYTES = INST.proven_bytes
 CHUNK = 1 << 14
 #: the bytes of a value's rows a file is written or read in at a time
 VALUE_CHUNK = 1 << 26
-#: a row table's schema, the window's port over its steps' roots (and the tables' name prefix), and the port of a linked member
+#: a row table's schema, the period's port over its steps' roots (and the tables' name prefix), and the port of a linked member
 #: that reads a table
 TABLE_SCHEMA, TABLE_PORT, LINKED = SCHEMA_HM96_SHA512_ROW_SEG, "row-table", "x"
 ROOTS_SCHEMA = RT.ROOTS_SCHEMA
@@ -220,7 +220,7 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
     return port, start, levels(dom.domain_id, leaves, start, hash=dom.hash)[-1][0], bc
 
 
-# --- the window ----------------------------------------------------------------------------------------------------------
+# --- the period ----------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class Member:
@@ -238,7 +238,7 @@ class Member:
     name: str = ""
     schemas: tuple[tuple[str, str], ...] = ()
     link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
-    links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the window's row table and rank it is
+    links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the period's row table and rank it is
     wired: tuple[tuple[str, str, tuple[int, ...]], ...] = ()  # per wire (port, out, writers): unit i's port row is unit writers[i]'s out row (`wiring`)
     wired_trees: bool = True                     # False: a wired port commits no tree, its rows its writer's output rows, whole (`Binding.held`)
 
@@ -295,7 +295,7 @@ class RowTable:
     ``hm96-sha512/row-seg/v1`` leaf each, committed with its segment's other tables before that segment's coin.  ``name`` and
     each row's ``keys[rank]`` are the integration's and opaque here (they only tell tables and rows apart), as are the
     ``label`` fields its ``window.json`` entry carries.  Fixed by the circuit, never by values.  ``port`` names it (its files,
-    the window's entries); the window registers its segment's root, not its own."""
+    the period's entries); the period registers its segment's root, not its own."""
     segment: int
     name: str
     template: str
@@ -377,7 +377,7 @@ class Binding:
                                  "linked row takes its row table row's salt, and a salt hides one string (Member.schemas)")
             for t, r in m.links:
                 if not (0 <= t < len(covered) and 0 <= r < len(covered[t])):
-                    raise ValueError(f"{m.key}: link {(t, r)} is no row of the window's {len(covered)} row tables")
+                    raise ValueError(f"{m.key}: link {(t, r)} is no row of the period's {len(covered)} row tables")
                 if self.row_tables[t].words != dict(m.rows)[LINKED]:
                     raise ValueError(f"{m.key}: its {LINKED!r} rows are {dict(m.rows)[LINKED]} words, {self.row_tables[t].port}'s "
                                      f"{self.row_tables[t].words}")
@@ -388,7 +388,7 @@ class Binding:
         if any(a > b for a, b in zip(segs, segs[1:])) or not all(len(set(t.keys)) == t.n for t in self.row_tables):
             raise ValueError("row tables go by segment, rising, each table's row keys each once")
         if self.row_tables and not re.fullmatch(f"[0-9a-f]{{{2 * RT.DIGEST_BYTES}}}", self.context):
-            raise ValueError(f"a window with row tables names its context, {RT.DIGEST_BYTES} bytes hex known before its first "
+            raise ValueError(f"a period with row tables names its context, {RT.DIGEST_BYTES} bytes hex known before its first "
                              f"segment (the live coin commitment's root), not {self.context!r}")
 
     @cached_property
@@ -405,7 +405,7 @@ class Binding:
         return tuple(i for _s, ks in self.segments for i in range(len(ks)))
 
     def table_domain(self, k: int) -> CommitmentDomain:
-        """Row table ``k``'s domain under the window's context."""
+        """Row table ``k``'s domain under the period's context."""
         t = self.row_tables[k]
         return RT.table_domain(bytes.fromhex(self.context), t.segment, self.places[k], t.n)
 
@@ -667,16 +667,16 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     port's committed as its output row); and each row table, its rows read off its linked members' ``x`` tables, whose rows take
     their row table row's salt.  Salts: 192 fresh OS bytes a row of a member's port; a segment's tables', ``segment_salts`` under
     ``row_salt_key``.  The row tables' roots make each segment's root and the ``row-table`` port is the tree over those; with
-    ``segment_roots`` (what the integration recorded before each segment's coin, by segment), each must be the window's, or the
+    ``segment_roots`` (what the integration recorded before each segment's coin, by segment), each must be the period's, or the
     commit is refused.
 
     ``salt_key``: tests only: ChaCha20 under it, as `salts` gives it.  ``row_salt_key``: the run's row key the recorded segment
     roots were salted under (32 bytes); fresh OS bytes when ``None``, which no recorded segment root can match.
     ``salts_of``: by port, an outside registered value's salts, one a row, so its rows' ``b || c`` are the value's (`write`).
     ``strings_of``: by port of ``salts_of``, its rows' ``b || c`` under those salts, already made (a history table's, whose
-    leaves they are), so the window hashes only their leaves and tree; a wrong string is a leaf no opening of the row matches.
+    leaves they are), so the period hashes only their leaves and tree; a wrong string is a leaf no opening of the row matches.
 
-    An input port's rows may be given by reference, in a window with no row tables: `WIRED` for a wired port (its writers'
+    An input port's rows may be given by reference, in a period with no row tables: `WIRED` for a wired port (its writers'
     output rows) or a `ValueRows` (rows of a registered value). Their rows are never held or hashed: each row's salt and
     ``b || c`` are its source's, so the commitment is the one their rows given in full make, and the committed rows (`_Rows`)
     are read off the sources when a body is written. A wired port of a member with no wired trees (``Member.wired_trees``)
@@ -746,12 +746,12 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     if segment_roots is not None and row_salt_key is None:
         raise ValueError("recorded segment roots are checked under the run's row key: give row_salt_key")
     if any(p not in rows or len(s) != len(rows[p]) * SALT_BYTES for p, s in (salts_of or {}).items()):
-        raise ValueError(f"salts_of {sorted(salts_of)}: not one {SALT_BYTES}-byte salt for each row of one of the window's ports "
+        raise ValueError(f"salts_of {sorted(salts_of)}: not one {SALT_BYTES}-byte salt for each row of one of the period's ports "
                          "given in full")
     if any(p not in (salts_of or {}) or len(s) != len(rows[p]) * BC_BYTES for p, s in (strings_of or {}).items()):
         raise ValueError(f"strings_of {sorted(strings_of)}: not one {BC_BYTES}-byte b || c for each row of a port of salts_of")
     if refd and window.row_tables:
-        raise ValueError(f"{len(refd)} ports given by reference ({sorted(refd)[:3]}) in a window with row tables, whose linked "
+        raise ValueError(f"{len(refd)} ports given by reference ({sorted(refd)[:3]}) in a period with row tables, whose linked "
                          "members' rows are read off their x tables: give every row")
     ys = {p: (salts_of or {}).get(p) or (os.urandom(n * SALT_BYTES) if salt_key is None else salts(bytes(salt_key), k, n))
           for k, (p, n) in enumerate(counts.items()) if p not in refd}
@@ -795,7 +795,7 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     if segment_roots is not None:
         bad = [s for s in segs if segs[s] != segment_roots.get(s)]
         if bad:
-            raise ValueError(f"segments {bad}: the window's segment roots are not the ones recorded before their coins")
+            raise ValueError(f"segments {bad}: the period's segment roots are not the ones recorded before their coins")
     if window.row_tables:
         roots[TABLE_PORT], domains[TABLE_PORT] = RT.RootTree(window.tables_domain, list(segs.values())).root, window.tables_domain
     t1 = time.perf_counter()
@@ -820,8 +820,8 @@ def wired_ports(window: Binding) -> dict[str, str]:
 
 
 def expected_ports(window: Binding) -> dict[str, dict[str, Any]]:
-    """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
-    domain}}``, each domain ``window_domain`` (core's ``registration.window_domain``) over the window's program, partition and run.
+    """The ports the verifier's own period derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
+    domain}}``, each domain ``window_domain`` (core's ``registration.window_domain``) over the period's program, partition and run.
     A wired port with no tree of its own is named under its reader too, at the leaves and domain of the port whose
     tree holds it (`wired_ports`), which its entry names (``wired``): one tree at two ports, whose two roots R3 holds
     equal."""
@@ -834,7 +834,7 @@ def expected_ports(window: Binding) -> dict[str, dict[str, Any]]:
 
 
 def window_bytes(members: Sequence[Member], row_tables: Sequence[RowTable] = ()) -> dict[str, int]:
-    """The bytes a window commits, from its layout alone: ``public`` (every ``b || c``, and a shared-row member's refs, u32 per
+    """The bytes a period commits, from its layout alone: ``public`` (every ``b || c``, and a shared-row member's refs, u32 per
     instance and port), ``private`` (every row's words and salt), and the ``x`` ports' share of each (``x_public``, ``x_private``;
     a row table's rows count as ``x``)."""
     out = dict.fromkeys(("public", "private", "x_public", "x_private", "tables_public", "tables_private"), 0)
@@ -868,11 +868,11 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
 def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served",
                  registrar: Any, entries: Sequence[Mapping[str, Any]] = (),
                  outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """Core's ``verity/registration/v1`` record of the window, made by ``registrar`` (core's ``one_stage.docket``: its
+    """Core's ``verity/registration/v1`` record of the period, made by ``registrar`` (core's ``one_stage.docket``: its
     ``record``, ``KINDS``): its program, query and law, the scheme, every port's root, leaves and window domain, the leaf layer,
     and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
     the prover's last record; None for its first).  ``entries``: those of the values its program takes as parameters
-    (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``outputs``: the registered values the window
+    (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``outputs``: the registered values the period
     outputs for a later record to take (``{"port", "root", "leaves", "domain"}`` each), named among the roots after its ports.
     ``served``: these roots are the integration's own commitment as it ran, made before any sample; ``stand-in``: a fresh
     commitment to values opened from its record afterwards, whose link to the record's roots is provenance."""
@@ -883,7 +883,7 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
     roots += [{"port": a, "root": c.roots[q].hex(), "leaves": c.domains[q].count, "domain": c.domains[q].domain_id.hex()}
               for a, q in wired_ports(w).items()]
     if {o["port"] for o in outputs} & set(c.roots):
-        raise ValueError(f"output values {sorted({o['port'] for o in outputs} & set(c.roots))} are named like the window's ports")
+        raise ValueError(f"output values {sorted({o['port'] for o in outputs} & set(c.roots))} are named like the period's ports")
     roots += [{k: o[k] for k in ("port", "root", "leaves", "domain")} for o in outputs]
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
@@ -939,7 +939,7 @@ def _names(entry: Mapping[str, Any] | None, src: ValueRows) -> bool:
 
 def _pathless(reads: Mapping[str, Mapping[str, Any]], paths: dict[str, dict[str, str]]) -> dict[str, dict[str, Any]]:
     """A member's header entries with their paths moved into ``paths`` (by value, then position), each path once for the
-    window; refused where two entries give one row two paths."""
+    period; refused where two entries give one row two paths."""
     out = {}
     for p, e in reads.items():
         table = paths.setdefault(e["value"], {})
@@ -951,8 +951,8 @@ def _pathless(reads: Mapping[str, Mapping[str, Any]], paths: dict[str, dict[str,
 
 
 def registered_header(win: Mapping[str, Any], k: int) -> dict[str, Any] | None:
-    """Member ``k``'s header ``registered`` entry (``{port: {"value", "positions", "paths"}}``) from its window's
-    ``window.json`` (`write`), each path read off the window's ``registered_paths`` where the member's entry gives none."""
+    """Member ``k``'s header ``registered`` entry (``{port: {"value", "positions", "paths"}}``) from its period's
+    ``window.json`` (`write`), each path read off the period's ``registered_paths`` where the member's entry gives none."""
     reads = win["members"][k].get("registered")
     if not reads:
         return None
@@ -963,7 +963,7 @@ def registered_header(win: Mapping[str, Any], k: int) -> dict[str, Any] | None:
             continue
         got = table.get(e["value"], {})
         if missing := [x for x in e["positions"] if str(x) not in got]:
-            raise ValueError(f"member {k} {p}: the window gives no path for rows {missing[:4]} of {e['value']!r}")
+            raise ValueError(f"member {k} {p}: the period gives no path for rows {missing[:4]} of {e['value']!r}")
         out[p] = {**e, "paths": [got[str(x)] for x in e["positions"]]}
     return out
 
@@ -977,7 +977,7 @@ def own_value(port: str) -> str:
 
 def held_ports(win: Mapping[str, Any], k: int) -> dict[str, str]:
     """Member ``k``'s wired ports with no tree of its own (``wired_trees`` false), each to the port whose tree holds it,
-    ``<writer member>/<out>`` (`Binding.held`), from the window document ``win`` (``window.json``)."""
+    ``<writer member>/<out>`` (`Binding.held`), from the period document ``win`` (``window.json``)."""
     ms, mem = win["members"], win["members"][k]
     if mem.get("wired_trees", True):
         return {}
@@ -1056,9 +1056,9 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
 
 
 class Bodies:
-    """A written window's prover bodies (`write`), each made from the files that hold its rows and salts: a member's own
+    """A written period's prover bodies (`write`), each made from the files that hold its rows and salts: a member's own
     ``m<k>-private.bin`` (its body less its ports ``value_rows`` and ``wired_rows`` name, in the body's own order), a
-    registered value's ``v<j>-private.bin`` (the rows the window reads, in position order, then their salts) and, for a wired
+    registered value's ``v<j>-private.bin`` (the rows the period reads, in position order, then their salts) and, for a wired
     port, its writers' own files (each row and salt its writer's output row's; with no tree of its own, ``wired_trees``
     false, its writer's output rows, whole: `Binding.held`). Each file is read where a body reads it,
     memory-mapped; a file not the size its ports make, a row no file holds and a writer whose output isn't the port's rows
@@ -1112,7 +1112,7 @@ class Bodies:
             self._values.clear()
 
     def value(self, name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Registered value ``name``'s rows the window holds: their positions, rows ((P, words) u16) and salts ((P, 192) u8)."""
+        """Registered value ``name``'s rows the period holds: their positions, rows ((P, words) u16) and salts ((P, 192) u8)."""
         if name not in self._values:
             v = self._win["value_rows"][name]
             at, w, path = np.asarray(v["positions"], dtype=np.int64), int(v["words"]), self.dir / v["file"]
@@ -1134,12 +1134,12 @@ class Bodies:
             pos, (have, rows, ys) = np.asarray(e["positions"], dtype=np.int64), self.value(e["value"])
             if len(pos) != self.leaves(k)[p] or rows.shape[1] != words:
                 raise ValueError(f"member {k} {p}: {len(pos)} rows of {e['value']!r}, not {self.leaves(k)[p]} rows of {words} "
-                                 f"words the window's {self._win['value_rows'][e['value']]['file']} holds")
+                                 f"words the period's {self._win['value_rows'][e['value']]['file']} holds")
             pos = pos[at]
             i = np.minimum(np.searchsorted(have, pos), len(have) - 1)
             if not np.array_equal(have[i], pos):
                 raise ValueError(f"member {k} {p}: rows {pos[have[i] != pos][:4].tolist()} of {e['value']!r} are not rows of "
-                                 f"{words} words the window's {self._win['value_rows'][e['value']]['file']} holds")
+                                 f"{words} words the period's {self._win['value_rows'][e['value']]['file']} holds")
             return (ys if salts else rows)[i]
         rows, ys = self.own(k)[p]
         return (ys if salts else rows)[at]
@@ -1199,12 +1199,12 @@ class Bodies:
 
 
 def copy_private(window_dir: str | Path, win: Mapping[str, Any], k: int, f: Any) -> None:
-    """Member ``k``'s prover body (`Committed.private_body`) from its window's files into ``f`` (`Bodies`)."""
+    """Member ``k``'s prover body (`Committed.private_body`) from its period's files into ``f`` (`Bodies`)."""
     Bodies(window_dir, win).copy(k, f)
 
 
 def read_private(window_dir: str | Path, win: Mapping[str, Any], k: int) -> bytes:
-    """Member ``k``'s prover body from its window's files (`Bodies`)."""
+    """Member ``k``'s prover body from its period's files (`Bodies`)."""
     f = io.BytesIO()
     Bodies(window_dir, win).copy(k, f)
     return f.getvalue()
@@ -1214,16 +1214,16 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
           kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any,
           index_salt: bytes | None = None, previous: str | None = None,
           entries: Sequence[Mapping[str, Any]] = (), outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """The window's files, its registration's window of ``kind`` (`registration`, by ``registrar``, which also names and digests
+    """The period's files, its registration's period of ``kind`` (`registration`, by ``registrar``, which also names and digests
     the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous``, registering
-    the values' ``entries`` and naming the roots of the values it ``outputs``; the window's provenance gets the index's hiding
+    the values' ``entries`` and naming the roots of the values it ``outputs``; the period's provenance gets the index's hiding
     leaf (`index_leaf`), so the registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt
     are prover only: the salt is ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the
     OS.  ``registered``: by member key, an outside value's reads (``salts_of``), each a header entry
-    (``{port: {"value", "positions", "paths"}}``), whose paths ``window.json`` gives once for the window
+    (``{port: {"value", "positions", "paths"}}``), whose paths ``window.json`` gives once for the period
     (``registered_paths``, by value and position; `registered_header`).  A member's ``m<k>-private.bin`` is its prover body
     less two kinds of port, rows and salts: a port given as a registered value's rows (`Committed.by_value`) its entry names
-    (``value_rows``), whose rows the window reads are written once for each value, in position order and then their salts,
+    (``value_rows``), whose rows the period reads are written once for each value, in position order and then their salts,
     to ``v<j>-private.bin`` (``window.json``'s ``value_rows``); and a wired port (``wired_rows``), each row and salt its
     writer's output row's, which the writer's own file holds.  At the 4,32,4 class the members' bodies read 5,282,498 value
     rows, 37,787 of them distinct, and 9,657,548 wired rows of 3,750,680 output rows.  `Bodies` makes a member's prover
