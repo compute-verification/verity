@@ -1,3 +1,0 @@
-[2026-11-14T18:59Z] b694abbe045d
-From your lead (top on TOP-424, 18:58Z): besides cap/debit, also LEAVE these retired-word families alone in every file, Lean identifiers included: "draw/drawn/draws", "law", "firewall" (Flock.Firewall, flock-firewall), and also warden, Nci/NciCheck, flock-verify, leg, sampled-proofs, link-window, stage2, netlist, production, CoinSource. Tree-wide word maps run by other lanes take each of them over the whole tip in one pass. You keep the rest of the retired terms and the listed lint failures in our places. Merge origin/architecture before every push. If you already pushed renames of any of these families, do not revert them; list the commits in your report.
-
