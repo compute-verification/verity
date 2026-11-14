@@ -34,3 +34,10 @@ inputs = ["tools/config/verity_config",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
           "verity/circuits/ops", "verity/circuits/silicon",
           "verity/definitions/__init__.py", "verity/hardware/__init__.py", "verity/protocols/accounting/poub/__init__.py"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_p2_stage.py"]
+paths = ["benchmarks/torch_gpu/p2_stage/served_weights.py"]
