@@ -1,4 +1,4 @@
-"""`verity_vllm/acquire/fa2_tap_src/apply_v8.py`, the script a pod runs to turn the v7-tapped FlashAttention tree into the
+"""`verity_vllm/acquire/fa2_tap_src/apply_fa2_tap.py`, the script a pod runs to turn the v7-tapped FlashAttention tree into the
 v8 one, without that tree.
 
 The script is run whole, as `ops/pod_fa2_tap.sh` starts it: `verity-vllm fa2-tap-apply` from the tree's root, with the
@@ -59,11 +59,11 @@ MAX_SCALED = "    TensorT tap_max_scaled;   // [verity MS] each row's max * scal
 MS_FUNCTION = ("89185d4efc8bfd4ef54f0c5f7f63d3cab0fce51c9c0200fbb3d6b3331d91b5b9"
                "62da0aabd83534b9e7f100869572de11175f9657f536c66eea3f085650107564")
 SAID = [
-    "[apply_v8] flash.h: Verity_tap.BN/D added",
-    "[apply_v8] flash_fwd_kernel.h: Verity_mat_ctx<kBlockM, kBlockN, kHeadDim>",
-    "[apply_v8] flash_fwd_launch_template.h: arm iff (kBlockN, kHeadDim) == (vt.BN, vt.D)",
-    "[apply_v8] softmax.h: tap_max_scaled via scale_apply_exp2_ms (VERITY_MAT_SRC & 64)",
-    "[apply_v8] flash_fwd_kernel.h: VERITY_TAP_P stores the MS class",
+    "[fa2_tap] flash.h: Verity_tap.BN/D added",
+    "[fa2_tap] flash_fwd_kernel.h: Verity_mat_ctx<kBlockM, kBlockN, kHeadDim>",
+    "[fa2_tap] flash_fwd_launch_template.h: arm iff (kBlockN, kHeadDim) == (vt.BN, vt.D)",
+    "[fa2_tap] softmax.h: tap_max_scaled via scale_apply_exp2_ms (VERITY_MAT_SRC & 64)",
+    "[fa2_tap] flash_fwd_kernel.h: VERITY_TAP_P stores the MS class",
 ]
 
 
@@ -196,7 +196,7 @@ def test_a_tree_without_the_tap_header_gets_the_v7_patch_by_git_at_its_root_firs
 
     assert programs == [(["git", "apply", str(MINE / "verity_tap_v7.patch")], {"cwd": str(root), "check": True})]
     assert capsys.readouterr().out == f"APPLY-V8-OK {root / SRC}\n"
-    assert _said(caplog) == ["[apply_v8] verity_tap_v7.patch applied", *SAID]
+    assert _said(caplog) == ["[fa2_tap] verity_tap_v7.patch applied", *SAID]
     assert (root / SRC / "verity_tap.h").read_text() == (MINE / "verity_tap.h").read_text()
 
 

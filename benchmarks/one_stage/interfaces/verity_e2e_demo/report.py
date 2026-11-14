@@ -192,7 +192,7 @@ MEASURED: dict[str, str] = {
     "BLOCK_ROOT": "the block root of the block run's drawn-unit bundle (`verity/drawn-unit-bundle`)",
     "REGISTRATION_ROOT": "the seeded weights' registration root",
     "CHALLENGER_RUN": "the block run: the challenger's coin record for the block's draw",
-    "ZK_SESSIONS": "the prove run: its C-Flock --zk sessions behind the firewall (`sessions/index.jsonl`)",
+    "ZK_SESSIONS": "the prove run: its C-Flock --zk sessions behind the ZK server (`sessions/index.jsonl`)",
     "PROVE_RUN": "the prove run's id",
     "FLIP_VERDICT": "the flipped-bit run: the Lean verifier's verdict with one committed bit flipped",
     "FLIP_RUN": "the flipped-bit run's id",
@@ -838,7 +838,7 @@ def proved_section(proved: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:
     for g in drawn:
         line, v = verdicts.get(g, (None, None))
         value = "no VERDICT line" if v is None else "accepted" if v.get("accepted") is True else "not accepted"
-        rows.append({"what": f"drawn proof block {g}: proved in C-Flock --zk behind the firewall, verified by M0 and Lean",
+        rows.append({"what": f"drawn proof block {g}: proved in C-Flock --zk behind the ZK server, verified by M0 and Lean",
                      "value": value, "target": {"op": "==", "value": "accepted"}, "run": run,
                      "verdict": line or f"the run's output has no VERDICT line for block {g}"})
     line, v = final

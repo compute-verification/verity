@@ -2161,6 +2161,8 @@ def test_a_saved_window_whose_program_declared_again_is_another_is_refused_at_it
             HO.resume(tmp_path / "changed", mine.detach())
         assert str(refused.value) == (f"{run.entry}: the window Program declared again is not the one its tables were "
                                       "registered under")
+        theirs.setblocking(False)
+        assert theirs.recv(1) == b"", "the refused resume closed the stream it was handed"
     finally:
         mine.close()
         theirs.close()

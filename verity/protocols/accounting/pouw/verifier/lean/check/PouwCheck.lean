@@ -26,7 +26,7 @@ and circuits the verifier pins (`PouwCheck.Tile`), the three inputs and their de
 which `tests/test_difftest.py` holds to the Python through `pouw-check serve`; and the rule on one unit's opening beside it
 (`PouwCheck.Opening`), held to `core_check.opening` through `pouw-check-difftest`, as are the rules on the execution phase's pass and
 sample (`PouwCheck.Pass`) and on a live execution phase's salt and round coins (`PouwCheck.Rounds`). Code: Lean core only, and never
-`security/`. Its properties are stated in `Security/Properties/Pouw/Check.lean`.
+`security/`. Its properties are stated in `security/Properties/Pouw/Check.lean`.
 
 The rules on a served execution phase's credited set, its sampled proof blocks (the sampling coin's over its layout) and their outcome, its
 credit period (counted only closed and complete) and its A rows (`PouwCheck.Credit`, whose one entry is `window` and

@@ -340,7 +340,7 @@ def test_m3_drops_the_fallback_line_only_when_all_eight_are_proved_and_accepted(
     out = _draft([], _proved())
     assert out.splitlines()[0] == D.M3_STATUS and "fallback" not in out.lower()
     assert "## 1. M3 proper: the drawn H200 proof blocks proved in C-Flock" in out and "## 2. Commit overhead" in out
-    assert "**drawn proof block 108: proved in C-Flock --zk behind the firewall, verified by M0 and Lean:** accepted" in out
+    assert "**drawn proof block 108: proved in C-Flock --zk behind the ZK server, verified by M0 and Lean:** accepted" in out
     assert "None: every number above met its target." in out
 
 
@@ -357,7 +357,7 @@ def test_a_sampled_proof_block_with_no_verdict_line_is_a_visible_failure() -> No
     doc["proved"]["lines"] = [x for x in doc["proved"]["lines"] if '"block": 104' not in x]
     out = _draft([], doc)
     assert out.splitlines()[0] == D.FALLBACK_STATUS
-    assert ("**drawn proof block 104: proved in C-Flock --zk behind the firewall, verified by M0 and Lean**: no VERDICT "
+    assert ("**drawn proof block 104: proved in C-Flock --zk behind the ZK server, verified by M0 and Lean**: no VERDICT "
             "line against target = accepted. Run r20261027-013000-abcd.") in out.split("## Visible failures")[1]
 
 
