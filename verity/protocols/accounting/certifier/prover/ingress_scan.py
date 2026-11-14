@@ -12,7 +12,7 @@ are the network certifier's (`warden.read_cell`): `DATA` of P = B − 9 bytes, `
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
 **Fixed slots a timestep.** A timestep is EVERY buckets,
-its boundary the bucket t ≡ 0 mod EVERY of the scan, and the warden's window is whole timesteps (EVERY divides T,
+its boundary the bucket t ≡ 0 mod EVERY of the scan, and the network certifier's window is whole timesteps (EVERY divides T,
 `Class.serves`), so every execution phase has its boundaries at the same buckets and one window circuit serves them all.
 A request admitted at bucket s is anchored at A(s), the first boundary at or after s + WITHIN (`Class.anchor`), WITHIN
 the class's ingress bound δ in buckets, and its Program reads its slot in S_{A−1}. Each boundary has SLOTS = lanes
@@ -114,7 +114,7 @@ from one bucket's ingress to a later bucket's gates: each step reads the state t
 arrivals and the prompt lengths, which stay private.
 
 **Where it runs.** `row`, `sin` and each `prog<j>` are a registered read, an input port `Registered.checkPort` accepts:
-`row` the warden's signed row t (`warden_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>` the
+`row` the network certifier's signed row t (`warden_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>` the
 slot-entries row of slot j at t's boundary. o1 and o2 are gates, never inputs: the unit's statement commits o1 as the
 scan's state row t and o2 as its view row t, each registered as a read of its row (`checkPort` accepts a hidden-output
 statement's output row, the verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's `state`, which
