@@ -2198,6 +2198,11 @@
       "paths": {
         "verity/configuration/config/": "tools/config/"
       }
+    },
+    {
+      "paths": {
+        "verity/settings.py": "tools/config/verity_config/verity_settings.py"
+      }
     }
   ]
 }
