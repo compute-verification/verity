@@ -122,7 +122,7 @@ def facts(**over):
 
 FILES = {"P": "P.lean", "P.Assumptions": "P/Assumptions.lean", "P.Defs": "P/Defs.lean", "P.Thms": "P/Thms.lean"}
 POLICY = {"roots": ["P"], "assumptions_module": "P.Assumptions", "assumptions": {"P.Hyp": {"owner": "@lean"}},
-          "guarantees": {"P.t": {"owner": "@lean"}}}
+          "ids": {"P.Hyp": "p-hyp"}, "guarantees": {"P.t": {"owner": "@lean"}}}
 
 
 def recorded(f=None):
@@ -1199,8 +1199,9 @@ def test_bookkeeping_files_a_premise_on_the_locks_default_issue_and_its_guarante
         == "open.form", "an issue, when given, is a Linear key"
 
 
-#: a trust base of `facts()`'s one named assumption
+#: a trust base of `facts()`'s one named assumption, and its claim id and `P.Sound`'s
 HYP = {"P.Hyp": "the trust assumption it states"}
+IDS = {"P.Hyp": "p-hyp", "P.Sound": "p-sound"}
 
 
 def opened(now: dict) -> dict:
@@ -1240,7 +1241,7 @@ def test_a_deployed_guarantee_resting_on_a_premise_outside_the_trust_base_fails_
     `P.t`'s own with its reason.  A guarantee's own trust is a deployed guarantee's, and each holds a premise and a
     reason."""
     now = sounded()
-    lock = {**opened(now), "trust": {"base": HYP}, "deployed": ["P.t"]}
+    lock = {**opened(now), "trust": {"base": HYP}, "deployed": ["P.t"], "ids": IDS}
     assert A.judge({k: v for k, v in lock.items() if k != "deployed"}, now, FILES)[0] == []
     fails = A.judge(lock, now, FILES)[0]
     assert [(f.code, f.entry) for f in fails] == [("trust.gap-new", "P.t")] and "rests on P.Sound, outside" in fails[0]
@@ -1264,16 +1265,34 @@ def test_a_deployed_guarantee_resting_on_a_premise_outside_the_trust_base_fails_
         assert [f.code for f in A.judge(lock | {"trust": bad}, now, FILES)[0]] == ["trust.form"], bad
 
 
+def test_each_named_assumption_and_trusted_premise_has_a_claim_id_which_an_update_keeps_only_while_listed():
+    """`ids` gives each named assumption and each premise `trust` names its claim id, the one `verity.claims` cites it
+    by: one without fails, naming the entry to write, until a person writes it (an update doesn't), and an id not of a
+    claim's form fails.  An open premise may have one, and an update drops the id of a premise the lock no longer lists."""
+    now = sounded()
+    lock = {**opened(now), "trust": {"base": HYP}, "ids": IDS}
+    assert A.judge(lock, now, FILES)[0] == []
+    bare = {**lock, "ids": {"P.Sound": "p-sound"}}
+    fails = A.judge(bare, now, FILES)[0]
+    assert [(f.code, f.entry) for f in fails] == [("ids.missing", "P.Hyp")] and '"P.Hyp": "<id>"' in fails[0]
+    assert [f.code for f in A.judge(bare, now, FILES, update=True)[0]] == ["ids.missing"]
+    assert A.judge({**lock, "ids": {"P.Hyp": "p-hyp"}}, now, FILES)[0] == []
+    for bad in (["p-hyp"], {"P.Hyp": "P_Hyp"}, {"P.Hyp": "a/b/c"}, {"P.Hyp": 1}):
+        assert [f.code for f in A.judge({**lock, "ids": bad}, now, FILES)[0]] == ["ids.form"], bad
+    assert A.judge({**lock, "ids": IDS | {"P.Gone": "p-gone"}}, now, FILES, update=True)[1]["ids"] == IDS
+
+
 def test_a_discharged_premise_fails_until_its_trust_gap_entry_drops_which_an_update_and_the_lock_run_do(
         tmp_path, monkeypatch):
     """`P.t`'s proof stops taking `P.Sound`: its build takes only `P.Hyp`, which `trust` lists.  Its `trust_gap` entry still
     listing `P.Sound` fails, as bookkeeping (not a record difference, so `--regenerate` alone doesn't settle it), until the
     entry drops: `--update` drops it, and so does the lock run under `--bookkeeping warn`, whose warning names the premise.
     The report holds each deployed guarantee's gap."""
-    before = {**opened(sounded()), "trust": {"base": HYP}, "deployed": ["P.t"], "trust_gap": {"P.t": ["P.Sound"]}}
+    before = {**opened(sounded()), "trust": {"base": HYP}, "deployed": ["P.t"], "trust_gap": {"P.t": ["P.Sound"]},
+              "ids": IDS}
     assert A.judge(before, sounded(), FILES)[0] == []
     assert "trust.gap-gone" in [f.code for f in A.judge(before, facts(), FILES)[0]]
-    lock = {**recorded(), "trust": {"base": HYP}, "deployed": ["P.t"], "trust_gap": {"P.t": ["P.Sound"]}}
+    lock = {**recorded(), "trust": {"base": HYP}, "deployed": ["P.t"], "trust_gap": {"P.t": ["P.Sound"]}, "ids": IDS}
     fails = A.judge(lock, facts(), FILES)[0]
     assert [(f.code, f.entry) for f in fails] == [("trust.gap-gone", "P.t")] and "lists P.Sound, which it no" in fails[0]
     assert A.BOOKKEEPING.match(fails[0]) and A.regenerated(lock, facts(), FILES, fails) is None
@@ -3435,7 +3454,8 @@ def test_an_alias_of_listed_assumptions_is_no_new_named_assumption():
     """A premise that only packs listed assumptions (`def Both n := Hyp ∧ Hyp2 n`, or through another such definition) is
     no new named assumption: the check holds its parts to the lock in its place (so a listed part reached only through it is read), an
     update doesn't add it, and taken closed, its parts are the guarantee's named assumptions."""
-    listed = {**POLICY, "assumptions": {"P.Hyp": {"owner": "@lean"}, "P.Hyp2": {"owner": "@lean"}}}
+    listed = {**POLICY, "assumptions": {"P.Hyp": {"owner": "@lean"}, "P.Hyp2": {"owner": "@lean"}},
+              "ids": {"P.Hyp": "p-hyp", "P.Hyp2": "p-hyp2"}}
     for unfolds in ({"P.Both": [asserted("P.Hyp"), asserted("P.Hyp2")]},
                     {"P.Both": [asserted("P.Inner", "P.Defs"), asserted("P.Hyp")], "P.Inner": [asserted("P.Hyp2")]}):
         fails, pol = A.judge(listed, aliased(unfolds), FILES, update=True)
@@ -3453,6 +3473,7 @@ def test_a_guarantee_s_record_lists_the_named_assumptions_it_rests_on():
     empty for a statement that takes none. A record whose lists differ from the build's, or that holds none (written
     before records held them), fails as a record difference, which `--update` settles."""
     listed = {**POLICY, "assumptions": {"P.Hyp": {"owner": "@lean"}, "P.Hyp2": {"owner": "@lean"}},
+              "ids": {"P.Hyp": "p-hyp", "P.Hyp2": "p-hyp2"},
               "guarantees": {"P.t": {"owner": "@lean"}, "P.u": {"owner": "@lean"}}}
     f = aliased({"P.Both": [asserted("P.Inner", "P.Defs"), asserted("P.Hyp")], "P.Inner": [asserted("P.Hyp2")]})
     f["pins"]["P.u"] = fact(signature="P.u : True", hyps=[], reads=[])
@@ -3476,7 +3497,7 @@ def test_an_alias_hiding_anything_but_listed_assumptions_is_a_new_one_and_its_fa
     predicate, a constant applied to a proposition or a predicate, a part that doesn't unfold) stays a new named assumption,
     taken open or closed; its failure says what it unfolds to and the entry to write, so one edit settles it. Declared
     outside `assumptions_module`, it is an open premise, which an update lists only under `open_seed`."""
-    listed = {**POLICY, "assumptions": {"P.Hyp": {"owner": "@lean"}}}
+    listed = {**POLICY, "assumptions": {"P.Hyp": {"owner": "@lean"}}, "ids": {"P.Hyp": "p-hyp", "P.Hidden": "p-hidden"}}
     pol = A.judge(listed, aliased({"P.Both": [asserted("P.Hyp")]}), FILES, update=True)[1]
     ticket = {"issue": "LEAN-1", "due": "2026-11-30"}
     cases = {"P.Hidden": [asserted("P.Hyp"), asserted("P.Hidden")],
@@ -4530,7 +4551,7 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     assert A.renamed_witnesses({"witnesses": {"P.a": {"honest": ["P.a_h"], "nontrivial": "P.a_n"}},
                                 "unwitnessed": {"P.b": h}}, {"P": "Q"}) == {
         "witnesses": {"Q.a": {"honest": ["Q.a_h"], "nontrivial": "Q.a_n"}}, "unwitnessed": {"Q.b": h}}
-    assert A.renamed_witnesses(POLICY, {"P": "Q"}) == {}
+    assert A.renamed_witnesses(POLICY, {"P": "Q"}) == {"ids": {"Q.Hyp": "p-hyp"}}
 
 
 def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry_is_held_to_its_witnesses():
@@ -5544,7 +5565,8 @@ def test_assumptions_module_may_list_several_homes():
                                           "module": module}],
             reads=fact()["reads"] + [{"name": "P.Sound", "module": module, "kind": "def", "hash": "5" * 32}])})
     two = {**POLICY, "assumptions_module": ["P.Assumptions", "P.Defs"],
-           "assumptions": POLICY["assumptions"] | {"P.Sound": {"owner": "@lean"}}}
+           "assumptions": POLICY["assumptions"] | {"P.Sound": {"owner": "@lean"}},
+           "ids": POLICY["ids"] | {"P.Sound": "p-sound"}}
     fails, pol = A.judge(two, sound("P.Defs"), FILES, update=True)
     assert fails == [] and set(pol["assumptions"]) == {"P.Hyp", "P.Sound"}
     assert pol["guarantees"]["P.t"]["premises"]["assumptions"] == ["P.Hyp", "P.Sound"]
