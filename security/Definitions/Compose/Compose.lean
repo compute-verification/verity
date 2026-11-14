@@ -6,10 +6,10 @@ public import Definitions.Registration.Device
 public import Definitions.Pouw.Window
 
 /-!
-# PoUW as a compile pass over an arbitrary declared circuit (trusted)
+# PoUW as a compile pass over an arbitrary registered circuit (trusted)
 
 The vocabulary of `Definitions.Compose.Guarantees.Compose`. The
-compile pass `C → C′` replaces each credited product of a declared circuit by its kind's template, with its noise sampled
+compile pass `C → C′` replaces each credited product of a registered circuit by its kind's template, with its noise sampled
 after its operands are committed, one coin a round. The service then samples one uniform subset of the
 window's grid-padded tiles, one a proof block, and proves each sampled tile with the generation of its own noise.
 
@@ -135,7 +135,7 @@ namespace Accounting.Compose
 
 open Accounting.TS Pouw.RelativeSecurity
 
-/-! ## The declared circuit: its rounds, its proof blocks and its words -/
+/-! ## The registered circuit: its rounds, its proof blocks and its words -/
 
 /-- **A round's coin mode**: `live`, a verifier's coin released after the round's served values are committed (a
 per-round coin, or a per-stage prefill coin), or `seeded`, derived from the window's salt and commitments
@@ -145,7 +145,7 @@ inductive CoinMode
   | seeded
   deriving DecidableEq, Repr
 
-/-- **A declared circuit**: its gates in the IR's canonical order (`Accounting.Gates.IntDag`: each gate's operation,
+/-- **A registered circuit**: its gates in the IR's canonical order (`Accounting.Gates.IntDag`: each gate's operation,
 operands, interval, primitive, place and whether it is committed), and as the IR binds them:
 * `call i`: the Definition call site, of `calls`, that made gate `i`, numbered in the circuit's order;
 * `round c`: call site `c`'s round, of `rounds`: its noise reads that round's coin, released after the round's operands
@@ -345,7 +345,7 @@ reads, which the unit's proof checks when the unit is sampled and whose skip its
 gets no such case: a run input committed after its reader's coin lets the prover choose
 it against the reader's noise (`A = −b` cancels a one-bit dither), even when only its own unit reads it.
 
-It is a fact of the declared circuit, not a premise about the cheater. A service that commits later than it allows
+It is a fact of the registered circuit, not a premise about the cheater. A service that commits later than it allows
 fails it, and then `Scope` fails and the live statements credit nothing. A `Declared` whose `commitRound` claims an
 earlier coin than the code commits at meets it, and then its layer cuts a value before the code binds it: an opening
 moved after that cut is `SampledLayer.MovedIn`, so the failure lands in the binding premise (`MovedIn ≤ δ_bind`), which
