@@ -47,6 +47,9 @@ inputs = ["tools/verity/lean/README.md", "tools/verity/check/common.py", "tools/
           "tools/verity/graph/tests/key_vectors.json", "tools/verity/cli/verity_cli/__init__.py",
           "tools/lean/setup.sh", "tools/research/src/research/store/moves.json",
           "tools/research/src/research/__init__.py", "tools/verity/graph/verity_graph/__init__.py", "tools/research/src/research/store/__init__.py"]
+# check runs it as three parts by test id (`lean-suites:verity-lean-audit:K/3`, `suites.py`'s `id_part_of`), each collecting
+# every file and running the tests whose node id hashes to K, so that ci.toml's plans spread its one process over three shards
+parts = 3
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
