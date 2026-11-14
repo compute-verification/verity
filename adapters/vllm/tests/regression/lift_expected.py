@@ -113,7 +113,7 @@ def role_of(rel: str) -> str:
     return "record"
 
 
-def build_fixtures(index: dict, oracle: Path, keep_roles: set[str], decisions: dict[str, list[dict]] | None = None,
+def build_fixtures(index: dict, keep_roles: set[str], decisions: dict[str, list[dict]] | None = None,
                    shared_artifacts: dict[str, str] | None = None, carried: dict[str, dict] | None = None,
                    retired: dict[str, dict[str, dict]] | None = None) -> tuple[str, str, dict]:
     """fixtures.toml's text, files.toml's, and the rows."""
@@ -236,7 +236,7 @@ def main(argv=None) -> int:
         if dup:
             print(f"[lift] --append: already in {resolver.FIXTURES}: {dup}", file=sys.stderr)
             return 2
-        text, ftext, _ = build_fixtures(index, oracle, set(a.roles.split(",")), decisions=existing_decisions())
+        text, ftext, _ = build_fixtures(index, set(a.roles.split(",")), decisions=existing_decisions())
         old_files = resolver.FILES.read_text() if resolver.FILES.is_file() else ""
         if not old_files:
             print(f"[lift] --append: {resolver.FILES} is not here; `research data fetch-fixtures` fetches it", file=sys.stderr)
@@ -246,7 +246,7 @@ def main(argv=None) -> int:
             resolver.FILES.write_text(old_files.rstrip("\n") + "\n\n" + ftext[ftext.index("\n[rows.") + 1:])
         print(f"[lift] appended {sorted(index['rows'])} to {resolver.FIXTURES} and {resolver.FILES}")
     elif not a.only_expected:
-        text, ftext, _ = build_fixtures(index, oracle, set(a.roles.split(",")), decisions=existing_decisions(),
+        text, ftext, _ = build_fixtures(index, set(a.roles.split(",")), decisions=existing_decisions(),
                                         shared_artifacts=existing_shared_artifacts(), carried=existing_rows(with_files=True),
                                         retired=existing_retired())
         resolver.FIXTURES.write_text(text)

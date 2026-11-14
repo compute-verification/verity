@@ -8,11 +8,14 @@ import json
 from collections import Counter
 
 import pytest
-
 from verity.circuits.codec import encode_program
+
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match.instance_sequence import RootView
-from verity_vllm.check.match.program_compare import _canon_step_relative as canon_step_relative, compare_steps
+from verity_vllm.check.match.program_compare import (
+    _canon_step_relative as canon_step_relative,
+)
+from verity_vllm.check.match.program_compare import compare_steps
 from verity_vllm.program.predict import build as PB
 from verity_vllm.program.predict.phi import Phi
 
@@ -79,7 +82,7 @@ def test_a_changed_views_positions_are_its_new_sequences(descriptors, compact):
     B.to_compiler_form()
     fresh.to_compiler_form()
     want = seqs(fresh)
-    spare = [[] for _ in range(256)]
+    spare: list[list] = [[] for _ in range(256)]
     del first
     again = seqs(B)
     assert again == want and len(spare) == 256

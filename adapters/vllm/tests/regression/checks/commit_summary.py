@@ -86,7 +86,7 @@ def summarize(d: str, rc: int) -> dict:
         for k, v in re.findall(r"--engine-arg\s+([A-Za-z_]+)=([^\s]+)", cmd):
             try:
                 es[k] = json.loads(v)
-            except ValueError:
+            except (RecursionError, ValueError):
                 es[k] = v
         m = re.search(r"--max-num-seqs\s+(\d+)", cmd)
         if m:
