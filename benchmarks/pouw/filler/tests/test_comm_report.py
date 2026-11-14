@@ -117,6 +117,40 @@ def test_each_point_has_its_own_row(tmp_path):
     assert got == [("set0", "TPC_S=64", 32, 40, 30), ("set0", "TPC_S=64", 64, 80, 70), ("set1", "TPC_S=32", 32, 50, 40)]
 
 
+def _write_set(tmp_path, ranks):
+    """A set whose rank r wrote the lines `ranks[r]`."""
+    d = tmp_path / "set0"
+    d.mkdir()
+    (d / "settings.txt").write_text("TPC_S=64\n")
+    for r, lines in enumerate(ranks):
+        (d / f"rank{r}.jsonl").write_text("\n".join(lines) + "\n")
+
+
+def test_a_time_and_a_field_are_medians_over_an_arms_repeats(tmp_path):
+    # four repeats of base, three reps each: neither median over the repeats is a repeat's own value
+    repeats = ((40, 2000.0), (52, 1900.0), (44, 1960.0), (46, 1920.0))
+    _write_set(tmp_path, [[_tp(0, 32, 1e11, "base", [ms + 2, ms, ms - 1], mhz=mhz) for ms, mhz in repeats]])
+    (row,) = R.rows(str(tmp_path))
+    assert row["base_ms"] == 45
+    assert row["served"] == pytest.approx(1e11 / 45e-3 / (1024 * 188 * 1940.0 * 1e6))
+    assert row["gates_ok"] is None  # no rank wrote a gate's verdict
+
+
+def test_a_rank_cut_short_times_the_reps_every_rank_has(tmp_path):
+    _write_set(tmp_path, [[_tp(0, 32, 1e11, "base", [40, 42, 90])], [_tp(1, 32, 1e11, "base", [41, 43])]])
+    (row,) = R.rows(str(tmp_path))
+    assert row["base_ms"] == 42  # the median of 41 and 43, the slower rank's time of each rep both ranks have
+
+
+def test_one_failed_gate_fails_the_set_and_only_the_wrapped_point_is_flagged(tmp_path):
+    _write_set(tmp_path, [[json.dumps({"mode": "pf_gate", "rank": r, "ok": r == 0}),  # rank 1's gate fails
+                           *(_tp(r, B, 1e11, "base", [40] * 3) for B in (32, 64)),
+                           json.dumps({"mode": "point", "tp": 2, "rank": r, "B": 64, "L": 2048, "kv_wrapped": True})]
+                          for r in (0, 1)])
+    got = [(row["B"], row["gates_ok"], row["kv_wrapped"]) for row in R.rows(str(tmp_path))]
+    assert got == [(32, False, False), (64, False, True)]
+
+
 def test_pfill_fill_counts_mmas_and_reads_k(tmp_path):
     _write_pfill(tmp_path)
     (row,) = R.rows(str(tmp_path))
