@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`NciCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 682 cases (600 random circuits,
-two in five broken in one way, and 82 shaped ones, most in the shape of a served class) and, on each,
+`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 701 cases (600 random circuits,
+two in five broken in one way, and 101 shaped ones, most in the shape of a served class) and, on each,
 `scripts/nci_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -32,14 +32,18 @@ rows of one unit, with the rate rule's two failures in rows and the refusal of a
 fifteenth is a history table: a table over no registered parameter, so every row read of one is fresh, whatever
 pins and registers the rest. The sixteenth is what the prover chose of an execution phase's input bits: the rows no
 declaration fills, the reads of a parameter that is not θ and the ports of an opening that is not held, over every
-slot's units, with an opening's ports off the count only where the opening is held.
+slot's units, with an opening's ports off the count only where the opening is held. The seventeenth is that a row
+format is held to the registration log: a value read in leaves of another width than 16 bits is registered in
+leaves of that width.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
 not, `input_count` counts that opening's ports registered and the form counts them fresh, and the test holds the two
 apart by exactly those bits. The interface states no layout and no leaf's width: a record the form refuses for a
 pinned reader's roles (`reader-layout`, `reader-roles`) or for a wire's leaves (`leaf-widths`) is one the interface
-takes. The form reads a history table's keys and its name and nothing of its writer, rows and runs: a record
+takes. It states no row format and does not read the registration log: it refuses a record that states row formats,
+which the tenth leaves out (`_formatted`), and takes one the form refuses for its formats against the log (`formats`).
+The form reads a history table's keys and its name and nothing of its writer, rows and runs: a record
 whose history the interface refuses for those (`LOOSE`) is one the form takes.
 
 The interface refuses a record with a `ValueError`, and the helper that asks it (`_interface`) takes nothing else for
@@ -77,8 +81,9 @@ ref, IF, codec = vectors.ref, vectors.IF, vectors.codec
 RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.RecordDifftestMain"]
 #: the random cases the quick tests read, enough of them to reach every way of `BROKEN`
 SEEDS = range(500)
-#: the form's own refusals of a record `verity.commitments.windows.interface` takes: a wire's leaves, a pinned reader's layout
-OWN = ("leaf-widths", "reader-layout", "reader-roles")
+#: the form's own refusals of a record `verity.commitments.windows.interface` takes: a wire's leaves, a pinned reader's
+#: layout, and the row formats held to the registration log, which the interface does not read
+OWN = ("leaf-widths", "formats", "reader-layout", "reader-roles")
 #: the cases whose wires Python's layout has no rows for
 TWO_WIDTHS = "a wire from an output of two widths"
 TWO_CLOSED = "an output of two widths into a closed row"
@@ -101,6 +106,8 @@ KEYED = {f"2x3 {what}, {how}": "templates" for what in vectors.KEYED for how in 
 HISTORIES = {f"2x3 {what}": stage for what, (stage, _) in vectors.HISTORIES.items()}
 #: of those, the one the form takes that the interface refuses, and the one whose opening is against a history
 LOOSE, OPENED = f"2x3 {vectors.LOOSE}", "2x3 the opening against a history"
+#: the cases on a row format, each with the stage that refuses it, or None
+FORMATS = {(f"2x3 {what}" if shape is None else what): stage for what, (stage, shape, _) in vectors.FORMATS.items()}
 
 
 @pytest.fixture(scope="module")
@@ -115,7 +122,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 682 cases and the reference's results, byte for byte as the record pins them."""
+    """All 701 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -166,7 +173,7 @@ def test_the_served_shape(shaped):
     with none registered or committed, under another root, with an opening that reads no root, with an opening whose
     reader is another Definition under the pinned one's name, and with one wire from the next slot."""
     got = {what: vectors.results(m["case"]) for what, m in shaped.items()
-           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES}
+           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS}
     verdicts = {what: (r["detail"]["failure"], r["count"]["failure"]) for what, r in got.items()}
     refused = ("nci", "fresh")
     assert verdicts == {
@@ -235,7 +242,7 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     The layout's stage alone refuses them: without it the reference refuses none, and accepts the token among the
     ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {
-            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES).items() if isinstance(v, str)}
+            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS).items() if isinstance(v, str)}
     got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
     for what, want in LAYOUT.items():
         detail, count, m = got[what]["detail"], got[what]["count"], shaped[what]
@@ -712,6 +719,35 @@ def test_a_root_node_of_a_composite_is_no_input(shaped):
         assert ref.check_detail(case["instance"], case["trusted"]) == {"error": stage}
 
 
+def test_a_row_format_is_held_to_the_registration_log(shaped):
+    """A record states the leaf width of a registered value whose rows are not 16-bit leaves (`registered.formats`),
+    and the form holds it to the registration log: the run's own record registers the value in leaves of that width,
+    or the log's first record does (θ, at that width). Held, the scan state in 32-bit leaves, of either schema, and a
+    weight registered in 32-bit leaves are what they are in 16-bit ones: the verdict and every count of the accepted
+    case. The same records with another width, with the format dropped, with a format the log does not register, or
+    with the value's entry stating 16 bits over the same rows and words are refused (`formats`); a format the form's
+    shape refuses is refused with the declarations (`inputs`). A weight the first record registers in 32-bit leaves
+    with no format in the record is no θ: its rows are fresh."""
+    got = {what: vectors.results(shaped[what]["case"]) for what in FORMATS}
+    held = vectors.results(shaped["2x3 registered"]["case"])
+    for what, stage in FORMATS.items():
+        r = got[what]
+        if stage is not None:
+            assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == {"error": stage}, what
+        elif what != "2x3 a weight in 32-bit leaves, no format":
+            assert (r["detail"], r["count"]) == (held["detail"], held["count"]), what
+    loose = got["2x3 a weight in 32-bit leaves, no format"]
+    assert (loose["detail"]["failure"], loose["count"]["failure"]) == ("nci", "fresh")
+    assert loose["detail"]["unregistered"] > held["detail"]["unregistered"]
+
+
+def _formatted(made: dict) -> bool:
+    """Whether the case's record states row formats (`registered.formats`). `verity.commitments.windows.interface`
+    states no row format and refuses such a record, which the form reads, so the tenth test leaves it out."""
+    doc = json.loads(made["case"]["instance"]["record"])
+    return isinstance(doc, dict) and isinstance(doc.get("registered"), dict) and "formats" in doc["registered"]
+
+
 def _interface(made: dict):
     """The stage at which `verity.commitments.windows.interface` refuses the case's record (`wires`, `inputs` or
     `blocks`), else None with what it reads of it: the calls `window_of_record` makes on a stated record, which
@@ -799,7 +835,7 @@ def test_a_fault_of_the_helper_is_an_error_and_no_refusal(shaped, monkeypatch):
 
 
 def test_the_reference_reads_a_record_as_the_interface_does(random_cases, shaped):
-    made = [m for m in (*random_cases, *shaped.values()) if m["case"]["spot"] is not None]
+    made = [m for m in (*random_cases, *shaped.values()) if m["case"]["spot"] is not None and not _formatted(m)]
     exact = apart = unpinned = 0
     for m in made:
         case = m["case"]
@@ -827,7 +863,7 @@ def test_the_reference_reads_a_record_as_the_interface_does(random_cases, shaped
         assert total["fresh"] == sum(total[k] for k in ref.FRESH)
         # θ, as the interface holds a parameter: the log's first record's root for it is the run's own
         T = ref.reference.trusted_of(tr)
-        theta = sorted(p for p in x.params if ref.theta(T, x.params, p))
+        theta = sorted(p for p in x.params if ref.theta(T, x.params, p, ref.width_of(doc, p)))
         assert theta == m["theta"]
         roots = T["log"][T["run"]]["window"].get("registered_roots", {})
         pins = {p: T["log"][0]["registered"][k]["root"] for p in theta

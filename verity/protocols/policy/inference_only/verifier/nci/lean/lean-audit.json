@@ -7,6 +7,7 @@
   "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.RecordDifftestMain": "the record check's difftest, under `runs`: compiled evaluation of NciCheck.RecordDifftest.main, audited under NciCheck, a test and not a proof",
+  "NciCheck.RecordCheckMain": "the inference-only-record-check exe: reads one case of the record difftest's and prints NciCheck.Record.checkDetail and NciCheck.RecordCount.checkDetail on it, each with the seconds since it started; IO around the audited check, not a proof",
   "NciCheck.DescLivenessMain": "the description-sized check's liveness test, under `runs`: compiled evaluation of NciCheck.DescLiveness.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DescFuzzMain": "the description-sized check's fuzz run, under `runs`: compiled evaluation of NciCheck.DescFuzz.main, audited under NciCheck, a test and not a proof",
   "NciCheck.CountDifftestMain": "the count mode's difftest, under `runs`: compiled evaluation of NciCheck.CountDifftest.main, audited under NciCheck, a test and not a proof",
@@ -135,16 +136,6 @@
    "except": [],
    "why": "the count of (c, k)-inference blocks on a circuit record is code: the record's summary (NciCheck.Record) and each Definition's Boolean gates by the gate table (NciCheck.Count)"
   },
-  "NciCheck.RecordRows": {
-   "imports": ["NciCheck.Record"],
-   "except": [],
-   "why": "a block's rows on a circuit record, and the rate rule in rows, are code: the record's summary (NciCheck.Record) and each template's rows of one unit from a table it is handed; no circuit file, nothing of NciCheck.Count, no Mathlib and nothing of Security"
-  },
-  "NciCheck.RecordChosen": {
-   "imports": ["NciCheck.Record"],
-   "except": [],
-   "why": "what the prover chose of an execution phase's input bits is code: the record as NciCheck.Record reads it, its templates' rows and its declarations by their kinds; nothing of NciCheck.Count, no Mathlib and nothing of Security"
-  },
   "NciCheck.Protocol": {
    "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
    "except": [],
@@ -154,6 +145,16 @@
    "imports": ["Base.Bytes", "Base.Canon", "Base.Hash", "Circuits.Steps"],
    "except": [],
    "why": "a Definition's digests are code: Lean core, the base package's bytes, canonical JSON and SHA-512 and the circuit format's step bound, nothing of the policy's check, no Mathlib and nothing of Security"
+  },
+  "NciCheck.RecordRows": {
+   "imports": ["NciCheck.Record"],
+   "except": [],
+   "why": "a block's rows on a circuit record, and the rate rule in rows, are code: the record's summary (NciCheck.Record) and each template's rows of one unit from a table it is handed; no circuit file, nothing of NciCheck.Count, no Mathlib and nothing of Security"
+  },
+  "NciCheck.RecordChosen": {
+   "imports": ["NciCheck.Record"],
+   "except": [],
+   "why": "what the prover chose of an execution phase's input bits is code: the record as NciCheck.Record reads it, its templates' rows and its declarations by their kinds; nothing of NciCheck.Count, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {},

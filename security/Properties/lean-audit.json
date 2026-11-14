@@ -22142,7 +22142,7 @@
    }
   },
   "NciCheck.RecordText": {
-   "digest": "c39b26588d69a293201e122fc08201d9ad5969f273dc38652972d571dff63e5e",
+   "digest": "83da1f98384a876262eaccad7ed43f4cf13ecfb8cca2f07109011ca7e263a850",
    "definitions": {
     "NciCheck.RecordText.Decl": "a370a4704f72b7a0c91483a0c26d4a67047ee7ceecaec37f31711e6a5a8fe13a",
     "NciCheck.RecordText.Decl.fill": "4a2f425f6fb9c3d2d2c09b049d62d12210b2638c2cc6d09c8b69c95c8aa4d98e",
@@ -22151,6 +22151,7 @@
     "NciCheck.RecordText.Declared.opened": "10b6c34d099f971b4247687004e77e93592d8a3cfbb4c5010ca194b929886cc1",
     "NciCheck.RecordText.Declared.read": "be4507cb9aec9e5559bee2abd7ef7661e740e0629e4587db04a6e9f682cdf9e1",
     "NciCheck.RecordText.Declared.table": "f6a9401efdf8cca53c7b3513bb222d1c7bd79bf5f959092b95a0eeb5e937d7ba",
+    "NciCheck.RecordText.FORMAT": "d4a76bccffa2963fbd36fdfc9604ff6300aee15f44981cb8c8b2693e0fb5dbaa",
     "NciCheck.RecordText.Fill": "f1df3287e040b1e31ed1a800b8a36ab3c1e2dfa213e29b5603352499572e6fef",
     "NciCheck.RecordText.Fill.casesOn": "62c8a593a0bdbc9990351665b468fcf70ace150af167e8976acc0c32b8de0cb8",
     "NciCheck.RecordText.Fill.ingress": "c4d8a270df65ab4816573a1a63c72d87b2a9507401d8270614b18bcf92dd6d3a",
@@ -22189,6 +22190,7 @@
     "NciCheck.RecordText.Row.row": "58cdd0103a0cea9f608a7ded3397674cbf2b141ca44fe12b35917db5cdc3209c",
     "NciCheck.RecordText.Row.tid": "120bdc826928db2e620cefcf0a9a0a3b8468ee9c037eb3341f43e7caa0883c8c",
     "NciCheck.RecordText.Row.unit": "83bbd3e3f3b7789bc03e9214f2bcd0b49755e3d57665e32138a668043b9c61b5",
+    "NciCheck.RecordText.SCHEMAS": "4b29dacaf897a31024c844e3e3314035cc44b10a55e18ff7626460db63afbc1f",
     "NciCheck.RecordText.TABLE": "e69e8537aca23004535b1f175120b7c71eaf954793644c29931e5281bb8947b3",
     "NciCheck.RecordText.TABLE_READ": "daf3ed57706b4dddcbd5ef1f2d2dca3dcb4132512829d5cecfb6c6b820cd3873",
     "NciCheck.RecordText.Table": "d9ea92c2f8903ec419f6323b74e2ee66da22b2ae22d3350f6ba25858bbb75516",
@@ -22203,6 +22205,8 @@
     "NciCheck.RecordText.declared": "4a9b10a0b2f2b692d1d422a64a942ec341d69ee80918a66c406572ba6cdcfef7",
     "NciCheck.RecordText.fieldsOf": "bbb1f895455249164c10d486a6605c958d7f530ad9e85ea71bb9ec42fdcb07bf",
     "NciCheck.RecordText.fillAt": "f32281423eea339c8cbfb59e02ecba726422b5e30eef821e80cda5ef55dddefe",
+    "NciCheck.RecordText.formatsOf": "e43f14237bf2e39a6e3e547909fae0e899c7960844f0af2d9875dac42ff86035",
+    "NciCheck.RecordText.formatsOk": "754e01f50aa3fc624e1fdca03cd2d8b164d117bf423cb0653a88477fe605f54f",
     "NciCheck.RecordText.gridOf": "2f79dc375e80edc77a2bc37f2d184038830a4a78b16e1d54a526f2a8819e642d",
     "NciCheck.RecordText.gridsOf": "6b5ff9ad103a5a358d5a1a9f59af208e335867e305371575ebf9a158d501d6db",
     "NciCheck.RecordText.historiesOf": "3bc6fec42dcc06b2f71921c39e5722e6a889c45aa0eb4cefdd7618b2e145bf9a",
@@ -22216,6 +22220,7 @@
     "NciCheck.RecordText.readOf": "e9ef31c580fe9c8a20fce020f990fbde0871e8801f38e418b88559f9879fb386",
     "NciCheck.RecordText.recode": "2a862818e980a0b0bab5d9d173eec99215c46148d968678cc732137e6c8b105b",
     "NciCheck.RecordText.rect": "924af7bb77c81b003f7b8c4c5cbe5414065bb228e6b230235d0ab9abfe24b1f0",
+    "NciCheck.RecordText.registeredKeyed": "c21ab3f45bcced23ea16281384a3da195edf3637c03783c7738e21f4a3318273",
     "NciCheck.RecordText.registeredKeys": "0ac38059c4b7c77bdf85e46a4b3789b6ab2ba515306cc14e6225272db4bfefdf",
     "NciCheck.RecordText.rowIn": "470eeca4d2fd8732d7b9d4a7f498bea6443c2ba91bee3cf0526522d9c1898aa2",
     "NciCheck.RecordText.rowWords": "c918f20162a701cedbb12e5c47349070a7fff1d1bae9673059c490e337c7f3c1",
@@ -22228,6 +22233,7 @@
     "NciCheck.RecordText.tmplIn": "bea40b08f16466ede28a3bfa30b5ce55511fdaf35a6fbd1f56ad9c56109918a0",
     "NciCheck.RecordText.tmplOf": "c4fd9b45600d83c4da01130a7c5bd6fa294680a2ddc845b883820de49296a689",
     "NciCheck.RecordText.valueAt": "bf33673b8cb4eef38907b2c90697142691c4a1959d66ed30f036b384abf18646",
+    "NciCheck.RecordText.widthOf": "20c6b100704aec33a45be0b7edae2157244bb81a9a38214478ec569a8b9a30f1",
     "NciCheck.RecordText.wiresOf": "b22b0a2c5a12fec34da5aaed496d652fcf00cf8a0893a1b50894f84b0b6ed117",
     "NciCheck.RecordText.wiring": "00d8039a42c72cb13186e58cf0161b8191c06c2012da1e25ddd43f24f4f692d5"
    }
