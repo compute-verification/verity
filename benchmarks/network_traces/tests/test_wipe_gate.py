@@ -40,8 +40,7 @@ elif cmd.startswith("status "):
         open(os.environ["STUB_FIFO"], "w")
         signal.pause()
     print(json.dumps({"run": "%(run)s", "note": os.environ.get("STUB_NOTE"),
-                      "end": {"run": "%(run)s", "rc": 0, "ended_utc": "2026-10-27T17:05:00Z",
-                              "verdict": {"accepted": True}}}))
+                      "end": {"run": "%(run)s", "rc": 0, "ended": "ended", "verdict": {"accepted": True}}}))
 elif cmd == "fetch %(run)s":
     files = {"end.json": b"{}", "request.json": b"{}", "out/certificates.jsonl": b"",
              "out/deployment.json": json.dumps({"windows": 3, "origin_unix": 1.5,

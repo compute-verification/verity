@@ -443,8 +443,11 @@ docstring says why pooling them by weight copy would be unsound).
 
 **K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
 SUMMARY --out FILE`, with RUN a fetched certifier run and SUMMARY its scan's `summary.json` (its sample). It reads
-`leak_bounds` on the run's parameters (`deployment.json`), its traffic (`end.json`'s requests and execution phases) and
-the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block unsampled. FILE holds the widths, each
+`leak_bounds` on the run's parameters (`deployment.json`), its traffic (the requests `request.json` asked for and
+`end.json`'s execution phases) and the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block
+unsampled. The end carries no count of the traffic: the gate takes an end as accepted only when its check counted the
+request's own number of requests, so `leak` refuses a run whose end isn't accepted, and a relay session, whose request
+asks for no number because its clients are the peer's. FILE holds the widths, each
 term, the links and a row for each monitoring period, scope and reading; `FILE.md`, which it prints, holds the tables.
 A run's figures are its published Attempt's. The report's `d1` lists, per execution phase, whether its certificates, N2
 and the scan accepted.

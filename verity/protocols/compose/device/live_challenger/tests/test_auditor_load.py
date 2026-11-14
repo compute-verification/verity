@@ -89,7 +89,7 @@ def test_weights_write_needs_the_store_disk_and_a_lane_key_and_its_run_writes_th
                                    "by": LANE, "requested_utc": "2026-10-26T04:00:00Z",
                                    "unit": f"vy-certifier@{run}.service"}
         assert "still runs: one at a time" in refused(*gate(host, write, active=lambda r: r == run, token="ef56"))
-        ends.append(A.certifier_run(host, run, pinned=PIN, now=lambda: T1, wait=lambda proc, s: proc.wait()))
+        ends.append(A.certifier_run(host, run, pinned=PIN, wait=lambda proc, s: proc.wait()))
     for end, status in zip(ends, ("written", "present")):
         assert end["device"] == "weights" and end["rc"] == 0 and end["ended"] == "ended", end
         assert ended_why(host, end) == "the rehearsal ended"
@@ -217,7 +217,7 @@ LOAD_FILES = (
     f'(out / "load-relay.json").write_text(json.dumps({RELAY!r}))\n'
     f'(out / "load-heads.json").write_text(json.dumps({{"heads": [{{"root": {ROOT!r}}}]}}))\n'
     f'(out / "check.json").write_text(json.dumps({{"accepted": True, "problems": [], '
-    f'"summary": {{"requests": 4, "load": {LOAD_SUMMARY!r}}}}}))\n')
+    f'"summary": {{"requests": 100, "load": {LOAD_SUMMARY!r}}}}}))\n')
 
 
 def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_relay_alone(stored):
@@ -230,7 +230,7 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_rel
         return [sys.executable, "-c", f"import json, pathlib; out, url = pathlib.Path({str(work)!r}), {url!r}\n"
                                       f"{LOAD_FILES}"]
 
-    end = A.certifier_run(stored, run, pinned=PIN, now=lambda: T1,
+    end = A.certifier_run(stored, run, pinned=PIN,
                           tunnel_argv=lambda s, l: tunnels.append((s, l)) or TUNNEL,
                           sink_argv=lambda s, l, r: sinks.append((s, l, r)) or TUNNEL,
                           up=lambda t, p: ups.append(p) or True, command=command, wait=lambda proc, s: proc.wait())
@@ -246,8 +246,7 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_rel
     assert ended_why(stored, end) == "the rehearsal ended"
     assert end["load"] == RELAY_PUBLIC == json.loads((d / "out" / "load-relay.json").read_text())
     assert json.loads((d / A.WITNESS / "load-relay.json").read_text()) == RELAY
-    assert end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
-                                                       "load": LOAD_SUMMARY}
+    assert end["verdict"] == {"accepted": True, "load": LOAD_SUMMARY}
     assert set(end["files"]) == {"deployment.json", "cells-certificates.jsonl", "cells-registrations.jsonl",
                                  "certificates.jsonl", "load-relay.json"}
     assert (d / "out" / "cells-registrations.jsonl").read_text() == ""
@@ -262,7 +261,7 @@ def test_a_load_whose_sink_tunnel_doesnt_come_up_runs_nothing_and_its_end_says_w
     rc, out = gate(stored, LOAD)
     run = json.loads(out)["run"]
     ups = []
-    end = A.certifier_run(stored, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL,
+    end = A.certifier_run(stored, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL,
                           sink_argv=lambda s, l, r: TUNNEL, up=lambda t, p: not ups.append(p) and len(ups) < 3,
                           command=lambda *a, **k: pytest.fail("ran without its sink's tunnels"))
     assert end["rc"] == 2 and end["ended"] == "tunnel" and LOAD[2] not in json.dumps(end)
@@ -286,14 +285,14 @@ def test_a_refused_load_publishes_one_word_of_why_and_its_sentence_stays_in_the_
                  f'(out / "check.json").write_text(json.dumps({{"accepted": False, "problems": [{"load: " + said!r}], '
                  '"summary": {}}))\nraise SystemExit(1)\n')
         end = A.certifier_run(
-            stored, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, sink_argv=lambda s, l, r: TUNNEL,
+            stored, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, sink_argv=lambda s, l, r: TUNNEL,
             up=lambda t, p: True, wait=lambda proc, s: proc.wait(),
             command=lambda req, work, url, **kw: [
                 sys.executable, "-c", f"import json, pathlib; out = pathlib.Path({str(work)!r})\n{files}"])
         d = stored.certifier / run
         assert (end["rc"], end["ended"], end["load"]) == (1, "exited", {"refused": word})
         assert json.loads((d / "out" / "load-relay.json").read_text()) == {"refused": word}
-        assert end["verdict"] == {"accepted": False, "problems": 1}
+        assert end["verdict"] == {"accepted": False}
         public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
         assert b"acknowledged" not in public and b"34,240" not in public
         assert said in (d / A.WITNESS / "check.json").read_text()

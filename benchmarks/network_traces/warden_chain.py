@@ -16,8 +16,8 @@ certifier path none of its records enters the chain.
   records certified under the network certifier's key and session with its head the record's, its rows' registration,
   the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
   `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order. Of the check it writes
-  what the gate's end publishes and no more (`verdict`, `COUNTS`): whether it accepted, how many problems, and the
-  gate's own list of counts.
+  what the gate's end publishes and no more (`verdict`, `COUNTS`): whether it accepted, and the gate's own list of
+  counts.
 * `io`: the certified I/O, read off the records' cells alone, in `certifier_serve.certified_io`'s keys: each
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`active.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
@@ -56,11 +56,11 @@ FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
 #: the counts of `warden_serve.check`'s summary `certificates` writes: the gate's own list of what a network certifier
 #: run's end publishes (`auditor.WARDEN_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
-#: (`auditor.CELL_ROWS`). The summary's other keys are made from the witness (a connection's bytes before padding, the
-#: requests' tokens and finish reasons, the certifier's clocks and stalls) and stay there. A key is added here only
-#: after the gate's list has it
-COUNTS = ("requests", "ended", "refused", "failed", "windows", "certified_windows", "certificates", "signer_refused",
-          "cell_rows", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms", "load")
+#: (`auditor.CELL_ROWS`). The summary's other keys count the traffic (the requests and how each ended, the cells, their
+#: bits and their lateness) or are made from the witness (a connection's bytes before padding, the requests' tokens and
+#: finish reasons, the certifier's clocks and stalls) and stay there. A key is added here only after the gate's list
+#: has it
+COUNTS = ("failed", "windows", "certified_windows", "certificates", "signer_refused", "cell_rows", "load")
 CELL_ROWS = ("registered", "of")
 
 
@@ -120,12 +120,11 @@ def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
 
 def verdict(check: dict) -> dict:
     """What `certificates` writes of the network certifier's own check, the gate's end's verdict
-    (`auditor.warden_outcome`): whether it accepted, how many problems, and `COUNTS` of its summary, its `failed` in the
-    check's fixed words (`warden_serve.FAILED`, the gate's `FAILED`). A problem's words are made from the witness, as
-    the summary's other keys are, so neither is written."""
+    (`auditor.warden_outcome`): whether it accepted, and `COUNTS` of its summary, its `failed` in the check's fixed
+    words (`warden_serve.FAILED`, the gate's `FAILED`). The problems, their number and their words, are made from the
+    witness, as the summary's other keys are, so none is written."""
     summary = check.get("summary") or {}
-    out = {"accepted": check["accepted"], "problems": len(check["problems"]),
-           **{k: summary[k] for k in COUNTS if k in summary}}
+    out = {"accepted": check["accepted"] is True, **{k: summary[k] for k in COUNTS if k in summary}}
     if isinstance(out.get("cell_rows"), dict):
         out["cell_rows"] = {k: out["cell_rows"][k] for k in CELL_ROWS if k in out["cell_rows"]}
     if "failed" in out:

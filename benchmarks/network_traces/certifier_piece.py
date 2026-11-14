@@ -446,7 +446,7 @@ def local_unit(a: argparse.Namespace) -> int:
     a `relay` both ways in the place of its ssh, to the endpoint's port and from the clients' to the relay."""
     host = SS.scratch_host(a.keep / "local-gate", a.peer)
     me = [sys.executable, str(Path(__file__).resolve()), "relay"]
-    end = SS.A.certifier_run(host, a.run, pinned=SS.pinned(), now=lambda: SS.datetime.now(SS.UTC),
+    end = SS.A.certifier_run(host, a.run, pinned=SS.pinned(),
                              tunnel_argv=lambda ssh, port, back: [*me, "--listen", str(port), "--to", str(a.port),
                                                                   "--listen", str(back[0]), "--to", str(back[1])])
     return 0 if end["rc"] == 0 else 1
@@ -571,8 +571,8 @@ def rehearsed(run: Path) -> None:
     v = end.get("verdict") or {}
     if end.get("rc") != 0 or v.get("accepted") is not True:
         raise NotRun(f"the gate's rehearsal didn't pass, so it certified no served answer: exit {end.get('rc')}, "
-                     f"{end.get('ended')}; its check accepted {v.get('accepted')} with {v.get('problems')} problems, "
-                     f"failed {v.get('failed')}")
+                     f"{end.get('ended')}; its check accepted {v.get('accepted')}, failed {v.get('failed')} (its "
+                     "problems are the witness's check.json)")
 
 
 def bind(reqs: list[dict], io: dict) -> dict[str, dict]:

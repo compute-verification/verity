@@ -62,9 +62,8 @@ SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.sch
 K = 3
 #: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network certifier's
 #: D·τ
-PASSED = {"run": RUN, "rc": 0, "ended": "ended", "verdict": {"accepted": True, "problems": 0}}
-LATE = {"run": RUN, "rc": 1, "ended": "exited",
-        "verdict": {"accepted": False, "problems": 8, "requests": 4, "ended": 0, "failed": ["fail"]}}
+PASSED = {"run": RUN, "rc": 0, "ended": "ended", "verdict": {"accepted": True}}
+LATE = {"run": RUN, "rc": 1, "ended": "exited", "verdict": {"accepted": False, "failed": ["fail"]}}
 GATE_HOST = "gate-host"
 #: the window's private values, as numbers no other field of the chain's files takes: its request, step and output
 #: counts, its committed, v0 and derived advice bits, and the tie's prompt lengths
@@ -476,7 +475,7 @@ def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_no
     piece = tmp_path / "pieces" / "certifier"
     why = (piece / CP.REFUSED).read_text()
     assert why.startswith("the gate's rehearsal didn't pass, so it certified no served answer: exit 1, exited; "
-                          "its check accepted False with 8 problems"), why
+                          "its check accepted False, failed ['fail']"), why
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}
     assert not (d / CP.PRIVATE / RUN / "chain").exists() and not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
     assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
@@ -818,8 +817,9 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
                                                                                                    monkeypatch):
     """``--gate local``, this tree's gate in this process: the run's request records the tick and the minutes counted
     at it, and the certifier's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
-    rehearsal's check accepting."""
-    real, ran, check = CP.SS.A.certifier_run, [], json.dumps({"accepted": True, "problems": []})
+    rehearsal's check accepting and counting the requests the front asks for."""
+    real, ran = CP.SS.A.certifier_run, []
+    check = json.dumps({"accepted": True, "problems": [], "summary": {"requests": 4}})
 
     def command(req, work, url):
         ran.append(CP.SS.A.warden_command(req, work, url))

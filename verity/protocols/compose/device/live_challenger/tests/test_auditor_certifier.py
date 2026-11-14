@@ -178,14 +178,14 @@ def test_a_rehearsal_runs_through_the_tunnel_and_its_end_is_status_and_fetch(hos
         waited.append(seconds)
         return proc.wait()
 
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=tunnel_argv, up=lambda t, p: True,
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=tunnel_argv, up=lambda t, p: True,
                           command=rehearsal(SUMMARY), wait=wait)
     ssh, local = tunnels[0]
     assert ssh == ["-i", "/var/lib/vy-challenger/.ssh/vy-challenger-tunnel", "research@10.0.0.2"] and waited == [30 * 60]
     assert end["rc"] == 0 and end["ended"] == "ended" and ended_why(host, end) == "the rehearsal ended"
     assert end["runs"] == {"honest": {"verdict": "accepted", "network": True, "audit": True, "salt": True,
                                       "salt_again": "refused: already revealed"}}
-    assert end["pinned"] == PIN and end["ended_utc"] == "2026-10-23T11:30:00Z"
+    assert end["pinned"] == PIN and "ended_utc" not in end
     out = host.certifier / run / "out"
     assert json.loads((out / "summary.json").read_text())["upstream"] == f"http://127.0.0.1:{local}"
     assert set(end["files"]) == {"summary.json", "honest/check.json", "tunnel.log", "rehearse.log"}
@@ -199,7 +199,7 @@ def test_a_rehearsal_runs_through_the_tunnel_and_its_end_is_status_and_fetch(hos
                 f"{run}/out/honest/check.json"} <= set(tar.getnames())
         assert not [n for n in tar.getnames() if n.startswith(f"{run}/{A.WITNESS}")]
     with pytest.raises(A.Refused, match="has run already"):
-        A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+        A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                         command=rehearsal(SUMMARY), wait=wait)
     for argv in (["status", "c20261023T110000Z-ffff"], ["fetch", "c20261023T110000Z-ffff"], ["status", "c../../etc"]):
         rc, out = A.gate(argv, host)
@@ -217,7 +217,7 @@ def test_each_tampering_shim_is_recorded_rehearsed_alone_and_its_verdict_ends_th
     assert A.certifier_command(request, tmp_path, "u")[-2:] == ["--strategies", tamper]
 
     summary = HONEST | {"verdict": verdict, "network_verdict": {"accepted": verdict == "accepted", "windows": 3}}
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=rehearsal(f'(out / "summary.json").write_text(json.dumps({{"upstream": url, '
                                             f'"runs": {{{tamper!r}: {summary!r}}}}}))'),
                           wait=lambda proc, seconds: proc.wait())
@@ -233,13 +233,13 @@ def test_a_rehearsal_past_its_minutes_is_stopped_and_a_tunnel_that_never_came_up
         proc.send_signal(signal.SIGTERM)
         return proc.wait()
 
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=rehearsal("import signal; signal.pause()"), wait=past_its_minutes)
     assert end["rc"] == -signal.SIGTERM and end["ended"] == "stopped" and end["runs"] == {}
     assert ended_why(host, end) == "stopped at --minutes 30"
 
     run = started_run(host, "--minutes", "5", token="cd34")
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: False,
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: False,
                           command=lambda *a: pytest.fail("ran without its tunnel"))
     assert end["rc"] == 2 and end["ended"] == "tunnel" and "vy-nebius-1" not in json.dumps(end)
     assert "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in ended_why(host, end)
@@ -455,7 +455,7 @@ def test_a_varied_rehearsal_takes_its_prompts_off_stdin_into_its_witness_and_reh
     assert owned == [host.certifier, w / A.PROMPTS, w, d]
 
     seen = []
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=lambda req, out, url: seen.append((req, out, url)) or rehearsal(SUMMARY)(req, out,
                                                                                                          url),
                           wait=lambda proc, s: proc.wait())

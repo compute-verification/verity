@@ -200,7 +200,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   it ended in one of `ENDED`'s words, the SHA-512 of each file of `out/`, and from `out/summary.json` each run's
   verdict, network verdict, audit, salt and what a second reveal of window 0's salt got). The sentence the word stands
   for, with the peer, the port and for an unruled line the line and the fix, is the run's `witness/ended.txt`, for
-  the run's own lane and vy-admin alone, as every run's is. `status RUN` and `fetch RUN` return the end. The rehearsal's keys are made in a scratch directory and removed, and `out/` holds no salt. A rehearsal is
+  the run's own lane and vy-admin alone, as every run's is. The end holds no time: when a run ended follows what
+  the peer sent and when. `status RUN` and `fetch RUN` return the end. The rehearsal's keys are made in a scratch
+  directory and removed, and `out/` holds no salt. A rehearsal is
   no window of the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
   `verify_ledger`'s).
 - **A warden rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell warden
@@ -255,8 +257,12 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   registration) and a `--window-per-group` run's `groups.json`. Of the connection rows' registrations and a load's,
   `out/` and the end hold the certificates and nothing else: no root, domain or layout. Of the word that an
   execution phase has no head, `out/` holds its certificate likewise.
-  `end.json` adds `device` and the check's verdict (`warden_outcome`: accepted, the number of problems and the
-  counts `WARDEN_COUNTS` names). Of `witness/` the end says nothing, no file's name or size: `fetch RUN` gives
+  `end.json` adds `device` and the check's verdict (`warden_outcome`: whether it accepted, and the counts
+  `WARDEN_COUNTS` names, each the schedule's or of the certificates). How many problems the check found, and its
+  counts of the traffic (the requests and how each ended, the cells, their bits and their lateness), stay in the
+  witness's `check.json`. An accepted end's requests are the request's own number: the gate takes a check that
+  counted another as not accepted and ends the run nonzero (`miscounted`), so the request's `requests` is the count
+  an accepted run served. Of `witness/` the end says nothing, no file's name or size: `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
 - **A relay session** (`relay-session`, a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with
   the rehearsals): the network certifier's relay kept up here, as the auditor's device, for a served run's own load.
@@ -315,8 +321,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     counts; in `witness/`, for the run's own lane and vy-admin alone, the three records, their heads and salts, the
     cells' salts, the relay's log and the check. The gate holds no traffic and no client's log, so the check
     (`warden_serve.py check`) reads the records, their certificates, the registrations and the audit, and nothing of
-    what a client received: the end's `requests`, `ended` and `cells_in_their_bucket` count none. A client holds its
-    own log to the run's `fetch`.
+    what a client received. The request names no number of requests, the clients being the peer's, so nothing
+    holds a session's requests to a count: the end says none. A client holds its own log to the run's `fetch`.
   - *A connection open at the session's end is cut.* One still in the queue is closed with no cell and is in no
     record. One admitted at bucket s and cut before s + D has its ingress cells in the record (its request may have
     been released to the endpoint) and no answer cell, and the check refuses nothing for it. One cut at or after
@@ -2700,11 +2706,12 @@ def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> lis
             "--out", str(out / "store.json")]
 
 
-#: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: none is a cell's content or a
-#: connection's own (a load's are its values and how many registered), and `cell_rows` is cut to `CELL_ROWS`
-WARDEN_COUNTS = ("requests", "ended", "refused", "failed", "windows", "certified_windows", "certificates",
-                 "signer_refused", "cell_rows", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms",
-                 "load")
+#: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: the schedule's execution phases,
+#: how many were certified and by how many certificates, those the signer refused, the registered rows (cut to
+#: `CELL_ROWS`), a load's values and how many registered, and how its failed connections failed in `FAILED`'s words.
+#: None counts the traffic: the requests and how each ended, the cells, their bits, how many kept their bucket and
+#: the ticks' lateness follow what the peer sent and when, and stay in the witness's `check.json`
+WARDEN_COUNTS = ("failed", "windows", "certified_windows", "certificates", "signer_refused", "cell_rows", "load")
 #: the end's words for how a connection that neither ended nor was refused failed (the verdict's `failed`): the
 #: network certifier's own two outcomes, and `error` for any other. A client's exception is one, and its words are
 #: its connection's own line of `witness/client.json`
@@ -2801,17 +2808,20 @@ def row_registration(text: str) -> str:
     return json.dumps(_ruled(line, ROW_LINE, "the line"))
 
 
-def warden_outcome(out: Path, witness: Path) -> dict:
+def warden_outcome(out: Path, witness: Path, requests: int | None = None) -> dict:
     """A warden rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
     `WARDEN_PUBLIC`'s files copied to `out`, `certified.jsonl`'s certificates without the heads and salts they sign
     (`out/certificates.jsonl`), each row registration's certificate without its registration (`ROW_CERTIFICATES`),
     each cells' registration less its private keys (`ROW_REGISTRATIONS`, `row_registration`),
-    the check's verdict (`accepted`, how many problems, `WARDEN_COUNTS`, its `cell_rows` less the registrations'
-    cost, its `failed` in `FAILED`'s words) and a load's relay (`LOAD_RELAY`, to `out` and the end as
+    the check's verdict (`accepted` and `WARDEN_COUNTS`, its `cell_rows` less the registrations' cost, its `failed`
+    in `FAILED`'s words) and a load's relay (`LOAD_RELAY`, to `out` and the end as
     `load_relay_public` holds it: `LOAD_PUBLIC`, its streams and whether they were acknowledged, or the word it was
     refused in). Of `witness` itself the outcome says nothing: a file's name says what the run got to, and its size
     follows what the peer sent. A registrations' file with a line `ROW_LINE` doesn't rule is not published, no line
-    of it, and the outcome says which line and what to change (``unruled``)."""
+    of it, and the outcome says which line and what to change (``unruled``). `requests` is the number the request
+    asked the device's own client for, None for a relay session, whose clients are the peer's: a check that accepted
+    and counted another number of requests is not accepted here, and the outcome says both numbers
+    (``miscounted``), so an accepted end's requests are the request's."""
     for name in WARDEN_PUBLIC:
         if (witness / name).is_file():
             shutil.copyfile(witness / name, out / name)
@@ -2841,11 +2851,14 @@ def warden_outcome(out: Path, witness: Path) -> dict:
         check = json.loads((witness / "check.json").read_text())
     except (OSError, ValueError):
         check = None
-    verdict = None
+    verdict = miscounted = None
     if isinstance(check, dict):
         summary = check.get("summary") or {}
-        verdict = {"accepted": check.get("accepted"), "problems": len(check.get("problems") or []),
-                   **{k: summary[k] for k in WARDEN_COUNTS if k in summary}}
+        accepted, counted = check.get("accepted") is True, summary.get("requests")
+        if accepted and requests is not None and not (type(counted) is int and counted == requests):
+            accepted, miscounted = False, (f"check.json accepts and counts {counted!r} requests where the request "
+                                           f"asked for {requests}")
+        verdict = {"accepted": accepted, **{k: summary[k] for k in WARDEN_COUNTS if k in summary}}
         if isinstance(verdict.get("cell_rows"), dict):
             verdict["cell_rows"] = {k: verdict["cell_rows"][k] for k in CELL_ROWS if k in verdict["cell_rows"]}
         if "failed" in verdict:
@@ -2857,7 +2870,8 @@ def warden_outcome(out: Path, witness: Path) -> dict:
     if load is not None:
         (out / LOAD_RELAY).write_text(json.dumps(load, indent=1, sort_keys=True) + "\n")
     return {"verdict": verdict, **({} if load is None else {"load": load}),
-            **({} if unruled is None else {"unruled": unruled})}
+            **({} if unruled is None else {"unruled": unruled}),
+            **({} if miscounted is None else {"miscounted": miscounted})}
 
 
 def forward_argv(ssh: list[str], local: int, remote: int, back: tuple[int, int] | None = None) -> list[str]:
@@ -2891,7 +2905,7 @@ def _local_ports(n: int) -> list[int]:
     return ports
 
 
-def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], datetime],
+def certifier_run(host: Host, run: str, *, pinned: str,
                   tunnel_argv: Callable[..., list[str]] | None = None,
                   sink_argv: Callable[[list[str], int, int], list[str]] | None = None,
                   up: Callable[[subprocess.Popen, int], bool] = tunnel_up,
@@ -2905,7 +2919,8 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     `end.json`. A warden rehearsal writes to `witness/`, its own output (`rehearse.log`) and its tunnels'
     (`tunnel.log`) with it, and its public outcome (`warden_outcome`) to `out/` and the end; a line of its cells'
     registrations that `ROW_LINE` doesn't rule ends it nonzero, the end saying `unruled` and the witness's
-    `ENDED_WHY` the line and the fix. A store's write opens no tunnel: it runs `weights_command`
+    `ENDED_WHY` the line and the fix, and so does an accepted check that counted another number of requests than
+    the request's (`miscounted`). A store's write opens no tunnel: it runs `weights_command`
     (`command(req, out, store)`) and its end carries the store's record."""
     if not CERTIFIER_RUN.fullmatch(run):
         raise Refused(f"no certifier rehearsal {run!r}")
@@ -2918,7 +2933,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
         raise Refused(f"certifier rehearsal {run} has run already")
     out.mkdir(mode=0o755)
     if weights:
-        return _weights_run(host, d, req, pinned=pinned, now=now, command=command, wait=wait)
+        return _weights_run(host, d, req, pinned=pinned, command=command, wait=wait)
     work = out
     if warden:
         work = d / WITNESS
@@ -2965,10 +2980,11 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
             tunnel.terminate()
             tunnel.wait()
     if warden:
-        outcome = {"device": "warden", **warden_outcome(out, work)}
-        unruled = outcome.pop("unruled", None)
-        if unruled is not None:
-            rc, word, why = rc or 2, word or "unruled", unruled if why is None else f"{why}; {unruled}"
+        outcome = {"device": "warden", **warden_outcome(out, work, None if kept else req["requests"])}
+        for refusal in ("unruled", "miscounted"):
+            said = outcome.pop(refusal, None)
+            if said is not None:
+                rc, word, why = rc or 2, word or refusal, said if why is None else f"{why}; {said}"
     else:
         try:
             summary = json.loads((out / "summary.json").read_text())
@@ -2981,22 +2997,22 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
                             for s, r in summary.get("runs", {}).items()}}
     if kept and why is None:
         why = "the session ended" if rc == 0 else f"the session exited {rc}"
-    return _end(d, rc, word, why, outcome, pinned=pinned, now=now)
+    return _end(d, rc, word, why, outcome, pinned=pinned)
 
 
 #: how a certifier run's end says it ended (`ended`), in one word: its command exited 0 (`ended`) or didn't (`exited`,
 #: the exit beside it in `rc`), it was stopped at the request's minutes (`stopped`), a tunnel to the peer didn't come
-#: up or closed first (`tunnel`), or a line of a registrations' file isn't ruled (`unruled`, `ROW_LINE`). The
-#: sentence a word stands for names the peer, the port and, for an unruled line, the line and the fix: it is the
-#: run's `witness/` file `ENDED_WHY`, and no word of it is in the end
-ENDED = ("ended", "exited", "stopped", "tunnel", "unruled")
+#: up or closed first (`tunnel`), a line of a registrations' file isn't ruled (`unruled`, `ROW_LINE`), or its check
+#: accepted and counted another number of requests than the request asked for (`miscounted`). The sentence a word
+#: stands for names the peer, the port and, for an unruled line, the line and the fix: it is the run's `witness/`
+#: file `ENDED_WHY`, and no word of it is in the end
+ENDED = ("ended", "exited", "stopped", "tunnel", "unruled", "miscounted")
 ENDED_WHY = "ended.txt"
 
 
-def _end(d: Path, rc: int, word: str | None, why: str | None, outcome: dict, *, pinned: str,
-         now: Callable[[], datetime]) -> dict:
+def _end(d: Path, rc: int, word: str | None, why: str | None, outcome: dict, *, pinned: str) -> dict:
     """A run's `end.json`: its exit, how it ended in one of `ENDED`'s words (`word`, or its exit's), `outcome`, and
-    the SHA-512 of each file of `out/`. The sentence the word stands for (`why`, or its exit's) is written to the
+    the SHA-512 of each file of `out/`, and no time. The sentence the word stands for (`why`, or its exit's) is written to the
     run's `witness/` (`ENDED_WHY`), made here for a run that has none."""
     out, witness = d / "out", d / WITNESS
     word = word or ("ended" if rc == 0 else "exited")
@@ -3007,13 +3023,12 @@ def _end(d: Path, rc: int, word: str | None, why: str | None, outcome: dict, *, 
     (witness / ENDED_WHY).write_text(said + "\n")
     files = {str(p.relative_to(out)): hashlib.sha512(p.read_bytes()).hexdigest()
              for p in sorted(out.rglob("*")) if p.is_file()}
-    end = {"run": d.name, "rc": rc, "ended": word, "pinned": pinned, **outcome, "files": files,
-           "ended_utc": utc(now())}
+    end = {"run": d.name, "rc": rc, "ended": word, "pinned": pinned, **outcome, "files": files}
     (d / "end.json").write_text(json.dumps(end, indent=1, sort_keys=True) + "\n")
     return end
 
 
-def _weights_run(host: Host, d: Path, req: dict, *, pinned: str, now: Callable[[], datetime],
+def _weights_run(host: Host, d: Path, req: dict, *, pinned: str,
                  command: Callable[[dict, Path, Path], list[str]],
                  wait: Callable[[subprocess.Popen, float], int] | None) -> dict:
     """A `weights-write` run: `command` (`weights_command`) for at most `WEIGHTS_MINUTES`, its end the store's record
@@ -3029,7 +3044,7 @@ def _weights_run(host: Host, d: Path, req: dict, *, pinned: str, now: Callable[[
         store = json.loads((out / "store.json").read_text())
     except (OSError, ValueError):
         store = None
-    return _end(d, rc, word, why, {"device": "weights", "store": store}, pinned=pinned, now=now)
+    return _end(d, rc, word, why, {"device": "weights", "store": store}, pinned=pinned)
 
 
 # --- main ---------------------------------------------------------------------------------------------------------------------
@@ -3059,7 +3074,7 @@ def main(argv: list[str] | None = None) -> int:
             e = run(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
             print(json.dumps({"seq": e["seq"], "session": e["session"], "rc": e["body"]["rc"]}))
         elif argv[:1] == ["certifier-run"] and len(argv) == 2:
-            e = certifier_run(host, argv[1], pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
+            e = certifier_run(host, argv[1], pinned=pinned_commit())
             print(json.dumps({k: e[k] for k in ("run", "rc", "ended", "runs", "device") if k in e}))
         elif argv[:1] in (["model-register"], ["policy-register"]) and len(argv) == 5:
             register = model_register if argv[0] == "model-register" else policy_register

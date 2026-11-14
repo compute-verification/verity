@@ -207,8 +207,9 @@ COST = {"rows": 600, "row_bytes": 2048, "commit_ms": 41.375, "sign_ms": 7.125}
 NO_HEAD = {"format": "verity-network-certifier/connection-rows-no-head-word/v1", "link": LINK, "window": 2,
            "parameters": "31" * 64, "certificate": {"key": "0c" * 16, "digest": "9f" * 64, "signature": "e7" * 40}}
 WORD_COST = {"sign_ms": 3.625}
+#: a stand-in for the witness's `check.json` of a rehearsal that served `REQUEST`'s requests, the gate's default
 CHECK = {"accepted": True, "problems": [], "summary": {
-    "requests": 4, "ended": 4, "refused": 0, "failed": [], "windows": 2, "certified_windows": 6, "certificates": 6,
+    "requests": 100, "ended": 100, "refused": 0, "failed": [], "windows": 2, "certified_windows": 6, "certificates": 6,
     "signer_refused": [], "cell_rows": {"registered": 4, "of": 4, "rows": [600], "row_bytes": [2048],
                                         "commit_ms": {"n": 4, "max": 41.375}, "sign_ms": {"n": 4, "max": 7.125}},
     "cells": {"ingress": 9, "egress": 31},
@@ -216,7 +217,7 @@ CHECK = {"accepted": True, "problems": [], "summary": {
     "data_bytes": {"egress": 4242}, "completion_tokens": 77, "prompt_tokens": [16, 99], "arrival_lag_ms": {"n": 31},
     "finish_reasons": {"length": 4}}, "connections": [{"ordinal": 1, "outcome": "end", "text_bytes": 300}]}
 #: the rehearsal's last line of output, in the form its check is printed in: it ends with the costs' two times
-LAST_LINE = ("ACCEPTED: 4/4 ended, 0 refused, failed []; cell rows 4/4 registered, [600] rows a window, "
+LAST_LINE = ("ACCEPTED: 100/100 ended, 0 refused, failed []; cell rows 4/4 registered, [600] rows a window, "
              "commit ms {'n': 4, 'max': 41.375}, sign ms {'n': 4, 'max': 7.125}")
 #: what the rehearsal says on its stderr: free text
 STDERR = "the endpoint closed connection 3 early"
@@ -265,7 +266,7 @@ def run_warden(host, source=WARDEN_FILES, seen=None, token="ab12") -> tuple[str,
     run = json.loads(out)["run"]
     said = host.peers.parent / f"said-{token}"
     os.mkfifo(said)
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: speaking_tunnel(said),
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: speaking_tunnel(said),
                           up=lambda t, p: Path(said).read_text() == "", command=rehearsal(source, seen),
                           wait=lambda proc, s: proc.wait())
     return run, end
@@ -296,10 +297,10 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
     assert (d / A.WITNESS).stat().st_mode & 0o777 == 0o700
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "ended"
     assert ended_why(host, end) == "the rehearsal ended"
-    assert end["pinned"] == PIN and end["ended_utc"] == "2026-10-24T11:20:00Z" and "runs" not in end
-    assert end["verdict"] == {"accepted": True, "problems": 0, **{k: CHECK["summary"][k] for k in A.WARDEN_COUNTS
-                                                                   if k != "load"},
-                              "cell_rows": {"registered": 4, "of": 4}} and "load" not in end
+    assert end["pinned"] == PIN and "runs" not in end
+    assert end["verdict"] == {"accepted": True, "failed": [], "windows": 2, "certified_windows": 6, "certificates": 6,
+                              "signer_refused": [], "cell_rows": {"registered": 4, "of": 4}} and "load" not in end
+    assert set(end) == {"run", "rc", "ended", "pinned", "device", "verdict", "files"}
     assert "registrations" not in end
     assert {p.name for p in (d / A.WITNESS).iterdir()} == {
         "deployment.json", "cells.jsonl", "rows.jsonl", "certified.jsonl", "cells.salts", "requests.records",
@@ -321,6 +322,37 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
         assert secret not in public
 
 
+def test_an_accepted_end_served_the_requests_its_request_asked_for(host, tmp_path):
+    """The end carries no count of the traffic, and a reader takes an accepted run's requests from its request. The
+    gate holds the two equal: a check that accepted and counted another number of requests, or none, is not accepted
+    in the end, and the run ends nonzero in one word, the two numbers in the witness alone. A check that refused is
+    refused as it stands, and a relay session, whose request asks for no number, is held to none."""
+    check = CHECK | {"summary": CHECK["summary"] | {"requests": 4, "ended": 4}}
+    run, end = run_warden(host, WARDEN_FILES.replace(repr(CHECK), repr(check)))
+    assert json.loads((host.certifier / run / "request.json").read_text())["requests"] == 100
+    assert (end["rc"], end["ended"], end["verdict"]["accepted"]) == (2, "miscounted", False)
+    assert ended_why(host, end) == "check.json accepts and counts 4 requests where the request asked for 100"
+    assert "requests" not in end["verdict"] and "counts 4" not in end_text(host.certifier / run)
+
+    out, witness = tmp_path / "out", tmp_path / "witness"
+    out.mkdir()
+    witness.mkdir()
+
+    def outcome(summary, requests, accepted=True):
+        (witness / "check.json").write_text(json.dumps({"accepted": accepted, "problems": [], "summary": summary}))
+        return A.warden_outcome(out, witness, requests)
+
+    assert outcome({"requests": 100}, 100) == {"verdict": {"accepted": True}}
+    for counted in ({"requests": 99}, {"requests": 0}, {}, {"requests": "100"}, {"requests": 100.0},
+                    {"requests": None}):
+        got = outcome(counted, 100)
+        assert got["verdict"] == {"accepted": False} and "asked for 100" in got["miscounted"], counted
+    assert outcome({"requests": True}, 1)["verdict"] == {"accepted": False}
+    assert outcome({"requests": 4}, 100, accepted=False) == {"verdict": {"accepted": False}}
+    assert outcome({"requests": 4}, None) == {"verdict": {"accepted": True}}
+    assert outcome({}, None, accepted="yes") == {"verdict": {"accepted": False}}
+
+
 def test_the_ends_failed_list_holds_the_gates_fixed_words_and_none_of_a_clients(host):
     """The end's `failed` says how the connections that neither ended nor were refused failed, in `FAILED`'s words
     alone, whatever the check's summary holds: a client's exception's words, which the check may list, are `error`
@@ -330,7 +362,7 @@ def test_the_ends_failed_list_holds_the_gates_fixed_words_and_none_of_a_clients(
                      "summary": CHECK["summary"] | {"ended": 2, "failed": ["cut", said]}}
     run, end = run_warden(host, WARDEN_FILES.replace(repr(CHECK), repr(check)))
     d = host.certifier / run
-    assert end["verdict"]["failed"] == ["cut", "error"] and end["verdict"]["problems"] == 1
+    assert end["verdict"]["failed"] == ["cut", "error"] and "problems" not in end["verdict"]
     assert end["verdict"]["accepted"] is False
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     assert said.encode() not in public and b"hung up" not in public
@@ -485,7 +517,7 @@ def test_of_the_word_that_an_execution_phase_has_no_head_the_rehearsal_publishes
 def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_why(host):
     rc, out = gate(host, REQUEST, started=[])
     run = json.loads(out)["run"]
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL,
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL,
                           up=lambda t, p: False, command=lambda *a: pytest.fail("ran without its tunnel"))
     assert end["rc"] == 2 and end["ended"] == "tunnel"
     assert "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in ended_why(host, end)
@@ -782,7 +814,7 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
     files = WARDEN_FILES.replace('(out / "client.json").write_text("{}")\n', "").replace(
         '{"upstream": url, "session": "00" * 32}', repr(deployment))
     assert repr(deployment) in files and "client.json" not in files
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1,
+    end = A.certifier_run(host, run, pinned=PIN,
                           tunnel_argv=lambda s, l, back: forwards.append((l, back)) or TUNNEL, up=lambda t, p: True,
                           command=session(files, seen), wait=lambda proc, s: proc.wait())
     ((got, work, url, listen),) = seen
@@ -791,7 +823,7 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
     assert back == (8012, listen) and listen != local
     assert end["rc"] == 0 and end["ended"] == "ended" and end["device"] == "warden"
     assert ended_why(host, end) == "the session ended"
-    assert (end["verdict"]["accepted"], end["verdict"]["problems"]) == (True, 0)
+    assert end["verdict"]["accepted"] is True and not {"problems", "requests"} & set(end["verdict"])
     assert {k: end["verdict"][k] for k in ("windows", "certified_windows", "certificates")} == {
         k: CHECK["summary"][k] for k in ("windows", "certified_windows", "certificates")}
     assert not (d / A.WITNESS / "client.json").exists() and "deployment.json" in end["files"]
@@ -809,7 +841,7 @@ def test_a_relay_session_whose_ssh_exits_is_stopped_there_and_its_end_says_the_t
     which names the peer, is the witness's. A session whose runner fails says so as a rehearsal does."""
     rc, out = gate(host, SESSION, started=[])
     run = json.loads(out)["run"]
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l, back: [sys.executable, "-c", ""],
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l, back: [sys.executable, "-c", ""],
                           up=lambda t, p: True, command=session("import signal; signal.pause()", []),
                           wait=lambda proc, s: proc.wait())
     assert end["rc"] != 0 and end["verdict"] is None
@@ -818,12 +850,12 @@ def test_a_relay_session_whose_ssh_exits_is_stopped_there_and_its_end_says_the_t
                                     "clients' way to the relay and the relay's to the endpoint (tunnel.log)")
 
     rc, out = gate(host, SESSION, started=[], token="cd34")
-    end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN, now=lambda: T1,
+    end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN,
                           tunnel_argv=lambda s, l, back: TUNNEL, up=lambda t, p: True,
                           command=session("raise SystemExit(1)", []), wait=lambda proc, s: proc.wait())
     assert end["rc"] == 1 and end["ended"] == "exited" and ended_why(host, end) == "the session exited 1"
     rc, out = gate(host, SESSION, started=[], token="ef56")
-    end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN, now=lambda: T1,
+    end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN,
                           tunnel_argv=lambda s, l, back: TUNNEL, up=lambda t, p: False,
                           command=lambda *a, **k: pytest.fail("ran without its tunnel"))
     assert end["rc"] == 2 and end["ended"] == "tunnel" and "didn't come up (tunnel.log)" in ended_why(host, end)
@@ -858,8 +890,10 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
     assert rc == 0 and json.loads(out)["requests"] == 3 and "window_per_group" not in json.loads(out)
 
     seen = []
-    grouped = WARDEN_FILES + '(out / "groups.json").write_text(json.dumps({"groups": [{"group": 0}]}))\n'
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+    counted = CHECK | {"summary": CHECK["summary"] | {"requests": req["requests"], "ended": req["requests"]}}
+    grouped = WARDEN_FILES.replace(repr(CHECK), repr(counted)) + (
+        '(out / "groups.json").write_text(json.dumps({"groups": [{"group": 0}]}))\n')
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=rehearsal(grouped, seen), wait=lambda proc, s: proc.wait())
     (got, work, url), = seen
     assert got == req and work == w and end["rc"] == 0 and "witness" not in end

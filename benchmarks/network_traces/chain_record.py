@@ -209,7 +209,7 @@ def custody(gates: Path) -> dict:
         request = _json(root / "request.json") or {}
         summary = _json(root / "out" / "summary.json") or {}
         runs.append({"gate_run": root.name, "dir": str(root.relative_to(gates)), "ended": doc.get("ended"),
-                     "ended_utc": doc.get("ended_utc"), "files": len(files), "mismatches": bad,
+                     "files": len(files), "mismatches": bad,
                      "request": request, "lms_height": summary.get("lms_height"), "windows": summary.get("windows"),
                      "profile": summary.get("profile"),
                      "strategies": {s: (r or {}).get("verdict") for s, r in (doc.get("runs") or {}).items()}})
@@ -806,14 +806,18 @@ SCOPES = ("link", "datacenter", "world")
 
 def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
-    its gate run ``run`` (a fetched copy: its ``end.json`` and ``deployment.json``), for the scan's class
+    its gate run ``run`` (a fetched copy: its ``request.json``, ``end.json`` and ``deployment.json``), for the scan's class
     (`scan_zk.CLASS`) and its sample of every proof block, by `leak_bounds`' scaling by links (`SCOPES`): one link
     certifying the run's own request rate (`leak_bounds.per_link`), and as many identical links summed
     (`leak_bounds.at_link_rate`) as the census's reference datacenter has machines (`leak_bounds.datacenter_links`)
     and as the world fleet has (`leak_bounds.world_links`), whatever those scopes serve. Each count is in both forms,
     the per-period form (`MonitoringPeriodLeakAccepted`'s count) and the pooled one (`PooledLeakAccepted`'s at q = 1), in both
     readings of the sampling block's free inputs (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its
-    share of ``weights`` (`leak_bounds.WEIGHTS`)."""
+    share of ``weights`` (`leak_bounds.WEIGHTS`). The run's request rate is the requests its request asked for over
+    its execution phases: the end carries no count of the traffic, and the gate takes an end as accepted only when
+    its check counted the request's own number (`auditor.warden_outcome`). So K is counted only on an accepted run
+    of the device's own client; a relay session's request asks for no number, its clients being the peer's, and
+    nothing holds its requests to one."""
     import leak_bounds as LB
     import scan_zk as SZ
     from verity.protocols.accounting.certifier.prover import ingress_scan as IS
@@ -821,8 +825,15 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}
-    if not dep or not v.get("windows") or not v.get("requests"):
-        raise SystemExit(f"leak: {run} has no deployment.json, or no end.json verdict with its windows and requests")
+    if not dep or not v.get("windows"):
+        raise SystemExit(f"leak: {run} has no deployment.json, or no end.json verdict with its windows")
+    asked = (_json(run / "request.json") or {}).get("requests")
+    if type(asked) is not int or asked < 1:
+        raise SystemExit(f"leak: {run}'s request.json asks for no number of requests (a relay session's clients are "
+                         "the peer's), so nothing holds its requests to a count and K has no rate")
+    if v.get("accepted") is not True:
+        raise SystemExit(f"leak: {run}'s end isn't accepted, and the gate holds only an accepted end's requests to "
+                         "the number its request asked for")
     params, cls = W.WardenParams(**dep["params"]), SZ.CLASS
     cls.serves(params)
     T, units = params.window, 2 * params.window
@@ -830,10 +841,10 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     if drawn != units:
         raise SystemExit(f"leak: the scan drew {drawn} of {units} proof blocks; K's terms for incorrect proof blocks "
                          f"are 0 only with every proof block drawn (scan_zk --draw {units})")
-    rate = v["requests"] / v["windows"]
+    rate = asked / v["windows"]
     window_s = T * params.bucket_ms / 1000
     at = {"T": T, "tau": Fraction(params.bucket_ms, 1000), "egress_cells": params.egress_cells}
-    per_s = Fraction(v["requests"], v["windows"]) / (T * at["tau"])
+    per_s = Fraction(asked, v["windows"]) / (T * at["tau"])
     link = LB.link(cls, per_s, **at)
     links = {"link": 1, "datacenter": LB.datacenter_links(), "world": LB.world_links()}
 
@@ -862,7 +873,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
             "class": {k: getattr(cls, k) for k in IS.STATICS},
             "widths": link.widths | {"entries": link.entries, "egress_row": 8 * cls.egress.R * cls.B},
             "draw": {"units": units, "drawn": drawn},
-            "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
+            "run": {"link_windows": v["windows"], "requests": asked, "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
             "terms": {"schedules_per_request": link.cell, "cells_per_request": link.cell,
                       "cap_per_request": link.cap, "free": free, "faulty": 0,

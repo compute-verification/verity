@@ -329,9 +329,8 @@ def outcome(bundle: bytes) -> dict:
     dep = json.loads(files["out/deployment.json"]) if "out/deployment.json" in files else {}
     n, params = dep.get("windows"), dep.get("params") or {}
     span = n * params["window"] * params["bucket_ms"] / 1000 if n is not None and params else None
-    return {"run": end.get("run"), "rc": end.get("rc"), "ended": end.get("ended"), "ended_utc": end.get("ended_utc"),
-            "pinned": end.get("pinned"), "verdict": end.get("verdict"), "origin_unix": dep.get("origin_unix"),
-            "windows": n, "session_s": span}
+    return {"run": end.get("run"), "rc": end.get("rc"), "ended": end.get("ended"), "pinned": end.get("pinned"),
+            "verdict": end.get("verdict"), "origin_unix": dep.get("origin_unix"), "windows": n, "session_s": span}
 
 
 def needles(ps: list[list[int]]) -> list[bytes]:
@@ -439,7 +438,7 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
     endpoint.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", str(a.prompt_ids), "--tokens",
             str(a.tokens), "--vocab", str(a.vocab), "--out", str(endpoint)]
-    A.certifier_run(host, run, pinned=pinned(), now=lambda: datetime.now(UTC),
+    A.certifier_run(host, run, pinned=pinned(),
                     tunnel_argv=getattr(a, "tunnel", None) or (lambda ssh, port: [*stub, "--port", str(port)]))
     return A.certifier_fetch(run, host, witness=True)
 

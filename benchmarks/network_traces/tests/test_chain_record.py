@@ -511,8 +511,22 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     run = tmp_path / "c1"
     (run / "out").mkdir(parents=True)
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
-    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
-    doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
+    scan = {"draw": {"honest": 64}, "T": 32}
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"accepted": True, "windows": 75}}))
+    for request, why in ((None, "asks for no number of requests"), ({"client_port": 8012, "windows": 75}, "relay session"),
+                         ({"requests": True}, "asks for no number"), ({"requests": 0}, "asks for no number")):
+        if request is not None:
+            (run / "request.json").write_text(json.dumps(request))
+        with pytest.raises(SystemExit, match=why):
+            cr.leak(run, scan)
+    (run / "request.json").write_text(json.dumps({"device": "warden", "requests": 100}))
+    for verdict in ({"accepted": False, "windows": 75}, {"windows": 75, "requests": 100}):
+        (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": verdict}))
+        with pytest.raises(SystemExit, match="isn't accepted"):
+            cr.leak(run, scan)
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"accepted": True, "windows": 75}}))
+    doc = cr.leak(run, scan)
+    assert doc["run"]["requests"] == 100 and doc["run"]["requests_per_link_window"] == 100 / 75
     assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     assert doc["terms"]["schedules_per_request"] == doc["terms"]["cells_per_request"] == 7

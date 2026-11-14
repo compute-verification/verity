@@ -115,7 +115,7 @@ with tarfile.open(sys.argv[2], "r:gz") as tar, tarfile.open(sys.argv[3], "w:gz")
 with tarfile.open(sys.argv[3], "r:gz") as tar:
     dep = json.load(tar.extractfile(next(m for m in tar if m.name.endswith("/out/deployment.json"))))
 n, w = dep["windows"], dep["params"]["window"] * dep["params"]["bucket_ms"] / 1000
-print(json.dumps({"run": end.get("run"), "rc": end.get("rc"), "ended_utc": end.get("ended_utc"),
+print(json.dumps({"run": end.get("run"), "rc": end.get("rc"),
                   "accepted": (end.get("verdict") or {}).get("accepted"), "origin_unix": dep["origin_unix"],
                   "windows": n, "session_s": round(n * w, 1)}))
 sys.exit(end.get("rc") or 0)
