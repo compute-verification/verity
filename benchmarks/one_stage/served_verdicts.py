@@ -683,7 +683,7 @@ def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
 
 def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
     """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
-    templates, its scope's op path and law), which members it drew, and the row with no length of the advice
+    templates, its scope's op path and sampling design), which members it drew, and the row with no length of the advice
     (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
     scope's ``steps``, the window's engine steps, stay on the node too."""
     row = {k: v for k, v in records.items() if k != "population"}

@@ -26,7 +26,7 @@ occupancy past 2^`K_MAX`) or wider than the widest size class (`UNIT_CLASS_MAX` 
 block a statement, what lifting the limit would buy.
 
 **Two views.**  `lean`: each rung as n equal proof blocks of its mean size (`optimize.Grain`), its proving cost weighted by
-work (free compute) or by width (exfiltration), through `grain_costs`, the laws of `Achievability` and
+work (free compute) or by width (exfiltration), through `grain_costs`, the sampling designs of `Achievability` and
 `ExfiltrationOptimum`.  `planner`: the rung's parts as strata through `for_target` under the density bound, its
 statements shared (`CostModel.shared`), at `commit_weight` 0 or w.
 
@@ -313,7 +313,7 @@ def scale(parts: list[Part], windows: float) -> list[Part]:
 
 def grain(name: str, parts: list[Part], m: CostModel, by: str, marginal: bool = False) -> Grain:
     """The rung as n equal proof blocks of its mean work and width, its proving cost weighted by work (`by` "work") or by
-    width ("bits"): the cost the laws pay, which sample a proof block in proportion to it."""
+    width ("bits"): the cost the sampling designs pay, which sample a proof block in proportion to it."""
     n = sum(p.units for p in parts)
     weight = {p.name: p.units * (p.work if by == "work" else p.out_bits) for p in parts}
     total = sum(weight.values())

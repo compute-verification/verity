@@ -19,7 +19,7 @@ bookkeeping over the pieces' `Prop`s, and reads nothing of the form's check but 
    the check read is the device's (`Good`), or a sampled accept with `¬ Good`, which the cut bounds by `terms`
    (`CutBound`).
 2. The first is moved to the frame's plays, at a uniform tape and uniform run coins where the coin map's agreement
-   `Ag` holds, by the coin map's law (`CoinMapLaw`), at the cost `hide`.
+   `Ag` holds, by the coin map's distribution (`CoinMapLaw`), at the cost `hide`.
 3. On a frame play with `Acc ∧ Good` and `Ag`, each read round's coin read agrees with the run's (`ReadAgrees`;
    `projection_core`'s one premise about coins). There, either a message the check reads differs from the frame's
    prover's, which the messages' piece bounds by `miss`, or the run at the same tape and coins accepts: the check reads
@@ -146,7 +146,7 @@ theorem cutBound_and {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
     (q := fun o => V.Verdict k .sampled o ∧ ¬ Good o) (V.game θ F c) σ fun o hr ho => ?_) h
   exact ⟨ho.1, fun hg => ho.2 ⟨hg, hR o hr⟩⟩
 
-/-- **The projection's bound from the coins of accepted plays**: the wiring, the coin map's law at an agreement `Ag`,
+/-- **The projection's bound from the coins of accepted plays**: the wiring, the coin map's distribution at an agreement `Ag`,
 the messages fixed where the coins agree, the cut, the accept on the plays `Acc` and `Good` hold of, and the statement
 read give the projection's bound at `hide + miss + terms`, where on every frame play the check accepts, whose log it
 read is the device's and where `Ag` holds, each coin it reads at a read round agrees with the run's coin there. -/

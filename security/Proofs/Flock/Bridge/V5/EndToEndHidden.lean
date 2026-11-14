@@ -10,7 +10,7 @@ public import Proofs.Flock.Bridge.EndToEndHiddenC
 
 * `Layout.keyProgP_readsOwn`: `keyProgP`'s proof blocks read only their own gates and input gates (`keyProgP_reads`);
 * `zk_session_soundHJ_custody_escCP`: at verity-verify-proof `--zk --public-inputs`'s acceptance (`zk_headline_exec_tablesA`
-  at `AcceptsZKP I own`, through `decodesZCJH_custodyP` under the registration's law), at `keyProgP` and the binding
+  at `AcceptsZKP I own`, through `decodesZCJH_custodyP` under the registration's sampling design), at `keyProgP` and the binding
   `rsZHJP`, a set `W` of proof blocks is wrong with probability at most the sample's escape of `W` and the extraction's
   terms (`zk_flock_escapeC_regC`), at any sample `L`;
 * `Flock.Bridge.endToEndHiddenV5_of`: `OpeningsCanonTargetV5` gives `EndToEndHiddenV5`, at the verifier's sample
@@ -42,7 +42,7 @@ open scoped ENNReal
 variable {n : ℕ} {Reg : Type}
 
 /-- **One hidden-output `--zk` sampled session of `J` tables at the verifier's public inputs, under the registration's
-law, is sound against the registration with canonical openings, at a set of proof blocks**: every proof block of `W` is
+sampling design, is sound against the registration with canonical openings, at a set of proof blocks**: every proof block of `W` is
 wrong with probability at most the sample's escape of `W` and the extraction's terms (`zk_flock_escapeC_regC` at `own`). -/
 theorem zk_session_soundHJ_custody_escCP
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)

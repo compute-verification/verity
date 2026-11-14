@@ -142,7 +142,7 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
     Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
 
 /-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. `work` is the
-verifier's own `K` and work table, which a work sample's law is held to, `stratified` its own `K` for a stratified sample,
+verifier's own `K` and work table, which a work sample's sampling design is held to, `stratified` its own `K` for a stratified sample,
 `closure` its closure map, and `publicInputs` its own recomputation of the public input words. `registered` is the
 verifier's own registered reads, which every table's statement is held to (`Registered.check`), and `identifier` its own
 identifier (`checkIdentifier`). -/
@@ -1075,7 +1075,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
     | some k => match k.toNat? with
       | some k => pure (some k)
       | none => IO.eprintln "verify: --stratified K: K is a natural number"; return 2
-  -- a sampled statement that sets up is still refused when no soundness claim samples by its sample's law
+  -- a sampled statement that sets up is still refused when no soundness claim samples by its sample's sampling design
   -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
   -- each session's verdict
   -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`): a templated
@@ -1270,7 +1270,7 @@ refusals, in `verify`'s order, on plain sessions whose proof files are upstream'
 `None` tag, `verifyFiles (plainBytes true)`; `Tags.upstreamPlain`), which `verify` refuses. For each session it prints one
 line, `AGREEMENT {"session", "agree", "upstream", "check", "refusal", …}`, with `verify`'s findings and no `accepted`:
 `check` is the first check's failure (`""` when every check passes; a refusal before any check runs counts, such as a
-legacy statement's or a sample law's at setup), `refusal` the first refusal once every check has passed (`UPSTREAM_PLAIN`
+legacy statement's or a sampling design's at setup), `refusal` the first refusal once every check has passed (`UPSTREAM_PLAIN`
 when no other refuses, so no session passes), `upstream` the session's verdict in `F` (a JSON object from each session
 directory, as given to `--session`, to upstream's verdict, `true` for accepted; `null` where `F` has none), and `agree`
 whether the checks pass exactly when upstream accepted. Exit 0 iff every session agrees. Not with `--zk`: a `--zk`
@@ -1626,7 +1626,7 @@ def heldToRegistration (law : Draw.Law) (pop : Nat) : Lean.Json × Nat → Optio
     else none
 
 /-- The sample of a sampling design that samples every unit (a subset of the whole population, a Bernoulli sample at p = 1, or every
-stratum at its size), which reads no coins: its units are the same on any bytes. None for any other law. -/
+stratum at its size), which reads no coins: its units are the same on any bytes. None for any other sampling design. -/
 def drawEvery? (law : Draw.Law) (pop : Nat) : Option Draw.UnitDraw :=
   let every := match law with
     | .subset k => k == pop
