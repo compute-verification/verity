@@ -22,9 +22,10 @@ bare name (`import steps`) with the directory on `sys.path`, and a caller outsid
 vLLM adapter's int8 tests: `adapters/vllm/tests/engine/ppl_oracle.py` runs `steps.int8_linear` through `matmul.MM` and
 `gates.Gates` as their oracle, and `int8_kscale_gpu.py` builds the calibration windows with `windows` from
 `methodology.CALIBRATION`. Read as data and not imported: the arms in `specs/`, which a design in the design registry
-names, and the C4 shard `datasets.json` pins, which other benchmarks' jobs send as their input. **What it never does:**
-it reports no perplexity for a run whose gates fail, `run.py eval` scores no window list, context or seed but
-`methodology.py`'s, and its job reads a GPU's clocks and never sets them.
+names; the C4 shard `datasets.json` pins, which other jobs send as their input; and `pins/glm-5.3.json`, which
+`benchmarks/spot_proved/node_record.sh` checks a node's checkpoint against. **What it never does:** it reports no
+perplexity for a run whose gates fail, `run.py eval` scores no window list, context or seed but `methodology.py`'s,
+and its job reads a GPU's clocks and never sets them.
 
 ## Methodology
 
