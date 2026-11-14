@@ -113,7 +113,7 @@ theorem consAre (R : Reg) (ω : Ω) (t : List C) (l : (j : Fin S) → (Vs j).Bit
 
 section outer
 
-variable {n : ℕ} {L : Law n} {I : Inner} {Cm : Type} {Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {I : Inner} {Cm : Type} {Reg' Reg₂ : Type}
 
 /-- **G items 1–3 at the decoder**: `algebraDecodes_of_decodeLH` at `sess`, `un` and copy 0. -/
 theorem algebraDecodes (M : RepMaps stmt Vs sh Reg L.Ω (Cm × I.Coin))
@@ -162,7 +162,7 @@ end outer
 section obligations
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 

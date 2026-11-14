@@ -40,7 +40,7 @@ open scoped ENNReal
 /-- Period `r`'s sampled-proofs audit is Flock's integrity audit over the `T` sampling blocks `W t` of the period
 (`Flock.Guarantees.Period.run`). Every field is a property of the deployed run:
 
-* `strat`, `record`, `law`: the node is one prover strategy of the period's game at each value of the other audits'
+* `strat`, `record`, `samplingDesign`: the node is one prover strategy of the period's game at each value of the other audits'
   coins, and the sampled audit's own coins (`r.own .sampled`), sampled uniformly, drive that game: every event of the
   sampling blocks' records has the probability, over those coins, that the game's run gives it at that strategy. This is
   the live coin flow: each sampling block's subset sample comes from the verifier's byte source, which the period's
@@ -62,7 +62,7 @@ structure RealizesIntegrityOfIntegrityMonitoringPeriod {ι : Type} {d : Device �
   block -/
   record : ((i : I) → Ω i) → List Flock.Guarantees.WindowRec
   /-- the sampled audit's own coins drive the period's game at the strategy -/
-  law : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.WindowRec → Prop),
+  samplingDesign : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.WindowRec → Prop),
     ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
       FlockSoundness.Game.value E (Flock.Guarantees.Period.run W T (strat ξ))
   /-- the sampled audit accepts exactly when verity-verify-proof accepts every sampling block -/

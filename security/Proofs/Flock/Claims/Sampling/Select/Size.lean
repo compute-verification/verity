@@ -91,13 +91,13 @@ theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum
     rw [hD, Verity.QSort.size_qsort, hsz, Array.size_empty, Nat.zero_add]
     exact sum_range'_getElem! strata (·.k)
 
-/-- **`sampleUnits` samples the sampling design's `k`**: a sample from `src` under a sampling design on strata of sizes `ns` with sample `kd` (`LawOn`)
+/-- **`sampleUnits` samples the sampling design's `k`**: a sample from `src` under a sampling design on strata of sizes `ns` with sample `kd` (`SamplingDesignOn`)
 returns `kd` units. -/
-theorem sampleUnits_size {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} {src : ByteArray} {units : Array ℕ}
-    {read : ℕ} (hlaw : Flock.Bridge.LawOn law ns kd) (h : Draw.sampleUnits law n src = .ok (units, read)) :
+theorem sampleUnits_size {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd n : ℕ} {src : ByteArray} {units : Array ℕ}
+    {read : ℕ} (hlaw : Flock.Bridge.SamplingDesignOn samplingDesign ns kd) (h : Draw.sampleUnits samplingDesign n src = .ok (units, read)) :
     units.size = kd := by
   unfold Draw.sampleUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) law n).run 0 with
+  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) samplingDesign n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
     obtain ⟨r, read'⟩ := x
@@ -109,7 +109,7 @@ theorem sampleUnits_size {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} {sr
     dsimp only at h
     obtain ⟨hu, -⟩ := Prod.mk.inj (Except.ok.inj h)
     subst hu
-    cases law with
+    cases samplingDesign with
     | subset k =>
       obtain ⟨hk, -⟩ := hlaw
       unfold Flock.Draw.drawWith at hw

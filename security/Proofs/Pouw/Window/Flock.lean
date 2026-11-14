@@ -50,7 +50,7 @@ randomized-extraction analysis of it (`FlockSoundness.Audit.ExtractionAnalysis`,
 `hwrong` says the window's units' statements are the session's: a unit of the call that is wrong in `Xw`
 (`UnitStmts.wrong`, at its seed inputs) is wrong in `proj Xw`. The window's `ks`, `link` and `cover` are Flock's. -/
 def CallAnalysis.ofFlock (U : UnitStmts Tr n) (c : Fin C)
-    {fsess : Finset (Fin (n c)) → Reg → Game Bool} {LF : FlockSoundness.Audit.Law (n c)}
+    {fsess : Finset (Fin (n c)) → Reg → Game Bool} {LF : FlockSoundness.Audit.SamplingDesign (n c)}
     (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (proj : Tr → AF.Tr)
     (hwrong : ∀ Xw u, (⟨c, u⟩ : WUnit n) ∈ U.wrong Xw → u ∈ AF.wrong (proj Xw)) :
     CallAnalysis U c fsess where
@@ -63,13 +63,13 @@ def CallAnalysis.ofFlock (U : UnitStmts Tr n) (c : Fin C)
 (`analysisZC`) it holds with `κ = 0` and `g = ⨆_j ofReal (ksBoundAccZ_j / (1 − rateZ_j))` at `zcStrat τ`
 (`flockKnowledgeSound_analysisZC`, module doc). -/
 def FlockKnowledgeSound {m : ℕ} {fsess : Finset (Fin m) → Reg → Game Bool}
-    {LF : FlockSoundness.Audit.Law m} (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (κ : ℝ≥0∞)
+    {LF : FlockSoundness.Audit.SamplingDesign m} (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (κ : ℝ≥0∞)
     (g : (S : Finset (Fin m)) → (R : Reg) → Strategy (fsess S R) → ℝ≥0∞) : Prop :=
   ∀ S R τ u, u ∈ S → AF.ks S R τ u ≤ κ + g S R τ
 
 /-- **Flock's pointwise bound is the call's knowledge soundness in the window.** -/
 theorem CallAnalysis.ofFlock_knowledgeSound (U : UnitStmts Tr n) (c : Fin C)
-    {fsess : Finset (Fin (n c)) → Reg → Game Bool} {LF : FlockSoundness.Audit.Law (n c)}
+    {fsess : Finset (Fin (n c)) → Reg → Game Bool} {LF : FlockSoundness.Audit.SamplingDesign (n c)}
     (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (proj : Tr → AF.Tr)
     (hwrong : ∀ Xw u, (⟨c, u⟩ : WUnit n) ∈ U.wrong Xw → u ∈ AF.wrong (proj Xw)) {κ : ℝ≥0∞}
     {g : (S : Finset (Fin (n c))) → (R : Reg) → Strategy (fsess S R) → ℝ≥0∞}
@@ -94,7 +94,7 @@ state term `⨆_j ofReal (ksBoundAccZ_j / (1 − rateZ_j))` at `zcStrat τ`: a s
 table. -/
 theorem _root_.Pouw.Window.flockKnowledgeSound_analysisZC (A : Arith F K) (hA : A.Correct) (Hs : Hashes F D Sl)
     {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
-    (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : Law n}
+    (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : SamplingDesign n}
     (decode : DecoderZK (C := C) planZ tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) {k : ℕ} (hk : 1 ≤ k)
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode) :

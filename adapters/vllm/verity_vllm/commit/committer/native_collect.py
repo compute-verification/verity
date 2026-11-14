@@ -54,6 +54,7 @@ import torch
 from verity.commitments.merkle import merkle_depth
 
 from verity_vllm import settings
+from verity_vllm.acquire.committer_api import RunCommitment
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.device_pool import DevicePool, pool_key, release
 from verity_vllm.commit.committer.flush_points import (
@@ -1385,7 +1386,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         return {"stats": dict(self._nc.stats()), "window_stats": dict(self._nc.window_stats()),
                 "failure": str(getattr(self._nc, "failure", "") or "")}
 
-    def finalize(self):
+    def finalize(self) -> RunCommitment:
         if getattr(self, "_nc_at_detach", None) is None:
             for src in self.sources:
                 if hasattr(src, "sync_stats"):

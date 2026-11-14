@@ -3024,6 +3024,13 @@
         "adapters/vllm/verity_vllm/program/dsa_table.py": "adapters/torch/verity_torch/dsa_table.py",
         "adapters/vllm/verity_vllm/correspondence/runtime.py": "adapters/torch/verity_torch/correspondence/runtime.py"
       }
+    },
+    {
+      "paths": {
+        "security/Proofs/Flock/Bridge/SampledLaw.lean": "security/Proofs/Flock/Bridge/SampledDesign.lean",
+        "security/Proofs/Flock/Claims/Sampling/Select/SampleLaw.lean": "security/Proofs/Flock/Claims/Sampling/Select/SampleDesign.lean",
+        "security/Proofs/Flock/Soundness/Discharge/Exec/LawSample.lean": "security/Proofs/Flock/Soundness/Discharge/Exec/SamplingDesignSample.lean"
+      }
     }
   ]
 }

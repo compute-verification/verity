@@ -312,6 +312,7 @@ theorem Member.files_header {m : Member} {slice : Json} {bs : Core.Blobs} {a : S
   obtain ⟨⟨⟩, -, hb⟩ := Flock.HmNets.bind_ok hb
   have ha : a'' = a' := Except.ok.inj hb
   subst ha
+  obtain ⟨_, -, hst⟩ := Flock.HmNets.bind_ok hst
   obtain ⟨tags0, circuitB, pubB, rd, rfl⟩ := statementOf_ofOwn hst
   exact hh
 
@@ -689,7 +690,8 @@ theorem membersRun_sampled {p : Params} {ms : Array Member} {c : OneStage.Commit
   unfold membersRun at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
-  exact runMembers_sampled h
+  obtain ⟨_, hrun, _⟩ := Flock.HmNets.bind_ok h
+  exact runMembers_sampled hrun
 
 /-- **Where the per-member form's run returns, its order refusal and its population refusal passed** (`orderHeld`,
 `popHeld`): the two the one statement's check makes too, with the same arguments. -/
@@ -835,13 +837,13 @@ def live (bs : Array ByteArray) : Core.Live (protocol.on bs) where
 /-- **What `paramsOfJson` returns, `paramsParsed` returned, under a `subset` sampling design**: its one refusal of its
 own is `SUBSET_ONLY`'s. -/
 theorem paramsOfJson_ok {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
-    paramsParsed j = .ok p ∧ getD p.base.verifier.law "law" = .str "subset" := by
+    paramsParsed j = .ok p ∧ getD p.base.verifier.samplingDesign "law" = .str "subset" := by
   unfold paramsOfJson at h
   cases hp : paramsParsed j with
   | error why => simp [hp, bind, Except.bind] at h
   | ok q =>
     simp only [hp, bind, Except.bind] at h
-    cases hl : getD q.base.verifier.law "law" with
+    cases hl : getD q.base.verifier.samplingDesign "law" with
     | str s =>
       simp only [hl] at h
       by_cases hs : s = "subset"
@@ -857,9 +859,9 @@ theorem paramsOfJson_parsed {j : Json} {p : Params} (h : paramsOfJson j = .ok p)
   (paramsOfJson_ok h).1
 
 /-- **Parsed parameters' sampling design is a `subset` one**: whatever `paramsOfJson` returns names a sampling design of
-kind `subset`, the kind the sample reads (`Draw.deriveLaw`, `Draw.flockLaw`). -/
+kind `subset`, the kind the sample reads (`Draw.deriveSamplingDesign`, `Draw.flockSamplingDesign`). -/
 theorem paramsOfJson_subset {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
-    getD p.base.verifier.law "law" = .str "subset" :=
+    getD p.base.verifier.samplingDesign "law" = .str "subset" :=
   (paramsOfJson_ok h).2
 
 /-- **Parsed parameters name no members**: whatever `paramsOfJson` returns is of the one statement's form. -/
