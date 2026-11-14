@@ -123,8 +123,8 @@ def membersOfJson (j : Json) : V (Array (Array (Nat × Nat) × Nat)) := do
     pure (us, g)
 
 /-- `{"law", "population", "members"}` (the sampling design as `Draw.flockLaw` reads it, the members as `membersOfJson`
-reads them) to `{"bounds": [[fewest, most], ...], "refused": [index, ...]}`; a malformed law or member, or a sampling
-design no sample of which ends (`NEVER_ENDS`), is refused. -/
+reads them) to `{"bounds": [[fewest, most], ...], "refused": [index, ...]}`; a malformed sampling design or member, or
+a sampling design no sample of which ends (`NEVER_ENDS`), is refused. -/
 def piece (j : Json) : V Json := do
   let some population := nat? (getD j "population") | throw "the population is not a natural number"
   let law ← Draw.flockLaw (getD j "law") population

@@ -55,8 +55,8 @@ def test_a_case_naming_a_missing_file_has_no_run(tmp_path, exe):
         CF.run(case([tmp_path / "gone"]), exe, "refusal", tmp_path / "run")
 
 
-def test_arguments_past_linuxs_cap_are_refused_before_the_run(tmp_path, exe, monkeypatch):
-    monkeypatch.setattr(CF, "ARGS_CAP", 10)
+def test_arguments_past_linuxs_limit_are_refused_before_the_run(tmp_path, exe, monkeypatch):
+    monkeypatch.setattr(CF, "ARGS_LIMIT", 10)
     (tmp_path / "x").write_bytes(b"x")
     with pytest.raises(ValueError, match="past Linux's 10"):
         CF.run(case([tmp_path / "x"]), exe, "refusal", tmp_path / "run")

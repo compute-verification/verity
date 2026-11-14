@@ -66,15 +66,15 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
   refine ⟨fun pre r' post he i s n hr => (hslf pre r' post he i s n hr).1, fun κ ω hsrc hc => ?_⟩
   -- the window's sample at `ω` is the units v1's check proved
   obtain ⟨pub, prof, hv1⟩ := hM.v1
-  obtain ⟨law, n, read, hder0, hn, hdf⟩ := checkAt_drew hv1
+  obtain ⟨design, n, read, hder0, hn, hdf⟩ := checkAt_drew hv1
   obtain ⟨derived, fl, hder, hfl, hdu⟩ := drawnFrom_ok hdf
-  have hlawOf : LawOf p c (derived.getD fl) n := ⟨law, derived, fl, hder0, hn, hder, hfl, rfl⟩
+  have hof : LawOf p c (derived.getD fl) n := ⟨design, derived, fl, hder0, hn, hder, hfl, rfl⟩
   have hdrew : Drew k x.sent dr (derived.getD fl) n ξ (drawnUnits ev.base.draw) :=
-    ⟨a, b, e, p, c, ev, hcase, hacc, hlawOf, rfl, read, hdu⟩
+    ⟨a, b, e, p, c, ev, hcase, hacc, hof, rfl, read, hdu⟩
   have hnJ : W.nJ = n :=
     hset.toWindowOn.population hset.passes hp hms (membersStructure_laid (membersRun_ok hM.run hM.all).1) hn
   have hL : W.law = derived.getD fl := by
-    have h1 := lawAt_of_lawOf hlawOf
+    have h1 := lawAt_of_lawOf hof
     rw [← hnJ] at h1
     exact Except.ok.inj (hlaw.symm.trans h1)
   have hs := shows_of_read hv.2.1 hcase hacc hlogRead hl

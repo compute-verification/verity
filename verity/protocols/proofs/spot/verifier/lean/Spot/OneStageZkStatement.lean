@@ -4,6 +4,7 @@ public import CoreProtocol.Blobs
 public import Spot.OneStage
 public import Spot.ChallengerTrees
 public import Spot.Slots
+public import Spot.PopOrder
 public import Spot.FilePart
 public import Spot.CircuitKept
 public import Flock
@@ -162,7 +163,8 @@ private def committedOf (pr : Json) : V (String × String × Option Json) := do
 /-- The refusal of a sampling design of kind `kind` that is no `subset` one, at the one statement's form
 (`paramsOfJson`): its soundness statement covers a uniform sample of a fixed count alone. -/
 def SUBSET_ONLY (kind : String) : String :=
-  s!"the law is {kind}, which the one-statement audit's soundness statement doesn't cover: it covers a subset law"
+  s!"the sampling design is {kind}, which the one-statement audit's soundness statement doesn't cover: it covers a \
+    subset sampling design"
 
 /-- The one statement's parameters as parsed, before `paramsOfJson`'s refusal of a sampling design that is no `subset`
 one. The per-member form's parameters read them (`membersParamsOfJson`), under any sampling design v1 parses. -/
@@ -183,10 +185,10 @@ def paramsParsed (j : Json) : V Params := do
          members := none }
 
 /-- **The one statement's parameters** (`paramsParsed`), with every sampling design that is no `subset` one refused by
-its kind (`SUBSET_ONLY`), after every refusal of `paramsParsed`. The kind is the parsed law's, the one the sample is
-sampled under (`OneStage.drawnFrom`, `Draw.deriveLaw`): v1 has already resolved a rate stated as text over the population
-(`OneStage.design`), so `rate:NUM/DEN[:T]` is a `subset` law here and passes, and `stratified-rate:` and `work-rate:`
-are refused as `stratified` and `work`. -/
+its kind (`SUBSET_ONLY`), after every refusal of `paramsParsed`. The kind is the parsed sampling design's, the one the
+sample is sampled under (`OneStage.drawnFrom`, `Draw.deriveLaw`): v1 has already resolved a rate stated as text over
+the population (`OneStage.design`), so `rate:NUM/DEN[:T]` is a `subset` one here and passes, and `stratified-rate:` and
+`work-rate:` are refused as `stratified` and `work`. -/
 def paramsOfJson (j : Json) : V Params := do
   let p ← paramsParsed j
   let kind := match getD p.base.verifier.law "law" with | .str s => s | _ => ""
@@ -656,7 +658,9 @@ def POPULATION_ORDER : String :=
 
 /-- The registration's population held to the verifier's program (module docstring, **population**): the record names
 a population `n`, and under the verifier's query the program's proof blocks are its `n` units in order
-(`Slots.popOk`). -/
+(`Slots.popOk`). This module imports `Spot.PopOrder`, so the call runs from the query's ranges
+(`Slots.popOk_eq_popOkRanges`) and builds no proof block: without the import it would run `Slots.layout`, a proof block
+for every input gate of the root. -/
 def popHeld (v : Registration.Verifier) (record : Json) : V Unit :=
   match nat? (getD record "population") with
   | none => throw "the record names no population"
@@ -938,57 +942,6 @@ def headerHeld (rec h : Json) : V Unit :=
   let fv := getD h "frame_v3"
   let c := Record.matchesPublic rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
   if c.codes.isEmpty then pure () else throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
-
-/-- The refusal of members that are not the registration's population, a range each (`laidHeld`). -/
-def MEMBERS_LAID : String :=
-  "members: the members' units are not the registration's population, each member's one range of it: a member is " ++
-    "the units [base, base + n), and the members' counts sum to the population"
-
-/-- **The members laid over the registration's population**: each member's units are one range, within the record's
-population, and the members' counts sum to it. The parameters' members share no unit (`membersOf`), so every unit of
-the population is exactly one member's, and the members in the order of their first units lie one after another from
-unit 0: a member's units are `[base, base + n)`, `base` the count of the members before it. -/
-def laidHeld (ms : Array Member) (rec : Json) : V Unit :=
-  match nat? (getD rec "population") with
-  | none => throw "the record names no population"
-  | some n =>
-    if ms.all (fun m => m.units.size == 1 && m.units.all (·.2 ≤ n)) && ms.foldl (fun a m => a + m.count) 0 == n then
-      pure ()
-    else throw MEMBERS_LAID
-
-/-- The refusal of two members' ports of one registered value that are not one tree's (`classHeld`): `diff` is the
-first field they differ in (`Flock.RecVStar.portDiff?`). -/
-def classTwo (first second value diff : String) : String :=
-  s!"registered: members {first} and {second} read the registered value {value} as two ({diff}): a value the " ++
-    "window registers is one tree, read by every member at one root"
-
-/-- The member `name`'s registered port `q` after the ports before it: `acc` holds, for each value read so far, the
-first port of it and its member's name. A port of a value `acc` holds must be that port in the value's root, leaves,
-row width, domain and leaf schema (`Flock.RecVStar.portDiff?`, without the units' reads). -/
-def classPort (name : String) (acc : Std.HashMap String (String × Flock.Registered.Port))
-    (q : Flock.Registered.Port) : V (Std.HashMap String (String × Flock.Registered.Port)) :=
-  match acc.get? q.value with
-  | none => pure (acc.insert q.value (name, q))
-  | some (first, q0) =>
-    match Flock.RecVStar.portDiff? q0 q false with
-    | none => pure acc
-    | some diff => throw (classTwo first name q.value diff)
-
-/-- One member's registered ports after the members before it (`classPort` on each); a member whose registered file
-is no registered reads refuses, and one with none reads nothing. -/
-def classStep (acc : Std.HashMap String (String × Flock.Registered.Port)) (m : Member) :
-    V (Std.HashMap String (String × Flock.Registered.Port)) :=
-  match m.own.registered with
-  | none => pure acc
-  | some j =>
-    (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}") >>= fun own => own.foldlM (classPort m.name) acc
-
-/-- **A registered value is one tree for every member**: over the parameters' members, sampled or not, every port of
-one value names one root, one count of leaves, one row width, one domain and one leaf schema (`classStep`), so the
-values the members read are a function of the parameters, each with one root. It is one pass over the parameters'
-members, each member's registered file read once, and it reads no blob. -/
-def classHeld (ms : Array Member) : V Unit :=
-  ms.foldlM classStep {} >>= fun _ => pure ()
 
 /-- **A member's population check**, in the place of the one statement's `FilePart.check` and `publicHeld`
 (`Member.heldAt` at the strata of the member's query over its program, as `FilePart.check` reads them, then
