@@ -60,3 +60,7 @@ c616 cancelled too: it had waited 67 min for a slot and never started. Relaunche
 ## 2026-11-14T18:20:47Z
 
 #10032 merged with main (#10019 landed): head ccdf607b2eae8e22c378d7b31ff835da20811acc. The layout move 8469d5dc (registration_map) names only verity/hardware/registration.py, which none of the branch's own lines name, so a plain merge of main is what restack.py's script would give on them. One conflict, in test_repo_retired_terms.py with #10024 (Flock's caps, says()), resolved by keeping both. The list still deletes 27 and lowers 31 of circuits' entries (1,026 uses), none below what the tree holds. On the VM: test_repo_retired_terms.py, 29 passed. Its --changed suites (verity-vllm, repository, verity-graph) and ratchet: r20261114-182002-22e5. Still unmarked: it waits on top's yes, and none has come on CIR-278.
+
+## 2026-11-14T18:44:36Z
+
+TOP-424: I cancelled every run that served a mark on main (7860, fd54, 1fdd, 0603, ee58, b806, 315f, 22e5). #9835, #10032 and #10140 are carried across the architecture branch's moves with tools/move/restack.py (clean) and merged into architecture, now at 0b695681cf387d0ba6ea46d524afefd6782c05e1. The changed .py files compile. Change 5 (mypy-cures, e06f2a98) has no PR and is not merged. Next: renames in circuits' adapter directories.
