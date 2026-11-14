@@ -93,3 +93,53 @@ Built (local, at 57d807b796a0): Definitions.Core.SiteSubtree, Definitions.Accoun
 
 Also from GATERELAY2: Lean comments in our certifier Lean still name old Python paths (layout_one: verity/core/protocols/certifier/*, verity.ml.*; protocol_groups: verity.protocols.certifier.verifier.scan_ok; security_dir: Security/). Prose only; I'll mend them next unless you'd rather someone else does.
 
+[2026-11-14T22:07Z] 316a8603e0ef
+MEND9319, TOP-424 reds. Pushed to `cursor/na-architecture-b51f` (tip `81927cbf627c`, plain fast-forward, no force). Results are from the seven files run on that tip on my VM: 20 failed, 70 passed. Per red:
+
+- **`lint/test_lean_bar` (`DecodeEmpty.lean:202`): not ours now, as you said.** Before your 2:01 PM message I had committed `d7c594fae8c8`, which changes line 202's `maxHeartbeats 0` to `maxHeartbeats 400000` and keeps its comment. A node run at `6f00b98e1cd` built it: 400000 in 21 s, while 200000 times out. That commit exists only on my local `na-hold`. I left it out of the push and have reverted nothing. At the collect tip the unbounded file fails: `DecodeEmpty.lean:203:0: fwd: the condition is stuck`. After: still red, on DecodeEmpty and on PoUW's `PeelExactProofsP.lean:580` and `:591`.
+- **`lint/test_repo_ruff` (`scan_zk.py:1262`): a.** `5579e8f6625b` puts the definition back to `window_of`.
+  - The rename came from the integrator's merge `76f7a5860a3`. It applied `lean_names_map.toml:892`'s `words = { "window" = "executionPhase" }`, which is scoped to ten `.lean` files, to Python.
+  - GATERELAY2 was told first; I had no answer from TERMGB2.
+  - After: only inference-only's `desc_difftest_vectors.py:161` is left: an undefined name `Type` in a `"Type"` annotation, from `b035952c00ab`. It isn't ours.
+- **The names sweep (`[a-z]+[A-Z]..._(of|at|in)|executionPhase|samplingDesign|transferBlocks` in `*.py`):**
+  - Ours: `window_of`, mended above.
+  - Other lanes': `code_executionPhase`, made by `period_net_map.toml:81` (`"code_window" = "code_executionPhase"`).
+    - Defined in vllm's `adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py`.
+    - Called in `by_class.py`, `benchmarks/network_e2e/encodings/code_v1.py` and their tests; named in docstrings of certifier `arith_encode.py`.
+    - Not mended. Its owner decides whether to put back `code_window`.
+  - The rest of the hits are docstrings naming Lean declarations that exist, or test fixtures, so there is nothing to mend.
+- **`lint/test_repo_python_verdicts`: b.**
+  - `0343727e468b` pruned `certifier-device-program`, `simulator-python-audit` and `older-harness-memory-challenger` with `--prune`.
+  - I removed `remote-session-boundary-check` by hand because its `boundary_check` was deleted in `e883650f2de`.
+  - After: green.
+- **`test_gate_paths`: b.** `76a70dad000c`:
+  - repoints certifier/device's `benchmarks/rho/data/*` to `benchmarks/slowdown/data/*`;
+  - drops spot/prover's 11 `benchmarks/network_traces/*.py` inputs, which are moved (and covered by `verity`) or deleted;
+  - drops remote_session's old `word_codec/kv.cu`.
+  - After: red only on `benchmarks/prove_path/pyproject.toml:37` `"benchmarks/network_traces/replay.py",`, deleted in `64bd635e08f`. That is the line for proofs; I did not edit it. Plus 4 `tools/check` Lean-key tests, not ours.
+- **`test_lean_packages`: c and other lanes'.**
+  - Long module: `verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean`, 2240 lines against the 2000-line cap, so 240 > 0. It is PERIODPROOF2's split; I left it. Spot's `493 > 0` is not ours.
+  - `import all`: four `security/Proofs/Properties/InferenceOnly/Digest{Decode,Parts,Reads,Refs}.lean` files import `Circuits.Program` with `import all` to unfold its private decoder. Sent to POLICYROWS2. DecodeEmpty's is proofs'.
+  - After: red on both.
+- **`test_configurations`: regenerated with the generator** (`served_table.configuration` + `render`), in `a2753449132`. After: red only on the hashes, which are pinned at the close in `tools/verity/cli/verity_cli/configurations.toml`:
+  - `"demos/onsite_compute.toml" = "f5ca90b1a0f6c0b201537a257c2c7070050a8f94629b4356ca437cca08d9b627e3fbb2da763263e35fccb143ae171e908f3f7de57f120d206a17dda2c1554322"`
+  - `"demos/onsite_network.toml" = "9d9c1d03935955f17207629a34cc2001c04b90185587a00fe6a08bb88f342c59cde7036cc73eef8d75abb2b9e14295857d7ab94207f3b2d7572fc78ef519f00e"`
+  - `"demos/onsite_full.toml" = "f8fd02322844310fd45ec865cbc9694b5d94035fecdbaa5666654f29b88e0902b949ad70f5fa71b54080fd7465cbc8599edf8153269c0fe2dcb7c67135263612"` (it was already stale; the file itself is unchanged)
+  - `remote.toml`: unchanged.
+- **`test_boundaries`, `device_party.py:30` runtime: a.** `b4abc411f8c` takes `ProtocolDef` from `verity.protocol`, which belongs to the `verity/runtime` place. After: the runtime rule flags only pous's `wipe_on_node.py:9`, which isn't ours.
+- **`test_boundaries`, the two undeclared bare imports: a for ours.** `eedbcca43da` makes `compile_slice_zk` import `from benchmarks.network_traces import zk_drivers`. After: `benchmarks/prove_path/served_statics_zk.py:51` and `served_tie_zk.py:52` remain, both proofs'.
+- **`test_boundaries`, `certifier/device` loads `verity/channel.py` and 6 more: c.** The line for ci, in `tests/import_order.toml` (or written by `import_order.py --grow`):
+  `[[place]] paths = ["verity/protocols/accounting/certifier/device"]`, with
+  `loads = ["verity/channel.py", "verity/commitments", "verity/commitments/crypto", "verity/protocols/accounting/certifier/verifier", "verity/protocols/accounting/pous/verifier", "verity/protocols/proofs/spot/verifier", "verity/runtime"]` and
+  `reaches = [those + "verity/circuits", "verity/commitments/randomness", "verity/protocols/proofs/spot/verifier/profile.py"]`.
+  - Why the loads are right: `device_needs`, `device_party` and `coin_link` moved out of `certifier/verifier/` (`certifier_device_map.toml:25-27`), whose place already loads `channel.py`, commitments, crypto, `spot/verifier` and the runtime. `certifier_key`, `load_relay` and `connection_rows_run` came from `benchmarks/network_traces` (`certifier_programs_map.toml:35-37`).
+  - The one load new to a trusted place is `load_relay.py:95` → `pous/verifier/schemes/p2`.
+- **`test_boundaries`, `NUMPY_USERS`: c.** It needs `verity/protocols/accounting/certifier/device/leak_guard.py` (numpy is optional there, with a pure-Python fallback) and `.../device/load_relay.py` (which decodes a load's values). Both moved from `benchmarks/network_traces`.
+- **Console's `nothing_outside_benchmarks_imports_it`: a false positive.** It flags `certifier/verifier/network/tests/test_lean_audit.py:44: D.build(V2.LEAN, 'network-records')`, where `D` is `verity_difftest` and `V2.LEAN` is the certifier verifier's `lean/`. The tracer matches only the names `build` and `LEAN`. After: red.
+- **Also red: `spot_never_imports_the_network_certifier_in_lean`.** The chain runs `compose/verifier/onsite/CoreOnsite.lean` → `security/Properties/Verity/Game.lean` → … → `security/Proofs/Flock/Bridge/GateARow.lean`. That is compose's and security's to cut, not ours.
+- **ROWSPROTO2's two batches: done.**
+  - `631a5baf8eb1` removes 14 entries for the deleted certifier verifier files.
+  - `81927cbf627c` removes `repo_env_reads` `network_sim/workload/run.py`, `repo_retired_terms` `network_sim/workload/hardware.py` and `device_figures` `network_sim/mockdc.py`. `lab_run.py` was already in `0343727e468b`.
+  - I have no inbox id for ROWSPROTO2; please pass this on.
+- **device_party tests: not ours, not touched.** The two failures there (`'MessageTypes' object has no attribute 'decode'`) predate this work, from `156c17ce8f9`'s area.
+
