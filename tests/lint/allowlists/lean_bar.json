@@ -9,7 +9,7 @@
     {"file": "security/Definitions/Pouw/PearlC/Fp4Vectors.lean", "rule": "long-file", "count": 1},
     {"file": "security/Definitions/Pouw/PearlC/Sm120Vectors.lean", "rule": "long-file", "count": 1},
     {"file": "security/Proofs/Accounting/Gates.lean", "rule": "long-file", "count": 1},
-    {"file": "security/Proofs/Poub/ReadUnit/Frame.lean", "rule": "module-doc", "count": 1},
+    {"file": "security/Proofs/Accounting/ReadUnit/Frame.lean", "rule": "module-doc", "count": 1},
     {"file": "security/Proofs/Core/Fp32/Vectors.lean", "rule": "long-file", "count": 1},
     {"file": "security/Proofs/Core/Prims/Vectors.lean", "rule": "long-file", "count": 1},
     {"file": "security/Proofs/Core/SamplingGeneric/FirstHit.lean", "rule": "long-file", "count": 1},

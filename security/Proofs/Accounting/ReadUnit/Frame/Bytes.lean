@@ -5,7 +5,7 @@ bit `p % 8` of byte `8 i + 7 - p / 8`, each word's bytes big-endian and each byt
 -/
 module
 
-public import Proofs.Poub.ReadUnit.Net
+public import Proofs.Accounting.ReadUnit.Net
 public import Proofs.Flock.Soundness.Discharge.Hm.Compress
 public import Flock.ReadNet.Frame
 
