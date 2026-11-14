@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from verity.protocols.accounting.certifier.verifier import parties as NC
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
@@ -194,7 +196,8 @@ CHECK = {"accepted": True, "problems": [], "summary": {
     "finish_reasons": {"length": 4}}, "connections": [{"ordinal": 1, "outcome": "end", "text_bytes": 300}]}
 #: a stand-in for `warden_serve.py rehearse`'s files: public, then witness
 WARDEN_FILES = (
-    f'(out / "deployment.json").write_text(json.dumps({{"upstream": url, "session": "00" * 32}}))\n'
+    f'(out / "deployment.json").write_text(json.dumps({{"session": "00" * 32}}))\n'
+    f'(out / "endpoints.json").write_text(json.dumps({{"upstream": url}}))\n'
     f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {{"rows": 600}}}}) + "\\n"'
     f' + json.dumps({{"refused": ["warden", "ingress", 1], "cost": {{"rows": 600}}}}) + "\\n")\n'
     f'(out / "certified.jsonl").write_text(json.dumps({{"salt_c": {SALT_C!r}, "head": {{"root": "77" * 64}}, '
@@ -242,11 +245,12 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_re
                                                                    if k != "load"}} and "load" not in end
     assert end["registrations"] == {"warden/egress/0": "ab" * 64}
     assert end["witness"] == {n: (d / A.WITNESS / n).stat().st_size for n in (
-        "deployment.json", "cells.jsonl", "certified.jsonl", "cells.salts", "requests.records", "client.json",
-        "check.json")}
+        "deployment.json", "endpoints.json", "cells.jsonl", "certified.jsonl", "cells.salts", "requests.records",
+        "client.json", "check.json")}
     assert set(end["files"]) == {"deployment.json", "cells.jsonl", "certificates.jsonl", "tunnel.log", "rehearse.log"}
     out = d / "out"
-    assert json.loads((out / "deployment.json").read_text())["upstream"] == url
+    assert json.loads((d / A.WITNESS / "endpoints.json").read_text())["upstream"] == url
+    assert not {"listen", "upstream"} & set(json.loads((out / "deployment.json").read_text()))
     assert [json.loads(x) for x in (out / "certificates.jsonl").read_text().splitlines()] == [
         {"certificate": {"digest": "cd" * 64, "signature": "ef"}}, {"refused": ["warden-fails", "egress", 1]}]
     public = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
@@ -256,6 +260,20 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_re
 
     rc, st = A.gate(["--ssh", f"status {run}"], host, certifier_active=lambda r: False)
     assert rc == 0 and json.loads(st)["end"] == end
+
+
+#: each file a warden run publishes to `out/` (`WARDEN_PUBLIC`, and `warden_outcome`'s `certificates.jsonl`) by the
+#: certifier's message that carries it to the verifier
+PUBLISHED = {"deployment.json": NC.DEPLOYMENT, "cells.jsonl": NC.REGISTRATION, "load.json": NC.LOAD,
+             "certificates.jsonl": NC.CERTIFICATE, "groups.json": NC.GROUPS}
+
+
+def test_the_certifiers_manifest_declares_exactly_the_files_a_warden_run_publishes():
+    """Every file a warden run publishes is one of the certifier's messages to the verifier, and the verifier's channel
+    carries those messages and the out side's record, nothing else."""
+    assert set(A.WARDEN_PUBLIC) | {"certificates.jsonl"} == set(PUBLISHED)
+    (to_verifier,) = (c.messages for c in NC.MANIFEST.channels if c.receiver == NC.VERIFIER)
+    assert sorted(to_verifier) == sorted({*PUBLISHED.values(), NC.OUT_RECORD})
 
 
 @pytest.mark.parametrize("argv, witness", [
@@ -568,7 +586,7 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
         return json.loads(st)
 
     assert status() == {"run": run, "request": req, "end": None, "active": True, "relay": None}
-    deployment = {"listen": ["127.0.0.1", 40003], "windows": 20, "origin_unix": 1.5, "session": "00" * 32}
+    deployment = {"windows": 20, "origin_unix": 1.5, "session": "00" * 32}
     (d / A.WITNESS).mkdir(mode=0o700)
     (d / A.WITNESS / "deployment.json").write_text(json.dumps(deployment)[:-9])
     assert status()["relay"] is None
@@ -576,7 +594,7 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
 
     seen, forwards = [], []
     files = WARDEN_FILES.replace('(out / "client.json").write_text("{}")\n', "").replace(
-        '{"upstream": url, "session": "00" * 32}', repr(deployment))
+        '{"session": "00" * 32}', repr(deployment))
     assert repr(deployment) in files and "client.json" not in files
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1,
                           tunnel_argv=lambda s, l, back: forwards.append((l, back)) or TUNNEL, up=lambda t, p: True,

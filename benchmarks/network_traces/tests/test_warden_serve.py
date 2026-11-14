@@ -723,8 +723,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
 
     clients, warden = asyncio.run(main())
     publisher.close()
-    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=windows,
-                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack,
+    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=windows, slack=warden.slack,
                                       run_id=warden.run_id)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
@@ -763,9 +762,11 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     assert s["wire_bits"]["egress"] == s["cells"]["egress"] * PARAMS.cell_bytes * 8
     assert s["data_bytes"] == {"ingress": sum(map(len, requests)), "egress": sum(map(len, responses))}
     assert "ACCEPTED: 3/3 ended" in ws.table(result)
-    assert {k: s["cell_rows"][k] for k in ("registered", "of", "rows", "row_bytes")} == \
+    assert s["cell_rows"] == \
         {"registered": 2, "of": 2, "rows": [PARAMS.window], "row_bytes": [PARAMS.lanes * PARAMS.slots * PARAMS.cell_bytes]}
-    assert s["cell_rows"]["commit_ms"]["n"] == s["cell_rows"]["sign_ms"]["n"] == 2
+    assert s["cell_timing"]["commit_ms"]["n"] == s["cell_timing"]["sign_ms"]["n"] == 2
+    assert all(sorted(json.loads(x)["cost"]) == ["row_bytes", "rows"]
+               for x in (out / "cells.jsonl").read_text().splitlines())
 
     def refused(edit) -> list[str]:
         saved = {p: p.read_bytes() for p in out.iterdir()}
@@ -810,6 +811,18 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
 
     for change in (other_root, other_salt, other_wiring_salt):
         assert "responses window 0's cells aren't registered" in refused(lambda: edit_cells(change))
+    for k in ws.TIMINGS:
+        problems = refused(lambda k=k: edit_cells(lambda lines, salts: lines[1]["cost"].update({k: 1.0})))
+        assert (f"responses window 0's registration carries the device's {k}: its timings go in {ws.CELLS_TIMING}"
+                in problems and "responses window 0's cells aren't registered" in problems)
+
+    def address(k: str) -> None:
+        dep = json.loads((out / "deployment.json").read_text())
+        (out / "deployment.json").write_text(json.dumps(dep | {k: ["127.0.0.1", 1]}))
+
+    for k in ws.ADDRESSES:
+        assert (f"the deployment holds {k}, an address: it goes in {ws.ENDPOINTS}, which is never published"
+                in refused(lambda k=k: address(k)))
 
     def forge_reason() -> None:
         (record,) = ws.read_records(out, PARAMS)["fails"]
@@ -832,6 +845,31 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     problems = refused(lambda: edit_client(lambda c: c.update(data_sha256="0" * 64)))
     assert any(p.startswith("connection 2:") and "'response_certified': False" in p for p in problems)
     assert ws.check(out)["accepted"]
+
+
+def test_the_client_connects_where_the_endpoints_file_says_and_names_its_upstream_as_the_host(tmp_path):
+    """`client` takes the listener and the endpoint from `ENDPOINTS` beside the deployment, which holds neither: its
+    request reaches that listener as cells, with the endpoint as its host."""
+    body = {"prompt": "x", "stream": True}
+    got = []
+
+    async def main() -> dict:
+        async def take(reader, writer) -> None:
+            got.append(await reader.readexactly(len(want)))
+            writer.close()
+
+        server = await asyncio.start_server(take, "127.0.0.1", 0)
+        ends = ws.endpoints_record(server.sockets[0].getsockname()[:2], ("127.0.0.1", 2))
+        (tmp_path / ws.ENDPOINTS).write_text(json.dumps(ends))
+        (tmp_path / "deployment.json").write_text(json.dumps({"params": dataclasses.asdict(PARAMS), "origin_unix": 0.0}))
+        dep = json.loads((tmp_path / "deployment.json").read_text())
+        async with server:
+            return await ws.client(dep, ws.read_endpoints(tmp_path / "deployment.json"), [{"at": 0.0, "body": body}],
+                                   tmp_path / "out", clock=lambda: 0.0)
+
+    want = cells(ws.http_request(body, "127.0.0.1:2"), PARAMS.cell_bytes)
+    doc = asyncio.run(main())
+    assert got == [want] and "error" not in doc["connections"][0]
 
 
 @pytest.mark.parametrize("process", [False, True])
@@ -1080,7 +1118,8 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
     a = ws.parser().parse_args(serve[2:])
     said = json.loads(capsys.readouterr().out.splitlines()[0])
     assert said["listening"] == list(held.getsockname())
-    assert json.loads((a.out / "deployment.json").read_text())["listen"] == list(held.getsockname())
+    assert json.loads((a.out / ws.ENDPOINTS).read_text())["listen"] == list(held.getsockname())
+    assert not set(ws.ADDRESSES) & set(json.loads((a.out / "deployment.json").read_text()))
     with socket.create_connection(held.getsockname()) as late:
         late.sendall(b"late")
         conn, _ = held.accept()

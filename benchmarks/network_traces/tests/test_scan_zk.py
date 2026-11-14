@@ -341,7 +341,7 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
                           (served.failed[w], setup.params.fails_grid)):
             pub.keep(rec, grid)
     dep = WS.deployment_record(setup.params, signer.public_key(), sz.SESSION, origin_unix=0.0, windows=windows,
-                               listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=0.025, run_id=bytes(32))
+                               slack=0.025, run_id=bytes(32))
     (out / "deployment.json").write_text(json.dumps(dep))
     return out
 

@@ -64,8 +64,7 @@ def gate_run(root: Path, *, forged: frozenset = frozenset(), missing: frozenset 
     run = root / "c-test"
     (run / "out").mkdir(parents=True)
     key = LmsKey(_key().params, lms.public_key(_key()))
-    dep = ws.deployment_record(SCAN, key, SESSION, origin_unix=ORIGIN, windows=WINDOWS, listen=("127.0.0.1", 1),
-                               upstream=("127.0.0.1", 2), slack=0.025)
+    dep = ws.deployment_record(SCAN, key, SESSION, origin_unix=ORIGIN, windows=WINDOWS, slack=0.025)
     lines = [json.dumps({"refused": [LINK, "ingress", WINDOWS - 1]})]
     for w in range(WINDOWS):
         for i, link in enumerate((LINK, FAILS)):
