@@ -91,6 +91,12 @@ UNSTATED_CORES = 24
 LEAN_MEASURED, LEAN_FAMILY, LEAN_FITTED = "measured", "family", "fitted"
 #: each source of a Lean figure as its line words it
 LEAN_SOURCES = {LEAN_MEASURED: "own", LEAN_FAMILY: "family", LEAN_FITTED: "fitted"}
+#: each source of a block type's Lean verifier seconds as its row marks it: its own statement is a measurement; its
+#: Definition's measured rate at its AND gates is modeled on a measurement of that Definition; the rate fitted over
+#: every measured statement is assumed to hold for a Definition no measurement backs
+LEAN_MARKS = {LEAN_MEASURED: "measured", LEAN_FAMILY: "modeled", LEAN_FITTED: "assumed"}
+#: the circuit file a measured statement was read from, by the statement id its record names
+LEAN_FORMS = {"verity/flock-circuit": "the unrolled circuit file", "verity/flock-circuit/tmpl": "its circuit's templates"}
 #: why a type without a record of its own takes its Lean verifier seconds by its AND gates, and what that leaves unbacked
 LEAN_SECONDS_BASIS = (
     "the Lean verifier reads and sets up a statement from its circuit file, then checks the session: the lincheck's "
@@ -200,7 +206,8 @@ class Cost:
     other end; None for a type measured at steady state), the proof server's verifier's seconds where a record holds
     them, the prover count, the host CPU cores a card and the blocks a statement held that a steady-state figure was
     measured at, the Lean verifier's seconds and the proof's bytes with where each is from (`lean_source` and
-    `proof_bytes_source`, a key of `LEAN_SOURCES`; None with no figure), and the Definition the
+    `proof_bytes_source`, a key of `LEAN_SOURCES`; None with no figure), the measured statement the seconds rest on
+    (`lean_statement`: its own, or its Definition's that prices it; None at the fitted rate), and the Definition the
     statements a steady-state figure was measured on are of, by its id (`definition`: the type's own row's, or that of
     the family's row it is scaled from; None from any other source). `sizes` is each statement size the type's own
     steady-state rows timed at its prover count and cores, as (blocks, a statement's GPU-seconds, the run or art that
@@ -222,6 +229,7 @@ class Cost:
     definition: str | None = None
     proof_bytes_source: str | None = None
     sizes: tuple[tuple[int, float, str], ...] = ()
+    lean_statement: LeanVerify | None = None
 
 
 @dataclass(frozen=True)
@@ -379,7 +387,9 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     a steady-state measurement, else why it isn't. `lean_verifier_seconds_per_token` and `proof_bytes_per_token` are
     the Lean verifier's seconds and the proof's bytes a served token, with each source's share (`_scaled`), None
     where no statement was measured, and `lean_verify` names each measured statement, the most proving time first,
-    with its block type's share of the proving time. A row's `definition` is the Definition the statements its figure was measured on are of, by its id,
+    with its block type's share of the proving time and the statement id it was read as (`form`). A row's
+    `lean_mark` is its Lean verifier seconds' source as `LEAN_MARKS` words it, and `lean_record`, `lean_definition`,
+    `lean_form` and `lean_statement_blocks` the measured statement they rest on (`_lean_statement`). A row's `definition` is the Definition the statements its figure was measured on are of, by its id,
     where the figure is from a steady-state row, the type's own or its family's; its note says which form of the
     type that Definition is. A row's `sizes` is each statement size its own steady-state rows timed (`Cost.sizes`: its
     blocks, a statement's GPU-seconds and what holds it, the pricing size first), None where they timed one."""
@@ -396,6 +406,7 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
              "cores": r.cost.cores, "statement_blocks": r.cost.blocks, "definition": r.cost.definition, "note": r.cost.note,
              "verifier_seconds": r.cost.verifier_seconds, "proof_bytes": r.cost.proof_bytes,
              "lean_verifier_seconds": r.cost.lean_seconds, "lean_source": r.cost.lean_source,
+             "lean_mark": LEAN_MARKS.get(r.cost.lean_source), **_lean_statement(r.cost.lean_statement),
              "proof_bytes_source": r.cost.proof_bytes_source,
              "sizes": [{"blocks": n, "statement_seconds": g, "record": rec} for n, g, rec in r.cost.sizes] or None,
              "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total)}
@@ -412,7 +423,7 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     lean = [{"block": r.block, "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total),
              "k_log": v.k_log, "blocks": v.blocks, "full": v.full, "seconds": list(v.seconds),
              "statement_seconds": v.statement_seconds, "proof_bytes": v.proof_bytes, "run": v.run, "host": v.host,
-             "label": v.label}
+             "label": v.label, "form": v.form}
             for r in table.rows if (v := timed.get(definition_id(r.block)))]
     steady = sources[0]["time_share"] or 0.0
     known = [r.per_token * r.macs for r in table.rows if r.macs is not None]
@@ -447,6 +458,14 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
             "planned": _planned(table, serving_seconds),
         },
     }
+
+
+def _lean_statement(v: LeanVerify | None) -> dict[str, Any]:
+    """The measured statement a row's Lean verifier seconds rest on: its run, Definition, statement id, and its
+    blocks of a full statement; each None at the fitted rate."""
+
+    return {"lean_record": v and v.run, "lean_definition": v and v.definition, "lean_form": v and v.form,
+            "lean_statement_blocks": v and [v.blocks, v.full]}
 
 
 def steady_rows(doc: Mapping[str, Any]) -> dict[str, Any]:

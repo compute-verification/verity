@@ -120,8 +120,10 @@ class LeanVerify:
     """A statement the Lean verifier accepted, as a `lean-verify` record holds it: the staged Definition (by its id),
     its `blocks` blocks of 2^k_log witness bits each where a full statement holds `full`, each run's wall seconds (a
     run is one process of the Lean verifier's `verify`: the statement read and set up, and the one session verified), the bytes
-    of the session's proof files, the run that measured it, its host as the report words it, and what the accept holds
-    (`label`, the record's own words: on the provisional unit cover the verifier compares no Program with the circuit)."""
+    of the session's proof files, the run that measured it, its host as the report words it, what the accept holds
+    (`label`, the record's own words: on the provisional unit cover the verifier compares no Program with the circuit),
+    and the statement id it was verified as (`form`: `LEAN_FORMS` words the two it knows, the unrolled circuit file
+    and its templates; None where the record names none)."""
 
     definition: str
     k_log: int
@@ -132,6 +134,7 @@ class LeanVerify:
     run: str
     host: str
     label: str
+    form: str | None = None
 
     @property
     def bits(self) -> int:
@@ -168,21 +171,25 @@ class _LeanFigure:
         sized = self.sized
         return sum(self.value(v) for v, _ in sized) / sum(n for _, n in sized) if sized else None
 
-    def prices(self) -> Callable[[Block], tuple[float, str] | None]:
-        family: dict[str, tuple[float, str]] = {}
+    def prices(self) -> Callable[[Block], tuple[float, str, LeanVerify | None] | None]:
+        """A block's figure, its source and the measured statement it rests on (None at the fitted rate)."""
+
+        family: dict[str, tuple[float, str, LeanVerify]] = {}
         for v, n in self.sized:
             name = _family(v.definition)[0]
-            family[name] = max(family.get(name, (0.0, "")), (self.value(v) / n, v.definition))
+            rate = (self.value(v) / n, v.definition, v)
+            if (old := family.get(name)) is None or rate[:2] > old[:2]:
+                family[name] = rate
         fitted = self.fitted
 
-        def price(b: Block) -> tuple[float, str] | None:
+        def price(b: Block) -> tuple[float, str, LeanVerify | None] | None:
             if (own := self.timed.get(definition_id(b.name))) is not None:
-                return self.value(own) / own.blocks, LEAN_MEASURED
+                return self.value(own) / own.blocks, LEAN_MEASURED, own
             if (n := self.size(b)) is None:
                 return None
             if kin := family.get(_family(b.name)[0]):
-                return kin[0] * n, LEAN_FAMILY
-            return None if fitted is None else (fitted * n, LEAN_FITTED)
+                return kin[0] * n, LEAN_FAMILY, kin[2]
+            return None if fitted is None else (fitted * n, LEAN_FITTED, None)
 
         return price
 
@@ -376,9 +383,9 @@ class Flock:
                     cost = replace(cost, note="; ".join(filter(None, [cost.note, *why])))
                 if steady_rate is not None and b.k_log is not None and cost.seconds is not None:
                     cost = replace(cost, at_steady_rate=steady_rate * 2**b.k_log)
-            seconds, size = seconds_of(b) or (None, None), bytes_of(b) or (None, None)
+            seconds, size = seconds_of(b) or (None, None, None), bytes_of(b) or (None, None, None)
             cost = replace(cost, lean_seconds=seconds[0], lean_source=seconds[1], proof_bytes=size[0],
-                           proof_bytes_source=size[1])
+                           proof_bytes_source=size[1], lean_statement=seconds[2])
             rows.append(Row(b.name, b.k_log, b.per_token, cost, b.macs, staged_as=tuple(sorted(names.get(spelled, ())))))
         basis = (None if steady_rate is None else
                  f"every type not measured at steady state at {self.provers} prover{'' if self.provers == 1 else 's'} "
