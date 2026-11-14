@@ -64,7 +64,7 @@ def tokensel():
 
 
 def materialise(program, q):
-    """Family + list of its sets, with the three consistency laws checked."""
+    """Family + list of its sets, with the three consistency rules checked."""
     fam = evaluate(program, q)
     sets = list(fam)
     assert fam.count() == len(sets)
