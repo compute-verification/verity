@@ -6,9 +6,13 @@ C++ compiler; the device tests need CUDA and nvcc, and skip elsewhere.  What a b
 compiler that only records it, on every machine."""
 from __future__ import annotations
 
+import ctypes
+import re
 import tempfile
 from collections import deque
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -120,14 +124,44 @@ def test_every_build_takes_its_sources_from_the_one_directory_of_pouws_prover():
     file there, the device builds' too, which only nvcc compiles and no test without it reads."""
     pytest.importorskip("torch")
     from verity.protocols.accounting.pouw import prover
-    from verity_vllm.protocols.pouw import device as PD
-    from verity_vllm.protocols.pouw.h1 import receipts
-    from verity_vllm.protocols.pouw.h1 import registered_device as RD
+
+    from verity.protocols.accounting.pouw.prover.serving import device as PD
+    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts
+    from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as RD
 
     assert D.CUDA_DIR == PD.HERE == Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
     named = {*D.DEVICE_SOURCES, *D.HOST_SOURCES, *PD.SOURCES, *PD.CUDA_SOURCES, *PD.FUSED_SOURCES, *RD.DEVICE_SOURCES,
              *RD.HOST_SOURCES, *RD.ZY_DEVICE_SOURCES, *RD.ZY_HOST_SOURCES, receipts.NOISE_CU}
     assert sorted(s for s in named if not (D.CUDA_DIR / s).is_file()) == []
+
+
+def _declared(name: str) -> list[Any]:
+    """The ctypes of ``name``'s parameters as `row_table.cu` declares them: `Args`' pointer for a ``const Args*``, a void pointer
+    for any other pointer, and the integer of the declared width."""
+    (parameters,) = re.findall(rf'extern "C" int {name}\(([^)]*)\)', (D.CUDA_DIR / "row_table.cu").read_text())
+    kinds = [" ".join(p.split()).rsplit(" ", 1)[0] for p in parameters.split(",")]
+    integers = {"uint64_t": ctypes.c_uint64, "uint32_t": ctypes.c_uint32}
+    return [ctypes.POINTER(D.Args) if k == "const Args*" else ctypes.c_void_p if k.endswith("*") else integers[k] for k in kinds]
+
+
+def test_the_device_build_is_called_as_its_source_declares_it(monkeypatch):
+    """`device_lib` builds `DEVICE_SOURCES` with nvcc for the architecture it is given, and gives ``rt_midstates`` and ``rt_step``
+    the arguments `row_table.cu` declares for them and an ``int`` to return.  A stand-in is the compiler and the library it
+    builds, so nothing is compiled and the test runs without CUDA."""
+    handed: list[tuple[Any, ...]] = []
+    lib: Any = SimpleNamespace(rt_midstates=SimpleNamespace(), rt_step=SimpleNamespace())
+
+    def build(*given: Any) -> Any:
+        handed.append(given)
+        return lib
+
+    monkeypatch.setattr(D, "nvcc", lambda: "an-nvcc")
+    monkeypatch.setattr(D, "_build", build)
+    assert D.device_lib.__wrapped__("90") is lib
+    assert handed == [("an-nvcc", D.DEVICE_SOURCES, (*D.NVCC_FLAGS, "-gencode=arch=compute_90,code=sm_90"), "librow_table_cuda.so")]
+    for name in ("rt_midstates", "rt_step"):
+        kernel = getattr(lib, name)
+        assert list(kernel.argtypes) == _declared(name) and kernel.restype is ctypes.c_int
 
 
 def _cuda():

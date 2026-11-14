@@ -84,7 +84,7 @@ section outer
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
 
 /-- **An accepted outer proof**: at the history `(R, ω, t)` and registration `R₂`, every session's outcome
-`flock-verify --zk --registered` accepts and every session's value layer is `Good`, no two sessions' registrant
+`verity-verify-proof --zk --registered` accepts and every session's value layer is `Good`, no two sessions' registrant
 records clash there (`RegColl`), and each session's record is a genuine session-game outcome: one its game reaches
 against `τ j` (`Game.Outcome`; `VBridgeOff RegColl`'s premise). -/
 def Accepted (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')

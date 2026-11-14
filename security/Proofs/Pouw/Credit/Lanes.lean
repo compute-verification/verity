@@ -44,7 +44,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.Period.Accept
 
 /-!
-# The lanes window's strata and law
+# The lanes window's strata and sampling design
 
 The compiled `strata` and `law` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the
 sample's structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as

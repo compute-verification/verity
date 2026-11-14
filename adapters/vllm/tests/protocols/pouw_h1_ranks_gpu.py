@@ -110,8 +110,7 @@ def _w_edit(worker: Any, kind: str, tp: int) -> dict[str, Any] | None:
         edit = GPU.editor(GPU.EXPERT_NEGATIVE)
     else:
         codes = _edit_of(kind)
-        edit = lambda _layer, xq: codes(xq)  # noqa: E731
-        edit.at = None
+        edit = GPU.Edit(lambda _layer, xq: codes(xq))
     hooks = Hooks(tag=f"roots1-{kind}-tp{tp}")
     for m in layers:
         hooks.wrap(m.quant_method, "observe", lambda orig: GPU.edited(orig, edit))
@@ -143,9 +142,9 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
     kind) on rank ``--edit-tp`` when given, held to core's ROOTS1 steps (`pouw_h1_gpu.core_tie`) once released. Its
     Program is declared at its first call and kept in ``program`` for the next window."""
     from tests.protocols import pouw_h1_gpu as GPU
-    from verity_vllm.protocols.pouw.h1 import ranks as PHR
-    from verity_vllm.protocols.pouw.h1 import requests as RQ
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity_vllm.protocols.pouw import h1_ranks as PHR
+    from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
     tag, tdir = f"[tp{a.tp} {name}]", out / name
     tdir.mkdir(parents=True, exist_ok=True)
     served = SV.Served(window=os.urandom(64), **program)
@@ -205,8 +204,8 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
         tokens_digest,
     )
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.protocols.pouw import h1 as PH
-    from verity_vllm.protocols.pouw.h1 import requests as RQ
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 
     decl, out = declared_of(a), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -231,7 +230,7 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
             from vllm import LLM
 
             from verity_vllm.engine.build import engine_kwargs_for
-            from verity_vllm.protocols.pouw.h1 import ranks as PHR
+            from verity_vllm.protocols.pouw import h1_ranks as PHR
             kw, _env, cp = engine_kwargs_for(cps, max_num_seqs=max_num_seqs, case=a.role, target=target, engine_args={
                 **args, "pipeline_parallel_size": a.pp, "tensor_parallel_size": a.tp, "distributed_executor_backend": "mp",
                 "worker_extension_cls": PHR.COMMIT_EXTENSION if a.commit else PHR.EXTENSION, "async_scheduling": a.async_scheduling})
@@ -313,7 +312,7 @@ def macs(shapes: list[list[int]]) -> int:
 
 def compare(one: Path, other: Path) -> dict[str, Any]:
     """`one` (one GPU) and `other` (TP N × PP M) held to each other: tokens, calls, layouts and, at one TP, commitments."""
-    from verity_vllm.protocols.pouw.h1 import CALLS_FILE
+    from verity.protocols.accounting.pouw.prover.serving.h1 import CALLS_FILE
     a, b = (json.loads((d / SUMMARY).read_text()) for d in (one, other))
     ca, cb = (json.loads((d / CALLS_FILE).read_text()) for d in (one, other))
     tps = [a.get("tp", 1), b.get("tp", 1)]

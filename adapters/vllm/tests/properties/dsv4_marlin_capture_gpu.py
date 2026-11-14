@@ -2,7 +2,7 @@
 `marlin_moe.MarlinMoeExpertGemm(W)_v1` (and through them `MarlinMoeSchedule_v1`, `MarlinMxfp4Coordinate(W)_v1`) to the two
 `ops.moe_wna16_marlin_gemm` launches of `fused_marlin_moe` at one TP8 rank's shapes (E = 384, top_k 6, hidden 7168, I = 384).
 
-One GPU process writes `<out>/dsv4_marlin_capture.json`, the property record `dsv4_marlin_capture` (`properties.record`), and prints
+One GPU process writes `<out>/dsv4_marlin_capture.json`, the property record `dsv4_marlin_capture` (`records.property_record`), and prints
 one line per case and then `DSV4-MARLIN GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else
 runs when it fails (exit 3).  A phase that raises records its error and fails the verdict without stopping the others.
 
@@ -144,7 +144,7 @@ from tests.properties.glm53_block_fp8_capture_gpu import (
     _u16,
     _u32,
 )
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-marlin-capture/v3"
 RECORD = "dsv4_marlin_capture.json"
@@ -807,7 +807,7 @@ def last_cuda_error() -> int | None:
     return None if lib is None else int(ctypes.CDLL(lib).cudaGetLastError())
 
 
-def forced_launches(work: Path, W: dict[str, Any], cap: dict[str, Any], sms: int,
+def forced_launches(work: Path, W: dict[str, Any], captured_launch: dict[str, Any], sms: int,
                     seed: int) -> tuple[list[dict], list[dict], dict[str, Any]]:
     """One captured launch again at every candidate config of its moe block (`candidates`), forced, on the probe input into a
     SENTINEL-filled output; returns (records, specs, the probe's record: its row shifts and the accepted configs grouped by identical
@@ -820,19 +820,19 @@ def forced_launches(work: Path, W: dict[str, Any], cap: dict[str, Any], sms: int
         marlin_make_workspace_new,
     )
 
-    kind, L = cap["launch"], cap["L"]
+    kind, L = captured_launch["launch"], captured_launch["L"]
     K, N = shape(kind)
     tk_ = launch_top_k(kind)
     w = _load(W["paths"][kind])
-    xs, shifts = probe(np.random.default_rng(seed), [cap["e"][r * tk_:(r + 1) * tk_] for r in range(cap["e"].size // tk_)], w["wq"], w["ws"])
+    xs, shifts = probe(np.random.default_rng(seed), [captured_launch["e"][r * tk_:(r + 1) * tk_] for r in range(captured_launch["e"].size // tk_)], w["wq"], w["ws"])
     if list(xs.shape) != list(L["input"].shape):
         raise RuntimeError(f"probe {list(xs.shape)} for input {list(L['input'].shape)}")
     x = torch.from_numpy(xs.view(np.int16)).to(L["input"].device).view(torch.bfloat16)
     classes: dict[str, list[list[int]]]
     launches, specs, classes = [], [], {}
-    for tk, tn, b in candidates(moe_block_size_of(cap["M"])):
+    for tk, tn, b in candidates(moe_block_size_of(captured_launch["M"])):
         out = torch.full_like(L["output"].view(torch.int16), SENTINEL).view(torch.bfloat16)
-        rec = {"phase": "forced", "case": cap["case"], "launch": kind, "M": cap["M"], "config": [tk, tn, b], "pairs": int(out.shape[0]),
+        rec = {"phase": "forced", "case": captured_launch["case"], "launch": kind, "M": captured_launch["M"], "config": [tk, tn, b], "pairs": int(out.shape[0]),
                "K": K, "N": N, "refused": None}
         last_cuda_error()
         try:
@@ -852,13 +852,13 @@ def forced_launches(work: Path, W: dict[str, Any], cap: dict[str, Any], sms: int
             words = _u16(out)
             rec["nonfinite"] = int(((words & 0x7F80) == 0x7F80).sum())
             classes.setdefault(hashlib.sha256(words.tobytes()).hexdigest(), []).append([tk, tn, b])
-            specs.append({"phase": "forced", "case": cap["case"], "launch": kind, "config": [tk, tn, b], "statics": [tk, tn, sms * b],
-                          "M": cap["M"], "K": K, "N": N, "E": NUM_EXPERTS, "top_k": tk_, "pairs": rec["pairs"],
-                          "par": cap["par"], "weights": W["paths"][kind],
-                          "paths": _save(work / f"forced_{cap['case']}_{kind}_{tk}_{tn}_{b}",
-                                         **_launch_arrays({**L, "input": x, "output": out}, cap["blk"], cap["e"], kind))})
+            specs.append({"phase": "forced", "case": captured_launch["case"], "launch": kind, "config": [tk, tn, b], "statics": [tk, tn, sms * b],
+                          "M": captured_launch["M"], "K": K, "N": N, "E": NUM_EXPERTS, "top_k": tk_, "pairs": rec["pairs"],
+                          "par": captured_launch["par"], "weights": W["paths"][kind],
+                          "paths": _save(work / f"forced_{captured_launch['case']}_{kind}_{tk}_{tn}_{b}",
+                                         **_launch_arrays({**L, "input": x, "output": out}, captured_launch["blk"], captured_launch["e"], kind))})
     accepted = sum(r["accepted"] for r in launches)
-    probe_rec = {"case": cap["case"], "launch": kind, "shifts": shifts, "accepted": accepted, "classes": list(classes.values()),
+    probe_rec = {"case": captured_launch["case"], "launch": kind, "shifts": shifts, "accepted": accepted, "classes": list(classes.values()),
                  "ok": accepted < 2 or len(classes) > 1}
     return launches, specs, probe_rec
 
@@ -1142,12 +1142,12 @@ def gpu_phases(doc: dict[str, Any], work: Path, sms: int, quick: bool, forced: b
     specs, captured = [], []
     for _, name, M, pool in picked:
         try:
-            records, sp, cap = case_launches(work, name, M, pool, routed[name], launches, W, sms, types)
+            records, sp, case_captures = case_launches(work, name, M, pool, routed[name], launches, W, sms, types)
         except Exception as e:  # noqa: BLE001
             doc["errors"][f"case/{name}"] = _error(e)
             _say(f"auto {name} ERROR {doc['errors'][f'case/{name}'][:600]}")
             continue
-        for x, c in zip(records, cap):
+        for x, c in zip(records, case_captures):
             try:
                 x["replay_ok"] = replay(c["L"])
             except Exception as e:  # noqa: BLE001
@@ -1155,7 +1155,7 @@ def gpu_phases(doc: dict[str, Any], work: Path, sms: int, quick: bool, forced: b
                 doc["errors"][f"case/{name}/replay/{x['launch']}"] = _error(e)
         doc["launches"] += records
         specs += sp
-        captured += [c for c in cap if forced and name in (QUICK_FORCED if quick else FORCED)]
+        captured += [c for c in case_captures if forced and name in (QUICK_FORCED if quick else FORCED)]
         for x in records:
             _say(f"auto {name:10s} {x['launch']:3s} M={M:4d} block={x['moe_block']:2d} pairs={x['pairs']:4d} par={x['par']:4d} "
                  f"experts={x['experts_used']:3d} "
@@ -1163,18 +1163,18 @@ def gpu_phases(doc: dict[str, Any], work: Path, sms: int, quick: bool, forced: b
                  f"assignment={x['assignment_ok']} kernel={x['config']} kernel_ok={x['kernel_ok']}")
     forced_specs = []
     doc["probe"] = {}
-    for j, cap in enumerate(captured):
-        key = f"case/{cap['case']}/forced/{cap['launch']}"
+    for j, captured_launch in enumerate(captured):
+        key = f"case/{captured_launch['case']}/forced/{captured_launch['launch']}"
         try:
-            records, sp, pr = forced_launches(work, W, cap, sms, 13_000 + j)
+            records, sp, pr = forced_launches(work, W, captured_launch, sms, 13_000 + j)
         except Exception as e:  # noqa: BLE001
             doc["errors"][key] = _error(e)
-            _say(f"forced {cap['case']} {cap['launch']} ERROR {doc['errors'][key][:600]}")
+            _say(f"forced {captured_launch['case']} {captured_launch['launch']} ERROR {doc['errors'][key][:600]}")
             continue
         doc["launches"] += records
-        doc["probe"][f"{cap['case']}/{cap['launch']}"] = pr
+        doc["probe"][f"{captured_launch['case']}/{captured_launch['launch']}"] = pr
         forced_specs += sp
-        _say(f"forced {cap['case']:9s} {cap['launch']:3s} accepted={[x['config'] for x in records if x['accepted']]} "
+        _say(f"forced {captured_launch['case']:9s} {captured_launch['launch']:3s} accepted={[x['config'] for x in records if x['accepted']]} "
              f"refused={[x['config'] for x in records if not x['accepted']]} probe classes={pr['classes']} shifts={pr['shifts']}")
     return specs, forced_specs
 

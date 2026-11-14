@@ -408,6 +408,16 @@ def _match_account(tmp_path, *, served=None, tj_lag=1, gm_verdict="PASS", g6_len
     return str(row / "match")
 
 
+def _linked_facts(tmp_path, rid: str = "r0") -> dict:
+    """The facts of record the Commit hands the population for one request of the mixed-stop record, linked to its Match account:
+    r0 served eleven tokens of thirty-two, the last a declared EOS, under LAG 1; r1 served all thirty-two."""
+    e = _mixed_epr()
+    link = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
+    facts = EP.executed_prefix_facts(e, {"coverage": COVERED | {"match_account_link": link}}, {"result": True}, {"r0": 0, "r1": 0},
+                                     {"eos": [EOS], "lag": 1, "declared_lag": 1})
+    return EP.facts_accepted_by(POP.executed_prefix_of_record, facts)[rid]
+
+
 def test_a_reduced_prefix_is_accepted_only_linked_to_the_match_account_of_the_same_attempt(tmp_path):
     """The Commit's served count is linked: tokens.json served == Commit served, the same two lengths, GM-01 PASS, G6 agrees."""
     e = _mixed_epr()
@@ -514,3 +524,21 @@ def test_an_attention_rows_stratum_key_reads_its_statics_as_int_reads_them():
         assert key(bn) == f"Attention_v3{{T=20,NH=32,KVH=8,D=64,BN={bn}}}"
     for fam, spec in (("Gemm_v1", "Gemm_v1{K=4,N=8}"), ("Attention_v3", "Attention_v3{T=20,NH=32}"), ("Attention_v3", "Attention_v3{NH=32,BN=16}")):
         assert POP._stratum_spec(fam, spec, RM.spec_statics(spec)) == spec          # no rows of blocks, or a spec that states no T or no BN
+
+
+def test_a_served_list_of_another_length_than_the_record_s_faults_and_the_rule_s_count_over_it_is_not_taken(tmp_path):
+    """Ten served tokens, the last the EOS, beside a record that says eleven were served: the rule finds nothing wrong with the
+    list it is handed and counts eleven executed steps over it; the arithmetic over the record's length counts twelve."""
+    facts = _linked_facts(tmp_path)
+
+    def prefix(served: int) -> dict:
+        return POP.executed_prefix_of_record("r0", **facts, served=_served({"r0": served}, {"r0"})["r0"], eos_ids=[EOS])
+
+    other = prefix(10)
+    assert other["by_rule"]["problems"] == [] and other["by_rule"]["executed_prefix_len"] == 11
+    assert other["faults"] == [f"served list of 10 token(s) != a_r 11 ({facts['a_r_source']}): the recurrence would run over another prefix than the record's"]
+    assert (other["n_exec"], other["steps_not_executed"], other["r3_one_mechanism"]) == (12, [12, 32], False)
+    assert other["mechanism"] == "not classified: 1 fault(s) -- the class is not applicable to this request"
+    same = prefix(11)
+    assert (same["faults"], same["n_exec"], same["steps_not_executed"], same["r3_one_mechanism"]) == ([], 12, [12, 32], True)
+    assert same["mechanism"] == POP.MECH_RECURRENCE

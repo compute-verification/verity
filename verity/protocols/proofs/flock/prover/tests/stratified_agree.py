@@ -2,18 +2,18 @@
 
 For each program (A4 P6's six-template population, as core's sample test builds it, and small and random programs):
 
-- the sampling design: `flock-verify draw --program P --partition Q --stratified K` against `draw.derive`, and the population against
+- the sampling design: `verity-verify-proof draw --program P --partition Q --stratified K` against `draw.derive`, and the population against
   `partition.units`;
 - the units on a given stream: against `reference_draw`, the sampler of record written out here (each stratum's
   `subset k_s n_s` on its own segment of `2 k_s · width(n_s) + 64` bytes, local index j to the stratum's j-th unit);
 - the sample: `draw.check_draw` accepts it, from a given stream and from the operating system's randomness;
-- U2: `flock-verify draw-test` with the stratified flags against `draw.check_draw` on mutations of an accepted sample;
-- one sample over J = 2 and 3 tables: `flock-verify draw --tables J` against `draw.tables_problem`, the same sample where both
+- U2: `verity-verify-proof draw-test` with the stratified flags against `draw.check_draw` on mutations of an accepted sample;
+- one sample over J = 2 and 3 tables: `verity-verify-proof draw --tables J` against `draw.tables_problem`, the same sample where both
   take it and the same refusal where both refuse;
 - on a small program, each unit's inclusion frequency over samples on fresh streams from the operating system against
   `k_s / n_s`; given no stream, Lean samples only a sampling design of every unit and refuses any other (the verifier has no coins of
   its own);
-- A4's law as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
+- A4's sampling design as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
 
 Needs core's stratified sample on PYTHONPATH (the repository root). Prints one JSON line; exit 0 iff
 everything agrees.

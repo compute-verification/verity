@@ -2,7 +2,7 @@
 which runs before its check (`vqueue.Build.records`), and the records commit made of it.
 
 The run is a lock run (`Landing.launch_locks`: `train.sh SHA MACHINES --deferred lean-audit`, its check at
-`POSTLAND_SLOT_RANK`, its lean-audit regenerating each lock record it finds stale, with `--bookkeeping-warn` where train.sh
+`AFTER_LANDING_SLOT_RANK`, its lean-audit regenerating each lock record it finds stale, with `--bookkeeping-warn` where train.sh
 takes it), on the queue's machines (`Landing.on`), judged by `lock_outcome`: one its machine failed (lost, killed, out of disk
 or memory, its Lean pool closed: `machine_fault`) runs again once on the other machines (`resend_locks`); one that registered
 no run, never ran or was stopped is infra, which the loop launches again once; one that failed refuses.  A passed run passes

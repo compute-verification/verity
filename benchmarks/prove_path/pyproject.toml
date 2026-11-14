@@ -29,9 +29,11 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
           # the network certifier's run the certifier piece kept, which window-commit's scan reads (`kept_scan`):
-          # certifier_piece and warden_chain, what they import, and the site.json and host.json that served_session and
-          # auditor read on import; and serve.py, which the challenger's ledgers test_records_audit signs with auditor read
+          # certifier_piece and warden_chain, what they import, and the site.json, settings.py and host.json that
+          # served_session and auditor read on import; and serve.py, which the challenger's ledgers test_records_audit
+          # signs with auditor read
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
+          "benchmarks/network_traces/settings.py",
           "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/certifier_serve.py",
           "benchmarks/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py",
           "benchmarks/network_traces/connection_rows_run.py",
@@ -42,7 +44,7 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network
           # Pearl+'s verdict, whose W check (`verify_run.tie`) test_pearltie runs on its toy's passes: verify_run, what it
           # imports, and the settings registry it loads (`verity_config.settings.of`, which finds it beside pouw's pyproject)
           "benchmarks/pouw/pearl_c_vllm/verify_run.py", "benchmarks/pouw/pearl_c_vllm/fast_tile.py",
-          "verity/protocols/accounting/pouw/clear", "benchmarks/pouw/settings.py", "benchmarks/pouw/pyproject.toml",
+          "verity/protocols/accounting/pouw/prover/clear", "benchmarks/pouw/settings.py", "benchmarks/pouw/pyproject.toml",
           "tools/config/verity_config",
           # verity_difftest, which test_prove_path imports: under `verity` until the difftest map moved it
           "tools/difftest"]

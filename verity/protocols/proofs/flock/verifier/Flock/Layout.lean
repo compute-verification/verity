@@ -434,7 +434,7 @@ def checkFile (j : Json) : V (Array String × Array Nat) := do
   let sizes ← check types ls (← J.nat j "unit_layout" ctx) info
   return (← ls.mapM digest, sizes)
 
-/-- `flock-verify layout FILE...`: one line `LAYOUT {"file", "ok", "digests", "sizes" | "error"}` per archive. -/
+/-- `verity-verify-proof layout FILE...`: one line `LAYOUT {"file", "ok", "digests", "sizes" | "error"}` per archive. -/
 def cmd (paths : List String) : IO UInt32 := do
   for path in paths do
     let text ← try IO.FS.readFile path catch _ => pure ""

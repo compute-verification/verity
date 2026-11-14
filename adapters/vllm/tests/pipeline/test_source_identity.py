@@ -22,10 +22,11 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from research import pythonpath as rpp
 from research.telemetry import source_identity as gsid
-from verity_vllm import config as vconfig, settings as vsettings
+
+from verity_vllm import config as vconfig
+from verity_vllm import settings as vsettings
 from verity_vllm.pipeline import cli as vcli
 from verity_vllm.pipeline import research_tools
 from verity_vllm.pipeline import source_identity as sid
@@ -196,7 +197,9 @@ def _from_harness_tool(rec: dict) -> bool:
     PYTHONPATH), not from the tree under test."""
     snap = os.environ.get("RESEARCH_TOOL_SNAPSHOT")
     path = rec.get("resolved_path")
-    return bool(snap and path) and any(p.name == snap and p.parent.name == "tool" for p in Path(path).parents)
+    if not snap or not path:
+        return False
+    return any(p.name == snap and p.parent.name == "tool" for p in Path(path).parents)
 
 
 def test_only_researchs_copy_in_the_harness_tool_snapshot_is_left_out(monkeypatch):
@@ -226,7 +229,7 @@ def test_repo_root_resolution_prefers_export_json_then_git_then_markers(tmp_path
     shipped = tmp_path / "shipped"
     (shipped / "adapters" / "vllm" / "verity_vllm" / "ops").mkdir(parents=True)
     (shipped / "EXPORT.json").write_text(json.dumps({"commit": "a" * 40, "dirty_patch_sha256": "b" * 64, "branch": "x"}))
-    assert gsid.repo_root_of(shipped / "integrations" / "vllm" / "verity_vllm" / "ops" / "f.py") == str(shipped.resolve())
+    assert gsid.repo_root_of(shipped / "adapters" / "vllm" / "verity_vllm" / "ops" / "f.py") == str(shipped.resolve())
     ident = gsid.tree_identity(str(shipped))
     assert ident == {"git_sha": "a" * 40, "git_sha_source": "EXPORT.json", "dirty_patch_sha256": "b" * 64, "branch": "x"}
     assert gsid.repo_root_of(Path(sid.__file__)) == os.path.realpath(REPO)   # .git (worktree file or dir) at the REPO root, not adapters/vllm

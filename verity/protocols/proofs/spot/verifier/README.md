@@ -33,7 +33,7 @@ configs, Definitions) or advice charged at its width. A value the served hardwar
 atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
 or it is advice.
 
-Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The sample samples replay blocks.
+Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The first stage samples replay blocks.
 The proof server replays them and sends the verifier their interior registration (`Interior`). Once it is in, the
 verifier samples the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
 blocks, one session a template, and the verifier audits both stages.
@@ -51,7 +51,7 @@ Its guarantee is soundness, and it rests on:
 - an honest verifier: the challenger flips its coins after the registration is recorded and logs them, the verifier
   reads that log and the record the challenger wrote (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`,
   `RecordCustodyZKJ`), and it runs the Lean verifier;
-- where it reads the certifier's stamp, the certifier's own assumptions, which that layer states (`trusted-host` among
+- where it reads the certifier's stamp, the certifier's own assumptions, which that layer states (`trusted-device` among
   them, `verity/protocols/accounting/certifier/verifier/PROTOCOL.md`).
 
 ## Guarantee and assumptions
@@ -60,7 +60,7 @@ The guarantee is knowledge soundness of the sampled audit: except with a bounded
 accepts, at most the profile's count of proof blocks are incorrect. Its top statement is Flock's
 `Flock.Guarantees.SampledKSLiveV3`, stated in `security/Proofs/Flock/Bridge/ScopeGate.lean` and proved in
 `security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
-that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
+that `verity-verify-proof --zk` accepts the files and the run passes the registration's population while the claim fails. It
 covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
 (`Bridge.SampledKSLiveV5` and those behind it) read the file through `Flock.Desc.parseStmt`, so they also cover templated
 statements (`Flock.Tags.templated`, whose acceptance `flock_verify_sound` covers), at the circuit `HmOut.unrolled`
@@ -70,7 +70,7 @@ the last two taken at the collision finders the proof builds from the prover (`T
 unfold to them), and `RecordCustodyZKJPLaw` (read as `RecordCustodyZKJ`) in
 `security/Proofs/Flock/Soundness/Assumptions/ZkP.lean`.
 
-In the one-stage form, v2's verdicts are its own run of `flock-verify verify --zk` on the sessions' files, which come
+In the one-stage form, v2's verdicts are its own run of `verity-verify-proof verify --zk` on the sessions' files, which come
 in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
 carries a composite's acceptance to `SampledKSLiveV3`'s event.
 
@@ -135,7 +135,13 @@ Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
 refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
 block returns is read only at the boundary record's port for it: an interior registration that registers a value of
-that name is refused (`second-return`).
+that name is refused (`second-return`). It refuses an interior registration that registers a value the verifier
+doesn't hold, unless the value is the opened row of a read against a table round 1's record registers (its root and
+domain id those of one port of that record, its leaves the read's rows), at a key that is a port of that record or a
+value the verifier holds, its verdict held to 1 (`second-inputs`): any other is the prover's choice after the first
+stage's sample. A read is a template the auditor's params record as one (`"read": {"V", "H"}` beside its circuit
+file's SHA-512, `template_reads`): the record that `flock-read-tmpl check V H` accepted that file, made where the
+params are; round 2 runs no template check.
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
@@ -153,7 +159,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Flock/Soundness/Audit/`,
   whose `README.md` lists every theorem; `Audit/Flock*.lean` instantiate them for Flock.
   The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`).
-- **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`flock-verify draw`): the
+- **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`verity-verify-proof draw`): the
   samplers, the strata and sizes, the sample object and its checks U1 to U3. Soundness's `ExecDraw.lean`,
   `ExecStratified.lean` and `ExecDrawOS.lean` prove that its samples accept incorrect proof blocks no more often than the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
@@ -186,9 +192,38 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   and its `refusal` (`Spot/MembersRefusal.lean`, `one_stage.members.refusal`) why the audit's check refuses it, each as
   its module's docstring says; the refusal accepts nothing and never
   exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
-  (`one_stage.closing`, `challenger.members_tree_reason`).
+  (`one_stage.closing`, `challenger.members_tree_reason`). The parameters may name the members' wiring beside them
+  (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and the check then holds
+  every wired row of every unit of the sample to its writer's output row in the members' public files
+  (`OneStageZk.wiresHeld`, the `members_wires` piece); `one_stage.members` leaves a wiring `Outside`.
+- **A monitoring period's sessions in the auditor's ledger** (`Spot/MonitoringPeriod.lean`, Lean only; the Python it is held
+  to is a reference in `lean/tests/test_period_difftest.py`): from the ledger's signed lines, under the auditor's
+  challenger key, every session of a lane that the ledger opens on a root during a monitoring period, whatever its
+  layout (`sessionsOf`), and of those the windows, the sessions whose layout holds the sample's family (`windowsOf`),
+  with the lane's other sessions beside them. The monitoring period is a run of the ledger's entries, from the first
+  stamped at or after its start to the first stamped at or after its stop, so monitoring periods that follow one
+  another split the entries exactly whatever the stamps say. It refuses a ledger that does not reach the stop, a
+  window in no period of the lane, a period left open or listing a session that is no window, a reserve never opened
+  and a window that has not ended. It reads the ledger only: no window is audited here.
+- **SPOT's monitoring period** (`Spot/MonitoringPeriodAudit.lean`, `verity/sampled-proofs/period/v1`, Lean only, with the same
+  reference): the check that every window of a lane's monitoring period passed the one-stage audit on its proofs
+  (`OneStageZk`), on the one sample its challenger session gave it. Its commitment is the auditor's ledger; its
+  evidence is the host's pins log and, for each window, the session's files and one case. The verifier's parameters
+  are the period's alone, this registration's circuit among them, the SHA-512 a period of the lane commits when the
+  ledger opens it: a case supplies its registration's public file's digest and its sample's segment, and
+  nothing else of what one-stage reads. Only a window of one registration passes: the check reads the roots of every
+  family the window's session reserved, and a session whose signed log shows a second commitment in any of them
+  (another rank's or a second stage's in a family of its own, or the sample's family's second) is refused until the
+  check audits each, as is a public file that shares rows among members. Every window's period commits this
+  registration's circuit, and a session of the lane that holds no coin of the family is refused unless a period
+  that commits another circuit lists it: a root committed under this registration and never sampled refuses the
+  period. It publishes each window with the registration audited and each session of the lane that is another
+  registration's, by that registration's circuit and its session alone, of which it holds nothing. Its executable
+  is `spot-monitoring-period` (`id`, `check PARAMS COMMITMENT EVIDENCE [BLOB ...]`, `serve`); nothing calls it yet
+  but its difftest. What its accept means is stated in `security/Properties/Spot/MonitoringPeriod.lean`, and whose ledger it
+  reads in `security/Properties/Spot/MonitoringPeriodLedger.lean`.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
-  label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
+  label and index, each opened once, after its root is recorded. On the auditor device its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/protocols/compose/device/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
   as the far end of that coin link (`verity/protocols/compose/device/live_challenger/coin_link.py`).
@@ -202,11 +237,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   - `CoinsConfidential` is `Pouw.Assumptions.CoinsConfidential` (`security/Definitions/Pouw/Assumptions/Dither.lean`,
     in the lock), whose docstring is its statement, and ACCEL's pooled guarantee
     `Pouw.Guarantees.Dither.FleetSound` takes it. A path across a host the developer controls would need an encrypted,
-    authenticated channel, which the challenger doesn't have. Deployed, one auditor host runs the challenger and the
+    authenticated channel, which the challenger doesn't have. Deployed, one auditor device runs the challenger and the
     certifier, and a run's coins leave it only on the peer's certifier coin link, which the gate refuses to open
     without (`auditor.coin_ports`).
-  - `OneClock`, an assumption under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
-    ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
+  - `OneClock`, an assumption under the trusted auditor device, with no Lean statement yet: the challenger's release times and the certifier's
+    ingress and receipt times are read on one clock. Deployed, that is the auditor device's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.protocols.proofs.spot.verifier.one_stage` is the one-stage audit's reference and `service` the
   proof system over it; `optimize`, `candidates` and `costfit` plan a sampling design (`benchmarks/sampling_plan`).
@@ -277,7 +312,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   `check_verdicts` is given the service's Python verdict.
 - `proofs`: the proof system's own run of Flock's Lean verifier on a statement's proof files (`Proof`:
   circuit file, public file, sessions): `verify` refuses a circuit file other than the one the auditor committed, runs
-  `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
+  `verity-verify-proof verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `parties`: SPOT[Flock]'s `InferenceServer`, `ProofServer` and `SpotVerifier` (`SPOT_MANIFEST`, `SPOT_PROTOCOL`,
@@ -285,6 +320,9 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   `SPOT_TWO_PROTOCOL`), the core deployment's `Firewall`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
   the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
+- `window_place`: `of`, `family` and `run`, the place a registration record's window names in its window's session, the
+  family of challenges of that place and the root the session opens on; a stream holds a sample's challenger source
+  to that family.
 - `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's sample from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a sample's coins from one family of the auditor's
   challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
@@ -293,8 +331,8 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`. Its two modes (`CostModel.commit_weight`, `PROVING_ONLY`) and its prices of
-  n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the laws of
-  the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
+  n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the sampling designs
+  of the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
   in a public size class (`verity.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
 - `costfit`: Flock's cost model fitted from measurements, as a cost-model/v1 record.
@@ -356,12 +394,13 @@ A program's weights, constants and tables are values: committed once, under hidi
   port that reads a registered input of the verifier's own program is ever bound, and nor is any port the window's
   registered circuit record declares registered for the statement's template (its registered reads, table reads and
   openings' verdicts, outputs included: `RegBound.declaredOf`), which must be a registered port of the file. A file
-  that binds ports is verified with that record (`flock-verify --interface`), and refused without it.
+  that binds ports is verified with that record (`verity-verify-proof --interface`), and refused without it.
 - **Served trees.** A served path registers each tree a proof block reads as a registered value. `served.register_served`
   returns a `ServedRegistration`: the record's entries, R7's copies and the `--registered` file. That registration is the
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.
 - **The audit record** holds the roots the verifier opened the reads against (`audit.session_registered`, Lean
-  `Record.sessionRegistered`) to the registration's own (`Record.ownRegistered`).
+  `Record.sessionRegistered`) to the registration's own (`Record.ownRegistered`), taking a read named by one of its
+  own ports at that port's root (`audit.less_own_reads`, `Record.lessOwnReads`) and refusing it at any other.
 
 Pinned by `tests/test_registered.py`, `tests/test_served.py` and `verity/protocols/proofs/flock/prover/tests/test_lean_registered_reads.py`.
 
@@ -450,7 +489,17 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   `sessions` being the session records' SHA-512 and `verdict` the verifier's digest (a list when the sampled
   proof blocks were proved in several sessions). Its ε terms come from the soundness analysis, not from the run, so the run leaves them null.
 
-Pinned by `tests/test_one_stage.py` (the profile, audit record and incorrect-block bound tests, under each sampling design).
+One-stage's answer of an accepted record (`audit.answer`, as Lean's `OneStage.check` gives it) publishes `{"bound",
+"complete", "per_template", "proved"}` and the sample's units under the integrity profile's key for them. `complete`
+is the record's own: whether every verdict ran. An accept waits on the verdicts of record and on those that ran, so an
+accept can say `complete` is false, and then a verdict that is not of record did not run. A reader that wants a
+complete audit reads `audit.answer_complete`, never the verdict alone: it is true only of an accept whose `complete`
+is true, so an answer without the field (one written before it, a reject, an undecided) is not complete. A two-stage
+outcome says it only under `second_stage.complete`: the two-stage form allowed, the replay block the registered
+request Definition, and each audit record accepted and complete.
+
+Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
+sampling design).
 
 ### The consumers
 
@@ -517,10 +566,12 @@ commitment, and concatenates them, with no stretch. A rerun's extension opens on
 sampled once. The record is each `Segment` (family, first index, `after` and the openings). The verifier replays it with
 `read_reason` against the roots the challenger's signed release log shows (`remote.trusted_session`): the sample's coins
 are exactly those released after the commitment, every one read; the stream's digest says `"coins": "challenger"`.
-`Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, main, pins, segment,
-session}`), and the run takes the commitment and the roots from the session the auditor's ledger opens for the
-registration's run (`register`'s `window_root`, never one the evidence names), run from a commit the host's
-pins log records on the verifier's copy of main's first-parent line (`pinned_session`), and refuses the select step (code `coins`) unless the
+`Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{ledger, main, pins, segment, session}`, which is
+`draw_coins`'s: one object for the stream's check and a subprotocol's), and the run takes the commitment and the roots
+from the session the auditor's ledger opens for the registration's run (`register`'s `window_root`, never one the
+evidence names) under the challenger key the stream is made with (`Stream(key=)`, never one the evidence names: evidence
+that carries a key is refused), run from a commit the host's pins log records on the verifier's copy of main's
+first-parent line (`pinned_session`; `Stream(main=)`, which the copy the evidence carries must be), and refuses the select step (code `coins`) unless the
 session is a withheld one (`withheld_on`: the ledger's open says `withheld: true`, so its challenger released no root,
 salt or path before it closed) and the bytes the sample read are those coins, after the registration's digest. Missing evidence and a registration without its
 window root are refused the same way, a reject failing `run`; a sample that read no coins takes no evidence. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
@@ -532,3 +583,12 @@ At the window's open, before it serves, the stream samples its seed salt (`Strea
 challenger's `seed-salt` family after the open root, which no sample reads. The record names it (`window.seed_salt`), a
 certified input its circuits read, public as coins. A verifier reads it from the challenger's log (`coins.seed_salt_of`,
 Lean `Challenger.seedSaltOf`), and R6 holds the window to it (`R6-seed-salt`, `tests/test_registered.py`).
+
+### The registered compiler
+
+A verifier that reads the registration log's registered compiler (`compiler`: the log's item as its view publishes it,
+with its digest and the public length ℓ of the advice it reads, or null when the log registers none) holds the record's
+window to name that compiler by its digest (`window.compiler.digest`, `R6-compiler`) and advice of at most ℓ bits
+(`window.advice.bits`, `R6-advice-length`); where the log registers none, a window naming a compiler or advice is
+`R6-compiler`. Lean `Registration.compilerOk` and `adviceOk`, in `RunCompiler` of R6; `tests/test_registered.py` and
+the difftest's `test_advice_no_registered_compiler_reads_is_refused_by_name`.

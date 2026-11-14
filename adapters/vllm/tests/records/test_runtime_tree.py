@@ -1,5 +1,5 @@
 """`verity_vllm.records.runtime_tree`: the runtime's module tree reads back what `save` wrote, reads a field the document
-leaves out as empty, refuses another schema, and is the one type the observation and the acquisition's reader hand on; and
+leaves out as empty, refuses another schema, and is the one type the observation and the acquisition's reader read; and
 the tree the observation makes of a model on the meta device (`verity_vllm.observe.runtime_tree.meta_runtime_tree`)."""
 from __future__ import annotations
 
@@ -94,11 +94,9 @@ def test_the_tree_of_a_model_names_every_module_and_buffer_and_states_the_runner
     assert mro_names(3) == ["int", "object"] and RUNNER_PATH == "runner.sampler"
 
 
-def test_the_observation_and_the_acquisitions_reader_hand_on_the_same_names():
-    for module in (observed, reader_for_acquire):
-        assert module.RuntimeTree is RuntimeTree and module.RUNTIME_TREE_SCHEMA is SCHEMA and module.RUNNER_PATH is RUNNER_PATH
-        assert module.runtime_tree_of is runtime_tree_of and module.runtime_tree_from_paths is runtime_tree_from_paths
-        assert module.mro_names is mro_names
+def test_the_observation_and_the_acquisitions_reader_read_the_records_own_type():
+    assert observed.RuntimeTree is RuntimeTree and observed.runtime_tree_of is runtime_tree_of
+    assert reader_for_acquire.RuntimeTree is RuntimeTree and reader_for_acquire.RUNNER_PATH is RUNNER_PATH
 
 
 def test_the_meta_tree_is_the_built_models_with_the_runner_declared_or_copied(monkeypatch):

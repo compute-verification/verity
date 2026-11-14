@@ -3,7 +3,7 @@ sampling design in one audit. A coordinate is `ScaledMmS8Coordinate_v1{K, DOT=Bl
 sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vLLM's int8 profile serves), one template per K.
 
     PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src \\
-      python benchmarks/one_stage/a6.py --bin flock-circuit --lean flock-verify --out DIR [--members 2048:21504,8192:2048] \\
+      python benchmarks/one_stage/a6.py --bin flock-circuit --lean verity-verify-proof --out DIR [--members 2048:21504,8192:2048] \\
       [--k 32] [--chunk N] [--delta 2^-20]
 
 * **Population.** `--members K:N,...`: N coordinates at each K. The default is one Llama-3.2-1B decoder layer for one token:
@@ -20,7 +20,7 @@ sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vL
   set-bound domains), holds the public files to the registration, and the leaf layer is the SHA-512 of the canonical map
   from member to the SHA-512 of its public file.
 * **One sample, the stratified sampling design** (`stratified:K`: one stratum per template, k_s = max(1, round(k n_s / n))), made by the
-  verifier's Lean `flock-verify draw --program --partition --stratified K` over its own program and partition object. Each
+  verifier's Lean `verity-verify-proof draw --program --partition --stratified K` over its own program and partition object. Each
   member's server serves the sample's units it holds (`serve --zk --draw-file`), and Lean `verify --zk --partition --program`
   holds each session (units derived), so the stratum's share is proved across its template's members.
 """
@@ -243,7 +243,7 @@ def main() -> int:
                                                 "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
         verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, zk=True),
-                                                "tool": "flock-verify verify --zk --archive --partition --program"}
+                                                "tool": "verity-verify-proof verify --zk --archive --partition --program"}
         statement[m["name"]] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                                 "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
                                 "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),

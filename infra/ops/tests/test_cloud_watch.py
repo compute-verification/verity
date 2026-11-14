@@ -163,9 +163,9 @@ R2_ENV = {"R2_BUCKET": "dummy-bucket", "R2_ENDPOINT": "https://dummy.r2.example"
           "AWS_SECRET_ACCESS_KEY": "dummy"}
 
 
-def r2_pass(tmp_path, state, now, bucket, page_cap=2):
+def r2_pass(tmp_path, state, now, bucket, pages=2):
     cfg = config(tmp_path)
-    cfg["r2"] = {**cfg["r2"], "page_cap": page_cap, "bucket": cfg["r2"]["bucket"][:1]}
+    cfg["r2"] = {**cfg["r2"], "page_cap": pages, "bucket": cfg["r2"]["bucket"][:1]}
     rep = W.Report()
     W.check_r2(ctx(cfg, state, now, R2_ENV, http=bucket, clock=lambda: now), rep)
     return rep
@@ -271,7 +271,7 @@ BUDGETS = """
 """
 
 
-def test_runpod_lines_near_their_cap_and_a_short_runway_are_anomalies(tmp_path):
+def test_runpod_lines_near_their_limit_and_a_short_runway_are_anomalies(tmp_path):
     (tmp_path / "budgets.toml").write_text(BUDGETS)
     month = float(calendar.timegm((2026, 10, 1, 0, 0, 0)))
     pods = {"a": {"first_seen": month - 10 * 3600, "last_seen": month + 10 * 3600, "spent": 20.0},     # half of it in October
@@ -299,7 +299,7 @@ def test_a_short_runway_above_the_auto_top_up_is_not_an_anomaly(tmp_path):
     assert not rep.findings, "RunPod tops the balance up at $100, so 2 h of runway at $125 is no failure"
 
 
-def test_a_nebius_vm_on_no_line_past_its_line_or_over_a_daily_cap_is_an_anomaly(tmp_path):
+def test_a_nebius_vm_on_no_line_past_its_line_or_over_a_daily_limit_is_an_anomaly(tmp_path):
     (tmp_path / "budgets.toml").write_text(BUDGETS)
     md = tmp_path / "machines.d"
     md.mkdir()
@@ -322,7 +322,7 @@ def test_a_missing_credential_is_a_gap_in_the_digest_and_never_an_anomaly(tmp_pa
     W.one_pass(ctx(cfg, state, T0 + 4 * 3600), out=open(os.devnull, "w"))
     (digest, thread), = posts.sent
     assert thread is None and digest.startswith("*Cloud health and spend, 2026-10-18T16:00Z*") and "Nothing open." in digest
-    gaps = [ln for ln in digest.split("*Unmonitored* (")[1].splitlines()[1:] if ln.startswith("• needs ")]
+    gaps = [ln for ln in digest.split("*Unwatched* (")[1].splitlines()[1:] if ln.startswith("• needs ")]
     assert len(gaps) == len(set(gaps))
     for need in ("needs R2_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, R2_ENDPOINT: R2 bucket `store`",
                  "needs STORE_INDEXER_DATABASE_URL", f"needs {tmp_path}/gh_read_token.sh: the GitHub API rate limit",
@@ -429,3 +429,10 @@ def test_the_agent_watchs_stall_names_the_top_group_and_pages_a_person_an_hour_l
         assert rep.findings[0].text.startswith("<!subteam^S0C977GL9R7> *Agent watch*")
         assert [f.key for f in rep.findings][1:] == (["loop|Agent watch|page"] if pages else [])
     assert rep.findings[1].text.startswith(f"<@{loop['page_user']}> *Agent watch* has not succeeded for")
+
+
+def test_a_state_file_that_does_not_parse_starts_the_watch_from_none_and_says_so(tmp_path, capsys):
+    assert W.load_state(tmp_path / "state.json") == {} and capsys.readouterr().err == ""
+    (tmp_path / "state.json").write_text("{")
+    assert W.load_state(tmp_path / "state.json") == {}
+    assert "state.json: unreadable, so the watch starts from no state (JSONDecodeError" in capsys.readouterr().err

@@ -9,8 +9,25 @@ absorb committed words with, and the TS premises their accounting reads (`Accoun
 `NoSum`, `ScalarRoute`, `SideUnits`, `WordsWritten`). Dither, PoUW's no-fold design, has none of them. When the TS fold
 premises are retired, their scripts are deleted with them.
 
+The directory is scripts run by their paths, and no package. Seven are imported by another script here, under their
+bare names: `checked_strip.py`, `cpw_sass_count.py`, `fold_kernel_check.py`, `fold_opt_fx.py`, `fold_root_sweep.py`,
+`fold_routes.py` and `narrow_u.py`. Each one's `__all__` lists what its readers and the tests take, and every other
+name is the script's own. Outside the directory and its own tests (`../tests/test_theory_*.py`) only
+`checked_strip.py` is read: the references of `../../../verity/protocols/accounting/pouw/prover/kernels/edited_gemm/` load it by file (`cgemm_ref.py`) and
+`../tests/test_segment_h1.py` imports it. No Python here touches a GPU: the sm_120 probes are the `*.sh` jobs. A script
+starts only `gcc` and the C program it built, and `run.py` the checks; each writes only in a temporary directory and
+where its command says (`--verdict`, `--json`, `--out`).
+
 ## Running
 
+- **The runner** is `run.py`: every check, one after another, each in its own process.
+
+  ```text
+  uv run python benchmarks/pouw/theory/run.py [--quick] [--mutations] [--verdict PATH] [NAME ...]
+  ```
+
+  It passes when every script exits 0, and `NAME ...` runs those alone. Without `--quick`, `fold_wide32.py` searches
+  for CPU-hours. `--verdict PATH` writes the run's verdict there and each script's beside it.
 - **A check** runs on `exact_kit`'s registry (`exact_kit/README.md`):
 
   ```text
@@ -56,8 +73,8 @@ What each one checks, and the Lean or the test that reads it.
 - `scalar_route.py`: whether a program outside class P makes a fresh word in fewer than 2.03 issue slots without tables
   (`ScalarRoute`), over the four shapes class P's proof doesn't cover.
 - `isa_cap_check.py` with `isa_cap.c`: two radix packings that create more incidences in one sm_120 instruction than a
-  cap of 32/7, checked over every entry. They are why no per-instruction cap is a premise (`TS.lean`).
-- `kappa_count.py`: the per-opcode creation cap κ = 65·d from each device's census, the Lean's `ClassPSlots`
+  bound of 32/7, checked over every entry. They are why no per-instruction bound is a premise (`TS.lean`).
+- `kappa_count.py`: the per-opcode creation bound κ = 65·d from each device's census, the Lean's `ClassPSlots`
   (`created_le_65`).
 - `scope_offload.py`: how much of a credited GPU's int8 work a helper off the die (the host, a peer GPU, a NIC, device
   memory) can do, and which bound applies.
@@ -78,12 +95,13 @@ What each one checks, and the Lean or the test that reads it.
 ### The checked strip and attention's noise
 
 - `checked_strip.py`: the exact check of the two-sided noise whose served output is a checked word. It is the one module
-  other code imports (`edited_gemm`'s `cgemm_ref.py`, `fpx_design`, `tests/test_segment_h1.py`), and `edited_gemm`'s
+  other code reads (`edited_gemm`'s `cgemm_ref.py` and `tests/test_segment_h1.py`), and `edited_gemm`'s
   references build on its `pv_words`, `pv_served`, `co32c_words` and `digits`.
 - `narrow_u.py`: that check with U on ±N for N = 8, 16, 32 (`edited_gemm`'s `co32c-u*`).
 - `zero_routes_check.py`: `checked_strip.py`'s priced zero-instance routes.
 - `attn_noise.py`: attention's committed words at every operand value, and its noise's h. Core's
-  `verity/protocols/accounting/pouw/prover/circuit/compile.py` cites its `h_table` for the attention forms H1 is to carry.
+  `verity/protocols/accounting/pouw/prover/circuit/compile.py` cites its `h_table` for the attention forms H1 is to
+  carry.
 
 ### The sm_120 unit's checkpoint and issue
 

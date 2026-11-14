@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Soundness
 `table_sound_compiled` (`CompiledSound.lean`) bounds `tableC`, whose openings verify from the unsalted leaf
 `H(encode row)`. This file proves the same bound for `Model.tableCL A H E Lf`, whose openings carry salts and verify
 from the row's leaf under its salt (`OpensOKL`), for any leaf scheme `Lf` (`Merkle.Leaf`). At `Refine.leaf512` that
-is the `hm96-sha512/v1` table flock-verify checks (`accepts_tables_hm96`).
+is the `hm96-sha512/v1` table verity-verify-proof checks (`accepts_tables_hm96`).
 
 The argument is `CompiledSound`'s, and only the openings change. A salted opening is `(position, row, salt, path)`. A
 clash is two verifying openings of one position to different rows, under any salts, and the pair of the two openings

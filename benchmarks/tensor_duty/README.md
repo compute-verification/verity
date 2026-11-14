@@ -26,8 +26,23 @@ clock64 for the whole kernel and for its tensor phases) are diagnostics. Timings
   limit. Last it runs `summarize.py`, and exits nonzero unless the card passes. Its header lists the knobs.
 - `summarize.py`: the verdict, PASS, UNDECIDED or REFUTED against the card's rate (`verity.device.rate`), exiting 0
   only on PASS; then the maximum by clock, arm and class against both readings, each clock's and arm's duty x class
-  table, and the fills and bursts compared, over one or more runs' `out/` directories. `tests/` holds its verdict to
-  the card on made-up points.
+  table, and the fills and bursts compared, over one or more runs' `out/` directories. `tests/` holds its verdicts on
+  made-up points.
+
+`run.sh --arms fp32-beside` asks a second question of the same card: whether a pipe beats its ceiling when both are
+busy, which falsifies a clock reading of an FP32 add's price (`price.fp32.sm`, the card's `clock.default`, and
+`price.fp32.tensor` in the card file; that price's clock falsifier, under the rule that each operation is charged in seconds at its own pipe's
+data-sheet ceiling). Its arms are duty.cu's A (the e4m3 wgmma alone, R_t), B (a loop of 64 FADDs and 3 loop instructions alone,
+on two warps a scheduler), C (both in one kernel, the adds in the wgmma's shadow on warps of their own, at add:MAC
+ratios 1/128, 1/32 and 1/8) and D (the two alone in alternating phases of 1, 10 and 100 ms), on zero, constant and
+uniform operands, at each clock, with nvidia-smi sampling every 10 ms and `nvidia-smi -q -d CLOCK,PERFORMANCE` around
+each lock. `summarize.py --arms fp32-beside` writes `summary.json`: each point's rates and the clock it held (measured,
+never the one asked for), and a verdict on each reading, 32 (both pipes at 1980 MHz, the default) and 29.58 (the
+tensor pipe at 1830 MHz): it is refuted by a point whose MACs or adds over its host interval exceed the tensor's
+ceiling at that reading's clock or the FP32 pipe's at 1980 MHz. p = R_t,alone / R_f,mixed, an add's price in the
+tensor pipe's own time (the unit CMP-438 refused), is given for B, C and D as a diagnostic and judged against
+nothing. `--no-lock` runs only the default clock and calls no sudo; a clock whose lock is refused is skipped either
+way.
 
 `verity bench tensor_duty` runs `run.sh`, which writes under a run's `$OUT` and refuses without one, so run it as:
 

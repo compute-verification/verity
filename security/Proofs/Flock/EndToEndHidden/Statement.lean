@@ -53,9 +53,9 @@ circuit file, so the circuit's pin is SHA-512 of `D`), the public file is `HmOut
 `Stmt.setupHidden`'s, and every row, input or output, is registered under the public file's `b ‖ c`, an `hm96`
 commitment to the row's bytes under a 192-byte salt (`rsZHJ_wrongRegZ`). The prover registers `R`; the verifier samples
 a uniform `kd`-subset of the `n` proof blocks from its operating system's bytes (`Law.execOS` on the byte source `src`); one `--zk` session of `J = nTab I` tables proves the
-sampled proof blocks, `kd / J` in each; and `flock-verify verify --zk --session-tables J` reads the session's record. Then for
+sampled proof blocks, `kd / J` in each; and `verity-verify-proof verify --zk --session-tables J` reads the session's record. Then for
 every live prover `τ`,
-$$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
+$$\Pr[\text{verity-verify-proof accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
 * a unit wrong (`wrongRegZ`) unless it is right against the public file: in the committed transcript fixed at
   registration (`XplurZC`) its committed outputs are its gates applied to its committed inputs, and one opening per
@@ -71,8 +71,8 @@ $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong
 Its named assumptions, each a hypothesis, are `EndToEnd`'s:
 * A3 (`uniform/io-getrandombytes`, `Assumptions.UniformRandomBytes`): the verifier's bytes are uniform;
 * `live-verifier` (`Assumptions.Zk.RecordCustodyZKJ`, with A6 `uniform/flock-coin-server` for its coins): the record
-  `flock-verify` reads is the one the challenger's live-coin part wrote for the live session, and its sample file the one
-  `flock-verify draw` printed for the verifier's own sample;
+  `verity-verify-proof` reads is the one the challenger's live-coin part wrote for the live session, and its sample file the one
+  `verity-verify-proof draw` printed for the verifier's own sample;
 * `cr/sha-512` (`Assumptions.SHA512CRStrict`, through `TableCRZ`) for the knowledge finders of each table of the
   prover's session, at budgets `qF` (rewinding) and `qS` (self-clash);
 * `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through `LinkCRZC`) for the prover's link finders.
@@ -80,7 +80,7 @@ Its named assumptions, each a hypothesis, are `EndToEnd`'s:
 The rest are the verify command's tags under hidden outputs (`TagsOkZHJ`), an untyped statement with no shared-row
 tables (`pub.tables = none`), the count curve's numeric conditions, and a reference setup `y₀`: table 0's, at the
 session's link points, at some sample `d₀`, which the session's plan puts in place of a table that a sample doesn't set up.
-Every sample flock-verify accepts gives one (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of tables.
+Every sample verity-verify-proof accepts gives one (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of tables.
 
 A flat circuit file is the descriptor `Desc.single c`, which unrolls to `c` (`Desc.parse_flat`, `Desc.parse_single`):
 `EndToEndHiddenFlat` is this statement there, over `c`. -/
@@ -196,7 +196,7 @@ def EndToEndHiddenPerTest : Prop :=
 open Classical in
 /-- **Flock's one-stage audit, end to end, under hidden outputs, at the sampled proof blocks.** `EndToEndHidden`'s setting
 with `EndToEndDrawn`'s event: for every live prover `τ`,
-$$\Pr[\text{flock-verify accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
+$$\Pr[\text{verity-verify-proof accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
 with "wrong" `EndToEndHidden`'s (`wrongRegZ`, against the public file's `b ‖ c` at every row, in the committed transcript
 fixed at registration), and `ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's sample. The bound has no miss
 term, so it holds whatever the verifier's bytes: it needs no A3, and the sample need not be uniform.
@@ -207,7 +207,7 @@ each table's knowledge finders at budgets `qF` and `qS`, and `ecr/sha-512` (A2, 
 `LinkCRZC`) for the prover's link finders. The rest are the verify command's tags under hidden outputs (`TagsOkZHJ`), an
 untyped statement with no shared-row tables (`pub.tables = none`), the bound's numeric conditions, and
 `EndToEndHidden`'s reference setup `y₀`: table 0's, at the session's link points, at some sample `d₀`, which every sample
-flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of tables. As in
+verity-verify-proof accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of tables. As in
 `EndToEndHidden`, the circuit is the one the verifier's descriptor unrolls to, and `EndToEndHiddenDrawnFlat` is this
 statement at a flat circuit file. -/
 def EndToEndHiddenDrawn : Prop :=

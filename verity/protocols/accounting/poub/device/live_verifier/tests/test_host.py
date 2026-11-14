@@ -45,6 +45,8 @@ T1 = datetime(2026, 10, 21, 13, 30, 0, tzinfo=timezone.utc)
 PIN = "c" * 40
 KEY = "ab" * 64
 LANE = "memory-accounting"
+NODE_ADDRESS = "192.0.2.20"
+"""The served node's address as the gate's caller (`--from`): a peer's in the fixture's `verifier.json`."""
 RUN = "v20261021T130000Z-ab12"
 SSH = "-i /nonexistent/test-gate-key -o IdentitiesOnly=yes research@192.0.2.1"
 BASE = ["run", "--peer", "gpu-node", "--port", "7951", "--period", "memory-line-1", "--pin", KEY]
@@ -60,7 +62,7 @@ BOUND = [*PACED, "--model", ROLE, "--engines", "2", "--arena-blocks", "7"]
 def svc(tmp_path) -> H.Host:
     settings = json.loads((PACKAGING / "verifier.json").read_text())
     settings["challenger"].update(ssh=SSH, peer="auditor-host")
-    settings["peers"] = {"gpu-node": next(iter(settings["peers"].values()))}
+    settings["peers"] = {"gpu-node": {**next(iter(settings["peers"].values())), "addresses": [NODE_ADDRESS]}}
     (tmp_path / "verifier.json").write_text(json.dumps(settings))
     (tmp_path / "var" / "runs").mkdir(parents=True)
     host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl",
@@ -102,9 +104,11 @@ def gate(svc, argv, units: Units | None = None, *, token="ab12", now=T0, **hooks
     return rc, sink.getvalue()
 
 
-def call(svc, words, units: Units | None = None, *, key=LANE, **kw) -> tuple[int, bytes]:
-    """`words` as a gate key registered for `key` sends them (`-`, a read-only key)."""
-    return gate(svc, ["--ssh", shlex.join(words), "--key", key], units, **kw)
+def call(svc, words, units: Units | None = None, *, key=LANE, address=NODE_ADDRESS, **kw) -> tuple[int, bytes]:
+    """`words` as a gate key registered for `key` sends them (`-`, a read-only key) from `address` (None: the forced
+    command passes none)."""
+    return gate(svc, ["--ssh", shlex.join(words), "--key", key, *(["--from", address] if address is not None else [])],
+                units, **kw)
 
 
 def refused(got: tuple[int, bytes]) -> str:
@@ -603,8 +607,9 @@ def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_
     assert tampered["rc"] == 1 and tampered["gz_sums"] == {f"{name}.gz": False} and not tampered["sums_match"]
 
 
-def party(svc, words, units: Units | None = None, *, key=LANE, out=b'{"listening": 47611}\n{"signed": "x"}\n', rc=0):
-    """`words` sent by `key`; the party's run is recorded, and prints `out` and exits `rc`."""
+def party(svc, words, units: Units | None = None, *, key=LANE, address=NODE_ADDRESS,
+          out=b'{"listening": 47611}\n{"signed": "x"}\n', rc=0):
+    """`words` sent by `key` from `address`; the party's run is recorded, and prints `out` and exits `rc`."""
     ran: list[list[str]] = []
 
     def run(argv, sink, log, minutes):
@@ -612,7 +617,7 @@ def party(svc, words, units: Units | None = None, *, key=LANE, out=b'{"listening
         sink.write(out)
         log.write_bytes(out)
         return rc
-    got = call(svc, words, units, key=key, party=run)
+    got = call(svc, words, units, key=key, address=address, party=run)
     return got, ran
 
 
@@ -714,7 +719,7 @@ def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
 
 def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path, monkeypatch):
     """`exec_party` with a party that never exits (no prover joined): its timer kills it and its parent, and the log records
-    why. Killing the parent alone (runuser, on an auditor host) left the party listening and holding the pipe."""
+    why. Killing the parent alone (runuser, on an auditor device) left the party listening and holding the pipe."""
     armed: list[float] = []
 
     class Timer:
@@ -738,15 +743,38 @@ def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path
     assert json.loads(log.read_bytes().splitlines()[-1]) == {"killed": "the session's 2 min ran out"}
 
 
-def test_party_log_reads_the_sessions_and_each_ones_stdout_as_the_host_kept_it_for_any_key(svc):
+def test_party_log_is_refused_over_ssh_to_every_key_and_read_by_root_on_the_host(svc):
     (rc, _), _ = party(svc, ["wipe_party", "--reads", "64"], out=b'{"listening": 47611}\n{"window": {"t0": "a", "t1": "b"}}\n')
-    rc, out = call(svc, ["party_log", "wipe"], key="-")
+    log = json.loads((svc.parties / "wipe" / "requests.jsonl").read_text().splitlines()[0])["log"]
+    for name, _, _ in H.PARTIES.values():
+        for key in ("-", LANE):
+            for words in (["party_log", name], ["party_log", name, log]):
+                assert refused(call(svc, words, key=key)) == H.PARTY_LOG_REFUSED
+    rc, out = gate(svc, ["party_log", "wipe"])
     sessions = json.loads(out)["sessions"]
-    assert rc == 0 and [s.get("rc") for s in sessions] == [None, 0]
-    rc, out = call(svc, ["party_log", "wipe", sessions[0]["log"]], key="-")
+    assert rc == 0 and [s.get("rc") for s in sessions] == [None, 0] and sessions[0]["log"] == log
+    rc, out = gate(svc, ["party_log", "wipe", log])
     assert rc == 0 and json.loads(out)["lines"] == [{"listening": 47611}, {"window": {"t0": "a", "t1": "b"}}]
-    assert "party_log" in refused(call(svc, ["party_log", "wipe", "../../etc/passwd"], key="-"))
-    assert "no session log" in refused(call(svc, ["party_log", "pous", "20261026T000000Z.jsonl"], key="-"))
+    assert "party_log" in refused(gate(svc, ["party_log", "wipe", "../../etc/passwd"]))
+    assert "no session log" in refused(gate(svc, ["party_log", "pous", "20261026T000000Z.jsonl"]))
+
+
+def test_a_party_answers_only_a_caller_from_a_registered_node(svc):
+    """Every party verb is refused, before it runs or writes anything, unless the forced command's `--from` is one of a
+    peer's `addresses` (`node_of`): from another address, a malformed one, an empty one or none (a wrapper that passes
+    none). The node's own address gets its session, written as IPv4-mapped IPv6 too; the other verbs and root on the
+    host are not held to it."""
+    words = {verb: [verb, *(["--fixture"] if verb == "bw_party" else [])] for verb in H.PARTIES}
+    for verb in H.PARTIES:
+        for address in ("192.0.2.21", "not-an-address", "", None):
+            got, ran = party(svc, words[verb], address=address)
+            assert refused(got) == H.CALLER_REFUSED and ran == []
+    assert not svc.parties.exists()
+    assert call(svc, ["status"], key="-", address="192.0.2.21")[0] == 0 and call(svc, ["status"], address=None)[0] == 0
+    for verb in H.PARTIES:
+        assert party(svc, words[verb])[0][0] == 0
+        assert party(svc, words[verb], address="::ffff:192.0.2.20")[0][0] == 0
+    assert gate(svc, words["challenger_party"], party=lambda argv, sink, log, minutes: 0)[0] == 0
 
 
 def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc):

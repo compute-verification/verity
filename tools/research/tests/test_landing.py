@@ -32,7 +32,7 @@ LOOP_MODULES = ("queue.py", "landing.py", "vqueue.py", "vqueue_loop.py", "vqueue
 
 class Harness:
     """A `Landing` (`make`) on ``world`` whose records-run launches are recorded (`launched`) and whose launches of a check or
-    of the run beside one (`launch_postland`) are recorded (`posted`) as `r-post-N`, each running until a test sets its state
+    of the run beside one (`launch_after_landing`) are recorded (`posted`) as `r-post-N`, each running until a test sets its state
     in `run_state`; its posts, cancels, evidence and clock injected."""
 
     make = Landing
@@ -51,7 +51,7 @@ class Harness:
                            post=lambda text, to=(): self.posts.append(text) or True, now=lambda: self.clock,
                            cancel=lambda repo, ids, reason: self.cancelled.extend(ids), evidence=lambda repo, ids: self.evidence)
         self.evidence: list = []
-        self.d.launch_postland = self.launch_post
+        self.d.launch_after_landing = self.launch_post
 
     def launch(self, repo, commit, machine, agreement):
         rid = f"r20261012-0000{len(self.launched):02d}-abcd"
@@ -454,13 +454,13 @@ def test_the_records_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes
 
 
 def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
-    """Each part of a candidate's check and its records run ask for their check slot at `POSTLAND_SLOT_RANK`
+    """Each part of a candidate's check and its records run ask for their check slot at `AFTER_LANDING_SLOT_RANK`
     (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), whatever the loop's own environment says: a ranked
     priority waiter takes the next free slot ahead of the unranked, so `main` never waits on a slot for a `train.sh`
     launched by hand."""
     import types
 
-    from research.landing import POSTLAND_SLOT_RANK, launched
+    from research.landing import AFTER_LANDING_SLOT_RANK, launched
 
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setenv("CHECK_SLOT_RANK", "7")
@@ -475,15 +475,15 @@ def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unran
             os.waitpid(job["pid"], 0)
         return launched(job)[1]
 
-    ranked = f"rank=[{POSTLAND_SLOT_RANK}]"
+    ranked = f"rank=[{AFTER_LANDING_SLOT_RANK}]"
     assert f"{ranked} argv=[{'c' * 40} m1 --deferred pytest --shard 1/3]" in tail(
-        d.launch_postland(repo, "c" * 40, "m1", "pytest", shard="1/3"))
+        d.launch_after_landing(repo, "c" * 40, "m1", "pytest", shard="1/3"))
     assert f"{ranked} argv=[{'c' * 40} m1 --deferred lean-audit]" in tail(d.launch_locks(repo, "c" * 40, "m1"))
 
 
 def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and_bookkeeping_where_train_sh_takes_it(
         tmp_path, monkeypatch):
-    """A `Landing` on `train_launch` launches with the queue's credentials (``q.auth``: `launch` as `launch_postland` and
+    """A `Landing` on `train_launch` launches with the queue's credentials (``q.auth``: `launch` as `launch_after_landing` and
     `launch_locks`), a candidate's check with the loop's own train.sh when given one (``train_from``), and the records run with
     `--bookkeeping-warn` where the clone's train.sh takes it (`takes_bookkeeping`)."""
     import types
@@ -505,17 +505,17 @@ def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and
 
     assert d.launch(repo, "c" * 40, "m1", False) == ([rid], f"clone n=1 argv=[{'c' * 40} m1]\nRUN {rid}")
     assert f"own n=1 argv=[{'c' * 40} m1 --deferred pytest]" in tail(
-        d.launch_postland(repo, "c" * 40, "m1", "pytest", train_from=own))
+        d.launch_after_landing(repo, "c" * 40, "m1", "pytest", train_from=own))
     assert f"clone n=1 argv=[{'c' * 40} m1 --deferred lean-audit --bookkeeping-warn]" in tail(
         d.launch_locks(repo, "c" * 40, "m1"))
 
 
 def test_a_landing_on_an_injected_launch_launches_a_candidates_check_and_its_records_run_through_it(world):
-    """With ``launch`` injected, `launch_postland` and `launch_locks` launch through it, on the machines asked for."""
+    """With ``launch`` injected, `launch_after_landing` and `launch_locks` launch through it, on the machines asked for."""
     got = []
     d = Landing(world.queue(), on="m1", launch=lambda repo, commit, machine, agreement: got.append(
         (commit, machine, agreement)) or (["r1"], ""))
-    assert d.launch_postland(d.repo, "c" * 40, "m2", "pytest", shard="1/3") == d.launch_locks(d.repo, "d" * 40, "m3") == (
+    assert d.launch_after_landing(d.repo, "c" * 40, "m2", "pytest", shard="1/3") == d.launch_locks(d.repo, "d" * 40, "m3") == (
         ["r1"], "")
     assert got == [("c" * 40, "m2", False), ("d" * 40, "m3", False)]
 

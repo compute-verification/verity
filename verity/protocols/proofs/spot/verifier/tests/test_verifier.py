@@ -34,7 +34,8 @@ def _args(reg, draw, **change) -> dict:
 
 
 def _python_record(a: dict) -> dict:
-    return audit.audit_record(*a.values(), session_registered=audit.session_registered(a["verdicts"], a["registration"]))
+    opened = audit.less_own_reads(audit.session_registered(a["verdicts"], a["registration"]), a["registration"])
+    return audit.audit_record(*a.values(), session_registered=opened)
 
 
 def _public(rec: dict) -> tuple:
@@ -114,23 +115,25 @@ def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_
     """`audit_record`'s sessions' roots (`Record.checks`) and the registered reads it keeps (`Record.ownRegistered`), which
     the Lean compiles on a hash map of the registration's roots, against the Python's whole: the sessions' roots all
     right, one wrong, one at a port the registration doesn't name, and a port registered twice, read at its last root;
-    and verdicts reporting reads of the registration's own port and of a value it doesn't name, of which only its own is
-    kept."""
+    and verdicts reporting reads of the registration's own port and of a value it doesn't name, of which the value's is
+    dropped and the port's taken at that port's root (`Record.lessOwnReads`) and kept, refused, at another."""
     _, reg, draw = _drawn()
     rec = reg.record
     roots = {r["port"]: r["root"] for r in rec["roots"]}
     x = rec["roots"][0]["port"]
     twice = {**rec, "roots": [*rec["roots"], {**rec["roots"][0], "root": "77" * 64}]}
-    reads = _lean(registered={"0": {"value": x, "root": roots[x]}, "1": {"value": "elsewhere", "root": "00" * 64}})
+    reads = lambda root: _lean(registered={"0": {"value": x, "root": root},  # noqa: E731
+                                           "1": {"value": "elsewhere", "root": "00" * 64}})
     for registration, given, verdicts, failed in (
             (rec, roots, _lean(), []), (rec, {**roots, x: "77" * 64}, _lean(), ["roots"]),
             (rec, {**roots, "elsewhere": "00" * 64}, _lean(), ["roots"]),
             (twice, {**roots, x: "77" * 64}, _lean(), ["receipt"]), (twice, roots, _lean(), ["receipt", "roots"]),
-            (rec, roots, reads, ["registered"])):
+            (rec, roots, reads(roots[x]), []), (rec, roots, reads("77" * 64), ["registered"])):
         a = {**_args(reg, draw, registration=registration, verdicts=verdicts), "session_roots": given}
         got = V.audit_record(**a)
         assert got["verifiers"]["agree"] and got["verifiers"]["lean"]["failed"] == failed, got["verifiers"]
-        py = audit.audit_record(**a, session_registered=audit.session_registered(verdicts, registration))
+        opened = audit.less_own_reads(audit.session_registered(verdicts, registration), registration)
+        py = audit.audit_record(**a, session_registered=opened)
         assert canonical_json({k: v for k, v in got.items() if k != "verifiers"}) == canonical_json(py)
     assert got["checks"]["registered"]["detail"]["opened"] == [x]
 

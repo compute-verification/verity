@@ -5,9 +5,22 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
+
+from verity_bench import kit
 
 SCHEMA = "verity-bench/vllm-overhead/v1"
+#: each metric's unit, as a point's result records it (`record`)
+UNITS = {
+    "time_per_output_token_s": "s",
+    "time_to_first_token_s": "s",
+    "tokens_per_s": "tokens/s",
+    "peak_gpu_memory_bytes": "bytes",
+    "decode_time_per_token_s": "s",
+    "inter_token_latency_p50_s": "s",
+    "inter_token_latency_p99_s": "s",
+}
 
 
 class IdentityMismatch(ValueError):
@@ -67,6 +80,37 @@ def _check_points(doc: Mapping[str, Any], sweep: list[str]) -> None:
 def write(doc: Mapping[str, Any], path: str | Path) -> None:
     validate(doc)
     Path(path).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+
+
+def measurements(doc: Mapping[str, Any], evidence: str) -> list[dict[str, Any]]:
+    """The kit writer's arguments for each number of `doc`'s timed points, each measured from `evidence`: an arm's mean
+    of a metric with its 95% interval, named ``ARM.METRIC``, and for each arm but the baseline its paired ratio over the
+    baseline's reps, ``ARM.METRIC.ratio``, with no value where a baseline rep measured zero; each the sweep's point it
+    was timed at as its `member`. A failed gate leaves no timed point, so it leaves no measurement."""
+
+    out: list[dict[str, Any]] = []
+    for point in doc["points"]:
+        at = {"point": point["point"]["id"]}
+        for arm, held in point["arms"].items():
+            for metric, m in held["metrics"].items():
+                out.append({"name": f"{arm}.{metric}", "value": m["mean"], "unit": UNITS[metric],
+                            "interval": m.get("ci95"), "why": None if m["mean"] is not None else "no rep measured it",
+                            "inputs": [evidence], "member": at["point"], "extra": {**at, "n": m["n"]}})
+                if arm == doc["baseline"]:
+                    continue
+                r = m["ratio_to_stock"]
+                out.append({"name": f"{arm}.{metric}.ratio", "value": r["mean"], "unit": "ratio", "interval": r.get("ci95"),
+                            "why": None if r["mean"] is not None else "a baseline rep measured zero",
+                            "inputs": [evidence], "member": at["point"],
+                            "extra": {**at, "n": r["n"], "baseline": doc["baseline"]}})
+    return out
+
+
+def record(doc: Mapping[str, Any], writer: kit.Writer, evidence: str) -> None:
+    """Appends `doc`'s `measurements` to the run's result through the kit's `writer`."""
+
+    for m in measurements(doc, evidence):
+        writer.measurement(**m, mark="measured")
 
 
 def _leaves(value: Any, prefix: str = "") -> dict[str, Any]:

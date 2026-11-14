@@ -27,8 +27,8 @@ from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.pipeline import serve_day as SD
 from verity_vllm.pipeline import serve_h1 as SH
 from verity_vllm.pipeline import serve_tie as TIE
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
 
 #: what the tie hears of a sealed window (`serve_commit.CommitWindows`' seal line)
 SEALED = {"run_id": "t/w", "run_root": "ab" * 64, "row_dir": "windows/w"}
@@ -249,7 +249,8 @@ def test_without_day_w_the_window_log_and_the_tie_are_byte_for_byte_as_before(tm
 
 def _tied_day(tmp_path, monkeypatch, program: str):
     day = SD.declare(_opts(tmp_path, *_day(tmp_path, 0, program)), tmp_path)
-    srv, runs = _Server(monkeypatch), {}
+    srv = _Server(monkeypatch)
+    runs: dict[int, Any] = {}
     wc = WindowCommit(runs)
     tie = TIE.WindowTie("v3c-window-commit", tmp_path / "serve", runner=wc, day=day)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),

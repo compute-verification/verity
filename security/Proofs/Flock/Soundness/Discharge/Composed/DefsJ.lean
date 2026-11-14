@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
 # One `--zk` sampled session of `J` tables: the pieces `zk_session_soundJ` reads
 
 `zk_session_sound` (`Composed/Sound.lean`) reads one table. `flock-circuit serve|prove --zk --session-tables J` on the
-CPU prover (`--gpu` refuses `J > 1`), and `flock-verify verify --zk --session-tables J`, run `J` tables in one session.
+CPU prover (`--gpu` refuses `J > 1`), and `verity-verify-proof verify --zk --session-tables J`, run `J` tables in one session.
 `Stmt.setupTables` then sets table `j` up under `tagsAt` (`Tags.tableIdentity count j`) at part `j` of the session's
 subset sample (`partJson`, `accepts_tables`); at one table it is `zk_session_sound`'s table. Here are the pieces at `J`
 tables, each the one-table piece's counterpart:
@@ -81,7 +81,7 @@ structure DrawSetupZJ (I' : Inputs) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean.
   x : DrawSetup I' mPts S d
   sch : Flock.Schedule
   tPad : ℕ
-  hz : Zk.schedule x.st.m = .ok (sch, tPad)
+  hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)
   hshape : 2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
     (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧
     levelsChained (schedOf sch).levels (schedOf sch).ext = true
@@ -417,7 +417,7 @@ variable (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (planZ : Finset (Fin n) → 
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) (L : Law n)
 
 /-- **The decoder is right at the sampling design's samples, table by table** (`DecodesOnJ` at the compiled `--zk` tables): at every
-sample `L.draw ω`, registration and table `j`, on every live outcome flock-verify `--zk` accepts, table `j`'s compiled
+sample `L.draw ω`, registration and table `j`, on every live outcome verity-verify-proof `--zk` accepts, table `j`'s compiled
 reps run on the tapes decoded from its streams `(j, 0)`, `(j, 1)` and its proof files, and table `j`'s compiled verdict
 on those runs holds. -/
 def DecodesOnZKJ : Prop :=
@@ -464,8 +464,8 @@ theorem execRefinesZK_tables (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fi
   classical
   exact propext decide_eq_true_iff.symm
 
-/-- **The `--zk` headline at flock-verify's acceptance, for sessions of `J` tables**: a bound on the compiled batched
-audit's acceptance with any event `Q` at `simZJ … τ` bounds flock-verify `--zk`'s acceptance with `Q`. -/
+/-- **The `--zk` headline at verity-verify-proof's acceptance, for sessions of `J` tables**: a bound on the compiled batched
+audit's acceptance with any event `Q` at `simZJ … τ` bounds verity-verify-proof `--zk`'s acceptance with `Q`. -/
 theorem zk_headline_exec_tables (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) (Q : Prop) (B : ℝ≥0∞)
     (hB : prob (fun o => o.1 = true ∧ Q) (audit L Reg (batchedSessionZC A Hs planZ))
@@ -488,7 +488,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (L : Law n)
 
-/-- **`RunsOnZC` at `J` tables**: at the sampling design's samples, on every live outcome flock-verify `--zk` accepts, each table's
+/-- **`RunsOnZC` at `J` tables**: at the sampling design's samples, on every live outcome verity-verify-proof `--zk` accepts, each table's
 reps have a `RepRun` on their streams' rounds along `repShapeZ`, with `fin`'s messages as the tail, and the table's
 compiled verdict accepts at the two runs' ends, with its cap and openings. -/
 def RunsOnZCJ : Prop :=
@@ -535,7 +535,7 @@ def TagsOkZJ (I : Inputs) : Prop :=
   I.tags.hiddenOutputs = false ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "hm96-sha512/v1"
 
 /-- **`wr` is the challenger's live-coin part's record of the live `--zk` session of `J` tables** (`RecordsLiveZK` at `J` tables, as
-`RecordsLiveJ` is at the public path): whenever flock-verify `--zk` accepts what `wr` writes for the outcome `o` at sample
+`RecordsLiveJ` is at the public path): whenever verity-verify-proof `--zk` accepts what `wr` writes for the outcome `o` at sample
 `S`, the record carries the sample `dj S`, the proof files are `o`'s, and the record decodes to a session whose link
 points are `o`'s and whose table `j`'s `root_B` and rep streams' rounds are `o`'s. -/
 def RecordsLiveZKJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ)
@@ -576,7 +576,7 @@ noncomputable def opnAtZJ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 m
     (j : Fin (planZ S R).length) : OpensZ 𝔽 Dig (List UInt8) :=
   match Stmt.setupH (tagsAt (zkTags I) I.count j.val) I.circuitFile I.publicFile (zkCoins I) I.tables
       (some (drawJ I (dj S) j.val)) I.partition I.program with
-  | .ok st => match Zk.schedule st.m with
+  | .ok st => match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => opnZ (Setup.ofCircuit st) sch (nXZJ ((planZ S R).get j))
         #[proofs[2 * j.val]!, proofs[2 * j.val + 1]!]
     | .error _ => default
@@ -590,7 +590,7 @@ variable {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json}
 
 /-- A `DrawSetup` with `Zk.schedule`'s schedule at its `m` is a `DrawSetupZJ` (`drawSetupZK_of`). -/
 theorem drawSetupZJ_of (ht' : I'.tags.typed = false) (x : DrawSetup I' mPts S d) {sch : Flock.Schedule} {tPad : ℕ}
-    (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
+    (hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)) :
     ∃ y : DrawSetupZJ I' mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨hshape, hmsch, hpad⟩ := schedule_zk hz
   obtain ⟨-, hm35, -⟩ := schedule_spec hz
@@ -695,7 +695,7 @@ theorem runsZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin
   obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, c, hz0, hv0, hv1⟩ := hall j.val (by simpa using hj)
   simp only [Array.getElem_map] at hz0 hv0 hv1
-  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ _ht j.val
   obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst

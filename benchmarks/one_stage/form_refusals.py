@@ -12,7 +12,7 @@ M0 `--zk` sessions, each of N instances with every unit sampled and bound to its
 honest session under each of `WRONG_TAGS`, statements `verify --zk` must refuse, is recorded beside.
 
     PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src:\\
-      <tree>/benchmarks/numerical/python python benchmarks/one_stage/form_refusals.py --bin flock-circuit --lean flock-verify \\
+      <tree>/benchmarks/numerical/python python benchmarks/one_stage/form_refusals.py --bin flock-circuit --lean verity-verify-proof \\
       --tmpl-unit flock-tmpl-unit --work DIR --fixture DIR
 
 ``--fixture`` gets per case ``<case>/stage/`` (circuit.txt, partition.json, program.json), ``<case>/tables/`` (the MUFU
@@ -85,7 +85,7 @@ def forms(rng) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True, help="flock-circuit, the proving build (sha512, glue)")
-    ap.add_argument("--lean", required=True, help="flock-verify")
+    ap.add_argument("--lean", required=True, help="verity-verify-proof")
     ap.add_argument("--tmpl-unit", required=True, help="flock-tmpl-unit, the prover's placement of a templated unit")
     ap.add_argument("--work", required=True)
     ap.add_argument("--fixture", required=True)

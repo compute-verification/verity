@@ -4,10 +4,10 @@ Two halves, one CLI:
 
   GPU pod (torch, vLLM):
     verity-vllm census --workload workloads/workload_32x16_1req.json --out DIR
-        Builds the engine exactly like `bench/m1_capture.py` (κ, `vllm_adapter.build_engine`), runs the uninstrumented
+        Builds the engine exactly like `pipeline/m1_capture.py` (κ, `vllm_adapter.build_engine`), runs the uninstrumented
         throwaway warm-up (Triton JIT / cuBLAS / allocator / CUPTI), then runs the workload request with **no observer, no
         Triton hook, no module hooks**: every `engine.step()` is wrapped in its own `torch.profiler.profile(activities=
-        [CPU, CUDA], record_shapes=False)` (the pattern of `out/curve/e10/kern_profile.py:183-199`), so the device kernels
+        [CPU, CUDA], record_shapes=False)`, so the device kernels
         of engine step k are attributed to step k without any marker inside the runner.  Writes DIR/census.json: per step
         the device kernel names (demangled, as Kineto reports them) with count / total device µs / first grid+block, the
         sampled tokens after the step, plus the run-level histogram; the per-step Chrome traces go to DIR/traces/ (gz).
@@ -16,7 +16,7 @@ Two halves, one CLI:
   laptop (torch-free):
     verity-vllm census --reconcile DIR/census.json --log data/logs/m1.jsonl.gz \
         --profile vllm_d9105ea80_sm89_eager [--report out/capture/reports/census_m1]
-        Resolves the M1 log with `bench/resolve_log.resolve_log` and, per step, collects the kernel names every resolution
+        Resolves the M1 log with `observe.fold.resolve_log.resolve_log` and, per step, collects the kernel names every resolution
         part declares (`Compute.kernels` / `Transparent.kernels` over `resolver.parts_of`) plus the profile's
         `kernel_allowlist`.  Every census kernel of the same step must be matched by at least one declared name
         (`KERNEL_MATCH`: declared name -> regexes over the demangled kernel name; substring fallback).  Reports the residue
@@ -38,8 +38,8 @@ and a declared name with no launch in the step, an alternative the step did not 
 
 Kernel names: Kineto reports demangled CUDA names (`void vllm::fused_add_rms_norm_kernel<c10::BFloat16, 8>(...)`,
 `flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<64, 64, 128, 4, ...>, ...>`, `Memcpy DtoH (Device -> Pinned)`, `Memset
-(Device)`, Triton kernels by their function name `matmul_kernel_persistent`).  The declared names in `patterns.py` and the
-profile's allowlist are short tokens; `KERNEL_MATCH` is the explicit bridge.
+(Device)`, Triton kernels by their function name `matmul_kernel_persistent`).  The declared names in `observe/fold/patterns/`
+and the profile's allowlist are short tokens; `KERNEL_MATCH` is the explicit bridge.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ from verity_vllm.observe.kernel_trace import (
     summarize_kernels,
 )
 from verity_vllm.properties import kernel_allowlist
-from verity_vllm.properties.record import REGISTRY, seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 # ---------------------------------------------------------------------------------------------------------
 # declared name -> regexes over the demangled kernel name (torch-free)
@@ -631,5 +631,6 @@ def main(args: Options) -> int:
 
 
 def _engine_args(items: list[str]) -> dict:
-    from verity_vllm.engine import vllm_adapter as va  # torch import only on the GPU half
+    # torch import only on the GPU half
+    from verity_vllm.engine import vllm_adapter as va
     return va.parse_engine_args(items)

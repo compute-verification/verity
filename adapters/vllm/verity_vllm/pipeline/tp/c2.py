@@ -22,6 +22,7 @@ from verity_vllm.records.schema_ids import TP_REPLAY_DEFERRED_SCHEMA
 __all__ = ["DEFER_WORLDS"]
 
 DEFERRED = "replay_deferred.json"
+RANK_RESULT = "sampled_replay_p{pair}_rank{rank}.json"      # a rank's replay of its sealed bundle, as `tp-commit-replay` writes it
 SCHEMA = TP_REPLAY_DEFERRED_SCHEMA
 #: the worlds whose Commit defers its ranks' C2 replay, each proven by a row whose deferred arm (the Commit's bundles, then
 #: `tp-commit-replay` on CPU) gave the in-process arm's picks, per-rank records, verdict and run root; any other world replays in process
@@ -49,6 +50,14 @@ def write_atomic(p: Path, text: str) -> None:
     os.replace(tmp, p)
 
 
+def remove_earlier(out: Path) -> None:
+    """In a used ``out``, where a Commit writes its `versions.json`: an earlier Commit's rows and verdict go (its `runs.jsonl`, its
+    `summary.json`, its deferred record and each rank's replay result), so what stands beside `versions.json` is that Commit's or
+    nothing.  The bundles the earlier Commit sealed stay."""
+    for earlier in (out / "runs.jsonl", out / "summary.json", out / DEFERRED, *out.glob(RANK_RESULT.format(pair="*", rank="*"))):
+        earlier.unlink(missing_ok=True)
+
+
 def per_rank_of(row: dict) -> dict:
     """A run row's commit blocks by rank; none for a control run, and for an instrumented run that finalized no rank (its row holds no
     commit, or a commit with no ranks)."""
@@ -63,6 +72,20 @@ def last_per_rank(rows: list[dict]) -> dict:
         if r.get("arm") != "control" and per_rank_of(r):
             return r["commit"]["per_rank"]
     return {}
+
+
+def block_of(doc: dict, name: str) -> dict:
+    """The block ``name`` of a document the Commit's driver reads: the workload, the manifest of record, a rank's answer to one of its
+    calls (its make, its finalize, an opening, a value check), the cross-rank pass's result, a rank's commit block, a run's row.  Empty
+    for a document that holds none, or holds it null or empty: each field read off it is then None."""
+    block = doc.get(name)
+    return block if block else {}
+
+
+def list_of(doc: dict, name: str) -> list:
+    """The list ``name`` of such a document; empty for a document that lists none."""
+    listed = doc.get(name)
+    return listed if listed else []
 
 
 def _rank_record(cblock: dict, name: str) -> dict:
@@ -277,7 +300,7 @@ def c2_and_pin_gates(cblock: dict, f: dict, ok: bool, why: str | None, *, rank: 
     return pin_gate(cblock, wp_, ok, why, rank=rank, required=required)
 
 
-def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: set[str] | list[str]) -> None:
+def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: frozenset[str] | set[str] | list[str]) -> None:
     """Self-describing record: the replay's unreplayable collective families name the pass that evaluated them
     (`collective_kinds.evaluated_cross_rank`: the world's cross-rank families and every routed all-reduce) and its site coverage of each."""
     from verity_vllm.program.frontend.collective_kinds import evaluated_cross_rank

@@ -1,4 +1,4 @@
-"""H1's coins from the auditor host's challenger: each attack below is refused, the release log's rewrite by the
+"""H1's coins from the auditor device's challenger: each attack below is refused, the release log's rewrite by the
 challenger's signed close, sealed under its ledger.
 
 * a window is held to the one challenge phase the challenger gate opened for its Commit's root, in the gate's
@@ -13,7 +13,7 @@ challenger's signed close, sealed under its ledger.
   and coin; an early sample, a sample from another family and a challenge phase closed with no sample are refused.
 * round s's root commits the A and z tables of its calls and round s - 1's receipts.
 * a window whose coins were held in the serving process is no challenge phase's and credits nothing; ncp-v2
-  takes the auditor host's challenger (the Commit's coins, its C2 replay challenge among them: `test_commit_coins`).
+  takes the auditor device's challenger (the Commit's coins, its C2 replay challenge among them: `test_commit_coins`).
 * a window admits in round 0 only unless its ``admission`` is ``per-round``.
 * the release log is the only evidence that a round's coin followed its root, so an unsigned log would pass roots chosen
   after every coin once it was rewritten to name them. The challenger's signed close signs it and the auditor's ledger
@@ -44,14 +44,17 @@ from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.audit import salt_of
 from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device import remote as R
-from verity.protocols.proofs.spot.device.challenger import LiveCommitment, record_message
+from verity.protocols.proofs.spot.device.challenger import (
+    LiveCommitment,
+    record_message,
+)
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1 as T
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 
 PRIVATE, KEY = CH.challenger_key(1, H=6)
 COMMIT_A, COMMIT_B = "ca" * 64, "cb" * 64
@@ -382,7 +385,7 @@ def test_a_session_whose_tree_the_hosts_pins_log_doesnt_record_is_refused(tmp_pa
     assert PHC.session_reason(first, two.ledger(), fetch) is None
     assert PHC.session_reason(first, two.ledger(CH.PINS), fetch) == (
         f"session {SA} is not trusted: the host's pins log has 1 lines, fewer than the 2 the open of session {SA} "
-        "sealed: take the auditor host's operator's newest published pins log")
+        "sealed: take the auditor device's operator's newest published pins log")
     assert PHC.session_reason(first, two.ledger([second, second]), fetch) == (
         f"session {SA} is not trusted: the host's pins log is not the one the open of session {SA} sealed: its first 2 "
         "lines were edited or rewritten")
@@ -648,7 +651,7 @@ def test_a_challenger_off_the_answers_commitment_is_refused_before_its_first_coi
 
 
 def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
-    """The gate's own bytes (the auditor host's v2 head and seven challenge phases as its fetch gave
+    """The gate's own bytes (the auditor device's v2 head and seven challenge phases as its fetch gave
     them), through core's check: the head verifies under the key its challenge phases' key.json holds and the pin, v1
     entries then v2, and binds a window by its root; challenge phase s20261020T110845Z-1355 ended closed and complete under the
     commitment its end entry records (`held`), s20261020T105232Z-1281 (a hello without the secret),
@@ -887,7 +890,7 @@ class _NcpLinear:
 
 
 def test_ncp_v2s_salt_is_the_auditor_hosts_salt_coin_after_the_weights_root(tmp_path, monkeypatch):
-    """ncp-v2 under the setting ``challenger`` takes its epoch's salt from the auditor host's salt coin, opened
+    """ncp-v2 under the setting ``challenger`` takes its epoch's salt from the auditor device's salt coin, opened
     after the weights' root, carries its challenge phase, and closes the challenge phase at release."""
     host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=18)
     monkeypatch.setattr(pouw, "linear_types", lambda: (_NcpLinear,))

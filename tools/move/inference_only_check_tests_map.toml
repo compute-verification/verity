@@ -1,0 +1,27 @@
+# The inference-only check's README, before the moves: what `tools/move/rename.py --map
+# tools/move/inference_only_check_tests_map.toml` rewrites in it, so that `inference_only_check_map.toml`'s move of the
+# check's directory into the policy's `verifier/` is a pure move.
+# - The README names the check's tests by a pattern below `../tests/`, a directory the check no longer has beside it,
+#   and a relative path that names nothing can't follow the move. So it names the tests' directory, which the move's
+#   tools follow.
+# - It names the policy's manifest and its test as `../parties.py` and `../tests`, which the move would write with no
+#   directory left (`parties.py`, `tests`), an edit `move_check.py` credits to no moved path. So it names each by its
+#   path from the root, which the move leaves as written.
+# It renames no path, module or Lean declaration, so the change it makes is an ordinary one, reviewed as such.
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/policy/inference_only/verifier/nci/README.md"]
+[words_in.words]
+"`../tests/test_nci_*.py`" = "the `test_nci_*.py` of `../../../../accounting/certifier/verifier/network/tests/`"
+"`../parties.py`" = "`verity/protocols/policy/inference_only/verifier/parties.py`"
+"in `../tests`." = "in `verity/protocols/policy/inference_only/verifier/tests`."
+
+[rewrite]
+# Never rewritten: the earlier moves and their maps, and lock files.
+exclude = ["tools/move/**", "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = []
+strings = []
