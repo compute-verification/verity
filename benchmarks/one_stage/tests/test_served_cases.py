@@ -1012,7 +1012,7 @@ def test_on_a_serve_tied_to_pearl_plus_the_policys_log_is_w_and_the_serves_first
     deployment's first record."""
     first = {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "deployment": {"kind": "weights"}, "registered": [],
              "previous": None}
-    w, alone = h1_registration(R.digest(first)), h1_registration()
+    w, alone = h1_docket(R.digest(first)), h1_docket()
 
     def serve(name: str, held: dict, start: dict | None) -> tuple[Path, Path]:
         d = tmp_path / name
@@ -1050,7 +1050,7 @@ def test_without_an_h1_log_the_policys_case_takes_its_log_from_pearl_plus_parts(
     assert json.loads((private / "inference-only" / "case.json").read_text())["params"]["log"] == [w]
     pearl = json.loads((private / "pouw-pearl-plus" / "case.json").read_text())
     assert json.loads(bytes.fromhex(pearl["commitment"]))["window"]["record"] == w
-    other = {**parts, "window": {**parts["window"], "record": h1_registration(entry=5)}}
+    other = {**parts, "window": {**parts["window"], "record": h1_docket(entry=5)}}
     (piece / "parts.json").write_text(json.dumps(other, sort_keys=True))
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p2", "--alpha", "1",
                                   "--gamma", 1, *stand_ins(tmp_path, v1))
