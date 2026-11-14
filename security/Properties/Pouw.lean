@@ -1,7 +1,7 @@
 module
 
 public import PouwWindow
-public import PouwWindow.Draw
+public import PouwWindow.Sample
 public import PouwWindow.Public
 
 /-!

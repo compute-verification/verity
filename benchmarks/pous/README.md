@@ -104,7 +104,7 @@ Implementations:
     decode-to-staging kernel matches byte for byte. `store-toy/` is a 2-layer store at the registered width: its salt,
     C*, negative blocks, and spot vectors at the real store's indices, with W and the staging buffers pinned by digest
     (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both. `store.py commit` is
-    `setup.commit` of the real W, regenerated in this layout from the seeded generator (`benchmarks.torch_gpu.p2_stage.served_weights`),
+    `setup.commit` of the real W, regenerated in this layout from the seeded generator (`verity.protocols.accounting.pous.prover.served_weights`),
     with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it. `store.py encode` samples the
     salt from the auditor's coin and encodes C* on every GPU of a node (`pod.sh IMPL=p2-store ... -- encode ...`), as
     canonical segment files a rerun resumes; `--segments LO:HI --order down` encodes a part and `finish` joins the

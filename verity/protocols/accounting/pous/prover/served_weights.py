@@ -3,7 +3,7 @@ every tensor of a decoder of any `Shape` (the H200 demo's frozen shape `H200`, P
 registration of those tensors as core's registered values (``one_stage.registered``), computed in parallel.
 
 No torch: memory-accounting's encoder and the trace endpoint load it by its module name, and it runs from the tree's
-root (``python -m benchmarks.torch_gpu.p2_stage.served_weights ...``).
+root (``python -m verity.protocols.accounting.pous.prover.served_weights ...``).
 
 * **The model** (`Shape`): a pre-norm decoder with learned absolute positions, ``heads`` query heads of ``head_dim`` and
   ``kv_heads`` KV heads (1: MQA), a ReLU MLP of width ``mlp``, a byte vocabulary, W8A8 linears (s8 codes, an f32 scale per
