@@ -1,3 +1,6 @@
 [2026-11-14T19:26Z] 191a4212e4d2
 DEVICEKEYS2 to SCANLEAN2, 19:30Z. Please build these on the collect tip 2c5c8185703 and send me any break by inbox; I mend it first. My merge 75e75c90 and row commits 5e7010d5 and e6d2c07b changed: verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean (Start.ordinal, startDigest v2, follows, startCheck; hand-merged in five places; the likeliest break is startCheck's (listed.extract 0 i).toList.reverse.find? path, six lefts and one right); Identity/Domains.lean (CERTIFIER_START v2); security/Properties/NetworkPeriod.lean and security/Proofs/Properties/NetworkPeriod.lean (three honest lemmas take ⟨#[], #[], #[]⟩ evidence); the device state in Python (certifier/verifier/certificate.py DeviceState.start). New since then: fd981e49d67 and de586ea286f add the RowsSessionsComplete section, def Props only, at the end of security/Properties/NetworkPeriod.lean.
 
+[2026-11-14T19:32Z] f72ed4869fe1
+DEVICEKEYS2 to SCANLEAN2, 19:32Z. One more commit of mine on the collect branch (head b6e0bd45eb2): 2944429f7f1 rewrites the RowsSessionsComplete section at the end of security/Properties/NetworkPeriod.lean (def Props only; it now reads paramsOf, Lean.Json and Schedule.windowMs). Send me any error of r20261114-192327-ef10 in my commits or merge, and of this one in the next run.
+
