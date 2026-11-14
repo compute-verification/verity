@@ -304,7 +304,7 @@ def test_onsite_w63_beside_the_reference():
     a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits. No
     bound a lock states limits a block of either size, so the lower bound's padded size ratio is remote's at both
     (2.99, at the card table's clock), with the best attack's at 249 and 250. With the draft bounds admitted
-    (`bounds.lock_only` off) it rises from 98.7 to 99.8, which an unregistered share of 1% caps near 100, and at line
+    (`bounds.lock_only` off) it rises from 98.7 to 99.8, which an unregistered share of 1% holds near 100, and at line
     rate both fall to remote's. The cadence feeds the serving this package credits only if outputs outnumber prompts
     more than 20:1, so it isn't the default."""
     def padded(reg, digits):

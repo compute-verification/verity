@@ -143,7 +143,7 @@ def test_lo_grows_with_the_statuses_admitted_and_admitting_all_is_lo(name):
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_the_slowdown(name):
+def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_bounds_the_slowdown(name):
     r = analysis.result(REG, name)
     terms = analysis.attribution(r)
     assert sum(t.share for t in terms) == pytest.approx(1.0)

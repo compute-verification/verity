@@ -260,7 +260,7 @@ def accumulator(k: float, h_eff: float, b_ps: float, step_tokens: float) -> floa
     return k * k / (b_ps * h_eff) / rest if rest > 0 else math.inf
 
 
-def output_cap(map_width_min: float, b: float, beta_x: float, beta_v: float) -> float:
+def output_threshold(map_width_min: float, b: float, beta_x: float, beta_v: float) -> float:
     """Proposition 6b's threshold `k* = 4 d β_w (h_tok + F_in) / β_v^R`, with `h_tok + F_in = β_x d` (the replay-consistent
     rate) and `β_w = b`, at the narrowest map `d = d_in`."""
     return 4 * map_width_min ** 2 * b * beta_x / beta_v
@@ -268,8 +268,8 @@ def output_cap(map_width_min: float, b: float, beta_x: float, beta_v: float) -> 
 
 def output_premise(k: float, map_width: float, map_width_min: float, b: float, beta_x: float, beta_v: float) -> float:
     """E1's Proposition 6b: each output value a block produces costs `β_v^R` and carries `d` products, so a block
-    finishes at most `d k / β_v^R` while `k ≤ k*` (`output_cap`), no bound beyond."""
-    return map_width * k / beta_v if k <= output_cap(map_width_min, b, beta_x, beta_v) else math.inf
+    finishes at most `d k / β_v^R` while `k ≤ k*` (`output_threshold`), no bound beyond."""
+    return map_width * k / beta_v if k <= output_threshold(map_width_min, b, beta_x, beta_v) else math.inf
 
 
 def cut(k: float, b_w: float, b_a: float, outputs: float) -> float:
