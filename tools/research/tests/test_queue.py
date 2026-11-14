@@ -3002,8 +3002,9 @@ def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(wo
 
 
 #: a fetched fixture's bytes, and the tree that reads it: pkg's test reads it at import, as benchmarks/numerical's
-#: tests/explore/test_authentication.py reads benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0's K=1536 vector (`auth.read_openings()`), so the
-#: suite's collection fails without it; `other` registers one too, in a suite no change below touches
+#: tests/explore/test_authentication.py reads benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0's K=1536 vector
+#: (`auth.read_openings()`), so the suite's collection fails without it; `other` registers one too, in a suite no change
+#: below touches
 BIG = b'{"openings": [1, 2, 3]}\n'
 BIG_PATH = "pkg/data/big.json"
 
