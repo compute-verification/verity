@@ -11,8 +11,8 @@ with its source:
             (priority 1, given by a person), every goal of priority 1, and every goal, as the later dump has them: finished
             (open in the earlier dump, done in the later), moved earlier and later (how many, and their days in total; a
             day with no hour is its end, Pacific), the net (days earlier less days later), open and off track now, and the
-            stalls: a goal with a step past its hour and not updated since, or with no step due within STEP_H hours
-            (`stalls`). Two columns: the window, and since the baseline.
+            stalls: a goal with a step past its hour and not updated since, or with nothing under it written in STEP_H
+            hours (`stalls`). Two columns: the window, and since the baseline.
   LANDING   the share of marked changes on `main` within two hours of the mark, and the mark-to-`main` times with their
             median, over the window: the table of `research queue stats`, its long window started at the reading's start.
             It gathers the hours to the window's end from the queue's loop, the store and GitHub, which takes over a
@@ -52,7 +52,7 @@ from .goals import PACIFIC
 from .goals_audit import _waits, due_at
 
 WINDOW_H = 6
-STEP_H = 24                 # a goal's next step is due within this
+STEP_H = 24                 # a goal with nothing under it written in this is stalled
 GRACE_H = 1                 # and a step is dead this long past its hour: a reading on the hour meets steps due that hour
 SLACK_S = 900               # readings drift by minutes: a dump taken this long after a time still stands for it
 LIMIT = 100                 # the agents that may run at once
@@ -136,13 +136,16 @@ def moved(before: list[dict], after: list[dict], scope: str) -> dict:
 def stalls(goals: list[dict], now: datetime) -> list[dict]:
     """The open top-priority goals set by hand that are stalled at `now`, each with why. A goal's steps are itself and
     every open goal it waits on, through any number of links. A step is dead when it is GRACE_H hours past its hour and
-    hasn't been updated since that hour. The goal is stalled when a step is dead, or when no step is due within STEP_H
-    hours."""
+    hasn't been updated since that hour. The goal is stalled when a step is dead, or when nothing under it has been
+    written in STEP_H hours: every open step's `updatedAt` is older than that, a step with none counting as unwritten."""
     by = {g["id"]: g for g in goals}
 
     def dead(s: dict) -> bool:
         due = due_at(s["due"])
         return due + timedelta(hours=GRACE_H) < now and (not s.get("updatedAt") or when(s["updatedAt"]) <= due)
+
+    def written(s: dict) -> bool:
+        return bool(s.get("updatedAt")) and when(s["updatedAt"]) >= now - timedelta(hours=STEP_H)
     out = []
     for g in goals:
         if not in_scope(g, "hand") or g["status"] == "done":
@@ -157,8 +160,8 @@ def stalls(goals: list[dict], now: datetime) -> list[dict]:
         late = sorted(s["id"] for s in open_ if dead(s))
         if late:
             out.append({"goal": g["id"], "why": "past its hour and not updated since", "steps": late})
-        elif not any(due_at(s["due"]) <= now + timedelta(hours=STEP_H) for s in open_):
-            out.append({"goal": g["id"], "why": f"no step due within {STEP_H} hours", "steps": []})
+        elif not any(map(written, open_)):
+            out.append({"goal": g["id"], "why": f"nothing under it written in {STEP_H} hours", "steps": []})
     return out
 
 
@@ -468,7 +471,7 @@ def render(r: dict) -> str:
                 dead = sum(bool(x["steps"]) for x in s.get("goals", []))
                 lines.append(f"  {'stalled now':<34}" + (f"not read: {s['not_read']}" if "not_read" in s else (
                     f"{len(s['goals'])} of {g['now']['open']} open: {dead} with a step past its hour and not updated since, "
-                    f"{len(s['goals']) - dead} with no step due within {STEP_H} hours")))
+                    f"{len(s['goals']) - dead} with nothing under it written in {STEP_H} hours")))
                 lines += [f"    {x['goal']}: " + (f"{', '.join(x['steps'])} {x['why']}" if x["steps"] else x["why"])
                           for x in s.get("goals", [])]
     lines += ["", *(f"{name:<10}{text}" for name, text in _rest(r)), *(f"note: {n}" for n in r["notes"])]

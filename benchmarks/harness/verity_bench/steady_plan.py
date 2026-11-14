@@ -8,8 +8,9 @@ verdict a run wrote of itself is never read. Two kinds of run can be it:
 - **a run of the point** (`tool.STEADY_POINT` with the point's identity, at any commit: the identity digests what the
   time depends on), which ran to its end (exit 0 or `steady_spec.NOT_PASSED`) from a clean tree;
 - **a labelled row**: a row of a run of the workload's steady-state record (`prove_records.STEADY`: a labelled run, or a
-  run a labelled art names), timed before the harness or outside it, whose `pin`, `provers` and `cores.count` are the
-  point's. The row judged against the run's files is the run's own, or, where a labelled art holds the run's rows as
+  run a labelled art names), timed before the harness or outside it, whose `pin`, statement blocks
+  (`steady_spec.row_blocks`), `provers` and `cores.count` are the point's: a quarter of a statement has its full
+  statement's `pin`, and is another point. The row judged against the run's files is the run's own, or, where a labelled art holds the run's rows as
   completed after it (`completed_rows`), the art's: such an art names that one run in its `runs`, carries the rows'
   derivation from the run's own records (`DERIVATION`), isn't superseded, is the one standing art that completes the
   run, and holds the run's own rows with nothing changed but what its derivation names (`completed`). So a run from
@@ -328,7 +329,9 @@ class SteadyCompletion:
             if found.row is None:
                 whys.append(f"{found.run} (labelled `{record}`): {steady.CANNOT_TELL}: {found.held}")
                 continue
-            if found.row.get("pin") != item.row.pin or found.row.get("provers") != item.provers:
+            blocks = steady_spec.row_blocks(found.row)
+            if (found.row.get("pin") != item.row.pin or found.row.get("provers") != item.provers
+                    or isinstance(blocks, int) and blocks != item.row.n):
                 continue
             why = steady_spec.point_why(found.row, found.files, spec, item)
             if why is None:

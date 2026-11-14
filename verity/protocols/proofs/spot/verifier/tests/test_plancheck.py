@@ -77,10 +77,11 @@ def test_a_line_lean_cant_read_is_an_error():
 
 
 def _admissible_count(cells: list[Cell], k: dict[int, int], replay_blocks: int, q: float, delta: float,
-                      served: int | None = None, union: bool = True) -> int:
+                      served: int | None = None, union: bool = True, fanout: int = 1) -> int:
     """`CompiledTwo.Exfil`'s count by enumeration: Σ 2^{b(T)} over the sets T of proof blocks whose acceptance
     ∏_ρ (1 − q(1 − e_ρ)) is above δ, or under `served`, each replay block read by one request serving `served` bits,
-    the sum over their patterns (`union`) or Σ 2^{Σ_ρ min(b(T_ρ), served)}, the capped sets' count."""
+    the sum over their patterns (`union`) or Σ 2^{Σ_ρ min(b(T_ρ), served)}, the capped sets' count.  At a `fanout` F
+    the patterns are of one request for each F consecutive replay blocks, serving their `served` bits each."""
     blocks = [(c.stratum, int(c.bits)) for c in cells for _ in range(int(c.n))]
     n = {t: sum(1 for s, _ in blocks if s == t) for t in k}
 
@@ -91,8 +92,9 @@ def _admissible_count(cells: list[Cell], k: dict[int, int], replay_blocks: int, 
     def bits(sub: tuple[int, ...]) -> int:
         return sum(b for x, (_, b) in zip(sub, blocks) if x)
 
-    def light(sub: tuple[int, ...]) -> tuple:
-        return () if not any(sub) else ("all",) if bits(sub) >= served else sub
+    def light(group: tuple[tuple[int, ...], ...]) -> tuple[tuple, int]:
+        held, serves = sum(map(bits, group)), len(group) * served
+        return ((), 0) if not any(map(any, group)) else ("all", serves) if held >= serves else (group, held)
 
     total, seen = 0, set()
     for T in product(product((0, 1), repeat=len(blocks)), repeat=replay_blocks):
@@ -102,9 +104,9 @@ def _admissible_count(cells: list[Cell], k: dict[int, int], replay_blocks: int, 
             total += 2 ** sum(bits(sub) for sub in T)
         elif not union:
             total += 2 ** sum(min(bits(sub), served) for sub in T)
-        elif (p := tuple(light(sub) for sub in T)) not in seen:
+        elif (p := tuple(light(T[i:i + fanout]) for i in range(0, replay_blocks, fanout))) not in seen:
             seen.add(p)
-            total += 2 ** sum(0 if not x else served if x == ("all",) else bits(x) for x in p)
+            total += 2 ** sum(b for _, b in p)
     return total
 
 
@@ -131,8 +133,8 @@ def test_a_two_stage_points_bits_bound_its_count(cells, k, served, union):
 def test_a_capped_point_reads_the_fan_out_as_its_classes_n():
     """A replay grain of fan-out F (`partition.fanout`) is a capped point whose class's N is F: Lean certifies it as the
     point capped at F S with N = 1, at least log2 of that capped count by enumeration and more than at F = 1.  The
-    patterns' form, priced only at closed replay blocks, refuses F > 1, and the sets' form reads no N.  A served
-    cap has no default fan-out: without the registration verdict's, the point is refused."""
+    sets' form reads no N.  A served cap has no default fan-out: without the registration verdict's, the point is
+    refused."""
     cells, k = SMALL[1]
     one, three = (P.two(cells, k, 2, .9, .3, 3, theta=1.0, fanout=f, returned=3) for f in (1, 3))
     assert one["classes"][0]["N"] == "1" and three["classes"][0]["N"] == "3"
@@ -140,26 +142,53 @@ def test_a_capped_point_reads_the_fan_out_as_its_classes_n():
     assert b3 == b9 > b1 and math.log2(_admissible_count(cells, k, 2, .9, .3, 9, union=False)) <= b3
     assert P.two(cells, k, 2, .9, .3, theta=1.0, fanout=3)["classes"][0]["N"] == "0"
     assert P.two(cells, k, 2, .9, .3, theta=1.0)["classes"][0]["N"] == "0"
-    for bad in ({"union": True, "fanout": 2}, {"fanout": 0}, {"fanout": 1.5}):
-        with pytest.raises(ValueError, match="fan-out"):
-            P.two(cells, k, 2, .9, .3, 3, **bad)
+    for union, bad in product((False, True), (0, 1.5)):
+        with pytest.raises(ValueError, match="fan-out is a whole number at least 1"):
+            P.two(cells, k, 2, .9, .3, 3, union, fanout=bad)
     for union in (False, True):
         with pytest.raises(ValueError, match="registration verdict"):
             P.two(cells, k, 2, .9, .3, 3, union, theta=1.0)
 
 
+@pytest.mark.parametrize("cells,k", SMALL)
+def test_a_patterns_point_reads_the_replay_blocks_of_a_group_as_one_request(cells, k):
+    """A replay grain of fan-out F in the patterns' form: the replay blocks that read one another's values are one
+    request, so the class's N is 1 and the point's S is F times `served`, what a group of F replay blocks serves: the
+    point at F = 1 whose replay blocks return F times as much.  On one group of two replay blocks and on two of them,
+    the bits Lean certifies at the θ it finds from the planner's are at least log2 of the patterns' count by
+    enumeration, each group one request, with fewer sets admissible than there are.  Lean reads each request as
+    serving exactly S, which a group of fewer than F replay blocks doesn't: the point is refused unless its caller
+    says every group of the window holds F."""
+    for unsaid in ({}, {"whole_groups": False}):
+        with pytest.raises(ValueError, match="servedBits req r = D.S.*a group of fewer than 2.*whole_groups=True"):
+            P.two(cells, k, 2, .9, .3, 3, True, fanout=2, returned=3, **unsaid)
+    points, counts = [], []
+    for replay_blocks in (2, 4):
+        _, theta = two_stage_rankin(cells, k, replay_blocks, .9, .3, 3, True, fanout=2)
+        d = P.two(cells, k, replay_blocks, .9, .3, 3, True, theta or 1.0, fanout=2, returned=3, whole_groups=True)
+        assert d["form"] == "patterns" and d["classes"][0]["N"] == "1" and d["S"] == "6"
+        assert d == P.two(cells, k, replay_blocks, .9, .3, 6, True, theta or 1.0, fanout=1, returned=6)
+        points.append(d)
+        counts.append(_admissible_count(cells, k, replay_blocks, .9, .3, 3, fanout=2))
+        assert counts[-1] < _admissible_count(cells, k, replay_blocks, 0.0, .3, 3, fanout=2)
+    for count, (bits, _) in zip(counts, P.check(points)):
+        assert bits is not None and math.log2(count) <= bits, (count, bits)
+
+
 def test_a_served_cap_is_held_to_what_a_replay_block_returns():
     """A served cap is held to the bits a replay block of the registered Program returns, as its registration publishes
     them (`WindowCommitmentRecord.returned`): the capped form takes a cap of at least them, the patterns' form, which
-    reads each request as serving exactly S, only the cap that is them, and either is refused otherwise
+    reads each request as serving exactly S, only the cap that is them, at any fan-out, and either is refused otherwise
     (``served-cover``).  The count has no default under a cap, and the sets' form reads neither."""
     cells, k = SMALL[1]
     for served, s in ((3, "3"), (4, "4"), (2.5, "3")):
         assert P.two(cells, k, 2, .9, .3, served, theta=1.0, fanout=1, returned=3)["S"] == s
     assert P.two(cells, k, 2, .9, .3, 3, True, theta=1.0, fanout=1, returned=3)["form"] == "patterns"
     for served, union, returned in ((3, False, 4), (2.5, False, 4), (3, True, 4), (4, True, 3)):
-        with pytest.raises(ValueError, match="served-cover: a replay block of the registered Program returns"):
-            P.two(cells, k, 2, .9, .3, served, union, theta=1.0, fanout=1, returned=returned)
+        for fanout in (1, 2):
+            with pytest.raises(ValueError, match="served-cover: a replay block of the registered Program returns"):
+                P.two(cells, k, 2, .9, .3, served, union, theta=1.0, fanout=fanout, returned=returned,
+                      whole_groups=True)
     for bad in (None, 3.0, True, -1):
         with pytest.raises(ValueError, match="WindowCommitmentRecord.returned"):
             P.two(cells, k, 2, .9, .3, 3, theta=1.0, fanout=1, returned=bad)
