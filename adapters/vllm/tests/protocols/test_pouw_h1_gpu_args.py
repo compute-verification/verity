@@ -1,6 +1,6 @@
 """`pouw_h1_gpu.py`'s engine flags reach the engine it builds: ``--engine-arg KEY=VALUE`` over the workload's ``LLM()``
 keywords, and ``--no-batch-invariant`` as the target's ``batch_invariant``. Its ``--check-challenger``, the verifier's side
-on no GPU, fails closed, and its `producer` is the module at its path."""
+on no GPU, fails closed, and its ``--receipts`` refuses a run handed no producer."""
 from __future__ import annotations
 
 import hashlib
@@ -171,18 +171,9 @@ def test_check_challenger_fails_closed_and_its_record_says_why(tmp_path, capsys)
     assert "--check-challenger needs --key-sha512" in capsys.readouterr().err
 
 
-def test_the_producer_is_the_module_at_its_path_loaded_once(tmp_path, monkeypatch):
-    """`pouw_h1_gpu.producer` runs the file at `PRODUCER` as a module of its own, once a process, and registers it under
-    no name: a second call hands the same module back. The file here is a stand-in for the benchmark's."""
-    path = tmp_path / "producer.py"
-    path.write_text("LOADS = [__name__]\n")
-    monkeypatch.setattr(G, "PRODUCER", path)
-    G.producer.cache_clear()
-    try:
-        mod = G.producer()
-        assert mod.LOADS == ["served_h1_producer"] and mod.__file__ == str(path)
-        mod.LOADS.append("kept")
-        assert G.producer() is mod and G.producer().LOADS == ["served_h1_producer", "kept"]
-        assert "served_h1_producer" not in sys.modules
-    finally:
-        G.producer.cache_clear()
+def test_receipts_need_the_producer_handed_in(tmp_path, capsys):
+    """``--receipts`` computes and checks receipts with kernels' producer, which this package never loads itself: a run
+    whose ``main`` was handed none refuses before it builds an engine."""
+    with pytest.raises(SystemExit):
+        G.main(["--workload", "fill", "--served", "--receipts", str(tmp_path / "h1u_hbc.so"), "--out", str(tmp_path)])
+    assert "--receipts needs kernels' producer" in capsys.readouterr().err
