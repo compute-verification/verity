@@ -29,10 +29,6 @@ paths = ["tools/research/", "tools/agent-guard/", "tools/move/"]
 [drop]
 paths = []
 
-[split]
-# references to a directory this move splits that stay right: "old file: old directory" = why
-"tools/agent-guard/tests/test_shell_hook.py: tools" = "sample commands the hook judges (`ls tools`, `rg pytest tools/`), which name no file"
-
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, the move tool itself, changelogs, research's
 # recorded moves), files whose bytes a digest pins, every Lean file, every kernel source, and the layout of record.
@@ -46,6 +42,11 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
 include = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json"]
+
+[rewrite.keep_in]
+# The shell hook's test hands the hook sample commands, whose `../..` is relative to the scratch directory the command
+# runs in (`cd {T}/.. && git -C ../.. push origin main`), not to the test's own file.
+"infra/agent-guard/tests/test_shell_hook.py" = ["tools"]
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`): the directories as dotted paths, which nothing imports by
