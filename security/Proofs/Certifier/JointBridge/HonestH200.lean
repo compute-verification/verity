@@ -66,7 +66,7 @@ import Proofs.Pouw.MonitoringPeriod
 import Proofs.Pouw.MonitoringPeriod.Sort
 import Proofs.Pouw.Receipt
 import Proofs.Properties.Pouw.Check
-import Proofs.Properties.Pouw.Draw
+import Proofs.Properties.Pouw.Sample
 import Proofs.Properties.Pouw.Grid
 import Proofs.Properties.Poub.Remote.Sort
 import Spot.Record
