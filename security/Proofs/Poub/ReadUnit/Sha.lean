@@ -7,7 +7,7 @@ rest and its padding, each block's words big-endian); and the words' bytes as th
 module
 
 public import Flock.ReadNet.Sha
-public import Proofs.Accounting.ReadUnit.Net
+public import Proofs.Poub.ReadUnit.Net
 public import Proofs.Flock.Soundness.Discharge.Hm.Slot
 public import Proofs.Hash.Bytes
 import Mathlib.Algebra.Order.Floor.Extended
