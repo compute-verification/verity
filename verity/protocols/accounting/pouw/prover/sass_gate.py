@@ -96,7 +96,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 #: what `bench.py`, `ieee_pin.py`, the gates and build checks that load this file (`gpu_kit/`'s, `pearl_c_sm90/`'s,
-#: `pearl_c_sm120/`'s, `benchmarks/torch_gpu/`'s, `adapters/vllm/tests/engine/int8_attention_sass.py`) and the tests read
+#: `pearl_c_sm120/`'s, `benchmarks/kernels/`'s, `adapters/vllm/tests/engine/int8_attention_sass.py`) and the tests read
 __all__ = [
     "DIV", "EM_CUDA", "EXCEPTABLE", "EXIT_FAIL", "FATBIN_COMPRESSED", "FATBIN_MAGIC", "FATBIN_ZSTD", "Function", "Insn",
     "MAX_INFLATED", "MAX_LISTED", "MMA", "PAGE", "PINS", "PINS_VERSION", "POSIX_SEM", "SHT_NOTE", "SassChecker",
@@ -1763,7 +1763,7 @@ def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
 
 
 # ---- the build gate: ptxas's report and cuobjdump's SASS of one kernel family -----------------------------------------
-# Each kernel family's build.sh gate (pearl_c_sm90/, pearl_c_sm120/ and torch_gpu's s8_linear/) states the kernels it
+# Each kernel family's build.sh gate (pearl_c_sm90/, pearl_c_sm120/ and kernels' s8_linear/) states the kernels it
 # wants and the tensor-core forms each may run; `mma_gate` reads the build and refuses the rest.
 
 MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
