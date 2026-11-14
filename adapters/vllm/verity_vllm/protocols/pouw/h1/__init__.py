@@ -79,10 +79,10 @@ from typing import Any
 import numpy as np
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.circuits.types import Array
-from verity.circuits.ops.boolean import gemm as BG
 from verity.protocols.accounting.pouw.prover.circuit import compile as C
 from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
 from verity.protocols.accounting.pouw.verifier import credit as CR

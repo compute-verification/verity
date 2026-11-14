@@ -44,9 +44,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+from verity.circuits import requirement
 from verity.commitments import merkle_depth
 from verity.commitments.merkle import Opening
-from verity.circuits import requirement
 from verity.protocols.accounting.poub.verifier import receipts as rb
 from verity.protocols.accounting.poub.verifier.receipts import PER_LEAF, Plan
 from verity.protocols.accounting.poub.verifier.store import store_salt

@@ -21,6 +21,7 @@ from typing import Any, ClassVar
 import numpy as np
 from verity.commitments import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.audit import (
@@ -141,10 +142,10 @@ def _bytes(t: Any) -> bytes:
     return t.cpu().numpy().tobytes()
 
 
-def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, hash: str = HM96) -> bytes:
-    """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows, under tree hash `hash` (-h3's
+def call_keys(salt: bytes, root_b: bytes, index: int, m16: int, hash: str = HM96) -> bytes:
+    """A call's dom_a ‖ unit, as `pearl_c.keys_of` derives them for matmul `index` of m₁₆ rows, under tree hash `hash` (-h3's
     is `HM96`)."""
-    return rows_domain(activation_binding(salt, index), index, m16, hash).domain_id + fixture.unit_block(salt, root_b, index)
+    return rows_domain(activation_binding(salt, index), index, m16, hash).domain_id + C.unit_block(salt, root_b, index)
 
 
 class _Keys:
@@ -153,16 +154,16 @@ class _Keys:
     A call's index is unique in its epoch (`pouw_pass.call_index`), so no call's keys are another's and none are kept.
     ``native`` set to None takes `call_keys` itself (the reference path)."""
 
-    def __init__(self, fixture: Any, salt: bytes, hash: str = HM96):
-        self.native, self.fixture, self.salt, self.hash = hashlib.sha512, fixture, salt, hash
+    def __init__(self, salt: bytes, hash: str = HM96):
+        self.native, self.salt, self.hash = hashlib.sha512, salt, hash
         self.positions: dict[int, bytes] = {}
         root = bytes(64)
-        if self(root, 0, CHECK_ROWS) != call_keys(fixture, salt, root, 0, CHECK_ROWS, hash):
+        if self(root, 0, CHECK_ROWS) != call_keys(salt, root, 0, CHECK_ROWS, hash):
             raise ValueError(f"native keys don't frame tree hash {hash!r} as CommitmentDomain does")
 
     def __call__(self, root_b: bytes, index: int, m16: int) -> bytes:
         if self.native is None:
-            return call_keys(self.fixture, self.salt, root_b, index, m16, self.hash)
+            return call_keys(self.salt, root_b, index, m16, self.hash)
         pos = self.positions.get(m16)
         if pos is None:
             pos = self.positions[m16] = RangeIndexedDomain(m16).identity_sha512()
@@ -296,6 +297,8 @@ class _Ring:
     """Pinned host bytes handed out in order and given back in any order: a region is free again once it and every region
     handed out before it are given back."""
 
+    live: deque[list]
+
     def __init__(self, n: int):
         import torch
         self.buf, self.n, self.head, self.live = torch.empty(n, dtype=torch.uint8, pin_memory=True), n, 0, deque()
@@ -327,6 +330,8 @@ class _Arena:
     """The pinned host bytes a device tensor's copy lands in on its way to its file: `ARENA_RINGS` rings of `RING_BYTES`,
     made at the first take; a copy past half a ring gets pinned memory of its own.  A take waits for a give where no ring
     has room."""
+
+    rings: list[_Ring]
 
     def __init__(self, ring_bytes: int, rings: int):
         self.ring_bytes, self.count, self.rings, self.cv = ring_bytes, rings, [], threading.Condition()
@@ -405,8 +410,8 @@ def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = 
     digest's ``sha256`` lands in its entry with its write, and a file's ``then`` is called with its bytes and those of its
     `also` tensors (uint8 host tensors, copied with it) once they are written.  `fresh` and `here`: `_Copies.start`'s."""
     import torch
-    files = [(path, t, digest, (more or (None,))[0], tuple(more[1:])) for path, t, digest, *more in files]
-    srcs = [s.contiguous().reshape(-1).view(torch.uint8) for _, t, _, _, also in files for s in (t, *also)]
+    each = [(path, t, digest, (more or (None,))[0], tuple(more[1:])) for path, t, digest, *more in files]
+    srcs = [s.contiguous().reshape(-1).view(torch.uint8) for _, t, _, _, also in each for s in (t, *also)]
     if srcs and srcs[0].is_cuda:
         hosts, gives, done = _copies(srcs[0].device).start(srcs, fresh, here)
     else:
@@ -415,7 +420,7 @@ def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = 
     if _writers is None or _writers[0] != os.getpid():    # a forked child has none of its parent's threads
         _writers = (os.getpid(), ThreadPoolExecutor(WRITE_THREADS, thread_name_prefix="pearl-c-retain"))
     entries, batch, at = [], [], 0
-    for path, _, digest, then, also in files:
+    for path, _, digest, then, also in each:
         k = 1 + len(also)
         entry = _entry(path, hosts[at].numel())
         batch.append((path, hosts[at:at + k], digest, entry, then))
