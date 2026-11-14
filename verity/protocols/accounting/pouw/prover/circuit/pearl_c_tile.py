@@ -8,10 +8,10 @@ version.
                                       -> (Array<TM, Array<TN, F32>>, Array<TM, Array<TN, F32>>)          a tile's C̃ and U
     PearlCUnscale_v1{TM,TN,BIAS}      (u: Array<TM, Array<TN, F32>>, alpha_a: Array<TM, F32>, alpha_b: Array<TN, F32>
                                        [, bias: Array<TN, BF16>]) -> Array<TM, Array<TN, BF16>>           the served y
-    each _v2                          σ of its _v1 (`verity_vllm.definitions.boolean.sigma_lift`): the same body on bits, ``DOT``
+    each _v2                          σ of its _v1 (`verity.circuits.ops.boolean.versions.sigma_lift`): the same body on bits, ``DOT``
                                       the step's Boolean Definition, read as its word
 
-The device's chain is `verity_vllm.definitions.registry.pearl_c_forming`'s `PearlCChain_v1{K,DOT,G}`, the one Definition of it, which
+The device's chain is `verity.protocols.accounting.pouw.prover.circuit.pearl_c_forming`'s `PearlCChain_v1{K,DOT,G}`, the one Definition of it, which
 each word calls.
 
 **The order** is `verity.protocols.accounting.pouw.verifier.schemes.pearl_c_u`'s, op for op.  A′, B̃ are the formed E4M3 operands (K codes
@@ -51,8 +51,8 @@ from verity.circuits.ops.fp32 import Bf16Add, F32DivV2, F32MulV2
 from verity.circuits.ops.prims import F2fpBf16, HopperBF16WgmmaDot16, const
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity_vllm.definitions.boolean import sigma_lift
-from verity_vllm.definitions.registry.pearl_c_forming import PearlCChain
+from verity.circuits.ops.boolean.versions import sigma_lift
+from verity.protocols.accounting.pouw.prover.circuit.pearl_c_forming import PearlCChain
 
 __all__ = ["PearlCTileRead", "PearlCTileReadCell", "PearlCTileReadCellV2", "PearlCTileReadV2", "PearlCUnscale",
            "PearlCUnscaleV2"]

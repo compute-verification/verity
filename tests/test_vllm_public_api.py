@@ -249,7 +249,7 @@ KNOWN = frozenset({
     "verity_vllm.commit.opened",
     # the served circuits (`verity_vllm.definitions`), which outside code imported from `verity` before the served circuits'
     # move into the adapter; vllm takes these down under its goal vllm/benchmarks-import-public-only (due Wed 25 Nov)
-    "verity_vllm.definitions.boolean",
+    "verity.circuits.ops.boolean.versions",
     "verity_vllm.definitions.encoding",
     "verity_vllm.definitions.numerics._jit",
     "verity_vllm.definitions.numerics.cublas_gemm_rows",
@@ -303,7 +303,7 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.lifted",
     "verity_vllm.definitions.registry.marlin_moe",
     "verity_vllm.definitions.registry.moe",
-    "verity_vllm.definitions.registry.pearl_c_tile",
+    "verity.protocols.accounting.pouw.prover.circuit.pearl_c_tile",
     "verity_vllm.definitions.registry.pouw_rows",
     "verity_vllm.definitions.registry.prims",
     "verity_vllm.definitions.registry.ref_prims",

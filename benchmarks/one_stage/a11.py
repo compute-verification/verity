@@ -552,7 +552,7 @@ def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit
     or with ``boolean`` its Boolean version) and its unit: the deepest Definition of that one's chain in the probed unit's
     family. Calls of the probed specialization come first (the unit the table sized; prefill's attention, say, has one per
     prefix length), then by step preference."""
-    from verity_vllm.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     cands = []
     for m in res.instances:

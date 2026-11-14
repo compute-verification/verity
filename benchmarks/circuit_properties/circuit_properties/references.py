@@ -78,7 +78,7 @@ def configs() -> dict[str, tuple[dict, str]]:
 def on_bits(word: CompositeDefinition, version: int, **bindings):
     """σ(``word``) at ``bindings`` (`boolean.lift_body`: each Call the Boolean version of its Definition), with the QKV bias
     add, `BiasAdd_v1`, which has no registered Boolean version, as σ(`BiasAdd_v1`) (its `Bf16Add`s on bits)."""
-    from verity_vllm.definitions import boolean as BB
+    from verity.circuits.ops.boolean import versions as BB
     from verity_vllm.definitions.registry import b1
     bias = BB.sigma_lift(b1.BiasAdd, 2, register=False)
 
@@ -94,7 +94,7 @@ def on_bits(word: CompositeDefinition, version: int, **bindings):
 
 def layer_fn(C: dict, T: int = 1):
     """One b1 layer (not layer 0) at T positions on bits, as an unregistered root Definition."""
-    from verity_vllm.definitions import boolean as BB
+    from verity.circuits.ops.boolean import versions as BB
     from verity_vllm.definitions.registry import b1
     BB.load()
     H, NH, KVH, D = C["H"], C["NH"], C["KVH"], C["D"]

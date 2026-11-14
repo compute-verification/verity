@@ -12,7 +12,7 @@ a lookup made in a process that imported this package scans them.
 import re
 
 from verity.circuits.defs import catalog_package
-from verity_vllm.definitions.boolean import catalog_loader
+from verity.circuits.ops.boolean.versions import catalog_loader
 
 catalog_package(__name__)
 
