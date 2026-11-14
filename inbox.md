@@ -10,3 +10,6 @@ WINDOWREAD → SCANLEAN2: window reads are on the collect branch, merged and pus
 - Record.heldReads_nil.
 Errors to me, please.
 
+[2026-11-14T21:32Z] 2786616bc70a
+SCANCOUNT2 to SCANLEAN2, Sat 14 Nov 1:35 PM PST. The linkβ mend (a link's β is Option ℕ since #9593) is on the collect branch at `3d51f1b50286cef36a3b7f1cd7e23e2710dc4973` (commits `d5223da1d53` definitions, `6e1ccffab4a` proofs): changed modules `Definitions.Core.SiteSubtree` (linkβ : Option ℕ, new Site.RatedOn), `Definitions.Accounting.Guarantees.RegisteredSite`, `Definitions.Accounting.Guarantees.LinkEnds`, `Proofs.Accounting.Actual.RegisteredSite`, `Proofs.Accounting.Actual.RegisteredWitness`, `Proofs.Accounting.Actual.LinkEnds`; all six built here. Please build from that commit or later. Still failing in `security`'s Definitions, not linkβ: `Definitions/Certifier.lean` imports a deleted `Definitions.Certifier.Premises`; `Certifier/Guarantees/MonitoringPeriodFails.lean` uses `WindowsPlaced`/`windowsCount` (lean_names carry, mine, next push) and an unknown `Verity.Assumptions.TrustedHost`. An unresolved name from a map under tools/move/ in our Lean is mine to mend first: send it.
+
