@@ -205,6 +205,17 @@ PROVER_ONLY = {
                     "entry for a Definition's gates"),
 }
 
+#: The runtime, its package and each module in it: what runs parties over channels and what starts a side as another
+#: process (the layout's ``verity/runtime/``, ``tests/tree.toml``).
+RUNTIME = ("verity.runtime", *sorted(f"verity.runtime.{p.stem}" for p in (ROOT / "verity" / "runtime").glob("*.py")
+                                     if p.stem != "__init__"))
+#: The trees whose files import no module of the runtime: only what starts a run does (a demo, a benchmark, the `verity`
+#: command), and it hands a protocol's file the stream, the side or the driver it needs.
+RUNTIME_FREE = ("verity/protocols/", "adapters/")
+#: Files of ``RUNTIME_FREE``, outside its tests, that import the runtime all the same, each with its owner and what it
+#: imports.  It only shrinks.
+RUNTIME_IMPORTERS: dict[str, str] = {}
+
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 
@@ -826,6 +837,75 @@ def test_a_benchmarks_import_is_found() -> None:
 def _is_test(rel: str) -> bool:
     parts = Path(rel).parts
     return "tests" in parts[:-1] or parts[-1].startswith("test_") or parts[-1] == "conftest.py"
+
+
+def _runtime_importers(texts: dict[str, str]) -> dict[str, list[str]]:
+    """``{file: ["line: module", ...]}`` for each file of ``RUNTIME_FREE`` outside its tests that names a module of
+    ``RUNTIME``, the most specific one a line names: in an import statement (``from package import module`` too, and a
+    relative one), or as a whole string (an import call's argument, a ``"module:attr"``, a ``-m`` argument)."""
+    found: dict[str, list[str]] = {}
+    for rel, text in sorted(texts.items()):
+        if not rel.startswith(RUNTIME_FREE) or _is_test(rel) or not any(r.rpartition(".")[2] in text for r in RUNTIME):
+            continue
+        package = Path(rel).parts[:-1]
+        hits = set()
+        for node in ast.walk(ast.parse(text, filename=rel)):
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                base = ".".join([*package[:len(package) - node.level + 1], *([node.module] if node.module else [])]
+                                if node.level else [node.module])
+                names = [base, *(f"{base}.{a.name}" for a in node.names)]
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                names = [node.value.partition(":")[0]]
+            else:
+                continue
+            named = {r for n in names for r in RUNTIME if n == r or n.startswith(r + ".")}
+            hits |= {(node.lineno, r) for r in named if not any(o.startswith(r + ".") for o in named)}
+        if hits:
+            found[rel] = [f"{line}: {name}" for line, name in sorted(hits)]
+    return found
+
+
+def test_no_protocol_or_adapter_imports_the_runtime() -> None:
+    """No file of a protocol or an adapter, outside its tests, imports the runtime (``RUNTIME``), apart from
+    ``RUNTIME_IMPORTERS``, which only shrinks. It counts direct imports only: a file that imports ``verity.party`` loads
+    ``verity.runtime.handshake`` through it, uncounted."""
+    found = _runtime_importers(_tracked_python())
+    offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in RUNTIME_IMPORTERS for hit in hits]
+    assert not offenders, ("no protocol or adapter imports the runtime, only what starts a run does: take the stream, the "
+                           "side (`Side.of`) or the driver as an argument from the caller that starts the run, and declare "
+                           "what a protocol is with its manifest. RUNTIME_IMPORTERS only shrinks.\n" + "\n".join(offenders))
+    stale = sorted(set(RUNTIME_IMPORTERS) - set(found))
+    assert not stale, f"RUNTIME_IMPORTERS entries that no longer import the runtime; remove them: {stale}"
+
+
+def test_a_runtime_import_is_found() -> None:
+    """The check above isn't vacuous: an import of a runtime module by either statement, by a relative one, by an import
+    call and as a ``-m`` argument are each found, and so is the package's own (``import verity.runtime``, ``from verity
+    import runtime``); the manifest, the party, a docstring's mention, a test's import and a file outside
+    ``RUNTIME_FREE`` are not."""
+    module = RUNTIME[1]
+    package, _, name = module.rpartition(".")
+    texts = {
+        "verity/protocols/x/a.py": (f"from {package} import {name}\nfrom {module} import Side\nimport {module} as R\n"
+                                    f"from ...{package.removeprefix('verity.')} import {name}\n"),
+        "verity/protocols/x/b.py": (f"import importlib\nimportlib.import_module('{module}')\n"
+                                    f"ARGV = ('python', '-m', '{module}')\nPROTOCOL = '{module}:PROTOCOL'\n"),
+        "adapters/y/z.py": f"from {RUNTIME[-1]} import Key\n",
+        "verity/protocols/x/clean.py": (f'"""Handed a `{module}.Side`."""\n'
+                                        "from verity.protocol import Manifest\n"
+                                        "from verity.party import Party\n"),
+        "verity/protocols/x/c.py": "import verity.runtime\nfrom verity import runtime\n",
+        "verity/protocols/x/tests/test_a.py": f"from {module} import run\n",
+        "demos/d/run.py": f"from {package} import {name}\n",
+    }
+    assert _runtime_importers(texts) == {
+        "adapters/y/z.py": [f"1: {RUNTIME[-1]}"],
+        "verity/protocols/x/a.py": [f"{line}: {module}" for line in (1, 2, 3, 4)],
+        "verity/protocols/x/b.py": [f"{line}: {module}" for line in (2, 3, 4)],
+        "verity/protocols/x/c.py": ["1: verity.runtime", "2: verity.runtime"],
+    }
 
 
 def _uses(tree: ast.AST, names: set[str]) -> list[tuple[str, int]]:
