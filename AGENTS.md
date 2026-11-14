@@ -17,7 +17,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     `certifier` (compute, memory and network); `policy/` holds `inference_only`, on accounting. Both layers use the
     proofs, and the proofs use neither. On top of the audits, `compose/` is a ninth protocol. Its `verifier/` holds its
     Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an auditor with no devices at the
-    datacenter runs, and `onsite/` what an auditor with devices there runs. Its `device/` holds the auditor host's
+    datacenter runs, and `onsite/` what an auditor with devices there runs; beside them, `spot_caller/` is the protocol
+    both lists call SPOT through, with the recursive audit. Its `device/` holds the auditor host's
     challenger service. Target, not yet: `experimental/NAME/` for a whole directory
     no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
     its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `device/` is the
