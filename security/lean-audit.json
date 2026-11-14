@@ -310,11 +310,6 @@
    "digest": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
    "why": "A scope: an opened row costs no advice bits only where the previous run's check pins its closing row, a valid run's closing row a function of its inputs, as CheckedUnique pins its checked inputs; the deployed check's honest witness concludes it."
   },
-  "NetTiming.OpensAtInputs": {
-   "owner": "@proofs",
-   "digest": "c1281698ce1c924f21d0edd85fdad78a317bc854459f880bb520aa7b08d90cf2",
-   "why": "A scope: each statement's opening gates are inputs of its circuit, where a run reads the row it opens; the pool circuit's honest witness concludes it."
-  },
   "NetTiming.MonitoringPeriodAdaptive": {
    "owner": "@proofs",
    "digest": "40200a70f1ec7f8e05bfe30dd7c682921b0ddd02dfa5bbb84fcac9df0f1a9302",
@@ -334,6 +329,11 @@
    "owner": "@proofs",
    "digest": "c12a6f62df4f753d7747e2fda7590a7841d3b587e77be0e6d707d48a4596339e",
    "why": "The layer below's guarantee at each run: the leak relation with checked inputs and the carried rows (LeakAtCarried) at the run's faulty set, which a live SampledLeakCarried would give."
+  },
+  "NetTiming.OpensAtInputs": {
+   "owner": "@proofs",
+   "digest": "c1281698ce1c924f21d0edd85fdad78a317bc854459f880bb520aa7b08d90cf2",
+   "why": "A scope: each statement's opening gates are inputs of its circuit, where a run reads the row it opens; the pool circuit's honest witness concludes it."
   },
   "NetTiming.ResetsIn": {
    "owner": "@proofs",
@@ -27410,12 +27410,12 @@
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
     "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase": {
-    "instLENat.le (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)) (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases": {
     "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase": {
+    "instLENat.le (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)) (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
     "instLEENat.le As.encard (instHPow.hPow 2 c).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
