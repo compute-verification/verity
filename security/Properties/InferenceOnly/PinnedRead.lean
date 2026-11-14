@@ -1,7 +1,6 @@
 module
 
 public import InferenceOnlyCheck.Theta
-public import Base.Bytes
 public import Properties.InferenceOnly.Opening
 public import Properties.InferenceOnly.RecordForm
 public import Properties.Flock.Circuit.UnitInst
@@ -17,10 +16,8 @@ public import Flock.ReadNet.Template
 the verdict bit 1; `ReturnsRow`, that the unit returns its table's row, the fill row, or a SHA-512 collision;
 `PinnedReadBinds`, that a pinned read returns its row; `PinnedReadNontrivial`, that at the verdict bit 0 some pinned
 read does not; `PinnedReadHonest`, that the check's own form (`InferenceOnlyCheck.Record.SecurityProofs.form`) has a pinned
-read; `OpenedRowReturned`, that an opening's declared row is the row its reader returns; `ThetaRootRowRegistered`,
-that the unit's root and domain id gates hold the ones registered for the opening's parameter; and
-`PinnedReadRegistered`, the two together: the unit returns the row of the table registered under that parameter. The
-proofs are `Proofs.Properties.InferenceOnly.Lemmas.Opening`'s.
+read; and `OpenedRowReturned`, that an opening's declared row is the row its reader returns. The proofs are
+`Proofs.Properties.InferenceOnly.Lemmas.Opening`'s.
 
 A pinned read is a read by a pinned reader: the pin is the closure digest of the reader's Definition
 (`InferenceOnlyCheck.Record.pinOf`), and pins no table and no root.
@@ -112,8 +109,10 @@ what the unit's check and `table`'s opening at the key hashed (`ReturnsRow`). A 
 its row goes straight into the block's GEMM and never leaves the unit, so `portsOf` gives no gates for it.
 
 By itself it fixes no table: `table` is whatever is committed under the root and domain id the unit's gates hold in
-`Yc`, and no hypothesis ties those to a registered root. The open premise `ThetaRootRowRegistered` ties them to the
-ones registered for the opening's parameter, and `PinnedReadRegistered` is what the two give together. -/
+`Yc`, and no hypothesis ties those to a registered root, since every hypothesis on `Yc` is at the unit `u` alone. What
+would tie them is that `Yc` is a transcript the proof system accepted, whose input rows open against the window's
+registered roots, with this unit's root and domain id rows among them; no statement here says so, and its form waits
+on the sampled proofs' predicate for a proof block's input rows. -/
 def PinnedReadBinds : Prop :=
   ∀ (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ) (dfn : Defn) (ro : Roles)
     (out : String) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ct : Flock.Circuit)
@@ -183,64 +182,5 @@ def OpenedRowReturned : Prop :=
     InferenceOnlyCheck.Record.SecurityProofs.form.layout dfn = some ro →
     readRows dfn ro out count words = true →
     InferenceOnlyCheck.Record.SecurityProofs.form.openedRow c r = some o → o = out
-
-/-- **A θ table read's root and domain id rows hold the registered ones** (an open premise): where the check's own form
-holds a pinned read of row `r`, opened from the table `name` of the parameter `p`, and classes every row of the same
-unit's root port as a table read of that table's root and every row of its domain id port as one of its domain id,
-the root the unit's root gates hold in `Yc` is the one the run's own record registers `p` under
-(`window.registered_roots`, the root `IsTheta` reads), and the domain id its domain gates hold is the one the log's
-first record registers for `p` (its last `registered` entry of that value, whose root `IsTheta` reads), each as its
-lower-case hex. The check classes those rows and holds no row to a value, so this is not the check's; what would give
-it is that a θ table read's rows, the values a window supplies for `p`'s root and domain id, are opened against the
-registered root at those gates. Not proved, and stated nowhere else. -/
-def ThetaRootRowRegistered : Prop :=
-  ∀ (c : InferenceOnlyCheck.Record.SecurityProofs.form.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ)
-    (dfn : Defn) (ro : Roles) (out : String) (tags : Flock.Tags) (bytes : ByteArray)
-    (tables : List (String × ByteArray)) (ct : Flock.Circuit) (tu : Flock.TmplUnit)
-    (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
-    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
-    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
-    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening) (ok : Bool)
-    (log : Array Json) (run e : Json) (R D : String),
-    PinnedReadAt InferenceOnlyCheck.Record.SecurityProofs.form c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n
-      consts u q Yc table ok →
-    (∀ row < (InferenceOnlyCheck.Record.SecurityProofs.form.wiring c).cutsOf r.tid ro.root,
-      InferenceOnlyCheck.Record.SecurityProofs.form.held c ⟨r.tid, r.unit, ro.root, row⟩ = some (.table name p true)) →
-    (∀ row < (InferenceOnlyCheck.Record.SecurityProofs.form.wiring c).cutsOf r.tid ro.domain,
-      InferenceOnlyCheck.Record.SecurityProofs.form.held c ⟨r.tid, r.unit, ro.domain, row⟩ = some (.table name p false)) →
-    TrustedRun tr log run →
-    InferenceOnlyCheck.Theta.strAt (InferenceOnlyCheck.Theta.getD (InferenceOnlyCheck.Theta.getD run "window") "registered_roots") p =
-      some R →
-    InferenceOnlyCheck.Theta.lastWith log[0]! "registered" "value" p = some e → InferenceOnlyCheck.Theta.strAt e "domain" = some D →
-    Flock.hexOf (ByteArray.mk (Verity.Digest.bytes (q.rootOf Yc)).toArray) = R ∧
-      Flock.hexOf (ByteArray.mk (Verity.Digest.bytes (q.domainOf Yc)).toArray) = D
-
-/-- **A pinned read returns the row of the table registered under its parameter**: with the hypotheses of
-`PinnedReadBinds` at the check's own form and those of `ThetaRootRowRegistered`, the unit's root and domain id gates
-hold the root and domain id registered for the opening's parameter `p`, so `table`, committed under them
-(`PinnedRead`), is the table registered under `p`; and the unit returns its row (`ReturnsRow`). It follows from
-`ThetaRootRowRegistered` and `PinnedReadBinds` (`pinnedReadRegistered`), and holds no further than the open premise. -/
-def PinnedReadRegistered : Prop :=
-  ∀ (c : InferenceOnlyCheck.Record.SecurityProofs.form.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ)
-    (dfn : Defn) (ro : Roles) (out : String) (tags : Flock.Tags) (bytes : ByteArray)
-    (tables : List (String × ByteArray)) (ct : Flock.Circuit) (tu : Flock.TmplUnit)
-    (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
-    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
-    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
-    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening)
-    (log : Array Json) (run e : Json) (R D : String),
-    PinnedRead InferenceOnlyCheck.Record.SecurityProofs.form c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n
-      consts u q Yc table →
-    (∀ row < (InferenceOnlyCheck.Record.SecurityProofs.form.wiring c).cutsOf r.tid ro.root,
-      InferenceOnlyCheck.Record.SecurityProofs.form.held c ⟨r.tid, r.unit, ro.root, row⟩ = some (.table name p true)) →
-    (∀ row < (InferenceOnlyCheck.Record.SecurityProofs.form.wiring c).cutsOf r.tid ro.domain,
-      InferenceOnlyCheck.Record.SecurityProofs.form.held c ⟨r.tid, r.unit, ro.domain, row⟩ = some (.table name p false)) →
-    TrustedRun tr log run →
-    InferenceOnlyCheck.Theta.strAt (InferenceOnlyCheck.Theta.getD (InferenceOnlyCheck.Theta.getD run "window") "registered_roots") p =
-      some R →
-    InferenceOnlyCheck.Theta.lastWith log[0]! "registered" "value" p = some e → InferenceOnlyCheck.Theta.strAt e "domain" = some D →
-    Flock.hexOf (ByteArray.mk (Verity.Digest.bytes (q.rootOf Yc)).toArray) = R ∧
-      Flock.hexOf (ByteArray.mk (Verity.Digest.bytes (q.domainOf Yc)).toArray) = D ∧
-      ReturnsRow ct hB n u q Yc table
 
 end InferenceOnlyCheck.Properties.Record

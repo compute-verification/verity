@@ -2085,7 +2085,6 @@
     {"file": "benchmarks/network_traces/scan_period.sh", "count": 7},
     {"file": "benchmarks/network_traces/scan_zk.sh", "count": 49},
     {"file": "benchmarks/network_traces/served_session.py", "count": 56},
-    {"file": "benchmarks/network_traces/stall_probe.py", "count": 1},
     {"file": "benchmarks/network_traces/tests/test_certifier_piece.py", "count": 105},
     {"file": "benchmarks/network_traces/tests/test_chain_record.py", "count": 55},
     {"file": "benchmarks/network_traces/tests/test_demo_stub.py", "count": 10},
@@ -2094,7 +2093,6 @@
     {"file": "benchmarks/network_traces/tests/test_out_request_values.py", "count": 5},
     {"file": "benchmarks/network_traces/tests/test_record.py", "count": 2},
     {"file": "benchmarks/network_traces/tests/test_served_session.py", "count": 26},
-    {"file": "benchmarks/network_traces/tests/test_stall_probe.py", "count": 17},
     {"file": "benchmarks/network_traces/tests/test_warden_chain.py", "count": 53},
     {"file": "benchmarks/network_traces/tests/test_wipe_egress.py", "count": 9},
     {"file": "benchmarks/network_traces/tests/test_wipe_gate.py", "count": 1},
@@ -5102,6 +5100,8 @@
     {"file": "verity/protocols/accounting/poub/verifier/tests/poub_vectors.py", "count": 11},
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_poub.py", "count": 9},
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_poub_vectors.py", "count": 9},
-    {"file": "benchmarks/network_traces/tests/test_block_certifier.py", "count": 31}
+    {"file": "benchmarks/network_traces/tests/test_block_certifier.py", "count": 31},
+    {"file": "verity/protocols/accounting/certifier/device/stall_probe.py", "count": 1},
+    {"file": "verity/protocols/accounting/certifier/device/tests/test_stall_probe.py", "count": 17}
   ]
 }

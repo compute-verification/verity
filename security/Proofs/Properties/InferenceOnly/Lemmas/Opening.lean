@@ -41,8 +41,7 @@ declared row is. Of `laidOutAs` the proof reads the unit's number alone: that `S
 what makes a row's name mean its port, and no step here needs it. It gives no file, record and transcript that meet
 its hypotheses (`PinnedRead`). Two statements not proved are a listing's witnesses: `PinnedReadHonest`, that the
 check's own form has some, and `PinnedReadNontrivial`, that with the verdict bit 0 the unit returns another row
-than the table's own opening holds. `pinnedReadRegistered`: `PinnedReadRegistered` from the open premise
-`ThetaRootRowRegistered` and `pinnedReadBinds`.
+than the table's own opening holds.
 -/
 
 @[expose] public section
@@ -355,15 +354,5 @@ theorem pinnedReadBinds : PinnedReadBinds := by
     rw [hh]
     unfold Hash.EmbeddingRead.h
     exact (ite_eq_right hlt).trans (ite_eq_right hlt).symm
-
-/-- **`PinnedReadRegistered` from the open premise**: the premise gives the registered root and domain id, and
-`pinnedReadBinds` the row. -/
-theorem pinnedReadRegistered (h : ThetaRootRowRegistered) : PinnedReadRegistered := by
-  intro c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n consts u q Yc table log run e R D hp hroot hdom
-    htr hR he hD
-  obtain ⟨h1, h2⟩ := h c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n consts u q Yc table true log run
-    e R D hp hroot hdom htr hR he hD
-  exact ⟨h1, h2, pinnedReadBinds InferenceOnlyCheck.Record.SecurityProofs.form c j tr P r name p pin k dfn ro out tags bytes
-    tables ct tu hB n consts u q Yc table hp⟩
 
 end InferenceOnlyCheck.Properties.Record.SecurityProofs
