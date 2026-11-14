@@ -271,7 +271,7 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's fed by the
   stand-in certifier, and the restore arms' seeded sampling) aren't served by vLLM's.
 - **The arm behind the network certifier,** `tick-certifier`, is the tick arm with the certifier itself in front
-  (`benchmarks/network_traces/warden_serve.py`, with its watermark), so vLLM's client can send it: the client posts
+  (its serving program, `serve_tax.CERTIFIER`, with its watermark), so vLLM's client can send it: the client posts
   to a shim (`cell_shim`) that speaks the certifier's cells, the certifier releases each request to the id front
   (`verity-vllm ids-front`) before the engine and feeds the certified tick, and each answer leaves as ids on the
   certifier's schedule. Two commands serve it, because the certifier never runs on the node it certifies: `run --arm

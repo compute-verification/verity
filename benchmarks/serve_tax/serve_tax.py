@@ -1810,7 +1810,7 @@ FRONT_PORT = 18746
 #: the network certifier's schedule such an arm is served under, by the fields of its parameters; its lanes and its
 #: queue are by default the highest rung (`certifier_cells`). One cell, so one id, leaves a connection each slot of a
 #: bucket, the first ``delay`` buckets after the connection's admission; a request is at most ``ingress_cells`` cells,
-#: read within ``ingress_buckets`` buckets, and an answer at most ``max_tokens_cap`` ids
+#: read within ``ingress_buckets`` buckets, and an answer at most the ids its last field, the response limit, allows
 CELLS = {"cell_bytes": 4096, "slots": 1, "bucket_ms": 250, "delay": 60, "window": 600, "ingress_cells": 4,
          "ingress_buckets": 16, "egress_cells": 4096, "max_tokens_cap": 2048}
 CERTIFIER = ROOT / "benchmarks/network_traces/warden_serve.py"

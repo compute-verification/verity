@@ -1,6 +1,6 @@
 """The benchmark client's shim to the network certifier (`cell_shim`), against the certifier itself.
 
-The network certifier (`Warden`) runs tick by tick on a `VirtualClock`, in its id egress form with a limit on a
+The network certifier runs tick by tick on a `VirtualClock`, in its id egress form with a limit on a
 response's ids, in front of an in-memory server that answers in the id form; the shim's HTTP clients and its connections to the
 certifier are in memory too. Nothing waits on the host's clock: the test moves the clock and waits for each side to
 have read what the other wrote."""

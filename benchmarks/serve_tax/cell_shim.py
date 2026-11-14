@@ -1,8 +1,8 @@
 """vLLM's benchmark client's shim to the network certifier (`serve_tax`'s ``tick-certifier`` arm).
 
 vLLM's client (``vllm bench serve``) speaks HTTP: a streamed ``POST /v1/completions`` whose prompt is text or token ids.
-The network certifier (`verity.protocols.accounting.certifier.verifier.warden`) speaks fixed-size cells, one request a connection,
-and in its id egress form takes a canonical token-id request (`active.id_request`) and answers one id event a ``DATA``
+The network certifier (the module this one imports `cells` from) speaks fixed-size cells, one request a connection, and
+in its id egress form takes a canonical token-id request (`active.id_request`) and answers one id event a ``DATA``
 cell (`io_tie.id_event`), then an ``END`` that holds `io_tie.TRAILER`. `HttpShim` listens between them on the client's
 side of the certifier, the client's thin shim (that module's `cells` and `Shim`) with an HTTP face:
 
@@ -19,8 +19,8 @@ side of the certifier, the client's thin shim (that module's `cells` and `Shim`)
 - a connection the certifier refuses is a 503 and one it fails or cuts before its first id a 502; one that fails or is
   cut after an id is closed without the stream's last chunk, so the client counts it failed and never as a short answer.
 
-Each connection's record is one line of ``--log``, in the keys of `warden_serve.connection_log` (every cell's kind and
-arrival after the certifier's origin, the request's and the response's digests), which is what the certifier's offline
+Each connection's record is one line of ``--log``, in the keys of the certifier's serving program's `connection_log`
+(every cell's kind and arrival after the certifier's origin, the request's and the response's digests), which is what the certifier's offline
 check reads as its ``client.json`` (`client_doc`), with the request's id, its token counts and the HTTP status beside
 them. A request the shim did not send has a line too, with why (``unsent``): one it refused, and one it never read
 whole, its client having closed first. No prompt and no token id is kept.
