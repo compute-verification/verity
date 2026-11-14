@@ -2,7 +2,7 @@
 (`ChallengerInnerTrees.lean`, the verifier, which `VStar.Recursive.checkBlobs` reads) against its Python mirror
 `verity_flock.rec_live.tree_held_reason`, through `spot-difftest`'s piece `challenger_inner_trees`.
 
-The sampled cases are inner sessions as rec_live's live-coin part (`rec_live.CoinServer`) runs them on coin trees a
+The sampled cases are inner sessions as rec_live's live-coin part (`rec_live.LiveCoinPart`) runs them on coin trees a
 challenger (`challenger.LiveChallenger`) samples and opens, their release log lines among the challenger's roots and
 releases, one tree a session; then one mutation each (`INNER_TREES_NAMES`): a tree no line logged, or another than the one
 logged under its root; a link root, table or point edited; a round's coins, entry, number or stream edited, so it is a
@@ -82,7 +82,7 @@ class Inner:
         self.spec = CT.Spec.of_json({"block": rng.choice([1, 2, 3, 5]), "rounds_log": rng.choice([0, 1, 2]),
                                      "scheme": CT.SCHEME, "streams": [CT.SESSION] + self.streams})
         self.source = _Source(ch)
-        cs = RL.CoinServer(rng.randbytes, self.spec, self.source)
+        cs = RL.LiveCoinPart(rng.randbytes, self.spec, self.source)
         block = self.spec.block
         points = rng.randint(1, block)
         cs.start({"link": {"m": rng.randint(1, block // points), "points": points}})

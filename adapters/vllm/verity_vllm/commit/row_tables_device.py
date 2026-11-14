@@ -35,13 +35,21 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
 from verity.protocols.accounting.pouw.prover.serving import (
     ROW_TABLE_SEG_BYTES as SEG_BYTES,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
     ROW_TABLE_TAB_WORDS as TAB_WORDS,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
     RowTableArgs as Args,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
     hm_tables,
     leaf_prefixes,
-    row_table_host_lib as host_lib,
     table_width,
     u64_words,
+)
+from verity.protocols.accounting.pouw.prover.serving import (
+    row_table_host_lib as host_lib,
 )
 from verity_torch.pouw import RowTableLibrary as DeviceLibrary
 

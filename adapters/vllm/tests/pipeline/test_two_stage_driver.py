@@ -113,14 +113,14 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     challenger's coins, opened after the interior docket's digest."""
     c = _class()
     got = TS.first(c.public(), PAIR, RULE, _placed(c.layout))
-    assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
+    assert got.layout.n_rho == N_RHO and got.docket.record["population"] == N
     assert _samples_q(got) and got.read
     handoff = json.loads(json.dumps(got.first_stage()))
     assert handoff["units"] == list(got.sample.units) and handoff["spec"] == got.stream.spec.digest()
     again = TS.resume(handoff, PAIR, FC.Challenger("second"))
-    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
-    ireg, second = again.second(*_interior(again.layout, again.registration.digest))
-    assert ireg.order == again.registration.order and again.coins.live
+    assert (again.docket.digest, again.sample.units) == (got.docket.digest, got.sample.units)
+    ireg, second = again.second(*_interior(again.layout, again.docket.digest))
+    assert ireg.order == again.docket.order and again.coins.live
     assert second.replay_sample == again.sample and len(second.units) == Q * K
     assert [u // N_RHO for u in second.units] == list(range(Q))
 
@@ -133,8 +133,8 @@ def test_an_inlined_checks_second_stage_samples_the_template_its_body_calls():
     got = TS.first(c.public(), WRAP, RULE, _placed(c.layout))
     assert got.layout.inline and got.stream.spec.check.query == P.template_instance_query(PAIR)
     again = TS.resume(json.loads(json.dumps(got.first_stage())), WRAP, FC.Challenger("second"))
-    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
-    _, second = again.second(*_interior(again.layout, again.registration.digest))
+    assert (again.docket.digest, again.sample.units) == (got.docket.digest, got.sample.units)
+    _, second = again.second(*_interior(again.layout, again.docket.digest))
     assert len(second.units) == Q * K and [u // (2 * N_RHO) for u in second.units] == list(range(Q))
 
 
@@ -165,7 +165,7 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     assert handoff["rule"]["k"] == ks
     again = TS.resume(handoff, BOTH, FC.Challenger("second"))
     assert again.stream.spec.selection == S.TwoStage(c.layout.grain, RULE.replay, ks)
-    _, second = again.second(*_interior(again.layout, again.registration.digest, again.stream.interior_program(Q)))
+    _, second = again.second(*_interior(again.layout, again.docket.digest, again.stream.interior_program(Q)))
     assert second.law == S.second_sampling_design(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
     pairs = [u for u in second.units if u < Q * 2 * N_RHO]
     assert sorted(u // (2 * N_RHO) for u in pairs) == [0, 0, 0, 1, 1, 1] and len(second.units) - len(pairs) == Q
@@ -246,7 +246,7 @@ def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
     assert hand["family"] == mine and "window_root" not in hand and TS.first_root(hand) == pub["run"]
     for handoff in (hand, {**hand, "window_root": pub["run"]}, {k: v for k, v in hand.items() if k != "family"}):
         again = TS.resume(handoff, PAIR, window_root=TS.first_root(handoff))
-        assert again.registration.digest == got.registration.digest and again.sample.units == got.sample.units
+        assert again.docket.digest == got.docket.digest and again.sample.units == got.sample.units
         assert again.stream.family(again.sample) == mine
 
     assert FC.LABEL != mine != AC.family(0)
@@ -328,7 +328,7 @@ def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
     assert _samples_q(got)
     again = TS.resume(json.loads(json.dumps(got.first_stage())), SAME, FC.Challenger("second"))
-    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
+    assert (again.docket.digest, again.sample.units) == (got.docket.digest, got.sample.units)
 
 
 def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample():
@@ -456,7 +456,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     sampled = [hs[n] for n in names]
     toks = ((1, 5, 0, 2), (0, 4, 3, 2))
     it = IR.interior([IR.Span(f"s{k}", member, IR.table_reads(t, toks[k]), [[0, cells]], "p" * 64)
-                      for k, t in enumerate(sampled)], cells, got.registration.digest, got.sample.units,
+                      for k, t in enumerate(sampled)], cells, got.docket.digest, got.sample.units,
                      row="two-stage-driver-test", tables=sampled, served=got.record, positions=c, links=links)
     entries = {e["value"]: e for e in it.record["registered"]}
     assert list(entries) == [x.value for x in links]
@@ -562,8 +562,8 @@ def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_
     assert list(c.public()["values"]) == [*BR.PARTS, BR.STOP]
     got = TS.first(c.public(), PAIR, RULE, _placed(c.public()), stop=stop)
     assert [v.name for v in got.stream.spec.values if v.phase == "serve"] == list(BR.PARTS)
-    assert [r["port"] for r in got.registration.record["roots"]] == list(BR.PARTS)
-    assert got.registration.record["population"] == N and len(got.sample.units) == Q
+    assert [r["port"] for r in got.docket.record["roots"]] == list(BR.PARTS)
+    assert got.docket.record["population"] == N and len(got.sample.units) == Q
 
 
 #: a serve's stop rule: one stop id, a model of 64 ids, responses of at most 4
@@ -716,7 +716,7 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
     blocks = TS.family_of(got.layout, blocks=True)
     coins = _placed(pub, "stop", blocks=True)
     s = TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", coins, got.record)
-    assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == N
+    assert s["record"]["previous"] == got.docket.digest and s["record"]["population"] == N
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP]
     assert sorted(e["value"] for e in s["record"]["registered"]) == sorted(BS.STOP_READS)
     assert s["record"]["window"] == {**got.record["window"], "population": "stop"}
@@ -961,12 +961,12 @@ def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it
     got = VR.record("stop_record", first, summary, **NAMES)
     layout = r.layout
     assert got["class"] == f"w{pubs[0]['window']}/p{layout.prompt}-o{layout.outputs}"
-    assert got["registration"] == r.boundary == first["registration"] != r.registration.digest
+    assert got["registration"] == r.boundary == first["registration"] != r.docket.digest
     assert got["rate"] == VR.rate({"population": layout.spans, **_design("subset", len(r.sample.units))})
     assert (got["verdict"], got["verifier"]["module"]) == ("not complete", SA.TOOL)
-    assert (got["stream_registration"], got["stream_names_boundary"]) == (r.registration.digest, True)
-    assert r.registration.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
+    assert (got["stream_registration"], got["stream_names_boundary"]) == (r.docket.digest, True)
+    assert r.docket.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
     interior = _record(4, 4, previous=r.boundary, interior=True)
-    second = {"first_stage": {"registration": r.first.registration.digest}, "held": True, "outcome": {"accepted": False},
+    second = {"first_stage": {"registration": r.first.docket.digest}, "held": True, "outcome": {"accepted": False},
               "second_stage": {"registration": R.digest(interior)}}
     assert VR.record("second_stage", first, second, stream=interior, **NAMES)["verdict"] == "withheld"

@@ -20,7 +20,7 @@ and its units, from the finest up:
   yet, so stubs here (every id `stub:`), each one's ANDs composed from pinned pieces. A row op is a unit whole
   when its outputs fit a size class, or commits its row statistic as a unit of its own (`shared`: RMSNorm's 1/rms, the
   quantizer's scale, softmax's max and sum) read by coordinate units or chunks (`chunked`: the quantizer at N > 16,384,
-  whose whole row of N/2 code pairs and its scale is over `UNIT_CLASS_MAX`), or recomputes it in each reader
+  whose whole row of N/2 code pairs and its scale is over `SIZE_CLASS_MAX`), or recomputes it in each reader
   (`recomputed`); ReLU is a coordinate or a chunk of at most 16,384. The planner chooses (`candidates.cuts`).
 
 The harm is incorrect ANDs: each unit is credited its ANDs (a recomputed statistic once, in the op it belongs to), so a
@@ -584,7 +584,7 @@ def parameters(m: Model, s: Serving, share: float) -> list[list[str]]:
         ["replay", f"{s.replay:g} GPU-s a drawn request", "large: the Phase 2 model's estimate"],
         ["serve-time commitments", "units' outputs, request bytes, KV carry, PoUW h1 receipts, bandwidth receipts",
          "h1 assumed; commitment rate `inputs.commit_per_byte`"],
-        ["cost model", "C-Flock zk sessions of ScaledMmS8Coordinate at K = 4096, 14336 on sm_120",
+        ["cost model", "Flock zk sessions of ScaledMmS8Coordinate at K = 4096, 14336 on sm_120",
          "`inputs.observations`; extrapolated past them"],
         ["target", f"{share:g} of the block's ANDs incorrect at most",
          "`TARGET_SHARE`: the small model's knee, held fixed" if share == TARGET_SHARE else "given (`--share`)"],

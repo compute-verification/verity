@@ -30,7 +30,7 @@ import Proofs.Flock.Soundness.ZK.Session
 
 `zk_session_composed`: for any live prover `τ` of a public-output one-table `--zk` session,
 
-* **soundness**: `Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + ε_bind`, the units those of
+* **soundness**: `Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, the units those of
   the key program's partition (`keyProg c hU n`), each read at its `--zk` site and bound to the rows it commits
   (lp-zkbind's `sitesZAt`, `rsZAt`): `ZkBind.zk_flock_countC_execOS_at` at the simulated prover `simZ … τ`, with
   `δ_tree = 0` (`execAccept` is acceptance, so the tree's event is empty: `TreeRewind.ofNever`), carried to

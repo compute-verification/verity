@@ -326,7 +326,7 @@ theorem leakL_noRLeak (H : Msg → Msg) (As : Claims.Sampling.AuditStatement →
   obtain ⟨-, -, F, hF, a, -, free, hfree, hacc⟩ := h (fun _ _ => [false]) [obs0] hcar hcov rfl (by simp [obs0])
   have hF0 : F = ∅ := by
     classical
-    simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
+    simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset] at hF
     obtain ⟨hsub, -, hdis⟩ := hF
     refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
     have hv1 : v < 1 := Finset.mem_range.1 (hsub hv)
@@ -385,7 +385,7 @@ theorem certL_noWit (H : Msg → Msg) (As : Claims.Sampling.AuditStatement → (
   obtain ⟨-, -, F, hF, a, -, free, hfree, hacc⟩ := h (fun _ _ => [true]) [obs1] hop hcov rfl (by simp [obs1])
   have hF0 : F = ∅ := by
     classical
-    simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
+    simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset] at hF
     obtain ⟨hsub, -, hdis⟩ := hF
     refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
     have hv1 : v < 1 := Finset.mem_range.1 (hsub hv)

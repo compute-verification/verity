@@ -179,7 +179,7 @@ theorem extraction_audit_le (A : ExtractionAnalysis L Reg session)
     _ ≤ _ := add_le_add (add_le_add (avg_ite_eq_prCoin _).le (hks R τ tgt)) (hlink R τ tgt)
 
 /-- **The count curve, with a randomized extractor**:
-`Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks(σ) + ε_bind(σ)`. -/
+`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_count (A : ExtractionAnalysis L Reg session)
     {εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound εbind) (K : ℕ) (σ : Strategy (audit L Reg session)) :

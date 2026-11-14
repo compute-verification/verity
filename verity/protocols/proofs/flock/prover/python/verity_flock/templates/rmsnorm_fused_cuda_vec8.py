@@ -76,11 +76,11 @@ def circuit_lowering(subcircuit):
 def supports(subcircuit, scheme, family: str = FAMILY, unit: str = UNIT):
     n, _eps, block = _statics(subcircuit)
     if warps(n, block) is None:
-        return (f"C-Flock lowers {family} when its warps are identical units (min(BLOCK, N / 8) threads in whole warps, each "
+        return (f"Flock lowers {family} when its warps are identical units (min(BLOCK, N / 8) threads in whole warps, each "
                 f"holding N / 8 / threads vectors), not N = {n}, BLOCK = {block}")
     if scheme in SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: unit {unit}, the row tail in the "
+    return (f"Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: unit {unit}, the row tail in the "
             f"statement), not under {scheme}")
 
 

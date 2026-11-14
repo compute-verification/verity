@@ -16,14 +16,13 @@ import types
 import pytest
 import torch
 import torch.fx.traceback as fxt
-from verity_vllm.definitions.registry import tp_allreduce as TA
-
+from verity_torch.frontend.outcomes import Refuse
 from verity_vllm.config import workload_file
+from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline.build import applicability_conditions, run
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.compilations import COMPILATIONS
-from verity_torch.frontend.outcomes import Refuse
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
 from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -104,7 +103,6 @@ def test_step_982_a_full_graph_decode_reduces_on_flashinfer_mnnvl_at_its_padded_
     512 KiB), the PIECEWISE steps on symm_mem's multimem.  The FULL graph captures the attention at the padded batch, its 7
     padding rows without keys, which leave FA3's split counts the real batch's."""
     from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
-
     from verity_vllm.engine.profiles.engine_classes import CLASS_G_LIMITS
     from verity_vllm.program.predict.common import _Launch
     sizes, seqs = tuple(COMPILATIONS["breakable"]["capture_sizes"]), CLASS_G_LIMITS["max_num_seqs"]

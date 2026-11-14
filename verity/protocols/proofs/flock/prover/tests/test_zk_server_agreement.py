@@ -86,7 +86,7 @@ def proxy_session(schedule: dict, reqs: list[bytes], lean: RL.LeanZkServer | Non
                   tree: CT.Spec | None = None) -> tuple[dict, list]:
     """The challenger's live-coin part's record and every call made on it, in order, refused or not, while the proxy handles ``reqs``
     (relaying them through ``lean`` when it is given; on a coin tree of spec ``tree`` this host samples, when it is given)."""
-    coins = RL.CoinServer(_coins) if tree is None else RL.CoinServer(_coins, tree, RL.OsTree(_coins))
+    coins = RL.LiveCoinPart(_coins) if tree is None else RL.LiveCoinPart(_coins, tree, RL.OsTree(_coins))
     salts, calls = iter(SALTS), []
     for name, show in CALL.items():
         f = getattr(coins, name)
@@ -283,7 +283,7 @@ def test_the_proxy_sends_what_the_lean_zk_server_sends(lean_runs):
     assert not differ, differ[:3]
 
 
-def test_the_coin_server_never_sees_where_an_open_was_sent(lean_runs):
+def test_the_live_coin_part_never_sees_where_an_open_was_sent(lean_runs):
     """The challenger's live-coin part is the auditor's, so its calls, not only its record, must not show where the worker sent each Open:
     `Flock.ZkServer.run` opens a stream there just before its first round. Every placement of
     the two Opens gives the honest session's calls, and every cut of one a prefix of them."""
@@ -342,13 +342,13 @@ def test_commit_takes_the_tables_in_the_schedules_order_only(built, lean_records
     out = got["two tables: Commit names them out of order"]
     assert out["end"] == "stop" and out["link"] is None and out["rounds"] == []
     why = RL.refused("Commit's roots: the tables are not in the pinned schedule's order")
-    proxy = RL.Proxy(RL.CoinServer(_coins), iter(SALTS).__next__, schedule=SCHEDULE3)
+    proxy = RL.Proxy(RL.LiveCoinPart(_coins), iter(SALTS).__next__, schedule=SCHEDULE3)
     for b in honest3(("circuit", "aux"))[:3]:
         proxy.handle(b)
     assert proxy.stopped == f"rec proxy: {why}"
     lean_fw = RL.LeanZkServer(BIN, SCHEDULE3)
     try:
-        proxy = RL.Proxy(RL.CoinServer(_coins), schedule=SCHEDULE3, lean=lean_fw)
+        proxy = RL.Proxy(RL.LiveCoinPart(_coins), schedule=SCHEDULE3, lean=lean_fw)
         for b in honest3(("circuit", "aux"))[:3]:
             proxy.handle(b)
     finally:
@@ -389,11 +389,11 @@ def test_a_schedule_of_another_form_is_refused(lean_runs):
     assert [json.loads(x) for x in out] == [{"error": "not a rec/inner-transcript/v1/schedule"}] * (len(bad) + 1)
     for s in bad:
         with pytest.raises(ValueError, match="not a rec/inner-transcript/v1/schedule"):
-            RL.Proxy(RL.CoinServer(_coins), lambda: SALTS[0], schedule=s)
+            RL.Proxy(RL.LiveCoinPart(_coins), lambda: SALTS[0], schedule=s)
     for s in bad + [rootless]:
         with pytest.raises(ValueError, match="the schedule is refused"):
             RL.LeanZkServer(BIN, s)
-    RL.Proxy(RL.CoinServer(_coins), lambda: SALTS[0], schedule=rootless)
+    RL.Proxy(RL.LiveCoinPart(_coins), lambda: SALTS[0], schedule=rootless)
 
 
 def test_the_relay_sends_what_run_sends_at_the_salts_it_drew(relayed):
@@ -443,7 +443,7 @@ def test_a_proxy_that_parts_from_the_lean_zk_server_stops_the_session(built, mon
     for name, f in edit.items():
         monkeypatch.setattr(RL, name, f)
     lean = RL.LeanZkServer(BIN, SCHEDULE) if more is None else More(more, BIN, SCHEDULE)
-    coins = RL.CoinServer(_coins)
+    coins = RL.LiveCoinPart(_coins)
     proxy = RL.Proxy(coins, schedule=SCHEDULE, lean=lean)
     try:
         for b in honest()[:4]:
@@ -456,7 +456,7 @@ def test_a_proxy_that_parts_from_the_lean_zk_server_stops_the_session(built, mon
 
 def test_a_lean_zk_server_that_exits_stops_the_session(built):
     lean = RL.LeanZkServer(BIN, SCHEDULE)
-    coins = RL.CoinServer(_coins)
+    coins = RL.LiveCoinPart(_coins)
     proxy = RL.Proxy(coins, schedule=SCHEDULE, lean=lean)
     for b in honest()[:2]:
         proxy.handle(b)
@@ -471,7 +471,7 @@ def test_the_lean_zk_server_draws_its_own_salts(built):
     sch = json.loads(json.dumps(SCHEDULE))
     lean = RL.LeanZkServer(BIN, sch)
     try:
-        for coins in (RL.CoinServer(_coins, RL.INNER_COIN_SPEC, RL.OsTree()), RL.CoinServer(_coins)):
+        for coins in (RL.LiveCoinPart(_coins, RL.INNER_COIN_SPEC, RL.OsTree()), RL.LiveCoinPart(_coins)):
             with pytest.raises(ValueError, match="the salts are its own"):
                 RL.Proxy(coins, lambda: SALTS[0], schedule=sch, lean=lean)
     finally:
