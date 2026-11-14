@@ -2467,6 +2467,11 @@
       "paths": {
         "benchmarks/moe_align/": "benchmarks/kernels/moe_align/"
       }
+    },
+    {
+      "paths": {
+        "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
+      }
     }
   ]
 }

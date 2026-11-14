@@ -348,7 +348,7 @@ loads = [
 
 [[place]]
 paths = [
-    "verity/hardware/registration.py",
+    "verity/protocols/accounting/registration/verifier/registration.py",
 ]
 trusted = true
 loads = [
