@@ -288,6 +288,15 @@ def test_coins_the_lean_cannot_give_are_no_coins(monkeypatch):
         V.coins(8)
 
 
+def test_the_executable_answers_only_the_verifiers_pieces():
+    """The executable answers `Pieces.verifier`'s names, the challenger's ledger and session checks among them, and
+    refuses as unknown a piece the difftest executable serves beside them, which `lean` takes as a refusal."""
+    for fn in ("challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"):
+        assert "unknown fn" not in json.dumps(V.lean(fn, {})), fn
+    for fn in ("challenger_day", "challenger_read", "challenger_trusted", "decode", "wires"):
+        assert f'"unknown fn: {fn}"' in V.lean(fn, {})["refused"], fn
+
+
 def test_lean_that_cannot_run_fails_closed(monkeypatch):
     _, reg, draw = _drawn()
 

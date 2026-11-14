@@ -51,6 +51,7 @@ too.
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import hashlib
 import itertools
@@ -67,6 +68,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as T
+from verity.protocols.proofs.spot.verifier.one_stage.verifier import EXE as VERIFIER
 from verity.commitments import coin_tree as CT
 from verity.commitments.identity import canonical_json_text
 from verity.commitments.crypto import lms
@@ -2642,6 +2644,11 @@ SAMPLE_LINK_FIRST = D.Port(PIECES, "challenger_sample_link_first", sample_link_f
                            _cases(sample_link_first_case, SAMPLE_LINK_FIRST_NAMES), package=PACKAGE, of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
+verifier = D.server_fixture(dataclasses.replace(COMMITMENT, exe=VERIFIER))
+
+#: the challenger's checks the verifier executable answers too (`Pieces.verifier`)
+VERIFIED = [(LEDGER, ledger_case, LEDGER_NAMES), (HEAD, head_case, HEAD_NAMES), (SESSION, session_case, SESSION_NAMES),
+            (CREDITED, credited_case, CREDITED_NAMES), (PINNED, pinned_case, PINNED_NAMES)]
 
 RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_case, OPENING_NAMES, 300),
         (REASON, reason_case, REASON_NAMES, 400), (ORDER, order_case, ORDER_NAMES, 400), (KEY, key_case, KEY_NAMES, 200),
@@ -2673,6 +2680,17 @@ def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
             assert name != "link-tables" or f": {Ch.LINK_TABLES}" in text, (port.fn, seed, text)
             assert name != "link-root-len" or f": {Ch.LINK_ROOT_LEN}" in text, (port.fn, seed, text)
     print(f"{port.fn}: {stats}; swept {sum(outcomes.values())}")
+
+
+@pytest.mark.parametrize("port, make, names", VERIFIED, ids=[v[0].fn for v in VERIFIED])
+def test_the_verifier_answers_the_challengers_ledger_and_session_checks(verifier, port, make, names):
+    """The verifier's executable (`one_stage.verifier.EXE`) answers each of the challenger's ledger and session checks
+    as its row expects, on each of the sweep's mutations once: held to the row's Python reference as the sweep holds the
+    difftest executable, the honest case accepted and every mutation refused."""
+    for name in names:
+        kind, text = D.replay(port, make(random.Random(f"{name}/0"), name), verifier)
+        clean = kind == "output" and '"refused"' not in text and '"reason":"' not in text
+        assert clean == (name == "honest"), (port.fn, name, kind, text)
 
 
 @pytest.mark.parametrize("name", EXTRA_OPENINGS)

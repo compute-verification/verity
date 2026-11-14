@@ -117,7 +117,8 @@ two-stage rule's second stage, on the coins after the interior registration), `c
 `check_proved`, `record`, `across`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its
 outcome to it),
 `hello`,
-`stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
+`stream` (each of `service.Stream`'s ops), `fleet` (each of `service.Fleet`'s), and the challenger's ledger and session:
+`challenger_ledger`, `challenger_head`, `challenger_session`, `challenger_credited` and `challenger_pinned`.
 -/
 module
 
@@ -1021,9 +1022,10 @@ def table : List (String × (Json → V Json)) :=
    ("history_order", HistoryTable.orderPiece), ("history_strings", HistoryTable.stringsPiece),
    ("history_roots", HistoryTable.rootsPiece)]
 
-/-- The verifier's pieces: `table`'s, by name. -/
+/-- The verifier's pieces: `table`'s, by name, the challenger's ledger and session checks among them. -/
 def verifier : List (String × (Json → V Json)) :=
   table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
-    "record", "across", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1
+    "record", "across", "check_public", "check_verdicts", "run", "hello", "stream", "fleet", "challenger_ledger",
+    "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"].contains p.1
 
 end Spot.Pieces
