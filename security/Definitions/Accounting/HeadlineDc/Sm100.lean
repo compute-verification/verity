@@ -5,13 +5,13 @@ public import Definitions.Accounting.HeadlineDc.Encoding
 /-!
 # B200 (sm_100)'s headline instance: DS-100 and `dither-2s-licpw-redux-ldtm0-l32` (trusted; generated)
 
-Written by `machine-model lean-headline` from `machine_model`'s data, and checked against it by
-`benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never this file.
-`Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
+and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
+this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
 
 * `classes`: the 52 instruction classes of the DS-100 census, in the order `Fin 52` indexes them. `NOROW` is A2's
   catch-all: every warp instruction no other class names counts there, at its issue slot alone.
-* `ds100`, `sheet`: the B200's data sheet (DS-100), `machine_model`'s `sheet.toml` for sm_100 as
+* `ds100`, `sheet`: the B200's data sheet (DS-100), `benchmarks/pouw/machine_model/data/devices/sm_100/sheet.toml` as
   `Security/Definitions/Accounting/Sheets/B200.lean` states it: f_max 1965 MHz (the driver's reported maximum (the data
   sheet gives no clock)); each tensor class's dense MACs a warp instruction (sm_100's tcgen05 MMA whole (`m·n·k`), a 2:4
   sparse form at its dense twin's, its mma.sync whole, DMMA's at the f64 peak) and its operand type's dense MACs an SM
@@ -28,9 +28,9 @@ Written by `machine-model lean-headline` from `machine_model`'s data, and checke
   checkpoint's bit-exact loops) on lanes, and alone on the uniform datapath at the least of their counts; the table
   level's bytes counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's floors `q = q_T =
   ½`, `b_T = 0`; 32768 committed words a unit of honest work (an UTCIMMA_M128_N256 at L = 32).
-* `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word writing), the fold (the fold routes'
-  cheapest mix, by share of the words: cp-red2 65/72, cp-red8 7/72), no filler, and ε_skip's free compute at FFMA's
-  price, 0.698060% of ♭'s bound (`eps_budget.design_skip` on DS-100).
+* `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold (the fold
+  routes' cheapest mix, by share of the words: cp-red2 65/72, cp-red8 7/72), no filler, and ε_skip's skippable work at
+  FFMA's price, 0.698060% of ♭'s bound (`eps_budget.design_skip` on DS-100).
 * `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 0.666667 + DS_alu 0.333333).
 * `checks`: the checks a window, one a round (Theorem S's S).
 -/
@@ -153,14 +153,14 @@ def flatFill : Sparse := []
 noncomputable def model : Model (Fin 52) (SheetRow Pipe) (Fin 27) Unit Empty (Fin 14) Unit :=
   d2s.model 52 27 14 sheet.machine
 
-/-- ♭'s word writing a unit: the MMA and the operand floor. -/
+/-- ♭'s word production a unit: the MMA and the operand floor. -/
 def flatWords : Sparse := [(35, 1, 1)]
 
 /-- ♭'s fold a unit: the lane fold for 32768 words, the fold routes' cheapest mix, by share of the words: cp-red2 65/72,
 cp-red8 7/72. -/
 def flatFold : Sparse := [(0, 1601, 3), (8, 512, 1), (22, 62, 3)]
 
-/-- ♭'s free compute a unit, at FFMA's price. -/
+/-- ♭'s skippable work a unit, at FFMA's price. -/
 def flatSkip : Sparse := [(7, 745063066358, 99301939663)]
 
 /-- The floor program ♭, labelled. -/

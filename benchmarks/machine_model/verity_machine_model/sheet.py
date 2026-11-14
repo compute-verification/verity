@@ -326,8 +326,9 @@ def _doc(text: str) -> list[str]:
 
 
 def cited(s: Sheet) -> str:
-    """How generated text names the sheet's file: by its package and device, never by a path a move would change."""
-    return f"`machine_model`'s `{SHEET}` for sm_{s.vector.split('-')[1]}"
+    """How generated text names the sheet's file: as the committed Lean files do, by a path under `benchmarks/pouw/`
+    that the data no longer has. A change of that text changes those Lean files with it."""
+    return f"`benchmarks/pouw/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}`"
 
 
 def _simp(head: str, names: list[str]) -> list[str]:
@@ -397,7 +398,7 @@ def lean(s: Sheet, data: Path) -> str:
                         "the credited GPU's SMs compute, not which GPU computed a tile, and `Device.lean`'s side "
                         "channels don't list NVLink peer offload.", "")
     out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from {cited(s)}, and "
-                        "`machine_model`'s tests hold it to that output.", "")
+                        "the machine model's tests hold it to that output.", "")
     out += ["-/", "", "@[expose] public section", "", f"namespace Accounting.TS.Sheets.{s.name}", "",
             "noncomputable section", ""]
     # Not `deriving Fintype`: Mathlib's handler for an enumeration fails its own `rw [Finset.mem_mk, …]` under this

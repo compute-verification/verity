@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 # Exact data for a data-centre headline instance (trusted)
 
 `Definitions.Accounting.Headline.Encoding`'s encoding, with the two things the H200's and B200's instances
-(`verity_machine_model.lean_headline_dc`) need beside it:
+(`benchmarks/pouw/lean_headline_dc.py`) need beside it:
 
 * `DesignData.modelFill`: `DesignData.model` with a filler, its menu the one route the floor program's filler runs
   on, whose demand on each facet is the load of its counts a unit of honest work (the H200's ffill, which FILL-OPT

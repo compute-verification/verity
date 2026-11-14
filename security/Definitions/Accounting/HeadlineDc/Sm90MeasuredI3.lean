@@ -5,9 +5,9 @@ public import Definitions.Accounting.HeadlineDc.Sm90Measured
 /-!
 # H200 (sm_90)'s (I3) twin: DC-90-ri at q = 3/5 and `dither-2s-licpw-redux-p1-l32` (trusted; generated)
 
-Written by `machine-model lean-headline` from `machine_model`'s data, and checked against it by
-`benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never this file.
-`Accounting.Guarantees.TS.Sm90MeasuredI3Headline` reads it.
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
+and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
+this file. `Accounting.Guarantees.TS.Sm90MeasuredI3Headline` reads it.
 
 * `d2s`, `model`: `Sm90Measured.d2s` (its writer kinds, and `Sm90.d2s`'s vector classes, fold routes and `N_w`) at
   (I3)'s floors `q = q_T = 3/5`, `b_T = 0`, on `Sm90Measured.machine`. (I3) `ScalarRoute` there is

@@ -21,7 +21,7 @@ big-endian u32 halves, half `h` at bits `[32h, 32h + 32)`, `seeds.leaves`), a po
 halves, then `roots[1]`'s).
 
 `tests/test_known_rows.py` holds `knownRows` to the Python that writes the served path's stand-in known rows
-(the served path's `leaf.known_rows`: `pub_words`, `bits_words` and `h1unit.OK`). Proofs read it through
+(`benchmarks/pouw/h1_lanes/run.py`'s `known_rows`: `pub_words`, `bits_words` and `h1unit.OK`). Proofs read it through
 `Accounting.TS.Lanes.knownOf` (`Security/Proofs/Accounting/TS/Session/Lanes/KnownOf.lean`), the known content
 `Accounting.Guarantees.TS.LeafLanesSound` hands each session.
 -/
