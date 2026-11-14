@@ -127,7 +127,7 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
 import certifier_key as ck
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
@@ -227,7 +227,7 @@ def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) 
 
 def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
     """The module docstring's cost of a close of `params` under `load`, over `phases` execution phases."""
-    from benchmarks.network_traces import warden_serve as ws  # at its use: it imports this module
+    from verity.protocols.accounting.certifier.device import warden_serve as ws  # at its use: it imports this module
 
     releases = loaded(params, load)
     hands, pickles, longest, backs = [], [], [], []

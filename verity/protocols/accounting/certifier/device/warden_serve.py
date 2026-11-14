@@ -221,13 +221,13 @@ import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
 from verity.protocols.accounting.certifier.verifier import blob_files as bf
 import certifier_key as ck
 from verity.protocols.accounting.certifier.verifier import record_files as RF
 import runner_parts as rp
-from benchmarks.network_traces import load_relay as lr
+from verity.protocols.accounting.certifier.device import load_relay as lr
 from verity.protocols.accounting.certifier.verifier import load_check as LK
 import runner_cli as cli
 import stall_probe
@@ -248,7 +248,7 @@ from verity.protocols.accounting.certifier.verifier.warden import (EGRESS_FORMS,
 from verity.protocols.accounting.certifier.verifier.relay_check import (CELLS_TIMING, CERTIFIED, EGRESS, ENDPOINTS,
     FAILS, INGRESS, KIND_CHARS, LINK, _quantiles, check)
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
 #: in a key directory, beside the key and its leaf state: the key's device state (`certificate.DeviceState`)
 DEVICE = "device.json"
 #: the heap `prepare_process` grows and touches before the origin, a lane's and at least: heavy's opening burst through

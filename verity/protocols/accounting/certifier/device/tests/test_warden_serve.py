@@ -33,8 +33,8 @@ from verity.protocols.accounting.certifier.verifier.warden import (END, REFUSED,
                                                     read_cell, reason_frame)
 from verity.protocols.accounting.certifier.verifier import load_check as LK, relay_check as RC, record_files as RF
 
-HERE = Path(__file__).resolve().parents[1]
-ROOT = Path(__file__).resolve().parents[3]
+HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
+ROOT = Path(__file__).resolve().parents[6]
 #: a text rehearsal's schedule: its responses are vLLM's stock framing, so its egress form is bytes
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
                       ingress_buckets=30, egress_cells=128, egress="bytes")
@@ -49,7 +49,7 @@ def _load():
     sys.path.insert(0, str(HERE))
     sys.path.append(str(ROOT))  # for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location("network_traces_warden_serve",
-                                                  ROOT / "benchmarks/network_traces/warden_serve.py")
+                                                  ROOT / "verity/protocols/accounting/certifier/device/warden_serve.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -740,7 +740,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
             device[0].head_back(window, line)
 
     if process:
-        from benchmarks.network_traces import warden_serve  # by name, so that the spawned process finds its functions
+        from verity.protocols.accounting.certifier.device import warden_serve  # by name, so that the spawned process finds its functions
 
         ws.ck.load_key(key, height)
         publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads, base_ms=0,
@@ -1540,7 +1540,7 @@ def test_the_load_is_signed_by_the_serving_publisher_in_the_runs_session_before_
     out.mkdir()
     lr, program = ws.lr, hashlib.sha512(b"the reading program").hexdigest()
     lr.write_store(store, LK.TINY)
-    sink = subprocess.Popen([sys.executable, str(ROOT / "benchmarks/network_traces/load_relay.py"), "sink",
+    sink = subprocess.Popen([sys.executable, str(ROOT / "verity/protocols/accounting/certifier/device/load_relay.py"), "sink",
                              "--listen", "127.0.0.1:0",
                              "--weights", str(tmp_path / "weights.bin"), "--witness", str(tmp_path / "witness.bin")],
                             stdout=subprocess.PIPE, text=True)

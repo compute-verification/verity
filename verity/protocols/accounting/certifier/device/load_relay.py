@@ -11,10 +11,10 @@ each row under its own salt, in a frame-v3-sha512 tree under the value's domain,
 each value's head (`transfer_rows.TransferHead`: kind ``load``, ingress, window 0, the server session's) and writes the
 registrations the verifier pins each load value from (`blocks.pins`).
 
-    python benchmarks/network_traces/load_relay.py relay --program HEX --out DIR [--shape h200|tiny] [--format plain|p2]
+    python verity/protocols/accounting/certifier/device/load_relay.py relay --program HEX --out DIR [--shape h200|tiny] [--format plain|p2]
       [--source PATH|-] [--sink PATH|-|none] [--salt HEX] [--witness PATH] [--key DIR] [--session HEX] [--workers N]
-    python benchmarks/network_traces/load_relay.py write --store DIR [--shape h200|tiny] [--workers N] [--out FILE]
-    python benchmarks/network_traces/load_relay.py sink --listen HOST:PORT --weights PATH --witness PATH [--streams 4]
+    python verity/protocols/accounting/certifier/device/load_relay.py write --store DIR [--shape h200|tiny] [--workers N] [--out FILE]
+    python verity/protocols/accounting/certifier/device/load_relay.py sink --listen HOST:PORT --weights PATH --witness PATH [--streams 4]
 
 The demo's load is the gate's (``vy-challenger-gate weights-write`` and ``load-relay``,
 ``verity/protocols/compose/device/live_challenger/auditor.py``), in three parts:
@@ -85,9 +85,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
 from verity.commitments import hm96  # noqa: E402
 from verity.commitments.hm96 import batch as HB  # noqa: E402
