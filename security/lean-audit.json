@@ -7533,6 +7533,9 @@
    "type_hash": "0b217c8812262f71cd1d92dedfdfa361ea82bcda7daf976dcf1351d20fa42619",
    "unfolded_hash": "cd129e6a9ac7e687199282a47f67bb852ea6fca79a769eecc8742c246527db37"
   },
+  "Accounting.SecurityProofs.EgressRegistered": {
+   "owner": "@network-accounting"
+  },
   "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit": {
    "owner": "@compute-accounting",
    "signature": [
