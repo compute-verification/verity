@@ -1,9 +1,6 @@
 """block-certifier: certifier/v0's period answer as the block record's certifier entry (``legs.certifier`` of
-``verity/block-record/v2``), and the answer ``network-period check`` gives on a period's case, which `chain_record`
-re-decides an answer by before it writes the entry.
+``verity/block-record/v2``).
 
-* `check`: ``network-period check`` on a case (`NetworkCheck.Period`'s formats: its ``params``, ``commitment`` and
-  ``evidence``), its answer.
 * `block_leg`: a period's accepted answer as the block record's certifier entry: K
   in bits, its error the answer's exact ``eps``, and the certificate at δ = 1/100 and 10⁻⁶ wherever ``eps`` is at most
   δ (`BLOCK_DELTAS`).
@@ -11,13 +8,10 @@ re-decides an answer by before it writes the entry.
 from __future__ import annotations
 
 import json
-import subprocess
-import tempfile
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity.circuits.codec import canonical_json
 from verity.protocol import DELTAS
 
 PROTOCOL = "verity/certifier/v0"
@@ -29,21 +23,6 @@ OWNER: str = json.loads(
 BLOCK_DELTAS = DELTAS
 #: where the block record says a leg's error is read from: the runner row's ``quantity`` (the answer's public)
 BLOCK_ERROR_FROM = "quantity.eps"
-
-
-def check(exe: str, case: Mapping[str, Any]) -> dict[str, Any]:
-    """``network-period check`` on the case: its answer."""
-    with tempfile.TemporaryDirectory() as d:
-        files = []
-        for name, data in (("params.json", canonical_json(case["params"])),
-                           ("commitment.bin", bytes.fromhex(case["commitment"])),
-                           ("evidence.json", bytes.fromhex(case["evidence"]))):
-            (Path(d) / name).write_bytes(data)
-            files.append(str(Path(d) / name))
-        p = subprocess.run([exe, "check", *files], capture_output=True, text=True)
-    if p.returncode not in (0, 1, 2) or not p.stdout.strip():
-        raise RuntimeError(f"network-period check exited {p.returncode}: {p.stderr[-2000:]}")
-    return json.loads(p.stdout.strip().splitlines()[-1])
 
 
 def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real",
@@ -73,4 +52,4 @@ def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], so
             "error": str(eps), "error_from": BLOCK_ERROR_FROM, "at": at, "runs": list(runs)}
 
 
-__all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "PROTOCOL", "block_leg", "check"]
+__all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "PROTOCOL", "block_leg"]
