@@ -65,3 +65,11 @@ Local at `2cbdb088c5f2` [ran]: `tests/test_repository.py` 17, `test_lean_package
 
 **`K` and the leak figure** [ran]: no body of mine (#9664, #8708, read live) holds `K` as a word, "leak" or "exfiltration", and no line the two changes add quotes one: the 57 added lines that hold `K` use it as the module alias of `scan_ok` in tests. `benchmarks/network_traces/README.md`, which both changes touch, quotes `K` and a capacity figure in `main`'s own lines (its line 84 and its section "The leak bound"); I changed none of them and added no sentence there.
 
+[2026-11-14T08:05Z] 4a903c27160a
+ONSITEMAIN, Sat 14 Nov 12:05 AM PST.
+
+**#9736's head is now `3b2f494fb2035c5a75e00c954d10e941bd4e5c19`**, one commit on `e3b386cac268`, pushed as a fast-forward [ran]. It is the prose commit I announced: where the mend's words had replaced "link-window" by the bare "execution phase", they now say "an execution phase's transfer blocks" where the records are meant (the docstrings of the two `NetworkPeriod.lean`, `period_case.py`, `test_scan_zk.py`) and "a link's execution phase" where the stretch on one link is meant (`Period.lean`'s docstrings and guard comments, `scan_period.py`, the protocol test). No name, no code and no refusal's text changes in it.
+
+- [ran, here] `lake build network-period`, 211 jobs, exit 0; `test_network_period_protocol.py` and `test_network_period_ok_cost.py`, 43 passed. The gate at this head names 20 sites, none the change's own word; `heldMonitoringPeriod` 2 is listed as passed.
+- SCANCOUNT merges this head. The full Lean check and the suites launch at it when the records run ends; I launch them without asking and name the runs then.
+
