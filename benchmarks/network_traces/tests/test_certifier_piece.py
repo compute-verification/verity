@@ -51,7 +51,7 @@ import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
 import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
-from test_served_session import RUN, STUB  # noqa: E402
+from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Direction  # noqa: E402
@@ -87,7 +87,7 @@ def warden(tmp_path_factory):
     """The synthetic network certifier run, its fetch (``late``: the same run, its rehearsal failed late), the
     execution phase holding the most whole certified requests, its two row registrations (ingress, egress) and the
     run's deployment."""
-    d = tmp_path_factory.mktemp("warden")
+    d = tmp_path_factory.mktemp("network_certifier")
     run = gate_run(d)
     io, T = WC.io(run), WC.deployment(run)[1].window
     by: dict[int, list[dict]] = {}
@@ -729,6 +729,34 @@ def test_a_chain_the_split_rejects_stands_and_its_period_step_checks_nothing(tmp
     assert json.loads((piece / "answer.json").read_text()) == a and not (tmp_path / "seen").exists()
 
 
+def test_a_chain_accepted_on_the_period_check_goes_on_to_that_check_whose_answer_is_the_pieces(tmp_path, warden, period):
+    """The chain's report says `chain_record.RESTS` where its scan's acceptance rests on the period check. The piece
+    then goes on to that check and answers what it answers, a reject as an accept, so no answer is an accept the
+    period check didn't give; split in two, the chain step marks DIR/chain.json with no answer, and the period step
+    reads that report again and checks V3c's period.json."""
+    seen = []
+    rejected = CP.answer("reject", "window 0: the scan's prog is no compute audit's slot entries")
+    accepted = {"protocol": CP.PROTOCOL, "verdict": "accept"}
+    assert _decide(tmp_path / "reject", warden, CR.RESTS, check=lambda c, p: seen.append(p.name) or rejected) == rejected
+    assert _decide(tmp_path / "accept", warden, CR.RESTS, check=lambda c, p: seen.append(p.name) or accepted) == accepted
+    assert seen == ["period", "period"]
+    d = _serve_dir(tmp_path / "serve", warden)
+    v3c, piece = _v3c(d, PERIOD), tmp_path / "pieces" / "certifier"
+    assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, CR.RESTS, warden["w"])) == 0
+    assert (piece / CP.CHAINED).is_file() and not (piece / "answer.json").exists()
+    answer = period.reference(period.case("accept", 1, "clock"))
+    assert _hook("period", d, piece, v3c, *_lean(tmp_path, answer)) == 0, (piece / "period.log").read_text()
+    assert json.loads((piece / "answer.json").read_text())["verdict"] == "accept" and (tmp_path / "seen").is_dir()
+
+
+@pytest.mark.parametrize("word", ["refused", "scan accepted", f"scan {CR.RESTS}", f"{CR.RESTS}, N2 refused", None])
+def test_any_other_word_of_the_chains_report_is_a_reject_and_the_period_check_isnt_run(tmp_path, warden, word):
+    """Only the whole chain's two accepting words go on: a refusal, the scan-only path's words and anything else are the
+    chain's reject, with the word and its why, before the period check (`_decide`'s fails the test when called)."""
+    a = _decide(tmp_path, warden, word)
+    assert a["verdict"] == "reject" and a["reason"].startswith(f"the chain {word}: ")
+
+
 @pytest.mark.parametrize("case", ["no v3c window", "time limit", "no chain step", "a scan of no v3c", "no period.json"])
 def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, warden):
     """The chain step refuses without V3c's committed window, which its scan reads, and when its limit
@@ -771,6 +799,11 @@ def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
     assert CP.sized(9, ["CR_SCAN_ONLY=1"]) == ["CR_SCAN_ONLY=1"]
 
 
+@pytest.fixture(autouse=True)
+def challenger_host(monkeypatch):
+    monkeypatch.setenv("VY_CHALLENGER_1_HOST", CHALLENGER_HOST)
+
+
 def _stub_gate(tmp_path: Path, monkeypatch) -> None:
     """`test_served_session.STUB` as ssh: the gate it reaches writes its request to tmp_path/request."""
     (tmp_path / "bin").mkdir()
@@ -795,7 +828,7 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert (kept.parent / "start.json").stat().st_mode & 0o777 == 0o600
     assert json.loads((out / "session.json").read_text())["keep"] == str(kept)
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
-    assert json.loads((out / "session.json").read_text())["gate"] == CP.SS.GATE
+    assert json.loads((out / "session.json").read_text())["gate"] == LIVE_GATE
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
     assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "5"]) == 2
@@ -803,6 +836,18 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--key",
                     str(tmp_path / "key"), "--scan-class", "w63"]) == 0
     assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
+
+
+def test_the_front_without_the_challenger_hosts_address_is_refused_by_the_variables_name_before_the_gate(tmp_path,
+                                                                                                    monkeypatch):
+    """The front's default gate is `SS.GATE`, whose host the environment holds: unset, the front is refused by the
+    variable's name and sends nothing; the dry run's ``--gate local`` reads no address (the test below runs it)."""
+    _stub_gate(tmp_path, monkeypatch)
+    monkeypatch.delenv("VY_CHALLENGER_1_HOST")
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key")]) == 2
+    assert json.loads((out / "session.json").read_text())["refused"].startswith("VY_CHALLENGER_1_HOST is unset: the gate is ")
+    assert not (tmp_path / "request").exists()
 
 
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
@@ -966,3 +1011,359 @@ class _Clock:
 
     def sleep(self, s: float) -> None:
         self.t += s
+
+
+# ------------------------------------------------------------------------------------------------------ a relay session
+# The front's relay session (`front --session`, `close`, and the piece's guard for a session nobody closed), through a
+# stub gate that answers a scripted run of statuses, with every nap an injected one: the front sends the gate one
+# `relay-session` request and no prompts, returns once the gate's status shows the relay listening and leaves nothing
+# in OUT; `close` waits for the session's end, keeps the lane's fetch where the piece reads it and publishes what a
+# rehearsal's front does; the piece's steps close a session nobody closed before they read the kept run; and a request
+# this tree's gate refuses is refused before the gate is asked.
+
+#: a made-up name of a served node, a session's peer
+PEER = "some-served-node"
+#: the relay's deployment, as the gate's status gives it once the relay listens and the run's bundle at its end
+DEPLOYMENT = {"windows": 20, "origin_unix": 1.5, "listen": ["127.0.0.1", 40001],
+              "params": {"window": 32, "bucket_ms": 100}}
+#: the gate's status of a relay session before its relay listens, once it does, and at an end its check accepted
+WAITING = {"run": RUN, "request": {"device": "warden", "peer": PEER, "client_port": 8012, "windows": 20}, "end": None,
+           "active": True, "relay": None}
+LISTENING = WAITING | {"relay": {"client": "127.0.0.1:8012", "deployment": DEPLOYMENT}}
+ENDED = LISTENING | {"active": False, "end": PASSED | {"ended": "the session ended"}}
+
+SESSION_GATE = r'''#!PYTHON
+import io, json, os, sys, tarfile
+from pathlib import Path
+d, cmd = Path(os.environ["STUB_DIR"]), sys.argv[-1]
+with open(d / "asked", "a") as f:
+    f.write(cmd + "\n")
+if cmd.startswith("relay-session "):
+    (d / "stdin").write_bytes(sys.stdin.buffer.read())
+    if (d / "busy").exists():
+        print(json.dumps({"refused": "a rehearsal is running"}))
+        sys.exit(3)
+    print(json.dumps({"device": "warden", "run": "RUN", "unit": "vy-certifier@RUN.service"}, sort_keys=True))
+elif cmd == "status RUN":
+    left = json.loads((d / "statuses.json").read_text())
+    (d / "statuses.json").write_text(json.dumps(left[1:] or left))
+    if left[0] is None:
+        sys.exit("stub gate: no answer")
+    print(json.dumps(left[0], sort_keys=True))
+elif cmd == "fetch RUN" and not (d / "no-fetch").exists():
+    status = json.loads((d / "statuses.json").read_text())[0]
+    files = {"request.json": json.dumps(status["request"]).encode(), "end.json": json.dumps(status["end"]).encode(),
+             "out/deployment.json": json.dumps(DEPLOYMENT).encode(), "out/certificates.jsonl": b"",
+             "witness/certified.jsonl": b"a certified line, which only the run's own lane fetches\n"}
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for name, data in files.items():
+            info = tarfile.TarInfo("RUN/" + name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    sys.stdout.buffer.write(buf.getvalue())
+else:
+    sys.exit(f"stub gate: no verb {cmd!r}")
+'''.replace("PYTHON", sys.executable).replace("DEPLOYMENT", repr(DEPLOYMENT)).replace("RUN", RUN)
+
+
+def _statuses(tmp_path: Path, statuses: list[dict | None]) -> None:
+    """What the stub gate answers ``status`` from here on, one a call and the last ever after (None: no answer)."""
+    (tmp_path / "statuses.json").write_text(json.dumps(statuses))
+
+
+def _session_gate(tmp_path: Path, monkeypatch, statuses: list[dict | None]) -> None:
+    """`SESSION_GATE` as ssh: each request it gets is a line of tmp_path/asked."""
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "ssh").write_text(SESSION_GATE)
+    (tmp_path / "bin" / "ssh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}")
+    monkeypatch.setenv("STUB_DIR", str(tmp_path))
+    _statuses(tmp_path, statuses)
+
+
+def _asked(tmp_path: Path) -> list[str]:
+    return (tmp_path / "asked").read_text().splitlines() if (tmp_path / "asked").is_file() else []
+
+
+def _front(tmp_path: Path, *flags: str, serve: str = "serve", gate: str = f"research@{GATE_HOST}") -> list[str]:
+    """``front --session``'s words: the endpoint at 18190, SERVE_DIR tmp_path/`serve` and OUT tmp_path/out."""
+    return ["front", "18190", str(tmp_path / serve), str(tmp_path / "out"), "--key", str(tmp_path / "key"),
+            "--gate", gate, "--peer", PEER, "--session", *flags]
+
+
+SESSION_FLAGS = ("--client-port", "8012", "--windows", "20")
+
+
+def test_the_front_opens_a_relay_session_sends_no_group_and_returns_once_its_relay_listens(tmp_path, monkeypatch,
+                                                                                           capsys):
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
+    minutes = CP.SS.A.session_minutes(20, CP.HEIGHT) + CP.SS.MARGIN
+    assert _asked(tmp_path) == [f"relay-session --peer {PEER} --port 18190 --client-port 8012 --windows 20 "
+                                f"--minutes {minutes} --height 10 --scan-class w63k4", f"status {RUN}"]
+    assert (tmp_path / "stdin").read_bytes() == b"" and list(out.iterdir()) == []
+    keep = serve / CP.PRIVATE
+    kept = keep / RUN / CP.RELAY
+    assert json.loads(capsys.readouterr().out.splitlines()[-1]) == {"run": RUN, "client": "127.0.0.1:8012",
+                                                                    "relay": str(kept)}
+    doc = json.loads(kept.read_text())
+    assert (doc["run"], doc["gate"], doc["client"], doc["deployment"]) == (RUN, f"research@{GATE_HOST}",
+                                                                           "127.0.0.1:8012", DEPLOYMENT)
+    assert doc["args"] == {"peer": PEER, "port": 18190, "client_port": 8012, "windows": 20, "minutes": minutes,
+                           "height": 10, "bucket_ms": None, "scan_class": "w63k4"}
+    assert sorted(p.name for p in (keep / RUN).iterdir()) == [CP.RELAY, "start.json"]
+    assert [p.stat().st_mode & 0o777 for p in (serve / "private", keep, keep / RUN, kept, keep / RUN / "start.json")] \
+        == [0o700, 0o700, 0o700, 0o600, 0o600]
+    assert [d["run"] for d in CP.open_sessions(keep)] == [RUN]
+    # a second session in the serve dir is refused while this one is open, before the gate is asked
+    assert CP.main(_front(tmp_path, "--client-port", "8013", "--windows", "20")) == 2
+    assert f"relay session {RUN} is open" in json.loads((out / "session.json").read_text())["refused"]
+    assert len(_asked(tmp_path)) == 2
+    # the scan's tick and class reach the gate, and the minutes are counted at the tick
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS, "--bucket-ms", "200", "--scan-class", "w63", serve="serve-200")) == 0
+    at_200 = CP.SS.A.session_minutes(20, CP.HEIGHT, 32 * 200) + CP.SS.MARGIN
+    assert at_200 > minutes and _asked(tmp_path)[2].endswith(
+        f"--windows 20 --minutes {at_200} --height 10 --bucket-ms 200 --scan-class w63")
+    # the longest session at the scan's tick: the least height that signs its execution phases, and its minutes at it
+    assert CP.main(_front(tmp_path, "--client-port", "8012", "--windows", "1119", serve="serve-long")) == 0
+    assert (CP.SS.A.warden_height(1119), CP.SS.A.session_minutes(1119, 13) + CP.SS.MARGIN) == (13, 66)
+    assert _asked(tmp_path)[4].endswith("--windows 1119 --minutes 66 --height 13 --scan-class w63k4")
+    assert CP.main(_front(tmp_path, "--client-port", "8012", "--windows", "1119", "--bucket-ms", "200",
+                          serve="serve-longest")) == 0
+    assert _asked(tmp_path)[6].endswith("--windows 1119 --minutes 126 --height 13 --bucket-ms 200 --scan-class w63k4")
+
+
+@pytest.mark.parametrize("statuses, rc, naps, why", [
+    ([WAITING, None, WAITING, LISTENING], 0, 3, None),
+    ([WAITING, WAITING | {"active": False, "end": {"run": RUN, "rc": 2, "ended": "the tunnel didn't come up"}}], 1, 1,
+     f"relay session {RUN} ended before its relay listened: exit 2, the tunnel didn't come up"),
+    ([WAITING | {"active": False}], 1, 1, f"relay session {RUN}: its unit ended and wrote no end.json"),
+    ([WAITING], 1, 5 * 60 + 1, f"relay session {RUN}: 5 minutes of asking"),
+])
+def test_a_sessions_front_waits_on_the_gates_status_and_says_why_one_never_listened(tmp_path, monkeypatch, statuses,
+                                                                                    rc, naps, why):
+    """The front asks the gate's status every `READY_POLL_S` seconds (a gate that doesn't answer is asked again) until
+    the relay listens. A session that ended first, a unit twice seen ended with no end, and a session's own minutes of
+    asking each end the front with exit 1 and the reason; the session stays open, so a close keeps its fetch."""
+    _session_gate(tmp_path, monkeypatch, statuses)
+    if naps > 3:  # a gate that never shows the relay: its answer without the stub's process each time
+        monkeypatch.setattr(CP, "gate_status", lambda a, keep, run: WAITING)
+    slept = []
+    a = CP.parser().parse_args(_front(tmp_path, *SESSION_FLAGS, "--minutes", "5"))
+    assert CP.front(a, sleep=slept.append) == rc
+    assert slept == [CP.READY_POLL_S] * naps
+    doc = json.loads((tmp_path / "serve" / CP.PRIVATE / RUN / CP.RELAY).read_text())
+    assert [d["run"] for d in CP.open_sessions(tmp_path / "serve" / CP.PRIVATE)] == [RUN]
+    if why is None:
+        assert doc["client"] == "127.0.0.1:8012" and not (tmp_path / "out" / "session.json").exists()
+    else:
+        assert "client" not in doc and "deployment" not in doc
+        assert json.loads((tmp_path / "out" / "session.json").read_text())["refused"].startswith(why)
+
+
+@pytest.mark.parametrize("flags, why", [
+    ((), "--session: with --client-port PORT"),
+    (("--client-port", "8012"), "--session: with --client-port PORT"),
+    ((*SESSION_FLAGS, "--warmup", "1"), "--session sends no request of its own"),
+    (("--client-port", "18190", "--windows", "20"), "the gate refuses it: --client-port 18190: a port of the peer's"),
+    (("--client-port", "7811", "--windows", "20"), "the gate refuses it: --client-port 7811: a port of the peer's"),
+    (("--client-port", "8012", "--windows", "1120"), "the gate refuses it: --windows '1120': 1 to 1119"),
+    (("--client-port", "8012", "--windows", "1100", "--height", "11"),
+     "the gate refuses it: --height 11: the key's 2048 one-time signatures don't sign 1100 execution phases"),
+    ((*SESSION_FLAGS, "--minutes", "4"),
+     "the gate refuses it: --minutes 4: 20 execution phases of 3200 ms take 5 minutes"),
+    ((*SESSION_FLAGS, "--bucket-ms", "50"), "the gate refuses it: --bucket-ms '50': 100 to 4000"),
+])
+def test_a_session_this_trees_gate_refuses_is_refused_before_the_gate_is_asked(tmp_path, monkeypatch, flags, why):
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    assert CP.main(_front(tmp_path, *flags)) == 2
+    assert json.loads((tmp_path / "out" / "session.json").read_text())["refused"].startswith(why)
+    assert _asked(tmp_path) == [] and list((tmp_path / "serve" / CP.PRIVATE).iterdir()) == []
+
+
+def test_a_session_the_gate_doesnt_start_opens_none(tmp_path, monkeypatch):
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    (tmp_path / "busy").touch()
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 2
+    refused = json.loads((tmp_path / "out" / "session.json").read_text())["refused"]
+    assert refused.startswith("the gate didn't start the session (exit 3)") and "a rehearsal is running" in refused
+    assert len(_asked(tmp_path)) == 1 and CP.open_sessions(tmp_path / "serve" / CP.PRIVATE) == []
+    assert CP.main(["close", str(tmp_path / "serve"), str(tmp_path / "out-close")]) == 2
+    assert json.loads((tmp_path / "out-close" / "session.json").read_text())["refused"].startswith(
+        "0 relay sessions open")
+    assert len(_asked(tmp_path)) == 1
+
+
+def test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_rehearsals_front_does(tmp_path,
+                                                                                                     monkeypatch):
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    serve, out = tmp_path / "serve", tmp_path / "out-close"
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
+    _statuses(tmp_path, [LISTENING, None, LISTENING, ENDED])
+    slept = []
+    assert CP.close(argparse.Namespace(serve_dir=serve, out=out), sleep=slept.append) == 0
+    assert slept == [CP.SS.POLL_S] * 3
+    assert _asked(tmp_path)[2:] == [f"status {RUN}"] * 4 + [f"fetch {RUN}"]
+    kept = serve / CP.PRIVATE / RUN / "fetch.tar.gz"
+    assert kept.stat().st_mode & 0o777 == 0o600 and CP.kept_run(serve) == RUN
+    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "status.json"]
+    assert json.loads((out / "status.json").read_text()) == {k: v for k, v in ENDED.items() if k != "relay"}
+    with tarfile.open(kept) as full, tarfile.open(out / "bundle.tgz") as shown:
+        assert f"{RUN}/witness/certified.jsonl" in full.getnames()
+        assert sorted(shown.getnames()) == [f"{RUN}/end.json", f"{RUN}/out/certificates.jsonl",
+                                            f"{RUN}/out/deployment.json", f"{RUN}/request.json"]
+    doc = json.loads((out / "session.json").read_text())
+    assert (doc["run"], doc["rc"], doc["ended"], doc["verdict"]["accepted"], doc["windows"], doc["gate"]) == (
+        RUN, 0, "the session ended", True, 20, f"research@{GATE_HOST}")
+    assert doc["request"] == _asked(tmp_path)[0] and doc["keep"] == str(kept)
+    assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
+    assert CP.placement(serve, RUN)["parties"] == {"network_certifier": GATE_HOST, "prover": PEER, "verifier": PEER}
+    assert CP.open_sessions(serve / CP.PRIVATE) == []
+    # with the session closed there is none to close, and the gate isn't asked
+    asked = len(_asked(tmp_path))
+    assert CP.main(["close", str(serve), str(tmp_path / "out-again")]) == 2
+    assert len(_asked(tmp_path)) == asked
+
+
+def test_a_session_the_gates_check_refused_is_closed_and_kept_and_the_piece_doesnt_answer_for_it(tmp_path, monkeypatch):
+    """The whole-run rule across a session: an end whose check didn't accept the run (here each connection late) is
+    `close`'s exit, its fetch is kept all the same, and the piece's steps refuse on it (`rehearsed`), which leaves the
+    certifier missing for every window of the served run."""
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    serve = tmp_path / "serve"
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
+    _statuses(tmp_path, [LISTENING | {"active": False, "end": LATE}])
+    assert CP.main(["close", str(serve), str(tmp_path / "out-close")]) == 1
+    doc = json.loads((tmp_path / "out-close" / "session.json").read_text())
+    assert (doc["rc"], doc["verdict"]["accepted"]) == (1, False) and CP.kept_run(serve) == RUN
+    unpacked, run = CP.unpack(serve / CP.PRIVATE / RUN / "fetch.tar.gz")
+    try:
+        with pytest.raises(CP.NotRun):
+            CP.rehearsed(run)
+    finally:
+        CP.rm(unpacked)
+
+
+def test_the_pieces_steps_close_a_relay_session_nobody_closed_before_they_read_the_kept_run(tmp_path, monkeypatch,
+                                                                                            capsys):
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    serve, keep = tmp_path / "serve", tmp_path / "serve" / CP.PRIVATE
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
+    _statuses(tmp_path, [LISTENING, ENDED])
+    slept = []
+    CP.close_open(serve, sleep=slept.append)
+    assert slept == [CP.SS.POLL_S] and CP.kept_run(serve) == RUN and CP.open_sessions(keep) == []
+    assert sorted(p.name for p in (keep / RUN).iterdir()) == ["fetch.tar.gz", CP.RELAY, CP.SESSION, "start.json"]
+    assert (keep / RUN / "fetch.tar.gz").stat().st_mode & 0o777 == 0o600
+    assert json.loads((keep / RUN / CP.SESSION).read_text())["gate"] == f"research@{GATE_HOST}"
+    # nothing is published and no hold is left: the guard keeps, and a close is what publishes
+    assert list((keep / "held").iterdir()) == [] and list((tmp_path / "out").iterdir()) == []
+    assert f"relay session {RUN} closed here: no close ran" in capsys.readouterr().out
+    asked = len(_asked(tmp_path))
+    CP.close_open(serve)
+    assert len(_asked(tmp_path)) == asked
+    # a step closes it first: by the time it reads the kept run, the session's fetch is the kept one
+    again, seen = tmp_path / "serve-step", []
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS, serve="serve-step")) == 0
+    _statuses(tmp_path, [ENDED])
+
+    def step(hold: Path):
+        seen.append((CP.kept_run(again), CP.open_sessions(again / CP.PRIVATE)))
+        raise CP.NotRun("the step's own")
+
+    with pytest.raises(CP.NotRun, match="the step's own"):
+        CP.settle(again, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step)
+    assert seen == [(RUN, [])]
+    # a session the gate's fetch fails for can't be closed: the step doesn't run, and the session stays open
+    third = tmp_path / "serve-no-fetch"
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS, serve="serve-no-fetch")) == 0
+    (tmp_path / "no-fetch").touch()
+    with pytest.raises(CP.NotRun, match=f"relay session {RUN}, which no close ended, couldn't be closed here: .*fetch"):
+        CP.settle(third, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step)
+    assert len(seen) == 1 and [d["run"] for d in CP.open_sessions(third / CP.PRIVATE)] == [RUN]
+    assert list((third / CP.PRIVATE / "held").iterdir()) == []
+
+
+def test_a_local_gates_relay_session_is_this_trees_gate_its_unit_a_relay_each_way(tmp_path, monkeypatch):
+    """``--gate local``: this tree's gate takes the front's request on the scratch host under the serve dir's private,
+    answers its status and gives its fetch, and the unit the front starts runs `auditor.certifier_run` with a `relay`
+    each way in its ssh's place. The unit here is a stand-in that leaves the files a session's does."""
+    spent = subprocess.Popen([sys.executable, "-c", ""])
+    spent.wait()
+    serve, out, started = tmp_path / "serve", tmp_path / "out", []
+    keep = serve / CP.PRIVATE
+
+    def unit(pid: int, listens: bool):
+        class Unit:
+            def __init__(self, argv, **kw):
+                started.append(argv)
+                self.pid = pid
+                if listens:
+                    d = CP.SS.scratch_host(keep / "local-gate", PEER).certifier / argv[4] / CP.SS.A.WITNESS
+                    d.mkdir()
+                    (d / "deployment.json").write_text(json.dumps(DEPLOYMENT))
+        return Unit
+
+    monkeypatch.setattr(CP.SS, "pinned", lambda: "unpinned")
+    with monkeypatch.context() as m:  # a unit that ended at once and wrote no end: the front says so
+        m.setattr(CP.subprocess, "Popen", unit(spent.pid, False))
+        slept = []
+        a = CP.parser().parse_args(_front(tmp_path, *SESSION_FLAGS, serve="serve-spent", gate="local"))
+        assert CP.front(a, sleep=slept.append) == 1 and slept == [CP.READY_POLL_S]
+    assert "its unit ended and wrote no end.json" in json.loads((out / "session.json").read_text())["refused"]
+    with monkeypatch.context() as m:
+        m.setattr(CP.subprocess, "Popen", unit(os.getpid(), True))
+        assert CP.main(_front(tmp_path, *SESSION_FLAGS, gate="local")) == 0
+    (doc,) = CP.open_sessions(keep)
+    run, host = doc["run"], CP.SS.scratch_host(keep / "local-gate", PEER)
+    assert started[-1] == [sys.executable, str(HERE / "certifier_piece.py"), "unit", str(keep), run, PEER, "18190"]
+    assert (doc["gate"], doc["unit"], doc["client"], doc["deployment"]) == ("local", os.getpid(), "127.0.0.1:8012",
+                                                                            DEPLOYMENT)
+    req = json.loads((host.certifier / run / "request.json").read_text())
+    minutes = CP.SS.A.session_minutes(20, CP.HEIGHT) + CP.SS.MARGIN
+    assert {k: req[k] for k in ("device", "peer", "port", "client_port", "windows", "minutes", "height")} == {
+        "device": "warden", "peer": PEER, "port": 18190, "client_port": 8012, "windows": 20, "minutes": minutes,
+        "height": 10}
+    # the unit: certifier_run on that host, its tunnel a relay to the endpoint and one from the clients' port
+    ran = []
+
+    def certifier_run(host_, run_, **kw):
+        ran.append((host_.root, run_, kw["pinned"], kw["tunnel_argv"]([], 1, (8012, 2))))
+        return {"rc": 0}
+
+    with monkeypatch.context() as m:
+        m.setattr(CP.SS.A, "certifier_run", certifier_run)
+        assert CP.main(["unit", str(keep), run, PEER, "18190"]) == 0
+    assert ran == [(host.root, run, "unpinned", [sys.executable, str(HERE / "certifier_piece.py"), "relay", "--listen",
+                                                 "1", "--to", "18190", "--listen", "8012", "--to", "2"])]
+    # the session's end as the unit leaves it, and the close through the same gate
+    d = host.certifier / run
+    (d / "out").mkdir()
+    (d / "out" / "deployment.json").write_text(json.dumps(DEPLOYMENT))
+    (d / "end.json").write_text(json.dumps(PASSED | {"run": run, "ended": "the session ended"}))
+    assert CP.main(["close", str(serve), str(tmp_path / "out-close")]) == 0
+    assert CP.kept_run(serve) == run and CP.open_sessions(keep) == []
+    shown = json.loads((tmp_path / "out-close" / "session.json").read_text())
+    assert (shown["gate"], shown["rc"], shown["verdict"]["accepted"]) == ("local", 0, True)
+    assert set(json.loads((tmp_path / "out-close" / "status.json").read_text())) == {"run", "request", "end", "active"}
+    with tarfile.open(keep / run / "fetch.tar.gz") as full, tarfile.open(tmp_path / "out-close" / "bundle.tgz") as pub:
+        assert f"{run}/{CP.SS.A.WITNESS}/deployment.json" in full.getnames()
+        assert not any(CP.SS.A.WITNESS in n.split("/") for n in pub.getnames())
+
+
+def test_the_local_tunnel_relays_each_listen_port_to_its_own(monkeypatch):
+    """`relay --listen A --to B --listen C --to D`: one relay a pair, the last started once every other listens."""
+    order = []
+
+    def relay(listen: int, to: int, *, ready=lambda: None):
+        order.append((listen, to, threading.current_thread() is threading.main_thread()))
+        ready()
+
+    monkeypatch.setattr(CP, "relay", relay)
+    assert CP.main(["relay", "--listen", "1", "--to", "2"]) == 0
+    assert CP.main(["relay", "--listen", "3", "--to", "4", "--listen", "5", "--to", "6"]) == 0
+    assert order == [(1, 2, True), (3, 4, False), (5, 6, True)]
+    with pytest.raises(SystemExit, match="one --to for each --listen"):
+        CP.main(["relay", "--listen", "1", "--to", "2", "--listen", "3"])

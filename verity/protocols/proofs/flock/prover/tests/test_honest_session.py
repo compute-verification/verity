@@ -1,5 +1,5 @@
 """A recorded honest session held to the honest worker's Lean (`Flock.Firewall.honestReqs`, `FirewallHonest.honestRows`):
-every request `rec_live` relayed to Lean's live firewall on an honest recursive session of the unmodified prover, in order,
+every request `rec_live` relayed to Lean's live ZK server on an honest recursive session of the unmodified prover, in order,
 the ZK server's answer to each with the salts it drew, and the challenger's live-coin part's record (`fixtures/honest-session/`, from
 `pod/93-rec-honest-session.sh`, which keeps `flock-firewall live`'s stdin and stdout through a tee: RoPE d64, one head).
 
@@ -98,7 +98,7 @@ def test_the_firewalls_commitments_are_of_the_workers_rows():
 
 @lean
 def test_the_firewall_gives_the_live_record_on_lean_honest_reqs(server, built):
-    """`flock-firewall` (`Flock.Firewall.run`) on Lean's requests for the session, at the salts the live firewall drew,
+    """`flock-firewall` (`Flock.Firewall.run`) on Lean's requests for the session, at the salts the live ZK server drew,
     finishes with the challenger's live-coin part's live record (its coins and the link's points, which it samples, left out)."""
     schedule, reqs, answers = recorded()
     salts, _ = drawn(answers)

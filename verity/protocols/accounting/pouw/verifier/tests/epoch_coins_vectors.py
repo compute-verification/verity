@@ -20,8 +20,8 @@ from verity.commitments.randomness import derive
 from verity.protocols.accounting.pouw.verifier import audit as au
 from verity.protocols.accounting.pouw.verifier import coins as EC
 
-# the sample keys are the clear audit's, a reference tool (verity/protocols/accounting/pouw/clear) imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
+# the sample keys are the clear audit's, a reference tool (verity/protocols/accounting/pouw/prover/clear) imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "prover" / "clear"))
 import clear_audit as CA
 import clear_work as CW
 
