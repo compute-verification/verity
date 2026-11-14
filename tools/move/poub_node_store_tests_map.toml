@@ -33,3 +33,6 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
 
 [modules]
+"adapters.vllm.tests.protocols.remote_bandwidth.test_memory_map" = "verity.protocols.accounting.poub.tests.test_memory_map"
+"adapters.vllm.tests.protocols.remote_bandwidth.test_registry" = "verity.protocols.accounting.poub.tests.test_registry"
+"adapters.vllm.tests.protocols.remote_bandwidth.test_remote_session" = "verity.protocols.accounting.poub.tests.test_remote_session"
