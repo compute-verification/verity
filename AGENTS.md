@@ -25,7 +25,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.Firewall`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
-    policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
+    policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only; the policy's Python is its
+    manifest alone (`inference_only/verifier/parties.py`: the verifier, no channel). `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
     keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
     own): `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
@@ -40,9 +41,9 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `cards` and `nodes` (the loaders of the data sheets, which are in the
-    top-level `hardware/{cards,nodes}/`), `registration` (the registration log) and `record` (a record entry); its
-    types are in `verity/`'s `device.py`.
+  - `verity/hardware/`: the registered hardware: `registration` (the registration log) and `lean` (the Lean card
+    tables' writer); its types, and the readers of the data sheets, which are in the top-level
+    `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
   - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
     channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
     directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
@@ -50,7 +51,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/claims/`: the security claims' ids. `tools/difftest/`: the Python held to each Lean (target, not yet: under
     `tools/`). `verity/protocols/compose/device/live_challenger/`: the auditor host's challenger service, from `benchmarks/` too.
 - `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
-  base) and `nodes/` (one per kind of node). `verity.hardware.cards` and `verity.hardware.nodes` read them.
+  base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
