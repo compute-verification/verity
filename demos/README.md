@@ -29,12 +29,10 @@ Remote accepts only when all three accept over one commitment that binds them, e
 the commitment, never flipped again) and on what each subprotocol's own
 guarantee assumes; each subprotocol states its guarantee in `security/`, and the composite's
 (`Verity.RemoteSoundness`, `security/Properties/Verity/Soundness.lean`) is proved from theirs, which it takes as
-hypotheses, so no demo's `proof` is past `none`. `lifecycle/` is the only demo that steps through the whole
-remote composite, H1's development one, on CPU with a stand-in prover. Its demo is the vLLM demo
+hypotheses, so no demo's `proof` is past `none`. Its demo is the vLLM demo
 (`verity demo vllm`), on H1's development executable: one served run of Llama-3.2-1B INT8 on one H200, SPOT
-and PoUW on the served model, whose PoUW verdict is a development run that credits nothing. The inference-only policy
-runs in `lifecycle/` only: no served run produces the declared
-division yet. Five other things are called "remote" (PoUB among them);
+and PoUW on the served model, whose PoUW verdict is a development run that credits nothing. No served run produces
+the inference-only policy's declared division yet. Five other things are called "remote" (PoUB among them);
 `verity/protocols/compose/verifier/remote/README.md`, "Which remote", lists them.
 
 ## How far a demo runs, and how far it's proved
@@ -74,12 +72,6 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
 
 ## The demos
 
-- `lifecycle/` (`run` `runs`, `proof` `none`): both composites, `onsite` and `remote`, stepped through one monitoring
-  period on CPU in about 2 s, from the hardware registration to the period's verdict and accounting. Every party is
-  simulated in one process, the prover is a labelled stand-in for Flock, and the verdict is the composition's Python
-  mirror (`verity/protocols/compose/verifier/lean/tests/reference.py`), not `remote check`. It is the only demo that steps
-  through the whole remote composite; its tests (`demos/lifecycle/tests/test_lifecycle.py`) run each composite honest
-  and with every deviation it lists refused. Nothing about it is proved.
 - `vllm/` (`run` `moved`, `proof` `none`): the vLLM demo, the remote protocol on a real served model. Llama-3.2-1B INT8
   served by vLLM on one H200 through `verity_vllm`'s committing endpoint; `verity demo vllm` serves one execution phase,
   commits its values, and audits it through `benchmarks/one_stage/served_verdicts.sh`: live coins sample proof blocks,

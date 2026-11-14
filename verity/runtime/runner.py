@@ -1,8 +1,8 @@
 """The runtime: it runs parties over channels and keeps their transcripts, and knows no protocol.
 
-`run(config, parties_here, mode, state_dir, protocols=...)` runs the parties ``parties_here`` of a deployment: the
-lifecycle examples (`demos/lifecycle/`) call it, and so does a `verity run` table whose ``live`` runs a protocol's
-parties (the CLI's test table, `tools/verity/cli/tests/step0.py`). `config` is the deployment
+`run(config, parties_here, mode, state_dir, protocols=...)` runs the parties ``parties_here`` of a deployment: a
+`verity run` table whose ``live`` runs a protocol's parties calls it (the CLI's test table,
+`tools/verity/cli/tests/step0.py`). `config` is the deployment
 configuration as data; the runtime reads its protocol (`protocol`, or the one entry of `protocols`), `params`, its
 parties (`party`: `name`, `machine`, and `key`, the public key a handshake checks), its site when it describes one
 (`machine`: `name`, `owner`, `provides`; `link`: `ends`, `latency_ms`, `via`) and its hash (`hash`, else SHA-512 of its

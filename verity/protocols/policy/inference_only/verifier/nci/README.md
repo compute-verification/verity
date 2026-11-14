@@ -19,7 +19,7 @@ deployment configuration's table declares the policy's party from, with its test
     The Lean check runs each one's main on the data `lean/lean-audit.json` pins (`runs`), which the tests named
     under "Not here" hold to its generator. No other code runs them.
 - **Scripts**: `lean/scripts/nci_reference.py`, the check's Python reference, loaded by path by the tests of
-  `adapters/vllm`, by `demos/lifecycle` and by `benchmarks/verifier_cost`; and the difftests' generators,
+  `adapters/vllm` and by `benchmarks/verifier_cost`; and the difftests' generators,
   `python scripts/NAME.py CHECKOUT --out DIR`, as `lean/lean-audit.json` runs them (`runs`). The tests of
   `verity/protocols/proofs/flock/prover` load `desc_difftest_vectors.py` by path.
 - **Documents**: it reads registration records (`verity/registration/v2`), which `adapters/vllm` writes as the

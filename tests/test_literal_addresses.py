@@ -124,7 +124,6 @@ ALLOWED: dict[str, int] = {
     "benchmarks/one_stage/interfaces/tests/fixtures/block-record-b71a-w30.json": 7,
     "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r1-window10.json": 4,
     "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json": 8,
-    "benchmarks/one_stage/interfaces/tests/test_report.py": 1,
     "demos/vllm/placement.toml": 1,
     "adapters/vllm/tests/protocols/pouw_h1_rehearsal.py": 1,
     "tools/verity/check/tests/test_placement.py": 3,
