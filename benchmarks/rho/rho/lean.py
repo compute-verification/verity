@@ -29,7 +29,9 @@ def read(locks: tuple[Path, ...] = LOCKS) -> tuple[frozenset[str], frozenset[str
     for path in locks:
         lock = json.loads(path.read_text())
         for entry in lock["guarantees"].values():
-            proved.update(s.rsplit(" : ", 1)[-1] for s in entry.get("signature", ()))
+            # a signature's lines are one statement, wrapped
+            if sig := " ".join(" ".join(entry.get("signature", ())).split()):
+                proved.add(sig.rsplit(" : ", 1)[-1])
         assumed.update(lock["assumptions"])
         assumed.update(lock.get("open") or {})
         assumed.update(lock.get("domain") or {})
