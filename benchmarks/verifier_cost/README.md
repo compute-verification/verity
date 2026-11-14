@@ -305,6 +305,7 @@ Apart from `nci_glm`'s inputs and `flock_served`'s saved step, nothing here is a
 this benchmark's constructions, and nothing outside this directory reads them.
 
 The suite (`tests/test_mains.py`, which `check` runs after its Lean steps) holds every `<name>/Main.lean` here to the
-verifier it times: each must still elaborate in the checkout's package, and `whole_run.py toy 146 --check` must still
-accept the run it writes. It builds no executable and runs no benchmark; a main in a new directory is held without being
-listed.
+verifier it times: each must still elaborate in the checkout's package, `whole_run.py toy 146 --check` must still
+accept the run it writes, and the ledger replay's generators must still write a ledger the challenger accepts and a
+period PoUW's period check accepts. It builds no executable and runs no benchmark; a main in a new directory is held
+without being listed.
