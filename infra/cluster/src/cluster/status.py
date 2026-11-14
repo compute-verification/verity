@@ -29,7 +29,6 @@ than `STALE_S` outside one, or than the window's end plus `STALE_S`.
 from __future__ import annotations
 
 import json
-import os
 import re
 import shlex
 import subprocess
@@ -39,9 +38,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from . import ledger, model, nebius1, nebius2
+from . import ledger, model, nebius1, nebius2, settings
 
 NODES = {"nebius-1": nebius1.NODE, "nebius-2": nebius2.NODE}
+#: a node's address is the environment's (`reach`): no file holds it
 SSH_KEY = Path.home() / ".ssh" / "research_key"
 LIVE = "/workspace/pouw/infra/cluster/live"
 BUNDLE_ROOTS = ("/workspace/jobs/cov", "/workspace/jobs/probe-jit")
@@ -84,9 +84,9 @@ def reach(node: str, key: Path | None = SSH_KEY) -> Callable[[str], str]:
     node's name gives (vy-nebius-1's is VY_NEBIUS_1_HOST), as `machines.d/<node>.toml` registers it (``host``): no file
     here holds it, and with it unset each command fails as a read does (`ReadError`), naming the variable."""
     def run(cmd: str) -> str:
-        var = node.upper().replace("-", "_") + "_HOST"
-        if not (host := os.environ.get(var)):
-            raise ReadError(f"{var} is unset: {node}'s address, which machines.d/{node}.toml registers as host")
+        if not (host := settings.host(node)):
+            raise ReadError(f"{settings.host_var(node)} is unset: {node}'s address, which machines.d/{node}.toml "
+                            "registers as host")
         return ssh(f"research@{host}", key)(cmd)
     return run
 

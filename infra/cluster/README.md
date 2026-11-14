@@ -54,6 +54,7 @@ src/cluster/
 │               SSH, logged in its override log and read back
 ├── usage.py    GPU-seconds held, busy, idle, unmeasured and useful per node, owner, kind and UTC hour: the console imports
 │               it to compute and record the rows on node 1, and `cluster usage` (`research usage`) reads that record
+├── settings.py  the environment variables the package reads: a node's address (`<NODE>_HOST`), which no file holds
 └── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | usage | policy
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them, and their policy
 descriptions/nebius-after-n1.toml   node 2 alone, staged for node 1's retirement: it replaces nebius.toml then
