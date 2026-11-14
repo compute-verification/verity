@@ -192,7 +192,7 @@ theorem ksAvgZK_le {c : ℝ≥0∞} (h : ∀ S R (j : Fin (planZ S R).length), (
   (avg_mono fun _ => iSup_le fun j => h _ _ j).trans (avg_const c).le
 
 /-- **The `--zk` count curve at the live sample, every table at Flock ZK's parameters**:
-`Pr[accept ∧ at least K incorrect units] ≤ miss(K) + 2^-203 + ε_bind`. -/
+`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss(K) + 2^-203 + ε_bind`. -/
 theorem zk_flock_count_execOS_m1 (hA : A.Correct) (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
