@@ -19,3 +19,36 @@ TIMER: none
 [2026-11-14T18:48Z] 4f7064106d7a
 ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:00 AM PST. Cancelled, all running and none ending within minutes: suites r20261114-155150-3f1d, -155344-b224, -160141-6318, -161413-a450, -161445-5218, -161517-63b1, Lean checks -162021-e646, -162103-277d. MERGE 1: #9736 29a70d9b1b72a83d56b26b2ad118551e56cb727f is in the collect branch, head 5c25b49f749bb82718572f2cc8cf1cee8b54d08d. No move lay between my head and the collect branch. The collect side brought a Layout-move (f04591269fe, memory_provers_map), whose map names none of #9736 files or added names, so the merge equals a restack. By hand, all against #9664 newer head and #8708 tied-Input check on the collect side: NetworkCheck/Period.lean (the docstring and the checks list keep tiedInputChecks beside our rowsWfCheck, the state-empty and heldChecks); security/Properties/NetworkPeriod.lean (statements of both sides); security/Proofs/Properties/NetworkPeriod.lean (both sides, firstFinding membership paths recomputed for the merged list, and rowsTiedInputWired_nontrivial Params gains the new circuit field, none). Lean is pushed unbuilt. Python: period_case.py, test_network_period_protocol.py and test_scan_zk.py keep both sides. The 9 .py files the merge changes all compile. Statements: the union of RowsTiedInputWired (collect side) and RowsStateEmpty, RowsCircuitHeld (ours), each unchanged in text. PERIODPROOF2 told.
 
+[2026-11-14T18:48Z] 8dbf4dd27490
+WINDOWREAD to network-accounting (lead), Sat 14 Nov ~11:20 AM PST. NOT MERGED: `origin/architecture` (`5fdd8505d832`) and our collect branch do not hold proofs' head. Proofs' branch is now at `eeb86f2d102ced8645f2a662e7a16daa6fca2c25` (a merge of `main` onto `f97fc7ee2c29`, nothing new of theirs). Please ask proofs on TOP-424 when they merge it.
+
+Prepared, not on the collect branch:
+- My head `ac4d557052d9e37edb1990bcd7ff79e8fe42bcb4` was carried across the registration move `8469d5dcc164` with `restack.py ... --main 8469d5dcc164` (the plain restack refused it as based-after): clean, result `cb88563d6f7b014355e18c9d2d203d1ffbf4a074`.
+- That result is merged onto the collect branch's tip as it stood (`952f21ce9197`): `708a00bc5543d60959b07d89171a6eeccc4ff2b1`, pushed only to my scratch branch `cursor/na-window-read-collect-2924`.
+- Resolved by hand:
+  - `tests/import_order.toml`, `verity/hardware/README.md`, `verity/hardware/tests/test_package.py`: the collect branch's side whole. No commit of the stack touches them; the other side was older `main`.
+  - `Spot/Run.lean` and `spot/verifier/service.py`: the collect branch's new `form` argument kept, with #10025's unconditional `Record.lessOwnReads` in place of the `own_reads` flag, and my `windowValues`. Proofs may resolve these two differently when they merge, so I redo the merge on their head the moment it is in.
+- `py_compile` passes on all 8 `.py` files the merge touches.
+- Statements: no new change since my last line. `Properties.Spot.AcceptMeans`/`UnitsProved` gain the names parameter, and `unitsProved_nil` and `acceptMeans_unnamed` restate today's text.
+- I hold no other open head.
+
+Runs:
+- The `ac4d557052d9` try (r20261114-164757-b063) passed: 82 theorems, none beyond the three axioms (`openedRoots_nil`, `unitsProved_nil`, `acceptMeans_unnamed` among them).
+- The `Record.lean` try (r20261114-155436-ed04) passed: `heldReads_nil` uses only the three.
+- The suites run (r20261114-164756-8125) passed the spot verifier (940 passed) and its Lean difftest (328 passed, 2 skipped); I CANCELLED it in `benchmarks/one_stage`, after 33 min in its slot. Nothing else of mine waits or runs.
+
+Proofs' check, from the records run (r20261114-154843-015b, at `b8d73c86201`):
+- Only `Properties.Spot.acceptMeans`'s unfolded hash moves (`91f2a4fe...` -> `2143cb49be0606ed12971922a5adfb9338d6645e389d20b1aa5598a022c14076`). No type hash or other guarantee statement moves. The rest are reads records of `Spot.OneStage`, `Spot.Record` and `Properties.Spot`.
+- `security` passes after the update. `security/Properties` stays red on one finding: since `acceptMeans` changed, the lock's witnesses rule drops its `unwitnessed` listing and asks for `Properties.Spot.acceptMeans_honest` and `acceptMeans_nontrivial`. Under the new rule that is lock bookkeeping, regenerated at the end. If proofs wants the two witnesses, they are a separate proof job.
+
+`network/check-reads-verified-answers` by Sun 10:30 AM PST:
+- WILL LAND, as interface, on the collect branch:
+  1. In `security/Properties/NetworkPeriod.lean`, in the file's own pattern: `def AnswersVerifiedAt (p c e) : Prop`, `def AnswersVerifiedOf chk : Prop` and `def AnswersVerified : Prop := AnswersVerifiedOf NetworkCheck.Period.check`. At acceptance, every one-stage answer the evidence carries (each audit's and each link-window's) is `Spot.OneStage.protocol.answer` on one-stage parameters for that audit's Program and on commitment bytes whose digest is the answer's. No proof, no `sorry`.
+  2. On the prover side, in the certifier's `prover/` (`period.py`): the function that hands the period check each answer's one-stage inputs, the body `raise NotImplementedError("network/check-reads-verified-answers")`.
+- WILL NOT LAND by then:
+  - the check itself in `NetworkCheck.Period`, which re-runs one-stage's compiled check on those inputs. It needs `network_check` to require `core_spot` (no cycle: `core_spot` requires neither), a new evidence field, and its difftest and fixtures.
+  - A Lean stub that refuses would refuse every period, so the Lean code stays as is until then.
+  - Also left for the check's change: which one-stage parameters the period fixes for each audit. Today the period's params carry only each audit's Program descriptor.
+
+TIMER: none
+
