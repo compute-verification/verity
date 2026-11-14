@@ -1,5 +1,5 @@
 """The build family: the check's steps that build the Flock verifier and run what it built, and Flock's Rust, as
-`tools/verity/check/check.py` runs them (its `lean_steps` and `groups`), each step one task.
+`tools/check/check.py` runs them (its `lean_steps` and `groups`), each step one task.
 
 - `lean-build:verity/protocols/proofs/flock/verifier`: `lake build` of the Lean verifier, which reads its package and the packages of
   the tree it requires by path; its outputs are the executables its lakefile's
@@ -43,7 +43,7 @@ LEAN = "verity/protocols/proofs/flock/verifier"
 VERIFIER = "verity/protocols/proofs/flock/prover/agreement"
 FLOCK = "verity/protocols/proofs/flock/prover"
 UNIT_CUT = f"{VERIFIER}/unit_cut_agree.py"
-SUITES = "tools/verity/check/suites.py"
+SUITES = "tools/check/suites.py"
 #: the lean-suites suites listed in parts, {suite: parts}: `suites.py --files K/M` on a timing record that has none of their
 #: files (`lean_suites.run`), so each part is every M-th of the suite's test files in path order, a function of the commit alone,
 #: and the parts of one tree hold each file once whichever machines run them.  Each is as many as keep its parts near ten minutes
@@ -59,7 +59,7 @@ TREE_PATH = "lean-build/lake-build.tar.gz"
 #: what `check.py --lean-agreement` reads of the tree outside the verifier's directory: check.py, the modules it loads as it
 #: starts and the job declaration and policy they read, with the Slack registry the declaration checks its handles against
 #: (`tests/test_build.py` holds this list to what an audit hook sees it open)
-CHECK_READS = (*(f"tools/verity/check/{m}" for m in ("check.py", "ci.toml", "common.py", "declaration.py", "live.py",
+CHECK_READS = (*(f"tools/check/{m}" for m in ("check.py", "ci.toml", "common.py", "declaration.py", "live.py",
                                                      "policy.toml", "records.py", "settings.py", "shards.py", "slot.py",
                                                      "spans.py", "suites.py", "verdicts.py")),
                ".agents/skills/using-slack/registry.json")

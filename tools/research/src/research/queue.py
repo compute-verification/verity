@@ -177,7 +177,7 @@ publishes what it builds for the candidate's audit), from a clean checkout, eith
 failure.  `--mark` (`MarkOnly`) writes the mark with no tier, and its candidate's check is the head's first full check.  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
-`main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) names the hold label, and may name the author
+`main`, `tools/check/queue.toml` until the repository move, or `--rules`) names the hold label, and may name the author
 and committer of the queue's commits (`author = { name = "NAME", email = "ADDRESS" }`, `Rules.identity`): `IDENTITY` where it
 names none.  Ready marks are read after
 pulling the target's labels from the store's remote; when that pull can't happen (no remote here, one
@@ -233,7 +233,7 @@ Merges.  A candidate is its base with one merge commit per member on top, each m
 is recorded under what it reads (`Queue._merge_key`): the parent's tree, not its commit, the head and their merge bases, with
 the merge's code, git and drivers; the same head merged again onto the same tree takes its record's tree, conflict, porting,
 rebuilt pins and lock drops, and only `git commit-tree` runs (`Queue._recorded`).  A merge whose only conflicts are in pins
-(`tools/verity/check/pins.py`'s `PINS`, generated sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from
+(`tools/check/pins.py`'s `PINS`, generated sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from
 the merged tree (`repinned`): two PRs that each change a pinned input both change its pin.  Two that each change what a JSON
 pin holds besides its digests (each adds vectors) conflict in it, since keeping either side's text drops the other's.  A PR
 whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
@@ -257,7 +257,7 @@ doesn't merge onto `main`, as after a move it lacks, goes into no candidate, and
 to rebase it onto `main` and to mark the new head, once a head (`Loop._conflicts`); `tools/move/restack.py` carries a branch
 across a move, and a land verdict carries to the restacked head when its own change, mapped across the move, is the same
 (Admission).  `research queue sync`'s regeneration of a move on `next` (`_regenerate`, which
-`tools/verity/check/move_check.py` must certify) and its restacks across one (`_merge_through`, `_restack`) build only
+`tools/check/move_check.py` must certify) and its restacks across one (`_merge_through`, `_restack`) build only
 `next`.  The preflight merges no move PR's head, and notes rather than refuses a conflict only in files a move changed.
 
 Landing.  The verified queue's loop (`research queue vqueue`, `research.vqueue_loop`) is the one landing path: it builds each
@@ -343,12 +343,12 @@ from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
 RULES = "ci/queue.toml"
-#: where the rules are until the repository move puts `tools/verity/check/` at `ci/`
-RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
+#: where the rules are until the repository move puts `tools/check/` at `ci/`
+RULES_BEFORE_MOVE = "tools/check/queue.toml"
 #: drive's flags of record (`DriveFlags`, `--config`)
-DRIVE_FLAGS = "tools/verity/check/drive.toml"
+DRIVE_FLAGS = "tools/check/drive.toml"
 #: the pins tool, whose `PINS` names the generated files a merge rebuilds (`repinned`): after the repository move, and before it
-PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
+PINS_FILES = ("ci/pins.py", "tools/check/pins.py")
 #: the codemod that puts the in-tree Lake packages' Lean on Lean's module system, and the one reading of a Lean header it reads
 #: with: a merge into a tree on the module system runs the codemod over the merged tree (`ported`)
 MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
@@ -405,10 +405,10 @@ ISSUE_LINK_RE = re.compile(r"(?i)\b(?:refs?|references|part of|contributes to|to
 MOVE_TRAILER_RE = re.compile(r"^Move: (tools/move/[\w.-]+\.toml)$", re.M)
 #: the scripts a move runs, each as the landing branch has it (`move_scripts`): the move, its certificate, and carrying a branch
 #: across it
-RENAME, MOVE_CHECK, RESTACK = "tools/move/rename.py", "tools/verity/check/move_check.py", "tools/move/restack.py"
+RENAME, MOVE_CHECK, RESTACK = "tools/move/rename.py", "tools/check/move_check.py", "tools/move/restack.py"
 #: what those scripts import from their own checkout: `tools/move/`'s other scripts (rename.py's `layout`), and the pins list
 #: move_check.py reads to tell a pin's rewritten digest from an edit
-MOVE_DIR, MOVE_PINS = "tools/move/", "tools/verity/check/pins.py"
+MOVE_DIR, MOVE_PINS = "tools/move/", "tools/check/pins.py"
 #: how long a restack job runs at most (`Queue._launch_restack`): `timeout` interrupts `restack.py` then, so it removes its
 #: scratch worktrees, and kills it a minute on; a job with no exit written `RESTACK_LOST_S` after its start died (its process
 #: gone, or its pid another's after a restart of the pod)
@@ -760,7 +760,7 @@ def _author_why(author: object) -> str | None:
 LANDINGS = ("review",)
 #: a landing or warn gate's path (`DriveFlags.landing_gates`, `DriveFlags.warn_gates`)
 GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
-#: the steps of a check (`tools/verity/check/check.py`), of which `DriveFlags.warn_steps` names some
+#: the steps of a check (`tools/check/check.py`), of which `DriveFlags.warn_steps` names some
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
                "ratchet-gate")
@@ -835,7 +835,7 @@ class DriveFlags:
     close_unlandable: str = "off"
     #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`drive.Driver.start_postland`):
     #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot; "auto" or "auto:MAX", the shard
-    #: planner's N (`tools/verity/check/shards.py`), at most MAX (default its MAX_SHARDS), each shard `--shard auto:K/N`
+    #: planner's N (`tools/check/shards.py`), at most MAX (default its MAX_SHARDS), each shard `--shard auto:K/N`
     after_landing_shards: int | str = 1
     #: the keys a command line may override, of `COMMAND_LINE`
     command_line: tuple[str, ...] = ("on",)
@@ -908,7 +908,7 @@ class DriveFlags:
         if "after_landing_shards" in doc:
             v = doc["after_landing_shards"]
             if not (isinstance(v, str) and AUTO_SHARDS_RE.fullmatch(v)) and (type(v) is not int or v < 1):
-                raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/verity/check/ci.toml, or "
+                raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/check/ci.toml, or "
                                                   "\"auto\" or \"auto:MAX\" (the shard planner's N, at most MAX)")
             got["after_landing_shards"] = v
         for k, modes in (("executor", MODES), ("verdict_carry", MODES), ("close_unlandable", CLOSE_UNLANDABLE)):
@@ -3874,7 +3874,7 @@ REMOTE_POLL_S = 30
 SLOT_NOT_STARTED = 75
 #: the remote tier's command, slot.py from the shipped tree as the launcher of a machine with /etc/vy/runs-via-slot accepts it
 #: (pods/nebius/slot_only.py's `through_slot`, which the suites that read this module may not read)
-SLOT = ("python3", "tools/verity/check/slot.py")
+SLOT = ("python3", "tools/check/slot.py")
 #: `research queue ready`'s exit when the tier never started: nothing failed, and nothing is marked
 READY_NOT_STARTED = 3
 #: what `place` asks a research pool for when node 2 is down: any slot of the pool fits, and the tier takes the slot's cores
@@ -3883,7 +3883,7 @@ SPILL_CPUS, SPILL_MEM_GB = 4, 16
 POOL_SLOTS = "/workspace/research/locks/{pool}/slots"
 #: a lane's own test run, which no landing needs (its candidate's full check decides whether a PR lands)
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
-            'uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
+            'uv run tools/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
 
 
 class NotStarted(str):
@@ -3903,7 +3903,7 @@ def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None
     (``spill``, research.auto), as `MACHINE:POOL`. None when nothing could be placed. And why, with each machine skipped."""
     from .store import tools_registry
 
-    path = tools_registry.resolve("tools/verity/check/check.py", lambda p: (repo / p).is_file()) or "tools/verity/check/check.py"
+    path = tools_registry.resolve("tools/check/check.py", lambda p: (repo / p).is_file()) or "tools/check/check.py"
     s = importlib.util.spec_from_file_location("queue_check", repo / path)
     check = importlib.util.module_from_spec(s)
     sys.modules[s.name] = check
@@ -3939,7 +3939,7 @@ class RemoteQuickTier(QuickTier):
     """The quick tier as a `research run` on machine ``on`` (`auto` or `M1,M2`: the one `place` picks when the tier starts): a
     worktree of its own (`WORKTREE_SUFFIX`), checked out and cleaned as `QuickTier` does, is the run's `--source`, and the worktree's
     lock is held only while it is checked out and shipped, so several PRs' tiers run at once.  On the machine the run waits for a
-    free check slot (the shipped tree's `tools/verity/check/slot.py`, as `check.py --record --on` takes one, or in a pool the
+    free check slot (the shipped tree's `tools/check/slot.py`, as `check.py --record --on` takes one, or in a pool the
     machine's own copy where it has one, as `remote.launch` then names it: the run's command is slot.py's, which a machine with
     /etc/vy/runs-via-slot requires) and runs `quick_tier.py` (sent with the run) in that tree.
     The caller polls the run's records (`research fetch`) until it ends and judges the facts in its result.json as the local tier's are judged; a run that ends without them, with facts from another run
@@ -4879,7 +4879,7 @@ MERGED_ROOT: Path | None = None
 #: prints, as JSON, the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2]
 #: (`suites`) and, for each, the fetched registry entries under its inputs (`fixtures`), as `suites.py` picks what to fetch before
 #: it runs them: the repository's own suite reads tracked files only, so it needs none
-_TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/verity/check'); import suites as S; pkgs = S.members(); "
+_TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/check'); import suites as S; pkgs = S.members(); "
             "chosen = S.touched(S.discover(), pkgs, sys.argv[1], sys.argv[2], S.locked()); "
             "ins = {s: S.inputs_of(s, pkgs) for s in chosen}; own = {s: [p for p in ps if p != '.'] for s, ps in ins.items()}; "
             "fx = S.fetched_fixtures(sys.argv[2], {p for ps in own.values() for p in ps}); "
@@ -5934,7 +5934,7 @@ class Preflight:
                     f"once `main` has the other side, and push it")
         if kind == "pins":
             return (f"`pins.py --stale` on the merged tree: {shown}: regenerate each with its command, never by hand "
-                    f"(`python3 tools/verity/check/pins.py --regen`); when the head alone is fresh, the other side is a PR on "
+                    f"(`python3 tools/check/pins.py --regen`); when the head alone is fresh, the other side is a PR on "
                     f"`next`: regenerate once it lands")
         if kind == "tests":
             return (f"the invariant tests in {where} fail on the merged tree: {shown}: reproduce on `git merge origin/next` in a "
@@ -6002,8 +6002,8 @@ class Preflight:
                 out[name] = res
 
         if want("pins"):
-            if (wt / "tools/verity/check/pins.py").is_file():
-                r, why = self._run([sys.executable, "tools/verity/check/pins.py", "--stale"], wt, deadline)
+            if (wt / "tools/check/pins.py").is_file():
+                r, why = self._run([sys.executable, "tools/check/pins.py", "--stale"], wt, deadline)
                 got("pins", why if r is None else {} if r.returncode == 0 else
                     {ln.split(" is stale", 1)[0]: ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip()}
                     or {f"exit {r.returncode}": f"pins.py --stale exited {r.returncode}"})

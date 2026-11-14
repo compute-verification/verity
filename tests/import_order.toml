@@ -10,7 +10,7 @@
 # A new directory under `verity/` is in its parent's row until it is listed here.
 #
 # The order, the distributions and each place's `paths` and `trusted` mark are kept by hand.  The tables after them are
-# the tree's own, written by `uv run tools/verity/check/import_order.py`, and the test holds this file to what it writes.
+# the tree's own, written by `uv run tools/check/import_order.py`, and the test holds this file to what it writes.
 
 order = [
     ["fixtures", "tools/config", "verity"],

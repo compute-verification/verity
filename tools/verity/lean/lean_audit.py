@@ -26,7 +26,7 @@ each file under its path relative to its package (a module's is its name), never
   lakefile's `require ... path = "P"` and the manifest's `"dir": "P"` name such a package, the key reads P as that
   package's own content key (`content_key`), so moving it and rewriting the paths to it keeps every key. A path spelled
   otherwise stays a path in the key;
-- `tools/verity/lean/` (the auditor and this file) and `tools/verity/check/common.py`, the helpers it imports, at their paths in the
+- `tools/verity/lean/` (the auditor and this file) and `tools/check/common.py`, the helpers it imports, at their paths in the
   repository: not `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict. Nor
   `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
   (the merge driver, the Lean fast path, the daily publish, ...), which the audit never reads: the scratch tree leaves them
@@ -145,7 +145,7 @@ def _module(path: Path, name: str):
 
 #: every file this step loads is in `inputs`: `tools/verity/lean/` (this module among them), `common.py` and the task graph's
 #: contract, which `module_keys` loads (`test_lean_audit.py` holds it)
-COMMON = _module(ROOT / "tools" / "verity" / "check" / "common.py", "check_common_for_lean_audit")
+COMMON = _module(ROOT / "tools" / "check" / "common.py", "check_common_for_lean_audit")
 MK = _module(Path(__file__).resolve().parent / "module_keys.py", "lean_module_keys_for_lean_audit")
 SETTINGS = _module(Path(__file__).resolve().parent / "settings.py", "lean_settings_for_lean_audit")
 #: the task graph's contract, which `module_keys` keys each module with (`module_keys.CONTRACT`)
@@ -430,7 +430,7 @@ def tool_files(files: list[str]) -> list[str]:
     """The auditor's files: `tools/verity/lean/` less its tests, its docs and `NOT_READ`, and the helpers it imports."""
     tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")
             and f[len(LEAN_TOOL):] not in NOT_READ]
-    return sorted({*tool, "tools/verity/check/common.py", CONTRACT})
+    return sorted({*tool, "tools/check/common.py", CONTRACT})
 
 
 def read_packages(pkg: str) -> list[str]:

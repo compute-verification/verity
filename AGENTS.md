@@ -72,7 +72,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 
 Dependencies point inward, and which folder may import which is one listing, `tests/import_order.toml`, which
 `tests/test_boundaries.py` holds the tree to. Its order, its distributions and each place's paths are kept by hand; its
-tables are the tree's own, written by `uv run tools/verity/check/import_order.py`, so the listing's diff shows what a
+tables are the tree's own, written by `uv run tools/check/import_order.py`, so the listing's diff shows what a
 change opens. A file loads only what its own row of the listing or an earlier row holds, in Python and in Lean, but for
 the ties the listing names by file (`against`, which only shrinks). No file under a `verifier/` loads one under a
 `prover/`. `verity`'s own Python is in places, each the directories and files its `place` entry names, and a place's
@@ -105,7 +105,7 @@ audits on those, and compose on top; no protocol imports a configuration.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu        # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
-uv run tools/verity/check/suites.py             # the suites whose inputs changed; --quick: no slow tests
+uv run tools/check/suites.py             # the suites whose inputs changed; --quick: no slow tests
 uv run --extra torch-cpu verity check           # the whole check
 ~~~
 
@@ -237,11 +237,11 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 
 ## Checking and merging
 
-There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
+There is no GitHub Actions CI. `check` (`verity check`, `tools/check/check.py`) is the one check: every suite,
 `circuit-check --all`, Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
 `lean-agreement` (against upstream's Rust verifier) when Flock or its Lean verifier changes. The runners report facts: each
 suite, test, target and step's real verdict. What gates and what may stay red is the landing policy,
-`tools/verity/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
+`tools/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
 which the verified queue takes a failure as not red until it expires. `circuit-check` is off the merge gate until
 `circuit-check --all` fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it
 out; a candidate's check still runs it, and its red there holds nothing.

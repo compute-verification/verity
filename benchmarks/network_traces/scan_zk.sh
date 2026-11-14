@@ -2,7 +2,7 @@
 # The step-indexed scan composed in zero knowledge (scan_zk.py, w63's class or SC_CLASS's) on a CPU machine, on hidden_zk's builds (its
 # job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the
 # sampled-proofs verifier built in the tree. From a clone, in one of the network slots, as a job of at most 180 minutes:
-#   env SC_MEM_GB=128 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+#   env SC_MEM_GB=128 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/scan_zk.sh
 # env: SC_MEM_GB (what job.sh's stages may take, within the slot's)  SC_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  SC_DRY=1 (the run and the host's read of every round only)

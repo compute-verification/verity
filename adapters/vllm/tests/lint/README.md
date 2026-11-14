@@ -75,16 +75,16 @@ the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `t
 tracked file outside this lint's own), except that it counts findings per (file, rule), an entry
 `{"file", "rule", "count"}` pooled by rule, and a count above what a tree finds doesn't fail: its list may hold the findings of
 queued PRs that a tree doesn't have yet, and `python3 tests/lint/test_repo_ruff.py --prune` lowers what a tree no
-longer finds. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
+longer finds. Exempt are reverts and pure moves that `tools/check/move_check.py` certifies. A feature
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `adapters/vllm/tools/ratchet_gate.py` holds the
-rule off the merge gate (`tools/verity/check/policy.toml`'s `off_gate`): it is the check's `ratchet-gate` step, which each
+rule off the merge gate (`tools/check/policy.toml`'s `off_gate`): it is the check's `ratchet-gate` step, which each
 candidate's check runs as the step's base has it, judging each `Queue: #N` merge above that base against the one below. It
 fails a merge that grows a ratchet (naming the entries it added) or on whose tree the base's lints find what its lists don't
 cover (naming each violation). Before a PR's candidate, only the ready mark's preflight runs it, on the PR's merge within the
 preflight's budget, and prints what it fails as a warning without refusing the mark (`PREFLIGHT_RATCHET` in
 `tools/research/src/research/queue.py`): the gate tells a new violation by its text, so a moved line, or a cycle through a
 module the PR adds, can read as new. Its red never holds `main`
-(`tools/verity/check/drive.toml`'s `warn_steps`): the verified queue rings the owner of each merge it fails, who fixes it
+(`tools/check/drive.toml`'s `warn_steps`): the verified queue rings the owner of each merge it fails, who fixes it
 forward in their next PR.
 It lints the PR's own Python too: ruff, under its base's root `ruff.toml`, on each `*.py` file the PR adds or modifies
 outside this lint's files, before and after, and a PR whose (file, rule) count grows fails, naming each new finding
@@ -145,8 +145,8 @@ store, which `verity/circuits/evaluate`'s difftest loads by path too) and `tests
 (`DEFAULT_QUERY`). Two files run as commands: `python -m tests.regression.rebaseline run`, from
 `verity_vllm/ops/epoch_row.sh`, and `tests/lint/merge_allowlist.py`, git's merge driver for the lists (`.gitattributes`).
 The check runs `tests/regression` by its marks: the T0 tier in `check`, and the checks marked `rebuild` once per landing
-(`tools/verity/check/post_train.py`). Read by path: from each lint the gate reads `NAME`, its `test_no_new*` tests and its
+(`tools/check/post_train.py`). Read by path: from each lint the gate reads `NAME`, its `test_no_new*` tests and its
 list, and for P9 `_imports.LAYER` and `test_p09_layering.PACKAGE_OF`; the public export rewrites each lint's list,
-`tests/census_roots.txt` and `tests/dead_code_keep.json` (`tools/verity/check/public_export.py`); and
+`tests/census_roots.txt` and `tests/dead_code_keep.json` (`tools/check/public_export.py`); and
 `benchmarks/census/workloads.json` names files of `tests/regression/expected/`. A change to one of these names, commands
 or formats changes its reader in the same PR.

@@ -1,6 +1,6 @@
 # The served (prefill) edited GEMM: egemm.cu and its profile/probe scripts run on a GPU node through research run; the
 # depth-R fold check (egemm_depthr_check.py) and the tests of the CPU judges and summaries run here as a suite (`uv run
-# tools/verity/check/suites.py benchmarks/pouw/edited_gemm`). Not a package.
+# tools/check/suites.py benchmarks/pouw/edited_gemm`). Not a package.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

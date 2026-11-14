@@ -3,7 +3,7 @@
 # builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the
 # sampled-proofs verifier built in the tree. From a clone, in one of the network pool's pinned slots, as a job of at
 # most 180 minutes:
-#   env CS_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+#   env CS_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/compile_slice_zk.sh
 #   (the slot's mem= reserves the run's memory, so the job reserves none beside it), or, while the pool is full,
 #   `bash benchmarks/network_traces/compile_slice_zk.sh` alone as a job of 16 CPUs and 64 GB.

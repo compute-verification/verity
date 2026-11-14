@@ -65,7 +65,7 @@ def test_no_lakefile_names_the_setting_lake_reads_before_the_environment():
     assert not named, (
         f"{', '.join(named)}: names `enableArtifactCache`, which Lake reads before `LAKE_ARTIFACT_CACHE`: where a package "
         "turns it on, its build reads and writes a cache whatever the variable says. Two places turn Lake's cache off by "
-        "the variable alone: `lake_env` in tools/verity/lean/check.py and `UNCACHED_ENV` in tools/verity/check/suites.py. "
+        "the variable alone: `lake_env` in tools/verity/lean/check.py and `UNCACHED_ENV` in tools/check/suites.py. "
         "Leave the setting out, or in the same change give both what `build` in tools/verity/lean/lean_changed.py gives a "
         "build outside the sandbox: a `LAKE_CACHE_DIR` naming an empty directory of the command's own, removed after it.")
 

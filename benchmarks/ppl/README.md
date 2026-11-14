@@ -241,7 +241,7 @@ and each point's runs. The floor covers what moves a deterministic arm between h
 
 ## Tests
 
-`uv run tools/verity/check/suites.py benchmarks/ppl` runs the CPU tests on tiny random Llama, Qwen2 and block-FP8 GLM models: spec
+`uv run tools/check/suites.py benchmarks/ppl` runs the CPU tests on tiny random Llama, Qwen2 and block-FP8 GLM models: spec
 parsing, the window recipe and lock, the significance rule, the engine's bf16 stream against an independent float64
 forward, every gate on the adopted arms, gates that fail on sabotage reporting nothing, sharding, seeds, and HF parity
 where transformers is importable.

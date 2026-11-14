@@ -157,7 +157,7 @@ regression, skipped unless `VERITY_REGRESSION=1`.
 `uv sync --all-packages --extra torch-cpu` installs it with CPU-only torch. The `torch` extra is the CUDA build, and
 vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh` builds. Tests and tools read fixtures
 relative to this directory, so run them from here. The suite runs remotely like every suite
-(`tools/verity/check/suites.py`), and `python3 tools/suite_parts.py launch` splits it into parallel `research run` jobs.
+(`tools/check/suites.py`), and `python3 tools/suite_parts.py launch` splits it into parallel `research run` jobs.
 
 ## Vocabulary
 

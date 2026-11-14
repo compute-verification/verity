@@ -944,7 +944,7 @@ def answering(ctx: Ctx) -> list[Finding]:
 WORKSPACE = "/workspace"
 DISK_FULL_PCT = 85.0        # resource_probe's HARD /workspace line: no new check starts past it
 INODES_FULL_PCT = 80.0      # resource_probe's inode_pct
-#: twice tools/verity/check/slot.py's DISK_MIN_INODES, under which no check slot starts: a page of its own, since a node can
+#: twice tools/check/slot.py's DISK_MIN_INODES, under which no check slot starts: a page of its own, since a node can
 #: stand past INODES_FULL_PCT for days and that finding pages only once
 INODES_FREE_PAGE = 800_000
 FORECAST_S = 6 * 3600       # page while the line reaches FULL within this
@@ -1133,7 +1133,7 @@ FAILING = (r"\b(?:FAILED|ERROR) \S+::\S+", r"(?i)\berror(?:\[\w+\])?:", r"\bFAIL
 #: the most of a failed ratchet gate's lines (`reds.RATCHET_FAILED_RE`) a row carries: a train's merges, and a few more
 RATCHET_LINES = 40
 #: the check's jobs and their owners
-CI_TOML = "tools/verity/check/ci.toml"
+CI_TOML = "tools/check/ci.toml"
 
 # A machine's failed checks: `python3 -` runs this there, with __ARGS__ its paths and limits. It prints {"rows": one a run,
 # "waiting": each live ticket in slot.py's line (one another process holds locked: slot.py's `waiting`)}.

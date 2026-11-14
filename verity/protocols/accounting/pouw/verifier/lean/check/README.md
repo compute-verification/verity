@@ -201,6 +201,6 @@ form.
 ~~~text
 lake build                                                         the library, pouw-check and pouw-check-difftest
 lake exe pouw-check id | check PARAMS COMMITMENT EVIDENCE | serve    the interface's command line
-uv run tools/verity/check/suites.py verity-pouw-check-difftest     the difftest
+uv run tools/check/suites.py verity-pouw-check-difftest     the difftest
 python tools/verity/lean/check.py verity/protocols/accounting/pouw/verifier/lean/check   the Lean check
 ~~~

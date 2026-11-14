@@ -41,23 +41,23 @@ OFF = ("circuit-check", "ratchet-gate")
 LINT_PATHS = frozenset({"tests/test_repository.py", "tools/research/src/research/store/README.md"})
 #: a graph build family declaring lean-agreement's reads in the shape the tree's does
 BUILD_SRC = ('VERIFIER = "verity/protocols/proofs/flock/prover/agreement"\nLEAN = "verity/protocols/proofs/flock/verifier"\n'
-             'CHECK_READS = (*(f"tools/verity/check/{m}" for m in ("check.py", "settings.py")),\n'
+             'CHECK_READS = (*(f"tools/check/{m}" for m in ("check.py", "settings.py")),\n'
              '               ".agents/skills/using-slack/registry.json")\n')
 ART = "art:" + "ab" * 32
 #: a `main` whose files each bounded step reads, beside one none of them does (docs/notes.md)
-KEYED = {BUILD: BUILD_SRC, "tools/verity/check/check.py": "# check\n", "tools/verity/check/settings.py": "# settings\n",
+KEYED = {BUILD: BUILD_SRC, "tools/check/check.py": "# check\n", "tools/check/settings.py": "# settings\n",
          ".agents/skills/using-slack/registry.json": "{}\n", "uv.lock": "version = 1\n", "pyproject.toml": "[project]\n",
          "tools/x/pyproject.toml": "[project]\n", "verity/protocols/proofs/flock/prover/agreement/ci.py": "# ci\n",
          "verity/protocols/proofs/flock/verifier/Main.lean": "-- main\n", "artifacts.json": json.dumps({ART: "fixtures/golden/a.json"}),
          "fixtures/golden/a.json": "{}\n", "docs/notes.md": "notes\n"}
 #: each step the run judges whose reads are bounded, with files of `KEYED` it reads and files it doesn't
-BOUNDED = {"preflight-lock": (("uv.lock", "tools/x/pyproject.toml", "tools/verity/check/check.py", ".python-version"),
+BOUNDED = {"preflight-lock": (("uv.lock", "tools/x/pyproject.toml", "tools/check/check.py", ".python-version"),
                               ("verity/protocols/proofs/flock/prover/agreement/ci.py", "fixtures/golden/a.json")),
            "lean-agreement": (("verity/protocols/proofs/flock/prover/agreement/ci.py", "verity/protocols/proofs/flock/verifier/Main.lean",
-                               "tools/verity/check/settings.py", ".agents/skills/using-slack/registry.json", "uv.lock"),
-                              ("tools/x/pyproject.toml", "fixtures/golden/a.json", "tools/verity/check/other.py")),
+                               "tools/check/settings.py", ".agents/skills/using-slack/registry.json", "uv.lock"),
+                              ("tools/x/pyproject.toml", "fixtures/golden/a.json", "tools/check/other.py")),
            "preflight-fixtures": (("artifacts.json", "fixtures/golden/a.json", "tools/research/src/research/x.py",
-                                   "tools/verity/check/check.py"), ("fixtures/golden/b.json", "tools/x/pyproject.toml"))}
+                                   "tools/check/check.py"), ("fixtures/golden/b.json", "tools/x/pyproject.toml"))}
 
 
 @pytest.fixture
@@ -82,7 +82,7 @@ def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple
     """`Beside` on `main` (with ``tree``'s files) under policy.toml's ``off_gate``, candidate ``sha`` one commit above it
     (``change``, else f.txt) in the queue's clone, and the bases and commits lean-agreement's check asked of
     (`merge.required_steps`), which finds it changed with ``agreement``."""
-    _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate), **(tree or {})})
+    _move_main(world, {**GATED_TREE, "tools/check/policy.toml": _policy(off_gate=off_gate), **(tree or {})})
     asked: list[tuple[str, str, str]] = []
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
         {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]} if agreement else {}))
@@ -211,7 +211,7 @@ def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
     "train: no run launched in the wait; stopped its launcher (pid 7), so none launches later; see /l/log",
     "train: 0e4f on m1 (its process is gone with no exit written: a restart of the pod)",
     "train: 9644ff10525e on m1,m2 shard 1/5; log /l/train-9644ff10525e-1of5.log\nTerminated",
-    'Traceback (most recent call last):\n  File "tools/verity/check/check.py", line 9, in <module>\nImportError: boom\n'
+    'Traceback (most recent call last):\n  File "tools/check/check.py", line 9, in <module>\nImportError: boom\n'
     "train: no run launched; see /l/log",
     "train.sh: refused"])
 def test_every_launch_that_registered_no_run_is_launch_only_infra(world, monkeypatch, tmp_path, tail):
@@ -449,7 +449,7 @@ def test_start_launches_each_shard_with_the_loops_own_train_sh(world, monkeypatc
         repo, commit, machine, steps, **kw)
     start(h.d, sha, base, shards=shards)
     assert given == [OWN_TRAIN] * shards and OWN_TRAIN.is_file()
-    assert OWN_TRAIN == Path(__file__).resolve().parents[3] / "tools" / "verity" / "check" / "train.sh"
+    assert OWN_TRAIN == Path(__file__).resolve().parents[2] / "check" / "train.sh"
 
 
 @pytest.mark.parametrize("agreement", [False, True])
@@ -507,13 +507,13 @@ def test_a_candidate_is_sent_only_the_steps_its_own_ci_toml_declares_as_jobs(wor
     jobs = CI_TOML.replace(f'[[job]]\nname = "{dropped}"\nowner = "ci"\ngroup = 1\n', "")
     assert jobs != CI_TOML
     h, base, sha, _ = _harness(world, monkeypatch, agreement=True,
-                               change={"tools/verity/check/ci.toml": jobs} if drops else None)
+                               change={"tools/check/ci.toml": jobs} if drops else None)
     h.d.on, plans = "m1,m2,m3", Plans(h.d, tmp_path)
     start(h.d, sha, base, shards=shards)
     want = ",".join(s for s in (AFTER_LANDING if shards else SLIM_STEPS) if not (drops and s == dropped))
     sent = [steps for _, steps, _ in h.posted] + [steps for _, steps, *_ in plans.asked]
     assert sent == [want] * {0: 1, 1: 1, 3: 3, "auto:2": 1}[shards]
-    said = (f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml declares no job {dropped}, which "
+    said = (f"research queue vqueue: candidate {sha[:12]}'s tools/check/ci.toml declares no job {dropped}, which "
             "check.py refuses: left out of its --deferred")
     assert (said in world.logs) == drops and not any("ci.toml can't be read" in x for x in world.logs)
 
@@ -522,10 +522,10 @@ def test_a_candidate_is_sent_only_the_steps_its_own_ci_toml_declares_as_jobs(wor
 def test_a_candidate_whose_ci_toml_can_t_be_read_is_sent_every_step_and_one_line_says_so(world, monkeypatch, ci):
     """Where git can't read the candidate's ci.toml (gone, or not TOML), `declared_steps` can't say which jobs it declares: its
     check is sent every step, as before the tree's own list was read, and one line says why."""
-    h, base, sha, _ = _harness(world, monkeypatch, change={"tools/verity/check/ci.toml": ci})
+    h, base, sha, _ = _harness(world, monkeypatch, change={"tools/check/ci.toml": ci})
     start(h.d, sha, base, shards=1)
     assert [steps for _, steps, _ in h.posted] == [",".join(AFTER_LANDING)]
-    assert world.logs.count(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml can't be read: its "
+    assert world.logs.count(f"research queue vqueue: candidate {sha[:12]}'s tools/check/ci.toml can't be read: its "
                             f"--deferred keeps every step ({','.join(AFTER_LANDING)})") == 1
 
 
@@ -689,7 +689,7 @@ def test_with_heavy_on_the_shard_that_audits_security_proofs_alone_launches_on_t
     not the first), launches on those machines alone and the others on theirs; a plan naming it in no shard sends the one
     auditing `lean-audit:*`; no plan of N shards sends every shard, logged; a whole run goes there.  Without it, each
     shard launches on its usual machines and the record is as before."""
-    h, base, sha, _ = _harness(world, monkeypatch, change={"tools/verity/check/ci.toml": _plans(
+    h, base, sha, _ = _harness(world, monkeypatch, change={"tools/check/ci.toml": _plans(
         *([plan] if plan else []), [["pytest"]] * (5 - shards))})
     h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_postland
     h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
@@ -709,7 +709,7 @@ def test_with_heavy_on_the_shard_that_audits_security_proofs_alone_launches_on_t
 def test_heavy_on_moves_no_run_that_audits_nothing(world, monkeypatch):
     """The run beside a check under graph2 (no shards) runs no lean-audit, nor does a check taking lean-audit's verdict from a
     candidate below (``audit_from``): ``heavy_on`` moves neither."""
-    h, base, sha, _ = _harness(world, monkeypatch, change={"tools/verity/check/ci.toml": _plans(HEAVY_PLAN)})
+    h, base, sha, _ = _harness(world, monkeypatch, change={"tools/check/ci.toml": _plans(HEAVY_PLAN)})
     h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_postland
     h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
                                                                                                          steps, **kw)
@@ -940,7 +940,7 @@ def test_a_check_lends_its_suites_only_while_it_and_main_s_answer_for_both_suite
     red = json.loads(json.dumps(green))
     red["verdict"]["passed"] = [s for s in red["verdict"]["passed"] if s != "pytest"]
     assert not lends_suites(h.d, rec, red)
-    other = world.change({"tools/verity/check/policy.toml": _policy(("suite x", "ci", LIVE), off_gate=OFF)})
+    other = world.change({"tools/check/policy.toml": _policy(("suite x", "ci", LIVE), off_gate=OFF)})
     _git(h.q.workdir, "fetch", "-q", "origin", f"refs/dev/{other}")
     assert not lends_suites(h.d, start(h.d, other, base, shards=1), green), "its policy isn't its base's"
     h.d.warn_steps = ("lean-suites",)
@@ -1064,7 +1064,7 @@ def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(
     (circuit-check) or drive.toml's warn step (ratchet-gate).  The candidate's
     own policy.toml takes flock-rust-tests off the gate, and it fails on it all the same."""
     h, base, sha, _ = _harness(world, monkeypatch, off_gate=("circuit-check",), change={
-        "tools/verity/check/policy.toml": _policy(off_gate=("circuit-check", "flock-rust-tests"))})
+        "tools/check/policy.toml": _policy(off_gate=("circuit-check", "flock-rust-tests"))})
     h.d.warn_steps = ("ratchet-gate",)
     rec = start(h.d, sha, base, shards=1)
     _slim(h, tmp_path, **{red.replace("-", "_"): "error: it failed\n"})
@@ -1096,7 +1096,7 @@ def test_the_check_that_gates_passes_a_failure_only_an_allowance_at_its_base_cov
     """An unexpired allowance of policy.toml at the base covers a suite's failure as drive's covers it on `checked`, but the
     candidate's own (it adds the allowance) never covers its own failure: that fails it, on the suite's test.  A record
     with no base reads the candidate's."""
-    allowing = {"tools/verity/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE), off_gate=OFF)}
+    allowing = {"tools/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE), off_gate=OFF)}
     h, base, sha, _ = _harness(world, monkeypatch, tree=allowing if at == "base" else None,
                                change=None if at == "base" else allowing)
     rec = start(h.d, sha, base, shards=1)
@@ -1116,7 +1116,7 @@ def test_the_check_that_gates_passes_a_failure_only_an_allowance_at_its_base_cov
 def test_a_check_killed_on_what_only_the_candidates_own_allowance_covers_is_infra(world, monkeypatch, tmp_path, own):
     """A kill (a step's exit 137, on a suite that names no test) is the machine's fault unless an allowance at the base covers
     every failure: then the check passes; covered only by the candidate's own allowance, it is infra, to run again."""
-    allowing = {"tools/verity/check/policy.toml": _policy(("suite pkg", "ci", LIVE), off_gate=OFF)}
+    allowing = {"tools/check/policy.toml": _policy(("suite pkg", "ci", LIVE), off_gate=OFF)}
     h, base, sha, _ = _harness(world, monkeypatch, tree=None if own else allowing, change=allowing if own else None)
     rec = start(h.d, sha, base, shards=1)
     d = _slim(h, tmp_path, pytest="Killed\n")
@@ -1230,7 +1230,7 @@ def test_a_step_the_check_judges_failed_while_a_shard_runs_circuit_check_fails_i
     """Every other step the check is judged on passed and a shard still runs circuit-check: a suite of pytest failed in an
     ended shard fails the check at once, as before, never a pass; one an unexpired allowance at the base covers counts as
     passed, as at the end, and the check passes."""
-    tree = {"tools/verity/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE), off_gate=OFF)} if allowed else None
+    tree = {"tools/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE), off_gate=OFF)} if allowed else None
     h, base, sha, _ = _harness(world, monkeypatch, tree=tree)
     rec = start(h.d, sha, base, shards=3)
     _shards_now(h, tmp_path, running=((3, "circuit-check"),), failed=((2, "pytest"),))
@@ -1667,12 +1667,12 @@ def _lean(files, paths):
 
 
 def test_of_check_s_own_code_a_lean_input_is_common_py_and_the_code_that_runs_the_lean_audit_step():
-    """Of `tools/verity/check`: `common.py`, which every audit's key holds (the auditor imports it: `lean_audit.tool_files`),
+    """Of `tools/check`: `common.py`, which every audit's key holds (the auditor imports it: `lean_audit.tool_files`),
     and the code that runs the lean-audit step, which no key holds (`LEAN_AUDIT_STEP`): `check.py` and the wrapper it runs
     an audit in.  A change to check.py alone is a Lean input, so its candidate audits itself: on the verdict of the candidate
     below, a step it broke would land unrun and fail in the next candidate that audits.  What every candidate's check runs
     is none: `slot.py`, check's settings, its policy, or a test of any of them."""
-    check = "tools/verity/check"
+    check = "tools/check"
     lean = [f"{check}/check.py", f"{check}/common.py", f"{check}/lean_slot.py"]
     other = [f"{check}/slot.py", f"{check}/settings.py", f"{check}/policy.toml", f"{check}/drive.toml",
              f"{check}/tests/test_slot.py", f"{check}/tests/test_check.py", f"{check}/tests/test_verdicts.py"]

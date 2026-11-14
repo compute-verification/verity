@@ -60,7 +60,7 @@ OFF_GATE = (CIRCUIT_STEP, RATCHET_STEP)
 #: a file whose change is a Lean change: a module, a lakefile, a Lake manifest, a toolchain, a lock, or the Lean check's own
 #: code less its tests and docs, most of which every package's audit is keyed on (`lean_audit.tool_files`)
 LEAN_FILE = re.compile(r"\.lean$|(^|/)lakefile\.|(^|/)lake-manifest\.json$|(^|/)lean-toolchain$|(^|/)lean-audit\.json$"
-                       r"|^tools/verity/lean/(?!tests/)(?!.*\.md$)|^tools/verity/check/common\.py$"
+                       r"|^tools/verity/lean/(?!tests/)(?!.*\.md$)|^tools/check/common\.py$"
                        r"|^tools/verity/graph/verity_graph/contract\.py$")
 #: the most files GitHub's compare lists: a candidate with this many and no Lean file among them is not known to change none
 COMPARE_FILES = 300
@@ -571,7 +571,7 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
     try:
         import tomllib
 
-        doc["off_gate"] = tomllib.loads((CHECKOUT / "tools/verity/check/policy.toml").read_text())["off_gate"]
+        doc["off_gate"] = tomllib.loads((CHECKOUT / "tools/check/policy.toml").read_text())["off_gate"]
     except (OSError, ValueError, KeyError, IndexError):
         doc["off_gate"] = list(OFF_GATE)
     built = {(str(pr), head) for r in doc["control"].get("decisions", []) if r["action"] in ("advance", "build") and not r.get("shadow")

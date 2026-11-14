@@ -23,7 +23,7 @@
 # and with STACKED circuit-registration.json). Exits 1 unless the session, replay, rec_vstar, the fold check, the staging and
 # Lean's reading all pass.
 # Launch it through a check slot, which pins it to the slot's cores and holds the slot:
-#   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/verity/check/slot.py --by NAME -- bash $0 [N=16]
+#   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/check/slot.py --by NAME -- bash $0 [N=16]
 # env: N=16 (RoPE heads, one VU each: Shape(25,22,8))  FLOCK_WORK (as 80-rec-inner.sh)
 #   TREE_FROM= (the challenger's device, HOST:PORT, the session's coin tree sampled and opened there, rec_session --tree-from;
 #   TREE_SECRET_FILE= its session secret, hex; empty: this host's OS samples it, rec_session --tree-test-os, a test's coins,

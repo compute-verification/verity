@@ -251,7 +251,7 @@ One line per mechanism; a new one gets its line here and its detail in the docst
 
 Each line says what the module is; its docstring (a Lean file's `/-! -/`, a script's header comment) has the detail.
 Other tools run the commands here, and load `headers.py`, `module_keys.py`, `modules.py`, `lean_audit.py`,
-`axiom_probe.py` and `siblings.py`, by path (`tools/verity/check/`, the task graph, the queue, the `verity` command).
+`axiom_probe.py` and `siblings.py`, by path (`tools/check/`, the task graph, the queue, the `verity` command).
 They import only `tool.py`, as `tools.verity.lean.tool` (the run store's registry). `tests/test_gate_paths.py` fails
 on a gate tool's path constant or a registered tool that no longer resolves.
 
@@ -311,7 +311,7 @@ The audit needs the standard library, `lake` and the toolchain's `lean` and `lea
 here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`, `Graph.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `olean_graph.py`,
 `module_keys.py` with the task graph's `contract.py` it loads, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) for its
-own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with
+own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they stay with
 this repository.
 
 Copy this directory at a commit of Verity's `main` and record the commit beside it. Write a `lean-audit.json` for each
