@@ -10,6 +10,12 @@ inputs = [
     # minutes.py runs the remote demo's reader, which reads its environment through its settings registry
     "demos/vllm/minutes.py",
     "demos/vllm/settings.py",
+    # test_no_pin_literal.py: the committed configurations and the code it holds to having none of their pins as a literal
+    "demos",
+    "verity/protocols/accounting",
+    "benchmarks/pous",
+    "benchmarks/one_stage",
+    "adapters/vllm/verity_vllm/protocols",
 ]
 # a test file that starts a program the read guard can't trace (git, for the served commit): keyed on the suite's whole tree
 untraced = ["tests/test_onsite_minutes.py"]
