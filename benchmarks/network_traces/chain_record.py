@@ -422,7 +422,7 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
     a round's kind `scan_zk.kind_of`'s), every other round's (chain, tampered, unread, stale) refused, no witness piece
     was found at the verifier, and scan_zk's own ``ok`` holds; `RESTS` in place of accepted when an honest round's
     registration verdict let tied values through (``rests_on_period_check``, which the step carries)."""
-    from scan_zk import kind_of
+    from verity.protocols.accounting.certifier.prover.scan_zk import kind_of
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
@@ -712,7 +712,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     nothing holds its requests to one."""
     import leak_bounds as LB
     from verity.protocols.accounting.certifier.verifier import scan_answer as SA
-    import scan_zk as SZ
+    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
     from verity.protocols.accounting.certifier.prover import ingress_scan as IS
     from verity.protocols.accounting.certifier.verifier import warden as W
     weights = LB.WEIGHTS if weights is None else weights

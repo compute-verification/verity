@@ -141,26 +141,26 @@ BASES = ("honest", "honest-appends", "honest-by-root", "honest-rekey", "honest-s
          "honest-shared-paced-uneven", "honest-paced-one-flight", "after-boundary")
 
 
-def test_drawn_honest_sessions_agree(server) -> None:
+def test_sampled_honest_sessions_agree(server) -> None:
     stats = D.run(D.Port(M.EXE, "session", M.session, shaped(), package=M.PACKAGE, of_record=M.OF_RECORD,
                          need_rejects=False), examples=25, server=server)
     assert stats.outputs == 25, stats
 
 
-def test_drawn_honest_sessions_drawn_several_windows_a_coin_agree(server) -> None:
+def test_sampled_honest_sessions_sampled_several_windows_a_coin_agree(server) -> None:
     stats = D.run(D.Port(M.EXE, "session", M.session, shaped(shared=True), package=M.PACKAGE, of_record=M.OF_RECORD,
                          need_rejects=False), examples=15, server=server)
     assert stats.outputs == 15, stats
 
 
-def test_drawn_edits_of_recorded_sessions_agree(server) -> None:
+def test_sampled_edits_of_recorded_sessions_agree(server) -> None:
     base = st.sampled_from(BASES).map(lambda name: M.recorded(name)[0])
     stats = D.run(D.Port(M.EXE, "session", M.session, edited(base), package=M.PACKAGE, of_record=M.OF_RECORD),
                   examples=400, server=server)
     assert stats.outputs > 150 and stats.rejects > 40, stats
 
 
-def test_drawn_edits_of_drawn_sessions_agree(server) -> None:
+def test_sampled_edits_of_sampled_sessions_agree(server) -> None:
     stats = D.run(D.Port(M.EXE, "session", M.session, edited(shaped()), package=M.PACKAGE, of_record=M.OF_RECORD),
                   examples=20, server=server)
     assert stats.outputs > 5, stats

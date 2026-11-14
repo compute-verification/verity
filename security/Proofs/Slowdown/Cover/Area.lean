@@ -19,14 +19,14 @@ import Proofs.Slowdown.Cover.Paths
 `intensity`: the counted products a block computes whole lie in `J × L`, with `#J ≤ k` (`activationCharge`) and
 `b #L ≤ k` (`UpdateHardness` on them), so `b #whole ≤ k²`; the rest are at most `k` (`finished_sdiff_whole_card_le`).
 It is this vocabulary's form of the per-block step of the covering bound at `c_w = b`, `c_a = 1`
-(`InferenceOnly.Guarantees.CoveringBoundTwoCosts`), with the upstream certificate in place of activation-chaining, and the bridge
+(`Slowdown.Guarantees.CoveringBoundTwoCosts`), with the upstream certificate in place of activation-chaining, and the bridge
 to a compliant declaration (`CoverTraining`) sums it. `cover_sum` adds a per-block
 bound over a cover: every counted product's output gate is a non-input gate, so some block finishes it.
 -/
 
 @[expose] public section
 
-namespace InferenceOnly.Cover.SecurityProofs
+namespace Slowdown.Cover.SecurityProofs
 
 /-- A product's output gate is one of its gates. -/
 theorem o_mem {C : Circuit} {J L : Type} (M : MulBlocks C J L) {p : J × L} (hp : p ∈ M.Pall) : M.o p ∈ M.m p := by
@@ -91,4 +91,4 @@ theorem cover_sum {C : Circuit} {J L : Type} (M : MulBlocks C J L)
     _ ≤ ∑ _I ∈ 𝓘, X := Finset.sum_le_sum hX
     _ = 𝓘.card * X := by rw [Finset.sum_const, nsmul_eq_mul]
 
-end InferenceOnly.Cover.SecurityProofs
+end Slowdown.Cover.SecurityProofs

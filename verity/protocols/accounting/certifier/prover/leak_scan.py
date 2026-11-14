@@ -1,12 +1,13 @@
 """The received-pieces leak scan every zero-knowledge driver runs: which witness pieces found in what the verifier received
 (`a8.received`'s ``verifier_found``, each piece raw or as hex) leak, read against Flock's proof format.
 
-    sys.path.insert(0, "benchmarks/network_traces"); import leak_scan as LS
+    from verity.protocols.accounting.certifier.prover import leak_scan as LS
     pieces, held, public = LS.public_pieces(a8, blobs, held, circuit)  # each witness row cut whole, less the public
     LS.scan(received, pieces, vdir)    # {"leaked": [k], "structured": {k: "across" | "public"}, "placed": {k: [...]}}
     LS.find_whole(received, short, vdir, control)  # each row shorter than a piece found whole, then `scan`'s rule
 
-It reads the format with Flock's own reader (``verity/protocols/proofs/flock/prover/agreement``: `redigest.layout`, `transcript_check`).
+It reads the format with Flock's own reader (``verity/protocols/proofs/flock/prover/agreement``: `redigest.layout`,
+`transcript_check`), which `proof_drivers` hands it.
 
 The pieces (`cut`, the one cutter every driver's `public_pieces` runs): each witness row cut into 16-byte pieces that
 cover it whole, its aligned ones and, past its last 16-byte boundary, its last 16 bytes and its last aligned chunk
@@ -50,13 +51,10 @@ import functools
 import json
 import re
 import struct
-import sys
 import threading
 from pathlib import Path
 
-#: the directory of Flock's reader, `redigest.py`, and the modules it imports beside it
-sys.path.insert(0, str((Path(__file__).resolve().parents[5] / "verity/protocols/proofs/flock/prover/agreement/redigest.py").parent))
-import redigest as RD  # noqa: E402
+from verity.protocols.accounting.certifier.prover import proof_drivers
 
 #: The verifier's files the statement fixes before any witness: its program and partition, and the staged circuit.
 STATEMENT = ("program.json", "partition.json", "circuit.txt")
@@ -119,12 +117,13 @@ def is_stream(name: str) -> bool:
 
 
 @functools.lru_cache(maxsize=8)
-def reads(stream: bytes) -> tuple[tuple[tuple[int, int], ...], frozenset[int]] | None:
+def reads(stream: bytes, rd=None) -> tuple[tuple[tuple[int, int], ...], frozenset[int]] | None:
     """A ``--zk`` proof stream's fields, (offset, bytes) in order: every read Flock's proof format makes of it
     (`redigest.layout`: its elements, hashes, salts and paths and the integers between them), and its nonces' offsets
     (the ``*nonce`` fields and the Ligerito grinding nonces `GRIND`, but a ring switch's that is 0, `RS_NONCE`); None
-    when the format doesn't read the whole stream."""
-    readers = []
+    when the format doesn't read the whole stream. ``rd`` is Flock's reader, `redigest`; the installed
+    `proof_drivers`' when None."""
+    readers, RD = [], rd or proof_drivers.drivers().redigest
     # `transcript_check.R` is swapped process-wide while `redigest.layout` reads: one caller at a time, or a recorder
     # subclasses another's and stays installed (n2_zk scans its members in threads).
     with _SWAP:

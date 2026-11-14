@@ -143,7 +143,7 @@ def _derive_world8_collective(monkeypatch, *, fused: bool, custom: bool):
     pytest.importorskip("torch")
     import torch
 
-    from verity_torch.frontend.derive import derive_report
+    from verity_vllm.program.frontend.vllm_derive import derive_report
     from verity_vllm.program.frontend.export_ops import ensure_ops
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
@@ -187,7 +187,7 @@ def _derive_world4_all_reduce(monkeypatch, *, env: dict, gpu: tuple, M: int, N: 
     import torch
     from verity_vllm.definitions.registry.tp_allreduce import settings_of
 
-    from verity_torch.frontend.derive import derive_report
+    from verity_vllm.program.frontend.vllm_derive import derive_report
     from verity_vllm.program.frontend.export_ops import ensure_ops
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset

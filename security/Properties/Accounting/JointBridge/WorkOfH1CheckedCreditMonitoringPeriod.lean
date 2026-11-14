@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Assumptions.CreditedWords
+public import Definitions.Pouw.Assumptions.CreditedWords
 public import Properties.Pouw.Period
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

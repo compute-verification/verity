@@ -1,10 +1,10 @@
-"""kappa for frontier training: twice the counted multiplications over the reference training circuit's computed gates,
+"""kappa for frontier training: twice the counted multiplications over the reference training algorithm's computed gates,
 per token at a context length, over a model's pretraining schedule, and for the board's other rows (``ROWS``).
 
-``InferenceOnly.SecurityProofs.ThreadedTraining`` (``security/Definitions/Slowdown/Guarantees/Threads.lean``) takes kappa through its
-hypothesis ``kappa * c.D.size c.D.computed <= 2 * T.M.card``: every computed gate of the reference circuit ``c``
+``Slowdown.SecurityProofs.ThreadedTraining`` (``security/Definitions/Slowdown/Guarantees/Threads.lean``) takes kappa through its
+hypothesis ``kappa * c.D.size c.D.computed <= 2 * T.M.card``: every computed gate of the reference training algorithm's circuit ``c``
 against twice its counted multiplications ``M``, the gates that multiply an updated weight by an activation or an
-activation gradient (``InferenceOnly.Threading``). A gate is one scalar operation and an addition reads two values, so a matmul's
+activation gradient (``Slowdown.Threading``). A gate is one scalar operation and an addition reads two values, so a matmul's
 gates are its flops, 2 per multiply-add, and a nonlinear function, comparison or select is one gate. The circuit is the
 minimal one: causal attention computes only the pairs it uses, and nothing is recomputed. Per token, with ``N`` the
 active weights outside the embedding and the LM head:
@@ -251,7 +251,7 @@ def optimizer_step(m: dict) -> float:
 
 
 def per_token(m: dict, seq: int, forwards: float = 1, backward: float = 1) -> dict[str, float]:
-    """The reference circuit's gates per token at sequence length ``seq``, by part, in ``forwards`` forward passes and
+    """The reference training algorithm's gates per token at sequence length ``seq``, by part, in ``forwards`` forward passes and
     ``backward`` backward ones; the parts marked counted are ``2 |M|``. Parts a circuit lacks are left out."""
     N, upd, head, heads = active_weights(m), updated_weights(m), m["vocab"] * m["d"], 1 + m["mtp"]
     head_updated = "updated" not in m

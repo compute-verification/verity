@@ -34,10 +34,10 @@ if [ -n "${CS_PLAIN:-}" ]; then
   mode=cszk-plain points=${CS_POINTS:-}
 else
   mode=cszk points=${CS_POINTS:-1}
-  export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-    > "$OUT/build-firewall.log" 2>&1
-  [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "cszk: no firewall frame"; exit 7; }
+  export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+    > "$OUT/build-zk-server.log" 2>&1
+  [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "cszk: no ZK server frame"; exit 7; }
 fi
 
 rc=0

@@ -1,0 +1,20 @@
+# benchmarks/nci: the older efficiency term eta, (2/kappa) M / (C + U), is the counted share: the FLOP the counted
+# multiplications stand for over the FLOP the developer spends. It is not the slowdown; today's eta is the success
+# threshold.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/nci/tiers.py", "benchmarks/nci/exposure.py", "benchmarks/nci/statement.py",
+         "benchmarks/nci/tests/test_exposure.py", "benchmarks/nci/tests/test_statement.py"]
+
+[words_in.words]
+eta = "counted_share"
+inverse_eta = "inverse_counted_share"
+eta_T1 = "counted_share_T1"
+eta_T4 = "counted_share_T4"
+eta_T5 = "counted_share_T5"
+test_at_the_design_eta_is_the_free_compute = "test_at_the_design_the_counted_share_is_the_free_compute"
+test_the_thresholds_are_on_d_not_on_one_over_eta = "test_the_thresholds_are_on_the_slowdown_not_on_one_over_the_counted_share"
+
+[keep]

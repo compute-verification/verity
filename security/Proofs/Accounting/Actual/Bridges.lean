@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Bridges
+public import Definitions.Pouw.Guarantees.Bridges
 public import Definitions.Pouw.Assumptions.Deadline
 public import Proofs.Accounting.Actual.Physical
 public import Proofs.Pouw.Deadline

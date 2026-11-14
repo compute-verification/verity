@@ -30,8 +30,8 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 the parameters' members on the registered files and the registered files hold each member's file. -/
 theorem spotSound_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseConstructions I.base)
     (k : Verity.Registration.Composite) (reg : Option Claims.Msg → ByteArray)
-    (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)
-    (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hW : I.ExecutionPhaseRegistered) (hR : RegisteredHolds I.base) :
     (I.vocab (I.constructionsAt K₀ k reg sentEvidenceAt (statementFiles statementTable) record₀
       recordDigest)).SpotSound k :=
@@ -44,8 +44,8 @@ theorem spotSound_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseC
 premises and the base's PoUW and inference-only targets. -/
 theorem soundnessAt_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseConstructions I.base)
     (reg : Option Claims.Msg → ByteArray)
-    (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)
-    (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hW : I.ExecutionPhaseRegistered) (hR : RegisteredHolds I.base)
     (hP : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg sentEvidenceAt (statementFiles statementTable) record₀

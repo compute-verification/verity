@@ -45,8 +45,8 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `n_i`: what a published `complies` of the count of `(c, k)`-inference blocks (`InferenceOnlyCheck.Count.check`) gives the Boolean
   declaration its Program lowers to (`InferenceOnlyCheck.Properties.DescCountsCK`, stated in `security/Properties` and not yet
   proved). Reading the check itself needs the code (package `security_properties`), so the statement takes its verdict.
-  The day's charged work meets (H) and (E) (`InferenceOnly.Cut.Assumptions.Hardness`, `Exports`), and `InferenceOnly.Cut.Guarantees.CountHE`
-  bounds its MACs by `n_i (k + α) + (k/2) √(n_i O_i / (β_w β_x))` (`InferenceOnly.Cut.workHE`). No rate form, padding or other
+  The day's charged work meets (H) and (E) (`Slowdown.Cut.Assumptions.Hardness`, `Exports`), and `Slowdown.Cut.Guarantees.CountHE`
+  bounds its MACs by `n_i (k + α) + (k/2) √(n_i O_i / (β_w β_x))` (`Slowdown.Cut.workHE`). No rate form, padding or other
   premise on the circuit enters. What is open on this leg is `DescCountsCK`'s proof and the bridge from the deployment's
   days to the declarations the count reads: it is not stated.
 
@@ -54,7 +54,7 @@ Every other premise is `SlowdownRemote`'s: the model's accounting of the four so
 capacities `C` and `U` (`s = U/(C + U)`), and the hardware's rate `Φ` per identity. The developer's identities `I`
 are fixed over the period: nothing here models or rests on re-registration.
 
-`InferenceOnly.SecurityProofs.SlowdownRemoteMonitoringPeriod` proves it. `SlowdownRemoteMonitoringPeriod_honest` and `SlowdownRemoteMonitoringPeriod_nontrivial`
+`Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod` proves it. `SlowdownRemoteMonitoringPeriod_honest` and `SlowdownRemoteMonitoringPeriod_nontrivial`
 are its witnesses: its premises hold at a constructed honest developer with one declared day, and at `AcceptAll`, a
 PoUW verifier that accepts every certificate, every other premise holds while PoUW's per-window bound and the conclusion
 fail.
@@ -64,9 +64,11 @@ fail.
 
 open Verity.Game renaming prPMFReal → prob
 
-namespace InferenceOnly.Guarantees
+open InferenceOnly
 
-open Verity InferenceOnly.Slowdown
+namespace Slowdown.Guarantees
+
+open Verity Slowdown.Slowdown
 
 /-- **The slowdown, remote protocol, over a monitoring period.** A monitoring period of `T` windows, window `t`
 with its own uniform coins `Ω t`, independent of the others' (a window is a round of live coins: the deployment's
@@ -148,7 +150,7 @@ def SlowdownRemoteMonitoringPeriod : Prop :=
 the failure probability `δ = p/ε' + J (1 − q)^(K+1) + ∑_t ks t` at most `10⁻⁶`, and on every run the overhead bound on
 the hardware multiple (`remoteSlowdown`'s value) exceeds 1 while the run's own hardware multiple meets it. The proof's
 instance is an honest developer over one window, run by its one identity: its PoUW certificate right, no incorrect proof
-block, its monitored compute all certified work, and one declared day, the toy `InferenceOnly.Cut.Toy` complying with
+block, its monitored compute all certified work, and one declared day, the toy `Slowdown.Cut.Toy` complying with
 `CompliesAtMost 1 2 2` under (H) at unit costs and (E) at `b = 2`, whose two MACs are the run's counted multiplications,
 at `MFU₀ = 1/2`, `p = 3 · 2⁻⁴⁰` and `ε' = 2p/δ` at the pooled `δ = 10⁻⁶`, with every proof block proved (`q = 1`,
 `K = 0`) and no knowledge error (`ks = 0`). The instance's certificate is never incorrect, so it meets `PouwPerExecutionPhase` at
@@ -291,4 +293,4 @@ def SlowdownRemoteMonitoringPeriod_nontrivial : Prop :=
                 efficiency 2 (∑ i, Cut.workHE (AcceptAll.n i) 1 (1 * 1) 1 (AcceptAll.Wk i).O) 1 0 + 0) ≤
             hardwareMultiple 1 2 (AcceptAll.M ξ) 1 0))
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.JointPeriod
-public import Definitions.Accounting.PouwWitness
+public import Definitions.Pouw.PouwWitness
 
 /-!
 # The period run the network certifier's accounting bridge fails at (trusted definitions; used only by the

@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pous.Model.StreamedWipe
 public import Definitions.Accounting.Actual.Sampler
-public import Definitions.Accounting.TS.Drawn
+public import Definitions.Pouw.TS.Drawn
 public import Definitions.Hash.RowLeaf
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

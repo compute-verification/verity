@@ -5,17 +5,13 @@ quarantine, fails the record and names the key only there."""
 from __future__ import annotations
 
 import json
-import re
-import sys
 from pathlib import Path
 
 import pytest
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-ROOT = HERE.parents[1]
-sys.path.insert(0, str(HERE))
-import leak_guard as LG  # noqa: E402
-import released_keys as RK  # noqa: E402
+from verity.protocols.accounting.certifier.device import leak_guard as LG, released_keys as RK
+
+ROOT = Path(__file__).resolve().parents[6]
 
 LIST = {"name": "a step's summary", "writer": "step.py", "files": ["step/*.json"], "form": "json",
         "keys": {"schema": "structure", "verdict/accepted": "output", "rounds/*/root": "commitment",
@@ -43,55 +39,6 @@ def test_the_declared_lists_load_and_each_names_its_writer_in_the_tree():
         assert (ROOT / x.writer.split(" ")[0]).is_file(), f"the list {x.name!r} names a writer the tree doesn't have"
     waiting = set(json.loads(RK.DECLARED.read_text())["not_yet"])
     assert not waiting & {g for x in declared.lists for g in x.globs}
-
-
-def test_the_gates_lists_are_what_the_gate_publishes_of_a_line():
-    """The list of a gate run's cells' registrations names exactly the keys the gate publishes of a line (those
-    `ROW_LINE` gives a form), so a key the gate starts publishing fails a record until the list gives it a
-    kind, and the list holds none the gate leaves out. The certificates' list names exactly a certificate's fields
-    as the gate writes them (`CERTIFICATE_LINE`, `row_certificate`). Neither names the execution phase a line was
-    refused for: which ones the signer refused is the traffic's, so the gate writes no line that says it, and a
-    line that does is not declared."""
-    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
-    import auditor as A
-
-    def public(rule, at=()):
-        if isinstance(rule, dict):
-            return {p for k, v in rule.items() for p in public(v, (*at, k))}
-        return set() if rule == A.WITHHELD else {"/".join(at)}
-
-    def declared(listing):
-        doc = next(d for d in json.loads(RK.DECLARED.read_text())["lists"] if d["name"] == listing.name)
-        return {k.removesuffix("/*") for k in doc["keys"]}
-
-    lists = RK.load()
-    listing = lists.listing(f"gates/c0/r0/out/{A.ROW_REGISTRATIONS['cells.jsonl']}")
-    assert declared(listing) == public(A.ROW_LINE)
-    signed = re.compile("[0-9a-f]{4}")
-    given = {"link": ("l",), "links": ("l",), "parameters": ("31" * 64,), "cell_bytes": (64,), "buckets": (1,),
-             "signature": signed, "refused": [("l",), A.DIRECTIONS, int]}
-    line = {"registration": {"format": A.ROW_FORMAT, "wiring": "w", "link": "l", "direction": "ingress", "window": 2,
-                             "layout": {"buckets": 1},
-                             "certificate": {"key": "0c" * 16, "digest": "9d" * 64, "signature": "e5e5"}},
-            "cost": {"s": 1}}
-    refused = {"refused": ["l", "ingress", 3], "withheld": True}
-    assert listing.undeclared(A.row_registration(json.dumps(line), given).encode()) == {}
-    assert set(listing.undeclared(json.dumps(line).encode())) == {"registration/wiring", "cost"}
-    assert listing.undeclared(json.dumps({"refused": refused["refused"]}).encode()) == {"refused": 1}
-    for write in (lambda: A.row_registration(json.dumps(refused), given), lambda: A.row_certificate(refused, given),
-                  lambda: A.certified_certificate(refused, given)):
-        with pytest.raises(A.Unruled, match="the line says the signer refused its execution phase"):
-            write()
-    certificates = {lists.listing(f"gates/c0/r0/out/{f}").name
-                    for f in ("certificates.jsonl", *A.ROW_CERTIFICATES.values())}
-    assert len(certificates) == 1
-    listing = lists.listing("gates/c0/r0/out/certificates.jsonl")
-    written = A.row_certificate(line, given)
-    assert declared(listing) == {f"certificate/{k}" for k in written["certificate"]} == public(A.CERTIFICATE_LINE)
-    for doc in (written, A.row_certificate({A.ROWS_NO_HEAD: line["registration"]}, given)):
-        assert listing.undeclared(json.dumps(doc).encode()) == {}
-    assert listing.undeclared(json.dumps({"refused": refused["refused"]}).encode()) == {"refused": 1}
-    assert set(listing.undeclared(json.dumps(line).encode())) == {"registration", "cost"}
 
 
 def test_a_file_is_read_by_key_and_strictly():

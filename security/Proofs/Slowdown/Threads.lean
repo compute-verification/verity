@@ -25,7 +25,9 @@ computed` (`ThreadedThrottledSlots`). Each guarantee over weight gates is its `S
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs
+open InferenceOnly InferenceOnly.SecurityProofs
+
+namespace Slowdown.SecurityProofs
 
 open Verity Finset
 
@@ -451,4 +453,4 @@ theorem ThreadedTraining : Guarantees.ThreadedTraining := ThreadedTraining_rate
 
 theorem ThreadedTrainingOn : Guarantees.ThreadedTrainingOn := ThreadedTrainingOn_rate
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

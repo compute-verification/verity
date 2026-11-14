@@ -22,9 +22,10 @@ from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES
 from verity_vllm import protocols as PO
 from verity_vllm.protocols import pouw as P
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import graphs as PG
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PK
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import lanes as L
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import lanes_device as L
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import manifest as PM
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import joined
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.whole import WholeStep
@@ -35,19 +36,19 @@ NO_BASE = r"unsupported operand type\(s\) for -: 'int' and 'NoneType'"
 def test_a_pass_without_a_base_fails_where_a_calls_position_is_computed():
     """A call's position in its pass is its index less the pass's base.  Before the pass's first call the base is None,
     and the subtraction refuses it: in a graph's offsets, and at the copy of A's root after a call's steps."""
-    cur = PPD._Pass(None)
+    cur = PPDR._Pass(None)
     with pytest.raises(TypeError, match=NO_BASE):
         PG.GraphCalls._offsets(SimpleNamespace(nb=64, cur=cur), 3, 0, 0)
     copies: list = []
     run = SimpleNamespace(hashing=True, nb=64, roots_buf=SimpleNamespace(data_ptr=lambda: 0), copy=copies.append)
     with pytest.raises(TypeError, match=NO_BASE):
-        PPD.PearlCDeviceRun._after(run, cur, 0, SimpleNamespace(n=8), None, SimpleNamespace(size={"tree_a": 128}), 3, 16, 32,
+        PPDR.PearlCDeviceRun._after(run, cur, 0, SimpleNamespace(n=8), None, SimpleNamespace(size={"tree_a": 128}), 3, 16, 32,
                                    16, 1, None, (), None)
     assert copies == [] and [m.index for m in cur.matmuls] == [3]
 
 
 def test_a_pass_with_a_base_places_a_call_past_it():
-    cur = PPD._Pass(None, base=2)
+    cur = PPDR._Pass(None, base=2)
     assert PG.GraphCalls._offsets(SimpleNamespace(nb=64, cur=cur), 5, 4, 6) == (256, 12, 192)
 
 
@@ -219,9 +220,9 @@ def test_a_retained_call_of_a_pass_without_a_directory_fails_at_its_first_path()
     """`_retained` makes the call's paths under the pass's directory unchecked.  A pass that retains nothing has none, and
     the first path made of it is where it fails, before a directory, a record or a file is kept."""
     pytest.importorskip("torch")
-    cur = PPD._Pass(None)
+    cur = PPDR._Pass(None)
     with pytest.raises(TypeError, match=r"unsupported operand type\(s\) for /: 'NoneType' and 'str'"):
-        PPD.PearlCDeviceRun._retained(SimpleNamespace(), cur, None, 1, None, None, None)
+        PPDR.PearlCDeviceRun._retained(SimpleNamespace(), cur, None, 1, None, None, None)
     assert cur.dirs == set() and cur.records == [] and cur.files == []
 
 
@@ -229,9 +230,9 @@ def test_a_retained_passes_end_without_a_directory_fails_at_its_first_path():
     """`_write_retained` makes the pass's last paths under its directory unchecked: `end` calls it for a pass that has one.
     A pass that retains nothing has none, and the weights' directory is where it fails, before a file is written."""
     pytest.importorskip("torch")
-    cur = PPD._Pass(None)
+    cur = PPDR._Pass(None)
     with pytest.raises(TypeError, match=r"unsupported operand type\(s\) for /: 'NoneType' and 'str'"):
-        PPD.PearlCDeviceRun._write_retained(SimpleNamespace(nb=64), cur, None, b"", b"", None, 0, {})
+        PPDR.PearlCDeviceRun._write_retained(SimpleNamespace(nb=64), cur, None, b"", b"", None, 0, {})
     assert cur.writes == []
 
 
@@ -241,13 +242,13 @@ def test_a_retained_passes_end_of_a_run_without_a_salt_key_fails_at_the_manifest
     pass's leaves and its tile tree are written behind by then, and no manifest is."""
     torch = pytest.importorskip("torch")
     d = tmp_path / "pass"
-    cur, tree = PPD._Pass(d, run="a run"), torch.arange(64, dtype=torch.uint8)
+    cur, tree = PPDR._Pass(d, run="a run"), torch.arange(64, dtype=torch.uint8)
     run = SimpleNamespace(nb=64, leaves=torch.ones(128, dtype=torch.uint8), weights={}, _weight_files={}, entry="an entry",
                           scheme=SimpleNamespace(name=PPD.SCHEMES[0]), coins=SimpleNamespace(to_json=dict),
                           opening=SimpleNamespace(to_json=dict), salt=bytes(32), commits={}, details={"schedule": {}},
                           kernel=SimpleNamespace(cubin_sha256="", source_sha256="", files={}), salt_key=None)
     with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'hex'"):
-        PPD.PearlCDeviceRun._write_retained(run, cur, None, b"", bytes(64), tree, 1, {})
+        PPDR.PearlCDeviceRun._write_retained(run, cur, None, b"", bytes(64), tree, 1, {})
     joined(cur.writes)
     assert (d / "leaves").read_bytes() == b"\1" * 64 and (d / "tree_t").read_bytes() == bytes(range(64))
     assert sorted(p.name for p in d.iterdir()) == ["leaves", "tree_t", "weights"] and not list((d / "weights").iterdir())
@@ -255,7 +256,7 @@ def test_a_retained_passes_end_of_a_run_without_a_salt_key_fails_at_the_manifest
 
 def test_whole_calls_kept_without_stages_fail_at_the_first_calls_stage():
     """`_keep_whole` reads each call's stage of the run's stages unchecked.  A run that staged nothing has none."""
-    cur = PPD._Pass(None, matmuls=["the call's matmul"])
+    cur = PPDR._Pass(None, matmuls=["the call's matmul"])
     with pytest.raises(TypeError, match=NO_STAGES):
         PG.GraphCalls._keep_whole(SimpleNamespace(cur=cur, _stages=None), (CALL,), 0)
 
@@ -263,7 +264,7 @@ def test_whole_calls_kept_without_stages_fail_at_the_first_calls_stage():
 def test_a_forwards_slots_and_its_calls_start_at_the_passes_base_unchecked():
     """`_slots` and `whole_replayed` add to the pass's base as it is.  Before the pass's first call it is None, and the
     sum refuses it, before `whole_replayed` appends a call."""
-    cur = PPD._Pass(None)
+    cur = PPDR._Pass(None)
     with pytest.raises(TypeError, match=NO_BASE_YET):
         PG.GraphCalls._slots(SimpleNamespace(cur=cur), (), (0, 0, 0))
     with pytest.raises(TypeError, match=NO_BASE_YET):
@@ -274,7 +275,7 @@ def test_a_forwards_slots_and_its_calls_start_at_the_passes_base_unchecked():
 def test_a_replayed_forward_with_no_uploaded_slots_appends_its_calls_and_fails_at_the_slots():
     """`whole_replayed` takes the slots the replay uploaded unchecked.  With none (no `whole_replay` before it), the
     forward's calls are appended to the pass first, and reading the slots is where it fails."""
-    cur = PPD._Pass(None, base=2)
+    cur = PPDR._Pass(None, base=2)
     run = SimpleNamespace(cur=cur, hashing=True, _uploaded=None)
     with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'predicted'"):
         PG.GraphCalls.whole_replayed(run, (CALL,))

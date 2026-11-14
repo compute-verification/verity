@@ -9,16 +9,16 @@ public import Mathlib.Tactic.Linarith
 /-!
 # Local bounds: proofs of their witnesses
 
-Each witness of `Definitions.Slowdown.Guarantees.Capability.Witnesses`, at the toy instance (`InferenceOnly.Capability.Toy`). The
+Each witness of `Definitions.Slowdown.Guarantees.Capability.Witnesses`, at the toy instance (`Slowdown.Capability.Toy`). The
 facts about the toy they share come first: its `(2, 1)`-partition, a block program's bits, what the block recomputes,
 the decoder's description lengths, and the budgets of items priced one bit each.
 -/
 
 @[expose] public section
 
-namespace InferenceOnly.Capability.Toy
+namespace Slowdown.Capability.Toy
 
-open Verity Finset InferenceOnly.Capability
+open Verity Finset Slowdown.Capability
 open scoped ENNReal
 
 theorem isCK : R1.d.𝓘.IsCK R1.d 2 1 where
@@ -171,11 +171,11 @@ theorem requires_K2 : K2.RequiresState W2 1 := by
   · exact (show ∀ i : Fin 2, (if i = 0 then ({2} : Finset (Fin 4)) else {3}) ⊆ holds C {2, 3} by decide) i
   · simp [W2]
 
-end InferenceOnly.Capability.Toy
+end Slowdown.Capability.Toy
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
-open Verity Finset InferenceOnly.Capability InferenceOnly.Capability.Toy
+open Verity Finset Slowdown.Capability Slowdown.Capability.Toy
 open scoped ENNReal
 
 theorem HeldBudgetHonest : Guarantees.HeldBudgetHonest := by
@@ -327,4 +327,4 @@ theorem RecomputeByStateHonest : Guarantees.RecomputeByStateHonest :=
 theorem RecomputeByStateNontrivial : Guarantees.RecomputeByStateNontrivial :=
   ⟨held_W2_R1, not_requires_K2, fun h => h 0 0 (by decide)⟩
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs
