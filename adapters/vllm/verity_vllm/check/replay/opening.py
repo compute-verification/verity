@@ -35,9 +35,7 @@ def alias_table(manifest: RequiredManifest | dict[str, Any] | None) -> dict[str,
     (`CommittedStore.words`) resolve through THIS table and no other -- the two never disagree on which identity a Program path names."""
     if isinstance(manifest, RequiredManifest):
         return {str(k): (str(v[0]), int(v[1])) for k, v in (manifest.op_path_aliases or {}).items()}
-    if manifest is None:
-        return {}
-    aliases = (manifest or {}).get("op_path_aliases")                            # a manifest that states none: every path names itself
+    aliases = (manifest or {}).get("op_path_aliases")                            # no manifest, or one that states none: every path names itself
     return {str(k): (str(v[0]), int(v[1])) for k, v in (aliases if aliases else {}).items()}
 
 
