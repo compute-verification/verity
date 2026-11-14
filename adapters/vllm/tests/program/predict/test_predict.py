@@ -14,16 +14,20 @@ the predictor gives the rows' traced digests.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 from verity.definitions.registry.tp_allreduce import settings_of
 
-from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
-from verity_vllm.program.predict import dsv4
+from verity_vllm.program.predict import build as BUILD
+from verity_vllm.program.predict import dsa, dsv4
+from verity_vllm.program.predict import node as NODE
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import Unexpressible, build_program
 from verity_vllm.program.predict.model_shape import model_shape, weight_leaves
@@ -53,7 +57,7 @@ def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
 def _row_phi(row: str, case: str, hf_home: Path, rank: int = 0) -> Phi:
     """A row of record's φ at `rank` as `score.phi_of` makes it, the checkpoint's config.json the package's byte copy of it
     (`hf_configs/<case>.config.json`)."""
-    w = json.loads((WORKLOADS / f"{row}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{row}.json").read_text())
     cp = Path(S.hf_config_path(str(hf_home), w["model"], RowEngine.of(w).revision))
     cp.parent.mkdir(parents=True, exist_ok=True)
     cp.write_bytes((HF_CONFIG_DIR / f"{case}.config.json").read_bytes())
@@ -166,6 +170,31 @@ def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp
     assert r.digest == digest
 
 
+@pytest.mark.parametrize(("T", "error"), [("x", ValueError), ([1], TypeError)])
+def test_a_step_given_a_T_that_int_refuses_raises_ints_error(T, error):
+    """A `step` is built for no T, yet its launch (`common.in_launch`) takes `int` of a T it is given: one that `int` refuses
+    is `int`'s error, and one it takes (5, 2.5) builds the Program of a step given none."""
+    step = build_program(_phi(TINY), "step", M=1, pos0=8)
+    assert [build_program(_phi(TINY), "step", M=1, pos0=8, T=t).digest for t in (5, 2.5)] == [step.digest] * 2
+    with pytest.raises(error, match=r"^(invalid literal for int\(\) with base 10: 'x'|int\(\) argument must be .* not 'list')$"):
+        build_program(_phi(TINY), "step", M=1, pos0=8, T=T)
+
+
+def test_a_requests_launch_is_looked_up_by_the_LP_and_T_given(monkeypatch):
+    """`build_program` and `build_node_program` hand `common.launch_batch` and `launch_rows` the LP and T they were given, not
+    `int` of them: each reader takes `int` itself, and `launch_batch`'s refusal prints them as given. The Program is the one of
+    `int` of each."""
+    seen: list[tuple] = []
+    for module in (BUILD, NODE):
+        monkeypatch.setattr(module, "launch_batch", lambda phi, LP, T: seen.append(("batch", LP, T)))
+        monkeypatch.setattr(module, "launch_rows", lambda phi, LP, T, C=0: seen.append(("rows", LP, T)))
+    one, two = _phi(TINY), _phi(TINY, tp={"world": 2, "rank": 0})
+    whole = (build_program(one, "request", LP=4, T=2).digest, NODE.build_node_program(two, "request", LP=4, T=2).digest)
+    seen.clear()
+    assert (build_program(one, "request", LP="4", T=2.5).digest, NODE.build_node_program(two, "request", LP="4", T=2.5).digest) == whole
+    assert seen == [("batch", "4", 2.5), ("rows", "4", 2.5), ("batch", "4", 2.5), ("rows", "4", 2.5), ("rows", "4", 2.5)]
+
+
 def test_dsa_refuses_outside_its_domain(tmp_path):
     phi = _row_phi(GLM53, "GLM53", tmp_path)
     with pytest.raises(Unexpressible, match=re.escape("tensor parallel world 2 (TP8, the worlds a Build has traced)")):
@@ -201,6 +230,20 @@ def test_mhc_rank_step_equals_the_record(rank, tmp_path):
     assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][DSV4]["programs"][str(rank)]["step"]
 
 
+@pytest.mark.slow
+def test_mhc_request_equals_the_record(tmp_path):
+    """DeepSeek-V4-Pro's switched row at rank 0: its one request through `predict.dsv4`, the prefill of its prompt and each decode
+    after it, is the request Program `records.json` pins for the rank.  The step above is one decode of one row, and a request of
+    two rows adds to it only the prefill's gather and attention and the ratio-4 compressor; the row's own lengths alone reach the
+    ratio-128 compressor, the TF32 post-pre of more than 16 rows, DeepGEMM's FP8 linear from 32 rows, cuBLAS's f32 GEMM without
+    split-K and the multimem all-reduce.  About 140 s."""
+    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
+    [(lp, t)] = phi.request_shapes()
+    r = build_program(phi, "request", LP=lp, T=t)
+    assert r.function.startswith("Derived[vLLMRequest[DeepseekV4ForCausalLM]]_v1")
+    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][DSV4]["programs"]["0"]["requests"][f"build_request_LP{lp}_T{t}"]
+
+
 def test_mhc_refuses_outside_its_domain(tmp_path):
     phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
     short = {**phi.hf_config, "compress_ratios": [4] + phi.hf_config["compress_ratios"][1:], "index_topk": 1}
@@ -209,6 +252,9 @@ def test_mhc_refuses_outside_its_domain(tmp_path):
     cfg = {**phi.hf_config, "compress_ratios": [1] + phi.hf_config["compress_ratios"][1:]}
     with pytest.raises(Unexpressible, match=re.escape("compress ratios [1] (the compressors: [4, 128]")):
         build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": cfg}}), "step")
+    half = {**phi.hf_config, "head_dim": 256}
+    with pytest.raises(Unexpressible, match=re.escape("no FlashMLA sparse geometry at head 256, rope 64 (registered: ")):
+        dsv4.Net(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": half}}), 1, 8)
 
 
 def test_mhc_reads_an_engine_without_env_and_refuses_a_config_without_its_quantization_block(tmp_path):
@@ -221,6 +267,19 @@ def test_mhc_reads_an_engine_without_env_and_refuses_a_config_without_its_quanti
     bare = {k: v for k, v in phi.hf_config.items() if k != "quantization_config"}
     with pytest.raises(Unexpressible, match="a checkpoint without its block-FP8 quantization_config"):
         dsv4.Net(Phi.from_json({**doc, "model": {**phi.model, "hf_config": bare}}), 1, 8)
+
+
+def test_dsa_reads_an_engine_without_env_as_under_no_switch(tmp_path):
+    """A φ whose engine states no `env` runs the sparse-attention decoder's all-reduce under no switch (`tp_allreduce.settings_of`
+    of an empty env), as one whose `env` is empty does, and a stated switch is read.  The first two part at a row past INDEX_TOPK
+    alone: an engine that states no environment is refused none, and an empty one states no canonical top-k."""
+    phi = _row_phi(GLM53, "GLM53", tmp_path)
+    doc, stated = phi.to_json(), {k: v for k, v in phi.engine.items() if k != "env"}
+    invariant, off = {"VLLM_BATCH_INVARIANT": "1"}, bool(stated.get("disable_custom_all_reduce"))
+    absent, empty, switched = (dsa.Net(Phi.from_json({**doc, "engine": e}), 1, 8)
+                               for e in (stated, {**stated, "env": {}}, {**stated, "env": invariant}))
+    assert absent.settings == empty.settings == settings_of(off, {}) != settings_of(off, invariant) == switched.settings
+    assert absent.long_rows is None and "VERITY_DSA_TOPK=None" in str(empty.long_rows)
 
 
 def test_a_phi_that_leaves_a_block_out_declares_nothing_in_it():
@@ -254,7 +313,7 @@ def test_a_request_states_its_prompt_length_one_of_three_ways_and_one_that_state
 def test_a_row_that_pins_no_revision_names_no_snapshot_dir(tmp_path):
     """`score.phi_of` finds a row's config.json under `hf_home` by its checkpoint's revision.  A row whose engine block pins none
     names no dir there, which is `os.path.join`'s TypeError; given a `config` it is that config's φ, with no revision."""
-    w = json.loads((WORKLOADS / f"{DSV4}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
     bare = {**w, "engine": {k: v for k, v in w["engine"].items() if k != "revision"}}
     with pytest.raises(TypeError, match="NoneType"):
         S.phi_of({"row": DSV4, "workload": bare}, hf_home=str(tmp_path))
@@ -263,10 +322,18 @@ def test_a_row_that_pins_no_revision_names_no_snapshot_dir(tmp_path):
     assert pinless["model"]["revision"] is None and {**pinless, "model": full["model"]} == full
 
 
+def test_phi_of_opens_the_config_by_the_name_given():
+    """`score.phi_of` hands ``config`` to `open` as it is given: the file's name in bytes is read as the same name in a str is."""
+    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
+    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
+    in_bytes: Any = os.fsencode(config)
+    assert S.phi_of({"row": DSV4, "workload": w}, config=in_bytes).to_json() == S.phi_of({"row": DSV4, "workload": w}, config=config).to_json()
+
+
 def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
     """`score.phi_of` on a row whose declared manifest states no `requests`: φ's workload holds none, and the rest of φ is the
     row's as with them."""
-    w = json.loads((WORKLOADS / f"{DSV4}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
     config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
     full = S.phi_of({"row": DSV4, "workload": w}, config=config)
     bare = S.phi_of({"row": DSV4, "workload": {k: v for k, v in w.items() if k != "requests"}}, config=config)
@@ -425,7 +492,7 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
     `predict compare --predicted` holds it to the trace's): the traced manifest is pinned with the Programs its header names, and a moved
     one names the manifest it leaves behind.  About 2 min."""
     pin = H200_INT8[row]
-    w = json.loads((WORKLOADS / f"{row}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{row}.json").read_text())
     phi = S.phi_of({"row": row, "workload": w}, config=str(pinned_hf_config(w["model"], RowEngine.of(w).revision)))
     assert sorted(phi.request_shapes()) == sorted(pin["requests"]), "the workload's request shapes are not its Build's"
     M, step = pin["step"]

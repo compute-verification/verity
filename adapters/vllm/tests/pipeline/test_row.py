@@ -856,6 +856,30 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     assert "--norm-tap-so" in cmd and "--vocab-range" in cmd and "--router-tap-so" not in cmd
 
 
+def test_a_tp_rows_commit_names_the_trees_checkpoint_pins_as_its_replay_does(tmp_path, monkeypatch):
+    """`tp-commit` with no ``--checkpoints-manifest`` takes the package's own; the row names the tree's file to it, the one it
+    names to `tp-commit-replay`, so the Commit's record says which pins its shards were held to.  A config run's Commit, one
+    instrumented arm with no Match to compare against, names it as a full run's does."""
+    tp = _tp_row(tmp_path, TP_DENSE)
+    pins = os.path.join(tp.tree, "manifests/checkpoints.json")
+    for row, config_run in ((tp, False), (_tp_row(tmp_path, TP_DENSE, "--config-run", "1"), True)):
+        cmd = row.commit_cmd([])
+        assert cmd[cmd.index("--checkpoints-manifest") + 1] == pins and cmd.count("--checkpoints-manifest") == 1, config_run
+        assert ("--only-arm" in cmd, "--match-dir" in cmd) == (config_run, not config_run)
+    seen: list[list[str]] = []
+
+    def run_tl(stage: str, to: int, log: str, argv: list[str]) -> int:
+        seen.append(argv)
+        return 0
+
+    monkeypatch.setattr(tp, "run_tl", run_tl)
+    monkeypatch.setattr(os.path, "isdir", lambda p: p == "/ck" or os.path.exists(p))
+    os.makedirs(f"{tp.d}/commit")
+    Path(f"{tp.d}/commit/replay_deferred.json").write_text("{}")
+    tp.replay()
+    assert [c[c.index("--checkpoints-manifest") + 1] for c in seen] == [pins]
+
+
 def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
     """SERVING_ROWS reaches the single-GPU Commit and tp-commit alike as the request `Row.serving_rows_request` writes."""
     pf = str(tmp_path / "partition.json")
