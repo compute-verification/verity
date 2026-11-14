@@ -80,7 +80,7 @@ The report goes to the job's `out/prod_repro.txt` and `out/prod_repro.json`. Und
 run's files; the rest of `out/` is in the run's record whole. A job with no result of the benchmark's cost (one that
 served ours alone) gets one whose validation is the tokens line. For GLM-5.3 at the recipe's settings (`prod-record`
 over `prod`) the result also holds the cost line's figure as the measurement `vllm/prod-serving-cost-glm53`, in
-percent of stock's serving time, the number `benchmarks/metrics.toml` holds the goal to: only where it stands as the
+percent of stock's serving time, the number `benchmarks/prod_repro/metrics.toml` holds the goal to: only where it stands as the
 benchmark's own measurement (a sessions load, a value, the same work on both sides; `serve_tax.result_of`) and the
 two arms are at the same settings. Of `prod-record` it holds two more: `vllm/prod-replay-match-glm53`, the percent of
 the replayed window's served tokens the replay gave back before a request's first difference, where the replay's
