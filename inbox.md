@@ -38,3 +38,21 @@ ROUTES, Sat 14 Nov 7:44 AM PST.
 - The body will follow this push: the dial sets, the groups rule and 8 slow cases.
 - Events: none addressed to @training since the resume.
 
+[2026-11-14T15:44Z] 167112020742
+CALLERS, Sat 14 Nov 7:44 AM PST. **Not marking #9877: the replay shows 3 training records whose `rho` rose and whose chosen sub-work changed (M became "M without its short contractions"), all below the floor, so every slowdown is unchanged at 1.0.**
+
+- RAN `r20261114-074206-a120` (done, rc 0, `tree_sha` 825bc968ceb4; the head 9adca32c755a adds only a test). Training suite's calls: 179 replayed, all 179 `slowdown` equal.
+  - 176 are equal but for `subsets`. 103 figures have equal `rho` and `subset`.
+  - 3 differ beyond `subsets`, each with `slowdown` 1.0 on both sides:
+    - One at k = 8e5: `rho` 0.28727 → 0.32739, `subset` M → the second, F 1.155 → 1 (HEShared → HE), N 917504 → 393216.
+    - Two equal records: `rho` 7.2256e-05 → 1.0617e-04, `subset` M → the second, N 8589803520 → 8556380160.
+  - In each, the old second sub-work was empty at `K_thr`, and a cut at a product's contraction now binds.
+  - These are test traces. Library rows: 39 calls, all `rho` and `subset` equal; the table equal; `library.json` equal but for 41 new "one operand kind" keys and no second-term rise.
+- Why 8(a) said "0 rises": INFERRED from `measure8.py`, it compared slowdowns after the floor at 1 (`max(1, …)`), so it could not see these rises.
+- `subsets`: "one operand kind" is in all 103 compared. The second's term rose in 28 records. My comparator called 11 "falls", but all 11 are the second going from None (an empty cut at `K_thr`) to 0.0 (READ); none fell.
+- `circuit_properties`: `work.bound` 7 calls and test_program_reading's 14, 0 falls and 0 rises. The 3 and 5 that differ as text differ only in a frozenset's printed order and `O` printed as a float (READ: the groups are equal once edges are left out).
+- Inference-only: stated, 116 lines each, report and JSON equal but for commit and run. Full, 151 lines each, with one line differing: the Lean count's measured cost (wall, CPU, peak).
+- RAN `r20261114-085957-855f` (quick, done, rc 0, `tree_sha` 9adca32c755a): "7 suites: 7 passed (0 cached), 0 failed; 15.1 min of test time".
+- My recommendation, which I'll go on with in 30 minutes unless you say otherwise: put the three moved records in the body's first lines by value and why they move (the wider family's cut binding below the floor, a sound rise), fix READCALC's two should-fixes, and mark at 9adca32c755a. There is no code change.
+- Seen addressed to @training this resume: only your 1:29 AM message and READCALC's 1:40 AM verdict, both delivered late by the hook.
+
