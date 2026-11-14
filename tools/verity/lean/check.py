@@ -370,7 +370,7 @@ def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> 
 def sample_jobs(pkg: Path, threads: int | None, replay: bool, env=os.environ) -> int | None:
     """How many recompiles at once the sample of ``pkg`` (`sampled_recompile`, on the build's ``threads``) runs beside its
     replay (``replay``: the audit replays): None, its own share of ``threads``, for a package that pins no heavy
-    dependency or an audit with no replay; else those `reserve.beside` fits in what the replay's need leaves of what the
+    dependency or an audit with no replay (whose sample no dependent's build runs beside: `audit`); else those `reserve.beside` fits in what the replay's need leaves of what the
     run reserved, kept in `_BESIDE` for the sample and the replay's threads; 0 where none fits, and the sample runs after
     the replay."""
     if not replay or not (p := pins(pkg)):
@@ -6017,12 +6017,13 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     modules the build didn't compile is compiled again from their sources against the seal and compared with the seal's
     copies (`sampled_recompile`; the report's `sampled`), in `background` beside the replay, and the verdict waits for it
     as it does for the replay: a failure there fails the package, and its facts document is then neither written nor
-    stored. ``matched`` hears once whether the sample matched (True where nothing was sampled); ``sample_matched`` (a
-    package whose facts `proved` read, or one this package requires by path) returns once that package's sample has
-    ended, False when it didn't match or its audit ended before saying, and None for a package this run doesn't audit.
-    The package then fails: `proved_in.sampled` for a prover, and `requires.sampled` for a path dependency, whose modules
-    this build read and its own sample draws only a share of. Without the sandbox nothing is recompiled, and the sample's check runs
-    before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
+    stored. With no replay it holds the package's `writable` directories (`writing`) from before ``built`` until it
+    ends, so no dependent's build runs beside it. ``matched`` hears once whether the sample matched (True where nothing
+    was sampled); ``sample_matched`` (a package whose facts `proved` read, or one this package requires by path) returns
+    once that package's sample has ended, False when it didn't match or its audit ended before saying, and None for a
+    package this run doesn't audit. The package then fails: `proved_in.sampled` for a prover, and `requires.sampled` for
+    a path dependency, whose modules this build read and its own sample draws only a share of. Without the sandbox
+    nothing is recompiled, and the sample's check runs before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`), and None for a package this run doesn't audit, whose build, where the
     package is required by path, is settled with this one's (`stage_build`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
     `audit`, and within `audit` the package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the package's
@@ -6183,14 +6184,35 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     # tampered with, so by default it reuses the cache but writes nothing — a live-keyed verdict never enters it.
     # ``store`` overrides the default for a caller whose cache is a throwaway private dir, as lean's review allows.
     store = (sealed is not None) if store is None else store
+    replays = bool(replay) and not lifts
+    # with no replay, nothing plans the sample's jobs against a dependent's build (`sample_jobs`), so it holds the package's
+    # `writable` directories from before the announcement until it ends, and no build that writes them starts beside it
+    hold, held = contextlib.ExitStack(), threading.Lock()
+    if later is not None and not replays:
+        hold.enter_context(writing(pkg, log))
+        log(f"sampled: {rel(pkg)}: no replay to plan it beside, so a build that writes its .lake starts once it ends")
+
+    def release() -> None:
+        with held:
+            hold.close()
+
+    def recompile() -> tuple:
+        try:
+            return timed(sampled_recompile, pkg, policy["roots"], work, later, sealed or own_seal, n, log)
+        finally:
+            release()
+
     if later is None:
         matched(True)
-    built()
-    files = lean_modules(pkg)
-    background = ThreadPoolExecutor(max_workers=6)
-    beside = sample_jobs(pkg, n, bool(replay) and not lifts) if later is not None else None
-    sample = background.submit(timed, sampled_recompile, pkg, policy["roots"], work, later, sealed or own_seal, n, log) \
-        if later is not None and beside != 0 else None
+    try:
+        built()
+        files = lean_modules(pkg)
+        background = ThreadPoolExecutor(max_workers=6)
+        beside = sample_jobs(pkg, n, replays) if later is not None else None
+        sample = background.submit(recompile) if later is not None and beside != 0 else None
+    except BaseException:
+        release()
+        raise
     if later is not None and beside == 0:
         log(f"sampled: {rel(pkg)}: no room beside its replay in what this run reserved, so it starts once the replay ends")
 
@@ -6200,12 +6222,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         if later is None:
             return []
         try:
-            (got, rep["sampled"]), rep["seconds"]["sampled"] = sample.result() if sample else \
-                timed(sampled_recompile, pkg, policy["roots"], work, later, sealed or own_seal, n, log)
+            (got, rep["sampled"]), rep["seconds"]["sampled"] = sample.result() if sample else recompile()
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError, CancelledError) as e:
             got = [Failure("sampled", None, f"sampled: the recompile raised {type(e).__name__}: {e}")]
         finally:
             _BESIDE.pop(pkg.resolve(), None)
+            release()
         (work / BUILDING).write_text(json.dumps({k: rep[k] for k in ("package", "sandbox", "bound")} |
                                                 ({"failures": got} if got else {})))
         if own_seal:
