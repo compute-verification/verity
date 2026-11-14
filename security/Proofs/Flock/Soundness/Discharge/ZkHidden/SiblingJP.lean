@@ -4,19 +4,19 @@ public import Proofs.Flock.Claims.ZK.MaskedTables
 public import Proofs.Flock.Soundness.Discharge.Hidden.Sibling
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 
 /-!
 # The reference setup of a statement with no session
 
-A `--zk` table's reference setup (`DrawSetupZHJP`) is built from a setup `verify --zk` made. A statement no session
+A `--zk` table's reference setup (`SampleSetupZHJP`) is built from a setup `verify --zk` made. A statement no session
 samples has none of its own. `y₀_of_sibling` builds one from a setup at the sample of no unit on another public file
 of the same circuit file, tags, coins, tables, partition and program (`Hidden.setupHidden_noUnit`): at one table, the
 statement's public file loaded and held to its roots, its header naming no `public_inputs`, sets up a `--zk` table at
 the sample of no unit, at `mPtsOf g 0` points.
 
 A reference setup is the one value of its type (`drawSetupZHJP_subsingleton`): its statement is what
-`Stmt.setupHidden` returns, its sample what `Draw.UnitDraw.ofJson` decodes, its schedules what `fast100` and
+`Stmt.setupHidden` returns, its sample what `Draw.UnitSample.ofJson` decodes, its schedules what `fast100` and
 `Zk.schedule` return, and the rest are proofs.
 -/
 
@@ -30,7 +30,7 @@ open FlockSoundness.Discharge.Exec (Inputs)
 /-- **Two setups of one sample at one statement's inputs are one**: the statement, the decoded sample and the
 schedule are each a function's value, and every other field is a proof. -/
 theorem drawSetupHP_eq {n : ℕ} {I : Inputs} {own : Option ByteArray} {mPts : ℕ} {S : Finset (Fin n)}
-    {d : Lean.Json} : ∀ x x' : DrawSetupHP I own mPts S d, x = x'
+    {d : Lean.Json} : ∀ x x' : SampleSetupHP I own mPts S d, x = x'
   | ⟨st, h, D, hD, _, _, _, m, k0, l₀, l₁, rest, ext, hsch, _, _, _⟩,
     ⟨st', h', D', hD', _, _, _, m', k0', l₀', l₁', rest', ext', hsch', _, _, _⟩ => by
     obtain rfl : st = st' := Except.ok.inj (h.symm.trans h')
@@ -48,7 +48,7 @@ open Lean (Json)
 /-- **A reference setup is the one value of its type**: at given inputs, public inputs of the verifier's own, link
 points, sampled proof blocks and sample. -/
 theorem drawSetupZHJP_subsingleton {n : ℕ} (I' : Inputs) (own : Option ByteArray) (mPts : ℕ) (S : Finset (Fin n))
-    (d : Json) : Subsingleton (DrawSetupZHJP I' own mPts S d) :=
+    (d : Json) : Subsingleton (SampleSetupZHJP I' own mPts S d) :=
   ⟨fun y y' => by
     obtain ⟨x, sch, tPad, hz, _, _, _, _, _, _, _⟩ := y
     obtain ⟨x', sch', tPad', hz', _, _, _, _, _, _, _⟩ := y'
@@ -71,7 +71,7 @@ theorem y₀_of_sibling (n : ℕ) {I : Inputs} {D : Flock.Desc} {pf₁ : ByteArr
     (hkey : (pop.header.getObjVal? "public_inputs").toOption = none)
     (hpub : Flock.HmOut.checkPublic st₁.c pop = .ok ()) :
     ∃ (S₀ : Finset (Fin n)) (d₀ : Json),
-      Nonempty (DrawSetupZHJP (inputsJ I 0) none (Exec.mPtsOf D.unroll.g (0 / nTab I)) S₀ d₀) := by
+      Nonempty (SampleSetupZHJP (inputsJ I 0) none (Exec.mPtsOf D.unroll.g (0 / nTab I)) S₀ d₀) := by
   have htJ : (inputsJ I 0).tags = zkTags I := by
     show Exec.tagsAt _ I.count 0 = _
     unfold Exec.tagsAt
@@ -89,9 +89,9 @@ theorem y₀_of_sibling (n : ℕ) {I : Inputs} {D : Flock.Desc} {pf₁ : ByteArr
       (fun D' hD' => by
         obtain rfl := Except.ok.inj ((Hidden.ofJson_emptySample pop.n).symm.trans hD')
         rfl) hst'
-  obtain ⟨xx, hxx⟩ := drawSetupHP_of_setupHiddenI (I := inputsJ I 0) (own := none) (S := (∅ : Finset (Fin n)))
+  obtain ⟨xx, hxx⟩ := sampleSetupHP_of_setupHiddenI (I := inputsJ I 0) (own := none) (S := (∅ : Finset (Fin n)))
     (typedJ ht 0) hst₂ hf (Hidden.ofJson_emptySample pop.n) (fun v hv => by simp at hv) hmPts
-  obtain ⟨y, -, -, -⟩ := drawSetupZHJP_of xx (by rw [hxx]; exact hshape) (sch := sch) (tPad := tPad)
+  obtain ⟨y, -, -, -⟩ := sampleSetupZHJP_of xx (by rw [hxx]; exact hshape) (sch := sch) (tPad := tPad)
     (by rw [hxx]; exact hz)
   exact ⟨∅, _, ⟨y⟩⟩
 

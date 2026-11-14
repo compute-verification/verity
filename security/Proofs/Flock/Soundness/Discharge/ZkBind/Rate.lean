@@ -23,8 +23,8 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 # The planned rate of the `--zk` plan, at every sample
 
 `rateZ ts j k = 2^{logLen₀}/(e·k)` reads only level 0's codeword length of table `j`'s schedule. Every table the one-table
-`--zk` plan `planZAt dj y₀ S R` holds, at every sample `S` (a `DrawSetupZK`'s table, or `y₀`'s refused one), carries a
-schedule `Zk.schedule` returned (`DrawSetupZK.hz`). So a cap `L` on level 0's `logLen` over everything `Zk.schedule`
+`--zk` plan `planZAt dj y₀ S R` holds, at every sample `S` (a `SampleSetupZK`'s table, or `y₀`'s refused one), carries a
+schedule `Zk.schedule` returned (`SampleSetupZK.hz`). So a cap `L` on level 0's `logLen` over everything `Zk.schedule`
 returns (`ZkLogLenCap L`) bounds the rate at every sample, and the count curve's `∀ S' R' i, rateZ … ≤ ρ` follows from
 `2^L ≤ ρ·e·k`:
 
@@ -69,9 +69,9 @@ theorem zkLogLenCap_23 : ZkLogLenCap 23 := by
   exact hle
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) {Reg : Type}
+  (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) {Reg : Type}
 
-/-- **The `--zk` table's `logLen₀` is under the cap at every sample**: the sample's `DrawSetupZK`'s schedule, or `y₀`'s,
+/-- **The `--zk` table's `logLen₀` is under the cap at every sample**: the sample's `SampleSetupZK`'s schedule, or `y₀`'s,
 is one `Zk.schedule` returned. -/
 theorem logLen_tableAtZK_le {L : ℕ} (hL : ZkLogLenCap L) (S : Finset (Fin n)) :
     (lvOf (tableAtZK dj y₀ S).sch 0).logLen ≤ L := by

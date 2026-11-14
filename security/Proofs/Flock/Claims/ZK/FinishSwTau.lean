@@ -151,10 +151,10 @@ theorem swSrcE_tau_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ 
     (rep : ℕ → ℕ → ℕ) (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin)
     {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (q : _root_.Flock.ZkServer.Finish.RepIn)
-    (hq : q.draws = L.drawsAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
-    (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.ZkServer.Frame.drawBytes (L.lay x (rep j.val r.val)))
+    (hq : q.draws = L.samplesAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
+    (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.ZkServer.Frame.sampleBytes (L.lay x (rep j.val r.val)))
     (hpads : FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j) =
-      FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j))
+      FlockComplete.padsOf (Claims.ZKServer.tapeOfSamples t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
@@ -178,10 +178,10 @@ theorem swSrcE_innerSrc_rows {W R : Type} (L : Claims.ZKServer.LeanRelease W R) 
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hn : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (q : _root_.Flock.ZkServer.Finish.RepIn)
-    (hq : q.draws = L.drawsAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
-    (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.ZkServer.Frame.drawBytes (L.lay x (rep j.val r.val)))
+    (hq : q.draws = L.samplesAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
+    (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.ZkServer.Frame.sampleBytes (L.lay x (rep j.val r.val)))
     (hpads : FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j) =
-      FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j))
+      FlockComplete.padsOf (Claims.ZKServer.tapeOfSamples t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)

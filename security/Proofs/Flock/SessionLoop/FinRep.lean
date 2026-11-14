@@ -290,7 +290,7 @@ def FinRepPads : Prop :=
 
 /-- **A rep's samples are pads `repFw_cut` takes**: `Draws.ofBytes` reads `h` at the layout's length and sets `h_ab := h_a·h_b`
 and `w := x·y`, no index of which the other set moves. -/
-theorem drawsOfBytes_pads (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
+theorem samplesOfBytes_pads (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
     (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h.size = lay.len ∧
       (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h[lay.hab]! =
         (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h[lay.fa]! *
@@ -369,7 +369,7 @@ theorem drawsOfBytes_pads (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
 
 /-- **(c.2) holds in the masked scope**: there every table commits with `hm96-sha512` (`ZkTables.tables_of_setup`), rep
 stream `k`'s table is `tabOfLevel0` at table `k / 2`'s statement (`Count.tabOfLevel0_sched`), whose `--zk` schedule is
-the frame's (`Drive.start`), and the request's samples are `Draws.ofBytes` at that layout (`drawsOfBytes_pads`). -/
+the frame's (`Drive.start`), and the request's samples are `Draws.ofBytes` at that layout (`samplesOfBytes_pads`). -/
 theorem finRepPads (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) :
     FinRepPads L₀ src real wk x w := by
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
@@ -409,7 +409,7 @@ theorem finRepPads (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.
     rw [hqd, hlay, hss, hts]
     try rfl
   rw [hP]
-  refine ⟨?_, drawsOfBytes_pads _ _⟩
+  refine ⟨?_, samplesOfBytes_pads _ _⟩
   rw [hts]
   show (Masked.stsOf x)[k / 2]!.merkle = _
   rw [getElem!_pos (Masked.stsOf x) (k / 2) hj]

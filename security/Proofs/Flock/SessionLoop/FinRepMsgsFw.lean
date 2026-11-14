@@ -112,10 +112,10 @@ theorem finRepPads_tape (hS : Loop.RepSrc L₀ src x w) {ν : finS.Nonce} {t : f
     all_goals rfl
   rw [hk2] at hst0
   have hlay0 := LeanRelease.lay_ofLoopLink (L₀ := L₀) src (realOf src) j r hst0
-  have hd := LeanRelease.draws_ofLoopLink (L₀ := L₀) src (realOf src)
+  have hd := LeanRelease.samples_ofLoopLink (L₀ := L₀) src (realOf src)
   have hzs := hS.size (LeanRelease.ofLoopLink L₀ src (realOf src)) hd ν t j r hlay0
   have hpads := hS.pads (LeanRelease.ofLoopLink L₀ src (realOf src)) hd ν t j r hlay0 (Masked.UE.tapeZk t)
-  have hq' : q.draws = (LeanRelease.ofLoopLink L₀ src (realOf src)).drawsAt x (ν, t) (Loop.frepOf j.val r.val) := by
+  have hq' : q.draws = (LeanRelease.ofLoopLink L₀ src (realOf src)).samplesAt x (ν, t) (Loop.frepOf j.val r.val) := by
     rw [hqd]
     show _ = _root_.Flock.ZkServer.Frame.Draws.ofBytes
       ((LeanRelease.ofLoopLink L₀ src (realOf src)).lay x (2 * j.val + r.val)) (L₀.draws (ν, t) (2 * j.val + r.val))

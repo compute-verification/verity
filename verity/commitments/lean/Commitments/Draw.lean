@@ -114,7 +114,7 @@ structure WorkStratum extends Stratum where
 
 /-- A stratum's draw under the work law: `⌈K · work · n_s / W⌉`, with `W` the population's work `Σ_s work_s · n_s`, never
 below the stratum's floor and never above `n_s`. Rounding up keeps each unit's inclusion probability at least `K · work / W`,
-which the work bound (`FlockSoundness.Audit.Law.work_escape_le`, through `workRule_eq_draw`) reads. -/
+which the work bound (`FlockSoundness.Audit.Law.work_escape_le`, through `workRule_eq_sample`) reads. -/
 def workK (k work size total floor : Nat) : Nat := min size (max floor ((k * work * size + total - 1) / total))
 
 /-- A work law's population work, `Σ_s work_s · n_s`. -/
@@ -183,7 +183,7 @@ def stratified (strata : Array Stratum) (streams : Array ByteArray) : Option (Ar
 
 /-- A draw: its law, the population `[0, population)`, the drawn units, ascending, and for a closure draw the units
 proved with them, their closure beyond the drawn units, ascending. -/
-structure UnitDraw where
+structure UnitSample where
   law : Law
   population : Nat
   units : Array Nat
@@ -191,7 +191,7 @@ structure UnitDraw where
   deriving Inhabited
 
 /-- The units a draw proves: the drawn units and their closure, ascending. -/
-def UnitDraw.proved (d : UnitDraw) : Array Nat :=
+def UnitSample.proved (d : UnitSample) : Array Nat :=
   if d.closure.isEmpty then d.units else (d.units ++ d.closure).qsort (· < ·)
 
 /-- A closure map: a JSON object from a unit's index to the units its credit depends on (for a tile, the strips it reads
@@ -237,7 +237,7 @@ def Law.toJson : Law → Json
   | .stratified k strata => Json.mkObj [("law", "stratified"), ("k", Lean.toJson k), ("strata", Json.arr (strata.map (·.toJson)))]
   | .work k strata => Json.mkObj [("law", "work"), ("k", Lean.toJson k), ("strata", Json.arr (strata.map (·.toJson)))]
 
-def UnitDraw.toJson (d : UnitDraw) : Json :=
+def UnitSample.toJson (d : UnitSample) : Json :=
   let u := Json.arr (d.units.map fun x => Lean.toJson x)
   match d.law with
   | .subset k => Json.mkObj [("law", "subset"), ("population", Lean.toJson d.population), ("k", Lean.toJson k), ("units", u)]
@@ -258,7 +258,7 @@ def UnitDraw.toJson (d : UnitDraw) : Json :=
 #guard
   let ss : Array WorkStratum := #[{ template := "A", units := #[(0, 2)], k := 1, work := 3, floor := 1 },
     { template := "B", units := #[(2, 4)], k := 1, work := 1, floor := 1 }]
-  let record := Json.mkObj [("unit_draw", UnitDraw.toJson ⟨.work 2 ss, 4, #[1, 2], #[3]⟩)]
+  let record := Json.mkObj [("unit_draw", UnitSample.toJson ⟨.work 2 ss, 4, #[1, 2], #[3]⟩)]
   let printed := "{\"unit_draw\":{\"closure\":[3],\"k\":2,\"law\":\"work\",\"population\":4,\"strata\":[{\"floor\":1," ++
     "\"k\":1,\"template\":\"A\",\"units\":[[0,2]],\"work\":3},{\"floor\":1,\"k\":1,\"template\":\"B\",\"units\":[[2,4]]," ++
     "\"work\":1}],\"units\":[1,2]}}"
@@ -343,7 +343,7 @@ ascending, distinct units of the population, none of them drawn; `subset` draws 
 has `0 ≤ p ≤ 1`, no unit when `p = 0` and every unit when `p = 1`; `stratified`'s strata are well formed and tile the
 population (`strataProblem`), and exactly `k_s` of its units fall in each, and likewise `work`'s (`workProblem`); units
 are ascending, distinct and in the population. -/
-def UnitDraw.ofJson (j : Json) : V UnitDraw := do
+def UnitSample.ofJson (j : Json) : V UnitSample := do
   let .ok kvs := j.getObj? | throw "U2: unit_draw is not an object"
   let ctx := "unit_draw"
   let population ← J.nat j "population" ctx
@@ -404,7 +404,7 @@ def check (record statement : Option Json) (instances : Nat) : V Unit := do
   | none, some _ => throw "U1: the statement carries a unit draw the record does not keep"
   | some r, some s =>
     if (← canon r) != (← canon s) then throw "U1: the record's unit draw is not the statement's"
-    let d ← UnitDraw.ofJson s
+    let d ← UnitSample.ofJson s
     if d.proved.size != instances then throw "U3: the statement's instances are not the drawn units and their closure"
 
 /-- A sampler run on a byte source, `get need` returning `need` fresh bytes: a stream of `need` bytes, extended by `need`
@@ -432,7 +432,7 @@ def stratifiedWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteAr
 /-- The draw on a byte source, stream `i`'s bytes from `get i`: one stream per stratum for a stratified or work draw, stream
 `0` for a subset or Bernoulli draw. -/
 def drawWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteArray) (law : Law) (population : Nat) :
-    m (Option UnitDraw) := do
+    m (Option UnitSample) := do
   let units ← match law with
     | .subset k => onWith (get 0) (2 * k * width population + 64) (subset k population)
     | .bernoulli a b => onWith (get 0) (2 * population * width b + 64) (bernoulli a b population)
@@ -441,8 +441,8 @@ def drawWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteArray) (
   return units.map fun units => { law, population, units }
 
 /-- The sample from the operating system's randomness: `drawWith` with every stream's bytes from `IO.getRandomBytes`.
-The verifier never runs it: it has no randomness of its own, and its samples read the challenger's coins (`drawOn`). -/
-def drawOS (law : Law) (population : Nat) : IO UnitDraw := do
+The verifier never runs it: it has no randomness of its own, and its samples read the challenger's coins (`sampleOn`). -/
+def sampleOS (law : Law) (population : Nat) : IO UnitSample := do
   let some d ← drawWith (fun _ need => IO.getRandomBytes need.toUSize) law population
     | throw (IO.userError "unreachable")
   return d
@@ -450,7 +450,7 @@ def drawOS (law : Law) (population : Nat) : IO UnitDraw := do
 /-- The sample from given bytes, the challenger's coins (`flock-verify draw`): `subset` and `bernoulli` on the one
 stream; `stratified` and `work` on consecutive segments, stratum `s`'s the next `2 k_s · width(n_s) + 64` bytes. `none`
 when a stream runs out. -/
-def drawOn (law : Law) (population : Nat) (src : ByteArray) : Option UnitDraw := do
+def sampleOn (law : Law) (population : Nat) (src : ByteArray) : Option UnitSample := do
   let units ← match law with
     | .subset k => subset k population src
     | .bernoulli a b => bernoulli a b population src
@@ -466,7 +466,7 @@ def drawOn (law : Law) (population : Nat) (src : ByteArray) : Option UnitDraw :=
   return { law, population, units }
 
 /-- The units every draw under a law has, when that count is fixed: `k` for a subset law and `Σ_s k_s` for a stratified
-one (`UnitDraw.ofJson` holds every decoded draw to them); none for a Bernoulli law, whose count is random, and a work law,
+one (`UnitSample.ofJson` holds every decoded draw to them); none for a Bernoulli law, whose count is random, and a work law,
 whose closure varies from draw to draw. -/
 def Law.fixedCount : Law → Option Nat
   | .subset k => some k

@@ -73,7 +73,7 @@ theorem flock_batched_count_linked (hlow : P.LoweringSoundB plan tab decode)
 
 /-- **Sampled proof blocks of the compiled-layer audit, with `δ_link` discharged**, are correct at the plurality value layer
 up to `ε_ks(σ) + linkBoundE`. -/
-theorem flock_batched_drawn_linked (hlow : P.LoweringSoundB plan tab decode)
+theorem flock_batched_sampled_linked (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
@@ -81,7 +81,7 @@ theorem flock_batched_drawn_linked (hlow : P.LoweringSoundB plan tab decode)
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  (P.flock_batched_drawnE H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) hk
+  (P.flock_batched_sampledE H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) hk
     (fun S R j => (hr S R j).trans_lt hρ) hlow
     (P.flock_batched_linkSoundE H E plan tab vb hlow hk hRw hM hρ hr ht) σ).trans_eq
     (by rw [P.linkBoundCR_eq H E plan tab vb hCR])

@@ -117,7 +117,7 @@ def test_a_held_wired_row_flipped_at_the_row_its_reference_names_is_refused():
     assert all(v["refused"] for v in neg.values())
 
 
-def test_a_shared_row_readers_flipped_wired_row_is_its_drawn_units_own():
+def test_a_shared_row_readers_flipped_wired_row_is_its_sampled_units_own():
     """A shared-row reader (its body each port's table, then its units' refs) whose wired port is not its first, as the weights
     tie's stream rows (``data`` a registered read, ``cv`` wired): the flipped string is its unit 0's ``cv`` row, so the
     verifier's wiring check on that unit refuses it, and the honest wires hold."""

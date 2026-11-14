@@ -14,7 +14,7 @@ loop serves (`Loop.Serves`: its `Hello` leaves at `x`'s setup, which it refuses 
 frames', `Session.sizesOk`), and at the hiding gap of hm96-sha512's pinned key (`hidingGap My saltHash`, with no hiding
 premise). It concludes that the deployed frame's state is the loop's but for `stopped` (`ProgChecks`) and the bound.
 
-Each rep's table is the loop's own (`Loop.realOf`: `tabOfLevel0` at the level 0 `Level0.ofDraws` samples), at every
+Each rep's table is the loop's own (`Loop.realOf`: `tabOfLevel0` at the level 0 `Level0.ofSamples` samples), at every
 level-0 source `src` (the host's packed witness, the bytes sampled for level 0 and the salts for levels ≥ 1). What it
 takes of the loop beyond the code is named, each an obligation:
 
@@ -79,7 +79,7 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
 /-- **The session loop's own tables** at the level-0 source `src`: rep stream `k`'s table is table `k / 2`'s
-`tabOfLevel0` at the level 0 `Level0.ofDraws` samples at its `m` from `src`'s packed witness and sampled bytes, with `src`'s
+`tabOfLevel0` at the level 0 `Level0.ofSamples` samples at its `m` from `src`'s packed witness and sampled bytes, with `src`'s
 salts for levels ≥ 1 (`Frames.placeOf` on the loop's `Level0`, which `Level0.draw` drew on the host's packed witness and
 the operating system's bytes, and `Level0.commit` binds at the table's `m`; `Finish.serveLoop`'s salts). -/
 def Loop.realOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
@@ -87,17 +87,17 @@ def Loop.realOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F
   match FlockDeploy.setupOf true x with
   | some (_, _, sts) => do
     let (g, d, hi) ← src x w ρ k
-    let l ← _root_.Flock.ZkServer.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
+    let l ← _root_.Flock.ZkServer.Level0.ofSamples sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
     let t ← _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l
     pure (t, hi)
   | none => .error "no session"
 
-/-- **The level 0 the loop samples for table `j`** at the source `src`: `Level0.ofDraws` at table `j`'s `m` on the packed
+/-- **The level 0 the loop samples for table `j`** at the source `src`: `Level0.ofSamples` at table `j`'s `m` on the packed
 witness and sampled bytes `src` gives rep stream `2j` (one level 0 a table, as `Loop.realOf` reads it). -/
 def Loop.level0Of {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (j : ℕ) : V _root_.Flock.ZkServer.Level0.Level0 := do
   let (g, d, _) ← src x w ρ (2 * j)
-  _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d
+  _root_.Flock.ZkServer.Level0.ofSamples sts[j]!.wideLeaf sts[j]!.m g d
 
 /-- **The loop's own link** at the source `src`: each table's sampled level-0 root, with no public words, as the loop's
 `Commit` carries them (`Session.relay`'s `commitFrame` of the roots `Level0.ofSession` bound); the empty root where the
@@ -171,7 +171,7 @@ noncomputable def repInOf (x : Msg) (h : List (Msg × Msg)) (spec : SessionSpec)
   let st := sts[k / 2]!
   let (lay, _) ← _root_.Flock.ZkServer.Drive.start st
   let d := _root_.Flock.ZkServer.Frame.Draws.ofBytes lay draws
-  let c := Cfg.ofDraws lay d none
+  let c := Cfg.ofSamples lay d none
   let rounds := seenRounds x h (roundsOf spec sts) k
   let nSched := rounds.length - _root_.Flock.ZkServer.Frame.INNER_ROUNDS
   let fc := finalCOf ((rounds.getD nSched (.empty, 0, #[])).1)
@@ -274,12 +274,12 @@ noncomputable def LeanRelease.ofLoopLink
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand) :=
   LeanRelease.ofLoop Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real
 
-/-- **The level 0 the loop samples for rep stream `k`** at the source `src`: `Level0.ofDraws` at table `k / 2`'s `m` on the
+/-- **The level 0 the loop samples for rep stream `k`** at the source `src`: `Level0.ofSamples` at table `k / 2`'s `m` on the
 packed witness and sampled bytes `src` gives rep stream `k` (`Loop.realOf`'s). -/
 def Loop.level0At {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (k : ℕ) : V _root_.Flock.ZkServer.Level0.Level0 := do
   let (g, d, _) ← src x w ρ k
-  _root_.Flock.ZkServer.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
+  _root_.Flock.ZkServer.Level0.ofSamples sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
 
 /-- **The link's level 0 is the tape's** at `x`: at every nonce and tape, table `j`'s sampled level 0 (`Loop.level0Of`) has
 `Masked.linkIn`'s inputs. `Loop.Src`'s level-0 half gives it (`Loop.Src.linkLevel0`). -/
@@ -297,7 +297,7 @@ words (what the host hands the loop) and the tape's extra lanes, lane paddings a
 level 0 samples (the bytes `Level0.draw` reads from `IO.getRandomBytes`): each extra lane's first `2^cols` words, each of
 the `2^lanes + 4` lanes' first `t_pad` padding coefficients and the salts of the `2^d` tree positions, with `0` or
 empty past them, as every level 0 sampled at those sizes holds. It says nothing of how a root is committed: the root is
-`Link.root` of those inputs by the code (`Level0.ofDraws_ok`). -/
+`Link.root` of those inputs by the code (`Level0.ofSamples_ok`). -/
 def Loop.Level0Src (src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
@@ -308,7 +308,7 @@ def Loop.Level0Src (src : Msg → Flock.Wit →
 
 /-- **The rep samples are the tape's** at `x`: at every nonce and tape, table `j`'s rep `r`, rep stream `2j + r`, at the
 tape's layout (`Masked.layE`):
-* the frame's samples (`L₀.draws`, the bytes `Frames.startRep` reads from `IO.getRandomBytes`) are `drawBytes` long, and
+* the frame's samples (`L₀.draws`, the bytes `Frames.startRep` reads from `IO.getRandomBytes`) are `sampleBytes` long, and
   read as `Draws.ofBytes`, their pads are the tape's (`padsOf`) and their pads tree's leaf salts the tape's (each of the
   `codeLen` leaves, at the `192` bytes the masked prover fits it to);
 * where `src` hands the rep its salts for levels ≥ 1 (`hi`, the bytes `Finish.serve`'s `hiSaltsOf` reads from
@@ -322,9 +322,9 @@ def Loop.RepSrc
     (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
     (j : Fin (Masked.jOf x)) (r : Fin 2),
-    (L₀.draws (ν, t) (2 * j.val + r.val)).size = _root_.Flock.ZkServer.Frame.drawBytes (Masked.layE x j) ∧
+    (L₀.draws (ν, t) (2 * j.val + r.val)).size = _root_.Flock.ZkServer.Frame.sampleBytes (Masked.layE x j) ∧
     FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j) =
-      drawsPads (_root_.Flock.ZkServer.Frame.Draws.ofBytes (Masked.layE x j) (L₀.draws (ν, t) (2 * j.val + r.val))) ∧
+      samplesPads (_root_.Flock.ZkServer.Frame.Draws.ofBytes (Masked.layE x j) (L₀.draws (ν, t) (2 * j.val + r.val))) ∧
     (∀ q < _root_.Flock.ZkServer.Frame.codeLen (Masked.layE x j),
       FlockComplete.fitBytes 192 ((Masked.UE.tapeZk t).innerSalt j.val r.val q) =
         (_root_.Flock.ZkServer.Frame.Draws.ofBytes (Masked.layE x j) (L₀.draws (ν, t) (2 * j.val + r.val))).salts.extract

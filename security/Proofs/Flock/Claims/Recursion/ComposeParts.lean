@@ -68,7 +68,7 @@ open FlockDeploy (Raw)
 and its bindings. -/
 def RecRaw.shared (w : RecRaw) : RecShared :=
   ⟨w.recInner, w.recRows, w.innerCircuit, w.innerPublic, w.innerPartition, w.innerCoins, w.innerSession, w.transcript,
-    w.registration, w.innerStatement, w.innerTables, w.innerDraw, w.recLinks, w.innerProgram⟩
+    w.registration, w.innerStatement, w.innerTables, w.innerSample, w.recLinks, w.innerProgram⟩
 
 /-- **Part `s`'s recursive statement** from what every part shares `S` (the link table among it), its Flock statement
 `base` and its bindings. -/
@@ -87,7 +87,7 @@ def RecRaw.ofShared (S : RecShared) (base : Raw) (s : ℕ) (bindings : Option By
   registration := S.registration
   innerStatement := S.innerStatement
   innerTables := S.innerTables
-  innerDraw := S.innerDraw
+  innerSample := S.innerSample
   recLinks := S.links
   innerProgram := S.innerProgram
 
