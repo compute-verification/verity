@@ -49,3 +49,45 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 8:22 PM PST. Your 7:53, 7:59 
 
 TIMER: none
 
+[2026-11-14T04:28Z] 7518d036b47e
+ONSITEMAIN, Fri 13 Nov 8:28 PM PST. **#9736 under (b): the head with its locks, the body, the tests, the survey. The Lean check and the suites are running; their two verdicts follow in one line.**
+
+**Head `361671651710650d97cd593350fddae63def3ff5`** on `cursor/na-scratch-port-h-onmain-84f9`, each push a fast-forward, five commits over `db7faae396f5`, every one under the checkout's own identity [ran]. Not marked.
+
+1. `55aca7166979`: the check, the proofs, the two docstrings, the mirror and its test (your items 1 to 5).
+2. `7109a8681f01`: the writers' sentences beside `main`'s and the rows-case test's served-shaped audit (item 6).
+3. `8d9c57f9d927`, then `d041ba0c0f34`: `scan_period.py`'s runner under `--v3c` (your 7:49 and 8:00 PM PST lines). The first made the refusal unconditional; the second reads the expectation off the audit's registration, as you asked. Read the second.
+4. `361671651710`: **the lock commit.** In each of `security/Properties/lean-audit.json` and `security/lean-audit.json`, three lines out and two in: the period check's module's digest, `stateTied`'s digest, and **`NetworkCheck.Period.auditStateEntries`' record gone**. Nothing else [ran: both differences read whole; a search of both locks finds the name nowhere].
+
+**Runs** [ran, remote, each launched once, each by its own command line]:
+- `r20261114-032946-80a9` at `7109a8681f01`: the try of the proofs' `NetworkPeriod.lean`. Exit 0, 78 theorems, the three axioms only.
+- `r20261114-033157-011c` at `7109a8681f01`, `--mem-gb 120`: the records of `security/Properties`. Exit 0 after about 50 minutes, outcome `regenerated`: `security/Properties`, then `security`, which requires it. The commits between it and the lock commit change no Lean.
+- `r20261114-042416-eded` at `361671651710`, `--mem-gb 120`: the Lean check (`check.py --build`) of the certifier's verifier, `security` and `security/Properties`. **Running** since 8:24 PM PST.
+- `r20261114-042448-5e51` at `361671651710`: `suites.py --changed db7faae396f5 --quick`. **Running** since 8:24 PM PST.
+
+**The body is rewritten and posted** [ran: read back, equal]: the four it adds; what the check still refuses, with the lemma, the mirror's case and the writers' test; your sentence, verbatim and alone on its line; one sentence that `RowsStateTiedAt`'s "every" said more than the check at #9664's head too; the commits; the runs. No ticket id in its prose; the last line is the `Refs` line. The two runs in flight are named as running, and I write their verdicts into it when they end.
+
+**Tests that changed to a refusal:**
+- `test_network_period_protocol.py`: `test_a_tied_audit_whose_state_is_in_its_windows_activations_alone_is_tied` is now `…_is_refused`. Same case, the honest period with the audit's entry moved to its window's activations at the scan's state's root and domain; the mirror and Lean both refuse it with `UNSTATED`. [ran: the difftest on a Lean build of the tree, 46 passed with the two files beside it]
+- The same file, `test_a_scan_whose_state_is_not_its_wired_audits_is_refused`: `audit-activations` joins the untied cases (`UNSTATES`); `scan-activations` and `audit-misnamed`, which came with the wider reading, are gone with it.
+- `test_scan_zk.py`, `test_the_rows_forms_case_is_…` (slow, so the quick suites skip it; I ran it here): beside the roots-stated stand-in, which is accepted at each sample as before, an audit in the served shape is refused with `window 0: the scan's state is no wired audit's SCAN_STATE` at each sample; and the runner is run four times under `--v3c`, Lean stubbed: served wants `reject at the state tie`, stated wants `accept`, each with a Lean answer that disagrees exits 1. Its docstring says what the stand-in stands in for. [ran: the three writers' test files at `d041ba0c0f34`, 78 passed]
+- **Not changed: `test_certifier_piece.py`.** Its period check is a stub that answers what the test injects; it holds the piece's rule (accept only when the period check accepted) and feeds no served period to the check. No test in it expected an accepted served period, so none flips. Your word if you want one that builds the served shape there.
+- A mutation, not committed: the mirror with the wider reading put back accepts the three refused cases, so the place alone refuses them [ran].
+
+**The stronger half stands without the wider reading** [read, then ran]: `auditStateEntries` was read by `stateTied` alone, `activationsReg` by the one lemma alone, and no writer's test built an accepted period in the served shape. So I did not stop to tell you first.
+
+**The scratch ref:** `refs/scratch/onsitemain/h-state-entry-in-window-activations`, head `db7faae396f5b638bb28bdce460bb280540263a7`.
+
+**What else in the port assumed an accepted served period** [read at each head; line numbers are that head's]:
+- **#9826** (`beb057632057`) stands on #9736's old head and **carries the wider reading whole**: `Period.lean:1189` (`auditStateEntries`), `period_case.py:999`, the proofs' `NetworkPeriod.lean:306`. It needs one merge of #9736's new head and its records again; I have not done it, unasked. Its own lines that speak of an accept are conditional: `benchmarks/network_traces/certifier_piece.py:42`, `:69`, `:822`; `README.md:124`; `tests/test_certifier_piece.py:225-228`, `:926-948` (the stub check); `benchmarks/one_stage/tests/test_served_verdicts.py:616`.
+- **#9677** (`ae22778f5850`): `certifier_piece.py:42`, `:69`, `:758`; `README.md:124`; `tests/test_certifier_piece.py:223-226`, `:852-873`. The same kind: "accept only when … `network-period check` accepted the period", tested on a stub. True as a rule; under (b) a served run's certifier piece answers reject until one-stage's change [argued].
+- **#9678** (`a3981a146b6d`): none. The composites read the period check's answer whichever it is; its `#guard`s are on refusals.
+- **#9679** (`a5847b8f78ed`): none on a verdict. `kind_scan.py:98-99` declares `window.activations.values.*` and `tests/test_kind_scan.py:40` holds `scan/state` under the activations: the served shape, no accept assumed.
+- **On `main` itself**, beside the two places you named: `scan_zk.py`'s V3c bullet says the consistency check holds the scan's state to V3c's audit at any sample of it; `certifier_piece.py`'s period step and the README's describe the step on V3c's `period.json` with no verdict named. Each has the served case said beside it in `7109a8681f01`: the answer is a reject at the state tie. `chain_record.sh:49-51` is conditional ("an accepted report whose answer is … network-period's own") and unchanged.
+
+**One thing I did not follow to the letter, for your word:** the sentence owed beside #9736's line on K names an issue, and this body takes no ticket id in its prose. I wrote it with "until the gate's change" in place of the issue's name, otherwise verbatim. Say if you want the id back.
+
+**Least sure of:** that on a served run's own files the refusal is the state tie's and no earlier step's. It is shown on a registration built in the served shape and read off Monday's kept registration, not run on one. And the runner calls the mirror's private `_states`, so the two cannot disagree on what a state entry is; if you would rather the runner state the two places itself, it is three lines.
+
+TIMER: none
+
