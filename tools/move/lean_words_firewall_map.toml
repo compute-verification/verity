@@ -1,0 +1,516 @@
+# The retired word "firewall" in the Lean's names, in the Glossary's words: what `tools/move/rename.py --map
+# tools/move/lean_words_firewall_map.toml` renames. GLOSSARY.md: "firewall", Flock.Firewall, until renamed -> the ZK
+# server. It runs after `lean_names_map.toml` in the chain and before the draw and law maps, so its olds are spelled as
+# the names map leaves them. `Flock.Firewall` -> `Flock.ZkServer` (namespace, modules and paths); the executable's root
+# `FlockFirewall` becomes `FlockZkServerMain`, since `FlockZkServer` is the ZK server's library. The recursion's ZK server
+# package: its library `Firewall` -> `CoreZkServer` (modules, imports, paths), the namespace `Core.Firewall` ->
+# `Core.ZkServer`, its executables' roots (`FirewallMain` -> `CoreZkServerMain` and three more). A name that holds the
+# word and more is renamed by word ([words]); the word alone (`Firewall`) only in the `.lean` files that spell it and not
+# `ZkServer` or the package's library, as a whole word. Domain tags, the reason code `FIREWALL-REFUSED`, flock-circuit's
+# Rust `Firewall` (`Firewall::new`) and Lean's macro scopes (`_@.M`) keep their bytes ([keep]). Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that
+# `check.py --update --moved` takes.
+# Left by this map: what names no Lean declaration or module, which `move_check.py` can't certify: the commands and
+# variables (`flock-firewall`, `core-firewall`, `FC_FIREWALL*`, the Lake package `core_firewall`), in
+# `lean_words_zk_server_commands_map.toml`, and the package's directory, in `lean_words_zk_server_layout_map.toml`, each
+# after this one; `benchmarks/recursion_figures/figures.py`, which spells `Flock.ZkServer` already; prose outside the
+# Lean (a prose map's).
+
+[words]
+"Proofs.Flock.Recursive.FirewallAdaptive" = "Proofs.Flock.Recursive.ZkServerAdaptive"
+"Proofs.Flock.Recursive.FirewallTemplate" = "Proofs.Flock.Recursive.ZkServerTemplate"
+"Proofs/Flock/Recursive/FirewallAdaptive" = "Proofs/Flock/Recursive/ZkServerAdaptive"
+"Proofs/Flock/Recursive/FirewallTemplate" = "Proofs/Flock/Recursive/ZkServerTemplate"
+"Proofs.Flock.Recursive.FirewallAccepts" = "Proofs.Flock.Recursive.ZkServerAccepts"
+"Proofs/Flock/Recursive/FirewallAccepts" = "Proofs/Flock/Recursive/ZkServerAccepts"
+"Proofs.Flock.Recursive.FirewallHonest" = "Proofs.Flock.Recursive.ZkServerHonest"
+"Proofs.Flock.Recursive.FirewallSalted" = "Proofs.Flock.Recursive.ZkServerSalted"
+"Proofs/Flock/Recursive/FirewallHonest" = "Proofs/Flock/Recursive/ZkServerHonest"
+"Proofs/Flock/Recursive/FirewallSalted" = "Proofs/Flock/Recursive/ZkServerSalted"
+"Proofs.Flock.Recursive.FirewallFixed" = "Proofs.Flock.Recursive.ZkServerFixed"
+"Proofs.Flock.Recursive.FirewallSteps" = "Proofs.Flock.Recursive.ZkServerSteps"
+"Proofs/Flock/Recursive/FirewallFixed" = "Proofs/Flock/Recursive/ZkServerFixed"
+"Proofs/Flock/Recursive/FirewallSteps" = "Proofs/Flock/Recursive/ZkServerSteps"
+"Proofs.Flock.Recursive.FirewallJson" = "Proofs.Flock.Recursive.ZkServerJson"
+"Proofs.Flock.Recursive.FirewallLive" = "Proofs.Flock.Recursive.ZkServerLive"
+"Proofs.Flock.Recursive.FirewallWire" = "Proofs.Flock.Recursive.ZkServerWire"
+"Proofs/Flock/Recursive/FirewallJson" = "Proofs/Flock/Recursive/ZkServerJson"
+"Proofs/Flock/Recursive/FirewallLive" = "Proofs/Flock/Recursive/ZkServerLive"
+"Proofs/Flock/Recursive/FirewallWire" = "Proofs/Flock/Recursive/ZkServerWire"
+"recursiveFirewallPrivate_of_accepts" = "recursiveZkServerPrivate_of_accepts"
+"Proofs.Flock.Recursive.FirewallAny" = "Proofs.Flock.Recursive.ZkServerAny"
+"Proofs.Flock.Recursive.FirewallObj" = "Proofs.Flock.Recursive.ZkServerObj"
+"Proofs.Flock.Recursive.FirewallRun" = "Proofs.Flock.Recursive.ZkServerRun"
+"Proofs/Flock/Recursive/FirewallAny" = "Proofs/Flock/Recursive/ZkServerAny"
+"Proofs/Flock/Recursive/FirewallObj" = "Proofs/Flock/Recursive/ZkServerObj"
+"Proofs/Flock/Recursive/FirewallRun" = "Proofs/Flock/Recursive/ZkServerRun"
+"Proofs.Flock.Recursive.FirewallZK" = "Proofs.Flock.Recursive.ZkServerZK"
+"Proofs/Flock/Recursive/FirewallZK" = "Proofs/Flock/Recursive/ZkServerZK"
+"Proofs.Flock.Recursive.Firewall" = "Proofs.Flock.Recursive.ZkServer"
+"Proofs/Flock/Recursive/Firewall" = "Proofs/Flock/Recursive/ZkServer"
+"verifier/firewall/Firewall.lean" = "verifier/firewall/CoreZkServer.lean"
+"Flock.Firewall.FinishProver" = "Flock.ZkServer.FinishProver"
+"Flock/Firewall/FinishProver" = "Flock/ZkServer/FinishProver"
+"FirewallHonestDifftestMain" = "ZkServerHonestDifftestMain"
+"Flock.Firewall.Assumptions" = "Flock.ZkServer.Assumptions"
+"Flock.Firewall.SessionPlan" = "Flock.ZkServer.SessionPlan"
+"Flock/Firewall/Assumptions" = "Flock/ZkServer/Assumptions"
+"Flock/Firewall/SessionPlan" = "Flock/ZkServer/SessionPlan"
+"Proofs.Properties.Firewall" = "Proofs.Properties.ZkServer"
+"Proofs/Properties/Firewall" = "Proofs/Properties/ZkServer"
+"firewallCommits_committed" = "zkServerCommits_committed"
+"RecursiveFirewallPrivate" = "RecursiveZkServerPrivate"
+"firewallSends_of_accepts" = "zkServerSends_of_accepts"
+"Flock.Firewall.Contract" = "Flock.ZkServer.Contract"
+"Flock.Firewall.Released" = "Flock.ZkServer.Released"
+"Flock.Firewall.Skeleton" = "Flock.ZkServer.Skeleton"
+"Flock/Firewall/Contract" = "Flock/ZkServer/Contract"
+"Flock/Firewall/Released" = "Flock/ZkServer/Released"
+"Flock/Firewall/Skeleton" = "Flock/ZkServer/Skeleton"
+"FirewallHonestDifftest" = "ZkServerHonestDifftest"
+"Flock.Firewall.Session" = "Flock.ZkServer.Session"
+"Flock/Firewall/Session" = "Flock/ZkServer/Session"
+"firewallPairs_adaptive" = "zkServerPairs_adaptive"
+"Flock.Firewall.Finish" = "Flock.ZkServer.Finish"
+"Flock.Firewall.Frames" = "Flock.ZkServer.Frames"
+"Flock.Firewall.Honest" = "Flock.ZkServer.Honest"
+"Flock.Firewall.Level0" = "Flock.ZkServer.Level0"
+"Flock.Firewall.Values" = "Flock.ZkServer.Values"
+"Flock/Firewall/Finish" = "Flock/ZkServer/Finish"
+"Flock/Firewall/Frames" = "Flock/ZkServer/Frames"
+"Flock/Firewall/Honest" = "Flock/ZkServer/Honest"
+"Flock/Firewall/Level0" = "Flock/ZkServer/Level0"
+"Flock/Firewall/Values" = "Flock/ZkServer/Values"
+"firewallStrings_salts" = "zkServerStrings_salts"
+"Flock.Firewall.Coins" = "Flock.ZkServer.Coins"
+"Flock.Firewall.Drive" = "Flock.ZkServer.Drive"
+"Flock.Firewall.Frame" = "Flock.ZkServer.Frame"
+"Flock.Firewall.Hello" = "Flock.ZkServer.Hello"
+"Flock.Firewall.Salts" = "Flock.ZkServer.Salts"
+"Flock/Firewall/Coins" = "Flock/ZkServer/Coins"
+"Flock/Firewall/Drive" = "Flock/ZkServer/Drive"
+"Flock/Firewall/Frame" = "Flock/ZkServer/Frame"
+"Flock/Firewall/Hello" = "Flock/ZkServer/Hello"
+"Flock/Firewall/Salts" = "Flock/ZkServer/Salts"
+"FIREWALL_TRANSCRIPT" = "ZK_SERVER_TRANSCRIPT"
+"Flock.Firewall.Link" = "Flock.ZkServer.Link"
+"Flock/Firewall/Link" = "Flock/ZkServer/Link"
+"Properties.Firewall" = "Properties.ZkServer"
+"Properties/Firewall" = "Properties/ZkServer"
+"firewallStrings_eq" = "zkServerStrings_eq"
+"firewallStrings_os" = "zkServerStrings_os"
+"Firewall.Protocol" = "CoreZkServer.Protocol"
+"Firewall/Protocol" = "CoreZkServer/Protocol"
+"FIREWALL_RELEASE" = "ZK_SERVER_RELEASE"
+"Firewall.Release" = "CoreZkServer.Release"
+"Firewall/Release" = "CoreZkServer/Release"
+"FirewallAdaptive" = "ZkServerAdaptive"
+"FirewallComputes" = "ZkServerComputes"
+"FirewallDifftest" = "CoreZkServerDifftest"
+"FirewallTemplate" = "ZkServerTemplate"
+"firewallPairs_eq" = "zkServerPairs_eq"
+"FIREWALL_PUBLIC" = "ZK_SERVER_PUBLIC"
+"FIREWALL_RECORD" = "ZK_SERVER_RECORD"
+"Firewall.PyJson" = "CoreZkServer.PyJson"
+"Firewall.Record" = "CoreZkServer.Record"
+"Firewall/PyJson" = "CoreZkServer/PyJson"
+"Firewall/Record" = "CoreZkServer/Record"
+"FirewallAccepts" = "ZkServerAccepts"
+"firewallCommits" = "zkServerCommits"
+"firewallLeaf_os" = "zkServerLeaf_os"
+"firewallStrings" = "zkServerStrings"
+"FIREWALL_COINS" = "ZK_SERVER_COINS"
+"FirewallHonest" = "ZkServerHonest"
+"Flock.Firewall" = "Flock.ZkServer"
+"Flock/Firewall" = "Flock/ZkServer"
+"Core.Firewall" = "Core.ZkServer"
+"Firewall.Json" = "CoreZkServer.Json"
+"Firewall.Loop" = "CoreZkServer.Loop"
+"Firewall/Json" = "CoreZkServer/Json"
+"Firewall/Loop" = "CoreZkServer/Loop"
+"FirewallSends" = "ZkServerSends"
+"FirewallSteps" = "ZkServerSteps"
+"FlockFirewall" = "FlockZkServerMain"
+"firewallPairs" = "zkServerPairs"
+"FirewallJson" = "ZkServerJson"
+"FirewallLive" = "ZkServerLive"
+"FirewallMain" = "CoreZkServerMain"
+"FirewallWire" = "ZkServerWire"
+"firewallLeaf" = "zkServerLeaf"
+"FirewallAny" = "ZkServerAny"
+"FirewallObj" = "ZkServerObj"
+"FirewallRun" = "ZkServerRun"
+"FirewallZK" = "ZkServerZK"
+"firewallT" = "zkServerT"
+
+# the bare word `Firewall`, in every `.lean` file that spells it and not `ZkServer`
+[[words_in]]
+files = [
+    "security/Proofs/Flock/C3/RegLevels/ValueTie.lean",
+    "security/Proofs/Flock/Claims/Recursion/Assumptions/LoopFixture.lean",
+    "security/Proofs/Flock/Claims/Recursion/ResLowerDeployed.lean",
+    "security/Proofs/Flock/Claims/Recursion/VStarCap0.lean",
+    "security/Proofs/Flock/Claims/Recursion/VStarCapL.lean",
+    "security/Proofs/Flock/Claims/Recursion/VStarPorts.lean",
+    "security/Proofs/Flock/Claims/ZK/CoinLayer.lean",
+    "security/Proofs/Flock/Claims/ZK/CoinOpen.lean",
+    "security/Proofs/Flock/Claims/ZK/CoinPass.lean",
+    "security/Proofs/Flock/Claims/ZK/FinHmkLive.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishBridge.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishClaimsX.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishCommit.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishFc.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishFwL0.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishFwRep.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishFwRestart.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishFwRows.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishFwTarget.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishInner.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishInnerAt.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishInnerRet.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishLevel0.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishLig.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishLigEnd.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishLive.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishPiop.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishRep.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSrc.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishStop.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishStopAt.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwBit.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwFc.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwFrame.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwFw.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwInner.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwLig.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwLigE.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwPts.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwRep.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwRows.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwTau.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwVals.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishTau.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishTrunc.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameAdmits.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameAsks.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameBeta.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameCount.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameFree.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameInner.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameLinks.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameLoop.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameMask.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameOpen.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameOpenLive.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameOuter.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameOwn.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameParse.lean",
+    "security/Proofs/Flock/Claims/ZK/FramePass.lean",
+    "security/Proofs/Flock/Claims/ZK/FramePhase.lean",
+    "security/Proofs/Flock/Claims/ZK/FramePlan.lean",
+    "security/Proofs/Flock/Claims/ZK/FramePoints.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameProg.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameRank.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameRankFault.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameRanked.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameReal.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameRep.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameRho.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameRounds.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameRun.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameSched.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameShape.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameState.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameStop.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameTape.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameUnrefused.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameZK.lean",
+    "security/Proofs/Flock/Claims/ZK/HelloLean.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinBind.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinChain.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinCoins.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinCut.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinFlags.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinFrame.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinLoop.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinQuiet.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinRec.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinSwitch.lean",
+    "security/Proofs/Flock/Claims/ZK/LinkFft.lean",
+    "security/Proofs/Flock/Claims/ZK/LinkRecheck.lean",
+    "security/Proofs/Flock/Claims/ZK/PadsRoot.lean",
+    "security/Proofs/Flock/Claims/ZK/PiopFree.lean",
+    "security/Proofs/Flock/Claims/ZK/Refine.lean",
+    "security/Proofs/Flock/Claims/ZK/RepCons.lean",
+    "security/Proofs/Flock/Claims/ZK/RepCutFw.lean",
+    "security/Proofs/Flock/Claims/ZK/RepInner.lean",
+    "security/Proofs/Flock/Claims/ZK/RepRet.lean",
+    "security/Proofs/Flock/Claims/ZK/SessionLean.lean",
+    "security/Proofs/Flock/EndToEndRegistered/Nontrivial.lean",
+    "security/Proofs/Flock/Recursive.lean",
+    "security/Proofs/Flock/Recursive/Firewall.lean",
+    "security/Proofs/Flock/Recursive/FirewallAccepts.lean",
+    "security/Proofs/Flock/Recursive/FirewallAdaptive.lean",
+    "security/Proofs/Flock/Recursive/FirewallAny.lean",
+    "security/Proofs/Flock/Recursive/FirewallFixed.lean",
+    "security/Proofs/Flock/Recursive/FirewallHonest.lean",
+    "security/Proofs/Flock/Recursive/FirewallJson.lean",
+    "security/Proofs/Flock/Recursive/FirewallLive.lean",
+    "security/Proofs/Flock/Recursive/FirewallObj.lean",
+    "security/Proofs/Flock/Recursive/FirewallRun.lean",
+    "security/Proofs/Flock/Recursive/FirewallSteps.lean",
+    "security/Proofs/Flock/Recursive/FirewallTemplate.lean",
+    "security/Proofs/Flock/Recursive/FirewallWire.lean",
+    "security/Proofs/Flock/Recursive/FirewallZK.lean",
+    "security/Proofs/Flock/Recursive/HoloExec.lean",
+    "security/Proofs/Flock/Recursive/LoopAny.lean",
+    "security/Proofs/Flock/Recursive/LoopAnyDeployed.lean",
+    "security/Proofs/Flock/Recursive/LoopWitness.lean",
+    "security/Proofs/Flock/Recursive/LoopZK.lean",
+    "security/Proofs/Flock/Recursive/OuterSessionZK.lean",
+    "security/Proofs/Flock/Recursive/Property.lean",
+    "security/Proofs/Flock/Recursive/SaltFinder.lean",
+    "security/Proofs/Flock/SampledGeneric/FlockZk.lean",
+    "security/Proofs/Flock/SamplingGeneric/FlockZk.lean",
+    "security/Proofs/Flock/SessionLoop/AnyErrBound.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Delta.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Inputs.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Public.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Regions.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Scope.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Serves.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Setup.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Sizes.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Trace.lean",
+    "security/Proofs/Flock/SessionLoop/CutInnerLive.lean",
+    "security/Proofs/Flock/SessionLoop/CutPiopLive.lean",
+    "security/Proofs/Flock/SessionLoop/Fill.lean",
+    "security/Proofs/Flock/SessionLoop/FinCommits.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkCut.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkFc.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkFw.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkLive.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkRet.lean",
+    "security/Proofs/Flock/SessionLoop/FinHonest.lean",
+    "security/Proofs/Flock/SessionLoop/FinInner.lean",
+    "security/Proofs/Flock/SessionLoop/FinInnerCut.lean",
+    "security/Proofs/Flock/SessionLoop/FinInnerOwn.lean",
+    "security/Proofs/Flock/SessionLoop/FinInnerRec.lean",
+    "security/Proofs/Flock/SessionLoop/FinInnerRet.lean",
+    "security/Proofs/Flock/SessionLoop/FinL0Vals.lean",
+    "security/Proofs/Flock/SessionLoop/FinPiopRet.lean",
+    "security/Proofs/Flock/SessionLoop/FinPoints.lean",
+    "security/Proofs/Flock/SessionLoop/FinPrevFw.lean",
+    "security/Proofs/Flock/SessionLoop/FinRep.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepCm.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepErasedAt.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepErasedCut.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepErasedOf.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepFinal.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepL0.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepLanesFw.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepMsgsFw.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepOpen.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepPads.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepRestart.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepRows.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepTarget.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepTau.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepView.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepXs.lean",
+    "security/Proofs/Flock/SessionLoop/FinishIsOf.lean",
+    "security/Proofs/Flock/SessionLoop/FinishParts.lean",
+    "security/Proofs/Flock/SessionLoop/FreeWords.lean",
+    "security/Proofs/Flock/SessionLoop/Honest.lean",
+    "security/Proofs/Flock/SessionLoop/Inner.lean",
+    "security/Proofs/Flock/SessionLoop/InnerDeployed.lean",
+    "security/Proofs/Flock/SessionLoop/InnerSlot.lean",
+    "security/Proofs/Flock/SessionLoop/InnerUnrefused.lean",
+    "security/Proofs/Flock/SessionLoop/InnerWitness.lean",
+    "security/Proofs/Flock/SessionLoop/LeafCap.lean",
+    "security/Proofs/Flock/SessionLoop/Level0SrcSat.lean",
+    "security/Proofs/Flock/SessionLoop/Link.lean",
+    "security/Proofs/Flock/SessionLoop/LiveInner.lean",
+    "security/Proofs/Flock/SessionLoop/LiveInnerAt.lean",
+    "security/Proofs/Flock/SessionLoop/LiveInnerOwn.lean",
+    "security/Proofs/Flock/SessionLoop/LiveOwn.lean",
+    "security/Proofs/Flock/SessionLoop/LiveRefine.lean",
+    "security/Proofs/Flock/SessionLoop/LiveSchedOwn.lean",
+    "security/Proofs/Flock/SessionLoop/PcsRank.lean",
+    "security/Proofs/Flock/SessionLoop/PiopState.lean",
+    "security/Proofs/Flock/SessionLoop/RepSrc.lean",
+    "security/Proofs/Flock/SessionLoop/RepSrcSat.lean",
+    "security/Proofs/Flock/SessionLoop/RhoKeepRep.lean",
+    "security/Proofs/Flock/SessionLoop/RhoUnrefused.lean",
+    "security/Proofs/Flock/SessionLoop/RoundL0Frame.lean",
+    "security/Proofs/Flock/SessionLoop/RoundLig.lean",
+    "security/Proofs/Flock/SessionLoop/RoundLigBasis.lean",
+    "security/Proofs/Flock/SessionLoop/RoundLigFrame.lean",
+    "security/Proofs/Flock/SessionLoop/RoundLigFrameBind.lean",
+    "security/Proofs/Flock/SessionLoop/RoundLigFrameOff.lean",
+    "security/Proofs/Flock/SessionLoop/RoundLigFramePast.lean",
+    "security/Proofs/Flock/SessionLoop/RoundOff.lean",
+    "security/Proofs/Flock/SessionLoop/RoundOffCap.lean",
+    "security/Proofs/Flock/SessionLoop/RoundOffL0.lean",
+    "security/Proofs/Flock/SessionLoop/RoundOffOpenBind.lean",
+    "security/Proofs/Flock/SessionLoop/RoundPiop.lean",
+    "security/Proofs/Flock/SessionLoop/RoundSwitch.lean",
+    "security/Proofs/Flock/SessionLoop/RoundSwitchFrame.lean",
+    "security/Proofs/Flock/SessionLoop/RoundSwitchRank.lean",
+    "security/Proofs/Flock/SessionLoop/RoundSwitchRel.lean",
+    "security/Proofs/Flock/SessionLoop/RoundSwitchSched.lean",
+    "security/Proofs/Flock/SessionLoop/RoundSwitchSv.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPass.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassAt.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassFrame.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassInner.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassInner0.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassL0.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassLig.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassOpen.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassPiop.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassSwitch.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassTaken.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassZc.lean",
+    "security/Proofs/Flock/SessionLoop/SchedAt.lean",
+    "security/Proofs/Flock/SessionLoop/SchedSlot.lean",
+    "security/Proofs/Flock/SessionLoop/SchedTotalHolds.lean",
+    "security/Proofs/Flock/SessionLoop/SchedTotalPiop.lean",
+    "security/Proofs/Flock/SessionLoop/SchedTotalWalk.lean",
+    "security/Proofs/Flock/SessionLoop/SchedUnrefused.lean",
+    "security/Proofs/Flock/SessionLoop/ScheduleTotal.lean",
+    "security/Proofs/Flock/SessionLoop/SkelPiop.lean",
+    "security/Proofs/Flock/SessionLoop/Statement.lean",
+    "security/Proofs/Flock/SessionLoop/SwCausalExe.lean",
+    "security/Proofs/Flock/SessionLoop/Tables.lean",
+    "security/Proofs/Flock/SessionLoop/TakesTau.lean",
+    "security/Proofs/Flock/SessionLoop/VsOf.lean",
+    "security/Proofs/Flock/SessionLoop/VsOfBody.lean",
+    "security/Proofs/Flock/SessionLoop/ZkAny.lean",
+    "security/Proofs/Flock/SessionLoop/ZkAnyNontrivial.lean",
+    "security/Proofs/Flock/ZkAny/Gate.lean",
+    "security/Proofs/Flock/ZkAny/Relay.lean",
+    "security/Proofs/Flock/ZkAny/RelayAlg.lean",
+    "security/Proofs/Flock/ZkAny/RelayAuditor.lean",
+    "security/Proofs/Flock/ZkAny/RelayCarry.lean",
+    "security/Proofs/Flock/ZkAny/RelayCoins.lean",
+    "security/Proofs/Flock/ZkAny/RelayCount.lean",
+    "security/Proofs/Flock/ZkAny/RelayEnv.lean",
+    "security/Proofs/Flock/ZkAny/RelayFirst.lean",
+    "security/Proofs/Flock/ZkAny/RelayFold.lean",
+    "security/Proofs/Flock/ZkAny/RelayFollow.lean",
+    "security/Proofs/Flock/ZkAny/RelayFrames.lean",
+    "security/Proofs/Flock/ZkAny/RelayFresh.lean",
+    "security/Proofs/Flock/ZkAny/RelayFreshStart.lean",
+    "security/Proofs/Flock/ZkAny/RelayGap.lean",
+    "security/Proofs/Flock/ZkAny/RelayInv.lean",
+    "security/Proofs/Flock/ZkAny/RelayLast.lean",
+    "security/Proofs/Flock/ZkAny/RelayLive.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoop.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopCur.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopDeployed.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopFacts.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopFirst.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopInner.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopKept.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopL0.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopLink.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopNext.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopOwn.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopOwnAt.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopPre.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopRep.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopRound.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopSalts.lean",
+    "security/Proofs/Flock/ZkAny/RelayMark.lean",
+    "security/Proofs/Flock/ZkAny/RelayMask.lean",
+    "security/Proofs/Flock/ZkAny/RelayNext.lean",
+    "security/Proofs/Flock/ZkAny/RelayOpenFirst.lean",
+    "security/Proofs/Flock/ZkAny/RelayParams.lean",
+    "security/Proofs/Flock/ZkAny/RelayPlace.lean",
+    "security/Proofs/Flock/ZkAny/RelayPrior.lean",
+    "security/Proofs/Flock/ZkAny/RelayProg.lean",
+    "security/Proofs/Flock/ZkAny/RelayRank.lean",
+    "security/Proofs/Flock/ZkAny/RelayRankSched.lean",
+    "security/Proofs/Flock/ZkAny/RelayRankStop.lean",
+    "security/Proofs/Flock/ZkAny/RelayReg.lean",
+    "security/Proofs/Flock/ZkAny/RelayRelease.lean",
+    "security/Proofs/Flock/ZkAny/RelayReps.lean",
+    "security/Proofs/Flock/ZkAny/RelayRound.lean",
+    "security/Proofs/Flock/ZkAny/RelayRoundFirst.lean",
+    "security/Proofs/Flock/ZkAny/RelayRoundTook.lean",
+    "security/Proofs/Flock/ZkAny/RelayRun.lean",
+    "security/Proofs/Flock/ZkAny/RelaySame.lean",
+    "security/Proofs/Flock/ZkAny/RelaySched.lean",
+    "security/Proofs/Flock/ZkAny/RelayServes.lean",
+    "security/Proofs/Flock/ZkAny/RelaySlot.lean",
+    "security/Proofs/Flock/ZkAny/RelayStay.lean",
+    "security/Proofs/Flock/ZkAny/RelayStop.lean",
+    "security/Proofs/Flock/ZkAny/RelaySwitch.lean",
+    "security/Proofs/Flock/ZkAny/RelayTaken.lean",
+    "security/Proofs/Flock/ZkAny/RelayTook.lean",
+    "security/Proofs/Flock/ZkAny/RelayWords.lean",
+    "security/Proofs/Properties/Firewall.lean",
+    "security/Proofs/Properties/Verity/Recursive/Audit.lean",
+    "verity/protocols/proofs/flock/verifier/Flock.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/CanonForm.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Assumptions.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Coins.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Contract.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Drive.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Finish.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/FinishProver.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Frame.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Frames.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Hello.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Honest.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Level0.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Link.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Released.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Salts.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Session.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/SessionPlan.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Skeleton.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Values.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecCoins.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Tags.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/FrameStep.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/FramesAsk.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/FramesInner.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/FramesStop.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/SessionPlace.lean",
+    "verity/protocols/proofs/flock/verifier/FlockFirewall.lean",
+    "verity/protocols/proofs/flock/verifier/FlockFrameTape.lean",
+    "verity/protocols/proofs/flock/verifier/FlockZkServer.lean",
+    "verity/protocols/proofs/flock/verifier/VStar/In.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Supplied.lean",
+]
+words = { "Firewall" = "ZkServer" }
+
+[[words_in]]
+files = [
+    "verity/protocols/proofs/recursion/verifier/firewall/lakefile.toml",
+    "verity/protocols/proofs/recursion/verifier/firewall/lean-audit.json",
+    "security/Properties/lean-audit.json",
+]
+words = { "Firewall" = "CoreZkServer" }
+
+[[words_in]]
+files = [
+    "security/Properties/README.md",
+]
+words = { "Firewall.lean" = "ZkServer.lean" }
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "GLOSSARY.md", ".agents/skills/friction/SKILL.md", "benchmarks/recursion_figures/figures.py"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b',
+            'note:[\w./-]+',
+            'art:[0-9a-f]+',
+            'cursor/[\w./-]+',
+            'lanes/[\w.-]+',
+            '_@\.[\w.]+',
+            'FIREWALL-REFUSED',
+            'verity-core-firewall',
+            'Firewall::\w+']
