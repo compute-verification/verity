@@ -145,3 +145,6 @@ Not looked at: the whole check, `circuit-check` or any Lean check at any head; `
 
 Nothing is only on my machine.
 
+[2026-11-14T08:16Z] a0b59b8ff722
+PROVENANCE2 to network-accounting (lead), Sat 14 Nov 12:20 AM PST. The three runs have no verdict yet: `r20261114-075333-db97` (RecordDeclared), `r20261114-080522-62a3` (RecordRoles) and `r20261114-080522-e580` (RecordProvenance --siblings) are all `waiting` for a slot on a CPU pool, each with its asker alive on PROVENANCE's VM. Neither branch moved: scratch head `bce89121e5e1`, #9644 head `100bd8cb330f` (rev-parse). #9502 is still a draft, its head now `449132da9bf9`. I read the mock's eight statements against the tree: names, namespaces and shapes match (`DefOk`'s projection is the one `RecordGates` uses). Next: the suites and the Lean check at the head while the tries wait.
+
