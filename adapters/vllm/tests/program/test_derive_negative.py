@@ -8,56 +8,41 @@ no `Program` is returned AND that the refusal names the right class of reason. A
 is reported distinctly (`REFUSED-WRONG-REASON`) from acceptance (`ACCEPTED-MUST-REFUSE`) and from a crash that is
 not a classified refusal (`CRASH-NOT-REFUSAL`).
 
-Importer resolution (XFER may not edit importer code): `verity_vllm.program.frontend.derive.derive` when it exists;
-otherwise the shipped `nn.Module` route of `torch_frontend.export` (the one derivation rule the frontend applies
-today, `MODULE_WEIGHTS_RULE`). Which one ran is printed by `test_00_importer_identity` and recorded in the
-transfer report. Needs torch; runs on the pod (§37).
+The importer (XFER may not edit importer code) is `verity_vllm.program.frontend.derive.derive`, called through its
+`derive_report`; the transfer report records its name. Needs torch; runs on the pod (§37).
 """
 
 from __future__ import annotations
 
 import inspect
-import json
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+pytest.importorskip("torch")
 
-from verity.circuits import Program, bind, program_digest  # noqa: E402
-from tests.program.capture_check import LazyTranscript, Segments, check_call  # noqa: E402
-from verity.circuits.evaluation import evaluate_region  # noqa: E402
-from verity_vllm.program.frontend import FrontendError, export, function, Arr, batch, ops  # noqa: E402
-from verity_vllm.program.frontend import examples as ex  # noqa: E402
-from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402
-from verity.definitions.registry import b1  # noqa: E402
-from verity.definitions.registry.prims import BF16, I32  # noqa: E402
-from verity.circuits.refs import Coll, concat  # noqa: E402
-from verity.circuits.types import Array  # noqa: E402
+import torch
+from verity.circuits import Program, bind, program_digest
+from verity.circuits.evaluation import evaluate_region
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
+from verity.definitions.registry import b1
+from verity.definitions.registry.prims import BF16, I32
 
-pytestmark = pytest.mark.filterwarnings("ignore::verity_vllm.program.frontend.torch_frontend.DeadGateWarning")
+from tests.program.capture_check import LazyTranscript, Segments, check_call
+from verity_vllm.program.frontend import derive as _D
+from verity_vllm.program.frontend.errors import FrontendError
+from verity_vllm.program.frontend.provenance import registry_version
 
 # ---------------------------------------------------------------------------------------------------------
-# importer adapter: derive(...) when it exists, else the shipped nn.Module route; one normalised Outcome
+# importer adapter: derive_report(...); one normalised Outcome
 # ---------------------------------------------------------------------------------------------------------
 
-
-def _load_derive():
-    try:
-        from verity_vllm.program.frontend import derive as D  # type: ignore
-    except Exception:  # noqa: BLE001  (absent, or import-time failure: then the shipped route is the importer)
-        return None
-    fn = getattr(D, "derive", None)
-    return (D, fn) if callable(fn) else None
-
-
-_DERIVE = _load_derive()
-IMPORTER_NAME = ("verity_vllm.program.frontend.derive.derive" if _DERIVE else
-                 "verity_vllm.program.frontend.torch_frontend.export[nn.Module route] (derive.py not present)")
-UNSUPPORTED_CLS = getattr(_DERIVE[0], "Unsupported", None) if _DERIVE else None
+IMPORTER_NAME = "verity_vllm.program.frontend.derive.derive"
 
 
 @dataclass
@@ -86,21 +71,9 @@ def _reason_of(obj: Any) -> tuple[str, str]:
 
 
 def _is_unsupported(obj: Any) -> bool:
-    if UNSUPPORTED_CLS is not None and isinstance(obj, UNSUPPORTED_CLS):
+    if isinstance(obj, _D.Unsupported):
         return True
     return type(obj).__name__ == "Unsupported" or (hasattr(obj, "reason") and not isinstance(obj, Program))
-
-
-def _unwrap_program(res: Any) -> tuple[Program | None, Any]:
-    """derive may return a Program, a report carrying `.program`, or a (program, report) tuple."""
-    if isinstance(res, Program):
-        return res, None
-    p = getattr(res, "program", None)
-    if isinstance(p, Program):
-        return p, res
-    if isinstance(res, tuple) and res and isinstance(res[0], Program):
-        return res[0], res[1] if len(res) > 1 else None
-    return None, res
 
 
 def _filtered_kwargs(fn: Callable, kw: dict) -> dict:
@@ -114,32 +87,24 @@ def _filtered_kwargs(fn: Callable, kw: dict) -> dict:
 
 
 def run_importer(module: torch.nn.Module, example_inputs: tuple, **kw) -> Outcome:
-    """Call the importer on `module` with `example_inputs` and normalise what happened. With derive.py present:
+    """Call the importer on `module` with `example_inputs` and normalise what happened:
     `derive_report(module, inputs, mode="reference", ...)` (the report carries program|unsupported + provenance);
     `mode`/`profile`/`config` may be overridden per call."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         try:
-            if _DERIVE is not None:
-                D, fn = _DERIVE
-                rep_fn = getattr(D, "derive_report", None)
-                target = rep_fn if callable(rep_fn) else fn
-                kw = _filtered_kwargs(target, {"mode": "reference", "name": type(module).__name__, **kw})
-                res = target(module, example_inputs, **kw)
-                if callable(rep_fn):
-                    prog = getattr(res, "program", None)
-                    if isinstance(prog, Program):
-                        return Outcome(prog, "program", "", f"Program {prog.fn.id} ({prog.gates} gates)", report=res)
-                    u = getattr(res, "unsupported", None)
-                    if u is not None:
-                        r, d = _reason_of(u)
-                        hint = getattr(u, "hint", "") or ""
-                        det = getattr(u, "detail", None)
-                        return Outcome(None, "unsupported", r, f"{d} | hint={hint} | detail={det}", report=res)
-                    return Outcome(None, "crash", type(res).__name__, f"derive_report returned neither program nor unsupported: {res!r:.200}")
-            else:
-                kw = _filtered_kwargs(export, {"name": type(module).__name__, "dead_gates": "ignore", **kw})
-                res = export(module, example_inputs, **kw)
+            kw = _filtered_kwargs(_D.derive_report, {"mode": "reference", "name": type(module).__name__, **kw})
+            res = _D.derive_report(module, example_inputs, **kw)
+            prog = getattr(res, "program", None)
+            if isinstance(prog, Program):
+                return Outcome(prog, "program", "", f"Program {prog.fn.id} ({prog.gates} gates)", report=res)
+            u = getattr(res, "unsupported", None)
+            if u is not None:
+                r, d = _reason_of(u)
+                hint = getattr(u, "hint", "") or ""
+                det = getattr(u, "detail", None)
+                return Outcome(None, "unsupported", r, f"{d} | hint={hint} | detail={det}", report=res)
+            return Outcome(None, "crash", type(res).__name__, f"derive_report returned neither program nor unsupported: {res!r:.200}")
         except FrontendError as e:
             return Outcome(None, "frontend_error", e.code, str(e), e)
         except Exception as e:  # noqa: BLE001
@@ -147,13 +112,6 @@ def run_importer(module: torch.nn.Module, example_inputs: tuple, **kw) -> Outcom
                 r, d = _reason_of(e)
                 return Outcome(None, "unsupported", r, d, e)
             return Outcome(None, "crash", type(e).__name__, str(e).splitlines()[0][:400] if str(e) else "", e)
-    prog, rep = _unwrap_program(res)
-    if prog is not None:
-        return Outcome(prog, "program", "", f"Program {prog.fn.id} ({prog.gates} gates)", report=rep)
-    if _is_unsupported(res):
-        r, d = _reason_of(res)
-        return Outcome(None, "unsupported", r, d, report=res)
-    return Outcome(None, "crash", type(res).__name__, f"importer returned a non-Program, non-Unsupported {res!r:.200}")
 
 
 # reason classes: the documented vocabulary (design §3.3 codes, §4.3 reasons) plus the obvious synonyms;
@@ -216,15 +174,6 @@ class ResMLP(torch.nn.Module):
 
     def forward(self, x):
         return x + self.proj(torch.relu(self.fc(x)))
-
-
-def test_00_importer_identity():
-    print(f"\nXFER importer under test: {IMPORTER_NAME}; torch {torch.__version__}")
-    if _DERIVE is None:
-        # the shipped route refuses every plain nn.Module (no rules): every negative below then refuses for
-        # `unknown_op` — the class assertions are meaningful only once derive.py exists. Record that.
-        out = run_importer(ResMLP(), (meta(H),))
-        assert out.kind != "program", "the shipped export route must not accept an un-annotated nn.Module"
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -331,6 +280,7 @@ def test_rank_mismatch_is_refused_or_batched_exactly():
         pytest.skip(f"importer does not derive ResMLP ({single}); nothing to compare")
     out = run_importer(ResMLP(), (meta(3, H),))
     if out.kind == "program":
+        assert out.program is not None and single.program is not None
         assert out.program.gates > single.program.gates, "a [3,H] input derived to the same gate count as [H]: rows were dropped"
         assert out.program.input_gates == single.program.input_gates + 2 * H
     else:
@@ -501,6 +451,7 @@ def test_tied_parameter_stays_one_input():
     if out.kind != "program":
         pytest.skip(f"importer does not derive TiedEmbeddingLM yet ({out}); sharing cannot be checked. Filed as a gap.")
     P = out.program
+    assert P is not None
     assert P.input_gates == n_distinct + 1, (f"input gates {P.input_gates} != distinct parameter leaves {n_distinct} + 1 token: "
                                              f"tied table exported as two inputs ({n_naive + 1}) or a leaf lost")
     # the V*H table gates feed two distinct root-level consumers: the embedding gather and the LM-head gemm
@@ -545,6 +496,7 @@ def test_shared_block_twice_is_one_weight_two_calls():
     if out.kind != "program":
         pytest.skip(f"importer does not derive SharedBlockTwice yet ({out}). Filed as a gap.")
     P = out.program
+    assert P is not None
     assert P.input_gates == H + H * H + H, "the shared block's weights must appear once"
     # the weight leaves are whatever input gates are not the H activation gates (the importer may pack weight+bias
     # into one Input record); they must be read by gates in two disjoint root-call regions (two applications)
@@ -566,8 +518,10 @@ def test_shared_block_twice_is_one_weight_two_calls():
 
 # -- cache ownership: K/V rows an attention call reads must be produced by THIS request at positions <= t --
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
-        "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
+TINY: dict[str, Any] = {
+    "model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+    "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {},
+}
 
 
 _LOS_CACHE: dict[int, list[int]] = {}
@@ -600,11 +554,10 @@ def check_cache_ownership(P: Program) -> list[str]:
         t, L, r = int(m["t"]), int(m["L"]), m["r"]
         prefix = f"r={r}/" if r else ""
         args = call.args
-        S = call.fn.S() if hasattr(call.fn, "S") else None
         nq = call.arg_types()[0].leaves
         kv = args[nq:]
         T = call.fn.bindings.get("T") if hasattr(call.fn, "bindings") else None
-        if T is not None and T != t + 1:
+        if T is not None and t + 1 != T:
             bad.append(f"{name}: attends over T={T} rows at position t={t} (expected t+1={t + 1})")
         owners = set()
         for g in kv:
@@ -633,8 +586,13 @@ def _miswired_serve(kind: str):
     L+1), `future` (the row this position itself produces is replaced by the next step's row), `stale` (a
     position is dropped)."""
     from verity.circuits.defs import CompositeDefinition
-    from verity.definitions.registry.b1 import Embedding, Final, LayerPost, LayerPre, kv_type
-    from verity.circuits.refs import tuple_of  # noqa: F401
+    from verity.definitions.registry.b1 import (
+        Embedding,
+        Final,
+        LayerPost,
+        LayerPre,
+        kv_type,
+    )
     C, LP = TINY, 2
 
     def body(B, S, prompt, weights):
@@ -767,10 +725,7 @@ def _derive_examples():
 
 def _derive_serve(steps: int = 1, **kw):
     dex = _derive_examples()
-    if not _DERIVE:
-        pytest.skip("derive() not available")
-    from verity_vllm.program.frontend.derive import derive_report
-    return derive_report(dex.GreedyServe(TINY, steps, **kw), (torch.zeros(2, dtype=torch.int32),), mode="profile", profile="b1-eager", config=TINY)
+    return _D.derive_report(dex.GreedyServe(TINY, steps, **kw), (torch.zeros(2, dtype=torch.int32),), mode="profile", profile="b1-eager", config=TINY)
 
 
 def test_derived_tiny_serve_owns_its_kv_cache_and_matches_the_registered_program():
@@ -914,6 +869,7 @@ def test_early_exit_on_eos_is_not_specialised_on_observed_tokens():
     m = GreedyDecodeEarlyExit()
     out = run_importer(m, (torch.tensor(3, dtype=torch.int64),))  # CPU values on purpose: the observed run exits at step 0
     if out.kind == "program":
+        assert out.program is not None
         n_argmax = sum(1 for c in out.program.circuit.root_calls() if "TokenSelect" in c.id or "Argmax" in c.id)
         root_out = out.program.circuit.root_outputs()
         assert len(root_out) == m.STEPS, (f"the derived program returns {len(root_out)} token(s) for STEPS={m.STEPS}: "
@@ -1047,34 +1003,8 @@ def test_program_identity_differs_between_versions_and_statics():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# 7. positive-structure assertions (authoring route today; plain-torch route through derive when it lands)
+# 7. positive-structure assertions
 # ---------------------------------------------------------------------------------------------------------
-
-V16 = ex.Value(16)
-
-
-def test_repeated_return_and_returned_input_preserved_authored():
-    """IFb's identity shapes: the same tensor returned twice is ONE reference repeated (not two gates); a returned
-    input is the caller's reference; the dead declared return is in `returns`, not in `out`."""
-    Top, _ = ex.identity_pair(*_running_prims())
-    P = export(Top, (torch.empty((), dtype=torch.bfloat16, device="meta"),), dead_gates="ignore")
-    from verity.circuits import query
-    f = query(P.circuit, "//F")[0]
-    assert f.args == (0, 0)
-    assert f.returns[0] == f.returns[2], "t returned twice must be the same gate"
-    assert f.returns[1] == 0, "the returned input must be the caller's Input gate"
-    assert f.out == (1,)
-
-
-def _running_prims():
-    from tests.program.test_running_example import Add16, Id16, Mul16
-    return Add16, Mul16, Id16
-
-
-def test_repeated_return_gate_count_pinned():
-    Top, _ = ex.identity_pair(*_running_prims())
-    P = export(Top, (torch.empty((), dtype=torch.bfloat16, device="meta"),), dead_gates="ignore")
-    assert P.gates == 4, "Input(v) + Add16 + Mul16(dead) + Id16 — a duplicated `t` gate would make 5"
 
 
 class RepeatedReturnTorch(ResMLP):
@@ -1088,25 +1018,8 @@ def test_repeated_return_and_returned_input_preserved_derived():
     if out.kind != "program":
         pytest.skip(f"importer does not derive RepeatedReturnTorch yet ({out}). Filed as a gap.")
     P = out.program
+    assert P is not None
     ro = P.circuit.root_outputs()
     assert len(ro) == 3 * H
     assert ro[:H] == ro[2 * H:], "y returned twice must be the same gates, not a duplicated computation"
     assert all(0 <= g < H for g in ro[H:2 * H]), "the returned input must be the prescribed Input gates themselves"
-
-
-def test_tied_parameter_one_input_authored():
-    """The same sharing property on the shipped route: a module whose weight is used twice keeps one Input record
-    field (functional_call over `named_parameters()` dedups by identity)."""
-
-    class Twice(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.w = torch.nn.Parameter(torch.zeros(8, dtype=torch.bfloat16))
-
-        def forward(self, x):
-            return ex.BiasAdd(ex.BiasAdd(x, self.w), self.w)
-
-    P = export(Twice(), (torch.empty(8, dtype=torch.bfloat16, device="meta"),), name="Twice", dead_gates="ignore")
-    assert P.input_gates == 16
-    calls = [c for c in P.circuit.root_calls() if c.name == "BiasAdd"]
-    assert len(calls) == 2 and calls[0].args[8:] == calls[1].args[8:], "both BiasAdds must read the same 8 weight gates"

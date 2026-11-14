@@ -221,6 +221,24 @@ def test_program_dirs_for_passes_over_a_result_it_cannot_read(tmp_path):
         MF.program_dirs_for(fx, str(tmp_path))
 
 
+def test_program_dirs_for_passes_over_a_result_nested_past_the_parser(tmp_path):
+    """A result.json nested deeper than Python's parser reads, whole or in one part, is no JSON the lookup can read (`json`
+    raises `RecursionError` for it, which is no `ValueError`): the candidate is passed over like one that is not JSON."""
+    fx = {"requests": [{"request_id": "r0", "prompt_len": 168, "max_tokens": 10}]}
+    nested = "[" * 100_000 + "]" * 100_000
+    with pytest.raises(RecursionError):
+        json.loads(nested)
+    (tmp_path / "build_request_a").mkdir()
+    (tmp_path / "build_request_a" / "result.json").write_text(nested)
+    (tmp_path / "build_request_b").mkdir()
+    (tmp_path / "build_request_b" / "result.json").write_text('{"ok": true, "LP": 168, "T": 9, "C": ' + nested + "}")
+    with pytest.raises(SystemExit, match="r0 .*168,9"):
+        MF.program_dirs_for(fx, str(tmp_path))
+    (tmp_path / "build_request_c").mkdir()
+    (tmp_path / "build_request_c" / "result.json").write_text(json.dumps({"ok": True, "LP": 168, "T": 9}))
+    assert MF.program_dirs_for(fx, str(tmp_path)) == {"r0": str(tmp_path / "build_request_c")}
+
+
 def test_load_program_reads_the_dirs_result_and_its_artifact_when_there_is_one(tmp_path):
     """`load_program` returns the Program dir's result.json and artifact.json as the files hold them, and None for an artifact
     the dir does not have."""
@@ -232,6 +250,25 @@ def test_load_program_reads_the_dirs_result_and_its_artifact_when_there_is_one(t
     assert got["instances"] == {**head, "rows": []}
     (tmp_path / "artifact.json").write_text(json.dumps({"program": {"digest": "d" * 64}}))
     assert MF.load_program(str(tmp_path))["artifact"] == {"program": {"digest": "d" * 64}}
+
+
+def test_programs_for_loads_the_program_of_each_declared_request(tmp_path):
+    """One loaded Program a declared request, under its label: the dir `program_dirs_for` finds for its shape, a warm request's
+    its own."""
+    fx = {"requests": [{"request_id": "r0", "prompt_len": 168, "max_tokens": 10}, {"request_id": "r1", "prompt_len": 168, "max_tokens": 10, "cached": 128}]}
+    head: dict[str, object] = {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 64, "correspondence_digest": None, "params": []}
+    for name, C in (("build_request_LP168_T9", 0), ("build_request_LP168_T9_C128", 128)):
+        (tmp_path / name).mkdir()
+        write_instances_file(str(tmp_path / name / "instances.json.gz"), head, iter([]))
+        (tmp_path / name / "result.json").write_text(json.dumps({"ok": True, "LP": 168, "T": 9, "C": C}))
+    dirs = MF.program_dirs_for(fx, str(tmp_path))
+    assert dirs == {"r0": str(tmp_path / "build_request_LP168_T9"), "r1": str(tmp_path / "build_request_LP168_T9_C128")}
+    got = MF.programs_for(fx, str(tmp_path))
+    assert got == {rid: MF.load_program(d) for rid, d in dirs.items()}
+    assert {rid: (p["dir"], p["result"]["C"], p["artifact"]) for rid, p in got.items()} == {"r0": (dirs["r0"], 0, None), "r1": (dirs["r1"], 128, None)}
+    assert MF.programs_for({"requests": []}, str(tmp_path)) == {}
+    with pytest.raises(SystemExit, match="no request Program for r2 .*169,9"):
+        MF.programs_for({"requests": [*fx["requests"], {"request_id": "r2", "prompt_len": 169, "max_tokens": 10}]}, str(tmp_path))
 
 
 def test_a_manifests_rows_are_read_under_the_name_its_layout_gives_them():

@@ -5,7 +5,7 @@ from __future__ import annotations
 import collections
 import dataclasses
 import functools
-from typing import Any
+from typing import Any, cast
 
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import global_match_fast as GMF
@@ -66,7 +66,6 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
                                "a warm request's cached rows (the engine's first scheduled position) and their producers are the Program's declared prefix-cache hit")
     glob2loc: dict[int, tuple[str, int, int]] = {}
     shared_loc: dict[int, dict[str, tuple[str, int, int]]] = {}   # weight-only instance -> {request: its local identity}
-    loc_count = 0
     exec_pop = 0
     unexercised = 0
     A_cache: dict[str, SEQ.RootView] = _loaded.setdefault("components", {})  # decoded components shared with the alternate-criterion run
@@ -103,7 +102,7 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
     def apply(out: dict) -> None:
         """Global reconciliation of one request's facts, in request order: problems to their checks in the order met, the identity map
         over all requests (an instance with two local identities is named), the population sums, the request entry on the record."""
-        nonlocal loc_count, exec_pop, unexercised
+        nonlocal exec_pop, unexercised
         rid, ent = out["rid"], out["ent"]
         for role, msg in out["fails"]:
             checks_by_role[role].fail(msg)
@@ -133,12 +132,10 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
                     # a weight-only instance has one local identity PER request whose leg holds it (never a bijection
                     # with the global node): kept apart from glob2loc, so G7's owner blocks and G8's layout skip it like an unowned node
                     shared_loc.setdefault(gi, {})[rid] = key
-                    loc_count += 1
                     continue
                 if gi in glob2loc:
                     c4.fail(f"global instance {gi} carries two local identities {glob2loc[gi]} and {key}")
                 glob2loc[gi] = key
-                loc_count += 1
         exec_pop += out["exec_pop"]
         unexercised += out["unexercised"]
         res["requests"].append(ent)
@@ -304,9 +301,10 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
     """The request's projection against its component over the executed steps: the leg's G3/G4 facts and the canonical address of
     every executed fold instance."""
     rid, fails = g["request_id"], out["fails"]
-    if not cd or A is None:
+    if not cd:
         fails.append((SUBCIRCUITS, f"{rid}: no component Program in the global Program for shape (LP {LP}, T_bound {g.get('T_bound')})"))
         return out
+    A = cast("SEQ.RootView", A)   # a component's directory comes with the component its loader returned
     ent["component"] = {"dir": cd, "digest": A.digest, "steps": len(A.steps), "instances": len(A.inst),
                         "LP": g["component"].get("LP"), "T": g["component"].get("T")}
     want_d = g["component"].get("program_digest")
@@ -359,7 +357,8 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
             leftover = sum(len(v) for v in by_hash.values())
             permuted = sum(1 for j, x in enumerate(addr) if x is not None and x != j)
             if unmatched or leftover:
-                spec = lambda Q, i: Q.inst[i]["spec"].split("{")[0]  # noqa: E731
+                def spec(Q: Any, i: int) -> str:
+                    return Q.inst[i]["spec"].split("{")[0]
                 bad_dag.append({"step": s, "n_a": len(A.steps[s]), "n_b": len(P.steps[s]), "unmatched_fold": len(unmatched), "unmatched_component": leftover,
                                 "unmatched_fold_specs": dict(collections.Counter(spec(P, i) for i in unmatched).most_common(6)),
                                 "unmatched_component_specs": dict(collections.Counter(spec(A, A.steps[s][j]) for v in by_hash.values() for j in v).most_common(6)),
