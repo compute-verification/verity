@@ -3343,6 +3343,11 @@
       "paths": {
         "adapters/vllm/tests/correspondence/test_descriptor_annotation_stream.py": "adapters/torch/tests/correspondence/test_descriptor_annotation_stream.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/torch/tests/frontend/test_broadcast_bias_add.py": "adapters/vllm/tests/program/test_broadcast_bias_add.py"
+      }
     }
   ]
 }

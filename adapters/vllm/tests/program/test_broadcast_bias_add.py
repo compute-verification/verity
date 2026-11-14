@@ -6,7 +6,7 @@ registered `P.Bf16Add`), the bias parameter is recorded with role `linear.bias`,
 fail-closed (never silently bound to a different numeric).  These are tests of the operation, not of a Qwen layer: the modules are
 ordinary `y + b` graphs with unrelated shapes; the vLLM shape (persistent GEMM output + separate bias add) is one case among them.
 
-Run (pod venv, CPU): `CUDA_VISIBLE_DEVICES="" PYTHONPATH=. python -m pytest -q -p no:cacheprovider ../torch/tests/frontend/test_broadcast_bias_add.py`
+Run (pod venv, CPU): `CUDA_VISIBLE_DEVICES="" PYTHONPATH=. python -m pytest -q -p no:cacheprovider ../vllm/tests/program/test_broadcast_bias_add.py`
 """
 from __future__ import annotations
 
