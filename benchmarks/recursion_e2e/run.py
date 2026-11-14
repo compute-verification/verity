@@ -32,19 +32,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-# the harness kit (`record`), stdlib only with verity_config, which settings.py puts on the path: job.sh runs this on the
-# node's python3
-sys.path.append(str(HERE.parent / "harness"))
 
 import rec_profile as RP  # noqa: E402
 import rec_table as RT  # noqa: E402
 import settings as RS  # noqa: E402
 
-#: the metrics `benchmarks/recursion_e2e/metrics.toml` holds this benchmark to, by id: each the figure of the result's
-#: headline it names, in seconds (`record`)
-METRICS = {"benchmarks/recursion-run-seconds": "pipeline_sum_s",
-           "benchmarks/recursion-lean-verifier-seconds": "Lean step_s"}
-
+#: the job's command before its KEY=VALUE arguments, run from the tree's root; a caller of `main` may wrap it (`job`)
+JOB = ("bash", "benchmarks/recursion_e2e/job.sh")
 NODE = "vy-nebius-1"
 STEPS = RP.ORDER
 E2E = (*RP.E2E_STEPS, "negative")
@@ -223,7 +217,7 @@ def job_env(a: argparse.Namespace) -> list[str]:
 
 def job_command(a: argparse.Namespace, root: Path) -> list[str]:
     env, m, limit = job_env(a), on(a), a.max_min or max_min(a)
-    job = ["bash", "benchmarks/recursion_e2e/job.sh", *env]
+    job = [*a.job, *env]
     if direct(a):
         return ["research", "run", "--on", m, "--project", "verity", "--campaign", "recursion-e2e", "--source", str(root),
                 "--cwd", "source", "--mem-gb", str(mem_gb(a)), "--timeout", f"{limit}m", "--", "taskset", "-c", a.cores, *job]
@@ -259,37 +253,11 @@ def cmd_plan(a) -> int:
 def cmd_run(a) -> int:
     a = preset(a)
     if a.here:
-        cmd = ["bash", str(HERE / "job.sh"), *job_env(a)]
+        cmd = [*a.job, *job_env(a)]
     else:
         cmd = job_command(a, root())
     print(" ".join(cmd), flush=True)
     return 0 if a.dry_run else subprocess.run(cmd, cwd=root(), check=False).returncode
-
-
-def record(doc: dict, kept: Path | None) -> None:
-    """Writes `METRICS` into this research run's result through the harness kit's writer: each the headline's figure it
-    names, measured when the run was whole (every step one recursive run needs ran) and partial when it wasn't, with no
-    value and why where the run has none; the run's parameters in the fingerprint; and the run's validation, passed only
-    for an accepted recursive run (the headline's ``ok``), its detail the table's verdict, with the result file `kept` as
-    its evidence where it is in the run's directory."""
-    from verity_bench import kit
-
-    h, p, st = doc["headline"], doc.get("params", {}), doc.get("staged")
-    writer = kit.writer(RS.RESEARCH_RUN_DIR)
-    rel = kept.resolve().relative_to(writer.out.resolve()).as_posix() if kept and kept.resolve().is_relative_to(
-        writer.out.resolve()) else None
-    shape = f"{st['subcircuit']} x {st['n']}" if st else f"K = {p.get('K')}, N = {p.get('N')}"
-    writer.fingerprint(benchmark="recursion_e2e", shape=shape, modes=p.get("modes"), params=p)
-    if rel:
-        writer.measurement_file(rel)
-    figures = {"pipeline_sum_s": h.get("pipeline_sum_s"), "Lean step_s": (h.get("pipeline") or {}).get("Lean step_s")}
-    for name, figure in METRICS.items():
-        value = figures[figure]
-        writer.measurement(name, value, "s", mark="measured" if h.get("complete") else "partial",
-                           why=None if value is not None else f"the run has no {figure}: its steps were {sorted(doc.get('steps', {}))}",
-                           extra={"shape": shape, "modes": p.get("modes")})
-    writer.validation("passed" if h.get("ok") else "failed", "rec_profile.headline", RT.verdict(h, p.get("modes", "?")),
-                      [rel] if rel else [])
 
 
 def cmd_result(a) -> int:
@@ -302,13 +270,6 @@ def cmd_result(a) -> int:
         Path(a.md).write_text(md)
     print(md)
     print(json.dumps(doc["headline"]))
-    if RS.REGISTRY.is_set("RESEARCH_RUN_DIR"):
-        try:
-            record(doc, Path(a.out) if a.out else None)
-        except ValueError as e:
-            # job.sh's TERM trap writes the result again after a whole one: the run's first record stands
-            print(f"recursion_e2e: the run's result isn't recorded again: {e}", file=sys.stderr)
-            return 1
     return 0 if doc["rows"] else 1
 
 
@@ -372,7 +333,7 @@ def cmd_store(a) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, job: tuple[str, ...] = JOB) -> int:
     ap = argparse.ArgumentParser(prog="verity bench recursion_e2e", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -434,6 +395,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             p.add_argument("--dir", required=True, help="a new or empty directory the art's tree is written in")
     a = ap.parse_args(argv)
+    a.job = job
     return {"plan": cmd_plan, "run": cmd_run, "result": cmd_result, "table": cmd_table, "store": cmd_store}[a.cmd](a)
 
 
