@@ -62,7 +62,7 @@ from typing import Any
 import jsonschema
 import pytest
 from verity import device as SITE
-from verity.hardware import registration as RL
+from verity.protocols.accounting.registration.verifier import registration as RL
 from verity.protocols.accounting.pous.verifier import wipe_period as W
 from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 from verity.protocols.accounting.poub.verifier import ledger
