@@ -37,6 +37,9 @@ LEVEL = {0: ("moved", "none"), 1: ("runs", "none"), 2: ("placed", "none"), 3: ("
 EVIDENCE = {"runs", "tests", "guarantee", "honest", "nontrivial", "proof", "premises"}
 SCHEMA = "demos/README.md has the schema"
 WHERE = "tools/verity/cli/verity_cli/examples.py"
+#: the composites a demo's protocol may name, each by its Lake package's directory. A composite is a name and not a
+#: directory of verity/protocols/, so the path is written out, and a move of the package rewrites it here.
+COMPOSITES = {"onsite": "verity/protocols/onsite/verifier", "remote": "verity/protocols/remote/verifier"}
 DECL = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*\n?[ \t]*)?(?:(?:private|protected|noncomputable|nonrec|partial|unsafe)[ \t]+)*"
                   r"(?:theorem|lemma|def|abbrev|instance|structure|inductive|class|opaque)[ \t]+([^\s:({\[]+)", re.M)
 NAMESPACE = re.compile(r"^[ \t]*namespace[ \t]+(\S+)", re.M)
@@ -123,12 +126,13 @@ def _names(v) -> list[str]:
 
 
 def vocabulary(root: Path) -> tuple[list[str], list[str]]:
-    """The known protocols and configurations (packages under verity/protocols/ and verity/configurations/) and
-    workloads."""
+    """The known protocols (the directories of verity/protocols/) with the composites whose Lake package the tree holds
+    (`COMPOSITES`), and the workloads."""
     def dirs(p: Path) -> list[str]:
         return sorted(d.name for d in p.iterdir() if d.is_dir() and not d.name.startswith((".", "_")) and d.name != "tests")
-    named = [p for p in (root / "verity" / "protocols", root / "verity" / "configurations") if p.is_dir()]
-    return sorted(n for p in named for n in dirs(p)), [*dirs(root / "adapters"), "none"]
+    protocols = root / "verity" / "protocols"
+    composites = [name for name, package in COMPOSITES.items() if (root / package / "lakefile.toml").is_file()]
+    return sorted({*(dirs(protocols) if protocols.is_dir() else ()), *composites}), [*dirs(root / "adapters"), "none"]
 
 
 def schema(ex: Demo, root: Path) -> list[str]:
@@ -150,7 +154,8 @@ def schema(ex: Demo, root: Path) -> list[str]:
     if not ps or not all(isinstance(x, str) for x in ps) or (isinstance(p, list) and len(ps) < 2):
         out.append(f"protocol: give a protocol or composite ({', '.join(protocols)}) or a list of two or more")
     elif unknown := [x for x in ps if x not in protocols]:
-        out.append(f"protocol {unknown} is no package under verity/protocols/ or verity/configurations/: one of {', '.join(protocols)}")
+        out.append(f"protocol {unknown} is no directory of verity/protocols/ and no composite of {WHERE}'s COMPOSITES: one "
+                   f"of {', '.join(protocols)}")
     if d.get("workload") not in workloads:
         out.append(f"workload {d.get('workload')!r}: one of {', '.join(workloads)} (a directory under adapters/, or none)")
     for axis, steps in AXES.items():
