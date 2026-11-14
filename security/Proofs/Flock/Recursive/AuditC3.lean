@@ -574,7 +574,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
                   j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (holoError (holoAt st hp))
 
-/-- **`RecursiveAuditC3At` with no A3**: `RecursiveAuditC3At` without its A3 premise, at the same bound. V*'s laws are
+/-- **`RecursiveAuditC3At` with no A3**: `RecursiveAuditC3At` without its A3 premise, at the same bound. V*'s sampling designs are
 the full sample (`--draw subset:<units>`), which samples every unit at every value of the operating system's bytes
 (`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
 def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}

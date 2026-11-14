@@ -83,8 +83,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   work sampling design (``work-rate:NUM/DEN``) proves every unit of theirs (`serving_rows.work_table_of`: work 0, floor all its units) beside the sampled
   rest, the stream registering with that work table; its negatives (`transfer_gate_negatives`, and in `advice_negatives` the
   registration under the compiler listing none, `source`): the proved set less a transfer-gate unit (`check_proved`), a sample
-  trading one for a unit of the rest (`check_draw`), and the registration's law sampling them as the rest is (R1).
-* **One sample per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
+  trading one for a unit of the rest (`check_draw`), and the registration's sampling design sampling them as the rest is (R1).
+* **One sample per window** by the registered sampling design (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `verity-verify-proof draw`; a TP Commit samples each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol; without it Lean accepts a subset sample only at hidden outputs and one
   table, `Flock.ProvedScope`). They run on SPOT's proof server (`proof_server`, `verity_flock.proof_server`): one
@@ -804,7 +804,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
     (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
-    registration (a two-stage design's second stage of its interior registration), its sample, law and receipt, proved in
+    registration (a two-stage design's second stage of its interior registration), its sample, sampling design and receipt, proved in
     place of a5's own; the audit record and its negatives are then decided as that stream decides the interior's
     (`verifier.audit_record`'s ``own_reads``: a session's read of one of the registration's own ports at its own root is
     no registered read, its rows being round 2's to hold), ``audit.json`` says so (``own_reads``), and the summary's
@@ -1531,7 +1531,7 @@ def per_member(members: Sequence[dict], zk: bool) -> bool:
 def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     """The registration's `link-points` (`link_points.refused`) over the window's staged members, each its units
     ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest and most
-    sampled proof blocks under the sampled law over the samples that end (one that runs out of coins fails the window:
+    sampled proof blocks under the sampled sampling design over the samples that end (one that runs out of coins fails the window:
     `draw_ran_out`): one a sample misses, its fewest none, and one whose fewest and most open different link points. Or
     why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
     Recorded here for every window; the registration's check refuses them where the audit's case is of the per-member

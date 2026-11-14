@@ -40,7 +40,7 @@ def subsetList (pop : ℕ) (us : Array ℕ) : List (String × Json) :=
   [("law", Json.str "subset"), ("population", Lean.toJson pop), ("k", Lean.toJson us.size),
     ("units", Spot.natsJson us)]
 
-/-- **A subset sample's JSON**: law `subset`, population `pop`, `k` the units' count, and the units `us`. -/
+/-- **A subset sample's JSON**: sampling design `subset`, population `pop`, `k` the units' count, and the units `us`. -/
 def subsetJson (pop : ℕ) (us : Array ℕ) : Json := Json.mkObj (subsetList pop us)
 
 /-- **The second stage's own sample for part `p`'s session is a subset sample**: of its `q · n` slots, the second sample's
@@ -172,7 +172,7 @@ theorem proved_of_wf {j : Json} {pop : ℕ} {us : Array ℕ} {D : _root_.Flock.D
     · exact FlockComplete.JsonRT.good_subset hw hD hl
   exact subsetParses hg hj hD
 
-/-- **A sample of every unit of a population of `m`** (law `subset`, `k = m`, units `0..m-1`) is the subset sample of
+/-- **A sample of every unit of a population of `m`** (sampling design `subset`, `k = m`, units `0..m-1`) is the subset sample of
 those units, so `subsetParses` reads it as it reads the second stage's own. -/
 theorem wholeJson_eq (m : ℕ) :
     Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson m), ("k", Lean.toJson m),

@@ -167,7 +167,7 @@ abbrev hiddenAt {Ω H : Type} (st : Flock.Stmt) (rt : Flock.Registered.Port)
   fun _ ω => stmtAt rt stmt (Flock.Registered.rowsOf st.c st.pub rt) ω
 
 /-- **The sampling design of a finite space of samples with an element**: `Law` at `Ω` and the units each sample takes, nonempty by
-the element. Every law is one (`Classical.inhabited_of_nonempty`); (i) binds the space, its element and the sample rather
+the element. Every sampling design is one (`Classical.inhabited_of_nonempty`); (i) binds the space, its element and the sample rather
 than a sampling design, whose `nonempty` field would be a hypothesis of the statement. -/
 abbrev drawLaw {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] (draw : Ω → Finset (Fin n)) : Law n := ⟨Ω, draw⟩
 
@@ -177,7 +177,7 @@ abbrev drawLaw {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] (draw : Ω → 
 recursive audit with Flock's compiled table there as its inner protocol (`innerAt`): V*'s statements `Vs`, as many
 as V*'s staging lays out over the class and its regions (`outerStatementsAt`), each sampling all its units (`VLaw`:
 the full sample on the operating system's bytes, `--draw subset:<units>`), V*'s sessions `zr R ω t R₂ j` under
-their laws as the prover supplies them (`ZkOuterR`: inputs, own ports, sample file and record writer, with nothing
+their sampling designs as the prover supplies them (`ZkOuterR`: inputs, own ports, sample file and record writer, with nothing
 assumed of what the inputs parse to), their records' custody `_hCust`, the verifier's own inputs to them
 (the inner shape `ish`, V*'s bindings `bind` and the shared rows `rows`; session `j` runs as V*'s statement `j`), at
 which V*'s statements' files parse to `Vs` (`VStarParses`, an obligation until gap 4), the messages V*'s layers hold

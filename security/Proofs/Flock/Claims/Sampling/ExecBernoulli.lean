@@ -21,7 +21,7 @@ exact uniform sample `r ∈ [0, den)` from the stream (`Flock.Draw.uniform`, rej
 * `Law.bernoulli_append`: a sample that succeeds is the same on a longer stream, so `Flock.Draw.onWith`'s extend-and-rerun
   never changes it; `Law.drawOS_bernoulli_escape_le`, `Law.execOS_bernoulli_escape_le`: the live sample
   (`Flock.Draw.drawWith`, `Law.runOS`) on a uniform byte source (A3) escapes no more often, as `ExecDrawOS.lean` proves
-  for the other three laws.
+  for the other three sampling designs.
 -/
 
 @[expose] public section

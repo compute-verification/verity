@@ -94,7 +94,7 @@ def rangeOk (sp : RecSparse.Shape) (st : Stmt) : Bool :=
       (Array.replicate (st.c.kLog - 6) (0 : F128)) rng).isOk
   | .error _ => false
 
-/-- A sample, readable: its `subset` law's `k`, population, units and closure. -/
+/-- A sample, readable: its `subset` sampling design's `k`, population, units and closure. -/
 def drawOf (D : Draw.UnitDraw) : Claims.Recursion.DrawRecord where
   subset := match D.law with
     | .subset k => some k
