@@ -238,6 +238,8 @@ NORM_OFF_PIN = "fused norm/RoPE source or launch geometry differs from the recor
 NORM_OFF_ROWS, NORM_OFF_SHAPE = "fused norm/RoPE rows or GLM-5.3 dimensions differ", "norm weights or GPT-J rotary table have the wrong shape"
 INDEX_OFF_PIN, INDEX_OFF_SHAPE = "index-K dimensions differ from the recorded GLM-5.3 pin", "index-K inputs have the wrong shape"
 CS, TWO = view(76, (4096, 64), "bfloat16"), [("a", [5]), ("b", [9])]
+# what the index-K layer norm's epsilon may not be: absent, a word, a number as text, a bool, a list
+OFF_EPS = [None, "small", "1e-4", True, [1e-4]]
 # a top-k allocation off its width and strides together, then off one term of its layout alone: its dtype, its width, its strides
 OFF_TOPKS = [view(TOPK_ALLOC, (16, 1024), "int32"), view(TOPK_ALLOC, (16, 2048), "int64"),
              view(TOPK_ALLOC, (16, 1024), "int32", strides=(2048, 1)), view(TOPK_ALLOC, (16, 2048), "int32", strides=(4096, 1))]
@@ -349,6 +351,8 @@ OFF_STRIDE = (f"index-K cache {view(81, (2, 64, 132), 'uint8')!r} at block size 
     ({}, (5, 128), "a current-token slot is outside the cache", {"slots": (5, 128), "cache_slots": 128}),
     ({"q_rms_eps": None}, (5, 70), "norm epsilons are not static floats", {"q_eps": "None", "kv_eps": "1e-05"}),
     ({"kv_rms_eps": "small"}, (5, 70), "norm epsilons are not static floats", {"q_eps": "1e-06", "kv_eps": "'small'"}),
+    ({"q_rms_eps": "1e-6"}, (5, 70), "norm epsilons are not static floats", {"q_eps": "'1e-6'", "kv_eps": "1e-05"}),
+    ({"kv_rms_eps": True}, (5, 70), "norm epsilons are not static floats", {"q_eps": "1e-06", "kv_eps": "True"}),
     ({"index_k_layer_norm_bias_ptr": None}, (5, 70), "indexer-layer norm/RoPE pointers are not bound", {}),
     ({"consts": {"INDEX_K_DIM": 64}}, (5, 70), INDEX_OFF_PIN, {}),
     ({"consts": {"INDEX_K_BLOCK_SIZE": 64}}, (5, 70), INDEX_OFF_PIN, {}),
@@ -363,17 +367,26 @@ OFF_STRIDE = (f"index-K cache {view(81, (2, 64, 132), 'uint8')!r} at block size 
     ({"indexer_cache_stride": 136}, (5, 70), OFF_STRIDE, {}),
     ({"indexer_cache_ptr": SHORT_INDEX, "indexer_cache_scale_ptr": view(81, (1, 64, 33))}, (5, 70),
      "a current-token slot is outside the index-K cache", {"slots": (5, 70), "cache_slots": 64}),
+    *[({"index_k_layer_norm_eps": v}, (5, 70), "index-K layer-norm epsilon is not a static float", {"eps": repr(v)}) for v in OFF_EPS],
     *[({"topk_indices_ptr": v}, (5, 70), "topk_indices_ptr is not a contiguous i32 [capacity,2048] view", {"topk": repr(v)}) for v in OFF_TOPKS],
     ({"topk_indices_ptr": view(99, (16, 2048), "int32")}, (5, 70), "IndexShare layer does not use the indexer layers' top-k allocation",
      {"observed": (99, 0, 2048, (2048, 1)), "established": (TOPK_ALLOC, 0, 2048, (2048, 1))}),
 ], ids=["warps", "constexpr", "pointer", "positions", "rows", "q-width", "q-out-width", "kv-width", "dtype", "q-weight", "kv-weight",
         "table-rank", "table-width", "table-strides", "position-range", "latent-cache", "slots-short", "slot-range", "eps-absent", "eps-text",
+        "eps-number-as-text", "eps-bool",
         "index-pointer", "index-dim", "index-block", "index-rot", "index-k-width", "index-weight", "index-bias", "index-table-rank",
-        "index-table-width", "index-cache", "index-slot", "topk-layout", "topk-dtype", "topk-width", "topk-strides", "topk-allocation"])
+        "index-table-width", "index-cache", "index-slot", "index-eps-absent", "index-eps-text", "index-eps-number-as-text", "index-eps-bool",
+        "index-eps-list", "topk-layout", "topk-dtype", "topk-width", "topk-strides", "topk-allocation"])
 def test_a_fused_norm_rope_off_its_pins_its_views_or_the_step_is_refused_with_what_differs(kw, slots, reason, detail):
     off = D.DsaNormRope().match(_norm(**kw), _ctx(TWO, slots=slots))
     assert isinstance(off, Unsupported) and off.reason == reason and off.consumed == (31,)
     assert {k: off.detail[k] for k in detail} == detail
+
+
+def test_an_epsilon_recorded_as_an_int_is_read_as_its_float():
+    r = D.DsaNormRope().match(_norm(q_rms_eps=1, kv_rms_eps=2, index_k_layer_norm_eps=3), _ctx(TWO, slots=[5, 70]))
+    assert isinstance(r, Group) and [spec_label(p.spec) for p in r.parts] == [
+        "DsaRMSNorm_v1{N=2048,EPS=1.0}", "DsaRMSNorm_v1{N=512,EPS=2.0}", "RoPEHeadGptJ_v2{D=64}", "DsaIndexerKRow_v1{D=128,ROPE=64,EPS=3.0}"]
 
 
 def test_a_fused_norm_rope_s_refusal_names_its_pointer_arguments_and_the_first_eight_positions_or_slots():
@@ -464,6 +477,12 @@ def test_an_index_q_scale_in_the_last_bit_of_its_power_is_taken_and_one_a_part_i
         assert isinstance(far, Unsupported) and far.reason == "index-Q scales differ from D^-0.5 and H^-0.5", name
 
 
+# a scale that is no number: absent, a word, its pinned value as text, a list
+OFF_SCALES = [("index_weights_softmax_scale", "softmax_scale", None), ("index_weights_head_scale", "head_scale", None),
+              ("index_weights_softmax_scale", "softmax_scale", "small"), ("index_weights_softmax_scale", "softmax_scale", repr(128 ** -0.5)),
+              ("index_weights_head_scale", "head_scale", [0.5])]
+
+
 @pytest.mark.parametrize("kw,reason,detail", [
     ({"warps": 8}, Q_OFF_PIN, {"src_sha": D.Q_SRC_SHA, "num_warps": 8, "num_stages": 3}),
     ({"consts": {"QUANTIZE_MQA": True}}, "fused-q constexprs differ from the recorded GLM-5.3 pin", {"mismatches": {"QUANTIZE_MQA": (True, False)}}),
@@ -476,9 +495,10 @@ def test_an_index_q_scale_in_the_last_bit_of_its_power_is_taken_and_one_a_part_i
     ({"consts": {"INDEX_Q_HEAD_DIM": 64}}, "index-Q dimensions differ from the recorded GLM-5.3 pin", {}),
     *[({arg: v}, "index-Q views have the wrong shape", {name: repr(v)}) for arg, name, v in OFF_INDEX_Q],
     ({"index_weights_head_scale": 0.5}, "index-Q scales differ from D^-0.5 and H^-0.5", {"softmax_scale": 128 ** -0.5, "head_scale": 0.5}),
+    *[({name: v}, "index-Q scales differ from D^-0.5 and H^-0.5", {key: v}) for name, key, v in OFF_SCALES],
 ], ids=["warps", "constexpr", "rope-pointer", "positions", "q-shape", "q-out-shape", "q-dtype", "q-out-dtype", "table-dtype", "table-rank",
         "rope-views", "head-rows", "index-pointer", "index-dims", "index-q-shape", "index-shapes", "index-q-out-shape", "index-weights-out-shape",
-        "scales"])
+        "scales", "scale-absent", "head-scale-absent", "scale-text", "scale-number-as-text", "head-scale-list"])
 def test_a_fused_q_off_its_pins_or_its_views_is_refused_with_what_differs(kw, reason, detail):
     off = D.DsaQ().match(_q(**kw), _ctx([("a", [5]), ("b", [9])]))
     assert isinstance(off, Unsupported) and off.reason == reason
