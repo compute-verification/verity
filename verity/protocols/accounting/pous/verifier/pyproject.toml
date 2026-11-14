@@ -10,7 +10,7 @@ untraced = ["tests/test_pous_wipe_store.py", "tests/test_pous_wipe_stream.py"]
 # and the rest of the trusted layer's import closure that ../../../../../tools/pous_grader/TRUSTED.sha256 hashes (Core's Game, the named assumption
 # TimedINC): test_pous_trusted fails while a file it hashes is outside these, naming the lines to add.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
-          "verity/protocols/reporting.py", "verity/circuits",
+          "verity/circuits",
           "verity/protocols/accounting/pous/prover",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/channel.py", "verity/runtime", "verity/tests/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/protocols/accounting/pous/device/__init__.py",
@@ -25,4 +25,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
           # they are, in this suite's directory or outside it
           "tools/pous_grader", "verity/protocols/accounting/pous/device/memory_challenger.py",
           "verity/protocols/accounting/pous/device/challenger_session.py",
-          "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pous/__init__.py", "verity/periods"]
+          "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py",
+          "verity/protocols/accounting/pous/__init__.py"]

@@ -10,7 +10,7 @@
   },
   "Accounting.Assumptions.SketchHashRandom": {
    "owner": "@memory-accounting",
-   "digest": "3e61314a8079aa83ddf9f4d27c4b669a01d6470868cc4bbacce26dd6e40d8896"
+   "digest": "6e79010bd69179335cf616b30f200eeb5bc8bc4d7b27f0df3201fb604b369355"
   },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
@@ -3305,12 +3305,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Sampled.Instance.LogOpensRecorded": {
-   "owner": "@soundness",
-   "digest": "42a5f620cdf195873b4935d15e97a3c747de211499a2716f7dc02f214f09c794",
-   "issue": "PRF-579",
-   "due": "2026-11-20"
-  },
   "Verity.Sampled.Instance.RegisteredFiles": {
    "owner": "@soundness",
    "digest": "81205422acabcad7d2a0e783aa8f0f9f4351653a3b629e817f3964b889b277e5",
@@ -4495,8 +4489,7 @@
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
   },
   "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
-   "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
-   "nontrivial": "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial"
+   "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"]
   },
   "Flock.SecurityProofs.SampledAuditAnyDeployed": {
    "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
@@ -5415,6 +5408,11 @@
   },
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
+  "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
+   "type_hash": "4d6d8061ad0a9fe83ea3607ece52829df0c7b55b4c9c4a9e61e89316cad1756f",
+   "missing": "nontrivial",
+   "why": "the lemma on main shows the conclusion failing at a session without tables, not at the deployed session the guarantee's domain hypothesis fixes, so the guarantee is not witnessed as nontrivial at its own instance until the lemma is restated there"
+  },
   "Flock.SecurityProofs.SessionLoopZKDeployed": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659",
   "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc",
   "Flock.SecurityProofs.SpotExfilTwo": {
@@ -5702,7 +5700,7 @@
   "Definitions.Core.Assumptions": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Core.Assumptions", "Definitions.Assumptions.Transport"],
    "except": [],
-   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof; the transport's premises re-export its two named assumptions of the lock (ImprintPathPrivate, ChannelAuthentic), declared in the assumptions home (Definitions.Assumptions.Transport)",
+   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof; the transport's premises re-export its two named assumptions of the lock (ImprintPathPrivate, ChannelAuthentic), declared in the assumptions home's module for the transport",
    "sealed": true
   },
   "Definitions.Core.Guarantees": {
@@ -5961,7 +5959,7 @@
     "Definitions.Assumptions.Accounting"
    ],
    "except": [],
-   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof; the premises of the area that are named assumptions of the lock (W, the key's binding, the sketch's hash) are declared in the assumptions home (Definitions.Assumptions.Accounting), which the modules that list them re-export",
+   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof; the premises of the area that are named assumptions of the lock (W, the key's binding, the sketch's hash) are declared in the assumptions home's module for resource accounting, which the modules that list them re-export",
    "sealed": true
   },
   "Definitions.Claims": {
@@ -6081,7 +6079,7 @@
     "Definitions.Assumptions"
    ],
    "sealed": true,
-   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's definitions, PoUW's cost models (Definitions.Pouw.Game.Defs and Pearl-C's Definitions.Pouw.PearlC.Game, for Definitions.Assumptions.Pouw and Definitions.Assumptions.Accounting), PoUS's timed audit (Definitions.Pous.Model.Audit, for Definitions.Assumptions.Pous), the hash area's messages and digests with core's coin probability (Definitions.Hash.Basic, Definitions.Core.Game, for Definitions.Assumptions.Hash), the transport's channels (Definitions.Core.Transport, for Definitions.Assumptions.Transport) and weight security's definitions and premises, never a guarantee or a proof"
+   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's definitions, PoUW's cost models (Definitions.Pouw.Game.Defs and Pearl-C's Definitions.Pouw.PearlC.Game, for Definitions.Assumptions.Pouw and the resource-accounting assumptions), PoUS's timed audit (for PoUS's assumptions), the hash area's messages and digests with core's coin probability (Definitions.Hash.Basic, Definitions.Core.Game, for the hash's assumptions), the transport's channels (for the transport's assumptions) and weight security's definitions and premises, never a guarantee or a proof"
   },
   "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted": {
    "imports": [
@@ -6891,16 +6889,137 @@
    "unfolded_hash": "5b885d8ea9220f167d1f6921164766bf758069e80b68e9be70f3a5d33ad1f29c"
   },
   "Accounting.SecurityProofs.BoundReceiptLinkInteractive_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.BoundReceiptLinkInteractive_honest :",
+    "  Exists fun n =>",
+    "    And (Accounting.BoundReceipt.InteractiveNode.ofNode n).QueryDetermined",
+    "      (Eq",
+    "        (Pous.pr fun x =>",
+    "          And",
+    "            (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).Accepts x.fst x.snd.fst.fst",
+    "              x.snd.fst.snd x.snd.snd)",
+    "            (And",
+    "              (instLENat.le",
+    "                (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).compute 1 1 x.fst",
+    "                  x.snd.fst.fst x.snd.fst.snd)",
+    "                1)",
+    "              (And",
+    "                (instLENat.le",
+    "                  (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).tileWork 1 x.fst",
+    "                    x.snd.fst.fst x.snd.fst.snd)",
+    "                  0)",
+    "                (Not",
+    "                  (instLTNat.lt",
+    "                    (instHMul.hMul",
+    "                      (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).footprint x.fst",
+    "                        x.snd.fst.fst x.snd.fst.snd)",
+    "                      1)",
+    "                    (Accounting.Rate.floor 1 0 0 0 1 1 1 (instHSub.hSub 1 0) 0))))))",
+    "        1)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "e615ce527148601df81df5bc515fb16464fc5a8f5dfcb4b61a4ea47d3cfb78d4"
   },
   "Accounting.SecurityProofs.BoundReceiptLinkInteractive_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.BoundReceiptLinkInteractive_nontrivial :",
+    "  Exists fun n =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And",
+    "              (instLENat.le",
+    "                (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).compute 0 1 x.fst",
+    "                  x.snd.fst.fst x.snd.fst.snd)",
+    "                0)",
+    "              (And",
+    "                (instLENat.le",
+    "                  (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).tileWork 1 x.fst",
+    "                    x.snd.fst.fst x.snd.fst.snd)",
+    "                  0)",
+    "                (instLTNat.lt",
+    "                  (instHMul.hMul",
+    "                    (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).footprint x.fst",
+    "                      x.snd.fst.fst x.snd.fst.snd)",
+    "                    1)",
+    "                  (Accounting.Rate.floor 1 0 0 0 0 0 1 (instHSub.hSub 1 0) 0)))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "              (instHDiv.hDiv (instHMul.hMul 2 (Nat.cast 1)) (instHPow.hPow 2 2)))",
+    "            (instHDiv.hDiv (Nat.choose 0 (instHSub.hSub 1 0)).cast (instHPow.hPow 2 0)))",
+    "          (instHDiv.hDiv (Nat.choose 0 (instHAdd.hAdd 0 1)).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "2daa46fcafe64e5c379d291c113b535ff68b61eaba30fe6f6de8d938ee9901e8"
   },
   "Accounting.SecurityProofs.BoundReceiptLink_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.BoundReceiptLink_honest :",
+    "  Exists fun n =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (n.Accepts x.fst x.snd.fst.fst x.snd.fst.snd x.snd.snd)",
+    "          (And (instLENat.le (n.compute 1 1 x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "            (And (instLENat.le (n.tileWork 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (Not",
+    "                (instLTNat.lt (instHMul.hMul (n.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                  (Accounting.Rate.floor 1 0 0 0 1 1 1 (instHSub.hSub 1 0) 0))))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "1c664abd745b4c3fb234d380e2a55cdd4f3c7bdb8636254d1ae8b4240becb952"
   },
   "Accounting.SecurityProofs.BoundReceiptLink_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.BoundReceiptLink_nontrivial :",
+    "  Exists fun n =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (n.compute 0 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (And (instLENat.le (n.tileWork 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "                (instLTNat.lt (instHMul.hMul (n.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                  (Accounting.Rate.floor 1 0 0 0 0 0 1 (instHSub.hSub 1 0) 0)))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "              (instHDiv.hDiv (instHMul.hMul 2 (Nat.cast 1)) (instHPow.hPow 2 2)))",
+    "            (instHDiv.hDiv (Nat.choose 0 (instHSub.hSub 1 0)).cast (instHPow.hPow 2 0)))",
+    "          (instHDiv.hDiv (Nat.choose 0 (instHAdd.hAdd 0 1)).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "71bfc8fdaf9ec3ea60b7527302adae95ba87dbd287281cb82cba76f3a0962eb7"
   },
   "Accounting.SecurityProofs.BoundReceiptShare": {
    "owner": "@memory-accounting",
@@ -8609,16 +8728,106 @@
    "unfolded_hash": "ab768c3564e987cc9d23ebf20afc4f5ae51bba1ab61f05388a796587f99b8f6a"
   },
   "Accounting.SecurityProofs.RateAuditInteractiveRO_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditInteractiveRO_honest :",
+    "  Exists fun A =>",
+    "    And",
+    "      (∀ (E : Accounting.Rate.Store 1 1) (R : Pous.Bits 0) (O O' : Accounting.Rate.Oracle 1 1 1 0),",
+    "        Eq (A.side E R O) (A.side E R O'))",
+    "      (Eq",
+    "        (Pous.pr fun x =>",
+    "          And (A.Accepts x.fst x.snd.fst.fst x.snd.fst.snd x.snd.snd)",
+    "            (And (instLENat.le (A.compute 1 1 x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "              (Not",
+    "                (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                  (Accounting.Rate.floor 1 0 0 0 1 1 1 1 0)))))",
+    "        1)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "271c4826e2292536db38627c408a9db2c1de441599e6a40692b8e5aae13896fd"
   },
   "Accounting.SecurityProofs.RateAuditInteractiveRO_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditInteractiveRO_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                (Accounting.Rate.floor 1 0 0 0 0 0 1 1 0))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "            (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "          (instHDiv.hDiv (Nat.choose 0 1).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "8657170682f43b95f5a887e9ba95005da6d7b34e9f57a02ddc5fcd7847c95192"
   },
   "Accounting.SecurityProofs.RateAuditInteractive_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditInteractive_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (A.Accepts x.fst x.snd.fst.fst x.snd.fst.snd x.snd.snd)",
+    "          (And (instLENat.le (A.compute 1 1 x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "            (Not",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                (Accounting.Rate.floor 1 0 0 0 1 1 1 (instHSub.hSub 1 0) 0)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "329a98c5921e4af03ce45528c815fac75dcca8e44f095979e088bff91bc3b191"
   },
   "Accounting.SecurityProofs.RateAuditInteractive_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditInteractive_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                (Accounting.Rate.floor 1 0 0 0 0 0 1 (instHSub.hSub 2 1) 0))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 2 1).cast (Nat.cast 2)) 1)",
+    "            (instHDiv.hDiv (instHMul.hMul (Nat.choose 2 1).cast (instHPow.hPow 2 0))",
+    "              (instHPow.hPow 2 (instHMul.hMul 3 1))))",
+    "          (instHDiv.hDiv (Nat.choose 0 (instHSub.hSub 2 1)).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "fcdf1ea0ba8292873d617948506eb29c0b4727685167e1c71c7fac3a32b058ac"
   },
   "Accounting.SecurityProofs.RateAuditPartial": {
    "owner": "@memory-accounting",
@@ -8634,10 +8843,53 @@
    "unfolded_hash": "5cad5f047e0149d68c3e7804158ce9059d80a66aac26d58091f8c6a4c343dfb8"
   },
   "Accounting.SecurityProofs.RateAuditPartial_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditPartial_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (A.Accepts x.fst x.snd.fst.fst x.snd.fst.snd x.snd.snd)",
+    "          (And (instLENat.le (A.compute 1 (fun x => 0) x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "            (Not",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) (instHMul.hMul 1 1))",
+    "                (Accounting.Rate.floor 1 0 0 0 1 1 (instHMul.hMul 1 1) 1 0)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "1e357fa5600c6abb2a341545cad562bb2816f3b01796c03661cd87ceed30446a"
   },
   "Accounting.SecurityProofs.RateAuditPartial_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditPartial_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 (fun x => 0) x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) (instHMul.hMul 1 1))",
+    "                (Accounting.Rate.floor 1 0 0 0 0 0 (instHMul.hMul 1 1) 1 0))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "            (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "          (instHDiv.hDiv (Nat.choose 0 1).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "5c13b762aa8095d5ae7ea9270ed0e3964ccf9333df8e2f7e084985c0761c3619"
   },
   "Accounting.SecurityProofs.RateAuditSketch": {
    "owner": "@memory-accounting",
@@ -8668,16 +8920,110 @@
    "unfolded_hash": "acc406d75ae5564ca8dea5142386cb7d378ab9a04a6c9643678f3e9b00fc986f"
   },
   "Accounting.SecurityProofs.RateAuditSketchInteractiveRO_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditSketchInteractiveRO_honest :",
+    "  Exists fun dig =>",
+    "    Exists fun A =>",
+    "      Eq",
+    "        (Pous.pr fun x =>",
+    "          And (A.Accepts dig x.snd.fst.fst x.snd.fst.snd x.fst x.snd.snd)",
+    "            (And (instLENat.le (A.compute 1 1 x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "              (Not",
+    "                (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                  (Accounting.RateSketch.floor 1 1 0 0 0 1 1 1 1)))))",
+    "        1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "2ed178eb237f2c927f5959e36bea6fe86cdd2fdf5fdfad2626b89e58c8e93832"
   },
   "Accounting.SecurityProofs.RateAuditSketchInteractiveRO_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditSketchInteractiveRO_nontrivial :",
+    "  Exists fun dig =>",
+    "    Exists fun A =>",
+    "      Not",
+    "        (ENNReal.instLE.le",
+    "          (Pous.pr fun x =>",
+    "            And True",
+    "              (And (instLENat.le (A.compute 0 1 x.snd.fst.fst x.snd.fst.snd x.fst) 0)",
+    "                (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                  (Accounting.RateSketch.floor 1 1 0 0 0 0 0 1 1))))",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd",
+    "              (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "                (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "              (Pous.pr fun σ => instLTNat.lt 2 (Accounting.RateSketch.fib dig σ)))",
+    "            (instHDiv.hDiv (instHMul.hMul 0 2).cast (Fintype.card Bool).cast)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "6e2b028b42b65e513e9e47c7182816579327d2d2649ae1f14132f362882021b6"
   },
   "Accounting.SecurityProofs.RateAuditSketch_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditSketch_honest :",
+    "  Exists fun dig =>",
+    "    Exists fun A =>",
+    "      Eq",
+    "        (Pous.pr fun x =>",
+    "          And (A.Accepts dig x.snd.fst.fst x.snd.fst.snd x.fst x.snd.snd)",
+    "            (And (instLENat.le (A.compute 1 1 x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "              (Not",
+    "                (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                  (Accounting.RateSketch.floor 1 1 0 0 0 1 1 1 1)))))",
+    "        1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "0798acb14e545516d6a5f7e0d0e0734b80d35737f79ce602f1a416a75911c7aa"
   },
   "Accounting.SecurityProofs.RateAuditSketch_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditSketch_nontrivial :",
+    "  Exists fun dig =>",
+    "    Exists fun A =>",
+    "      Not",
+    "        (ENNReal.instLE.le",
+    "          (Pous.pr fun x =>",
+    "            And True",
+    "              (And (instLENat.le (A.compute 0 1 x.snd.fst.fst x.snd.fst.snd x.fst) 0)",
+    "                (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                  (Accounting.RateSketch.floor 1 1 0 0 0 0 0 1 1))))",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd",
+    "              (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "                (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "              (Pous.pr fun σ => instLTNat.lt 2 (Accounting.RateSketch.fib dig σ)))",
+    "            (instHDiv.hDiv (instHMul.hMul 0 2).cast (Fintype.card Bool).cast)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "4c2a06aaf4bf8a08b200747c81deaaacd06133dd40a5077607dbb211dd9a4200"
   },
   "Accounting.SecurityProofs.RateAuditTensorSketch": {
    "owner": "@memory-accounting",
@@ -8706,16 +9052,107 @@
    "unfolded_hash": "d05a276d44f5bedca8a167f6affc79369276ce79ffd1b46668e0a61031925629"
   },
   "Accounting.SecurityProofs.RateAuditTensorSketchRank_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditTensorSketchRank_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (A.Accepts Accounting.RateSketch.sketch x.snd.fst.fst x.snd.fst.snd x.fst x.snd.snd)",
+    "          (And (instLENat.le (A.compute 1 1 x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "            (Not",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                (Accounting.RateSketch.floor 1 256 0 0 0 1 1 1 1)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d09af8461fdd0a439fe3b2f26a8d2d38f8d865b68cdcb2798a957fac0a457d66"
   },
   "Accounting.SecurityProofs.RateAuditTensorSketchRank_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditTensorSketchRank_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 1 x.snd.fst.fst x.snd.fst.snd x.fst) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                (Accounting.RateSketch.floor 1 256 0 0 0 0 0 1 1))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "              (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "            (Pous.pr fun σ =>",
+    "              Exists fun u => instLTNat.lt ((Accounting.Tag.signMatrix (σ.block u)).map Int.cast).rank 0))",
+    "          (instHDiv.hDiv (Nat.cast 0) (instHPow.hPow 2 (instHMul.hMul 8 0)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a18da97bbac05f73160218ed3ac249ecb042454cb33d1f7815b333582e39f2cd"
   },
   "Accounting.SecurityProofs.RateAuditTensorSketch_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditTensorSketch_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (A.Accepts Accounting.RateSketch.sketch x.snd.fst.fst x.snd.fst.snd x.fst x.snd.snd)",
+    "          (And (instLENat.le (A.compute 1 1 x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "            (Not",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                (Accounting.RateSketch.floor 1 256 0 0 0 1 1 1 1)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d09af8461fdd0a439fe3b2f26a8d2d38f8d865b68cdcb2798a957fac0a457d66"
   },
   "Accounting.SecurityProofs.RateAuditTensorSketch_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditTensorSketch_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 1 x.snd.fst.fst x.snd.fst.snd x.fst) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                (Accounting.RateSketch.floor 1 256 0 0 0 0 0 1 1))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "              (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1057)))",
+    "            (Pous.pr fun σ => Not (Accounting.RateSketch.SectorsBind σ)))",
+    "          (instHDiv.hDiv (Nat.cast 0) (instHPow.hPow 2 256))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "877d779f2b632e08ba4ee37d6e86129dc4be72e1bcda17574657159765e65840"
   },
   "Accounting.SecurityProofs.RateAuditWindows": {
    "owner": "@memory-accounting",
@@ -8731,16 +9168,111 @@
    "unfolded_hash": "a9853f68b5a5452aff0c54e9a6136cdb3c0154bbe98e5a654fd81fb33179c6c4"
   },
   "Accounting.SecurityProofs.RateAuditWindows_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditWindows_honest :",
+    "  Exists fun D =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And",
+    "          (∀ (i : Fin 1),",
+    "            And ((D.dev i x.snd).Accepts x.fst (x.snd i).fst.fst (x.snd i).fst.snd (x.snd i).snd)",
+    "              (instLENat.le ((D.dev i x.snd).compute 1 1 x.fst (x.snd i).fst.fst (x.snd i).fst.snd) 1))",
+    "          (Not",
+    "            (instLTNat.lt",
+    "              (Finset.univ.sum fun i =>",
+    "                instHMul.hMul ((D.dev i x.snd).footprint x.fst (x.snd i).fst.fst (x.snd i).fst.snd) 1)",
+    "              (instHMul.hMul (instHSub.hSub (instHAdd.hAdd 1 1) 1) (Accounting.Rate.floor 1 0 0 0 1 1 1 1 0)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "402a2342720eb5a48639b2ad2563c21274a1b80179638916964d14c2cc6c8bd6"
   },
   "Accounting.SecurityProofs.RateAuditWindows_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditWindows_nontrivial :",
+    "  Exists fun D =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (instHMul.hMul (Nat.cast 1)",
+    "          (Pous.pr fun x =>",
+    "            And",
+    "              (∀ (i : Fin 1),",
+    "                And True (instLENat.le ((D.dev i x.snd).compute 0 1 x.fst (x.snd i).fst.fst (x.snd i).fst.snd) 0))",
+    "              (instLTNat.lt",
+    "                (Finset.univ.sum fun i =>",
+    "                  instHMul.hMul ((D.dev i x.snd).footprint x.fst (x.snd i).fst.fst (x.snd i).fst.snd) 1)",
+    "                (instHMul.hMul (instHSub.hSub (instHAdd.hAdd 1 1) 1) (Accounting.Rate.floor 1 0 0 0 0 0 1 1 0)))))",
+    "        (instHMul.hMul (Nat.cast 1)",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "              (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "            (instHDiv.hDiv (Nat.choose 0 1).cast (instHPow.hPow 2 0)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a59400753d616fe04b3ef93c87eaf7590257631aa4985ffe267b0c588038d538"
   },
   "Accounting.SecurityProofs.RateAudit_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAudit_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (A.Accepts x.fst x.snd.fst.fst x.snd.fst.snd x.snd.snd)",
+    "          (And (instLENat.le (A.compute 1 1 x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "            (Not",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                (Accounting.Rate.floor 1 0 0 0 1 1 1 1 0)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "039a8546c9955172d81be955ce0c51e1ad66d1ff834a5c6e09e146a3134562af"
   },
   "Accounting.SecurityProofs.RateAudit_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAudit_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                (Accounting.Rate.floor 1 0 0 0 0 0 1 1 0))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "            (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "          (instHDiv.hDiv (Nat.choose 0 1).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "b751a3f02d32dbaeb904e287571c1aee8bda9fa6690bfbb8506e26e0164e32f9"
   },
   "Accounting.SecurityProofs.RateChain": {
    "owner": "@memory-accounting",
@@ -9160,12 +9692,11 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.KeyBinding"],
     "domain": [],
     "open": [
      "Accounting.Assumptions.ChainSum",
      "Accounting.Assumptions.CircuitCarriers",
-     "Accounting.Assumptions.KeyBinding",
      "Accounting.Assumptions.SketchHashBudget",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Assumptions.SquaringFloor",
@@ -9197,10 +9728,55 @@
    "unfolded_hash": "f3fb5ff01a75c3e91ef80830cb39e2b722226196107c0327d5f0ff865acce516"
   },
   "Accounting.SecurityProofs.Remote.AuditRO_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.AuditRO_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (Bandwidth.Accepts A x.fst x.snd.fst x.snd.snd)",
+    "          (Not",
+    "            (instLTNat.lt",
+    "              (instHAdd.hAdd",
+    "                (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (A.ingress x.fst x.snd.fst) 0) 0) (instHMul.hMul 0 1)) 0)",
+    "              (instHMul.hMul 1 1))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "fb2de43a741d01c9dfcfcb195d4715e88f1aa93c86400c7db5f896f8fcd05427"
   },
   "Accounting.SecurityProofs.Remote.AuditRO_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.AuditRO_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (instLTNat.lt",
+    "              (instHAdd.hAdd",
+    "                (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (A.ingress x.fst x.snd.fst) 0) 0) (instHMul.hMul 0 1)) 0)",
+    "              (instHMul.hMul 1 1)))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "            (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "          (instHDiv.hDiv (Nat.choose 0 1).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "51658d736315889a39fc571dc61791de0b598a35624c97da4a9e037c0ca57e1f"
   },
   "Accounting.SecurityProofs.Remote.Held": {
    "owner": "@memory-accounting",
@@ -9404,10 +9980,9 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.SketchHashRandom"],
     "domain": [],
     "open": [
-     "Accounting.Assumptions.SketchHashRandom",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Remote.Sketch.Assumptions.KeyBudget",
      "Accounting.Remote.Sketch.Assumptions.Present",
@@ -9436,10 +10011,9 @@
    "signature": ["Accounting.SecurityProofs.Remote.SketchBoundP2 : Accounting.Guarantees.Remote.SketchBoundP2"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.SketchHashRandom"],
     "domain": [],
     "open": [
-     "Accounting.Assumptions.SketchHashRandom",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Remote.Sketch.Assumptions.KeyBudget",
      "Accounting.Remote.Sketch.Assumptions.Present",
@@ -9455,10 +10029,9 @@
    "signature": ["Accounting.SecurityProofs.Remote.SketchBoundRun : Accounting.Guarantees.Remote.SketchBoundRun"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.SketchHashRandom"],
     "domain": [],
     "open": [
-     "Accounting.Assumptions.SketchHashRandom",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Remote.Sketch.Assumptions.KeyBudget",
      "Accounting.Remote.Sketch.Assumptions.Present",
@@ -9476,9 +10049,9 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "536e79c1a4e47601f47be4f38a108432b21eda20c75cc846be32a2ce0ea0b73a",
@@ -9492,9 +10065,9 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "4a5a58ee406eed68b1df9a17e84c7d825595776e35e61625ee64e5f868f377e5",
@@ -9505,9 +10078,9 @@
    "signature": ["Accounting.SecurityProofs.RemoteRunConservation : Accounting.Guarantees.RemoteRunConservation"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "710a58bb8553d9dfb7234fee438799b8d8916e8e2f0cf27874ece9e8ddbf0912",
@@ -9520,9 +10093,9 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "0df531dcf2757bdbf7d543cb9dd84c74996aa8020632a81bb5f78a125d48d059",
@@ -9535,9 +10108,9 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "d463d3c434f9a27a7851fed0f05fd42bfbae3dfe7a2a55be351bc40316b8f6c1",
@@ -9579,9 +10152,9 @@
    "signature": ["Accounting.SecurityProofs.RemoteRunRoutes : Accounting.Guarantees.RemoteRunRoutes"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.WorkHardness"],
     "domain": [],
-    "open": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+    "open": ["Accounting.Assumptions.SquaringCeiling"],
     "reads": []
    },
    "type_hash": "0747c8953485538cbd4e85c2239aa37f20476b751c26332838b2fc5dc07afce1",
@@ -9982,11 +10555,10 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.KeyBinding"],
     "domain": [],
     "open": [
      "Accounting.Assumptions.ChainSum",
-     "Accounting.Assumptions.KeyBinding",
      "Accounting.Assumptions.SketchHashBudget",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Assumptions.SquaringFloor",
@@ -10005,14 +10577,12 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.KeyBinding", "Accounting.Assumptions.WorkHardness"],
     "domain": [],
     "open": [
      "Accounting.Assumptions.ChainSum",
-     "Accounting.Assumptions.KeyBinding",
      "Accounting.Assumptions.SquaringCeiling",
-     "Accounting.Assumptions.SquaringFloor",
-     "Accounting.Assumptions.WorkHardness"
+     "Accounting.Assumptions.SquaringFloor"
     ],
     "reads": []
    },
@@ -10027,11 +10597,10 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.KeyBinding"],
     "domain": [],
     "open": [
      "Accounting.Assumptions.ChainSum",
-     "Accounting.Assumptions.KeyBinding",
      "Accounting.Assumptions.SketchHashBudget",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Assumptions.SquaringFloor"
@@ -16607,24 +17176,6 @@
    },
    "type_hash": "b1b8da0e8ecbf5e4890926e53f753248e83ae2e68cc8f323b6675fa1e54aed47"
   },
-  "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial :",
-    "  Not",
-    "    (Claims.ZKServer.Loop.ZkAnyAt Claims.ZKServer.Loop.noTables Claims.ZKServer.Loop.noVals",
-    "      (Claims.ZKServer.Loop.leakL (Claims.ZKServer.Loop.constRel Claims.ZKServer.Loop.NT)) Claims.ZKServer.Loop.noReal",
-    "      Claims.ZKServer.Loop.noWk (fun x x_1 => True) 2)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "4506aaf50fe9d724a2ecc5ccff7ae1a40d56f6a54eaa63d3409e35ea9944a3d2"
-  },
   "Flock.SecurityProofs.SessionLoopZKDeployed": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.SessionLoopZKDeployed : Flock.Guarantees.SessionLoopZKDeployed"],
@@ -21391,10 +21942,40 @@
    "unfolded_hash": "f5db05faad237b32a0f201ae3cb4b9673fd1cd9c7baea419c54066ea8cb521ae"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsH200_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipeMeetsH200_honest :",
+    "  Exists fun prf => Exists fun P => Eq (Pous.pr fun x => Pous.StreamedWipe.Accepts P x.fst.fst (prf x.snd) x.fst.snd) 1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "c868959c5124dd0d192f3ac36bb9c35aa9cc1345eb2fd3147e433c837b4876d2"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsH200_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipeMeetsH200_nontrivial :",
+    "  Exists fun prf =>",
+    "    Exists fun P =>",
+    "      Not",
+    "        (ENNReal.instLE.le (Pous.StreamedWipe.winRealBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) prf P)",
+    "          (instHAdd.hAdd (instHPow.hPow (ENNReal.instInv.inv 2) 128)",
+    "            (Pous.StreamedWipe.prfAdvantage prf",
+    "              (Pous.StreamedWipe.wipeDistinguisherBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) P))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "0ab80d811699b4a046347ace572b6f889696336fa4b4849dde1150700a3edf78"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsReads": {
    "owner": "@memory-accounting",
@@ -21503,10 +22084,40 @@
    "unfolded_hash": "3ad4dba7ae60c5f40ffc98633c8c95e1e89b53ca443c386daf173201e8a4f391"
   },
   "Pous.SecurityProofs.StreamedWipe_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipe_honest :",
+    "  Exists fun prf => Exists fun P => Eq (Pous.pr fun x => Pous.StreamedWipe.Accepts P x.fst.fst (prf x.snd) x.fst.snd) 1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "08001578f548294fb4daa4e83b5528e6833305ed58fe8571803275024e10c38e"
   },
   "Pous.SecurityProofs.StreamedWipe_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipe_nontrivial :",
+    "  Exists fun prf =>",
+    "    Exists fun P =>",
+    "      Not",
+    "        (ENNReal.instLE.le (Pous.StreamedWipe.winRealBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) prf P)",
+    "          (instHAdd.hAdd (Pous.StreamedWipe.bound 1 1 1 1 1 0 0)",
+    "            (Pous.StreamedWipe.prfAdvantage prf",
+    "              (Pous.StreamedWipe.wipeDistinguisherBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) P))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d5619f4b235ed58fa1fd43929b67e3ecd8d725a845676bf667e2bd30eb3b72c8"
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tGap": {
    "owner": "@compute-accounting",
@@ -25992,7 +26603,6 @@
     "  (record : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)",
     "  (recordDigest : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg) (hready : I.SessionsReady)",
     "  (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered Verity.Registration.Composite.remote)",
-    "  (hOR : I.LogOpensRecorded Verity.Registration.Composite.remote)",
     "  (hW : I.base.PouwSound Verity.Registration.Composite.remote)",
     "  (hI : I.base.InferenceOnlySound Verity.Registration.Composite.remote) :",
     "  (I.vocab (I.constructionsAt K₀ Verity.Registration.Composite.remote reg record recordDigest)).SoundnessAt",
@@ -26003,7 +26613,6 @@
     "assumptions": [],
     "domain": [],
     "open": [
-     "Verity.Sampled.Instance.LogOpensRecorded",
      "Verity.Sampled.Instance.RegisteredFiles",
      "Verity.Sampled.Instance.SessionRegistered",
      "Verity.Sampled.Instance.SessionsReady",
@@ -26028,8 +26637,8 @@
      "Hash.Assumptions.LmsUnforgeable"
     ]
    },
-   "type_hash": "3d2d19194764096d29e03335d4b31e725d4ad43e9a6d93ed1e1fe2b8a0bd3627",
-   "unfolded_hash": "3653810526ab281d1f2cb1a381bebb6331f43463743f519662e54d8348521bd2"
+   "type_hash": "0449cb7de9e91d247bf28244faa3c3b70bb5be79f942509a0f8bb9f410abb08a",
+   "unfolded_hash": "3cfa3d5f294a2b9a5ba8163eecb207954516772919dc4068a5b52b8037438ca1"
   },
   "Verity.Sampled.remote_soundness_deployedReady_honest": {
    "owner": "@soundness",
@@ -26041,13 +26650,10 @@
     "        ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).SessionRegistered",
     "          Verity.Registration.Composite.remote)",
     "        (And",
-    "          ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).LogOpensRecorded",
+    "          ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PouwSound",
     "            Verity.Registration.Composite.remote)",
-    "          (And",
-    "            ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PouwSound",
-    "              Verity.Registration.Composite.remote)",
-    "            ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.InferenceOnlySound",
-    "              Verity.Registration.Composite.remote)))))"
+    "          ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.InferenceOnlySound",
+    "            Verity.Registration.Composite.remote))))"
    ],
    "assumptions": [],
    "premises": {
@@ -26069,7 +26675,7 @@
      "Hash.Assumptions.LmsUnforgeable"
     ]
    },
-   "type_hash": "a4cf2eb85bcabd9ed42b01e79d0a65c91084e43191764528394c6b667cb8d362"
+   "type_hash": "bfdc1903af3dd5335e391ff6fe13582e88be0dd4af5196fa861140cf04097804"
   },
   "Verity.Sampled.remote_soundness_deployedReady_nontrivial": {
    "owner": "@soundness",
@@ -27747,8 +28353,8 @@
    "Proofs.Flock.Soundness.Premises",
    "Definitions.Nci.Assumptions.Fit",
    "Definitions.Core.Assumptions.DeviceFigures",
-   "Definitions.Pouw.Assumptions.LeadCommit",
-   "Proofs.Accounting.TS.Session.Group.Premises"
+   "Proofs.Accounting.TS.Session.Group.Premises",
+   "Definitions.Pouw.Assumptions.LeadCommit"
   ],
   "properties": {
    "Flock.SecurityProofs.PublicAudit": {
@@ -28732,7 +29338,7 @@
    "Flock.SecurityProofs.StreamStopBudget": "frozen (no-function): at every run a stream's joint stop (Flock.StopCount.streamStop) is a Pattern at its failure budget b, at most b of its sessions stopping (Flock.StopCount.StreamStopWithin), and a Pattern at b takes Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1) values (card_streamStops), with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountStream.lean and StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered, LogOpensRecorded), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved"
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -31538,13 +32144,14 @@
    }
   },
   "Definitions.Accounting.BoundReceipt": {
-   "digest": "834c8fe24e8f96d65ed63350777ae737d8437c45cb566fb8c04b964394360e1a",
+   "digest": "ff28083abf943190c7635c71f280f205ca2658b64236410c247a4d1d6b17e2f2",
    "definitions": {
     "Accounting.BoundReceipt.Coins": "5bd3e33203ab507f0dade1983b5d07fcbf91a18e2857842b16567c5bd937f8f2",
     "Accounting.BoundReceipt.InteractiveNode": "663671d9afffa89fb8e9c25550b362c674575911c5b6be20f1d8369b8147cb38",
     "Accounting.BoundReceipt.InteractiveNode.QueryDetermined": "74389a2b77452caafc3f98ee0ea38f50507d0091fec78e4638487f19ee9ae666",
     "Accounting.BoundReceipt.InteractiveNode.gpuSide": "6617249cdbf38e595a296742f526d88806e6c92c97bd090247dd47c4b0bc45be",
     "Accounting.BoundReceipt.InteractiveNode.node": "64d6dbcaa563588438dd0682fb626cb257cebcac5b97c96474cc0d885dfe926a",
+    "Accounting.BoundReceipt.InteractiveNode.ofNode": "a167ad7ff57f244ee693af2d1b165d8d1ffac2b356b71d6a0b1a45414768979d",
     "Accounting.BoundReceipt.InteractiveNode.restSide": "1b84f2fd45004f188d972bc050f446f85aacebf736f1bbabd16393084f1a35f2",
     "Accounting.BoundReceipt.InteractiveNode.under": "66ff895b105a8833174085749294d0c91c7ecf2df0cd73f2f886256d375eedca",
     "Accounting.BoundReceipt.Mix": "bedbca35f8b2fbd990eff56b367389fd0320356dd508046f111a75a217366f15",
@@ -34288,10 +34895,10 @@
    }
   },
   "Definitions.Assumptions.Accounting": {
-   "digest": "bef8d52836ec639ee7d129d126871cc08fef055b272a04d4d18f0de4806c63fb",
+   "digest": "024bfa65b08d3670a756f6f5bb80a333dcf2d386f43d3e1f0c65c85b5ec1e726",
    "definitions": {
     "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
-    "Accounting.Assumptions.SketchHashRandom": "3e61314a8079aa83ddf9f4d27c4b669a01d6470868cc4bbacce26dd6e40d8896",
+    "Accounting.Assumptions.SketchHashRandom": "6e79010bd69179335cf616b30f200eeb5bc8bc4d7b27f0df3201fb604b369355",
     "Accounting.Assumptions.WorkHardness": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec",
     "Accounting.BudgetAbort": "8a37c1d7984c1cb00a729b34d360d5f97bba4ef1b11e31e3b216fa76bf8b4be1",
     "Accounting.BudgetAbortPearlC": "62a36c498a423d1faf10977b5259a7277dcd6a31dda7ee60c639ce1025984a5e"
@@ -43995,7 +44602,7 @@
    }
   },
   "Flock.KsScope": {
-   "digest": "cc04ed4922c8fa4eb2e9e6cbc181a045f80a7da5fc629086ee9de78012dfefbe",
+   "digest": "a122b335b5c54400da195d4288f810dc687f938f640ae0bb2880cff3743c9231",
    "definitions": {
     "Flock.KsScope.ROOTS_WHY": "856122f76860449b1a6c7504a4ecf832f3c95daaabfa94f7812092d433ee5c64",
     "Flock.KsScope.SCOPE_WHY": "dd0e53f27f892c737ac8ffd6097ac7a8412479c7e79053f6fda35dc725ada0c0",
@@ -44005,6 +44612,7 @@
     "Flock.KsScope.checkOf": "6be630c05de52e27f378c42885fc58b4225079532c110a56cbc2d20b8b242345",
     "Flock.KsScope.collidesT": "d64b1507c7afd599e8161438c8ea995b72b9f89b67f3f3552c4cf8848a99d6a0",
     "Flock.KsScope.drawWhy": "31490eabd56ff3e8894152ecbe4e94d5669e623c79d6f763cc1121f716063779",
+    "Flock.KsScope.filesOf": "7b62684b3c3d417360fb28a4a6286772f3f8fe86a254bfb5a3e49e2be3289284",
     "Flock.KsScope.filesWhy": "be405c9f8b28eab80ce9674a5edb080dcf02d182ae36b237616128f066603f9c",
     "Flock.KsScope.rootT": "ab0baeea16d9ef7ded8923f9e81f4856026bef143cd82ea63b60583063c129ce",
     "Flock.KsScope.sharedWhy": "005abe36bb114dd69776434e06bbe9104d5eb1291760081d0e50df9a7cd4c1dc",
@@ -49136,7 +49744,7 @@
    }
   },
   "Proofs.Flock.Bridge.Deployed": {
-   "digest": "76baac92ffa862ce7c7284118c4323a4b70c9c64f1fdefac617ca37c6300b578",
+   "digest": "b834df0c7718e02e4dba1170015e1b8040e8afb679c23156f0a135723664073c",
    "definitions": {
     "Flock.Bridge.RowAt": "4fb2fcca817cbd8deb1dc9f305ec57503452a264f75b8369c38f454c20c8815b",
     "Flock.Bridge.RowAt.leaf": "b0c32691e7c1abc1f63fcedf0ab362b7d25293581922239489bd83a0283fc0b8",
@@ -49148,7 +49756,7 @@
     "Flock.Bridge.bitsOf": "a2a1b25a668da5e228012dd0add46eb8d7764c3533478294dafa9882ca89f20f",
     "Flock.Bridge.commitDep": "a1e700170f2cb8aeaab4c0517d1ad206f9abf2cc20ba4f9fa6e6500fce188528",
     "Flock.Bridge.domOf": "096d8650c6c4ee6702d8394c13def99fa9953ef7fdcfd29b3a65c30fad6b4de9",
-    "Flock.Bridge.pathOf": "3820a7e769f5052578bed6b819dce88dff798627d63e7d45ae20c70ba1497a6f",
+    "Flock.Bridge.pathOf": "3a8a1a9eb0069615426820fed8c4970a68c837651cdaddae715bd65c424767d0",
     "Flock.Bridge.placeOf": "d9d664741ffa9097a0e86a9aa51bb7bc8cb89a404916dc8a27411515d43bd4cc",
     "Flock.Bridge.portOfPos": "d4df35dda99be50e8071f3f8cd970f7b9a23451ac194568a0f9165b85f0c49ac",
     "Flock.Bridge.portsOf": "facba4c0107f30a09ea63609f2e227d6da07a49cb75b74fd06082b3696ee2fa6",
@@ -49275,9 +49883,9 @@
    }
   },
   "Proofs.Flock.Bridge.Spec.RowSeg": {
-   "digest": "62aa2938e472896b1b8ac7f4cee456eedcd3a9419f7c60e3f407e42ab85684d0",
+   "digest": "b4ff3f29a1fa18e3a73538e2945798bf8d6a79e3c267258cab37b7d0836a4700",
    "definitions": {
-    "Flock.Bridge.Spec.formatOf": "cbeac15c8853bed889188c1c898c524b49283c24c194fd02e440df904a2ae35a"
+    "Flock.Bridge.Spec.formatOf": "61305957bc4f6cfb2c1b39fbd7224960af81b339eac87516306b30e833b8dbd8"
    }
   },
   "Proofs.Flock.Bridge.Spec.Tree": {
@@ -51990,12 +52598,6 @@
     "FlockSoundness.Discharge.ZkHidden.ZkTab.table": "6f20306952c62b0ee0a1af2e4276fbe303cd768c3902a140754e4b2f40aa2747"
    }
   },
-  "Proofs.Flock.Claims.ZK.NonVacuous": {
-   "digest": "468bd4762d92aca19aa8c4dce88fe740aab90a219a01c7bb7d84408806f587e0",
-   "definitions": {
-    "Claims.ZKMal.witMsg": "ca5489c145ec1db67e2961ff54bae441d7e6f3c0603bfcd19119fe5c63f63911"
-   }
-  },
   "Proofs.Flock.Claims.ZK.OneTape": {
    "digest": "7f8eebcf22964d014e6223d0ef180f9ccec077a98cd6d813d804a48e568f0dfc",
    "definitions": {
@@ -53928,10 +54530,9 @@
    }
   },
   "Proofs.Flock.SessionLoop.Leak": {
-   "digest": "841b149912da2e88b62c251001128c0e806be26b38fdfc9144e8e939b9173373",
+   "digest": "b006b305b23a7b8f74c2cdc07a6e50790151df083a4bd9b84c53da7733a0decb",
    "definitions": {
-    "Claims.ZKServer.Loop.helloRej": "46102b645a80082cd192ce32ee56619a55d33860c7ad622ff68814a66b40962d",
-    "Claims.ZKServer.Loop.leakL": "a7fdd5ffefdec54ad40305a1741d46f3d4e125ea34ccacdc21cd39c6ed78a9ce"
+    "Claims.ZKServer.Loop.helloRej": "46102b645a80082cd192ce32ee56619a55d33860c7ad622ff68814a66b40962d"
    }
   },
   "Proofs.Flock.SessionLoop.Level0SrcSat": {
@@ -54040,17 +54641,6 @@
     "Claims.ZKServer.Loop.tapeL₀": "b03609278486f0b28e924abccdbeaf10bf2c443b8af5983f60c4f55924d82123",
     "Claims.ZKServer.Loop.tapeRel": "48b8729493eef3c04c5a01c688090bd4d1319bdddddfa86e619c80630e892542",
     "Claims.ZKServer.Loop.tapeWk": "e10ebd23253fc1e3b3e6a9c40b58f4eed799a5aa8c801a51e23f6edf9042532a"
-   }
-  },
-  "Proofs.Flock.SessionLoop.ZkAnyNontrivial": {
-   "digest": "f41582d29993e7845a9e6017a9f107899b2d423ff46f66eb138ff9869ba723ad",
-   "definitions": {
-    "Claims.ZKServer.Loop.NT": "bd4adb1e9c5a4b03874622e36e24826368b973bca1778d6e811b86081a2f21c3",
-    "Claims.ZKServer.Loop.constRel": "99d08792904a28e4834c36dd1a91cfa076776209d0ad41c2f020b39a2a0714a4",
-    "Claims.ZKServer.Loop.noReal": "0e7b6d955ea32ea3ff3a979982f5566f8d92f7ff06dcb78cc25e1c7a37afc253",
-    "Claims.ZKServer.Loop.noTables": "0cb04796bf0048e9dc32287254a280be0c7a0df0c287edf7691360da01b48d43",
-    "Claims.ZKServer.Loop.noVals": "177ca5a2a097553bdc0cf48243a3861ad08eecb53583b09d57c0c335d8526e6b",
-    "Claims.ZKServer.Loop.noWk": "af81cbf8063345139740a15c63b960b72994a7153b9d6cb557fcb87e3f4f2887"
    }
   },
   "Proofs.Flock.SoundAtBridge.Served": {
@@ -57894,15 +58484,8 @@
    }
   },
   "Proofs.Properties.Verity.Sampled.Binding": {
-   "digest": "46723e95d456429996e896437c88954642fd9cf4766b6abf98a02e98a40439c5",
+   "digest": "8ffc62bbc812e6068ee58652e636d2182adf9b883a090771623175499beff86b",
    "definitions": {
-    "Verity.Sampled.Binding.Logged": "12e2253dd2153270519466fbc045fbedcba0e13a144753fd2bf010595aa1b0b6",
-    "Verity.Sampled.Binding.Read": "fb6d6342c7c4018d73b5783cde08dc5ca1b8c9ea331fcdd578fc59e56754fc17",
-    "Verity.Sampled.Binding.Read.Of": "1fa0470c668dcdfce44f8c5471a4063fc2250c32741e50e401b2e252ab909e44",
-    "Verity.Sampled.Binding.Read.answers": "d1668b15b7592cbc6ebbdce97c25b73b0c50ad5520766ce652a936e65b575f29",
-    "Verity.Sampled.Binding.Read.coins": "cffc04facd6dd42de743bf09ab7b93862852bd8359913094da0bba3201775cc9",
-    "Verity.Sampled.Binding.Read.frame": "5d24444c19e6db133b00dd1782afdda41ecddc14fb1e9e0f108ac3cac351d858",
-    "Verity.Sampled.Binding.Read.ofV2": "1e0eae5c78d3f1b033d890e928f5e5e10b05583d26ed7d1fc0aca817dee97e6d",
     "Verity.Sampled.Binding.breakCalls": "345a427d451de9b45b3642975af7829183db853530b53b57533c5130bd5ddd8a",
     "Verity.Sampled.Binding.collisionOf": "9df51d3a808e530b6f05b12ff91df0825db24d8a7207a79c0b7a8cd3b93fe030",
     "Verity.Sampled.Binding.forger": "5fda73fad4064fdff8f4f8fded1331381e9f5fbf760cc30a2490de99c2a3aff7",
@@ -57911,7 +58494,6 @@
     "Verity.Sampled.Binding.keyOf": "23ebc9f452c1966eda0c77b06e7f05dc15ef9441c8eb8830d4e0cb4debd3b830",
     "Verity.Sampled.Binding.lmsCalls": "622452849f545e521d7e5b99eb5a0d5c43cb82f3a44a845c6d108bf00237856a",
     "Verity.Sampled.Binding.readFinder": "995c82dd0946f3db7f22bd69a810710ad7331e2e1d0e708bd5fba2299a819924",
-    "Verity.Sampled.Binding.readsV2": "108d1a9721f2ce9ac7aa2db1e78dbed005b87a199a9c3cc6e3ecc6ec435cb525",
     "Verity.Sampled.Binding.record?": "8affed265a8072892dd0a594066ddaa45848dea18b4fd0b6f2613f171d1fe49d",
     "Verity.Sampled.Binding.records": "88436655dcf0c8d3fd0414721f90238431691545c2034a711d92d76e62e1f20f",
     "Verity.Sampled.Binding.tableCollision": "f5645aeec00656fdeba0e061558311313b7555c9fe10f3abad650b54c626e245",
@@ -58059,7 +58641,7 @@
    }
   },
   "Proofs.Properties.Verity.Sampled.Instance": {
-   "digest": "a352e7a5c0b2e7c2b2e7239ab68a24c24db7767567b1b6ef1501767b75e83658",
+   "digest": "a2ebee1fad30d3b3d2e2890f317bead69493b7cfc46ed1530382fc4ae3dd8cbf",
    "definitions": {
     "Verity.Sampled.CostsRead": "88a00c16759b1918ca0772bac9a5dd223325c51cafa2be1559ec84b092959008",
     "Verity.Sampled.Instance": "1446d15758e7f7b943b9f55128981d91ebec8ed11ac76751956ea3c52531afe7",
@@ -58072,7 +58654,6 @@
     "Verity.Sampled.Instance.Honest.ofRun": "f403a01597a12225609cd04af343fc807a2e696d41892ba5089b0ec1ab2110ba",
     "Verity.Sampled.Instance.Honest.signer": "a04ab1d9dc2055c3061f8c567df337efbbf8d803f9c26cda6d41b4bbac5ca126",
     "Verity.Sampled.Instance.Honest.wipe": "7dc691bf89333c91c5272e46a628bad4d31109081127fd6e563d9c0de9f87135",
-    "Verity.Sampled.Instance.LogOpensRecorded": "42a5f620cdf195873b4935d15e97a3c747de211499a2716f7dc02f214f09c794",
     "Verity.Sampled.Instance.RegisteredFiles": "81205422acabcad7d2a0e783aa8f0f9f4351653a3b629e817f3964b889b277e5",
     "Verity.Sampled.Instance.base": "ac974dab0d7c9ca5b25d61ed06d43e50c059f3e274540ed0b781004eeb67dcc3",
     "Verity.Sampled.Instance.bindSpec": "82514da27362bbd93d31589fa6ba1ad33cc3c42749d8aee3fe74c9d247df74fa",
@@ -58172,10 +58753,10 @@
    }
   },
   "Proofs.Properties.Verity.Sampled.OpensAt": {
-   "digest": "bc95761e431e8ec8877a66820582cf312a44527b85f5a3647a5df7ef2fbf8e09",
+   "digest": "1d9370cb407a1f67faa210e313365def99c098c08dff7820de469ed8e69591f7",
    "definitions": {
     "Verity.Sampled.Instance.SessionsReady": "b3c68dd91b99363dd6daa4b0f4778d150f32fe80fb2820969ce9c4ebdee6a386",
-    "Verity.Sampled.Live.OpensReady": "53571361ae2765fe0f23b17e0bbed6329718f0b45115657140708345ef7efd74"
+    "Verity.Sampled.Live.OpensReady": "be5f1d8688ddfa7f76edcef80fe7abc7f1487a7c3c62c2eb1b82099e64f39e34"
    }
   },
   "Proofs.Properties.Verity.Sampled.Place": {
@@ -58219,13 +58800,6 @@
     "Verity.Sampled.readingAt": "69a0ed2eecd9d4ae134ef1917a4a070e78a94f4daaecc8341a7e3e61a037832d",
     "Verity.Sampled.slotReveal": "ae094dfbe5e5ffa9c7866cc29dd00b240f3c33a74de24d2d05c1e01239a23fbe",
     "Verity.Sampled.slotRound": "f97b6701d2a25f70524c150fd23fe576fe15d40a81cda0db2f4b5f167f29e7e3"
-   }
-  },
-  "Proofs.Properties.Verity.Sampled.RecordRounds": {
-   "digest": "ee041f0bfed83558c75ab22fece3e9b84d47643b545ddc211416657e0b0ea690",
-   "definitions": {
-    "Verity.Sampled.OpenedRecorded": "1aff57cf0ac6946111a4df8859d3d764a0e5efc02c34583be8fd64a1e2b1be22",
-    "Verity.Sampled.recordRounds": "bf55a0c38ee88d7d5414f4d4061cd4ae2720393ca43dfc4da7e4be466ef5dd01"
    }
   },
   "Proofs.Properties.Verity.Sampled.SampleNamed": {
@@ -58451,7 +59025,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "44472c6741cbe678531711ac518f1d39e428fce871b6f6ef866aa621d2a4c6cc",
+   "digest": "84645352e65d90fe3654473371816546770df13d3580071429f5b555a78042de",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -58509,7 +59083,6 @@
     "Verity.Place.root": "2bb4eec397e6a80ee6ea59ee56045d50e304118268871e38f2dbaa3c890418cd",
     "Verity.Place.verifier": "0b37f4227f0d959146bfad2122239dfe848c86083b102db8c16afa1d2f808e56",
     "Verity.Release": "9aa5ea5e861e996845f382b3e2f76d7908c1611399917e738a91a1a499cb2018",
-    "Verity.Release.answers": "1155236b8459507406ecc83e5ae244fd075bd7a52e309971fe66695868a0c16c",
     "Verity.Release.casesOn": "724a80724d99406dbd43656689ab2d1cccb3510ef75a2c41c8fc0ca8e26f0ed9",
     "Verity.Release.coins": "edd772093f33047e63e9be321761712c07a170bfae7c2f096a561e55f772a3fd",
     "Verity.Release.frame": "4a177825ffa99c14da3efc0902496aafa2d5db7bfe4b1aaefbb2f74fc7b246a3",
@@ -59849,7 +60422,7 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "98db71834393617798ff105c218e45cbec1d83423f947ae53655757497af811d",
+   "digest": "df551560db040f9f9c993847f7ae47b13e48f90712fd2f11062ec1969b9caac8",
    "definitions": {
     "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
     "Spot.OneStageZk.Evidence": "f5fc59dc0b4a0d0d0732da27e636afe6ec207cbbf2bbe5666d18c048c5459e52",
@@ -59867,6 +60440,7 @@
     "Spot.OneStageZk.Member": "438d2f0ccacb3b2be9c14d3f916c837e4ce5b42a6efce589d08019d6c4202f61",
     "Spot.OneStageZk.Member.blockHeld": "30d9e01956c29f94b2fbf784d7a5f074b5ddd59f7fa9c244a15e3259e3bec29f",
     "Spot.OneStageZk.Member.count": "1ccacbab061c24258c9cc7c8cd6eba72c5ffbb63a1c5852aca2d3f4f51ed1f4a",
+    "Spot.OneStageZk.Member.files": "0e8fecd818bc892f00193dc80c0b6335a0b2a61bc7c64fe0ff520630ba11599d",
     "Spot.OneStageZk.Member.first": "6704f9f9a0b2f923eebd37bb820de2b614b5a62c4f7e69dc240f8023a75f05be",
     "Spot.OneStageZk.Member.g": "969b1d5d33ac4edd0908ee2381cd0c7def8467b1b3cec5aacb30a6d49bc264f1",
     "Spot.OneStageZk.Member.heldAt": "442a5999bd5a6c52e035cc11079651076a74dad88df6e1ad2aba22abfa663d7a",
@@ -59915,6 +60489,7 @@
     "Spot.OneStageZk.StatementFiles.sessions": "bca9515ec633f410c78828682108beb86046aa14e580ddfa3e2d1c119eb703f4",
     "Spot.OneStageZk.StepAt": "7846b73f4dede43dda78677d073a2289dccc733bcd8cc538d9874ab9ab440ccd",
     "Spot.OneStageZk.StepAt.I": "c9098a37b34f14defb8c930a14d29140369c805e2b0a9604a6c858ce1c5eb073",
+    "Spot.OneStageZk.StepAt.filesHeld": "b7e67a7b73f04fd0a5856895c0575666c6ae4ae0250da18d0a3fb0ad7567763b",
     "Spot.OneStageZk.StepAt.ksFiles": "5638c90ef4a18c1bdd57e1e0e6eb8675c70068451ba246ece9e4aff72dca0f00",
     "Spot.OneStageZk.StepAt.ofOwn": "0d1bfb5ff48fa6d1ff90118a5988bf1b8ce946e4aa222cf54bc15a0703439e33",
     "Spot.OneStageZk.StepAt.population": "157a90dafc8b73826e2b986fdb086f7916a6a02fb03b2f437da8c9ee1b18d1e0",
@@ -59953,8 +60528,10 @@
     "Spot.OneStageZk.laidHeld": "62fee0acf3a5a492387a44adf427ef87c0cf94e9ad0468c226f74cf3f8c22754",
     "Spot.OneStageZk.linesOf": "ea58ef2214221f1a7075a8c0461ce4a6a8eb9a06da64fcf96eb7b0bc64f6a5c0",
     "Spot.OneStageZk.lookupsOf": "c6c15967aa40752c7b9f4adc4608e3732149b0d018a70ca9f1bb497ef44e1793",
+    "Spot.OneStageZk.membersFiles": "3c468c5dc9c33037f745196ad47b9d1e38469b9a9062c3d5205fcb66080b9dfe",
     "Spot.OneStageZk.membersHeld": "e1935c3cf06b4978654a7630080695cbf6e68f7d3384158ec88fe98a4fcaf628",
-    "Spot.OneStageZk.membersRun": "43e7e77969ee600e1f2d18d0878712060c7495015d1ebe1cf0ff8e8fb82cb259",
+    "Spot.OneStageZk.membersRun": "11970b1124378a8e9310ff14a664652cc30af648c0bc30d8385ec5d1880f6d32",
+    "Spot.OneStageZk.membersStructure": "3b7b22a494729000cc32e110e06859a9217db437d951327a45d13409c4d7f98c",
     "Spot.OneStageZk.membersTreesHeld": "1a49768f7524b12bf5c7aa7bd332cb41d4bb9698167d8d73b3960ad1e4180176",
     "Spot.OneStageZk.oneSession": "3b5bc4ea098e1bcb9df88afa7689c9c6acaaf3fd29e1c6297447b1ce3a7ecf15",
     "Spot.OneStageZk.orderHeld": "dc4a26c43f92f5ac3e26f531238cf4bbaafb16dce2a97cb2859661952f44e482",
@@ -59978,7 +60555,7 @@
     "Spot.OneStageZk.rootsOf": "be102973e9ad3f0e573b77acb39b0598169f767ea5ae9afff50054dd677c8f0d",
     "Spot.OneStageZk.run": "417702f7ff36f19de4c4154b15cb9e47bd97c3b635e68ed7446afe853918c8cc",
     "Spot.OneStageZk.runFrom": "9e1c21af2dfe60b4b3a847eb8f8daf0ce515ceb24fb65b31d346bcb364a90cc9",
-    "Spot.OneStageZk.runMembers": "5b86ef3f519ab280a209e47e5344ca96cf74b7cb679511987e99429d17141c35",
+    "Spot.OneStageZk.runMembers": "2563aa68dc71210e7b604cde2ad6ff2e1661cd8a8aea8028b1c66f8460a871c8",
     "Spot.OneStageZk.scopeOf": "e94187243787d5abe3cc13000e4f657a91ed3109f7e8a9c48ca2919b23454fd9",
     "Spot.OneStageZk.sessionAt": "c8faeafb847a3afda29031af35b25bfe70134280834f8c045d22797c7c2420a6",
     "Spot.OneStageZk.sessionEvidence": "b7c784997338fbfe811fb30bbe5e4717a87f8bb9704cac295ccccb5c09ac110f",
@@ -59987,9 +60564,10 @@
     "Spot.OneStageZk.setupChecks": "6e7eea147c0b79a1391bc6d73f978f1745ccde6056349dfc4a9008ed2c2257d9",
     "Spot.OneStageZk.splitsFrom": "7181b0742833f22184fa0565070c0368a19952f2d0b0f9fbfa91483c6034f3ed",
     "Spot.OneStageZk.splitsOf": "d18169c4bc3a4ed7a2bbcd18fe4ad3536f51583a85d0683fa7b3c78447fa7255",
+    "Spot.OneStageZk.statementAt": "e569643c828f2a85cabb02918dfbc3c2cac9f1dd861f7872a40db6a2a20f6a45",
     "Spot.OneStageZk.statementOf": "5abb49800bbc7e224ac319a29853e4382d6ea3c6e5289fc9894213d84fae8b33",
     "Spot.OneStageZk.step": "3b03721d6ced6798eddc70854cb60612be4c38b1ec6167f44f123f4f83aa40d3",
-    "Spot.OneStageZk.stepMember": "9a08fa2b1f75ade7137518bba484231f2d3d4443f1b02ef1fe7853349c6effa5",
+    "Spot.OneStageZk.stepMember": "608e8bfd59a145d82a09efdf39d95d03dc071160e50ca520bbb0721df6e0a32a",
     "Spot.OneStageZk.tablesHeld": "000574eb0376f78d18d1f42de1622518420348bb5ed5667796faa54c6b7b20c4",
     "Spot.OneStageZk.tablesOf": "5d14cb4d8454567b99bad8463df6f9d6fe7503bb6809976e46259cec2c5d008b",
     "Spot.OneStageZk.templateOk": "a5e4e652dc1d4c9f51482b0b140519c4aaa029fbe83144a590e35a907e5d1348",

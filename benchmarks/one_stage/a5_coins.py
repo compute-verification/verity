@@ -5,7 +5,9 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
   (`verity/protocols/compose/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
-  writes, and its key is this run's alone, so its samples show the path, not an auditor's coins; and since that key is
+  writes, and its key is this run's alone (or, where its caller keeps the host's root, `start`'s ``host``, that of every
+  run that reopens it: a later stage's session is then the same challenger's), so its samples show the path, not an
+  auditor's coins; and since that key is
   not at `Lms.deployed`, SPOT's v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Where its
   caller asks (`start`'s ``deployed``) the key is made at `lms.DEPLOYED` instead, its whole tree, over this
   machine's cores: still this run's alone, and one v2 reads signatures under. Its pins log pins main's
@@ -35,9 +37,11 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
 * **The evidence** (`Local.finish` or `GateClient.finish`, on a thread of the run's process once the session closed): the session's out/,
   the auditor's ledger and the host's pins log, copied to ``out/challenger/``, the key, the verifier's own copy of main's
   first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
-  ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one sample's `{key, ledger, main, pins,
-  segment, session}` (`coins.coins_reason`'s, and the Lean run's), its segment the settled one, and `negatives` its altered
-  copies.
+  ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one sample's `{ledger, main,
+  pins, segment, session}` (`coins.coins_reason`'s and `coins.draw_coins`', and the Lean run's), its segment the settled
+  one, and `negatives` its altered copies. The key is not evidence: it is the verifier's own, known with its copy of
+  main's history before any coin (`held`), and every stream on the session's coins is made with the two
+  (`service.Stream`'s ``key`` and ``main``), which hold the evidence to them.
 * **The verifier's own coins** (`a5.py --coins verifier`): no session. Each rank's `service.Stream` samples on `VerifierCoins`, the
   service's default coins (`verifier.coins`: the Lean verifier's `IO.getRandomBytes`, assumption A3), read by its
   `select` once the stream has received the rank's registration and written its receipt. The stream's coin source is then
@@ -46,6 +50,7 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import importlib.util
 import io
@@ -177,8 +182,9 @@ class Draws:
     (`hold`, before its sample ends) until its sessions have closed (`release`): `tree` and `tree_open` are the client's
     (`remote.RemoteChallenger`'s), one request and its answer at a time among the ranks' reads."""
 
-    def __init__(self, window_root: str, ranks: list[int]) -> None:
+    def __init__(self, window_root: str, ranks: list[int], key: dict | None = None, main: list[str] | None = None) -> None:
         self._root, self._ranks = window_root, sorted(ranks)
+        self._key, self._main = key, list(main or ())
         self._lock, self._left, self._closed, self._ready = threading.Lock(), set(ranks), threading.Event(), threading.Event()
         self._io, self._held = threading.Lock(), set()
         self._unplanned, self._needs, self._planned = set(ranks), {}, threading.Event()
@@ -387,11 +393,50 @@ class Draws:
         self._evidence = evidence
         self._ready.set()
 
+    def held(self) -> dict:
+        """What the verifier holds of the session's challenger before any coin (`held`): its key
+        (`ChallengerKey.to_json`) and the verifier's copy of main's first-parent history."""
+        return {"key": self._key, "main": self._main}
+
     def evidence(self) -> dict:
-        """The session's evidence once it has ended (`Session.finish`): {key, ledger, session, trusted} or {error}, each
-        with the `plan` it opened on (`start`)."""
+        """The session's evidence once it has ended (`Session.finish`): {ledger, main, pins, segments, session, trusted}
+        or {error}, each with the `plan` it opened on (`start`)."""
         self._ready.wait()
         return self._evidence
+
+
+def held(draws: Any) -> dict[str, Any]:
+    """`service.Stream`'s ``key`` and ``main`` for a stream on the coins of ``draws``' session (a `Draws`): the
+    challenger's key and the verifier's copy of main's first-parent history, as `start` had them before the session
+    opened. A stream is made with them: no evidence names a key, and the history an evidence carries is held to
+    this one."""
+    got = draws.held()
+    return {"key": Ch.ChallengerKey.from_json(got["key"]), "main": got["main"]}
+
+
+NO_HOST = ("holds no development challenger: --challenger-host is the directory the audit's first command kept its "
+           "challenger in, and a later command of the audit reopens it there")
+
+
+def local_key(host: str | Path, params: tuple[int, int] = LOCAL_PARAMS) -> Ch.ChallengerKey:
+    """The key of the development challenger kept at `host` (`Local`'s root), `Ch.CoinError` where the directory holds
+    none. A later command of one audit reads it from the host its first command made, never from a sample's evidence
+    or a hand-off, and makes no host of its own: a second host would sign under a second key."""
+    public = Path(host) / "var" / "key" / "public"
+    if not public.is_file():
+        raise Ch.CoinError(f"{host} {NO_HOST}")
+    at = lms.Params(64, *params)
+    return Ch.ChallengerKey(at.W, at.H, public.read_bytes())
+
+
+def verifier_key(key_record: str | None, host: str | Path | None) -> Ch.ChallengerKey:
+    """The challenger's key as a verifier holds it when it reads the samples of a session it did not open: the
+    deployment's key record at `key_record` (`served_h1.coins.key_record`), or the development host's at `host`
+    (`local_key`). Exactly one names it."""
+    if (key_record is None) == (host is None):
+        raise Ch.CoinError("the verifier holds the challenger's key from one place: --challenger-key, the deployment's "
+                           "key record, or --challenger-host, the development challenger the audit's first command kept")
+    return served_h1().key_record(key_record) if key_record is not None else local_key(host)
 
 
 class _Manager(BaseManager):
@@ -479,7 +524,7 @@ class OwnReplay:
 
 
 #: Evidence of the challenger's form that a prover might attach to a sample from the verifier's own coins.
-FOREIGN_EVIDENCE = {"key": None, "ledger": [], "main": [], "pins": [], "segment": None, "session": {}}
+FOREIGN_EVIDENCE = {"ledger": [], "main": [], "pins": [], "segment": None, "session": {}}
 SELECT_COINS = ("select", ["coins"])
 
 
@@ -499,7 +544,8 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
     audit record); `window` is the registration's window root.
 
     * ``verifier-coins-claimed-as-challenger``: the honest sample's bytes passed off as the auditor's challenger's coins
-      (`Replay`) with no evidence: `coins.coins_reason` refuses, and the Lean's run refuses at its select (`coins`).
+      (`Replay`) with no evidence: `coins.coins_reason` refuses under any key, and the Lean's run refuses at its select
+      (`coins`).
     * ``verifier-coins-with-evidence``: the honest sample's bytes as the verifier's own with evidence of the challenger's
       form attached: a sample from the verifier's own coins carries none, and the Lean's run refuses at its select
       (`coins`).
@@ -526,7 +572,7 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
         at = ((side or {}).get("step"), (side or {}).get("codes"))
         row = {"accepted": accepted, "lean": side, "source": s.coin_source}
         if isinstance(replay, Replay):
-            row["python"] = CC.coins_reason(evidence, window, FAMILY, after, read, lms_verify)
+            row["python"] = CC.coins_reason(s.key, list(s.main), evidence, window, FAMILY, after, read, lms_verify)
         neg[name] = {"refused": accepted is False and at == SELECT_COINS and row.get("python", "") is not None, **row}
     neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.registration), "drawn", lambda: len(coins.read))
     fresh = OwnReplay(read)
@@ -567,20 +613,26 @@ def opened_reason(got: dict, withhold: bool) -> str | None:
 
 class Local:
     """A development session on this machine (module docstring), its auditor host's root in scratch `root`, pinned on the
-    verifier's copy of main's first-parent line `main`, its key at `params` (W, H), made in `workers` processes."""
+    verifier's copy of main's first-parent line `main`, its key at `params` (W, H), made in `workers` processes. A
+    `root` that holds a host already is reopened: its key, with the leaves it has signed at, its ledger and its pins
+    log are kept, so a session opened on it is the same challenger's as the ones before it, under the same key (`key`)."""
 
     def __init__(self, root: Path, main: list[str], by: str = "circuits", params: tuple[int, int] = LOCAL_PARAMS,
                  workers: int = 1) -> None:
         A = _module("a5_auditor", TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
         self.A, self.by = A, by
         self.host = A.Host(root=root / "var", peers=root / "peers", name=LOCAL_HOST, pins=root / "pins.jsonl")
-        (root / "var" / "sessions").mkdir(parents=True)
+        (root / "var" / "sessions").mkdir(parents=True, exist_ok=True)
         (root / "peers").write_text(f"{LOCAL_HOST} research@127.0.0.1\n{LOCAL_PEER} research@127.0.0.1\n")
         (root / "coin-ports").write_text(f"{LOCAL_PEER} {A.PORTS.start}-{A.PORTS.stop - 1}\n")
         self.pin = on_main(main)
-        self.host.pins.write_text(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
+        pins = lines(self.host.pins) if self.host.pins.exists() else []
+        if not pins or json.loads(pins[-1]).get("commit") != self.pin:  # the pins log only grows, as the host's does
+            with open(self.host.pins, "a", encoding="utf-8") as log:
+                log.write(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
         self.params = lms.Params(64, *params)
         self.signer = A.key_signer(self.host, self.params, workers=workers)
+        self.key = Ch.ChallengerKey(self.params.W, self.params.H, (self.host.key / "public").read_bytes())
         self.thread: threading.Thread | None = None
         self.session: str | None = None
 
@@ -634,8 +686,7 @@ class Local:
         shutil.copytree(self.host.sessions / self.session / "out", dest / "session", dirs_exist_ok=True)
         shutil.copyfile(self.host.ledger, dest / "windows.jsonl")
         shutil.copyfile(self.host.pins, dest / "pins.jsonl")
-        key = Ch.ChallengerKey(self.params.W, self.params.H, (self.host.key / "public").read_bytes())
-        return dest / "session", dest / "windows.jsonl", dest / "pins.jsonl", key
+        return dest / "session", dest / "windows.jsonl", dest / "pins.jsonl", self.key
 
 
 class GateClient:
@@ -705,11 +756,16 @@ class GateClient:
 class Loopback:
     """The challenger party's host on this machine (`challenger_party.Host`, the ``host`` of sampled proofs' challenger)
     at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
-    from the party itself, so its coins are a development session's, not an auditor's (`simulated`)."""
+    from the party itself, asked for before any session (`key`), so its coins are a development session's, not an
+    auditor's (`simulated`)."""
 
     def __init__(self, address: str) -> None:
         host, port = address.rsplit(":", 1)
         self.address, self.session = (host, int(port)), None
+
+    @functools.cached_property
+    def key(self) -> Ch.ChallengerKey:
+        return Ch.ChallengerKey.from_json(self._ask({"op": "key"})["key"])
 
     def _ask(self, req: dict) -> dict:
         with socket.create_connection(self.address) as s, s.makefile("rwb") as f:
@@ -727,7 +783,7 @@ class Loopback:
 
     def finish(self, dest: Path) -> tuple[Path, Path, Path, Ch.ChallengerKey]:
         got = self._ask({"op": "finish", "dest": str(dest)})
-        return Path(got["session"]), Path(got["ledger"]), Path(got["pins"]), Ch.ChallengerKey.from_json(got["key"])
+        return Path(got["session"]), Path(got["ledger"]), Path(got["pins"]), self.key
 
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
@@ -749,7 +805,7 @@ def opened_pin(ledger: list[str], session: str) -> str | None:
 
 def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | Path, *, ssh_key: str | None = None,
           peer: str | None = None, key_record: str | None = None,
-          reserve: Callable[[Mapping[int, int]], list] = families, deployed: bool = False):
+          reserve: Callable[[Mapping[int, int]], list] = families, deployed: bool = False, host: Path | None = None):
     """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its samples' manager: (the manager, a
     `Draws` proxy, and the thread that opens the session and publishes its evidence). The thread waits until every rank of
     `ranks` has planned its sample (`Draws.plan`), then opens the session with the layout `reserve` gives their needs
@@ -757,11 +813,14 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     rank's sample, when a rank ended before planning (refused before its sample, or failed) or `reserve_reason` refuses the
     layout. The evidence's `plan` is the needs, the layout and the session's id (None when none opened). `main` is the
     verifier's own copy of main's first-parent history (`remote.main_lines`'s file: ``git rev-list --first-parent
-    origin/main``). With `deployed`, a ``local`` session's key is made at `lms.DEPLOYED` (module docstring)."""
+    origin/main``). With `deployed`, a ``local`` session's key is made at `lms.DEPLOYED` (module docstring). A ``local``
+    session's host is made under `host` when given, or reopened there when it holds one (`Local`), and else in a
+    scratch directory of this run's alone. The challenger's key is known here, before the session opens (the local
+    host's, the loopback party's, or the gate's key record), and the manager holds it with `main`'s lines (`held`)."""
     first_parent = R.main_lines(main)
     if challenger == "local":
         at = dict(params=(lms.DEPLOYED.W, lms.DEPLOYED.H), workers=len(os.sched_getaffinity(0))) if deployed else {}
-        session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")), first_parent, **at)
+        session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")) if host is None else Path(host), first_parent, **at)
     elif challenger.startswith("loopback:"):
         session = Loopback(challenger.removeprefix("loopback:"))
     elif challenger.startswith("gate:") and peer and key_record:
@@ -771,7 +830,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
                          f"not {challenger!r}")
     manager = _Manager(ctx=get_context("spawn"))
     manager.start()
-    draws = manager.Draws(root, ranks)
+    draws = manager.Draws(root, ranks, session.key.to_json(), first_parent)
 
     def finish() -> None:
         needs = draws.wait_planned()
@@ -804,6 +863,8 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
         released = draws.released()
         try:
             directory, ledger, pins_log, key = session.finish(dest)
+            if key != session.key:
+                raise Ch.CoinError("the session finished under another key than the one its challenger had when it started")
             commitment_, roots = R.trusted_session(directory, [ledger], {"root": root}, key, lms_verify)
             if ended is None and released["commitment"] != commitment_.root.hex():
                 raise Ch.CoinError(f"the challenger released commitment {str(released['commitment'])[:16]}… at the close, "
@@ -814,7 +875,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
                 pinned = None
             except Ch.CoinError as e:
                 pinned = str(e)
-            draws.publish({"key": key.to_json(), "ledger": led, "main": first_parent, "pins": pins,
+            draws.publish({"ledger": led, "main": first_parent, "pins": pins,
                            "segments": released["segments"], "session": R.session_files(directory),
                            "trusted": {"commitment": commitment_.root.hex(), "released": {k: len(v) for k, v in roots.items()},
                                        "close": ended, "ledger_sha512": hashlib.sha512(ledger.read_bytes()).hexdigest(),
@@ -829,8 +890,8 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
 
 
 def evidence(published: dict, segment: dict) -> dict | None:
-    """One sample's coins' evidence, `coins.coins_reason`'s {key, ledger, main, pins, segment, session}; None when the session
-    gave none. The sample's `segment` (`drawn`'s, read before the close: a withheld session's coins as raw bytes) is the
+    """One sample's coins' evidence, `coins.coins_reason`'s {ledger, main, pins, segment, session}; None when the
+    session gave none. The sample's `segment` (`drawn`'s, read before the close: a withheld session's coins as raw bytes) is the
     published one of its family, first coin, commitment and coins, settled to the openings its challenger released at its
     close (`Draws.released`); a segment no published one has those of stays as it is."""
     if "error" in published:
@@ -843,25 +904,35 @@ def evidence(published: dict, segment: dict) -> dict | None:
         return s.get("label"), s.get("start"), s.get("after"), [o.get("coin") for o in s["openings"]]
     at = coins_of(segment)
     settled = next((s for s in published.get("segments", ()) if at is not None and coins_of(s) == at), segment)
-    return {"key": published["key"], "ledger": published["ledger"], "main": published["main"], "pins": published["pins"],
-            "segment": settled, "session": published["session"]}
+    return {"ledger": published["ledger"], "main": published["main"], "pins": published["pins"], "segment": settled,
+            "session": published["session"]}
 
 
-def negatives(ev: dict, pre: dict) -> dict[str, dict | None]:
-    """`ev` altered as a prover would alter it: a tampered opening, the coin opened before the registration (`pre`'s, the
-    window family's, its `after` rewritten to the registration's) added in front, a segment that skips a coin released
-    after the registration,
-    the verifier's main without any commit the pins log pins (the session's pin off main's first-parent line), no pins log,
-    no evidence at all."""
+def negatives(ev: dict, pre: dict, key: Ch.ChallengerKey, main: list[str]) -> dict[str, tuple[dict | None, dict[str, Any]]]:
+    """`ev` altered as a prover would alter it, each with what its stream is made with (`held`'s ``key`` and ``main``,
+    here `key` and `main` unless the negative is about them): a tampered opening, the coin opened before the
+    registration (`pre`'s, the window family's, its `after` rewritten to the registration's) added in front, a segment
+    that skips a coin released after the registration, no pins log, no evidence at all, the evidence naming the key
+    itself, the form a verifier took before it held one, and the evidence carrying another copy of main's history
+    than the verifier's, one with a commit more; then the honest evidence held to another key than the session's, and
+    evidence and verifier both on a copy of main without any commit the pins log pins (the session's pin off main's
+    first-parent line)."""
     s = ev["segment"]
     earlier = [{**o, "after": s["after"]} for o in pre["openings"]]
     logged = {json.loads(line)["commit"] for line in ev["pins"]}
+    mine = {"key": key, "main": main}
+    other = Ch.ChallengerKey(key.W, key.H, bytes(b ^ 1 for b in key.public))
+    off = [c for c in main if c not in logged]
     return {
-        "coins-tampered-opening": {**ev, "segment": {**s, "openings": [{**s["openings"][0], "coin": "00" * 64},
-                                                                       *s["openings"][1:]]}},
-        "coins-opened-before-the-registration": {**ev, "segment": {**s, "openings": earlier + s["openings"]}},
-        "coins-segment-skips-a-released-coin": {**ev, "segment": {**s, "openings": s["openings"][1:], "start": s["start"] + 1}},
-        "coins-pin-off-main": {**ev, "main": [c for c in ev["main"] if c not in logged]},
-        "coins-no-pins-log": {**ev, "pins": None},
-        "coins-no-evidence": None,
+        "coins-tampered-opening": ({**ev, "segment": {**s, "openings": [{**s["openings"][0], "coin": "00" * 64},
+                                                                        *s["openings"][1:]]}}, mine),
+        "coins-opened-before-the-registration": ({**ev, "segment": {**s, "openings": earlier + s["openings"]}}, mine),
+        "coins-segment-skips-a-released-coin": ({**ev, "segment": {**s, "openings": s["openings"][1:],
+                                                                   "start": s["start"] + 1}}, mine),
+        "coins-no-pins-log": ({**ev, "pins": None}, mine),
+        "coins-no-evidence": (None, mine),
+        "coins-evidence-names-its-key": ({**ev, "key": key.to_json()}, mine),
+        "coins-on-another-main": ({**ev, "main": [*main, "0" * 40]}, mine),
+        "coins-under-another-key": (ev, {"key": other, "main": main}),
+        "coins-pin-off-main": ({**ev, "main": off}, {"key": key, "main": off}),
     }
