@@ -384,8 +384,6 @@
     {"file": "verity_vllm/program/predict/node_registration.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/program/predict/node_registration.py", "kind": "T201", "symbol": "register", "detail": "`print` found"},
     {"file": "verity_vllm/program/predict/steps.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/program/quarantine/act/silu_mul_difftest.py", "kind": "E741", "symbol": "_words", "detail": "Ambiguous variable name: `I`"},
-    {"file": "verity_vllm/program/quarantine/act/silu_mul_difftest.py", "kind": "E741", "symbol": "cases", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/program/quarantine/act/silu_mul_difftest.py", "kind": "E741", "symbol": "production", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/program/quarantine/act/silu_mul_difftest.py", "kind": "I001", "symbol": "spec", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/properties/admission.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
