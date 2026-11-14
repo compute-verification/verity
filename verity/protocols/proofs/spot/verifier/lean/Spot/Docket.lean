@@ -127,7 +127,7 @@ public import Std.Data.HashMap
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace Spot.Registration
+namespace Spot.Docket
 
 open Lean (Json)
 open Flock (V)
@@ -842,4 +842,4 @@ theorem check_eq_checkRef (rec : Json) (v : Verifier) : check rec v = checkRef r
   simp (maxSteps := 800000) only [check, checkRef, portIndex_count, portIndex_has, portIndex_find,
     portIndex_find_fun]
 
-end Spot.Registration
+end Spot.Docket

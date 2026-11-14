@@ -119,7 +119,7 @@ the verifier expects values registered, the pool its window opens and no output 
 verdict log names refused. SPOT's one-stage form and the recursive audit read SPOT's acceptance through that
 check (`VStar.Recursive.Caller.gate`), so `StageHeld` reads the caller's facts off it (`CallerCheckSound`). -/
 def CallerCheckMeans : Prop :=
-  ∀ (rec : Json) (v : Spot.Registration.Verifier),
+  ∀ (rec : Json) (v : Spot.Docket.Verifier),
     VStar.Recursive.Caller.check rec v = #[] ↔ Properties.Spot.CallerHeld rec v
 
 /-- **Where the caller's check finds nothing, the record keeps the caller's facts**: `CallerCheckMeans`' forward half,
