@@ -23,10 +23,10 @@ def desc : Claims.Msg := programFile.data.toList
 
 /-- The query named by the registered Program and partition. -/
 def query : Json :=
-  json """{"name":"Q_template_instance","params":{"template":"RoPEHead_v1{D=64}"},"version":0}"""
+  jsonOfText """{"name":"Q_template_instance","params":{"template":"RoPEHead_v1{D=64}"},"version":0}"""
 
 /-- The subset sampling design named by the parameters. -/
-def law : Json := json """{"k":16,"law":"subset"}"""
+def law : Json := jsonOfText """{"k":16,"law":"subset"}"""
 
 /-- The descriptor parsed from the registered circuit. -/
 def D : Flock.Desc :=
