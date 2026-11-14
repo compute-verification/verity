@@ -315,18 +315,21 @@ null for a scope no run of record holds) and its `phases`, and an amount that ha
 
 `run.py`'s `METRICS` are the rows of `benchmarks/exfiltration/metrics.toml` this benchmark is held to. Under a research
 run (`RESEARCH_RUN_DIR` set) the command writes them into the run's `result.json` through the harness kit, each at the
-share over every monitoring period the document holds (a week, a month and a year of a datacenter's and of the world's
-compute), with its `period` and `over` (`year` and `world` for the world's year), in GB a world year at 10% of compute
-and so on for each period. The world's year comes first, and is the figure each metric's title names:
+share over each monitoring period of the document it has a value over (a week, a month and a year of a datacenter's
+and of the world's compute), with its `period` and `over` (`year` and `world` for the world's year), in GB a world
+year at 10% of compute and so on for each period. A period it has no value over (one no run of record holds, or where
+the network certifier's ε is 1 or more) is left out, but the world's year, the figure each metric's title names, which
+is always written and written last, so a reader that keys a result's measurements by name alone, the last of a name
+winning, reads it:
 
 - `benchmarks/exfiltration-gb-world-year`: the headline figure, the document's `value` over the world's year (today
   the compute audit's part, λ times the bound where row `(ii) honest`'s total is 10% of compute), and that part over
   each other period.
 - `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over each period.
-- `benchmarks/exfiltration-network-certifier-gb`: the network certifier's part of record, the `scan` row at D_j = 2,
-  with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
+- `benchmarks/exfiltration-network-certifier-gb`: the network certifier's part of record, the `scan` row at D_j = 2;
+  over the world's year with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
 
-Over a period no run of record holds, the first two have no value and say so. Each measurement's first input opens
+Each measurement's first input opens
 with its mark (`modeled`, and the network certifier's with the mark its calculator gives the `scan` row beside it), its
 second is its error over its period (the compute audit's δ, or the network certifier's ε at its scans' δ), and the
 rest are the runs of record it read. The document is kept as

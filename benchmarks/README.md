@@ -122,7 +122,9 @@ given: `period`, one of `phase`, `week`, `month` or `year` (`kit.PERIODS`), and 
 (`kit.OVER`). A run's result holds one measurement a name, period and `over`, and the writer refuses a second, so one
 id may give a value for each period and scope it is computed at, each in its own unit (`verity bench exfiltration`'s
 three, over a week, a month and a year of a datacenter's and of the world's compute). Its `title` and `unit` are those
-of the period and scope it is named for: `exfiltration-gb-world-year`'s, the `year` over the `world`.
+of the period and scope it is named for (`exfiltration-gb-world-year`'s, the `year` over the `world`), which the
+benchmark writes last of its name, so a reader that keys measurements by name alone reads that one; one that keys on
+the name, period and `over` reads the others.
 
 `tests/test_metrics_registry.py` refuses an id declared twice across all the files, an unknown owner, an id outside its
 owner's prefix, a `better` other than `lower` or `higher`, a command whose script is missing or whose directory never
