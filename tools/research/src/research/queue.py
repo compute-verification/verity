@@ -7113,7 +7113,8 @@ def _cross(a: argparse.Namespace) -> int:
     """`research queue cross`, in this checkout: the open PRs into `main` marked ready at heads that lack the moves --main has
     (`cross_plan`), with marks and land verdicts read from the evidence store as the loop reads them (`World._relabel`), each
     crossed by --main's `tools/move/restack.py`, --jobs stacks at once (`cross_all`), into --out (`cross_write`), and with --push
-    pushed to its branch (`cross_push`); `--push --from DIR` pushes what a run left in DIR, from its bundle.  The open PRs come
+    pushed to its branch (`cross_push`); `--push --from DIR` pushes what a run left in DIR, from its bundle.  Where the store has
+    no remote (a machine's run without `--store-read`) it is refused before it lists or fetches a PR.  The open PRs come
     from GitHub's API through `gh`, else without credentials (`PublicGitHub`: a node has no `gh`), and their heads from
     --remote's pull refs."""
     from .clone import Refused, set_drivers
@@ -7123,6 +7124,12 @@ def _cross(a: argparse.Namespace) -> int:
     remote, slug_ = remote_and_repo(a.remote, a.repo, top)
     push_to = "origin" if a.remote is None and a.repo is None else remote
     log = lambda s: print(s, file=sys.stderr)  # noqa: E731
+    store = LocalStore(a.store)
+    if a.from_dir is None and store.remote is None:
+        raise SystemExit(f"research queue cross: the evidence store has no remote here ({store.remote_error or 'none configured'}), "
+                         f"so no mark or land verdict can be read; run it from a shell with the store's secrets, or on a machine "
+                         f"with a read-only store key: `research run --on auto --project verity --cwd clone --store-read -- "
+                         f"research queue cross --repo {slug_}`")
     gh = GitHub(slug_) if shutil.which("gh") else PublicGitHub(slug_)
 
     def fetch(*shas: str) -> None:
@@ -7156,7 +7163,6 @@ def _cross(a: argparse.Namespace) -> int:
     _git(top, *STALL, "fetch", "-q", "--no-tags", remote, *(f"+refs/pull/{p.number}/head:{CROSS_PR}{p.number}" for p in prs),
          check=False)
     fetch(*(p.head for p in prs))
-    store = LocalStore(a.store)
     labels = StoreLabels(store, log=log)
     q = Queue(top, remote=remote, github=gh, ready=labels.ready, store=store, log=log, marked_by=labels.marked_by)
     opened = {p.number: p for p in prs}
