@@ -8,9 +8,13 @@
     kinds(instance, trusted, rows) -> [kind, …] | {"error": code}
     exported(instance, trusted, rows) -> [[slot, why the row is θ or None], …] | {"error": code}
     count(instance, trusted, limits) -> {"bool_gates", "complies", "failure"} | {"error": code}
+    block_rows(instance, trusted, limits) -> {"rows", "fresh", "complies", "failure"} | {"error": code}
+    chosen(instance, trusted) -> {"inputs", "inside", "theta", "cross_wires", "free", "ingress", "unregistered",
+                                  "openings", "chosen"} | {"error": code}
 
 `Record`'s docstring gives the instance, the trusted input, the stages and their refusals, and what each field
-of the summary counts; `RecordCount`'s gives the count's limits. Where the Lean reads each template's gates
+of the summary counts; `RecordCount`'s gives the count's limits, `RecordRows`'s the rows rule's and `RecordChosen`'s
+what the prover chose of an execution phase's input bits. Where the Lean reads each template's gates
 from the Program's own count and its rows from its Definition's parameters, takes one closed form per wire and per
 declaration, and multiplies through the slots, this file expands: each template's gates gate by gate
 (`nci_reference.activation_gates`), every unit's slot from the inference entries' digits, every input row of every
@@ -30,7 +34,10 @@ it passes. `own_rows`: the root's arguments in the form the Lean reads, then eve
 resolved to its gate, an input gate and no other leaf's. `leaf_widths`: a wire into a closed row (one-bit leaves its
 Definition passes none of on, `passed_on`), then of every unit of that template no leaf of an output row resolved to
 a gate of the row (`hands_on`); else one width a port and the writer's dividing the reader's, then every leaf of the
-writer's output inside one leaf of each row its wire fills (`lands_whole`).
+writer's output inside one leaf of each row its wire fills (`lands_whole`). With `form_only` (`check_detail`,
+`count`) each of the two is its rule restated and no expansion: the expansions visit every leaf of every row of every
+unit, more than a served class's circuit lets the reference walk, and the verdict is then the Lean's rules' alone,
+with nothing holding what they stand for on that case.
 """
 from __future__ import annotations
 
@@ -66,9 +73,16 @@ _nat = reference._nat
 FIELDS = ("program", "record", "gamma", "alpha", "pins")
 #: the count's limits: the gate table, and `(c, k, n)`
 LIMITS = ("table", "c", "k", "n")
+#: the rows rule's limits: the rows table, `Γ` and `α`
+ROWS_LIMITS = ("table", "gamma", "alpha")
 WIRE = {"reader", "port", "writer", "out", "at", "radix", "base", "step"}
 READ = {"reader", "port", "param", "at", "radix", "base", "step"}
 REGISTERED = {"params", "tables", "reads", "roots", "openings"}
+FORMAT = {"row_schema", "word_bits"}
+#: the row schemas a format may name, the first the default's
+SCHEMAS = ("hm96-sha512/row/v2", "hm96-sha512/row-seg/v1")
+#: a history table's keys; it may state its `capacity` beside them
+HISTORY = {"name", "program", "writer", "out", "words", "runs"}
 TABLE = {"name", "param", "offset", "words", "rows"}
 TABLE_READ = {"reader", "port", "table", "of", "at", "units"}
 OPENING = {"reader", "table", "key", "ports", "verdict", "at", "units"}
@@ -221,21 +235,30 @@ OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Eve
             "over input nodes of their own, each input leaf handed once.")
 
 
-def own_rows(program) -> None:
-    """The Lean's `ownRows` (`own-rows`). The rule's form, restated: every argument of a root node that is no input
-    node is affine runs of the root's nodes' leaves, and a batch maps every argument over its members. Then what the
-    rule stands for, leaf by leaf: every leaf of every parameter of every unit, resolved through the root
+def own_rows(program, form_only: bool = False) -> None:
+    """The Lean's `ownRows` (`own-rows`). The rule, restated: every argument of a root node that is no input node is
+    affine runs of leaves of the root's input nodes (each a primitive or a batch), a batch maps every argument over its
+    members, and no two runs, of one argument or of two, share a leaf. Then, unless `form_only`, what the rule stands
+    for, leaf by leaf: every leaf of every parameter of every unit, resolved through the root
     (`layout.resolve_gate`), is an input gate, and no gate is two of them."""
     from verity.circuits.layout import Scope, resolve_gate
     from verity.circuits.parts import n_members
+    nodes = program.root.body.nodes
+
+    def run(p) -> bool:
+        return (isinstance(p, Affine) and p.space == "n" and 0 <= p.idx < len(nodes) and is_input(nodes[p.idx].fn)
+                and nodes[p.idx].form in ("primitive", "batch"))
+    units = [(k, node) for k, node in enumerate(nodes) if not is_input(node.fn)]
+    parts = [p for _, node in units for a in node.args for p in _parts(a.refs)]
+    runs = sorted((p.idx, p.base, p.count) for p in parts if run(p) and p.count > 0)
+    if any(node.form == "batch" and None in node.axes for _, node in units) or not all(map(run, parts)) \
+            or any(a[0] == b[0] and a[1] + a[2] > b[1] for a, b in zip(runs, runs[1:])):
+        raise refused("own-rows", OWN_ROWS)
+    if form_only:
+        return
     root = Scope(program.root, 0, None, 0, 0)
     seen: set[int] = set()
-    for k, node in enumerate(program.root.body.nodes):
-        if is_input(node.fn):
-            continue
-        if any(not (isinstance(p, Affine) and p.space == "n") for a in node.args for p in _parts(a.refs)) \
-                or node.form == "batch" and None in node.axes:
-            raise refused("own-rows", OWN_ROWS)
+    for k, node in units:
         for m in range(n_members(node)):
             unit = root.child(k, m)
             for i, (_, ty) in enumerate(node.fn.signature()[0]):
@@ -278,16 +301,16 @@ def hands_on(program, tid: str, port: str) -> bool:
     return False
 
 
-def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dict) -> None:
+def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dict, form_only: bool = False) -> None:
     """The Lean's `unwhole` (`leaf-widths`). The rule, restated. Of every wire, the writer's output's bits are its
     own words', which are the row's (a wire's two rows have the same words). And a wire is taken where the reader's
     row is closed (`Template.closed`), or where the reader's row and the writer's output each have leaves of one
     width and the writer's divides the reader's. The first wire that fails either is refused, by name, with its two
-    rows' bits or its two widths, and the fix. Then what the rule stands for, leaf by leaf, of each row of the
-    reader's port the wire fills, a cut port's row `j` of `k` its leaves `[j·n/k, (j+1)·n/k)`. The row's leaves hold
-    exactly the bits the writer's output's leaves do: no bit of the row is past its writer's. Of a closed row: no
-    unit of the reader's template hands a leaf of it on (`hands_on`, once a row). Of the other: every leaf of the
-    writer's output lies inside one leaf of the row (`lands_whole`)."""
+    rows' bits or its two widths, and the fix. Then, unless `form_only`, what the rule stands for, leaf by leaf, of
+    each row of the reader's port the wire fills, a cut port's row `j` of `k` its leaves `[j·n/k, (j+1)·n/k)`. The
+    row's leaves hold exactly the bits the writer's output's leaves do: no bit of the row is past its writer's. Of a
+    closed row: no unit of the reader's template hands a leaf of it on (`hands_on`, once a row). Of the other: every
+    leaf of the writer's output lies inside one leaf of the row (`lands_whole`)."""
     by = {t.tid: t for t in templates}
     kept: set[tuple[str, str]] = set()
 
@@ -298,7 +321,7 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
         row, out = by[w["reader"]].widths[w["port"]], by[w["writer"]].widths[w["out"]]
         wire = f"wire {w['writer']}.{w['out']} -> {w['reader']}.{w['port']}: "
         k, n = int(cuts.get(w["reader"], {}).get(w["port"], 1)), len(row)
-        filled = [row[j * n // k:(j + 1) * n // k] for j in range(w["c0"], w["c0"] + w["C"])]
+        filled = [] if form_only else [row[j * n // k:(j + 1) * n // k] for j in range(w["c0"], w["c0"] + w["C"])]
         bits, words = sum(out), by[w["writer"]].port(w["out"], outs=True)
         if bits != 16 * words:
             assert all(sum(leaves) == 16 * words > bits for leaves in filled)
@@ -309,7 +332,7 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
                 "16-bit words, each bit a gate of its own."))
         assert all(sum(leaves) == bits for leaves in filled)
         if w["port"] in by[w["reader"]].closed:
-            if (w["reader"], w["port"]) not in kept:
+            if not form_only and (w["reader"], w["port"]) not in kept:
                 assert not hands_on(program, w["reader"], w["port"])
                 kept.add((w["reader"], w["port"]))
             continue
@@ -392,13 +415,31 @@ def _objects(xs, keys: set[str]) -> list[dict]:
     return xs
 
 
+def histories_of(reg: dict) -> list[str]:
+    """The Lean's `RecordText.historiesOf`: the record's history tables, by name, in order; none where `registered`
+    has no `histories`. Refused (`inputs`) unless `histories` is a list of objects of a history's keys (`HISTORY`, with
+    or without `capacity`), each named by a string that is no registered parameter's name, no table's (the `name` of
+    each entry of `tables` that has one) and no other history's. Nothing else of a history is read."""
+    hs = reg.get("histories", [])
+    if not (isinstance(hs, list) and all(isinstance(h, dict) and set(h) - {"capacity"} == HISTORY
+                                         and isinstance(h["name"], str) for h in hs)):
+        raise Malformed("inputs")
+    names = [h["name"] for h in hs]
+    tables = reg["tables"] if isinstance(reg["tables"], list) else []
+    taken = {*reg["params"], *(t["name"] for t in tables if isinstance(t, dict) and isinstance(t.get("name"), str))}
+    if len(set(names)) != len(names) or taken & set(names):
+        raise Malformed("inputs")
+    return names
+
+
 class Inputs:
     """What the record declares to fill its units' input rows beside its wires, each declaration refused (`inputs`)
     unless it is well formed for the templates and cuts, and unless no row is filled twice (`fill`, row by row):
-    `params`, the registered parameters' leaves; `tables`, by name; `reads`, the registered reads; `roots`, the table
-    reads; `openings`; and `fill`, by `(template, port)`, each filled `(unit, row)` with what fills it:
-    `("wire", index)`, `("read", parameter)`, `("root", table, what it reads of it)`, `("opening", index)` or
-    `("ingress",)`."""
+    `params`, the registered parameters' leaves; `tables`, by name, each over its `param`: the entries of
+    `registered.tables`, then the history tables (`histories_of`), each over a parameter of its own name, which is no
+    registered parameter's; `reads`, the registered reads; `roots`, the table reads; `openings`; and `fill`, by
+    `(template, port)`, each filled `(unit, row)` with what fills it: `("wire", index)`, `("read", parameter)`,
+    `("root", table, what it reads of it)`, `("opening", index)` or `("ingress",)`."""
 
     def __init__(self, templates: list[Template], cuts: dict, wires: list[dict], rec: dict) -> None:
         by = {t.tid: t for t in templates}
@@ -427,10 +468,11 @@ class Inputs:
         for i, w in enumerate(wires):
             put(w["reader"], w["port"], ((u, r) for u, r, _ in entries(w)), ("wire", i))
         reg = rec.get("registered", {"params": {}, "tables": [], "reads": [], "roots": [], "openings": []})
-        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values"}
+        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values", "formats", "histories"}
                 and isinstance(reg["params"], dict) and all(_nat(v) and v >= 1 for v in reg["params"].values())
                 and isinstance(reg["reads"], list)):
             raise Malformed("inputs")
+        histories = histories_of(reg)
         self.params = reg["params"]
         self.tables: dict[str, dict] = {}
         for t in _objects(reg["tables"], TABLE):
@@ -440,6 +482,14 @@ class Inputs:
                     and t["offset"] + t["words"] * t["rows"] <= self.params[t["param"]]):
                 raise Malformed("inputs")
             self.tables[t["name"]] = t
+        formats = reg.get("formats", {})
+        if not (isinstance(formats, dict) and all(
+                p in self.params and p not in {t["param"] for t in self.tables.values()} and isinstance(f, dict)
+                and set(f) == FORMAT and f["row_schema"] in SCHEMAS and _nat(f["word_bits"]) and f["word_bits"] in (16, 32)
+                and (f["row_schema"], f["word_bits"]) != (SCHEMAS[0], 16) and 16 * self.params[p] % f["word_bits"] == 0
+                for p, f in formats.items())):
+            raise Malformed("inputs")
+        self.tables.update({name: {"name": name, "param": name} for name in histories})
         self.reads = [pattern(r, READ) for r in reg["reads"]]
         for r in self.reads:
             words, k = port(r["reader"], r["port"], outs=True)
@@ -448,7 +498,8 @@ class Inputs:
                 raise Malformed("inputs")
             units(r["reader"], r["at"], n // r["C"])
             got = [s for _, _, s in entries(r)]
-            if r["param"] not in self.params or min(got) < 0 or max(got) + words // k > self.params[r["param"]]:
+            if (r["param"] not in self.params or min(got) < 0 or max(got) + words // k > self.params[r["param"]]
+                    or 16 * (words // k) % width_of(rec, r["param"])):
                 raise Malformed("inputs")
             put(r["reader"], r["port"], ((u, j) for u, j, _ in entries(r)), ("read", r["param"]))
         self.roots = _objects(reg["roots"], TABLE_READ)
@@ -512,18 +563,55 @@ def slots_of(templates: list[Template], rec: dict) -> tuple[int, dict[str, list[
     return slots, out
 
 
-def theta(T: dict, params: dict, p: str) -> bool:
-    """Whether registered parameter `p` is θ: the registration log's first record registers a value `p` (its last
-    entry of that name) under the root the run's own record commits `p` under (its window's `registered_roots`), with
-    the record's leaves for `p` in 16-bit words."""
+def theta(T: dict, params: dict, p: str, b: int) -> bool:
+    """Whether registered parameter `p`, its leaves `b` bits each in its rows (`width_of`), is θ: the registration
+    log's first record registers a value `p` (its last entry of that name) under the root the run's own record commits
+    `p` under (its window's `registered_roots`), in leaves of `b` bits, the record's 16-bit leaves for `p` in all."""
     e = reference.last_with(T["log"][0], "registered", "value", p)
-    window = T["log"][T["run"]].get("window")
-    roots = window.get("registered_roots") if isinstance(window, dict) else None
-    root = roots.get(p) if isinstance(roots, dict) else None
+    root = _committed(T, p)
     if e is None or not isinstance(root, str) or e.get("root") != root:
         return False
     m = reference.dims(e)
-    return m is not None and m[0] * m[1] == params[p] and m[2] == 16
+    return m is not None and m[0] * m[1] * b == 16 * params[p] and m[2] == b
+
+
+def _committed(T: dict, p: str):
+    """The root the run's own record commits registered parameter `p` under (its window's `registered_roots`)."""
+    window = T["log"][T["run"]].get("window")
+    roots = window.get("registered_roots") if isinstance(window, dict) else None
+    return roots.get(p) if isinstance(roots, dict) else None
+
+
+def width_of(rec: dict, p: str) -> int:
+    """`RecordText.widthOf`, b(p): the bits of a leaf of registered parameter `p`'s rows, its format's `word_bits`
+    (`registered.formats`), 16 where the record declares none."""
+    reg = rec.get("registered")
+    formats = reg.get("formats") if isinstance(reg, dict) else None
+    f = formats.get(p) if isinstance(formats, dict) else None
+    b = f.get("word_bits") if isinstance(f, dict) else None
+    return b if _nat(b) else 16
+
+
+def formats_held(T: dict, rec: dict, params: dict) -> bool:
+    """`Record.formatsHeld`, the formats held to the registration log: of each registered parameter `p` the run's own
+    record registers (its last entry named `p`), that entry's root is the one the run's record commits `p` under, its
+    `word_bits` (16 where absent) is `p`'s width (`width_of`), and its leaves of `words` words of that width hold the
+    record's 16-bit leaves for `p`; and each parameter with a format that the run's record does not register is θ, at
+    its width."""
+    formats = rec["registered"].get("formats", {}) if "registered" in rec else {}
+    for p, leaves in params.items():
+        b = width_of(rec, p)
+        e = reference.last_with(T["log"][T["run"]], "registered", "value", p)
+        if e is None:
+            if p in formats and not theta(T, params, p, b):
+                return False
+            continue
+        m = reference.dims(e)
+        root = _committed(T, p)
+        if not (isinstance(e.get("root"), str) and e.get("root") == root and m is not None and m[2] == b
+                and m[0] * m[1] * b == 16 * leaves):
+            return False
+    return True
 
 
 def layout(t: Template) -> dict | None:
@@ -565,7 +653,7 @@ def held(x: Inputs, is_theta, is_pinned, o: dict) -> bool:
     return is_pinned(o["reader"]) and is_theta(x.tables[o["table"]]["param"]) and covered("root") and covered("domain")
 
 
-def front(inst, tr) -> tuple:
+def front(inst, tr, form_only: bool = False) -> tuple:
     """`Record.front`, the stages as far as `own-rows`: the instance's fields, the Program, its descriptor,
     the record, the trusted input and the templates. Refused (`Malformed`) with the first stage's code."""
     i = parse(inst)
@@ -586,7 +674,7 @@ def front(inst, tr) -> tuple:
     if not (isinstance(window, dict) and window.get("circuit") == hashlib.sha512(i["record"].encode()).hexdigest()):
         raise Malformed("run-circuit")
     templates = templates_of(program, rec, digest)
-    own_rows(program)
+    own_rows(program, form_only)
     return i, program, desc, rec, T, templates
 
 
@@ -599,20 +687,26 @@ def closed(inst, tr) -> list | dict:
         return {"error": m.code}
 
 
-def expand(inst, tr) -> dict:
+def expand(inst, tr, form_only: bool = False) -> dict:
     """Everything the summary is read from, unit by unit: the instance's fields (`i`), the templates, the wires and
     cuts, the declarations (`x`), the slots and each unit's (`slots`, `slot`), each wire's `within`, `kind` (the class
     of what fills a row), each template's pin where the policy pins its Definition (`pins`), and per slot the sums
     `gates`, `inputs` (every row, whole), each of `KINDS`' bits, and `fresh`, the sum of `FRESH`'s. Refused
     (`Malformed`) with the first stage's code, in `Record`'s order."""
-    i, program, desc, rec, T, templates = front(inst, tr)
+    i, program, desc, rec, T, templates = front(inst, tr, form_only)
     wires, cuts = wires_of(templates, rec, (i["order"],) if "order" in i else None)
-    leaf_widths(program, templates, wires, cuts)
+    leaf_widths(program, templates, wires, cuts, form_only)
     x = Inputs(templates, cuts, wires, rec)
+    if not formats_held(T, rec, x.params):
+        raise Malformed("formats")
     slots, slot = slots_of(templates, rec)
     by = {t.tid: t for t in templates}
     inside = [all(slot[w["reader"]][u] == slot[w["writer"]][v] for u, _, v in entries(w)) for w in wires]
-    is_theta = {p: theta(T, x.params, p) for p in x.params}.__getitem__
+    thetas = {p: theta(T, x.params, p, width_of(rec, p)) for p in x.params}
+
+    def is_theta(p: str) -> bool:
+        """Whether `p` is a registered parameter that is θ: a history table's parameter, its own name, is none."""
+        return thetas.get(p, False)
     digests = {t.tid: closure_digest(desc, t.tid) for t in templates}
     pins = {tid: d if d in i["pins"] else None for tid, d in digests.items()}
 
@@ -654,10 +748,10 @@ def expand(inst, tr) -> dict:
             "wired_rows": sum(n for n, _ in wired), "wired_bits": sum(n * b for n, b in wired)}
 
 
-def evaluate(inst, tr) -> dict:
+def evaluate(inst, tr, form_only: bool = False) -> dict:
     """`Record.evaluate`: the summary, each per-block count the greatest over the slots, and the rate rule on
     it: `size` where a block has more than `Γ` gates, else `nci` where its fresh bits exceed `α` times its gates."""
-    e = expand(inst, tr)
+    e = expand(inst, tr, form_only)
     i = e["i"]
     out = {"blocks": e["slots"], **{k: max(e[k]) for k in ("gates", "inputs", "fresh", *FRESH)},
            "wired_rows": e["wired_rows"], "wired_bits": e["wired_bits"]}
@@ -666,11 +760,13 @@ def evaluate(inst, tr) -> dict:
     return {**out, "complies": failure is None, "failure": failure}
 
 
-def check_detail(inst, tr) -> dict:
+def check_detail(inst, tr, form_only: bool = False) -> dict:
     """`Record.checkDetail`: the whole verdict, or the refusal (with its message, where it has one), for the
-    private record only."""
+    private record only. With `form_only`, `own-rows` and `leaf-widths` are their rules alone, as the Lean has them,
+    without the leaf-by-leaf expansions (the module docstring): nothing then holds a taken record's rows to being input
+    gates of their own unit, or a taken wire's leaves to lying whole in the row it fills."""
     try:
-        return evaluate(inst, tr)
+        return evaluate(inst, tr, form_only)
     except Malformed as e:
         return {"error": e.code, **({"message": e.message} if hasattr(e, "message") else {})}
 
@@ -714,17 +810,17 @@ def exported(inst, tr, rows) -> list | dict:
     return [[e["slot"][t][u], reason(x.fill.get((t, p), {}).get((u, r)))] for t, p, u, r in rows]
 
 
-def count(inst, tr, limits) -> dict:
+def count(inst, tr, limits, form_only: bool = False) -> dict:
     """`RecordCount.count`: `(c, k, n)` over the blocks' Boolean gates (each gate its primitive's entry of the
     gate table), fresh bits and number. `instance` or `params` where the limits are not as stated, then the form's own
-    refusal, then `gate-table` where the table lacks a primitive a block computes."""
+    refusal, then `gate-table` where the table lacks a primitive a block computes. `form_only` as `check_detail`'s."""
     if not (isinstance(limits, dict) and all(k in limits for k in LIMITS) and isinstance(limits["table"], dict)):
         return {"error": "instance"}
     table = limits["table"]
     if not (all(_nat(limits[k]) for k in ("c", "k", "n")) and all(map(_nat, table.values()))):
         return {"error": "params"}
     try:
-        e = expand(inst, tr)
+        e = expand(inst, tr, form_only)
     except Malformed as m:
         return {"error": m.code}
     if any(p not in table for t in e["templates"] for p in t.prims):
@@ -736,3 +832,43 @@ def count(inst, tr, limits) -> dict:
     failure = ("gates" if max(bools) > limits["c"] else "fresh" if max(e["fresh"]) > limits["k"] else
                "count" if e["slots"] > limits["n"] else None)
     return {"bool_gates": max(bools), "complies": failure is None, "failure": failure}
+
+
+def block_rows(inst, tr, limits) -> dict:
+    """`RecordRows.checkDetail`: the rate rule in rows, a block's rows each unit's template's entry of the rows table
+    (`{template: rows of one unit}`, none of them 0), unit by unit: `size` where a block has more than `Γ` rows, else
+    `nci` where its fresh bits exceed `α` times its rows. `instance` or `params` where the limits are not as stated,
+    then the form's own refusal, then `rows-table` where the table lacks a template of the record."""
+    if not (isinstance(limits, dict) and all(k in limits for k in ROWS_LIMITS) and isinstance(limits["table"], dict)):
+        return {"error": "instance"}
+    table, gamma, alpha = (limits[k] for k in ROWS_LIMITS)
+    if not (_nat(gamma) and isinstance(alpha, list) and len(alpha) == 2 and all(map(_nat, alpha)) and alpha[1] != 0
+            and all(_nat(m) and m != 0 for m in table.values())):
+        return {"error": "params"}
+    try:
+        e = expand(inst, tr)
+    except Malformed as m:
+        return {"error": m.code}
+    if any(t.tid not in table for t in e["templates"]):
+        return {"error": "rows-table"}
+    rows = [0] * e["slots"]
+    for t in e["templates"]:
+        for u in range(t.units):
+            rows[e["slot"][t.tid][u]] += table[t.tid]
+    most, fresh = max(rows), max(e["fresh"])
+    failure = "size" if most > gamma else "nci" if fresh * alpha[1] > alpha[0] * most else None
+    return {"rows": most, "fresh": fresh, "complies": failure is None, "failure": failure}
+
+
+def chosen(inst, tr) -> dict:
+    """`RecordChosen.checkDetail`: over the whole execution phase, every slot's units, the input bits (`inputs`), those
+    of each of `KINDS`, and the ones the prover chose (`chosen`): the rows no declaration fills (`free`), the registered
+    reads and table reads of a parameter that is not θ (`unregistered`) and the ports of an opening that is not held
+    (`openings`). Added up row by row over every unit, where the Lean takes one product a declaration. Or the form's
+    own refusal."""
+    try:
+        e = expand(inst, tr)
+    except Malformed as m:
+        return {"error": m.code}
+    total = {k: sum(e[k]) for k in ("inputs", *KINDS)}
+    return {**total, "chosen": total["free"] + total["unregistered"] + total["openings"]}

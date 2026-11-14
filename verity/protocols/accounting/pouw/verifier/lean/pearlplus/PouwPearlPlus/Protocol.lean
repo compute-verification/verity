@@ -15,7 +15,7 @@ caller's blobs.
 
     {"coins": epoch coins, "draws": t, "record": {"commitment": hex, "draw": sample, "schema": s, "source": hex}}
 
-the epoch's coins (`EpochCoins.ofJson`: a live session's on the auditor host's challenger, or an in-process one's), the
+the epoch's coins (`EpochCoins.ofJson`: a live session's on the auditor device's challenger, or an in-process one's), the
 number of samples, and the verifier's record of the coin it drew on this run's commitment (`CoinRecord`, as `verify_run`
 writes it: its schema and its sample), which pins the source (`after-coin`): a bare source, which `check` also takes, is no
 input here, so the coin is always the one sampled on the run. The verdict is of record (`ofRecord`, `--of-record` as

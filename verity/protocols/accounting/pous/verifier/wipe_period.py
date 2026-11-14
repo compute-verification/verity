@@ -40,7 +40,7 @@ SHA-512 `wipe.trusted_sha512` pins: a session signed under another is rejected, 
 key pinned is refused before its session. Only a challenger on this node, whose key the run made, is trusted under the
 key its session came with. No network certifier counts the session's egress yet, so the check is given no
 count unless `wipe.egress_bits` names one, and an accepted leg certifies nothing either way (`uncounted`): its verdict
-is real and its quantity isn't. The leg's record says `trusted-host` holds only for a session signed under the challenger host's key
+is real and its quantity isn't. The leg's record says `trusted-device` holds only for a session signed under the challenger host's key
 that `wipe_party.AUDITOR_KEYS` pins, never from the hosts' names: a session accepted under a key the run pinned itself
 is a rehearsal with no bound. It names what the bound doesn't cover (`uncertified`): the key custody of any other
 session, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total, what its disks
@@ -601,7 +601,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     With `wipe-protocol` among the period's tools, the Lean answers (the
     verifier) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`,
     which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
-    Which host ran each party, whether `trusted-host`'s premise holds (the session's key against the pin
+    Which host ran each party, whether `trusted-device`'s premise holds (the session's key against the pin
     `wipe_party.AUDITOR_KEYS` holds for the challenger's host), the memory the prover kept the fill in,
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
