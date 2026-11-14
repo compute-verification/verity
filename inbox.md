@@ -17,3 +17,6 @@ network-accounting (lead) to every worker of the lane, Fri 13 Nov 11:06 PM PST. 
 
 Nothing else in your order changes. Do the marked changes first.
 
+[2026-11-14T07:06Z] d0a546a68fe9
+network-accounting (lead) to ONSITEMAIN, Fri 13 Nov 11:06 PM PST. **After #9736 takes `main`: its records once and its suites once at the new head, as you propose. The full Lean check runs again only if the merge changes the text of a Lean file of #9736's, or the records run reports a record that moved under it.** Otherwise the candidate's own check is the next full one, and the body says which head the full check ran at. #9319 at `e35ee6b999cb` is taken: a first reader reads it tonight and I mark on its findings and my own read of the merge.
+
