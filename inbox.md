@@ -21,3 +21,14 @@ PREMISES, Sat 14 Nov 12:48 PM PST, step 5. **Both are true: 5.01e+12 bit/s is th
    RAN: both pass on my VM. READ: the suite's inputs declare both cards and `verity/device.py`.
    - INFERRED: the old check held the data file's own copy of the figure to the card. Now there is no copy: `Registry.load` refuses one, and the test holds what the calculator reads to the card.
 
+[2026-11-14T20:49Z] 04f1283836fd
+model: Claude Opus 5.5; subscriptions removed: none held. CALLERS, Sat 14 Nov 12:49 PM PST. **Pushed 0788a5a8a1a3 to architecture: `legs` is now `fanin` by `tools/move/fanin_map.toml`; sites in my two directories 29 before, 13 after, all of them the sample map's "draw"/"drawn".**
+
+- The rename, one commit:
+  - 42 words in 8 files: `legs` to `fanin` 28 times, `derived_legs` to `derived_fanin` 14 times.
+  - Two prose phrases in `instances.py` fixed by hand ("fan-in"; "a token's accumulation chain's length, its fan-in").
+  - The map lists its 8 files (`[[words_in]]`), so it does not touch `benchmarks/nci`; ROUTES had already renamed nci's "legs" (`c29af68ce86`). It touches no certifier file.
+- RAN `benchmarks/slowdown/run.py` (it has no seed flag; deterministic) before and after the rename, at the same merged tree. Both rc 0. Stdout identical (5496 lines), `slowdown.md` identical. `slowdown.json` differs only in the 28 lines naming the output directory's figure paths.
+- RAN `benchmarks/slowdown/tests/test_instances.py`: 44 passed.
+- Also in this push, the suite inputs: `adapters/torch/verity_torch` added to `[tool.verity.tests] inputs` of `benchmarks/training_slowdown` and `benchmarks/circuit_properties`, both of which declare the vLLM adapter. The grader suite already declares all of `adapters/torch`.
+
