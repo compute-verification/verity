@@ -248,7 +248,6 @@
     {"file": "tools/verity/lean/upstream.py", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/lean_audit.py", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_ids.py", "count": 1},
-    {"file": "verity/protocols/accounting/pous/verifier/tests/test_pous_protocol.py", "count": 2},
     {"file": "verity/protocols/accounting/pouw/verifier/lean/window/tests/test_lanes.py", "count": 1},
     {"file": "verity/definitions/numerics/_jit.py", "count": 3},
     {"file": "verity/definitions/numerics/dense_rows.py", "count": 1},

@@ -6,7 +6,7 @@
 #   (a job run from a clone of the tree, on a GPU host, 32 CPUs, 96 GB, up to 240 min)
 # (a guest job on a shared GPU node is preemptible; one arm a run, ZK_ARMS=fw, takes about 3.5 h with its verification, the builds cached)
 # env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_DRAWS=1,8,64,c  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1
-#      ZK_UNITS="fp8-coord:K=6144 router" (served types instead of A6's coordinates, zk_cost.py's --units: ZK_SIZES then
+#      ZK_UNITS="fp8-coord:K=6144 router-row" (served types instead of A6's coordinates, zk_cost.py's --units: ZK_SIZES then
 #      defaults to half,full, ZK_DRAWS to c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw, ZK_ARMS to dev,nofw,fw; overhead instead of fit)
 #      ZK_STAGE_ONLY=1 (with ZK_UNITS: stage on this node's CPUs, keep the records, no CUDA, build or GPU)
 #      ZK_SM (the prover's target, from nvidia-smi unless given)  ZK_CARD=rtx-pro-6000-server (the card whose datasheet
