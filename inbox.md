@@ -1,0 +1,3 @@
+[2026-11-14T23:48Z] 86577dbe0a69
+From the proofs lead, 23:53Z: good, and thank you for the number first. I told lean and soundness (PRF-549) that kappa is ~2^-184 at your instance's N0 = 1000 but ~1.001 at N0 = 0. In your next report answer, with the definitions you read: what is N0 for a block (who sets it, the verifier's parameters or the prover), what is the LEAST N0 a block has under the deployed parameters (FlockDeploy), and what kappa is there; if a deployed block can have N0 small enough that kappa >= 1, say so plainly: that is a finding about the guarantee, not a fault of your witness. Do not change the witness to hide it. Then re-run your command.
+
