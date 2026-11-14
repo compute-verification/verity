@@ -62,7 +62,7 @@ Two kinds of committed run:
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
-        --checkpoint-dir DIR --out DIR [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] \\
+        --checkpoint-dir DIR --out DIR --law RATE [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--cap N] \\
         [--workers N] [--window-registration W (--h1-key FILE | --pearl-passes DIR)] [--hf-config F] [--target F] \\
         [--cap-bits L]
 
@@ -145,7 +145,9 @@ Two kinds of committed run:
   the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
   the network certifier's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
   records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
-  verifier's own ``window-circuit`` record is the circuit it holds it to. Each Program's Build is its own, from its
+  verifier's own ``window-circuit`` record is the circuit it holds it to. ``--law`` is the rate that audit states as
+  its stream's rule, and the window is committed under the sampling design that rate names over the circuit's proof
+  blocks (`window_design`), the design the stream holds its registration to. Each Program's Build is its own, from its
   compile (`own_builds`, beside ``--out``, as ``circuit``'s), so it commits a window at its close, before the row dir holds
   any (``advice_compile.py`` writes those once the serve is done). With ``--window-registration W`` (H1's
   registration of the window) and ``--h1-key``, the circuit reads H1's tables where the model makes them (its rounds
@@ -1628,6 +1630,18 @@ def h1_tie(a: argparse.Namespace, cls: Any, key: bool = True) -> tuple[dict[str,
     return w, meta, WC.Tables(*CT.shape(meta["layout"], int(meta["steps"])))
 
 
+def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
+    """The sampling design a window of ``circuit`` is committed under (``window-commit --law``): the one the rate ``rule``,
+    which the window's audit states to its stream, names over the circuit's proof blocks (`service.params_law`), so the
+    window registers the design the stream holds it to. A fixed count is refused by name (`service.Law`): no stream
+    takes it, and the audit would hold the window to another design."""
+    from verity.protocols.proofs.spot.verifier import service as S
+
+    S.Law(rule)
+    program, query = circuit.program()
+    return dict(S.params_law(rule, program, query, None)[0])
+
+
 def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dict[str, Any]], list[int], Any] | None:
     """With ``--pearl-passes DIR`` (serve_pearl's ``pearl/w<k>/``: the window's passes, ``served.json`` and its retention):
     Pearl+'s window record W of them (``--window-registration``, ``retain --window-record W``'s), the retained passes'
@@ -1671,7 +1685,9 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     digest of W it is chained after, and the tables); with ``--pearl-passes`` too (`pearl_tie`), the circuit is cut at its
     linears and the registration reuses Pearl+'s W's values (`pearl_c.window.reuse`). -> the window's run root, its circuit record's SHA-512, its
     population and members, the scan state's kind (``scanned`` or ``stand-in``), the registered weights whose root the
-    window's is (``held``) and those it isn't, whose reads are free (``free``), ``tie``, and the seconds each part took."""
+    window's is (``held``) and those it isn't, whose reads are free (``free``), ``tie``, and the seconds each part took.
+    The window's sampling design is the one its rule ``--law``, a rate, names over the class circuit (`window_design`); a
+    rule that is no rate is refused before the class is lowered."""
     import tempfile
 
     out = Path(a.out).resolve()
@@ -1697,7 +1713,7 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
+    from verity.protocols.proofs.spot.verifier import service as S
     from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 
     seconds: dict[str, float] = {}
@@ -1707,6 +1723,7 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
         nonlocal t
         seconds[what], t = round(time.time() - t, 1), time.time()
 
+    S.Law(a.law)
     key = committer_key(Path(a.key))
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
     requests = compile_advice(compiler, data)
@@ -1777,7 +1794,7 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
         values |= PWR.reuse(pw, manifests, filled.value, rounds)
         previous = R.digest(pw)
     lap("rows")
-    win = IF.Window(low.circuit, run, DR.parse_design(a.law), a.cap, registered=values, forms=WRS.FORMS)
+    win = IF.Window(low.circuit, run, window_design(a.law, low.circuit), a.cap, registered=values, forms=WRS.FORMS)
     win.supply(CR)
     filled.record(win)
     lap("record")
@@ -1990,7 +2007,9 @@ def main(argv: list[str] | None = None) -> int:
                    "opened from against the committed weights root")
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards, checked when given (each tensor is "
                    "held to its committed tensor root either way)")
-    p.add_argument("--law", default="subset:1", help="the proof system's law of the window")
+    p.add_argument("--law", required=True, help="the rate the window's audit states as its stream's rule (rate:NUM/DEN or "
+                   "stratified-rate:NUM/DEN), the window committed under the sampling design it names over the class "
+                   "circuit's proof blocks (`window_design`)")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
     p.add_argument("--workers", type=int, default=None, help="commit workers (default min(16, CPUs))")
     p.add_argument("--window-registration", help="H1's registration W of the window (`pouw_h1_commit.registration`): the "

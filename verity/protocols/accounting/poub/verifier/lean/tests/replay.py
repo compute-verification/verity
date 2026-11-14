@@ -5,7 +5,7 @@ A record is one of two kinds:
 
 * A transcript: the difftest's case, every event the verifier's `AuditRun` saw with the clock it read, its W + ⌈W/g⌉
   coins (g its `groups_per_coin`, 1 when absent) and its append coins. Both verifiers replay all of it and must give every event the same result, and the session the same
-  outcome and record. The outcome is the verdict, and a rejection's failure, window and draw are its reason. Given
+  outcome and record. The outcome is the verdict, and a rejection's failure, window and sample are its reason. Given
   the `verifier.json` that recorded it (`--record`), the outcome must be the recorded one. A transcript that doesn't
   name its session's pace replays only with the pace its `verifier.json` gives, and only if its bytes are
   the ones whose sha256 that record keeps: replayed unpaced, a paced session's windows would be held to no cap on their
@@ -24,8 +24,8 @@ A record is one of two kinds:
   - an accepted session samples every sample, each as many receipts as recorded over its windows;
   - one rejected for a failure the record keeps the cause of (`KEPT`: too few passes in a window) is rejected the same
     at the same window;
-  - one rejected for any other failure is rejected nowhere in what is replayed, and draws as many receipts as recorded
-    in each window it drew. Its cause is in what the record doesn't keep: its openings, plans, appends or steps, or
+  - one rejected for any other failure is rejected nowhere in what is replayed, and samples as many receipts as recorded
+    in each window it sampled. Its cause is in what the record doesn't keep: its openings, plans, appends or steps, or
     the root it rejected, whose arrival the verifier records only once `AuditRun.receive` takes it (so not a late one).
   Both verifiers also recompute the registration's digest from its fields, which must be the recorded one, unless the
   registration was recorded before it named its layout and rows (`LATER`), when the digest bound neither. A record
@@ -51,10 +51,10 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
 
 import ra_cases as M
 import verity_difftest as D
+
 from verity.protocols.accounting.poub.verifier import audit, coins, receipts
 
 SESSION = D.Port(M.EXE, "session", M.session, None, package=M.PACKAGE, of_record=M.OF_RECORD)
@@ -86,7 +86,7 @@ def digests(reg: dict, s: D.Server) -> tuple[D.Outcome, D.Outcome]:
 
 def summary(outcome: D.Outcome) -> dict:
     """A session's verdict and reasons from one verifier's answer: its outcome (None while a window is unverified), the
-    first rejection (failure, window, draw), how many calls it refused, and each window's sample count."""
+    first rejection (failure, window, sample), how many calls it refused, and each window's sample count."""
     kind, text = outcome
     if kind != "output":
         return {kind: text[:500]}
@@ -100,7 +100,7 @@ def summary(outcome: D.Outcome) -> dict:
 
 def difference(case: dict, lean: D.Outcome, python: D.Outcome) -> dict:
     """Where the two answers first differ: the event and each side's result, or else the outcome and record."""
-    if "output" != lean[0] or "output" != python[0]:
+    if lean[0] != "output" or python[0] != "output":
         return {"lean": f"{lean[0]} {lean[1][:300]}", "python": f"{python[0]} {python[1][:300]}"}
     a, b = json.loads(lean[1]), json.loads(python[1])
     for k, (x, y) in enumerate(zip(a["results"], b["results"])):
@@ -181,7 +181,7 @@ def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
     lifetime = ((record.get("public") or {}).get("lifetime") or session.get("lifetime")
                 or audit.lifetime_windows(session["window_ns"]))
     seen = session["windows_seen"]
-    drawn = {last_of(int(t), g, W) for t in session.get("draws") or {}}
+    sampled = {last_of(int(t), g, W) for t in session.get("draws") or {}}
     failure = session.get("failure") or {}
     few = last_of(failure["t"], g, W) if failure.get("failure") == "few" and failure.get("t") is not None else None
     made = {"plans": "registered store", "steps": "recorded" if profile and "steps" in profile[0] else "counted"}
@@ -210,7 +210,7 @@ def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
             step += 1
         if w.get("boundary_ns") is not None:
             timed.append((w["boundary_ns"], 0, t, 0, {"kind": "boundary", "now": w["boundary_ns"]}))
-        if t in drawn:
+        if t in sampled:
             at = profile[t]["opened_ns"] if t < len(profile) else w["draws_sent_ns"]
         elif few == t and w.get("deadline_ns") is not None:
             at = w["deadline_ns"] + 1
@@ -244,10 +244,10 @@ def held(session: dict, verdict: dict) -> tuple[bool, str]:
     if verdict["refused"]:
         return False, f"{verdict['refused']} calls refused: the record's events are out of the session's turn"
     g, W = session.get("groups_per_coin", 1), session["windows"]
-    by_draw: dict[int, int] = {}
+    by_sample: dict[int, int] = {}
     for k, ds in (session.get("draws") or {}).items():
-        by_draw[int(k) // g] = by_draw.get(int(k) // g, 0) + len(ds)
-    want = [by_draw[c] for c in sorted(by_draw)]
+        by_sample[int(k) // g] = by_sample.get(int(k) // g, 0) + len(ds)
+    want = [by_sample[c] for c in sorted(by_sample)]
     f = session.get("failure")
     if f and f["failure"] in KEPT:
         r = verdict["rejected"]

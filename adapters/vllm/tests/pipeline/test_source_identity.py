@@ -22,10 +22,11 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from research import pythonpath as rpp
 from research.telemetry import source_identity as gsid
-from verity_vllm import config as vconfig, settings as vsettings
+
+from verity_vllm import config as vconfig
+from verity_vllm import settings as vsettings
 from verity_vllm.pipeline import cli as vcli
 from verity_vllm.pipeline import research_tools
 from verity_vllm.pipeline import source_identity as sid
@@ -196,7 +197,9 @@ def _from_harness_tool(rec: dict) -> bool:
     PYTHONPATH), not from the tree under test."""
     snap = os.environ.get("RESEARCH_TOOL_SNAPSHOT")
     path = rec.get("resolved_path")
-    return bool(snap and path) and any(p.name == snap and p.parent.name == "tool" for p in Path(path).parents)
+    if not snap or not path:
+        return False
+    return any(p.name == snap and p.parent.name == "tool" for p in Path(path).parents)
 
 
 def test_only_researchs_copy_in_the_harness_tool_snapshot_is_left_out(monkeypatch):

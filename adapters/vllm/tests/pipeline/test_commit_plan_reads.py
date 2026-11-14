@@ -15,6 +15,7 @@ import pytest
 
 import verity_vllm.pipeline.commit_plan as CP
 from verity_vllm.query.required import QUERIES
+from verity_vllm.records import schema_ids
 
 Record = dict[str, Any]
 ABSENT = object()
@@ -198,3 +199,7 @@ def test_a_plan_that_holds_no_producer_facts_gives_the_commit_none_and_an_empty_
 def test_a_plan_s_facts_with_no_record_of_them_come_with_an_empty_one(tmp_path: Path) -> None:
     got, record = CP.use(plan(tmp_path, producer_facts={"facts": [["op", "m0", {}]]}), None)
     assert got == ({("op", "m0"): {}}, {}) and record["members"] == 1
+
+
+def test_the_plan_reads_its_schema_id_from_the_records_package() -> None:
+    assert CP.SCHEMA is schema_ids.COMMIT_PLAN_SCHEMA

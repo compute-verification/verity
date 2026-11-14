@@ -14,21 +14,17 @@ The tests evaluate the registered functions gate by gate (`verity.circuits.evalu
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
-
-if sys.version_info < (3, 12):  # pragma: no cover
-    pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
-
 from verity.circuits import Program, bind
-from tests.program.capture_check import coll_range as _coll_range
 from verity.circuits.evaluation import evaluate_region
-from verity.definitions.registry import fp8 as F
 from verity.definitions.numerics import fp8_twins
+from verity.definitions.registry import fp8 as F
 from verity.definitions.registry import prims as P
+
+from tests.program.capture_check import coll_range as _coll_range
 
 DATA = Path(__file__).parent / "data"
 
@@ -107,7 +103,7 @@ def test_numpy_twin_matches_scalar_model() -> None:
 @pytest.mark.parametrize("group", ["g0", "g1", "g3"])
 def test_scaled_mm_fp8_matches_cutlass(group: str) -> None:
     d = np.load(DATA / "fp8_saved_operands.npz")
-    K, N, bias_on = int(d[f"{group}_K"]), int(d[f"{group}_N"]), bool(int(d[f"{group}_bias"]))
+    K, bias_on = int(d[f"{group}_K"]), bool(int(d[f"{group}_bias"]))
     xq, sx, w, sw, b, y = d[f"{group}_xq"], d[f"{group}_sx"], d[f"{group}_w"], d[f"{group}_sw"], d[f"{group}_b"], d[f"{group}_y"]
     ncols = w.shape[0]
     prog = Program(bind(F.ScaledMmFp8, K=K, N=ncols, BIAS=bias_on))
@@ -208,9 +204,9 @@ def test_fp8_block_promotion_is_ffma_ascending() -> None:
     checked to separate the hypotheses on one such case (tile 0 puts acc on a bf16 midpoint, tile 1 adds ~half an f32 ulp)."""
     one, onehalf = 0x38, 0x3C
     K, G = 256, 128
-    xq = np.zeros(K, dtype=np.uint8)
+    xq: np.ndarray = np.zeros(K, dtype=np.uint8)
     xq[0] = xq[G] = one
-    w = np.zeros(K, dtype=np.uint8)
+    w: np.ndarray = np.zeros(K, dtype=np.uint8)
     w[0], w[G] = one, onehalf
     sx = np.array([P.bits_of(np.float32(1.0))] * 2, dtype=np.uint32)
     mid = int(P.bits_of(np.float32(1.0 + 2.0 ** -8)))                 # a bf16 midpoint
