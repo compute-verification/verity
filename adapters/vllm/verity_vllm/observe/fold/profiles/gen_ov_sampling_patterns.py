@@ -92,14 +92,14 @@ class TokenSampleGumbel:
         if node.is_triton:
             k = triton_name(node)
             if k == "_gumbel_sample_kernel":
-                return self._stage1(node, ctx)
+                return self._block_max(node, ctx)
             if k == "_temperature_kernel":
                 return self._temperature(node, ctx)
             return None
         op = node.op.split(".")
         b = ".".join(op[:2]) if len(op) >= 2 else node.op
         if b == "aten.argmax":
-            return self._stage2(node, ctx)
+            return self._winning_block(node, ctx)
         if b == "aten.gather":
             return self._stage3(node, ctx)
         if b == "aten.index" and node.phase == "sample":
@@ -119,7 +119,7 @@ class TokenSampleGumbel:
                            pattern=self.name)
 
     def _state(self, ctx: StepContext) -> dict:
-        return ctx.scratch.setdefault(SCRATCH_OV, {"stage1": {}, "stage2": {}, "temperature_written": set()})
+        return ctx.scratch.setdefault(SCRATCH_OV, {"block_max": {}, "winning_block": {}, "temperature_written": set()})
 
     def _temperature(self, node: TreeNode, ctx: StepContext) -> Resolution:
         """`_temperature_kernel(logits f32[R,V], expanded_idx_mapping, temperature[·], ...)`: in place `logits[r] /= T[r]`
@@ -136,7 +136,7 @@ class TokenSampleGumbel:
                                                                   "GumbelArgmaxTempBf16_v1 at the sampler launch)"),
                            kernels=(triton_name(node),), pattern=self.name)
 
-    def _stage1(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+    def _block_max(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         s = header_sampling(ctx)
         if s.get("greedy") is True:
             return None                                        # the registered greedy recognizer's case
@@ -193,7 +193,7 @@ class TokenSampleGumbel:
                 return unsupported(node, "bf16 logits with a non-unit temperature: the kernel would have to divide in-kernel", request=rid, temperature=T)
             seed = seeds.get(rid)
             if seed is None:
-                return unsupported(node, "unseeded sampled row: the kernel consumed a seed drawn on the host by vLLM's SamplingStates "
+                return unsupported(node, "unseeded sampled row: the kernel consumed a seed vLLM's SamplingStates chose on the host "
                                          "(`seed: null` in the request record); no trusted fact explains it -- PROPOSED root class "
                                          "`sampling-seed` (REPORT.md)", request=rid, position=int(pos))
             if T != 1.0:
@@ -203,12 +203,12 @@ class TokenSampleGumbel:
             else:
                 specs.append((bind(GumbelArgmaxBf16, V=V, SEED=int(seed), POS=int(pos)), rid, int(pos)))
         st = self._state(ctx)
-        st["stage1"][local_max.alloc] = {"logits": logits, "local_argmax": local_argmax, "local_max": local_max, "specs": specs,
+        st["block_max"][local_max.alloc] = {"logits": logits, "local_argmax": local_argmax, "local_max": local_max, "specs": specs,
                                           "kernels": (triton_name(node),)}
-        return Transparent("noop", (node.id,), hint=hint_of(node, "gumbel_sample stage 1 (noised blockwise max/argmax)"),
+        return Transparent("noop", (node.id,), hint=hint_of(node, "gumbel_sample's noised blockwise max/argmax"),
                            kernels=(triton_name(node),), pattern=self.name)
 
-    def _stage2(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+    def _winning_block(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         a = bound_args(node)
         x = first(a.get("self"), a.get("arg0"))
         if not isinstance(x, ViewDesc):
@@ -216,7 +216,7 @@ class TokenSampleGumbel:
         st = ctx.scratch.get(SCRATCH_OV)
         if not st:
             return None
-        by_max = st.get("stage1")
+        by_max = st.get("block_max")
         s1 = by_max.get(x.alloc) if by_max else None
         if s1 is None or x.shape != s1["local_max"].shape:
             return None
@@ -228,8 +228,8 @@ class TokenSampleGumbel:
         R = x.shape[0]
         if out.numel != R or not is_int(out):
             return unsupported(node, "argmax over local_max does not produce int [R]", out=repr(out))
-        st["stage2"][out.alloc] = {"idx": out, **s1}
-        return Transparent("noop", (node.id,), hint=hint_of(node, "gumbel_sample stage 2 (winning block)"), kernels=("ArgMaxOps",),
+        st["winning_block"][out.alloc] = {"idx": out, **s1}
+        return Transparent("noop", (node.id,), hint=hint_of(node, "gumbel_sample's winning block"), kernels=("ArgMaxOps",),
                            pattern=self.name)
 
     def _stage3(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
@@ -239,7 +239,7 @@ class TokenSampleGumbel:
         if not isinstance(src, ViewDesc) or not isinstance(idx, ViewDesc):
             return None
         st = ctx.scratch.get(SCRATCH_OV)
-        by_idx = st.get("stage2") if st else None
+        by_idx = st.get("winning_block") if st else None
         s2 = by_idx.get(idx.alloc) if by_idx else None
         if s2 is None or src.alloc != s2["local_argmax"].alloc:
             return None

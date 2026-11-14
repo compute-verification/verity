@@ -56,11 +56,11 @@ class AttentionScopeSoftcap(AttentionScopeInertWindow):
             return None                                           # the base pattern reports the malformed scope
         fa = fas[0]
         a = bound_args(fa)
-        cap = as_float(a.get("softcap"))
-        if cap is None or cap == 0.0:
+        softcap = as_float(a.get("softcap"))
+        if softcap is None or softcap == 0.0:
             return None                                           # no softcap: the inert-window / base patterns' case
-        if not (math.isfinite(cap) and cap > 0.0):
-            return unsupported(node, "softcap is not a positive finite float (FA2 takes the Is_softcap path iff softcap > 0)", softcap=cap)
+        if not (math.isfinite(softcap) and softcap > 0.0):
+            return unsupported(node, "softcap is not a positive finite float (FA2 takes the Is_softcap path iff softcap > 0)", softcap=softcap)
         # every other launch fact is the base pattern's to check: hand it the launch with softcap normalised to the no-softcap value
         rewritten = _replace_descendant(node, fa.id, _rewrite_args(fa, {"softcap": 0.0}))
         if _is_window(a.get("window_size_left")):
@@ -70,21 +70,21 @@ class AttentionScopeSoftcap(AttentionScopeInertWindow):
         if r is None:
             return None
         if isinstance(r, Unsupported):
-            return _annotate(r, {"softcap": cap})
+            return _annotate(r, {"softcap": softcap})
         try:
-            return self._rebind(r, cap)
+            return self._rebind(r, softcap)
         except TG.UnregisteredTarget as e:
-            return unsupported(node, f"target has no registered softcapped attention binding: {e}", softcap=cap)
+            return unsupported(node, f"target has no registered softcapped attention binding: {e}", softcap=softcap)
 
-    def _rebind(self, r: Resolution, cap: float) -> Resolution:
-        """Every attention compute of the group -> its softcapped chain with `CAP=cap` (`frontend.targets.softcapped`, the selection the
+    def _rebind(self, r: Resolution, softcap: float) -> Resolution:
+        """Every attention compute of the group -> its softcapped chain with `CAP=softcap` (`frontend.targets.softcapped`, the selection the
         builder makes: `Attention_v3` -> `AttentionSoftcap_v1`, `Attention_v5` -> `AttentionSoftcap_v2`; any other chain raises
         UnregisteredTarget); operands, outputs, rows, attribution and consumed ids are the base pattern's (the scope's transparent
         children in `.before` are untouched)."""
         def one(c: Resolution) -> Resolution:
             if not isinstance(c, Compute) or getattr(c.spec, "name", None) != "Attention":
                 return c
-            return dataclasses.replace(c, spec=TG.softcapped(c.spec, cap), pattern=self.name)
+            return dataclasses.replace(c, spec=TG.softcapped(c.spec, softcap), pattern=self.name)
         if isinstance(r, ComputeGroup):
             primary = one(r)
             return dataclasses.replace(primary, also=tuple(one(x) for x in r.also))
