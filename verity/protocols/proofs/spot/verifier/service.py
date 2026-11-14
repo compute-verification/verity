@@ -71,7 +71,9 @@ flat Flock circuit file of one instance of it (`verity_flock.class_statement.Uni
 and program digests. The auditor names each file by its SHA-512 in the run's interior params, `proofs.templates`
 (`template_circuits`), beside the header of the template's registered reference statement and the registered reads it
 reads, which round 2 takes as given and holds each statement's header and registered reads to but for the run's fields
-(`second_stage.RUN_FIELDS`, `second_stage.blank_reads`), and reproduces the file from public data
+(`second_stage.RUN_FIELDS`, `second_stage.blank_reads`), and, for a template that reads a table, the record that the
+template check accepted the file as that read (``read``, `template_reads`: ``flock-read-tmpl check V H`` on the file,
+run where the params are made), and reproduces the file from public data
 alone: the template's Definition and rows, the interior's
 partition and program digests, the values it reads (`reads`), its AND gates per stage (`stage_ands`) and the leaf
 scheme, in a process where `FLOCK_PACK_WORDS`, `FLOCK_CORE_ROWS`, `FLOCK_PLAIN_LEAVES`, `FLOCK_OWN_ROWS` and
@@ -172,7 +174,7 @@ from verity.circuits.partition import Level
 from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, IntegrityProfile, Subset
 
-from . import second_stage as SS
+from . import second_stage as SS, window_place as WP
 from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
 from .one_stage.verdict import Verdict, _Collect
 from verity.protocols.proofs.spot.device.challenger import ChallengerKey
@@ -872,31 +874,55 @@ def template_circuits(proofs: Mapping[str, Any] | None, query: Mapping[str, Any]
     <descriptor id>, "circuit": <SHA-512, lowercase hex>, "header": <the registered reference statement's header>,
     "registered": <the registered reads it reads, null for none>}, ...]}`, as (template, circuit, header,
     registered) in the order the check's template query `query` names the templates, which is REPLAY_c's first-instance
-    order (`replay_cells`). None names no file and gives none. Raises `ValueError` for any other form, a circuit that
-    isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor null, and a
-    list that doesn't name each of the check's templates once, in its order. The Lean verifier's `Run.templateCircuits`
-    is this."""
+    order (`replay_cells`). An entry may also record its template as a table read, ``"read": {"V": <rows>, "H":
+    <words a row>}`` (`template_reads`). None names no file and gives none. Raises `ValueError` for any other form, a
+    circuit that isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor
+    null, a read that isn't two positive counts, and a list that doesn't name each of the check's templates once, in
+    its order. The Lean verifier's `Run.templateCircuits` is this."""
     if proofs is None:
         return ()
     ids = _check_ids(query)
     if ids is None:
         raise ValueError("a two-stage design's check is a template query")
     form = ('the params\' proofs are {"templates": [{"template": <descriptor id>, "circuit": <SHA-512>, '
-            '"header": <object>, "registered": <object or null>}, ...]}')
+            '"header": <object>, "registered": <object or null>}, ...]}, an entry\'s "read" {"V": <rows>, "H": <words>}')
     if not isinstance(proofs, Mapping) or set(proofs) != {"templates"} or not isinstance(proofs["templates"], (list, tuple)):
         raise ValueError(form)
     named = []
     for e in proofs["templates"]:
-        if not (isinstance(e, Mapping) and set(e) == {"template", "circuit", "header", "registered"}
+        if not (isinstance(e, Mapping) and set(e) - {"read"} == {"template", "circuit", "header", "registered"}
                 and isinstance(e["template"], str) and isinstance(e["circuit"], str) and _DIGEST.fullmatch(e["circuit"])
-                and isinstance(e["header"], dict) and (e["registered"] is None or isinstance(e["registered"], dict))):
-            raise ValueError(f"{form}, each circuit a SHA-512 in lowercase hex, each header an object and each "
-                             f"registered an object or null: {e!r}")
+                and isinstance(e["header"], dict) and (e["registered"] is None or isinstance(e["registered"], dict))
+                and ("read" not in e or _read_of(e["read"]) is not None)):
+            raise ValueError(f"{form}, each circuit a SHA-512 in lowercase hex, each header an object, each "
+                             f"registered an object or null and each read two positive counts: {e!r}")
         named.append((e["template"], e["circuit"], e["header"], e["registered"]))
     if [t for t, *_ in named] != ids:
         raise ValueError(f"the params name the circuits of {[t for t, *_ in named]}, not the check's templates {ids}, "
                          "each once, in its order")
     return tuple(named)
+
+
+def _read_of(j: Any) -> tuple[int, int] | None:
+    """A params entry's ``read``, ``{"V": <rows>, "H": <words a row>}`` of two positive integers, as ``(V, H)``; None
+    for anything else."""
+    if not (isinstance(j, Mapping) and set(j) == {"V", "H"}
+            and all(isinstance(j[k], int) and not isinstance(j[k], bool) and j[k] > 0 for k in ("V", "H"))):
+        return None
+    return int(j["V"]), int(j["H"])
+
+
+def template_reads(proofs: Mapping[str, Any] | None) -> tuple[tuple[str, int], ...]:
+    """The templates the auditor's params ``proofs`` record as table reads, each with its table's rows, ``(template,
+    V)``, for params `template_circuits` accepted: an entry's ``"read": {"V", "H"}`` is the auditor's record that the
+    template check (``flock-read-tmpl check V H CIRCUIT``, `Flock.ReadNet.check`) accepted the circuit file whose
+    SHA-512 the entry names as the read of a table of V rows of H 16-bit words. The check ran where the params were
+    made; the verifier runs none, and takes a template with no such record as no read. The Lean verifier's
+    `Run.templateReads` is this."""
+    if proofs is None:
+        return ()
+    return tuple((e["template"], r[0]) for e in proofs["templates"]
+                 if "read" in e and (r := _read_of(e["read"])) is not None)
 
 
 def second_counts(k: int | Mapping[str, Any], ids: Sequence[str], ns: Sequence[int]) -> tuple[int, ...]:
@@ -1020,6 +1046,15 @@ def _token(x: Any, k: str) -> str:
 
 def _order(r: WindowCommitmentRecord) -> int | None:
     return r.order if _nat(r.order) else None
+
+
+def _names_place(window: Any) -> bool:
+    """Whether a record's window names a place in its window's session (`window_place.of`)."""
+    try:
+        WP.of(window)
+    except ValueError:
+        return False
+    return True
 
 
 def _registration_token(r: WindowCommitmentRecord) -> str:
@@ -2136,8 +2171,10 @@ class Stream:
         work sample it widens proves a set whose size varies with the sample, which the sampled audit's soundness
         statement doesn't cover. The sample of record is the verifier's (`verifier.select`: the Lean's `Select.select` on the
         bytes of the coins this sample read), unless a `sampler` samples. Raises `Refused` for a registration sampled before
-        (nothing resamples), a closure map (before any coin is read), the two verifiers sampling differently
-        (`disagree`), and a sample that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`).
+        (nothing resamples), a closure map (before any coin is read), the challenger's coins of another family than the
+        place the record's window names (`place`, before any coin is read: `_placed`), the two verifiers sampling
+        differently (`disagree`), and a sample that isn't well formed under the sampling design (`draw.check_draw`, by
+        `verifier.check_draw`).
 
         Under a two-stage design, `select` of a registration is the first stage, and of its interior registration
         (`register_interiors`) the second (`select_second`, by `verifier.select_second`): `k` proof blocks in each
@@ -2163,6 +2200,7 @@ class Stream:
                 if closure is not None:
                     raise _refuse("closure", "a closure map widens a work sample, which the sampled audit's soundness "
                                              "statement doesn't cover")
+                self._placed(registration)
                 obj = select_draw(self.spec.selection, e.law, registration.record["population"], coins, closure=closure,
                                   sampler=self._sampler)
                 if self._sampler is None:
@@ -2185,6 +2223,17 @@ class Stream:
         e.draw, e.drawn_at, e.read, e.closure = got["draw"], got["drawn_at"], got["read"], closure
         e.family = self._family(e.read)
         return e.draw
+
+    def _placed(self, registration: WindowCommitmentRecord) -> None:
+        """`Refused` (`place`) where the sample's coins are of another family of the challenger's than the one of the
+        place the record's window names (`window_place.family`): the sample's family is its record's, never its coin
+        source's to choose. A window that names no place is held to none."""
+        window = registration.record.get("window")
+        if not isinstance(self._coins, ChallengerCoins) or not _names_place(window):
+            return
+        mine = WP.family(window)
+        if self._coins.label != mine:
+            raise _refuse("place", {"family": self._coins.label, "place": mine})
 
     def _family(self, read: bytes | None) -> str | None:
         """The challenger's family a sample that read `read` took its coins from: the stream's own coin source's at the
@@ -2426,12 +2475,14 @@ class Stream:
         the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
         interior program's strata make, the design's links and wires and their rows, which it derives from the replay
         block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`), the
-        reads the verdicts report, what they
-        name of each session they accepted
-        (`second_stage.verified_of`), and the reference header and registered reads the params `proofs` give each
-        template, `template_circuits`), and the registration's
-        over the replay sample, each taking the sessions' reads of its own ports at their own roots (`audit.less_own_reads`), both
-        failing `run` where the whole run isn't the verifier's; and the public outputs."""
+        reads the verdicts report, what they name of each session they accepted (`second_stage.verified_of`), the
+        reference header and registered reads the params `proofs` give each template, `template_circuits`, and its
+        own copies of the interior registration's values it holds without the prover: those it fills, with their
+        sources as the registration's check read them (`registration.resolved`: a history table's root and domain
+        id as bytes), and those it pinned or holds to an earlier record, and the templates the params record as table
+        reads, `template_reads`), and the registration's over the replay sample,
+        each taking the sessions' reads of its own ports at their own roots (`audit.less_own_reads`), both failing `run` where
+        the whole run isn't the verifier's; and the public outputs."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
         reg, first, ireg, second = e.registration, e.draw, e.interior, e.second
         outputs = self.spec.check.public_outputs
@@ -2455,7 +2506,10 @@ class Stream:
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
                      wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
                      rows=SS.replay_rows(e.program, descriptor_id(self.replay)),
-                     returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record))
+                     returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record),
+                     supplied=SS.supplied_of(R.resolved(e.interior_copies[5], e.interior_history)),
+                     fixed=(*(e.interior_copies[6] or ()), *(e.interior_copies[10] or ())),
+                     reads=template_reads(proofs))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots)
