@@ -68,7 +68,7 @@ Files:
   `cover_count.py` on a small hand-written cover record,
   `ks_form.py` on synthetic circuit heads,
   `stage.py`'s `census:NAME`, `full/D`, its bound default, `--unbound` and its retired names on a stub stager, `stage_window.py`'s member choice and public-body
-  check, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in
+  check, `job.sh`'s `stage_one` handing a census name with several statics to a stub stager as one argument, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in
   each) held to the tree.
 - `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
   the Lean verifier's `ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and

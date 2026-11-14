@@ -26,7 +26,8 @@ A run that ended without custody preserving it (the upload failed, custody was o
 on the machine: the retention collector lists such runs apart, and where a machine's collector takes them
 (`research retention gc --unpreserved-runs`) the directory goes 7 days after its last write, unless
 `research keep RUNDIR ...` before then or `research data custody RUN --publish` keeps it (the research README,
-"Retention of node data").
+"Retention of node data"). The directory of a launch that was refused before it ran goes the same way, and only
+`research keep` keeps it: nothing ran that custody could preserve.
 
 A local `research run` (no `--on`) publishes only its telemetry and the files its `result.json` lists, unless
 `--run-record` gives it custody's selection; the Nebius Sky templates with a free-form `CMD` (`port-capture`,

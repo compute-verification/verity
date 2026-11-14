@@ -27,7 +27,7 @@ import re
 import shlex
 import signal
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 MARKER = Path("/etc/vy/runs-via-slot")
@@ -219,7 +219,7 @@ def stop(o: dict, *, proc: Path = Path("/proc"), kill=os.kill, dry_run: bool = F
             sent.append(p)
         except ProcessLookupError:
             pass
-    return {"at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
+    return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
             "pgid": o["pgid"], "workload_group_seen": o["pgid"] in groups, "sigterm": sent, "dry_run": dry_run, "why": why}
 
 
@@ -234,7 +234,7 @@ def renice(o: dict, nice: int, *, proc: Path = Path("/proc"), dry_run: bool = Fa
                 moved.append(p)
         except (ProcessLookupError, PermissionError) as e:
             print(f"slot_only: process {p} not reniced ({type(e).__name__})", file=sys.stderr, flush=True)
-    return {"at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
+    return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
             "reniced": moved, "nice": nice, "dry_run": dry_run, "why": "a direct run, not through a check slot (slot.py)"}
 
 
