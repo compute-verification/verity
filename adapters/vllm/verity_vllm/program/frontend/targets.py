@@ -56,7 +56,6 @@ from verity_vllm.definitions.registry import gemm_bias as GB
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import value_inputs as VI
 from verity_vllm.definitions.registry.hopper import Fa3InvSum
-
 from verity_vllm.program.frontend.gemm_targets import GemmTarget, UnregisteredGemmTarget
 
 if TYPE_CHECKING:
