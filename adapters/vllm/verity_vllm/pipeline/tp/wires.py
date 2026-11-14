@@ -59,6 +59,8 @@ Range = tuple[str, int, int]
 #: a writer row run of a site's output: its leaves [lo, hi), a row's words, the writer's template, output and first unit
 Segment = tuple[int, int, int, str, str, int]
 
+__all__ = ["ALL", "COMBINE", "CONSUMER", "GATHER", "NORM", "OUTPUT", "PRODUCER", "Sites", "sites_circuit"]
+
 
 @dataclass(frozen=True)
 class Sites:
