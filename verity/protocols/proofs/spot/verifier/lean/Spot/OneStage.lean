@@ -32,7 +32,10 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   record's program to (`Registration.declaredCode`), refused in any other form; and it may add `seed_salt`: the window's
   seed salt it read from the challenger's log (`Challenger.seedSaltOf`), lowercase hex of 64 bytes, which needs
   `window_root` and which R6 holds the record's window to name (`R6-seed-salt`), refused in any other form; and it may
-  add `pool`, `{"genesis", "lag", "pin", "pout", "reset", "verdicts", "week"}`: the two registered values a window
+  add `compiler`: the registration log's registered compiler as its view publishes it (`CoreProtocol.Registration`'s
+  item), null when the log registers none, the digest lowercase hex of 64 bytes and the length ℓ a natural, whose digest
+  R6 holds the record's window's compiler to and ℓ its advice's bits (`Registration.compilerOk`,
+  `Registration.adviceOk`), refused in any other form; and it may add `pool`, `{"genesis", "lag", "pin", "pout", "reset", "verdicts", "week"}`: the two registered values a window
   opens its pool from and leaves it in, which it neither fills, pinned nor gives as outputs, the empty pool's root
   (lowercase hex of 64 bytes), the public lag at which serving learns a verdict (a positive integer), its verdict log
   (an object of record digests, lowercase hex of 64 bytes, to whether its run on that record accepted), whose verdict
@@ -250,6 +253,7 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys
   let keys := if (field? j "pool").isSome then keys.push "pool" else keys
   let keys := if (field? j "history").isSome then keys.push "history" else keys
+  let keys := if (field? j "compiler").isSome then keys.push "compiler" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -386,12 +390,23 @@ def paramsParsed (j : Json) : V Params := do
       | some n, .str p => pure (n, p)
       | _, _ => throw "a declaration's day is not a natural number or its program not a string"
     pure (some (day, ds))
+  let compiler ← match field? j "compiler" with
+    | none => pure none
+    | some .null => pure (some none)
+    | some b => do
+      exactly b #["advice", "cap", "digest", "kind"] "the registered compiler"
+      match getD b "kind", getD b "digest", getD b "advice", nat? (getD b "cap") with
+      | .str "builder", .str d, .str _, some ℓ =>
+        if d.length == 128 && isHex d then pure (some (some (d, ℓ)))
+        else throw "the registered compiler's digest is not lowercase hex of 64 bytes"
+      | _, _, _, _ => throw ("the registered compiler is the registration log's item: its kind, a digest, an advice " ++
+        "format and a natural length")
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared, seedSalt, pool, tied },
+                                    declared, seedSalt, pool, tied, compiler },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then

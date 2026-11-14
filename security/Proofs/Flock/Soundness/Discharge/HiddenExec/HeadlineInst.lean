@@ -136,7 +136,7 @@ theorem rsAtHI_computes (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : 
 /-- **The headline at the executable over hidden-output sessions, at the template instance's program.**
 `flock_headline_exec_hidden` with the production program `instProg c n`, the program of the whole template instance (the
 unit's copies, the stage nets and the lookup slots, wired), and its outputs the output words' bits (`outsOfI`): against
-any live prover `τ`, flock-verify accepts with at least `K` incorrect proof blocks of `instProg c n`, at the simulated prover's
+any live prover `τ`, verity-verify-proof accepts with at least `K` incorrect proof blocks of `instProg c n`, at the simulated prover's
 committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
 at most `miss(K) + ε_ks + δ_link`.
 

@@ -1,7 +1,7 @@
 """The recursive inner session's sample: the challenger answers ``Register`` with the verifier's full sample
 (`verity_flock.rec_live.full_draw`, the stratified sampling design at K = the population, so every unit) and the session record keeps
 it as ``unit_draw``, which `verify` holds to its own sampling design (``--stratified N --program --partition``). `full_draw` is checked
-against Lean's own derivation (``flock-verify draw`` at K = N), and the controls `rec_inner.py forge` makes of a sampled
+against Lean's own derivation (``verity-verify-proof draw`` at K = N), and the controls `rec_inner.py forge` makes of a sampled
 record (no sample, a unit dropped) against what they change. `inner_draw` reads a record's sample as the verifier does and
 refuses a record without one, and `rec_vstage stage` refuses to stage V* over such a session."""
 from __future__ import annotations
@@ -19,7 +19,7 @@ import test_rec_live as T
 
 HERE = Path(__file__).resolve().parent
 LEAN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 
 DRAW = {"law": "stratified", "population": 2, "k": 2, "strata": [{"template": "t", "units": [[0, 2]], "k": 2}],
         "units": [0, 1]}
@@ -73,7 +73,7 @@ def test_the_full_draw_is_the_lean_verifiers_own_at_k_the_population(tmp_path):
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.circuits.codec import canonical_json, encode_program
 
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     for i, (prog, q) in enumerate(_programs()):
         desc, part = tmp_path / f"{i}.desc", tmp_path / f"{i}.partition.json"
         desc.write_bytes(canonical_json(encode_program(prog)))

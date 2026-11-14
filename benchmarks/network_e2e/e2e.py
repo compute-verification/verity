@@ -6,7 +6,7 @@ the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json
 the chain's stages (`chain`): the advice's bits per link-window, the prove path's audit and the negatives
 (`negatives.py`), and what is still stubbed.
 
-    python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
+    python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean verity-verify-proof |
                                          --proofs N2ZK_DIR | --no-prove) [--advice FILE [--serving-config FILE] |
                                          --endpoint-run DIR] [--ids FILE] [--prove-path DIR ...
                                          [--prove-path-registered FILE]] [--no-negatives]
@@ -905,7 +905,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=os.environ.get("OUT"), help="the report's directory (default $OUT)")
     ap.add_argument("--work", help="scratch, kept (default: a temporary directory, removed)")
     ap.add_argument("--bin", help="Flock's flock-circuit (run.sh builds it)")
-    ap.add_argument("--lean", help="the Lean flock-verify (run.sh builds it)")
+    ap.add_argument("--lean", help="the Lean verity-verify-proof (run.sh builds it)")
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     how = ap.add_mutually_exclusive_group()
     how.add_argument("--no-prove", action="store_true", help="N2's verdicts and the head checks' references only")

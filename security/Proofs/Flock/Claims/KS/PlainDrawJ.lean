@@ -39,7 +39,7 @@ import Proofs.Flock.Claims.KS.ConflictOC
 /-!
 # The plain verdict at the statement's sample, at the record's parsed value
 
-`PlainDrawKDefs`' predicates read a transcript's record as text (`Exec.Transcript.record`), and flock-verify parses it
+`PlainDrawKDefs`' predicates read a transcript's record as text (`Exec.Transcript.record`), and verity-verify-proof parses it
 first. The recursion's last step at the parsed value (`FlockDeploy.nextJ`) runs the verdict on a parsed value, which
 need not be any text's parse, so the KS and Bits route is stated here at a parsed value `j` (`TranscriptJ`), through
 `verifyJWithMK keep` and `Record.decodeJWithK keep` at SHA-512 (`With.std`):
@@ -69,7 +69,7 @@ structure TranscriptJ where
   j : Json
   proofs : Array ByteArray
 
-/-- **flock-verify accepts at the setup at the sample `dr`, at the parsed value, through `keep`**: `AcceptsAtDK` with
+/-- **verity-verify-proof accepts at the setup at the sample `dr`, at the parsed value, through `keep`**: `AcceptsAtDK` with
 `verifyJWithMK keep` on the parsed record for `verifyWithMK keep` on its text. -/
 def AcceptsAtDJK (keep : Bool → Bool) (I : Exec.Inputs) (dr : Option Json) (t : TranscriptJ) : Prop :=
   ∃ spec sts, setupAtD I dr = .ok (spec, sts) ∧

@@ -51,17 +51,17 @@ def PadNonvanishing40 : Prop :=
 
 /-- **The record is the live session's** (`live-verifier`; the custody of `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`, with A6,
 `uniform/flock-coin-server`, for the coins in it). Nothing in a session record authenticates its writer, and
-`flock-verify verify --zk` reads the sample and the proofs only from the record, so no check of the record establishes
+`verity-verify-proof verify --zk` reads the sample and the proofs only from the record, so no check of the record establishes
 either fact:
 
 * `RecordsLiveZK I dj wr`: the record `verify --zk` reads is the one the challenger wrote for the live
   session. At every transcript it accepts, its sample is `dj S`, its proofs are the prover's, and its root, link points
   and rounds are the live outcome's.
-* `DrawFileZK dj law pop`: the sample file is the one `flock-verify draw` printed for the verifier's own sample. Every sample
+* `DrawFileZK dj law pop`: the sample file is the one `verity-verify-proof draw` printed for the verifier's own sample. Every sample
   file `dj S` that `UnitDraw.ofJson` decodes decodes to `drawOf law pop S`, the sample of `S` under `law` over
   `[0, pop)`.
 
-Both are stated at what flock-verify parses, so the record's serialization is outside them. -/
+Both are stated at what verity-verify-proof parses, so the record's serialization is outside them. -/
 def RecordCustodyZK {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
     (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (law : Flock.Draw.Law) (pop : ℕ) :
     Prop :=
@@ -70,11 +70,11 @@ def RecordCustodyZK {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj 
 /-- **The record is the live session's, at `J` tables, under a stratified sample** (`live-verifier`, as
 `RecordCustodyZKJ`): the record `verify --zk --session-tables J` reads is the one the challenger wrote for the live
 session (`RecordsLiveZKJ`: its sample, proofs and link points, and each table's root and rounds, are the live outcome's),
-and its sample file the one `flock-verify draw` printed for the verifier's own sample under the stratified sampling design
+and its sample file the one `verity-verify-proof draw` printed for the verifier's own sample under the stratified sampling design
 `stratified Kd strata` over `[0, pop)` (`DrawFileZK`). That one sample covers the sampling block's units, every stratum
 of every table, and `verify` gives table `j` part `j` of its units (`drawJ`, `partS`), so the tables' samples are its
 parts and form one stratified sampling design together. Only the record's custody is assumed: the parts and their link points are
-flock-verify's own arithmetic (`ZkHidden.drawOkZKHJ_of_size`). -/
+verity-verify-proof's own arithmetic (`ZkHidden.drawOkZKHJ_of_size`). -/
 def RecordCustodyZKJS {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
     (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)

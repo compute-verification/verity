@@ -9,7 +9,8 @@ the difftest. The references live here alone: there is no Python verifier of the
   as the stand-in answers it. No proof here is one that one-stage v2 accepts, so an accepted period, an undecided one
   and the records each audit is handed are run through the stand-in alone.
 - `period_check`: the period's check on one-stage v2 itself, against one-stage v2's own answer
-  (its zero-knowledge executable's) on what `asked` composes.
+  (its zero-knowledge executable's) on what `asked` composes. The check's own executable (`spot-monitoring-period`) is
+  asked the same cases and answers them as the piece does, as the protocol's outcome.
 
 The cases are a week of one lane under the deployed key, written as the auditor's gate writes it (`Week`): each window
 reserved with a family for each commitment (`ONE`), opened on a commit the host's pins log records and main's
@@ -50,6 +51,7 @@ from test_period_difftest import (CIRCUIT, DAY, ELSEWHERE, LABEL, LANE, OTHER, S
                                   reference as ledger_half)
 
 import verity_difftest as D
+from verity_difftest import protocol as PR
 from verity.commitments.crypto import lms
 from verity.commitments.identity import canonical_json_text
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as T
@@ -609,6 +611,28 @@ ASKED = D.Port(PIECES, "period_asked", asked,
 pieces = D.server_fixture(CHECK)
 one_stage_v2 = D.server_fixture(ONE_STAGE_V2)
 
+#: the period's check as its own executable (`Core.BlobProtocol.main`), and its protocol's id
+EXE = "spot-monitoring-period"
+PROTOCOL = "verity/sampled-proofs/period/v1"
+
+
+@pytest.fixture(scope="module")
+def period():
+    with D.Server([str(D.build(PACKAGE, EXE)), "serve"]) as s:
+        yield s
+
+
+def _served(period, j: dict) -> dict:
+    """The executable's outcome on the request `j`, as one case of its `serve`: the ledger and the evidence as the
+    bytes of their canonical text."""
+    return period.exchange(_json({"blobs": j["blobs"], "commitment": _hex(j["ledger"]), "evidence": _hex(j["evidence"]),
+                                  "params": j["params"]}))
+
+
+def _rejected(j: dict, reason: str) -> dict:
+    """The protocol's outcome for a reject of the request `j`: the reason, under the ledger's bytes' SHA-512."""
+    return PR.outcome(PROTOCOL, "reject", reason, hashlib.sha512(D.canonical(j["ledger"]).encode()).digest())
+
 
 def _answer(pieces, port: D.Port, j: Any) -> dict:
     kind, text = D.replay(port, j, pieces)
@@ -797,13 +821,14 @@ def test_one_stage_v2_itself_refuses_a_root_in_another_family_than_its_own(piece
     assert kind == "output" and json.loads(text) == want, (kind, text)
 
 
-def test_one_stage_v2_itself_answers_each_case(pieces, one_stage_v2):
+def test_one_stage_v2_itself_answers_each_case(pieces, one_stage_v2, period):
     """The period's check on one-stage v2 itself answers a case as one-stage v2 answers what the reference composes
     for it. A sample read from the window's session's coins and proved in no session is read by one-stage v2 (its
     coins are the challenger's: the period's ledger, main's history, pins log and session files, composed with the
     case's segment, pass its own reading) and rejected for its proofs; the same case with its segment's commitment
     another's is refused by one-stage v2's reading of the coins. Either way the period rejects under `audit` with
-    one-stage v2's reason."""
+    one-stage v2's reason, and the check's executable gives that reject as the protocol's outcome, under the ledger's
+    digest."""
     inner = _asks(one_stage_v2)
     w = Week(random.Random("real"))
     b = w.b
@@ -817,6 +842,7 @@ def test_one_stage_v2_itself_answers_each_case(pieces, one_stage_v2):
     assert want == {"reason": f"audit: session {sid}, registration {digest[:16]}: {NO_SESSIONS}", "verdict": "reject"}
     kind, text = pieces.call("period_check", j)
     assert kind == "output" and json.loads(text) == want, (kind, text)
+    assert _served(period, j) == _rejected(j, want["reason"])
 
     segment = j["evidence"]["windows"][0]["audits"][0]["evidence"]["coins"]["segment"]
     segment["after"] = "00" * 64
@@ -825,6 +851,7 @@ def test_one_stage_v2_itself_answers_each_case(pieces, one_stage_v2):
     assert NO_SESSIONS not in want["reason"], want
     kind, text = pieces.call("period_check", j)
     assert kind == "output" and json.loads(text) == want, (kind, text)
+    assert _served(period, j) == _rejected(j, want["reason"])
 
 
 def test_parameters_one_stage_v2_refuses_at_every_window_are_refused_before_the_check(pieces):

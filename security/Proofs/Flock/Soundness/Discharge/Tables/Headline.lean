@@ -15,7 +15,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
 tables at each sample, `plan S R` of length `J`, and the live session is `liveSession` over them.
 
 * `Prog.flock_headline_live_tables`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_tables`, at the
-  live stratified sample, which flock-verify splits over `J > 1` tables as one sample (`Stmt.setupTables`, `Draw.tablesWhy`:
+  live stratified sample, which verity-verify-proof splits over `J > 1` tables as one sample (`Stmt.setupTables`, `Draw.tablesWhy`:
   several tables need a subset or stratified sample).
 * `Prog.flock_headline_live_tables_subset`: the same at the live subset sample `Law.execOS src (.subset kd) n`, whose
   count curve is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` (`Law.subset_miss`), under A3.
@@ -43,11 +43,11 @@ variable {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {R
 sample.** Let the verifier sample the units as in `Prog.flock_headline_L` (the live stratified sample under A3), let each
 sample's session be the plan's tables `plan S R`, and let the live session be `liveSession` over them (the challenger,
 its coins uniform per round and sampled after the round's retained bytes, on the `2J` rep streams), written out as a
-session directory by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K` incorrect proof blocks of the
+session directory by `wr`. Against any live prover `τ`, verity-verify-proof accepts with at least `K` incorrect proof blocks of the
 committed values of the simulated prover (`simAuditJ … τ`) with probability at most `miss(K) + ε_ks + δ_link`:
 `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_tables`, so `Pr[bad] = 0`. Beyond
 `Prog.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`, `hCR`),
-it takes `hdec`: the decoder is right on the sessions flock-verify accepts, at the samples the sampling design makes, table by table. -/
+it takes `hdec`: the decoder is right on the sessions verity-verify-proof accepts, at the samples the sampling design makes, table by table. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_tables
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -105,7 +105,7 @@ theorem execOS_subset_miss_le (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype �
   iSup₂_mono fun B _ => Law.execOS_subset_escape_le n kd hkd Lb src hA3 B
 
 /-- **The headline at the executable, for sessions of `J` tables of the challenger, at the live subset sample**,
-the sample flock-verify takes at more than one table. As `Prog.flock_headline_live_tables`, with the verifier's sample the
+the sample verity-verify-proof takes at more than one table. As `Prog.flock_headline_live_tables`, with the verifier's sample the
 live `kd`-subset sample of the `n` units under A3 (`hA3`), whose count curve at `K ≤ n` incorrect proof blocks is
 `C(n − K, kd) / C(n, kd)`. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset
