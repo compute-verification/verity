@@ -41,7 +41,7 @@ def _u64(*vals) -> np.ndarray:
 
 
 def _eval(spec, operands) -> list[int]:
-    from verity_vllm.properties.admission import evaluate_spec
+    from verity_vllm.check.replay.stoch_recompute import evaluate_spec
     return [int(v) for v in evaluate_spec(spec, operands)]
 
 

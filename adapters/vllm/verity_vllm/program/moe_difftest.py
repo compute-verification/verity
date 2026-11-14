@@ -1,9 +1,7 @@
-"""Differential-test adapter (`verity_vllm.properties.admission`) for the fused-MoE block's registered Definitions against vLLM
-d9105ea80's `fused_experts` (TritonExperts: `fused_moe_kernel` w13 -> `_C.silu_and_mul` -> `fused_moe_kernel` w2 with the routed
-weight -> `_moe_C.moe_sum`), bf16, unquantized, routing given:
-
-    # pod, torch venv:  verity-vllm properties-admission produce --adapter verity_vllm.program.moe_difftest --n 20 --seed 17 --out DIR
-    # verity venv:      verity-vllm properties-admission check   --adapter verity_vllm.program.moe_difftest --dir DIR --out RUN/moe.json
+"""Differential-test adapter for the fused-MoE block's registered Definitions against vLLM d9105ea80's `fused_experts`
+(TritonExperts: `fused_moe_kernel` w13 -> `_C.silu_and_mul` -> `fused_moe_kernel` w2 with the routed weight ->
+`_moe_C.moe_sum`), bf16, unquantized, routing given: `cases` gives each case's statics and input words, `production` runs
+the kernels on them and `spec` is the Definition they are compared with.  The tree has no command that runs it.
 
 `production` runs vLLM's own entry and records what each `fused_moe_kernel` launch wrote, by wrapping the module's
 `dispatch_fused_moe_kernel`: the w13 launch's output (`MoeExpertGemm{E,K=H,N=2I}` per (token, slot) pair), the w2 launch's input

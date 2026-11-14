@@ -12,7 +12,7 @@ from verity.definitions.registry.sampling import (
     GumbelArgmaxTempBf16,
 )
 
-from verity_vllm.properties.admission import evaluate_spec
+from verity_vllm.check.replay.stoch_recompute import evaluate_spec
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 

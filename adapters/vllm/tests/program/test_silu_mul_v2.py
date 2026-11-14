@@ -14,7 +14,6 @@ from verity.definitions.registry.act import SiluMul, SiluMulBf16
 
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.quarantine.act import silu_mul_difftest as DT
 
 V1 = P.SiluMulBf16.evaluate
 V2 = SiluMulBf16.evaluate
@@ -112,15 +111,3 @@ def test_the_replay_row_is_the_element_on_every_gate_word():
         gu = np.concatenate([np.arange(1 << 16, dtype=np.uint16), np.full(1 << 16, u, dtype=np.uint16)])
         got = RK.ROWS["SiluMul_v2"].fn({"I": 1 << 16}, [gu])["out"]
         assert [int(w) for w in got] == [V2(g, u) for g in range(1 << 16)], hex(u)
-
-
-def test_the_adapter_covers_every_edge_kind_and_the_edge_words():
-    from verity_vllm.properties.admission import REQUIRED_EDGE_KINDS
-
-    cases = [DT.cases(None, i) for i in range(60)]
-    kinds = {s.get("kind") for c in cases for s in c["inputs"]}
-    assert set(REQUIRED_EDGE_KINDS) <= kinds
-    words = [c for c in cases if "words" in c["inputs"][0]]
-    assert words and all(len(c["inputs"][0]["words"]) == 2 * c["statics"]["I"] for c in words)
-    pairs = {(w["words"][k], w["words"][len(w["words"]) // 2 + k]) for c in words for w in c["inputs"] for k in range(len(w["words"]) // 2)}
-    assert {(g, u) for g in DT.GATES for u in DT.UPS} <= pairs

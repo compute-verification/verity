@@ -69,7 +69,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "serve-openai": ("verity_vllm.pipeline.serve_openai", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
     "program-dag": ("verity_vllm.check.match.program_dag", "a derived Program and a fold: live-cone DAG multisets equal"),
-    "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
     "records": ("verity_vllm.pipeline.circuit_db", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
                             "switch), and a checkpoint's staging (staged)"),
     "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),

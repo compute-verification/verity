@@ -1,6 +1,5 @@
 """The dense family's Definition modules (dense, activation, norms, RoPE, GEMM bias) import only `verity`, other Definition
-modules and the evidence their conformance texts cite (`EVIDENCE`), so they can move to `verity/circuits/` as they are. Their twins and vocabulary live in the integration package:
-`properties.difftests.rope_difftest`, `properties.difftests.rope_gptj_difftest`,
+modules and the evidence their conformance texts cite (`EVIDENCE`), so they can move to `verity/circuits/` as they are. Their vocabulary lives in the integration package:
 `program.frontend.gemm_targets`."""
 from __future__ import annotations
 
@@ -29,8 +28,7 @@ THIRD_PARTY = ("numpy",)
 CATALOG = ("verity.circuits.ops", "verity.circuits.silicon", "verity.circuits.targets")
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
-MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
-         "verity_vllm.program.frontend.gemm_targets")
+MOVED = ("verity_vllm.program.frontend.gemm_targets",)
 
 
 def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:

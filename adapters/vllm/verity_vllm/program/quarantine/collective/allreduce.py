@@ -31,9 +31,8 @@ What is NOT known (and why this stays in quarantine):
     rounds ONCE at the end (`custom_all_reduce.cuh::packed_reduce`): a different function for R > 2 (equal for R = 2).  It was disabled
     in every capture so far and is not modelled here.
 
-Conformance: quarantine — `difftest` pending (the production body needs a 2-GPU producer: two processes and an NCCL communicator; the
-protected `difftest.produce` is single-process, so the adapter `allreduce_difftest.py` spawns the second rank itself; untested on GPU in
-this window).  Nothing is claimed exact beyond the R = 2 statement above.
+Conformance: quarantine — `difftest` pending (the production body needs a 2-GPU producer: two processes and an NCCL communicator;
+the tree has none).  Nothing is claimed exact beyond the R = 2 statement above.
 """
 from __future__ import annotations
 

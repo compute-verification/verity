@@ -224,25 +224,9 @@ def test_descriptor_round_trip_and_registry():
 def test_quarantine_lint_passes_for_the_collective_package():
     rep = lint(Path(QC.__file__).parents[1])
     mine = [f for f in rep["files"] if "/collective/" in f["file"]]
-    assert {Path(f["file"]).name for f in mine} >= {"allreduce.py", "allreduce_difftest.py", "__init__.py"}
+    assert {Path(f["file"]).name for f in mine} >= {"allreduce.py", "__init__.py"}
     assert all(f["status"] == "pass" for f in mine), [(f["file"], f["problems"]) for f in mine]
     assert not [d for d in rep["duplicate_semantic_ids"] if d.startswith("tp2/")]
-    adapter = next(f for f in mine if f["file"].endswith("allreduce_difftest.py"))
-    assert adapter["adapter"] and adapter["semantic_id"] == A.SEMANTIC_ID
-
-
-def test_difftest_adapter_cases_and_spec_are_torch_free():
-    import random
-
-    from verity_vllm.program.quarantine.collective import allreduce_difftest as D
-    kinds = set()
-    for i in range(10):
-        c = D.cases(random.Random(0), i)
-        assert c["statics"]["R"] == 2 and len(c["inputs"]) == 2
-        assert all(inp["dtype"] == "bfloat16" and inp["shape"] == [c["statics"]["N"]] for inp in c["inputs"])
-        kinds.add(c["inputs"][0]["kind"])
-        assert D.spec(c["statics"]).id == f"AllReduceSumBf16_v1{{N={c['statics']['N']},R=2}}"
-    assert {"zeros", "max", "subnormal", "alternating", "random"} <= kinds
 
 
 # --- the linkage tool: synthetic ranks ------------------------------------------------------------------------------------

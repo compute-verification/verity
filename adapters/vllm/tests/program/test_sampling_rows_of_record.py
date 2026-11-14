@@ -49,7 +49,7 @@ def test_the_r16_gpu_fixture_rows_device_token_masked_row_and_lane_walk_all_agre
     served token AND every lane of the masked row; the lane walk is run on one of them (10 s) as the reference beside it."""
     from verity.definitions.registry import sampling_topp_difftest as D
 
-    from verity_vllm.properties.admission import evaluate_spec
+    from verity_vllm.check.replay.stoch_recompute import evaluate_spec
     z = np.load(os.path.join(FIX, "fstoch01_rows.npz"))
     with open(os.path.join(FIX, "fstoch01_rows.npz.json")) as fh:
         meta = json.load(fh)
