@@ -37,7 +37,7 @@ def reference(on: bool):
     it (the build of record's)."""
     def check(j):
         allow, own, statements = _second_own(j)
-        return SS.check(allow, dataclasses.replace(own, wired_key=True) if on else own, statements).to_json()
+        return SS.check_twin(allow, dataclasses.replace(own, wired_key=True) if on else own, statements).to_json()
     return check
 
 
