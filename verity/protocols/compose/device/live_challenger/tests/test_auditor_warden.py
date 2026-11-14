@@ -723,6 +723,26 @@ def test_a_relay_session_whose_unit_is_stopped_stops_its_runner_then_its_ssh_the
     assert signal.getsignal(signal.SIGTERM) is before
 
 
+def test_a_relay_session_whose_unit_is_stopped_fails_though_its_runner_exits_0_on_the_signal(host, stop_held, tmp_path):
+    """A stopped session is a failed run whatever its runner returns: a runner that exits 0 on the unit's SIGTERM still
+    leaves the run's rc nonzero."""
+    rc, out = gate(host, SESSION, started=[])
+    ready = tmp_path / "ready"
+    os.mkfifo(ready)
+
+    def wait(proc, seconds):
+        open(ready).close()
+        os.kill(os.getpid(), signal.SIGTERM)
+        return proc.wait()
+
+    runner = ("import signal\nsignal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\n"
+              f"open({str(ready)!r}, 'w').close()\nsignal.pause()")
+    end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN, now=lambda: T1,
+                          tunnel_argv=lambda s, l, back: TUNNEL, up=lambda tunnel, port: True,
+                          command=session(runner, []), wait=wait)
+    assert end["rc"] == 2 and end["ended"] == A.STOPPED
+
+
 def test_a_relay_session_whose_unit_is_stopped_before_its_tunnel_is_up_runs_nothing_and_writes_its_end(
         host, stop_held):
     rc, out = gate(host, SESSION, started=[])
@@ -734,6 +754,29 @@ def test_a_relay_session_whose_unit_is_stopped_before_its_tunnel_is_up_runs_noth
 
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l, back: TUNNEL, up=up,
                           command=lambda *a, **k: pytest.fail("ran after its unit was stopped"))
+    assert end["rc"] == 2 and end["ended"] == f"{A.STOPPED} before its runner started" and end["verdict"] is None
+    assert set(end["files"]) == {"tunnel.log"}
+
+
+def test_a_relay_session_whose_unit_is_stopped_once_its_tunnel_didnt_come_up_still_writes_its_end(host, stop_held):
+    """A stop at the step after the tunnel's check failed, the run holding why it ends, still closes the tunnel and
+    writes the end. The stop is raised there through a line tracer on `certifier_run`'s frame, since a SIGTERM's
+    handler runs only where the interpreter checks for one, which no signal sent from outside could aim at."""
+    rc, out = gate(host, SESSION, started=[])
+    run = json.loads(out)["run"]
+    code, previous = A.certifier_run.__wrapped__.__code__, sys.gettrace()
+
+    def line(frame, event, arg):
+        if event == "line" and frame.f_locals.get("why") is not None:
+            signal.raise_signal(signal.SIGTERM)
+        return line
+
+    sys.settrace(lambda frame, event, arg: line if frame.f_code is code else None)
+    try:
+        end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l, back: TUNNEL,
+                              up=lambda tunnel, port: False, command=lambda *a, **k: pytest.fail("ran with no tunnel"))
+    finally:
+        sys.settrace(previous)
     assert end["rc"] == 2 and end["ended"] == f"{A.STOPPED} before its runner started" and end["verdict"] is None
     assert set(end["files"]) == {"tunnel.log"}
 
