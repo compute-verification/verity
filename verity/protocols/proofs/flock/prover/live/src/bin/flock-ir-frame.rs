@@ -9,9 +9,9 @@
 //!   any of them with `--class MANIFEST` (a key-count class: `--pin` is the manifest's sha256; see `check_class`)
 //!
 //! Before anything the verifier checks its own instance file (`verity_flock.ir_frame.stage`, never a producer's): the unit
-//! netlist's order, the block table against the plan, the frame-v3 roots recomputed from its row digests and output words,
-//! the wiring, output mapping, block assignment and row key against the netlist's pinned leaf maps (IR6), and for a cut
-//! template its cut words against the netlist's pinned tail (on the sha256-pinned MUFU tables under
+//! circuit description's order, the block table against the plan, the frame-v3 roots recomputed from its row digests and output
+//! words, the wiring, output mapping, block assignment and row key against the circuit description's pinned leaf maps (IR6), and
+//! for a cut template its cut words against the circuit description's pinned tail (on the sha256-pinned MUFU tables under
 //! `--tables`). Session: `Hello(Σ)`, `Commit(root_f = Σ, root_B, publics = every real block's run output values)` (the
 //! verifier chains them into its regions and folds each row's chunk values into its digest), two verifier points (the
 //! regions' claims), `Link(y = 0, 0)`, Flock's coins.
@@ -44,7 +44,7 @@ const SIGMA_TAG: &[u8] = b"verity/flock-ir-frame/sigma/v3";
 const STATEMENT: &str = "verity/flock-ir-frame/v3";
 
 static TABLES: std::sync::OnceLock<Tables> = std::sync::OnceLock::new();
-/// A class-pinned statement's pin (`--class`): Σ binds it.
+/// The class pin of a statement (`--class`): Σ binds it.
 static CLASS_PIN: std::sync::OnceLock<[u8; 32]> = std::sync::OnceLock::new();
 
 fn arg(k: &str, d: &str) -> String {
@@ -418,7 +418,7 @@ fn retail(st: &FrameStmt, tail: &[flock_live::ir_tail::Op], flip: Option<(usize,
 }
 
 /// An IR6 case: a structurally valid file (the block table and frame-v3 roots still check) whose leaf maps or key differ from
-/// the netlist's; pass iff `check_leaf_maps` refuses it.
+/// the circuit description's; pass iff `check_leaf_maps` refuses it.
 fn leaf_case(st: &FrameStmt, name: &str) -> Option<Value> {
     let mut v = load(&arg("--instances", ""));
     match name {
@@ -752,8 +752,9 @@ fn main() {
     }
 }
 
-/// sha256 of a unit netlist without its name and its per-T lines (`verity_flock.templates.attention_head.unit_rows_sha256`): the
-/// header line minus its name token, then the matrix rows up to `LEAVES`.
+/// sha256 of a unit's circuit description without its name and its per-T lines
+/// (`verity_flock.templates.attention_head.unit_rows_sha256`): the header line minus its name token, then the matrix rows up to
+/// `LEAVES`.
 fn unit_rows_sha256(text: &str) -> String {
     let (head, rest) = text.split_once('\n').unwrap_or((text, ""));
     let mut s = head.split(' ').enumerate().filter(|(i, _)| *i != 1).map(|(_, t)| t).collect::<Vec<_>>().join(" ");
@@ -764,8 +765,9 @@ fn unit_rows_sha256(text: &str) -> String {
 
 /// A key-count class (`flock-ir-class/v1`, `--class MANIFEST`): the pin is the manifest's sha256 (serve and replay must name it;
 /// prove takes the manifest's own); the manifest lists every T of its class `[lo, hi]`; the file's own key count (its key port's
-/// words / words per key, which its committed rows bind) is in the class; the netlist is that T's entry; and its unit rows are
-/// the class's, so one block circuit serves the class. The statement is then this netlist's, and Σ binds the class pin.
+/// words / words per key, which its committed rows bind) is in the class; the circuit description is that T's entry; and its unit
+/// rows are the class's, so one block circuit serves the class. The statement is then this circuit description's, and Σ binds the
+/// class pin.
 fn check_class(path: &str, pin: &str, net: &IrUnitNet, text: &str, inst: &FrameInstances) -> Result<[u8; 32], String> {
     let b = std::fs::read(path).map_err(|e| format!("class manifest: {e}"))?;
     let c = sha256(&b);
@@ -811,9 +813,10 @@ fn unhex32(s: &str) -> [u8; 32] {
 }
 
 /// Re-verify a verifier's recorded session from files with this machine's own statement (its own staged instance file,
-/// checked above as `serve` checks it, the pinned netlist and tables, the honest run outputs): the coins are the recorded
-/// ones, so this is not transferable evidence, but every message the proofs carry must hash to what the verifier recorded
-/// before each coin, the link exchange must hash to the recorded link_sha256, and Flock must accept both reps on one root.
+/// checked above as `serve` checks it, the pinned circuit description and tables, the honest run outputs): the coins are the
+/// recorded ones, so this is not transferable evidence, but every message the proofs carry must hash to what the verifier
+/// recorded before each coin, the link exchange must hash to the recorded link_sha256, and Flock must accept both reps on one
+/// root.
 fn replay(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, rec: &Value, proofs: &[Vec<u8>]) -> Result<Value, String> {
     let sig = sigma(st, inst);
     if rec["kind"] != "flock-live-session/v1" {
