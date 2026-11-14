@@ -13,7 +13,8 @@ is removed. Reading the run leaves ``sys.path`` and the module ``replay`` as the
 so a5's ``import replay`` still finds one_stage's where it did before. `prove_path.place_slots` places the window's
 slots off the scan's starts and rows without serving, and refuses by name a request started in two slots, a served
 request started in none, a started request that wasn't served, and a slot whose prompt or ``max_tokens`` isn't its
-served request's."""
+served request's. SPOT never imports the certifier: `kept_scan` reads the ingress rows by the reader its caller passes
+(here the certifier's `warden_rows.window_rows`), and refuses a kept run when none is passed."""
 from __future__ import annotations
 
 import hashlib
@@ -33,11 +34,12 @@ from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import warden as W
 from verity.protocols.accounting.certifier.verifier.active import id_request
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE
+from verity.protocols.accounting.certifier.verifier import warden_rows as WRW
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer, LmsSigner
 from verity.commitments.crypto import lms
 from verity_vllm.program.predict.window_circuit import WindowClass
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
+HERE = (Path(__file__).resolve().parent.parent.parent / "prove_path" / "tests")
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent))
 from verity.protocols.proofs.spot.prover.audit import prove_path as PP  # noqa: E402
@@ -46,6 +48,12 @@ with PP.network_traces():
     import certifier_piece as CP
     import warden_chain as WCH
     import warden_serve as WS
+
+
+def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> Any:
+    """`prove_path.kept_scan` with the certifier's reader of its ingress rows, as its composing caller passes it."""
+    return PP.kept_scan(serve_dir, cls, users, window_rows=WRW.window_rows)
+
 
 _spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py")
 ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
@@ -108,14 +116,14 @@ def _imports() -> tuple:
 
 def test_a_windows_slots_are_the_requests_the_scan_starts_there(serve_dir):
     scan, imports = CLASS.scan, _imports()
-    rows, starts = PP.kept_scan(serve_dir, CLASS, USERS[:3])
+    rows, starts = kept_scan(serve_dir, CLASS, USERS[:3])
     assert starts == [None, "user-0", None, "user-1", None, "user-2", None, None]
     assert len(rows) == CLASS.buckets and rows[0] == IS.encode(scan, IS.empty(scan))
     for k, u in enumerate(starts):
         p = PROMPTS[USERS.index(u)] if u else ()
         want = (1, len(p), p) if u else (0, 0, ())
         assert IS.token_row(scan, IS.decode(scan, rows[CLASS.anchor(k)]))[CLASS.lane(k)] == want
-    _, late = PP.kept_scan(serve_dir, CLASS, USERS[3:])
+    _, late = kept_scan(serve_dir, CLASS, USERS[3:])
     assert late == [None] * 6 + ["user-3", None]
     assert sorted(p.name for p in (serve_dir / CP.PRIVATE / "RUN").iterdir()) == ["fetch.tar.gz"]
     assert _imports() == imports
@@ -129,7 +137,7 @@ def test_a_windows_state_rows_are_the_rows_of_the_scans_state_tree(serve_dir):
     served, T = _served(), CLASS.buckets
     states = ST.chain(CLASS.scan, *served.rows(), served.outputs).states[1:]
     for w, users in ((0, USERS[:3]), (1, USERS[3:])):
-        rows, _ = PP.kept_scan(serve_dir, CLASS, users)
+        rows, _ = kept_scan(serve_dir, CLASS, users)
         assert [list(r) for r in rows] == IS.window_state(CLASS.scan, states, w * T, T)
 
 
@@ -144,7 +152,7 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     monkeypatch.setattr(H1R, "MODE", "numpy")
     with PP.network_traces():
         import scan_zk as SZ
-    rows, _ = PP.kept_scan(serve_dir, CLASS, USERS[:3])
+    rows, _ = kept_scan(serve_dir, CLASS, USERS[:3])
     run = "ab" * 64
     value = WRS.state_value(WC.NAME, CLASS, rows, hashlib.sha512(b"committer").digest()[:32], 0, window=run)
     path = PP.scan_state_opening(value, tmp_path)
@@ -152,22 +160,28 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     rec = {"window": {"run": run, "activations": {"program": WC.NAME, "values": {SCAN_STATE: value.entry()}}}}
     held = SZ.v3c_state(tmp_path, rec, [list(r) for r in rows])
     assert (held.root.hex(), held.domain.domain_id.hex()) == (value.entry()["root"], value.entry()["domain"])
-    late, _ = PP.kept_scan(serve_dir, CLASS, USERS[3:])
+    late, _ = kept_scan(serve_dir, CLASS, USERS[3:])
     with pytest.raises(SystemExit, match=r"rows \[.*\] aren't the scan's .* it scanned another warden run or link-window"):
         SZ.v3c_state(tmp_path, rec, [list(r) for r in late])
 
 
 def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_path):
     with pytest.raises(ValueError, match=r"start in the scan's link-windows \['0', '1'\], not one"):
-        PP.kept_scan(serve_dir, CLASS, USERS)
+        kept_scan(serve_dir, CLASS, USERS)
     with pytest.raises(ValueError, match="1 of the window's 2 requests are no certified request"):
-        PP.kept_scan(serve_dir, CLASS, ["user-0", "user-9"])
+        kept_scan(serve_dir, CLASS, ["user-0", "user-9"])
     with pytest.raises(ValueError, match="link-windows are 32 buckets, not a window of class .*'s 16"):
-        PP.kept_scan(serve_dir, WindowClass(4, 32, 4, lanes=4, every=16), USERS[:3])
+        kept_scan(serve_dir, WindowClass(4, 32, 4, lanes=4, every=16), USERS[:3])
     with pytest.raises(ValueError, match="doesn't serve the warden at these parameters"):
-        PP.kept_scan(serve_dir, WindowClass(8, 32, 2, lanes=4, every=16), USERS[:3])
+        kept_scan(serve_dir, WindowClass(8, 32, 2, lanes=4, every=16), USERS[:3])
     with pytest.raises(ValueError, match="refuses the network certifier's ingress rows"):
-        PP.kept_scan(serve_dir, WindowClass(8, 4, 4, lanes=4, every=16), USERS[:3])
+        kept_scan(serve_dir, WindowClass(8, 4, 4, lanes=4, every=16), USERS[:3])
+    assert kept_scan(tmp_path, CLASS, USERS) is None
+
+
+def test_a_kept_run_read_with_no_reader_of_its_ingress_rows_is_refused_by_name(serve_dir, tmp_path):
+    with pytest.raises(ValueError, match="by the certifier's reader, which SPOT never imports"):
+        PP.kept_scan(serve_dir, CLASS, USERS[:3])
     assert PP.kept_scan(tmp_path, CLASS, USERS) is None
 
 
@@ -178,17 +192,17 @@ def test_a_kept_run_that_wont_read_or_whose_io_or_link_windows_arent_whole_is_re
     two = shutil.copytree(serve_dir, tmp_path / "two")
     shutil.copytree(two / CP.PRIVATE / "RUN", two / CP.PRIVATE / "RUN2")
     with pytest.raises(ValueError, match="the certifier front's kept run: 2 warden runs kept"):
-        PP.kept_scan(two, CLASS, USERS[:3])
+        kept_scan(two, CLASS, USERS[:3])
     undigested = _kept(tmp_path / "digest", _served(), deployment=lambda dep: dep | {"digest": "00" * 64})
     with pytest.raises(ValueError, match="the certifier front's kept run: .*deployment.json's digest isn't its param"):
-        PP.kept_scan(undigested, CLASS, USERS[:3])
+        kept_scan(undigested, CLASS, USERS[:3])
     twice = _kept(tmp_path / "twice", _served([*USERS[:3], USERS[0]]))
     with pytest.raises(ValueError, match="the kept run's certified I/O doesn't read whole off its cells"):
-        PP.kept_scan(twice, CLASS, USERS[:3])
+        kept_scan(twice, CLASS, USERS[:3])
     skipped = _kept(tmp_path / "skipped", _served(),
                     records=lambda kind, rec: replace(rec, window=2) if kind == "ingress" and rec.window == 1 else rec)
     with pytest.raises(ValueError, match=r"the kept run's ingress records are link-windows \[0, 2\], not 0, 1, …"):
-        PP.kept_scan(skipped, CLASS, USERS[:3])
+        kept_scan(skipped, CLASS, USERS[:3])
     assert not list((tmp_path / "skipped" / "serve" / CP.PRIVATE / "RUN").glob("unpacked-*"))
 
 
@@ -202,11 +216,11 @@ def test_an_accepted_ios_request_with_no_end_or_a_start_it_doesnt_hold_is_refuse
     monkeypatch.setattr(WCH, "io", lambda run: (got := io(run)) | {
         "records": [r | {"release": None} if r["user"] == USERS[0] else r for r in got["records"]]})
     with pytest.raises(ValueError, match="a request of the window has no END in the kept run's ingress"):
-        PP.kept_scan(serve_dir, CLASS, USERS[:3])
+        kept_scan(serve_dir, CLASS, USERS[:3])
     monkeypatch.setattr(WCH, "io", lambda run: (got := io(run)) | {
         "records": [r for r in got["records"] if r["user"] != USERS[2]]})
     with pytest.raises(ValueError, match=r"the scan starts connections \[3\], whose requests the kept run's certified"):
-        PP.kept_scan(serve_dir, CLASS, USERS[:2])
+        kept_scan(serve_dir, CLASS, USERS[:2])
 
 
 def _heads(starts: Sequence[str | None]) -> list[tuple[list[int], list[int]]]:

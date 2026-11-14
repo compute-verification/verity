@@ -14,7 +14,7 @@ from verity_vllm.definitions.numerics import torch_kernels as TK
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import torch_embedding_f32 as TEF
 
-from tests.program.test_train_step import _bits, _outputs, _program, _same_bits
+from tests.frontend.test_train_step import _bits, _outputs, _program, _same_bits
 from verity_torch.frontend.derive_graph import derive_graph
 from verity_torch.frontend.outcomes import Unsupported
 from verity_torch.frontend.rules.training import training_rules

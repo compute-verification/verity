@@ -32,6 +32,7 @@ from verity.protocols.proofs.spot.device import challenger as Ch
 
 import served_commit as SC
 import of_record as OR
+import of_record_lean as ORL
 
 _CASES = Path(CC.__file__).resolve().parent / "lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases", "pouw_check_cases", "pouw_opening_cases"):
@@ -107,7 +108,7 @@ def _challenger(params, c, prover, path: Path, ledger: PS.WindowOpens) -> SC.Cha
     live = Wd.draw_challenger(0, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("auditor-host", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
     deployment = SC.Deployment(c.certifier_key, c.run_id, Ch.ChallengerKey(4, 2, lms.public_key(k)))
-    return SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=c, prover=prover,
+    return SC.Challenger(params, live, clock=lambda: 0.0, record=ORL.Record(lean=False), certifier=c, prover=prover,
                          coin_record=path, deployment=deployment, opens=ledger)
 
 
@@ -163,7 +164,7 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
         assert d.units
         salt = CC.certified_salt(w["raw"], w["params"]["context"], sampled[p], committed, sid, prover)
         assert salt == PS.pouw_salt(sampled[p], p, sid, prover) == ch.salts[f"w{p}"]
-        params, rec = SC.core_params(w["params"]), CC.commitment(bytes.fromhex(OR.hexed(w["rec"])))
+        params, rec = SC.core_params(w["params"]), CC.commitment(bytes.fromhex(ORL.Record(lean=False).hexed(w["rec"])))
         for u in d.units:
             pub, op = _pub(w["priv"], w["advice"], u), SC.opening(w["advice"], w["priv"], w["params"], u)
             why = ch.check(f"w{p}", u, pub, op)

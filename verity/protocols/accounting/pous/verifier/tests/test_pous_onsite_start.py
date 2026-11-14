@@ -19,7 +19,6 @@ from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.prover import challenger_prover as CPR
 from verity.protocols.accounting.pous.prover import wipe_prover as WR
 from verity.commitments.crypto import lms
-from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import wipe_parties as WPS
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 
@@ -36,7 +35,7 @@ REQUEST = {"node": "the prover's node"}
 
 
 def key_state(state, public: bytes) -> None:
-    """What `period.challenger` leaves in a state directory that holds a key, but its tree: the seed and the leaf state
+    """What `onsite.device_key` leaves in a state directory that holds a key, but its tree: the seed and the leaf state
     with its public key."""
     state.mkdir(parents=True, exist_ok=True)
     (state / "seed").write_bytes(bytes(lms.DEPLOYED.N))
@@ -45,24 +44,24 @@ def key_state(state, public: bytes) -> None:
 
 @pytest.fixture
 def keyed(monkeypatch):
-    """`period.challenger` handing back a signer whose public key is the one its state holds."""
+    """`onsite.device_key` handing back a signer whose public key is the one its state holds."""
     signer = types.SimpleNamespace(public_key=POUS_KEY)
 
-    def challenger(state):
+    def device_key(state):
         signer.public_key = bytes.fromhex(json.loads((state / onsite.KEY_STATE).read_text())["public"])
         return signer
 
-    monkeypatch.setattr(period, "challenger", challenger)
+    monkeypatch.setattr(onsite, "device_key", device_key)
     return signer
 
 
 @pytest.fixture
 def untouched(monkeypatch):
-    """`period.challenger` and each request failing the test if read."""
+    """`onsite.device_key` and each request failing the test if read."""
     def read(*_):
         raise AssertionError("read before the key was refused")
 
-    monkeypatch.setattr(period, "challenger", read)
+    monkeypatch.setattr(onsite, "device_key", read)
     monkeypatch.setattr(CP, "deployed_request", read)
     monkeypatch.setattr(WC, "deployed_request", read)
 
