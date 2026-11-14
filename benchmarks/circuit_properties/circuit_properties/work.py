@@ -5,7 +5,7 @@ language, trace, model or optimizer. It is computed once per specialized Definit
 batches and scans, so it never walks the unrolled circuit. Its rules are the training benchmark's reading of a trace
 (`training_slowdown.capture.products`' `_rates`, `_gemm_rate` and `_gathered`, `training_slowdown.work`'s
 `he_of_rows`), each resolved on the side of the smaller bound wherever a Program doesn't state what the rule reads.
-For `min_cut.bound`'s inputs it reads:
+For the inputs of `min_cut.slowdown_of` it reads:
 
 * `|C|` (`Work.gates`, `boolean_gates`): Boolean gates, each primitive at its Boolean version's AND, XOR and NOT
   gates and an input node at none; a primitive with no Boolean version is refused by name.
@@ -51,7 +51,8 @@ For `min_cut.bound`'s inputs it reads:
 * `N` and `O`: the charged products' MACs and their returned leaves times their width. A token-indexed product keeps
   1 − `SHARED_PREFIX`/s of its MACs, s the least sequence a Program's products of two activations allow (the second
   smallest of each one's dims above 1, at least two of which a token indexes where it is attention's); a Program
-  with none keeps all of them.
+  with none keeps all of them. A charged product's MACs leave out the share that reads a row zero at its point
+  (`points.Tally.share`): a product by a zero row is zero.
 * `F`: `share(ω)`, ω the largest set of arrays the work multiplies pairwise (at least 2).
 
 Each status is per array, never per word: a node's output has one status unless it is a call's or a scan's, whose
@@ -60,8 +61,9 @@ where any may, and two arrays are one where any references overlap. A rule's bra
 the one with the smaller bound: a product with an activation is token-indexed by every dim its activations span, of
 the branches of `_gemm_rate` the least the Program doesn't exclude, from `HEAD_K` no bound, since a Program doesn't
 say which products are the head's. So, under the reading's two premises (`SHARED_PREFIX`'s and the updates', below),
-every error of the reading is less work or a smaller `β` than the trace's reading of the same
-step, and a bound true but weak: a product the tables don't name is not counted, a value with any
+every error of a reading the point passes (`points.check`, which tests each charged operand whose rows the rules show
+distinct or specific) is less work or a smaller `β` than the trace's reading of the same step, and a bound true but
+weak: a product the tables don't name is not counted, a value with any
 word θ′ doesn't reach is `θ`'s, and overlapping references are one array (F may be higher).
 
 A value is specific where, at an input whose rows hold one token at two positions, its words take different values at
@@ -87,22 +89,38 @@ gives a gathered value:
   op with a specific argument is not specific by that alone, and none is where another argument is an input's whose
   values the Program doesn't state (a rope table, which may hold a 0).
 
+A softmax's row and the select a guard puts over the softmax are read from their references' runs where they take a
+causal mask's form, a product's row plus constant words (`row_by_runs`) and an and over each row, one node a word, of
+those words compared with one word (`fold`): each run is valued once, as `value` values each of its words. Any other is
+valued word by word, as `Reader(structure=False)` values every one, to the same reading.
+
 The reading rests on two premises, each held as a fact by a test where a Program breaks it. The rule rests on the
 one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens), `training_slowdown.work.P_BATCH`, whose
 words its suite holds this text to: past each row's first position, no two positions of the batch hold equal words.
+The point's second draw, word by word (`points`), meets `P_BATCH` by the construction of its tokens wherever a batch
+holds no more positions than the least table has rows, so it shows a specific operand's rows are not equal by an
+identity of the circuit (the attention's output plus -1 times itself is 0
+for every input). That the served data meets `P_BATCH` stays the premise it is today, and with it that a specific
+operand's rows the second draw shows differing are not equal only at values a submitter found by trying circuits
+against its public seed.
 The three batches that break it, which `P_BATCH`'s comment states, make two positions' values equal at every layer,
 under this rule and the trace's reading alike. The updates': a weight is `θ`'s rows, which
 differ, for generic weights, at every width a product or a rounding (`ROUNDINGS`) reads them, and a word no input
 reaches is nonzero; a carried word an input reaches is θ′; and rows one node computes one to one from distinct rows
-are distinct, even where the update can't change a weight or cancels it for a reason the constant test doesn't see
-(W plus z plus -1 times z is θ′), and a weight combined with its own words still counts as a weight with distinct
-rows, though the combination may make its rows equal whatever the weight: cancelled against itself (M plus -1 times
-M; W times v plus -1 times v, v `θ`'s or carried, keeps W's rows), or times its own rows in another order (M times
-swap(M), whose two rows are equal for every M), so the looked-up rows plus such an array are charged as weights
-though they repeat with the tokens; where one word that every member
-of every enclosing batch reads multiplies it and is 0 (a learning rate, a decay, an input's or computed from inputs,
-taken as nonzero), and where two nodes compute rows one to one from one array's words into two arrays (b added to
-each of two rows, carried apart, whose products by W are charged).
+are distinct, wherever the point (`points.check`) doesn't make two of them equal: where the update can't change a
+weight or cancels it for a reason the constant test doesn't see (W plus z plus -1 times z is θ′), where one word that
+every member of every enclosing batch reads multiplies it and is 0 (a learning rate, a decay, an input's or computed
+from inputs, taken as nonzero), where the inputs are fitted to the weights, where the circuit tests its own weights
+against a stated constant, where the rows are equal only where an input's word is negative, where they are equal
+only at values a submitter found by trying circuits against the point's public seed, and where two nodes
+compute rows one to one from one array's words into two arrays (b added to each of two rows, carried apart, whose
+products by W are charged). The reading refuses a circuit
+(`RepeatedRows`) where a charged operand whose rows these rules show distinct holds two equal rows at the point that
+are not zero: a weight combined with its own words, cancelled against itself (M plus -1 times M; W times v plus -1
+times v) or times its own rows in another order (M times swap(M)), whose rows are equal whatever the weight, and a
+weight times a difference of an input's words; and where such an operand holds a NaN at the point, which leaves its
+rows uncompared. A row all zero at the point, -0 read as +0, is no work: it is left out of the comparison and none of
+the MACs that read it is charged (W plus -1 times W, times a stated ±1, is charged nothing).
 
 The rule doesn't reach a softmax's backward or a table the Program doesn't state, so the input gradients of the
 attention's queries and keys (dQ·Wq and dK·Wk, behind a rope table's product or the softmax's backward) stay gathered,
@@ -112,9 +130,8 @@ Two limits follow. A Program with no scan has no carried word, so no θ′ and n
 specific stays a gather's rows: a model whose first op is a table lookup by its tokens is charged only downstream of a
 softmax over a constant that differs between its rows.
 
-`bound` takes the most blocks over the sub-works whose products are at least a threshold β_w·β_x, at least a
-contraction length and of one kind or both, each at the least β_w·β_x, the least `b` and the ω of its own products,
-through the calculator's `min_cut`.
+`bound` hands the charged products, priced so (`products`), to the calculator's `min_cut.slowdown_of`, which chooses
+the sub-work and takes `F` from the ω of the arrays its products multiply.
 """
 
 from __future__ import annotations
@@ -124,14 +141,17 @@ import math
 import re
 import struct
 import sys
+from collections import Counter
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
 from typing import NamedTuple, Sequence
 
+import numpy as np
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import is_input, is_registered
 from verity.circuits.refs import Affine, Concat, Strided
+from verity.circuits.refs import runs as ref_runs
 
 from .ops import ids
 
@@ -207,6 +227,42 @@ THETA = Status(False, False, False, False, frozenset(), distinct=True)
 STATED = THETA._replace(stated=True, distinct=False)
 
 
+class RepeatedRows(ValueError):
+    """A charged operand whose rows the reading shows distinct, or specific alone (``by_words``: tested at the
+    word-by-word point), holds two equal rows, not zero, at the point (`points.check`), reads values a scan the point doesn't run
+    whole leaves unevaluated (``scan``), or holds a NaN in ``nan`` = (n, rows) of its rows there, which leaves them
+    uncompared. ``member`` is the activation that holds them, or the two whose rows are equal."""
+
+    def __init__(self, definition: str, node: int, operand: str, rows: tuple[int, int] | None,
+                 member: int | tuple[int, int] | None = None, scan=None, nan: tuple[int, int] | None = None,
+                 by_words: bool = False) -> None:
+        self.definition, self.node, self.operand, self.rows, self.member, self.scan, self.nan, self.by_words = \
+            definition, node, operand, rows, member, scan, nan, by_words
+        point = "the word-by-word point" if by_words else "the point"
+        at = ("" if member is None else f" in member {member}" if isinstance(member, int)
+              else f" of members {member[0]} and {member[1]}")
+        if scan is not None:
+            what = (f"reads the outputs of scan node {scan.node} of {scan.fn}, which {point} runs {scan.ran} of its "
+                    f"{scan.n} iterations; fix: carry the weight through the outer scan rather than out of a scan "
+                    "whose contexts repeat")
+        elif nan is not None:
+            what = (f"holds a NaN in {nan[0]} of its {nan[1]} rows at {point}{at}, which leaves them uncompared; fix: "
+                    "keep its values finite at the point, whose weights and registered values take every sign and "
+                    "whose inputs are positive: square a weight or a registered value before a square root or a "
+                    "logarithm reads it, or carry it in as an input")
+        elif by_words:
+            what = (f"holds rows {rows[0]} and {rows[1]} equal at {point}{at}, whose positions hold different "
+                    "tokens; fix: compute it so that its rows follow its positions' tokens (an identity such as O1 "
+                    "plus -1 times O1 is equal for every input), or let it read the inputs as gathered, which leaves "
+                    "its product out")
+        else:
+            what = (f"holds rows {rows[0]} and {rows[1]} equal at {point}{at}; fix: compute it from a weight one to "
+                    "one (a shift, a rounding, a multiply by a word no input reaches) or let it read the inputs, "
+                    "which leaves its product out as gathered")
+        shows = "specific" if by_words else "distinct"
+        super().__init__(f"{definition} node {node}: operand {operand!r}, whose rows the reading shows {shows}, {what}")
+
+
 def unknown(st: Status) -> bool:
     """Whether an array's values are the current inputs', which the Program neither states nor computes from θ."""
     return st.reach and not (st.dep or st.gathered or st.specific or st.stated)
@@ -274,6 +330,45 @@ def _generic(name: str, vs: list, f):
     if name == "SelectF32" and isinstance(vs[0], tuple):
         return vs[1] if vs[0][1] else vs[2]
     return None
+
+
+def _runs(pairs) -> tuple:
+    """The sequence of ``pairs`` (item, count) as runs (item, count), adjacent equal items one run: two equal sequences
+    give one tuple however their pairs split them."""
+    out: list = []
+    for v, n in pairs:
+        if not n:
+            continue
+        if out and out[-1][0] == v:
+            out[-1][1] += n
+        else:
+            out.append([v, n])
+    return tuple((v, n) for v, n in out)
+
+
+_MIXED = object()
+
+
+def _ends(runs):
+    """The positions where ``runs``' runs end."""
+    at = 0
+    for _v, n in runs:
+        at += n
+        yield at
+
+
+def _words(runs):
+    for v, n in runs:
+        for _ in range(n):
+            yield v
+
+
+def _nth(runs, j: int):
+    for v, n in runs:
+        if j < n:
+            return v
+        j -= n
+    raise IndexError(j)
 
 
 def _nonzero(b: int) -> bool:
@@ -412,11 +507,75 @@ def _fields(t, at: int = 0) -> list[tuple[int, int]]:
     return out
 
 
-def returned(parts, t, source, words: list) -> Profile:
-    """References of type ``t`` as runs, each part (`Reader.parts`) at its source's status over its leaves; an array of
-    ``t`` that reads a word twice (of ``words``, the references' words), or whose parts come from more than one node
-    or parameter, has no rows shown distinct, since two of them may then be one array's words, or computed one to one
-    from them."""
+def reads_once(refs) -> bool:
+    """Whether ``refs`` reads no word twice, from its structure: each source's runs (an `Affine`, a row of a `Strided`
+    whose inner stride is 1) pairwise disjoint, and its other leaves (the rest of a `Strided`'s grid, an `Explicit`'s)
+    distinct and outside them. It builds arrays of leaf numbers and of run ends, never a list of the references."""
+    runs: dict = {}
+    points: dict = {}
+
+    def walk(r) -> None:
+        if not r.count:
+            return
+        if isinstance(r, Affine):
+            runs.setdefault((r.space, r.idx), []).append((np.array([r.base]), np.array([r.base + r.count])))
+        elif isinstance(r, Strided):
+            rows, rem = divmod(r.count, r.inner)
+            starts = r.base + np.arange(rows, dtype=np.int64) * r.outer_stride
+            tail = r.base + rows * r.outer_stride
+            if r.inner_stride == 1 or r.inner == 1:
+                los = np.append(starts, tail) if rem else starts
+                lens = np.full(len(los), r.inner, dtype=np.int64)
+                if rem:
+                    lens[-1] = rem
+                runs.setdefault((r.space, r.idx), []).append((los, los + lens))
+            else:
+                inner = np.arange(r.inner, dtype=np.int64) * r.inner_stride
+                points.setdefault((r.space, r.idx), []).extend(
+                    [(starts[:, None] + inner[None, :]).ravel(), tail + inner[:rem]])
+        elif isinstance(r, Concat):
+            for p in r.parts:
+                walk(p)
+        else:
+            by: dict = {}
+            for space, idx, leaf in r:
+                by.setdefault((space, idx), []).append(leaf)
+            for key, leaves in by.items():
+                points.setdefault(key, []).append(np.array(leaves, dtype=np.int64))
+
+    walk(refs)
+    for key in runs.keys() | points.keys():
+        lo = hi = None
+        if key in runs:
+            lo = np.concatenate([a for a, _b in runs[key]])
+            hi = np.concatenate([b for _a, b in runs[key]])
+            order = np.argsort(lo, kind="stable")
+            lo, hi = lo[order], hi[order]
+            if (lo[1:] < hi[:-1]).any():
+                return False
+        if key in points:
+            p = np.sort(np.concatenate(points[key]))
+            if (p[1:] == p[:-1]).any():
+                return False
+            if lo is not None:
+                at = np.searchsorted(lo, p, side="right") - 1
+                if ((at >= 0) & (p < hi[np.maximum(at, 0)])).any():
+                    return False
+    return True
+
+
+def one_word(refs) -> bool:
+    """Whether ``refs`` reads one word, and every reference is that word."""
+    if not len(refs):
+        return False
+    first = refs[0]
+    return all(r == first for r in refs)
+
+
+def returned(parts, t, source, refs) -> Profile:
+    """References ``refs`` of type ``t`` as runs, each part (`Reader.parts`) at its source's status over its leaves; an
+    array of ``t`` that reads a word twice, or whose parts come from more than one node or parameter, has no rows shown
+    distinct, since two of them may then be one array's words, or computed one to one from them."""
     parts = list(parts)
     fields = _fields(t)
     starts = [lo for lo, _hi in fields]
@@ -429,7 +588,7 @@ def returned(parts, t, source, words: list) -> Profile:
         for j in over(a, b):
             sources[j].add((s, i))
     for j, (lo, hi) in enumerate(fields):
-        if len(set(words[lo:hi])) < hi - lo:
+        if not reads_once(refs.slice(lo, hi)):
             sources[j].add(None)
     out = []
     for a, b, s, i, lo, hi in parts:
@@ -654,8 +813,15 @@ def _unit(t) -> int:
 
 
 class Reader:
-    def __init__(self, program, k: float, products=PRODUCTS, lookups=LOOKUPS) -> None:
+    def __init__(self, program, k: float, products=PRODUCTS, lookups=LOOKUPS, structure: bool = True,
+                 clock=None) -> None:
         self.program, self.k, self.products, self.lookups = program, k, products, lookups
+        self.structure, self.clock = structure, clock
+        #: (softmax | select, "runs" | "words"): the softmax and select nodes read from their runs and word by word;
+        #: ("columns", "words"): the products whose operand `softmax_rows` reads as columns, word by word by design
+        self.read_by: Counter = Counter()
+        #: the seconds by ``clock`` spent in those columns
+        self.column_s = 0.0
         self.memo: dict = {}
         self.logs: dict = {}
         self._match: dict = {}
@@ -699,7 +865,7 @@ class Reader:
             return ctx[idx] if space == "p" else prof[idx]
 
         def arg_profile(a) -> Profile:
-            return returned(self.parts(a.refs), a.type, source, words(a)) or ((a.refs.count, THETA),)
+            return returned(self.parts(a.refs), a.type, source, a.refs) or ((a.refs.count, THETA),)
 
         def arg_status(a) -> Status:
             """``a``'s status as one array: its rows distinct only where one node or parameter gives them all and no
@@ -753,21 +919,17 @@ class Reader:
             n = a.refs.count
             return (rate / n, bits / n) if n else (0.0, 0.0)
 
-        words_of: dict = {}
-
-        def words(a) -> list:
-            if id(a) not in words_of:
-                words_of[id(a)] = (a, list(a.refs))
-            return words_of[id(a)][1]
+        once_of: dict = {}
 
         def one_to_one(a) -> bool:
-            w = words(a)
-            return len(set(w)) == len(w)
+            if id(a) not in once_of:
+                once_of[id(a)] = (a, reads_once(a.refs))
+            return once_of[id(a)][1]
 
-        def member_words(nd, i: int, m: int) -> list:
-            """The words member ``m`` of node ``nd`` reads of its argument ``i``."""
-            w, per = words(nd.args[i]), nd.fn.signature()[0][i][1].leaves
-            return w[m * per:(m + 1) * per] if nd.form == "batch" and nd.axes[i] is not None else w
+        def member_words(nd, i: int, m: int):
+            """The words member ``m`` of node ``nd`` reads of its argument ``i``, as references."""
+            w, per = nd.args[i].refs, nd.fn.signature()[0][i][1].leaves
+            return w.slice(m * per, (m + 1) * per) if nd.form == "batch" and nd.axes[i] is not None else w
 
         value_of: dict = {}
 
@@ -801,6 +963,123 @@ class Reader:
                 todo.pop()
             return value_of[j, leaf]
 
+        def uniform(space: str, j: int):
+            """The value every word of (space, j) has where `value` gives its words one whatever the word (a parameter's,
+            an input's, a composite's, a constant's), else `_MIXED`."""
+            if space == "n":
+                nd = body.nodes[j]
+                if isinstance(nd.fn, PrimitiveDefinition) and not is_input(nd.fn) and nd.args:
+                    return _MIXED
+            return value(space, j, 0)
+
+        def valued_runs(refs):
+            """``refs``' words' values as `_runs`, from its parts, or None where a part's words are not `uniform`."""
+            out: list = []
+            todo = [refs]
+            while todo:
+                r = todo.pop()
+                if isinstance(r, Concat):
+                    todo.extend(reversed(list(r.parts)))
+                elif isinstance(r, (Affine, Strided)):
+                    v = uniform(r.space, r.idx)
+                    if v is _MIXED:
+                        return None
+                    out.append((v, r.count))
+                else:
+                    for space, idx, _leaf in r:
+                        v = uniform(space, idx)
+                        if v is _MIXED:
+                            return None
+                        out.append((v, 1))
+            return _runs(out)
+
+        def scalar(nd) -> bool:
+            """A batch of primitives each of one-word arguments and one word out, so member m is its output's leaf m."""
+            return isinstance(nd.fn, PrimitiveDefinition) and nd.form == "batch" and nd.out.leaves == nd.n and \
+                all(t.leaves == 1 for _n, t in nd.fn.signature()[0])
+
+        fold_of: dict = {}
+        cond_of: dict = {}
+        fell: set = set()
+
+        def fold(j: int):
+            """Where node j is a chain of `BitAnd` batches, each of the one below and K-strided words of one batch E of
+            two arguments, one A's words one to one and one a single `uniform` word, whose bases are each of 0..K-1 once:
+            (E, A, A's first leaf, the bases in the chain's order from the bottom, the chain's nodes from the bottom),
+            so member m of j is the and, in that order, of E at m·K + each base. Else None."""
+            if j in fold_of:
+                return fold_of[j]
+            fold_of[j] = None
+            chain, bases, top = [], [], body.nodes[j]
+            nd, i = top, j
+            while True:
+                if not scalar(nd) or nd.fn.name != "BitAnd" or len(nd.args) != 2 or nd.axes != (0, 0) or nd.n != top.n:
+                    return None
+                chain.append(nd)
+                lower, side = (r.refs for r in nd.args)
+                if not isinstance(side, Strided) or side.space != "n" or side.inner != 1 or side.count != top.n:
+                    return None
+                bases.append(side)
+                if isinstance(lower, Affine) and lower.space == "n" and lower.base == 0 and lower.count == top.n and \
+                        lower.idx != i:
+                    i = lower.idx
+                    nd = body.nodes[i]
+                    continue
+                if not isinstance(lower, Strided) or lower.space != "n" or lower.inner != 1 or lower.count != top.n:
+                    return None
+                bases.append(lower)
+                break
+            chain.reverse()
+            bases.reverse()
+            K = len(bases)
+            if len({(s.idx, s.outer_stride) for s in bases}) != 1 or bases[0].outer_stride != K or \
+                    sorted(s.base for s in bases) != list(range(K)):
+                return None
+            E = body.nodes[bases[0].idx]
+            if not scalar(E) or len(E.args) != 2 or E.n != K * top.n:
+                return None
+            ones = [i_ for i_, ax in enumerate(E.axes) if ax is None]
+            if len(ones) != 1 or E.args[ones[0]].refs.count != 1:
+                return None
+            one, rows = E.args[ones[0]].refs, E.args[1 - ones[0]].refs
+            if not isinstance(rows, Affine) or rows.space != "n" or rows.count != E.n or \
+                    uniform(*one[0][:2]) is _MIXED:
+                return None
+            A = body.nodes[rows.idx]
+            if not scalar(A) or A.axes != tuple(0 for _a in A.args):
+                return None
+            fold_of[j] = (E, ones[0], A, rows.base, [s.base for s in bases], chain)
+            return fold_of[j]
+
+        def condition(space: str, j: int, leaf: int):
+            """`value` of a select's condition word, from runs where it is a `fold`'s member: each run of A's words
+            valued once, as `value` values each of its words."""
+            f = fold(j) if self.structure and space == "n" else None
+            if f is None:
+                return value(space, j, leaf)
+            if (j, leaf) not in cond_of:
+                E, one, A, lo, bases, chain = f
+                K = len(bases)
+                at = lo + leaf * K
+                sides = [valued_runs(a.refs.slice(at, at + K)) for a in A.args]
+                if None in sides:
+                    fell.add(j)
+                    return value(space, j, leaf)
+                c = uniform(*E.args[one].refs[0][:2])
+                cut = sorted({0, K} | {p for r in sides for p in _ends(r)})
+                vals = []
+                for a, b in zip(cut, cut[1:]):
+                    v = _generic(A.fn.name, [_nth(r, a) for r in sides], A.fn)
+                    vals.append((_generic(E.fn.name, [c, v] if one == 0 else [v, c], E.fn), b - a))
+                acc = None
+                for nd, b in zip([None, *chain], bases):
+                    e = _nth(vals, b)
+                    acc = e if nd is None else _generic(nd.fn.name, [acc, e], nd.fn)
+                cond_of[j, leaf] = acc
+            return cond_of[j, leaf]
+
+        selects: dict = {}
+
         def unselected(space: str, j: int, leaf: int):
             """The word a select gives where its condition is false whatever the data, else the word itself."""
             while True:
@@ -809,7 +1088,9 @@ class Reader:
                     return space, j, leaf
                 m = leaf if nd.form == "batch" else 0
                 c, b = member_words(nd, 0, m)[0], member_words(nd, 2, m)[0]
-                if value(*c) != ("c", 0):
+                if j not in selects and b[0] == "n" and softmax(body.nodes[b[1]]):
+                    selects[j] = c[1] if c[0] == "n" and self.structure and fold(c[1]) is not None else None
+                if condition(*c) != ("c", 0):
                     return None
                 space, j, leaf = b
 
@@ -844,13 +1125,20 @@ class Reader:
             for j, nd in enumerate(body.nodes):
                 if not softmax(nd) or len(nd.args) != 1 or (nd.form == "batch" and nd.axes[0] is None):
                     continue
+                words = 0
                 for r in range(nd.n if nd.form == "batch" else 1):
-                    row = row_of(member_words(nd, 0, r))
+                    ws = member_words(nd, 0, r)
+                    row = row_by_runs(ws) if self.structure else None
                     if row is None:
+                        words += 1
+                        row = row_of(ws)
+                    if not row:
                         continue
                     prod, at, consts = row
                     info[j, r] = (prod, consts)
-                    groups.setdefault(prod, []).append(((j, r), at, _shape(consts)))
+                    shape = _shape(_words(consts))
+                    groups.setdefault(prod, []).append(((j, r), at, shape and tuple(_runs((v, 1) for v in p) for p in shape)))
+                self.read_by["softmax", "words" if words else "runs"] += 1
             ok = set()
             for rows in groups.values():
                 if len({at for _r, at, _p in rows}) == len(rows) == len({p for _r, _a, p in rows}):
@@ -858,14 +1146,52 @@ class Reader:
             rows_of.extend((frozenset(ok), info))
             return rows_of[0]
 
-        def row_of(ws: list):
-            """(the product, its leaves, the constants' `_shape`) a softmax row reads as an f32 add of the two, or
-            None."""
+        def adds(ws):
+            """The f32 add batch whose members a softmax row ``ws`` reads, or None."""
             if not ws or {s_ for s_, _j, _l in ws} != {"n"} or len({j_ for _s, j_, _l in ws}) != 1:
                 return None
             e = body.nodes[ws[0][1]]
             if not isinstance(e.fn, PrimitiveDefinition) or e.fn.name != "F32Add" or e.form != "batch" or \
                     len(e.args) != 2 or e.axes != (0, 0):
+                return None
+            return e
+
+        def row_by_runs(ws):
+            """`row_of` from runs where the row reads members lo..hi of `scalar` adds whose two arguments' words there
+            are each `uniform` a run, one side's runs all constants and the other's one product's leaves lo'..hi', in
+            order, that `scaled` reads as themselves; False where `row_of` is None; else None."""
+            e = adds(ws)
+            if e is None:
+                return False
+            if not scalar(e) or len(rr := ref_runs(ws)) != 1 or rr[0][3] - rr[0][2] != len(ws):
+                return None
+            lo, hi = rr[0][2:]
+            sides = [e.args[i].refs.slice(lo, hi) for i in (0, 1)]
+            vs = [valued_runs(s) for s in sides]
+            if None in vs:
+                return None
+            const = [all(isinstance(v, tuple) for v, _n in r) for r in vs]
+            data = [not any(isinstance(v, tuple) for v, _n in r) for r in vs]
+            if sorted(zip(const, data)) != [(False, True), (True, False)]:
+                return None
+            d, c = (1, 0) if const[0] else (0, 1)
+            dr = ref_runs(sides[d])
+            if len(dr) != 1 or dr[0][0] != "n" or dr[0][3] - dr[0][2] != hi - lo:
+                return None
+            _s, p, a, b = dr[0]
+            if scaled("n", p, a) != ("n", p, a) or scaled("n", p, b - 1) != ("n", p, b - 1) or \
+                    self.product(body.nodes[p].fn) is None:
+                return None
+            consts = tuple((v[1], n) for v, n in vs[c])
+            if _shape(_words(consts)) is None or a % (b - a):
+                return False
+            return p, (a, b), consts
+
+        def row_of(ws: list):
+            """(the product, its leaves (lo, hi), the constants as `_runs`) a softmax row reads as an f32 add of the
+            two, or None."""
+            e = adds(ws)
+            if e is None:
                 return None
             got = []
             for _s, _j, leaf in ws:
@@ -882,16 +1208,16 @@ class Reader:
             at = tuple(leaf for _s, _j, leaf in data)
             if _shape(c for _d, c in got) is None or at != tuple(range(at[0], at[0] + len(at))) or at[0] % len(at):
                 return None
-            return data[0][1], at, tuple(c for _d, c in got)
+            return data[0][1], (at[0], at[0] + len(at)), _runs((c, 1) for _d, c in got)
 
         def softmax_rows(a, K: int, n: int) -> bool:
             """Whether argument ``a``'s ``n`` slices of ``K`` words differ pairwise as a softmax's rows or columns that
             the mask makes differ, through selects whose conditions are false: each slice a row `masked_rows` finds
             differs, every slice another; or each slice one column of one sequence of a product's rows, every slice
             another column and the mask's columns there pairwise different, each with a finite word."""
-            if not words(a) or len(words(a)) != n * K or not one_to_one(a):
+            if not len(a.refs) or len(a.refs) != n * K or not one_to_one(a):
                 return False
-            got = [unselected(*w) for w in words(a)]
+            got = [unselected(*w) for w in a.refs]
             if None in got or {s_ for s_, _j, _l in got} != {"n"}:
                 return False
             width = {}
@@ -906,6 +1232,17 @@ class Reader:
             if all(len({r for r, _c in sl}) == 1 and [c for _r, c in sl] == list(range(K)) for sl in slices):
                 rows = {sl[0][0] for sl in slices}
                 return len(rows) == n and rows <= ok
+            self.read_by["columns", "words"] += 1
+            t0 = self.clock() if self.clock else 0.0
+            try:
+                return by_columns(slices, info, n, K)
+            finally:
+                if self.clock:
+                    self.column_s += self.clock() - t0
+
+        def by_columns(slices, info, n: int, K: int) -> bool:
+            """`softmax_rows`' columns, word by word: each slice one column of one sequence of rows, every slice another
+            column and the mask's columns there pairwise different, each with a finite word."""
             seq = [r for r, _c in slices[0]]
             if len(set(seq)) != K or any(r not in info for r in seq) or len({info[r][0] for r in seq}) != 1:
                 return False
@@ -914,7 +1251,7 @@ class Reader:
                 if [r for r, _c in sl] != seq or len({c for _r, c in sl}) != 1:
                     return False
                 c = sl[0][1]
-                col = tuple(info[r][1][c] for r in seq)
+                col = tuple(_nth(info[r][1], c) for r in seq)
                 if not any(_finite(b) for b in col) or any(b != NEG_INF and not _finite(b) for b in col):
                     return False
                 cols.append((c, col))
@@ -930,8 +1267,8 @@ class Reader:
                 return one_to_one(a)
             if not may_repeat(st):
                 return not st.stated and not unknown(st)
-            w = words(a)
-            if not w or len(w) % K or {s_ for s_, _j, _l in w} != {"n"} or len({j_ for _s, j_, _l in w}) != 1:
+            w = a.refs
+            if not len(w) or len(w) % K or {s_ for s_, _j, _l in w} != {"n"} or len({j_ for _s, j_, _l in w}) != 1:
                 return False
             src = body.nodes[w[0][1]]
             p = self.product(src.fn)
@@ -941,7 +1278,7 @@ class Reader:
             if arg_status(src.args[names.index(p.w)]).data:
                 return False
             n_out = src.out.leaves // src.n
-            cols = [leaf % n_out for _s, _j, leaf in w[::K]]
+            cols = [w[j][2] % n_out for j in range(0, len(w), K)]
             return len(set(cols)) == len(cols)
 
         def product_status(nd, ix: int, iw: int, base: Status) -> Status:
@@ -967,19 +1304,19 @@ class Reader:
                 for i, s in enumerate(sts))
             for i, s in enumerate(sts):
                 if ok and s.stated:
-                    cs = [value(*w) for w in words(nd.args[i])]
-                    ok = all(isinstance(c, tuple) and INJECTIVE[f.name](c[1]) for c in cs)
+                    ok = all(isinstance(c, tuple) and INJECTIVE[f.name](c[1])
+                             for c in (value(*w) for w in nd.args[i].refs))
             return base if ok else unspecific(base, sts)
 
         def constants_pass(f, sts: list, nd) -> bool:
-            return all(all(isinstance(c, tuple) and INJECTIVE[f.name](c[1]) for c in (value(*w) for w in words(a)))
+            return all(all(isinstance(c, tuple) and INJECTIVE[f.name](c[1]) for c in (value(*w) for w in a.refs))
                        for s, a in zip(sts, nd.args) if s.stated)
 
         def zero(a) -> bool:
             """Whether argument ``a`` is a stated 0 in every word (`INJECTIVE`'s constant test fails on a finite word),
             so that a multiply by it gives 0 whatever its other argument holds."""
-            cs = [value(*w) for w in words(a)]
-            return bool(cs) and all(isinstance(c, tuple) and _finite(c[1]) and not _nonzero(c[1]) for c in cs)
+            return bool(len(a.refs)) and all(isinstance(c, tuple) and _finite(c[1]) and not _nonzero(c[1])
+                                             for c in (value(*w) for w in a.refs))
 
         def distinct_status(f, nd, sts: list, st: Status) -> Status:
             """``st`` with `Status.distinct` where an op reads one to one (a batch maps it) an argument whose rows are
@@ -994,7 +1331,7 @@ class Reader:
                 return not batch or (nd.axes[i] is not None and one_to_one(nd.args[i]))
 
             def multiplier(j: int, o: Status) -> bool:
-                return not o.reach or o.distinct or (o.fixed and len(set(words(nd.args[j]))) == 1)
+                return not o.reach or o.distinct or (o.fixed and one_word(nd.args[j].refs))
 
             if f.name in ROUNDINGS:
                 def keeps(i: int) -> bool:
@@ -1085,8 +1422,10 @@ class Reader:
                 prof.append(capped(self.scan(S, k, nd, depth, arg_profile, arg_status, bindings), rate, bits))
             else:
                 raise ValueError(f"{fn.id} node {k}: form {nd.form!r}")
-        S.ret = returned(self.parts(body.ret), fn.signature()[1], source, list(body.ret)) or \
+        S.ret = returned(self.parts(body.ret), fn.signature()[1], source, body.ret) or \
             ((body.ret.count, THETA),)
+        for f in selects.values():
+            self.read_by["select", "runs" if f is not None and f not in fell else "words"] += 1
         S.sid = len(self.memo)
         self.memo[key] = S
         return S
@@ -1311,17 +1650,18 @@ def operand_beta(rate: float, w: float, activation: bool, r_step: int | None, k:
     return min(b, most)
 
 
-def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS) -> Work:
-    """The work ``program`` holds at a policy's k (module docstring), from the circuit alone."""
-    return _read(program, k, products, lookups)[0]
+def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS, structure: bool = True) -> Work:
+    """The work ``program`` holds at a policy's k (module docstring), from the circuit alone; ``structure`` False reads
+    every softmax row and select word by word (`Reader`)."""
+    return _read(program, k, products, lookups, structure)[0]
 
 
-def calls(program, k: float, products=PRODUCTS, lookups=LOOKUPS):
+def calls(program, k: float, products=PRODUCTS, lookups=LOOKUPS, structure: bool = True):
     """Each product call of ``program``'s circuit, every member and iteration its own, with its `Site` and the reason
     `read` leaves it out ("" where it is charged): the reading's decisions on the circuit's own calls."""
     from verity.circuits.layout import FunctionCall
 
-    _work, R, root, reasons = _read(program, k, products, lookups)
+    _work, R, root, reasons = _read(program, k, products, lookups, structure)
     circ = program.circuit
 
     def walk(S: Summary, scope):
@@ -1337,9 +1677,9 @@ def calls(program, k: float, products=PRODUCTS, lookups=LOOKUPS):
     yield from walk(root, circ.root_scope)
 
 
-def _read(program, k: float, products, lookups):
+def _read(program, k: float, products, lookups, structure: bool = True, clock=None):
     gates = boolean_gates(program)
-    R = Reader(program, k, products, lookups)
+    R = Reader(program, k, products, lookups, structure, clock)
     root = R.root()
     order = sorted(R.memo.values(), key=lambda s: -s.sid)
     count = {root.sid: 1}
@@ -1374,7 +1714,6 @@ def _read(program, k: float, products, lookups):
     groups: dict = {}
     reasons: dict = {}
     for s, i, site, x, w in ops:
-        n = count[s.sid] * site.n
         if not (site.x.aff and site.w.aff):
             reason = "theta"
         elif may_repeat(site.x) or may_repeat(site.w):
@@ -1386,45 +1725,23 @@ def _read(program, k: float, products, lookups):
         else:
             reason = ""
         reasons[s.sid, i] = reason
+    from .points import check
+    zero = check(program, R, root, reasons).share
+    for s, i, site, x, w in ops:
+        n, reason = count[s.sid] * site.n, reasons[s.sid, i]
         weight = (not site.x.data, not site.w.data)
         beta = tuple(round(operand_beta(r, p, not wt, r_step, k, most), 9)
                      for r, p, wt in zip(site.rates, site.passed(), weight))
         key = (site.product.op, site.widths, weight, site.out_width, site.k_dim, site.dims,
                tuple(round(r, 6) for r in site.rates), tuple(round(b, 6) for b in site.bits), beta, reason)
         g = groups.setdefault(key, [0, 0, set()])
-        g[0] += n * site.macs
+        g[0] += n * site.macs - math.ceil(n * site.macs * zero(s.sid, site.node))
         g[1] += n * site.outputs * site.out_width
         if x is not None and w is not None:
             g[2].add(frozenset((cls.find(x), cls.find(w))))
     out = [Group(key[0], key[1], key[2], key[3], key[4], m, o, frozenset(e), *key[5:])
            for key, (m, o, e) in sorted(groups.items(), key=lambda kv: repr(kv[0]))]
     return Work(k, gates, out, r_step, keep), R, root, reasons
-
-
-def clique(edges) -> int:
-    """The most vertices pairwise joined by ``edges`` (pairs), at least 2 where there is an edge."""
-    adj: dict = {}
-    for e in edges:
-        a, b = tuple(e)
-        adj.setdefault(a, set()).add(b)
-        adj.setdefault(b, set()).add(a)
-    best = 0
-
-    def grow(r: int, p: set, x: set) -> None:
-        nonlocal best
-        if not p and not x:
-            best = max(best, r)
-            return
-        if r + len(p) <= best:
-            return
-        u = max(p | x, key=lambda v: len(adj[v] & p))
-        for v in list(p - adj[u]):
-            grow(r + 1, p & adj[v], x & adj[v])
-            p.discard(v)
-            x.add(v)
-
-    grow(0, set(adj), set())
-    return best
 
 
 def min_cut():
@@ -1439,46 +1756,34 @@ def min_cut():
 
 @dataclass(frozen=True)
 class Priced:
-    """The bound at a policy on a sub-work: which groups, their ω, and `min_cut.bound`'s result."""
+    """The bound at a policy on the sub-work the calculator chose: which groups, their ω, and the calculator's
+    `Bound`."""
 
     bound: object
     groups: tuple[Group, ...]
     omega: int
     N: float
-    O: int
+    O: float
 
 
-def betas(g: Group) -> tuple[float, float]:
-    """A group's (β_w, β_x): the weight's first, and where both are of one kind, the larger."""
-    b = g.beta
-    if g.weight[0] != g.weight[1]:
-        return (b[1], b[0]) if g.weight[1] else (b[0], b[1])
-    return tuple(sorted(b, reverse=True))
-
-
-def bound(work: Work, c: float, n: float | None = None, F: float | None = None) -> Priced | None:
-    """The best bound at the policy (c, the work's k, n) over ``work``'s sub-works (module docstring), each at ``F``
-    where given, else its own share; None where it charges no product, (H) states no activation's β at k, or k is
-    `HEAD_K` or more."""
+def products(work: Work) -> list:
+    """``work``'s charged groups as the calculator's products (`min_cut.Product`), priced as this reading charges them:
+    a token-indexed group's MACs at the work's `keep`, an output at most bf16's 16 bits, each operand at its `β` with
+    which is a weight, its contraction, and the pairs of arrays it multiplies. A Program doesn't say which products are
+    forward ones or weight gradients."""
     mc = min_cut()
-    k = work.k
-    if mc.beta(k) is None or k >= HEAD_K or not work.groups:
+    return [mc.Product(g.macs * (1.0 if all(g.weight) else work.keep), g.wires, g.beta, g.weight,
+                       min(mc.BF16, g.out_width), g.k_dim, pairs=g.edges) for g in work.groups]
+
+
+def bound(work: Work, c: float, n: float | None = None) -> Priced | None:
+    """The calculator's bound at the policy (c, the work's k, n) on ``work``'s products (`products`,
+    `min_cut.slowdown_of`, which chooses the sub-work); None where it charges no product, (H) states no activation's β
+    at k, or k is `HEAD_K` or more."""
+    mc = min_cut()
+    if mc.beta(work.k) is None or work.k >= HEAD_K or not work.groups:
         return None
-    priced = [(math.prod(g.beta), g) for g in work.groups]
-    best = None
-    for P in sorted({q for q, _ in priced if q > 0}):
-        for K0 in sorted({g.k_dim for g in work.groups}):
-            for kinds in ("both", "weights", "activations"):
-                M = [(q, g) for q, g in priced if q >= P and g.k_dim >= K0 and
-                     (kinds == "both" or any(g.weight) == (kinds == "weights"))]
-                if not M:
-                    continue
-                bw, bx = betas(min(M, key=lambda x: x[0])[1])
-                omega = max(2, clique(e for _, g in M for e in g.edges))
-                N = sum(g.macs * (1.0 if all(g.weight) else work.keep) for _, g in M)
-                O = sum(g.wires for _, g in M)
-                b = mc.bound(c, k, n, N=N, O=O, size=work.gates, beta_w=bw, beta_x=bx,
-                             b=min(mc.BF16, *(g.out_width for _, g in M)), F=mc.share(omega) if F is None else F)
-                if best is None or b.blocks > best.bound.blocks:
-                    best = Priced(b, tuple(g for _, g in M), omega, N, O)
-    return best
+    got = mc.slowdown_of(c, work.k, n, size=work.gates, work=products(work))
+    if got.bound is None:
+        return None
+    return Priced(got.bound, tuple(work.groups[i] for i in got.products), got.omega, got.N, got.O)

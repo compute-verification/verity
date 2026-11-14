@@ -1,6 +1,6 @@
 """PoUS's piece of the composed served run (`benchmarks/one_stage/served_verdicts.sh`'s ``POUS_CMD``): one period of
 PoUS over the served checkpoint's linear weights, held as P2's ``C*`` on the card the window served on, with the memory
-challenger on the auditor's host; its core answer in ``DIR/answer.json``.
+challenger on the auditor's device; its core answer in ``DIR/answer.json``.
 
     served_piece.py SERVE_DIR WINDOW DIR --hf-home H [--p2-lib LIB] [--device cuda] [--node NAME] [--private P]
       [--rounds K] [--challenger-host NAME --challenger-address HOST:PORT --challenger-command ARGV] [--trusted-sha512 HEX]
@@ -118,7 +118,7 @@ MERGED = (("self_attn.qkv_proj", ("self_attn.q_proj", "self_attn.k_proj", "self_
           ("mlp.down_proj", ("mlp.down_proj",)))
 SERVING = ("the KV cache's pages and the activations: serving state, which the weights-only obligation doesn't cover and "
            "an honest run doesn't need")
-#: the auditor's host and how the card reaches its challenger: the gate's `challenger_party` verb under the card's key,
+#: the auditor's device and how the card reaches its challenger: the gate's `challenger_party` verb under the card's key,
 #: and the port the side listens on, which the security groups open from the card only
 CHALLENGER_HOST = "vy-auditor-2"
 CHALLENGER_ADDRESS = "10.96.0.36:47610"
@@ -128,7 +128,7 @@ CHALLENGER_COMMAND = ("ssh", "-i", "~/.ssh/vy-auditor2-pous", "-o", "IdentitiesO
 #: the SHA-512 of the challenger's public key as its host made it (the gate's `party_key pous`)
 TRUSTED_SHA512 = ("39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
                   "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb")
-#: the bandwidth party on the auditor's host: the gate's `bw_party` verb under the card's key, its minutes the gate's cap
+#: the bandwidth party on the auditor's device: the gate's `bw_party` verb under the card's key, its minutes the gate's cap
 BW_PARTY = ("ssh -i ~/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 "
             "research@10.96.0.36 bw_party")
 BW_PARTY_HOST = "10.96.0.36"

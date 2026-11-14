@@ -1,7 +1,8 @@
-/- The `flock-rec-links` executable: `Flock.RecLinksCmd.cmd`. -/
 module
 
 public import Flock.RecLinksCmd
+
+/-! The `flock-rec-links` executable: `Flock.RecLinksCmd.cmd`. -/
 
 @[expose] public section
 
