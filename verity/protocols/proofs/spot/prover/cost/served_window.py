@@ -462,7 +462,7 @@ def render(out: dict) -> str:
                  "rows, or at h/ρ, a code at rate ρ whose proof blocks hash no row in circuit, its encoding and openings "
                  "unpriced; replay: H200, each request a drawn proof block lies in re-run from its prompt). 'x serve' divides "
                  "by the scope's stock serving time. s* is the cheapest rung every proof block "
-                 f"of which C-Flock's block holds (k_log <= {K_MAX} at the composer's occupancy, `inputs.cap`; attention in "
+                 f"of which Flock's block holds (k_log <= {K_MAX} at the composer's occupancy, `inputs.cap`; attention in "
                  f"key blocks of {attention_keys()}) and the size classes; 'any' includes the rungs that don't.")
     lines += ["", "| scope | target | h | commitment | mode | s* (lean) | s* (MACs a gate_up block) | total | prove | commit | "
               "replay | x serve | s* (planner) | planner total | s* any, as fitted | s* any, marginal |",

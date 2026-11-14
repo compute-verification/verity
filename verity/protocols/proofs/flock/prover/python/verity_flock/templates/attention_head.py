@@ -42,10 +42,10 @@ def frame_lowering(subcircuit, T: int):
 
 def supports(subcircuit, scheme):
     if int(subcircuit.params["D"]) % 16:
-        return f"C-Flock lowers AttentionHead_v3 with D a multiple of 16, not D = {subcircuit.params['D']}"
+        return f"Flock lowers AttentionHead_v3 with D a multiple of 16, not D = {subcircuit.params['D']}"
     if scheme in FRAME_SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3: tensor-core steps as units, "
+    return (f"Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3: tensor-core steps as units, "
             f"the softmax native); binding its rows under {scheme} is not wired yet")
 
 
