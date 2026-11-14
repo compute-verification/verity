@@ -50,7 +50,7 @@ transformers = pytest.importorskip("transformers")
 # dims, environment, output
 # ---------------------------------------------------------------------------------------------------------
 
-H, NL, NH, KVH, V, I, MAXPOS, EPS = 64, 2, 4, 2, 128, 128, 64, 1e-5
+H, NL, NH, KVH, V, INTER, MAXPOS, EPS = 64, 2, 4, 2, 128, 128, 64, 1e-5
 LP = 8
 STEPS = int(os.environ.get("REALHF_STEPS", "4"))
 EVAL = os.environ.get("REALHF_EVAL", "1") != "0"
@@ -88,20 +88,20 @@ def make_config(arch: str, impl: str, tie: bool, **over):
     common = dict(tie_word_embeddings=tie, attn_implementation=impl, use_cache=False)
     if arch == "llama":
         from transformers import LlamaConfig
-        return LlamaConfig(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return LlamaConfig(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                            num_key_value_heads=KVH, max_position_embeddings=MAXPOS, rms_norm_eps=EPS, **common, **over)
     if arch == "qwen2":
         from transformers import Qwen2Config
-        return Qwen2Config(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return Qwen2Config(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                            num_key_value_heads=KVH, max_position_embeddings=MAXPOS, rms_norm_eps=EPS, use_sliding_window=False,
                            **common, **over)
     if arch == "mistral":
         from transformers import MistralConfig
-        return MistralConfig(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return MistralConfig(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                              num_key_value_heads=KVH, max_position_embeddings=MAXPOS, rms_norm_eps=EPS, **common, **over)
     if arch == "gpt2":
         from transformers import GPT2Config
-        return GPT2Config(vocab_size=V, n_positions=MAXPOS, n_embd=H, n_layer=NL, n_head=NH, n_inner=I, layer_norm_epsilon=EPS,
+        return GPT2Config(vocab_size=V, n_positions=MAXPOS, n_embd=H, n_layer=NL, n_head=NH, n_inner=INTER, layer_norm_epsilon=EPS,
                           resid_pdrop=0.0, embd_pdrop=0.0, attn_pdrop=0.0, **common, **over)
     raise ValueError(arch)
 
@@ -245,11 +245,11 @@ for impl in ("eager", "sdpa"):
              variant="cache_position = arange built in forward (static structure)"),
     ]
     CASES.append(Case(f"llama-{impl}-f32-tie1-fwd-mask_input", "llama", impl, "f32", True, "forward",
-                      (lambda impl=impl: (lambda: (LogitsWithMaskInput(make_model("llama", impl, "f32", True)),
+                      (lambda kind=impl: (lambda: (LogitsWithMaskInput(make_model("llama", kind, "f32", True)),
                                                     (PROMPT.clone(), torch.ones(LP, dtype=torch.int64)))))(),
                       variant="attention_mask is a prescribed INPUT value"))
     CASES.append(Case(f"llama-{impl}-f32-tie1-fwd-position_input", "llama", impl, "f32", True, "forward",
-                      (lambda impl=impl: (lambda: (LogitsWithPositionInput(make_model("llama", impl, "f32", True)),
+                      (lambda kind=impl: (lambda: (LogitsWithPositionInput(make_model("llama", kind, "f32", True)),
                                                     (PROMPT.clone(), torch.arange(LP)))))(),
                       variant="position_ids is a prescribed INPUT value"))
 # Mistral with a sliding window smaller than the prompt (the default 4096 never bites at T=8)
@@ -560,7 +560,7 @@ def test_realhf_case(case: Case):
     rec: dict[str, Any] = {"case": case.id, "arch": case.arch, "class": f"transformers.{MODEL_CLASS[case.arch]}", "attn_impl": case.impl,
                            "dtype": case.dtype, "tie": case.tie, "what": case.what, "variant": case.variant, "cfg_over": case.cfg_over,
                            "importer_head": GIT_HEAD, "derive_version": DERIVE_VERSION, "torch": torch.__version__,
-                           "transformers": transformers.__version__, "mode": "reference", "dims": dict(H=H, NL=NL, NH=NH, KVH=KVH, V=V, I=I, MAXPOS=MAXPOS),
+                           "transformers": transformers.__version__, "mode": "reference", "dims": dict(H=H, NL=NL, NH=NH, KVH=KVH, V=V, I=INTER, MAXPOS=MAXPOS),
                            "LP": LP, "STEPS": STEPS if case.what == "greedy" else None, "prompt": PROMPT.tolist(),
                            "probe": PROBE, "probe_patches": PROBE_APPLIED}
     try:
@@ -620,7 +620,8 @@ def test_realhf_summary_written():
     """Prints the compressed outcome table from the JSONL rows of this run (for the report)."""
     if not os.path.exists(OUT_PATH):
         pytest.skip("no rows")
-    rows = [json.loads(line) for line in open(OUT_PATH)]
+    with open(OUT_PATH) as f:
+        rows = [json.loads(line) for line in f]
     rows = [r for r in rows if r.get("importer_head") == GIT_HEAD and r.get("probe", 0) == PROBE]
     print(f"\n{len(rows)} rows @ {GIT_HEAD} probe={PROBE} {PROBE_APPLIED}")
     for r in rows:
