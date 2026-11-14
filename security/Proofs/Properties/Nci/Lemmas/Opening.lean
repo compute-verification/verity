@@ -33,8 +33,8 @@ the table's by `Accounting.SecurityProofs.readUnitBinds`; at or past the count i
 refinement alone.
 
 **What it does not say.** It is on the row returned, not on the opened ports: at a key at or past the count the
-reference accepts any witness, and the opened ports hold what the prover likes. The output row returned is a name the
-statement takes: no opening declares it, so no row of the record is named as the row returned. Of `laidOutAs` the
+reference accepts any witness, and the opened ports hold what the prover likes. The output row returned is the one
+the opening declares (`Form.openedRow`); of an opening that declares none it says nothing. Of `laidOutAs` the
 proof reads the unit's number alone: that `Spot.Bits.check` gives no reason is what makes a row's name mean its port,
 and no step here needs it. It gives no file, record and transcript that meet its hypotheses.
 -/
@@ -52,9 +52,10 @@ open Accounting
 under a pin, the reader's Definition having the roles `ro`. Let the circuit file `bytes` parse to the templated
 statement `ct`, as the verifier reads it, with the unit template `tu`; let the read's check accept `tu` for a table of
 `q.count` rows of `q.words` words, and the unit return the circuit's outputs. Let the file's unit `u` be `r`'s unit,
-and `q` be the read unit's gates there at the roles and the output row `out`. Let the unit's constant be registered as
-1. Let `u` be correct in the transcript `Yc` and the registered constants hold there; let the verdict bit be 1; and let
-`table` be committed under the root and the domain id the root and domain gates hold. Then the row `u` returns in its
+and `q` be the read unit's gates there at the roles and the output row `out` the opening declares as its row. Let
+the unit's constant be registered as 1. Let `u` be correct in the transcript `Yc` and the registered constants hold
+there; let the verdict bit be 1; and let `table` be committed under the root and the domain id the root and domain
+gates hold. Then the row `u` returns in its
 local evaluation is `table`'s row at the key its key gates hold there, or the fill row where the key is at or past the
 table's count (`Hash.EmbeddingRead.h`), or SHA-512 collides on what the unit's check and `table`'s opening at the key
 hashed. -/
@@ -67,7 +68,8 @@ def PinnedReadBinds : Prop :=
     (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
     (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening),
     Flock.Program.decode (F.inst c).program.toUTF8 = .ok P →
-    F.held c r = some (.opened name p pin) → P.index[r.tid]? = some k → P.defs[k]? = some dfn →
+    F.held c r = some (.opened name p pin) → F.openedRow c r = some out →
+    P.index[r.tid]? = some k → P.defs[k]? = some dfn →
     F.layout dfn = some ro →
     Flock.Desc.parseStmt tags bytes tables = .ok (.tmpl ct) →
     ct.tmpl = some tu → Flock.ReadNet.check q.count q.words tu.t = true → ct.outNet = ct.unitNet →
@@ -376,7 +378,7 @@ theorem portsOf_portsAt {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray} {tab
 /-- **A pinned reader's unit returns its table's row** (`PinnedReadBinds`). -/
 theorem pinnedReadBinds : PinnedReadBinds := by
   intro F c j tr _ P r name p pin k dfn ro out tags bytes tables ct tu hB n consts u q Yc table
-    _ _ _ _ _ hstmt ht hcheck ho hlaid hports hone hcorrect hconsts hok htable
+    _ _ _ _ _ _ hstmt ht hcheck ho hlaid hports hone hcorrect hconsts hok htable
   have hparse := parseTmpl_of_parseStmt hstmt
   have hu : u.val = r.unit := by
     unfold laidOutAs at hlaid
