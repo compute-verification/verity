@@ -1,10 +1,11 @@
 # The inference-only policy's names: what `tools/move/rename.py --map tools/move/inference_only_map.toml` renames, the
 # policy's older name NCI in paths, Lean and Python (GLOSSARY.md, Older names). The prose's words are
 # `inference_only_prose_map.toml`'s.
-# - `Nci` becomes `InferenceOnly`: the Lean area (`Security/{Definitions,Properties,Proofs,Proofs/Properties}/Nci`), its
+# - `Nci` becomes `InferenceOnly`: the Lean area (`security/{Definitions,Properties,Proofs,Proofs/Properties}/Nci`), its
 #   namespace and modules, and every name it is one part of, so `NciCheck`, the policy's check and its Lake library,
 #   becomes `InferenceOnlyCheck`.
-# - `nci` becomes `inference_only`: `verity/core/protocols/network/nci/` and each module, file and identifier that
+# - `nci` becomes `inference_only`: the check's directory, `verity/protocols/policy/inference_only/verifier/nci/`, which
+#   `inference_only_check_map.toml` then flattens into `verifier/`, and each module, file and identifier that
 #   spells it (`nci_check`, the check's Lake package, `nci_reference`, `nci_glm`, `nci_cost`, `nci_phases`, `test_nci_*`).
 # What stays, each for a change of its own (`move_check.py` certifies a word that renames a path, a module or a Lean
 # declaration, and these rename none):
@@ -15,7 +16,7 @@
 # - A lock's `runs` entry's `why`, which `move_check.py` holds to its moved paths: the check's six, each opening with its
 #   count ([keep]).
 # - `benchmarks/nci/`, where it is and under its name ([keep_paths], [keep]), with the names that follow it: its own
-#   `nci`, its row `nci/` of `benchmarks/README.md`'s table ([keep_in]), and in `benchmarks/rho/` the family kind `nci`,
+#   `nci` ([keep_in]), and in `benchmarks/rho/` the family kind `nci`,
 #   `nci:<id>`, the `nci.*` keys and `families.Nci`, which name that library ([keep_in], [keep]).
 # - The ids, until a format version ([keep]): the schema `verity/nci-glm/v1` and the stub ids, which end in a version,
 #   and the cited draft `draft:nci-search`.
@@ -29,7 +30,7 @@
 # their own, `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints.
 
 [words]
-"network/nci" = "network/inference_only"
+"verifier/nci" = "verifier/inference_only"
 "Nci" = "InferenceOnly"
 "nci" = "inference_only"
 
@@ -45,7 +46,7 @@ exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "*
 
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
-            'lanes/[\w.-]+', 'draft:[\w.-]+', '\bbenchmarks/nci\b', '(?<!\w)nci-', '(?<!/ )"nci"(?! /)',
+            'lanes/[\w.-]+', 'draft:[\w.-]+', '\bbenchmarks/nci\b', '\binference_only/nci\b', '(?<!\w)nci-', '(?<!/ )"nci"(?! /)',
             '"why": "[\d,]+ [^"\n]*"', '(?<=")Nci(?!Check)[A-Z]\w*']
 # GLOSSARY.md's rows of older names, the slowdown calculator's family of `benchmarks/nci`'s algorithms, and the period
 # check's refusal.
@@ -59,7 +60,6 @@ strings = ["families.Nci", "`Nci*`, `nci-*`, `ius` and the `nci` directories",
 
 [keep_in]
 "benchmarks/nci/**" = ["nci"]
-"benchmarks/README.md" = ["nci"]
 "benchmarks/rho/**" = ["nci"]
 "benchmarks/rho/rho/families.py" = ["Nci"]
 "benchmarks/rho/tests/test_families.py" = ["Nci"]

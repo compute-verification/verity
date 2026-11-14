@@ -1,0 +1,20 @@
+# The inference-only check's tests, named by their directory: what `tools/move/rename.py --map
+# tools/move/inference_only_check_tests_map.toml` rewrites in the check's README, before the moves. The README names the
+# tests by a pattern below `../tests/`, a directory the check no longer has beside it, and a relative path that names
+# nothing can't follow `inference_only_check_map.toml`'s move. So the README names the tests' directory, which that
+# move's tools follow. It renames no path, module or Lean declaration, so the change it makes is an ordinary one,
+# reviewed as such.
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/policy/inference_only/verifier/nci/README.md"]
+words = { "`../tests/test_nci_*.py`" = "the `test_nci_*.py` of `../../../../accounting/certifier/verifier/network/tests/`" }
+
+[rewrite]
+# Never rewritten: the earlier moves and their maps, and lock files.
+exclude = ["tools/move/**", "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = []
+strings = []
