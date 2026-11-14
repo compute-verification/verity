@@ -16,16 +16,26 @@ namespace Verity.Sampled.Instance.HonestSession
 
 open FlockSoundness.Discharge
 
-/-- The compiled verifier's setup result on the honest session. -/
-def setup : Flock.SessionSpec × Array Flock.Stmt :=
-  (Exec.setupOfP (ZkExec.zkInputs inputs) none transcript.record).toOption.getD default
+/-- The compiled verifier's setup computation on the honest session. -/
+def setupResult : Flock.V (Flock.SessionSpec × Array Flock.Stmt) :=
+  Exec.setupOfP (ZkExec.zkInputs inputs) none transcript.record
 
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 1000000 in
+/-- The compiled verifier's setup computation succeeds. -/
+theorem setup_some : setupResult.toOption.isSome = true := by
+  decide +kernel
+
+/-- The compiled verifier's setup result on the honest session. -/
+def setup : Flock.SessionSpec × Array Flock.Stmt :=
+  setupResult.toOption.get setup_some
+
 /-- The compiled verifier sets up the honest session. -/
 theorem setup_ok :
     Exec.setupOfP (ZkExec.zkInputs inputs) none transcript.record = .ok setup := by
-  decide +kernel
+  change setupResult = .ok setup
+  generalize h : setupResult = r at setup_some ⊢
+  cases r <;> simp_all [setup]
 
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 1000000 in

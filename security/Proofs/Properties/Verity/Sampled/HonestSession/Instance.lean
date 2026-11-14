@@ -18,7 +18,7 @@ namespace Verity.Sampled.Instance.HonestSession
 open scoped ENNReal
 
 /-- The decoded component-parameter list. -/
-private def decodedResult :=
+def decodedResult :=
   _root_.Core.canonicalJson θ >>= _root_.Core.Composition.decodeParams
 
 set_option maxHeartbeats 0 in
@@ -26,8 +26,9 @@ theorem decoded_some : decodedResult.toOption.isSome := by decide +kernel
 
 def decoded : List _root_.Core.Composition.Named := decodedResult.toOption.get decoded_some
 
-set_option maxHeartbeats 0 in
-theorem decoded_ok : decodedResult = .ok decoded := by decide +kernel
+theorem decoded_ok : decodedResult = .ok decoded := by
+  generalize h : decodedResult = r at decoded_some ⊢
+  cases r <;> simp_all [decoded]
 
 set_option maxHeartbeats 0 in
 theorem member_some :
@@ -37,18 +38,18 @@ theorem member_some :
 def member : _root_.Core.Composition.Named :=
   (decoded.find? (·.id == VStar.Recursive.Sampled.PROTOCOL)).get member_some
 
-set_option maxHeartbeats 0 in
 theorem member_ok :
     decoded.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = some member := by
-  decide +kernel
+  generalize h : decoded.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = x at member_some ⊢
+  cases x <;> simp_all [member]
 
-private def innerResult :=
+def innerResult :=
   _root_.Core.canonicalJson member.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson
 
 set_option maxHeartbeats 0 in
 theorem inner_some : innerResult.toOption.isSome := by decide +kernel
 
-private def inner := innerResult.toOption.get inner_some
+def inner := innerResult.toOption.get inner_some
 
 set_option maxHeartbeats 0 in
 theorem left_some :
@@ -63,8 +64,14 @@ def params : _root_.Spot.OneStageZk.Params :=
     | .inl p => some p
     | .inr _ => none).get left_some
 
-set_option maxHeartbeats 0 in
-theorem inner_ok : innerResult = .ok (.inl params) := by decide +kernel
+theorem inner_ok : innerResult = .ok (.inl params) := by
+  generalize h : innerResult = r at inner_some ⊢
+  cases r with
+  | error e => simp at inner_some
+  | ok x =>
+    cases x with
+    | inl p => simp [params, inner, h]
+    | inr p => simp [inner, h] at left_some
 
 /-- The concrete parameters contain one-stage-v2's parameters. -/
 theorem params_at : ParamsAt θ params :=
@@ -162,7 +169,8 @@ theorem parameter_inputs :
     query = params.base.verifier.query ∧
     params.base.challenger = some
       ({ params := _root_.Lms.deployed, pub := ByteArray.mk (Array.replicate 80 0) }, "honest-session") := by
-  decide +kernel
+  repeat' apply And.intro
+  all_goals rfl
 
 /-- The concrete session is set up on the registered files. -/
 theorem sets_up : SetsUp base θ files live := by

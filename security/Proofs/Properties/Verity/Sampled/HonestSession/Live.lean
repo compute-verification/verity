@@ -28,20 +28,39 @@ def query : Json :=
 /-- The subset sampling design named by the parameters. -/
 def law : Json := jsonOfText """{"k":16,"law":"subset"}"""
 
+/-- The descriptor parser's result on the registered circuit. -/
+def descResult : Flock.V Flock.Desc :=
+  Flock.Desc.parse (ZkExec.zkTags inputs) inputs.circuitFile inputs.tables
+
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 1000000 in
+theorem desc_some : descResult.toOption.isSome = true := by decide +kernel
+
 /-- The descriptor parsed from the registered circuit. -/
-def D : Flock.Desc :=
-  (Flock.Desc.parse (ZkExec.zkTags inputs) inputs.circuitFile inputs.tables).toOption.getD default
+def D : Flock.Desc := descResult.toOption.get desc_some
+
+theorem desc_ok : descResult = .ok D := by
+  generalize h : descResult = r at desc_some ⊢
+  cases r <;> simp_all [D]
 
 /-- The registered public file as the circuit reads it. -/
-def pubO : Flock.Public :=
-  (Flock.HmOut.loadPublic (ZkExec.zkTags inputs) D.unroll inputs.publicFile).toOption.getD default
+def publicResult : Flock.V Flock.Public :=
+  Flock.HmOut.loadPublic (ZkExec.zkTags inputs) D.unroll inputs.publicFile
+
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 1000000 in
+theorem public_some : publicResult.toOption.isSome = true := by decide +kernel
+
+def pubO : Flock.Public := publicResult.toOption.get public_some
+
+theorem public_ok : publicResult = .ok pubO := by
+  generalize h : publicResult = r at public_some ⊢
+  cases r <;> simp_all [pubO]
 
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 1000000 in
 /-- The circuit and public-file checks needed by `Live`, as closed kernel computations. -/
 theorem file_checks :
-    Flock.Desc.parse (ZkExec.zkTags inputs) inputs.circuitFile inputs.tables = .ok D ∧
-    Flock.HmOut.loadPublic (ZkExec.zkTags inputs) D.unroll inputs.publicFile = .ok pubO ∧
     pubO.n = 32 ∧
     Layout.scopeOkH D.unroll = true ∧
     Flock.PortRoots.checkOf (.ok D.unroll) (ZkExec.zkTags inputs) inputs.publicFile = .ok () ∧
@@ -56,13 +75,20 @@ set_option maxRecDepth 1000000 in
 theorem population_matches : Flock.Bridge.PopMatches desc query 32 := by
   decide +kernel
 
+/-- The sampling design read from the registered data. -/
+def design : Flock.Draw.Law := Flock.Bridge.designAt desc query law none 32
+
 set_option maxHeartbeats 0 in
-set_option maxRecDepth 1000000 in
-/-- The registered sampling design is uniform subset sampling of 16 proof blocks. -/
+theorem design_is_subset :
+    (match design with | .subset _ => true | _ => false) = true := by
+  decide +kernel
+
+/-- The registered sampling design is subset sampling. -/
 theorem subset_design :
     Flock.Bridge.designAt desc query law none 32 =
       .subset (Flock.Bridge.lawK (Flock.Bridge.designAt desc query law none 32)) := by
-  decide +kernel
+  change design = .subset (Flock.Bridge.lawK design)
+  cases h : design <;> simp_all [Flock.Bridge.lawK]
 
 /-- The transcript records the concrete ascending subset draw. -/
 theorem record_drawn :
@@ -98,12 +124,12 @@ theorem table_shape : Flock.Zk.shapeOk setup.2[0] = .ok () :=
 theorem exists_live : ∃ A : Live,
     A.I = inputs ∧ A.n = 32 ∧ A.desc = desc ∧ A.qr = query ∧ A.lj = law ∧ A.tb = none ∧
       A.Lb = deployedLb ∧ A.ε = 0 ∧ A.OpensReady := by
-  have hD := file_checks.1
-  have hpubO := file_checks.2.1
-  have hnO := file_checks.2.2.1
-  have hscope := file_checks.2.2.2.1
-  have hports := file_checks.2.2.2.2.1
-  have hready := file_checks.2.2.2.2.2
+  have hD := desc_ok
+  have hpubO := public_ok
+  have hnO := file_checks.1
+  have hscope := file_checks.2.1
+  have hports := file_checks.2.2.1
+  have hready := file_checks.2.2.2
   have ht : inputs.tags.typed = false := by decide
   have hU : FlockSoundness.Built D.unroll.unit :=
     Hidden.built_of_parseStmt (Flock.Desc.parseStmt_of_parse hD) ((ZkExec.zkTags_typed inputs).trans ht)
