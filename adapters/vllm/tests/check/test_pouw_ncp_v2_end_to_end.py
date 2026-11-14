@@ -40,6 +40,7 @@ from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import pouw_circuit as RC
 from verity_vllm.protocols import pouw
+from verity.protocols.accounting.pouw.prover.serving import LayerRows
 from verity.protocols.accounting.pouw.prover.serving import circuit as PC
 from verity.protocols.accounting.pouw.prover.serving import native as PN
 from verity_vllm.query.required import Q_MODULE_BODY_ID
@@ -600,7 +601,7 @@ def test_the_transcript_holds_every_calls_inputs_and_regenerates_each_call(which
     live leaf: the data a verifier needs to open the calls off the serving host."""
     from verity.protocols.accounting.pouw.prover.serving import native as PN
     w = request.getfixturevalue(which)
-    calls = PC.load_calls(w.tdir / PC.CALLS_DATA_FILE, lambda weight: pouw._LayerRows(w.w_up))
+    calls = PC.load_calls(w.tdir / PC.CALLS_DATA_FILE, lambda weight: LayerRows(w.w_up))
     assert [i for i, _s, _c in calls] == [r.index for r in w.records] and {s for _i, s, _c in calls} == {"ncp-v2"}
     assert [PC.call_leaf(PN.commit_call(i, s, c)).hex() for i, s, c in calls] == [PC.call_leaf(r).hex() for r in w.records]
 

@@ -8,28 +8,28 @@ public import Proofs.Flock.Claims.ZK.LinkFft
 /-!
 # The link round at the Lean recheck
 
-`Flock.Firewall.Link.root` is the code of record of the ZK server's level-0 recheck: each table's
+`Flock.ZkServer.Link.root` is the code of record of the ZK server's level-0 recheck: each table's
 level-0 root, committed again from the host's witness, the table's level-0 hiding and its level-0 salts: the root of
-record, which the session's link carries and `Firewall::new` holds the device's root to (live `PROTOCOL.md` §10.2; Rust
+record, which the session's link carries and `ZkServer::new` holds the device's root to (live `PROTOCOL.md` §10.2; Rust
 commits nothing of level 0 that leaves). Here that function is held to the session's link.
 
-* `Flock.Firewall.Link.root_eq`, `cap_eq`, `leaves_getElem!`, `layer_eq`: the recheck's root is
+* `Flock.ZkServer.Link.root_eq`, `cap_eq`, `leaves_getElem!`, `layer_eq`: the recheck's root is
   `FlockComplete.flat` of `FlockComplete.layerOf`'s cap over `hm96-sha512/v1`'s leaves of `encodeRowsZk`'s rows under the
   salts (`rows_eq`, `LinkFft`: the FFT's rows are those rows); its tasks (`parRange`) split one map (`Link.parRange_eq`).
 * `swExeOf_inl`, `Masked.leafAt_swCutAt`: the switched prover's level-0 leaves are the honest prover's, whatever values
   the workers supply (`Coined.swContent_inl`): level 0 reads neither the values nor the moved pads.
-* `Masked.linkIn`, `Masked.linkMsg`: what the ZK server hands `Flock.Firewall.Link` for table `j` at the tape (the packed
+* `Masked.linkIn`, `Masked.linkMsg`: what the ZK server hands `Flock.ZkServer.Link` for table `j` at the tape (the packed
   table of the witness's traces at the tape's mask words, and the tape's extra lanes, lane paddings and level-0 salts),
   and the link message of the roots it answers. That message is round `0`'s encoding of the switched cut, at every
   coin vector and any values the workers supply (`Masked.enc0_swCutAt`, from `exeOf_inl` at `agrees0_exe`).
 * `LeanRelease.LinkIs`: the ZK server's link is `linkMsg`, a named trust narrower than `LinkRoundEq`. It is a fact about
-  what the transport hands `Flock.Firewall.Link` and how it frames the roots, not about how a root is computed.
+  what the transport hands `Flock.ZkServer.Link` and how it frames the roots, not about how a root is computed.
 * **`LeanRelease.linkRoundEq_of_linkIs`**: `LinkRoundEq` at the deployed session (`Masked.dataE`) from `LinkIs`.
 -/
 
 @[expose] public section
 
-namespace Flock.Firewall.Link
+namespace Flock.ZkServer.Link
 
 theorem flat_eq : flat = FlockComplete.flat := rfl
 
@@ -95,7 +95,7 @@ theorem rows_congr (lv : Level) (tPad : Nat) (g : Array F128) {extra extra' lane
     refine congrArg (· + _) ?_
     exact sumF_congr fun c hc => by simp only [he _ c hc]
 
-end Flock.Firewall.Link
+end Flock.ZkServer.Link
 
 namespace Claims.ZKMal
 
@@ -139,13 +139,13 @@ theorem leafAt_swCutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.
 noncomputable abbrev dataE : TableData :=
   tableData PE (RoundPlan.stop (czExe PE) (encStop (encExe PE)) (finExe PE)) UE
 
-/-- **What the ZK server hands `Flock.Firewall.Link` for table `j`** at the tape `t`: the table's `m`, its packed table
+/-- **What the ZK server hands `Flock.ZkServer.Link` for table `j`** at the tape `t`: the table's `m`, its packed table
 at the witness's traces with the tape's mask words, and the tape's extra lanes, lane paddings and level-0 salts at the
 sizes level 0 of the table's `--zk` schedule takes (`Level0.drawSize`): each extra lane's first `2^cols` words, each of
 the `2^lanes + 4` lanes' first `t_pad` padding coefficients and the salts of the `2^d` tree positions, and `0` or empty
 past them, as `Level0.toIn` reads a level 0 sampled at those sizes. -/
 noncomputable def linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (j : Fin (jOf x)) :
-    _root_.Flock.Firewall.Link.In where
+    _root_.Flock.ZkServer.Link.In where
   wideLeaf := (stAt x j).wideLeaf
   m := (stAt x j).m
   g := (FlockComplete.tablesP (FlockDeploy.tabsOf (stsOf x)) (FlockComplete.ZkTables.traces (stsOf x)
@@ -157,22 +157,22 @@ noncomputable def linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (j : Fin
 
 /-- **`linkIn`'s rows are the tape's**: level 0's rows read the extra lanes and paddings within its sizes only. -/
 theorem rows_linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (j : Fin (jOf x)) :
-    _root_.Flock.Firewall.Link.rows (lv0 x j) (zkTab x j).tPad (linkIn x w t j).g (linkIn x w t j).extra
+    _root_.Flock.ZkServer.Link.rows (lv0 x j) (zkTab x j).tPad (linkIn x w t j).g (linkIn x w t j).extra
         (linkIn x w t j).lanePad =
-      _root_.Flock.Firewall.Link.rows (lv0 x j) (zkTab x j).tPad (linkIn x w t j).g ((exeTape t).extra j.val)
+      _root_.Flock.ZkServer.Link.rows (lv0 x j) (zkTab x j).tPad (linkIn x w t j).g ((exeTape t).extra j.val)
         ((exeTape t).lanePad j.val) :=
-  _root_.Flock.Firewall.Link.rows_congr _ _ _ (fun _ _ hc => if_pos hc) fun _ _ hl hi => if_pos ⟨hl, hi⟩
+  _root_.Flock.ZkServer.Link.rows_congr _ _ _ (fun _ _ hc => if_pos hc) fun _ _ hl hi => if_pos ⟨hl, hi⟩
 
 /-- **`linkIn`'s salt at a tree position is the tape's.** -/
 theorem salt_linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (j : Fin (jOf x)) {q : ℕ}
     (hq : q < 2 ^ (lv0 x j).d) : (linkIn x w t j).salt q = (exeTape t).toTape.salt j.val 0 0 q :=
   if_pos hq
 
-/-- **The link message of the recheck's roots**: `Flock.Firewall.Link`'s root of each table, framed as `enc0` frames its
+/-- **The link message of the recheck's roots**: `Flock.ZkServer.Link`'s root of each table, framed as `enc0` frames its
 caps; the empty message where the statement sets up no session. -/
 noncomputable def linkMsg (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) : Msg :=
   if (FlockDeploy.setupOf true x).isNone then [] else
-  0 :: FlockDeploy.linkBody (List.ofFn fun j => _root_.Flock.Firewall.Link.root (linkIn x w t j))
+  0 :: FlockDeploy.linkBody (List.ofFn fun j => _root_.Flock.ZkServer.Link.root (linkIn x w t j))
     (List.replicate (jOf x) ByteArray.empty)
 
 /-- **Table `j`'s recheck root is its level-0 cap at the switched cut**, at every coin vector and any values the workers
@@ -180,7 +180,7 @@ supply: each leaf below `2^d` is the executable's leaf of `encodeRowsZk`'s row u
 which the switched prover's is (`swExeOf_inl`). -/
 theorem root_linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (cz : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
     (v : ∀ j, ((tabC PE x j).T (cz j)).tab.Vals) (j : Fin (jOf x)) :
-    _root_.Flock.Firewall.Link.root (linkIn x w t j) =
+    _root_.Flock.ZkServer.Link.root (linkIn x w t j) =
       FlockComplete.flat (FlockComplete.layerOf (fun l r => _root_.Flock.Sha512.hash (l ++ r)) (lv0 x j).d
         (leafAt PE x cz (swCutAt (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1
           (swExeOf (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1)) j)
@@ -189,7 +189,7 @@ theorem root_linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (cz : ∀ j, 
   have hl : ∀ q, q < 2 ^ (lv0 x j).d →
       leafAt PE x cz (swCutAt (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1
         (swExeOf (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1)) j q =
-      _root_.Flock.Firewall.Link.leaf ((_root_.Flock.Firewall.Link.rows (lv0 x j) (zkTab x j).tPad
+      _root_.Flock.ZkServer.Link.leaf ((_root_.Flock.ZkServer.Link.rows (lv0 x j) (zkTab x j).tPad
         (linkIn x w t j).g (linkIn x w t j).extra (linkIn x w t j).lanePad)[q]!) ((linkIn x w t j).salt q) :=
     fun q hq => by
       have hq' : q < (tabC PE x j).z.nS + (tabC PE x j).z.nU := lt_of_lt_of_eq hq hd.symm
@@ -197,10 +197,10 @@ theorem root_linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (cz : ∀ j, 
         (swExeOf (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1) j hq').trans
         ((swExeOf_inl (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1 j ⟨q, hq'⟩).trans
         ((exeOf_inl PE (TapeLayout.exe PE) exeTape (agrees0_exe PE) w t cz j ⟨q, hq'⟩).trans ?_))
-      rw [rows_linkIn, salt_linkIn x w t j hq, _root_.Flock.Firewall.Link.rows_eq] <;> rfl
-  rw [_root_.Flock.Firewall.Link.root_eq (linkIn x w t j) (zkTab x j).hz]
-  show _root_.Flock.Firewall.Link.flat (_root_.Flock.Firewall.Link.cap (lv0 x j) (zkTab x j).tPad (linkIn x w t j)) = _
-  rw [_root_.Flock.Firewall.Link.flat_eq, _root_.Flock.Firewall.Link.cap_eq (lv0 x j) (zkTab x j).tPad _ _ hl] <;> rfl
+      rw [rows_linkIn, salt_linkIn x w t j hq, _root_.Flock.ZkServer.Link.rows_eq] <;> rfl
+  rw [_root_.Flock.ZkServer.Link.root_eq (linkIn x w t j) (zkTab x j).hz]
+  show _root_.Flock.ZkServer.Link.flat (_root_.Flock.ZkServer.Link.cap (lv0 x j) (zkTab x j).tPad (linkIn x w t j)) = _
+  rw [_root_.Flock.ZkServer.Link.flat_eq, _root_.Flock.ZkServer.Link.cap_eq (lv0 x j) (zkTab x j).tPad _ _ hl] <;> rfl
 
 /-- **The recheck's link message is round `0`'s encoding of the switched cut**, at every coin vector and any values the
 workers supply. -/
@@ -230,10 +230,10 @@ open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 namespace LeanRelease
 
 /-- **The ZK server's link is the recheck's link message**: after `Hello`'s answer, where the protocol has coins and the
-frame takes the answer's, the link is `linkMsg`, `Flock.Firewall.Link.root`'s roots of the tables the transport hands
+frame takes the answer's, the link is `linkMsg`, `Flock.ZkServer.Link.root`'s roots of the tables the transport hands
 it. A named hypothesis, one of the transport's trusts, narrower than `LinkRoundEq`: what `flock-circuit`'s
-`Firewall::new` hands the Lean code (the host's packed table, the extra lanes, the lane paddings and the level-0 salts
-on its tape, to the session loop's `Level0` or the Lean finish's `table`) and how `Firewall::root` frames the roots it
+`ZkServer::new` hands the Lean code (the host's packed table, the extra lanes, the lane paddings and the level-0 salts
+on its tape, to the session loop's `Level0` or the Lean finish's `table`) and how `ZkServer::root` frames the roots it
 answers, never how a root is computed. -/
 def LinkIs (nr : Msg → ℕ → ℕ)
     (L : LeanRelease Claims.Flock.Wit ((session nr dataE).refP.Nonce × (session nr dataE).refP.Rand)) (x : Msg)

@@ -22,7 +22,7 @@ for a stream among the labels (`slot_round_open`). So the rep the relay steps a 
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session (State)
+open _root_.Flock.ZkServer.Session (State)
 open _root_.Flock (SessionSpec)
 
 /-- **A rep stream's name is its table's and rep's.** -/

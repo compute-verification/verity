@@ -39,7 +39,7 @@
 #                CONTROLS=DIR: the ZK server's negative controls on that statement; OPROVE_JOBS=4 statements at once while their estimated
 #                peaks sum to at most OPROVE_MEM_GB=48. Before any session, V*'s own inputs into data/$TAG/v-sess (the inner
 #                shape, each statement's index and bindings, the shared rows, the inner statement's files and the inner
-#                session vstage staged V* over), which STEP=lean verifies with. MODES=firewall alone, WARM=0 RUNS=1: each
+#                session vstage staged V* over), which STEP=lean verifies with. MODES=zk_server alone, WARM=0 RUNS=1: each
 #                statement fixed before any session starts gets exactly one independent session, never sampled again, every
 #                exit recorded (out/oprove/statements.sha512, exits.tsv), and the challenger keeps the run's record
 #                (v-sess/rec-run.jsonl): the staging before any session, each V* part's challenger (serve --rec-run) logging
@@ -77,7 +77,7 @@
 #              step that would build one refuses instead)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
 #      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's sample: every unit; none: no sample)
-#      RETRY= (oprove, MODES=firewall: a statement's name, which gets a second session after its first, on a fresh coin
+#      RETRY= (oprove, MODES=zk_server: a statement's name, which gets a second session after its first, on a fresh coin
 #              server and in the run's record; a negative control, whose composition lean_verdicts.py requires refused)
 #      GPU=1 (0: the CPU prover end to end: built GPU=0, no CUDA, no lease, prove without --gpu; for a small K and N)
 #      NEG_INNER="challenge query" (lean: each honest V* session verified again over a copy of the inner session with one
@@ -98,8 +98,8 @@
 #      RELEASE=0 (1: the recursive session through the ZK server's release side, live PROTOCOL.md §10.5, on the state
 #              directory $DD/fw: STEP=inner, one session (WARM=0 RUNS=1), opens it with V*'s statements as its parts in
 #              rec-statements' order and RELEASE_WINDOWS_S's schedule ($DD/release.json, rec_inner.py release-parts);
-#              STEP=oprove, MODES=firewall, proves each part once in that order through `prove --firewall-state`
-#              (core-firewall session, built beside verity-verify-proof) and writes out/oprove/release.json, each part's release
+#              STEP=oprove, MODES=zk_server, proves each part once in that order through `prove --zk-server-state`
+#              (core-zk-server session, built beside verity-verify-proof) and writes out/oprove/release.json, each part's release
 #              time against when the Lean loop decided it (rec_inner.py release-report), failing unless every part left)
 #      RELEASE_WINDOWS_S=lead=1500,L0=2800,L=900,alg=900,cap=120,other=900 (each part's window by its class, seconds; lead is
 #              added to the first's)  RELEASE_BUDGET= (the stream's failure budget, at least 1: RELEASE=1 needs it)
@@ -168,16 +168,16 @@ KEY=$(cat verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh verity/protoco
 BIN=$W/bin-$KEY-g$GPU-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
 LEAN_BIN=$L/lean-$LSHA/verity-verify-proof
-# the Lean frame a firewalled prover (MODES=ZK server) releases through, built beside verity-verify-proof
-export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
-# the release side's Lean session loop (RELEASE=1: prove --firewall-state), keyed by its package's sources and those it requires
-CSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/recursion/verifier/firewall)
-export FC_CORE_FIREWALL=$L/corefw-$CSHA/core-firewall
+# the Lean frame a zk_served prover (MODES=ZK server) releases through, built beside verity-verify-proof
+export FC_ZK_SERVER_LEAN=$L/lean-$LSHA/flock-zk-server
+# the release side's Lean session loop (RELEASE=1: prove --zk-server-state), keyed by its package's sources and those it requires
+CSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/recursion/verifier/zk_server)
+export FC_CORE_ZK_SERVER=$L/corefw-$CSHA/core-zk-server
 FWS=$DD/fw RELEASE=${RELEASE:-0}
 FSHA=$( (echo $LSHA; cat verity/protocols/proofs/flock/prover/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
 FOLD_BIN=$L/fold-$FSHA/inner-fold
 # the ship's name for each binary: its cache key in the name, so a node takes only the one its own sources key
-SHIPS="$B:flock-circuit-$KEY-g$GPU-sm$SM $LEAN_BIN:verity-verify-proof-$LSHA $FC_FIREWALL_LEAN:flock-firewall-$LSHA $FOLD_BIN:inner-fold-$FSHA $FC_CORE_FIREWALL:core-firewall-$CSHA"
+SHIPS="$B:flock-circuit-$KEY-g$GPU-sm$SM $LEAN_BIN:verity-verify-proof-$LSHA $FC_ZK_SERVER_LEAN:flock-zk-server-$LSHA $FOLD_BIN:inner-fold-$FSHA $FC_CORE_ZK_SERVER:core-zk-server-$CSHA"
 if [ -n "${PREBUILT:-}" ]; then
   for s in $SHIPS; do
     f=$PREBUILT/${s#*:}; [ -x ${s%%:*} ] || [ ! -f $f ] || { mkdir -p $(dirname ${s%%:*}) && cp $f ${s%%:*}.$$ && chmod +x ${s%%:*}.$$ && mv ${s%%:*}.$$ ${s%%:*}; }
@@ -283,7 +283,7 @@ EOF
 
 # loopback NAME PUB INST CIRCUIT [--zk]: a verifier process (serve, on the verifier's cores, every session at once) and
 # prove_live against it; the sessions under $DD/$STEP-NAME/sessions; the prover's status. With RRUN and RPART (oprove's V*
-# parts under MODES=firewall), serve logs each Hello it answers in the run's record RRUN as part RPART's (serve --rec-run)
+# parts under MODES=zk_server), serve logs each Hello it answers in the run's record RRUN as part RPART's (serve --rec-run)
 loopback() {
   local name=$1 pub=$2 inst=$3 circ=$4 zk=${5:-} s=$DD/$STEP-$1 PORT=$(free_port) PIN=$(sha512sum $4 | cut -d' ' -f1)
   rm -rf $s; mkdir -p $s $O/$STEP/$name
@@ -310,17 +310,17 @@ loopback() {
   return $rc
 }
 
-# hello_at DIR: a firewalled prover's Lean Hello sets each session up at the statement STEP=lean verifies (live PROTOCOL.md
-# §10.4), verity/flock-circuit with DIR's partition and program; read only under FC_FIREWALL=1
+# hello_at DIR: a zk_served prover's Lean Hello sets each session up at the statement STEP=lean verifies (live PROTOCOL.md
+# §10.4), verity/flock-circuit with DIR's partition and program; read only under FC_ZK_SERVER=1
 hello_at() {
-  export FC_FIREWALL_STATEMENT=verity/flock-circuit
-  FC_FIREWALL_HELLO_ARGS=; local k
-  for k in partition program; do [ -f $1/$k.json ] && FC_FIREWALL_HELLO_ARGS+="--$k $1/$k.json "; done
-  export FC_FIREWALL_HELLO_ARGS
+  export FC_ZK_SERVER_STATEMENT=verity/flock-circuit
+  FC_ZK_SERVER_HELLO_ARGS=; local k
+  for k in partition program; do [ -f $1/$k.json ] && FC_ZK_SERVER_HELLO_ARGS+="--$k $1/$k.json "; done
+  export FC_ZK_SERVER_HELLO_ARGS
 }
 
 # proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>, held to $O/inner/schedule.json, Register answered
-# with $DD/stage/draw.json, every coin the challenger's coin tree's, each session's send check Lean's flock-firewall live)
+# with $DD/stage/draw.json, every coin the challenger's coin tree's, each session's send check Lean's flock-zk-server live)
 # and prove_live against it under INNER_COINS; the prover's status
 proxied() {
   rm -rf $DD/inner; mkdir -p $DD/inner
@@ -336,12 +336,12 @@ proxied() {
   local rel=()
   if [ $RELEASE = 1 ]; then
     rm -rf $FWS; mkdir -p $FWS
-    rel=(--firewall $FWS $(python3 -c 'import json, sys; r = json.load(open(sys.argv[1]))
+    rel=(--zk-server $FWS $(python3 -c 'import json, sys; r = json.load(open(sys.argv[1]))
 print("--parts", ",".join(r["parts"]), "--release-windows-ms", ",".join(map(str, r["windows_ms"])))' $DD/release.json) \
       --budget $RELEASE_BUDGET)
   fi
   taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS --schedule $O/inner/schedule.json \
-    --draw $DD/stage/draw.json --coin-tree "${src[@]}" --lean $FC_FIREWALL_LEAN "${rel[@]}" > $O/inner/proxy/proxy.log 2>&1 &
+    --draw $DD/stage/draw.json --coin-tree "${src[@]}" --lean $FC_ZK_SERVER_LEAN "${rel[@]}" > $O/inner/proxy/proxy.log 2>&1 &
   local PP=$!
   wait_serving $O/inner/proxy/proxy.log $PP || { cat $O/inner/proxy/proxy.log; return 1; }
   PENV="$INNER_COINS ${PENV:-}" prove_live proxy $(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log) $D/inst-$N.bin $D/circuit.txt
@@ -407,10 +407,10 @@ def live(d):
     rank_s = [sum(ranks[i * per:(i + 1) * per]) for i in range(len(rows))][warm:] if per else []
     # the prover process's CPU seconds over all its sessions, the ZK server's per-session timings (both reps summed), its refusals
     cpu = [float(tv(d / "time-prove.txt", k) or "nan") for k in (r"User time \(seconds\)", r"System time \(seconds\)")]
-    firewall = {k: med(lambda v: sum(b.get(k) or 0 for b in v.get("buckets") or [])) for k in ("t.firewall_recheck", "cpu.firewall_recheck")}
-    stops = [l for l in text(d / "prove.err").splitlines() if l.startswith(("FIREWALL-REFUSED", "PROVER-STOPPED"))]
+    zk_server = {k: med(lambda v: sum(b.get(k) or 0 for b in v.get("buckets") or [])) for k in ("t.zk_server_recheck", "cpu.zk_server_recheck")}
+    stops = [l for l in text(d / "prove.err").splitlines() if l.startswith(("ZK-SERVER-REFUSED", "PROVER-STOPPED"))]
     return {"sessions": len(rows), "timed": len(timed), "accepted": [v.get("accepted") for _, v in rows],
-            "env": text(d / "prove-env.txt").strip(), "prover_cpu_s": sum(cpu), "firewall": firewall, "refusals": stops[:8],
+            "env": text(d / "prove-env.txt").strip(), "prover_cpu_s": sum(cpu), "firewall": zk_server, "refusals": stops[:8],
             "why": [v.get("why") for _, v in rows if v.get("accepted") is not True],
             "serve_why": [v.get("why") for v in served if v.get("accepted") is not True],
             "stopped": [v.get("prover_stopped") for _, v in rows],
@@ -427,7 +427,7 @@ def live(d):
             "statement_digest": rows[0][1].get("statement_digest"), "prover_peak_gb": gb(d / "time-prove.txt"),
             "gpu_peak_mib": max(mib) if mib else None, "gpu_idle_mib": min(mib) if mib else None,
             "lease": [l for l in text(d / "prove.err").splitlines() if l.startswith("gpu-lease:")],
-            "buckets": [{k: x for k, x in b.items() if k.startswith(("t.", "cpu.", "firewall_")) or k in ("device_witness", "native_sha")} for b in (timed[-1][1].get("buckets") or [])]
+            "buckets": [{k: x for k, x in b.items() if k.startswith(("t.", "cpu.", "zk_server_")) or k in ("device_witness", "native_sha")} for b in (timed[-1][1].get("buckets") or [])]
             if timed else None}
 
 def replay(p):
@@ -514,33 +514,33 @@ EOF
 }
 
 lean_build() {
-  [ -x $LEAN_BIN ] && [ -x $FC_FIREWALL_LEAN ] && return 0
-  no_build "verity-verify-proof-$LSHA or flock-firewall-$LSHA"
+  [ -x $LEAN_BIN ] && [ -x $FC_ZK_SERVER_LEAN ] && return 0
+  no_build "verity-verify-proof-$LSHA or flock-zk-server-$LSHA"
   (
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
-    if [ ! -x $LEAN_BIN ] || [ ! -x $FC_FIREWALL_LEAN ]; then
+    if [ ! -x $LEAN_BIN ] || [ ! -x $FC_ZK_SERVER_LEAN ]; then
       rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-        && (cd $LEAN_SRC && lake build verity-verify-proof flock-firewall) && mkdir -p $L/lean-$LSHA \
-        && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_SRC/.lake/build/bin/flock-firewall $L/lean-$LSHA/
+        && (cd $LEAN_SRC && lake build verity-verify-proof flock-zk-server) && mkdir -p $L/lean-$LSHA \
+        && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_SRC/.lake/build/bin/flock-zk-server $L/lean-$LSHA/
     fi
   )
 }
 
-# corefw_build: core-firewall (verity/protocols/proofs/recursion/verifier/firewall, the release side's Lean session loop), from a copy of the
+# corefw_build: core-zk-server (verity/protocols/proofs/recursion/verifier/zk_server, the release side's Lean session loop), from a copy of the
 # packages it requires at their relative places, keyed by their sources (CSHA)
 corefw_build() {
-  [ -x $FC_CORE_FIREWALL ] && return 0
-  no_build core-firewall-$CSHA
+  [ -x $FC_CORE_ZK_SERVER ] && return 0
+  no_build core-zk-server-$CSHA
   (
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/corefw.lock; flock 9
-    if [ ! -x $FC_CORE_FIREWALL ]; then
-      C=$L/corefw-src; rm -rf $C && C=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/recursion/verifier/firewall $C) \
-        && (cd $C && lake build core-firewall) \
-        && mkdir -p $L/corefw-$CSHA && cp $C/.lake/build/bin/core-firewall $FC_CORE_FIREWALL
+    if [ ! -x $FC_CORE_ZK_SERVER ]; then
+      C=$L/corefw-src; rm -rf $C && C=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/recursion/verifier/zk_server $C) \
+        && (cd $C && lake build core-zk-server) \
+        && mkdir -p $L/corefw-$CSHA && cp $C/.lake/build/bin/core-zk-server $FC_CORE_ZK_SERVER
     fi
   )
 }
@@ -652,7 +652,7 @@ build)
   echo "statement exit $?"
   wait $LP; echo "lean build exit $?"
   [ -x $LEAN_BIN ] && sha256sum $LEAN_BIN > $O/lean.sha
-  [ -x $FC_CORE_FIREWALL ] && sha256sum $FC_CORE_FIREWALL >> $O/lean.sha
+  [ -x $FC_CORE_ZK_SERVER ] && sha256sum $FC_CORE_ZK_SERVER >> $O/lean.sha
   tail -5 $O/build-lean.log
   if [ "${SHIP:-0}" = 1 ]; then
     fold_build > $O/build-fold.log 2>&1 || { tail -30 $O/build-fold.log; exit 1; }
@@ -674,7 +674,7 @@ inner)
   # the verifier's full sample, which verify requires of a session over the inner session (RecSetup.innerDrawn)
   inner_partition > $O/inner/partition.txt || exit 1
   cp $D/draw.json $O/inner/
-  [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/inner/build-lean.log 2>&1 || { tail -20 $O/inner/build-lean.log; exit 1; }
+  [ -x $FC_ZK_SERVER_LEAN ] || lean_build > $O/inner/build-lean.log 2>&1 || { tail -20 $O/inner/build-lean.log; exit 1; }
   if [ "${TREE_FROM:-}" = local ]; then
     . verity/protocols/proofs/flock/prover/pod/challenger.sh; challenger_build; challenger_built || exit 1
   fi
@@ -865,15 +865,15 @@ oprove)
   # every staged statement (each level's, each of the algebra's parts, each forgery's: L3, alg-p0, forged-sum-L6, ..), proved with --zk on
   # loopback, a forgery's once; upstream's replay --zk of the last session, which (accepted or not) is kept under $DD/v-sess
   # beside the statement directory Lean reads it with. MODES names the prover's sides, WARM + RUNS sessions each per
-  # statement: dev (the device's witness, rec-reprice's), host (FC_HOST_WITNESS=1, no ZK server) and ZK server (FC_FIREWALL=1
+  # statement: dev (the device's witness, rec-reprice's), host (FC_HOST_WITNESS=1, no ZK server) and ZK server (FC_ZK_SERVER=1
   # on the host witness: the send check and the level-0 recheck, live/PROTOCOL.md §10); the ZK server's cost is ZK server's minus
   # host's. The last mode's last session is the one oreplay and lean read.
   # Statements are proved OPROVE_JOBS at once, the largest first, while their estimated peaks (oprove_gb) sum to at most
   # OPROVE_MEM_GB; each in a subshell of its own (its WARM, RUNS, PENV, LAST and hello_at's exports), its log
   # $O/oprove/<name>.log.
   MODES=${MODES:-dev}; MODES=${MODES//,/ }
-  for mode in $MODES; do case $mode in dev|host|firewall) ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac; done
-  [[ " $MODES " != *" firewall "* ]] || [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/build-lean.log 2>&1 \
+  for mode in $MODES; do case $mode in dev|host|zk_server) ;; *) echo "MODES: dev host zk_server"; exit 1 ;; esac; done
+  [[ " $MODES " != *" zk_server "* ]] || [ -x $FC_ZK_SERVER_LEAN ] || lean_build > $O/build-lean.log 2>&1 \
     || { tail -20 $O/build-lean.log; exit 1; }
   VS=$DD/v-sess; mkdir -p $VS $O/oprove
   # Outer proofs through the ZK server are independent sessions (AGENTS.md): every
@@ -882,20 +882,20 @@ oprove)
   # no preemption: a failed session is its statement's failure), and every statement's exit is recorded (exits.tsv: 0 only
   # when the verifier accepted each of its sessions, `loopback`), an honest one's failure, or one with no exit recorded,
   # failing the step.
-  if [[ " $MODES " == *" firewall "* ]]; then
-    [ "$MODES" = firewall ] || { echo "REFUSED: MODES=$MODES: a firewalled oprove gives each staged statement exactly one session; run MODES=dev or host in a job of its own"; exit 2; }
-    [ $((WARM + RUNS)) = 1 ] || { echo "REFUSED: WARM=$WARM RUNS=$RUNS: a firewalled oprove gives each staged statement exactly one session (WARM=0 RUNS=1)"; exit 2; }
+  if [[ " $MODES " == *" zk_server "* ]]; then
+    [ "$MODES" = zk_server ] || { echo "REFUSED: MODES=$MODES: a zk_served oprove gives each staged statement exactly one session; run MODES=dev or host in a job of its own"; exit 2; }
+    [ $((WARM + RUNS)) = 1 ] || { echo "REFUSED: WARM=$WARM RUNS=$RUNS: a zk_served oprove gives each staged statement exactly one session (WARM=0 RUNS=1)"; exit 2; }
     export GPU_TRIES=1 GPU_PREEMPTIBLE=
   fi
   if [ $RELEASE = 1 ]; then
-    [ "$MODES" = firewall ] || { echo "REFUSED: RELEASE=1 with MODES=$MODES: the release side runs around the Lean session loop (MODES=firewall)"; exit 2; }
+    [ "$MODES" = zk_server ] || { echo "REFUSED: RELEASE=1 with MODES=$MODES: the release side runs around the Lean session loop (MODES=zk_server)"; exit 2; }
     [ -z "${RETRY:-}" ] && [ -z "${LEVELS:-}" ] \
       || { echo "REFUSED: RELEASE=1: each part once, every part (no RETRY, no LEVELS): the release side refuses the rest"; exit 2; }
     [ -s $DD/release.json ] && [ -s $FWS/record.jsonl ] || { echo "RELEASE=1: no recursive session opened (run STEP=inner with RELEASE=1)"; exit 1; }
     corefw_build > $O/oprove/build-corefw.log 2>&1 || { tail -20 $O/oprove/build-corefw.log; exit 1; }
   fi
   if [ -n "${RETRY:-}" ]; then
-    [ "$MODES" = firewall ] || { echo "REFUSED: RETRY=$RETRY: a retry is shown only in a firewalled run's record (MODES=firewall)"; exit 2; }
+    [ "$MODES" = zk_server ] || { echo "REFUSED: RETRY=$RETRY: a retry is shown only in a zk_served run's record (MODES=zk_server)"; exit 2; }
     [ -f $V/${RETRY//-//}/inst.bin ] && [[ $RETRY != forged-* ]] || { echo "REFUSED: RETRY=$RETRY: not a staged honest statement under $V"; exit 2; }
   fi
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup), fixed before any session
@@ -953,12 +953,12 @@ for c in sorted(p.parent for p in v.rglob("inst.bin")):
     (vs / f"own-{name}.txt").write_text(" ".join(flags))
     print(name, unit, " ".join(flags))
 EOF
-  # MODES=firewall: the challenger's record of the run (rec-run.jsonl, verity/rec-run/v1's events a line): the staging of
+  # MODES=zk_server: the challenger's record of the run (rec-run.jsonl, verity/rec-run/v1's events a line): the staging of
   # rows.json and the shared set every V* part is given (rec_compose.shared_of_args) before any session, then each V* part's
   # challenger logs every Hello it answers as an open of that part (serve --rec-run), a forgery's in a record of its own
   # (rec-run-<name>.jsonl), and the close after the last session; RETRY's second session is logged as any other's
   REC_RUN=
-  if [ "$MODES" = firewall ]; then
+  if [ "$MODES" = zk_server ]; then
     REC_RUN=$VS/rec-run.jsonl
     python3 - $VS > $REC_RUN <<'EOF' || exit 1
 import json, sys
@@ -973,11 +973,11 @@ print(json.dumps({"event": "stage", "rec_rows_sha512": RC.digest((vs / "rows.jso
 EOF
     [ -z "${RETRY:-}" ] || echo $RETRY > $VS/retried.txt
   fi
-  # RELEASE=1: the recursive session the inner session opened (its firewall.json), its parts as the inner step fixed them,
+  # RELEASE=1: the recursive session the inner session opened (its ZK server.json), its parts as the inner step fixed them,
   # which must be V*'s statements here, and the staged statement of each part in their order (ORDER), every part one
   if [ $RELEASE = 1 ]; then
-    SID=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["session"])' $INNER/firewall.json) \
-      || { echo "RELEASE=1: $INNER opened no recursive session (no firewall.json)"; exit 1; }
+    SID=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["session"])' $INNER/zk_server.json) \
+      || { echo "RELEASE=1: $INNER opened no recursive session (no ZK server.json)"; exit 1; }
     mapfile -t PARTS < <(python3 -c 'import json, sys; print(*json.load(open(sys.argv[1]))["parts"], sep="\n")' $DD/release.json)
     mapfile -t ORDER < <(python3 - $VS $V $DD/release.json <<'EOF'
 import json, re, sys
@@ -1012,7 +1012,7 @@ EOF
     # a forgery's one session is the dev prover's, a dishonest prover running no ZK server: a ZK server would hold it back,
     # leaving Lean nothing to check (lean_verdicts.py: "not exercised")
     case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip LM=dev ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
-    # a V* part's sessions in the run's record (MODES=firewall), a forgery's in one of its own, which STEP=lean puts in its
+    # a V* part's sessions in the run's record (MODES=zk_server), a forgery's in one of its own, which STEP=lean puts in its
     # part's place, so that the honest run's record stays one session a part
     local RRUN= RPART=$(sed -n 's/.*--rec-part \([0-9]*\).*/\1/p' $VS/own-$l.txt) RARGS=
     if [ -n "$REC_RUN" ] && [ -n "$RPART" ]; then
@@ -1020,11 +1020,11 @@ EOF
     fi
     # RELEASE=1: an honest part's one session is the recursive session's outer session at that part
     if [ $RELEASE = 1 ] && [ -n "$RPART" ] && [[ $l != forged-* ]]; then
-      RARGS="--firewall-state $FWS --session $SID --part ${PARTS[$RPART]}"
+      RARGS="--zk-server-state $FWS --session $SID --part ${PARTS[$RPART]}"
     fi
     hello_at $V/$C
     for mode in $LM; do
-      case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; esac
+      case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; zk_server) PENV="FC_ZK_SERVER=1 FC_HOST_WITNESS=1" ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
       LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk || rc=$?
       # RETRY's negative control: a second session of the statement on a fresh challenger, logged in the run's record as
@@ -1034,7 +1034,7 @@ EOF
       fi
     done
     PENV=
-    # the last mode's LIVE verdicts, which STEP=lean reads for a FIREWALL-REFUSED stop when no session reached it
+    # the last mode's LIVE verdicts, which STEP=lean reads for a ZK-SERVER-REFUSED stop when no session reached it
     grep -h $'\tLIVE\t' $O/oprove/$n/prove.tsv 2>/dev/null | cut -f3- > $DD/v-sess/$l.live
     du -sb $V/$C/inst.bin $V/$C/pub.bin $V/$C/circuit.txt ${LAST:+$LAST/*.bin} > $O/oprove/$n/sizes.txt
     [ -n "${LAST:-}" ] || { echo "$n: no session"; return 1; }
@@ -1097,11 +1097,11 @@ EOF
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
   (cd $V && sha512sum --quiet -c $O/oprove/statements.sha512) || { echo "a staged statement changed while sessions ran"; exit 1; }
   # RELEASE=1: the recursive session on the ZK server's record against its schedule, each part's release time beside when the
-  # Lean loop decided it (its FIREWALL-TIMES line in the part's prove.err); every part released, or the step fails
+  # Lean loop decided it (its ZK-SERVER-TIMES line in the part's prove.err); every part released, or the step fails
   if [ $RELEASE = 1 ]; then
     cp $FWS/record.jsonl $O/oprove/fw-record.jsonl
     python3 verity/protocols/proofs/flock/prover/pod/rec_inner.py release-report --state $FWS --session $SID \
-      --times $(for C in "${ORDER[@]}"; do echo $O/oprove/${C//\//-}-firewall/prove.err; done) > $O/oprove/release.json
+      --times $(for C in "${ORDER[@]}"; do echo $O/oprove/${C//\//-}-zk-server/prove.err; done) > $O/oprove/release.json
     rr=$?; cat $O/oprove/release.json; [ $rr = 0 ] || { echo "release: the recursive session $SID did not release every part at its time"; exit 1; }
   fi
   python3 - $O/oprove/exits.tsv "${STARTED[@]}" <<'EOF' || exit 1
@@ -1111,13 +1111,13 @@ bad = [f"{l}: exit {got.get(l, 'not recorded')}" for l in sys.argv[2:] if got.ge
 print(f"oprove: {len(got)} statements, one session each: exits {dict(sorted(got.items()))}")
 sys.exit(f"oprove: an honest statement's session failed, and none is drawn again: {', '.join(bad)}" if bad else 0)
 EOF
-  # CONTROLS=DIR (a statement's directory under data/$TAG/v, e.g. L6): on that statement, one firewalled session per
-  # FC_FIREWALL_TAMPER control (the device's side dishonest in one named way), each of which the ZK server must refuse by name
+  # CONTROLS=DIR (a statement's directory under data/$TAG/v, e.g. L6): on that statement, one ZK server session per
+  # FC_ZK_SERVER_TAMPER control (the device's side dishonest in one named way), each of which the ZK server must refuse by name
   # without the tampered message leaving, the session stopping at its Finish (live PROTOCOL.md §10.1)
   if [ -n "${CONTROLS:-}" ]; then
     C=$V/$CONTROLS; hello_at $C
     for w in root witness label opening algebra algebra-proof shape; do
-      PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_TAMPER=$w" WARM=0 RUNS=1 NS=1 again loopback neg-${CONTROLS//\//-}-$w $C/pub.bin $C/inst.bin $C/circuit.txt --zk
+      PENV="FC_ZK_SERVER=1 FC_HOST_WITNESS=1 FC_ZK_SERVER_TAMPER=$w" WARM=0 RUNS=1 NS=1 again loopback neg-${CONTROLS//\//-}-$w $C/pub.bin $C/inst.bin $C/circuit.txt --zk
     done
   fi
   ;;
@@ -1201,7 +1201,7 @@ lean)
   [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
   else cp $DD/v-sess/*.live $O/lean/ 2>/dev/null
-    # the challenger's record of a firewalled oprove (rec-run.jsonl), its forgeries' own (rec-run-<name>.jsonl) and RETRY's
+    # the challenger's record of a zk_served oprove (rec-run.jsonl), its forgeries' own (rec-run-<name>.jsonl) and RETRY's
     # name, which lean_verdicts.py composes V*'s parts over
     cp $DD/v-sess/rec-run*.jsonl $DD/v-sess/retried.txt $O/lean/ 2>/dev/null
     python3 verity/protocols/proofs/flock/prover/pod/lean_verdicts.py $([ -s $O/lean/rows.json ] && echo "--compose $LEAN_BIN") $O/lean $PARTS; LEAN_RC=$?; fi

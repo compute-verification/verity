@@ -39,8 +39,8 @@ unfold, so each proof evaluates its fuelled twin (`canon_fuel`).
 
 namespace SpotFlock.InstanceStmt
 
-open Flock Flock.Firewall
-open FlockSoundness.Discharge.Recursion.FirewallJson (parse_printJson)
+open Flock Flock.ZkServer
+open FlockSoundness.Discharge.Recursion.ZkServerJson (parse_printJson)
 open FlockSoundness.Refine
 open Properties.Spot.SecurityProofs (canon_fuel)
 open Lean (Json)
@@ -48,7 +48,7 @@ open Lean (Json)
 theorem plain_progJ : plain progJ = true := by
   simp only [progJ]
   plain_json
-theorem fjnorm_progJ : FlockSoundness.Discharge.Recursion.FirewallJson.norm progJ = progJ := by kernel_rfl
+theorem fjnorm_progJ : FlockSoundness.Discharge.Recursion.ZkServerJson.norm progJ = progJ := by kernel_rfl
 
 theorem parse_prog : JsonParse.parse progText = .ok progJ := by
   rw [progText, parse_printJson plain_progJ, fjnorm_progJ]

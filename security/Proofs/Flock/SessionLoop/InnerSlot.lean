@@ -65,14 +65,14 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, as in `TakenVals`
 
 namespace Count
 
-open _root_.Flock.Firewall.Drive (Step)
+open _root_.Flock.ZkServer.Drive (Step)
 
 /-- **Fed fewer coins than it asks for, a step program that ends with no asks left has not ended.** -/
 theorem feed_short {α : Type} : ∀ (s : Step α) (cs : List (Array F128)) (rs : Array (ByteArray × ℕ)) (ns : List ℕ),
@@ -102,10 +102,10 @@ theorem feed_short {α : Type} : ∀ (s : Step α) (cs : List (Array F128)) (rs 
 opening's. Short of the opening's coins, it would hold the round the opening asks for next. -/
 theorem schedSoFar_full (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
     (cr : Array (Array F128)) {alg sched : Array (ByteArray × ℕ)}
-    (ha : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (ha : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (h : Loop.schedSoFar t rep dom xs hi cr = .ok sched) (hs : sched.size ≤ cr.size) (hdom : dom.size < 2 ^ 64)
-    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
     (hm : t.st.m < 2 ^ 64) (hx : xs.size + 2 < 2 ^ 64) (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62)
     (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63) :
     sched.size = alg.size + (openList (xs.size + 2) t.sch).length := by
@@ -122,7 +122,7 @@ theorem schedSoFar_full (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Arr
     have hlen : (cr.extract alg.size cr.size).toList.length = cr.size - alg.size := by
       rw [Array.length_toList, Array.size_extract]
       omega
-    rcases hfe : (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
+    rcases hfe : (_root_.Flock.ZkServer.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
       (cr.extract alg.size cr.size).toList #[] with ⟨s', rs⟩
     rw [hfe] at h'
     cases s' with
@@ -185,15 +185,15 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
     (hloc : CoinLayer.locate (roundsOf spec sts) 0 q = (k, i)) (hR : Count.RealTabs sts real)
     (hreal : real k = .ok (tr, hr))
     (hrs : schedSoFar tr (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-      (_root_.Flock.Firewall.Drive.extras sts[k / 2]!
-        (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
+      (_root_.Flock.ZkServer.Drive.extras sts[k / 2]!
+        (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
       hr ((Array.range i).map fun j => wordsAt x cs (q - i + j + 1)) = .ok rsched)
     (hle : rsched.size ≤ i) :
     ∃ (j : Fin (Masked.jOf x)) (r : Fin 2), k = 2 * j.val + r.val ∧ i - rsched.size < 4 ∧
       q + 1 = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff (i - rsched.size)) ∧
       Masked.repBase x (2 * j.val + r.val) ≤ q + 1 ∧ q + 1 < Masked.repBase x (2 * j.val + r.val + 1) ∧
       0 < i ∧ i ≤ q ∧ ∀ e < 4, loopNr x (Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff e)) =
-        [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].getD e 0 := by
+        [1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].getD e 0 := by
   have hsts : Masked.stsOf x = sts := by
     unfold Masked.stsOf
     rw [hs]
@@ -242,9 +242,9 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
     have e : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.wideLeaf (Masked.stsOf x)[k / 2]!.m = .ok (tr.sch, tr.tPad) := hsch
     rw [hz, Except.ok.injEq, Prod.mk.injEq] at e
     exact e.1.symm
-  have hcn : (_root_.Flock.Firewall.Finish.flat tr.cm0.cap).size < 2 ^ 64 := by
+  have hcn : (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap).size < 2 ^ 64 := by
     obtain ⟨s, tp, hs', -⟩ := Count.ofDraws_gsize hl
-    obtain ⟨-, -, ⟨s1, hs1, hlv⟩, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl
+    obtain ⟨-, -, ⟨s1, hs1, hlv⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl
     rw [hs'] at hs1
     obtain ⟨rfl, -⟩ := Prod.mk.inj (Except.ok.inj hs1)
     have hd : 64 * 2 ^ l.lv.d < 2 ^ 64 := by
@@ -263,7 +263,7 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
   have hmb : tr.st.m < 2 ^ 64 := by
     rw [hts]
     exact Nat.lt_trans hm36 (by decide)
-  have hls : (wordsAt x cs 0).size = min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by
+  have hls : (wordsAt x cs 0).size = min (loopNr x 0) _root_.Flock.ZkServer.Frames.COIN_MAX := by
     cases cs with
     | nil => simp at hq
     | cons p rest => simp [wordsAt, FlockDeploy.Coin.vals]
@@ -273,19 +273,19 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
     rfl
   have hpts : (wordsAt x cs 0).size / (Masked.stsOf x)[k / 2]!.mPts = spec.points := by
     rw [hls, hl0, Nat.min_eq_left hpc, hmp, Nat.mul_div_cancel _ hmp0]
-  have hxn : (_root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[k / 2]!
-      (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[k / 2]! (wordsAt x cs 0))).size =
+  have hxn : (_root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[k / 2]!
+      (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[k / 2]! (wordsAt x cs 0))).size =
       spec.points * (Masked.stsOf x)[k / 2]!.regions.size := by
     rw [Count.extras_size, Count.linkPoints_size, hpts, Nat.mul_comm]
-  have hxb : (_root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[k / 2]!
-      (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[k / 2]! (wordsAt x cs 0))).size + 2 < 2 ^ 64 := by
+  have hxb : (_root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[k / 2]!
+      (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[k / 2]! (wordsAt x cs 0))).size + 2 < 2 ^ 64 := by
     rw [extras_size]
     have := Nat.mul_le_mul_left (Masked.stsOf x)[k / 2]!.regions.size
       ((linkPoints_size_le (Masked.stsOf x)[k / 2]! (wordsAt x cs 0)).trans (hls.trans_le (Nat.min_le_right _ _)))
     omega
   -- the schedule so far is complete: the algebraic phase and the opening, `N` rounds
   obtain ⟨alg, hal⟩ := schedSoFar_ok_rounds hrs
-  have hA : alg.size = ((_root_.Flock.Firewall.Session.replayCoins (Masked.stsOf x)[k / 2]!.m
+  have hA : alg.size = ((_root_.Flock.ZkServer.Session.replayCoins (Masked.stsOf x)[k / 2]!.m
       (Masked.stsOf x)[k / 2]!.c.kLog).toList.filter (· != 0)).length := by
     have e := congrArg List.length (Count.rounds_counts hmb hal)
     rw [Count.piop_counts, hts, List.length_map, Array.length_toList] at e
@@ -296,7 +296,7 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
   have hplan := congrArg List.length (Count.repPlan_list (spec := spec) hz')
   rw [Array.length_toList, repPlan_size] at hplan
   simp only [repRounds_true, hz, List.length_append] at hplan
-  have h4 : ([1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by
+  have h4 : ([1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by
     decide
   have hFO : alg.size + (Count.openList (2 + spec.points * (Masked.stsOf x)[k / 2]!.regions.size)
       tr.sch).length = N := by
@@ -337,8 +337,8 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
     omega
   · intro e he
     show loopNr x (Masked.repSlot x (2 * (k / 2) + k % 2) (Masked.innerOff e)) = _
-    have hf4 : [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0) =
-        [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q] := by
+    have hf4 : [1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0) =
+        [1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q] := by
       decide
     have hNe : FlockComplete.piopRoundsZk spec (Masked.stsOf x)[k / 2]! + Masked.innerOff e y.sch = N + e := by
       rw [hN]

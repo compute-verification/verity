@@ -73,7 +73,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
 * `template_circuits`: a two-stage run's params naming each template's circuit file by SHA-512 and its statements'
-  reference header and registered reads, in the check's order (`Run.templateCircuits`);
+  reference header and registered reads, in the check's order (`Run.templateCircuits`), and the tables they pin
+  (`Run.pinnedTables`);
 * `stream`: the proof system stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
 * `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
@@ -798,6 +799,7 @@ def run (j : Json) : V Json := do
       let ip ← params (Json.mkObj ((entries ipj).filter (·.1 != "proofs")).toList)
       let circuits ← Run.templateCircuits (getD ipj "proofs") ip.verifier.query
       let reads := Run.templateReads (getD ipj "proofs")
+      let tables := Run.pinnedTables (getD ipj "proofs")
       let replay ← Program.parse (← Flock.canon (getD it "replay")).toUTF8
       let values ← valuesOf (getD it "values") "an interior's values"
       let source ← Flock.unhex (← Flock.J.str it "source" "the interior")
@@ -818,7 +820,7 @@ def run (j : Json) : V Json := do
         throw "an interior's params name no certified entries: its registered values are its program's own"
       pure (some ({ params := ip, replay, values, record := getD it "record", received, source, coins := getD it "coins",
                     provedUnits, instances, served := getD it "served", sessionRoots := getD it "session_roots",
-                    statements, circuits, reads } : Run.Interior))
+                    statements, circuits, reads, tables } : Run.Interior))
   Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
             source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
@@ -837,8 +839,9 @@ none) and the registered reads it reads (`ref_reads`, `{template: registered}`, 
 template's), the verifier's own copies of the interior registration's values it fills, with their sources
 (`supplied`, `SecondStage.suppliedOf?`), and the names of those it pinned or holds to an earlier record (`fixed`), each
 null for none, the templates the auditor's params record as table reads with their tables' rows (`reads`, `{template:
-V}`, null for none), the words of the rows each wire joins (`widths`, `replayWidths`', null for none), and the
-statements, null for none. The wired key's switch is `SecondStage.WIRED_KEY`'s: no input sets it. -/
+V}`, null for none), the registered tables they pin (`tables`, `{parameter: entry}`, `Run.pinnedTables`, null for
+none), the words of the rows each wire joins (`widths`, `replayWidths`', null for none), and the statements, null for
+none. The wired key's switch is `SecondStage.WIRED_KEY`'s: no input sets it. -/
 def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array Json)) := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let .arr ss := getD j "sample" | throw "sample is not a list"
@@ -902,6 +905,12 @@ def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array Json)) :=
       | some rs => pure rs
       | none => throw "reads is null or an object of naturals"
     | _ => throw "reads is null or an object of naturals"
+  let tables ← match getD j "tables" with
+    | .null => pure #[]
+    | ts@(.obj _) => match (entries ts).mapM (fun (p, e) => match e with | .obj _ => some (p, e) | _ => none) with
+      | some ts => pure ts
+      | none => throw "tables is null or an object of entries, each an object"
+    | _ => throw "tables is null or an object of entries, each an object"
   let widths ← match getD j "widths" with
     | .null => pure #[]
     | ws => match SecondStage.widthsOf? ws with
@@ -911,7 +920,7 @@ def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array Json)) :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
       boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts,
       verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns, supplied, fixed, reads,
-      widths }
+      tables, widths }
   return (allow, own, stmts)
 
 /-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.checkAny`). -/
@@ -1020,15 +1029,17 @@ def fits (j : Json) : V Json := do
     ("draw", why (OneStageZk.drawFitsWhy limit (given "draw")))]
 
 /-- `{"proofs", "query"}` to `{"circuits": [[template, circuit, header, registered], ...], "reads": [[template, V],
-...]}`: a two-stage run's params naming each template's circuit file and its statements' reference header and
-registered reads, in the order the check's template query names the templates (`Run.templateCircuits`), and the
-templates they record as table reads, each with its table's rows (`Run.templateReads`); refused where the Python
-raises. -/
+...], "tables": [[parameter, entry], ...]}`: a two-stage run's params naming each template's circuit file and its
+statements' reference header and registered reads, in the order the check's template query names the templates
+(`Run.templateCircuits`), the templates they record as table reads, each with its table's rows (`Run.templateReads`),
+and the registered tables they pin (`Run.pinnedTables`); refused where the Python raises. -/
 def templateCircuits (j : Json) : V Json := do
   let named ← Run.templateCircuits (getD j "proofs") (getD j "query")
   let reads := Run.templateReads (getD j "proofs")
+  let tables := Run.pinnedTables (getD j "proofs")
   return Json.mkObj [("circuits", Json.arr (named.map fun (t, c, h, r) => Json.arr #[Json.str t, Json.str c, h, r])),
-    ("reads", Json.arr (reads.map fun (t, v) => Json.arr #[Json.str t, Lean.toJson v]))]
+    ("reads", Json.arr (reads.map fun (t, v) => Json.arr #[Json.str t, Lean.toJson v])),
+    ("tables", Json.arr (tables.map fun (p, e) => Json.arr #[Json.str p, e]))]
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),

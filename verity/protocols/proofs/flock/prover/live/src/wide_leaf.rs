@@ -58,7 +58,7 @@ pub fn domain(tag: &'static str, wide: bool) -> Result<&'static str, String> {
 }
 
 /// The Lean verifier's name of the statement a ZK server session's Lean loop is set up under, in a version: `statement` is
-/// the circuit's, `given` is `FC_FIREWALL_STATEMENT`, and `seed_injection` whether the build's identity pins it. fast100's
+/// the circuit's, `given` is `FC_ZK_SERVER_STATEMENT`, and `seed_injection` whether the build's identity pins it. fast100's
 /// is `given`, else `statement` with `+seed-injection` in such a build. The wide version's is `statement`'s wide name
 /// ([`LEAN_NAMES`]), and `given` may only repeat it: a loop set up under any other name is at another version and refuses
 /// every session, so that is refused here, with the name to set. The Lean verifier has no wide version of a
@@ -68,19 +68,19 @@ pub fn lean_statement(statement: &str, given: Option<&str>, seed_injection: bool
         return Ok(given.map_or_else(|| format!("{statement}{}", if seed_injection { "+seed-injection" } else { "" }), str::to_string));
     }
     if seed_injection {
-        return Err(format!("--wide-leaf behind the ZK server (FC_FIREWALL=1): the Lean verifier has no wide-leaf version of a \
+        return Err(format!("--wide-leaf behind the ZK server (FC_ZK_SERVER=1): the Lean verifier has no wide-leaf version of a \
                             seed-injection build's statement (`{statement}+seed-injection` is fast100's alone), so its session \
-                            loop cannot be set up: run the ZK server with the proving build, or this build with FC_FIREWALL=0"));
+                            loop cannot be set up: run the ZK server with the proving build, or this build with FC_ZK_SERVER=0"));
     }
     let want = LEAN_NAMES.iter().find(|(own, _)| *own == statement).map(|(_, wide)| *wide).ok_or_else(|| {
-        format!("--wide-leaf behind the ZK server (FC_FIREWALL=1): the Lean verifier has no wide-leaf version of `{statement}`. \
+        format!("--wide-leaf behind the ZK server (FC_ZK_SERVER=1): the Lean verifier has no wide-leaf version of `{statement}`. \
                  It has two, `{}` and `{}`: prove this statement without --wide-leaf", LEAN_NAMES[0].1, LEAN_NAMES[1].1)
     })?;
     match given {
         Some(g) if g != want => Err(format!(
-            "--wide-leaf behind the ZK server (FC_FIREWALL=1): FC_FIREWALL_STATEMENT is `{g}`, not this statement's wide-leaf \
+            "--wide-leaf behind the ZK server (FC_ZK_SERVER=1): FC_ZK_SERVER_STATEMENT is `{g}`, not this statement's wide-leaf \
              name, so the Lean session loop would be set up at another version and refuse the session: set \
-             FC_FIREWALL_STATEMENT={want}, or unset it")),
+             FC_ZK_SERVER_STATEMENT={want}, or unset it")),
         _ => Ok(want.to_string()),
     }
 }
@@ -185,9 +185,9 @@ mod tests {
         assert_eq!(domain("flock-circuit/stacked/fast100/rep0", true).ok(), None);
     }
 
-    /// The ZK server's Lean loop is set up under the session's version: fast100's name as it was, `FC_FIREWALL_STATEMENT`
+    /// The ZK server's Lean loop is set up under the session's version: fast100's name as it was, `FC_ZK_SERVER_STATEMENT`
     /// taken as given; under the wide version the statement's wide name, the Lean verifier's literal, with `+wide-leaf`
-    /// once, whether `FC_FIREWALL_STATEMENT` is unset or repeats it.
+    /// once, whether `FC_ZK_SERVER_STATEMENT` is unset or repeats it.
     #[test]
     fn the_lean_loop_is_set_up_under_the_sessions_version() {
         use crate::{circuit::{STATEMENT, TMPL_STATEMENT}, typed};
@@ -205,19 +205,19 @@ mod tests {
     }
 
     /// Under the wide version a loop that would be set up at another version is refused before it starts, with the fix:
-    /// `FC_FIREWALL_STATEMENT` naming fast100's statement or the other wide statement, and a seed-injection build.
+    /// `FC_ZK_SERVER_STATEMENT` naming fast100's statement or the other wide statement, and a seed-injection build.
     #[test]
     fn the_lean_loop_at_another_version_is_refused() {
         use crate::circuit::{STATEMENT, TMPL_STATEMENT};
         for (statement, given) in [(STATEMENT, STATEMENT), (STATEMENT, "verity/flock-circuit+seed-injection"),
                                    (STATEMENT, "verity/flock-circuit/tmpl+wide-leaf"), (TMPL_STATEMENT, TMPL_STATEMENT)] {
             let why = lean_statement(statement, Some(given), false, true).unwrap_err();
-            let fix = format!("set FC_FIREWALL_STATEMENT={statement}+wide-leaf, or unset it");
-            assert!(why.contains(&format!("FC_FIREWALL_STATEMENT is `{given}`")) && why.ends_with(&fix), "{why}");
+            let fix = format!("set FC_ZK_SERVER_STATEMENT={statement}+wide-leaf, or unset it");
+            assert!(why.contains(&format!("FC_ZK_SERVER_STATEMENT is `{given}`")) && why.ends_with(&fix), "{why}");
         }
         for given in [None, Some("verity/flock-circuit+wide-leaf")] {
             let why = lean_statement(STATEMENT, given, true, true).unwrap_err();
-            assert!(why.contains("no wide-leaf version of a seed-injection build's statement") && why.ends_with("this build with FC_FIREWALL=0"), "{why}");
+            assert!(why.contains("no wide-leaf version of a seed-injection build's statement") && why.ends_with("this build with FC_ZK_SERVER=0"), "{why}");
         }
     }
 }

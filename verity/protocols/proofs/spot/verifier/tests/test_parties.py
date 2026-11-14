@@ -27,7 +27,7 @@ CERT = P.IDS["certifier"]
 NCI = P.IDS["inference-only"]
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
-ROLES = [P.CHALLENGER, P.FIREWALL, P.VERIFIER, P.WORKERS]
+ROLES = [P.CHALLENGER, P.ZK_SERVER, P.VERIFIER, P.WORKERS]
 SHA = "5a" * 64
 CASE = {"commitment": "01", "evidence": "02", "params": {"k": 8}}
 #: another listed subprotocol's accepting answer and its case
@@ -69,8 +69,8 @@ class Machine:
         self.calls.append(("pin",))
         return {"sha512": SHA, "sessions": 1}
 
-    def audit(self, i, raw, challenger, firewall):
-        self.calls.append(("audit", i, raw, challenger["address"], firewall["sha512"]))
+    def audit(self, i, raw, challenger, zk_server):
+        self.calls.append(("audit", i, raw, challenger["address"], zk_server["sha512"]))
         if self.audit_raises:
             raise self.audit_raises
         digest = self.commitment or R.digest(json.loads(raw))
@@ -90,7 +90,7 @@ class Machine:
                 "reason": "; ".join(f"{i} reject" for i in bad) or None}
 
     def caps(self) -> dict:
-        return {P.CHALLENGER: {"host": self.host}, P.FIREWALL: {"pin": self.pin}, P.WORKERS: {"serve": self.serve},
+        return {P.CHALLENGER: {"host": self.host}, P.ZK_SERVER: {"pin": self.pin}, P.WORKERS: {"serve": self.serve},
                 P.VERIFIER: {"audit": self.audit, "component": self.component, "product": self.product}}
 
 
@@ -218,7 +218,7 @@ def test_the_placement_holds_each_party_to_its_principals_machine():
     site = site_of([{"name": "prover-1", "owner": "developer", "provides": every},
                     {"name": "auditor-1", "owner": "auditor", "provides": every}],
                    [{"ends": ["prover-1", "auditor-1"], "latency_ms": 1}])
-    bound = {P.WORKERS: "prover-1", P.FIREWALL: "prover-1", P.CHALLENGER: "auditor-1", P.VERIFIER: "auditor-1"}
+    bound = {P.WORKERS: "prover-1", P.ZK_SERVER: "prover-1", P.CHALLENGER: "auditor-1", P.VERIFIER: "auditor-1"}
     assert place(P.MANIFEST, site, bound).mode == "placed"
     with pytest.raises(Refused) as e:
         place(P.MANIFEST, site, {**bound, P.CHALLENGER: "prover-1"})

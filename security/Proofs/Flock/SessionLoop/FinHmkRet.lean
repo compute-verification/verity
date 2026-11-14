@@ -109,7 +109,7 @@ theorem swSrcE_hmk_ret (vs : finS.SwVals)
           (Masked.priorE (finCoins x ops) (k / 2) (k % 2)) (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[k / 2]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l =
           (.ok (p, tr), l') ∧ l'.size = Masked.repBase x (k + 1))
-    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.Firewall.Finish.RepIn}
+    {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.ZkServer.Finish.RepIn}
     {f : ByteArray} (hRep : RepAt L₀.draws src x w (ν, t) ((m₀, ρ₀) :: ops) spec (2 * j.val + r.val) tb hi q f)
     {extras : Array _root_.Flock.Claim}
     (hext : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (viewPoints x ops spec) = .ok extras)
@@ -146,7 +146,7 @@ theorem swSrcE_hmk_ret (vs : finS.SwVals)
           (.ok (p, tr), l') ∧ l'.size = Masked.repBase x (2 * j.val + r.val + 1)) :
     ∀ i < (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).zp 64,
       ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked i =
-        q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := by
+        q.vals[i]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[i]! := by
   have hx : Masked.Live x := Masked.live_of hsc hR
   have hk2 : (2 * j.val + r.val) / 2 = j.val := by
     have := r.isLt
@@ -163,14 +163,14 @@ theorem swSrcE_hmk_ret (vs : finS.SwVals)
     (fun l' => by rw [hk2, hkr, hsj]; exact hic l') l hl
   rw [hk2, hkr, hsj] at hret
   -- so its PIOP does, and below `zp 64` but at `final_c` the masked values are the request's plus its pads
-  obtain ⟨res, tr₁, l₁, hpiop⟩ := _root_.Flock.Firewall.Finish.piopCut_of_repCut _ _ _ _ _ _ _ _ _ _ _ _ _ _ hret
+  obtain ⟨res, tr₁, l₁, hpiop⟩ := _root_.Flock.ZkServer.Finish.piopCut_of_repCut _ _ _ _ _ _ _ _ _ _ _ _ _ _ hret
   have hmkV := swSrcE_hmk_cut L₀ src wk x w vs hsc hR hServe hE hc hF hsx hs hcms j r hexts hprev hRep hext hic hl
     hpiop hcap hroot
   -- and cut at its inner proof's first round it stops there, sending the source's masked `final_c`
   have hSch : FlockComplete.CutEq.SchOk (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]! (Masked.zkTab x j).sch := by
     rw [Masked.tabsOf_stAt x j]
     exact Masked.schOk_of (Masked.zkTab x j)
-  obtain ⟨t₄, L, hp4, hLs, hcut⟩ := _root_.Flock.Firewall.Finish.repCut_inner_of_ret _ _ _ _ _ _ _ _ _ _ _ _ _ l
+  obtain ⟨t₄, L, hp4, hLs, hcut⟩ := _root_.Flock.ZkServer.Finish.repCut_inner_of_ret _ _ _ _ _ _ _ _ _ _ _ _ _ l
     hSch hret
   have he : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (Masked.ptsE (finCoins x ops) spec) = .ok extras :=
     hext

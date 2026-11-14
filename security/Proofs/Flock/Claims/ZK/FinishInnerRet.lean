@@ -52,7 +52,7 @@ first coin is the one the cut refuses (`innerCut_first`). It reads no commitment
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock Transcript
 open FlockComplete (PS)
@@ -167,4 +167,4 @@ theorem piopCut_of_repCut (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (
   obtain ⟨res, t₃, l₃, hPC, -⟩ := run_bind_ok h
   exact ⟨res, t₃, l₃, hPC⟩
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish
