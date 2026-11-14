@@ -4,7 +4,7 @@
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
-- `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None)`: appends one measurement to the run's result: under a research run
+- `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
   `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
@@ -24,9 +24,10 @@ model or stated figures no run measured, or scaled past what a run covered; ``"p
 name covers. The writer also puts it first among the `inputs`, where the console's Metrics tab reads it until it reads
 `mark`. A measurement of a figure that is over a span of time or of compute says which, each as its own field and held
 only where given: `period`, one of `PERIODS` (a verification phase, a week, a month or a year), and `over`, one of
-`OVER` (the world's compute or one datacenter's). The writer appends: every
+`OVER` (the world's compute or one datacenter's). A measurement of one member of a set (a deployed guarantee, a lead)
+says which as `member`, a non-empty string, held only where given. The writer appends: every
 writer of a research run, whatever its `out`, appends to the run's one result and keeps what the run already wrote there.
-A result holds one run's measurements, one a name, period and `over` (a name given neither is one of them), and one
+A result holds one run's measurements, one a name, period, `over` and member (a name given none is one of them), and one
 validation, so a rerun writes a fresh directory.
 
 **A measurement is a number, and its verdict is its target check.** Nothing under `benchmarks/` writes a verdict of record or
@@ -271,23 +272,26 @@ class Writer:
     def measurement(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
                     why: str | None = None, *, mark: str | None = None, period: str | None = None,
-                    over: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
+                    over: str | None = None, member: str | None = None,
+                    extra: Mapping[str, Any] | None = None) -> dict:
         """Appends one measurement to `out/result.json` and returns it: the one `entry` makes of the same arguments. It
-        also refuses a name, period and `over` the result already holds, and a result of another run."""
+        also refuses a name, period, `over` and member the result already holds, and a result of another run."""
 
         entry = self.entry(name, value, unit, interval, target, verdict, inputs, why, mark=mark, period=period, over=over,
-                           extra=extra)
+                           member=member, extra=extra)
         with self._open() as (path, doc):
-            if any((m.get("name"), m.get("period"), m.get("over")) == (name, period, over) for m in doc["measurements"]):
-                raise ValueError(f"{path} already holds a measurement named {name} at period={period!r} and over={over!r}: a "
-                                 "result holds one a name, period and over (a rerun writes a fresh directory)")
+            key = (name, period, over, member)
+            if any((m.get("name"), m.get("period"), m.get("over"), m.get("member")) == key for m in doc["measurements"]):
+                raise ValueError(f"{path} already holds a measurement named {name} at period={period!r}, over={over!r} and "
+                                 f"member={member!r}: a result holds one a name, period, over and member (a rerun writes a "
+                                 "fresh directory)")
             doc["measurements"].append(entry)
         return entry
 
     def entry(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
               target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
               why: str | None = None, *, mark: str | None = None, period: str | None = None,
-              over: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
+              over: str | None = None, member: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
         """One measurement as `measurement` appends it, written nowhere, for a benchmark that writes its result whole:
         `value` in `unit` (None where the benchmark has no finite value to give, and then `why`, in words, where
         given), its `mark`, its 95% `interval` (low, high),
@@ -297,10 +301,11 @@ class Writer:
         is required, a value of None's too, which takes the mark its value would have had. It is also the first of
         `inputs`, the bare word, unless the given first input already opens with it (``"modeled: ..."``), which the
         console's Metrics tab reads it from until it reads `mark`. `period` (one of `PERIODS`) and `over` (one of `OVER`)
-        say what span of time and of compute the value is over, each its own field where given. It refuses what isn't a
-        measurement (a value that isn't a number, a verdict with no target or in a verdict of record's or a seal's words,
-        a `why` beside a value), a missing or unknown mark and a first input that opens with another one, a period or an
-        `over` it doesn't know, and an `extra` key the entry already has a meaning for or a value that isn't JSON."""
+        say what span of time and of compute the value is over, and `member` which member of a set it is for, each its own
+        field where given. It refuses what isn't a measurement (a value that isn't a number, a verdict with no target or
+        in a verdict of record's or a seal's words, a `why` beside a value), a missing or unknown mark and a first input
+        that opens with another one, a period or an `over` it doesn't know, a member that isn't a non-empty string, and
+        an `extra` key the entry already has a meaning for or a value that isn't JSON."""
 
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"a measurement has a name, not {name!r}")
@@ -313,6 +318,9 @@ class Writer:
         if over is not None and (not isinstance(over, str) or over not in OVER):
             raise ValueError(f"{name}'s over is one of {', '.join(map(repr, OVER))}, the compute its value is over, or None "
                              f"where it is over no such scope, not {over!r}: pass over=... with one of them")
+        if member is not None and (not isinstance(member, str) or not member.strip()):
+            raise ValueError(f"{name}'s member names which member of a set its value is for, a non-empty string, or None "
+                             f"where it is for no one member, not {member!r}")
         if not isinstance(unit, str):
             raise ValueError(f"{name}'s unit is a string, not {unit!r}")
         if why is not None and (value is not None or not isinstance(why, str) or not why.strip()):
@@ -335,7 +343,7 @@ class Writer:
             if (low := _number("interval", low)) > (high := _number("interval", high)):
                 raise ValueError(f"{name}'s interval is (low, high), not {interval!r}")
             interval = [low, high]
-        spans = {key: x for key, x in (("period", period), ("over", over)) if x is not None}
+        spans = {key: x for key, x in (("period", period), ("over", over), ("member", member)) if x is not None}
         entry = {"name": name, "value": None if value is None else _number("value", value), "unit": unit, "mark": mark,
                  **spans, "commit": self.stamp["commit"], "run": self.run, "ci95": interval,
                  "target": None if target is None else _number("target", target),
@@ -343,7 +351,7 @@ class Writer:
         if why is not None:
             entry["why"] = why
         for key, held in (extra or {}).items():
-            if not isinstance(key, str) or key in entry or key in ("why", "period", "over"):
+            if not isinstance(key, str) or key in entry or key in ("why", "period", "over", "member"):
                 raise ValueError(f"{name}'s extra key {key!r} is a key the measurement already has a meaning for")
             try:
                 json.dumps(held, allow_nan=False)

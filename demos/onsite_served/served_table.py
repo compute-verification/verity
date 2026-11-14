@@ -263,9 +263,15 @@ def _poub_session(cfg, params, bound):
     return {"SERVE_ARGS": shlex.join(["--remote-verifier", bound["address"]])}
 
 
+#: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
+#: 503-byte payload of the front's 512-byte cells; every other request is answered as before
+ID_FORM = "--protocol ids --id-payload 503"
+
+
 def _certifier_piece(cfg, params, bound):
     py = ".venv/bin/python"
-    return {"CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
+    return {"SERVE_ARGS": ID_FORM,
+            "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
             "CERTIFIER_CMD": f'{py} {CERTIFIER_PIECE} piece "$1" "$2" "$3"'}
 
 
@@ -361,12 +367,18 @@ def pieces(cfg: Mapping[str, Any], party: str) -> list[Piece]:
     return out + [PARTIES[c][party] for c in cfg["protocols"] if party in PARTIES.get(c, {})]
 
 
+#: the runner's variables that are serve-openai's flags, which each piece adds its own to
+JOINED = ("SERVE_ARGS",)
+
+
 def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
     """The served window's runner's variables: every listed piece's hooks, whichever party's they are, since the
-    prover's pieces reach the auditor's sides through their bindings."""
+    prover's pieces reach the auditor's sides through their bindings. A variable of `JOINED` is every piece's flags,
+    in the pieces' order; any other is one piece's."""
     out: dict[str, str] = {}
     for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]:
-        out.update(p.variables(cfg, bindings))
+        for k, v in p.variables(cfg, bindings).items():
+            out[k] = f"{out[k]} {v}" if k in JOINED and k in out else v
     return out
 
 
@@ -375,10 +387,19 @@ def unbound(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> list[str]:
             for k in p.unbound(bindings)]
 
 
+def composite(env: Mapping[str, str]) -> dict[str, str]:
+    """The runner's ``COMPOSITE``, set empty: it composes off the served node unless told otherwise, where onsite's
+    composite, which reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses
+    to start. A caller whose environment ``env`` names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` (a development composite
+    on the node) keeps what it named."""
+    return {} if "COMPOSITE" in env or env.get("COMPOSE_OFF_NODE") == "0" else {"COMPOSITE": ""}
+
+
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
-    """The served window's runner with every listed piece's hooks, its public record in ``state/out``; its serve dir
-    stays where the runner keeps it on the node (its ``D`` and ``SERVE_ROOT``, from the environment)."""
-    env = {**os.environ, **variables(cfg, bindings), "OUT": str(state / "out")}
+    """The served window's runner with every listed piece's hooks and no composite unless the caller asks for one
+    (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
+    ``D`` and ``SERVE_ROOT``, from the environment)."""
+    env = {**os.environ, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:
         return subprocess.run(["bash", str(ROOT / RUNNER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
