@@ -18,7 +18,7 @@ inequality and any `p` that caps each thread's multiplications at `c · p`, so i
 
 Theorem 2 follows Appendix B, through a partial containment (`ThreadedThrottledOnSlots`): pull a compliant division of
 the containing declaration back to the gates `S` of `c` it computes (`piece`); each piece is small, reads no more than its
-IU, and Theorem 1 bounds its counted multiplications. The pieces divide `S`, and a total containment is the case `S =
+inference block, and Theorem 1 bounds its counted multiplications. The pieces divide `S`, and a total containment is the case `S =
 computed` (`ThreadedThrottledSlots`). Each guarantee over weight gates is its `Slots` form at one slot per weight gate
 (`Fit.idSlots`), where `WeightsIncompressible` gives `WeightsIncompressibleSlots` (`weightsIncompressibleSlots_of`).
 -/

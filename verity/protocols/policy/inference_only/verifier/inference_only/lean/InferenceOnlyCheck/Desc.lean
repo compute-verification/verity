@@ -5,8 +5,8 @@ public import InferenceOnlyCheck.Check
 /-!
 # The inference-only check at the size of the description
 
-`InferenceOnlyCheck.Desc.evaluate` decides what `InferenceOnlyCheck.evaluate` decides, for a division whose IUs are unions of the root's
-nodes (IUs aligned to Calls), without laying out the circuit: its cost grows with the descriptor, not with the unrolled
+`InferenceOnlyCheck.Desc.evaluate` decides what `InferenceOnlyCheck.evaluate` decides, for a division whose inference blocks are unions of the root's
+nodes (inference blocks aligned to Calls), without laying out the circuit: its cost grows with the descriptor, not with the unrolled
 circuit (AGENTS.md "Design rules"). `InferenceOnlyCheck.evaluate` stays the reference it is held to: the
 difftest (`InferenceOnlyCheck.DescDifftest`) checks both on the same declarations, the old one on the division expanded gate by gate.
 
@@ -17,17 +17,17 @@ per root node instead of per gate:
 * `theta`: θ as root nodes, each an input node (§5.2 of `verity/ml/circuits/PROTOCOL.md`) bound at registration
   (`RegisteredInput<w>_v1`), none twice. θ is every gate of those nodes.
 * `owner`: one entry per root node: `"input"` for an input node, and `u` for a Call (any other root node), every gate of
-  which is in IU `u`. A root node without gates (a batch of none, or a Call of a Definition without gates) holds no gate of
-  any IU, so its entry is only read for its form.
+  which is in inference block `u`. A root node without gates (a batch of none, or a Call of a Definition without gates) holds no gate of
+  any inference block, so its entry is only read for its form.
 
 The expansion, θ as the gates of its nodes and each gate's owner its root node's, is an instance of `InferenceOnlyCheck.evaluate`, and
-the verdict is the one `InferenceOnlyCheck.evaluate` gives on it: `gates`, per IU its size and novel reads, the verdict and the first
-failing IU with its rule.
+the verdict is the one `InferenceOnlyCheck.evaluate` gives on it: `gates`, per inference block its size and novel reads, the verdict and the first
+failing inference block with its rule.
 
 ## What is computed, once per Definition
 
 Every gate of a root node reads its operands inside the node, or through the node's arguments (the root has no
-parameters, and a node names only earlier nodes, `Prog.orderViolation`). So the gates outside an IU that it reads are what
+parameters, and a node names only earlier nodes, `Prog.orderViolation`). So the gates outside an inference block that it reads are what
 its nodes' arguments resolve to (§7), restricted to the parameter leaves the callee reads. Two summaries per Definition,
 computed in the decoder's order (callees first) and shared by every activation:
 * `ret`: its return leaves as segments (`Seg`) of pieces (`Piece`). A piece is `rows` runs `base + r * rowStride +
@@ -43,7 +43,7 @@ A body's references are resolved through its nodes' outputs with the callees' `r
 make one run maps any piece by one affine map, whole members of any other batch become one segment of copies, and a
 pass-through goes back through the node's arguments. A root node's reads are those segments, copies all alike as one and
 one copy piece by piece, so that each names one node's gates: whole members returning leaves of several shared arguments
-are one copy of pieces of as many nodes (`Seg.split`). Per IU, its reads are those with the IU's own nodes and θ's taken
+are one copy of pieces of as many nodes (`Seg.split`). Per inference block, its reads are those with the inference block's own nodes and θ's taken
 out, and its novel reads the width of their union (`freshWidth`): copies of one frame that nothing else meets are
 counted as copies times one copy's width.
 
@@ -57,7 +57,7 @@ What has no closed form here is walked one by one up to `WALK` and refused past 
 walked): the members of a batch whose returns are none of those, strided reads of a call's, scan's or batch's output
 that aren't, a scan's ys read iteration by iteration, and chains longer than `WALK`. Still walked unbounded: the leaves
 of a strided piece taken through a parameter (`throughArg`), and segments of copies that overlap other reads of the
-same IU (expanded copy by copy, `freshWidth`). Serve_v1 meets none of the walks, at word level or on bits.
+same inference block (expanded copy by copy, `freshWidth`). Serve_v1 meets none of the walks, at word level or on bits.
 
 ## Refusals
 
@@ -223,7 +223,7 @@ def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 then { s with rep
 
 /-- `s` as reads, each of one node's gates: copies all alike as one (`alike`), and one copy piece by piece. A copy's
 pieces can name different nodes' outputs (a batch member returning leaves of several arguments its members share), and a
-read is kept, and its IU found, by its first piece. Copies that shift stay one read, since they lie in one node: they
+read is kept, and its inference block found, by its first piece. Copies that shift stay one read, since they lie in one node: they
 name only gates of one batch's members (`down` makes them from whole members returning their own gates, and `fromCallee`
 offsets a callee's into one member), and copies naming leaves never shift. -/
 def Seg.split (s : Seg) : Array Seg :=
@@ -1056,7 +1056,7 @@ summarizes each Definition once, would give a verdict. The walk also reads every
 def walkable (P : Prog) : Bool :=
   calleesFirst P && bodiesLaidOut P && (resolvable P && walkBound P ≤ Flock.Steps.FUEL / 2)
 
-/-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
+/-- Per inference block `u < n`, its number of gates: those of its root nodes, root node `k` (in inference block `own[k]`) holding gates
 `[offs[k], offs[k + 1])`. -/
 def sizes (offs : Array Nat) (own : Array (Option Nat)) (n : Nat) : Array Nat :=
   (List.range own.size).foldl (fun s k => match own[k]! with
@@ -1074,7 +1074,7 @@ def thetaStep (inp reg mask : Array Bool) (t : Json) : Except String (Array Bool
   return mask.set! k true
 
 /-- A root node's owner entry `e`, the node an input node (`inp`) or not, holding gates (`held`) or none: `none` for
-`"input"` and for a node without gates, `some u` for IU `u`. -/
+`"input"` and for a node without gates, `some u` for inference block `u`. -/
 def ownerStep (inp held : Bool) (e : Json) : Except String (Option Nat) := do
   let o ← if isInputTag e then pure none else match natOf? e with
     | some u => pure (some u)
@@ -1084,7 +1084,7 @@ def ownerStep (inp held : Bool) (e : Json) : Except String (Option Nat) := do
     if o.isNone && !inp then throw "gate-in-no-iu"
   return if held then o else none
 
-/-- Per IU `u < n`, the segments its root nodes read (`reads`) outside it and outside θ's nodes (`theta`). -/
+/-- Per inference block `u < n`, the segments its root nodes read (`reads`) outside it and outside θ's nodes (`theta`). -/
 def intoOf (offs : Array Nat) (own : Array (Option Nat)) (theta : Array Bool) (reads : Array (Array Seg)) (n : Nat) :
     Array (Array Seg) :=
   (List.range own.size).foldl (fun into k => match own[k]! with

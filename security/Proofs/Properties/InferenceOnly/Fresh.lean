@@ -26,8 +26,8 @@ import Std.Data.HashSet.Lemmas
 # The novel reads, from what `Desc.analyze` and `Desc.freshWidth` compute
 
 Toward `FreshExact`. A segment names gates with their widths (`Width.segGates`). `Desc.intoOf`
-collects, per IU, the segments its root nodes read whose first piece is in a root node of another IU and outside θ's
-nodes (`intoOf_spec`), and `InferenceOnlyCheck.ius` sums the widths of the gates outside an IU that its gates read, θ's taken out
+collects, per inference block, the segments its root nodes read whose first piece is in a root node of another inference block and outside θ's
+nodes (`intoOf_spec`), and `InferenceOnlyCheck.ius` sums the widths of the gates outside an inference block that its gates read, θ's taken out
 (`ius_snd`, `hashSet_fold_sum'`), and `Desc.freshWidth` sums the widths of the distinct gates of those segments
 (`Width.freshWidthExact`). So `FreshExact` holds wherever one smaller statement does, a named `Prop` here
 (`freshExact_of`): `ReadsExact`, that on a Program `Desc.evaluate` reads, the segments `Desc.analyze` gives a root node
@@ -63,7 +63,7 @@ def ReadsExact : Prop :=
 
 /-! ## What `intoOf` collects -/
 
-/-- `Desc.intoOf`'s step over one segment `s` of a root node of IU `u`. -/
+/-- `Desc.intoOf`'s step over one segment `s` of a root node of inference block `u`. -/
 def collStep (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array Bool) (u : ℕ)
     (into : Array (Array Desc.Seg)) (s : Desc.Seg) : Array (Array Desc.Seg) :=
   match s.ps[0]? with
@@ -84,7 +84,7 @@ theorem intoOf_eq (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array B
     Desc.intoOf offs own theta reads n =
       (List.range own.size).foldl (intoStep offs own theta reads) (Array.replicate n #[]) := rfl
 
-/-- What `collStep` keeps for IU `u`: a segment of positive count whose first piece is in a root node of another IU and
+/-- What `collStep` keeps for inference block `u`: a segment of positive count whose first piece is in a root node of another inference block and
 outside θ's nodes. -/
 abbrev Coll (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array Bool) (u : ℕ) (s : Desc.Seg) : Prop :=
   ∃ q, s.ps[0]? = some q ∧ s.count ≠ 0 ∧ own[Desc.nodeOf offs q.base.toNat]! ≠ some u ∧
@@ -168,7 +168,7 @@ theorem intoStep_some (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Arr
     intoStep offs own theta reads A k = reads[k]!.foldl (collStep offs own theta u) A := by
   unfold intoStep; rw [h]
 
-/-- `intoOf`'s first `m` root nodes: per IU, the segments its nodes read that `collStep` keeps. -/
+/-- `intoOf`'s first `m` root nodes: per inference block, the segments its nodes read that `collStep` keeps. -/
 theorem intoOf_inv (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array Bool) (reads : Array (Array Desc.Seg))
     (n : ℕ) : ∀ m,
     let T := (List.range m).foldl (intoStep offs own theta reads) (Array.replicate n #[])
@@ -249,7 +249,7 @@ theorem segGates_ps {s : Desc.Seg} {x : ℤ × ℕ} (h : x ∈ segGates s) : ∃
 
 /-! ## `FreshExact` -/
 
-/-- **`FreshExact`, from `analyze`'s reads and `freshWidth`'s union**: the segments `intoOf` collects for an IU name, with
+/-- **`FreshExact`, from `analyze`'s reads and `freshWidth`'s union**: the segments `intoOf` collects for an inference block name, with
 their widths, the gates outside it that its gates read, θ's taken out, each once; `freshWidth` sums their widths, and so
 does `InferenceOnlyCheck.ius`. -/
 theorem freshExact_of (hR : ReadsExact) : FreshExact := by

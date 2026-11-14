@@ -7,13 +7,13 @@ public import Mathlib.Tactic.Linarith
 /-!
 # Proofs of the inference-only policy as a `(c, k)`-partition
 
-A Boolean declaration's novel reads are its unregistered input gates, so a complying IU of `|I| ≤ Γ` gates reads at
+A Boolean declaration's novel reads are its unregistered input gates, so a complying inference block of `|I| ≤ Γ` gates reads at
 most `α |I| ≤ α Γ` of them, and the division is a `(Γ, ⌊αΓ⌋)`-partition. Through the bit-level expansion,
-an IU's size becomes its width, at least `|I|` and at most `W |I|`, and its novel reads do not grow (`ExpandSize`).
+an inference block's size becomes its width, at least `|I|` and at most `W |I|`, and its novel reads do not grow (`ExpandSize`).
 
 With its constants registered (`RegisteredCircuit.constInputs`) a declaration needs neither assumption:
 `constInputs_isCK` and `constInputs_expand_isCK` take a complying division to those partitions with only the gates'
-widths bounded, since a constant leaves its IU as a registered input and every other gate reads what it read.
+widths bounded, since a constant leaves its inference block as a registered input and every other gate reads what it read.
 -/
 
 @[expose] public section

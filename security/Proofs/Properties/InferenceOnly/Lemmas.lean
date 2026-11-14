@@ -517,7 +517,7 @@ theorem push_ownerOf_error (c : GateTable) (owner : Array Json) (own : Array (Op
   rw [OwnerFaultC, ← ownerOf_error]
   rcases ownerOf c g owner[g]! with e | o <;> simp [Functor.map, Except.map]
 
-/-- The owner fold: one entry per gate so far, gate `g`'s the IU its owner names. -/
+/-- The owner fold: one entry per gate so far, gate `g`'s the inference block its owner names. -/
 theorem ownerFold_ok (c : GateTable) (owner : Array Json) : ∀ n own,
     (List.range n).foldlM (fun own g => own.push <$> ownerOf c g owner[g]!) #[] = .ok own →
       own.size = n ∧ ∀ g < n, own[g]! = natOf? owner[g]! := by
@@ -549,12 +549,12 @@ theorem ownerFold_error {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (o
     (circuitOf_ok P c hc).1]
   exact FirstFault_congr (fun g hg => ownerOkC_iff hc owner hg) (fun g hg => ownerFaultC_iff hc owner hg k)
 
-/-! ## The IUs -/
+/-! ## The inference blocks -/
 
 theorem getElem!_fin {α : Type} [Inhabited α] (xs : Array α) (i : Fin xs.size) : xs[i] = xs[i.val]! :=
   (getElem!_pos xs i.val i.isLt).symm
 
-/-- `iuCount` bounds every IU an owner names, and is `0` or one more than an IU an owner names. -/
+/-- `iuCount` bounds every inference block an owner names, and is `0` or one more than an inference block an owner names. -/
 theorem iuCount_spec (own : Array (Option ℕ)) :
     (∀ g < own.size, ∀ u, own[g]! = some u → u < iuCount own) ∧
       (iuCount own = 0 ∨ ∃ g < own.size, own[g]! = some (iuCount own - 1)) := by
@@ -610,7 +610,7 @@ theorem usedOf_mem (own : Array (Option ℕ)) (u : ℕ) : u ∈ usedOf own ↔ �
       · exact Or.inr ⟨g, hg, h⟩
       · rw [ho] at h; exact Or.inl (Option.some.inj h)
 
-/-- The IUs are `0 … iuCount - 1`, each named by an owner and no more of them than gates, exactly when no IU below one
+/-- The inference blocks are `0 … iuCount - 1`, each named by an owner and no more of them than gates, exactly when no inference block below one
 an owner names is empty. -/
 theorem iuCheck_iff (owner : Array Json) (own : Array (Option ℕ)) (hs : own.size = owner.size)
     (ho : ∀ g < owner.size, own[g]! = natOf? owner[g]!) :
@@ -679,7 +679,7 @@ theorem divisionOf_eq (c : GateTable) (theta owner : Array Json) :
           simp [h2, h3, hA, hB, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
     · simp [h2, bind, Except.bind, throw, throwThe, MonadExceptOf.throw]
 
-/-- What a checked division holds: θ as the set its entries name, and per gate the IU its owner names. -/
+/-- What a checked division holds: θ as the set its entries name, and per gate the inference block its owner names. -/
 theorem divisionOf_ok {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {theta owner : Array Json} {d : Division}
     (h : divisionOf c theta owner = .ok d) :
     (∀ t < theta.size, ThetaOk P theta t) ∧ (∀ g, g ∈ d.theta ↔ ∃ t < theta.size, natOf? theta[t]! = some g) ∧
@@ -765,7 +765,7 @@ theorem getElem!_modify {α : Type} [Inhabited α] (xs : Array α) (j : ℕ) (f 
     (xs.modify j f)[i]! = if j = i then f xs[i]! else xs[i]! := by
   rw [getElem!_pos _ i (by simpa using hi), Array.getElem_modify, getElem!_pos xs i hi]
 
-/-- The reads of one gate, added to an IU's set: those outside the IU. -/
+/-- The reads of one gate, added to an inference block's set: those outside the inference block. -/
 theorem readsFold_mem (reads : Array ℕ) (own : Array (Option ℕ)) (u : ℕ) (into : Std.HashSet ℕ) (x : ℕ) :
     x ∈ reads.foldl (fun into a => if own[a]! = some u then into else into.insert a) into ↔
       x ∈ into ∨ (x ∈ reads ∧ own[x]! ≠ some u) := by
@@ -812,7 +812,7 @@ def tallyStep (c : GateTable) (d : Division) (acc : Array (ℕ × Std.HashSet �
 theorem tally_eq (c : GateTable) (d : Division) :
     tally c d = (List.range c.N).foldl (tallyStep c d) (Array.replicate d.n (0, {})) := rfl
 
-/-- `tally`'s first `m` steps: per IU, its gates so far and the gates outside it they read. -/
+/-- `tally`'s first `m` steps: per inference block, its gates so far and the gates outside it they read. -/
 theorem tally_inv (c : GateTable) (d : Division) : ∀ m,
     let T := (List.range m).foldl (tallyStep c d) (Array.replicate d.n (0, {}))
     T.size = d.n ∧ ∀ u < d.n, T[u]!.1 = ((Finset.range m).filter fun g => d.owner[g]! = some u).card ∧
@@ -1035,7 +1035,7 @@ theorem fresh_eq (u : Fin n) : InferenceOnly.freshInput d (U.gates u) =
   · have : ¬ dv.theta.contains a.val = true := fun h => ha (h1.2 (Std.HashSet.contains_iff_mem.1 h))
     simp [ha, this, h2]
 
-/-- Entry `u` of `ius`: the size and novel reads of IU `u`. -/
+/-- Entry `u` of `ius`: the size and novel reads of inference block `u`. -/
 theorem ius_get (u : Fin n) : (ius c dv)[u.val]! = (d.D.size (U.gates u), InferenceOnly.freshInput d (U.gates u)) := by
   have hu : u.val < (tally c dv).size := by rw [(tally_spec c dv).1, ← S.n_eq]; exact u.isLt
   rw [S.size_eq u, S.fresh_eq u, ius, getElem!_pos _ u.val (by simpa using hu), Array.getElem_map,
@@ -1289,7 +1289,7 @@ theorem exists_partition {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {
     rw [hos, ← hL.1] at hg
     exact ⟨⟨g, hg⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, (hunit ⟨g, hg⟩ u).2 h⟩⟩
 
-/-! ## The first failing IU -/
+/-! ## The first failing inference block -/
 
 theorem findSome_range_none {β : Type} (f : ℕ → Option β) (n : ℕ) :
     (List.range n).findSome? f = none ↔ ∀ i < n, f i = none := by
