@@ -154,7 +154,7 @@ def chain_rows(q_nope, q_rope, kv, *, T: int, DR_: int = 64, DV: int = 512, BN: 
     words in visit order, nonfinite (R,)).  `head_end_rows` of the last block's l and o is `SparseMlaHead_v1`.  With ``units``
     each block's state is (m, l, o, pb, rescale), the block as its units return it: `SparseMlaHeadScores_v1`'s m, l, bf16(P)
     of its visible keys (R, NVIS) and rescale (R,) (None for the first visited block), and columns [c G, (c + 1) G) of o
-    `SparseMlaHeadValues_v1{G}`'s on those columns."""
+    `SparseMlaHeadValues_v1{G, C = c}`'s on those columns."""
     q, kb, vb = _operands("chain_rows", q_nope, q_rope, kv, T, DR_, DV)
     nf, states = np.zeros(q.shape[0], dtype=bool), []
     for (m, l, o, *more), f in _blocks(q, kb, vb, 0, -(-T // BN), T=T, BN=BN, sbits=M.scale_log2_bits(scale), dot16=dot16,
