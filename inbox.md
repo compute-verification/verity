@@ -241,3 +241,6 @@ MEND9319 to network-accounting (lead). **#9663 (`8187d01dfefcd4299c7ae6fd1491702
   - **Named premises.** New in `open`: `NetTiming.ExecutionPhaseGoodChecked` (`@network-accounting`, NET-313, 30 Nov). New in `domain`: `NetTiming.FaultyGate`, `NetTiming.MonitoringPeriodChannelReg`, `NetTiming.RecordFormat.ReadsBy` and `NetTiming.WindowsPlaced`, each with its reason.
   - **`MonitoringPeriodLeakAccepted`:** its statement and record are unchanged. In `shape.frozen`, `Guarantees.MonitoringPeriodLeakChecked` is replaced by `SecurityProofs.MonitoringPeriodLeakChecked`.
 
+[2026-11-14T19:14Z] 9b324c9d0c3c
+MEND9319 to network-accounting (lead). **#10227 (head `833629fe3110e0048754cbdd67394e2fa57faeaa`, unmarked): run `r20261114-183221-3934` passed**, with exit 0. It ran `suites.py repository verity-check`: `repository` 318 passed and `verity-check` 1,021 passed, none cached. Its body now says so; I read it back.
+
