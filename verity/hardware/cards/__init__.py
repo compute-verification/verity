@@ -14,6 +14,9 @@ uses it) or ``placeholder`` (none of these: open). ``source`` names a data sheet
 (``security/Definitions/Core/Accel``) are held to the GPU cards that name one (``lean``), number by number
 (``verity/hardware/tests/test_lean.py``). Stdlib only, and it imports no other unit.
 
+The readers of card files (``skus``, ``load``) take ``directory``, the directory the card files are in, so that a reader
+whose copy of them is not beside this file names where it is; ``None`` is ``CARDS``, read when the reader is called.
+
 ``rate`` is the one calculator of a GPU's peak rates, Lean's ``card.ρ``: a reader that needs the tensor peak at some
 clock calls it rather than multiplying the card's numbers itself.
 
@@ -49,17 +52,19 @@ ENTRY = frozenset({"value", "unit", "mark", "source"})
 WORD = 4  # bytes in a 32-bit word, the unit of every store and of device memory's rate
 
 
-def skus(kind: str | None = None) -> list[str]:
-    """The SKUs with a card file, or those of one ``kind``."""
-    every = sorted(p.stem for p in CARDS.glob("*.toml"))
-    return every if kind is None else [sku for sku in every if load(sku)["kind"] == kind]
+def skus(kind: str | None = None, *, directory: Path | None = None) -> list[str]:
+    """The SKUs with a card file in ``directory`` (``CARDS`` when ``None``), or those of one ``kind``."""
+    every = sorted(p.stem for p in (CARDS if directory is None else directory).glob("*.toml"))
+    return every if kind is None else [sku for sku in every if load(sku, directory=directory)["kind"] == kind]
 
 
-def load(sku: str) -> dict:
-    """The card file of ``sku`` as parsed TOML, refused unless every number in it carries its unit, mark and source."""
-    path = CARDS / f"{sku}.toml"
+def load(sku: str, *, directory: Path | None = None) -> dict:
+    """The card file of ``sku`` in ``directory`` (``CARDS`` when ``None``) as parsed TOML, refused unless every number
+    in it carries its unit, mark and source."""
+    directory = CARDS if directory is None else directory
+    path = directory / f"{sku}.toml"
     if not path.is_file():
-        raise KeyError(f"no card {sku!r}: the cards are {skus()} (verity/hardware/cards/<sku>.toml)")
+        raise KeyError(f"no card {sku!r}: the cards are {skus(directory=directory)} ({directory}/<sku>.toml)")
     card = tomllib.loads(path.read_text(encoding="utf-8"))
     if card.get("sku") != sku:
         raise InvalidArtifact(f"{path.name}: sku = {card.get('sku')!r}; set it to the file's name, {sku!r}")

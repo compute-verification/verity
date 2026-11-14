@@ -5,7 +5,7 @@ The verifier's side listens and the prover connects; each message is one line of
 store's block count and payload root (`{"register": {"blocks", "payload_root"}}`). The verifier registers it from
 its own coins and answers with the registration (`{"hold": {"registration"}}`). It then sends each pass's challenge,
 its value and the root it was opened after (`{"run": {"challenge", "i", "previous", "t"}}`, the challenge a
-`coins.Released`, answered `{"root"}`), and each window's draws (`{"open": {"draws", "t"}}`, answered `{"openings":
+`coins.Released`, answered `{"root"}`), and each window's samples (`{"open": {"draws", "t"}}`, answered `{"openings":
 hex}` in the openings frame, `wire.encode_openings`, which it decodes strictly), and `{"end": {"commitment",
 "openings"}}` last, once the session has its outcome: the coin commitment and every released coin's opening, which
 the prover checks each challenge it was sent against (`audit.Prover.end`), or `{"end": {}}` for a session left
@@ -15,8 +15,8 @@ makes in one process.
 `python -m verity.protocols.poub.verifier.verifier_party [--listen HOST:PORT]` is the verifier's side (`main`):
 it reads the request `{"deadline_ns", "node", "passes", "samples", "window_ns", "windows"}` as one JSON line on stdin,
 prints `{"listening": PORT}`, serves one prover and prints `{"answer", "case", "host"}`. `side_of(period, node)` is
-where `period.json` puts that side (`stream.Side`), and `period_with(side, request, store)` is the leg's: it starts the
-side, connects to it and plays the prover (`prove`).
+where `period.json` puts that side (`stream.Side`), and `period_with(side, request, store)` starts the side, connects
+to it and plays the prover (`prove`).
 """
 
 from __future__ import annotations
@@ -119,7 +119,7 @@ def prove(f: BinaryIO, prover: P.Local) -> int:
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, coins: bytes, clock: Callable[[], int] = time.monotonic_ns,
-          sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until) -> P.Period:
+          sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until) -> P.Run:
     """The verifier's side of one session over the connection `f` (`period.session` against `Remote`), ended with its
     coins disclosed once it has its outcome."""
     remote = Remote(f)
@@ -158,7 +158,7 @@ def request_of(node: str, *, windows: int = 2, passes: int = 1, samples: int = a
 
 
 def period_with(side: Side, request: Mapping[str, Any], store: bytes, *,
-                entropy: Callable[[int], bytes] = os.urandom) -> tuple[P.Period, dict[str, Any]]:
+                entropy: Callable[[int], bytes] = os.urandom) -> tuple[P.Run, dict[str, Any]]:
     """One session with the verifier's side `side` starts and this process the prover of `store`: the period, and the
     side's report (`host`, `passes`)."""
 
@@ -167,7 +167,7 @@ def period_with(side: Side, request: Mapping[str, Any], store: bytes, *,
             return prove(f, P.Local(request["node"], store, entropy=entropy))
 
     got, passes = side.talk(request, drive)
-    return P.Period(got["answer"], got["case"]), {"host": got["host"], "passes": passes}
+    return P.Run(got["answer"], got["case"]), {"host": got["host"], "passes": passes}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
