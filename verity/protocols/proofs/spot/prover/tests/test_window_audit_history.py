@@ -136,7 +136,7 @@ def _negatives(mine, doc: dict, rec: dict, publics: dict) -> tuple[bool, dict[st
     return record["accepted"], {
         "R3": a0.negative(check(CS.expected_ports(replace(mine, run="00" * 64)), leaf)),
         "R4": a0.negative(check(want, CS.leaf_layer(flipped))),
-        "history-root": a0.history_negative(check(want, leaf, wrong)),
+        "history-root": a0.negative(check(want, leaf, wrong)),
         "sample": a0.negative(A5.outside_the_partition(sample, rec, design, n)),
         "proved": a0.negative(V.check_proved(sample, sample["units"][1:], 1)),
         **a0.audit_negatives(record, design, 0.5, registered)}
@@ -146,8 +146,8 @@ def test_a_negative_is_refused_only_where_the_lean_answered(tmp_path, monkeypatc
     """While the Lean answers, the window's record accepts and each negative is refused: the registration's, the
     sample's and the proved set's by the code both verifiers give, the history root's as `registration.HISTORY` with the
     Lean's reason the Python's, the record's with the two agreeing. Under a Lean that can't run the verifier fails the
-    same checks, the honest record's too, and still names the history root's refusal `registration.HISTORY`; no negative
-    is refused, a verdict's row saying what stood in the Lean's place, so a5's audit, which passes only with every
+    same checks, the honest record's too, each as a disagreement, the history root's among them; no negative is
+    refused, a verdict's row saying what stood in the Lean's place, so a5's audit, which passes only with every
     negative refused, fails."""
     mine, doc, rec, publics, _ = _window(tmp_path / "w")
     accepted, rows = _negatives(mine, doc, rec, publics)
@@ -163,7 +163,6 @@ def test_a_negative_is_refused_only_where_the_lean_answered(tmp_path, monkeypatc
     said = {"refused": "the Lean cannot run"}
     accepted, dead = _negatives(mine, doc, rec, publics)
     assert not accepted and dead.keys() == rows.keys() and not any(r["refused"] for r in dead.values()), dead
-    for k in ("R3", "R4", "sample", "proved"):
+    for k in ("R3", "R4", "history-root", "sample", "proved"):
         assert dead[k] == {"refused": False, "codes": [V.DISAGREE], "lean": said}, dead[k]
-    assert dead["history-root"]["codes"] == [R.HISTORY] and dead["history-root"]["reasons"]["lean"] == said["refused"]
     assert not any(r["agree"] for r in dead.values() if "agree" in r), dead
