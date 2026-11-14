@@ -3,7 +3,7 @@ logits[0] and the row's V-chunk partials (``dead_free.TokenSelect_v4``'s last ca
 carries its running best across chunks, so its gate graph is no row of identical units), lowered piece by piece from the word
 Definition. Its output is the egress id, one 32-bit word.
 
-The unit is the whole instance, so its netlist depends on every static and is pinned per (V, C) by :data:`PINS`."""
+The unit is the whole instance, so its circuit description depends on every static and is pinned per (V, C) by :data:`PINS`."""
 TEMPLATE = "token-select-combine"
 UNIT = "token-select-combine/v2/row"
 PINS = {(200, 64): "d36c1846d96f0a707aa5fa696f305096cba2bd743cb875758f00c7171e9ec6d3",

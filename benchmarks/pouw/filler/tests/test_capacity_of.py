@@ -78,6 +78,26 @@ def test_fstep_reads_as_dfill_co():
     assert f["co_cost"] == 1.0 and f["rec_bad"] == 0 and f["out_bad"] == 0
 
 
+def test_an_fstep_lines_own_fold_wins_over_the_callers():
+    (own,) = CO.fstep_rows(PI, [dict(fstep(), fold="li")])
+    (asked,) = CO.fstep_rows(PI, [fstep()], fold="li")
+    (duo,) = CO.fstep_rows(PI, [fstep()])
+    assert (own["fold"], asked["fold"], duo["fold"]) == ("li", "li", "duo")
+    for k in ("sigma", "sigma_run_clock"):
+        assert own[k] == pytest.approx(asked[k]) and own[k] < 0.9 * duo[k]
+
+
+def test_each_row_is_read_from_its_own_line():
+    slow = dfill("co")
+    slow["arms"]["co_fill"]["mhz"] = 1800.0
+    d = CO.dfill_rows(PI, [slow, dfill("co")])
+    assert [r["mhz"] for r in d] == [1800.0, 2092.0] and d[0]["sigma"] == pytest.approx(d[1]["sigma"])
+    assert d[0]["sigma_run_clock"] > d[1]["sigma_run_clock"]  # the same MACs a second are more of a slower clock's peak
+    f = CO.fstep_rows(PI, [dict(fstep(), mhz=1800.0), fstep()])
+    assert [r["mhz"] for r in f] == [1800.0, 2092.0] and f[0]["sigma"] < f[1]["sigma"]
+    assert f[0]["sigma_run_clock"] == pytest.approx(f[1]["sigma_run_clock"])  # its shares are of the peak at its clock
+
+
 def test_cli_reads_lfill_lines(tmp_path, capsys):
     p = tmp_path / "lfill.jsonl"
     p.write_text("\n".join(json.dumps(r) for r in (rec(), rec(pf_lane=8, lane_rate=0.5))) + "\n")
