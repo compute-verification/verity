@@ -172,12 +172,14 @@ def lean_modules(files: list[str]) -> dict[str, str]:
     return out
 
 
-def lean_declares(f: str) -> set[str]:
-    """The bare words `f` declares in code: a declaration's last component or a structure's field."""
+def lean_declares(f: str, module: str = "") -> set[str]:
+    """The bare words `f` declares in code: a declaration's last component, a structure's field, a component of a
+    namespace it opens, or one of its module name `module`."""
     t = text(f)
     out = {m.group(1).split(".")[-1] for m in DECL.finditer(t) if is_code(f, m.start(1))}
     out |= {m.group(1) for m in LEAN_FIELD.finditer(t) if is_code(f, m.start(1))}
-    return out & WORDS
+    out |= {c for m in NAMESPACE.finditer(t) if is_code(f, m.start(1)) for c in m.group(1).split(".")}
+    return (out | set(module.split("."))) & WORDS
 
 
 def py_tree(f: str) -> ast.AST | None:
@@ -227,7 +229,9 @@ def plan() -> tuple[dict[str, list[str]], dict[str, str]]:
                 stack += imports.get(x, [])
         return frozenset(seen)
 
-    declared = {f: d for f in lean if not ours(f) and WORD.search(text(f)) and (d := lean_declares(f))}
+    module_of = {f: m for m, f in mods.items()}
+    declared = {f: d for f in lean if not ours(f) and (WORD.search(text(f)) or WORD.search(module_of.get(f, "")))
+                and (d := lean_declares(f, module_of.get(f, "")))}
     reached_by: dict[str, set[str]] = defaultdict(set)
     for f in lean:
         if not ours(f) and WORD.search(text(f)):
@@ -287,7 +291,7 @@ def plan() -> tuple[dict[str, list[str]], dict[str, str]]:
             out |= {g for g in whys if g.endswith(".py") and any(by_module.get(m) == f for m in py_imports(g))}
         return {g for g in out if g in whys and g != f}
     links = {f: linked(f) for f in whys}
-    declares = {f: (lean_declares(f) if f.endswith(".lean") else py_declares(f)) for f in whys}
+    declares = {f: (lean_declares(f, module_of.get(f, "")) if f.endswith(".lean") else py_declares(f)) for f in whys}
     changed = True
     while changed:
         changed = False
