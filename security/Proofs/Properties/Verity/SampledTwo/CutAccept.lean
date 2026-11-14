@@ -159,12 +159,12 @@ theorem option_bind_ok {α β : Type} {o : Option α} {f : α → Option β} {b 
   | none => cases h
   | some a => exact ⟨a, rfl, h⟩
 
-/-- The two windows `windowsOf` names are the boundary registration's and the interior audit's open roots. -/
+/-- The two windows `executionPhasesOf` names are the boundary registration's and the interior audit's open roots. -/
 theorem executionPhasesOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} (hp : paramsAt θ = .ok p)
-    {w₁ w₂ : String} (h : windowsOf θ = some (w₁, w₂)) :
+    {w₁ w₂ : String} (h : executionPhasesOf θ = some (w₁, w₂)) :
     p.boundary.verifier.windowRoot = some w₁ ∧ p.audit.base.verifier.windowRoot = some w₂ := by
   have hb : boundaryOf p = .ok p.boundary := rfl
-  unfold windowsOf at h
+  unfold executionPhasesOf at h
   rw [hp] at h
   cases h1 : p.boundary.verifier.windowRoot with
   | none => simp [Except.toOption, hb, h1] at h
@@ -180,13 +180,13 @@ theorem executionPhasesOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.
       obtain ⟨rfl, rfl⟩ := hpair
       exact ⟨rfl, rfl⟩
 
-/-- **The two windows `windowsOf` names differ**: the parameters are the form's parse (`paramsAt_form`), and the
+/-- **The two windows `executionPhasesOf` names differ**: the parameters are the form's parse (`paramsAt_form`), and the
 form's parameters parse only where the interior audit's window is not the boundary registration's
 (`VStar.Recursive.SampledTwo.paramsOfJson_ok`, its refusal `ONE_WINDOW`). -/
-theorem executionPhasesOf_ne {θ : ByteArray} {w₁ w₂ : String} (h : windowsOf θ = some (w₁, w₂)) : w₁ ≠ w₂ := by
+theorem executionPhasesOf_ne {θ : ByteArray} {w₁ w₂ : String} (h : executionPhasesOf θ = some (w₁, w₂)) : w₁ ≠ w₂ := by
   cases hp : paramsAt θ with
   | error err =>
-    unfold windowsOf at h
+    unfold executionPhasesOf at h
     rw [hp] at h
     simp [Except.toOption] at h
   | ok p =>
@@ -275,7 +275,7 @@ device's, is at most as likely as the read finder's collision plus the forger's 
 theorem cutBound_accept (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hw : Wired V k θ)
-    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) →
+    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) →
       PrintsInOrder (dev o) w₁ w₂ o.log)
     (hs : SignsPlay V dev θ F c) : CutBound V k θ F c σ ReadIsDevice (terms V dev θ F c σ) :=
   cutBound_order V k dev θ F c σ hw (firstReads θ) (orderShown θ) hP hs
