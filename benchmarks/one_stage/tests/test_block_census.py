@@ -111,21 +111,27 @@ def test_a_fitting_row_past_its_familys_whole_bound_is_cut_like_its_longer_rows_
 
 @pytest.mark.parametrize("t", [4, 9])
 def test_a_split_row_past_its_bound_takes_a_scores_unit_a_key_block_and_head_and_its_values_and_ends_per_column_block(t):
-    """Each head's key blocks (``ceil(T / BN)``) a scores unit and ``DV / CHAIN_COLS`` values units at ``NVIS = T``, and each
-    head ``DV / CHAIN_COLS`` ends of one column block: the row's counts, as serving names them."""
+    """Each head's key blocks (``ceil(T / BN)``) a scores unit and a values unit on each of its ``DV / G`` column blocks at
+    ``NVIS = T``, each key block's rows a writer on each of their ``(DV + DR) / G`` column blocks for all the heads, and each
+    head an end on each column block (G = `CHAIN_COLS`): the row's counts, as serving names them."""
     row = CHAIN_ROW.replace("T=272,NS=5", f"T={t},NS=1")
     st = B.spec_statics(row)
-    blocks, cols = st["NH"] * -(-t // st["BN"]), st["DV"] // B.CHAIN_COLS
+    G, blocks = B.CHAIN_COLS, -(-t // st["BN"])
     units, _ways = _chain_units(row)
     kind, got, _why = B.cut(row, family(row, units, est_log=27))
-    assert kind == "split" and sorted((B.spec_base(u["spec"]), u["n"]) for u in got) == [
-        ("SparseMlaHeadEnd_v1", st["NH"] * cols), ("SparseMlaHeadScores_v1", blocks), ("SparseMlaHeadValues_v1", blocks * cols)]
+    assert kind == "split"
+    assert sorted((B.spec_base(u["spec"]), B.spec_statics(u["spec"]).get("C", -1), u["n"]) for u in got) == sorted([
+        ("SparseMlaHeadEnd_v1", -1, st["NH"] * st["DV"] // G), ("SparseMlaHeadScoresCols_v1", -1, st["NH"] * blocks),
+        *(("SparseMlaHeadValues_v1", c, st["NH"] * blocks) for c in range(st["DV"] // G)),
+        *(("SparseMlaHeadKeysWire_v1", c, blocks) for c in range((st["DV"] + st["DR"]) // G))])
     for u in got:
         base, s = B.spec_base(u["spec"]), B.spec_statics(u["spec"])
         if base == "SparseMlaHeadEnd_v1":
-            assert s["DV"] == B.CHAIN_COLS
+            assert s["DV"] == G
+        elif base == "SparseMlaHeadKeysWire_v1":
+            assert (s["NVIS"], s["W"]) == (t, G)
         else:
-            assert (s["NVIS"], s["FIRST"], s.get("G", B.CHAIN_COLS)) == (t, True, B.CHAIN_COLS)
+            assert (s["NVIS"], s["FIRST"], s["G"]) == (t, True, G)
 
 
 @pytest.mark.parametrize("n", [37, 60])
