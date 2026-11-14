@@ -11,3 +11,10 @@ def train_trees() -> str | None:
     `tools/research/src/research/pods/nebius/vqueue/loop.sh` always set it, to a directory on a local disk whose old trees
     they sweep.  Unset or empty, None."""
     return os.environ.get("TRAIN_TREES") or None
+
+
+def cursor_agent_socket() -> str:
+    """CURSOR_AGENT_SOCKET: the Cursor agent's identity socket, which answers for this agent's OIDC tokens; a machine where it
+    doesn't exist (a laptop, the control pod) is no Cursor agent.  Unset, /run/cursor/api.sock; set empty, no socket, as
+    `slack.oidc_token` reads it."""
+    return os.environ.get("CURSOR_AGENT_SOCKET", "/run/cursor/api.sock")

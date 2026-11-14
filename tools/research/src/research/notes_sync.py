@@ -101,7 +101,6 @@ REFRESH_S, BROKER_RETRY_S = 300, 60
 #: how long to wait before minting once more: after an HTTP 429 (Cursor's identity service refuses a burst of token requests for
 #: a few seconds), and after GitHub refused a token the broker minted
 MINT_WAIT_S = 3.0
-IDENTITY_SOCKET = "/run/cursor/api.sock"
 NOTES_URL = "https://github.com/compute-verification/research-notes.git"
 #: a clone made before the notes moved into the organization still names the old address; the token is the organization's
 MOVED = {"danielreuter/research-notes": "compute-verification/research-notes"}
@@ -200,7 +199,8 @@ _MINTED_AGAIN: list[bool] = []                      # [True] once `_authed` retr
 
 def has_identity() -> bool:
     """Whether this machine has a Cursor agent's identity socket, which buys the broker's notes token: a cloud VM, not a laptop."""
-    return os.path.exists(os.environ.get("CURSOR_AGENT_SOCKET", IDENTITY_SOCKET))
+    from .settings import cursor_agent_socket
+    return os.path.exists(cursor_agent_socket())
 
 
 def _held() -> tuple[str | None, bool, float]:
