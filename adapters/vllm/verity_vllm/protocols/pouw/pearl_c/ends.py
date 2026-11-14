@@ -187,8 +187,9 @@ class PassEnds(_RunState):
             units = len(cur.matmuls)
             flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0) if cur.flag_rows else torch.zeros(2, dtype=torch.int64)
             aside = lag and self.aside_ends and cur.retain is None and self.device.type == "cuda"
-            leaves, side, got = self._end_aside(count, self.roots_buf[:nb * units], flags) if aside else \
+            where: tuple[int, Any, Any] = self._end_aside(count, self.roots_buf[:nb * units], flags) if aside else \
                 (self.leaves.data_ptr(), None, None)
+            leaves, side, got = where
             K.dev.stream = side.cuda_stream if aside else self.stream()
             try:
                 for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
@@ -212,10 +213,10 @@ class PassEnds(_RunState):
                 done.record()
                 self._lagged = (out, done, got, units, count)
             else:
-                roots_a, root = _bytes(self.roots_buf[:nb * units]), _bytes(tree[-nb:])
-                self._ended(out, roots_a, root, flags.tolist(), units, count)
+                roots_a, root_t = _bytes(self.roots_buf[:nb * units]), _bytes(tree[-nb:])
+                self._ended(out, roots_a, root_t, flags.tolist(), units, count)
                 if cur.retain is not None:
-                    complete = self._write_retained(cur, epoch, roots_a, root, tree, count, out)
+                    complete = self._write_retained(cur, epoch, roots_a, root_t, tree, count, out)
                     if behind and self.retain_behind:
                         self._behind = (*self._behind, host_behind(complete))
                         deferred = True
