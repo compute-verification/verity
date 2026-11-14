@@ -2959,7 +2959,7 @@ impl Stmt {
         Self::of(Arc::new(c), circuit, regions, None, n, identity)
     }
 
-    /// `Stmt::new(self.c, n, identity)`, the statement of this one's circuit at `n` instances (a drawn sample's), with this
+    /// `Stmt::new(self.c, n, identity)`, the statement of this one's circuit at `n` instances (a sampled sample's), with this
     /// one's circuit, slot types and `A_0`, `B_0`, `C_0` shared rather than built again: [`Stmt::new`] derives them from the
     /// circuit alone.
     pub fn drawn(&self, n: usize, identity: Value) -> Result<Self, String> {
@@ -4139,7 +4139,7 @@ mod tests {
             .into_iter().map(|(name, text)| (name, Composite::parse(&text, None).unwrap_or_else(|e| panic!("{name}: {e}")))).collect()
     }
 
-    /// A cached drawn statement is the one `Stmt::new` builds afresh from the same circuit, count and identity, byte for byte,
+    /// A cached sampled statement is the one `Stmt::new` builds afresh from the same circuit, count and identity, byte for byte,
     /// for each test circuit at counts on both sides of a block-count step and under two identities; a second call with the
     /// same key returns that statement, and an identity's key is its canonical form.
     #[test]

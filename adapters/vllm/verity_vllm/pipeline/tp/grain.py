@@ -1,4 +1,4 @@
-"""A tensor-parallel collective site's units (`lower`) at a grain C-Flock proves (`interface.check_proof_block`: at most 256
+"""A tensor-parallel collective site's units (`lower`) at a grain Flock proves (`interface.check_proof_block`: at most 256
 rows a unit, one of them past 111 B). A combine reads its producers' units' rows, gathered first where those are words, and
 producers are never re-cut to fit a combine.
 
