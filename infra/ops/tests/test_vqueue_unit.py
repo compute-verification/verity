@@ -22,6 +22,8 @@ HELPER = "infra/control/gh_app_token.sh"          # the control pod's own, which
 CONFIG, SKIP = 78, 75
 KEYS = ("HOME", "PATH", "PYTHONPATH", "TMPDIR", "TRAIN_TREES", "GH_TOKEN", "AWS_ACCESS_KEY_ID", "SLACK_BOT_TOKEN",
         "RESEARCH_AGENT_URL", "RESEARCH_LANE", "GIT_TERMINAL_PROMPT", merge.DRIVE_ENV)
+#: each list's flag, which the loop otherwise reads at the control pod's path, and the node's file under live/
+LISTS = {"--deselect": "deselect", "--keep-runs": "keep-runs", "--wide-file": "wide", "--heavy-file": "heavy", "--pins-file": "pins"}
 # The stand-in tick: one JSON line a call. With VQ_TEST_TERM its first call tells the loop to stop and then goes on, as a tick
 # under `systemctl stop` does; a second call, which a loop that stopped never makes, ends the loop so the test can't hang.
 STUB = """#!{py}
@@ -170,6 +172,28 @@ def test_live_alone_may_move_main_whatever_the_environment_says(node, monkeypatc
     assert "--dry-run" in dry["argv"] and "--shadow" in shadow["argv"] and not {"--dry-run", "--shadow"} & set(live["argv"])
     assert on_drive(live["env"][merge.DRIVE_ENV])
     assert not on_drive(dry["env"][merge.DRIVE_ENV]) and not on_drive(shadow["env"][merge.DRIVE_ENV])
+
+
+def test_every_tick_reads_the_five_lists_at_the_node_s_paths_and_names_the_missing_in_one_line(node):
+    """The loop's defaults for --deselect, --keep-runs, --wide-file, --heavy-file and --pins-file are the control pod's paths:
+    on the node each is its file under live/, in every mode and after ci's args, so a line of args naming the pod's never wins.
+    A missing file reads as empty there, as it does on the pod, and the tick says which in one line and runs."""
+    live = node.home / "live"
+    (live / "args").write_text("--gate check\n--pins-file /data/drive/pins\n")
+    (live / "heavy").write_text("")
+    r = node.loop("once")
+    assert r.returncode == 0, r.stderr
+    said = [ln for ln in r.stderr.splitlines() if "reads each as empty" in ln]
+    assert said == [f"vy-vqueue: no deselect keep-runs wide pins in {live}: the loop reads each as empty; copy ci's from the "
+                    "host the loop ran on"]
+    for f in LISTS.values():
+        (live / f).write_text("")
+    (node.home / "mode").write_text("shadow\n")
+    (node.home / "shadow" / "args").write_text("--gate check\n--keep-runs /data/vqueue/live/keep-runs\n")
+    r = node.loop("once")
+    assert r.returncode == 0 and "reads each as empty" not in r.stderr
+    for t in node.ticks():
+        assert {o: flag(t["argv"], o) for o in LISTS} == {o: str(live / f) for o, f in LISTS.items()}
 
 
 def test_a_node_missing_the_clone_the_pin_or_the_args_says_which_and_runs_nothing(node):

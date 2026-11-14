@@ -9,7 +9,8 @@
 # Everything it keeps is under its home (VQ_HOME, the unit's StateDirectory), on the node's own disk:
 #   mode      dry-run (also when the file is absent), shadow or live
 #   live/     the loop's state: decisions.jsonl (the log every tick derives its candidates from), state.json, vqueue.lock, and
-#             ci's files: args (the loop's flags, one a line, `#` comments), priority, agent-url, frozen, stopped
+#             ci's files: args (the loop's flags, one a line, `#` comments), priority, agent-url, frozen, stopped, and the lists
+#             every mode reads: deselect, keep-runs, wide, heavy and pins (LISTS)
 #   shadow/   a shadow's own log, with its own args and stopped
 #   verity/   the loop's clone;  src/  ci's pinned tree, whose research package and train.sh run;  tmp/, trains/  scratch
 # and what research keeps under a home: .research/ (the store's cache, the records of the runs it launched, the notes clone with
@@ -24,7 +25,8 @@
 # which the loop never moves `main` (merge.on_drive): live's tick gets it, and dry-run's and shadow's never, whatever the unit's
 # environment or a credential file says.
 #
-# The node's paths follow ci's args on the command line, so a flag of args naming another host's log or lock never wins.
+# The node's paths follow ci's args on the command line, so a flag of args naming another host's file never wins: the log, the
+# lock and the five lists (each read as empty while it is missing, as on any host; a tick names the missing ones in one line).
 #
 # Credentials, none in this file or its unit: VQ_CRED/*.env (root's, readable by the group: the store's key, the Slack token)
 # are sourced for each tick, and GH_TOKEN is the token vy-vqueue-token.timer keeps in VQ_TOKEN, which root mints from the App's
@@ -41,6 +43,8 @@ SELF=$(readlink -f "$0")
 CLONE=$H/verity CODE=$H/src
 CONFIG=78     # what the node holds can't run a tick: the unit stays failed until it is put right (RestartPreventExitStatus)
 SKIP=75       # this tick can't run, the next may: the loop goes on
+# each list's flag and its file under live/
+LISTS="--deselect=deselect --keep-runs=keep-runs --wide-file=wide --heavy-file=heavy --pins-file=pins"
 
 if [ "${1:-}" = git ]; then
   cat > /dev/null
@@ -65,6 +69,17 @@ mode() {
     live)    dir=$H/live flag= drive=1 ;;
     *) say "$H/mode says '$mode': write dry-run, shadow or live"; return $CONFIG ;;
   esac
+}
+
+# Sets listed, the lists' flags with the node's files, and says the missing ones in one line.
+lists() {
+  local l missing=
+  listed=()
+  for l in $LISTS; do
+    listed+=("${l%%=*}" "$H/live/${l#*=}")
+    [ -e "$H/live/${l#*=}" ] || missing="$missing ${l#*=}"
+  done
+  [ -z "$missing" ] || say "no$missing in $H/live: the loop reads each as empty; copy ci's from the host the loop ran on"
 }
 
 now() { date +%s; }
@@ -98,12 +113,13 @@ tick() {
     [ ! -s "$H/live/agent-url" ] || { read -r RESEARCH_AGENT_URL _ < "$H/live/agent-url"; export RESEARCH_AGENT_URL; }
     GH_TOKEN=$(cat "$TOKEN") || exit $SKIP
     export GH_TOKEN
+    lists
     cd "$CLONE" || exit $CONFIG
     set -f      # args is words, a flag or a value each, never a pattern
     # shellcheck disable=SC2046
     PYTHONPATH=$CODE/tools/research/src exec "$PY" -m research queue vqueue $(grep -v '^[[:space:]]*#' "$dir/args") \
       --repo "$CLONE" --log "$dir/decisions.jsonl" --state "$dir/state.json" --lock "$dir/vqueue.lock" \
-      --priority-file "$H/live/priority" --frozen "$dir/frozen" --once $flag "$@"
+      --priority-file "$H/live/priority" --frozen "$dir/frozen" "${listed[@]}" --once $flag "$@"
   )
 }
 
