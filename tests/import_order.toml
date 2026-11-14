@@ -699,6 +699,12 @@ trusted = true
 
 [[place]]
 paths = [
+    "verity/protocols/proofs/spot/prover/audit",
+    "verity/protocols/proofs/spot/prover/cost",
+]
+
+[[place]]
+paths = [
     "verity/protocols/proofs/spot/prover/workload.py",
 ]
 loads = [
