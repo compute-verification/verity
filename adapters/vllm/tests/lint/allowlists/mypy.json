@@ -195,9 +195,6 @@
     {"file": "verity_vllm/pipeline/build.py", "kind": "assignment", "symbol": "_construct", "detail": ""},
     {"file": "verity_vllm/pipeline/build.py", "kind": "union-attr", "symbol": "_construct", "detail": ""},
     {"file": "verity_vllm/pipeline/cli.py", "kind": "arg-type", "symbol": "main", "detail": ""},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "arg-type", "symbol": "bounded_admission", "detail": "", "count": 2},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "arg-type", "symbol": "match_record_compare", "detail": ""},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "arg-type", "symbol": "weights_of_record_digests", "detail": "", "count": 8},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "index", "symbol": "main", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "union-attr", "symbol": "main", "detail": "", "count": 8},
     {"file": "verity_vllm/pipeline/deferred_rows.py", "kind": "arg-type", "symbol": "of_record", "detail": "", "count": 3},
@@ -389,6 +386,9 @@
     {"file": "verity_vllm/protocols/pouw/h1/window.py", "kind": "return-value", "symbol": "reserve_draw", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/lead/__init__.py", "kind": "arg-type", "symbol": "LeadRun._open", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/lead/__init__.py", "kind": "arg-type", "symbol": "LeadRun.end_pass", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/h1/served.py", "kind": "arg-type", "symbol": "Served._tree", "detail": ""}
+    {"file": "verity_vllm/protocols/pouw/h1/served.py", "kind": "arg-type", "symbol": "Served._tree", "detail": ""},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "arg-type", "symbol": "bounded_admission", "detail": "", "count": 2},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "arg-type", "symbol": "match_record_compare", "detail": ""},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "arg-type", "symbol": "weights_of_record_digests", "detail": "", "count": 8}
   ]
 }
