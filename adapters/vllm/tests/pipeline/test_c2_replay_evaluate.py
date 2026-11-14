@@ -1,6 +1,7 @@
 """`verity_vllm.pipeline.c2_replay.evaluate`, the replay and linkage records of one instrumented run, with each step that reads
 Programs or committed values replaced by a stand-in: what it hands the linkage and the sampled replay, what it puts on the
-replay's record after them, and what a plan and a planner's plan return instead.  The executed prefix of record, its facts
+replay's record after them (a run's protocols and the rows' premises among it), and what a plan and a planner's plan return
+instead.  The executed prefix of record, its facts
 (`executed_prefix_kw`) and the reconciliation of the not-executed class (`reconcile`) are the real ones
 (`verity_vllm.commit.executed_prefix`, `check.replay.population`), on two requests of which one stopped at an EOS.  CPU only;
 the replay itself is `tests/check/test_sampled_replay.py`."""
@@ -18,9 +19,9 @@ import pytest
 
 import verity_vllm.pipeline.c2_replay as C2
 from verity_vllm.check.replay import driver as SR
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.commit import executed_prefix as EPX
 from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.records import replay_codes as RC
 
 Record = dict[str, Any]
 Lines = Callable[[], list[str]]
@@ -312,6 +313,33 @@ def test_the_replay_and_the_linkage_are_given_the_run_s_facts_of_record_and_the_
         "INFO [delta] not-executed reconciliation (pair 0): AGREE n_exec r0 4/4, r1 2/2; row families [('instance_outputs', 2, 2)]",
         ("INFO [delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair 0): 6 reads, 12 leaves, 96 B verified against the run root in 0.5 s (5 "
          "steps bound); not retained 0, failed 0; forked evaluators 3")]
+
+
+def test_a_run_s_protocols_take_its_replay_and_a_premise_its_rows_leave_unshown_goes_on_the_record(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """With protocols the replay runs under them (`pouw_circuit.replayed`), while a plan and the sample taken again for the reads
+    do not; what the Programs' rows leave unshown (`definitions.premises`, over every Program's rows) is put beside the verdict."""
+    from verity_vllm.check.replay import definitions as DF
+    from verity_vllm.check.replay import pouw_circuit as PWC
+
+    steps, s, under, rows = Steps(monkeypatch), sources(tmp_path), list[tuple[Any, int]](), list[Record]()
+    s.protocols, s.reads = SimpleNamespace(entries=["pous:any"]), {}
+
+    def replayed(comp: Any, run: Callable[[], Record]) -> Record:
+        under.append((comp, len(steps.replays)))
+        return run() | {"pouw_ncp_v2": {"result": True}}
+
+    def premises(read: Any) -> list[str]:
+        rows.extend(read)
+        return ["a premise"]
+
+    monkeypatch.setattr(PWC, "replayed", replayed)
+    monkeypatch.setattr(DF, "premises", premises)
+    sr, _lk = C2.evaluate(s, {})
+    assert under == [(s.protocols, 0)] and [c[5] for c in steps.calls if c[0] == "replay"] == [False, True]
+    assert (sr["pouw_ncp_v2"], sr["premises"]) == ({"result": True}, ["a premise"])
+    assert rows == [{"spec": "NotReplayed_v1{request=0}"}, {"spec": "NotReplayed_v1{request=1}"}]
+    assert C2.evaluate(s, {}, plan=True) == ({"plan": True, "picks": 4}, LINKAGE) and len(under) == 1
 
 
 def test_arrivals_the_engine_s_schedule_moved_are_the_replay_s_and_the_linkage_s(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

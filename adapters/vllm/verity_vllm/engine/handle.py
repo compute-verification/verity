@@ -4,7 +4,8 @@ its executor and the uniproc executor's driver worker).
 Each accessor takes a :class:`verity_vllm.LLM`, a ``vllm.LLM`` or its ``LLMEngine``, and raises ``RuntimeError`` naming
 the multiprocess engine core when the object lives in another process (build with ``VLLM_ENABLE_V1_MULTIPROCESSING=0``,
 `engine.env.ENGINE`); `scheduler_or_none` and `executor_or_none` return None there instead, `core_or_none` returns the
-client the engine holds, and `structural_output_lag` says only which of vLLM's two architectures the engine is.
+client the engine holds, `core_in_process` says whether that client holds the core in this process, and
+`structural_output_lag` says only which of vLLM's two architectures the engine is.
 Attribute reads only; nothing is patched.
 """
 from __future__ import annotations
@@ -25,8 +26,8 @@ if TYPE_CHECKING:
 
     type Engine = Wrapper | vllm.LLM | LLMEngine
 
-__all__ = ["core_or_none", "engine_of", "executor", "executor_or_none", "model_runner", "scheduler", "scheduler_or_none",
-           "structural_output_lag"]
+__all__ = ["core_in_process", "core_or_none", "engine_of", "executor", "executor_or_none", "model_runner", "scheduler",
+           "scheduler_or_none", "structural_output_lag"]
 
 
 def engine_of(llm: Engine) -> LLMEngine:
@@ -44,6 +45,14 @@ def core_or_none(llm: Engine) -> Any:
     """The engine core as the ``LLMEngine`` holds it (a client, where the core runs in another process), else None: for a
     reader that records which it is."""
     return getattr(engine_of(llm), "engine_core", None)
+
+
+def core_in_process(llm: Engine) -> bool:
+    """Whether vLLM's engine core runs in this process: what the ``LLMEngine`` holds is a client that holds the core as
+    its own ``engine_core``. False for a client of a core in another process, and for an engine that holds no such
+    client: one with no core at all (vLLM V0, whose executor is the engine's own; `structural_output_lag` tells it
+    apart) and one that holds a core with no client around it, whose parts the other accessors still give."""
+    return getattr(core_or_none(llm), "engine_core", None) is not None
 
 
 def structural_output_lag(llm: Engine) -> int | None:

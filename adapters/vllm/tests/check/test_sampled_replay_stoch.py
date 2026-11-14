@@ -20,8 +20,8 @@ from verity.definitions.numerics import rows as RK
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import population as POP
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records import replay_codes as RC
 
 V, H, T = 64, 8, 2          # vocab, hidden (the logits Gemm's K), decode steps after the arrival step
 

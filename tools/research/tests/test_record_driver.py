@@ -59,9 +59,10 @@ def repository(tmp_path: Path, monkeypatch, key: str, files: tuple[str, ...] = (
 
 
 def test_every_lean_driver_is_one_command_with_its_mode():
-    assert [k.split(".")[1] for k in LEAN] == ["lakefile-lists", "lean-audit", "lean-caps", "lean-imports", "pyproject-test-lists"]
+    assert [k.split(".")[1] for k in LEAN] == ["lakefile-lists", "lean-audit", "lean-caps", "lean-imports", "lean-limits",
+                                               "pyproject-test-lists"], "lean-caps: lean-limits' older name, registered too"
     plain = RECORD_DRIVER["merge.lean-audit.driver"]
-    for k, flag in zip(LEAN, ("--lakefile ", "", "--caps ", "--lean ", "--pyproject ")):
+    for k, flag in zip(LEAN, ("--lakefile ", "", "--caps ", "--lean ", "--caps ", "--pyproject ")):
         assert RECORD_DRIVER[k] == plain.replace("%O", f"{flag}%O")
 
 

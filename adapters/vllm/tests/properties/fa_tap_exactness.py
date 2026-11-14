@@ -55,13 +55,13 @@ import numpy as np
 # functions that read them, never here: a Definition enters the Definition table (`verity.circuits.defs.REGISTRY`) as its
 # module loads, and a reader of the table by id (`verity.commitments.windows.interface.resolve`) answers for it from then
 # on.  Importing this module loads neither the evaluator nor a module of `verity.definitions`.
+from tests.commit.hidden_stream import ROW_GUARD_FIELD, SRC_BITS, StreamLayout
 from verity_vllm.acquire.sources.hidden_source import (
     KBLOCK_M,
     fa2_kblock_n,
     fa2_swapped,
     fa3_tile,
 )
-from verity_vllm.commit.hidden_stream import ROW_GUARD_FIELD, SRC_BITS, StreamLayout
 from verity_vllm.records.property_record import REGISTRY, digest_of
 from verity_vllm.records.property_record import seal as seal_record
 

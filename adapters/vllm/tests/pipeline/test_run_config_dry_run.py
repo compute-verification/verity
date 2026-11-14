@@ -31,7 +31,7 @@ def dry(*extra: str) -> dict[str, list[str]]:
 
 def test_dry_run_gpu_phase():
     c = dry("--phase", "gpu")
-    assert list(c) == ["capture", "control", "census", "nonint", "gpu_done"]
+    assert list(c) == ["capture", "control", "gpu_done"]
     cap = c["capture"]
     assert cap[:4] == ["/pod/py311", "-m", "verity_vllm.pipeline.cli", "m1-capture"]
     assert cap[cap.index("--snapshot-steps") + 1] == "0,1,2,3"        # default, contiguous from 0
@@ -39,34 +39,22 @@ def test_dry_run_gpu_phase():
     assert cap[cap.index("--max-num-seqs") + 1] == "8" and "--workload" in cap
     ctl = c["control"]
     assert "--no-observer" in ctl and ctl[ctl.index("--out") + 1] == "/r/RUN/control" and "--snapshot-steps" not in ctl
-    cen = c["census"]
-    assert cen[1:4] == ["-m", "verity_vllm.pipeline.cli", "census"] and cen[cen.index("--out") + 1] == "/r/RUN/census" and "--no-traces" in cen
-    ni = c["nonint"]
-    assert ni[1:4] == ["-m", "verity_vllm.pipeline.cli", "noninterference"] and ni[ni.index("--out") + 1] == "/r/RUN/nonint"
-    assert ni[ni.index("--case") + 1] == "B1"                        # expected_layers resolves from the case
-    assert ni[ni.index("--accepted-ctl") + 1] == "/r/RUN/control/tokens.json"   # the control run, never a workload list
-    assert not any("accepted" in a and "control" not in a for a in ni if not a.startswith("--"))   # no workload-authored list anywhere
     assert all(x[0] == "/pod/py311" for k, x in c.items() if k != "gpu_done")
 
 
 @pytest.mark.slow
 def test_dry_run_cpu_phase():
     c = dry("--phase", "cpu", "--laptop", "--full-replay", "--seed", "12345")
-    assert list(c) == ["resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "golden", "gates"]
+    assert list(c) == ["resolve", "compare", "fold", "fold_2", "gates"]
     log = "/r/RUN/capture/log.jsonl.gz"
     r = c["resolve"]
     assert r[:5] == ["/pod/py312", "-m", "verity_vllm.pipeline.cli", "resolve-log", log] and r[r.index("--out") + 1] == "/r/RUN/resolution" and "--strict" not in r
-    cr = c["census_reconcile"]
-    assert cr[cr.index("--reconcile") + 1] == "/r/RUN/census/census.json" and cr[cr.index("--report") + 1] == "/r/RUN/census_reconcile"
-    nc = c["nonint_compare"]
-    assert "--compare" in nc and nc[nc.index("--case") + 1] == "B1" and nc[nc.index("--accepted-ctl") + 1] == "/r/RUN/control/tokens.json"
     cp = c["compare"]
     assert cp[1:4] == ["-m", "verity_vllm.pipeline.cli", "fold-compare"] and cp[cp.index("--out") + 1] == "/r/RUN/compare.json"
     assert cp[cp.index("--snapshots") + 1] == "/r/RUN/capture" and cp[cp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
     for st, out in (("fold", "/r/RUN/fold_summary.json"), ("fold_2", "/r/RUN/fold_summary_2.json")):
         f = c[st]
         assert f[1:6] == ["-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold"] and f[f.index("--out") + 1] == out
-    assert c["golden"][1:6] == ["-m", "verity_vllm.pipeline.cli", "golden", "--check", "--out"] and c["golden"][-1] == "/r/RUN/golden.json"
     assert c["gates"][0].startswith("in-process") and "/r/RUN/gates.json" in c["gates"][0] and "out/gen/cards/cid.json" in c["gates"][0]
     assert all(x[0] == "/pod/py312" for k, x in c.items() if k != "gates")
 
@@ -82,7 +70,7 @@ def test_dry_run_no_laptop_and_skip():
 
 @pytest.mark.slow
 def test_the_stage_names_without_a_command_run_nothing_and_a_skip_naming_them_is_printed():
-    retired = ("root_policy", "wiring", "replay_a", "replay_chain")
+    retired = ("root_policy", "wiring", "replay_a", "replay_chain", "census_reconcile", "nonint_compare", "golden")
     c = dry("--phase", "cpu")                                         # no --seed: no stage samples a sample
     assert not set(retired) & set(c)
     c = dry("--phase", "cpu", "--skip", ",".join(retired))
@@ -92,7 +80,7 @@ def test_the_stage_names_without_a_command_run_nothing_and_a_skip_naming_them_is
 @pytest.mark.slow
 def test_dry_run_all_and_snapshot_steps():
     c = dry("--phase", "all", "--snapshot-steps", "0,1,2", "--seed", "7")
-    assert list(c)[:4] == ["capture", "control", "census", "nonint"]
+    assert list(c)[:3] == ["capture", "control", "resolve"]
     assert c["capture"][c["capture"].index("--snapshot-steps") + 1] == "0,1,2"
     assert "fold" in c and "gates" in c
     c = dry("--phase", "all", "--snapshot-steps", "0,1,2", "--full-replay", "--seed", "7")
@@ -113,7 +101,7 @@ def test_dry_run_snapshot_caps_reach_the_capture_only():
     c = dry("--phase", "gpu", "--snapshot-max-bytes", str(256 << 20), "--snapshot-max-bytes-op", str(48 << 20))
     cap = c["capture"]
     assert cap[cap.index("--snapshot-max-bytes") + 1] == str(256 << 20) and cap[cap.index("--snapshot-max-bytes-op") + 1] == str(48 << 20)
-    assert all("--snapshot-max-bytes" not in c[st] for st in ("control", "census", "nonint"))
+    assert all("--snapshot-max-bytes" not in c[st] for st in ("control",))
 
 
 @pytest.mark.slow
@@ -121,7 +109,6 @@ def test_dry_run_existing_capture_paths():
     c = dry("--phase", "cpu", "--log", "/data/x/log.jsonl.gz", "--snapshots", "/data/x", "--control-tokens", "/data/ctl.json", "--other-log", "/data/y.jsonl.gz",
             "--seed", "7")
     assert c["resolve"][4] == "/data/x/log.jsonl.gz" and c["compare"][c["compare"].index("--snapshots") + 1] == "/data/x"
-    assert c["nonint_compare"][c["nonint_compare"].index("--accepted-ctl") + 1] == "/data/ctl.json"
     assert c["fold_other"][c["fold_other"].index("--log") + 1] == "/data/y.jsonl.gz"
 
 

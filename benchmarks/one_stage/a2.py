@@ -31,12 +31,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import a0  # noqa: E402
-import r2_population as R2  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:

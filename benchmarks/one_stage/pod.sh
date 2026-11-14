@@ -64,7 +64,7 @@ elif [ "${RUN:-a0}" = a3 ]; then
     --lean $W/bin/verity-verify-proof --out $O/a3 --layer ${LAYER:-0} --k ${K:-128} ${DELTA:+--delta $DELTA} ${DRAW_FILE:+--draw-file} \
     ${STATEMENT:+--statement $STATEMENT} 2>&1 | tee $O/a3.log | cut -c1-4000
 else
-  $W/py/bin/python benchmarks/one_stage/a0.py --set $SET --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \
+  $W/py/bin/python verity/protocols/proofs/spot/prover/audit/template_audit.py --set $SET --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \
     --lean $W/bin/verity-verify-proof --out $O/a0 --k ${K:-16} --delta ${DELTA:-0.01} ${BIND:+--bind} ${STATEMENT:+--statement $STATEMENT} 2>&1 | tee $O/a0.log | cut -c1-4000
 fi
 exit ${PIPESTATUS[0]}

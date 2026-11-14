@@ -208,3 +208,12 @@ def test_the_lease_pool_holders_go_to_their_own_local_queue_on_the_same_cluster_
         "kueue.x-k8s.io/queue-name"] == "deployments-gpu"
     kueue = (NEBIUS / "sky" / "kueue.yaml").read_text()
     assert "metadata: {name: deployments-gpu-pool, namespace: default}" in kueue
+
+
+def test_the_latch_under_its_older_name_still_latches_and_is_renamed(pacer):
+    pacer.OLD_LATCH.write_text("2026-11-01T00:00:00Z disk 78.2%\n")
+    pacer.disk["bundles"] = 140                      # 140 + 120 is over the dropped 150 GB, under the 1200 GB room
+    commit(pacer, "cov-a", B8, admitted=True)
+    pacer.tick()
+    assert not pacer.OLD_LATCH.exists() and pacer.LIMIT_LATCH.read_text() == "2026-11-01T00:00:00Z disk 78.2%\n"
+    assert pacer.LIMIT_LATCH.name == "limit-150" and pacer.cluster["policy"] == "Hold", "latched: the limit is LIMIT_LOW_GB"

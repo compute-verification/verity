@@ -28,7 +28,7 @@ from tests.check.test_rev_r16_named_population_gap import (
 from tests.check.test_verdict import _base
 from verity_vllm.check import c2_rules as C2
 from verity_vllm.check import verdict as V
-from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.records import replay_codes as RC
 
 NO_GAP = (None, None)
 BY_FORM_B = "C2 of record by form (B) [oracle compare complete: 3 compared, 0 mismatch, instance outputs 2]"

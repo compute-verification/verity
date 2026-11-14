@@ -28,8 +28,7 @@ from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Subset
 from verity.protocols.proofs.spot.prover import optimize as O, plancheck as PC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
-from verity.protocols.proofs.spot.verifier.one_stage import (draw as D, partition as P, registration as R,
-                                                            verifier as V)
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 from verity.commitments.window import window_binding
 
 import fake_challenger as FC
@@ -302,20 +301,30 @@ def test_the_run_of_record_holds_the_form_switch(monkeypatch):
 
 
 def test_a_two_stage_outcome_is_complete_only_on_the_form_the_request_definition_and_its_records():
-    """`second_stage.complete`: true only when the two-stage form is allowed, the replay block is the registered request
+    """`second_stage.complete_twin`: true only when the two-stage form is allowed, the replay block is the registered request
     Definition and each audit record accepted and is itself complete. One of the three missing, it is false: the form
     off, as `FORM` is; a stand-in replay block; a record that is missing, did not accept, is not complete or does not
     say; no record at all. An argument that is not the boolean true counts as missing."""
     whole = {"accepted": True, "complete": True}
     assert SS.FORM is False
-    assert SS.complete(True, True, [whole, whole]) is True and SS.complete(True, True, [whole]) is True
-    assert not SS.complete(SS.FORM, True, [whole, whole])
-    assert not SS.complete(True, False, [whole, whole])
+    assert SS.complete_twin(True, True, [whole, whole]) is True and SS.complete_twin(True, True, [whole]) is True
+    assert not SS.complete_twin(SS.FORM, True, [whole, whole])
+    assert not SS.complete_twin(True, False, [whole, whole])
     for record in (None, {"accepted": True, "complete": False}, {"accepted": False, "complete": True},
                    {"accepted": True}, {"complete": True}, {"accepted": 1, "complete": True}):
-        assert not SS.complete(True, True, [whole, record])
-    assert not SS.complete(True, True, [])
-    assert not SS.complete(1, True, [whole]) and not SS.complete(True, "yes", [whole])
+        assert not SS.complete_twin(True, True, [whole, record])
+    assert not SS.complete_twin(True, True, [])
+    assert not SS.complete_twin(1, True, [whole]) and not SS.complete_twin(True, "yes", [whole])
+
+
+def test_no_python_decides_a_two_stage_outcome():
+    """Round 2's check and a two-stage outcome's completeness of record are the Lean's, which no interface here reaches:
+    each raises naming the goal (`verifier.not_written`), and their Python twins answer only beside it."""
+    whole = {"accepted": True, "complete": True}
+    for call in (lambda: SS.check(True, None, None), lambda: SS.complete(True, True, [whole])):
+        with pytest.raises(NotImplementedError, match=V.GOAL):
+            call()
+    assert V.GOAL == "proofs/spot-two-stage-sound"
 
 
 def _linked(s: dict, shift: int = 0, **ports) -> dict:
@@ -701,7 +710,7 @@ def _registered_codes(monkeypatch):
     reads)``, the reference's reads of the linked ports (`READS`'s when None), and whether the verifier fills the two
     values itself (``filled``) or the prover registers them."""
     seen = []
-    check = SS.check
+    check = SS.check_twin
     monkeypatch.setattr(SS, "check", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
     _two_stage_outcome(_stream(), lambda s, second: [s])
     (own, (s,)), = seen
@@ -717,7 +726,7 @@ def _registered_codes(monkeypatch):
                                 reported=SS.statement_reads([stmt]), verified=SS.verified_of(_lean(checked=stmt)),
                                 ref_reads=((TEMPLATE, ref),),
                                 supplied=SS.supplied_of({v: [[{"bytes": "00000000"}]] for v in entries} if filled else None))
-        return list(SS.check(True, o, [stmt]).codes)
+        return list(SS.check_twin(True, o, [stmt]).codes)
     return codes
 
 
@@ -1349,12 +1358,12 @@ def test_round_two_names_what_a_replay_block_returns_and_refuses_an_interior_val
     for registered, returns in (([{"value": "w"}, {"value": 5}, {}], (BOUT,)), (5, (BOUT,)), ([{"value": BOUT}], ()),
                                 ([{"value": BX}], (BOUT,))):
         assert SS.returns_ok(own(registered, returns))
-        assert "second-return" not in SS.check(True, own(registered, returns), None).codes
+        assert "second-return" not in SS.check_twin(True, own(registered, returns), None).codes
     refused = own([{"value": "w"}, {"value": BOUT}])
-    v = SS.check(True, refused, None)
+    v = SS.check_twin(True, refused, None)
     assert not SS.returns_ok(refused) and "second-return" in v.codes and not v.ok, v
     assert v.to_json()["detail"]["second-return"] == SS.RETURN_WHY
-    assert SS.check(False, refused, None).codes == v.codes
+    assert SS.check_twin(False, refused, None).codes == v.codes
 
 
 def test_a_replay_block_of_two_templates_takes_a_count_per_template():

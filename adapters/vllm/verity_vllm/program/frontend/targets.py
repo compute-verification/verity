@@ -343,6 +343,7 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
                              -> the same, for a request whose prefill ran in launches of n0, n1, ... rows in turn (`chunks`; the
                                 chunked request wrapper, `vllm_meta.ChunkedGreedyRequest`): its steps are its chunks, then its decodes
         "conflict"           -> {"conflict": True}        requests of this shape have DIFFERENT contexts: refused where the tile rule reads it
+        any other str        -> the int, list or dict it spells (a count, or JSON), read as above; a string that spells none is refused
     Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True} (+ "batch_by_step": {int: [(rows, start), ...]},
     + "chunks": [int, ...])."""
     if spec is None or spec == "":
@@ -351,7 +352,12 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         s = spec.strip()
         if s.lower() == "conflict":
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
-        spec = int(s) if s.lstrip("-").isdecimal() else json.loads(s)
+        try:
+            spec = int(s) if s.lstrip("-").isdecimal() else json.loads(s)
+        except ValueError as e:
+            raise ValueError(f"launch context: {spec!r} is neither a count nor JSON ({e}); it is max_seqlen_q as a count (1024), a JSON "
+                             'list of it per step ([1024, 1, 1]), a JSON object ({"0": 1024}, or {"batch": [[[rows, start], ...], ...]} '
+                             'for the batch itself) or "conflict"') from e
     if isinstance(spec, bool):
         raise ValueError(f"launch context: {spec!r}")
     if isinstance(spec, int):

@@ -104,6 +104,7 @@ def _loaded(p: PrimitiveDefinition, loaders: list) -> set[tuple[int, str | None]
         return set()
     assert not any(isinstance(t, Array) for _n, t in p.params), f"{p.id}: an array parameter (WORDS covers words only)"
     reads: set[tuple[int, str | None]] = set()
+    refused: list[Exception] = []
 
     def recorder(w):
         def call(*a, **k):
@@ -130,8 +131,9 @@ def _loaded(p: PrimitiveDefinition, loaders: list) -> set[tuple[int, str | None]
         for ws in itertools.product(WORDS, repeat=len(masks)):
             try:
                 p.evaluate(*(x & m for x, m in zip(ws, masks)))
-            except Exception:  # noqa: BLE001  (an input it refuses still shows what it read)
-                pass
+            except Exception as e:  # noqa: BLE001  (an input it refuses still shows what it read)
+                refused.append(e)
+    assert len(refused) < len(WORDS) ** len(masks), f"{p.id} refuses every word of WORDS: {refused[0]!r}"
     return reads
 
 

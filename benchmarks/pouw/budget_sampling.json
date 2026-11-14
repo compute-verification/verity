@@ -1,5 +1,5 @@
 {
- "source": "budget.py --sampling-sweep: OPT2's int8 Llama-3.1-8B row (benchmarks/sampling_plan/int8_llama.py at 77776aa95b), cost-model/v1, \u03b4_s = 2^-41, a week of one RTX PRO 6000; point = [B_s, eps_sample, draws a week, unit_share, linears' cut]",
+ "source": "budget.py --sampling-sweep: OPT2's int8 Llama-3.1-8B row (verity/protocols/proofs/spot/prover/cost/int8_llama.py at 77776aa95b), cost-model/v1, \u03b4_s = 2^-41, a week of one RTX PRO 6000; point = [B_s, eps_sample, draws a week, unit_share, linears' cut]",
  "regimes": {
   "plain": {
    "commit": 1.0,

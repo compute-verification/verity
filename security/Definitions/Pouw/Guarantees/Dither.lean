@@ -124,7 +124,7 @@ Open (stated so the red team can aim at them):
 * `G` is any accelerator here. The card instance reads it as the card model's machine at a card's θ (its table,
   `Accel.Card`), prices an exchanged bit at `β = n_max H_mac` with the certifier streaming the dither bits and counting
   `K = E_in + E_out` (which holds only while the dither bits stay streamed), and makes the hosts and DPUs resources
-  of `G` (that they are all the processors the cards reach is `PeriodInventory`, held until it is decided whether
+  of `G` (that they are all the processors the cards reach is `MonitoringPeriodInventory`, held until it is decided whether
   they are devices of the period). -/
 def WorkSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (Obs : Type)

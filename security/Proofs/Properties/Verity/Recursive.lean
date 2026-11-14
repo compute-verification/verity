@@ -492,7 +492,8 @@ theorem sampled_oneStage_accepts {p₀ : Spot.OneStageZk.Params} {c : Spot.OneSt
     (h : VStar.Recursive.Sampled.checkBlobs (.inl p₀) c e bs = .accept pub prof) :
     ∃ e₀, e = .inl e₀ ∧ Spot.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof := by
   cases e with
-  | inl e₀ => exact ⟨e₀, rfl, h⟩
+  | inl e₀ => exact ⟨e₀, rfl, (VStar.Recursive.Caller.gate_accept (show VStar.Recursive.Caller.gate c.record
+      p₀.base.verifier (Spot.OneStageZk.checkBlobs p₀ c e₀ bs) = .accept pub prof from h)).2⟩
   | inr e₁ => simp [VStar.Recursive.Sampled.checkBlobs] at h
 
 /-- `sampled_oneStage_accepts` at the component, `VStar.Recursive.Sampled.protocol`'s blob check. -/
