@@ -1,4 +1,4 @@
-"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.circuits` Program, verified by sampled proofs.
+"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.circuits` Program, verified by SPOT.
 
 * `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
 * `boolean`: the six of them `pc4`'s and `pc8`'s row units call, and the four Keccak words their hiding tiles' digest calls,
@@ -53,8 +53,8 @@
   the pass's public one and the calls' pass tiles in order.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
-is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs
-and the sample layout; None for any other scheme, which stays refused beside sampled proofs.  The verifier builds these
+is here, the Programs SPOT traces for one PoUW linear and its weight, their partition queries, the served outputs
+and the sample layout; None for any other scheme, which stays refused beside SPOT.  The verifier builds these
 Programs itself, from (scheme, m, k, n) and its own anchors, and never takes a prover's descriptor: `Traced.check_descriptor`
 compares an offered one's digest with its own.
 """
@@ -190,7 +190,7 @@ class Traced:
 
 
 def traced_as(scheme: str, m: int, k: int, n: int) -> Traced | None:
-    """The circuit sampled proofs traces for one PoUW linear of shape m × k → n under ``scheme``, or None when the scheme has
+    """The circuit SPOT traces for one PoUW linear of shape m × k → n under ``scheme``, or None when the scheme has
     no circuit here. Raises `protocol.DomainError` for a shape outside the circuit (16 | m, 16 | n, 64 | k). P is the
     scheme's, never the caller's."""
     if scheme not in SCHEMES:

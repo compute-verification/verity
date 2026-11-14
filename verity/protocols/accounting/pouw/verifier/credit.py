@@ -149,7 +149,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   ``req``), when it registers one, is round 0's: its root is ``request_table`` and its domain binds the session alike.
   That the Commit's values are the model's computation is the Commit's sample's, not credit's.
 * **The window serves its period's fixed length** (`committed_length`, `_length`): correct
-  tokens served past the honest run's end of sequence are not useful work, so a row of record serves each request's
+  tokens served past the honest run's end of sequence are not useful work, so a workload of record serves each request's
   public max_tokens whatever it samples (ignore_eos, circuits' ``public-cap`` done source). The period's open commits
   them before any window (`LENGTH_FIELD`, ``{max_tokens, stop}``, stop `window.STOP_FIXED`), so they are the verifier's
   own; an open with none (``no-fixed-length``) or an EOS-keyed stop mode (``eos-keyed-row``) credits nothing. Every
