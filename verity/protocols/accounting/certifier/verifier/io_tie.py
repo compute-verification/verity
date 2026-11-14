@@ -1,6 +1,6 @@
 """The I/O tie (`PROTOCOL.md`, "The I/O tie"), a prototype on a fake upstream: the reference of one egress
 execution phase's tie, a proof block a bucket row that opens every cell of it, and the Boolean Definitions it is built
-from. Nothing here is in a Spec or proved. The cells are the network certifier's (`warden`, its rows as `warden_rows`
+from. Nothing here is in a Spec or proved. The cells are the network certifier's (`network_certifier`, its rows as `network_certifier_rows`
 registers them, registration v2); no Commit writes the port yet, so the fake upstream commits it as the design has the
 Commit commit it, under `hm96-sha512/row/v2` rows in a `frame-v3-sha512` tree.
 
@@ -11,7 +11,7 @@ B bytes, so cell i is slot i mod R of bucket ⌊i / R⌋. A bucket's live connec
 egress cell i is in bucket s + D + ⌊i / r⌋, its slot i mod r: its n events (`data_cell`) and its `END`
 (`end_cell`), and the rest of that bucket a `PAD` on q; it holds no slot after it. A `DATA` cell is the network
 certifier's cut of the server's bytes, P = B − 9 of them, and a response is its events, each `id_event` padded with
-spaces to P, then `TRAILER`, shorter than P: so the network certifier's cut (`warden.Warden._egress`) is exactly n
+spaces to P, then `TRAILER`, shorter than P: so the network certifier's cut (`network_certifier.NetworkCertifier._egress`) is exactly n
 `DATA` cells, one event each, and an `END` that holds `TRAILER`, whenever the bytes are there by their deadlines. q is
 the request's ingress ordinal on the wire, from 1 as `active.Requests` numbers it, which the network certifier writes
 from the connection it terminated.
@@ -55,7 +55,7 @@ fabricated output, an early, late or missing `END`, a `FAIL`, a wrong id and a f
 
 `IoTieBucket` is the proof block, one a bucket row. Its `row` is the network certifier's registered row t and its `port`
 S rows of the Commit's registered port, which the proof system reads (the Lean verifier's registered reads,
-`flock-verify --registered`: proof block t reads row t by `warden_rows.bucket_port`, and its `port[s]` its bucket's s-th
+`flock-verify --registered`: proof block t reads row t by `network_certifier_rows.bucket_port`, and its `port[s]` its bucket's s-th
 step by `port_reads`), so no gate of it hashes. It holds every cell to the map (`IoTieContent`): the port's E entries,
 each its id and its index e, routed to the slots by the prover's switches; any setting is a permutation, and
 `IoTieMatch` holds each `DATA` cell's id to the entry the map names, by its index. An execution phase's tie is its T
@@ -92,7 +92,7 @@ ID_EVENT_BYTES = len(ID_EVENT_HEAD) + ID_DIGITS + len(ID_EVENT_TAIL)
 ID_AT = HEADER.size + len(ID_EVENT_HEAD)
 #: the least cell: the header and one event, which a `DATA` cell holds with no padding
 CELL_USED = HEADER.size + ID_EVENT_BYTES
-#: the network certifier's `END` kind (`warden.END`), beside `active`'s `PAD` and `DATA`
+#: the network certifier's `END` kind (`network_certifier.END`), beside `active`'s `PAD` and `DATA`
 END = 0x20
 #: a response's last bytes, after its events: the network certifier's `END` holds them
 TRAILER = b"data: [DONE]" + EVENT_END
@@ -501,12 +501,12 @@ def reference(inst: Instance) -> bool:
 
 def port_reads(steps: Sequence[Sequence[int]], root: bytes, domain_id: bytes, count: int, P: int,
                value: str = SAMPLED, reads_from: int = 0) -> dict[str, dict[str, Any]]:
-    """The verifier's own `--registered` ports (`warden_rows.reads_file`'s `ports`) of a population of proof blocks that
+    """The verifier's own `--registered` ports (`network_certifier_rows.reads_file`'s `ports`) of a population of proof blocks that
     each read S rows of the Commit's port, its `count` rows of P ids under `root` in the domain `domain_id`: `port[s]`
     (`port` when S = 1, as `registered.reads` keys a parameter of one row), the proof block's s-th port row, has proof
     block `reads_from + u` read row steps[u][s]. The steps are the verifier's map's, so every read is at a public
     position, and the Lean verifier holds each read row to its leaf of the Commit's root by its b ‖ c
-    (`registered.verify_read`), as it holds a bucket row to the network certifier's (`warden_rows.bucket_port`)."""
+    (`registered.verify_read`), as it holds a bucket row to the network certifier's (`network_certifier_rows.bucket_port`)."""
     widths = {len(st) for st in steps}
     if len(widths) != 1 or 0 in widths:
         raise ValueError("every unit reads the same S >= 1 port rows")

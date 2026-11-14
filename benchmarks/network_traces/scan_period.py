@@ -8,7 +8,7 @@ and its Lean.
 * **The case** (`rows_case`) of link-window W: the parameters the network certifier run's ``deployment.json`` (its key, session
   and one schedule, its integer fields and its response cap when it has one: the period check reads the id egress
   form, and a run in another is refused),
-  the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
+  the link `network_certifier_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
   the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
@@ -52,8 +52,8 @@ sys.path.insert(0, str(HERE))
 
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
-import warden_serve as WS  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS  # noqa: E402
+import network_certifier_serve as WS  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.network_certifier import INTEGER_FIELDS  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registration as RG  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 
@@ -62,7 +62,7 @@ CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "windo
 
 def certificates(run: Path, w: int) -> list[dict]:
     """Execution phase w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
-    responses, fails: `warden_serve.CERTIFIED`), each the certificate's own fields."""
+    responses, fails: `network_certifier_serve.CERTIFIED`), each the certificate's own fields."""
     docs = [json.loads(x)["certificate"] for x in SZ._found(run, "certified.jsonl").read_text().splitlines()
             if "certificate" in json.loads(x)]
     out = []

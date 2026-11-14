@@ -1,5 +1,5 @@
-"""The bound on an execution phase's releases (`WardenParams.phase_releases`, R), on the device, driven tick by tick on
-`test_network_certifier_warden`'s harness: under loads that keep every lane busy, each client sending its request
+"""The bound on an execution phase's releases (`NetworkCertifierParams.phase_releases`, R), on the device, driven tick by tick on
+`test_network_certifier`'s harness: under loads that keep every lane busy, each client sending its request
 when the load says, no execution phase releases more than R requests, and a load that fills an execution phase
 releases exactly R in it where the schedule lets it. R is the most rows a class's tables have under the lengths
 rows' form 2 (`content_rows`' "The classes"), so the device is held to it here and nowhere on its tick."""
@@ -13,14 +13,14 @@ from collections import Counter
 import pytest
 
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import LEN, id_req
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import Client, Server, run
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams, cells
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import Client, Server, run
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams, cells
 
 #: the lengths tests' schedule at form 2: two lanes, sixteen buckets an execution phase
 SMALL = dataclasses.replace(LEN, lengths=2)
 #: the schedule `benchmarks/network_traces/connection_rows_run.py` costs by default, at form 2, and the same with
 #: ingress half as long
-WIDE = WardenParams(cell_bytes=512, slots=8, bucket_ms=100, delay=30, lanes=16, queue=64, window=600, ingress_cells=96,
+WIDE = NetworkCertifierParams(cell_bytes=512, slots=8, bucket_ms=100, delay=30, lanes=16, queue=64, window=600, ingress_cells=96,
                     ingress_buckets=30, egress_cells=4097, every=1, lengths=2)
 SHORT = dataclasses.replace(WIDE, ingress_buckets=15)
 
@@ -49,7 +49,7 @@ def holding() -> tuple[Server, type[Client]]:
     return Silent([]), Holding
 
 
-def released(params: WardenParams, arrivals: dict[int, list], phases: int) -> tuple[Counter, object]:
+def released(params: NetworkCertifierParams, arrivals: dict[int, list], phases: int) -> tuple[Counter, object]:
     """The releases of each execution phase of a run of `phases` under `arrivals`, by the device's own log, and the
     device. Its records are dropped as they are published: only the count is read."""
     server, client = holding()
@@ -59,7 +59,7 @@ def released(params: WardenParams, arrivals: dict[int, list], phases: int) -> tu
     return Counter(e["ingress_end"] // params.window for e in device.log if e["release"] is not None), device
 
 
-def filling(params: WardenParams, phase: int = 1) -> dict[int, list]:
+def filling(params: NetworkCertifierParams, phase: int = 1) -> dict[int, list]:
     """A load that fills execution phase `phase`: every lane admits a connection in the earliest bucket whose
     release can be in the execution phase, `ingress_buckets` − 1 before its first, and again in each bucket the lane
     is free, every D + 1. The first connections send their request so that it is released in the execution phase's
@@ -74,7 +74,7 @@ def filling(params: WardenParams, phase: int = 1) -> dict[int, list]:
     return arrivals
 
 
-def eager(params: WardenParams, phases: int, hold: int = 0) -> dict[int, list]:
+def eager(params: NetworkCertifierParams, phases: int, hold: int = 0) -> dict[int, list]:
     """A load that keeps every lane busy from the run's first bucket: a connection a lane in each bucket the lane is
     free, its request sent `hold` buckets after its admission, or at once."""
     one = cells(id_req(1, 3), params.cell_bytes)
@@ -82,7 +82,7 @@ def eager(params: WardenParams, phases: int, hold: int = 0) -> dict[int, list]:
             for s in range(0, phases * params.window - params.span, params.delay + 1)}
 
 
-def scattered(params: WardenParams, phases: int, seed: int) -> dict[int, list]:
+def scattered(params: NetworkCertifierParams, phases: int, seed: int) -> dict[int, list]:
     """A seeded load of connections that arrive in bursts of a lane's worth at most, each holding its request for a
     time of its own inside the ingress bound: no more than the lanes and the queue hold at once."""
     rng, one = random.Random(seed), cells(id_req(1, 3), params.cell_bytes)
@@ -106,7 +106,7 @@ def test_the_bound_is_the_schedules_own_number():
     assert LEN.phase_releases == SMALL.phase_releases
 
 
-def busy(params: WardenParams, phases: int, seeds: int) -> list[dict[int, list]]:
+def busy(params: NetworkCertifierParams, phases: int, seeds: int) -> list[dict[int, list]]:
     """Loads that keep the lanes busy through a run: sent at once, at each bucket of the ingress bound, and at
     seeded times."""
     return [*(eager(params, phases, hold=hold) for hold in range(params.ingress_buckets)),

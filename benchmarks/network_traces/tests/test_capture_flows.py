@@ -28,12 +28,12 @@ from pathlib import Path
 
 import pytest
 
-from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from test_network_certifier_serve import PARAMS, SESSION, _response, _Writer, ws
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import VirtualClock
 from verity.protocols.accounting.certifier.verifier.io_tie import TRAILER
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_head, with_release
-from verity.protocols.accounting.certifier.verifier.warden import Warden, WardenParams, audit, cells, read_cell
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifier, NetworkCertifierParams, audit, cells, read_cell
 
 HERE = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -680,8 +680,8 @@ class _Uncommitted(ws.Publisher):
 
 
 def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, held: tuple[int, ...] = (),
-            watermark: bool = True, params: WardenParams = PARAMS, order=None, phases: int = 1,
-            arrive: tuple[int, ...] = ()) -> tuple[Warden, list[_Writer], _Writer]:
+            watermark: bool = True, params: NetworkCertifierParams = PARAMS, order=None, phases: int = 1,
+            arrive: tuple[int, ...] = ()) -> tuple[NetworkCertifier, list[_Writer], _Writer]:
     """`phases` execution phases of the network certifier at `params` on a `VirtualClock`, one unless given, published
     as `serve` publishes a run: its records and certificates through `Publisher`, `deployment.json`, and
     `warden.json`'s connections and, with `watermark`, its watermark. Every request arrives before the first tick,
@@ -710,13 +710,13 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
     async def open_watermark():
         return asyncio.StreamReader(), mark
 
-    def settled(w: Warden) -> bool:
+    def settled(w: NetworkCertifier) -> bool:
         return all(c.server is not None and c.ingress_ended
                    and (c.egress_ended or (c.ordinal - 1 in held and c.bytes_out)) for c in w.active)
 
-    async def main() -> Warden:
+    async def main() -> NetworkCertifier:
         clock = VirtualClock(-tau / 2)
-        relay = Warden(params, connect, origin=0.0, windows=phases, clock=clock, sleep=clock.sleep, publish=publisher,
+        relay = NetworkCertifier(params, connect, origin=0.0, windows=phases, clock=clock, sleep=clock.sleep, publish=publisher,
                        withhold=publisher.withhold, watermark=open_watermark if watermark else None)
         running = asyncio.create_task(relay.run())
         tasks = []

@@ -14,8 +14,8 @@ import asyncio
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier.warden import REFUSED, cells
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import (
+from verity.protocols.accounting.certifier.verifier.network_certifier import REFUSED, cells
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import (
     B, EOF, P, PARAMS, Client, Ordered, Server, request, run, tick_engine, tick_traffic)
 
 

@@ -202,16 +202,16 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   no window of the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
   `verify_ledger`'s).
 - **A network certifier rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell network certifier
-  (`verity.protocols.accounting.certifier.verifier.warden`) as the auditor's device, `benchmarks/network_traces/warden_serve.py
+  (`verity.protocols.accounting.certifier.verifier.network_certifier`) as the auditor's device, `benchmarks/network_traces/network_certifier_serve.py
   rehearse`, with the network certifier and its client here and the server the peer's endpoint, reached through the same tunnel:
   client ──cells──▶ network certifier (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`, `--port` and
   `--minutes` as a certifier rehearsal's (it takes no `--tamper`: the network certifier is the device, with no shim to tamper),
   `--requests` 4 to 1700 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
-  passed on only when given (`warden_serve.py`'s 256 otherwise), and the sampling and the key's height below. The traffic
+  passed on only when given (`network_certifier_serve.py`'s 256 otherwise), and the sampling and the key's height below. The traffic
   is the gate's (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`), so a request whose `--minutes` is under
-  `warden_minutes` of its requests and height is refused, with the least that fits. With `--scan` (recorded only then)
+  `network_certifier_minutes` of its requests and height is refused, with the least that fits. With `--scan` (recorded only then)
   it is the scan's rehearsal, the network certifier run `scan_zk.py prove --warden-run` reads from its `fetch`: the schedule is
-  scan_zk's (`SCAN_SCHEDULE`, `scan_zk.py schedule`'s flags; the gate's otherwise `warden_serve.py`'s default, which
+  scan_zk's (`SCAN_SCHEDULE`, `scan_zk.py schedule`'s flags; the gate's otherwise `network_certifier_serve.py`'s default, which
   the scan's class doesn't serve) and the traffic the same arrivals of warden-form id requests (`rehearse --ids`, at
   the sampling below), so the endpoint must answer each id-form (`io_tie.id_event`s, then `io_tie.TRAILER`): the
   network certifier frames what the server sends, and the check and the scan refuse a response that isn't by name. `--bucket-ms`
@@ -219,7 +219,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (`SCAN_BUCKET_MS`; the scan's class takes any tick), the network certifier run at it: a request has D ticks from its admission
   to its first egress cell, by which a short answer must be whole, and the gate counts the minutes and sampling blocks
   below at that tick (`scan_schedule`). A scan rehearsal's `--prompts` sends the caller's own requests instead (a period's of a loop, say): the gate reads them off
-  its stdin (`warden_prompts`: at most `WARDEN_PROMPTS_BYTES` of JSON, `WARDEN_PROMPTS` prompts of `WARDEN_PROMPT_IDS`
+  its stdin (`network_certifier_prompts`: at most `WARDEN_PROMPTS_BYTES` of JSON, `WARDEN_PROMPTS` prompts of `WARDEN_PROMPT_IDS`
   token ids each, at most the scan's KI of 1024 and below 2^17, its IDB), writes them to `witness/prompts.json` alone (the request records their
   count and ids), and `rehearse --prompts` sends request j the (j mod n)-th of the n with exactly `--tokens`
   (`WARDEN_PROMPT_TOKENS`, the scan's 64 by default), `--requests` (`WARDEN_PROMPT_REQUESTS`) the prompts' count by
@@ -229,20 +229,20 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (`scan_bounds`), the network certifier's run `scan_zk.py prove --class CLASS --warden-run` reads. `--window-per-group` (at most
   the scan's 4 lanes of prompts) sends them a group at a time, group g's half a bucket into link-window g·G
   (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows g·G … (g+1)·G − 1, which
-  `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
+  `out/groups.json` publishes, and `--minutes` must cover `network_certifier_group_minutes` of its groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
   --prompts --tokens 24`. `--watermark` (recorded and passed on only when given) has the network certifier also send the
   endpoint, through the same tunnel, the watermark stream an engine admitting at certified ticks waits on
   (`verity.protocols.accounting.certifier.verifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
   bucket t its server connections lost); the network certifier reads nothing
-  back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`; it
+  back, and nothing it signs, certifies or publishes changes. Its request carries `device: network_certifier`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
   The network certifier writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and
   the check, all the prover's. Its unit publishes to `out/` only what isn't: `deployment.json` (the network certifier's key,
-  session and schedule), `cells.jsonl` (each link-window's registration, `warden_rows`, and its cost),
+  session and schedule), `cells.jsonl` (each link-window's registration, `network_certifier_rows`, and its cost),
   `certificates.jsonl` (the certificates alone) and a `--window-per-group` run's `groups.json`.
-  `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
+  `end.json` adds `device`, the check's verdict (`network_certifier_outcome`: accepted, the number of problems and the counts
   `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
 - **The load** (a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with the
@@ -256,7 +256,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   record of `--shape` is interface 1's (`load_relay.read_store`), `--program` is the reading program's digest and
   `--minutes` covers `load_minutes` (the stream and its witness at `LOAD_RATE`, and `LOAD_READY_S`) and then the
   rehearsal's. Its run opens one more tunnel a stream (`--streams`, 4 by default) to `--sink-port` on the peer's
-  loopback, where the prover's `load_relay.py sink --streams N --weights W --witness S` listens, and `warden_serve.py
+  loopback, where the prover's `load_relay.py sink --streams N --weights W --witness S` listens, and `network_certifier_serve.py
   rehearse --load-store` relays the store over them: each value's bytes held to its digest and committed as they
   cross (`load_relay.relay_load`), every row's salts sent on with them. The witness (4.85 GB at H200) is the sink's
   `--witness` file on the developer's host and nowhere here: this host never writes a salt. The developer then starts its
@@ -276,9 +276,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   request says otherwise; recorded in every request and passed on every one. `certifier_serve.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
   a certifier rehearsal makes two keys (the certifier's and the challenger's) and a network certifier rehearsal one, which
-  `warden_minutes` counts. A network certifier rehearsal's key signs `WARDEN_WINDOW_LEAVES` one-time signatures a link-window,
-  after a load's heads, and its signer refuses every window past its 2^H: so a request whose `warden_windows` its
-  height can't sign is refused, with the least height that can (`warden_height`; the gate's most requests at the
+  `network_certifier_minutes` counts. A network certifier rehearsal's key signs `WARDEN_WINDOW_LEAVES` one-time signatures a link-window,
+  after a load's heads, and its signer refuses every window past its 2^H: so a request whose `network_certifier_windows` its
+  height can't sign is refused, with the least height that can (`network_certifier_height`; the gate's most requests at the
   scan's schedule take 13). The rehearsal samples each serve's session itself (32 fresh random bytes, `--session`), as
   the challenger it plays: the challenger here samples none, since a rehearsal is none of its windows.
 
@@ -393,17 +393,17 @@ KEYGEN_LEAVES_S = 4096
 WARDEN_REQUESTS = (4, 1700)
 #: the one-time signatures a network certifier rehearsal's key gives a link-window: a certificate for each of its three links'
 #: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
-#: (`warden_serve.Publisher.keep` and `attest`)
+#: (`network_certifier_serve.Publisher.keep` and `attest`)
 WARDEN_WINDOW_LEAVES = 5
-#: a network certifier rehearsal's link-window without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
+#: a network certifier rehearsal's link-window without `--scan`: `network_certifier_serve.py`'s default schedule's (`NetworkCertifierParams`, 600
 #: buckets of 100 ms)
 WARDEN_WINDOW_MS = 60_000
 WARDEN_TOKENS = (16, 256)
-#: the network certifier rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
+#: the network certifier rehearsal's traffic, which the gate fixes so that `network_certifier_minutes` bounds it: Poisson arrivals at
 #: `WARDEN_RATE` a second sampled from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
 WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
 #: a scan rehearsal's (`--scan`) schedule at the class of record, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`),
-#: as `warden_serve.py`'s flags
+#: as `network_certifier_serve.py`'s flags
 SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "27", "--lanes", "4",
                  "--queue", "4", "--window", "32", "--ingress-cells", "47", "--ingress-buckets", "12",
                  "--egress-cells", "65", "--every", "16")
@@ -432,10 +432,10 @@ WARDEN_PROMPT_IDS = (1, SCAN_CLASSES[SCAN_CLASS][1])
 WARDEN_PROMPT_ID_BITS = 17
 WARDEN_PROMPT_REQUESTS = (1, WARDEN_REQUESTS[1])
 WARDEN_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
-#: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
+#: the prompts' file in `witness/`, the prover's: `network_certifier_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
 #: what a network certifier rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`); everything else
-#: `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's own lane alone.
+#: `network_certifier_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's own lane alone.
 #: `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the request's
 #: public counts and the scan's schedule alone
 WARDEN_PUBLIC = ("deployment.json", "cells.jsonl", "groups.json", "load.json", "load-relay.json")
@@ -1465,7 +1465,7 @@ def bounded(flag: str, v: str, lo: int, hi: int) -> int:
     return int(v)
 
 
-def warden_minutes(requests: int, height: int = REHEARSAL_HEIGHT[1], window_ms: int = WARDEN_WINDOW_MS) -> int:
+def network_certifier_minutes(requests: int, height: int = REHEARSAL_HEIGHT[1], window_ms: int = WARDEN_WINDOW_MS) -> int:
     """The fewest minutes a network certifier rehearsal of `requests` requests takes: its traffic's last arrival (1/`WARDEN_RATE`
     seconds a request), the tail, the rest of the `window_ms` sampling block it ends in (a minute for a shorter one)
     and the check, and its key at `height` (2^height one-time keys at `KEYGEN_LEAVES_S` a second)."""
@@ -1494,21 +1494,21 @@ def scan_bounds(scan_class: str | None = None) -> tuple[tuple[int, int], tuple[i
     return (1, ki), (1, cells - 1)
 
 
-def warden_window_ms(req: dict) -> int:
+def network_certifier_window_ms(req: dict) -> int:
     """A network certifier rehearsal's sampling block, in ms: T ticks of the scan's schedule at the request's tick with ``scan``,
     `WARDEN_WINDOW_MS` otherwise."""
     return SCAN["--window"] * req.get("bucket_ms", SCAN["--bucket-ms"]) if req.get("scan") else WARDEN_WINDOW_MS
 
 
-def warden_windows(requests: int, scan: bool = True, bucket_ms: int = SCAN["--bucket-ms"]) -> int:
-    """The most link-windows a network certifier rehearsal of `requests` requests runs (`warden_serve.rehearse` counts its
-    traffic's last arrival and tail): `warden_minutes`'s arrivals and three tails, in link-windows of the scan's
+def network_certifier_windows(requests: int, scan: bool = True, bucket_ms: int = SCAN["--bucket-ms"]) -> int:
+    """The most link-windows a network certifier rehearsal of `requests` requests runs (`network_certifier_serve.rehearse` counts its
+    traffic's last arrival and tail): `network_certifier_minutes`'s arrivals and three tails, in link-windows of the scan's
     schedule at the tick `bucket_ms` with `scan` and of `WARDEN_WINDOW_MS` otherwise."""
-    window_ms = warden_window_ms({"scan": True, "bucket_ms": bucket_ms} if scan else {})
+    window_ms = network_certifier_window_ms({"scan": True, "bucket_ms": bucket_ms} if scan else {})
     return -(-(round(requests / WARDEN_RATE) + 3 * WARDEN_TAIL_S) * 1000 // window_ms)
 
 
-def warden_height(windows: int, heads: int = 0) -> int:
+def network_certifier_height(windows: int, heads: int = 0) -> int:
     """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's) and then
     `windows` link-windows at `WARDEN_WINDOW_LEAVES` each."""
     return max(REHEARSAL_HEIGHT[0], (heads + WARDEN_WINDOW_LEAVES * windows - 1).bit_length())
@@ -1520,10 +1520,10 @@ def load_heads(shape: str) -> int:
     return len(lr.manifest(lr.SHAPES[shape]))
 
 
-def warden_key(windows: int, height: int, what: str, heads: int = 0) -> None:
+def network_certifier_key(windows: int, height: int, what: str, heads: int = 0) -> None:
     """Refuses a network certifier rehearsal whose key at `height` can't sign its `windows` link-windows after a load's `heads`,
-    with the least height that can (`warden_height`)."""
-    if height < (least := warden_height(windows, heads)):
+    with the least height that can (`network_certifier_height`)."""
+    if height < (least := network_certifier_height(windows, heads)):
         load = f" after the load's {heads} heads" if heads else ""
         raise Refused(f"--height {height}: {what} take {windows} link-windows, "
                       f"{heads + WARDEN_WINDOW_LEAVES * windows} one-time signatures ({WARDEN_WINDOW_LEAVES} a "
@@ -1532,26 +1532,26 @@ def warden_key(windows: int, height: int, what: str, heads: int = 0) -> None:
 
 def scan_group_windows(tokens: int) -> int:
     """The link-windows a `--window-per-group` group takes at the scan's schedule, each request answered by at most
-    `tokens` id events (`warden_serve.group_windows`, which `test_warden_serve` holds this to)."""
+    `tokens` id events (`network_certifier_serve.group_windows`, which `test_network_certifier_serve` holds this to)."""
     return -(-(SCAN["--delay"] + tokens // SCAN["--slots"] + 3) // SCAN["--window"])
 
 
-def warden_group_minutes(groups: int, tokens: int, height: int = REHEARSAL_HEIGHT[1],
+def network_certifier_group_minutes(groups: int, tokens: int, height: int = REHEARSAL_HEIGHT[1],
                          bucket_ms: int = SCAN["--bucket-ms"]) -> int:
-    """`warden_minutes` of a `--window-per-group` run: its `groups` groups' windows, at the tick `bucket_ms`, in place
+    """`network_certifier_minutes` of a `--window-per-group` run: its `groups` groups' windows, at the tick `bucket_ms`, in place
     of the arrivals."""
     return _minutes(-(-groups * scan_group_windows(tokens) * SCAN["--window"] * bucket_ms // 1000), height)
 
 
-def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
+def parse_network_certifier(argv: list[str], host: Host, *, load: bool = False) -> dict:
     """A network certifier rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
-    `warden_minutes` of its requests and height), how many requests its traffic sends, when given the most tokens a
-    request asks for (`warden_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic) with, when
+    `network_certifier_minutes` of its requests and height), how many requests its traffic sends, when given the most tokens a
+    request asks for (`network_certifier_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic) with, when
     given, its tick `--bucket-ms` (`SCAN_BUCKET_MS`, which the minutes and the key's sampling blocks are counted at),
     the sampling (`sampling`) and the key's height. `--prompts` (with `--scan`) marks the request's prompts as the gate's stdin,
     `--scan-class` (with `--prompts`, recorded only when given) the scan's class they are of (`SCAN_CLASSES`: its
     schedule, prompt ids and tokens), and `--window-per-group` (with `--prompts`) sends them a group a link-window's
-    span; `warden_prompts` reads them and checks what depends on them. `--watermark` (recorded only when given) sends
+    span; `network_certifier_prompts` reads them and checks what depends on them. `--watermark` (recorded only when given) sends
     the endpoint the watermark stream. With `load` (`load-relay`) it is the serving session with its load first
     (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before the rehearsal's."""
     p = argparse.ArgumentParser(prog=f"vy-challenger-gate {'load-relay' if load else 'warden-rehearse'}",
@@ -1604,11 +1604,11 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     requests = bounded("--requests", a.requests or "100", *WARDEN_REQUESTS)
     given = ({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_TOKENS)}) | \
         ({"scan": True} if a.scan else {}) | tick
-    if minutes - spent < (least := warden_minutes(requests, a.height, warden_window_ms(given))):
+    if minutes - spent < (least := network_certifier_minutes(requests, a.height, network_certifier_window_ms(given))):
         raise Refused(f"--minutes {minutes}: {requests} requests take {least} minutes (arrivals at {WARDEN_RATE} a "
                       f"second, a {WARDEN_TAIL_S} s tail, the window they end in, the check and the key at height "
                       f"{a.height}){_after_load(spent)}: give --minutes {least + spent} or more, or fewer --requests")
-    warden_key(warden_windows(requests, a.scan, tick.get("bucket_ms", SCAN["--bucket-ms"])), a.height,
+    network_certifier_key(network_certifier_windows(requests, a.scan, tick.get("bucket_ms", SCAN["--bucket-ms"])), a.height,
                f"{requests} requests", load_heads(loaded["load"]["shape"]) if load else 0)
     return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "requests": requests,
             "height": a.height} | a.sampling | given | watermark | loaded
@@ -1698,11 +1698,11 @@ def prompts_of(data: bytes, ids: tuple[int, int] = WARDEN_PROMPT_IDS) -> list[li
     return prompts
 
 
-def warden_prompts(req: dict, data: bytes) -> bytes:
+def network_certifier_prompts(req: dict, data: bytes) -> bytes:
     """A scan rehearsal's `--prompts` (`prompts_of`), under `--window-per-group` at most the scan's lanes of them (one
     group). Completes the request: `requests` the prompts' count when not given, and `prompts` their count and ids
-    alone (the ids are the prover's, `witness/` only); refused when `--minutes` is under `warden_group_minutes` of its
-    groups (`warden_minutes` of its requests otherwise), at its tick. Returns the prompts' canonical bytes, the
+    alone (the ids are the prover's, `witness/` only); refused when `--minutes` is under `network_certifier_group_minutes` of its
+    groups (`network_certifier_minutes` of its requests otherwise), at its tick. Returns the prompts' canonical bytes, the
     witness's `PROMPTS`."""
     ids, most = scan_bounds(req.get("scan_class"))
     prompts = prompts_of(data, ids)
@@ -1713,15 +1713,15 @@ def warden_prompts(req: dict, data: bytes) -> bytes:
     tokens, height, minutes = req.get("tokens", most[1]), req["height"], req["minutes"]
     spent, tick = req.get("load", {}).get("minutes", 0), req.get("bucket_ms", SCAN["--bucket-ms"])
     if req.get("window_per_group"):
-        least, what = warden_group_minutes(-(-requests // n), tokens, height, tick), f"{-(-requests // n)} groups"
+        least, what = network_certifier_group_minutes(-(-requests // n), tokens, height, tick), f"{-(-requests // n)} groups"
         windows = -(-requests // n) * scan_group_windows(tokens)
     else:
-        least, what = warden_minutes(requests, height, warden_window_ms(req)), f"{requests} requests"
-        windows = warden_windows(requests, bucket_ms=tick)
+        least, what = network_certifier_minutes(requests, height, network_certifier_window_ms(req)), f"{requests} requests"
+        windows = network_certifier_windows(requests, bucket_ms=tick)
     if minutes - spent < least:
         raise Refused(f"--minutes {minutes}: {what} take {least} minutes (with the check and the key at height "
                       f"{height}){_after_load(spent)}: give --minutes {least + spent} or more, or fewer --requests")
-    warden_key(windows, height, what, load_heads(req["load"]["shape"]) if "load" in req else 0)
+    network_certifier_key(windows, height, what, load_heads(req["load"]["shape"]) if "load" in req else 0)
     req.update(requests=requests, prompts={"count": n, "ids": sum(map(len, prompts))})
     return json.dumps(prompts, separators=(",", ":")).encode()
 
@@ -1738,8 +1738,8 @@ def certifier_prompts(req: dict, data: bytes) -> bytes:
 
 #: each verb the rehearsal unit runs, its request parser: the two rehearsals, the load (a network certifier rehearsal with its
 #: load first) and the store's write
-REHEARSALS = {"certifier-rehearse": parse_certifier, "warden-rehearse": parse_warden,
-              "load-relay": lambda argv, host: parse_warden(argv, host, load=True), "weights-write": parse_weights}
+REHEARSALS = {"certifier-rehearse": parse_certifier, "warden-rehearse": parse_network_certifier,
+              "load-relay": lambda argv, host: parse_network_certifier(argv, host, load=True), "weights-write": parse_weights}
 
 
 def certifier_runs(host: Host) -> list[str]:
@@ -1753,12 +1753,12 @@ def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token
                    read: Callable[[int], bytes] = lambda n: b"") -> dict:
     """Validate a rehearsal's request (`parse`: the certifier's or the network certifier's), refused while another of either runs
     (under the gate's lock), and `start` its unit, which runs `certifier-run` as `auditor`. Returns at once: `status
-    RUN` follows it. A `--prompts` request's prompts are `read` off stdin (`warden_prompts`, a certifier's
+    RUN` follows it. A `--prompts` request's prompts are `read` off stdin (`network_certifier_prompts`, a certifier's
     `certifier_prompts`) and written to the run's `witness/` (0700, the file 0600, both `auditor`'s), never to its
     request."""
     req = parse(argv, host)
     prompts = None if not req.get("prompts") else (
-        warden_prompts if req.get("device") == "warden" else certifier_prompts)(req, read(WARDEN_PROMPTS_BYTES + 1))
+        network_certifier_prompts if req.get("device") == "warden" else certifier_prompts)(req, read(WARDEN_PROMPTS_BYTES + 1))
     with locked(host.root / "gate.lock"):
         if (running := next((r for r in certifier_runs(host) if active(r)), None)) is not None:
             raise Refused(f"rehearsal {running} still runs: one at a time, a certifier's or a warden's "
@@ -2426,9 +2426,9 @@ def certifier_env(tree: Path = TREE) -> dict[str, str]:
             "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": str(tree)}
 
 
-def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: list[tuple[str, int]] = (),
+def network_certifier_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: list[tuple[str, int]] = (),
                    store: Path | None = None) -> list[str]:
-    """`warden_serve.py rehearse` of the request: the network certifier and its client here, the network certifier's upstream the endpoint
+    """`network_certifier_serve.py rehearse` of the request: the network certifier and its client here, the network certifier's upstream the endpoint
     at `url` (the tunnel's local end), its key at the request's height (`height_argv`), the request's number of
     requests on the gate's traffic (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`),
     for a scan rehearsal id requests (`--ids`) at the scan's schedule at the request's tick and class
@@ -2446,7 +2446,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     loaded = [] if not load else ["--load-store", str(store), "--load-shape", load["shape"], "--load-sinks",
                                   ",".join(f"{h}:{p}" for h, p in sinks), "--load-program", load["program"],
                                   "--load-ready-s", str(LOAD_READY_S)]
-    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "rehearse",
+    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "network_certifier_serve.py"), "rehearse",
             "--upstream", url.removeprefix("http://"), "--out", str(out), *height_argv(req),
             "--requests", str(req["requests"]),
             "--rate", str(WARDEN_RATE), "--seed", str(WARDEN_SEED), "--tail", str(WARDEN_TAIL_S), *sampling_argv(req),
@@ -2461,15 +2461,15 @@ def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> lis
             "--out", str(out / "store.json")]
 
 
-#: the counts of `warden_serve.py check`'s summary a network certifier rehearsal's end carries: none is a cell's content or a
+#: the counts of `network_certifier_serve.py check`'s summary a network certifier rehearsal's end carries: none is a cell's content or a
 #: connection's own (a load's are its values and how many registered)
 WARDEN_COUNTS = ("requests", "ended", "refused", "failed", "windows", "certified_windows", "certificates",
                  "signer_refused", "cell_rows", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms",
                  "load")
 
 
-def warden_outcome(out: Path, witness: Path) -> dict:
-    """A network certifier rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
+def network_certifier_outcome(out: Path, witness: Path) -> dict:
+    """A network certifier rehearsal's public outcome, from what `network_certifier_serve.py rehearse` wrote to `witness`:
     `WARDEN_PUBLIC`'s files copied to `out`, `certified.jsonl`'s certificates without the heads and salts they sign
     (`out/certificates.jsonl`), each registration's root by value, the check's verdict (`accepted`, how many problems,
     `WARDEN_COUNTS`), each witness file by name and size alone, and a load's relay (`load-relay.json`: its counts and
@@ -2524,15 +2524,15 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     """Run the requested rehearsal (the module docstring's "A certifier rehearsal", "A network certifier rehearsal" and "The
     load"), as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
-    `end.json`. A network certifier rehearsal writes to `witness/`, and its public outcome (`warden_outcome`) to `out/` and the
+    `end.json`. A network certifier rehearsal writes to `witness/`, and its public outcome (`network_certifier_outcome`) to `out/` and the
     end. A store's write opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries
     the store's record."""
     if not CERTIFIER_RUN.fullmatch(run):
         raise Refused(f"no certifier rehearsal {run!r}")
     d = host.certifier / run
     req = json.loads((d / "request.json").read_text())
-    warden, weights, load = req.get("device") == "warden", req.get("device") == "weights", req.get("load")
-    command = command or (warden_command if warden else weights_command if weights else certifier_command)
+    network_certifier, weights, load = req.get("device") == "warden", req.get("device") == "weights", req.get("load")
+    command = command or (network_certifier_command if network_certifier else weights_command if weights else certifier_command)
     out = d / "out"
     if out.exists():
         raise Refused(f"certifier rehearsal {run} has run already")
@@ -2540,7 +2540,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     if weights:
         return _weights_run(host, d, req, pinned=pinned, now=now, command=command, wait=wait)
     work = out
-    if warden:
+    if network_certifier:
         work = d / WITNESS
         work.mkdir(mode=0o700, exist_ok=True)
     sys.path.insert(0, str(HERE))
@@ -2572,8 +2572,8 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
         for tunnel in tunnels:
             tunnel.terminate()
             tunnel.wait()
-    if warden:
-        outcome = {"device": "warden", **warden_outcome(out, work)}
+    if network_certifier:
+        outcome = {"device": "warden", **network_certifier_outcome(out, work)}
     else:
         try:
             summary = json.loads((out / "summary.json").read_text())

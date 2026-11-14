@@ -45,7 +45,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(ROOT))
 from verity.protocols.accounting.certifier.verifier import io_tie as IT  # noqa: E402 (the tree's, put on sys.path above)
 from verity.protocols.accounting.certifier.verifier.active import id_request  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.warden import (DATA, END, FAIL, KIND_NAMES, PAD, REFUSED, cells,  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.network_certifier import (DATA, END, FAIL, KIND_NAMES, PAD, REFUSED, cells,  # noqa: E402
                                                         read_cell)
 
 #: the longest request body taken
