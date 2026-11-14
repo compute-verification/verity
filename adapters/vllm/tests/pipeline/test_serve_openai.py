@@ -18,7 +18,9 @@ import numpy as np
 import pytest
 import torch
 
-from verity.protocols.accounting.certifier.verifier import active as A, id_form as IDF, compile_slice as CS, io_tie as IT, release as REL, served_rows as SRW
+from verity.protocols.accounting.certifier.verifier import (compile_slice as CS, id_form as IDF, io_tie as IT,
+                                                            release as REL, served_rows as SRW)
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine import served_seed
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived
@@ -125,7 +127,7 @@ def test_ids_frames_are_the_scans_id_events():
     req = p.parse(dict(CERTIFIER_BODY, stream_options={"include_usage": True, "continuous_usage_stats": True}))
     assert (req.include_usage, req.continuous_usage, req.return_token_ids) == (False, False, True)
     assert not p.parse(dict(CERTIFIER_BODY, stream=False)).return_token_ids
-    assert proto.PROTOCOLS["ids"] is proto.IdsProtocol and proto.ID_PAYLOAD == 512 - A.HEADER.size
+    assert proto.PROTOCOLS["ids"] is proto.IdsProtocol and proto.ID_PAYLOAD == 512 - HEADER.size
     with pytest.raises(ValueError, match="at least 138"):
         proto.IdsProtocol(payload=137, base=proto.PlainProtocol())
 
@@ -501,7 +503,7 @@ def test_errors_and_whole_response(tmp_path):
 
 def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
     """The network certifier's id request in cells of P + 9 bytes (`id_form.id_request`, offset 0)."""
-    return IDF.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + A.HEADER.size,
+    return IDF.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + HEADER.size,
                         offset=0)
 
 

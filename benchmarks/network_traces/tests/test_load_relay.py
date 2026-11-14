@@ -364,9 +364,9 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
                                leaves(v, data[v.offset:v.offset + v.nbytes]), mine, v.word_bits, v.schema)
         assert c.root == h.root and h.domain == LR.verifier_domain(PROGRAM)(v).domain_id, v.name
         at += TR.SALT_BYTES * v.leaves
-    from benchmarks.network_traces import certifier_serve as CS
+    from certifier_key import signer
     from verity.protocols.accounting.certifier.verifier import record_files as RF
-    own, session = CS.signer(tmp_path / "key", 5), os.urandom(32)
+    own, session = signer(tmp_path / "key", 5), os.urandom(32)
     regs = LR.sign_heads(Issuer(own, session), heads)
     doc = LR.load_doc(shape, heads, regs, RF.public_json(own.public_key()), session)
     key = RF.read_public(doc["key"])

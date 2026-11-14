@@ -773,7 +773,7 @@ def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root()
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
     WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
-    from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD
+    from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
     from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, BlockGrid
     from verity.protocols.accounting.certifier.verifier.warden import WardenParams, cell
 

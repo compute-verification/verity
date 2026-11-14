@@ -56,7 +56,8 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.verifier import io_request as Q
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
-from verity.protocols.accounting.certifier.verifier.active import HEADER, ID_DIGITS, ID_FIELD_BYTES
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
+from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES
 
 BIT, BYTE = HC.BIT, HC.BYTE
 #: a slot's record out of `IoTieIdsSlots`: field, ordinal, value

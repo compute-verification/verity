@@ -31,7 +31,7 @@ import pytest
 from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
 from verity.protocols.accounting.certifier.verifier import relay_check as RC
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import VirtualClock
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.io_tie import TRAILER
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_head, with_release
 from verity.protocols.accounting.certifier.verifier.warden import Warden, WardenParams, audit, cells, read_cell

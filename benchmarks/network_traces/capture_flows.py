@@ -440,7 +440,7 @@ def record_counts(run: Path) -> dict:
     `warden.json` has one, its `release` and `from_server` None; and how many of the records it read, each execution
     phase's ingress, egress and reasons, are certified under the deployment's key."""
     from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
-    from verity.protocols.accounting.certifier.verifier.active import DATA
+    from verity.protocols.accounting.certifier.verifier.link_frame import DATA
     from verity.protocols.accounting.certifier.verifier.certificate import record_head
     from verity.protocols.accounting.certifier.verifier.grid import row_count
     from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
