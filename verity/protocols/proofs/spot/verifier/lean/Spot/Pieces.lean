@@ -109,7 +109,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_inner_trees`: a recursive session's inner coins (`ChallengerInnerTrees`): `rec_live`'s live-coin part
   records held to the trees a release log shows, one tree a session, every opening read (`rec_live.tree_held_reason`).
 * `period_windows`: a lane's sessions of a monitoring period as the auditor's ledger opens them, and which of them
-  are SPOT's windows (`MonitoringPeriod.read`, `MonitoringPeriod.windowsIn`).
+  are SPOT's windows (`MonitoringPeriod.read`, `MonitoringPeriod.runsIn`).
 * `period_asked`, `period_check`, `period_check_stub`: what the period's check asks one-stage v2 at a case
   (`MonitoringPeriod.paramsAt`, `MonitoringPeriod.evidenceAt`), the period's check's answer on a ledger and its evidence
   (`MonitoringPeriod.checkBlobs`), and that answer with a stand-in for one-stage v2 that accepts when told to
@@ -1114,7 +1114,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
    ("challenger_members_order", Challenger.membersOrderPiece),
    ("challenger_links_first", Challenger.linksFirstPiece),
-   ("challenger_inner_trees", Challenger.innerTreesPiece), ("period_windows", MonitoringPeriod.windowsPiece),
+   ("challenger_inner_trees", Challenger.innerTreesPiece), ("period_windows", MonitoringPeriod.runsPiece),
    ("period_asked", MonitoringPeriod.askedPiece), ("period_check", MonitoringPeriod.checkPiece),
    ("period_check_stub", MonitoringPeriod.checkStubPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),

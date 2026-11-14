@@ -38,9 +38,9 @@ import Proofs.Pouw.RelativeSecurity
 # `H1J10RCheckedCreditPeriod`'s conclusion fails at a verifier that accepts everything
 
 The nontrivial twin of `HonestJ10R.j10r_meets`, the honest one. The statement reads its verdict, `Credit.window`'s, in
-its conclusion only through the accepted prefix (`CreditWindows.prefixLen`) and the prefix's live words (`creditLive`).
+its conclusion only through the accepted prefix (`CreditExecutionPhases.prefixLen`) and the prefix's live words (`creditLive`).
 `CreditBoundBy` is that conclusion at any verdict `acc` (window `w` credited on path `x`), and at `Credit.window`'s it is
-the statement's own (`creditBound_window`).
+the statement's own (`creditBound_executionPhase`).
 
 `j10r_nontrivial`: at the verdict that credits every window, over the honest instance's circuit, scheme, period and
 rate (`Λ = j10rRate (k s_T) 1`), the prover that fixes no word (`idle`, accepted on every path) breaks it. The prefix
@@ -67,7 +67,7 @@ def UpToBy (acc : Paths Ω n → Fin n → Prop) (x : Paths Ω n) (w : Fin n) : 
   ∀ w' : Fin n, w' ≤ w → acc x w'
 
 open Classical in
-/-- **The accepted prefix at verdict `acc`**: `CreditWindows.prefixLen` with `acc` for `Credit.window`'s verdict. -/
+/-- **The accepted prefix at verdict `acc`**: `CreditExecutionPhases.prefixLen` with `acc` for `Credit.window`'s verdict. -/
 noncomputable def prefixLenBy (acc : Paths Ω n → Fin n → Prop) (x : Paths Ω n) : ℕ :=
   (Finset.univ.filter fun w : Fin n => UpToBy acc x w).card
 
@@ -91,13 +91,13 @@ def CreditBoundBy {ι K T L U C B : Type} [Fintype C] [Fintype B] (Sc : Scheme K
 
 /-- **At `Credit.window`'s verdict it is the statement's conclusion**, so `j10r_nontrivial`, `CreditBoundBy` at the verdict
 that credits every window, is the conclusion with that verdict in place of `Credit.window`'s. -/
-theorem creditBound_window {ι K T L U C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : Declared ι)
-    {nB mB n : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
+theorem creditBound_executionPhase {ι K T L U C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : Declared ι)
+    {nB mB n : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
     (Wp : ExecutionPhasePlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (Pl : Play (Coin C Ξ Cd.rounds σ sT) n K T L U) (Λ δs δ : ℝ) :
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd (tileCount σ sT) (ws.prefixLen x) (creditLive Sc Cd Wp ws x) 1 1 Λ δs) ≤ δ ↔
-      CreditBoundBy Sc Cd Wp (fun x w => WindowAccepts (ws.reg x w) (ws.ev x w)) Pl Λ δs δ :=
+      CreditBoundBy Sc Cd Wp (fun x w => ExecutionPhaseAccepts (ws.reg x w) (ws.ev x w)) Pl Λ δs δ :=
   Iff.rfl
 
 /-! ## The verifier that accepts everything -/

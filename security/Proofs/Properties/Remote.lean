@@ -7,7 +7,7 @@ public import Proofs.Properties.InferenceOnly.Theta
 public import Proofs.Properties.InferenceOnly.ThetaSteps
 public import Proofs.Properties.InferenceOnly
 public import Proofs.Properties.InferenceOnly.Agrees
-public import Proofs.InferenceOnly.FitWitness
+public import Proofs.Slowdown.FitWitness
 public import Proofs.Properties.Spot
 public import Proofs.InferenceOnly.CompliesCK
 public import Proofs.Core.Expand
@@ -30,9 +30,9 @@ Boolean or of positive fan-in; where it is, they are partitions of the declarati
 The parse, declaration and division an acceptance
 exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an expansion) and `Decodes` (that check's
 verdicts are about a parse, a layout, a baseline and a division). SPOT's acceptance is one-stage v1's check
-at the coins it read (`OneStage.checkAt`) at its params' form: in the one-stage form v2's, on the verdicts its own run of
-the verifier computed (`stage_zk_registered`), in the recursive form v1's live check on the inner statement's params
-after V*'s compiled check (`recursive_live`), so its record keeps R2 in either (`stage_registered_at`). Either form
+at the coins it read (`OneStage.checkAt`), one-stage v2's on the verdicts its own run of the verifier computed
+(`stage_zk_registered`), so its record keeps R2 (`stage_registered_at`): SPOT's params decode to no other form that
+accepts (the recursive form is refused by name, the two-stage form refuses while its switch is off). It
 reads SPOT's acceptance through the caller's check (`VStar.Recursive.Caller.gate`), whose emptiness gives the caller's
 facts (`Properties.Spot.CallerHeld`): `CallerCheckSound`, which `stage_held` and `acceptInferenceOnly` take, is the
 forward half of `CallerCheckMeans` (`callerCheckSound_of_means`), which `callerCheckMeans` proves from the check's
@@ -156,7 +156,7 @@ theorem strays_none {ss : List String} {cs : List Protocol} {ev : List Case} {s 
 /-- Remote's check on the caller's blobs is its tie held over `checkSame` over its components on them. -/
 theorem remote_check (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) :
     (Core.Remote.protocol.on blobs).check ps c ev =
-      holdTies [Core.Remote.windows] ev (checkSame "verity/remote/v0"
+      holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
         ["verity/inference-only/v0", "verity/sampled-proofs/v1"]
         [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol,
           VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := rfl
@@ -232,9 +232,9 @@ that meet the policy, `InferenceOnly.SecurityProofs.FitWitness`'s five-gate circ
 `α = 3`. -/
 theorem policyMet_honest : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n) (Γ : ℕ) (α : ℝ),
     0 < n ∧ (∀ u, (U.gates u).Nonempty) ∧ PolicyMet d U Γ α := by
-  have hs : ∀ u, InferenceOnly.SecurityProofs.FitWitness.decl.D.size (InferenceOnly.SecurityProofs.FitWitness.windows.gates u) = 1 := by
+  have hs : ∀ u, InferenceOnly.SecurityProofs.FitWitness.decl.D.size (InferenceOnly.SecurityProofs.FitWitness.serverBlocks.gates u) = 1 := by
     decide +kernel
-  refine ⟨InferenceOnly.SecurityProofs.FitWitness.decl, 2, InferenceOnly.SecurityProofs.FitWitness.windows, 1, 3, by norm_num,
+  refine ⟨InferenceOnly.SecurityProofs.FitWitness.decl, 2, InferenceOnly.SecurityProofs.FitWitness.serverBlocks, 1, 3, by norm_num,
     by decide +kernel, policyMet_of_meets fun u => ⟨(hs u).le, ?_⟩⟩
   rw [hs u, Nat.cast_one, mul_one]
   exact InferenceOnly.SecurityProofs.FitWitness.reads_le u
@@ -243,9 +243,9 @@ theorem policyMet_honest : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition 
 nonempty inference blocks, the same windows at `Γ = 0`, at every `α`: each block is a gate of width 1. -/
 theorem policyMet_nontrivial : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n),
     (∀ u, (U.gates u).Nonempty) ∧ ∀ α : ℝ, ¬ PolicyMet d U 0 α := by
-  refine ⟨InferenceOnly.SecurityProofs.FitWitness.decl, 2, InferenceOnly.SecurityProofs.FitWitness.windows, by decide +kernel,
+  refine ⟨InferenceOnly.SecurityProofs.FitWitness.decl, 2, InferenceOnly.SecurityProofs.FitWitness.serverBlocks, by decide +kernel,
     fun α h => ?_⟩
-  have hs : InferenceOnly.SecurityProofs.FitWitness.decl.D.size (InferenceOnly.SecurityProofs.FitWitness.windows.gates 0) = 1 := by
+  have hs : InferenceOnly.SecurityProofs.FitWitness.decl.D.size (InferenceOnly.SecurityProofs.FitWitness.serverBlocks.gates 0) = 1 := by
     decide +kernel
   have h0 := (h.1 0).1
   omega
@@ -288,16 +288,6 @@ theorem stage_registered_at {p : Spot.OneStage.Params} {c : Spot.OneStage.Commit
   · obtain ⟨samplingDesign, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
     exact hreg.2.1
 
-/-- What one-stage v1's live check gives on acceptance: its record keeps R2 against the audit's own verifier. -/
-theorem stage_registered {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
-    {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public} {prof : Integrity}
-    (h : Spot.OneStage.checkLive p c e = .accept pub prof) :
-    Properties.Spot.R2 c.record p.verifier := by
-  unfold Spot.OneStage.checkLive Core.atCoins at h
-  split at h
-  · exact stage_registered_at h
-  · cases h
-
 /-- One-stage v2's check at the coins it read accepts only where v1's check accepts at them, on the verdicts its own
 run of the verifier computed, in either form: the one statement's run, or the per-member run. -/
 theorem stage_zk_at {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
@@ -335,21 +325,6 @@ theorem stage_zk_registered {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Comm
   · obtain ⟨_, hr⟩ := stage_zk_at h
     exact stage_registered_at hr
   · cases h
-
-/-- The recursive audit accepts only where one-stage v1 accepts on the inner statement's params, with the verdicts
-V*'s compiled check computes, and the caller's check finds nothing against the inner statement's verifier. -/
-theorem recursive_live {q : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
-    {e : VStar.Recursive.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
-    (h : VStar.Recursive.checkBlobs q c e bs = .accept pub prof) :
-    VStar.Recursive.Caller.check c.record q.base.verifier = #[] ∧
-      ∃ e₀, Spot.OneStage.checkLive q.base c e₀ = .accept pub prof := by
-  unfold VStar.Recursive.checkBlobs at h
-  split at h
-  · cases h
-  · split at h
-    · cases h
-    · obtain ⟨hc, h⟩ := VStar.Recursive.Caller.gate_accept h
-      exact ⟨hc, _, h⟩
 
 /-- `digestOf` of a commitment that decodes is the digest of what it decodes to. -/
 theorem digestOf_ok {P : Protocol} {b : ByteArray} {c : P.Commitment} (h : P.commitment b = .ok c) :
@@ -422,7 +397,7 @@ theorem strays_two_none {P₁ P₂ P₃ : Protocol} {k₁ k₂ k₃ : Case} {c�
 named by their ids. -/
 theorem remote_check_ids (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) :
     (Core.Remote.protocol.on blobs).check ps c ev =
-      holdTies [Core.Remote.windows] ev (checkSame "verity/remote/v0"
+      holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
         [InferenceOnlyCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)).id]
         [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol,
           VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := by
@@ -441,7 +416,7 @@ they decode, has the policy's record's digest. -/
 theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol.Commitment}
     (hI : kI.id = InferenceOnlyCheck.Protocol.protocol.id) (hW : kW.id = PouwCheck.Period.protocol.id)
     (hcI : InferenceOnlyCheck.Protocol.protocol.commitment kI.commitment = .ok cI)
-    (ht : Properties.Composition.Tied Core.Remote.windows [kI, kW, kS]) :
+    (ht : Properties.Composition.Tied Core.Remote.executionPhases [kI, kW, kS]) :
     ∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = InferenceOnlyCheck.Protocol.protocol.digest cI := by
   intro ds hds d hd
   rw [id_policy] at hI
@@ -456,12 +431,12 @@ theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol
     have hI' : (kI.id == PouwCheck.Period.protocolId) = false := by rw [hI]; decide
     have hW' : (kW.id == PouwCheck.Period.protocolId) = true := by rw [hW]; decide
     simp [Properties.Composition.named, List.find?, hI', hW', hds]
-  have mI : (InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord) ∈ Core.Remote.windows.names := by
-    simp [Core.Remote.windows]
-  have mW : (PouwCheck.Period.protocolId, Core.Remote.executionPhaseRecords) ∈ Core.Remote.windows.names := by
-    simp [Core.Remote.windows]
+  have mI : (InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord) ∈ Core.Remote.executionPhases.names := by
+    simp [Core.Remote.executionPhases]
+  have mW : (PouwCheck.Period.protocolId, Core.Remote.executionPhaseRecords) ∈ Core.Remote.executionPhases.names := by
+    simp [Core.Remote.executionPhases]
   rcases ht with ⟨n, hn, e⟩ | ⟨r, hr⟩
-  · simp only [Core.Remote.windows, List.mem_cons, List.not_mem_nil, or_false] at hn
+  · simp only [Core.Remote.executionPhases, List.mem_cons, List.not_mem_nil, or_false] at hn
     rcases hn with rfl | rfl
     · rw [nI] at e; cases e
     · rw [nW] at e; cases e
@@ -567,7 +542,7 @@ theorem callerCheckSound_of_means (hm : CallerCheckMeans) : CallerCheckSound := 
 /-- `CallerCheckSound`, from `callerCheckMeans`. -/
 theorem callerCheckSound : CallerCheckSound := callerCheckSound_of_means callerCheckMeans
 
-/-- What SPOT's accepted case gives, on any blobs: `StageHeld`, at the form its params name, where the caller's
+/-- What SPOT's accepted case gives, on any blobs: `StageHeld`, in the one-stage form, where the caller's
 check finds nothing only where the record keeps the caller's facts (`CallerCheckSound`). -/
 theorem stage_held (hm : CallerCheckSound) {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params)
     (h : Properties.Composition.DecodedAccepted (VStar.Recursive.Sampled.protocol.onBlobs bs) n.params.toUTF8
@@ -582,17 +557,11 @@ theorem stage_held (hm : CallerCheckSound) {k : Case} {n : Named} {bs : Blobs} (
   · obtain ⟨hcall, hz⟩ := VStar.Recursive.Caller.gate_accept
       (show VStar.Recursive.Caller.gate c.record p.base.verifier (Spot.OneStageZk.checkBlobs p c e bs) =
         .accept pub prof from hchk')
-    exact Or.inl ⟨p, c, hp'', hc', stage_zk_registered hz, hm _ _ hcall⟩
+    exact ⟨p, c, hp'', hc', stage_zk_registered hz, hm _ _ hcall⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
-  · rcases q with q | q <;> rcases e with e | e
-    · obtain ⟨hcall, e₀, he₀⟩ := recursive_live
-        (show VStar.Recursive.checkBlobs q c e bs = .accept pub prof from hchk')
-      exact Or.inr ⟨q, c, hp'', hc', stage_registered he₀, hm _ _ hcall⟩
-    · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
-    · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
-    · exact absurd hchk' (VStar.Recursive.SampledTwo.checkBlobs_refuses VStar.Recursive.SampledTwo.form_off q c e bs
-        pub prof)
+  · exact absurd hchk' (VStar.Recursive.SampledTwo.checkBlobs_refuses VStar.Recursive.SampledTwo.form_off q c e bs
+      pub prof)
 
 /-- What remote's acceptance gives: the three cases in order, one digest for the policy's and SPOT's
 records, which every Commit record the period's windows name has, the policy's case decoding to what the policy's

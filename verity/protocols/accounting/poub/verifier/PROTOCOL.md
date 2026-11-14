@@ -15,8 +15,8 @@ and where the sketch's bound is read) and `p2.py` (the audit over PoUS's P2 stor
 pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
 checks are the specification of what each zero-knowledge proof block proves on the deployed path (§8). The verifier's
-definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's sample and its openings' checks, and
-`RemoteAudit.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
+definition is Lean code, `lean/` (`Poub`: `verifyWindow`, a window's sample and its openings' checks, and
+`Poub.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
 `lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the
 verifier, and `audit.py` is the reference that runs beside it (`README.md`). Both refuse a registration that binds PoUW's
 tiles.
@@ -256,7 +256,7 @@ K           LE(XOF(D ‖ u8 5 ‖ "p1024" ‖ seed ‖ u32be 2^32 − 2)[0 : 128
 d_j         a bound block's digest: sha512/row/v2(payload_j) = SHA512(P(32768) ‖ payload_j), its payload leaf's x_j
 b_j         a bound block's offset: LE(XOF(D ‖ u8 5 ‖ "p1024" ‖ seed ‖ u32be 2^32 − 3 ‖ u64be j ‖ d_j)[0 : 64]) mod p;
             0 under the seed's key
-c_a         an append's coin: 32 bytes the verifier draws when the append's root arrives, its digests committed
+c_a         an append's coin: 32 bytes the verifier flips when the append's root arrives, its digests committed
 b_j(c_a)    an appended block's offset: LE(XOF(D ‖ u8 5 ‖ "p1024" ‖ seed ‖ u32be 2^32 − 4 ‖ u64be j ‖ d_j ‖ c_a)
             [0 : 64]) mod p, the b_j that encode and decode take for it
 encode      from the payload word, for r = 0 … k − 1: x ↦ σ_K(x) if r ≥ 1, then x ↦ ρ(x + c_r + t(i) + b_j)
@@ -606,7 +606,7 @@ What each kind rests on:
   enters before the sketch, \(e = E_j \oplus \text{spread}(z)\), as §8's third rule requires, and XOR with a fixed \(z\)
   permutes each sector, so each sector's fiber is the same. But `RateAuditSketch`'s digest is of the tile alone, so that
   form needs it restated over the block and \(z\) together, and it is not part of the stated guarantee. The verifier's
-  registry (`RemoteAudit.Registry.register`, and `audit.Registry.register` beside it) refuses such a registration until
+  registry (`Poub.Registry.register`, and `audit.Registry.register` beside it) refuses such a registration until
   its definition covers it.
 
 **Where sketch-sha512's bound is read** (`timing.sketch_reading`, `timing.sketch_failure`, pinned by
@@ -955,7 +955,7 @@ pace naming `in_flight`) window \(t\)'s boundary message is due once \(t\) has i
 \(\max(b_{t-1} + k A, D_{t-1})\), and is refused before any of them arrived; a root of \(t\) after it is out of turn
 (`order`). So every coin leaves after the root before it, which the challenger's signed log shows
 (`coins.released_reason`) and a record naming \(f = 1\) holds (`Record`), and the honest prover waits a round trip on
-each coin. The Lean is `RemoteAudit.Flight`, which is the session at \(f = 2\) (`Flight.run_two`).
+each coin. The Lean is `Poub.Flight`, which is the session at \(f = 2\) (`Flight.run_two`).
 
 Each root's arrival on the verifier's clock is in the record (`WindowRecord.arrived_ns`), so the record bounds when
 each group's reads were: after its challenge left at \(s_g = b_{g-1}\), and before
@@ -1153,7 +1153,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     as before, each pass still starts after the root before it and sends its root once its receipts are made (§5),
     and the verifier sees the same messages, so what it accepts is unchanged.
 - **The schedule check.** Credit after the seed waits on it (`schedule.py`, of record in
-  `lean/RemoteAudit/Schedule.lean`, held by the difftest). Before the session's first coin the prover commits a cap
+  `lean/Poub/Schedule.lean`, held by the difftest). Before the session's first coin the prover commits a cap
   \(a\) on its schedule's bits, with the session's parameters (`Params.schedule_cap`; none, the default, and nothing
   after the seed is credited). After the session it publishes the schedule: when each appended block is written and
   freed, which registered blocks are freed and when, and each pass's step. The verifier refuses a schedule over the
@@ -1162,8 +1162,8 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   (`AuditRun.scheduled`, a `Scheduled` verdict carrying the cap; `GammaTerms.steering` is the cap). `ledger` credits
   nothing after the seed without a `Scheduled` of the same session. So a credited plan is the verifier's own function
   of a schedule of at most \(a\) bits, and a plan that follows a coin at that schedule is refused: the `a` of the
-  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, at the
-  verifier's own layout, `Properties.RemoteAudit.sessionLayout`: the positions of the plan the pass sent, where it
+  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.Poub.steered_of_checked`, at the
+  verifier's own layout, `Properties.Poub.runLayout`: the positions of the plan the pass sent, where it
   checks each opened block, `CodeLayoutTiles` and `OpensAtPosition`), never the coins' bits for free. The cap, not
   the published schedule's own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a
   schedule's length can follow
@@ -1338,16 +1338,19 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   window. Keeping each tree above its leaves and re-reading an opened leaf's 16 blocks instead costs a small fraction of
   the reads again (about 0.06–0.1%). The reference keeps every pass whole.
 - **Lean.** A session's published `q_bytes` is its receipts less a bound on the wrong ones that covers
-  `Accounting.Guarantees.Remote.PooledSample`'s on its record (`RemoteAudit.Protocol.certify`,
-  `Properties.RemoteAudit.PooledCovers`). Its `eps` is that statement's δ and term per sampled receipt; the statement's
-  PRF advantages (`prf/sha-512`) and its receipts' binding term are not in `eps`. γ's other terms are the ledger's
+  `Accounting.Guarantees.Remote.PooledSample`'s on its record (`Poub.Protocol.certify`,
+  `Properties.Poub.PooledCovers`). Its `eps` is that statement's δ and term per sampled receipt; the statement's
+  PRF advantages (`prf/sha-512`) and its receipts' binding term are not in `eps`, and neither is the sketch's term
+  \(\delta_s\) (§4), which a sketch-receipt session's error is mostly made of: a monitoring period's table
+  (`monitoring.py`) reads the session's whole error from the ledger, sums it over the period's sessions and states no
+  bytes where the sum is 1 or more. γ's other terms are the ledger's
   arithmetic, which no Lean property covers. The statements γ is modelled on are the lock's `deployed` entries,
   `RemoteRunConservationSketchDeployed` (sketch receipts, provers that keep sectors verbatim) and
   `RemoteRunConservationDeployed` (whole-block receipts). `RemoteMonitoringPeriodConservation` is the whole-block
   statement at every parameter, read as a run of PoUB. They take n windows of P passes, one sample of 2,773
   a window and no clock; a paced session's groups, the receipts it samples a group and its timing term are not shown to
   be an instance. The one deployed statement on a paced session's record is the memory line's,
-  `Properties.RemoteAudit.Line.LineHeld`. The conservation statements' openings are
+  `Properties.Poub.Line.LineHeld`. The conservation statements' openings are
   `Accounting.Guarantees.RateWindowSample`, a window's pooled sample over its passes' receipts, and `RateRunSample`,
   the monitoring period and every window at once, both from `PooledSampling`, the causal bound over the monitoring
   period. They take windows of one size, \(M = P \cdot N\), and samples with replacement. The record's windows differ
@@ -1373,10 +1376,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   at the session's bounds (§1) and at \(\mathrm{split}_t = 0\) (`Binding.binding_le_of_fixed`), which holds where the
   cut fixes the roots; that the deployed prover's play fixes them is the gap `binding-split` (below).
   `pooled` is computed in exact rationals in the verifier's Lean
-  (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
-  certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledSample`
+  (`lean/Poub/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
+  certified rational root, and `Properties.Poub.PooledCovers` proves its W at least the bound `PooledSample`
   reads (the greedy by \(U_t/s_t\) is the fractional knapsack's optimum); the memory line reads that W from the
-  record's windows (`Properties.RemoteAudit.LineCoversRun`). What this code supplies is the schedule (each
+  record's windows (`Properties.Poub.LineCoversRun`). What this code supplies is the schedule (each
   window's challenge released at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile
   a receipt under a registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and
   the profile at δ.
@@ -1620,7 +1623,7 @@ path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p
 path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
 nothing (`append`).
 
-**Of record** (`lean/RemoteAudit/P2Session.lean`). The Lean verifier's process decides a P2 session (`p2_parties.py`):
+**Of record** (`lean/Poub/P2Session.lean`). The Lean verifier's process decides a P2 session (`p2_parties.py`):
 it holds the registration file's bytes (its digest recomputed from its fields, a stated `digest` refused unless it is
 theirs) and reads the prover's request and each root and openings line as sent, a line out of form rejecting the
 session `malformed` at the window filling. Its bookkeeping is §4–§6's over the U units, and its openings are checked
@@ -1631,7 +1634,7 @@ values, by name, before the first coin, and so does the Lean, naming each in `p2
 (`P2Session.heldTo`). The process holds its pinned `P2Session.SESSION` unless the auditor's party names a toy's
 (`p2_hold`'s `session`), and the session's core case (`p2_case.py`), whose request no digest binds, is replayed under
 `SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there. The case is signed: the memory
-challenger's key closes it (`p2_parties.Closer`, its line count and its chain, `RemoteAudit.P2Close`) under the session id
+challenger's key closes it (`p2_parties.Closer`, its line count and its chain, `Poub.P2Close`) under the session id
 the auditor gave it, which its session log records before the first coin. The chain runs over the case's head (the
 commitment's digest and the clock floor, `P2Protocol.headOf`) and then every entry of its log, and it is the one
 SHA-512 the verifier's device keeps of the case (`p2_parties.case_digest`). The check refuses a close that doesn't sign

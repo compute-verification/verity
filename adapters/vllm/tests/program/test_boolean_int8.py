@@ -17,7 +17,7 @@ from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate, evaluate_batch
 from verity.circuits.ops import prims as CP
 from verity.circuits.types import Array, Value
-from verity_vllm.definitions.boolean import boolean_version
+from verity.circuits.ops.boolean.versions import boolean_version
 from verity_vllm.definitions.registry import boolean_int8 as BI8
 from verity_vllm.definitions.registry import int8_exact as IE
 

@@ -19,9 +19,9 @@ coins are the sample's at which the sample ended and the earlier sessions' sampl
 * `JointAuditV5.endShare_mul_epsKs_le`, `JointAuditV5.endShare_mul_link_le`: `ε_ks` and `ε_bind` read only member `k`'s
   part of the sample, so that share of each at `memberSamplingDesign` is at most the term at `design k`, which samples the sample's
   coins alone and counts the samples that ran out too;
-* `JointAuditV5.member_accepted_sampledWrong_le`: the sample ends and member `k`'s session in the window's audit accepts
+* `JointAuditV5.member_accepted_sampledIncorrect_le`: the sample ends and member `k`'s session in the window's audit accepts
   with a sampled proof block of its part incorrect with probability at most `ε_ks,k + ε_bind,k` at `design k`
-  (`MemberV5.accepted_drawnWrong_le` at `memberSamplingDesign`).
+  (`MemberV5.accepted_drawnIncorrect_le` at `memberSamplingDesign`).
 
 `JointAuditV5.hcls_of_bounds` gives `JointAuditV5.hcls` from the registration check's refusal of a member whose fewest
 and most sampled proof blocks have different link points (`mPtsOf_mono`).
@@ -239,7 +239,7 @@ theorem endShare_mul_link_le (τ : Strategy w.game) (k : Fin w.ms.length) :
 /-- **The sample ends and member `k`'s session in the window's audit accepts with a sampled proof block of its part
 incorrect** with probability at most `ε_ks,k + ε_bind,k` at `design k`, under `cr/sha-512` and `ecr/sha-512` at its
 session played alone. -/
-theorem member_accepted_sampledWrong_le (τ : Strategy w.game) (k : Fin w.ms.length)
+theorem member_accepted_sampledIncorrect_le (τ : Strategy w.game) (k : Fin w.ms.length)
     (hCR : ∀ ω j, TableCRZ execArith hs512
       (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberSamplingDesign τ k).draw ω) (reg (w.memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
@@ -248,11 +248,11 @@ theorem member_accepted_sampledWrong_le (τ : Strategy w.game) (k : Fin w.ms.len
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
       (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') :
     prob (fun o => (o.2.2[k.1]?).elim False (fun t => AcceptsZKP (w.ms.get k).I (w.ms.get k).own t ∧
-        ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberWrong τ k) ∧ o.1.2 = true) w.game τ ≤
+        ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberIncorrect τ k) ∧ o.1.2 = true) w.game τ ≤
       (w.ms.get k).epsKs (w.design k) + (w.ms.get k).link (w.design k) := by
   refine (w.prob_member τ k fun S t => AcceptsZKP (w.ms.get k).I (w.ms.get k).own t ∧
-    ∃ u ∈ S, u ∈ w.memberWrong τ k).trans_le ?_
-  refine (mul_le_mul' le_rfl ((w.ms.get k).accepted_drawnWrong_le (w.memberSamplingDesign τ k) (w.oneClass_memberSamplingDesign τ k)
+    ∃ u ∈ S, u ∈ w.memberIncorrect τ k).trans_le ?_
+  refine (mul_le_mul' le_rfl ((w.ms.get k).accepted_drawnIncorrect_le (w.memberSamplingDesign τ k) (w.oneClass_memberSamplingDesign τ k)
     (w.memberStrat τ k) hCR hA2)).trans ?_
   rw [mul_add]
   exact add_le_add (w.endShare_mul_epsKs_le τ k) (w.endShare_mul_link_le τ k)

@@ -102,7 +102,7 @@ class Row:
 def incorrect(registry: Registry, scenario: Scenario) -> Row:
     """The incorrect-outputs row at the regime's identities, at the reporting confidence `incorrect.delta`. A sampled
     regime samples at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every unit
-    (`q = 1`); unmonitored, nothing detects it."""
+    (`q = 1`); unregistered, nothing detects it."""
     refs = {n: registry[f"exfil.{n}.bits"] for n in registry.names("exfil")}
     d = getattr(_inner(scenario.regime), "detection", None)
     delta = registry["incorrect.delta"]

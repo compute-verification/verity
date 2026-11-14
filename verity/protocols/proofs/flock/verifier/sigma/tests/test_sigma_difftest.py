@@ -1,5 +1,5 @@
 """`Flock.Sigma.check`, the Lean verifier's check that a Boolean Program is σ of its word Program, held to the Python that
-mirrors it, `verity_vllm.definitions.boolean.sigma_check`.
+mirrors it, `verity.circuits.ops.boolean.versions.sigma_check`.
 
 The reference decodes both descriptors (`codec.decode_program`), checks the Boolean descriptor's `word` link, σ's table and the
 input streams as the Lean does, then runs `sigma_check` itself on the two roots seen as Definitions: each root's Calls in
@@ -25,7 +25,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-import verity_vllm.definitions.boolean as BB
+import verity.circuits.ops.boolean.versions as BB
 from verity.circuits import boolean as BL
 from verity.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
 from verity.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind

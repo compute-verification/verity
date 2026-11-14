@@ -21,7 +21,7 @@ pooled sample of `d` openings. It puts together what the pieces state separately
 * **the window** (`DeployedWindow`) is `RateAuditRemote.lean`'s `GrindChain` of such devices: pass `j`'s root is one
   of `G` candidates the earlier passes' coins and the store fix, picked as any function of pass `j`'s whole oracle
   family, and pass `j`'s device may depend on the pick;
-* **the session** (`DeployedSession`) is `RateAuditPooled.lean`'s `Session` of such windows: window `w`'s prover is
+* **the session** (`DeployedRun`) is `RateAuditPooled.lean`'s `Session` of such windows: window `w`'s prover is
   any function of the earlier windows' coins, their samples among them, and each window samples `d` of its `P·N`
   receipts after its last root (`WindowCoins`).
 
@@ -216,19 +216,19 @@ end DeployedWindow
 
 /-- A deployed session of `n` windows on one store, each closed by its pooled sample of `d` openings: window `w`'s prover
 is any function of the earlier windows' coins, their samples among them. -/
-structure DeployedSession (n P N b h ρ S L q r s d G : ℕ) where
+structure DeployedRun (n P N b h ρ S L q r s d G : ℕ) where
   window : (w : Fin n) → ({v : Fin n // v < w} → WindowCoins P N b h ρ r s d) → DeployedWindow P N b h ρ S L q r s G
 
-namespace DeployedSession
+namespace DeployedRun
 
 variable {n P N b h ρ S L q r s d G : ℕ}
 
 /-- Window `w`'s prover at the session's coins `ω`: it reads the earlier windows' coins. -/
-def win (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (ω : Fin n → WindowCoins P N b h ρ r s d) :
+def win (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (ω : Fin n → WindowCoins P N b h ρ r s d) :
     DeployedWindow P N b h ρ S L q r s G :=
   A.window w (fun v => ω v.1)
 
-end DeployedSession
+end DeployedRun
 
 namespace Deployed
 

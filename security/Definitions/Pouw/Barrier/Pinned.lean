@@ -22,7 +22,7 @@ def GenericPr : Prop :=
     U.InDomain D → 0 ≤ c₀ → q ≤ 2 ^ 64 → A.Bounded U c₀ q → 0 < totalWref P U.layout →
     ∀ g : ℝ, g < 1 - c₀ / totalWref P U.layout → ∀ δ : ℕ → ℕ → ℝ, GGap CM P D g δ →
       pr (fun x : (Q → R) × S =>
-          correctSet P U x.1 x.2 (A.transcript U x.1 x.2) = range U.layout.N ∧ ¬ A.Breaks U x.1 x.2)
+          correctSet P U x.1 x.2 (A.trace U x.1 x.2) = range U.layout.N ∧ ¬ A.Breaks U x.1 x.2)
         ≤ δ q U.layout.N
 
 /-- **Class (a) in the abstract model: `g ≥ 1 − 1/p`.** For every noise source, domain and `W_ref ≥ p·W_mm`

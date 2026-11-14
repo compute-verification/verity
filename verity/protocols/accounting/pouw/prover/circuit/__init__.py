@@ -45,6 +45,9 @@
   `window.window_problem` in gates), one unit an execution phase: ok iff the P rows are entry rows of the layout, the
   calls, one filler, then empty entries, whose ranges tile [0, N) at the public registered level, every call's -h3 root
   the pass's public one and the calls' pass tiles in order.
+* `pearl_c_call`, `pearl_c_forming`, `pearl_c_noise`, `pearl_c_tile`: Pearl-C -h3's rows and cells, its forming, its noise
+  derivation and its tile's checked words as registered Definitions, each with its Boolean version, which
+  `pearl_plus_tile`, Pearl+'s tile check, calls.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs SPOT traces for one PoUW linear and its weight, their partition queries, the served outputs

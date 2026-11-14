@@ -5,7 +5,7 @@
 #
 #   probe  read-only requests: the challenger host's `pubkey` (its public key's SHA-512 must be PIN), `pins` and `ledger`
 #          (PERIOD unused, no period of LANE open), and the verifier host's `status` (pinned at COMMIT, no unit running);
-#          the circuit, `verity/remote-bandwidth/v0 verifier tree <tree>` of COMMIT's remote_bandwidth tree (auditor_line's
+#          the circuit, `verity/remote-bandwidth/v0 verifier tree <tree>` of COMMIT's poub tree (auditor_line's
 #          `descriptor`). COMMIT, and so the verifier host's pin, must be on main's first-parent line, fetched from the
 #          repository main is pushed to (in a run's clone, the node's bare repository behind the source root, never the
 #          source root's copy; main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier

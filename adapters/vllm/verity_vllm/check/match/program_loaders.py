@@ -8,7 +8,7 @@ import hashlib
 import json
 import os
 
-from verity_vllm.definitions.boolean import word_descriptor
+from verity.circuits.ops.boolean.versions import word_descriptor
 
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import supplied_inputs as SI

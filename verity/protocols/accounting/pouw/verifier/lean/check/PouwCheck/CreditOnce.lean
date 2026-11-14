@@ -8,7 +8,7 @@ import all Spot.ChallengerSession
 
 `Credit.periodCredit` reads the auditor's ledger through `Spot.Challenger.checked` (each line's parse, the hash chain and
 each entry's LMS signature) once in `Credit.period` and five more times a window: `creditedChallengePhase` for the
-window and for its sample session, `drawSession`, `roundsCheck` and `periodWeights`, each through `auditedOpen`. Each
+window and for its sample session, `drawChallengePhase`, `roundsCheck` and `periodWeights`, each through `auditedOpen`. Each
 reads it at the same ledger and the key `Credit.periodCredit` reads, so one replay does.
 
 Each function on that path has a twin here, its body as written with `checked ledger` a parameter `replay`
@@ -28,7 +28,7 @@ open Lean (Json)
 open Flock (V)
 
 /-- What `checked ledger` returns for a key: a ledger's replay. -/
-abbrev Replay := ChallengerKey → V (Array Win × Array MonitoringPeriod)
+abbrev Replay := ChallengerKey → V (Array Win × Array PeriodRecord)
 
 /-- `auditedOpen` with `replay` its ledger's replay: Spot's `auditedIn` on what `replay` returns. -/
 def auditedOpenWith (replay : Replay) (window : Json) (key : ChallengerKey) : V (Audited × Json) := do
@@ -92,7 +92,7 @@ theorem eq_of_sameKey {a b : ChallengerKey} (h : sameKey a b) : a = b := by
   cases h1; cases h2; cases h3; cases h4; rfl
 
 /-- `checked ledger`, its value at `k0` held as `c0`: a replay at `k0` made once, wherever it is read. -/
-def replayAt (ledger : Json) (k0 : ChallengerKey) (c0 : V (Array Win × Array MonitoringPeriod)) : Replay :=
+def replayAt (ledger : Json) (k0 : ChallengerKey) (c0 : V (Array Win × Array PeriodRecord)) : Replay :=
   fun k => if sameKey k k0 then c0 else checked ledger k
 
 theorem replayAt_checked (ledger : Json) (k0 : ChallengerKey) : replayAt ledger k0 (checked ledger k0) = checked ledger := by
@@ -139,7 +139,7 @@ open Spot.Challenger.Once (Replay trustedChallengePhaseOfWith auditedChallengePh
   replayAt replayAt_checked)
 open PouwCheck.Once (roundsCheckWith)
 
-/-- `drawSession` with `replay` its ledger's replay. -/
+/-- `drawChallengePhase` with `replay` its ledger's replay. -/
 def drawSessionWith (replay : Replay) (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
     R (Spot.Challenger.LiveCommitment × Spot.Challenger.Roots) := do
   let got ← (trustedChallengePhaseOfWith replay (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
@@ -148,7 +148,7 @@ def drawSessionWith (replay : Replay) (ledger : Json) (k : ChallengerKey) (pins 
   pure got
 
 theorem drawSession_eq (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
-    drawSession ledger k pins main session root =
+    drawChallengePhase ledger k pins main session root =
       drawSessionWith (Spot.Challenger.checked ledger) ledger k pins main session root := rfl
 
 /-- `Internal.creditedDraw` with `replay` its ledger's replay. -/
@@ -205,8 +205,8 @@ theorem periodWeights_eq (key ledger window rounds layout entries : Json) (progr
     periodWeights key ledger window rounds layout entries program prefix_ =
       periodWeightsWith (Spot.Challenger.checked ledger) key ledger window rounds layout entries program prefix_ := rfl
 
-/-- `windowLayout` with `replay` its ledger's replay. -/
-def windowLayoutWith (replay : Replay)
+/-- `executionPhaseLayout` with `replay` its ledger's replay. -/
+def executionPhaseLayoutWith (replay : Replay)
     (key ledger pins main window session salt calls served commit rounds draw descriptor entries proofs live k rows :
       Json) :
     R (List Nat × Json × List Nat) := do
@@ -238,19 +238,19 @@ def windowLayoutWith (replay : Replay)
   let rows ← Internal.servedRows calls layout log.size t
   let maxTokens ← committedLength ledger name
   Internal.length maxTokens rows layout log.size
-  proved (← windowDrawn window draw k ss) proofs
+  proved (← executionPhaseDrawn window draw k ss) proofs
   Internal.registration ((str? (get window "root")).getD "") program ((str? (prefixOf P)).getD "") entries proofs ss
     layout log.size sid
   Internal.live live t log.size ((str? (prefixOf P)).getD "") program ((str? (get window "root")).getD "") entries rows
     maxTokens
   pure (got.filter fun i => 0 < rows.getD i 0, layout, rows)
 
-theorem windowLayout_eq
+theorem executionPhaseLayout_eq
     (key ledger pins main window session salt calls served commit rounds draw descriptor entries proofs live k rows :
       Json) :
-    windowLayout key ledger pins main window session salt calls served commit rounds draw descriptor entries proofs live
+    executionPhaseLayout key ledger pins main window session salt calls served commit rounds draw descriptor entries proofs live
         k rows =
-      windowLayoutWith (Spot.Challenger.checked ledger) key ledger pins main window session salt calls served commit
+      executionPhaseLayoutWith (Spot.Challenger.checked ledger) key ledger pins main window session salt calls served commit
         rounds draw descriptor entries proofs live k rows := rfl
 
 /-- `period` with `replay` its ledger's replay. -/
@@ -334,7 +334,7 @@ def periodCreditWith (replay : Replay) (key ledger pins main name windows : Json
       d).mapError fun e =>
       ("circuit", s!"window {i}'s draw session of period {nm} doesn't count toward it, so the period earns nothing: {e}")
     if let some why := pinHygiene nm i main dr.pinned periodPin floor DRAW_UNIT then throw why
-    let (got, layout, rows) ← (windowLayoutWith replay key ledger pins main (f "window") (f "session") (f "salt")
+    let (got, layout, rows) ← (executionPhaseLayoutWith replay key ledger pins main (f "window") (f "session") (f "salt")
       (f "calls") (f "served") (f "commit") (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs")
       (f "live") (Lean.toJson bigK) (Lean.toJson t)).mapError
       fun (c, why) => ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")
@@ -350,7 +350,7 @@ theorem periodCredit_eq (key ledger pins main name windows : Json) :
 /-- `periodCreditWith` on the replay at `k0` made once, `c0`: kept out of line so that `c0`, an argument, is computed
 once, before the call. -/
 @[noinline] def periodCreditAt (ledger : Json) (k0 : ChallengerKey)
-    (c0 : Flock.V (Array Spot.Challenger.Win × Array Spot.Challenger.MonitoringPeriod))
+    (c0 : Flock.V (Array Spot.Challenger.Win × Array Spot.Challenger.PeriodRecord))
     (key pins main name windows : Json) : R PeriodCredit :=
   periodCreditWith (replayAt ledger k0 c0) key ledger pins main name windows
 

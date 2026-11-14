@@ -77,7 +77,7 @@ theorem setObjVal_obj (m : Std.TreeMap.Raw String Json compare) (k : String) (v 
 theorem cmp_ne {a b : String} (h : a ≠ b) : compare a b ≠ Ordering.eq :=
   fun e => h (Std.LawfulEqCmp.compare_eq_iff_eq.1 e)
 
-theorem cmp_wrong_units : compare "wrong_units" "accepted" ≠ Ordering.eq := cmp_ne (by decide)
+theorem cmp_incorrect_units : compare "wrong_units" "accepted" ≠ Ordering.eq := cmp_ne (by decide)
 
 theorem cmp_integrity_profile : compare "integrity_profile" "accepted" ≠ Ordering.eq := cmp_ne (by decide)
 
@@ -91,7 +91,7 @@ theorem accepted_false {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) :
     Spot.jeq (Spot.getD (((((Json.obj m).setObjVal! "accepted" (.bool false)).setObjVal! "profile" .null).setObjVal!
       "integrity_profile" .null).setObjVal! "wrong_units" .null) "accepted") (.bool true) = false := by
   simp only [setObjVal_obj, getD_obj]
-  rw [Std.TreeMap.Raw.getElem?_insert hm.insert.insert.insert, if_neg cmp_wrong_units,
+  rw [Std.TreeMap.Raw.getElem?_insert hm.insert.insert.insert, if_neg cmp_incorrect_units,
     Std.TreeMap.Raw.getElem?_insert hm.insert.insert, if_neg cmp_integrity_profile,
     Std.TreeMap.Raw.getElem?_insert hm.insert, if_neg cmp_profile,
     Std.TreeMap.Raw.getElem?_insert hm, if_pos cmp_accepted]
