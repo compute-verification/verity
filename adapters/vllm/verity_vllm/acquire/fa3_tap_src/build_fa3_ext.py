@@ -8,7 +8,8 @@ FLASHATTENTION_{DISABLE_BACKWARD,DISABLE_DROPOUT,DISABLE_UNEVEN_K,DISABLE_PYBIND
 DISABLE_APPENDKV}, TORCH_TARGET_VERSION, USE_CUDA) and narrows the build to what batch-invariant bf16 serving launches: bf16 only,
 head dims from --hdims (64, 128), paged-KV PackGQA forward, num_splits == 1 (no split/combine), no softcap / local / fp8 / fp16.
 The narrowing macros only remove template branches (each remaining instantiation is the same `run_mha_fwd_<...>` the installed
-library dispatches to); `fa3_tap_xcheck.py` verifies out / lse bit-identical to the installed `_vllm_fa3_C.fwd`.
+library dispatches to); `tests.properties.fa_tap_exactness`'s property (a) checks out / lse bit-identical to the installed
+`_vllm_fa3_C.fwd` on a GPU.
 
 Usage:
   verity-vllm fa3-tap-build --tree /path/to/vllm-flash-attn --name verity_fa3_matReq --build-dir /path/build --hdims 64,128 \
