@@ -44,7 +44,7 @@ import Proofs.Flock.Recursive.KSProved
 # The recursive audit over SPOT's recursive form
 
 `Flock.Guarantees.RecursiveAuditC3` is SPOT at the recursive configuration, the sample checked by V\*'s
-compiled check (`verity/sampled-proofs/recursive/v1`, a component of its own: onsite's and remote's sampled-proofs
+compiled check (`verity/sampled-proofs/recursive/v1`, a component of its own: onsite's and remote's SPOT
 component refuses the recursive form by name), at every composite, with zero knowledge (`RecursiveZkServerPrivate`).
 
 * `SpotRecursive Acc` is `spotRecursive`'s bound at every deployment `RecursiveKS` is stated at

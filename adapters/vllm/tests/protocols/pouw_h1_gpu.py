@@ -1365,7 +1365,7 @@ def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) ->
     `layers` in place (no second copy on the GPU), or with a ``.cubin`` SO (noise.cu's) the torch chain over noise.cu's
     noise, keeping the first layer's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the
     window Program's form, v1's or J10-R's (``--j10r``)."""
-    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
+    from verity_torch.pouw.h1 import receipts as RC
 
     kernel = {"cubin": RC.Cubin(so)} if so.endswith(".cubin") else {"units": producer().Units(so)}
     made = RC.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,

@@ -185,7 +185,7 @@ def test_the_open_answer_status_and_end_carry_the_coin_commitment_the_hello_answ
 
 def test_a_withheld_sessions_gate_gives_no_coin_commitment_root_and_fetches_no_record_before_its_end(host, signer, tmp_path,
                                                                                                     monkeypatch):
-    """A sampled-proofs window's session (`reserve --withhold`): its reserve and open say `withheld: true` (so
+    """A SPOT window's session (`reserve --withhold`): its reserve and open say `withheld: true` (so
     `challenger.withheld_on` takes its window), serve.py runs it `--withhold`, and its hello answers the layout alone.
     Until its end entry the gate hands out no root: the open's answer, though `ready` has one, and `status` carry
     `commitment` null, and `fetch` refuses, though serve.py has written out/record.json. Once its end is in, `status`

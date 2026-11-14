@@ -243,7 +243,7 @@ def _honest_trusted(store, tmp_path, sign):
 @pytest.mark.parametrize("piece", TRUSTED_PIECES)
 def test_the_session_trusted_is_the_leans_and_the_python_alone_trusts_none(store, tmp_path, sign, monkeypatch, piece,
                                                                            lean):
-    """`coins.trusted` asks the Lean verifier (`sampled-proofs-verifier`) for the ledger's head, the pinned session and
+    """`coins.trusted` asks the Lean verifier (`spot-verifier`) for the ledger's head, the pinned session and
     the session's commitment and roots, in that order, and acts on its answers: an honest session the Python trusts is
     trusted where the Lean agrees, and refused, naming the check, where the Lean refuses any one of the three or
     answers it otherwise than the Python."""

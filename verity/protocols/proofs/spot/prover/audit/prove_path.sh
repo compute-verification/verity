@@ -107,7 +107,7 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protoco
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-zk-server
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 PP_CHALLENGER=${PP_CHALLENGER:-local}   # the sample's coins are a challenger's: a local development session unless named
 

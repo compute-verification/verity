@@ -143,7 +143,7 @@ one file for both commands: each stage's evidence carries the copy of main's his
 the stream holds both to the copy ``second`` is given.
 
 A ``local`` session's challenger reads its coins through
-``sampled-proofs-verifier``, which must be built first (``lake build sampled-proofs-verifier`` in
+``spot-verifier``, which must be built first (``lake build spot-verifier`` in
 ``verity/protocols/proofs/spot/verifier/lean``): building it on first use outlasts the local gate's start.
 ``two_stage_small.sh`` runs both commands on a CPU node at small statics.
 """
