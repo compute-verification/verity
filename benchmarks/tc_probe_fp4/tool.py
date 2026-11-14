@@ -13,8 +13,6 @@ Key params follow probe.py's argparse; `--out` and `--procs` never enter the der
 
 `tc_rates_fp4` is F1 (f1_rates.py): its CPU steps (``build``, ``collect``) run as recorded runs, its timed families as fill jobs
 (``benchmarks.tc_probe_fp4.tool:TC_RATES_FP4``; paths, ``--jobs`` and guards are not part of the answer).
-`tc_sparse_e4m3` (sp_e4m3.py, the 2:4 sparse E4M3 row against two dense k32 atoms) captures in fill chunks and verifies on
-the CPU (``benchmarks.tc_probe_fp4.tool:TC_SPARSE_E4M3``).
 """
 from __future__ import annotations
 
@@ -148,39 +146,6 @@ TC_RATES_FP4 = Tool(
     caches=["nvcc"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse_f1,
-)
-
-
-def parse_sparse_e4m3(argv: list[str]) -> dict:
-    idx = next((i for i, t in enumerate(argv) if Path(t).name == "sp_e4m3.py"), 0)
-    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    ap.add_argument("cmd", nargs="?", default=None)
-    for flag in ("--out", "--capture", "--prebuilt", "--expect-uuid", "--seeds", "--fake-silicon"):
-        ap.add_argument(flag, default=None)
-    ap.add_argument("--arch", default="sm_120a")
-    ap.add_argument("--seed", type=int, default=None)
-    ap.add_argument("--n-random", type=int, default=None)
-    ap.add_argument("--fixed-mult", type=int, default=1)
-    ap.add_argument("--procs", type=int, default=None)
-    ap.add_argument("--budget-s", type=float, default=None)
-    ns, unknown = ap.parse_known_args(argv[idx + 1:])
-    out = vars(ns)
-    for k in ("out", "capture", "prebuilt", "expect_uuid", "procs", "budget_s"):  # paths and guards, not the answer
-        out.pop(k)
-    if unknown:
-        out["_unknown"] = unknown
-    return out
-
-
-TC_SPARSE_E4M3 = Tool(
-    name="tc_sparse_e4m3", version="1",
-    command=["python", "benchmarks/tc_probe_fp4/sp_e4m3.py"],
-    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.circuits.silicon", "**")],
-    key_params=["cmd", "arch", "seed", "seeds", "n_random", "fixed_mult", "fake_silicon"],
-    key_conditions=["hw.family"],
-    caches=["nvcc"],
-    produces=["tc-evidence/v1", "run-files/v1"],
-    parse=parse_sparse_e4m3,
 )
 
 

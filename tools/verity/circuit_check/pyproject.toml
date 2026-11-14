@@ -85,7 +85,7 @@ inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "tools/config/verity_config",
           "verity/protocols/proofs/spot/verifier/__init__.py",
-          "verity/hardware/record.py",
+          "verity/channel.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/circuits/kernels", "verity/circuits/private_circuits",
           "verity/commitments/randomness", "verity/definitions", "verity/protocols/proofs/flock/prover/python/verity_flock", "verity/commitments/windows",
           "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/audit.py", "verity/protocols/accounting/pouw/verifier/salt.py",
@@ -95,6 +95,8 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/pouw/verifier/serving.py", "verity/protocols/accounting/pouw/verifier/registration.py", "verity/protocols/accounting/pouw/verifier/coins.py",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/claims/__init__.py",
           "verity/protocols/accounting/pouw/verifier/grind.py", "verity/protocols/accounting/pouw/prover/circuit", "verity/protocols/accounting/pouw/prover/schemes",
+          "verity/protocols/experimental/dither/prover", "verity/protocols/experimental/__init__.py",
+          "verity/protocols/experimental/dither/__init__.py",
           "verity/protocols/accounting/pouw/verifier/live_reads.py", "verity/protocols/accounting/pouw/prover/__init__.py",
           "verity/protocols/accounting/pous/prover/__init__.py", "verity/protocols/accounting/certifier/prover/__init__.py",
           "verity/protocols/accounting/pous/verifier/__init__.py", "verity/protocols/accounting/pous/prover/circuit.py",
@@ -206,7 +208,9 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/certifier/verifier/release.py",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/certifier/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py",
           "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments",
-          "adapters/vllm/tests/__init__.py", "verity/protocols/accounting/pous/__init__.py", "adapters/vllm/tests/check/__init__.py"]
+          "adapters/vllm/tests/__init__.py", "verity/protocols/accounting/pous/__init__.py", "adapters/vllm/tests/check/__init__.py",
+          # test_superseded_versions.py: the list it holds the superseded versions to
+          "tests/lint/allowlists/superseded_versions.json"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -228,6 +232,7 @@ tests = [
     "tests/test_named_targets.py",
     "tests/test_pinned_targets.py",
     "tests/test_ranges.py",
+    "tests/test_superseded_versions.py",
     "tests/test_targets.py",
     "tests/test_wide_outputs.py",
 ]
@@ -256,7 +261,8 @@ paths = [
 tests = ["tests/test_attention_split.py", "tests/test_attention_split_digests_*.py", "tests/test_bodies.py",
          "tests/test_declared_tables.py", "tests/test_metadata_files.py", "tests/test_named_targets.py",
          "tests/test_pinned_targets.py", "tests/test_ranges.py", "tests/test_split_prims_serve.py",
-         "tests/test_structural.py", "tests/test_structural_slots.py", "tests/test_targets.py"]
+         "tests/test_structural.py", "tests/test_structural_slots.py", "tests/test_superseded_versions.py",
+         "tests/test_targets.py"]
 paths = [
     "adapters/vllm/verity_vllm/engine/served_seed.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",

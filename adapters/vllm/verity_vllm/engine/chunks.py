@@ -57,6 +57,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
+
 
 class Collector:
     """Per-iteration facts for `attribute()`: whether `step()` returned outputs, the new tokens per request (child 0), and --
@@ -76,7 +80,8 @@ class Collector:
         for o in outs or []:
             try:
                 n = len(o.outputs[0].token_ids)
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                logger.debug("iteration %d: an output with no token ids counts no new tokens: %r", len(self.nonempty) - 1, e)
                 continue
             rid = str(o.request_id)
             new[rid] = n - self._len.get(rid, 0)

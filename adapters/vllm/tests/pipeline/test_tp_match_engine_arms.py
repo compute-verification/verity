@@ -20,7 +20,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import match as M
 from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 
-stand_ins = TT.stand_ins
+stand_ins, vllm = TT.stand_ins, TT.vllm
 FAMILIES = ("NCCL_", "VLLM_", "CUBLAS")
 DUMMY = "dummy"
 
