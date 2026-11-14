@@ -3,7 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.PerRun
 public import Proofs.Pouw.PearlC.W1BudgetAbort
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Accounting.Device
+import Proofs.Registration.Device
 import Proofs.Pouw.PerRunJoint
 import Proofs.Pouw.PerRunTruncation
 import Proofs.Pouw.Prob

@@ -362,7 +362,7 @@ def _draw(rec: dict, law: dict) -> dict:
 
 def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):
     """The window's work sampling design proves every RoPE head (work 0, its floor all 32: an All stratum) and samples 2 of the 8 SiluMul rows, as
-    the registration's law states and the verifier's own window derives; a sample by it holds every transfer-gate unit."""
+    the registration's sampling design states and the verifier's own window derives; a sample by it holds every transfer-gate unit."""
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
     c = gated_tp

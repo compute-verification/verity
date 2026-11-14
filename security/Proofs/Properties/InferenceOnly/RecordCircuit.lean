@@ -26,7 +26,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.RecordText (Row)
+open Spot.RecordText (Row)
 open InferenceOnlyCheck.Record.SecurityProofs (read_front finish_text front_text gridsOf_covers gridsOf_ok)
 open Lean (Json)
 
@@ -53,7 +53,7 @@ theorem slot_of_unit {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : Inf
     Option.isSome_iff_exists.1 (List.find?_isSome.2 ⟨g, hgm, by simp [hlo, hhi]⟩)
   obtain ⟨g', hfind⟩ := hex
   refine ⟨(u - g'.start) / g'.q % c.S, ?_, Nat.mod_lt _ (by omega)⟩
-  simp only [InferenceOnlyCheck.Record.Case.slot, InferenceOnlyCheck.RecordText.slotIn, hfind, Option.map_some]
+  simp only [InferenceOnlyCheck.Record.Case.slot, Spot.RecordText.slotIn, hfind, Option.map_some]
 
 /-- **θ and the blocks of a wired circuit.** Where `D` is the wired circuit (`LaysOut`), every unit's rows are its own
 input gates (`OwnRows`), every computed gate lies in a unit (`GatesOwn`) and every unit has a slot below `n`: some θ

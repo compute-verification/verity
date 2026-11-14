@@ -1,6 +1,6 @@
 module
 
-public import VStarRecursive.Protocol
+public import VStarRecursion.Protocol
 public import VStarRecursive.Sampled
 
 @[expose] public section

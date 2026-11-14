@@ -38,8 +38,8 @@ sector's `ks × 32` block below rational rank `r` with probability at most `ε`:
 The finite probability is exact; only its numerical evaluation is outside Lean. At the deployed 16 rows the chosen
 rank is `r = 12`, where `ε = 128 · Pr[rank_ℚ(16 × 32 block) ≤ 11] ≤ 2^(-96.25)`: evaluated, with the per-compression
 reading `2^(-96) + ε = 2^(-95.12)`, by a standalone seeded script (exact rational arithmetic through
-the F2 rank distribution, with exhaustive and seeded self-checks; the script and its output are an evidence artifact, and
-`verity/core/protocols/poub/tests/test_sketch_reading.py` holds the in-suite falsification tests). At 64
+the F2 rank distribution, with exhaustive and seeded self-checks; the script and its output are an evidence artifact,
+and `verity/core/protocols/poub/tests/test_sketch_reading.py` holds the in-suite falsification tests). At 64
 rows, the remote receipts' deployed count (`Accounting.Guarantees.Remote.SketchBoundDeployed`), it is `r = 27`, where
 `ε = 128 · Pr[rank_ℚ(64 × 32 block) ≤ 26] ≤ 2^(-219.23)` and the reading is `2^(-216) + ε = 2^(-215.85)`. -/
 def SketchRank (ks m r : ℕ) (ε : ℝ≥0∞) : Prop :=

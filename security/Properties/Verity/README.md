@@ -18,19 +18,33 @@ properties, never a proof. Their proofs (`security/Proofs/Properties/Verity/`) i
 |---|---|---|
 | `Verity.soundness_at_of_targets : Verity.SoundnessOf` | at every composite `k`, a list of subprotocols' ids, `k`'s subprotocols' targets give `Vocab.SoundnessAt k` | `security/Proofs/Properties/Verity/Soundness.lean` |
 | `Verity.soundness_of_subprotocols : Verity.Soundness` | `SoundnessOf` at onsite's list, from its seven targets | the same file |
-| `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` | `SoundnessOf` at remote's list, from its three targets | the same file |
+| `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` | `SoundnessOf` at remote's list, from two targets and the two statements on the committed files | `security/Proofs/Properties/Verity/InferenceOnly.lean` |
 
 The statements are in `Soundness.lean` (this directory). **Remote's**: for any device and any names `V` the subprotocols
-define (`Vocab`), if SPOT, PoUW and the inference-only policy each meet their target at remote, then at all
-parameters `θ`, committed files `F` and commitments `c` and for every prover strategy, the probability that remote's
-compiled verifier (`Core.Remote.V1.protocol`, `verity/remote/v1`) accepts files that passed the commit phase's check while
-one of the three claims fails is at most the three errors at that strategy summed. Onsite's is the same statement over
-its seven. Each takes its targets by name, which are the target of every subprotocol its list names, `SoundnessOf`'s
-hypothesis (`Vocab.targets_remote`, `Vocab.targets_onsite`).
+define (`Vocab`), if SPOT and PoUW each meet their target at remote and the two statements on the committed files hold
+(below), then at all parameters `θ`, committed files `F` and commitments `c` and for every prover strategy, the
+probability that remote's compiled verifier (`Core.Remote.V1.protocol`, `verity/remote/v1`) accepts files that passed
+the commit phase's check while SPOT's, PoUW's or the inference-only policy's claim fails is at most the three errors
+at that strategy summed. Onsite's is the same conclusion over its seven, from its seven targets. Each takes its targets
+by name, which are the target of every subprotocol its list names, `SoundnessOf`'s hypothesis (`Vocab.targets_remote`,
+`Vocab.targets_onsite`).
+
+**The two statements on the committed files** (`Committed.lean`) stand at remote where the policy's target stood. The
+policy's claim is on the case as sent, of which its target is proved (`Vocab.inferenceOnlySound`); these are what that
+leaves unsaid of the committed files, each stated and not proved:
+
+- `Vocab.WiresSound`: the wiring the policy's record names is the wiring the committed units are held to. On an
+  accepted play, at most a `2ε` share of the committed units are unbound or read a row that is not the row the wiring
+  gives them, but for twice SPOT's error.
+- `GateARow`: every unit of the committed circuit has one gate for each of its file's rows, so `Γ`, which counts rows a
+  block, counts the gates PoUW's claim counts.
+
+No clause of the conclusion reads either: the conclusion's clause for the policy is still on the case as sent.
 
 The lock (`security/Properties/lean-audit.json`) records each with no named assumption among its hypotheses, which are
-the targets alone, and with its two witnesses at the idle deployment (`Idle.lean`): `*_honest`, every target holds at
-`Idle.unbounded`, and `*_nontrivial`, the conclusion fails at `Idle.exact` for a verifier that accepts everything.
+the targets and, at remote, the two statements, and with its two witnesses at the idle deployment (`Idle.lean`):
+`*_honest`, every target (and `Vocab.WiresSound`) holds at `Idle.unbounded`, and `*_nontrivial`, the conclusion fails
+at `Idle.exact` for a verifier that accepts everything. `GateARow` reads no deployment, so no instance concludes it.
 
 ## The subprotocols each composes
 
@@ -84,7 +98,7 @@ In this order:
 
 - **The five period subprotocols** (SPOT, PoUW, PoUS, PoUB-P2, the network certifier): a target is the
   per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
-  `security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee. PoUW's in
+  `security/Definitions/Compose/JointLive.lean`), so each discharges its target by proving that guarantee. PoUW's in
   a composite that lists Pearl+'s id (remote) is Pearl+'s claim in MACs instead, which reads `Properties.Pouw.PearlPlus`.
 - **SPOT** at the one-stage form: `Verity.Sampled.spotSound_of_targets`
   (`security/Proofs/Properties/Verity/Sampled/Target.lean`) proves `SpotSound` at every composite, for a vocabulary whose
@@ -98,12 +112,15 @@ In this order:
   verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `spotRecursive_of_ks`
   (`security/Proofs/Properties/Verity/Recursive/Audit.lean`) states it at the deployment from
   `Flock.Guarantees.RecursiveKS`. It doesn't yet instantiate `SpotSound`.
+- **The inference-only policy**: `Vocab.inferenceOnlySound` (`security/Proofs/Properties/Verity/InferenceOnly.lean`)
+  proves its target of the case as sent. Onsite's statement still takes the target; remote's proof applies it.
 - **The others** are hypotheses of the theorem. Each subprotocol's own guarantee, in its own form, is in
   [the guarantees to read first](../../README.md#the-guarantees-to-read-first).
 
 ## What it rests on
 
-The targets are the theorem's only hypotheses. Three kinds of assumption enter beside them, by their lock names:
+The targets, and at remote the two statements on the committed files, are the theorem's only hypotheses. Three kinds
+of assumption enter beside them, by their lock names:
 
 - **SHA-512 collision resistance**, `Claims.ExpectedCR` (`ecr/sha-512`, `security/Definitions/Core/Interaction.lean`;
   `security/lean-audit.json`). It is asked only of each subprotocol's fixed finder: `Vocab.FinderCR` is

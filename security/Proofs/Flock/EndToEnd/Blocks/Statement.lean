@@ -79,14 +79,14 @@ def sessions (b : ℕ) : Finset ℕ := Finset.Ico (S.start b) (S.start (b + 1))
 noncomputable def game : Game Unit := Period.game S.W S.T
 
 /-- The monitoring period's run at the prover strategy `s`: each session's record, in serve order. -/
-noncomputable def run (s : Strategy S.game) : Game (List WindowRec) := Period.run S.W S.T s
+noncomputable def run (s : Strategy S.game) : Game (List SamplingBlockRec) := Period.run S.W S.T s
 
 /-- Block `b`'s incorrect proof blocks in a run's records. -/
-def blockIncorrect (b : ℕ) (l : List WindowRec) : ℕ := ((l.filter fun r => r.idx ∈ S.sessions b).map WindowRec.incorrect).sum
+def blockIncorrect (b : ℕ) (l : List SamplingBlockRec) : ℕ := ((l.filter fun r => r.idx ∈ S.sessions b).map SamplingBlockRec.incorrect).sum
 
 /-- **Block `b` escapes at `ln(1/δ)/q`**: every session of block `b` is accepted, and its incorrect proof blocks total at least
 `ln(1/δ)/q`. -/
-def BlockMissProb (q δ : ℝ) (b : ℕ) (l : List WindowRec) : Prop :=
+def BlockMissProb (q δ : ℝ) (b : ℕ) (l : List SamplingBlockRec) : Prop :=
   (∀ r ∈ l, r.idx ∈ S.sessions b → r.accepted) ∧ Real.log (1 / δ) / q ≤ (S.blockIncorrect b l : ℝ)
 
 /-- Block `b`'s knowledge and binding errors, `Σ_{t ∈ b} (ε_ks,t + δ_link,t)`. -/
@@ -157,7 +157,7 @@ def IntegrityPooledBlocks : Prop :=
     (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ →
       LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
         (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
-    value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.incorrect).sum : ℝ)) (S.run s) ≤
+    value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (S.run s) ≤
       ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b
 
 end Flock.Guarantees

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Physical
+public import Definitions.Registration.Physical
 public import Definitions.Pouw.CostModel
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Game.Params

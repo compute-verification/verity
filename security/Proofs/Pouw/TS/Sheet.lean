@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Sheet
+public import Definitions.Registration.Guarantees.Sheet
 public import Proofs.Accounting.Lemmas.Sheet
 
 /-!

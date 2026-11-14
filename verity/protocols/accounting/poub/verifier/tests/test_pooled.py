@@ -64,7 +64,7 @@ def lp_optimum(ws: list[tuple[int, int]], B: Fraction) -> Fraction:
     return best
 
 
-def test_w_is_the_fractional_knapsacks_optimum_and_at_least_every_share_the_draw_allows():
+def test_w_is_the_fractional_knapsacks_optimum_and_at_least_every_share_the_sample_allows():
     rng = random.Random(7)
     for _ in range(300):
         ws = [(u, rng.randint(1, u)) for u in (rng.randint(1, 60) for _ in range(rng.randint(1, 5)))]
@@ -82,7 +82,7 @@ def test_w_is_the_fractional_knapsacks_optimum_and_at_least_every_share_the_draw
         assert b.floor == max(b.floors)
 
 
-def test_the_greedy_takes_the_windows_by_receipts_a_draw_and_a_window_opened_whole_has_none():
+def test_the_greedy_takes_the_windows_by_receipts_a_sample_and_a_window_opened_whole_has_none():
     ws = [(1000, 10), (12, 10), (40, 40), (5000, 10)]
     b = pooled.bound(ws, Fraction(1, 10 ** 6))
     assert pooled.order(ws) == [3, 0, 1, 2] and b.floors[2] == 0

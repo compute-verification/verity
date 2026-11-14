@@ -5,7 +5,7 @@ leg, each ending in the verifier's check (`verity.protocols.accounting.pous.veri
 is steps 1 to 3, `audit` steps 4 and 5, so a node's store can be set up once and audited every period):
 
 1. the prover commits to `W`, the node's `store` padded with zeros to the point's payload (`setup.commit`);
-2. the verifier samples the salt after the commitment, from its live `coins` (`setup.draw_salt`);
+2. the verifier samples the salt after the commitment, from its live `coins` (`setup.sample_salt`);
 3. the prover encodes `C*` (`P2.encode_segment`), and the verifier decodes it and checks `Dec(C*)` against the commitment
    (`setup.verifier_key_from_encoding`, the public-encoder setup; in Lean `verity/pous/p2/v4/setup`), publishing its root;
 4. the memory challenger takes its table of `C*` (each block's `memory_challenger.block_digest`), samples its `k` indices
@@ -141,7 +141,7 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
         raise ValueError(f"the store is {len(store)} bytes, past the point's payload of {q.w_bytes}")
     w = bytes(store) + bytes(q.w_bytes - len(store))
     commitment = setup.commit(q, w)
-    salt = setup.draw_salt(coins, commitment)
+    salt = setup.sample_salt(coins, commitment)
     encoded = encode(q, salt, w, workers)
     root = setup.verifier_key_from_encoding(q, None, commitment, salt, encoded).root
     blocks = tuple(b for seg in encoded for b in seg)
@@ -242,10 +242,10 @@ def cited(entries: Sequence[dict], sessions: Collection[str]) -> list[int]:
                 keep.add(i)
         elif e["session"] in sessions:
             keep.add(i)
-            if kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b):
-                if (o := current.get(b.get("for") or b.get("by"))) is not None:
-                    keep.add(o)
-                    held.add(o)
+            reserves = kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b)
+            if reserves and (o := current.get(b.get("for") or b.get("by"))) is not None:
+                keep.add(o)
+                held.add(o)
     opened = {e["session"] for e in entries if e["kind"] == "open"}
     if missing := sorted(set(sessions) - opened):
         raise ValueError(f"the auditor's ledger opens no session {missing[0]}, which a challenger close record beside it "

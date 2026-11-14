@@ -19,7 +19,7 @@ distinct ids (`leaves_find`), and a name's entry in a list of named values with 
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open InferenceOnlyCheck.RecordText (Tmpl)
+open Spot.RecordText (Tmpl)
 open Flock.Program
 open Flock.Sigma (bits)
 
@@ -110,13 +110,13 @@ theorem lookup_append_of_some {β : Type} : ∀ (l l' : List (String × β)) (a 
 outer length, its outputs the fields of the Definition's return type, named `o<j>`, each with its bits rounded up to
 words, and no two of its ports have one name. -/
 structure Shaped (P : Prog) (t : Tmpl) : Prop where
-  rows : t.rows = (P.defs[t.defn]!).params.toList.map fun p => (p.1, bits p.2 / 16, RecordText.outerOf p.2)
+  rows : t.rows = (P.defs[t.defn]!).params.toList.map fun p => (p.1, bits p.2 / 16, Spot.RecordText.outerOf p.2)
   outs : t.outs =
     (fieldsOf (P.defs[t.defn]!).ret).zipIdx.map fun x => ("o" ++ toString x.2, (bits x.1 + 15) / 16)
   names : (t.rows.map (·.1) ++ t.outs.map (·.1)).Nodup
 
 /-- A template the text's reader gives is its Definition's. -/
-theorem shaped_of_tmplOf {P : Prog} {r : Flock.TemplateQuery.TRange} {t : Tmpl} (h : RecordText.tmplOf P r = .ok t) :
+theorem shaped_of_tmplOf {P : Prog} {r : Flock.TemplateQuery.TRange} {t : Tmpl} (h : Spot.RecordText.tmplOf P r = .ok t) :
     Shaped P t :=
   ⟨(tmplOf_spec h).2.2.2.1, (tmplOf_spec h).2.2.2.2.2.1, tmplOf_names h⟩
 

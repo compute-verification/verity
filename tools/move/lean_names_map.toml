@@ -4,17 +4,17 @@
 # that `check.py --update --moved` takes. A word that names other declarations too goes by file ([[words_in]]), each
 # entry listing a module that declares the name it renames, since `move_check.py` keeps a scoped word only there.
 #
-# By hand, in a commit of its own after the map's, with a build: `Accounting.Rate.DeployedSession` becomes
-# `DeployedRun`, a name the module `Proofs.Accounting.RateAudit.DeployedRun` already spells.
+# By hand, each in a commit of its own after the map's: `Accounting.Rate.DeployedSession` becomes `DeployedRun`, a
+# name the module `Proofs.Accounting.RateAudit.DeployedRun` already spells; `exWindow` becomes `exExecutionPhase`;
+# `Flock.Guarantees.WindowRec` becomes `SamplingBlockRec`; the certifier's four charge-chain `session`s become
+# `chargesFrom`; `Core.Account.Example.session` and `MemoryChallenger.Properties.InProofs.sessionOf` become
+# `challengePhase` and `challengePhaseOf`; and the homonyms the words couldn't place.
 # The map's rename stands beyond its words where a file already spells the new name, which move_check reads as a
 # merge of two names: the six one-file entries below that say so, and `instBEqSessionCommitment`, the instance
 # Lean derives.
-# Left out: `exWindow`, whose file declares `exRun`; `Flock.Guarantees.WindowRec`, renamed with its field `wrong`
-# by another word, which `check.py --moved` can't read back in one move; the four `session`s of the network
-# certifier's advice and window charge, whose files spell `run` already (the carry's field); the two network
-# certifier `Instance.session`s, each punned with the issuer's field `session`; `Core.Account.Example.session`,
-# whose file spells `run` already; `Pouw.Window.flockKnowledgeSound_analysisZC`, whose word is only its namespace's;
-# `Accounting.Window`, its `ticks`, `steps` and `card_ticks`, a refactor.
+# Left out: the two network certifier `Instance.session`s, each punned with the issuer's field `session`;
+# `Pouw.Window.flockKnowledgeSound_analysisZC`, whose word is only its namespace's; `Accounting.Window`, its
+# `ticks`, `steps` and `card_ticks`, a refactor.
 [words]
 # proofs
 "card_wrongBlocks_lt_subsetInputs" = "card_incorrectBlocks_lt_subsetInputs"

@@ -22,7 +22,7 @@ physical premises enter as the game's shape, and the challenger's deployment mus
 - C5, *no side channel*: no label reaches the outside except through that egress, and nothing reaches the server during
   the challenges but the indices and what the outside sends, which is a function of `ξ` and the indices.
 
-The game is not yet tied to the actual-circuit model of `Definitions.Accounting.Physical`, whose `Memory` and `Links`
+The game is not yet tied to the actual-circuit model of `Definitions.Registration.Physical`, whose `Memory` and `Links`
 constraints are these premises' forms there.
 
 **What it covers.** The sequential reveal: round `j`'s answer reads the indices before it, not those after. A batched

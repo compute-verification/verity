@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.JointBridge.CreditedWords
+public import Definitions.Certifier.JointBridge.CreditedWords
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,8 +36,8 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A credited word's named premises: its priced cost on the device, and the units the network certifier admits (trusted)
 
-The two premises `Properties.Accounting.JointBridge.WorkOfCreditedWords` adds to a PoUW source statement that credits
-words (`Properties.Pouw.Period.H1CheckedCreditPeriod`), each a `Prop` taken as a hypothesis, never an `axiom`:
+The two premises `Properties.Certifier.JointBridge.WorkOfCreditedWords` adds to a PoUW source statement that credits
+words (`Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`), each a `Prop` taken as a hypothesis, never an `axiom`:
 
 * `WordCostsMacs`: a per-word work lower bound, priced, for the words of units the device didn't outsource;
 * `HelpWithinCertifier`: the units the device outsourced are within the network certifier's bits, at `b_unit` a unit.

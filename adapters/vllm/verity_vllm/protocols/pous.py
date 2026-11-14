@@ -14,13 +14,13 @@ vLLM's model, attaches the decode to its layers and holds the option.
 * **Commit** (`commit_weights`, the composition's first phase, model untouched): ``setup.commit(params, W)`` before any
   salt exists, recorded in the composition record's ``weights``.
 * **Install**, in order: the same commitment recomputed, refused if the weights changed since; the salt
-  ``setup.draw_salt(source, commitment)``, ``source`` the auditor's coin flipped after the commitment (``salt_source``);
-  ``C*`` encoded a segment at a time (`store.GpuEncoder`, ``libp2v1.so`` on the weights' GPU, which checks its own decode
-  of the whole segment; `store.CpuEncoder` on the CPU), two blocks of each segment held to ``W`` by the reference decode,
-  and ``C*`` held as one [blocks, block_bytes] uint8 tensor on the weights' device; the memory challenger's table of it
-  and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's tagged `Hooks`: the
-  plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's ``quant_method.apply``
-  wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the store's load
+  ``setup.sample_salt(source, commitment)``, ``source`` the auditor's coin flipped after the commitment
+  (``salt_source``); ``C*`` encoded a segment at a time (`store.GpuEncoder`, ``libp2v1.so`` on the weights' GPU, which
+  checks its own decode of the whole segment; `store.CpuEncoder` on the CPU), two blocks of each segment held to ``W``
+  by the reference decode, and ``C*`` held as one [blocks, block_bytes] uint8 tensor on the weights' device; the memory
+  challenger's table of it and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's
+  tagged `Hooks`: the plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's
+  ``quant_method.apply`` wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the store's load
   `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
   and the inner ``apply`` called with a proxy layer holding it), and the prover started last.  Uninstall runs newest
   first: prover, wrappers, then ``W`` restored; ``C*`` is freed after.
@@ -70,7 +70,7 @@ def schemes() -> tuple[str, ...]:
 def _source_refusal(source: Any) -> str | None:
     """Why ``salt_source`` can't give the auditor's coin, or None."""
     if source is None:
-        return ("no salt_source: the salt is setup.draw_salt(source, commitment), the source the auditor's coin drawn after "
+        return ("no salt_source: the salt is setup.sample_salt(source, commitment), the source the auditor's coin drawn after "
                 "the commitment (its hex, a callable of the commitment, or {'command': argv})")
     if callable(source):
         return None
@@ -246,7 +246,7 @@ def install(scheme: str, target: Target) -> PousOption:
     if committed is not None and committed.get("commitment") != commitment.hex():
         raise ValueError(f"{entry}: the weights changed after the composition committed to them (commit_weights)")
     source, how = ws.salt_from(entry, own["salt_source"], commitment, layout.params)
-    store = ws.encode(layout, tensors, commitment, setup.draw_salt(source, commitment), how, own.get("p2_lib"))
+    store = ws.encode(layout, tensors, commitment, setup.sample_salt(source, commitment), how, own.get("p2_lib"))
     decode = ws.decoder(store, own.get("p2_lib"))
     meta = {name: (tuple(t.shape), t.dtype) for name, t in tensors.items()}
     device = store.rows.device
