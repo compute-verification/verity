@@ -26,7 +26,7 @@ execution phase of the credit period's close is credited.
 | `digest` | SHA-512(`verity/pouw/period/ledger/v1` ‖ 0 ‖ the ledger's bytes) |
 | `Evidence` | `{pins, windows}`: the challenger host's pins log, and each execution phase's evidence in the close's order (`Credit.PERIOD_KEYS`, each sampled proof block's and each round's proof outcome the verifier's verdict) |
 | `check` | `Credit.periodCredit`, then a session of the close the parameters don't list or that repeats one (`sessions`); a refusal is `code: why`, and it never leaves a credit period undecided |
-| `Public` | `Published.toJson`, what `PouwCheck.Period.account` (a `Core.Account`) reads: `Credit.PeriodCredit.toJson` (each execution phase's credited calls and credited served work, K, δ and each execution phase's ε) with the parameters' challenger `key` and, where they name the registration, their `registration_head` and `place` with the `part` of the device at `place` it accounts for (`PART`, compute), the close's open `roots`, and the period's span in ledger entries (`start`, the period-open's seq, and `length` to its close) |
+| `Public` | `Published.toJson`, what `PouwCheck.Period.account` (a `Core.Account`) reads: `Credit.PeriodCredit.toJson` (each execution phase's credited calls and credited served work, K, δ and each execution phase's ε) with the parameters' challenger `key`, the close's open `roots`, and the period's span in ledger entries (`start`, the period-open's seq, and `length` to its close); it names no device, as the accounting layer binds `key` to a registered device |
 | `Profile` | `{period, windows}`: the credit period's name and its number of execution phases |
 
 | module | `core_check.py` |

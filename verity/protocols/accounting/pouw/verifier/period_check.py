@@ -5,8 +5,8 @@ Its parameters are the verifier's own, ``{head, key, main, name, place, sessions
 the period is accounted against (a SHA-512 digest), the challenger key it pins, its copy of main's first-parent history,
 the period it credits, the id the registration log registered its device under, and the ordered ids of the sessions
 the challenger's ledger opened for the period's windows (each window's and its sample's). The registration's three
-(head, place, sessions) come all or none: with none, ``{key, main, name}`` (`ALONE_KEYS`), the period runs alone, its
-sessions aren't checked against a list and its answer names no head, place or part. Its commitment is the
+(head, place, sessions) come all or none: with none, ``{key, main, name}`` (`ALONE_KEYS`), the period runs alone and
+its sessions aren't checked against a list. Its commitment is the
 auditor's ledger (the lines the challenger signed), its digest SHA-512(`COMMITMENT_TAG` ‖ 0 ‖ its bytes). Its evidence
 is ``{pins, windows}``: the challenger host's pins log and each window's evidence in the close's order
 (`credit.PROVED_KEYS`). The check first refuses, by name (``form``), every window in a form the period's proved
@@ -14,10 +14,8 @@ guarantee (`GUARANTEE`) doesn't cover: a Pearl-C pass, a circuit that is not an 
 noise (``PouwH1Tile`` v1, v3 or v4), a J10-R unit over a tile other than ``PouwH1Tile_v5`` (v6), or units at more than
 one K. Then it is `credit._period_outcomes`, all or nothing, and last a session of the period's close the parameters
 don't list or that repeats one before it is refused (``sessions``). It accepts publishing the period's credit
-(``{windows, work, k, delta, eps}``) with the parameters' challenger ``key`` and, where they name the registration,
-its ``registration_head`` and ``place`` with the ``part`` of the device it accounts for (`PART`), the close's open
-``roots`` and the period's span in ledger entries
-(``start``, ``length``), with the profile ``{period, windows}``, or rejects with the first refusal, ``code: why``. Each
+(``{windows, work, k, delta, eps}``) with the parameters' challenger ``key``, the close's open ``roots`` and the
+period's span in ledger entries (``start``, ``length``), naming no device (the accounting layer binds ``key`` to one), with the profile ``{period, windows}``, or rejects with the first refusal, ``code: why``. Each
 sampled proof block's and each round's proof outcome is the verifier's verdict, which the evidence carries."""
 from __future__ import annotations
 
@@ -40,8 +38,6 @@ KEYS_FORM = (f"keys are not {', '.join(PARAMS_KEYS)}, or {', '.join(ALONE_KEYS)}
 HEAD_FORM = "head is not the registration log's head (a SHA-512 digest, 128 lowercase hex)"
 PLACE_FORM = ("place is not the id the registration log registered the period's device under "
               "(a nonempty string)")
-#: `PouwCheck.Period.PART`: the name of the part of the device at ``place`` a period accounts for, its compute
-PART = "compute"
 CHALLENGE_PHASES_FORM = ("sessions is not a list of the ids of the sessions the challenger's ledger opened for the "
                          "period (1 to 64 of [A-Za-z0-9._:-] each, the first alphanumeric)")
 
@@ -182,14 +178,12 @@ def challenge_phases_refusal(name: str, listed: list[str], got: list[str]) -> st
 
 
 def published(credit: dict, p: dict, ledger: list) -> dict:
-    """`PouwCheck.Period.Published.toJson`: the period's credit, its parameters' challenger key, from the trusted ledger
-    its close's open roots and its span (the period-open's seq and the entries from it to its close, inclusive), and,
-    where its parameters name the registration, their registration head and place with the part it accounts for
-    (`PART`)."""
+    """`PouwCheck.Period.Published.toJson`: the period's credit, its parameters' challenger key, and from the trusted
+    ledger its close's open roots and its span (the period-open's seq and the entries from it to its close, inclusive).
+    It names no device: the accounting layer binds the challenger key to a registered device."""
     o, c = (_period_entry(ledger, k, p["name"]) for k in ("period-open", "period-close"))
-    own = {**credit, "key": p["key"], "roots": [w["root"] for w in c["body"]["windows"]], "start": o["seq"],
-           "length": c["seq"] + 1 - o["seq"]}
-    return own if "head" not in p else {**own, "registration_head": p["head"], "place": p["place"], "part": PART}
+    return {**credit, "key": p["key"], "roots": [w["root"] for w in c["body"]["windows"]], "start": o["seq"],
+            "length": c["seq"] + 1 - o["seq"]}
 
 
 def check(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] | None]:
@@ -245,6 +239,6 @@ def case(j: Any) -> dict:
 
 
 __all__ = ["ALONE_KEYS", "CHALLENGE_PHASES_FORM", "COMMITMENT_TAG", "COVERED_TILE", "EVIDENCE_KEYS", "GUARANTEE",
-           "HEAD_FORM", "ID", "KEYS_FORM", "PARAMS_KEYS", "PART", "PLACE_FORM", "answer", "case",
+           "HEAD_FORM", "ID", "KEYS_FORM", "PARAMS_KEYS", "PLACE_FORM", "answer", "case",
            "challenge_phases_refusal", "check", "commitment", "digest", "evidence", "form", "ledger_challenge_phases",
            "params", "published"]

@@ -23,8 +23,7 @@ windows is credited (`Credit.window`), and a refused window refuses the period. 
 the head of the registration log the period is accounted against (a SHA-512 digest, 128 lowercase hex), the
 challenger key the verifier pins (`Spot.Challenger.ChallengerKey`), its own copy of main's first-parent history (newest
 first), the name of the period it credits (a string), the id the registration log registered the period's device under
-(a nonempty string, the id of a device in the Site's locations, whose compute is the Site part the period accounts for)
-and the ordered ids of the sessions the challenger's ledger opened for the period's windows (each window's and its
+(a nonempty string, which the check reads only for its form) and the ordered ids of the sessions the challenger's ledger opened for the period's windows (each window's and its
 sample's, `sessionId?`; the empty list names none). The registration's three (`head`, `place`, `sessions`,
 `Registered`) come all or none: parameters with none of them, `{"key", "main", "name"}` (`aloneKeys`), run the period
 alone, against no registration log, and parameters with some but not all are refused (`KEYS_FORM`).
@@ -51,10 +50,8 @@ don't list or that repeats one before it (`challengePhasesRefusal`). It never le
 credited calls, its credited served work, the K the period's open committed, the δ (`Credit.DELTA`) and each window's
 ε at it; beside it the parameters' challenger `key`, and from the ledger the close's open `roots` in its order and the
 period's span: the period-open's `start` and its `length` to its close inclusive, in ledger entries, as the ledger
-carries no clock reading on either. Where the parameters name the registration, it also publishes their
-`registration_head` and `place`, and the `part` of the device at `place` the period accounts for (`PART`, its compute,
-so the Site part it accounts for is (`place`, compute)); a period run alone publishes none of the three, so no account
-read against a registration head counts it.
+carries no clock reading on either. It names no device, registration head or place: the accounting layer binds the
+challenger `key` to a registered device.
 
 **Profile**: the period's name and its number of windows.
 
@@ -234,16 +231,18 @@ def ledgerChallengePhases (ledger : Json) (name : String) : Option (List String)
     | _ => none
 
 /-- Why the sessions `got` the period's close lists aren't sessions the parameters list (`listed`), each once: the
-first that isn't listed or repeats one before it; `none` when they all are, once each. -/
+first that isn't listed or repeats one before it; `none` when they all are, once each. Linear in the sessions: both
+sets are hash sets. -/
 def challengePhasesRefusal (name : String) (listed got : List String) : Option String := Id.run do
-  let mut seen : List String := []
+  let listedSet : Std.HashMap String Unit := listed.foldl (fun m s => m.insert s ()) {}
+  let mut seen : Std.HashMap String Unit := {}
   for (s, i) in got.zipIdx do
-    unless listed.contains s do
+    unless listedSet.contains s do
       return some (s!"session {i} of period {name}'s close ({s}) is not one the verifier's parameters list for the " ++
         "period: only a session the challenger's ledger opened for one of its windows counts")
     if seen.contains s then
       return some s!"session {i} of period {name}'s close ({s}) repeats a session before it: each session counts once"
-    seen := s :: seen
+    seen := seen.insert s ()
   return none
 
 /-- One value for a list of sessions, its canonical JSON: `[]` for none. -/
@@ -271,30 +270,19 @@ def spanOf (ledger : Json) (name : String) : Option Span := do
   let roots ← ws.toList.mapM fun w => str? (get w "root")
   pure ⟨o.seq, c.seq, roots⟩
 
-/-- The name of the part of the registered hardware at its place a period accounts for: the device's compute,
-`account`'s part (`Core.Account.Part.name`, held to it below). A string, so what the check publishes reads nothing of
-`CoreProtocol.Account`. -/
-def PART : String := "compute"
-
-/-- What an accepted period publishes: its credit, its parameters' challenger key, from the ledger its close's open
-roots and its span (the period-open's seq and the entries from it to its close), and, all or none as its parameters
-name them, their registration head and place (`registered`, head then place) with the part it accounts for there
-(`PART`). -/
+/-- What an accepted period publishes: its credit, its parameters' challenger key, and from the ledger its close's open
+roots and its span (the period-open's seq and the entries from it to its close). It names no device: the accounting
+layer binds the challenger key to a registered device. -/
 structure Published where
   credit : Credit.PeriodCredit
-  registered : Option (String × String)
   key : Json
   roots : List String
   start : Nat
   length : Nat
 
 def Published.toJson (p : Published) : Json :=
-  let own := (Credit.PeriodCredit.toJson p.credit).mergeObj <| Json.mkObj [("key", p.key),
+  (Credit.PeriodCredit.toJson p.credit).mergeObj <| Json.mkObj [("key", p.key),
     ("roots", Json.arr (p.roots.map Json.str).toArray), ("start", Lean.toJson p.start), ("length", Lean.toJson p.length)]
-  match p.registered with
-  | none => own
-  | some (head, place) => own.mergeObj <| Json.mkObj [("registration_head", .str head), ("place", .str place),
-      ("part", .str PART)]
 
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Published Profile :=
   match form p.name e.windows with
@@ -307,22 +295,21 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Published 
       | some got, some s =>
         match p.registered.bind fun r => challengePhasesRefusal p.name r.challengePhases got with
         | some why => .reject s!"sessions: {why}"
-        | none => .accept ⟨pc, p.registered.map fun r => (r.head, r.place), p.key, s.roots, s.start,
-            s.stop + 1 - s.start⟩
+        | none => .accept ⟨pc, p.key, s.roots, s.start, s.stop + 1 - s.start⟩
             { period := p.name, windows := pc.windows.length }
       | _, _ => .reject s!"sessions: period {p.name}'s close in the auditor's ledger lists no session ids to read"
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("period", .str pr.period), ("windows", toJson pr.windows)]
 
-/-- **What the period accounts for** (`Core.Account`): the served work its windows' credited calls did, in MACs, on the
-compute (`PART`) of the device its parameters' `place` names, from below, each window's ε at δ (once for the period),
-over the ledger entries of the period's span in the challenger key's ledger, which carry no clock reading, so the span
-orders periods and covers no tick. The Site part an accepted answer accounts for is its (`place`, `part`), both read
-off the answer. -/
+/-- **What the period accounts for** (`Core.Account`): the served work its windows' credited calls did, in MACs of
+compute, from below, each window's ε at δ (once for the period), over the ledger entries of the period's span in the
+challenger key's ledger (`series`), which carry no clock reading, so the span orders periods and covers no tick. It
+names no registration head and no place: the accounting layer binds the challenger key to a registered device, so
+until it does no registered account counts the answer. -/
 def account : Core.Account :=
-  { protocol := protocolId, head := some (.published "registration_head")
-    amounts := [{ metric := "work", part := .compute, place := some (.published "place"), key := .published "work",
+  { protocol := protocolId, head := none
+    amounts := [{ metric := "work", part := .compute, key := .published "work",
                   unit := Core.Account.macs, side := .verified,
                   time := .steps (.run (.published "start") (.published "length")) ⟨0, 1⟩,
                   series := some (.published "key"), share := some (.published "eps"), error := .published "delta",
@@ -378,27 +365,26 @@ private def reason (ps : ByteArray) : Option String := (protocol.answer ps "[]".
   (·.startsWith "session 1 of period p's close (s1) is not") == some true
 #guard (challengePhasesRefusal "p" ["s0"] ["s0", "s0"]).map
   (·.startsWith "session 1 of period p's close (s0) repeats") == some true
+#guard challengePhasesRefusal "p" ["s0", "s1"] ["s1", "s0", "s1"] ==
+  some "session 2 of period p's close (s1) repeats a session before it: each session counts once"
 #guard challengePhasesNamed (String.fromUTF8! wellFormed) "[]".toUTF8 == some "[]".toUTF8
 #guard challengePhasesValue ["s0", "s1"] == "[\"s0\",\"s1\"]".toUTF8
 #guard challengePhasesNamed (String.fromUTF8! wellFormed) "[\"x\"]".toUTF8 == none
 #guard challengePhasesNamed (String.fromUTF8! wellFormed) "{}".toUTF8 == none
 #guard challengePhasesNamed "{}" "[]".toUTF8 == none
 
--- the account reads what an accepted period publishes: its head, place, work with its ε, and its span's entries
+-- the account reads what an accepted period publishes: its work with its ε, its challenger key, and its span's entries;
+-- it names no device, no head and no place
 private def credit : Credit.PeriodCredit := ⟨[[0], [1, 2]], [10, 20], 4, Credit.DELTA, [some (1 / 2), none]⟩
-private def published : Json := Published.toJson ⟨credit, some (HEAD, "gpu0"), .null, ["r0", "r1"], 3, 5⟩
-private def answered (j : Json) : Core.Answer :=
-  { protocol := protocolId, verdict := .accept, reason := none, digest := none, published := some j, profile := none }
-private def accepted : Core.Answer := answered published
--- a period run alone publishes no head, place or part, so the account reads no head of it
-#guard (account.head.bind (·.read (answered (Published.toJson ⟨credit, none, .null, ["r0", "r1"], 3, 5⟩)))) == none
-#guard ["registration_head", "place", "part"].all fun k =>
-  ((Published.toJson ⟨credit, none, .null, [], 0, 1⟩).getObjVal? k).toOption.isNone
+private def published : Json := Published.toJson ⟨credit, .str "k", ["r0", "r1"], 3, 5⟩
+private def accepted : Core.Answer :=
+  { protocol := protocolId, verdict := .accept, reason := none, digest := none, published := some published,
+    profile := none }
+#guard ["registration_head", "place", "part"].all fun k => (published.getObjVal? k).toOption.isNone
 #guard account.Formed
-#guard (account.head.bind (·.read accepted)) == some (.str HEAD)
-#guard (account.amounts.map fun m => (m.place.bind (·.read accepted), m.key.read accepted)) ==
-  [(some (.str "gpu0"), some (Lean.toJson [10, 20]))]
-#guard (account.amounts.map fun m => some (Json.str m.part.name)) == [(published.getObjVal? "part").toOption]
+#guard account.head.isNone && account.amounts.all (·.place.isNone)
+#guard (account.amounts.map fun m => (m.key.read accepted, m.series.bind (·.read accepted))) ==
+  [(some (Lean.toJson [10, 20]), some (.str "k"))]
 #guard (account.amounts.map fun m => match m.time with
   | .steps s _ => s.read accepted
   | _ => none) == [some (3, 8)]

@@ -95,7 +95,7 @@ def test_an_honest_period_is_a_period_piece_that_accepts(tmp_path):
 
 def test_a_period_piece_names_the_registration_all_or_none(tmp_path):
     """Without --head and --place the period runs alone, its parameters naming no head, place or sessions, and is
-    accepted with an answer that names none of them; one of the two without the other is refused."""
+    accepted with an answer that names no device; one of the two without the other is refused."""
     case = pouw_period_cases.instance(random.Random(0), "honest")
     p, ev = case["params"], json.loads(bytes.fromhex(case["evidence"]))
     args = ["--key", str(_json(tmp_path / "k.json", p["key"])), "--main", str(_lines(tmp_path / "main.txt", p["main"])),
