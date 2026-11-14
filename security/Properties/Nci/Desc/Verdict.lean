@@ -7,7 +7,7 @@ public import Properties.Nci.Threads
 # What a verdict of the description-sized check carries
 
 `NciCheck.Desc.evaluate` is the policy check `nci-check` runs (`NciCheck.Desc.check` writes its refusals, and the check
-of record, `NciCheck.Baseline.evaluate`, returns its verdict once θ's provenance is checked). `DescAgrees`
+of record, `NciCheck.Theta.evaluate`, returns its verdict once θ's provenance is checked). `DescAgrees`
 (`Properties.Nci.Desc`) makes its verdict the one `NciCheck.evaluate` gives on every expansion of the instance gate by gate
 (`Expands`), of which there is one. The statements here restate the verdict's properties (`Properties.Nci`,
 `Properties.Nci.Threads`) of `Desc.evaluate`: on every instance with a verdict, the instance has an expansion, and on each

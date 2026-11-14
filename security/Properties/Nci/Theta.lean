@@ -1,17 +1,17 @@
 module
 
-public import NciCheck.Baseline
+public import NciCheck.Theta
 
 /-!
 # What θ's provenance check's acceptance means
 
-`NciCheck.Baseline.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Baseline.lean`) is the NCI check of
+`NciCheck.Theta.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Theta.lean`) is the NCI check of
 record: the policy check, then each θ entry's provenance against the trusted input, the service's registration log, the
 run's own record and the program function's parameters. `Nci.Assumptions.ThetaRegistered`
-(`Definitions/Nci/Assumptions/Baseline.lean`, [THETA-REGISTERED]) states what θ must hold: registered information,
+(`Definitions/Nci/Assumptions/Theta.lean`, [THETA-REGISTERED]) states what θ must hold: registered information,
 public data registered at the start of the deployment, which the log's first record registers.
 
-* `BaselineProvenance`: on every instance and trusted input it accepts, the trusted input's log is in R6's chain from a
+* `ThetaProvenance`: on every instance and trusted input it accepts, the trusted input's log is in R6's chain from a
   record that opens it (`Chained`), the run's own record is one of its records and is this Program's whatever θ is (its
   `program` is the Program's SHA-512), the parameters are the trusted input's (`ParamsOf`), and every θ entry `t`
   is `HeldAtStart`: its provenance cites, by digest, the log's first record, which registers the cited value under the
@@ -24,8 +24,8 @@ the auditor knows which log is the deployment's, and how the reference circuit `
 `theta-width` (the cited value's dimensions give the parameter's gates) is checked but not stated here: under the
 binding premise equal roots already give equal rows.
 
-Proved as `NciCheck.Properties.SecurityProofs.BaselineProvenance : NciCheck.Properties.BaselineProvenance` in
-`Proofs.Properties.Nci.Baseline`.
+Proved as `NciCheck.Properties.SecurityProofs.ThetaProvenance : NciCheck.Properties.ThetaProvenance` in
+`Proofs.Properties.Nci.Theta`.
 -/
 
 @[expose] public section
@@ -34,7 +34,7 @@ namespace NciCheck.Properties
 
 open Lean (Json)
 open Flock.Program (Prog Ty)
-open NciCheck.Baseline (getD strAt digest lastWith ownersOf)
+open NciCheck.Theta (getD strAt digest lastWith ownersOf)
 
 /-- `log` is a registration log in R6's chain, oldest first: every record has a digest, the first record's `previous` is
 `null` (it opens the deployment), and each later record's `previous` is the digest of the record before it. -/
@@ -80,8 +80,8 @@ def ProvenanceHeld (j tr : Json) : Prop :=
       strAt run "program" = some (Flock.hexOf P.sha512) ∧ ∀ t < i.theta.size, HeldAtStart j i P log run ps t
 
 /-- **θ holds what the deployment's first record registers.** On every instance `j` and trusted input `tr` that
-`NciCheck.Baseline.evaluate` accepts, `ProvenanceHeld j tr`. -/
-def BaselineProvenance : Prop :=
-  ∀ (j tr out : Json), Baseline.evaluate j tr = .ok out → ProvenanceHeld j tr
+`NciCheck.Theta.evaluate` accepts, `ProvenanceHeld j tr`. -/
+def ThetaProvenance : Prop :=
+  ∀ (j tr out : Json), Theta.evaluate j tr = .ok out → ProvenanceHeld j tr
 
 end NciCheck.Properties

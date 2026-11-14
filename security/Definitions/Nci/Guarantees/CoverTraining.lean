@@ -2,7 +2,7 @@ module
 
 public import Definitions.Nci.BitView
 public import Definitions.Nci.Dark
-public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Theta
 public import Definitions.Nci.Assumptions
 public import Definitions.Nci.Assumptions.Cover
 public import Definitions.Nci.Assumptions.CoverTraining
