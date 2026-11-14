@@ -125,25 +125,4 @@ theorem streamed_wipe_meets_server_H200 : Pous.Guarantees.StreamedWipeMeetsServe
   streamed_wipe_meets_server_5GB h200.Ms h200.n h200.R (by decide +kernel) (by decide +kernel) h200.r h200.k
     (by decide +kernel) (by decide +kernel) (by unfold OperatingPoint; decide +kernel) q E κ prf P hq
 
-/-- **`StreamedWipeMeetsServer8H200HBM`**: the 5 GB form at `n = 17,625,000,000`, `R = 31,200,000,000`, `r = 1050`
-and `k = 93,843`. -/
-theorem streamed_wipe_meets_server_8H200_HBM : Pous.Guarantees.StreamedWipeMeetsServer8H200HBM :=
-  fun q E κ prf P hq =>
-    streamed_wipe_meets_server_5GB _ 17625000000 31200000000 (by norm_num) (by norm_num) 1050 93843 (by norm_num)
-      (by decide +kernel) (by unfold OperatingPoint; decide +kernel) q E κ prf P hq
-
-/-- **`StreamedWipeMeetsServer8H200HBMRAM`**: the 5 GB form at `n = 48,875,000,000`, `R = 31,200,000,000`,
-`r = 2922` and `k = 261,229`. -/
-theorem streamed_wipe_meets_server_8H200_HBMRAM : Pous.Guarantees.StreamedWipeMeetsServer8H200HBMRAM :=
-  fun q E κ prf P hq =>
-    streamed_wipe_meets_server_5GB _ 48875000000 31200000000 (by norm_num) (by norm_num) 2922 261229 (by norm_num)
-      (by decide +kernel) (by unfold OperatingPoint; decide +kernel) q E κ prf P hq
-
-/-- **`StreamedWipeMeetsServer8H200`**: the 5 GB form at `n = 236,375,000,000`, `R = 31,200,000,000`, `r = 14,183`
-and `k = 1,268,143`. -/
-theorem streamed_wipe_meets_server_8H200 : Pous.Guarantees.StreamedWipeMeetsServer8H200 :=
-  fun q E κ prf P hq =>
-    streamed_wipe_meets_server_5GB _ 236375000000 31200000000 (by norm_num) (by norm_num) 14183 1268143
-      (by norm_num) (by decide +kernel) (by unfold OperatingPoint; decide +kernel) q E κ prf P hq
-
 end PousStreamedWipe

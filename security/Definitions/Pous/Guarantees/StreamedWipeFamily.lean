@@ -6,7 +6,7 @@ public import Definitions.Pous.Model.StreamedWipe
 # The streamed-label wipe at 2152 reads: what `verity/wipe/v0` publishes
 
 `Pous.Guarantees.StreamedWipe` at the figure the wipe port publishes for an accepted session, `⌈M/19⌉ + E` bits at
-`2^-128` with 2152 sequential timed reads, for every fill of at least one 32 MiB segment, and at 96 GiB and 141 GB.
+`2^-128` with 2152 sequential timed reads, for every fill of at least one 32 MiB segment, and at 96 GiB.
 The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`, the proofs
 `Security/Proofs/Pous/StreamedWipe/Family.lean`.
 
@@ -63,21 +63,6 @@ def StreamedWipeMeets96GiB : Prop :=
   ∀ (q E κ : ℕ) (prf : Bits κ → Fin 1610612736 → Bits 512)
     (P : StreamedWipe.Prover 1610612736 2152 512 q (1610612736 * 512) E),
     43401774781 + E ≤ q →
-    StreamedWipe.winReal prf P ≤
-      (2⁻¹ : ℝ≥0∞) ^ 128 + StreamedWipe.prfAdvantage prf (StreamedWipe.wipeDistinguisher P)
-
-/-- **The streamed wipe of 141 GB at 2152 reads.** `StreamedWipeMeetsFamily` at `n = 2,203,125,000` labels, the
-`141·10^9` bytes of an H200's HBM3e (about 4,202.1 segments of 32 MiB; `M = 1,128,000,000,000` bits): a prover with `E`
-bits of egress that keeps at least `59,368,421,053 + E` bits (`⌈M/19⌉ + E`, about 7.42 GB plus the egress) of uniform
-prior content through the reads is accepted with probability at most `2^-128` plus the PRF's advantage. For a fill
-that reaches less of the device, cite the family at the `n` it reaches, with the memory outside the fill added to what
-a prover can keep. Same footing as the family. Proof: `PousStreamedWipe.streamed_wipe_meets_141GB`.
-
-Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
-def StreamedWipeMeets141GB : Prop :=
-  ∀ (q E κ : ℕ) (prf : Bits κ → Fin 2203125000 → Bits 512)
-    (P : StreamedWipe.Prover 2203125000 2152 512 q (2203125000 * 512) E),
-    59368421053 + E ≤ q →
     StreamedWipe.winReal prf P ≤
       (2⁻¹ : ℝ≥0∞) ^ 128 + StreamedWipe.prfAdvantage prf (StreamedWipe.wipeDistinguisher P)
 
