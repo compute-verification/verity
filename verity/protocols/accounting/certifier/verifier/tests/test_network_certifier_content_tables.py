@@ -523,7 +523,8 @@ def test_a_schedule_can_be_tied_with_each_p_once_one_o_and_a_response_cap_and_is
         assert CT.can_be_tied(other), other.content
     twice = "it lists P=128 prompt ids in classes 2, 3, and a release's class is told by its request's length alone"
     for schedule, why in ((LEN, "it has no content rows, so no class to tie"),
-                          (dataclasses.replace(TIED, content=(*ONCE, (16, 8))), "it lists P=16 prompt ids in classes 1, 3"),
+                          (dataclasses.replace(TIED, content=(*ONCE, (16, 8))),
+                           "it lists P=16 prompt ids in classes 1, 3"),
                           (dataclasses.replace(TIED, content=((4, 4), (16, 8), (128, 8))),
                            "its classes hold O=4, 8 ids, and a tied schedule's response rows have one width"),
                           (dataclasses.replace(TIED, max_tokens_cap=None), "it has no response cap (max_tokens_cap)"),

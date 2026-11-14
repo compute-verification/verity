@@ -186,9 +186,9 @@ The stop record's population is held to the head's count of the class (`class_ch
 off: the stop record is of every row of the class and of no other, and every block of a population of another
 size is `EVERY_BLOCK` all the same, so the rate alone doesn't say it. Equal numbers don't make the two one
 population: what holds a block to its row is the response tie's read of that row, and the reader holds nothing of
-it. The response tie's population is not held to the count here. A failure is final for what its verdict speaks for, which
-at `EVERY_BLOCK` is one execution phase's class; a rate below `EVERY_BLOCK` widens the failure to the whole
-registered population, for when the reader takes one. A verdict's ``complete`` says that every session ran to a
+it. The response tie's population is not held to the count here. A failure is final for what its verdict speaks
+for, which at `EVERY_BLOCK` is one execution phase's class; a rate below `EVERY_BLOCK` widens the failure to the
+whole registered population, for when the reader takes one. A verdict's ``complete`` says that every session ran to a
 verdict and holds no class to a rate. The certified read is over no sampled population, and the rate of the
 compute audit's second stage is not held here: a rate on either's record is not read. A registration record that
 doesn't read holds no execution phase at all, in a run that is not superseded."""

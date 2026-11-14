@@ -107,10 +107,11 @@ more than O, is refused, never cut short.
 **The filing** (`file`): a release's class is the first the schedule lists that holds it. The rule reads the
 release as the network certifier cut it and nothing a server says. It is called in one place, in `connection_rows`,
 which lays the tables by it (`connection_rows.tables`) and lists each class's releases by it
-(`connection_rows.filed`, through `filed` here); `tables` lays whatever class it is given. The network certifier releases no request longer than the
-schedule's largest class holds (the schedule's `request_bound`: ingress refuses it), so none it releases is unfiled
-for its request's length; and a class of the largest P holds the most ids a response releases ("The classes"), so
-none is unfiled for its ids. Every release of a schedule's own network certifier fits a class.
+(`connection_rows.filed`, through `filed` here); `tables` lays whatever class it is given. The network certifier
+releases no request longer than the schedule's largest class holds (the schedule's `request_bound`: ingress
+refuses it), so none it releases is unfiled for its request's length; and a class of the largest P holds the most
+ids a response releases ("The classes"), so none is unfiled for its ids. Every release of a schedule's own network
+certifier fits a class.
 
 Under form 2 the rule files in no class a release that ended in a `FAIL` before any `DATA` cell, whatever class
 holds it. The network certifier released no id of it, so its response row would hold none, and its slots of the

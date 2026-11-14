@@ -1145,8 +1145,8 @@ def audit(params: WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[B
     In the id egress form every egress `DATA` and `END` cell is one `io_tie.parse_cell` reads. Every reason is the
     schedule's (`WardenParams.reasons`). Under a response cap each connection's `max_tokens` is read from its first
     request cell as the network certifier read it: a request cut into cells has one from 1 to the cap, its response
-    at most that many `DATA` cells, and only a request with no cells is refused (cap). A window is accepted when its three
-    records are complete, its cells are the schedule's and the egress form's and no connection failed in it. With
+    at most that many `DATA` cells, and only a request with no cells is refused (cap). A window is accepted when its
+    three records are complete, its cells are the schedule's and the egress form's and no connection failed in it. With
     lengths rows every `FAIL` is at an egress slot, a client's reason (`CLIENT_REASONS`) is a connection's whose request
     has no `END` and a server's one whose request has, and a connection that was never released fails no window: its
     failure is its client's, no server saw its request, and its entry still names its reason. Each

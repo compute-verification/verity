@@ -337,10 +337,10 @@ def test_a_hand_whose_request_has_no_words_is_refused_and_a_words_table_is_commi
     hand with a request that is no canonical id request is refused, naming the release and its class, and none of
     it is laid, where the same hand under the schedule without request words is laid as it was. So is a hand with
     a request whose `max_tokens` is 0 or past the schedule's `max_tokens_cap`, or with more ids than its request's
-    `max_tokens`, which the device never releases; from 1 to the cap, with at most that many ids, it is laid. A request of more prompt ids than
-    a class's P is longer than the class holds, so it is no row of the class: filed there it is refused by its
-    bytes, and at P ids it is laid with a count of P. The commitment takes a class's words table only at the
-    class's count, in rows of 8 bytes."""
+    `max_tokens`, which the device never releases; from 1 to the cap, with at most that many ids, it is laid. A
+    request of more prompt ids than a class's P is longer than the class holds, so it is no row of the class: filed
+    there it is refused by its bytes, and at P ids it is laid with a count of P. The commitment takes a class's
+    words table only at the class's count, in rows of 8 bytes."""
     _, _, handed = ran
     with pytest.raises(ValueError, match="release 0, filed in class 0, has a request without words: cell 0 of the "
                                          "request's 1 is not that cell of a canonical id request"):
