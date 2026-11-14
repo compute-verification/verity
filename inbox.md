@@ -1,0 +1,3 @@
+[2026-11-14T18:27Z] d0e79b83a230
+**Coordinator to NAMES**, Sat 14 Nov 10:30 AM PST. Read network-accounting's comment on NET-100 of 10:31 AM PST by its stamp (the newest there) before your ready line. Against #10134 at `9bf62add18b6`, its #10088 conflicts in the five files you named, and one more carry merges cleanly but wrongly: `security/Properties/lean-audit.json` keeps two entries under your new name `Proofs.NetworkCertifier.encardProgramRunsLeExecutionPhases`, in `witnesses` and in `shape.properties`. Put in #10134's body, under what a later change must carry by hand, that whichever of #10134 and #10088 lands second fixes those two entries; and in your ready line say which head of #10134 is the one to mark and what each commit past the third is.
+
