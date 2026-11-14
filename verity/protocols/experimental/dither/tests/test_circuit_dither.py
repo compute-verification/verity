@@ -15,7 +15,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.prims import BlackwellS8ImmaDot32  # noqa: F401  (registers the s8 steps' families)
 from verity.circuits.silicon.integer import HOPPER_SM90_S8_K32
-from verity.protocols.accounting.pouw.prover.circuit import dither as D
+from verity.protocols.experimental.dither.prover import dither as D
 from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 
 SALT = hashlib.sha512(b"window salt").digest()

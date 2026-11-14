@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.protocols.accounting.pouw.prover.circuit.dither`'s Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity.protocols.experimental.dither.prover.dither`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ def _pouw_roots() -> list[Any]:
     `PouwDitherOutDot0_v2` and `PouwDitherOutDot_v2`. Both grow linearly in their lengths / 32, which larger L and K are
     priced by. `PouwDitherLast_v1` checks O for O's consumers and earns no credit, at one segment or more."""
     from verity.circuits.defs import bind
-    from verity.protocols.accounting.pouw.prover.circuit import dither as D
+    from verity.protocols.experimental.dither.prover import dither as D
 
     return ([bind(D.PouwDitherBlock, L=L, FIRST=first) for L in (32, 64, 1024) for first in (True, False)]
             + [bind(D.PouwDitherLast, K=64, L=64), bind(D.PouwDitherLast, K=96, L=64)])
