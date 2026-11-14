@@ -279,9 +279,9 @@ research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --poo
 
 `ledger_replay/replays.sh W...` counts the replays one PoUW period check makes: `ledger_replay/replays.py` writes, per
 W, an honest period of W windows as PoUW's period difftest generates one and counts the replays its reference
-(`period_check.case`) makes, and the compiled check (`pouw-period serve`) answers the same case under gdb, which counts
-its entries into `Spot.Challenger.checked`. `$OUT` gets replays.jsonl, one row per W; on a node without gdb the
-compiled check's count is null.
+(`period_check.case`) makes, and the compiled check (`pouw-period serve`) answers the same case under
+`ledger_replay/calls.py`, which counts its entries into `Spot.Challenger.checked` by a breakpoint it holds with ptrace
+(x86-64 Linux; the nodes have no debugger). `$OUT` gets replays.jsonl, one row per W: each side's verdict and replays.
 
 ~~~sh
 research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --pool research --cwd source \
