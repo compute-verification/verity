@@ -13,7 +13,7 @@ from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import io_request as Q
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD, id_request
+from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, ID_DIGITS, ID_REQUEST_HEAD, PAD, id_request
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import EOF, reasons, records, request, run
 from verity.protocols.accounting.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, WardenParams,
                                                     audit, cells, read_reason, reason_frame)
@@ -45,7 +45,7 @@ def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
     assert WardenParams().lengths is None and PLAIN.lengths is None
     assert WardenParams().digest.hex() == DEFAULT_DIGEST and PLAIN.digest.hex() == PLAIN_DIGEST
     assert LEN.digest != PLAIN.digest and dataclasses.replace(LEN, lengths=None) == PLAIN
-    assert OPTIONAL_FIELDS == ("max_tokens_cap", "lengths", "content")
+    assert OPTIONAL_FIELDS == ("max_tokens_cap", "lengths", "content", "request_words")
     assert not set(OPTIONAL_FIELDS) & set(INTEGER_FIELDS)
     assert LEN.reasons == PLAIN.reasons
     capped = dataclasses.replace(PLAIN, max_tokens_cap=4)
@@ -315,16 +315,33 @@ def read_as_requests(warden, ordinal: int) -> tuple[int, int] | None:
     return carry
 
 
+def with_body(body: bytes) -> bytes:
+    """An id request's head before `body`, with that body's length as its content-length."""
+    return ID_REQUEST_HEAD + b"%*d" % (ID_DIGITS, len(body)) + b"\r\n\r\n" + body
+
+
 def no_id_requests() -> dict[str, tuple[bytes, int]]:
     """Requests that are no canonical id request in the network certifier's cells, each with the cells the ingress
-    proof block still reads as a request's before the one it refuses."""
+    proof block still reads as a request's before the one it refuses. Among them: a request without `max_tokens` at
+    its place, and one with an `ignore_eos` key, each with the content-length of its own body."""
     long, linked = id_req(2, 40), id_request(model="m", user="user-2", prompt=[2000 + k for k in range(40)],
                                              max_tokens=8, seed=2, temperature=0.7, top_p=0.95, frame_bytes=B)
     assert len(cells(long, B)) == 2 * B and len(long) > P and linked != long
     at = long.index(b",", P + 5) + 5
     length = b"%*d" % (10, len(long) - Q.BODY_AT)
     assert long.count(length) == 1
-    return {"bytes": (request(300, 5), 0),
+    short = id_req(2, 3)
+    body, asks, said = short[Q.BODY_AT:], b'{"max_tokens":         8,', b',"stop":[],"stream":true'
+    assert with_body(body) == short and body.startswith(asks) and body.count(said) == 1 and body.endswith(b"]}")
+    return {"no max_tokens": (with_body(b"{" + body[len(asks):]), 0),
+            "its max_tokens after another key": (
+                with_body(b'{"temperature":0.700000,"max_tokens":         8' + body[body.index(b',"top_p"'):]), 0),
+            "a max_tokens that is no number": (short.replace(asks, b'{"max_tokens":      null,'), 0),
+            "an ignore_eos key": (with_body(body.replace(said, said + b',"ignore_eos":true')), 0),
+            "an ignore_eos key where its stop and stream are": (
+                short.replace(said, b',"ignore_eos":true,"x":1'), 0),
+            "an ignore_eos key after its prompt": (with_body(body[:-1] + b',"ignore_eos":true}'), 0),
+            "bytes": (request(300, 5), 0),
             "a name that needs an escape": (id_req(2, 3, model='a "b"'), 0),
             "an id that is no number": (long[:at] + b"x" + long[at + 1:], 1),
             "another length than its head says": (long.replace(length, b"%*d" % (10, len(long) - Q.BODY_AT + 1)), 1),
@@ -343,7 +360,8 @@ def test_a_request_that_is_no_id_request_is_never_released_and_fails_as_its_clie
     accepts every window. And it is no failure of the server's: the lengths and fails tables are those of the run
     without it, with no failed slot in them. Without lengths rows the same request is cut whole and released, the
     reference refuses its bucket, and the server's answer to it, which is no id response, fails as the server's
-    (format) and fails its window."""
+    (format) and fails its window; but for the one with bytes after its end, which is no one request to a server
+    (`release.one_request`) and is refused as its client's without lengths rows too."""
     bad, prefix = no_id_requests()[name]
     honest, out = id_req(1, 60), (7, 8, 9)
     assert len(cells(honest, B)) == 3 * B
@@ -373,6 +391,10 @@ def test_a_request_that_is_no_id_request_is_never_released_and_fails_as_its_clie
 
     plain, _, served = run(answers, arrivals, params=PLAIN, windows=3)
     log = {e["ordinal"]: e for e in plain.log}
+    if name == "bytes after its end":
+        assert (log[2]["release"], log[2]["failed"], served.conns[1].received) == (None, "malformed", b"")
+        assert END not in [k for _, k, _ in request_cells(plain, 2)] and plain.requests_released == 1
+        return
     assert (log[2]["release"], log[2]["failed"], log[2]["ended"]) == (0, "format", D)
     assert served.conns[1].received and END in [k for _, k, _ in request_cells(plain, 2)]
     assert read_as_requests(plain, 1) == (0, 60) and read_as_requests(plain, 2) is None

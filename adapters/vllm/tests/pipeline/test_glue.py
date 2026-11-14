@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -139,3 +141,11 @@ def test_a_family_that_states_no_params_counts_none(monkeypatch):
         monkeypatch.setitem(G.FF.FAMILY_FACTS, "toy_type", fam)
         got = G._family("toy_type", GLM)
         assert got is not None and (got["params"], got["arch"], got["facts"], got["shared_with"]) == (count, "toy", 1, [])
+
+
+def test_importing_the_inventory_imports_no_profile_package():
+    """`import verity_vllm.glue` in a fresh process leaves `verity_vllm.observe.fold.profiles` unloaded, so its finder is not yet on
+    `sys.meta_path`: `_profile` imports the package when it is first called."""
+    script = "import sys; import verity_vllm.glue; print('verity_vllm.observe.fold.profiles' in sys.modules)"
+    out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True).stdout
+    assert out.strip() == "False"

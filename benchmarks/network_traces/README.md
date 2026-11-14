@@ -75,7 +75,7 @@ two gate verbs on the auditor's machine:
 
 ## The wipe's egress
 
-Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over
+Memory accounting's streamed wipe signs no egress count; its check takes the count as evidence. The count over
 its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` runs that relay through the gate
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
@@ -88,8 +88,11 @@ its own function, `wipe_monitoring.counted` (`verity/protocols/accounting/pous/v
 ## The served session
 
 `served_session.py` is the runbook of the served session of record, the network certifier in front of a served model.
-`plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. `session` runs
-the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
+`plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. The gate is
+`site.json`'s `gate`, whose host is the name of the environment variable that holds the challenger host's address
+(`VY_CHALLENGER_1_HOST`): the session, the front (`certifier_piece.py front`), a chain on the gate's coins and
+`wipe_gate.sh` read it there, and without it and with no gate given (`--gate`, `CHALLENGER`) each ends naming it.
+`session` runs the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
@@ -119,7 +122,13 @@ network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 
 `scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
 and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
 admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
-4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
+4000 ms (108 s). Under that runner's `LOAD=session` the load is the caller's own, and neither the runner nor the gate
+sends a request: `front --session` opens the gate's relay session in the rehearsal's place and returns once its relay
+listens, the caller's command (`LOAD_CMD`, given the session's `relay.json` and the serve dir) sends the load to the
+client address that file names, and `close` (`CERTIFIER_CLOSE`) waits for the session's end and keeps its fetch where a
+rehearsal's is. The runner refuses a session without all three, and under any other `LOAD` each of them. A session's
+records cover the connections that crossed the relay; that no other route reaches the endpoint is the placement's.
+Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
 form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the network certifier's
 records pass `network-rows check` (each record held to its certified head, then the certifier program's rows audit,

@@ -374,8 +374,8 @@ def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
 
 
 def test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name(tmp_path, capsys, monkeypatch):
-    """Where the tree leaves the inference-only policy out (the public release: no module `SC.POLICY`, which names the
-    policy's Lean package and the Python its check is held to), the inference-only case is refused saying so, never
+    """Where the tree leaves the inference-only policy out (no module `SC.POLICY`, which names the policy's Lean package
+    and the Python its check is held to), the inference-only case is refused saying so, never
     skipped, its Lean never runs, and v1's and sampled proofs' cases are still written; a caller that asks for the
     package is refused the same way."""
     program, query = toy()
