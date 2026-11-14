@@ -347,11 +347,10 @@ def keep_ptx(cache: Path, dest: Path) -> dict[str, Any]:
 
 
 def save(dest: Path, case: dict, got: dict[str, np.ndarray], first: tuple, second: tuple) -> None:
-    stored: dict[str, Any] = {k: got[k] for k in STORED}
     np.savez_compressed(dest / f"{case['name']}.npz", logits=np.ascontiguousarray(case["logits"], F),
                         draft=np.array(case["draft"], np.int64), seed=np.int64(case["seed"]), pos=np.array(case["pos"], np.int64),
                         temp=np.uint32(case["temp"]), wrapper_sampled=np.stack([first[0], second[0]]),
-                        wrapper_num_sampled=np.stack([first[1], second[1]]), **stored)
+                        wrapper_num_sampled=np.stack([first[1], second[1]]), **{k: got[k] for k in STORED})
 
 
 def capture(a: argparse.Namespace) -> int:
@@ -451,8 +450,7 @@ def replay(a: argparse.Namespace) -> int:
     src = Path(a.replay)
     kept = json.loads((src / RECORD).read_text())
     names = [e["case"] for e in kept["cases"]]
-    entries: list[dict[str, Any]] = []
-    dfn: dict[str, Any] = {"cases": 0, "words_compared": 0, "words_differ": 0, "differ": []}
+    entries, dfn = [], {"cases": 0, "words_compared": 0, "words_differ": 0, "differ": []}
     for i, name in enumerate(names):
         case, got = load(src / "cases" / f"{name}.npz")
         entries.append(e := judge(name, case, got))
