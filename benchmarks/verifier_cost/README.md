@@ -277,6 +277,17 @@ research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --poo
   --mem-wait 1800 -- bash benchmarks/verifier_cost/ledger_replay/ledger_replay.sh 10 30 100 300 1000
 ~~~
 
+`ledger_replay/replays.sh W...` counts the replays one PoUW period check makes: `ledger_replay/replays.py` writes, per
+W, an honest period of W windows as PoUW's period difftest generates one and counts the replays its reference
+(`period_check.case`) makes, and the compiled check (`pouw-period serve`) answers the same case under gdb, which counts
+its entries into `Spot.Challenger.checked`. `$OUT` gets replays.jsonl, one row per W; on a node without gdb the
+compiled check's count is null.
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --pool research --cwd source \
+  --mem-wait 1800 -- bash benchmarks/verifier_cost/ledger_replay/replays.sh 1 2 3
+~~~
+
 `qcall.sh CONFIG X...` measures `Q_call` v1 (`Flock.Qcall`, an open walk in `tests/test_verifier_cost.py`) on one Serve_v1
 config's word-level descriptor: `flock-verify qcall-program` at each X, with the output's SHA-256 so two commits' outputs
 compare, a `perf` profile at the first X, and the one-stage `partition` piece under `Q_call` v1 at X = 16. Its header has

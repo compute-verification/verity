@@ -24,8 +24,8 @@ the deployed parameters takes a core about a quarter of an hour to make).
 `--table OUT` reads OUT's inputs.jsonl and ledger_replay.jsonl (`ledger_replay.sh`) and writes one row a size on stdout:
 the compiled replay's seconds, the reference's, and how the compiled replay's time splits: each entry's parse, its
 line's SHA-512, its message, its LMS verification, and the rest (`rest_s`), which holds the replay's searches and each
-entry's checks of its body. `searches_s` is the searches made apart from the replay (`Main.lean`'s `searches`), and
-`share` each part's share of the replay. With three sizes or more it fits the rest to ``c + a S + b S²`` by least
+entry's checks of its body. `searches_s` is the searches made apart from the replay (`Main.lean`'s `searches`),
+`share` each part's share of the replay, and `reading_s` the parts of an entry's reading (`entries_s`). With three sizes or more it fits the rest to ``c + a S + b S²`` by least
 squares and gives ``b S²``'s share of the replay at each size: a fit, not a measurement.
 """
 from __future__ import annotations
@@ -51,6 +51,8 @@ START = datetime(2026, 1, 5, tzinfo=UTC)
 #: a session's entries (reserve, open, end) and the leaves it takes: theirs and its record's, between its open and end
 SESSION_ENTRIES, SESSION_LEAVES = 3, 4
 PHASES = ("entries", "chain", "messages", "signatures")
+#: the parts of an entry's reading that Main.lean times apart
+READING = ("parse", "canonical", "canon", "record")
 
 
 def _utc(t: datetime) -> str:
@@ -206,10 +208,13 @@ def table(out: Path) -> list[dict]:
         replay = p["checked"]["us"] / 1e6
         split["rest"] = replay - sum(split.values())
         split["searches"] = p["searches"]["us"] / 1e6
+        reading = {k: p[k]["us"] / 1e6 for k in READING}
+        reading["other"] = split["entries"] - sum(reading.values())
         rows.append({"sessions": n, "entries": i["entries"], "periods": i["periods"], "bytes": i["bytes"],
                      "longest_line": i["longest_line"], "replay_s": replay, "piece_s": p["piece"]["us"] / 1e6,
                      "python_s": i["python_s"], **{f"{k}_s": round(v, 6) for k, v in split.items()},
-                     "share": {k: round(v / replay, 6) for k, v in split.items()}, "hwm_mb": p["checked"]["hwm_mb"]})
+                     "share": {k: round(v / replay, 6) for k, v in split.items()},
+                     "reading_s": {k: round(v, 6) for k, v in reading.items()}, "hwm_mb": p["checked"]["hwm_mb"]})
     fitted = [r for r in rows if "rest_s" in r]
     if len(fitted) >= 3:
         c, a, b = _fit([float(r["sessions"]) for r in fitted], [r["rest_s"] for r in fitted])

@@ -9,7 +9,10 @@ microseconds (`us`) the least of REPEAT timings (default 3):
 * `request`: the two files' read and parse, once: the harness's work, no part of a replay;
 * `piece`: the difftest's piece (`Challenger.ledgerPiece`: `auditedChallengePhase`, one replay and the window's lookup);
 * `checked`: the replay alone (`Challenger.checked`: each line's parse, then `verifyLedger`);
-* `entries`: each line's parse (`ledgerEntry?`), as `checked` makes it;
+* `entries`: each line's reading (`ledgerEntry?`), as `checked` makes it, and four parts of it: `parse`
+  (`Flock.JsonParse.parse`), `canonical` (`PyJson.canonical`, held to the line), `canon` (`Flock.canon`) and `record`
+  (`Core.Record.ofJson`); what `entries` takes beyond them is the line's length, its scan for an escaped surrogate, its
+  keys' order and its body's form;
 * `chain`: each line's SHA-512 in hex, which the next entry's `prev` is held to;
 * `messages`: what each entry's signature signs (`ledgerMessage`);
 * `signatures`: each signature's decode and its LMS verification under the key;
@@ -118,6 +121,19 @@ def main (args : List String) : IO UInt32 := do
   row "checked" s size us [("ok", toJson ok), ("windows", toJson windows)]
   let (es, us) ← timed n (fun t => if t == 0 then #[] else lines.filterMap ledgerEntry?) (·.size)
   row "entries" s size us [("read", toJson es.size)]
+  let texts := lines.filterMap fun | .str x => some x | _ => none
+  let (parsed, us) ← timed n
+    (fun t => if t == 0 then #[] else texts.filterMap fun x => (Flock.JsonParse.parse x).toOption) (·.size)
+  row "parse" s size us [("read", toJson parsed.size)]
+  let (own, us) ← timed n (fun t => if t == 0 then 0 else
+    (texts.zip parsed).foldl (fun acc (x, e) => if (PyJson.canonical e).toOption == some x then acc + 1 else acc) 0) id
+  row "canonical" s size us [("read", toJson own)]
+  let (whole, us) ← timed n (fun t => if t == 0 then 0 else
+    parsed.foldl (fun acc e => if (Flock.canon e).toOption.isSome then acc + 1 else acc) 0) id
+  row "canon" s size us [("read", toJson whole)]
+  let (records, us) ← timed n
+    (fun t => if t == 0 then #[] else parsed.filterMap fun e => (Core.Record.ofJson e).toOption) (·.size)
+  row "record" s size us [("read", toJson records.size)]
   let (_, us) ← timed n
     (fun t => es.foldl (fun acc e => acc + (Flock.hexOf (Flock.Sha512.hash e.text.toUTF8)).length) (t % 2)) id
   row "chain" s size us []
