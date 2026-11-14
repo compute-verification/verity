@@ -36,7 +36,7 @@ from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # no
 from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 
 ORDER = ("rmstriton", "gemm2048", "rope", "rmsfused", "silu", "gemm8192")
 
