@@ -32,7 +32,8 @@ FMA contraction (nvcc default `-fmad=true`, no `--use_fast_math`): `nA*mA + nB*m
 fused -- `MEAN_FMA_ORDER = "A"`, pinned on the pod: 0/184 f32 mean-word mismatches vs `aten.native_layer_norm`'s returned mean
 over N in {64, 768, 2304}, against 48/184 for the other order); `sA + sB + delta*delta*cA*nB` is `fma((delta*delta)*cA, nB, sA + sB)`
 (`SIGMA_FMA = True`; the two contractions of the sigma2 term were not distinguishable through `rsqrt.approx` on the probe's inputs,
-the fused form is the compiler's canonical one).  Its difftest (`layer_norm_difftest.py`) is the bit-exact check.
+the fused form is the compiler's canonical one).  Its bit-exact check is a differential test
+against `aten.native_layer_norm` on the GPU, whose record the quarantine admission holds.
 """
 from __future__ import annotations
 

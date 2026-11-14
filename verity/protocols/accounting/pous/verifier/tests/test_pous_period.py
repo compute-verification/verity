@@ -16,6 +16,7 @@ from pous_test_signer import SCHEMES, TestSigner, session_log
 
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period
+from verity.protocols.accounting.pous.prover import period_prover
 from verity.protocols.accounting.pous.verifier import run as R
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -96,27 +97,27 @@ def test_320_reads_keep_the_105_read_certificates():
 def test_encode_in_processes_is_the_serial_encode():
     q = P2Params(128, 173, 8, 2)
     w = hashlib.shake_256(b"W").digest(q.w_bytes)
-    serial = period.encode(q, SALT, w)
+    serial = period_prover.encode(q, SALT, w)
     assert serial == [P2.encode_segment(q, None, SALT, s, w[s * 112:(s + 1) * 112]) for s in range(2)]
-    assert period.encode(q, SALT, w, workers=3) == serial
+    assert period_prover.encode(q, SALT, w, workers=3) == serial
 
 
 def test_a_kept_store_is_audited_again(tmp_path):
     """A store set up once and saved (`EncodedStore.save`) loads as it was, and each audit of it is a fresh session: two
     periods, each accepted, under session ids of their own."""
-    held = period.setup_store(b"a period's records", hashlib.sha512(b"setup coins").digest(),
+    held = period_prover.setup_store(b"a period's records", hashlib.sha512(b"setup coins").digest(),
                               period.point_for(18, period.W, period.C0))
     held.save(tmp_path / "pous-store")
-    again = period.EncodedStore.load(tmp_path / "pous-store")
+    again = period_prover.EncodedStore.load(tmp_path / "pous-store")
     assert again == held and len(again.blocks) == held.point.params.blocks
     signer, log = TestSigner(b"period", 3), session_log()
-    got = [period.audit("n0", again, hashlib.sha512(b"coins %d" % i).digest(), signer=signer, log=log, schemes=SCHEMES,
+    got = [period_prover.audit("n0", again, hashlib.sha512(b"coins %d" % i).digest(), signer=signer, log=log, schemes=SCHEMES,
                         protocol=TEST_ID, clock=Clock(10 ** 9)) for i in range(2)]
     assert [p.verdict for p in got] == ["accept", "accept"] and got[0].case["params"] != got[1].case["params"]
     assert {p.public("s_bits") for p in got} == {0}
 
 
-def _certified_store() -> period.EncodedStore:
+def _certified_store() -> period_prover.EncodedStore:
     """A `C*` of uniformly random canonical blocks at the certified point, with a setup case of its own: what the run
     checks of it (the table, its root and the session) doesn't read how it was encoded, and a 256-block encode is 16
     core-minutes. No setup accepts it (a random block is no codeword), so the tie refuses its audits."""
@@ -126,7 +127,7 @@ def _certified_store() -> period.EncodedStore:
     digests = b"".join(mc.block_digest(b) for b in blocks)
     rows = [digests[64 * i:64 * (i + 1)] for i in range(q.blocks)]
     root, commitment = VerifierKey.from_row_digests(q, SALT, rows).root, hashlib.sha512(b"W").digest()
-    return period.EncodedStore(pt, R.Setup(q.blocks, commitment, root, SALT), blocks, digests,
+    return period_prover.EncodedStore(pt, R.Setup(q.blocks, commitment, root, SALT), blocks, digests,
                                period.setup_case(q, commitment, SALT, [list(blocks)]))
 
 
@@ -145,13 +146,13 @@ def test_an_audit_at_the_certified_point_checks_its_run():
     an accepted, certified audit through the tie is `verifier/check/tests/test_run_protocol.py`'s (slow: a 256-block encode)."""
     held, signer = _certified_store(), TestSigner(b"certified", 3)
     kw = dict(signer=signer, log=session_log(), schemes=SCHEMES, protocol=TEST_ID, clock=Clock(10 ** 9))
-    honest = period.audit("n0", held, hashlib.sha512(b"coins").digest(), **kw)
+    honest = period_prover.audit("n0", held, hashlib.sha512(b"coins").digest(), **kw)
     assert honest.verdict == "reject" and honest.answer["reason"].startswith("setup: "), honest.answer
     R.check_at(*_run_of(honest.case))
     assert period.certify(held.point) == {"certified": True, "eps": str(EPS), "s_bits": 3_989_072}
     prof = period.profile(held.point)
     assert prof["gaps"] == [] and prof["certificate"]["theorem"] == "Pous.SecurityProofs.P2SlackFamilyUncond"
-    zeros = period.audit("n0", held, hashlib.sha512(b"coins 2").digest(),
+    zeros = period_prover.audit("n0", held, hashlib.sha512(b"coins 2").digest(),
                          prover=lambda blocks: lambda i: bytes(len(blocks[i])) if i % 2 else blocks[i], **kw)
     assert zeros.verdict == "reject" and (zeros.public("s_bits"), zeros.eps) == (0, 0)
     with pytest.raises(R.Refused):
@@ -165,7 +166,7 @@ def _line(lines: list[str], kind: str, session: str | None, body: dict, sig_byte
     """The auditor's next ledger line in its form (`spot.challenger.ledger_line`), under a stand-in signature of
     `sig_bytes` bytes at leaf `seq`: `cite` reads the form, never the signature."""
     e = {"body": body, "kind": kind, "prev": hashlib.sha512(lines[-1].encode()).hexdigest() if lines else "0" * 128,
-         "schema": period.LEDGER_SCHEMAS[1], "seq": len(lines), "session": session}
+         "schema": period_prover.LEDGER_SCHEMAS[1], "seq": len(lines), "session": session}
     return json.dumps({**e, "sig": (len(lines).to_bytes(4, "big") + bytes(sig_bytes - 4)).hex()}, sort_keys=True,
                       separators=(",", ":"))
 
@@ -242,7 +243,7 @@ def test_the_records_keep_only_the_ledger_entries_their_window_cites(tmp_path):
     and close, and every other file as it is, while the window's files on disk keep the whole ledger PoUW reads."""
     lines, s, kept = _ledger(200)
     files = _window(tmp_path, lines, s)
-    store = period.records(tmp_path)
+    store = period_prover.records(tmp_path)
     got = _unframe(store)
     assert sorted(got) == sorted(k for k in files if not k.startswith("answers/"))
     want = [lines[i] for i in kept]
@@ -263,16 +264,16 @@ def test_a_ledger_that_opens_no_cited_session_is_refused(tmp_path):
     files = _window(tmp_path, lines, s)
     (tmp_path / "pouw/salt-session/windows.jsonl").write_text("".join(x + "\n" for x in lines[:kept[1] + 1]))
     with pytest.raises(ValueError, match=f"^pouw/salt-session/windows.jsonl: the auditor's ledger opens no session {s}"):
-        period.records(tmp_path)
+        period_prover.records(tmp_path)
     (tmp_path / "pouw/salt-session/windows.jsonl").write_bytes(files["pouw/salt-session/windows.jsonl"])
     (tmp_path / "pouw/elsewhere").mkdir()
     (tmp_path / "pouw/elsewhere/windows.jsonl").write_bytes(files["pouw/salt-session/windows.jsonl"])
-    got = _unframe(period.records(tmp_path))
+    got = _unframe(period_prover.records(tmp_path))
     assert got["pouw/elsewhere/windows.jsonl"] == files["pouw/salt-session/windows.jsonl"]
     assert got["pouw/salt-session/windows.jsonl"].decode().split("\n") == [*(lines[i] for i in kept), ""]
-    assert period.cited([json.loads(x) for x in lines], {s}) == kept
+    assert period_prover.cited([json.loads(x) for x in lines], {s}) == kept
     with pytest.raises(ValueError, match="^no challenger session is cited beside the auditor's ledger"):
-        period.cited([json.loads(x) for x in lines], set())
+        period_prover.cited([json.loads(x) for x in lines], set())
 
 
 def test_pous_accepts_the_cut_records_as_it_does_the_whole(tmp_path):
@@ -282,8 +283,8 @@ def test_pous_accepts_the_cut_records_as_it_does_the_whole(tmp_path):
     files = _window(tmp_path, lines, s)
     signer, log = TestSigner(b"records", 4), session_log()
     point = {}
-    for name, store in (("whole", _whole(files)), ("cut", period.records(tmp_path))):
-        got = period.run("n0", store, hashlib.sha512(b"coins " + name.encode()).digest(), signer=signer, log=log,
+    for name, store in (("whole", _whole(files)), ("cut", period_prover.records(tmp_path))):
+        got = period_prover.run("n0", store, hashlib.sha512(b"coins " + name.encode()).digest(), signer=signer, log=log,
                          point=period.point_for(len(store), period.W, period.C0), schemes=SCHEMES, protocol=TEST_ID,
                          clock=Clock(10 ** 9))
         assert got.verdict == "accept", got.answer
