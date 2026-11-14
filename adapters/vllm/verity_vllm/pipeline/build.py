@@ -301,13 +301,29 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         profile_mismatches,
     )
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
-        from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
-        from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
-        from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
+
+        from verity_vllm.program.frontend import loader_parity
+        from verity_vllm.program.frontend import vllm_meta as vm
         from verity_vllm.program.frontend.derive import derive_report
-        from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts, observe_batched_form,
-                                                            observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context)
+        from verity_vllm.program.frontend.export_compat import (
+            apply_target_profile,
+            host_facts,
+            read_back_applied,
+        )
+        from verity_vllm.program.frontend.rules.vllm_bindings import (
+            VLLM_BINDING_RULES,
+            clear_observations,
+            declared_derived_accounting,
+            observe_allreduce_settings,
+            observe_attention_impls,
+            observe_batched_form,
+            observe_export_facts,
+            observe_launch_context,
+            observe_target_profile,
+            vllm_ruleset,
+        )
+        from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         clear_observations()
         observe_target_profile(target)
         observe_launch_context(launch)
@@ -326,8 +342,13 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             bus = None
             if tp > 1:
                 # rank `rank` of `tp`: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation, export and derive
-                from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
                 from verity.definitions.registry.tp_allreduce import settings_of
+
+                from verity_vllm.program.frontend.export_ops import (
+                    CollectiveBus,
+                    bind_vocab_parallel_embeddings,
+                    tp_group_override,
+                )
                 env_now = engine_env.snapshot()
                 allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
                 observe_allreduce_settings(allreduce_settings)

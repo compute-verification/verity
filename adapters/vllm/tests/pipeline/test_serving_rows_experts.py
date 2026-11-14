@@ -24,8 +24,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity_flock.class_statement import UnitStager
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G1
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
@@ -33,13 +31,16 @@ from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
 from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.commitments.gates import embedding as EMB
+from verity.commitments.windows import interface as IF
+from verity.commitments.windows import rows as CS
 from verity.definitions.numerics import fp8_moe_rows as FR
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import boolean_moe as BMOE
 from verity.definitions.registry import fp8_moe_experts as X
 from verity.definitions.registry import moe as MOE
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G1
+from verity_flock.class_statement import UnitStager
+
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import expert_rows as EX
 from verity_vllm.pipeline import serving_rows as SRW

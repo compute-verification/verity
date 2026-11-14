@@ -17,21 +17,25 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-
-from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array
+from verity.commitments.windows import rows as CS
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.definitions.registry import dead_free as DF
-from verity.commitments.windows import rows as CS
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.engine import sampler_capture as SC
-from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import interior_rows as IR
+from verity_vllm.pipeline import serving_rows as SRW
 
 ROPE = "RoPEHead_v1{D=64}"
 PROMPTS = {"r0": [1, 2], "r1": [5, 3], "r2": [4, 6]}
