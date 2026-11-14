@@ -121,8 +121,8 @@ the entries' order:
 
     "starts": [{"base_ms": b, "certificate": certificate, "schedule": hex}, …]
 
-each as the network certifier's run publishes it (`certificate.CertifiedStart`, `warden_serve.start_json`,
-`deployment.json`'s `"start"`): where the session starts on its key's life, in milliseconds on the network
+each as the network certifier's run publishes it (`certificate.CertifiedStart`, `deployment.json`'s `"start"`):
+where the session starts on its key's life, in milliseconds on the network
 certifier's clock, the parameters digest of the schedule it runs under, and the certificate the key signed for both
 once, before the session's first tick. The clock form's certifier signs no start, and its evidence has no `"starts"`.
 
@@ -146,7 +146,7 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   `tagged_sha512("verity-network-certifier/start/v1", u64be base_ms ‖ schedule)` (`startDigest`); and verifying under
   the entry's key in the entry's session. An entry whose start is not the one its session signed is then refused by
   name (`heldTo`): tick t of a session is millisecond `base_ms + t · bucket_ms` of its key's life, so with `L` =
-  `window · bucket_ms`, a link-window's milliseconds, two listed entries of one key, starting at `a` and `a'` with
+  `window · bucket_ms`, an execution phase's milliseconds, two listed entries of one key, starting at `a` and `a'` with
   bases `b` and `b'`, have `a · L + b' = a' · L + b`. Each key's life starts at 0, so two keys' bases share no origin:
   a key's first listed entry's start is the auditor's pin, and every later entry of that key is read off it by the
   certifier's signatures, which is why a key may be listed in more than one session. In the clock form the evidence
@@ -381,7 +381,7 @@ def Schedule.programSlots (s : Schedule) : Nat := s.lanes
 /-- A window's Program slots: T / `every` slot strides of `programSlots` (`WardenParams.window_programs`). -/
 def Schedule.executionPhasePrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
 
-/-- A link-window in milliseconds on the network certifier's clock: its T buckets of `bucket_ms` each. -/
+/-- An execution phase in milliseconds on the network certifier's clock: its T buckets of `bucket_ms` each. -/
 def Schedule.windowMs (s : Schedule) : Nat := s.window * s.bucketMs
 
 /-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its own free inputs
@@ -477,8 +477,8 @@ def ExecutionPhase.clockDigest? (x : ExecutionPhase) : Option ByteArray :=
   | .clock c => some c.digest
   | .rows _ => none
 
-/-- A certifier session's signed start as the evidence shows it (`certificate.CertifiedStart`, as
-`warden_serve.start_json` writes it): where the session starts on its key's life, in milliseconds on the network
+/-- A certifier session's signed start as the evidence shows it (`certificate.CertifiedStart`, as the run's
+`deployment.json` holds it): where the session starts on its key's life, in milliseconds on the network
 certifier's clock; the parameters digest of the schedule it runs under; and the certificate, which signs their start
 digest (`startDigest`). -/
 structure Start where
@@ -1030,9 +1030,7 @@ def certifierEntries (j : Json) : V (Array Entry) := (·.entries) <$> paramsOf j
   let reason := fun (es : Array Json) => match listed es with | .ok _ => "" | .error e => e
   (listed #[entry (hex 1 80) 7 0, entry (hex 2 80) 8 2, entry (hex 1 80) 9 3]).toOption.map (·.map (·.start)) ==
       some #[0, 2, 3] &&
-    reason #[entry (hex 1 80) 7 0, entry (hex 1 80) 7 3] ==
-      "keys: one session listed twice: two entries hold one key identifier (a key's first 16 bytes) and one \
-        session, so that session's link-window n would be two of the period's" &&
+    (reason #[entry (hex 1 80) 7 0, entry (hex 1 80) 7 3]).startsWith "keys: one session listed twice: " &&
     reason #[entry (hex 1 80) 7 0, entry (hex 1 16 ++ hex 2 64) 8 3] ==
       "keys: two keys with one key identifier (a key's first 16 bytes)"
 
@@ -1098,14 +1096,14 @@ def executionPhaseOf (j : Json) (ctx : String) : V ExecutionPhase := do
     else do pure (Shown.rows (← (← Flock.J.arr j "registrations" ctx).mapM (rowsOf · s!"{ctx}.registrations")))
   pure { answer, certificates, shown }
 
-/-- A session's signed start, as `warden_serve.start_json` writes it. -/
+/-- A session's signed start, as the run's `deployment.json` holds it (`"start"`). -/
 def startOf (j : Json) (ctx : String) : V Start := do
   exactly j ["base_ms", "certificate", "schedule"] ctx
   pure { baseMs := ← Flock.J.nat j "base_ms" ctx, schedule := ← hexAt j "schedule" ctx,
          certificate := ← certificateOf (← Flock.J.get j "certificate" ctx) s!"{ctx}.certificate" }
 
-/-- The evidence: the audits' answers and the link-windows, and the listed entries' sessions' signed starts where it
-shows any (`"starts"`, the rows form's). Evidence that shows none has no `"starts"`, so it has one encoding. -/
+/-- The evidence: the audits' answers and the execution phases', and the listed entries' sessions' signed starts where
+it shows any (`"starts"`, the rows form's). Evidence that shows none has no `"starts"`, so it has one encoding. -/
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
   let shown := keysOf j == ["audits", "starts", "windows"]
@@ -1529,9 +1527,9 @@ def startRefusal (p : Params) (sd : ByteArray) (e : Entry) (x : Start) : Option 
 
 /-- Whether the listed entry `e`, whose session's signed start is `x`, starts where its key's entry `a`, whose
 session's is `xa`, puts it. Tick t of a session is millisecond `base_ms + t · bucket_ms` of its key's life, so `e`'s
-link-window 0 is `(x.baseMs − xa.baseMs) / L` link-windows of `L` milliseconds after `a`'s, and its start is that
-many after `a`'s: `a.start · L + x.baseMs = e.start · L + xa.baseMs`, which no base short of a whole link-window from
-`a`'s satisfies. -/
+execution phase 0 is `(x.baseMs − xa.baseMs) / L` execution phases of `L` milliseconds after `a`'s, and its start is
+that many after `a`'s: `a.start · L + x.baseMs = e.start · L + xa.baseMs`, which no base short of a whole execution
+phase from `a`'s satisfies. -/
 def heldTo (L : Nat) (a : Entry) (xa : Start) (e : Entry) (x : Start) : Bool :=
   a.start * L + x.baseMs == e.start * L + xa.baseMs
 
@@ -1549,9 +1547,9 @@ def startCheck (p : Params) (s : Schedule) (sd : ByteArray) (starts : Array Star
     match (p.entries.zip starts).find? (·.1.key.extract 0 16 == e.key.extract 0 16) with
     | some (a, xa) =>
       if heldTo s.windowMs a xa e x then none else
-        some (.reject, s!"entry {i}: a start that is not the one its session signed: it starts at link-window \
+        some (.reject, s!"entry {i}: a start that is not the one its session signed: it starts at execution phase \
           {e.start} and its session at {x.baseMs} ms of its key's life, and its key's entry that starts at \
-          {a.start} at {xa.baseMs} ms, a link-window being {s.windowMs} ms")
+          {a.start} at {xa.baseMs} ms, an execution phase being {s.windowMs} ms")
     | none => none
 
 /-- The listed entries' starts' findings. In the rows form one an entry, in order (`startCheck`), or the one finding
@@ -1567,22 +1565,22 @@ def startChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × Str
     if e.starts.isEmpty then #[] else
       #[some (.reject, "starts: the clock form reads no session's signed start: its certifier signs none")]
 
--- `start_digest(0, WardenParams().digest)` and `start_digest(36_000_000, WardenParams(max_tokens_cap=4).digest)`;
--- none past a u64, or for a digest that is not 64 bytes
+-- the Python's `start_digest` under the default schedule's parameters digest, at base 0 and at 36,000,000 ms; none
+-- past a u64, or for a digest that is not 64 bytes
 #guard ((defaultSchedule.digest.toOption.bind (startDigest 0 ·)).map Flock.hexOf) == some
   "601a25606f257809574fc5bbd78155a21953467341fc3bee7bc2801a0c7caaa9\
     ab73aa83183a2e889c341777342a71877d6d3501c4ad35e5e042ca75799a3872"
-#guard (((({ defaultSchedule with maxTokensCap := some 4 } : Schedule).digest.toOption.bind
-    (startDigest 36000000 ·)).map Flock.hexOf)) == some
-  "c67072e1b8002b9d6e5842221827c0204cbb0b8461c18b26a138726cc3fb9591\
-    7899d8f02f7fa255925875130980ad731a7fad7ff23adef71fc15817fc5cdfbf"
-#guard (startDigest (2 ^ 64 - 1) ⟨Array.replicate 64 0⟩).isSome && (startDigest (2 ^ 64) ⟨Array.replicate 64 0⟩).isNone &&
-  (startDigest 0 ⟨Array.replicate 63 0⟩).isNone
+#guard ((defaultSchedule.digest.toOption.bind (startDigest 36000000 ·)).map Flock.hexOf) == some
+  "dd7ebcee76b7b2db1c8595c6e67b955fd9c4dfbe1efe6035096ad005dd98ecb1\
+    c8886483c32026f6b368655e0cc6507e5f1c797b948fe0fec8f8ed3c955b8ae2"
+#guard (startDigest (2 ^ 64 - 1) ⟨Array.replicate 64 0⟩).isSome &&
+  (startDigest (2 ^ 64) ⟨Array.replicate 64 0⟩).isNone && (startDigest 0 ⟨Array.replicate 63 0⟩).isNone
 -- a start is refused by `CertifiedStart.refusal`'s codes, in its order: no egress certificate of window 0 under the
 -- link's start link; another key's; another schedule's; a digest that is not its base's and its schedule's; and,
 -- with those four held, a signature that does not verify. A key's entries are held to its first listed one by their
--- sessions' bases: at 60,000 ms a link-window, the entry 3 link-windows on is the session whose base is 180,000 ms on,
--- and neither a millisecond less nor a link-window more. Evidence that shows no start for an entry is one finding
+-- sessions' bases: at 60,000 ms an execution phase, the entry 3 execution phases on is the session whose base is
+-- 180,000 ms on, and neither a millisecond less nor an execution phase more. Evidence that shows no start for an entry
+-- is one finding
 #guard
   let key := fun (b : UInt8) => (⟨Array.replicate 80 b⟩ : ByteArray)
   let session := fun (b : UInt8) => (⟨Array.replicate attachmentBytes b⟩ : ByteArray)

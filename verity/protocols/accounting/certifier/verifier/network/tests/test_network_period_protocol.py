@@ -409,8 +409,8 @@ def with_starts(case: dict, starts: list | None) -> dict:
 
 def test_a_key_listed_in_two_sessions_is_held_to_its_signed_starts(server, monkeypatch):
     """The rows form reads each listed entry's session's signed start, so a key may be listed in two sessions. A
-    period whose link-windows two stretches of one key hold, each link-window signed in its own stretch's session at
-    that session's number, the second entry starting as many link-windows after the first as its session's signed
+    period that two stretches of one key hold between them, each signature in its own stretch's session at that
+    session's number, the second entry starting as many execution phases after the first as its session's signed
     base is after the first's on the key's life (`restart`), is accepted by Lean with the mirror's public. The same
     list with the second session's signed base another, every signature still verifying, is refused by Lean and by the
     mirror and by name (`PC.NOT_SIGNED`); and a mirror that reads the starts' certificates and not their bases accepts

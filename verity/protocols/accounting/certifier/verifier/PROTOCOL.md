@@ -304,8 +304,8 @@ The developer's record, a clock-form registration's served window, is in the per
 In the rows form the evidence shows each listed entry's session's signed start (`"starts"`, one for each entry in the
 entries' order: the start's certificate, below, as `deployment.json`'s `start` holds it), and the check holds each
 entry to it. The start shown is its session's certified start: under the entry's key, in its session, over the
-period's schedule's parameters digest. And an entry starts as many link-windows after its key's first listed entry as
-its session's signed base is after that entry's session's on the key's life, a link-window being
+period's schedule's parameters digest. And an entry starts as many execution phases after its key's first listed
+entry as its session's signed base is after that entry's session's on the key's life, an execution phase being
 `window · bucket_ms` milliseconds. So a key may be listed there in several sessions. A key's first listed entry is
 held to no other entry: its `start` is the auditor's pin. A signed start says where a session starts on its key's
 life, not where the session before it stopped: a session that ends early loses the rest of its span, and no period

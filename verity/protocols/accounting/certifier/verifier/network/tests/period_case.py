@@ -36,9 +36,9 @@ belongs (`cert-period-number`, `reg-period-number`); and parameters whose `"keys
 entry, entries out of order or with one start, one session twice, two keys under one key identifier (in the clock
 form, one key identifier twice), a period that starts before the first entry, or the earlier forms `"key"`,
 `"session"` and `"sessions"`. A rows-form period's evidence shows each listed entry's session's signed start, its base
-on its key's life sampled for a key's first listed entry and, for a later one, as many of the schedule's link-windows
-on as its start is. `restart` lists the signer's key in two sessions, each stretch holding some of the period's
-link-windows, and is accepted. Refused: that list with the second session's base another (`start-not-signed`); a
+on its key's life sampled for a key's first listed entry and, for a later one, as many of the schedule's execution
+phases on as its start is. `restart` lists the signer's key in two sessions, each stretch holding some of the period,
+and is accepted. Refused: that list with the second session's base another (`start-not-signed`); a
 shown start that is not its session's certified start, by each code of `CertifiedStart.refusal`
 (`start-uncertified`, `UNCERTIFIED_BY`); evidence that shows a start too few or too many, or none (`start-count`); and
 a clock-form period whose evidence shows one (`start-shown`). In the clock form: the
@@ -851,15 +851,15 @@ def _window(j, ctx: str) -> Window:
 
 
 def _start(j, ctx: str) -> CertifiedStart:
-    """`startOf`: a session's signed start, as `warden_serve.start_json` writes it."""
+    """`startOf`: a session's signed start, as the run's `deployment.json` holds it (`"start"`)."""
     _exactly(j, START_KEYS, ctx)
     return CertifiedStart(_nat(j["base_ms"], ctx), P.unhex(_of(j["schedule"], str, ctx)),
                           _certificate(j["certificate"], f"{ctx}.certificate"))
 
 
 def evidence(b: bytes) -> tuple[list[dict], list[Window], list[CertifiedStart]]:
-    """`evidenceOf`: the audits' answers, the link-windows, and the listed entries' sessions' signed starts where the
-    evidence shows any (`"starts"`, the rows form's); evidence that shows none has no `"starts"`."""
+    """`evidenceOf`: the audits' answers, the execution phases', and the listed entries' sessions' signed starts where
+    the evidence shows any (`"starts"`, the rows form's); evidence that shows none has no `"starts"`."""
     j = P.canonical_json(b)
     shown = isinstance(j, dict) and sorted(j) == ["audits", "starts", "windows"]
     if not shown:
@@ -912,8 +912,8 @@ def _certifies(p: Params, d: Direction, w: int, c: Certificate) -> bool:
 
 def _held_to(L: int, a: Entry, xa: CertifiedStart, e: Entry, x: CertifiedStart) -> bool:
     """`heldTo`: the listed entry `e`, whose session's signed start is `x`, starts where its key's entry `a`, whose
-    session's is `xa`, puts it: as many link-windows of `L` milliseconds after `a`'s start as its session's base is
-    after `a`'s session's on their key's life."""
+    session's is `xa`, puts it: as many execution phases of `L` milliseconds after `a`'s start as its session's base
+    is after `a`'s session's on their key's life."""
     return a.start * L + x.base_ms == e.start * L + xa.base_ms
 
 
@@ -927,7 +927,7 @@ def _start_check(p: Params, starts: list[CertifiedStart], i: int, e: Entry, x: C
         return Finding(REJECT, f"entry {i}: {UNCERTIFIED} ({why})")
     a, xa = next((y, z) for y, z in zip(p.entries, starts) if y.key.key_id == e.key.key_id)
     if not _held_to(p.schedule.window * p.schedule.bucket_ms, a, xa, e, x):
-        return Finding(REJECT, f"entry {i}: {NOT_SIGNED}: it starts at link-window {e.start} and its session at "
+        return Finding(REJECT, f"entry {i}: {NOT_SIGNED}: it starts at execution phase {e.start} and its session at "
                                f"{x.base_ms} ms of its key's life, and its key's entry that starts at {a.start} at "
                                f"{xa.base_ms} ms")
     return None
@@ -1400,14 +1400,14 @@ MUTATIONS = list(EXPECT)
 #: own session at its own number, in a period the second's stretch holds; a certificate or a rows registration under
 #: a key that isn't listed, under the picked key in the other entry's session, under the other listed entry, outside
 #: its stretch, and at the period's number where the session's belongs. In the rows form, which reads each session's
-#: signed start: accepted, one key listed in two sessions whose stretches each hold some of the period's link-windows,
-#: the second starting where the two sessions' signed bases put it (`restart`); refused, that list with the second
+#: signed start: accepted, one key listed in two sessions whose stretches each hold some of the period, the second
+#: starting where the two sessions' signed bases put it (`restart`); refused, that list with the second
 #: session's base another (`start-not-signed`). `case` aims at none (`AIMS`), so its period lists the one entry that
 #: signs it.
 LISTS = ("second-key", "two-stretches", "two-signers", "cert-unlisted", "reg-unlisted", "cert-other-session",
          "reg-other-session", "cert-outside-stretch", "reg-outside-stretch", "cert-period-number", "reg-period-number",
          "restart", "start-not-signed")
-#: The changes whose parameters list one key in two sessions, each stretch holding some of the period's link-windows
+#: The changes whose parameters list one key in two sessions, each stretch holding some of the period
 RESTARTS = ("restart", "start-not-signed")
 #: How a shown start fails to be its session's certified start (`start-uncertified`), by `CertifiedStart.refusal`'s
 #: code: signed under the link's own name, as an ingress certificate or for window 1; by a key that isn't listed;
@@ -2325,8 +2325,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         case_params["sync_set"] = {"deltas": deltas, "rhos": [[x.numerator, x.denominator] for x in rhos]}
     c_json = {"audits": audit_regs, "windows": window_regs}
     # each listed entry's session's signed start, which the rows form's evidence shows: its base on its key's life, a
-    # key's first listed entry's sampled and each later one's as many of the period's schedule's link-windows on as
-    # its start is (`_held_to`), signed under the entry's key in its session; the clock form's evidence shows none
+    # key's first listed entry's sampled and each later one's as many of the period's schedule's execution phases on
+    # as its start is (`_held_to`), signed under the entry's key in its session; the clock form's evidence shows none
     rs = random.Random(f"network-period starts {m} {seed}")
     L = bound.window * bound.bucket_ms if rows else 1
     anchors: dict[bytes, tuple[int, int]] = {}
@@ -2336,12 +2336,12 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         anchor, base = anchors.setdefault(entry.key.I, (entry.start, sampled))
         bases.append(base + (entry.start - anchor) * L)
     if m == "start-not-signed":
-        # the second session's base is not the one its start is read off: a link-window on or back, a millisecond on,
-        # or the first session's own
+        # the second session's base is not the one its start is read off: an execution phase on or back, a
+        # millisecond on, or the first session's own
         bases[1] = rs.choice([bases[1] + L, bases[1] - L, bases[1] + 1, bases[0]])
 
     def signed_start(i: int, how: str | None = None) -> dict:
-        """Listed entry `i`'s session's signed start, as `warden_serve.start_json` writes it: its base and the
+        """Listed entry `i`'s session's signed start, as a run's `deployment.json` holds it: its base and the
         period's schedule's digest (a stand-in's in the clock form, which has none), signed for the link's start
         name, egress, window 0; or one that is not its session's certified start, as `how` says (`UNCERTIFIED_BY`)."""
         e = listed[i]
