@@ -24,7 +24,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 pytest.importorskip("torch")
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, fp8_block_gemm="cutlass", moe_backend="triton")
-WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 2}], "sampling": {"max_tokens": 2}, "sha256": "w",
+WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 2}], "sampling": {"variant": "greedy"}, "sha256": "w",
             "accepted": {"q0": [5, 6]}, "engine_args_required": {"max_model_len": 288, "tensor_parallel_size": 8}, "execution": "eager",
             "engine": {"reasons": {"VLLM_USE_DEEP_GEMM": "the target's CUTLASS block-FP8 GEMM", "moe_backend": "the target's Triton experts"}}}
 RUN = {"wall_s": 0.5, "iterations": 2, "step_wall_s": [0.2, 0.3], "generated_tokens": 2, "prompt_tokens": 3, "tokens": {"q0": [5, 6]}}

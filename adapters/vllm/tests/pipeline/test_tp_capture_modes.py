@@ -24,7 +24,7 @@ from verity_vllm.pipeline.tp import capture as TPC
 stand_ins, vllm = TT.stand_ins, TT.vllm
 
 EXTENSION = "verity_vllm.pipeline.tp.rank_worker.TP2CaptureWorkerExtension"
-SAMPLING = {"max_tokens": 2}
+SAMPLING = {"variant": "greedy"}
 RUN = ("run", ["q0"], SAMPLING)
 WARM = ("run", ["throwaway of q0 under seed 0x5eed7a9b"], SAMPLING)
 STEP_BOUND = "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS"
