@@ -536,6 +536,31 @@ def kept_run(serve_dir: Path) -> str:
     return runs[0]
 
 
+def kept_ingress(serve_dir: Path) -> tuple[object, dict, list[tuple[int, list]]] | None:
+    """The network certifier run the front kept under ``serve_dir`` as a served window's scan reads it
+    (`prove_path.kept_scan`, which takes this from its caller): the run's deployment parameters, its certified I/O
+    (`warden_chain.io`) and its certified ingress, each execution phase's number and rows (`warden_rows.window_rows`);
+    None where the front kept no run. ValueError, naming why, where the kept run can't be read."""
+    from benchmarks.network_traces import warden_chain as WC
+    from verity.protocols.accounting.certifier.verifier import relay_check as RC, warden_rows as WRW
+
+    if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
+        return None
+    unpacked = None
+    try:
+        unpacked, kept = unpack(serve_dir / PRIVATE / kept_run(serve_dir) / "fetch.tar.gz")
+        _, params = WC.deployment(kept)
+        io = WC.io(kept)
+        phases = [(r.window, list(WRW.window_rows(r, params)))
+                  for r in RC.read_records(WC.witness(kept), params)[RC.INGRESS]]
+    except (SystemExit, NotRun) as e:
+        raise ValueError(f"the certifier front's kept run: {e}") from None
+    finally:
+        if unpacked is not None:
+            rm(unpacked)
+    return params, io, phases
+
+
 def ran_on(chained: Path | None = None) -> dict[str, str]:
     """Which machine ran each of the piece's own steps, by the name each machine gives itself as it runs the step:
     this one for the period check and its proofs' challenges, and for the chain's checks and samples too unless

@@ -46,7 +46,7 @@ charged form, on the weights' sum.
 **At one pattern.** `checked_at_pattern` is `monitoringPeriodLeakChecked` at the secrets of `Zs` whose run has the fail pattern
 `φ`, at the pattern's operator `op φ` and registered values `ρ φ`: both are fixed before the secrets, so the theorem
 reads them as its own operator and registered values. It gives the held clause at that pattern and the count
-`#Θ · windowsCount` of the pattern's secrets.
+`#Θ · executionPhasesCount` of the pattern's secrets.
 
 **Over the patterns.** The fail patterns of exactly `j` connections, each below its bound, are among
 `failPatterns bound j` patterns (`exists_failPatterns`), so a count that holds at each pattern holds, times that
@@ -187,7 +187,7 @@ theorem checked_at_pattern
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg chk : AuditStatement → Finset ℕ)
     (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Msg → ℝ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
-    (hplaced : WindowsPlaced D.partition δ sw Pw β)
+    (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
       (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r))
     {Conn : Type} (ρ : (Conn → Option ℕ) → Fin n → ℕ → Bool)
@@ -195,7 +195,7 @@ theorem checked_at_pattern
     {Cell Srv Dev Z Par : Type} (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (rd : Par → (Fin n → List (Obs L K S)) → Conn → List (ℕ × CellView Cell))
     (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
     (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
@@ -218,7 +218,7 @@ theorem checked_at_pattern
       {z | failCell (schedOf z) (arr (srvOf z)) = φ ∧ z ∈ Zs ∧
           ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i) (ρ φ i) tops
             (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
-        Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) := by
+        Θ.encard * ((executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) := by
   have hφ := (monitoringPeriodLeakChecked H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
     (ρ φ) (op φ) arr f tap run htrust rd allows hread Θ
     {z | z ∈ Zs ∧ failCell (schedOf z) (arr (srvOf z)) = φ} schedOf srvOf dec
@@ -283,11 +283,11 @@ theorem monitoringPeriodLeakCharged : Guarantees.MonitoringPeriodLeakCharged := 
     (encard_weighted_le (Fintype.card Conn) T w hw
       (fun j => {z | z ∈ Zs ∧ failCount (failCell (schedOf z) (arr (srvOf z))) = j ∧
         FailsBelow bound (failCell (schedOf z) (arr (srvOf z))) ∧
-        ((failPatterns bound j * (Θ.card * windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β) : ℕ) : ℚ≥0) ≤
+        ((failPatterns bound j * (Θ.card * executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β) : ℕ) : ℚ≥0) ≤
           w j * (T : ℚ≥0) ∧
         ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
           (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)})
-      (fun j => failPatterns bound j * (Θ.card * windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β))
+      (fun j => failPatterns bound j * (Θ.card * executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β))
       (fun j => ?_) fun j hne => ?_)
   · rintro z ⟨hz, hb', hle, hg⟩
     exact Set.mem_iUnion₂.2 ⟨failCount (failCell (schedOf z) (arr (srvOf z))),

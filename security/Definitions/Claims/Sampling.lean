@@ -423,7 +423,7 @@ private circuit's description), and the Flock verifier its sessions run (`flock`
 parser, the opened columns of a run, the code, each trace's codeword length and decoding radius, and how a trace is
 read as a witness.
 
-The sample is `V`'s, from its coins, in this layout: `stage2` holds the rounds after the sample (the sessions), so runs that
+The sample is `V`'s, from its coins, in this layout: `secondStage` holds the rounds after the sample (the sessions), so runs that
 keep the other rounds make the same sample and see the same interior commitments; `checked` is the slots of the proof
 blocks the run checks; `rounds` is each one's session's rounds; `session` is its Flock statement and what its session
 showed; `reveal` is what its Flock witness reveals: committed values, each with the roots it is committed under (the
@@ -444,7 +444,7 @@ structure Deploy (Coin Col T : Type) where
   commit : CommitmentScheme Bool
   universal : SizeClass → Prog
   flock : Flock.Deploy Coin Col T
-  stage2 : (x : Msg) → Finset (Fin (V.k x))
+  secondStage : (x : Msg) → Finset (Fin (V.k x))
   checked : (x : Msg) → (Fin (V.k x) → Coin) → List ℕ
   rounds : (x : Msg) → ℕ → Finset (Fin (V.k x))
   session : Msg → ℕ → Seen → Option (Msg × Seen)

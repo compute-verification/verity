@@ -11,7 +11,7 @@ from typing import Any, overload
 import numpy as np
 
 from verity.protocols.accounting.pouw.prover.serving import int8_arm as ARM
-from verity.protocols.accounting.pouw.prover.serving.tensors import h1_device, tensors
+from verity.protocols.accounting.pouw.prover.serving.tensors import dtype_name, h1_device, tensors
 
 #: a unit's rows and columns (`pouw_h1.TILE`, `engine.int8_exact.UNIT`)
 UNIT = (32, 32)
@@ -22,7 +22,7 @@ ZY_BYTES = 6 * UNIT[0] * UNIT[1]
 def of(z: Any, units: int) -> Any:
     """A call of `units` units' records, [units, `ZY_BYTES`] uint8, as its arm handed them over (``scaled_mm_zy``'s zy: a
     tensor on its device, or an array), when `z` is them, else None."""
-    if z is None or str(getattr(z, "dtype", "")).removeprefix("torch.") != "uint8" or tuple(z.shape) != (units, ZY_BYTES):
+    if z is None or dtype_name(z) != "uint8" or tuple(z.shape) != (units, ZY_BYTES):
         return None
     return z.detach() if hasattr(z, "detach") else np.ascontiguousarray(z)
 
@@ -64,7 +64,7 @@ def _holds(records: np.ndarray, rows: int, n: int, y: Any, s_a: Any, s_w: Any) -
     """Whether `reason` finds nothing, read in full only on the row blocks that hold a served row. Every later slot has
     scale 0, so `reason` holds there iff its z is 0 and its y is dq(0, 0, s_w), one row for them all: those blocks are
     compared in the records' own layout. False also when the shapes are not a call's, s_w is not finite or a dq is a NaN
-    (torch's CPU cast doesn't give every NaN the same bits), for `reason` to read the records whole."""
+    (a device library's CPU cast doesn't give every NaN the same bits), for `reason` to read the records whole."""
     ur, uc = UNIT
     m = int(np.asarray(s_a).size)
     if not (isinstance(records, np.ndarray) and records.dtype == np.uint8 and rows > 0 and rows % ur == 0 and n > 0

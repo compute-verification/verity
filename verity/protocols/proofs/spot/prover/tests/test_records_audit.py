@@ -392,8 +392,8 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
     pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
             "registered": OP.block("test/model", {"b": b})}
     assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
-    assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.docket_roots({"window": 63})
-    assert RA.docket_roots({"window": w}) == RA.window_roots(w)
+    assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.registration_roots({"window": 63})
+    assert RA.registration_roots({"window": w}) == RA.window_roots(w)
     for bad, why in [({"registered": {"w": "cd" * 64}}, r"is \{program, values"), ({"activations": group(x=7)}, "hex digits"),
                      ({"activations": group(x="zz")}, "hex digits"), ({"registered": group(w=None)}, "hex digits"),
                      ({**w, "registered": group(x="cd" * 64)}, r"two roots for \['x'\]"),
@@ -564,7 +564,7 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     assert all(f["ports"]["wrow"]["root"] == got.value.root.hex() for f in files.values())
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     rec = json.loads((got.dir / "registration.json").read_text())
-    roots, pin = RA.docket_roots(rec), {v: e["root"] for v, e in pins.items()}
+    roots, pin = RA.registration_roots(rec), {v: e["root"] for v, e in pins.items()}
     assert roots == rec["window"]["registered_roots"] == pin == {"w": got.value.root.hex()}
     count = RA.declared_count(doc, 0, pins=pin, roots=roots)
     assert (count["inputs"], count["registered"], count["free"]) == (8 * per_unit, 8 * 8 * K, 8 * per_unit - 8 * 8 * K)
@@ -626,7 +626,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     files = IF.registered_reads(ldoc, ml, pins, registered=REG)
     assert files == IF.registered_reads(sdoc, ms, pins, registered=REG) and len(files) == 2
     pin = RA.pin_roots(pins)
-    roots = RA.docket_roots(json.loads((listed.dir / "registration.json").read_text()))
+    roots = RA.registration_roots(json.loads((listed.dir / "registration.json").read_text()))
     count = RA.declared_count(ldoc, 0, pins=pin, roots=roots)
     assert roots == pin and count == {**RA.declared_count(sdoc, 0, pins=pin, roots=roots), IF.WINDOW_INGRESS: 0}
     assert count["registered"] == 8 * 8 * K and "unpinned" not in count
@@ -1571,7 +1571,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
 def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
     statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
-    that cache, and none without ``--compose-cache``."""
+    that cache, and none without ``--compose-cache``. It hands a5 ``--archive-link`` too, and only where it is given."""
     from verity.protocols.proofs.spot.prover.audit import window_audit as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
 
@@ -1594,7 +1594,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         pass
 
     def audit(a, *args, **kw):
-        seen["audit"] = a.compose_cache
+        seen["audit"] = a.compose_cache, a.archive_link
         raise Opened
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
@@ -1605,7 +1605,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     args = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"),
             "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
-    for extra, want in ((["--compose-cache", cache], cache), ([], None)):
+    for extra, want in ((["--compose-cache", cache], (cache, False)), ([], (None, False)), (["--archive-link"], (None, True))):
         with pytest.raises(Opened):
             RA.main([*args, *extra])
         assert seen["audit"] == want

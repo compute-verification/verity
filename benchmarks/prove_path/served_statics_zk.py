@@ -52,8 +52,8 @@ import zk_drivers  # noqa: E402
 from verity.protocols.accounting.certifier.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 import served_tie_zk as STZ  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import served_rows as SR  # noqa: E402
-from verity.protocols.accounting.certifier.prover import served_statics as SS, served_tie as ST  # noqa: E402
+from verity_vllm.compiler import served_rows as SR  # noqa: E402
+from verity_vllm.compiler import served_statics as SS, served_tie as ST  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 
 CLASSES = {k: {s: c[s] for s in ("R", "P", "IW", "L", "T")} for k, c in STZ.CLASSES.items()}
@@ -265,7 +265,7 @@ def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, por
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
     verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program --registered"}
     proved = a0.proved_units(m["header"], live or {})
-    timing = {k: (live or {}).get(k) for k in N2.TIMING}
+    timing = {k: (live or {}).get(k) for k in STZ.TIMING}
     statement = {name: {"session_s": proc["wall_s"], **{k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest",
                                                                                          "sigma")},
                         "timing": timing, "process": proc, "lean_verify_s": lv.get("verify_s")}}
@@ -305,8 +305,8 @@ def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, por
             "verdicts": {k: y.get("accepted") for k, y in verdicts.items()}, "why": {k: y.get("why") for k, y in verdicts.items()},
             "registered": lv.get("registered"), "timing": statement[name], "lean_verify_s": lv.get("verify_s"),
             "proof_bytes": proofs,
-            "per_unit": {"prove_total_s": N2._per(timing.get("prove_total_s"), n), "proof_bytes": N2._per(sum(proofs) if proofs else None, n),
-                         "lean_verify_s": N2._per(lv.get("verify_s"), n)}}
+            "per_unit": {"prove_total_s": STZ._per(timing.get("prove_total_s"), n), "proof_bytes": STZ._per(sum(proofs) if proofs else None, n),
+                         "lean_verify_s": STZ._per(lv.get("verify_s"), n)}}
 
 
 def blobs_of(units: list, salts: dict) -> tuple[dict[str, bytes], set[str]]:

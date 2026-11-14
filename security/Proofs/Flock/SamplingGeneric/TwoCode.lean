@@ -419,16 +419,16 @@ def RegMatchesTwo : Prop :=
 
 /-- **The second stage's coins don't move the first stage's bytes.** -/
 def FirstFixed : Prop :=
-  ∀ x r e, bytes₁ x (forkOn (c.stage2 x) r e) = bytes₁ x r
+  ∀ x r e, bytes₁ x (forkOn (c.secondStage x) r e) = bytes₁ x r
 
 /-- **The second stage's bytes are uniform on its coins**: at any coins, fresh second-stage coins make them uniform. -/
 def SecondUniform : Prop :=
   ∀ x (r : Fin (c.V.k x) → FlockDeploy.Coin) (E : (Fin (L₂ x) → Fin 256) → Prop),
-    Pr (fun e : Fin (c.V.k x) → FlockDeploy.Coin => E (bytes₂ x (forkOn (c.stage2 x) r e))) = Pr E
+    Pr (fun e : Fin (c.V.k x) → FlockDeploy.Coin => E (bytes₂ x (forkOn (c.secondStage x) r e))) = Pr E
 
 /-- **The sessions' rounds are second-stage and neither stage's bytes read them.** -/
 def BytesFixedTwo : Prop :=
-  ∀ x u, c.rounds x u ⊆ c.stage2 x ∧
+  ∀ x u, c.rounds x u ⊆ c.secondStage x ∧
     ∀ r d, bytes₁ x (forkOn (c.rounds x u) r d) = bytes₁ x r ∧ bytes₂ x (forkOn (c.rounds x u) r d) = bytes₂ x r
 
 theorem replaySamples_code (hreg : RegMatchesTwo c reg two) (hunif : BytesUniform c L₁ bytes₁) :
@@ -455,16 +455,16 @@ theorem secondSamples_code (hreg : RegMatchesTwo c reg two) (hfirst : FirstFixed
   have hP' : c.partition s = some Pt := hP
   have hN : units c x = Pt.blocks.length := by simp [units, hx', hP']
   have hchk : ∀ e : Fin (c.V.k x) → FlockDeploy.Coin,
-      (((reg x).map fun g => g.checked (units c x) (bytesOf (bytes₁ x (forkOn (c.stage2 x) r e)))
-        (bytesOf (bytes₂ x (forkOn (c.stage2 x) r e)))).getD []).take (units c x) =
-      g.checked Pt.blocks.length (bytesOf (bytes₁ x r)) (bytesOf (bytes₂ x (forkOn (c.stage2 x) r e))) := by
+      (((reg x).map fun g => g.checked (units c x) (bytesOf (bytes₁ x (forkOn (c.secondStage x) r e)))
+        (bytesOf (bytes₂ x (forkOn (c.secondStage x) r e)))).getD []).take (units c x) =
+      g.checked Pt.blocks.length (bytesOf (bytes₁ x r)) (bytesOf (bytes₂ x (forkOn (c.secondStage x) r e))) := by
     intro e
     rw [hg, Option.map_some, Option.getD_some, hfirst x r e, hN]
     exact List.take_of_length_le (g.checked_length_le _ _ _)
   have hrs : replayTwo c reg L₁ bytes₁ x r = g.first.checked (bytesOf (bytes₁ x r)) := by
     simp only [replayTwo, hg, Option.map_some, Option.getD_some]
   show Pr (fun e : Fin (c.V.k x) → FlockDeploy.Coin => ∀ u ∈ (((reg x).map fun g => g.checked (units c x)
-      (bytesOf (bytes₁ x (forkOn (c.stage2 x) r e))) (bytesOf (bytes₂ x (forkOn (c.stage2 x) r e)))).getD []).take
+      (bytesOf (bytes₁ x (forkOn (c.secondStage x) r e))) (bytesOf (bytes₂ x (forkOn (c.secondStage x) r e)))).getD []).take
       (units c x), u ∉ B) ≤ _
   simp only [hchk]
   refine (hsec x r fun src₂ => ∀ u ∈ g.checked Pt.blocks.length (bytesOf (bytes₁ x r)) (bytesOf src₂), u ∉ B).trans_le

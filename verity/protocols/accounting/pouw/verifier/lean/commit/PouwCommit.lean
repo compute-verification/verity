@@ -6,7 +6,7 @@ public import PouwCommit.Bindings
 public import PouwCommit.Rows
 public import PouwCommit.Py
 public import PouwCommit.Coins
-public import PouwCommit.Draws
+public import PouwCommit.Samples
 public import PouwCommit.Difftest
 
 /-!

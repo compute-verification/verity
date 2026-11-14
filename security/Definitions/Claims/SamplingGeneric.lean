@@ -58,7 +58,7 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    (each verdict, where a session stopped), the honest view's probability of the outcome and an event is at most the
    simulator's, given the outcome, plus an error that reads the statement, the witness, the verifier and the outcome.
 2. **The compiled sampled verifier** (`Compiled`, `Sampling.Deploy` without Flock): its verifier, parser, scope check,
-   partition and commitment; the second stage (`stage2`: the sample and the sessions); the sampled proof blocks
+   partition and commitment; the second stage (`secondStage`: the sample and the sessions); the sampled proof blocks
    (`checked`); each one's public shape (`sh`) and the bounds on its session's errors (`κb`, `γb`), its session's
    rounds (`rounds`, whose order embedding `emb` of `A`'s rounds is defined, from which `coinsOf` reads a session's
    coins and `place` replaces them), and its session (`session`: its statement and view); each slot's session key
@@ -222,7 +222,7 @@ def ZkArg.ZK (H : Msg → Msg) {Coin : Type} (A : ZkArg Coin) : Prop :=
 /-! ## 2. The compiled sampled verifier -/
 
 /-- **A compiled sampled verifier over the proof system `A`** (`Sampling.Deploy` with its Flock parts replaced by `A`):
-the verifier, its parser, scope check and partition, the trace's commitment; the second stage (`stage2`: the sample
+the verifier, its parser, scope check and partition, the trace's commitment; the second stage (`secondStage`: the sample
 and the sessions, after the registration); the slots of the proof blocks a run samples (`checked`); each one's public
 shape (`sh x u`, fixed by the statement) and the bounds on its session's errors (`κb x u`, `γb x u`: on `A`'s `κ` and
 `γ` at the session's statement); its session's rounds (`rounds`) and the session as a run shows it (`session`: its
@@ -239,7 +239,7 @@ structure Compiled (Coin : Type) (A : Arg Coin) where
   scopeCheck : Msg → Bool
   partition : AuditStatement → Option Partition
   commit : CommitmentScheme Bool
-  stage2 : (x : Msg) → Finset (Fin (V.k x))
+  secondStage : (x : Msg) → Finset (Fin (V.k x))
   checked : (x : Msg) → (Fin (V.k x) → Coin) → List ℕ
   sh : Msg → ℕ → A.Sh
   κb : Msg → ℕ → ℝ
@@ -385,7 +385,7 @@ noncomputable def E (L : Compiled Coin A) : Extractor Coin Sampling.Wit L.V wher
       if v₀.out = .acc then
         (waitAccC (L.kOut x) ((List.finRange (L.capOut x)).map c.1) []).bind fun outer =>
           (flatMapRP (fun jo : Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen) =>
-              (waitAccC (L.kIn x) ((List.finRange (L.capIn x)).map fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l))
+              (waitAccC (L.kIn x) ((List.finRange (L.capIn x)).map fun l => forkOn (L.secondStage x) jo.2.1 (c.2.1 jo.1 l))
                   []).bind fun inner =>
                 flatMapRP (fun li : Fin (L.kIn x) × ((Fin (L.V.k x) → Coin) × Seen) =>
                     L.runExt x s li.2.1 li.2.2 fun p => c.2.2 (jo.1, li.1, p))
@@ -475,7 +475,7 @@ def Scope (L : Compiled Coin A) (x : Msg) : Prop :=
 structure Sessions (H : Msg → Msg) (L : Compiled Coin A) : Prop where
   draws : ∀ x s P, L.parse x = some s → L.partition s = some P → InScope P s →
     ∀ B ⊆ Finset.range P.blocks.length, ∃ esc : (Fin (L.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
-      (∀ r, Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B) ≤ esc r) ∧
+      (∀ r, Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.secondStage x) r d), u ∉ B) ≤ esc r) ∧
       Ex esc ≤ s.design.Pa P B
   slots : ∀ x r, (L.checked x r).length ≤ L.nPU x
   shared : ∀ x (Ω : Type) (P : Prover Ω) ω r i j u u', (run H P L.V x ω r).out = .acc →
@@ -486,9 +486,9 @@ structure Sessions (H : Msg → Msg) (L : Compiled Coin A) : Prop where
   unions : ∀ x, L.nPU x ≤ L.nOut x
   refuses : ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P L.V x ω r).out = .acc → L.Scope x
   interior : ∀ x (Ω : Type) (P : Prover Ω) ω r d u,
-    L.iroots x (run H P L.V x ω (forkOn (L.stage2 x) r d)).seen u = L.iroots x (run H P L.V x ω r).seen u
+    L.iroots x (run H P L.V x ω (forkOn (L.secondStage x) r d)).seen u = L.iroots x (run H P L.V x ω r).seen u
   fixed : ∀ x r u, u ∈ L.checked x r →
-    L.rounds x u ⊆ L.stage2 x ∧ ∀ d, L.checked x (forkOn (L.rounds x u) r d) = L.checked x r
+    L.rounds x u ⊆ L.secondStage x ∧ ∀ d, L.checked x (forkOn (L.rounds x u) r d) = L.checked x r
   runs : ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) r u, u ∈ L.checked x r →
     ∃ (xS : Msg) (P' : Prover Unit), A.shape xS = L.sh x u ∧ A.κ xS ≤ L.κb x u ∧ A.γ xS ≤ L.γb x u ∧
       A.V.k xS = (L.rounds x u).card ∧
