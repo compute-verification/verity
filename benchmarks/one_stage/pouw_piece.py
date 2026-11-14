@@ -24,9 +24,10 @@ The directory, private as `composite.py` reads it (0700, its files 0600: the evi
 ``params.json``, ``commitment.bin`` and ``evidence.json`` (canonical), ``case.json`` (``{params, commitment, evidence,
 blobs}``, the commitment and evidence hex, no blobs: neither protocol reads any) and ``answer.json``: the line ``EXE
 check params.json commitment.bin evidence.json`` prints, the Lean's (``--exe``, its package's ``pouw-check`` or
-``pouw-period``), or without ``--exe`` the Python reference's (`core_check.case`, `period_check.case`, which the
-difftests hold to the Lean). Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when
-it is undecided, as the check does.
+``pouw-period``). ``period`` is answered by the Lean alone: without ``--exe`` its piece is MISSING (below), never the
+Python reference's (`period_check.case`, which the difftests hold to the Lean); ``v1`` without ``--exe`` is
+`core_check.case`'s. Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when it is
+undecided, as the check does.
 
 ``--serve-run SERVE_DIR --window K`` takes the inputs from a served run (`served_verdicts.sh`'s serve dir, or its
 ``out/serve``), and names its piece MISSING, with why, wherever the run doesn't hold them (`v1_missing`,
@@ -63,7 +64,8 @@ from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity_vllm.protocols.pouw.h1 import answers as A
 
 V1, PERIOD = CC.ID, PC.ID
-CASE = {V1: CC.case, PERIOD: PC.case}
+NO_EXE = (f"no {PERIOD} executable (--exe, the pouw-period of PouwCheck/Period.lean's package): the period's case is "
+          "answered by the Lean alone, so with none nothing decides it")
 EXIT = {"accept": 0, "reject": 1, "undecided": 2}
 CASE_FILES = ("params.json", "commitment.bin", "evidence.json", "case.json", "answer.json")
 
@@ -86,10 +88,13 @@ def challenger_key(doc: dict) -> dict:
 
 
 def answer(protocol: str, out: Path, exe: str | None) -> dict:
-    """The protocol's answer on the case in `out`: the Lean's when `exe` is given, else the Python reference's."""
+    """The protocol's answer on the case in `out`: the Lean's when `exe` is given, else (`v1` only) the Python
+    reference's."""
     if exe is None:
+        if protocol != V1:
+            raise RuntimeError(NO_EXE)
         case = json.loads((out / "case.json").read_text())
-        return CASE[protocol]({k: case[k] for k in ("params", "commitment", "evidence")})
+        return CC.case({k: case[k] for k in ("params", "commitment", "evidence")})
     p = subprocess.run([exe, "check", *(str(out / f) for f in ("params.json", "commitment.bin", "evidence.json"))],
                        capture_output=True, text=True, check=False)
     said = p.stdout.strip().splitlines()
@@ -297,7 +302,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("protocol", choices=["v1", "period"])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--exe", help="the protocol's Lean executable (pouw-check, pouw-period); else the Python reference")
+    ap.add_argument("--exe", help="the protocol's Lean executable (pouw-check, pouw-period); without it period's piece "
+                                  "is missing, and v1's is the Python reference's")
     ap.add_argument("--serve-run", type=Path)
     ap.add_argument("--window", type=int)
     for f in ("params", "registration", "answer", "key", "ledger", "pins", "main", "windows"):
@@ -356,7 +362,11 @@ def period_piece(out: Path, params: dict, ledger: list[str], pins: list[str], wi
     """The period's piece in `out`: `windows` as given (`credit.PROVED_KEYS`), or carrying their statements
     (`credit.PERIOD_KEYS`) and put in that form by `proved`, whose reference verdict ``REFERENCE`` prints; its verifier
     runs `run` when given (`answers.Answers` on ``--lean-answers``, its counts a ``LEAN-ANSWERS`` line), else
-    `proofs.verify`."""
+    `proofs.verify`. With no `exe` the piece is MISSING (`NO_EXE`), before any of that runs."""
+    if exe is None:
+        missing(out, PERIOD, NO_EXE)
+        print(f"MISSING {PERIOD}: {NO_EXE}", flush=True)
+        return EXIT["undecided"]
     if isinstance(windows, list) and windows and all(isinstance(w, dict) and "statements" in w for w in windows):
         windows, (_credit, why) = proved(params["key"], ledger, pins, params["main"], params["name"], windows,
                                          **({} if run is None else {"run": run}))
