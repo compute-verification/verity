@@ -24,7 +24,7 @@ import pytest
 
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.windows import interface as IF
-from verity.protocols.spot.verifier.one_stage import draw as D, proofs as PF, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R, draw as D, proofs as PF
 
 import test_audit_two_members as T
 from test_audit_two_members import binaries  # noqa: F401 -- the fixture, under the name the test takes
