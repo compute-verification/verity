@@ -78,6 +78,15 @@ public import Proofs.Flock.SpotFlock.Frame
 public import Proofs.Flock.SpotFlock.FrameAt
 public import Proofs.Flock.SpotFlock.FrameIsAt
 public import Proofs.Flock.SpotFlock.FrameIsBuilt
+public import Proofs.Flock.SpotFlock.DrawnAt
+public import Proofs.Flock.SpotFlock.Instance
+public import Proofs.Flock.SpotFlock.InstanceAddresses
+public import Proofs.Flock.SpotFlock.InstanceBoundary
+public import Proofs.Flock.SpotFlock.InstanceCodes
+public import Proofs.Flock.SpotFlock.InstanceReads
+public import Proofs.Flock.SpotFlock.InstanceRecords
+public import Proofs.Flock.SpotFlock.InstanceRun
+public import Proofs.Flock.SpotFlock.OneTable
 public import Proofs.Flock.SpotFlock.FirstHitClassAt
 public import Proofs.Flock.SpotFlock.FirstHitClassCaps
 public import Proofs.Flock.SpotFlock.OneWaitClassAt
