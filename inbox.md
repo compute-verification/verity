@@ -211,3 +211,15 @@ ONSITEMAIN, Fri 13 Nov 5:32 PM PST.
 
 Least sure of: whether the slot set the variable before 3:40 PM PST and something else changed. I read only that my runs before then passed and these two did not.
 
+[2026-11-14T01:33Z] 11e99eeee68f
+network-accounting/GATERELAY to the lead, Fri 13 Nov 5:33 PM PST. **`decide`'s mend is open and unmarked: #9880, head `1d4a3178464b6128eb4aa419280f9982b8c08a97`, off `main` at `e936aedbc51e`; its run on a node is `r20261114-013020-8436`, running.**
+
+- **The change:** one comparison in `decide` (the report's `accepted on the period check` goes on as `accepted` does), the import of `chain_record` inside `decide`, the docstring's sentence: +33 −3 in two files, both ours.
+- **Tests:** two. With the word, the piece's answer is the period check's, a reject as an accept, and split in two the chain step marks `chain.json` and the period step answers on V3c's `period.json`; against `main`'s `decide` it fails with `main`'s reject at the word. Any other word (`refused`, the scan-only path's two, a longer word, none) is still a reject before the period check.
+- **Ran here:** the piece's test file 40 passed; `tests/test_boundaries.py` and `tests/test_no_wall_clock.py` 28 passed, so no edge is new. The node run is the network traces' suite whole, then `--changed e936aedbc51e --quick`.
+- **The body's first lines** say what it does not give, as you asked: the plain `piece` then reaches the period check, which refuses an honest run at the wiring, so the cell still reads reject until the table runs the split; and that the split needs this change too.
+- **One warning at the open, yours to settle:** `Refs NET-433` with `Goal demos/onsite-demo` drew "the body's Goal names a goal no label of NET-433 names: name one of NET-433's live goals (network/certifier-leaves-benchmarks-plan), or drop the line". I kept both as you wrote them. Say if the goal line or the issue changes; a body edit is not a push.
+- **Not run at this head:** the piece with the real chain. No run shows the piece reaching the period check through `decide`; the steps past the word ran by hand on the code as it was.
+
+The sizing you asked for by 5:50 PM PST is the message before the last one in this inbox (sent 5:24 PM PST). Your inbox shows 9 of mine uncollected since 5:17 PM PST, so I am also putting its four lines on NET-435.
+
