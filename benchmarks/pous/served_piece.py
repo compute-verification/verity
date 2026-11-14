@@ -57,7 +57,9 @@ same sessions, which no second session replaces. With neither, one process does 
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
    placement and the weights' public properties: their model, count and size. The placement's `trusted-host` holds
    only for a session signed under a key `memory_challenger.AUDITOR_KEYS` pins for the challenger's host: a run's
-   own ``--trusted-sha512`` gets its session accepted, but its record is a rehearsal's, with no bound.
+   own ``--trusted-sha512`` gets its session accepted, but its record is a rehearsal's, with no bound. Its ``setup``
+   is `challenger_session.SETUP`: the tie ran on the developer's node, so every verdict rests on setup checked by the
+   developer, not the auditor, which the ``POUS`` line prints after the premise.
 
 6. **The bandwidth session** (`held_bandwidth.py`): once PoUS's session completed, before either is answered and
    before ``C*`` is released, the same process runs PoUB-P2's session over the store it holds on the card, so both
@@ -76,7 +78,8 @@ same sessions, which no second session replaces. With neither, one process does 
 Writes ``DIR/answer.json`` and ``DIR/pous.json`` (sizes, the phases' timings, the bytes of the case's line,
 ``case_bytes``, the SHA-512 of the key the session was signed under and whether it is the trusted one, ``key_sha512``
 and ``key_pinned``, and under ``decided_by`` the program whose verdict the answer is with the host it ran on,
-`period.decided_by`: the Lean where it answered the case, with its seconds and its peak memory, else this Python),
+`period.decided_by`: the Lean where it answered the case, with its seconds and its peak memory, else this Python, and
+of a session's answer ``setup``, `challenger_session.SETUP`),
 appends its timeline to ``DIR/stamps.txt`` (a UTC second and an event a line: the weights loaded, setup, each session,
 each answer, the case written; `served_piece.sh` adds its own) and prints one ``POUS`` line.
 Weights that aren't the pin's are a reject, and a session the challenger's side couldn't complete is undecided, each with
@@ -603,7 +606,7 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str = TR
     _done(out, summary, answer, answer_s=answer_s, case_bytes=case_bytes, key_sha512=key_sha,
           key_pinned=bool(trusted), key_pin="tree" if trusted_sha512 in mc.AUDITOR_KEYS.get(host, ()) else "run",
           private=str(private), public=inner["public"], bandwidth=bandwidth,
-          decided_by=decided, **lean)
+          decided_by=decided, setup=CS.SETUP, **lean)
     # last, and only once each Lean asked for has answered its case: until then the same sessions can be answered again
     unanswered = not agreed or (bw is not None and bw["verdict"] == "undecided" and (bw_private / HB.HELD).is_file())
     if not unanswered:
@@ -643,7 +646,7 @@ def line(answer: Mapping[str, Any]) -> str:
         return (f"POUS: accept: {w.get('model')}@{str(w.get('revision'))[:10]}'s {w.get('linears')} linears, "
                 f"{w.get('bytes')} B of the checkpoint's {w.get('checkpoint_bytes')} in {w.get('used_blocks')} of "
                 f"{w.get('blocks')} blocks; certifies {pub}; "
-                f"{CS.PREMISE} {(answer['profile'].get('placement') or {}).get(CS.PREMISE)}")
+                f"{CS.PREMISE} {(answer['profile'].get('placement') or {}).get(CS.PREMISE)}; {CS.SETUP}")
     return f"POUS: {answer['verdict']}: {answer['reason']}"
 
 

@@ -366,22 +366,25 @@ def test_a_rehearsals_challenger_under_a_key_that_is_not_the_pin_bounds_nothing(
     assert where == {
         "parties": {"memory_challenger": "on-node-rehearsal", "prover": "vy-dc-h200-3", "verifier": "vy-dc-h200-3"},
         "kind": "own-host",
-        CS.PREMISE: REHEARSAL + "the memory challenger ran on on-node-rehearsal, not the prover's vy-dc-h200-3"}
+        CS.PREMISE: REHEARSAL + "the memory challenger ran on on-node-rehearsal, not the prover's vy-dc-h200-3",
+        "setup": CS.SETUP}
     assert not mc.holds(where)
     assert CS.placement("n0", "n0", OTHER) == {
         "parties": {"memory_challenger": "n0", "prover": "n0", "verifier": "n0"}, "kind": "prover-node",
-        CS.PREMISE: REHEARSAL + "the memory challenger ran on the prover's node n0"}
+        CS.PREMISE: REHEARSAL + "the memory challenger ran on the prover's node n0", "setup": CS.SETUP}
     assert CS.placement("n0", "n0", None)[CS.PREMISE] == REHEARSAL + "the memory challenger ran on the prover's node n0"
 
 
 def test_the_auditors_host_under_its_pinned_key_holds() -> None:
-    """vy-auditor-2 under a key the tree pins for it: `trusted-host` holds. The pins are the role's module's alone."""
+    """vy-auditor-2 under a key the tree pins for it: `trusted-host` holds, and setup is still the developer's to check,
+    the verifier on the auditor's host too. The pins are the role's module's alone."""
     where = CS.placement("vy-dc-h200-3", "vy-auditor-2", PINNED, verifier="vy-auditor-2")
     assert where == {
         "parties": {"memory_challenger": "vy-auditor-2", "prover": "vy-dc-h200-3", "verifier": "vy-auditor-2"},
         "kind": "own-host",
         CS.PREMISE: "holds: the session is signed under vy-auditor-2's pinned key; "
-                    "the memory challenger ran on vy-auditor-2, not the prover's vy-dc-h200-3"}
+                    "the memory challenger ran on vy-auditor-2, not the prover's vy-dc-h200-3",
+        "setup": "setup checked by the developer, not the auditor"}
     assert mc.holds(where) and CS.PREMISE == mc.PREMISE
     assert re.fullmatch("[0-9a-f]{128}", PINNED)
     with pytest.raises(TypeError):

@@ -37,7 +37,9 @@ parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; 
 node.
 `trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 when the session was signed under a key `memory_challenger.AUDITOR_KEYS` pins for the challenger's host, whatever the
-host names say; the leg says which (`challenger_session.placement`). The setup's salt is still sampled on the node.
+host names say; the leg says which (`challenger_session.placement`). The setup's salt is still sampled on the node,
+and its check runs there too: every verdict rests on setup checked by the developer, not the auditor, which the leg
+says beside the premise.
 """
 
 from __future__ import annotations
@@ -562,7 +564,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     answers and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
     `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
     whether `trusted-host`'s premise holds (`challenger_session.placement`, of the key the session was signed under),
-    go in `pous.json` and in an accepted answer's profile (`placement`)."""
+    and that setup was checked by the developer, not the auditor (`challenger_session.SETUP`), go in `pous.json` and in
+    an accepted answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
     workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))

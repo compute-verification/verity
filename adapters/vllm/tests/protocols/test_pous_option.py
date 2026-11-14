@@ -257,7 +257,8 @@ def _period_dir(tmp_path, n: int):
 
 def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_it_certifies(toy, tmp_path, monkeypatch):
     """`PousOption.leg`: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
-    the setup case and its check; an accepted period says plainly that this point certifies 0 bits."""
+    the setup case and its check; an accepted period says plainly that this point certifies 0 bits, and that its setup
+    was checked by the developer, not the auditor."""
     session, calls = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
     monkeypatch.setattr(CS, "session", session)
     with PO.install(toy, _ctx(ENTRY)) as comp:
@@ -271,7 +272,8 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
                 "rehearsal: key not the auditor's pinned key, no bound; "
                 f"the memory challenger ran on {AUDITOR}, not the prover's {NODE}")
             doc = json.loads((out / "pous.json").read_text())
-            assert doc["placement"]["kind"] == "own-host"
+            assert doc["placement"]["kind"] == "own-host" and doc["placement"]["setup"] == CS.SETUP
+            assert got["profile"]["placement"]["setup"] == "setup checked by the developer, not the auditor"
             assert doc["s_bits"] == 0 and doc["rounds_answered"] == period.K + CS.WARMUPS and doc["setup"]["fresh"] == (n == 0)
             assert (out / "pous.case.json").exists() and (out / "pous-setup.case.json").exists() == (n == 0)
         party, request = calls[0]

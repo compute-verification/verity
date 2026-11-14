@@ -289,6 +289,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert prof["outside"]["bytes"] == {"the embedding and the head": 2048, "the norms": 96, "the per-row scales": 1024}
     assert "KV cache" in prof["outside"]["serving"] and prof["window"] == 3
     assert prof["placement"][CS.PREMISE].startswith("rehearsal: key not the auditor's pinned key, no bound; ")
+    assert prof["placement"]["setup"] == CS.SETUP == "setup checked by the developer, not the auditor"
     assert set(period.profile(period.point_for(1))) <= set(prof)                      # the run protocol's own profile
     party, request = calls[0]
     assert party.host == AUDITOR and request["node"] == NODE and request["blocks"] == 48
@@ -296,7 +297,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert prof["placement"]["salt"].startswith(f"drawn by the memory challenger on {AUDITOR} from its OS")
 
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["key_pinned"] and doc["key_pin"] == "run"
+    assert doc["key_pinned"] and doc["key_pin"] == "run" and doc["setup"] == CS.SETUP
     assert not {"latency", "rounds_answered", "warmups", "reported_host"} & set(doc)
     assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and "lean_s" not in doc
     run = json.loads((served.private / "run.json").read_text())
@@ -320,7 +321,7 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(
     doc = json.loads((served.out / "pous.json").read_text())
     assert doc["key_pinned"] and doc["key_pin"] == "run" and doc["key_sha512"] not in mc.AUDITOR_KEYS["vy-auditor-2"]
     assert SP.TRUSTED_SHA512 in mc.AUDITOR_KEYS[SP.CHALLENGER_HOST]
-    assert SP.line(answer).endswith(f"; {CS.PREMISE} {where[CS.PREMISE]}")
+    assert SP.line(answer).endswith(f"; {CS.PREMISE} {where[CS.PREMISE]}; setup checked by the developer, not the auditor")
 
 
 def test_a_plain_bf16_checkpoint_is_held_as_its_linears_at_twice_the_bytes(served_bf16, tmp_path, monkeypatch):

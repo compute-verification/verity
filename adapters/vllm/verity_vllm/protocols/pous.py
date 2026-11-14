@@ -441,8 +441,9 @@ class PousOption(Option):
         in ``pous-challenger`` beside the periods when it is this node), fresh coins, and the Lean's answer where the
         period's tools name ``pous-run-protocol`` (and, at the first period, ``pous-setup``), which must agree with the
         Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
-        returns the answer, its profile carrying where each party ran and whether `trusted-host` holds, which only the
-        key the session was signed under decides (`challenger_session.placement`).  ``schemes`` and
+        returns the answer, its profile carrying where each party ran, whether `trusted-host` holds, which only the
+        key the session was signed under decides, and that setup was checked by the developer, not the auditor
+        (`challenger_session.placement`).  ``schemes`` and
         ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in tests)."""
         from verity.protocols.accounting.pous.device import challenger_session as CS
         from verity.protocols.accounting.pous.device import memory_challenger as mc
