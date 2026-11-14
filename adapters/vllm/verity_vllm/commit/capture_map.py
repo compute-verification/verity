@@ -120,7 +120,7 @@ def config_value(config: dict[str, Any], path: str) -> Any:
     """`a.b.0` reads config["a"]["b"][0]."""
     v: Any = config
     for part in path.split("."):
-        if isinstance(v, list) and part.isdigit():
+        if isinstance(v, list) and part.isdecimal():
             v = v[int(part)]
         elif isinstance(v, dict) and part in v:
             v = v[part]

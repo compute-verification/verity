@@ -1414,7 +1414,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                 if m.name.startswith(("fa2.m1/", "fa3.m1/", "moe/")) or moe_of(m.name) is not None or m.name.endswith("/row4_f32"):
                     continue                                  # declared separately (hidden source / MoE block source / row-4 regenerate baseline)
                 mc = self._module_class(m.name)
-                compiled_kernel = len(m.name) > 3 and m.name[0] == "c" and m.name[1:3].isdigit() and m.name[3] == "."   # compiled kernel: c<piece>.<kernel>/<role>
+                compiled_kernel = len(m.name) > 3 and m.name[0] == "c" and m.name[1:3].isdecimal() and m.name[3] == "."   # compiled kernel: c<piece>.<kernel>/<role>
                 if m.name.endswith("/in") or (compiled_kernel and m.name.endswith("/ids")):
                     cls, fam = "input_token_ids", (TOKEN_IDS_INPUT,)
                 elif "sampled_token_ids" in m.name:

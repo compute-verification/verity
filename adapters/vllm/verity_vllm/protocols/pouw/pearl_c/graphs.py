@@ -25,6 +25,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+import numpy as np
+
 from verity_vllm.protocols.pouw.pearl_c.ends import _RunState, _Stages
 from verity_vllm.protocols.pouw.pearl_c.host import (
     _Driver,
@@ -35,6 +37,8 @@ from verity_vllm.protocols.pouw.pearl_c.host import (
 )
 from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into
 from verity_vllm.protocols.pouw.pearl_c.whole_calls import WholeCall, WholeCalls
+
+__all__ = ["GRAPH_ROWS"]
 
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
@@ -260,7 +264,6 @@ class GraphCalls(WholeCalls, _RunState):
         weight's slot for the rest of the forward is predicted (the next indices, the same m, the pass's running offsets) and
         uploaded in one copy; a call whose slot doesn't hold its own values (another order or m) gets them uploaded alone, so
         the bytes don't depend on the prediction."""
-        import numpy as np
         cur, R = self.cur, self.kernel.run
         want = (index, m16, cur.tiles, cur.flag_rows)
         pos = self.order[w]

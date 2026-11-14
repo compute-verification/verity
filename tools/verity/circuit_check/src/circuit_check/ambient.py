@@ -16,9 +16,9 @@ where in this tree's code it was made, and is a failure whatever its value. Not 
 file a builder reads, a value an import computed from such state), a perturbation that by chance changes nothing a builder
 reads, and a clock read through `datetime` (which only the changed TZ perturbs).
 
-`ambiguous_words` is the static part: a word primitive that two registered Boolean Definitions build with different builders,
-and that `ir_lower.PIECES` holds no piece of its own for, is lowered by whichever registered first (`ir_lower._boolean_build`),
-so by the order its modules were imported.
+`ambiguous_words` is the static part: a word primitive that two registered Boolean Definitions (not ``opt_in``) build with
+different builders, and that `ir_lower.PIECES` holds no piece of its own for, is refused by Flock's lowering
+(`ir_lower._boolean_build`'s `AmbiguousWord`), here over every registry rather than at the first lowering that reaches it.
 
 This module imports only the standard library until a lowering needs more, so a child installs its recorder first.
 """
@@ -215,10 +215,11 @@ def check(targets: list[str], *, path: tuple[str, ...] = ()) -> list[dict]:
 
 
 def ambiguous_words() -> dict[str, list[str]]:
-    """Each word primitive that registered Boolean Definitions build with two or more different builders, and that
-    `ir_lower.PIECES` lowers by one of them (no piece of its own; a piece the Boolean export's tracer wrapped, as it wraps
-    each one once the process exports, is the one it wraps): their ids, in registration order. Every registry is loaded
-    first (`targets.load_registries`)."""
+    """Each word primitive that registered Boolean Definitions (not ``opt_in``) build with two or more different builders
+    (unwrapped), and that `ir_lower.PIECES` refuses (`ir_lower.AmbiguousWord`) or lowers by one of them, resolved before
+    another was registered (no piece of its own; a piece the Boolean export's tracer wrapped, as it wraps each one once the
+    process exports, is the one it wraps): their ids, in registration order. Every registry is loaded first
+    (`targets.load_registries`)."""
     import inspect
 
     from verity_flock import ir_lower as IL
@@ -232,12 +233,19 @@ def ambiguous_words() -> dict[str, list[str]]:
     by: dict[str, list] = {}
     for d in list(REGISTRY.defs.values()):
         w, build = getattr(d, "word", None), getattr(d, "build", None)
-        if callable(build) and getattr(w, "id", None):
+        if callable(build) and getattr(w, "id", None) and not getattr(d, "opt_in", False):
             by.setdefault(w.id, []).append(d)
     out = {}
     for word, ds in by.items():
-        builds = {id(d.build) for d in ds}
-        if len(builds) > 1 and id(inspect.unwrap(IL.PIECES.get(word))) in builds:
+        builds = {id(inspect.unwrap(d.build)) for d in ds}
+        if len(builds) < 2:
+            continue
+        try:
+            piece = IL.PIECES.get(word)
+        except IL.AmbiguousWord:
+            out[word] = [d.id for d in ds]
+            continue
+        if id(inspect.unwrap(piece)) in builds:
             out[word] = [d.id for d in ds]
     return out
 

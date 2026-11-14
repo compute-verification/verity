@@ -119,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"bw_ref {'PASS' if out['ok'] else 'FAIL'}: the tensors' {units} units of the store's {store_units} "
           f"({store_units - units} padding units in no receipt); y {units - len(bad_y)}/{units} from the GPU's sigma, root "
           f"{'match' if out['root_cpu']['match'] else 'DIFFERS'} ({rec['root'][:16]}...), sigma "
-          f"{len(picks) - len(bad_s)}/{len(picks)} sampled units from C*")
+          f"{len(picks) - len(bad_s)}/{len(picks)} units picked from C*")
     return 0 if out["ok"] else 1
 
 

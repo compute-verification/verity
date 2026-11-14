@@ -200,7 +200,7 @@ def test_a_tree_without_the_run_stores_tool_beside_it_is_refused_by_name(tmp_pat
     """A row's stages run with the run store's tool on their path, so a tree without `tools/research/src` beside it, as the public
     tree is, refuses the row at setup before any stage."""
     r = _row(tmp_path)
-    r.tree = str(tmp_path / "tree" / "integrations" / "vllm")
+    r.tree = str(tmp_path / "tree" / "adapters" / "vllm")
     os.makedirs(r.tree)
     with pytest.raises(Stop) as e:
         r.setup({})
@@ -873,7 +873,8 @@ def test_a_tp_rows_commit_names_the_trees_checkpoint_pins_as_its_replay_does(tmp
         return 0
 
     monkeypatch.setattr(tp, "run_tl", run_tl)
-    monkeypatch.setattr(os.path, "isdir", lambda p: p == "/ck" or os.path.exists(p))
+    isdir = os.path.isdir
+    monkeypatch.setattr(os.path, "isdir", lambda p: p == "/ck" or isdir(p))
     os.makedirs(f"{tp.d}/commit")
     Path(f"{tp.d}/commit/replay_deferred.json").write_text("{}")
     tp.replay()

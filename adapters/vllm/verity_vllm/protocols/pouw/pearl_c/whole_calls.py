@@ -56,6 +56,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, cast
 
+import numpy as np
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 
 from verity_vllm.protocols.pouw.pearl_c.ends import _RunState, _Stages
@@ -244,7 +245,6 @@ class WholeCalls(_RunState):
             flags_at += c.m
 
     def _slots(self, calls: tuple[WholeCall, ...], at: tuple[int, int, int]) -> _Slots:
-        import numpy as np
         base = cast(int, self.cur.base)
         index, tiles_at, flags_at = base + at[0], at[1], at[2]
         offs, predicted = np.empty((len(calls), 3), np.int64), {}
