@@ -61,7 +61,6 @@
     {"file": "verity_vllm/properties/noninterference.py", "kind": "schema-literal", "symbol": "compare", "detail": "verity-capture/noninterference/v1"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "schema-literal", "symbol": "run_hooks_variant", "detail": "verity-capture/noninterference-hooks/v1"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
-    {"file": "verity_vllm/properties/quarantine_lint.py", "kind": "schema-literal", "symbol": "lint", "detail": "verity-gen/quarantine-lint/v1"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession._session", "detail": "verity-vllm/remote-session/v0"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession.end", "detail": "verity-vllm/remote-session/v0"},
     {"file": "verity_vllm/settings.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/settings/v1"},
