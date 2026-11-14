@@ -1,7 +1,7 @@
 """stage_window.py WINDOW_DIR OUT (--member K | --pick P N [--swap 0|1]): one member of a serving-rows window (a TP Commit's
 ``--serving-rows`` window, or ``verity-vllm tp-serving-rows``' from its sealed bundles) staged for Flock as its served statement,
 for `prove_time.sh`'s ``PT_STATEMENTS``: the verifier's circuit for the member's template (`chunk_rows.statement` by
-`UnitStager`, as ``benchmarks/one_stage/compose_circuit.py --template`` composes it) bound to the window's partition and program
+`UnitStager`, as ``verity/protocols/proofs/spot/verifier/one_stage/compose_circuit.py --template`` composes it) bound to the window's partition and program
 digests, and the member's public and prover files made from the window's own bodies (`flock_inputs.flock_input_files`): its
 served values under the committer's salts, nothing sampled; the public body must be the one the window's member record states
 (``public_sha512``).

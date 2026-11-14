@@ -90,7 +90,8 @@ has an interior, and the interior's statements are the evidence's (`stmts`), the
 entry of each. -/
 theorem stmts_of_accepts {k : Case} {p : VStar.Recursive.SampledTwo.Params}
     {e : VStar.Recursive.SampledTwo.Evidence} (h : AcceptsOn k) (hf : SessionMsgs.formOf k = some (p, e)) :
-    ∃ i it, inputOfCase k = some i ∧ i.interior = some it ∧ it.statements = some e.stmts := by
+    ∃ i it, inputOfCase k = some i ∧ i.interior = some it ∧
+      it.statements = some (VStar.Recursive.SampledTwo.stmtsOwn p e k.blobs) := by
   obtain ⟨p', cm, e', pub, prof, hdec, hacc⟩ := h
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj (hf.symm.trans (SessionMsgs.formOf_of_decoded hdec)))
   obtain ⟨h1, h2, h3⟩ := hdec
@@ -123,6 +124,7 @@ theorem stmtsCount_of {A : Live₂} {C : CaseOf} (Good : Verity.Exchange → Pro
   obtain ⟨own, q, hp, hcodes⟩ :=
     SpotFlock.RunsAs.parts_of_accepted ha (heldAt_of_parts hof hparts o i it hA hi hit)
   rw [hss] at hcodes
+  rw [← VStar.Recursive.SampledTwo.stmtsOwn_size p e k.blobs]
   exact SpotFlock.RunsAs.count_of_parts hp
     (SpotFlock.RunsAs.Round2.namesDistinct_of_two (twoHolds_at hof hA hi hit)) hcodes
 

@@ -87,8 +87,6 @@
     {"file": "benchmarks/proof_throughput/verity_proof_throughput/profile.py", "count": 1},
     {"file": "benchmarks/proof_throughput/verity_proof_throughput/result.py", "count": 2},
     {"file": "benchmarks/proof_throughput/verity_proof_throughput/zk.py", "count": 1},
-    {"file": "benchmarks/prove_path/prove_path.py", "count": 1},
-    {"file": "benchmarks/prove_path/tests/test_class_size.py", "count": 1},
     {"file": "benchmarks/remote_session/engine.py", "count": 1},
     {"file": "benchmarks/remote_session/lease.py", "count": 1},
     {"file": "benchmarks/remote_session/tests/test_gate.py", "count": 2},
@@ -267,6 +265,8 @@
     {"file": "tools/research/src/research/at_main.py", "count": 4},
     {"file": "benchmarks/served_commit/tests/test_served_arm.py", "count": 1},
     {"file": "tools/research/src/research/landing.py", "count": 2},
-    {"file": "tools/config/verity_config/verity_settings.py", "registry": true}
+    {"file": "tools/config/verity_config/verity_settings.py", "registry": true},
+    {"file": "verity/protocols/proofs/spot/prover/audit/prove_path.py", "count": 1},
+    {"file": "verity/protocols/proofs/spot/prover/tests/test_class_size.py", "count": 1}
   ]
 }

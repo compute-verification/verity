@@ -59,7 +59,7 @@ def window(d: Path, members: int) -> Path:
 def audit_argv(win: Path, out: Path, main: Path, flock: Path, lean: Path) -> list[str]:
     m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python", "verity/protocols/proofs/flock/prover/python",
                                                   "adapters/vllm"))
-    return [sys.executable, str(ROOT / "benchmarks" / "prove_path" / "records_audit.py"), "audit", "--window", str(win),
+    return [sys.executable, str(ROOT / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "one_stage" / "records_audit.py"), "audit", "--window", str(win),
             "--law", DESIGN, "--circuit", hashlib.sha512((win / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, "--bin", str(flock),
             "--lean", str(lean / "verity-verify-proof"), "--firewall", str(lean / "flock-firewall"), "--ports", str(len(KS)),
