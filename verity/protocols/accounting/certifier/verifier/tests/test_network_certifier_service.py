@@ -585,10 +585,10 @@ def test_the_opening_must_be_the_registered_phases(tmp_path):
     run = Run(tmp_path)
     opening = run.honest(0)
     draw = run.stream.select(run.register(opening))
-    with pytest.raises(ValueError, match="link-window"):
+    with pytest.raises(ValueError, match="execution phase"):
         run.lw.clear(run.honest(1), draw, SYNCS)
     delivered = run.prove(opening, draw)
-    with pytest.raises(ValueError, match="link-window"):
+    with pytest.raises(ValueError, match="execution phase"):
         run.lw.verify(draw, [r.certificate for r in opening.records], SYNCS, delivered,
                       circuit_sha512=standin.circuit_sha512(delivered), opening=run.honest(1))
     for salts in ((SALTS[0][0],) * 4, SALTS[0][:2]):
