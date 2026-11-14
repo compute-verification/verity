@@ -19,10 +19,10 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
   ``outcome.json``'s.  A window recorded before the fixed-length rule (no ``length`` item) is
   replayed under the verifier's length of its request (`LENGTH`, where its params name none), and a REGISTERED or ACCEPT
   of it must now get a reject as not of record (``window-form: no-fixed-length``).
-* **openings** (``open-u<t>``, ``open-filler``, ``open-foreign-*``), as `job.sh` maps them, go to `core_check.opening`
+* **openings** (``open-u<t>``, ``open-filler``, ``open-foreign-*``), as `job.sh` maps them, go to `core_check.opening_twin`
   and Lean's.  In a window of the 336-byte entry rows an ACCEPT opening must open and a REJECT one must not;
   the windows before them hold entries of an earlier layout, so theirs compare Python with Lean only.
-* **coin cases** go to `core_check.pass_epoch` and `core_check.draw` and Lean's (`of_record`): ``select`` (the recorded
+* **coin cases** go to `core_check.pass_epoch_twin` and `core_check.draw_twin` and Lean's (`of_record`): ``select`` (the recorded
   sample from the challenger's coin commitment, its sampling coin's opening, the stream's digest, the receipt and draw.json),
   with generated controls (a unit changed, the coin tampered, opened after another registration, another stream or
   receipt, one unit fewer under the registration's K), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``served_run``),
@@ -281,7 +281,7 @@ def coin_judged(recorded: str, kind: str, out: Any) -> bool:
 def opening_reference(x: dict) -> Any:
     p = CC.params(CC.canonical(D.canonical(x["params"]).encode()))
     c = CC.commitment(bytes.fromhex(x["commitment"]))
-    return CC.opening(p, c, x["units"], x["unit"], bytes.fromhex(x["pub"]), x["opening"])
+    return CC.opening_twin(p, c, x["units"], x["unit"], bytes.fromhex(x["pub"]), x["opening"])
 
 
 class Sides:
@@ -349,7 +349,7 @@ def entry_rows(out: Path) -> bool:
 
 
 def opening_judged(recorded: str, py: tuple[str, Any]) -> bool:
-    """Whether core_check.opening's outcome is the recorded verdict: an ACCEPT opening opens, a REJECT one does not."""
+    """Whether core_check.opening_twin's outcome is the recorded verdict: an ACCEPT opening opens, a REJECT one does not."""
     opens = py == ("output", None)
     return opens if recorded == "ACCEPT" else recorded == "REJECT" and not opens
 
