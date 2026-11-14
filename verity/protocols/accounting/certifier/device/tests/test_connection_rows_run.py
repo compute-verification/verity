@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import importlib.util
 import json
+from pathlib import Path
 
 import pytest
 
@@ -29,13 +31,17 @@ from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier.warden import REFUSED, Released, WardenParams
 
-import test_stop_verdicts as TSV
 from test_warden_serve import _run, ws
-import connection_rows_run
+from verity.protocols.accounting.certifier.device import connection_rows_run, runner_parts as rp
 from verity.protocols.accounting.certifier.verifier import link_frame, warden_rows as WR
-import runner_parts as rp
 from verity.protocols.accounting.certifier.verifier import (connection_rows_check as CRC, record_files as RF,
     relay_check as RC)
+
+_tsv = importlib.util.spec_from_file_location(
+    "test_stop_verdicts",
+    Path(__file__).resolve().parents[2] / "prover/tests/test_stop_verdicts.py")
+TSV = importlib.util.module_from_spec(_tsv)
+_tsv.loader.exec_module(TSV)
 
 crr = connection_rows_run
 #: the reader of the registrations' file, and its tests' records
@@ -941,10 +947,8 @@ def test_the_note_that_a_line_missed_takes_a_head_away_and_only_a_schedule_with_
         with pytest.raises(ValueError, match="in a schedule with a head offset, and in no other, the network "
                                              "certifier's tick writes each execution phase's line"):
             rp.Keeper(tmp_path, None, params, ws.LINK, back=back)
-    import warden_serve  # by name, so that the spawned process finds its functions
-
     ws.ck.load_key(tmp_path / "key-3", 5)
-    publisher = warden_serve.PublisherProcess(tmp_path, tmp_path / "key-3", bytes(32), ENDS, base_ms=0, ordinal=0)
+    publisher = ws.PublisherProcess(tmp_path, tmp_path / "key-3", bytes(32), ENDS, base_ms=0, ordinal=0)
     try:
         with pytest.raises(ValueError, match="sends lines back in a schedule with a head offset, to one taker"):
             publisher.heads(lambda window, line: None)
