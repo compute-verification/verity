@@ -42,7 +42,7 @@ from verity_vllm import config as C
 from verity_vllm.config import option
 from verity_vllm.pipeline.tp import run_root as RT
 
-__all__ = ["BINDING", "Options", "ROWS_SCHEME", "from_bundle", "main", "record", "source", "window_of", "window_of_record"]
+__all__ = ["BINDING", "Options", "ROWS_SCHEME", "from_bundle", "main", "record", "source", "window_of", "window_of_record", "write_node_window"]
 
 SCHEMA = "verity-vllm/tp-serving-rows/v1"
 ROWS_SCHEME = "rows-sha512"
@@ -145,6 +145,12 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
     finally:
         H.release(hs, request.get("open", ()))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
+
+
+def write_node_window(st: Mapping[str, Any], request: Mapping[str, Any], tp: Mapping[str, Any]) -> dict[str, Any]:
+    """`write`'s node-window form, run in each rank by `rank_rows`: the rank's node window committed
+    (`node_window_rows.commit_rank_window`), with `expert_rows.commit_bnk` for each ``/bnk`` read."""
+    raise NotImplementedError("vllm/compiler-wires-period-pieces: no serve commits a rank's node window yet")
 
 
 def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, *, pair: int = 0,
