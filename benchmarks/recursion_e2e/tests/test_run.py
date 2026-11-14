@@ -90,6 +90,30 @@ def test_a_run_behind_the_zk_server_is_a_plain_run_on_a_cpu_node(capsys) -> None
         RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-2", "--oprove-gpu", "1"])
 
 
+def test_a_cpu_run_on_auto_or_a_named_cpu_node_is_a_command_research_run_takes(capsys) -> None:
+    """`--on auto` is research run's queue itself, which refuses --queue: a CPU run there is the queue's options without
+    --queue or --gpu-host, its job on a CPU node's GPU=0 and work tree, since the queue may place it on one. A named CPU
+    node is a plain run there; a GPU run on auto keeps its GPU host."""
+    assert RUN.main(["run", "--dry-run", "--on", "auto", "--steps", "vcap", "--repeat", "1"]) == 0
+    cmd = capsys.readouterr().out.split()
+    head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
+    assert head[:4] == ["research", "run", "--on", "auto"] and "--queue" not in head and "--gpu-host" not in head
+    assert head[head.index("--max-min") + 1] == str(RUN.SETUP_MIN + 1) and "--cpus" in head and "--timeout" not in head
+    assert job[:2] == ["bash", "benchmarks/recursion_e2e/job.sh"] and "GPU=0" in job and f"FLOCK_WORK={RUN.CPU_WORK}" in job
+    assert RUN.main(["run", "--dry-run", "--on", "auto", "--cpu", "--K", "64", "--N", "16", "--modes", "dev"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert cmd[:4] == ["research", "run", "--on", "auto"] and "--queue" not in cmd and "--gpu-host" not in cmd
+    assert "GPU=0" in cmd
+    assert RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-3"]) == 0
+    cmd = capsys.readouterr().out.split()
+    head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
+    assert head[:4] == ["research", "run", "--on", "vy-nebius-cpu-3"] and "--queue" not in head and "--gpu-host" not in head
+    assert job[:3] == ["taskset", "-c", "0-31"] and "GPU=0" in job
+    assert RUN.main(["run", "--dry-run", "--on", "auto", "--oprove-gpu", "1"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert cmd[:5] == ["research", "run", "--on", "auto", "--gpu-host"] and "--queue" not in cmd and "GPU=0" not in cmd
+
+
 def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
     assert RUN.main(["run", "--dry-run", "--e2e", "--cpu", "--K", "64", "--N", "16", "--modes", "dev"]) == 0
     cmd = capsys.readouterr().out.split()

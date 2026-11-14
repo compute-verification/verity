@@ -50,6 +50,18 @@ standing = "supported"
 beyond = "supported"
 credible_bits = { value = inf, unit = "bit", source = "the premise's Lean docstring: a structural property of the training circuit; the depth D it needs at k is classes.upstream_share", status = "derived" }
 
+[premise.cap-below-depth]
+lean = "Nci.Cover.Assumptions.CapBelowDepth"
+standing = "supported"
+beyond = "supported"
+credible_bits = { value = inf, unit = "bit", source = "the premise's Lean docstring: S < b D on the parameters; classes.upstream_share takes the depth D with k < b D", status = "derived" }
+
+[premise.block-fits]
+lean = "Nci.Cover.Assumptions.BlockFits"
+standing = "assumed"
+beyond = "assumed"
+credible_bits = { value = inf, unit = "bit", source = "the premise's Lean docstring: the reference circuit's widest gate w0 and registered width with w0 c + S + width(theta) <= s, which no data here states", status = "derived" }
+
 [premise.baseline-registered]
 lean = "Nci.Assumptions.ThetaRegistered"
 standing = "supported"

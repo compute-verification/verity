@@ -1,14 +1,15 @@
-"""H1's coins from the proof system's challenger on its auditor host (`verity.protocols.proofs.spot.device.remote`), and the
+"""H1's coins from the proof system's challenger on its auditor device (`verity.protocols.proofs.spot.device.remote`), and the
 verifier's check that a served window's coins are that challenger's.
 
-* **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor host's
+* **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor device's
   challenger, H1's opened on the window's open root and ncp-v2's after the weights' root.
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
   (its ``out/``, fetched whole), never from the prover's bundle, under its own challenger key (`pinned_key`),
   and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
   commitment the challenger signed and the roots its signed release log shows it received. The window's coins must be
   that commitment's, its salt coin must have followed its own open root, the root the ledger opened its session on
-  (PoUW's salt rule of record, `core_check.salt`, Lean `PouwCheck.saltCheck`: that root is `salt.window_open_root` of the
+  (PoUW's salt rule of record, Lean `PouwCheck.saltCheck`, `core_check.salt_of_record`, `core_check.salt_twin` its Python
+  twin and a disagreement a refusal: that root is `salt.window_open_root` of the
   window's weights' root, its round-0 request table's root, round 0's ``requests`` in its log, and the session the
   ledger's signed reserve entry names, each read from the ledger and the session's own files, never the prover's; a salt
   opened after another window's root or after the bare weights' root is refused, and so is a session opened without a
@@ -39,8 +40,8 @@ verifier's check that a served window's coins are that challenger's.
   the one session the ledger opened for its Commit's root, ended, closed and complete with the window's commitment
   (`held`), and reads that session's tree from the gate's ``fetch`` (never the prover's bundle) as core reads a session
   (`challenger.pinned_session` and `challenger.session_named`: its record, signed close, release log and refused
-  hellos the ones the end sealed); its coins pass the checks above, the salt by `core_check.salt` and the rounds by
-  `core_check.rounds`.
+  hellos the ones the end sealed); its coins pass the checks above, the salt by `core_check.salt_of_record` and the
+  rounds by `core_check.rounds`.
 * **Pearl-C passes** (`salt_session_reason`): a Pearl-C device run's session is reserved with its salt coin alone
   (`window.SALT_FAMILIES`) and opened on its salt epoch's root (`salt.epoch_open_root` of the weights' root and the
   pass's ``pass_index``, recomputed, never read from the pass), so it counts only ended closed and complete, its one coin
@@ -71,7 +72,9 @@ verifier's check that a served window's coins are that challenger's.
   ``h1/b/<K>``, and the registration theirs. It reports the ε the sample established at δ = 2^-40
   (`credit.established`). A period earns only as a whole (`period_credit`, `credit.period_credit`): the windows
   presented are exactly its close's, in order, the close complete, each window proving the period's circuit and
-  credited. The serving process's gate-passed count (`pouw_h1.H1Run.credit`) is never credit.
+  credited. Both verdicts are the Lean's (`PouwCheck.Credit.window`, `Credit.periodCredit`), core's Python their twin
+  and a disagreement a refusal (`verifier.of_record`). The serving process's gate-passed count
+  (`pouw_h1.H1Run.credit`) is never credit.
 """
 from __future__ import annotations
 
@@ -145,7 +148,7 @@ def address(raw: Any) -> str | None:
         return None
     host, sep, port = raw.rpartition(":") if isinstance(raw, str) else ("", "", "")
     if not (sep and host and port.isdigit()):
-        raise ValueError(f"pouw setting 'challenger' is the auditor host's challenger as HOST:PORT, not {raw!r}")
+        raise ValueError(f"pouw setting 'challenger' is the auditor device's challenger as HOST:PORT, not {raw!r}")
     return raw
 
 
@@ -204,8 +207,9 @@ def _window_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: list[s
                    session: str, verify: Any, draw_files: Any) -> str | None:
     """Why the window's coins (its H1 commitment `commits`) aren't those of the session `session`, the one the auditor's
     ledger `lines` (core's check of it under `key`) opened for `window` (``{root}``), whose files are `files` and whose
-    signed coin commitment is `trusted`: its salt coin opened after the window's own open root (`core_check.salt`, S from
-    the ledger's reserve and R from its open), its round log held to `core_check.rounds`, each reading the session only
+    signed coin commitment is `trusted`: its salt coin opened after the window's own open root
+    (`core_check.salt_of_record`, S from the ledger's reserve and R from its open), its round log held to
+    `core_check.rounds`, each reading the session only
     when the host's pins log `pins` records its open's pin and the verifier's first-parent history of main `main` holds
     it (`challenger.pinned_session`), and its sampling coin its sample session's, whose files are `draw_files`
     (`draw_session_reason`); None when they are."""
@@ -221,8 +225,8 @@ def _window_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: list[s
     named = given.get("session") if isinstance(given, Mapping) else None
     if named != session:
         return f"the window records session {named!r}, not {session}, the one the auditor's ledger opened on its root"
-    refused = CC.salt(key.to_json(), lines, pins, main, window, files, commits.get("weights_root"),
-                      commits.get("requests_root"), commits.get("salt_opening"), verify)
+    refused = CC.salt_of_record(key.to_json(), lines, pins, main, window, files, commits.get("weights_root"),
+                                commits.get("requests_root"), commits.get("salt_opening"), verify)
     if refused is not None:
         return f"the window's salt: {refused[1]}"
     log = list(commits.get("rounds") or ())
@@ -280,7 +284,7 @@ def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, hea
     (``git rev-list --first-parent origin/main``, `remote.main_lines`; `challenger.pinned_session`); None when they
     are. Fails closed: a missing, malformed or unsigned record, log, hello log or ledger, a ledger signed under another
     key, forked or older than the session's end, a window it opens no one session for, or a session whose pin the log
-    or main doesn't hold, trusts nothing (`remote.trusted_session`, `pinned_session`, `core_check.salt`,
+    or main doesn't hold, trusts nothing (`remote.trusted_session`, `pinned_session`, `core_check.salt_of_record`,
     `core_check.rounds`)."""
     try:
         trusted, _received = remote.trusted_session(directory, heads, window, key, verify)
@@ -416,13 +420,13 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     """Why the window (its H1 commitment `commits`) isn't held to the one session the auditor's `ledger` opened for its
     Commit's root, ended closed and complete under the window's commitment (`held`), with that session's coins (its
     ``out/`` as `fetch` gives it, read as core reads a session run from main's code, `evidence`, and checked as
-    `trusted_rounds_reason` checks a session's: its salt by `core_check.salt`, S the ledger's reserve's session and R
-    its open's root, and its rounds by `core_check.rounds`, both under the ledger's pins log and `main`); None when it
+    `trusted_rounds_reason` checks a session's: its salt by `core_check.salt_of_record`, S the ledger's reserve's
+    session and R its open's root, and its rounds by `core_check.rounds`, both under the ledger's pins log and `main`); None when it
     is. `registered` is the weights' root the period registered and `commit` the window's Commit root as the verifier
     holds it, which the window's must be. A Pearl-C pass's (``scheme`` one of `pouw_pearl_c_device.SCHEMES`) session
     is held to its salt session instead (`salt_session_reason`). Fails closed."""
     if commits.get("coin_source") != "challenger":
-        return ("the window's coins were held in the serving process, not drawn by the auditor host's challenger (the pouw "
+        return ("the window's coins were held in the serving process, not drawn by the auditor device's challenger (the pouw "
                 "setting 'challenger'), so no session binds them")
     if commits.get("scheme") in PPD.SCHEMES:
         return salt_session_reason(commits, ledger, fetch, registered, commit, verify)
