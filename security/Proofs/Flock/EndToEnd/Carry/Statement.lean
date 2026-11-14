@@ -333,8 +333,8 @@ is `Gives` at `K₀ = 1` for the run whose `accepts` is every session of `I` acc
 `I`'s sessions (`failing.card` the sum of their `wrong`), and whose `ok` is each unit's circuit at its values, each
 carried leaf at its one value, at `ε` the bound above. A row's lemma takes that `Gives` and concludes its own check.
 
-Not proved: it is `Flock.SecurityProofs.integrity_on` at `q = 1` and `M = 1`, whose sampling term `(1 - q)^M` is then
-`0`, once `IntegrityHorizonCarried`'s premises give that lemma's. -/
+Proved as `Flock.SecurityProofs.IntegrityAllProvedCarried`: `CarriedBlocks.integrity_on_units` at `q = 1` and
+`M = 1`, whose sampling term `(1 - q)^M` is then `0`; a session of `I` with no units has no proof block to be wrong. -/
 def IntegrityAllProvedCarried : Prop :=
   ∀ (S : CarriedBlocks) (I : Finset ℕ),
     (∀ t ∈ I, (S.W t).kd = (S.W t).n) →
