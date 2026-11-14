@@ -2946,6 +2946,11 @@
       "paths": {
         "verity/commitments/windows/": "verity/commitments/periods/"
       }
+    },
+    {
+      "paths": {
+        "demos/configurations.toml": "tests/configurations.toml"
+      }
     }
   ]
 }

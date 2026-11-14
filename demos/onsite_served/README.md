@@ -8,7 +8,7 @@ The file is `served_table.configuration` rendered by `verity.config.render`, and
 `tools/verity/cli/tests/test_onsite_served.py` holds it to that byte for byte. It names no host and no address: those are
 the deploy bindings' (below), so binding another host changes no hash. It pins the memory challenger's two keys, one
 for PoUS's sessions and one for the wipe's (`[[pin]]`: the party, the protocol, the scheme's id and the public key's
-SHA-512, `served_table.PINS`), and they are inside its hash, which `demos/configurations.toml` holds.
+SHA-512, `served_table.PINS`), and they are inside its hash, which `tests/configurations.toml` holds.
 
 ## Interface
 
