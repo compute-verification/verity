@@ -16,13 +16,14 @@ verified that session at that member: the first part of `SessionCoins.VerdictsAt
   is the member the check ran that statement at.
 * **Each statement's sessions, with its member's statement kept** (`SessionCoins.runMembers_stmt`): where the
   per-member form's run accepts every session, each statement's member's statement reads
-  (`Spot.OneStageZk.Member.statement`) and each of the statement's sessions was accepted at it
-  (`MemberChecks.SessionAccepted`).
+  (`Spot.OneStageZk.Member.statement`) and each of the statement's sessions was accepted at it, its record's sample
+  under `2^64` bytes as the statement holds it (`SessionCoins.SessionRead`).
 * **The verdict at template `t`** (`SessionCoins.verified_at`): on an accepted play, Flock's masked verdict accepts
   the text of template `t`'s session's record with the proof files `SessionMsgs.SessionParts` names, at the session
   the form set up (`Spot.OneStageZk.setupAt`) on the member's circuit and public files on the blobs and its registered
   reads, at the record's sample. Those files, with the record's sample, are the fields of the statement
-  `SessionMsgs.stmtAtCase` gives the template (`SessionCoins.stmtAtCase_of_member`).
+  `SessionMsgs.stmtAtCase` gives the template (`SessionCoins.stmtAtCase_of_member`), and the check refused each of
+  them at `2^64` bytes or more (`SessionCoins.statement_fits`).
 
 **Not established here**: that the session the form set up is the one the statement sets up
 (`FlockDeploy.setupOf`), which needs the statement's printed files read back (`MemberChecks.ReadsBack`); that the
@@ -152,23 +153,86 @@ theorem paired_at {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.S
 
 /-! ## Each statement's sessions, accepted at its member's statement -/
 
+/-- **A session the statement's run accepted, with its sample's fit kept**: `MemberChecks.SessionAccepted`, and the
+record's sample fits its length word (`Spot.OneStageZk.drawFitsWhy`), which `Spot.OneStageZk.step` checks before its
+verdict. -/
+def SessionRead (a : Spot.OneStageZk.StepAt) (bs : Core.Blobs) (s : Spot.OneStageZk.RunFiles) : Prop :=
+  ∃ coinKeys b record, bs.get s.record s!"session {s.name}'s record" = .ok b ∧ String.fromUTF8? b = some record ∧
+    Spot.OneStageZk.drawFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none ∧
+    Spot.OneStageZk.verdictOf a.I a.scope a.ksFiles a.population coinKeys record
+      (Flock.Witness.recordDraw record) (Spot.OneStageZk.setupAt a.I a.rd (Flock.Witness.recordDraw record))
+      (Spot.OneStageZk.filesOf bs s (Spot.OneStageZk.setupAt a.I a.rd (Flock.Witness.recordDraw record)))
+      (Spot.OneStageZk.coinKeyOf record
+        (Spot.OneStageZk.setupAt a.I a.rd (Flock.Witness.recordDraw record))) = .ok ()
+
+/-- **A statement's sessions, run in order, accepting every one, each with its sample's fit**:
+`MemberChecks.foldl_all` with what `MemberChecks.step_all` gives of the sample kept (`SessionRead`). -/
+theorem foldl_read {a : Spot.OneStageZk.StepAt} {bs : Core.Blobs} :
+    ∀ (l : List Spot.OneStageZk.RunFiles) (r r' : Spot.OneStageZk.Run),
+      l.foldlM (fun r s => a.step bs r s) r = .ok r' → r'.all = true →
+        r.all = true ∧ ∀ s ∈ l, SessionRead a bs s
+  | [], r, r', h, ha => by
+    obtain rfl : r = r' := Except.ok.inj h
+    exact ⟨ha, fun _ hs => by simp at hs⟩
+  | s :: l, r, r', h, ha => by
+    rw [List.foldlM_cons] at h
+    obtain ⟨r₁, h₁, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+    obtain ⟨ha₁, hl⟩ := foldl_read l r₁ r' h ha
+    have h₁' : Spot.OneStageZk.step a.I a.rd bs a.scope a.ksFiles a.population a.programSha a.want r s =
+        .ok r₁ := h₁
+    obtain ⟨har, b, record, hb, hrec, hfit, hv⟩ := MemberChecks.step_all h₁' ha₁
+    refine ⟨har, fun s' hs' => ?_⟩
+    rcases List.mem_cons.1 hs' with rfl | hs'
+    · exact ⟨r.coinKeys, b, record, hb, hrec, hfit, hv⟩
+    · exact hl s' hs'
+
+/-- **A member's statement that passes fits its length words**: `Spot.OneStageZk.statementOf` refuses a circuit or
+public file, a lookup table, a program, a partition object or registered reads at `2^64` bytes or more
+(`Spot.OneStageZk.fitsWhy`), at the member's files on the blobs. The steps are `MemberChecks.statement_ok`'s, with
+the refusal's test kept. -/
+theorem statement_fits {m : Spot.OneStageZk.Member} {slice : Json} {bs : Core.Blobs} {a : Spot.OneStageZk.StepAt}
+    {circuitB pubB : ByteArray} (h : m.statement slice bs = .ok a)
+    (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB) :
+    Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB (Spot.OneStageZk.tablesOf bs) (some m.own.program)
+      (some m.own.partition) m.own.registered = none := by
+  unfold Spot.OneStageZk.Member.statement at h
+  obtain ⟨a', ha', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨⟨⟩, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain rfl : a' = a := Except.ok.inj h
+  unfold Spot.OneStageZk.statementOf at ha'
+  obtain ⟨⟨⟩, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok ha'
+  split at h
+  · exact absurd h (throw_ne _ _)
+  split at h
+  · exact absurd h (throw_ne _ _)
+  split at h
+  · exact absurd h (throw_ne _ _)
+  obtain ⟨circuitB', hc', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨pubB', hp', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain rfl : circuitB' = circuitB := Except.ok.inj (hc'.symm.trans hc)
+  obtain rfl : pubB' = pubB := Except.ok.inj (hp'.symm.trans hp)
+  split at h
+  · exact absurd h (throw_ne _ _)
+  rename_i hfit
+  exact hfit
+
 /-- **One statement's step, with its member's statement kept**: where the run still accepts every session after
 the step, the run before it accepted every session, the member's statement reads at its slice, and each of the
-statement's sessions was accepted at it (`MemberChecks.SessionAccepted`), where the statement `st` the step reads is
-the member's own at its slice (`hst`). -/
+statement's sessions was accepted at it with its sample's fit (`SessionRead`), where the statement `st` the step reads
+is the member's own at its slice (`hst`). -/
 theorem stepMember_stmt {slice : Spot.OneStageZk.Member → Json}
     {st : Spot.OneStageZk.Member → Flock.V Spot.OneStageZk.StepAt} {bs : Core.Blobs} {r r' : Spot.OneStageZk.Run}
     {z : Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member}
     (hst : ∀ a, st z.2 = .ok a → z.2.statement (slice z.2) bs = .ok a)
     (h : Spot.OneStageZk.stepMember st bs r z = .ok r') (ha : r'.all = true) :
     r.all = true ∧ ∃ a, z.2.statement (slice z.2) bs = .ok a ∧
-      ∀ s ∈ z.1.sessions.toList, MemberChecks.SessionAccepted a bs s := by
+      ∀ s ∈ z.1.sessions.toList, SessionRead a bs s := by
   unfold Spot.OneStageZk.stepMember at h
   have h := mapError_ok h
   unfold Spot.OneStageZk.runFrom at h
   obtain ⟨a, ha', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   rw [← Array.foldlM_toList] at h
-  obtain ⟨har, hs⟩ := MemberChecks.foldl_all _ r r' h ha
+  obtain ⟨har, hs⟩ := foldl_read _ r r' h ha
   exact ⟨har, a, hst a ha', hs⟩
 
 theorem foldl_stmt {slice : Spot.OneStageZk.Member → Json}
@@ -177,7 +241,7 @@ theorem foldl_stmt {slice : Spot.OneStageZk.Member → Json}
       (∀ z ∈ l, ∀ a, st z.2 = .ok a → z.2.statement (slice z.2) bs = .ok a) →
       l.foldlM (Spot.OneStageZk.stepMember st bs) r = .ok r' → r'.all = true →
         r.all = true ∧ ∀ z ∈ l, ∃ a, z.2.statement (slice z.2) bs = .ok a ∧
-          ∀ s ∈ z.1.sessions.toList, MemberChecks.SessionAccepted a bs s
+          ∀ s ∈ z.1.sessions.toList, SessionRead a bs s
   | [], r, r', _, h, ha => by
     obtain rfl : r = r' := Except.ok.inj h
     exact ⟨ha, fun _ hz => by simp at hz⟩
@@ -194,13 +258,13 @@ theorem foldl_stmt {slice : Spot.OneStageZk.Member → Json}
 /-- **The per-member form's run, accepting every session, with each member's statement kept**: where `runMembers`
 returns a run that accepts every session, the statements' structure held, and for each statement paired with its
 member, in order, the member's statement reads at its slice and each of the statement's sessions was accepted at
-it (`MemberChecks.SessionAccepted`). -/
+it with its sample's fit (`SessionRead`). -/
 theorem runMembers_stmt {slice : Spot.OneStageZk.Member → Json} {ms : Array Spot.OneStageZk.Member}
     {sts : Array Spot.OneStageZk.StatementFiles} {want : Array ℕ} {bs : Core.Blobs} {r : Spot.OneStageZk.Run}
     (h : Spot.OneStageZk.runMembers slice ms sts want bs = .ok r) (ha : r.all = true) :
     ∃ held, Spot.OneStageZk.membersHeld ms sts = .ok held ∧ ∀ z ∈ (sts.zip held).toList,
       ∃ a, z.2.statement (slice z.2) bs = .ok a ∧
-        ∀ s ∈ z.1.sessions.toList, MemberChecks.SessionAccepted a bs s := by
+        ∀ s ∈ z.1.sessions.toList, SessionRead a bs s := by
   unfold Spot.OneStageZk.runMembers at h
   obtain ⟨held, hheld, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
   obtain ⟨files, hfiles, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
@@ -226,7 +290,9 @@ its registered reads read, the session's record is a text on the blobs, the form
 (`Spot.OneStageZk.setupAt`) on those files at the record's sample, and Flock's masked verdict accepts the record's
 text with the proof files `fs`'s reps name at that session (`Spot.OneStageZk.filesOf`). The member's statement
 passed, so the circuit statement's leaves are not plain (`MemberChecks.statement_ok`): no computation settles that,
-and the statement's setup reads it. -/
+and the statement's setup reads it. And the check refused any length at `2^64` bytes or more: the member's files,
+the lookup tables, its program, partition object and registered reads (`statement_fits`), and the record's sample
+(`SessionRead`). -/
 theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) {k : Case} (hk : C o = some k)
     {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     (hf : SessionMsgs.formOf k = some (p, e)) {t : ℕ} {fs : Spot.OneStageZk.RunFiles}
@@ -240,7 +306,10 @@ theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) 
         Spot.OneStageZk.setupAt (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB k.blobs) rd
           (Flock.Witness.recordDraw record) = .ok (spec, tabs, rest) ∧
         (Spot.OneStageZk.filesOf k.blobs fs (.ok (spec, #[], Json.null, Json.null))).toOption = some proofs ∧
-        Flock.Zk.verify spec tabs record proofs = .ok () := by
+        Flock.Zk.verify spec tabs record proofs = .ok () ∧
+        Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB (Spot.OneStageZk.tablesOf k.blobs)
+          (some m.own.program) (some m.own.partition) m.own.registered = none ∧
+        Spot.OneStageZk.drawFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none := by
   obtain ⟨k', hk', pp, c, e', pub, prof, hdec, hck⟩ := hacc
   obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
   have hpe : (pp, e') = (p, e) := Option.some.inj ((SessionMsgs.formOf_of_decoded hdec).symm.trans hf)
@@ -254,10 +323,11 @@ theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) 
   obtain ⟨st, m, -, hm, hmem, hfs⟩ := paired_at hheld hs
   obtain ⟨a, ha, hsess⟩ := hz (st, m) hmem
   obtain ⟨circuitB, pubB, rd, hpl, hc, hp, hrd, rfl⟩ := MemberChecks.statement_ok ha
-  obtain ⟨coinKeys, b, record, hb, hu, hv⟩ := hsess fs hfs
+  obtain ⟨coinKeys, b, record, hb, hu, hfitd, hv⟩ := hsess fs hfs
   dsimp only [Spot.OneStageZk.StepAt.ofOwn] at hv
   obtain ⟨proofs, spec, tabs, rest, hfiles, hst, hzk⟩ := Verity.Sampled.verdictOf_ok hv
-  refine ⟨m, circuitB, pubB, rd, record, spec, tabs, rest, proofs, hpl, hm, hc, hp, hrd, ?_, hst, ?_, hzk⟩
+  refine ⟨m, circuitB, pubB, rd, record, spec, tabs, rest, proofs, hpl, hm, hc, hp, hrd, ?_, hst, ?_, hzk,
+    statement_fits ha hc hp, hfitd⟩
   · have hb' : k.blobs.get fs.record "record" = .ok b := Verity.Sampled.Record.get_what hb
     unfold SessionMsgs.recordAt
     rw [hb']
