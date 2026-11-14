@@ -1,0 +1,16 @@
+s1-nv17	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=17,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	4250
+s1-nv16	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=16,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	4000
+s1-nv15	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=15,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	3750
+s1-nv14	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=14,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	3500
+s1-nv13	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=13,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	3250
+s1-nv12	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=12,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	3000
+s1-nv11	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=11,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	2750
+s1-nv10	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=10,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	2500
+s1-nv09	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=9,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	2250
+s1-nv08	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=8,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	2000
+s1-nv07	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=7,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	1750
+s1-nv06	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=6,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	1500
+s1-nv05	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=5,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	1250
+s1-nv04	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=4,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	1000
+s1-nv03	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=3,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	750
+s1-nv02	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=2,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session	600
