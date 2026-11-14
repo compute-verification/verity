@@ -56,7 +56,7 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
     body is the sampling fields the request brought (its ingress record) with its prompt ids. Only the window's own records
     count: a run can serve a user again in another window."""
     adv = run / "advice" / f"w{window}"
-    reg = json.loads((adv / "registration.json").read_text())
+    reg = json.loads(M.read(adv / "registration.json", "Advice"))
     serve = json.loads(M.read(run / "serve.json", "ServingConfiguration"))
     bodies = {}
     for line in (run / "requests.jsonl").read_text().splitlines():
@@ -127,7 +127,7 @@ def carry_of(run: Path, window: int, data: bytes) -> dict:
              "follows": None}
     if path is not None and path.exists():
         try:
-            WA.follows(WA.decode(path.read_bytes()), a)
+            WA.follows(WA.decode(M.read(path, "Advice")), a)
         except WA.MalformedAdvice as e:
             raise ValueError(f"window {window} doesn't open where window {last} closed: {e}") from None
         carry["follows"] = last
@@ -178,7 +178,7 @@ def main() -> int:
             print(f"[advice-compile] the advice's carry is refused: {e}", flush=True)
             return 2
     else:
-        data = Path(a.advice or run / "advice" / "private" / "advice.bin").read_bytes()
+        data = M.read(Path(a.advice or run / "advice" / "private" / "advice.bin"), "Advice")
         meta = json.loads((run / "run.json").read_text())
         recs = [d for d in map(json.loads, (run / "requests.jsonl").read_text().splitlines()) if d]
         user = {d["request"]: d["user"] for d in recs}
