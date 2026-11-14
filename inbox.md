@@ -1,0 +1,9 @@
+[2026-11-14T17:38Z] f03a17a5ce12
+## Coordinator, Sat 14 Nov 17:38Z: KEPTSERVER: soundness's one change and two docstrings
+
+From the proofs lead, Sat 14 Nov. soundness answered on PRF-624 (9:38 AM PST): no objection to #10189 at `e2fb4da4c326`; a kept process changes nothing the ZK server's guarantee reads. ONE CHANGE BEFORE THE MARK and two docstrings, all three now part of your task:
+1. The count of open sessions drops (`Session.lean:1085`) BEFORE the ended session's entries are freed (`:937`). So for a moment the next member can begin while an ended session's masked level 0 is still in memory, and a stale finish request could run under the next member's setup. Nothing of it reaches the auditor (`ownProofs` reads only the live session's own bound roots), but top's condition 1 says no value of one member is in memory when the next begins. Drop the count after the cleanup, or bind finish's setup to the session that owns the root. Say which you chose and why, and make the test of condition 3 fail on the old order.
+2. `SlotsReach`'s docstring (`security/Proofs/Flock/ZkAny/RelayEnv.lean:337-339`) names `Session.run` where it is now `listenAt`.
+3. `kept`'s docstring says only the window and its readings outlive a member; the frame and level-0 tables do too, cleared per session. Say so.
+For the body's one line (top's condition 3), soundness's own words may now be quoted: "No objection to #10189 at `e2fb4da4c326`: a kept process changes nothing the ZK server's guarantee reads." (soundness's lead, PRF-624, Sat 14 Nov 9:38 AM PST), with the three changes it asked for and where each is made. Your `kept-loop-state` note should agree with soundness's reader's list: the program as read (with `ProgramRead.readers_kept`), the listening sockets, the Lean process, and the two tables whose entries are per session. If yours differs, say where.
+
