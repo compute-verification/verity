@@ -695,7 +695,7 @@ def _registered_reads(verdicts: dict) -> None:
             raise D.Reject("a verifier of record reports registered reads that are not objects with a string value and a root")
 
 
-def _registration_verdict(p: dict, rec) -> Verdict:
+def _docket_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
@@ -704,7 +704,7 @@ def _registration_verdict(p: dict, rec) -> Verdict:
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
-    return _registration_verdict(p, rec).codes
+    return _docket_verdict(p, rec).codes
 
 
 def _caller_verdict(p: dict, rec) -> Verdict:
@@ -873,7 +873,7 @@ def registration(j):
     p = _params_of(j)
     if "members" in j:
         p = {**p, "link_members": _link_members(j["members"])}
-    v = _registration_verdict(p, j.get("record"))
+    v = _docket_verdict(p, j.get("record"))
     return {"codes": list(v.codes), **({} if v.fanout is None else {"fanout": v.fanout}),
             **({"rests_on_period_check": list(v.rests_on_period_check)} if v.rests_on_period_check else {})}
 
@@ -3946,7 +3946,7 @@ LINK_SETUPS = [Setup(P.population_program(PAIR, 24), P.template_instance_query(P
 PROGRAMS.update({s.sha512: s.program for s in LINK_SETUPS})
 
 
-def _registration_members(a: dict, cut: int, gs: list[int], bad: int) -> dict:
+def _docket_members(a: dict, cut: int, gs: list[int], bad: int) -> dict:
     """The `registration` piece's input of the audit `a` with the per-member form's members: the record's population
     cut in two at `cut`, or whole where it holds under two units, each `gs` units a proof block, one broken where
     `bad` says (`_cut_members`)."""
@@ -3958,7 +3958,7 @@ def _registration_members(a: dict, cut: int, gs: list[int], bad: int) -> dict:
 
 #: `registration` inputs with members: audits of `LINK_SETUPS`' windows and of the small ones, with at most one change.
 REGISTRATIONS_WITH_MEMBERS = st.one_of(
-    *[st.builds(_registration_members, changed_audits(most=1, setups=setups), st.integers(0, 60),
+    *[st.builds(_docket_members, changed_audits(most=1, setups=setups), st.integers(0, 60),
                 st.lists(st.sampled_from([1, 1, 2]), min_size=1, max_size=2), st.integers(0, 20))
       for setups in (LINK_SETUPS, LINK_SETUPS, LINK_SETUPS, SETUPS)],
     st.builds(lambda a, ms: {**_REGISTRATION_OF(a), "members": ms}, changed_audits(most=0), JSON))

@@ -128,7 +128,7 @@ def hold_bound(st: dict, program, query) -> None:
     st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
 
 
-def hold_registered(st: dict, program, query, served, log=(), ports=None) -> SV.ServedRegistration:
+def hold_registered(st: dict, program, query, served, log=(), ports=None) -> SV.ServedDocket:
     """The verifier's own `--registered` file beside a bound stage (`served.register_served`: each served tree a port, the
     form every served path registers in), which `lean_verify` passes to `verify --zk`. The returned docket's
     `registered` entries go into the record (`R.record(..., registered=)`), and its `values` and `outputs` into R7."""
