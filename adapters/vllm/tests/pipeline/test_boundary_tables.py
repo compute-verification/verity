@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import stat
 from types import SimpleNamespace as NS
+from typing import Any
 
 import numpy as np
 import pytest
@@ -85,8 +86,10 @@ class Runner:
     batch as the runner pads its buffers."""
 
     def __init__(self, model: Model) -> None:
-        self.model, self.blocks, self.free, self.gen = model, {}, list(range(16)), {}
-        self.execute_model_state = None
+        self.model, self.free = model, list(range(16))
+        self.blocks: dict[str, list[int]] = {}
+        self.gen: dict[str, int] = {}
+        self.execute_model_state: NS | None = None
 
     def preempt(self, request: str) -> None:
         self.free += self.blocks.pop(request)
@@ -311,7 +314,8 @@ class Scheduler:
     """vLLM's V1 scheduler as `BoundaryWindows` wraps it: the step's outputs are ``outputs``."""
 
     def __init__(self) -> None:
-        self.cache_config, self.outputs = NS(enable_prefix_caching=False), {}
+        self.cache_config = NS(enable_prefix_caching=False)
+        self.outputs: dict[int, NS] = {}
 
     def add_request(self, request):
         return None
@@ -480,7 +484,8 @@ def test_history_tables_refuse_a_scheduler_that_caches_prefixes(tmp_path):
     start past what it holds: every class committed after the first hit would register nothing. So the hook is refused
     on a caching scheduler before it serves a request, and nothing is wrapped; without tables it is installed
     (`test_boundary_rows`)."""
-    sched, hooks, lines = Scheduler(), Hooks(tag="test-boundary-tables-caching"), []
+    sched, hooks = Scheduler(), Hooks(tag="test-boundary-tables-caching")
+    lines: list[dict] = []
     sched.cache_config.enable_prefix_caching = True
     bw = BW.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
                             tables=BT.LocalChannel(BT.Builder(BT.Latents([0, 3]))), layers=(0, 3))
@@ -495,7 +500,7 @@ def test_history_tables_refuse_a_scheduler_that_caches_prefixes(tmp_path):
 
 
 def test_the_tables_private_directory_is_never_under_what_leaves_the_node(tmp_path):
-    cfg = {"check": "c", "tables": {"private": str(tmp_path / "node"), "layers": 2, "capacity": CAP, "timeout_s": 5}}
+    cfg: dict[str, Any] = {"check": "c", "tables": {"private": str(tmp_path / "node"), "layers": 2, "capacity": CAP, "timeout_s": 5}}
     bw = BW.BoundaryWindows.of(cfg, tmp_path / "out", public=[tmp_path / "run"])
     bw.stop()
     assert (bw.layers, bw.capacity, bw.tables.timeout_s, bw.tables.dir) == ((0, 1), CAP, 5.0, tmp_path / "node" / "channel")
