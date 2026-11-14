@@ -4,7 +4,6 @@ public import Properties.Pous.Component
 public import Proofs.Properties.Pous.RunAt
 public import Proofs.Properties.Pous.MemoryChallenger
 public import Proofs.Properties.Hash.Lms
-public import Proofs.Properties.Hash.Lms
 public import Mathlib.Tactic.SplitIfs
 public import Proofs.Core.CanonUtf8
 import all Init.Data.Array.QSort.Basic

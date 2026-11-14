@@ -103,7 +103,7 @@ uses.  -h3 (``pearl-c-nvfp4-v0-h3``, not registered) keys each row's E_A on its 
 does; no device path forms it yet.
 The domain (`PearlC4.check`), B-OVF's credit discount (`B_OVF`), D-SK (`seed_b`) and the accounting
 (`wref`, `credit_of`) are stated where they are coded.  The reference replay (`benchmarks/pouw/pearl_c4/replay.py`) opens
-rows and is a development shortcut: the protocol checks a sampled tile by a zero-knowledge proof of `circuit.pc4`'s hiding
+rows and is a development shortcut: the protocol checks a sampled tile by a zero-knowledge proof of `pc4`'s hiding
 Programs, which opens nothing.
 
 **Stand-ins.**  The atoms are the RTX 5090 pins (`BLACKWELL_SM120_NVF4`, `_MXF4`, `HOPPER_BF16_M16N8K16`), pending GPU 4's
@@ -139,10 +139,10 @@ from verity.protocols.accounting.pouw.verifier.registration import (  # noqa: F4
     check_registration,
 )
 
-from . import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from . import pearl_c4_c_L as CL
-from . import pearl_kw as P
-from .pearl_c_work import UnitRecord
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_work import UnitRecord
 
 R = 32
 ATOM = 64

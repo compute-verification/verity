@@ -37,9 +37,11 @@ _ARGS_MODELLED = ("disable_custom_all_reduce", "max_model_len", "max_num_batched
                   "enable_chunked_prefill", "long_prefill_token_threshold")
 
 
-def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str | tuple[str, ...], tuple[str, ...]]) -> None:
-    """Refuse φ outside a decoder's domain (worlds, execution or executions, checkpoint dtypes) or the samplers the vocabulary has."""
-    worlds, executions, dtypes = domain
+def check_phi(phi: Phi, domain: tuple) -> None:
+    """Refuse φ outside a decoder's domain (worlds, execution or executions, checkpoint dtypes, and where it states them the KV cache
+    layouts φ's engine may name, `phi.STATED_KV_LAYOUT`'s) or the samplers the vocabulary has."""
+    worlds, executions, dtypes, *rest = domain
+    layouts = tuple(rest[0]) if rest else ()
     executions = (executions,) if isinstance(executions, str) else executions
     facts = []
     s = phi.sampling or {}
@@ -58,16 +60,19 @@ def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str | tuple[str, ...], tu
         facts.append(f"execution {phi.execution!r}")
     if (phi.model or {}).get("dtype", "bfloat16") not in dtypes:
         facts.append(f"checkpoint dtype {phi.model.get('dtype')!r} ({' or '.join(dtypes)} only)")
-    facts += engine_facts(phi, world)
+    facts += engine_facts(phi, world, layouts)
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
 
 
-def engine_facts(phi: Phi, world: int) -> list[str]:
+def engine_facts(phi: Phi, world: int, layouts: tuple[str, ...] = ()) -> list[str]:
     """What of φ's engine the Program would not be the prediction of: a target whose execution label is not the row's, an env
     switch the target sets to another value or none models (`_ENV_MODELLED`), an engine arg the target applies at another value, the
-    eager execution contradicted, another world, or an arg none models (`_ARGS_MODELLED`)."""
+    eager execution contradicted, another world, or an arg none models (`_ARGS_MODELLED`); a KV cache layout (``kv_cache_dtype``) is
+    modelled where it is one of the decoder's `layouts`."""
     tp, eng = phi.target_profile(), dict(phi.engine or {})
+    if eng.get("kv_cache_dtype") in layouts:
+        eng.pop("kv_cache_dtype")
     facts = [] if tp.execution_label == phi.execution else [
         f"a target labelled {tp.execution_label!r} (batch invariant {tp.batch_invariant}) for the {phi.execution!r} row"]
     target_env = tp.env()

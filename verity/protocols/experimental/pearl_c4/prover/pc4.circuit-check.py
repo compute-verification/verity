@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.protocols.accounting.pouw.prover.circuit.pc4`'s Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity.protocols.experimental.pearl_c4.prover.pc4`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ def _pouw_roots() -> list[Any]:
     along k (`verity.protocols.accounting.pouw.prover.circuit.rowk`, ``Shape.row_k``) in two segments at k = 128, plain and hiding."""
     from dataclasses import replace
 
-    from verity.protocols.accounting.pouw.prover.circuit import pc4
+    from verity.protocols.experimental.pearl_c4.prover import pc4
 
     tile = pc4.Shape(1, 64, 1, tile=(1, 1))
     out = [*pc4.templates(64, tile.tile).values(), pc4.weight(tile), pc4.call(tile), pc4.check(tile)]

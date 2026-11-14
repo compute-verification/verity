@@ -3613,6 +3613,32 @@
         "adapters/vllm/verity_vllm/definitions/registry/pearl_c_tile.circuit-check.json": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_tile.circuit-check.json",
         "adapters/vllm/verity_vllm/definitions/boolean.py": "verity/circuits/ops/boolean/versions.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/torch/tests/frontend/test_broadcast_bias_add.py": "adapters/vllm/tests/program/test_broadcast_bias_add.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/circuit/pc4.py": "verity/protocols/experimental/pearl_c4/prover/pc4.py",
+        "verity/protocols/accounting/pouw/prover/circuit/pc4.circuit-check.py": "verity/protocols/experimental/pearl_c4/prover/pc4.circuit-check.py",
+        "verity/protocols/accounting/pouw/prover/circuit/pc4_rowk.py": "verity/protocols/experimental/pearl_c4/prover/pc4_rowk.py",
+        "verity/protocols/accounting/pouw/prover/circuit/pc4_rowk.circuit-check.py": "verity/protocols/experimental/pearl_c4/prover/pc4_rowk.circuit-check.py",
+        "verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py": "verity/protocols/experimental/pearl_c4/prover/pearl_c4.py",
+        "verity/protocols/accounting/pouw/prover/schemes/pearl_c4_c_L.py": "verity/protocols/experimental/pearl_c4/prover/pearl_c4_c_L.py",
+        "verity/protocols/accounting/pouw/verifier/tests/pearl_c4_vectors.py": "verity/protocols/experimental/pearl_c4/tests/pearl_c4_vectors.py",
+        "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c4.json": "verity/protocols/experimental/pearl_c4/tests/vectors/pearl_c4.json",
+        "verity/protocols/accounting/pouw/verifier/tests/pearl_c4_regions_vectors.py": "verity/protocols/experimental/pearl_c4/tests/pearl_c4_regions_vectors.py",
+        "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c4_regions.json": "verity/protocols/experimental/pearl_c4/tests/vectors/pearl_c4_regions.json",
+        "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c4.py": "verity/protocols/experimental/pearl_c4/tests/test_pouw_pearl_c4.py",
+        "verity/protocols/accounting/pouw/verifier/tests/test_circuit_pc4.py": "verity/protocols/experimental/pearl_c4/tests/test_circuit_pc4.py",
+        "verity/protocols/accounting/pouw/verifier/tests/test_circuit_pc4_rowk.py": "verity/protocols/experimental/pearl_c4/tests/test_circuit_pc4_rowk.py",
+        "verity/protocols/accounting/pouw/verifier/tests/test_circuit_pc4_leaves.py": "verity/protocols/experimental/pearl_c4/tests/test_circuit_pc4_leaves.py",
+        "verity/protocols/accounting/pouw/verifier/tests/test_circuit_pc4_anchors.py": "verity/protocols/experimental/pearl_c4/tests/test_circuit_pc4_anchors.py",
+        "verity/protocols/accounting/pouw/verifier/tests/test_circuit_pc4_lean.py": "verity/protocols/experimental/pearl_c4/tests/test_circuit_pc4_lean.py",
+        "verity/protocols/accounting/pouw/verifier/tests/test_circuit_whole4_lean.py": "verity/protocols/experimental/pearl_c4/tests/test_circuit_whole4_lean.py"
+      }
     }
   ]
 }

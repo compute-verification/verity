@@ -15,7 +15,7 @@ from here, which needs nothing but Mathlib.
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
 open Finset
 
@@ -60,4 +60,4 @@ theorem loomis_whitney (T : Finset (α × β × γ)) :
 
 end LoomisWhitney
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

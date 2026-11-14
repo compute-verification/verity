@@ -478,7 +478,7 @@ theorem stmtsSessions_at {p : Params} {e : Evidence} {bs : Core.Blobs} (h : stmt
   · have h' := Flock.RecCompose.forM_ok h t (List.mem_range.2 ht)
     cases hc : stmtOwnAt p e bs t with
     | none => rw [hc] at h'; cases h'
-    | some j => exact ⟨j, hc⟩
+    | some j => exact ⟨j, rfl⟩
 
 #guard (jsonOfBytes "{\"a\":1}".toUTF8).isSome
 #guard (jsonOfBytes "{".toUTF8).isNone
@@ -751,7 +751,8 @@ def secondChecked (v : Docket.Verifier) (delta : Core.Ratio) (c : OneStage.Commi
     .accept
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
         bound := Bound.boundOf m prof delta,
-        perTemplate := (Bound.strataOf m prof).map (·.map fun s => (s.name, Bound.stratumBound s delta)) }
+        perTemplate := (Bound.strataOf m prof).map (·.map fun s => (s.name, Bound.stratumBound s delta)),
+        complete := Record.allRan e.verdicts }
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := m, draw := some prof }],
         delta, drawn := #[(Record.LEVEL, units.size)] }
@@ -893,7 +894,7 @@ theorem prepare_sessions {form : Bool} {p : Params} {c : OneStage.Commitment} {�
   · cases h
   · split at h
     · cases h
-    · next hw _ => exact hw
+    · exact ‹stmtsSessions p e bs = .ok ()›
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
 does, the run of record must accept, and then the form is refused while `form` is off. -/

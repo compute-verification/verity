@@ -35,7 +35,6 @@ from typing import Any
 import numpy as np
 from verity.device import load_card
 
-import adapter as A
 import policy as P
 
 # a served step's pricing, `block_work`'s
@@ -114,10 +113,12 @@ def block_work(cls: tuple[int, int, int], model: str) -> dict[str, int]:
 def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     """The session policy of the record ``doc`` under θ = ``pins``: its block Definition and slots, `c` and `k`, the
     gate table and each template's gates a unit."""
+    from verity.circuits.ops.boolean.versions import gate_table
+    # block_counts registers the vLLM adapter's catalog with the Boolean-versions lookup as it loads
     from verity_vllm.program.predict import block_counts as BC
 
     fn, m, steps = BC.session(doc)
-    table, unpriced = A.gate_table([fn])
+    table, unpriced = gate_table([fn])
     memo: dict = {}
     c, missing = BC.gates(fn, table, memo)
     if unpriced or missing:

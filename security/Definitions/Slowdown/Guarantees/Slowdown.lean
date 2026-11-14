@@ -17,7 +17,7 @@ guarantee or of the model's accounting:
   of the compute audit's covert residual (`Accounting.Guarantees.CovertResidual`, `CovertResidualPerRun`), whose other
   accounts stay within `F·T − W_cert`;
 * the declared computation runs at `ρ` declared gates per counted multiplication, `M_d ≤ C/ρ`: the inference-only
-  policy's thread bound, `InferenceOnly.Guarantees.ThreadedThrottled`, which `SlowdownThreaded` takes as proved rather
+  policy's thread bound, `Slowdown.Guarantees.ThreadedThrottled`, which `SlowdownThreaded` takes as proved rather
   than as a hypothesis;
 * incorrect proof blocks skip or inject at most the cheating share, `M_χ ≤ χ κ (C + U)/2`: what SPOT's sample
   establishes (the cumulative bound, `Population.Exfil.tail_cumPrev`, at a budget);
@@ -34,9 +34,11 @@ also discharges the declared computation's with `ThreadedThrottled`, and `Slowdo
 
 @[expose] public section
 
-namespace InferenceOnly.Guarantees
+open InferenceOnly
 
-open Verity InferenceOnly.Slowdown
+namespace Slowdown.Guarantees
+
+open Verity Slowdown.Slowdown
 
 /-- **The slowdown.** A developer spends `C > 0` FLOP on monitored hardware and `U ≥ 0` on unmonitored
 hardware and computes `M` counted multiplications, each by one of four sources (`M ≤ M_U + M_r + M_d + M_χ`):
@@ -76,7 +78,7 @@ def SlowdownExecutionPhases : Prop :=
 computation's bound proved: the declared circuit `d` contains the reference training circuit `r` (`Mc`), threaded by `T`
 and with incompressible weights, and complies at `(Γ, α)` (`CompliesRate`), with its registered information free of the
 reference circuit's fresh input (`ThetaRegistered`), so its counted multiplications `|T.M|` number at most
-`size(d)/ρ_T` (`InferenceOnly.Guarantees.ThreadedThrottled`), `ρ_T = b_a/(α Λ(α Γ))`, and `size(d) ≤ C`. The windows' bound is
+`size(d)/ρ_T` (`Slowdown.Guarantees.ThreadedThrottled`), `ρ_T = b_a/(α Λ(α Γ))`, and `size(d) ≤ C`. The windows' bound is
 stated with `T`'s `Λ = T.bound`, as the memory cap over threads states it. Then `η ≤ s + min(r, μ (1 + L/H)) + ν_T + χ`
 with `ν_T = (1 − s) · 2/(κ ρ_T)` and `μ = 2 reuse · R α/(κ d b_w b_a)` at `T`'s reuse. -/
 def SlowdownThreaded : Prop :=
@@ -97,7 +99,7 @@ def SlowdownThreaded : Prop :=
 /-- **The slowdown over the inference-only policy's thread bound, per parameter slot**: `SlowdownThreaded` with
 the reference circuit's weights incompressible per parameter slot of a slot map `σ`
 (`Assumptions.WeightsIncompressibleSlots`), its declared computation's bound from
-`InferenceOnly.Guarantees.ThreadedThrottledSlots`. -/
+`Slowdown.Guarantees.ThreadedThrottledSlots`. -/
 def SlowdownThreadedSlots : Prop :=
   ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r)
     (σ : T.Slots) (dd e : ℕ) (Mc : Containment r.D d.D),
@@ -113,4 +115,4 @@ def SlowdownThreadedSlots : Prop :=
         unregisteredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
           declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

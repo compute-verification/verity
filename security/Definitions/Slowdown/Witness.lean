@@ -12,7 +12,7 @@ public import Definitions.Slowdown.Covering
 # The (c, k) guarantees: the instances their witnesses are stated at
 
 The witnesses of the inference-only policy's guarantees in `(c, k)` (`Definitions.Slowdown.Guarantees.Witnesses`) are stated
-at the local bounds' toy circuit (`InferenceOnly.Capability.Toy.C`): a registered weight `0`, an unregistered token `1`, and two
+at the local bounds' toy circuit (`Slowdown.Capability.Toy.C`): a registered weight `0`, an unregistered token `1`, and two
 gates `2` and `3` computing `0 ∧ 1`. Its registered circuit `Toy.D` registers the weight; `Dθ` registers the token too, so
 that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 
@@ -27,9 +27,9 @@ that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 
 @[expose] public section
 
-namespace InferenceOnly.Witness
+namespace Slowdown.Witness
 
-open Verity Finset InferenceOnly.Capability.Toy
+open Verity Finset Slowdown.Capability.Toy
 
 /-- The toy registered circuit with the token registered too: both inputs are registered information. -/
 @[reducible] def Dθ : RegisteredCircuit := .ofCircuit C {0, 1} (by decide)
@@ -180,4 +180,4 @@ abbrev time : Empty → ℝ := fun b => b.elim
 
 end OneWindow
 
-end InferenceOnly.Witness
+end Slowdown.Witness
