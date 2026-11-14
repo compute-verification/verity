@@ -145,7 +145,7 @@ from verity_vllm.protocols.pouw.pearl_c import window as PWR
 from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
 import fast_tile as FT
 import clear_work as CW
 from clear_audit import TileOpening, Transcript, Verifier
