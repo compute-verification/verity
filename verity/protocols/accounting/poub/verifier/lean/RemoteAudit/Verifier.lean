@@ -6,7 +6,7 @@ public import RemoteAudit.Difftest
 /-!
 # The verifier's process: `remote-audit-verifier`
 
-The remote audit's Lean verifier as a process the driver
+PoUB's Lean verifier as a process the driver
 (`verity/protocols/accounting/poub/verifier/session/verifier.py`) runs beside its Python: it holds the verifier's
 registry (`Registry`) and every session's state (`Session.State`) and takes the events as they happen, one request a
 line on stdin, each answered by one line on stdout, `{"answer": JSON}` or `{"error": MESSAGE}`, in canonical JSON
