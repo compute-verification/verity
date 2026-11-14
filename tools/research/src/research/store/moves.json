@@ -2811,6 +2811,12 @@
     },
     {
       "paths": {
+        "adapters/vllm/verity_vllm/properties/kernel_allowlist.py": "adapters/vllm/verity_vllm/observe/fold/profiles/kernel_allowlist.py",
+        "adapters/vllm/verity_vllm/properties/quarantine_lint.py": "adapters/vllm/tests/properties/quarantine_lint.py"
+      }
+    },
+    {
+      "paths": {
         "security/Proofs/Flock/Bridge/DrawnLaw.lean": "security/Proofs/Flock/Bridge/SampledLaw.lean",
         "security/Proofs/Flock/Claims/Complete/Json/UnitDraw.lean": "security/Proofs/Flock/Claims/Complete/Json/UnitSample.lean",
         "security/Proofs/Flock/Claims/KS/PlainDraw.lean": "security/Proofs/Flock/Claims/KS/PlainSample.lean",

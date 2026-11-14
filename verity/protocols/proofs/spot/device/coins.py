@@ -23,7 +23,7 @@ challenge derives its own (`verity_vllm.commit.challenge.replay_key`, under the 
 
 A window's seed salt is a family of its own (`SEED_SALT_FAMILY`), which no sample reads: one coin, released after the
 window's open root, before the window serves (`draw_seed_salt`), and read back by the verifier from the challenger's log
-(`seed_salt_of`).  Every docket of the window names it as a certified input (`one_stage.registration`'s R6), which
+(`seed_salt_of`).  Every docket of the window names it as a certified input (`one_stage.docket`'s R6), which
 the window's circuits may read: a value they would otherwise take as the server's choice.
 """
 

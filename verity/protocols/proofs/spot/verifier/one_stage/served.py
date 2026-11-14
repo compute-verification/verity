@@ -99,7 +99,7 @@ class ServedTree:
 
 
 @dataclass(frozen=True)
-class ServedRegistration:
+class ServedDocket:
     """What `register_served` returns. `registered`: the record's `registered` entries (`registration.record(...,
     registered=)`); `values`, `outputs`, `window_root` and `held`: R7's own copies (`registration.check(...,
     registered=values, outputs=outputs, window_root=window_root, held=held)`, `outputs` None when no tree is an earlier
@@ -162,7 +162,7 @@ def _check_form(t: Any) -> None:
 
 def register_served(program: Program, query: Mapping[str, Any], served: Sequence[ServedTree],
                     log: Sequence[Mapping[str, Any]] = (), ports: Mapping[str, str] | None = None,
-                    window_root: str | None = None, held: Sequence[str] | None = None) -> ServedRegistration:
+                    window_root: str | None = None, held: Sequence[str] | None = None) -> ServedDocket:
     """Register each served tree as a port of the verifier's own `--registered` file, in the module's port form: the record's
     `registered` entries, R7's copies, and the file, from the verifier's own program and query. `log`: this prover's earlier
     records, which an output tree's `(record digest, port)` and a reused tree's `(record digest, value)` name. `ports`: a template parameter's circuit port, where
@@ -231,8 +231,8 @@ def register_served(program: Program, query: Mapping[str, Any], served: Sequence
     unread = sorted(set(values) - {e["value"] for e in file["ports"].values()})
     if unread:
         raise ValueError(f"served trees {unread}: no unit of the population reads them, so no proof would open them")
-    return ServedRegistration([t.entry() for t in served], values, outputs or None, roots, file, P.partition(program, query),
+    return ServedDocket([t.entry() for t in served], values, outputs or None, roots, file, P.partition(program, query),
                               schemas, window_root, None if held is None else list(held))
 
 
-__all__ = ["SCHEMAS", "ServedRegistration", "ServedTree", "register_served"]
+__all__ = ["SCHEMAS", "ServedDocket", "ServedTree", "register_served"]

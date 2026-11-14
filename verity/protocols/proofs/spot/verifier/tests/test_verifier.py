@@ -393,7 +393,7 @@ def test_a_stream_rules_disagreement_stops_the_stream(monkeypatch):
     decides otherwise, or holds another state after it, the op is refused (`disagree`, naming both), and so is every op
     after it."""
     stream, reg, draw = _drawn()
-    assert stream._rule_entries == [{"order": 0, "registration": S._registration_token(reg), "draw": S._draw_token(draw),
+    assert stream._rule_entries == [{"order": 0, "registration": S._docket_token(reg), "draw": S._draw_token(draw),
                                      "proved": len(draw.proved), "drawn_at": stream._entries[0].drawn_at,
                                      "delivered": False, "session": None, "final": False}]
     _lean_answering(monkeypatch, "stream", lambda got: {**got, "decision": {"ok": "late"}})
