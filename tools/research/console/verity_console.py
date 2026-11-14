@@ -31,7 +31,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -48,7 +48,7 @@ QUEUES = Path("/workspace/usage/queues.jsonl")
 
 
 def iso(t: datetime) -> str:
-    return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def isoz(s: str | None) -> str | None:
@@ -288,7 +288,7 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
             gpus = sum(q.get("usage", {}).get("nvidia.com/gpu", 0.0) for q in d.get("queues", {}).values())
             buckets[int(d["t"]) // 300 * 300]["alloc"].append(100 * gpus / GPUS)
     mean = lambda xs: sig(sum(xs) / len(xs), 3) if xs else None  # noqa: E731
-    urows = [[iso(datetime.fromtimestamp(t, timezone.utc)), mean(v["busy"]), mean(v["util"]), mean(v["held"]), mean(v["alloc"]),
+    urows = [[iso(datetime.fromtimestamp(t, UTC)), mean(v["busy"]), mean(v["util"]), mean(v["held"]), mean(v["alloc"]),
               mean(v["cpu"]), GPU_TARGET, CPU_TARGET] for t, v in sorted(buckets.items())]
     out.append(panel("node1-utilization", "vy-nebius-1 utilization, last 24 hours", "line",
                      ["time", "GPU busy %", "GPU util %", "GPU held %", "Kueue-allocated %", "CPU busy %", "GPU busy target %",
@@ -308,7 +308,7 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
         out.append(panel("node1-queues", "vy-nebius-1 Kueue queues now", "table",
                          ["Queue", "GPUs used", "GPUs nominal", "GPUs borrowed", "CPUs used", "CPUs nominal", "Memory used GiB",
                           "Memory nominal GiB", "Admitted", "Pending", "Oldest pending (min)", "Pods' mean GPU util %"], qrows,
-                         updated_at=iso(datetime.fromtimestamp(last["t"], timezone.utc)), source=src,
+                         updated_at=iso(datetime.fromtimestamp(last["t"], UTC)), source=src,
                          note="Each ClusterQueue's quota and use from vy-usage's latest sample (every 5 minutes)."))
     else:
         errors.append(f"node1-queues: no samples in {QUEUES}")
@@ -550,7 +550,7 @@ def owner_panels(name: str, host: str, minutes: list[tuple], now: datetime, src:
 
 
 def uc_hour(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:00Z")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:00Z")
 
 
 # ---------------------------------------------------------------------------------------------------------------- held idle (infra/*)
@@ -673,7 +673,7 @@ def n1_pool_idle(pool: str, loops: dict[str, set[tuple[str, str]]]) -> int:
 
 
 def _utc(s: str) -> float:
-    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp()
 
 
 def n1_leases(now: float, pools: dict = N1_LEASE_POOLS, usage_log: Path = N1_LEASE_USAGE) -> list[tuple]:
@@ -739,7 +739,7 @@ def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle: dict | None =
         for ln in log.read_text().splitlines():
             try:
                 e = json.loads(ln)
-                t, g = datetime.strptime(e["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp(), e.get("gpu")
+                t, g = datetime.strptime(e["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp(), e.get("gpu")
             except (ValueError, KeyError, TypeError):
                 continue
             if g is None:
@@ -752,7 +752,7 @@ def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle: dict | None =
                 if b > a:
                     spans.append((g, a, b, lane))
         state = json.loads((Path(d) / "n1-lease.json").read_text()) if start and (Path(d) / "n1-lease.json").exists() else {}
-        st = datetime.strptime(state["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if state else now
+        st = datetime.strptime(state["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp() if state else now
         leased = {g["index"] for g in state.get("gpus") or [] if g.get("lease")}
         for g, a in start.items():
             b = now if g in leased else st - idle_s
@@ -806,7 +806,7 @@ def tp_lease(row: Path, w0: float, w1: float | None, now: float) -> tuple[float,
         a = datetime.strptime((row / "gpu_lease.started").read_text().strip(), "%Y-%m-%dT%H:%M:%SZ")
     except (OSError, ValueError):
         return None
-    a = a.replace(tzinfo=timezone.utc).timestamp()
+    a = a.replace(tzinfo=UTC).timestamp()
     if a < w0 or (w1 is not None and a > w1):
         return None
     try:
@@ -1090,7 +1090,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--research-src", type=Path, default=HERE / "research-src", help="a directory holding the `research` package")
     ap.add_argument("--no-refresh", action="store_true", help="read the store's catalog as it is")
     ns = ap.parse_args(argv)
-    t0, now, errors = time.time(), datetime.now(timezone.utc).replace(microsecond=0), []
+    t0, now, errors = time.time(), datetime.now(UTC).replace(microsecond=0), []
     ns.out.mkdir(parents=True, exist_ok=True)
     try:
         panels, info = (store_panels if ns.group == "store" else node1_panels)(ns, now, errors)

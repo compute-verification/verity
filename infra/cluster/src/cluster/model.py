@@ -44,7 +44,7 @@ def instant(value: str | int | None) -> int | None:
 
 
 def iso(t: int) -> str:
-    return dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.fromtimestamp(t, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def read_deadline(path: str | Path = DEADLINE_FILE) -> int | None:

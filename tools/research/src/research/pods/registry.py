@@ -281,7 +281,7 @@ def _write_checked(name: str, entry: dict[str, Any], mt: Path, *, replace: bool,
     same = old is not None and all(old.get(k) == entry.get(k) for k in KNOWN_KEYS)
     if same:
         return p, "unchanged"
-    now = now or dt.datetime.now(dt.timezone.utc)
+    now = now or dt.datetime.now(dt.UTC)
     entry["registered_by"] = os.environ.get("RESEARCH_AGENT") or socket.gethostname()
     entry["registered_at"] = f"{now:%Y-%m-%dT%H:%MZ}"
     write_entry(d, name, entry)

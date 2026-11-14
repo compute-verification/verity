@@ -26,7 +26,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 LEASE_DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
@@ -37,7 +37,7 @@ RUN_ID = re.compile(r"(?:^|\s)--id\s+(r\d{8}-\d{6}-[0-9a-f]{4})(?:\s|$)")
 
 
 def iso(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def compute_apps() -> list[tuple[int, str]]:
