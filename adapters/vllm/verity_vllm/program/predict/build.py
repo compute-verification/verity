@@ -67,7 +67,7 @@ from .domain import check_phi
 from .model_shape import _ACTS, ModelShape, model_shape, rank_shape, weight_leaves
 from .phi import Phi
 
-__all__ = ["Unexpressible", "build_program"]
+__all__ = ["Unexpressible", "build_program", "dead_free_form", "decoder", "drive", "with_checks"]
 
 BUILDER_ID = "predict-build/derived/v1"
 I32 = Value(32)
@@ -444,7 +444,7 @@ class _Model:
                             pos, policy)
 
 
-def decoder(phi: Phi, M: int = 1, history: int = 0):
+def decoder(phi: Phi, M: int = 1, history: int = 0) -> Any:
     """φ's decoder at launches of M rows over a history of `history` keys: the family's constructor (`FAMILY_FACTS[...]["arch"]`), a
     DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
     Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in

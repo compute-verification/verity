@@ -61,6 +61,8 @@ from .build import Unexpressible, _Specs, build_program, model_shape
 from .common import _ptypes, kind
 from .phi import Phi
 
+__all__ = ["check_compiled", "separable", "workload_labels"]
+
 #: the request-local Input groups a request's own certified body fixes, with its seed rule's (`seed_rule.PARAMS`: its body's seed
 #: and id, and the window's public seed salt); any other request-local group is the batch's
 OWN_GROUPS = ("prompt", "seed", *SEED_PARAMS)

@@ -28,8 +28,10 @@ from verity_vllm.engine.profiles.devices import device_name_of_row
 from verity_vllm.program import workload as W
 from verity_vllm.target_family import declared_profile
 
-from .build import Unexpressible, build_program
+from .build import BuildResult, Unexpressible, build_program
 from .phi import Phi
+
+__all__ = ["phi_of", "request_component"]
 
 # ------------------------------------------------------------------------------------------------------------------- φ of a row
 
@@ -89,7 +91,7 @@ def sampling_of(w: dict, phi: Phi) -> dict:
 # ------------------------------------------------------------------------------------------------------------------- the workload Program
 
 
-def request_component(r):
+def request_component(r: BuildResult) -> W.RequestComponent:
     """A predicted request Program (a `BuildResult`) as GP-01's component (`program.workload.program_component`): its own root,
     whose definitions are this process's, so nothing is decoded."""
     params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]

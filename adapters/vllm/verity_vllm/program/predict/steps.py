@@ -735,4 +735,4 @@ def compare(summary: dict, root: str) -> dict:
 compile_steps = cyclic_gc_off(compile_steps)
 
 
-__all__ = ["Registered", "RequestUnit", "compile_steps", "trace_dir"]
+__all__ = ["Registered", "RequestUnit", "compile_steps", "dead_units", "plan_steps", "request_program", "trace_dir"]

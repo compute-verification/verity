@@ -24,9 +24,12 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from verity_vllm.records.schema_ids import PHI_SCHEMA
+
+if TYPE_CHECKING:
+    from verity_vllm.program.frontend.target_profile import TargetProfile
 
 __all__ = ["Phi", "served_phi"]
 
@@ -69,7 +72,7 @@ class Phi:
         declared = self.workload.get("requests")   # a workload that states none has no request
         return list(declared) if declared else []
 
-    def target_profile(self):
+    def target_profile(self) -> TargetProfile:
         """The declared `TargetProfile`; where the target block does not declare `batch_invariant`, the one the execution label names
         (`TargetProfile.execution_label`: a `bi-*` row runs the batch-invariant kernels, an `eager` row vLLM's defaults)."""
         from verity_vllm.program.frontend.target_profile import TargetProfile
