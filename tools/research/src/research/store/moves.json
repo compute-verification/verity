@@ -3332,6 +3332,17 @@
         "verity/protocols/accounting/pous/verifier/wipe_stream.py": "verity/protocols/accounting/pous/device/wipe_stream.py",
         "verity/protocols/accounting/pous/verifier/wipe_stream.c": "verity/protocols/accounting/pous/device/wipe_stream.c"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/program/test_harden_moe.py": "adapters/torch/tests/frontend/test_harden_moe.py",
+        "adapters/vllm/tests/program/test_derive_hf5.py": "adapters/torch/tests/frontend/test_derive_hf5.py"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/correspondence/test_descriptor_annotation_stream.py": "adapters/torch/tests/correspondence/test_descriptor_annotation_stream.py"
+      }
     }
   ]
 }
