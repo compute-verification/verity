@@ -183,6 +183,8 @@ meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `mem
 bytes; it names no device). Each wipe's `eps` leaves out its labels' and coins' PRF advantage (SHA-512 as PRF: not
 priced, not assumed), and the table says so beside each number that is short by it: the count and its δ hold at
 p = `eps`, before those terms (`holds_at`), and T·`eps` is short by their sum over the T wipes (`except_with`).
+A period's row carries that sum, T·`eps`, as its error, and where it is 1 or more the row prints "no bound at this
+period" with it and neither statement (`verity/protocol.py`, the one rule for a row's error).
 `wipe_parties` declares the same memory challenger and prover as parties of the deployment layer (`verity.runtime`),
 the challenger's party in `verity/protocols/accounting/pous/device/wipe_challenger.py` and the prover's in
 `verity/protocols/accounting/pous/prover/wipe_prover.py`; the challenger times the reads its machine gives it: on the
