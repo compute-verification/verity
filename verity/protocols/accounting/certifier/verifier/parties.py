@@ -45,7 +45,7 @@ ID = CERTIFIER_PROTOCOL
 VERSION = 1
 NETWORK_CERTIFIER, WORKERS, VERIFIER = "network-certifier", SP.WORKERS, SP.VERIFIER
 OUT_OPENING, OUT_RECORD = "out-opening", "out-record"
-#: a frame's largest body (`channel.HEADER`: a u32 length) in whole salts: the most rows one opening carries
+#: a frame's largest body (`runtime.framing.HEADER`: a u32 length) in whole salts: the most rows one opening carries
 MAX_OPENING = ((1 << 32) - 1) // O.SALT_BYTES * O.SALT_BYTES
 #: a record is its head and one certificate, whose signature is about 70 kB in hex at `lms.DEPLOYED`
 MAX_RECORD = 1 << 20

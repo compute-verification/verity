@@ -26,7 +26,7 @@ WINDOW = (PAIR, TRIPLE)
 QUERY = P.template_instances_query(WINDOW)
 #: PAIR's one instance and TRIPLE's nine, strata `stratified-rate:1/3` samples ⌈1/3⌉ = 1 and ⌈9/3⌉ = 3 of.
 COUNTS = {P.template_id(PAIR): 1, P.template_id(TRIPLE): 9}
-LAW = S.Law("stratified-rate:1/3")
+SAMPLING_DESIGN = S.SamplingDesign("stratified-rate:1/3")
 PUBLIC = (*RECORD_ITEMS, *(S.Public(f"population:{P.template_id(t)}", "structure", "a template's stratum") for t in WINDOW))
 
 
@@ -35,7 +35,7 @@ def _check(program=None, query=QUERY, tied=()) -> S.Check:
                    proof_deadline=60.0, tied=tied)
 
 
-def _spec(check=None, selection=LAW) -> S.Spec:
+def _spec(check=None, selection=SAMPLING_DESIGN) -> S.Spec:
     return S.Spec(VALUES, selection, check or _check(), PUBLIC, b"service-window-test")
 
 
@@ -72,20 +72,20 @@ def _ports(counts=COUNTS, values=(), program=None) -> dict:
 
 
 def _named(program: Program, query=QUERY) -> tuple[dict, dict]:
-    """The sampling design `LAW` names over `program`'s population under `query`, and the work table it is expanded over."""
-    law = S.selection_law(LAW, P.units(program, query), S.selection_sizes(LAW, program, query))
-    return law, S.selection_table(LAW, program, query, None)
+    """The sampling design `SAMPLING_DESIGN` names over `program`'s population under `query`, and the work table it is expanded over."""
+    sampling_design = S.selection_sampling_design(SAMPLING_DESIGN, P.units(program, query), S.selection_sizes(SAMPLING_DESIGN, program, query))
+    return sampling_design, S.selection_table(SAMPLING_DESIGN, program, query, None)
 
 
-def _record(counts=COUNTS, program=None, query=QUERY, law=None, values=(), form=None, **kw) -> dict:
+def _record(counts=COUNTS, program=None, query=QUERY, sampling_design=None, values=(), form=None, **kw) -> dict:
     """A docket of the window's mixed population, or of `program` with the mixed population's ports; of `form`
     with its own."""
     ports = _ports(counts, values, form)
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
     program = form or program or _program(counts, values=values)
     named, table = _named(program, query)
-    return R.record(program, query, law or named, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
-                    work_table=None if law else table, **kw)
+    return R.record(program, query, sampling_design or named, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
+                    work_table=None if sampling_design else table, **kw)
 
 
 def test_a_windows_stream_takes_its_templates_digests_and_query_in_its_order():
@@ -115,11 +115,11 @@ def test_a_two_template_window_runs_to_an_accepted_outcome_by_the_lean_run():
     stream = _stream()
     rec = _record()
     reg = stream.register(rec, _ports(), counts=COUNTS)
-    law = stream._entries[reg.order].law
-    assert [(s["template"], s["k"]) for s in law["strata"]] == [(P.template_id(PAIR), 1), (P.template_id(TRIPLE), 3)]
+    sampling_design = stream._entries[reg.order].law
+    assert [(s["template"], s["k"]) for s in sampling_design["strata"]] == [(P.template_id(PAIR), 1), (P.template_id(TRIPLE), 3)]
     draw = stream.select(reg)
     assert draw.draw["law"] == "stratified" and draw.draw["k"] == 3 and len(draw.units) == 4 and 0 in draw.units
-    assert V.check_draw(draw.draw, rec, law).ok
+    assert V.check_draw(draw.draw, rec, sampling_design).ok
     assert stream.deliver(draw, [SESSION]) is None
     out = stream.outcome(draw, _lean(), {"statement": "stub"})
     audit = stream.records[-1]["audit"]
@@ -218,16 +218,16 @@ def test_a_stratum_short_of_its_floor_is_refused():
     rec = _record()
     short = {**rec, "law": {**rec["law"], "strata": [{**rec["law"]["strata"][0], "k": 0}, *rec["law"]["strata"][1:]]}}
     assert "R1-law" in _refused(lambda: _stream().register(short, _ports(), counts=COUNTS))
-    law = D.derive(_program(), QUERY, *_named(_program()))
-    assert not V.check_draw({**law, "population": 10, "units": [1, 2, 3, 4]}, rec, law).ok
-    stream = _stream(sampler=lambda law, n: [1, 2, 3, 4])
+    sampling_design = D.derive(_program(), QUERY, *_named(_program()))
+    assert not V.check_draw({**sampling_design, "population": 10, "units": [1, 2, 3, 4]}, rec, sampling_design).ok
+    stream = _stream(sampler=lambda sampling_design, n: [1, 2, 3, 4])
     reg = stream.register(rec, _ports(), counts=COUNTS)
     assert _refused(lambda: stream.select(reg))
 
 
 #: a value the window's mixed population takes ahead of its templates' parameters: 8 leaves of 16 bits, read as rows of 4
 VALUE = ("t", 8, 16)
-VALUED = S.Spec((*VALUES, S.Value("t", None, "serve", registered=True)), LAW, _check(),
+VALUED = S.Spec((*VALUES, S.Value("t", None, "serve", registered=True)), SAMPLING_DESIGN, _check(),
                 (*PUBLIC, *(S.Public(f"{x}:t", "structure", "the value's layout") for x in ("leaves", "words", "domain"))),
                 b"service-window-test")
 
@@ -291,8 +291,8 @@ def test_a_registration_reads_the_earlier_record_its_outputs_name_whatever_the_l
     entry = {"value": "t", "root": port["root"], "leaves": 2, "words": 4, "domain": port["domain"]}
     stream, rec, register = _reusing([w, x], entry, outputs)
     assert stream._earlier(rec, None, outputs) == [w, x] and stream._earlier(rec) == [x]
-    law, table = _named(_program(values=(VALUE,)))
-    args = (rec, _program(values=(VALUE,)), QUERY, law, S.SCHEME, _ports(values=(VALUE,)), None, ())
+    sampling_design, table = _named(_program(values=(VALUE,)))
+    args = (rec, _program(values=(VALUE,)), QUERY, sampling_design, S.SCHEME, _ports(values=(VALUE,)), None, ())
     few = V.check(*args, stream._earlier(rec, None, outputs), None, table, {"t": 4}, outputs=outputs)
     assert few == V.check(*args, stream.log, None, table, {"t": 4}, outputs=outputs) and few.ok
     assert register().order == 0
