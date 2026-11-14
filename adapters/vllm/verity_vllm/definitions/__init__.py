@@ -1,13 +1,14 @@
 """verity_vllm.definitions: kernel Definitions (`registry`), their vectorised twins and row evaluators (`numerics`), their
-Boolean versions (`boolean`), the word replay (`replay`), the proof-block cut (`word`, `cross_call`, `call_scope`), a
+Boolean versions, the word replay (`replay`), the proof-block cut (`word`, `cross_call`, `call_scope`), a
 Definition's encoding and digest (`encoding`), and the evidence ids their conformance texts and provenance records cite
 (`evidence`).  It builds on the catalog (`verity.circuits.ops`, `.silicon`) and the kernels (`verity.circuits.kernels`); no
 verifier reads it, so it is off the soundness path.
 
 It is a catalog package, and names itself one as it loads: a window takes its templates from it by that name, wherever
-the package is.  As it loads it also registers its registry with the Boolean-versions lookup (`boolean.catalog_loader`):
-every module `registry.catalog.load` imports, and the gathers and `BitAtx` made on demand (`registry.boolean_gather`), so
-a lookup made in a process that imported this package scans them.
+the package is.  As it loads it also registers its registry with the Boolean-versions lookup
+(`verity.circuits.ops.boolean.versions.catalog_loader`): every module `registry.catalog.load` imports, and the gathers
+and `BitAtx` made on demand (`registry.boolean_gather`), so a lookup made in a process that imported this package scans
+them.
 """
 import re
 
