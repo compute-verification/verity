@@ -109,7 +109,7 @@ PUBLIC = {
     "verity_vllm.pipeline.boundary_logits": "I1: a two-stage window's select inputs at serve: rank 0's hook on the sampler "
                                             "(SamplerHook), the builder and its channel to the boundary commitment "
                                             "(Builder, Channel), and the rows and salts kept on the node, which "
-                                            "benchmarks/serve_tax's plugin installs and benchmarks/one_stage/two_stage.py "
+                                            "benchmarks/serve_tax's plugin installs and verity/protocols/proofs/spot/device/two_stage.py "
                                             "opens (load)",
     "verity_vllm.pipeline.interior_rows": "I1: a two-stage window's interior at replay: the sampled spans' registration "
                                           "(interior, register), the block parameters it registers as values, the "
