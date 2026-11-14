@@ -132,7 +132,7 @@ at least 4 for `N < 2^64`.
 
 @[expose] public section
 
-namespace Accounting.Remote.Draw
+namespace Accounting.Remote.Sample
 
 open Finset
 open scoped ENNReal
@@ -248,7 +248,7 @@ def incorrect (ω : SampleCoins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D
 
 /-- The session's pooled bound at `δ`, at the sizes and sample counts of outcome `ω`. -/
 noncomputable def pooled (δ : ℝ) (ω : SampleCoins n κ X) : ℝ :=
-  Draw.pooled n (fun t => D.size t ω) (fun t => D.samples t ω) δ
+  Sample.pooled n (fun t => D.size t ω) (fun t => D.samples t ω) δ
 
 end Run
 
@@ -338,4 +338,4 @@ noncomputable def binding [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Run n m
 
 end Receipts
 
-end Accounting.Remote.Draw
+end Accounting.Remote.Sample

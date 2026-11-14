@@ -15,7 +15,7 @@ public import Proofs.Flock.Soundness.Discharge.Zero
 set_option Elab.async false
 
 /-!
-# `lay` and `rs` at the production program's places
+# `lay` and `rs` at the proving program's places
 
 At `Discharge/Placed`'s places of the circuit's program on Δ's source keys (`Sites.progPlaces_keyProg hU hparse outs`), with
 row widths `16 · words` (`portRowW`), `lay` is `keyLayout` with the registration's bit `outBitOf` (the population's
@@ -42,7 +42,7 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {Reg : Type} {mPts : 
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
   (outs : Finset (Fin (keyN c hU n))) (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ) (popOf : Reg → Public)
 
-/-- **`lay` at the production program's places**: `keyLayout` at row widths `16 · words`, with the population's
+/-- **`lay` at the proving program's places**: `keyLayout` at row widths `16 · words`, with the population's
 returned outputs for the registration's bit. -/
 noncomputable abbrev keyedLayout :
     Binding.Layout ((keyProg c hU n).partition outs) plan tab
@@ -50,7 +50,7 @@ noncomputable abbrev keyedLayout :
   keyLayout (portRowW c) hparse outs saltCol popOf (outBitOf c hU n outs popOf) bitCode
 
 variable {outs popOf} in
-/-- **`rs` at the production program's places**: `keyRowsEnc` at row widths `16 · words`, with the constant's and the
+/-- **`rs` at the proving program's places**: `keyRowsEnc` at row widths `16 · words`, with the constant's and the
 zero's gates from `Discharge/Const` and `Discharge/Zero`. -/
 noncomputable def keyedRows (ho : c.outNet = c.unitNet)
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
@@ -68,7 +68,7 @@ theorem keyedRows_enc (ho : c.outNet = c.unitNet)
     (keyedRows hparse saltCol ho hsite houts hkeys).enc = rowEnc := rfl
 
 variable {outs popOf} in
-/-- **`rs` at the production program's places, with `KeysRow` from the parse** (`keysRow_of_parse`): the circuit's unit
+/-- **`rs` at the proving program's places, with `KeysRow` from the parse** (`keysRow_of_parse`): the circuit's unit
 has only its leaf group, and every input a unit row reads is a port bit (`PortReads`). -/
 noncomputable def keyedRowsOfParse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (hc : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU)
@@ -80,7 +80,7 @@ noncomputable def keyedRowsOfParse {tags : Tags} {bytes : ByteArray} {tables : L
   keyedRows hparse saltCol ho hsite houts (keysRow_of_parse hc h1 hpr)
 
 variable {popOf} in
-/-- **`rs` at the production program's places, with the returned outputs' bits for the program's outputs**
+/-- **`rs` at the proving program's places, with the returned outputs' bits for the program's outputs**
 (`outs := outsOf`, `outsOut_outsOf`): `keyedRowsOfParse` without `OutsOut`. -/
 noncomputable def keyedRowsOuts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (hc : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU)

@@ -1249,7 +1249,7 @@ def test_pinned_vectors_fast():
 
 
 @pytest.mark.slow
-def test_pinned_vectors_production_tile():
+def test_pinned_vectors_serving_tile():
     pinned = json.loads(V.OUT.read_text())
     for case, want in zip(V.CASES, pinned["cases"]):
         if not case[5]:
