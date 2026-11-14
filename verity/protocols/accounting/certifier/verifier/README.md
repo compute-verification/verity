@@ -125,10 +125,10 @@ A spec-level reference for network accounting's timing channel:
   check yet) that compares no grid in the clear. Its claim is counts only: on every execution phase the head check holds
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
   is at the profile. Nothing here holds the frames, the rest of the egress grid. The network verdict of record is
-  `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
+  `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
   egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
-- a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
+- a served link's counts (`served`, `TransferBlocks(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
   occupancy profile: N2's served proof block, `NetworkServedTransferBlocks`, adds a Boolean Definition,
   `NetworkServedCounts_v1`, that holds the egress
   head's counts to the ones its ingress head's counts derive under the window's declared sync, the advice the audit
@@ -459,20 +459,20 @@ Every protocol is to be zero-knowledge. The network audit's claim is counts only
 counts on every link's execution phase: on a served link to the ones its ingress counts derive under the declared sync,
 on a network certifier's to its schedule's, beside the proved timing bound (provisional).
 
-N2's verifier, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
+N2's verifier, `TransferBlocks.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
 block (`NetworkTransferBlocks` v5, served `NetworkServedTransferBlocks` v4) and public inputs alone: its own run of Flock's Lean
 verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
-output row's verdict and deadline bits are 1, the certificates verify on their public fields (`LinkWindows.certified`),
+output row's verdict and deadline bits are 1, the certificates verify on their public fields (`TransferBlocks.certified`),
 and the window's sync is declared. It reads no head, salt or sibling. `verity/protocols/accounting/certifier/prover/n2_zk.py` proves a
 certifier-serve run's execution phases this way through the link's own stream, and scans what the verifier received. The
-in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. What's open:
+in-the-clear check, `TransferBlocks.clear`, is a debug comparison, off by default. What's open:
 - **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
   device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
   commitment. That is a provisional exception to the four public kinds, not a fifth kind.
-- **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
+- **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`TransferBlocks.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
-`LinkWindows.verify`'s verdict of record on a plain, served or network certifier link is the Lean's, `NetworkCheck.TransferBlocks`
+`TransferBlocks.verify`'s verdict of record on a plain, served or network certifier link is the Lean's, `NetworkCheck.TransferBlocks`
 (`verity/protocols/accounting/certifier/verifier/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`. `verify` runs both on every proof, and an execution phase where
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch is at
@@ -501,8 +501,8 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
 A proof of the proof block is held to its circuit. Each gate names its Definition's circuit digest
 (`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`, `served.gate` likewise), as `head_check.circuit-check.json` and
 `served.circuit-check.json` pin it and circuit-check holds the pin to the Definition. So the proof block's Program,
-which the spec and each registration bind, binds both circuits, and `LinkWindows.verify` refuses a proof that names any
-other Program, or a proof block of a size class no sidecar pins (`LinkWindows.proved`).
+which the spec and each registration bind, binds both circuits, and `TransferBlocks.verify` refuses a proof that names any
+other Program, or a proof block of a size class no sidecar pins (`TransferBlocks.proved`).
 
 The certificate signs no hash of witness. The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier samples fresh for each record

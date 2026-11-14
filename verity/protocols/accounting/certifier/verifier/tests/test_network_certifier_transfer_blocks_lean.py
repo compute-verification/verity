@@ -1,6 +1,6 @@
-"""N2's execution phase verdict of record in Lean (`NetworkCheck.TransferBlocks`, `LinkWindows.lean_verdict`) held to the
-Python (`LinkWindows.python_verdict`), the reference that keeps running beside it: the same accept bit, public outputs
-and digest on served and warden link-windows, honest and tampered (the session refused, rejected, naming another
+"""N2's execution phase verdict of record in Lean (`NetworkCheck.TransferBlocks`, `TransferBlocks.lean_verdict`) held to the
+Python (`TransferBlocks.python_verdict`), the reference that keeps running beside it: the same accept bit, public outputs
+and digest on served and warden execution phases, honest and tampered (the session refused, rejected, naming another
 Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or in a
 shared-row layout; the salts and the output word forged; each certificate's fields edited, the certificates swapped,
 missing or not certificates; the declared syncs off Σ_sync or missing; a warden link under another digest).
@@ -167,7 +167,7 @@ def test_the_lean_verdict_is_the_pythons(tmp_path, kind):
     """On every case the Lean gives the Python's accept bit, public outputs and digest; the honest proof is accepted,
     with both bits proved."""
     c = KINDS[kind](tmp_path)
-    rng = random.Random(f"link-window/{kind}")
+    rng = random.Random(f"execution phase/{kind}")
     lean, python = c.both()
     assert lean == python and python["accepted"] and python["public"]["verdict"] == 1 == python["public"]["deadline"]
     cases = [{"delivered": c.public(d)} for d in _public_files(c, rng)]
@@ -187,7 +187,7 @@ def test_the_lean_verdict_is_the_pythons(tmp_path, kind):
     assert rejected >= len(cases) - 30
 
 
-def test_a_warden_link_window_reads_the_wardens_digest_and_no_sync(tmp_path):
+def test_a_warden_phase_reads_the_wardens_digest_and_no_sync(tmp_path):
     """On a network certifier link the Lean holds both ends' grids to the network certifier's parameters digest and
     reads no sync, as the Python does: syncs missing or off Σ_sync change neither verdict; the link under another
     network certifier's digest is a reject by both; and a network certifier case the Python never makes (a digest of another length or none, an end with a profile, two
@@ -219,7 +219,7 @@ def test_a_warden_link_window_reads_the_wardens_digest_and_no_sync(tmp_path):
         SVC.LA.SERVER.call("link-window", case)
 
 
-def test_an_advised_link_window_is_refused_by_name(tmp_path):
+def test_an_advised_phase_is_refused_by_name(tmp_path):
     """No advised link has a verdict of record (`OF_RECORD`): the Lean refuses a case of kind ``advised`` by name, its
     view and advice included or not, as it does a kind it doesn't know."""
     c = _warden(tmp_path)
@@ -247,12 +247,12 @@ def test_a_disagreement_or_a_case_the_lean_cant_state_rejects(tmp_path, monkeypa
     assert python["by"] == "python" and {k: v for k, v in python.items() if k != "by"} == \
         {k: v for k, v in lean.items() if k != "by"}
     monkeypatch.setitem(SVC.OF_RECORD, "warden", "lean")
-    real = SVC.LinkWindows.lean_verdict
-    monkeypatch.setattr(SVC.LinkWindows, "lean_verdict",
+    real = SVC.TransferBlocks.lean_verdict
+    monkeypatch.setattr(SVC.TransferBlocks, "lean_verdict",
                         lambda self, *a, **kw: {**real(self, *a, **kw), "public": {"verdict": 1, "deadline": 0}})
     v = run()
     assert not v["accepted"] and v["public"] == {"verdict": 0, "deadline": 0} and v["reference"] == {"accepted": True}
-    monkeypatch.setattr(SVC.LinkWindows, "lean_verdict", real)
+    monkeypatch.setattr(SVC.TransferBlocks, "lean_verdict", real)
 
     class Wrapped:
         """The link's LMS key behind another type, which `lean_case` doesn't state."""

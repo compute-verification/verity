@@ -22,7 +22,7 @@ from verity.commitments import hm96
 from verity.commitments.gates.frame_v3 import root_ref
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
-from verity.protocols.accounting.certifier.verifier.service import (HEADS, OUTPUTS, PUBLIC_WARDEN, SCHEMA, VALUE, LinkWindows,
+from verity.protocols.accounting.certifier.verifier.service import (HEADS, OUTPUTS, PUBLIC_WARDEN, SCHEMA, VALUE, TransferBlocks,
                                                                       encode, rows)
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
@@ -72,7 +72,7 @@ class Run:
         self.signer = signers.signer(tmp_path)
         drawn = itertools.count(0xc0)
         self.issuer = Issuer(self.signer, signers.SESSION, coins=lambda n: bytes([next(drawn) % 256]) * n)
-        self.lw = LinkWindows(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
+        self.lw = TransferBlocks(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
                               proof_deadline=proof_deadline, warden=SVC.WardenProfile(3, WARDEN_DIGEST))
         self.clock = Clock()
         self.stream = self.lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: coins * n,
@@ -109,7 +109,7 @@ def reject(out: S.Outcome) -> bool:
     return not out.accepted and out.verdict.codes == ("reject",) and out.public == {} and out.exhaustive is None
 
 
-def test_one_link_window_round_trip_is_the_exhaustive_fact(tmp_path):
+def test_one_phase_round_trip_is_the_exhaustive_fact(tmp_path):
     run = Run(tmp_path)
     opening = run.honest(0)
     reg = run.register(opening)
@@ -170,7 +170,7 @@ def test_a_registered_window_with_no_outcome_rejects_the_link(tmp_path):
 
 
 def test_a_gap_in_the_registration_order_rejects_the_link(tmp_path):
-    """Window 2 registered second, past `LinkWindows.register`'s order check, and accepted on its own: window 1 is never
+    """Window 2 registered second, past `TransferBlocks.register`'s order check, and accepted on its own: window 1 is never
     registered, so the link is a reject, as it is with a registration past the windows asked for."""
     run = Run(tmp_path)
     run.round(run.honest(0))
@@ -190,7 +190,7 @@ def test_the_network_verdict_is_only_of_its_own_links_stream(tmp_path):
     other = replace(run.lw, link="tokens")
     with pytest.raises(ValueError, match="not this link's"):
         other.network_verdict(run.stream)
-    with pytest.raises(ValueError, match="one or more link-windows"):
+    with pytest.raises(ValueError, match="one or more execution phases"):
         run.lw.network_verdict(run.stream, windows=0)
 
 
@@ -581,7 +581,7 @@ def test_a_signer_that_refuses_leaves_the_window_unregistered(tmp_path):
     assert run.stream.records == ()
 
 
-def test_the_opening_must_be_the_registered_link_windows(tmp_path):
+def test_the_opening_must_be_the_registered_phases(tmp_path):
     run = Run(tmp_path)
     opening = run.honest(0)
     draw = run.stream.select(run.register(opening))

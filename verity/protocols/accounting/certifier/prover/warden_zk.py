@@ -121,7 +121,7 @@ def attestation(run: Path, n: int) -> SimpleNamespace:
             if w in cells and (w == 0 or first > 0) and k >= pads + n and (best is None or k > best[2]):
                 best = (w, q, k)
     if best is None:
-        raise SystemExit(f"no egress link-window of {run} has a registration and a connection admitted in it with "
+        raise SystemExit(f"no egress execution phase of {run} has a registration and a connection admitted in it with "
                          f"D·r + n = {pads} + {n} cells")
     w, q, k = best
     doc, salts, wiring_salt = cells[w]
@@ -201,9 +201,9 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int = 0) -> st
 
 def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list[int]]) -> G.Registered:
     """A member's own rows of a port no network certifier row registration holds (one a unit, its u16 words), committed
-    before staging as a value registered on `head`'s link-window: each row under a salt of the prover's own, in a tree
+    before staging as a value registered on `head`'s execution phase: each row under a salt of the prover's own, in a tree
     whose domain binds the statement's Program (its SHA-512, `program`) and the network certifier's root, so the root,
-    which the registration names before any coin, opens under no other link-window's. The statement commits the port's
+    which the registration names before any coin, opens under no other execution phase's. The statement commits the port's
     rows under the same salts, so they open it."""
     return G.Registered.commit(program, f"{head.value}/committed/{port}", rows, None, G.WORD_BITS, WR.SCHEMA,
                                window=head.root.hex())
@@ -353,7 +353,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the warden's "
-                                      f"egress link-window {at.window} (warden_zk.py)",
+                                      f"egress execution phase {at.window} (warden_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "units": {"cells": [list(c) for c in at.units.cells], "digest": at.units.digest().hex()},
            "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the warden's signed root; "

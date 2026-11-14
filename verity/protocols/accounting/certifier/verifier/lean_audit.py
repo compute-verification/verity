@@ -24,7 +24,7 @@ a window or a grid field outside its integer width, a frame of other than B byte
 `VERITY_NETWORK_RECORDS_EXE` names the executable, and then nothing but `verity` and the stdlib is needed besides it; by
 default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
 after a request starts its own executable at its first; `SERVER`'s is closed at exit. The same process answers
-`link-window` (`Server.call`), N2's verdict of record on one link-window's proof (`service.LinkWindows.verify`),
+`link-window` (`Server.call`), N2's verdict of record on one execution phase's proof (`service.TransferBlocks.verify`),
 and `certificates`, the client's check of one window's served certificates (`certificate_refusals`, with
 `audit.certificate_refusals` beside it as the reference).
 
@@ -273,7 +273,7 @@ class Audit:
         except Exception as e:
             raise RuntimeError(f"the reference audit raised where the Lean check answered: {e!r}") from e
         if [(v.link, v.window) for v in ref] != [(v.link, v.window) for v in lean]:
-            raise RuntimeError(f"the reference audit gave link-windows {[(v.link, v.window) for v in ref]}, "
+            raise RuntimeError(f"the reference audit gave execution phases {[(v.link, v.window) for v in ref]}, "
                                f"the Lean check {[(v.link, v.window) for v in lean]}")
         vs = [l if l == r else Verdict(l.link, l.window, DISAGREEMENT) for l, r in zip(lean, ref)]
         self.lean.extend(lean)

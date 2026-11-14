@@ -4137,6 +4137,11 @@
       "paths": {
         "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Protocol.lean": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_link_window_lean.py": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_transfer_blocks_lean.py"
+      }
     }
   ]
 }

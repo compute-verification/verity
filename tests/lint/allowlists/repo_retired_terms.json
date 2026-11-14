@@ -2908,7 +2908,7 @@
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie.py", "count": 31},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie_adversarial.py", "count": 6},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie_phase4.py", "count": 2},
-    {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_link_window_lean.py", "count": 58},
+    {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_transfer_blocks_lean.py", "count": 58},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_out_commit.py", "count": 2},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_pacer.py", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_period.py", "count": 172},
