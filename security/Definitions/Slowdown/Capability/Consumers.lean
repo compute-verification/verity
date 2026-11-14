@@ -15,13 +15,13 @@ The **upstream certificate** (`Upstream`), a property of the wiring checkable on
 required gate reaches, inside the region, a gate the consumer's finishing set reads. So a block that finishes the
 consumer either is handed a gate of its region (an **import**, spending fresh bits) or contains all of its required
 gates (a **recomputation**, spending gates and, possibly, updated state). **Overlap weights** let regions share gates.
-The same three statements bound every kind of consumer (`InferenceOnly.Guarantees.ImportOrRecompute`, `RecomputeByGates`,
+The same three statements bound every kind of consumer (`Slowdown.Guarantees.ImportOrRecompute`, `RecomputeByGates`,
 `RecomputeByState`); a new kind of dependency is a new `Consumers` value, not a new argument.
 -/
 
 @[expose] public section
 
-namespace InferenceOnly.Capability
+namespace Slowdown.Capability
 
 open Verity Finset
 
@@ -49,7 +49,7 @@ noncomputable def servedIn [Fintype κ] (K : Consumers d κ) (S : Finset (Fin d.
 
 /-- **The uses of counted products as consumers**: use `j` is finished by computing one of its counted products whole,
 with the upstream region `A j` and required gates `G j` (one token's previous layer, say, and its products). -/
-def ofUses (B : InferenceOnly.Covering.MulBlocks d) (A G : Fin B.nt → Finset (Fin d.D.N)) (hG : ∀ j, G j ⊆ A j)
+def ofUses (B : Slowdown.Covering.MulBlocks d) (A G : Fin B.nt → Finset (Fin d.D.N)) (hG : ∀ j, G j ⊆ A j)
     (hA : ∀ j, Disjoint (A j) d.θ) : Consumers d (Fin B.nt) where
   fins j := (B.P.filter fun q => q.2 = j).image B.m
   A := A
@@ -72,7 +72,7 @@ def ofOutputs (out : κ → Fin d.D.N) (A G : κ → Finset (Fin d.D.N)) (hG : �
 consumer, every required gate reaches, inside the consumer's region, a gate that finishing set reads. It is the analysed
 implementation's; an algebraic rewrite needs its own. -/
 def Upstream (K : Consumers d κ) : Prop :=
-  ∀ c, ∀ F ∈ K.fins c, ∀ g ∈ K.G c, ∃ a ∈ d.D.into F ∩ K.A c, InferenceOnly.Covering.FeedsWithin d.D (K.A c) g a
+  ∀ c, ∀ F ∈ K.fins c, ∀ g ∈ K.G c, ∃ a ∈ d.D.into F ∩ K.A c, Slowdown.Covering.FeedsWithin d.D (K.A c) g a
 
 /-- **Overlap weights** on the consumers: nonnegative, summing to at most 1 over the regions that hold any one gate.
 Disjoint regions take weight 1 each; regions sharing gates take less. -/
@@ -87,4 +87,4 @@ def RequiresState (K : Consumers d κ) {ι : Type} (W : Items d.D ι) (h : ℝ) 
 
 end Consumers
 
-end InferenceOnly.Capability
+end Slowdown.Capability

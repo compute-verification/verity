@@ -17,14 +17,14 @@ that block's own `r` and its own `β_x` (`onePremise`), and (E) gives `b E ≤ T
 at each block's own reads (`countsOn_rows`). `HECharged` is that count at one `β_x`, (H) at the cap holding at every
 smaller one (`hardness_mono`).
 
-`HECharged_honest` and `HECharged_nontrivial` are at the toy `InferenceOnly.Cut.Toy`. With a block for each MAC, the first under
+`HECharged_honest` and `HECharged_nontrivial` are at the toy `Slowdown.Cut.Toy`. With a block for each MAC, the first under
 the cap `k = 2` and the second charged whole, `HECharged`'s premises hold together. With one block holding both MACs
 and no block charged, the block reads three gates, and at the total `T = 0` the bound is `0`, below `N = 2`.
 -/
 
 @[expose] public section
 
-namespace InferenceOnly.Cut.SecurityProofs
+namespace Slowdown.Cut.SecurityProofs
 
 open Verity Finset
 
@@ -180,4 +180,4 @@ theorem HECharged_nontrivial : Guarantees.HECharged_nontrivial := by
   · rw [toy_N, compl_univ, sum_empty]
     norm_num [workHEOn]
 
-end InferenceOnly.Cut.SecurityProofs
+end Slowdown.Cut.SecurityProofs

@@ -6,13 +6,15 @@ decided by `LinkWindows.outcome`: the verifier's own Lean `verify --zk` of the p
 the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
 comparison to each verdict, which decides nothing.
 
-    python verity/protocols/accounting/certifier/prover/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
-      [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K]
+    python benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
+      [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K] [--witness FILE]
 
 * **The run** (``--warden-run``): an active network certifier's run (`warden_serve.py`'s, or the gate's
   ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
   certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
-  declared or charged), a certifier rehearsal's run refused by name.
+  declared or charged), a certifier rehearsal's run refused by name. Which execution phases its signer refused follows
+  what the node sent, so a member's summary says only whether it refused any (``certifier_refused``), and the phases
+  go to ``--witness`` alone.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
   with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
   still the network certifier's, its head failing its signed digest alone. The prover's references
@@ -56,26 +58,20 @@ import hashlib
 import json
 import os
 import socket
-import sys
 import time
 from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
-ONE_STAGE = HERE.parent / "one_stage"
-sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
-
-import leak_scan as LS  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import head_check as HC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import service as SVC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.schedule import ClockSync  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.service import LinkWindows  # noqa: E402
-from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers
+from verity.protocols.accounting.certifier.verifier import head_check as HC
+from verity.protocols.accounting.certifier.verifier import service as SVC
+from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction
+from verity.protocols.accounting.certifier.verifier.schedule import ClockSync
+from verity.protocols.accounting.certifier.verifier.service import LinkWindows
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 ENDS = ("egress", "ingress")
 #: the stream's δ, by default
@@ -84,7 +80,7 @@ DELTA = 2.0 ** -40
 OTHER = "other_subset"
 ROUNDS = ("honest", "tampered")
 #: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
-ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'Live coins only')"
+ONE_SESSION = "outer proofs go through the ZK server one at a time (AGENTS.md, 'Live coins only')"
 #: what the verifier receives per execution phase, by file (`member`)
 RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
@@ -124,8 +120,7 @@ def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
     """A network certifier run's link (`warden_chain.link`: the active network certifier's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
     the signer's refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
-    from benchmarks.network_traces import warden_chain as WC
-
+    WC = proof_drivers.drivers().warden_chain
     lw, dep, _ = WC.link(run)
     got, refused = WC.pairs(run, dep)
     certified = {(d, w): r for w, pair in enumerate(got) for d, r in zip((Direction.EGRESS, Direction.INGRESS), pair)}
@@ -231,16 +226,12 @@ public_pieces = functools.partial(LS.public_pieces, fields=True)
 # --- the statement ----------------------------------------------------------------------------------------------------
 
 def _one_stage():
-    sys.path.insert(0, str(ONE_STAGE))
-    from verity.protocols.proofs.spot.prover.audit import template_audit as a0
-    import a8
     import numpy as np
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-    from verity_flock import circuit as FC
-    from verity_flock import class_statement as CS
 
-    return SimpleNamespace(a0=a0, a8=a8, np=np, P=P, PF=PF, V2=V2, FC=FC, CS=CS)
+    d = proof_drivers.drivers()
+    return SimpleNamespace(a0=d.a0, a8=d.a8, np=np, P=P, PF=PF, V2=V2, FC=d.circuit, CS=d.class_statement)
 
 
 def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
@@ -320,11 +311,11 @@ def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], secret: b
 
 
 def zk_server_env(M, sg: SimpleNamespace) -> dict:
-    """A firewalled prover's environment (`FC_FIREWALL=1`, its Lean frame named by ``FC_FIREWALL_LEAN``) on the
+    """A zk_served prover's environment (`FC_ZK_SERVER=1`, its Lean frame named by ``FC_ZK_SERVER_LEAN``) on the
     statement's partition and Program."""
-    if not os.environ.get("FC_FIREWALL_LEAN"):
-        raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (verity-verify-proof's flock-firewall)")
-    return {"FC_FIREWALL": "1", **M.a0.firewall_env({"partition_file": sg.partition_file,
+    if not os.environ.get("FC_ZK_SERVER_LEAN"):
+        raise SystemExit("FC_ZK_SERVER_LEAN names no Lean ZK server frame (verity-verify-proof's flock-zk-server)")
+    return {"FC_ZK_SERVER": "1", **M.a0.zk_server_env({"partition_file": sg.partition_file,
                                                      "program_file": sg.program_file})}
 
 
@@ -332,7 +323,7 @@ def one_session(jobs: int) -> None:
     """A driver's ``--jobs``: 1, its members proved one after another, each session behind the ZK server alone
     (`ONE_SESSION`); any other count is refused before anything runs."""
     if jobs != 1:
-        raise SystemExit(f"--jobs {jobs}: {ONE_SESSION}, so a prover runs one firewalled session at a time: --jobs 1")
+        raise SystemExit(f"--jobs {jobs}: {ONE_SESSION}, so a prover runs one ZK server session at a time: --jobs 1")
 
 
 # --- the rounds -------------------------------------------------------------------------------------------------------
@@ -522,11 +513,15 @@ def prove(a) -> int:
             raise SystemExit(f"{name}: its link's registered unit is not the honest run's")
         summary.setdefault("members", {})[name] = {
             "reference": [{"window": x.window, "word": x.word, "expect": x.expect, "failed": x.failed} for x in rd.windows],
-            "issuer_refused": rd.issuer_refused}
+            "certifier_refused": bool(rd.issuer_refused)}
         log(f"{name}: {len(rd.windows)} link-windows, words {[x.word for x in rd.windows]}, expected verdicts "
             f"{[x.expect for x in rd.windows]}, failed parts {[x.failed for x in rd.windows if any(x.failed.values())]}")
         if not expected(name, rd):
             raise SystemExit(f"{name}: the references are not the {name} round's")
+    if a.witness is not None:
+        a.witness.parent.mkdir(parents=True, exist_ok=True)
+        a.witness.write_text(json.dumps({name: {"issuer_refused": rd.issuer_refused} for name, rd in members.items()},
+                                        indent=1, sort_keys=True, default=str))
     if not summary["link"]["pinned"]:
         raise SystemExit(f"a gate names no pinned circuit digest: {summary['link']['gates']}")
     if a.dry:
@@ -612,6 +607,8 @@ def main(argv=None) -> int:
                         "window's root is committed, and only those proved (LinkWindows.period_draw); tampered then "
                         "changes every window, and other_subset proves another K-subset; 0 (the default): every window")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
+    p.add_argument("--witness", type=Path, help="where each member's execution phases its signer refused are written, "
+                                                "on the chain's private side")
     a = ap.parse_args(argv)
     one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)

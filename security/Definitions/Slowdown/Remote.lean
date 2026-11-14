@@ -32,7 +32,7 @@ residual read there is `r̂ + ε_W W_cert/C`.
 
 @[expose] public section
 
-namespace InferenceOnly.Slowdown
+namespace Slowdown.Slowdown
 
 /-- **The capacity of the windows whose certificates are wrong**: `∑_{i : wrong i} c_i`, window `i` of `N` having
 capacity `c_i`. -/
@@ -64,4 +64,4 @@ with `reference_efficiency=False`; at `s = 0` it is `max(1, MFU₀/x)`): unmonit
 the unconstrained developer, at `MFU₀`, and the other terms `x` are counted at peak. -/
 noncomputable def remoteSlowdown (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))
 
-end InferenceOnly.Slowdown
+end Slowdown.Slowdown

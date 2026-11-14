@@ -6,7 +6,7 @@ public import Proofs.Slowdown.Untied
 /-!
 # The min-cut statements say something
 
-`Cut_honest`, `CountHE_honest` and each guarantee's `_nontrivial`, at the toy `InferenceOnly.Cut.Toy`. The toy's `w`- and
+`Cut_honest`, `CountHE_honest` and each guarantee's `_nontrivial`, at the toy `Slowdown.Cut.Toy`. The toy's `w`- and
 `x`-words are each one unregistered input, which every separator from the unregistered inputs holds
 (`card_inter_le_kappa`), so `|S ∩ W| + |S ∩ X| ≤ κ(S)` (`toy_card_words_le`): that is (H) at unit costs for every
 budget `k`, and at `κ(S) ≤ 1` no matmul has both a `w`- and an `x`-word in `S`, so `Π(k) = 0` and `α = 0` for `k ≤ 1`
@@ -33,7 +33,9 @@ is tight.
 
 @[expose] public section
 
-namespace InferenceOnly.Cut.SecurityProofs
+open InferenceOnly
+
+namespace Slowdown.Cut.SecurityProofs
 
 open Verity Finset
 
@@ -237,7 +239,7 @@ theorem hardness_of_input_words {V : Type} [DecidableEq V] (d : RegisteredCircui
 
 /-- A path that ends in a set of gates closed under reads starts in it. -/
 theorem mem_of_feedsWithin_closed {C : Circuit} {R A : Finset (Fin C.N)} (hA : ∀ h ∈ A, C.reads h ⊆ A)
-    {g t : Fin C.N} (hp : InferenceOnly.Covering.FeedsWithin C R g t) : t ∈ A → g ∈ A := by
+    {g t : Fin C.N} (hp : Slowdown.Covering.FeedsWithin C R g t) : t ∈ A → g ∈ A := by
   induction hp with
   | refl _ => exact fun h => h
   | step _ hgh _ ih => exact fun ht => hA _ (ih ht) hgh
@@ -487,4 +489,4 @@ theorem toyZ_bound :
   obtain ⟨hT, hk, hH, hE, hval, hshare, -⟩ := toyZ_premises
   exact Untied.bound_asInputs_he dZ PZ TZ hT WZ valZ hk univ one_pos one_pos one_pos hval hshare (fun _ _ => hH _) hE
 
-end InferenceOnly.Cut.SecurityProofs
+end Slowdown.Cut.SecurityProofs

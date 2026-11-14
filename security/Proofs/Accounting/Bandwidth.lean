@@ -10,6 +10,7 @@ public import Proofs.Accounting.Bandwidth.Causal
 public import Proofs.Accounting.Bandwidth.Joint
 public import Proofs.Accounting.Bandwidth.TickedJoint
 public import Proofs.Accounting.Bandwidth.CausalJoint
+public import Proofs.Accounting.Bandwidth.Witnesses
 
 /-! The bandwidth audit v0's proofs: the guarantee in the random-oracle model, PoUB's per-pass lemma
 (`Accounting.SecurityProofs.Remote.AuditRO`), its completeness (`Bandwidth.SecurityProofs.HonestPasses`), the guarantee

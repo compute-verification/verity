@@ -136,7 +136,7 @@ def test_derive_registered_values_on_bits_reads_the_values_through_boolean_defin
     the lift is σ of the word function, and the `values` parameter is the fields' bits."""
     import torch
     from verity.circuits import boolean as BL
-    from verity_vllm.definitions import boolean as BB
+    from verity.circuits.ops.boolean import versions as BB
 
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.vllm_derive import derive_report

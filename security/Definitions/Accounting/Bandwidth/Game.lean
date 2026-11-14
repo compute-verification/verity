@@ -26,7 +26,7 @@ of it, which is what the commitment before the deadline enforces. A program reme
 chip's working memory in the window is unbounded: `S` bounds only what is on chip when the seed arrives, and writing to
 device memory to read it back gains a device nothing.
 
-**What is a parameter.** `S`, `c` and `G` are bounds the device class is sampled with; the claims registry names the
+**What is a parameter.** `S`, `c` and `G` are bounds the device class is sampled with; a deployment premise names the
 measurement that falsifies each for a deployed device (`bandwidth-s-chip`, `bandwidth-side-cap`,
 `bandwidth-regen-time`). Treating the stored blocks as uniform, apart from regeneration, is the claim
 `bandwidth-instantiation`; reading the deployed tag as the random oracle is `random-oracle`.

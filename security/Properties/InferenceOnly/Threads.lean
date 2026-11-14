@@ -10,7 +10,7 @@ public import Definitions.Slowdown.Assumptions.Threads
 `Witnesses` (`Properties.InferenceOnly`) says that a verdict of `InferenceOnlyCheck.evaluate` whose `complies` is `true` means every
 declaration the Program lays out, with the registered information `theta` names, complies with the inference-only policy
 at its rate, `InferenceOnly.CompliesRate c α`, at the gate budget `c = gamma` and the rate `α = num / den`. The thread
-bounds, `InferenceOnly.Guarantees.ThreadedThrottled`, `ThreadedThrottledDark` and their `Slots` forms
+bounds, `Slowdown.Guarantees.ThreadedThrottled`, `ThreadedThrottledDark` and their `Slots` forms
 (`Definitions/Slowdown/Guarantees/Threads.lean`), bound a complying declaration that contains a reference training
 circuit. The statements here join the two, so that the check's verdict carries the bound: on every instance with a
 verdict whose `complies` is `true`, every such declaration `d` meets the bound's conclusion at `c` and the fresh-input
@@ -26,7 +26,7 @@ budget `k = α c`, for every reference training circuit `r` it contains, under t
   (`WeightsIncompressibleSlots`).
 
 `k` need not be a natural here, since the check's rate is any `num / den`: the bounds are stated at the rate
-(proved as `InferenceOnly.SecurityProofs.ThreadedThrottled_rate` and its forms), and their `0 ≤ α` is no premise: `num / den` of
+(proved as `Slowdown.SecurityProofs.ThreadedThrottled_rate` and its forms), and their `0 ≤ α` is no premise: `num / den` of
 naturals is nonnegative. Each statement is proved as `InferenceOnlyCheck.Properties.SecurityProofs.X : InferenceOnlyCheck.Properties.X` in
 `Proofs.InferenceOnly.Verdict` (package `security_proofs`), from `Witnesses` and the bound's proof: a property whose
 proof needs `security_proofs` is stated here and proved there.
@@ -43,7 +43,7 @@ open Flock.Program (Prog)
 information `theta` names has at least `c b_a / (k Λ)` gates per counted multiplication of each reference training
 circuit `r` it contains that is `(dd, e)`-threaded with incompressible weights, with no fresh input of `r` in `d`'s
 registered information (`ThetaRegistered`), `Λ` being Theorem 1's bound at fresh-input budget `k`, at `c = gamma`,
-`α = num / den` and `k = α c` (`InferenceOnly.Guarantees.ThreadedThrottled`'s conclusion). -/
+`α = num / den` and `k = α c` (`Slowdown.Guarantees.ThreadedThrottled`'s conclusion). -/
 def Throttled (j out : Json) : Prop :=
   ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
@@ -51,11 +51,11 @@ def Throttled (j out : Json) : Prop :=
     let c : ℕ := i.gamma
     let α : ℝ := (i.num : ℝ) / i.den
     let k : ℝ := α * c
-    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : InferenceOnly.Threading r) (dd e : ℕ)
+    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : Slowdown.Threading r) (dd e : ℕ)
       (M : Verity.Containment r.D d.D),
       0 < b_w → 0 < b_a → 0 < dd →
-      InferenceOnly.Assumptions.ThetaRegistered r d (InferenceOnly.PartialContainment.ofContainment M) →
-      T.Threaded c k dd e → InferenceOnly.Assumptions.WeightsIncompressible r T c k b_w b_a →
+      InferenceOnly.Assumptions.ThetaRegistered r d (Slowdown.PartialContainment.ofContainment M) →
+      T.Threaded c k dd e → Slowdown.Assumptions.WeightsIncompressible r T c k b_w b_a →
         b_a * T.M.card ≤ α * T.bound k b_w dd e * d.D.size d.D.computed
 
 /-- **A verdict of compliance throttles every threaded reference training circuit the declaration contains, if its
@@ -70,7 +70,7 @@ def Throttles : Prop :=
 information `theta` names, containing a `(dd, e)`-threaded reference training circuit `r` with incompressible weights
 partly, with no fresh input of `r` in `d`'s registered information (`ThetaRegistered`), has `r`'s counted
 multiplications at most its dark gates plus `αΛ size(d) / b_a`, at `c = gamma`, `α = num / den` and `k = α c`
-(`InferenceOnly.Guarantees.ThreadedThrottledDark`'s conclusion). -/
+(`Slowdown.Guarantees.ThreadedThrottledDark`'s conclusion). -/
 def ThrottledDark (j out : Json) : Prop :=
   ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
@@ -78,10 +78,10 @@ def ThrottledDark (j out : Json) : Prop :=
     let c : ℕ := i.gamma
     let α : ℝ := (i.num : ℝ) / i.den
     let k : ℝ := α * c
-    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : InferenceOnly.Threading r) (dd e : ℕ)
-      (M : InferenceOnly.PartialContainment r d),
+    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : Slowdown.Threading r) (dd e : ℕ)
+      (M : Slowdown.PartialContainment r d),
       0 < b_w → 0 < b_a → 0 < dd → InferenceOnly.Assumptions.ThetaRegistered r d M → T.Threaded c k dd e →
-      InferenceOnly.Assumptions.WeightsIncompressible r T c k b_w b_a →
+      Slowdown.Assumptions.WeightsIncompressible r T c k b_w b_a →
         (T.M.card : ℝ) ≤ M.dark.card + α * T.bound k b_w dd e * d.D.size d.D.computed / b_a
 
 /-- **A verdict of compliance puts counted multiplications off the books in dark gates**, for every threaded reference
@@ -94,7 +94,7 @@ def ThrottlesDark : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledDark j out
 
 /-- `Throttled` with the weights charged per parameter slot of a slot map `σ` (`WeightsIncompressibleSlots`):
-`InferenceOnly.Guarantees.ThreadedThrottledSlots`'s conclusion. -/
+`Slowdown.Guarantees.ThreadedThrottledSlots`'s conclusion. -/
 def ThrottledSlots (j out : Json) : Prop :=
   ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
@@ -102,11 +102,11 @@ def ThrottledSlots (j out : Json) : Prop :=
     let c : ℕ := i.gamma
     let α : ℝ := (i.num : ℝ) / i.den
     let k : ℝ := α * c
-    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : InferenceOnly.Threading r) (σ : T.Slots) (dd e : ℕ)
+    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : Slowdown.Threading r) (σ : T.Slots) (dd e : ℕ)
       (M : Verity.Containment r.D d.D),
       0 < b_w → 0 < b_a → 0 < dd →
-      InferenceOnly.Assumptions.ThetaRegistered r d (InferenceOnly.PartialContainment.ofContainment M) →
-      T.Threaded c k dd e → InferenceOnly.Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →
+      InferenceOnly.Assumptions.ThetaRegistered r d (Slowdown.PartialContainment.ofContainment M) →
+      T.Threaded c k dd e → Slowdown.Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →
         b_a * T.M.card ≤ α * T.bound k b_w dd e * d.D.size d.D.computed
 
 /-- **`Throttles` per parameter slot**: a verdict of compliance throttles every threaded reference training circuit the
@@ -117,7 +117,7 @@ def ThrottlesSlots : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledSlots j out
 
 /-- `ThrottledDark` with the weights charged per parameter slot of a slot map `σ` (`WeightsIncompressibleSlots`):
-`InferenceOnly.Guarantees.ThreadedThrottledDarkSlots`'s conclusion. -/
+`Slowdown.Guarantees.ThreadedThrottledDarkSlots`'s conclusion. -/
 def ThrottledDarkSlots (j out : Json) : Prop :=
   ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
@@ -125,10 +125,10 @@ def ThrottledDarkSlots (j out : Json) : Prop :=
     let c : ℕ := i.gamma
     let α : ℝ := (i.num : ℝ) / i.den
     let k : ℝ := α * c
-    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : InferenceOnly.Threading r) (σ : T.Slots) (dd e : ℕ)
-      (M : InferenceOnly.PartialContainment r d),
+    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : Slowdown.Threading r) (σ : T.Slots) (dd e : ℕ)
+      (M : Slowdown.PartialContainment r d),
       0 < b_w → 0 < b_a → 0 < dd → InferenceOnly.Assumptions.ThetaRegistered r d M → T.Threaded c k dd e →
-      InferenceOnly.Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →
+      Slowdown.Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →
         (T.M.card : ℝ) ≤ M.dark.card + α * T.bound k b_w dd e * d.D.size d.D.computed / b_a
 
 /-- **`ThrottlesDark` per parameter slot**: for every threaded reference training circuit the declaration contains

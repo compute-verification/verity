@@ -7,7 +7,7 @@ public import Mathlib.Tactic.FinCases
 /-!
 # The training formalism v2: the instances its witnesses are stated at (trusted)
 
-The instances the honest and nontrivial lemmas of `InferenceOnly.Formalism.Guarantees` are stated at
+The instances the honest and nontrivial lemmas of `Slowdown.Formalism.Guarantees` are stated at
 (`Security/Definitions/Slowdown/Guarantees/Formalism/Witnesses.lean`). Each is a small Boolean declaration whose gate 0 is its
 one registered input, the weight `θ`.
 
@@ -30,7 +30,7 @@ one registered input, the weight `θ`.
 
 @[expose] public section
 
-namespace InferenceOnly.Formalism
+namespace Slowdown.Formalism
 
 open Verity
 
@@ -118,4 +118,4 @@ abbrev methods : Set Run := {r}
 
 end Chain
 
-end InferenceOnly.Formalism
+end Slowdown.Formalism

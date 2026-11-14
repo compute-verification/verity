@@ -18,9 +18,9 @@ At `c_w = c_a = r · b` the assumptions are `ParameterHard` and `ActivationChain
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs.CoveringTwoCosts
+namespace Slowdown.SecurityProofs.CoveringTwoCosts
 
-open Verity Finset InferenceOnly.Covering
+open Verity Finset Slowdown.Covering
 
 variable {d : RegisteredCircuit} (B : MulBlocks d)
 
@@ -40,11 +40,11 @@ theorem coveringBound_of_twoCosts (h : Guarantees.CoveringBoundTwoCosts) : Guara
   rw [chainedBlocks_eq, sq]
   exact ⟨h1, h2⟩
 
-end InferenceOnly.SecurityProofs.CoveringTwoCosts
+end Slowdown.SecurityProofs.CoveringTwoCosts
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
-open Verity Finset InferenceOnly.Covering InferenceOnly.SecurityProofs.Covering
+open Verity Finset Slowdown.Covering Slowdown.SecurityProofs.Covering
 
 /-- **One block's chained count at two costs**: an `(s, k)`-inference block `S` of an `(s, c_w)`-parameter-hard `d`,
 with `c_w D > k` and `c_a > 0`, computes the output gates of at most `(k / c_w)(k / c_a) + k` multiplication blocks
@@ -175,4 +175,4 @@ theorem CoveringBoundTwoCosts : Guarantees.CoveringBoundTwoCosts := by
     _ ≤ (n : ℝ) * ((s : ℝ) / d.D.N) := mul_le_mul_of_nonneg_right hdiv (by positivity)
     _ = (s : ℝ) * n / d.D.N := by ring
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

@@ -799,7 +799,8 @@ def test_an_admin_only_node_is_read_only_when_named(world, capsys):
     manifest = world["manifest"]
     manifest.write_text(manifest.read_text().replace("[nodes.n]\n", f'[nodes.a]\nadmin = true\nrecord = "{world["node"]}/a.jsonl"\n\n'
                                                                        "[nodes.n]\n", 1))
-    denied = lambda node, argv, stdin: subprocess.CompletedProcess(argv, 255, b"", b"vy-admin@h: Permission denied (publickey).\n")
+    def denied(node, argv, stdin):
+        return subprocess.CompletedProcess(argv, 255, b"", b"vy-admin@h: Permission denied (publickey).\n")
     deploy.main(["drift", "--json", "--no-fetch"], run=denied, manifest=manifest, repo=world["repo"])
     assert set(json.loads(capsys.readouterr().out)) == {"n"}
     assert deploy.main(["drift", "--on", "a", "--json", "--no-fetch"], run=denied, manifest=manifest, repo=world["repo"]) == 1
@@ -879,7 +880,8 @@ def test_a_staged_node_is_passed_by_unless_named_and_installs_as_any_other(world
     node, repo, manifest = world["node"], world["repo"], world["manifest"]
     manifest.write_text(manifest.read_text().replace('[nodes.n]\n', '[nodes.n]\nstaged = "created when the quota lands"\n', 1))
     seen = []
-    run = lambda name, argv, stdin: seen.append(name) or local(name, argv, stdin)
+    def run(name, argv, stdin):
+        return seen.append(name) or local(name, argv, stdin)
     assert deploy.main(["drift", "--json", "--no-fetch"], run=run, manifest=manifest, repo=repo) == 0
     out = capsys.readouterr()
     assert json.loads(out.out) == {} and not seen and "n is staged (created when the quota lands)" in out.err
@@ -1133,7 +1135,8 @@ def test_each_unit_is_installed_with_the_environment_files_and_scripts_it_names_
             for u in units:
                 name = u.split(":", 1)[1].rsplit(".", 1)[0]
                 inst = name.partition("@")[2]
-                resolve = lambda s: s.replace("%N", name).replace("%i", inst)
+                def resolve(s):
+                    return s.replace("%N", name).replace("%i", inst)
                 envs = [resolve(ln.split("=", 1)[1].lstrip("-")) for ln in text.splitlines() if ln.startswith("EnvironmentFile=")]
                 scripts = [resolve(s) for ln in text.splitlines() if ln.startswith(("ExecStart=", "ExecStartPre="))
                            for s in re.findall(r"/workspace/[\w./@-]+\.(?:py|sh)\b", ln)]
@@ -1272,7 +1275,7 @@ def test_a_held_entry_is_reported_and_skipped_and_refused_when_named(world, caps
                        repo=repo) == 3
     assert "A PR that drops its `hold` comes first" in capsys.readouterr().err and not (node / "bin" / "h.py").exists()
 
-    manifest.write_text(f'[nodes.n]\nrecord = "/r"\n[[file]]\npath = "/p"\nby = "s"\nnodes = ["n"]\nhold = "x"\n')
+    manifest.write_text('[nodes.n]\nrecord = "/r"\n[[file]]\npath = "/p"\nby = "s"\nnodes = ["n"]\nhold = "x"\n')
     with pytest.raises(ValueError, match="is held, which only an entry install copies"):
         deploy.load(manifest)
 

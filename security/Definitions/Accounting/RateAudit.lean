@@ -52,7 +52,7 @@ ingress (`Prover.ingress`) counts every read, so it is at least the footprint, a
 memory to the chip.
 
 **What is a parameter.** `S`, `L`, `q`, `c_tag`, `c_enc` and the compute budget are bounds the device class is sampled
-with; the claims registry names the measurement that falsifies each for a deployed device (`bandwidth-s-chip`,
+with; a deployment premise names the measurement that falsifies each for a deployed device (`bandwidth-s-chip`,
 `bandwidth-side-cap`, and `rate-codec-work` for `c_enc`). Treating the stored words as uniform is
 `bandwidth-instantiation`; reading the deployed tag as the random oracle is `random-oracle`.
 
