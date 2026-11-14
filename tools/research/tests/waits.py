@@ -49,6 +49,10 @@ class Gate:
         self.path = path
         self._fd: int | None = os.open(path, os.O_RDWR)
 
+    def fileno(self) -> int:
+        """The read end, for a `select` that waits on a line here or on something else, whichever comes first."""
+        return self._fd
+
     def release(self) -> None:
         os.write(self._fd, b"x")
 

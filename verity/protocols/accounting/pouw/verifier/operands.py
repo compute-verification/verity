@@ -27,8 +27,8 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 TAG = CC.VALUES_TAG
 KEY = "activations"
 #: what an execution phase's operands don't establish yet, named wherever a record reports them (`stated`)
-GAPS = ("the A rows are not proved to be the served activations x (an x row is one token's codes, an A row R tokens' "
-        "K/2 codes): a gather",
+GAPS = (("the A rows are not proved to be the served activations x (an x row is one token's codes, an A row R tokens' "
+         "K/2 codes): a gather"),
         "the B rows are not proved to be the registered weights' rows")
 
 
