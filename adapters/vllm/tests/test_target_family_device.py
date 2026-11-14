@@ -76,3 +76,12 @@ def test_a_torch_that_fails_is_no_device_by_the_errors_name(monkeypatch):
     _smi(monkeypatch, raises=FileNotFoundError("nvidia-smi"))
     _torch(monkeypatch, (9, 0), raises=RuntimeError("CUDA driver initialization failed"))
     assert tf.device_cc() == (None, "no device: RuntimeError")
+
+
+@pytest.mark.parametrize(("answer", "cc"), [([8, 9], (8, 9)), ((9, 0, 1), (9, 0, 1)), ((9,), (9,)), ("90", ("9", "0"))],
+                         ids=["a-list", "three", "one", "a-text"])
+def test_torchs_answer_is_given_as_the_tuple_of_whatever_it_holds(monkeypatch, answer, cc):
+    monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+    _smi(monkeypatch, raises=FileNotFoundError("nvidia-smi"))
+    _torch(monkeypatch, answer)
+    assert tf.device_cc() == (cc, "torch.cuda.get_device_capability")
