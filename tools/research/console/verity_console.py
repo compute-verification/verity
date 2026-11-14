@@ -57,7 +57,8 @@ def isoz(s: str | None) -> str | None:
         return None
     try:
         return iso(datetime.fromisoformat(s.replace("Z", "+00:00")))
-    except ValueError:
+    except ValueError as e:
+        print(f"verity_console: store time {s[:40]!r} does not parse, so it is shown as none ({e})", file=sys.stderr)
         return None
 
 
@@ -679,7 +680,7 @@ def _utc(s: str) -> float:
 def n1_leases(now: float, pools: dict = N1_LEASE_POOLS, usage_log: Path = N1_LEASE_USAGE) -> list[tuple]:
     """(GPU, start, end, who) for each lease node 1's gpu-lease granted: since to end of each finished one's
     `gpu-lease/usage/v1` record in usage_log, and since to now of each live one in a pool's n1-lease.json that no record has."""
-    out = []
+    out, skipped = [], 0
     for ln in usage_log.read_text().splitlines() if usage_log.exists() else ():
         try:
             d = json.loads(ln)
@@ -687,7 +688,9 @@ def n1_leases(now: float, pools: dict = N1_LEASE_POOLS, usage_log: Path = N1_LEA
                 a, b = _utc(d["since"]), _utc(d["end"])
                 out += [(int(g["index"]), a, b, d["who"]) for g in d["gpus"]]
         except (ValueError, KeyError, TypeError, AttributeError):
-            continue
+            skipped += 1
+    if skipped:
+        print(f"verity_console: {skipped} line(s) of {usage_log} unread, so their leases are not counted", file=sys.stderr)
     done = {(g, a, who) for g, a, _, who in out}
     for d in pools:
         f = Path(d) / "n1-lease.json"
@@ -695,7 +698,9 @@ def n1_leases(now: float, pools: dict = N1_LEASE_POOLS, usage_log: Path = N1_LEA
             lease = g.get("lease") or {}
             try:
                 a = _utc(lease["since"])
-            except (ValueError, KeyError, TypeError):
+            except (ValueError, KeyError, TypeError) as e:
+                print(f"verity_console: {f}: GPU {g.get('index')}'s lease has no readable `since`, so it is not counted "
+                      f"({type(e).__name__}: {e})", file=sys.stderr)
                 continue
             if lease.get("who") and (g["index"], a, lease["who"]) not in done:
                 out.append((g["index"], a, max(a, now), lease["who"]))
@@ -736,11 +741,13 @@ def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle: dict | None =
         else:
             idle_s = idle[d]
         start: dict[int, float] = {}
+        skipped = 0
         for ln in log.read_text().splitlines():
             try:
                 e = json.loads(ln)
                 t, g = datetime.strptime(e["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp(), e.get("gpu")
             except (ValueError, KeyError, TypeError):
+                skipped += 1
                 continue
             if g is None:
                 continue
@@ -751,6 +758,8 @@ def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle: dict | None =
                 b = t - idle_s if e["ev"] == "shrink" else t
                 if b > a:
                     spans.append((g, a, b, lane))
+        if skipped:
+            print(f"verity_console: {skipped} line(s) of {log} unread, so their events are not counted", file=sys.stderr)
         state = json.loads((Path(d) / "n1-lease.json").read_text()) if start and (Path(d) / "n1-lease.json").exists() else {}
         st = datetime.strptime(state["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if state else now
         leased = {g["index"] for g in state.get("gpus") or [] if g.get("lease")}
@@ -802,16 +811,22 @@ def tp_lease(row: Path, w0: float, w1: float | None, now: float) -> tuple[float,
     the files gpu-lease writes in the row as it goes: `gpu_lease.started` to `gpu_lease.released`'s `t`, on one GPU per rank it
     released. A lease still open runs to the window's end, or to `now` up to LEASE_OPEN_MAX_S, on the
     row's `__tpN__` GPUs. Files an earlier attempt left in the row start before the window and don't count."""
+    if not (row / "gpu_lease.started").exists():
+        return None
     try:
         a = datetime.strptime((row / "gpu_lease.started").read_text().strip(), "%Y-%m-%dT%H:%M:%SZ")
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"verity_console: {row / 'gpu_lease.started'} unread, so its lease is not counted ({type(e).__name__}: {e})",
+              file=sys.stderr)
         return None
     a = a.replace(tzinfo=timezone.utc).timestamp()
     if a < w0 or (w1 is not None and a > w1):
         return None
     try:
-        rel = json.loads((row / "gpu_lease.released").read_text())
-    except (OSError, ValueError):
+        rel = json.loads((row / "gpu_lease.released").read_text()) if (row / "gpu_lease.released").exists() else None
+    except (OSError, ValueError) as e:
+        print(f"verity_console: {row / 'gpu_lease.released'} unread, so its lease is read as open ({type(e).__name__}: {e})",
+              file=sys.stderr)
         rel = None
     if isinstance(rel, dict) and isinstance(rel.get("t"), (int, float)) and rel["t"] >= a:
         return (a, rel["t"] if w1 is None else min(rel["t"], w1), [], max(1, len(rel.get("ranks") or [])))
@@ -833,7 +848,9 @@ def commit_leases(paths, now: float) -> list[tuple[float, float, list[tuple[str,
     for p in paths:
         try:
             evs = [json.loads(ln) for ln in Path(p).read_text().splitlines() if ln.strip()]
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"verity_console: timeline {p} unread, so its Commits' leases are not counted ({type(e).__name__}: {e})",
+                  file=sys.stderr)
             continue
         opened: dict = {}
         spans: dict = {}
