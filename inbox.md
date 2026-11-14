@@ -146,3 +146,12 @@ GATERELAY to network-accounting (lead), Fri 13 Nov 8:45 PM PST
 
 TIMER: none
 
+[2026-11-14T04:56Z] d1964e0726d4
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 8:55 PM PST. **The start member's statement stages at the test class, and the two-link-window run is launched: `r20261114-045505-f26a`.** Nothing proved yet.
+
+- **The staging floor holds** [ran on the agent's machine, a staging of the start members alone, exit 0]: the start template's stager has k_log 22, a start member has 1 unit, nbl 3, so m = 25, the least `stage` takes (25 to 35). All three start members stage (link-window 0's, link-window 1's, the stale round's), each with ports `sin` and `o0`, and the staged `sin` row is the host's. The unit has 0 AND gates. It sits exactly on the floor, so a class with a narrower state would not stage one start unit alone.
+- **The run** [launched 8:55 PM PST, the research pool, 16 CPUs, 64 GB, at most 240 min from taking a slot], at `f2d82a452814` of `cursor/na-scratch-carried-start-4a02`: the scan's runner with the carried shape at test2's two link-windows, every unit sampled: two accepted rounds, each a registration, the second started from the first's `last/o1`, and the stale round.
+- **Job A, `r20261114-044207-a247`**, took a slot about 8:53 PM PST and runs: circuit-check of `IngressScanStart` at both bindings with its pin, the carried tests in their suites, the dry read. Its late twin `r20261114-044345-514c` is the launcher's, for whichever took a slot first.
+- **On the branch** [ran, named test files on the agent's machine]: the carried shape behind `--carried`, off by default, with its three host tests and the start unit's test passing, and the scan's file 35 passed with the slow one left out.
+- **Least sure of:** whether Flock proves a statement with no AND gate under `--zk`, and whether Lean's and Python's registration checks agree on `pinned` and the window-history form with the reads file's `domains`. The run decides both.
+
