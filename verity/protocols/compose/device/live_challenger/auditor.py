@@ -2753,11 +2753,13 @@ def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> lis
 
 
 #: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: the schedule's execution phases,
-#: how many were certified and by how many certificates, those the signer refused, the registered rows (cut to
-#: `CELL_ROWS`), a load's values and how many registered, and how its failed connections failed in `FAILED`'s words.
+#: how many were certified and by how many certificates, the registered rows (cut to `CELL_ROWS`), a load's values
+#: and how many registered, and how its failed connections failed in `FAILED`'s words.
 #: None counts the traffic: the requests and how each ended, the cells, their bits, how many kept their bucket and
-#: the ticks' lateness follow what the peer sent and when, and stay in the witness's `check.json`
-WARDEN_COUNTS = ("failed", "windows", "certified_windows", "certificates", "signer_refused", "cell_rows", "load")
+#: the ticks' lateness follow what the peer sent and when, and stay in the witness's `check.json`. So does which
+#: execution phases the signer refused (`signer_refused`), which is the traffic's: the end holds no list and no
+#: count of them, and one of them has no certificate, which is all the period check needs to refuse it
+WARDEN_COUNTS = ("failed", "windows", "certified_windows", "certificates", "cell_rows", "load")
 #: the end's words for how a connection that neither ended nor was refused failed (the verdict's `failed`): the
 #: network certifier's own two outcomes, and `error` for any other. A client's exception is one, and its words are
 #: its connection's own line of `witness/client.json`

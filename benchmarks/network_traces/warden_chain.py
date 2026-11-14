@@ -57,10 +57,10 @@ UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
 #: the counts of `warden_serve.check`'s summary `certificates` writes: the gate's own list of what a network certifier
 #: run's end publishes (`auditor.WARDEN_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
 #: (`auditor.CELL_ROWS`). The summary's other keys count the traffic (the requests and how each ended, the cells, their
-#: bits and their lateness) or are made from the witness (a connection's bytes before padding, the requests' tokens and
-#: finish reasons, the certifier's clocks and stalls) and stay there. A key is added here only after the gate's list
-#: has it
-COUNTS = ("failed", "windows", "certified_windows", "certificates", "signer_refused", "cell_rows", "load")
+#: bits and their lateness, the execution phases the signer refused) or are made from the witness (a connection's
+#: bytes before padding, the requests' tokens and finish reasons, the certifier's clocks and stalls) and stay there.
+#: A key is added here only after the gate's list has it
+COUNTS = ("failed", "windows", "certified_windows", "certificates", "cell_rows", "load")
 CELL_ROWS = ("registered", "of")
 
 

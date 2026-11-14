@@ -299,7 +299,8 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
     assert ended_why(host, end) == "the rehearsal ended"
     assert end["pinned"] == PIN and "runs" not in end
     assert end["verdict"] == {"accepted": True, "failed": [], "windows": 2, "certified_windows": 6, "certificates": 6,
-                              "signer_refused": [], "cell_rows": {"registered": 4, "of": 4}} and "load" not in end
+                              "cell_rows": {"registered": 4, "of": 4}} and "load" not in end
+    assert CHECK["summary"]["signer_refused"] == [] and "signer_refused" not in end_text(d)
     assert set(end) == {"run", "rc", "ended", "pinned", "device", "verdict", "files"}
     assert "registrations" not in end
     assert {p.name for p in (d / A.WITNESS).iterdir()} == {
