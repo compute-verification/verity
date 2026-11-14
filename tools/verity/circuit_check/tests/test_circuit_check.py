@@ -11,7 +11,7 @@ that runs one builds circuit-check's catalog first (conftest.py), from the bindi
 binding without them, and only the whole suite shows what they hold (every registered family checked, every Call partitioned).
 The two walks of every Call over the partition budget (`_unchecked_walk`) are opt-in (`_opt_in`), and the nightly cold check runs
 them by name (check.py's `OPT_IN`): `circuit-check --all` fails a Call whose partition nothing checks by its name, and the walks
-hold `targets.CALLEE_CALLS` and `OVER_PARTITION_BUDGET` current.
+hold `targets.callee_calls` and `OVER_PARTITION_BUDGET` current.
 A test that selects targets by family reads the family off the catalog (`Catalog.reached`), so it makes only those.
 """
 from __future__ import annotations
@@ -190,12 +190,13 @@ def test_the_boolean_call_candidates_drop_only_families_boolean_version_refuses(
 
 def test_a_boolean_version_whose_statics_no_word_call_binds_is_not_a_candidate(monkeypatch):
     """A Boolean Definition linked to its word by name is the Boolean version only at a binding that gives each of its statics
-    (`verity.definitions.boolean._find`), so one with a static no word Call family of its name has is not a candidate, and
+    (`verity.circuits.ops.boolean.versions._find`), so one with a static no word Call family of its name has is not a candidate, and
     `is_call` says it is no Call without the catalog: a new port shape (``{K,R}`` beside the word Call's ``{K}``) is not
     refused."""
     from types import SimpleNamespace
 
-    from verity.definitions import boolean as BV
+    from verity.circuits.ops.boolean import versions as BV
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     TG.load_registries()
     exact, by_name, errors = BV._load()
@@ -238,7 +239,8 @@ def test_a_boolean_version_made_on_demand_is_a_call_by_its_id(monkeypatch):
 def test_the_boolean_versions_made_on_demand_are_made_in_sorted_order(monkeypatch):
     """Making a Boolean version on demand registers it, so `on_demand_boolean_families` makes them in sorted order: the
     registry's order, which a slice's shared part notes (`units.slices`' ``families``), is not a set's."""
-    from verity.definitions import boolean
+    from verity.circuits.ops.boolean import versions as boolean
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     asked: list[str] = []
     monkeypatch.setattr(boolean, "made_on_demand", asked.append)
@@ -392,7 +394,7 @@ def test_a_caller_keeps_room_for_random_vectors_after_fewer_edges():
 
 def _f32_sum():
     from verity.circuits.types import Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     return _composite("CircuitCheckFloorSum", (_f32x2(), Value(32)), lambda B, S, x: B.call(P.F32Add, x[0], x[1]))
 
@@ -540,14 +542,14 @@ def test_the_probed_entries_are_the_ends_and_each_regions_edges():
         VX.probe_entries(8, [(4, 9)])
 
 
-def test_a_registered_table_is_probed_and_never_flattened(monkeypatch):
+def test_a_registered_table_is_probed_and_never_flattened(monkeypatch, hand):
     """A Definition whose table parameter is over the input budget is checked on its other parameters' vectors plus one
     vector per probed entry, each reading the table lazily; the record names the probed entries and counts the words read."""
     from verity.circuits.evaluation import evaluate
 
     read, holds = _table_read(), _holds()
     probe = _table_probe(holds)
-    monkeypatch.setitem(TG.TABLE_PROBES, read.id, lambda: probe)
+    hand("table_probes", {read.id: (probe.param, lambda: probe.table, probe.entry_words, probe.regions, probe.reads)})
     monkeypatch.setattr(VX.RegisteredTable, "__iter__", lambda self: pytest.fail("the table was flattened"), raising=False)
     params, _ = CK.signature_of(read)
     instances, got, _rec = VX.table_instances(params, probe, CK._n_vectors(read, TABLE_OPTS, 1), TABLE_OPTS.seed)
@@ -565,13 +567,13 @@ def test_a_registered_table_is_probed_and_never_flattened(monkeypatch):
                                      "this Definition's correspondence reads a registered table lazily"}]
 
 
-def test_a_probe_that_reads_past_the_table_is_a_partial_reference(monkeypatch):
+def test_a_probe_that_reads_past_the_table_is_a_partial_reference(hand):
     """An entry index one past the last (an off-by-one in ``evaluate_lazy``) raises on the last entry's probe, by name."""
     read = _table_read()
     mask = (1 << TABLE_IB) - 1
     read.evaluate_lazy = lambda get: get(3 + 2 * (get(0) & mask)) | get(2 + 2 * (get(0) & mask)) << 16  # type: ignore[attr-defined]
     probe = _table_probe(_holds())
-    monkeypatch.setitem(TG.TABLE_PROBES, read.id, lambda: VX.TableProbe(probe.param, probe.table, 2, (), lambda e: [[e]]))
+    hand("table_probes", {read.id: (probe.param, lambda: probe.table, 2, (), lambda e: [[e]])})
     e = CK.check_definition(read, dataclasses.replace(TABLE_OPTS, vectors=4, min_vectors=4), memo={}, pins=PINS)
     (f,) = e["failures"]
     assert f["name"].startswith("correspondence/reference-not-total CircuitCheckTableRead_v1 raised on ")
@@ -583,8 +585,8 @@ def test_a_parameter_over_the_input_budget_without_a_probe_fails_by_name():
     assert e["conformance"] == "not-yet-established"
     assert [f["name"] for f in e["failures"]] == [
         "correspondence/unprobed-table CircuitCheckTableRead_v1 parameter 1 has 8192 leaves, over the input budget, and is neither a "
-        "registered table a probe reads (`circuit_check.targets.TABLE_PROBES`) nor an operand read lazily "
-        "(`circuit_check.targets.LAZY_OPERANDS`)"]
+        "registered table a probe reads (`circuit_check.targets.table_probe`) nor an operand read lazily "
+        "(`circuit_check.targets.lazy_operands`)"]
 
 
 def _wide_gemm():
@@ -597,7 +599,7 @@ def _wide_gemm():
 
 
 def test_an_operand_over_the_input_budget_is_read_lazily_on_the_vectors_words(monkeypatch):
-    """A weight over the input budget (`targets.LAZY_OPERANDS`) takes the edge and random words every parameter takes, one
+    """A weight over the input budget (`targets.lazy_operands`) takes the edge and random words every parameter takes, one
     vector at a time, and is read lazily, never flattened; the reference on each vector equals it on the same words flattened."""
     from verity.circuits.evaluation import RegisteredTable, evaluate
 
@@ -652,7 +654,7 @@ def _wide_experts(E: int):
     are over and 8 vectors of its other parameters fit in."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32
-    from verity.definitions.registry import fp8_moe_experts as X
+    from verity_vllm.definitions.registry import fp8_moe_experts as X
 
     return (bind(X.MoeExpertFp8Gemm, E=E, K=128, N=80, G=64, KB=32, SWAP=False, DOT=BlackwellE4m3QmmaDot32),
             dataclasses.replace(OPTS, input_budget=8192, vectors=8))
@@ -712,13 +714,13 @@ def _wide_shard():
     """`EmbeddingShard_v1` at VS=64, H=32, START=1000, with an input budget its table's 2,048 leaves are over: no edge or
     random token lies in the shard."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import b1_tp2
+    from verity_vllm.definitions.registry import b1_tp2
 
     return bind(b1_tp2.EmbeddingShard, VS=64, H=32, START=1000), dataclasses.replace(OPTS, input_budget=1024, vectors=8)
 
 
 def test_an_operand_probe_sets_the_index_that_reads_the_operands_first_and_last_rows():
-    """A shard's edge and random tokens lie outside it, so only its probes (`targets.OPERAND_PROBES`: the shard's first and last
+    """A shard's edge and random tokens lie outside it, so only its probes (`targets.operand_probes`: the shard's first and last
     token) read the table, one row each, on random words; the reference there equals it on the same words flattened."""
     from verity.circuits.evaluation import evaluate
 
@@ -735,16 +737,16 @@ def test_an_operand_probe_sets_the_index_that_reads_the_operands_first_and_last_
         assert ref[n + q] == tuple(evaluate(t, tok, words)) != (0,) * 32
 
 
-def test_an_operand_no_vector_reads_is_unchecked_and_a_probe_of_a_non_scalar_is_refused(monkeypatch):
+def test_an_operand_no_vector_reads_is_unchecked_and_a_probe_of_a_non_scalar_is_refused(hand):
     t, opts = _wide_shard()
-    monkeypatch.setitem(TG.OPERAND_PROBES, "EmbeddingShard_v1", lambda S: [])
+    hand("operand_probes", {"EmbeddingShard_v1": lambda S: []})
     F = CK.Findings()
     rec, _arrays, _ref = CK.correspondence(t, opts, F)
     assert not F.failures and rec["wide"][0]["reads"] == 0 and "probes" not in rec
     assert [w["name"] for w in F.warnings] == [
         "correspondence/operand-unread EmbeddingShard_v1{VS=64,H=32,START=1000}: 1 no vector read 'table', so its words are "
-        "checked on none (`circuit_check.targets.OPERAND_PROBES` sets an index that reads it)"]
-    monkeypatch.setitem(TG.OPERAND_PROBES, "EmbeddingShard_v1", lambda S: [{"table": 0}])
+        "checked on none (`circuit_check.targets.operand_probes` sets an index that reads it)"]
+    hand("operand_probes", {"EmbeddingShard_v1": lambda S: [{"table": 0}]})
     with pytest.raises(ValueError, match=r"isn't one of its Value parameters \['tok'\]"):
         CK.correspondence(t, opts, CK.Findings())
 
@@ -766,11 +768,12 @@ def test_an_operands_lazy_words_are_its_edges_then_seeded_random_words():
         VX.wide_words(Array(4, Value(128)), 0, 1, 7, 0)
 
 
-def test_a_definition_over_the_leaf_budget_is_not_partitioned(monkeypatch):
+def test_a_definition_over_the_leaf_budget_is_not_partitioned(hand):
     """The word query and `Q_call` resolve every parameter leaf: over ``partition_max_leaves`` the partition is not run, a warning
     where the Definition is no Call; a primitive Call has no callees to partition it, so it fails by its name."""
     read = _table_read()
-    monkeypatch.setitem(TG.TABLE_PROBES, read.id, lambda: _table_probe(_holds()))
+    probe = _table_probe(_holds())
+    hand("table_probes", {read.id: (probe.param, lambda: probe.table, probe.entry_words, probe.regions, probe.reads)})
     opts = dataclasses.replace(TABLE_OPTS, partition_max_leaves=4096)
     why = "its parameters' 8193 leaves are over the partition's leaf budget 4096: the word query and Q_call resolve every leaf"
     e = CK.check_definition(read, opts, memo={}, pins=PINS, as_call=False)
@@ -800,7 +803,7 @@ def _f32x2():
 
 def test_a_value_computed_twice_in_one_unit_is_a_redundant_gate():
     from verity.circuits.types import Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckRedundant", (_f32x2(), Value(32)),
                     lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])))
@@ -815,7 +818,7 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
     node by node; the whole Definition's cut compares them)."""
     from verity.circuits.refs import array_of
     from verity.circuits.types import Array, Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckRecompute", (_f32x2(), Array(2, Value(32))),
                     lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
@@ -833,7 +836,7 @@ def test_a_call_over_the_partition_budget_fails_by_its_name(monkeypatch):
     contains it, so its record says it is unchecked and nothing fails; a Call whose callees can't partition it either (one is no
     Call) fails by its name, with that callee, so its entry never reads as a pass."""
     from verity.circuits.types import Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckOverBudget", (_f32x2(), Value(32)),
                     lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), x[1]))
@@ -853,7 +856,7 @@ def _two_callees():
     callee that computes one value twice, each copy returned by its own proof block, and a 1-gate one."""
     from verity.circuits.refs import array_of
     from verity.circuits.types import Array, Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     twice = _composite("CircuitCheckTwice", (_f32x2(), Array(2, Value(32))),
                        lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
@@ -863,7 +866,7 @@ def _two_callees():
 
 
 def test_a_call_over_the_budget_whose_callees_are_calls_is_partitioned_by_them(monkeypatch):
-    """Over ``partition_max_gates`` and not cut member by member, a Call whose every callee is a Call (`targets.CALLEE_CALLS`) has
+    """Over ``partition_max_gates`` and not cut member by member, a Call whose every callee is a Call (`targets.callee_calls`) has
     each callee's partition checked as a Call's: a violation fails by the callee's name, and no ``partition/unchecked`` warning
     is left; the report's summary names the callees."""
     top, twice, mul, opts = _two_callees()
@@ -918,7 +921,7 @@ def test_a_call_over_the_budget_with_a_primitive_callee_over_it_too_fails_by_its
     """A primitive callee over ``partition_max_leaves`` has no callees to partition it, so nothing checks its Call's partition
     though it is a Call: `checks.callee_gap` names it, in the record, in the Call's failure and for the suite's walk."""
     from verity.circuits.types import Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     top = _composite("CircuitCheckOverPrimitive", (_f32x2(), Value(32)), lambda B, S, x: B.call(P.F32Mul, x[0], x[1]))
     monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (top, P.F32Mul)})
@@ -953,7 +956,7 @@ def test_a_call_over_the_leaf_budget_partitioned_by_its_callees_still_compares_i
 
 
 def test_a_call_over_the_budget_fails_all_by_the_name_of_a_callee_that_breaks_q_word(monkeypatch):
-    """``--all`` takes a Call's callees as Calls from `targets.CALLEE_CALLS` (through `targets.call_families`, as every task
+    """``--all`` takes a Call's callees as Calls from `targets.callee_calls` (through `targets.call_families`, as every task
     does), checks each callee's partition inside the Call's check and fails by the callee's name, and its summary reads the
     Call partitioned by its callees.  Without the entries nothing checks the Call's partition, so ``--all`` fails by the
     Call's name (``partition/unpartitioned``) rather than pass a value computed in two proof blocks as a warning."""
@@ -963,14 +966,14 @@ def test_a_call_over_the_budget_fails_all_by_the_name_of_a_callee_that_breaks_q_
     monkeypatch.setattr(TG, "load_registries", lambda: None)
     monkeypatch.setattr(TG, "suite", lambda: {top.id: top})
     # the holds name the registry's Definitions, which this one-target catalog doesn't check (block/absent-hold)
-    monkeypatch.setattr(block_held, "HELD", {})
+    monkeypatch.setattr(block_held, "held", dict)
     monkeypatch.setattr(TG, "templates", lambda: [])
     monkeypatch.setattr(TG, "word_call_families", lambda: {TG.family(top)})
     monkeypatch.setattr(TG, "boolean_call_families", lambda words, found=None: set())
     monkeypatch.setattr(TG, "_CALLS", set())
 
     def everything(callee_calls):
-        monkeypatch.setattr(TG, "CALLEE_CALLS", callee_calls)
+        monkeypatch.setitem(TG._HANDS, "callee_calls", lambda: callee_calls)
         TG._CALLS.clear()
         return cli.run([], opts, everything=True, log=None, isolate=False)
 
@@ -1044,7 +1047,7 @@ def test_the_partition_cuts_a_call_once(monkeypatch):
     cut whole once, by `partition` alone."""
     from verity.circuits.types import Value
     from verity.circuits import word as W
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     real_rule, cuts = W.unit_rule, []
 
@@ -1108,7 +1111,7 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 
 #: Calls over `Options.partition_max_gates` or `Options.partition_max_leaves` whose partition stays unchecked, each with why it
 #: is allowed: the suite's, and any range spot or callee of one `_unchecked_walk` reaches; none is.  Each passes no Call status
-#: to its callees (`targets.CALLEE_CALLS`): their boundaries are not the proof blocks its pending cut makes.  A hold keeps these
+#: to its callees (`targets.callee_calls`): their boundaries are not the proof blocks its pending cut makes.  A hold keeps these
 #: walks from failing on it; circuit-check still fails it by name (``partition/unpartitioned``), and whether that may stay red is
 #: drive's policy (policy.toml's allowances).  Over the gate
 #: budget alone, GLM-5.3 TP8's served two-shot MNNVL all-reduces (past 22 rows of 6,144) and multimem ones (past 50) are cut
@@ -1145,7 +1148,7 @@ _WALK: dict = {}
 
 
 def _unchecked_walk(catalog) -> tuple[dict[str, set[str]], set[str], dict[str, str]]:
-    """What `targets.CALLEE_CALLS` should be, the `OVER_PARTITION_BUDGET` ids reached, and each `checks.callee_gap` reached: from
+    """What `targets.callee_calls` should be, the `OVER_PARTITION_BUDGET` ids reached, and each `checks.callee_gap` reached: from
     the suite's Calls over the budget (`_over_budget`) and the range spots that are Calls (`circuit_check.ranges`), the families
     of each `checks.uncut` Call's callees that are no Call otherwise, each with the families of the Calls that pass it, through
     each callee `uncut` itself, primitives included; one `OVER_PARTITION_BUDGET` holds passes nothing."""
@@ -1153,7 +1156,7 @@ def _unchecked_walk(catalog) -> tuple[dict[str, set[str]], set[str], dict[str, s
         from circuit_check import ranges as RG
 
         suite, calls = catalog.suite, TG.call_families()
-        own = calls - set(TG.CALLEE_CALLS)
+        own = calls - set(TG.callee_calls())
         stack = [suite[k] for k in _over_budget(catalog, calls)]
         stack += [fn for spot in RG.spots() if TG.family(fn := TG.definition(spot)) in calls]
         want: dict[str, set[str]] = {}
@@ -1190,7 +1193,7 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
     over = _over_budget(catalog, calls)
     gaps = {k: f"{why}; {gap}" for k, why in over.items() if k not in OVER_PARTITION_BUDGET and (gap := _gap(suite[k])) is not None}
     assert gaps == {}, ("a Call over the partition budget that its callees can't partition: list a callee that is no Call in "
-                        "targets.CALLEE_CALLS, cut an uncut primitive callee or member, or hold the Call here with why")
+                        "the catalog's `callee_calls` hook (`targets.HOOKS`), cut an uncut primitive callee or member, or hold the Call here with why")
     assert sorted(set(OVER_PARTITION_BUDGET) - set(over) - _unchecked_walk(catalog)[1]) == [], \
         "no longer an over-budget Call the suite checks, or a range spot or callee of one: remove it from OVER_PARTITION_BUDGET"
     assert sorted(k for k in OVER_PARTITION_BUDGET if k in suite and _gap(suite[k]) is None) == [], \
@@ -1200,7 +1203,7 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
 @pytest.mark.slow
 @_opt_in("~40 min")
 def test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees(catalog):
-    """`targets.CALLEE_CALLS` is the families of the Definitions an `checks.uncut` Call calls (and, through each callee `uncut`
+    """`targets.callee_calls` is the families of the Definitions an `checks.uncut` Call calls (and, through each callee `uncut`
     itself, its callees), apart from those that are Calls otherwise, each with the families of the Calls that pass it
     (`_unchecked_walk`).  The uncut Calls are the suite's and the range spots' (`circuit_check.ranges`), apart from
     `OVER_PARTITION_BUDGET`'s: they pass nothing, and stay unchecked until their cut lands.  Every other one the walk reaches,
@@ -1208,14 +1211,14 @@ def test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees(c
     circuit-check fails its Call (``partition/unpartitioned``).  A listed Call that no longer passes a family Call status only warns:
     it keeps a family a Call, so its partition is checked, never left unchecked."""
     want, _held, gaps = _unchecked_walk(catalog)
-    have = {f: set(by) for f, by in TG.CALLEE_CALLS.items()}
+    have = {f: set(by) for f, by in TG.callee_calls().items()}
     assert {f: sorted(by - have.get(f, set())) for f, by in want.items() if by - have.get(f, set())} == {}, (
-        f"set targets.CALLEE_CALLS to {dict(sorted((f, tuple(sorted(by))) for f, by in want.items()))}, or hold in "
+        f"make the catalog's `callee_calls` hook (`targets.HOOKS`) return {dict(sorted((f, tuple(sorted(by))) for f, by in want.items()))}, or hold in "
         "OVER_PARTITION_BUDGET, with why, a Call whose callees can't be Calls yet")
     if stale := {f: sorted(by - want.get(f, set())) for f, by in have.items() if by - want.get(f, set())}:
-        warnings.warn(f"targets.CALLEE_CALLS lists Calls that no longer pass these families Call status: {stale}; drop them",
+        warnings.warn(f"the catalog's `callee_calls` hook lists Calls that no longer pass these families Call status: {stale}; drop them",
                       stacklevel=1)
-    assert {f: by for f, by in TG.CALLEE_CALLS.items() if list(by) != sorted(by)} == {}, "list each family's Calls in order"
+    assert {f: by for f, by in TG.callee_calls().items() if list(by) != sorted(by)} == {}, "list each family's Calls in order"
     assert gaps == {}, ("Calls whose partition nothing checks (`checks.callee_gap`: a callee that is no Call, or a primitive "
                         "over the budget): cut each, or hold it in OVER_PARTITION_BUDGET with why")
 
@@ -1234,7 +1237,7 @@ def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding(suite):
 
 def test_a_gate_no_output_reads_is_a_dead_gate():
     from verity.circuits.types import Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     def body(B, S, x):
         B.call(P.F32Mul, x[0], x[1])
@@ -1411,7 +1414,7 @@ def test_a_boolean_constant_is_checked_on_its_one_instance():
 
 def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
     from verity_flock import ir_lower as IL
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     add = IL.PIECES["F32Add_v1"]
     monkeypatch.setitem(IL.PIECES, "F32Mul_v1", lambda C, a, b: add(C, a, b))
@@ -1420,7 +1423,7 @@ def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
 
 
 def test_a_lowering_count_off_its_pin_is_named():
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     pins = {"pieces": {"F32Mul_v1": {"and": 1}}, "units": {}}
     e = CK.check_definition(P.F32Mul, OPTS, pins=pins)
@@ -1492,7 +1495,7 @@ def test_a_lowering_with_its_pinned_and_count_but_another_circuit_is_refused_on_
     """The same ANDs computing the same function, but built another way (every AND's operands swapped), match the pin's AND count
     and every correspondence check: only the pin's ``type`` refuses it."""
     from verity.circuits.boolean import forms
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
     pins = {"pieces": {"F32Mul_v1": pin["counts"]}, "units": {}}
@@ -1510,7 +1513,7 @@ def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monke
     warning, and `--update-pins` writes the lowering's ``type`` into it."""
     from circuit_check import cli
     from circuit_check import sidecars as SC
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
     e = CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {"F32Mul_v1": {"and": pin["counts"]["and"]}}, "units": {}})
@@ -1524,16 +1527,17 @@ def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monke
 
 
 def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
-    """A Definition a Program holds as one gate naming its circuit digest (``gated``: N2's served counts here) has that
-    digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier reads in its
-    place: its own digest passes, another fails by name, and none warns."""
+    """A Definition a Program holds as one gate naming its circuit digest (``gated``: the certifier's ingress scan bucket
+    here) has that digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier
+    reads in its place: its own digest passes, another fails by name, and none warns."""
     from verity.circuits.codec import program_digest
+    from verity.circuits.defs import bind
     from verity.circuits.program import Program
-    from verity.protocols.accounting.certifier.verifier import served as SV
+    from verity.protocols.accounting.certifier.prover.ingress_scan import IngressScanBucket
 
-    d = SV.unit(8, 3, 1, 2, 2, 0)
+    d = bind(IngressScanBucket, B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
     digest = program_digest(Program(d))
-    assert SV.NetworkServedCounts.gated and PINS["digests"][d.id] == {"sha512": digest}
+    assert IngressScanBucket.gated and PINS["digests"][d.id] == {"sha512": digest}
     for pinned, status in ((digest, "ok"), ("0" * 128, "mismatch"), (None, "unpinned")):
         F = CK.Findings()
         rec = CK.circuit_digest_pin(d, {"digests": {} if pinned is None else {d.id: {"sha512": pinned}}}, F)
@@ -1549,7 +1553,7 @@ def test_any_definition_holding_a_digests_pin_is_held_to_it():
     from verity.circuits.codec import program_digest
     from verity.circuits.defs import bind
     from verity.circuits.program import Program
-    from verity.definitions.registry import tp_allreduce as TA
+    from verity_vllm.definitions.registry import tp_allreduce as TA
 
     d = bind(TA.AllReduceMultimemVector, WORLD=8, TREE=TA.GLM53_H200_TREE, FTZ=False)
     digest = program_digest(Program(d))
@@ -1922,22 +1926,23 @@ def test_the_cache_key_is_the_same_under_two_builds_of_one_python_release(monkey
 
 
 def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
-    """Each check slot keeps its tests' results apart (`VERITY_TEST_CACHE`, `tools/verity/check/slot.py`); a report one slot
+    """Each check slot keeps its tests' results apart (`VERITY_TEST_CACHE`, `tools/check/slot.py`); a report one slot
     stored must count in another, while a variable that can change what a check computes still keys it."""
     from circuit_check import cache as CC
 
+    monkeypatch.delenv("VERITY_REGRESSION", raising=False)
     monkeypatch.setenv("VERITY_TEST_CACHE", "/home/research/.cache/verity/tests-slot-a")
     here = CC.key({"target": "F32Mul_v1"})
     monkeypatch.setenv("VERITY_TEST_CACHE", "/home/research/.cache/verity/tests-slot-b")
     assert CC.key({"target": "F32Mul_v1"}) == here
-    monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
+    monkeypatch.setenv("VERITY_REGRESSION", "1")
     assert CC.key({"target": "F32Mul_v1"}) != here
 
 
 def test_the_cache_key_is_the_same_on_every_node(monkeypatch, tmp_path):
     """A report one node stored counts on every other node of the image (`check.py --plan`, `research merge --verdicts`): the key
     names no host, kernel, working directory, home, PATH or check slot (each slot sets its own `VERITY_TEST_CACHE`,
-    `tools/verity/check/slot.py`), while the CPU, a variable that can change what a check computes and the request still key it."""
+    `tools/check/slot.py`), while the CPU, a variable that can change what a check computes and the request still key it."""
     import platform
 
     from circuit_check import cache as CC

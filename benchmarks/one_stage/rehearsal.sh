@@ -11,10 +11,11 @@
 #                         $OUT/steps.txt, and the exit status is 0 only where every step's is. The steps: this tree's
 #                         environment (uv sync); the filter around a stand-in harness (a made-up secret, an exit status
 #                         carried, a TERM waited out); the settings file as `serve` holds it (a one-output class needs
-#                         its own PP_PARTITION: its window has no step 1; the tied window's rule is stated, V3C_LAW a
-#                         stratified-rate:NUM/DEN, which the harness gives no default); `serve` around a stand-in
-#                         harness (the deferral's copy asked once, only after a serve that exited 0 or 2, pending,
-#                         and never after one that exited 1 or any other status); the class's
+#                         its own PP_PARTITION: its window has no step 1; the tied window's sampling design is stated, a
+#                         stratified-rate:NUM/DEN, which the harness gives no default; the record form's pair is
+#                         stated, HELD_ALPHA and HELD_GAMMA in the form the limits-held step writes); `serve` around a
+#                         stand-in harness (the deferral's copy asked once, only after a serve that exited 0 or 2,
+#                         pending, and never after one that exited 1 or any other status); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
 #                         reads the card: the H200's compute capability and SMs); a stand-in window of the class at
 #                         the settings' engine args through what a served window's close reads of it
@@ -23,12 +24,13 @@
 #                         it is a W the served compare takes); the harness's own policy step,
 #                         which fixes the limits and states what they prove; the policy's Lean check on the class's
 #                         own Program (`rehearsal_limits.py`), and the settings' ALPHA, GAMMA and DAY_PROGRAM held to
-#                         what it answers ($OUT/record.env.add has the lines where they differ); the day's declaration
+#                         what it answers, with HELD_ALPHA and HELD_GAMMA held to the record form's pair it states
+#                         ($OUT/record.env.add has the lines where they differ); the day's declaration
 #                         at that Program in a scratch log, checked as the follow-on checks it; the Lean the serve,
 #                         the audit and the compose run (Flock's verifier and ZK server, Pearl+'s check, remote's
 #                         composite); that verifier on a circuit file linked into its archive (`a0.lean_verify` under
 #                         `a0.ARCHIVE_LINK`): the same answer as on one it put, and a refusal once the linked bytes
-#                         change; the probe around a stand-in gate; Pearl+'s period, salt session, draw, coin and
+#                         change; the probe around a stand-in gate; Pearl+'s period, salt session, sample, coin and
 #                         piece against this tree's own gate code (`pearlplus_local_e2e.py`), whose piece then holds
 #                         the execution phase and each check's cost.
 #                         The whole verb runs inside one memory scope (MEM_GB, default 64) where the node makes one.
@@ -93,6 +95,20 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     for v in ROW PP_CHALLENGER PP_PEER MAIN_FILE PP_CHALLENGER_KEY ALPHA GAMMA LIMITS_UNIT DAY DAY_PROGRAM DAY_LOG DAY_PARAMS; do
       [ -n "${!v-}" ] || no "$v is unset"
     done
+    # the record form's pair of the class, which the limits file states before the first request, in the form
+    # `check`'s limits-held step writes and reads
+    if [ -z "${HELD_ALPHA-}" ] || [ -z "${HELD_GAMMA-}" ]; then
+      no "HELD_ALPHA is ${HELD_ALPHA:-unset} and HELD_GAMMA is ${HELD_GAMMA:-unset}: set both in $1, beside ALPHA and" \
+        "GAMMA, to the record form's pair of the class, the two lines \`rehearsal.sh check\` writes to its" \
+        "record.env.add (limits.json's held)"
+    else
+      [[ $HELD_ALPHA =~ ^[1-9][0-9]*(/[1-9][0-9]*)?$ ]] \
+        || no "HELD_ALPHA is $HELD_ALPHA, and the record form's alpha is a positive number P/Q or P, each a whole number" \
+          "with no sign or leading zero, as \`rehearsal.sh check\` writes it to its record.env.add"
+      [[ $HELD_GAMMA =~ ^[1-9][0-9]*$ ]] \
+        || no "HELD_GAMMA is $HELD_GAMMA, and the record form's gamma is a positive whole number with no sign or" \
+          "leading zero, as \`rehearsal.sh check\` writes it to its record.env.add"
+    fi
     # the record states the class's own two numbers with what they prove
     [ -n "${LIMITS_PROVE-}" ] || no "LIMITS_PROVE is unset: the limits are the class's own two numbers, and the record" \
       "says in a sentence what they prove (the slowdown they prove is 1, that is none)"
@@ -102,10 +118,10 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     # the tied window's rule, which the harness gives no default: its preflight refuses a launch that states none, or one
     # that is no stratified rate, on the serve node. NUM and DEN are compared as digits, whatever their length
     if [ -n "${PEARLPLUS_TIE-}" ]; then
-      num='' den=''
-      [[ ${V3C_LAW-} =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
+      num='' den='' design=${V3C_LAW-}
+      [[ $design =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
       [ -n "$num" ] && { [ "${#num}" -lt "${#den}" ] || { [ "${#num}" = "${#den}" ] && [[ ! $num > $den ]]; }; } \
-        || no "V3C_LAW is ${V3C_LAW:-unset}: under PEARLPLUS_TIE V3C_LAW has no default, and the launch states it, a" \
+        || no "the sampling design is ${design:-unset}: under PEARLPLUS_TIE it has no default, and the launch states it, a" \
           "stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one proof block of" \
           "each template while none holds more than DEN"
     fi
@@ -127,7 +143,8 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     [ -z "${WANT_CLASS-}" ] || [ "$WANT_CLASS" = "$cls" ] \
       || no "CLASS is $WANT_CLASS and the settings serve $cls: name the class in the settings (V3C_CLASS and CLASSES)"
     [ "$bad" != 0 ] || echo "SETTINGS held: Pearl+ tied to the window at class $cls, product remote, limits $ALPHA and" \
-      "$GAMMA with their unit and what they prove, day $DAY at program ${DAY_PROGRAM:0:16}…"
+      "$GAMMA with their unit and what they prove, the record form's pair $HELD_ALPHA and $HELD_GAMMA, day $DAY at" \
+      "program ${DAY_PROGRAM:0:16}…"
     exit "$bad"
   )
 }
@@ -307,12 +324,12 @@ EOF
   return "$ok"
 }
 
-link_test() {  # LEAN DIR: the real flock-verify at LEAN on a circuit file linked into its archive, in the tree
+link_test() {  # LEAN DIR: the real Lean verifier at LEAN on a circuit file linked into its archive, in the tree
   "${PY:-$HERE/../../.venv/bin/python}" - "$1" "$2" "$HERE" <<'EOF'
 import hashlib, json, os, subprocess, sys
 from pathlib import Path
-sys.path.insert(0, sys.argv[3])
-import a0
+sys.path.insert(0, str(Path(sys.argv[3]).resolve().parents[1]))
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0
 lean, root = sys.argv[1], Path(sys.argv[2])
 root.mkdir(parents=True, exist_ok=True)
 circuit = root / "circuit.txt"
@@ -439,7 +456,7 @@ open(sys.argv[3], "w").write(json.dumps(doc, indent=1) + "\n")
 print(json.dumps(doc, sort_keys=True))
 ' "${REPO:-unsloth/Llama-3.2-1B}" "${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da}" "$D/pearlplus/serve-phi.json"
   cp "$D/pearlplus/serve-phi.json" "$OUT/serve-phi.json" 2> /dev/null
-  step class-circuit 30m "$PY" benchmarks/prove_path/prove_path.py class-circuit --serve "$D/pearlplus/serve-phi.json" \
+  step class-circuit 30m "$PY" verity/protocols/proofs/spot/prover/audit/prove_path.py class-circuit --serve "$D/pearlplus/serve-phi.json" \
     --class "$CLASS" --pearl-tables "$SCHEME" --out "$D/pearlplus/circuit-record.json"
   # a stand-in window of the class through what its close reads of it: its row dir's Builds, its served rows and W
   step served-window 30m "$PY" benchmarks/one_stage/rehearsal_window.py "$D/pearlplus/serve-phi.json" "$CLASS" "$SCHEME" \
@@ -454,21 +471,36 @@ print(json.dumps(doc, sort_keys=True))
 import json, os, subprocess, sys
 from fractions import Fraction
 prof, said, settings, add = json.load(open(sys.argv[1])), json.load(open(sys.argv[2])), sys.argv[3], sys.argv[4]
-p = prof["profile"]
+p, h = prof["profile"], prof.get("held")
 want = {"ALPHA": f"{p['alpha'][0]}/{p['alpha'][1]}", "GAMMA": str(p["gamma"]), "DAY_PROGRAM": prof["program"]}
+if h:
+    want |= {"HELD_ALPHA": f"{h['alpha'][0]}/{h['alpha'][1]}", "HELD_GAMMA": str(h["gamma"])}
 open(add, "w").write("".join(f"{k}={v}\n" for k, v in want.items()))
-got = subprocess.run(["bash", "-c", 'set -a; . "$0"; set +a; printf "%s\\n%s\\n%s\\n" "$ALPHA" "$GAMMA" "$DAY_PROGRAM"', settings],
-                     capture_output=True, text=True, check=True).stdout.split("\n")[:3]
-bad = [f"{k} is {g or 'unset'}, and the class's own is {want[k]}" for k, g in zip(want, got)
-       if not g or (Fraction(g) != Fraction(want[k]) if k == "ALPHA" else g != want[k])]
+got = subprocess.run(["bash", "-c", 'set -a; . "$0"; set +a; printf "%s\\n" "$ALPHA" "$GAMMA" "$DAY_PROGRAM" "${HELD_ALPHA-}" "${HELD_GAMMA-}"',
+                      settings], capture_output=True, text=True, check=True).stdout.split("\n")[:5]
+def same(k, g):
+    if not k.endswith("ALPHA"):
+        return g == want[k]
+    try:
+        return Fraction(g) == Fraction(want[k])
+    except (ValueError, ZeroDivisionError):
+        return False
+bad = [f"{k} is {g or 'unset'}, and the class's own is {want[k]}" for k, g in zip(want, got) if not g or not same(k, g)]
+sh = said.get("held") or {}
+if not h:
+    bad.append("limits.json states no held pair (the policy step wrote no policy file for it to read k from)")
+elif (Fraction(*sh.get("alpha", [0, 1])), sh.get("gamma")) != (Fraction(want["HELD_ALPHA"]), h["gamma"]) or not sh.get("theta"):
+    bad.append(f"the harness's limits file states the held pair {sh.get('alpha')}, {sh.get('gamma')}, theta {sh.get('theta')!r}")
 if prof.get("at_profile", {}).get("verdict") != "accept":
     bad.append(f"the policy's Lean check at the class's own numbers: {prof.get('at_profile')}")
 if (Fraction(*said["alpha"]), said["gamma"]) != (Fraction(want["ALPHA"]), p["gamma"]) or not said.get("proves"):
     bad.append(f"the harness's limits file states {said['alpha']}, {said['gamma']}, proves {said.get('proves')!r}")
 if bad:
-    sys.exit("LIMITS not held (record.env.add has the settings' three lines): " + "; ".join(bad))
+    sys.exit(f"LIMITS not held (record.env.add has the settings' {len(want)} lines): " + "; ".join(bad))
 print(f"LIMITS held: the settings' ALPHA, GAMMA and DAY_PROGRAM are the class's own ({prof['templates']} templates, "
-      f"program {prof['program'][:16]}…), the policy's Lean check accepts at them, and the limits file says: {said['proves']}")
+      f"program {prof['program'][:16]}…), the policy's Lean check accepts at them, and the limits file says: {said['proves']}; "
+      f"HELD_ALPHA and HELD_GAMMA are the record form's pair of the class, {want['HELD_ALPHA']} and {want['HELD_GAMMA']}, "
+      "which the limits file states with whose weights theta is")
 EOF
 
   # the day: serve-openai's own declaration of the settings' day at that Program in a scratch log, then the follow-on's
@@ -477,7 +509,7 @@ EOF
 import json, subprocess, sys
 from pathlib import Path
 from verity import device as S
-from verity.hardware import registration as G
+from verity.protocols.accounting.registration.verifier import registration as G
 from verity_vllm.pipeline import serve_day as SD
 prof, d, settings, out = json.load(open(sys.argv[1])), Path(sys.argv[2]), sys.argv[3], sys.argv[4]
 day, params = subprocess.run(["bash", "-c", 'set -a; . "$0"; set +a; printf "%s\\n%s\\n" "$DAY" "$DAY_PARAMS"', settings],
@@ -509,8 +541,8 @@ print(json.dumps(doc, sort_keys=True))
 EOF
 
   # the Lean the three verbs run
-  step lean-flock 50m bash -c 'cd verity/protocols/proofs/flock/verifier && lake build Flock flock-verify flock-firewall'
-  step link-lean 5m env PY="$PY" bash "$SELF" link-test "$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify" "$scratch/link"
+  step lean-flock 50m bash -c 'cd verity/protocols/proofs/flock/verifier && lake build Flock verity-verify-proof flock-zk-server'
+  step link-lean 5m env PY="$PY" bash "$SELF" link-test "$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof" "$scratch/link"
   step lean-pearlplus 40m bash -c 'cd verity/protocols/accounting/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus'
   step lean-remote-v1 40m bash -c 'cd verity/protocols/compose/verifier/remote && lake build remote-v1'
 
@@ -526,7 +558,7 @@ piece, phase, checks = e2e["piece"], e2e["piece"]["execution_phase"], e2e["piece
 lean, row = e2e["lean"], e2e["row"]
 assert piece["verdict"] == "accept", piece
 assert lean["rc"] == 0 and lean["lean"]["verdict"] == "accept" and not lean["differ"], lean
-# a test instance credits nothing, so on the toy every condition of a row of record holds up to its last, the credit
+# a test instance credits nothing, so on the toy every condition of a workload of record holds up to its last, the credit
 assert row["verdict"] == "missing" and "the Lean verdict credits 0 MACs" in row["why"], row
 period = phase["period"]
 assert phase["start_utc"] and phase["end_utc"] and period["opened_utc"] and period["closed_utc"], phase
@@ -551,6 +583,6 @@ case ${1:-} in
   serve-test) serve_test "${2:?a scratch directory}" ;;
   probe) probe ;;
   probe-test) probe_test "${2:?a scratch directory}" ;;
-  link-test) link_test "${2:?flock-verify}" "${3:?a scratch directory}" ;;
+  link-test) link_test "${2:?the Lean verifier}" "${3:?a scratch directory}" ;;
   *) refuse "rehearsal.sh check|serve|audit|compose|probe|filter CMD..., not ${1:-nothing}" ;;
 esac

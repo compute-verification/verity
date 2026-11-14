@@ -3,7 +3,7 @@ bound, `Achievability`'s rates at zero statement cost, the frontier under Flock'
 between a partition and a covering, serving's commitment (per proof block, and the fixed serve-time total with its overlaps), the
 weight classes' weights, the sensitivity queries, and the two-stage design: its exfiltration bound against the
 admissible sets' count enumerated and the adversary's best attack at scale, uncapped and capped at the bits a replay
-block serves, its proving price with its statements a replay block's or a registration's padded to its public cap, and the
+block serves, its proving price with its statements a replay block's or a docket's padded to its public cap, and the
 width-stratified design against the uniform one."""
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from verity.protocols.proofs.spot.prover.optimize import (HM96_ANDS, KAPPAS, PRO
                                                            sensitivity, sqrt_grain, template_cost, touched,
                                                            two_stage_counts, two_stage_design, two_stage_exfil,
                                                            two_stage_price, two_stage_statements, two_stage_strata, weigh,
-                                                           work_law)
+                                                           work_sampling_design)
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
@@ -60,13 +60,13 @@ def test_density_bound_is_above_core_harm_bound():
             n = rng.randint(1, 60)
             strata.append((f"s{i}", n, rng.randint(0, n), rng.choice([0.0, 1.0, rng.uniform(0, 50)])))
         delta = rng.choice([0.5, 2.0 ** -5, 2.0 ** -20])
-        law = Stratified(tuple(Stratum(name, n, k) for name, n, k, _ in strata))
-        core = law.harm_bound({name: h for name, _, _, h in strata}, delta)
+        sampling_design = Stratified(tuple(Stratum(name, n, k) for name, n, k, _ in strata))
+        core = sampling_design.harm_bound({name: h for name, _, _, h in strata}, delta)
         assert at_most(core, density_bound(((n, k, h) for _, n, k, h in strata), delta))
 
 
 def test_density_bound_is_its_exact_value_rounded_up():
-    """`density_bound`'s float is at least `density_exact`, Lean's rational (the sampled proofs service's `harm_bound`
+    """`density_bound`'s float is at least `density_exact`, Lean's rational (the SPOT service's `harm_bound`
     difftest holds the two equal), and within 2^-18 of it unless delta is within 2^-40 of 1, where the budget's 2^-60
     is most of ln(1/delta)."""
     assert ln_upper(Fraction(1, 2)) == Fraction(3196577161300663915, 2 ** 62)
@@ -99,15 +99,15 @@ def test_max_harm_brackets_the_exact_supremum():
                 for n in (rng.randint(0, 7) for _ in range(rng.randint(1, 3)))]
         delta = rng.choice([0.5, 0.1, 0.01, rng.uniform(1e-4, 0.99)])
         lower, upper, lam, cert = max_harm(rows, delta)
-        law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+        sampling_design = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
         best = max(sum(Fraction(h) * x for (_, _, h), x in zip(rows, xs))
                    for xs in product(*(range(n + 1) for n, _, _ in rows))
-                   if law.escape({f"s{i}": x for i, x in enumerate(xs)}) >= Fraction(delta))
+                   if sampling_design.escape({f"s{i}": x for i, x in enumerate(xs)}) >= Fraction(delta))
         assert lower <= best <= upper <= best + 4 * max(Fraction(h) for _, _, h in rows) + Fraction(1, 2 ** 40), rows
         assert max_harm_check([(*r, *c) for r, c in zip(rows, cert)], delta, lam) == (lower, upper)
 
 
-def test_certificate_of_a_full_law_is_zero_and_the_leak_adds_location():
+def test_certificate_of_a_full_sampling_design_is_zero_and_the_leak_adds_location():
     cands = [Candidate("a", "A", 50, 3, 16), Candidate("b", "B", 10, 7, 4)]
     exfil = Objective(2.0 ** -10, work=0.0, bits=1.0)
     full = certify({"A": 50, "B": 10}, cands, exfil)
@@ -142,14 +142,14 @@ def test_zero_statement_cost_gives_achievability_rates(achievability):
 
 
 def _registered(plan, cands) -> dict[str, int]:
-    """What `work:1` over `work_law`'s table samples, as the verifier reads it."""
-    table = work_table(work_law(plan, cands)["table"])
+    """What `work:1` over `work_sampling_design`'s table samples, as the verifier reads it."""
+    table = work_table(work_sampling_design(plan, cands)["table"])
     chosen = [c for c in cands if c.template in table]
     total = sum(table[c.template][0] * c.units for c in chosen)
     return {c.template: work_k(1, table[c.template][0], c.units, total, table[c.template][1]) for c in chosen}
 
 
-def test_work_law_draws_the_plan_sizes(achievability, batched):
+def test_work_sampling_design_samples_the_plan_sizes(achievability, batched):
     cands, _, plan = achievability
     assert _registered(plan, cands) == dict(plan.sizes)
     cands, _, _, plans = batched
@@ -183,7 +183,7 @@ def test_frontier_is_monotone_and_certified(batched):
     assert any("M" in p.full for p in plans)
 
 
-def test_statement_size_moves_to_the_cap_as_the_draw_densifies(batched):
+def test_statement_size_moves_to_the_cap_as_the_sample_densifies(batched):
     cands, costs, objective, plans = batched
     sparse = for_target(cands, costs, objective, 4e5, plans=plans)
     dense = for_target(cands, costs, objective, 2e5, plans=plans)
@@ -461,7 +461,7 @@ def _loc_exact(n: int, k: int) -> float:
     return log2(sum(comb(n, j) for j in range(k + 1)))
 
 
-def test_leak_count_is_certified_and_the_leak_law_draws_n_lambda_over_k_plus_one():
+def test_leak_count_is_certified_and_the_leak_sampling_design_samples_n_lambda_over_k_plus_one():
     """K is the most incorrect proof blocks the target allows under `loc_bits` (at least Lean's `locBits`, so b K +
     locBits n K <= ℓ holds for it), and the sampling design samples n Λ / (K + 1), at most n, none once every proof block may be
     incorrect."""
@@ -566,6 +566,38 @@ def _admissible_sum(cells: list[Cell], k: dict[int, int], replay_blocks: int, q:
     return total
 
 
+def _group_patterns(cells: list[Cell], k: dict[int, int], groups: list[int], q: float, delta: float,
+                    served: float) -> float:
+    """The patterns' count, Σ_p 2^{Σ_r bits(p r)} over the admissible sets' patterns p
+    (`Claims.Guarantees.InfluenceTwoPatterns`), enumerating every set T of incorrect proof blocks: the replay blocks in
+    consecutive groups of `groups`' sizes, each group one request serving `served` bits a replay block.  A request's
+    class of T is T's blocks in its group, charged their bits, or, once they hold at least the bits it serves, one
+    class for all such sets, charged the bits it serves."""
+    blocks = [(c.bits, c.stratum) for c in cells for _ in range(int(c.n))]
+    sizes: dict[int, int] = {}
+    for _, t in blocks:
+        sizes[t] = sizes.get(t, 0) + 1
+    choices = []
+    for mask in range(1 << len(blocks)):
+        counts: dict[int, int] = {}
+        for i, (_, t) in enumerate(blocks):
+            if mask >> i & 1:
+                counts[t] = counts.get(t, 0) + 1
+        e = prod(_esc(n, k[t], counts.get(t, 0)) for t, n in sizes.items())
+        choices.append((mask, 1 - q * (1 - e), fsum(b for i, (b, _) in enumerate(blocks) if mask >> i & 1)))
+    patterns: dict[tuple, float] = {}
+    for picks in product(choices, repeat=sum(groups)):
+        if prod(pa for _, pa, _ in picks) <= delta:
+            continue
+        classes, at = [], 0
+        for g in groups:
+            part, at = picks[at:at + g], at + g
+            sets, bits = tuple(mask for mask, _, _ in part), fsum(b for _, _, b in part)
+            classes.append(((), 0.0) if not any(sets) else ("all", g * served) if bits >= g * served else (sets, bits))
+        patterns[tuple(c for c, _ in classes)] = fsum(b for _, b in classes)
+    return fsum(2.0 ** b for b in patterns.values())
+
+
 def _every(cells: list[Cell], replay_blocks: int) -> float:
     return replay_blocks * fsum(c.n * log2(1 + 2.0 ** c.bits) for c in cells)
 
@@ -616,6 +648,32 @@ def test_the_capped_bound_is_at_least_the_capped_count():
         checked += 1
     with pytest.raises(ValueError, match="patterns' form needs one"):
         two_stage_exfil([Cell(2, 3.0)], {0: 1}, 1, 0.5, 0.01, union=True)
+
+
+def test_the_patterns_bound_at_a_fan_out_is_at_least_the_groups_patterns_count():
+    """On small designs, every set of incorrect proof blocks enumerated: at a fan-out F the patterns' form reads the
+    replay blocks that read one another's values as one request, and its bound is at least log2 of the patterns' count
+    at that split, each group one request serving its replay blocks' S bits each.  It holds where every group holds F
+    replay blocks, the window Lean's point reads (`plancheck.two`), and where a group holds fewer, the fan-out being
+    only at least the most a group holds."""
+    rng = random.Random(13)
+    checked = whole = 0
+    while checked < 300:
+        groups = rng.choice([[1], [2], [3], [1, 1], [2, 2], [2, 1], [1, 2], [3, 1], [2, 1, 1]])
+        f = max(groups) + rng.choice([0, 0, 1])
+        cells = [Cell(rng.choice([1, 2, 3]), rng.choice([0.0, 0.5, 1.0, 3.0, 8.0, 20.0]), rng.choice([0, 1]))
+                 for _ in range(rng.choice([1, 2, 3]))]
+        if sum(c.n for c in cells) * sum(groups) > 12:
+            continue
+        k = {c.stratum: rng.choice([1, 2, 3, 4]) for c in cells}
+        q, delta = rng.choice([0.0, 0.1, 0.5, 0.9, 1.0]), rng.choice([0.5, 0.1, 0.01, 1e-4])
+        served = rng.choice([0.0, 1.0, 4.0, 10.0, 30.0])
+        bound = two_stage_exfil(cells, k, sum(groups), q, delta, served, True, fanout=f)
+        count = _group_patterns(cells, k, groups, q, delta, served)
+        assert log2(count) <= bound + 1e-9, (groups, f, cells, k, q, delta, served)
+        whole += all(g == f for g in groups)
+        checked += 1
+    assert 50 < whole < 250
 
 
 def _log2_comb(n: float, m: float) -> float:
@@ -1001,8 +1059,9 @@ def test_a_replay_block_others_read_is_charged_its_groups_served_bits():
     """A replay grain of fan-out F (`partition.fanout`), some replay block reading values another computed, is charged as
     if each replay block served F S bits, the capped form at N = F: more than at F = 1 where the served bound binds, and a
     design's bound is the capped `two_stage_exfil` at F.  At F = 1, every replay block closed, the charge is the served
-    bound's alone.  The sets' form without a served bound doesn't read F, and the patterns' form, priced only at closed
-    replay blocks, refuses it."""
+    bound's alone.  The sets' form without a served bound doesn't read F.  The patterns' form reads the replay blocks
+    that read one another's values as one request serving F S bits: its bound is the patterns' at F S, here at most the
+    capped sets' at F, and a design's is the patterns' `two_stage_exfil` at F."""
     delta, replay_blocks, budget, served = 2.0 ** -20, 10 ** 8, 1e7, 4096.0
     cells = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(4, 131072.0, prove=1e-3, commit_bytes=2.0 ** 14)]
     k, q = {0: 995}, 0.0438
@@ -1011,14 +1070,19 @@ def test_a_replay_block_others_read_is_charged_its_groups_served_bits():
     for f in (2, 8):
         shared = two_stage_exfil(cells, k, replay_blocks, q, delta, served, fanout=f)
         assert shared == two_stage_exfil(cells, k, replay_blocks, q, delta, f * served) > one
+        group = two_stage_exfil(cells, k, replay_blocks, q, delta, served, True, fanout=f)
+        assert group == two_stage_exfil(cells, k, replay_blocks, q, delta, f * served, True) <= shared
+        assert group > two_stage_exfil(cells, k, replay_blocks, q, delta, served, True)
     assert two_stage_exfil(cells, k, 10, .5, delta, fanout=8) == two_stage_exfil(cells, k, 10, .5, delta)
     kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "served": served}
     closed, read = (two_stage_design(cells, replay_blocks, delta, fanout=f, **kw) for f in (1, 4))
     assert closed == two_stage_design(cells, replay_blocks, delta, **kw) and read["bound"] > closed["bound"]
     strata = [replace(c, stratum=0 if c.bits <= read["merged"] else 131072) for c in cells]
     assert read["bound"] == two_stage_exfil(strata, read["k"], replay_blocks, read["q"], delta, served, fanout=4)
-    with pytest.raises(ValueError, match="needs fan-out 1, not 2"):
-        two_stage_exfil(cells, k, 10, .5, delta, served, union=True, fanout=2)
+    patterns = two_stage_design(cells, replay_blocks, delta, union=True, fanout=4, **kw)
+    strata = [replace(c, stratum=0 if c.bits <= patterns["merged"] else 131072) for c in cells]
+    group = two_stage_exfil(strata, patterns["k"], replay_blocks, patterns["q"], delta, served, True, fanout=4)
+    assert patterns["bound"] == group <= read["bound"]
     with pytest.raises(ValueError, match="fan-out is at least 1"):
         two_stage_exfil(cells, k, 10, .5, delta, served, fanout=0)
 
@@ -1114,7 +1178,7 @@ def test_miss_holds_its_digits_at_any_population():
                 assert Decimal(_miss(n, m, k)) == pytest.approx(exact.exp(), rel=Decimal("1e-9") + loose)
 
 
-def test_shared_statements_hold_only_the_drawn_units():
+def test_shared_statements_hold_only_the_sampled_units():
     """Under `shared` a sample of k pays ceil(k / cap) statements and stages k proof blocks however large n is; cut in order, a
     sparse sample of a huge population touches one statement a sampled proof block."""
     c = Candidate("x", "A", 10 ** 12, 1, 16, ands=1000, cap=64)
@@ -1126,7 +1190,7 @@ def test_shared_statements_hold_only_the_drawn_units():
     assert template_cost(c, replace(costs, shared=True), 0)[0] == 0.0
 
 
-def test_sparse_draws_on_huge_populations_still_touch_statements_and_replay_blocks():
+def test_sparse_samples_on_huge_populations_still_touch_statements_and_replay_blocks():
     """At 10^17 proof blocks the miss probability of a single sample rounds to 1: what it touches is kept as 1 - miss directly."""
     n = 10 ** 17
     assert touched(n, 4, 1) == pytest.approx(1.0, rel=1e-12)

@@ -1,6 +1,8 @@
 """`wipe_monitoring`: one accepted wipe over a week, a month and a year of a deployment. The pooled count is the least M
-with C(T, M)·p^M within δ, against hand counts at small T; an HBM-only wipe's table names its tier and device, every wipe
-meeting its bound except with T·eps; every number that is short by a wipe's PRF advantage says so beside it, in the
+with C(T, M)·p^M within δ, against hand counts at small T; an HBM-only wipe's table names its tier and no device, and
+leaves out what the prover's store leaves out, every wipe
+meeting its bound except with T·eps; a period's row carries that sum and, where it is 1 or more, prints "no
+bound at this period" and neither statement; every number that is short by a wipe's PRF advantage says so beside it, in the
 same closing words, and no number moved for it; the cadence is a parameter; an uncounted wipe stays vacuous, since every
 egress record is refused, a covered one over the session's own real-time window too; a run's own answer stays vacuous
 at the count its evidence gives, which no network certifier signs, so the pooled tables are of an answer certified by
@@ -17,24 +19,25 @@ import pytest
 import pous_test_signer as ts
 from verity import protocol
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_monitoring as WM
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
 
 HBM = sw.WipeParams(64, W.READS, 1, 1_000, ((WM.HBM, 64 * sw.LABEL_BYTES),))
-STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GPU-test", "nvml_total_bytes": 64 * 64,
-         "cuda_total_bytes": 64 * 64, "total_bytes": 64 * 64}
+STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GPU-test", "pci_bus_id": "0000:9A:00.0",
+         "nvml_total_bytes": None, "cuda_total_bytes": 64 * 64, "total_bytes": 64 * 64}
 LINK = WP.link("control", "n0", "outside", "eth0")
 
 
 def _answer(egress_mib: int | None) -> dict:
-    """An accepted HBM-only wipe of `HBM`, its evidence's egress `egress_mib`, with the placement a GPU leg records."""
-    w = W.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
+    """An accepted HBM-only wipe of `HBM`, its evidence's egress `egress_mib`, with the placement a GPU subprotocol records."""
+    w = wipe_run.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=iter(range(10 ** 9, 10 ** 10)).__next__,
               coin_secret=b"coins", egress_mib=egress_mib)
     assert w.verdict == "accept"
-    where = WP.placement("n0", "auditor", w.report["key_sha512"], store=STORE, links=[LINK])
+    where = WP.placement("n0", "auditor", w.report["key_sha512"], store_gaps=W.store_gaps(STORE), links=[LINK])
     return w.answer | {"profile": w.answer["profile"] | {"placement": where}}
 
 
@@ -75,8 +78,9 @@ def test_an_hbm_only_wipe_over_a_week_a_month_and_a_year(counted):
     assert public["certified"] and public["eps"] == str(W.EPS) and public["egress_mib"] == 2
     r = WM.table(counted, 3, deployment="three H200 nodes")
     assert r["format"] == WM.FORMAT and r["deployment"] == {"id": "three H200 nodes", "machines": 3, "cadence_s": 86400}
-    assert r["memory"] == {"tiers": [{"tier": "gpu-hbm", "bytes": 64 * 64}], "tier": "gpu-hbm", "hbm_only": True,
-                           "devices": [{"tier": "gpu-hbm", "device": "NVIDIA H200", "uuid": "GPU-test"}]}
+    assert r["memory"] == {"tiers": [{"tier": "gpu-hbm", "bytes": 64 * 64}], "tier": "gpu-hbm", "hbm_only": True}
+    assert not any(STORE[k] in json.dumps(r) for k in ("device", "uuid", "pci_bus_id"))
+    assert any(s.startswith("tier gpu-hbm: the memory the GPU's driver reserves") for s in r["leaves_out"])
     f, m = public["foreign_bits"], public["memory_bits"]
     assert m == 64 * 512 and r["each"] | {"eps_float": None} == {
         "foreign_bits": f, "memory_bits": m, "wiped_bits": m - f, "wiped_share": f"{(m - f) / m:.4g}", "eps": str(W.EPS),
@@ -85,6 +89,7 @@ def test_an_hbm_only_wipe_over_a_week_a_month_and_a_year(counted):
         row = r["periods"][name]
         t = 3 * days
         assert (row["wipes"], row["wipes_per_machine"]) == (t, days)
+        assert row["error"] == float(t * W.EPS) and "no_bound" not in row
         for d in protocol.DELTAS:
             assert row[str(d)]["failing_at_most"] == 0 and row[str(d)]["meeting_at_least"] == t
         assert row["per_wipe"]["except_with"] == f"T·eps = {float(t * W.EPS):.3g}, plus {SUM}"
@@ -121,9 +126,10 @@ FIXED = {"verdict": "accept",
 """One accepted wipe's answer, its numbers set by hand: at eps = 1/100 no number of its table rounds to 0."""
 NUMBERS = {"week": (14, "0.14", {"1/100": ("0.0091", 1, 13), "1/1000000": ("2e-07", 4, 10)}),
            "month": (60, "0.6", {"1/100": ("0.00488", 3, 57), "1/1000000": ("2.56e-07", 7, 53)}),
-           "year": (730, "7.3", {"1/100": ("0.00636", 21, 709), "1/1000000": ("7e-07", 28, 702)})}
+           "year": (730, "7.3", None)}
 """`FIXED`'s table over 2 machines as it was before any number carried the PRF's words. Per period: its wipes, T·eps,
-and at each δ the bound, the wipes failing at most and the wipes meeting at least."""
+and at each δ the bound, the wipes failing at most and the wipes meeting at least; None where T·eps is 1 or more, so
+the row states neither."""
 
 
 def test_except_names_the_labels_and_the_coins_prf_advantage_not_priced_and_not_assumed():
@@ -151,7 +157,12 @@ def test_every_number_short_by_the_prf_advantage_says_so_beside_it_and_no_number
     assert r["leaves_out"] == [WM.EXCEPT] and set(r["periods"]) == set(NUMBERS)
     for name, (wipes, t_eps, steps) in NUMBERS.items():
         row = r["periods"][name]
-        assert row["wipes"] == wipes and row["per_wipe"] == {"except_with": f"T·eps = {t_eps}, plus {SUM}"}
+        assert row["wipes"] == wipes and f"{row['error']:.3g}" == t_eps
+        if steps is None:
+            assert row == {"seconds": 365 * 86400, "wipes": wipes, "wipes_per_machine": 365, "error": 7.3,
+                           "no_bound": f"{protocol.NO_BOUND}: the row's error, {t_eps}, is 1 or more"}
+            continue
+        assert row["per_wipe"] == {"except_with": f"T·eps = {t_eps}, plus {SUM}"} and "no_bound" not in row
         for delta, (bound, failing, meeting) in steps.items():
             assert row[delta] == {"bound": bound, "failing_at_most": failing, "meeting_at_least": meeting,
                                   "statement": WM.STATEMENT["name"],
@@ -163,7 +174,7 @@ RECORD = {"format": WM.EGRESS, "covered": True, "egress_mib": 5, "egress_bits": 
 """A covered `wipe-egress/v1` record: its writer's verdict, its count and its link."""
 WINDOW = {"t0_unix_ns": 1_793_088_000_123_456_789, "t1_unix_ns": 1_793_088_183_000_001_000, "pad_ns": 10 ** 9}
 """The wipe's own session in real time, as its challenger's side reports it beside the signed session
-(`wipe_party.report`), in the fields a record's writer gives its window."""
+(`wipe_challenger.report`), in the fields a record's writer gives its window."""
 
 
 def test_an_uncounted_wipe_stays_vacuous_and_a_covered_egress_record_is_refused(counted, uncounted):

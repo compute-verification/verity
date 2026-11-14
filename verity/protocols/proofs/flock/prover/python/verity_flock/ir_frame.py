@@ -16,7 +16,7 @@ prover-committed public; the verifier chains a chunk's runs through them, folds 
 natively and checks the digests and the output words against the frame-v3 roots it recomputes.
 
 A cut template's cut words (``ir_lower.cut_words``) follow in the file: public words of the units that read or compute them,
-each unit's cut ports a region claim; the verifier evaluates the netlist's pinned tail on them before any session.
+each unit's cut ports a region claim; the verifier evaluates the circuit description's pinned tail on them before any session.
 """
 from __future__ import annotations
 
@@ -336,7 +336,7 @@ def serve_args(path) -> list[str]:
 
 
 def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, k_max: int = K_MAX) -> Path:
-    """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/frame-<n>.bin`` and the unit netlist as ``<out_dir>/net.txt``: the
+    """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/frame-<n>.bin`` and the unit circuit description as ``<out_dir>/net.txt``: the
     verifier's own staging."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

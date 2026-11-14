@@ -238,7 +238,7 @@ def unit_gates(program: Program, query: Mapping[str, Any]) -> list[tuple[int, in
 
 def in_order(program: Program, query: Mapping[str, Any], n: int) -> bool:
     """`Slots.popOk`: `query` applies to `program`, every proof block has its gates (`unit_gates`), and the proof blocks read stratum by
-    stratum (`strata`) are `0, ..., n - 1` in order, so slot `u` is proof block `u`. The run refuses a registration whose program
+    stratum (`strata`) are `0, ..., n - 1` in order, so slot `u` is proof block `u`. The run refuses a docket whose program
     and query fail it (`population-order`): the sampled audit's knowledge soundness reads slot `u` as the game's proof block `u`."""
     try:
         ss, gates = strata(program, query), unit_gates(program, query)

@@ -61,7 +61,7 @@ def test_a_prover_that_encodes_an_append_before_its_coin_is_rejected(early) -> N
     assert r.finish() == [audit.Verdict(0, False, "codec", (1, N + 1))]
 
 
-def test_an_append_sent_again_draws_no_coin_and_rejects_the_session() -> None:
+def test_an_append_sent_again_flips_no_coin_and_rejects_the_session() -> None:
     """A retry never resamples: the same append root sent a second time, as a prover that wanted another coin would,
     is the session's `coin` rejection, and the challenger opens nothing for it."""
     r = Run(store())
@@ -101,7 +101,7 @@ def test_a_session_that_reserves_no_append_coins_has_no_append_family_and_refuse
         r.s.coins.append(bytes(64))
 
 
-def test_an_append_after_the_last_window_s_roots_are_final_draws_no_coin() -> None:
+def test_an_append_after_the_last_window_s_roots_are_final_flips_no_coin() -> None:
     """Once the last window's roots are final no root can follow an append, so its coin could never be used: the
     append is the session's `coin` rejection, and the challenger opens nothing."""
     r = Run(store(), windows=1)

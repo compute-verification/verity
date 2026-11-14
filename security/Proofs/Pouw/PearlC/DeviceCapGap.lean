@@ -1,12 +1,13 @@
 module
 
 public import Proofs.Pouw.PearlC.DeviceRev1Gap
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceGap
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.Prob
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # The unpromoted record, the cap, and g at sm_120's prices
@@ -45,7 +46,7 @@ variable {Q R S : Type}
 open Classical in
 theorem cap_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (hadd : 0 ≤ d.prices.add)
     (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (H : Q → R) (s : S)
-    (τ : Transcript) :
+    (τ : Trace) :
     ∑ u ∈ correctSet (pearlCProtocolDev d sem ρ') U H s τ, (pearlCProtocolDev d sem ρ').credit H s U u (actOf τ u) ≤
       ∑ u ∈ correctSet (pearlCProtocolDev d sem ρ) U H s τ, (pearlCProtocolDev d sem ρ).credit H s U u (actOf τ u) := by
   have hsub : correctSet (pearlCProtocolDev d sem ρ') U H s τ ⊆ correctSet (pearlCProtocolDev d sem ρ) U H s τ := by

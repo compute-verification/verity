@@ -7,18 +7,21 @@ beside it, and the two must agree at every event, window verdict and record fiel
 from __future__ import annotations
 
 import dataclasses
+import json
 import os
 import queue
 import random
 import socket
 import sys
 import threading
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/accounting/poub/prover/remote_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
 from verity.protocols.accounting.poub.verifier import audit, coins, ledger, receipts as rb, timing  # noqa: E402
@@ -27,8 +30,11 @@ from verity.protocols.accounting.poub.verifier import codec as rcodec  # noqa: E
 import prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+import lean_stands_in  # noqa: E402
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
+FIGURES = timing.RTX_PRO_6000_NODE
+BARE = dataclasses.replace(FIGURES, gpu_chip_bytes=0, host_chip_bytes=0, gpu_squarings_per_s={"p512": 0.0})
 
 
 VERIFIER, PROVER = 0, 1
@@ -152,12 +158,12 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, then=None,
         transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
-        binding=None, groups_per_coin: int = 1, **kv):
+        groups_per_coin: int = 1, figures: timing.Figures = FIGURES, node=None, **kv):
     """The verifier's sessions and the prover's over one registration, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
     (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a sample; `then(v)` once
-    they end. With `store` (a `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `binding`
-    the verifier binds the registration to its pinned model."""
+    they end. With `store` (a `poub.store.Store`) the prover's blocks are that store's, and with `node` its
+    ledgers are on that node."""
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, store.blocks if store else blocks, random.Random(7),
@@ -173,10 +179,11 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
 
     th = threading.Thread(target=prove, daemon=True)
     th.start()
-    v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
+    v = verifier.Verifier(vconn, figures=figures, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           lifetime=lifetime, host_bytes=host_bytes, transcript=transcript,
-                          challenger=challenger, appends=appends, binding=binding, groups_per_coin=groups_per_coin)
+                          challenger=challenger, appends=appends, groups_per_coin=groups_per_coin,
+                          node=node)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))
@@ -205,6 +212,38 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
     assert all(w["slack_ns"] >= 0 for w in r["windows_seen"])
 
 
+def test_without_its_lean_an_accepted_sessions_gamma_is_undecided(monkeypatch):
+    """With the real interface (`lean_stands_in.unwritten`), an accepted session's γ terms have no Lean answer, so each
+    reading is undecided, with the goal's id, as a refused one is refused: no γ, no certified bytes, the session
+    declares that alone, and its memory line carries no error."""
+    lean_stands_in.unwritten(monkeypatch)
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), _ = run("honest")
+    lg, why = r["ledger"], coins.undecided("γ terms")
+    assert r["accepted"] and all(lg[n] == {"capacity_bytes_per_s": lg["inputs"][f], "undecided": why}
+                                 for n, f in (("spec", "spec_bytes_per_s"), ("measured", "measured_read_bytes_per_s")))
+    assert lg["declared"] == {"undecided": why} and verifier.memory_error(lg) is None
+
+
+@pytest.mark.parametrize("outcome", ["rejected", None, "error"])
+def test_a_session_whose_windows_all_accept_is_not_accepted_unless_the_leans_outcome_is(monkeypatch, outcome):
+    """The session's acceptance is the Lean's `outcome` at its end: an honest session whose every window verdict
+    accepts, while the Lean's `outcome` is anything but `accepted` (another word, none, or no answer), is not
+    accepted, and the record says `disagreement` at the event `outcome`; the books' acceptance is the veto beside it."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    end = verifier.Pair.end
+
+    def other(self, failure):
+        end(self, failure)
+        got = self.outcome_json
+        self.outcome_json = {"error": "no answer"} if outcome == "error" else {**got, "outcome": outcome}
+
+    monkeypatch.setattr(verifier.Pair, "end", other)
+    (r,), (pr,) = run("honest")
+    assert not r["accepted"] and not pr["accepted"] and r["failure"]["failure"] == "disagreement"
+    assert r["disagreement"]["event"] == "outcome" and r["disagreement"]["python"] == {"windows_accepted": True}
+
+
 def test_a_session_on_the_pass_clock_runs_one_schedule(monkeypatch):
     """Each tick settles both sides, so an honest session's windows are the same at every run: window 0's boundary
     falls at tick 20, as its 20th pass ends, and each later window starts one tick after its coin, the pass in flight
@@ -228,6 +267,76 @@ def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(mon
     assert slow["ledger"]["measured"]["capacity_bytes_per_s"] == timing.READ_BYTES_PER_S
     assert slow["ledger"]["spec"]["capacity_bytes_per_s"] == timing.SPEC_BYTES_PER_S
     assert fast["ledger"]["measured"]["capacity_bytes_per_s"] == fast["ledger"]["spec"]["capacity_bytes_per_s"] == 1e20
+
+
+def test_a_node_handed_in_is_the_ledgers_and_a_report_still_only_raises_it(monkeypatch):
+    """A node handed in (`Verifier(node=...)`, `--node`) takes `ledger.Node.stated`'s place: `timing`'s node handed in
+    is the default's, a node of twice the rates doubles both capacities, and a slower reported read lowers neither.
+    The ledger publishes the node whole (`capacities`), which `ledger.Node.of_json` reads back.  A node handed in
+    beside disk or link ceilings, or without the HBM and DRAM tiers, is refused."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (default,), _ = run("honest", read_bytes_per_s=1.0)
+    (same,), _ = run("honest", read_bytes_per_s=1.0, node=ledger.Node.stated(FIGURES))
+    assert same["ledger"]["inputs"]["capacities"] == default["ledger"]["inputs"]["capacities"] == (
+        ledger.Node.stated(FIGURES).to_json())
+    fast = dataclasses.replace(ledger.Node.stated(FIGURES), spec_bytes_per_s=2 * timing.SPEC_BYTES_PER_S,
+                               read_bytes_per_s=2 * timing.READ_BYTES_PER_S)
+    (r,), _ = run("honest", read_bytes_per_s=1.0, node=fast)
+    assert r["ledger"]["measured"]["capacity_bytes_per_s"] == 2 * timing.READ_BYTES_PER_S
+    assert r["ledger"]["spec"]["capacity_bytes_per_s"] == 2 * timing.SPEC_BYTES_PER_S
+    assert ledger.Node.of_json(r["ledger"]["inputs"]["capacities"]) == fast
+    kw = {"figures": FIGURES, "source": bytes(32), "windows": 3, "window_ns": 20, "samples": 6, "delta": 2.0 ** -40, "jitter_ns": 10}
+    with pytest.raises(ValueError, match="its own disk and link"):
+        verifier.Verifier(None, **kw, node=ledger.Node.stated(FIGURES), disk_bytes_per_s=4.4e9)
+    with pytest.raises(ValueError, match="states its tiers"):
+        verifier.Verifier(None, **kw, node=dataclasses.replace(ledger.Node.stated(FIGURES), tiers={}))
+
+
+def test_the_process_hands_its_node_file_to_the_verifier_and_refuses_a_bad_one_before_it_listens(
+        tmp_path, monkeypatch, capsys):
+    """`main`'s `--node FILE` reaches `Verifier(node=...)` as `ledger.Node.of_json` reads it.  A file that holds no
+    node, a node without the HBM and DRAM tiers, or a node beside a disk or link flag is an argument error before the
+    process listens, not a traceback once the prover has connected."""
+    class Listened(Exception):
+        pass
+
+    def refuse(host, port):
+        raise Listened
+
+    def main(node: object, *flags: str) -> None:
+        f = tmp_path / "node.json"
+        f.write_text(json.dumps(node))
+        verifier.main(["--out", str(tmp_path / "out"), "--check-workers", "0", "--node", str(f), *flags],
+                      figures=FIGURES)
+
+    monkeypatch.setattr(verifier.wire, "listen", refuse)
+    fast = dataclasses.replace(ledger.Node.stated(FIGURES), read_bytes_per_s=2 * timing.READ_BYTES_PER_S)
+    one_tier = fast.to_json()
+    del one_tier["tiers"]["dram"]
+    for node, flags, why in (({"tiers": {}}, (), "a node's capacities are an object of exactly"),
+                             (one_tier, (), "states its tiers"),
+                             (fast.to_json(), ("--disk-bytes-per-s", "4.4e9"), "drop --disk-* and --link-*"),
+                             (fast.to_json(), ("--link-burst-bytes", "1"), "drop --disk-* and --link-*")):
+        with pytest.raises(SystemExit) as e:
+            main(node, *flags)
+        assert e.value.code == 2 and why in capsys.readouterr().err
+    handed = {}
+
+    class Server:
+        def accept(self):
+            return None, ("prover", 0)
+
+    def made(conn, **kw):
+        handed.update(kw)
+        raise Listened
+
+    monkeypatch.setattr(verifier.wire, "listen", lambda host, port: Server())
+    monkeypatch.setattr(verifier.wire, "Conn", lambda sock: None)
+    monkeypatch.setattr(verifier, "Verifier", made)
+    monkeypatch.setattr(verifier.sys, "setswitchinterval", lambda s: None)
+    with pytest.raises(Listened):
+        main(fast.to_json())
+    assert handed["node"] == fast and handed["disk_bytes_per_s"] == 0.0
 
 
 def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypatch):
@@ -254,14 +363,15 @@ def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its
             "tiers": {"hbm": {"bytes": 751_619_276_800, "ms": 61.502974},
                       "host": {"bytes": 8_589_934_592, "ms": 25.468371}}}
     for r in (timing.READ_BYTES_PER_S, timing.SPEC_BYTES_PER_S):
-        parts = verifier.timing_parts(capacity_bytes_per_s=r, node=ledger.Node.stated(), **d101)
+        parts = verifier.timing_parts(capacity_bytes_per_s=r, node=ledger.Node.stated(FIGURES), **d101)
         assert sum(parts.values()) == pytest.approx(1 - d101["reads_bytes"] / (r * d101["span_ns"] / 1e9), abs=1e-12)
-    parts = verifier.timing_parts(capacity_bytes_per_s=timing.READ_BYTES_PER_S, node=ledger.Node.stated(), **d101)
+    parts = verifier.timing_parts(capacity_bytes_per_s=timing.READ_BYTES_PER_S, node=ledger.Node.stated(FIGURES),
+                                  **d101)
     assert sum(parts.values()) == pytest.approx(0.09926702029063428, abs=1e-12)
     assert {k: round(v * 100, 2) for k, v in parts.items()} == {
         "above_stated_tiers": 0.0, "host_dram_idle": 3.68, "hbm_below_stated": 0.66, "receipts_beyond_read": 5.48,
         "boundaries_and_allowance": 0.10, "blocks_left_out": 0.0}
-    spec = verifier.timing_parts(capacity_bytes_per_s=timing.SPEC_BYTES_PER_S, node=ledger.Node.stated(), **d101)
+    spec = verifier.timing_parts(capacity_bytes_per_s=timing.SPEC_BYTES_PER_S, node=ledger.Node.stated(FIGURES), **d101)
     assert spec["above_stated_tiers"] == pytest.approx(1 - timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
 
 
@@ -286,8 +396,8 @@ def test_a_sessions_lines_deduct_the_on_chip_bytes_and_rebuilds_of_the_node_its_
     squarings, where `timing`'s has 3,105,652,736 B and a squaring ceiling."""
     B, stated = rcodec.BLOCK_BYTES, ledger.Node.stated
 
-    def small(**kw) -> ledger.Node:
-        return dataclasses.replace(stated(**kw), chip_bytes=4 * B, rebuild_burst_bytes=4.0 * B,
+    def small(figures, **kw) -> ledger.Node:
+        return dataclasses.replace(stated(figures, **kw), chip_bytes=4 * B, rebuild_burst_bytes=4.0 * B,
                                    squarings_per_s={"p512": 0.0})
 
     monkeypatch.setattr(ledger.Node, "stated", small)
@@ -308,8 +418,8 @@ def test_a_sessions_record_and_timing_parts_state_the_tiers_of_the_node_its_ledg
     stated = ledger.Node.stated
     tiers = {"hbm": ledger.Tier(2, 8e12, 7e12, 4096), "dram": ledger.Tier(1, 4e12, 2e12, 8192)}
 
-    def other(**kw) -> ledger.Node:
-        return dataclasses.replace(stated(**kw), spec_bytes_per_s=2e13, read_bytes_per_s=1.6e13, tiers=tiers)
+    def other(figures, **kw) -> ledger.Node:
+        return dataclasses.replace(stated(figures, **kw), spec_bytes_per_s=2e13, read_bytes_per_s=1.6e13, tiers=tiers)
 
     monkeypatch.setattr(ledger.Node, "stated", other)
     block = rcodec.BLOCK_BYTES
@@ -408,8 +518,8 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     """Two sessions over one registration, each beside a serving trace of memory-map/v1 steps (2 pages every 4th pass
     over a pool of 10 slots): an honest one is accepted, its record counting the appends, releases and post-seed reads
     the verifier saw, which its ledger leaves uncredited without a property verdict; then one whose prover drops the
-    pages it appends, whose appends start again from N, is rejected at a sample on a dropped page.  At 16 draws a window
-    the second's chance of sampling no dropped page is below 2^-30 at the passes these sessions make."""
+    pages it appends, whose appends start again from N, is rejected at a sample on a dropped page.  At 16 samples a
+    window the second's chance of sampling no dropped page is below 2^-30 at the passes these sessions make."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (honest, dropping), (ph, pd) = run("kv:2,kvdrop:2", sessions=2, samples=16, kv_every=4, kv_pool=8)
     assert honest["accepted"] and ph["accepted"] and honest["failure"] is None
@@ -468,8 +578,8 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
     assert kv["challenger"]["reason"] is None and not pk["accepted"]
 
 
-def test_a_window_with_no_draws_settles_malformed_whatever_its_batches():
-    """A window with no draws (none a session makes) settles `malformed` whatever its batches' results, as
+def test_a_window_with_no_samples_settles_malformed_whatever_its_batches():
+    """A window with no samples (none a session makes) settles `malformed` whatever its batches' results, as
     `AuditRun.verify` and the Lean's settle give it."""
     from types import SimpleNamespace
 
@@ -617,7 +727,7 @@ def test_a_pipelined_prover_that_overwrites_a_freed_block_before_its_pass_reads_
     session's fence holds serving's writes until no pass to come holds the block, and it is accepted; one whose writes
     skip the fence (`kvoverwrite`) lands pages over blocks the pass in flight still has to read, and is rejected at a
     receipt of one of them.  Each of its passes but the second (whose steps write the pool's empty slots) misreads 2
-    of its at most 17 blocks, so at 96 draws a window its chance of sampling none in either window is below 2^-30."""
+    of its at most 17 blocks, so at 96 samples a window its chance of sampling none in either window is below 2^-30."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (honest, over), (ph, po) = run("kv:1,kvoverwrite:1", sessions=2, windows=2, samples=96, kv_every=1, kv_pool=8,
                                    ahead=2, fill=True, kv_headroom=1)
@@ -643,12 +753,10 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
     less the blocks the node's squarings could rebuild in its span (none here: the clock's spans are ticks, so the
     session runs at no squarings, and a rate is put back below); the KV the session appended is held and read but
     credited only on the property's verdict and the session's schedule check (its verdict stood in here: the check's
-    own tests are `remote_bandwidth`'s), then less its carriers; the share and residual are of the node's HBM.
+    own tests are `poub`'s), then less its carriers; the share and residual are of the node's HBM.
     Unlabelled, the whole registered store is filler and no weights are credited.  The node has no on-chip storage
     here, which would hold the whole store."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
-    monkeypatch.setattr(timing, "CHIP_BYTES", 0)
     seen = {}
     memory = verifier.memory
 
@@ -659,10 +767,10 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
     monkeypatch.setattr(verifier, "memory", keep)
     layout = [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
               {"kind": "kv", "tier": "hbm", "first": 8, "blocks": 8}]
-    (r,), (p,) = run("kv:2", samples=4096, kv_every=4, kv_pool=8, layout=layout)
+    (r,), (p,) = run("kv:2", samples=4096, kv_every=4, kv_pool=8, layout=layout, figures=BARE)
     assert r["accepted"] and p["accepted"] and r["appended"] > 0
     B, mem, pub = rcodec.BLOCK_BYTES, r["ledger"]["memory"], r["record"]["public"]
-    assert mem["labels"] and not mem["kv_credited"] and mem["hbm_bytes"] == verifier.HBM_BYTES == 8 * 96 * 2 ** 30
+    assert mem["labels"] and not mem["kv_credited"] and mem["hbm_bytes"] == FIGURES.hbm_bytes == 8 * 96 * 2 ** 30
     for w, posts in zip(mem["windows"], (w["post_seed"] for w in r["record"]["profile"]["windows"])):
         assert w["floor"] == 0 == w["lost_blocks"] == w["epsilon"] and w["held"]["weights"] == 8 * B
         assert w["held"]["kv"] == min(posts) * B and w["read"]["kv"] == sum(posts) * B and w["held"]["host"] == 0
@@ -713,8 +821,6 @@ def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(mon
     verdict; each share is of HBM plus DRAM, the residual what the total leaves, and the line is its worst window's.
     The node has no on-chip storage here."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
-    monkeypatch.setattr(timing, "CHIP_BYTES", 0)
     seen, memory = {}, verifier.memory
 
     def keep(*a, **kw):
@@ -726,9 +832,9 @@ def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(mon
               {"kind": "filler", "tier": "hbm", "first": 8, "blocks": 4},
               {"kind": "filler", "tier": "host", "first": 12, "blocks": 4}]
     host = 1843 * 10 ** 9
-    (r,), (p,) = run("honest", samples=4096, layout=layout, host_bytes=host)
+    (r,), (p,) = run("honest", samples=4096, layout=layout, host_bytes=host, figures=BARE)
     assert r["accepted"] and p["accepted"]
-    B, node, whole = rcodec.BLOCK_BYTES, r["ledger"]["memory"]["node"], verifier.HBM_BYTES + host
+    B, node, whole = rcodec.BLOCK_BYTES, r["ledger"]["memory"]["node"], FIGURES.hbm_bytes + host
     assert node["node_bytes"] == whole and node["host_bytes"] == host and node["lost_bytes"] == 0
     assert node["held"] == {"weights": 8 * B, "filler_hbm": 4 * B, "host": 4 * B}
     assert node["credited"] == {"weights": 8 * B, "filler_hbm": 4 * B, "host": 4 * B, "kv": 0}
@@ -750,7 +856,7 @@ def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(mon
 
 def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot(monkeypatch):
     """Both forms of the memory line on a store of 8 weights blocks and 8 of filler, every pass reading all 16, at 200
-    draws a window of its ~320 receipts, so f_t ≈ 0.14.  At every pass (the worst-pass form) a window loses f_t·U_t
+    samples a window of its ~320 receipts, so f_t ≈ 0.14.  At every pass (the worst-pass form) a window loses f_t·U_t
     ≈ 44 blocks, its rebuilds and the chip's block, more than the store, and credits nothing.  On average a window
     loses f_t·U_t/P_t ≈ 2 blocks, its rebuilds and the chip's block, so it credits the weights less those; with the
     rebuilds spread over its passes, less again only f_t·N and the chip.  The node line carries both forms and both
@@ -758,7 +864,6 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     same line in both forms (`recorded_memory`), a record written before the worst-pass form charged the chip
     included."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
     seen, memory = {}, verifier.memory
 
     def keep(*a, **kw):
@@ -768,7 +873,8 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     monkeypatch.setattr(verifier, "memory", keep)
     layout = [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
               {"kind": "filler", "tier": "hbm", "first": 8, "blocks": 8}]
-    (r,), (p,) = run("honest", samples=200, layout=layout)
+    (r,), (p,) = run("honest", samples=200, layout=layout,
+                     figures=dataclasses.replace(FIGURES, gpu_squarings_per_s={"p512": 0.0}))
     assert r["accepted"] and p["accepted"]
     (record, plans, regions), kw = seen["args"]
     assert kw["chip_bytes"] == timing.CHIP_BYTES
@@ -807,7 +913,7 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     assert a["held"] == {"weights": 8 * B, "filler_hbm": 8 * B, "host": 0}
     assert a["credited"]["weights"] == pytest.approx(8 * B - lost) == a["credited"]["filler_hbm"]
     assert a["credited_bytes"] == pytest.approx(16 * B - lost) and a["share"]["weights"] == a["credited"]["weights"] / (
-        verifier.HBM_BYTES + host)
+        FIGURES.hbm_bytes + host)
     pp = line["average_rebuild_per_pass"]
     lost_pp = max(x["average"]["lost_blocks_rebuild_per_pass"] for x in m["windows"]) * B
     assert pp["form"] == verifier.AVERAGE and pp["lost_bytes"] == pytest.approx(lost_pp) and lost_pp < lost
@@ -816,12 +922,13 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
 
     lg = r["ledger"]
     reading = next(lg[n] for n in ("spec", "measured") if "error" in lg[n])
+    d = {k: Fraction(v) for k, v in lg["delta"].items()}
     assert lg["memory"]["error"] == verifier.memory_error(lg) == (
-        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"] + lg["delta"]["hiding"]
-        + lg["delta"]["binding"] + lg["delta"]["rejection"])
-    assert lg["delta"]["hiding"] == ledger.hiding_over(len(record.windows)) > 0
-    assert lg["delta"]["binding"] > 0
-    assert lg["delta"]["rejection"] == len(record.windows) * record.samples / 2 ** 64 > 0
+        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"]
+        + sum(float(d[k]) for k in ("hiding", "binding", "rejection")))
+    assert d["hiding"] == ledger.hiding_over(len(record.windows)) > 0
+    assert d["binding"] > 0
+    assert d["rejection"] == Fraction(len(record.windows) * record.samples, 2 ** 64) > 0
     assert record.samples == r["samples"] == 200 and record.public()["samples"] == 200
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
     assert lg["named"] == lg["memory"]["named"] == reading["named"] == ledger.NAMED_TERMS, (
@@ -865,11 +972,11 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
 
 
 @pytest.mark.parametrize("k", [1, 3])
-def test_a_paced_group_is_drawn_as_its_k_th_root_arrives(k):
+def test_a_paced_group_is_sampled_as_its_k_th_root_arrives(k):
     """A paced window takes at most k roots, so its k-th makes them final once its boundary has left
-    (`audit.AuditRun.close`), which the loop sends before that root: each group's draws go out as that root arrives, the
-    last group's too, so the openings coin's request on the challenger's log names the group's last root when it came,
-    not one root or a deadline later."""
+    (`audit.AuditRun.close`), which the loop sends before that root: each group's samples go out as that root arrives,
+    the last group's too, so the openings coin's request on the challenger's log names the group's last root when it
+    came, not one root or a deadline later."""
     (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)])
     assert r["accepted"]
     assert [w["draws_sent_ns"] for w in r["windows_seen"]] == [w["arrivals_ns"][-1] for w in r["windows_seen"]]
@@ -955,7 +1062,8 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
         return lines
 
     def lmax(s: dict) -> list[int]:
-        return [x["l_max_ns"] for x in verifier.recorded_paced(s, got["reg"], host_bytes=0)["stretches"]]
+        paced = verifier.recorded_paced(s, got["reg"], figures=FIGURES, host_bytes=0)
+        return [x["l_max_ns"] for x in paced["stretches"]]
 
     shifted, how = al.auditor_seen(log(0, False), seen)
     assert [w["released_ns"] for w in shifted] == [x + 100 for x in R]
@@ -985,7 +1093,7 @@ def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
     assert r["accepted"] and r["verdict"] == "lean" and r["lean_record"]["registration"] == got["reg"]["digest"]
     old = {k: v for k, v in r.items() if k != "lean_record"}
     assert verifier.lean_record(old) == r["lean_record"]
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
     mem = r["ledger"]["memory"]
     windows = [(sum(w["lengths"]), w["drawn"]) for w in r["lean_record"]["windows"]]
     given = line.inputs_json(
@@ -996,10 +1104,12 @@ def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
     assert "refused" not in want
     for s in (r, old):
         assert verifier.recorded_windows(s) == (windows, s["delta"])
-        assert line.record_run_json(verifier.recorded_inputs(s, got["reg"], host_bytes=0, rates=rates)) == want
-        assert verifier.recorded_line(s, got["reg"], host_bytes=0, rates=rates).to_json() == want
+        got_inputs = verifier.recorded_inputs(s, got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
+        assert line.record_run_json(got_inputs) == want
+        assert verifier.recorded_line(s, got["reg"], figures=FIGURES, host_bytes=0, rates=rates).to_json() == want
     with pytest.raises(ValueError, match="of registration"):
-        verifier.recorded_inputs(r, {**got["reg"], "digest": "00" * 64}, host_bytes=0, rates=rates)
+        verifier.recorded_inputs(r, {**got["reg"], "digest": "00" * 64}, figures=FIGURES,
+                                 host_bytes=0, rates=rates)
     with pytest.raises(ValueError, match="not its record's"):
         verifier.lean_record({**old, "windows_seen": old["windows_seen"][:-1]})
 
@@ -1017,14 +1127,14 @@ def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
     mem = r["ledger"]["memory"]
     b, short = mem["block_bytes"], 3_045_746_688
     assert mem["chip_bytes"] == timing.CHIP_BYTES > short
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
 
     def at(chip: int) -> dict:
         return {**r, "ledger": {**r["ledger"], "memory": {**mem, "chip_bytes": chip}}}
 
-    inputs = verifier.recorded_inputs(at(short), got["reg"], host_bytes=0, rates=rates)
+    inputs = verifier.recorded_inputs(at(short), got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     assert inputs["chip_bytes"] == timing.CHIP_BYTES
-    assert inputs == verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates)
+    assert inputs == verifier.recorded_inputs(r, got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     charged, own = line.record_run_json(inputs), line.record_run_json({**inputs, "chip_bytes": short})
     more = -(-timing.CHIP_BYTES // b) - -(-short // b)
     assert more > 0
@@ -1033,10 +1143,13 @@ def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
         for x, y in zip(charged[f]["stretches"], own[f]["stretches"]):
             for reading in line.READINGS:
                 assert line.number(x[reading]["lost_blocks"]) == line.number(y[reading]["lost_blocks"]) + more
-    assert verifier.recorded_paced(at(short), got["reg"], host_bytes=0)["chip_blocks"] == -(-timing.CHIP_BYTES // b)
+    short_paced = verifier.recorded_paced(at(short), got["reg"], figures=FIGURES, host_bytes=0)
+    assert short_paced["chip_blocks"] == -(-timing.CHIP_BYTES // b)
     larger = timing.CHIP_BYTES + b
-    assert verifier.recorded_inputs(at(larger), got["reg"], host_bytes=0, rates=rates)["chip_bytes"] == larger
-    assert verifier.recorded_paced(at(larger), got["reg"], host_bytes=0)["chip_blocks"] == -(-larger // b)
+    larger_inputs = verifier.recorded_inputs(at(larger), got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
+    assert larger_inputs["chip_bytes"] == larger
+    larger_paced = verifier.recorded_paced(at(larger), got["reg"], figures=FIGURES, host_bytes=0)
+    assert larger_paced["chip_blocks"] == -(-larger // b)
 
 
 def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
@@ -1116,10 +1229,12 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
 
 def test_a_paced_lines_ingress_charge_brings_the_bursts_the_ledger_states_for_its_routes():
     """`ingress_bursts` is `ledger.Node.stated`'s B: the rebuild batch in flight always, one second at the disks'
-    ceiling for the charge up to it, and a link window once the charge passes the disks (the link-charged line)."""
-    assert verifier.ingress_bursts(0.0) == timing.CHIP_BYTES
-    assert verifier.ingress_bursts(4.4e9) == timing.CHIP_BYTES + 4.4e9
-    assert verifier.ingress_bursts(54.4e9) == timing.CHIP_BYTES + 4.4e9 + timing.LINK_WINDOW_BYTES
+    measured rate for the charge up to it, and a link burst once the charge passes the disks (the link-charged
+    line)."""
+    assert FIGURES.disk_bytes_per_s == 4.311e9
+    assert verifier.ingress_bursts(0.0, FIGURES) == timing.CHIP_BYTES
+    assert verifier.ingress_bursts(4.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9
+    assert verifier.ingress_bursts(54.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9 + timing.LINK_BURST_BYTES
 
 
 def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registered_block_out():
@@ -1207,8 +1322,8 @@ def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, 
 
     th = threading.Thread(target=prove, daemon=True)
     th.start()
-    v = verifier.Verifier(wire.Conn(a), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
-                          jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime)
+    v = verifier.Verifier(wire.Conn(a), figures=FIGURES, source=os.urandom(32), windows=3, window_ns=20, samples=6,
+                          delta=2.0 ** -40, jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime)
     refused = None
     try:
         v.register()
@@ -1266,7 +1381,7 @@ def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp
     path = tmp_path / "registry.json"
     verifier.save_registry(path, registry)
     monkeypatch.setattr(sys, "argv", ["verifier.py", "--registry", str(path), "--close", b"test-node".hex()])
-    assert verifier.main() == 0
+    assert verifier.main(figures=FIGURES) == 0
     back = verifier.load_registry(path)
     assert back.live(b"test-node") is None and back.closed == [
         audit.Closed(b"test-node", bytes.fromhex("ab" * 64), ("accepted", audit.UNENDED))]
@@ -1288,9 +1403,9 @@ def test_the_lean_verifier_accepts_an_honest_session_and_rejects_a_dropping_one(
     assert closed[0]["sessions"] == ["accepted", "receipt"] and "python" not in closed[0]
 
 
-def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_draw(monkeypatch):
+def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_sample(monkeypatch):
     """A window's verdict is the Lean's, set on `audit.AuditRun` (`Checks.settle`): the Lean's accepting window 1 read
-    as a rejection at a draw rejects the session there, at that draw, with no disagreement."""
+    as a rejection at a sample rejects the session there, at that sample, with no disagreement."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     settle = verifier.Pair.settle
 
@@ -1312,8 +1427,8 @@ def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_draw(monkeypa
 
 def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers(tmp_path, monkeypatch):
     """`--transcript DIR`: each session's difftest case, written as it runs, which `replay.py transcript` replays
-    through `RemoteAudit.Session` and `audit.AuditRun` alike: the honest session accepted, every window verified, and
-    the prover that dropped half its blocks rejected at the window and draw it was rejected at live, at a receipt,
+    through `Poub.Session` and `audit.AuditRun` alike: the honest session accepted, every window verified, and
+    the prover that dropped half its blocks rejected at the window and sample it was rejected at live, at a receipt,
     which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
@@ -1358,11 +1473,11 @@ def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, 
     assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
 
 
-def test_a_session_drawn_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not(
+def test_a_session_sampled_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not(
         tmp_path, monkeypatch):
-    """`--groups-per-coin 4` over five windows: two draws, windows 0–3 and window 4, each sampled at its last window's
+    """`--groups-per-coin 4` over five windows: two samples, windows 0–3 and window 4, each sampled at its last window's
     close on its own openings coin (`audit.Params.groups_per_coin`), the challenger reserving ⌈5/4⌉ = 2 of them. The
-    first draw's two receipts leave at least two of its windows a share of none, which the close accepts and no
+    first sample's two receipts leave at least two of its windows a share of none, which the close accepts and no
     openings follow; the Lean verifier agrees at every event and on the record, which names g, and the session's
     transcript replays to the same verdict through both verifiers. A prover that dropped half its blocks is rejected
     at a receipt."""
@@ -1391,14 +1506,14 @@ def test_a_session_drawn_four_windows_a_coin_is_accepted_through_both_verifiers_
     assert bad["disagreement"] is None
 
 
-def test_a_session_drawn_two_windows_a_coin_at_one_window_in_flight_is_refused_before_it_starts(
+def test_a_session_sampled_two_windows_a_coin_at_one_window_in_flight_is_refused_before_it_starts(
         tmp_path, monkeypatch, capsys):
     """`--groups-per-coin 2` with a `--paced` session at F = 1: no property covers one window in flight at g > 1, so
     the Lean verifier's `session` request refuses it, and the driver refuses the pair before it listens."""
     monkeypatch.setattr(sys, "argv", ["verifier.py", "--out", str(tmp_path / "out"), "--groups-per-coin", "2",
                                       "--paced", "2:8:12:2", "2:8:12:2:1"])
     with pytest.raises(SystemExit) as e:
-        verifier.main()
+        verifier.main(figures=FIGURES)
     assert e.value.code == 2 and "one window in flight" in capsys.readouterr().err
     assert not (tmp_path / "out").exists()
 
@@ -1420,11 +1535,12 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
     (r,), _ = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=tmp_path,
                   then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     case = json.loads(Path(r["transcript"]["path"]).read_bytes())
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
-    inputs = verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates)
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
+    inputs = verifier.recorded_inputs(r, got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     want = verifier.line.record_run_json(inputs)
     assert "refused" not in want and inputs["clock"] == "record"
-    assert verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates, transcript=case)["session"] is case
+    with_case = verifier.recorded_inputs(r, got["reg"], figures=FIGURES, host_bytes=0, rates=rates, transcript=case)
+    assert with_case["session"] is case
     moved = copy.deepcopy(inputs)
     moved["record"]["windows"][0]["stale"][0] += 1
     late = copy.deepcopy(inputs)
@@ -1454,11 +1570,11 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
         lean.close()
 
 
-def test_the_leans_line_of_a_transcript_drawn_four_windows_a_coin_reads_the_draws_of_the_record_it_makes(tmp_path):
-    """At `--groups-per-coin 4` and two windows in flight, a paced session's twelve windows are three draws. Its line
-    of record reads the same twelve groups and, for its pooled bound, the three draws, each four windows' receipts and
-    draws summed (`line.draws_of`); `line_record` with the transcript runs `Shared.run 4` on it and reads the line off
-    the record that run makes, which names g: the line of the kept record, given beside it or not, line.py's. With
+def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_samples_of_the_record_it_makes(tmp_path):
+    """At `--groups-per-coin 4` and two windows in flight, a paced session's twelve windows are three samples. Its line
+    of record reads the same twelve groups and, for its pooled bound, the three samples, each four windows' receipts and
+    samples summed (`line.samples_of`); `line_record` with the transcript runs `Shared.run 4` on it and reads the line
+    off the record that run makes, which names g: the line of the kept record, given beside it or not, line.py's. With
     the record's pace at one window in flight it has no line (`line.SHARED`)."""
     import copy
     import json
@@ -1471,11 +1587,11 @@ def test_the_leans_line_of_a_transcript_drawn_four_windows_a_coin_reads_the_draw
     assert r["accepted"] and pr["accepted"] and r["windows"] == 12 and r["record"]["public"]["groups_per_coin"] == 4
     case = json.loads(Path(r["transcript"]["path"]).read_bytes())
     assert case["params"]["groups_per_coin"] == 4 and len(case["coins"]) == 12 + 3
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
-    inputs = verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates)
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
+    inputs = verifier.recorded_inputs(r, got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     record = inputs["record"]
     assert record["groups_per_coin"] == 4 and len(record["windows"]) == 12
-    draws = verifier.line.draws_of(4, record["windows"])
+    draws = verifier.line.samples_of(4, record["windows"])
     assert [d for _, d in draws] == [min(inputs["samples"], u) for u, _ in draws] and len(draws) == 3
     assert draws == verifier.recorded_windows(r)[0]
     want = verifier.line.record_run_json(inputs)
@@ -1575,12 +1691,12 @@ SCHEDULE = ("released_ns", "boundary_ns", "deadline_ns", "passes", "arrivals_ns"
 
 
 @pytest.mark.parametrize("defer_openings", [True, False])
-def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or_draw(monkeypatch, held_lean,
+def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or_sample(monkeypatch, held_lean,
                                                                                      defer_openings):
     """The driver waits on no Lean answer while a session runs: with every request to the Lean from the session's
     first event held back until the prover's passes are done (`HeldLean`), with its openings after its passes or
     beside them (`--overlap-openings`), a paced session runs the schedule it runs with a Lean that answers at once,
-    every coin, boundary, root and draw at the same tick, and is still accepted only on the Lean's verdict of each of
+    every coin, boundary, root and sample at the same tick, and is still accepted only on the Lean's verdict of each of
     its windows and its record."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     pace = verifier.pace_of("1:4:40:2", 1.0)
@@ -1622,7 +1738,7 @@ def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(mo
 
 def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_order():
     """`Verifier.append` answers an append's message with its first index and its coin, flipped then, once: the same
-    root sent again draws none and is the session's `coin` rejection.  `Verifier.root`: a message's releases, then
+    root sent again samples none and is the session's `coin` rejection.  `Verifier.root`: a message's releases, then
     its root with its plan change and its step; a plan that still holds a block the message released, or one
     appended by no message, is the session's `plan` rejection, a root with no step or one not above the last pass's
     is its `step` rejection, and a message the session cannot read, a root's carrying appends among them, is
@@ -1767,7 +1883,7 @@ def test_codec_names_round_trip(name):
     assert wire.codec_named(name).name == name
 
 
-def test_the_predicted_rate_is_the_draws_chance_to_miss_every_dropped_receipt():
+def test_the_predicted_rate_is_the_samples_chance_to_miss_every_dropped_receipt():
     import summary
 
     assert summary.miss(100, 0, 10) == 1.0 and summary.miss(10, 1, 10) == 0.0

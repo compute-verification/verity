@@ -55,6 +55,10 @@ from verity_vllm.engine.profiles import dense_generic
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.pipeline import circuit_db as RC
 from verity_vllm.pipeline import config_record as CR
+from verity_vllm.pipeline.cli import write
+
+#: The names the library's other modules read here: ``Options`` and ``main``, the ``glue`` command.
+__all__ = ["Options", "main"]
 
 MARKER = "__models__"
 SCAN = (Path(__file__).parent, ROOT / "tests")
@@ -338,5 +342,5 @@ def main(o: Options) -> int:
     if set(models) - pinned:
         raise UsageError(f"{sorted(set(models) - pinned)}: no checkpoint or capture map pins it")
     invs = [inventory(m, marks, store_sql if o.store else None) for m in models]
-    print(json.dumps(invs, indent=1) if o.json else "\n\n".join(map(render, invs)))
+    write(json.dumps(invs, indent=1) if o.json else "\n\n".join(map(render, invs)))
     return 0

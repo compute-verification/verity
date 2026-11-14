@@ -37,8 +37,8 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.evaluation import evaluate
 from verity.circuits.refs import Affine, Coll, concat, runs
 from verity.circuits.types import Array, Value
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import (
+from verity_vllm.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry import (
     b1,
     cublas_bf16,
     dsa,
@@ -51,14 +51,14 @@ from verity.definitions.registry import (
     sparse_mla,
     sparse_mla_split,
 )
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
-from verity.definitions.registry.sparse_mla_split import launch_num_splits
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
 
 from tests import fake_vllm
-from verity_vllm.program import dsa_table
+from verity_torch import dsa_table
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa, vllm_dsa_dense
@@ -899,8 +899,8 @@ def test_the_dense_prefill_locates_a_heads_q_k_v_in_their_parts_up_to_the_span_b
     """A head's call reads q from q_nope's and q_pe's rows (two spans), k from k_nope's and k_pe's alternately (two spans a row) and
     v from v's rows (one input, not one range); every k and v part is an `Affine`, so the emitter walks a head's log once, not once
     a call.  Past `emit.MAX_SPANS` runs, k stays unlocated and says so: spans for every row of every head grow as rows squared."""
-    from verity_vllm.correspondence.runtime import NAMESPACE
-    from verity_vllm.program.frontend import emit
+    from verity_torch.correspondence.runtime import NAMESPACE
+    from verity_torch.frontend import emit
     monkeypatch.setattr(emit, "MAX_SPANS", 2)
     model = _model(dense=True)
     rep = _derive(model, _inputs(model))

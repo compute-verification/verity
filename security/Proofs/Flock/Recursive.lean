@@ -31,23 +31,23 @@ public import Proofs.Flock.Recursive.OuterAbort
 public import Proofs.Flock.Recursive.Description
 public import Proofs.Flock.Recursive.Sessions
 public import Proofs.Flock.Recursive.OuterZK
-public import Proofs.Flock.Recursive.Firewall
-public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.ZkServer
+public import Proofs.Flock.Recursive.ZkServerZK
 public import Proofs.Flock.Recursive.OuterSessionZK
-public import Proofs.Flock.Recursive.FirewallRun
-public import Proofs.Flock.Recursive.FirewallTemplate
-public import Proofs.Flock.Recursive.FirewallLive
-public import Proofs.Flock.Recursive.FirewallAccepts
-public import Proofs.Flock.Recursive.FirewallAny
-public import Proofs.Flock.Recursive.FirewallWire
-public import Proofs.Flock.Recursive.FirewallJson
-public import Proofs.Flock.Recursive.FirewallAdaptive
+public import Proofs.Flock.Recursive.ZkServerRun
+public import Proofs.Flock.Recursive.ZkServerTemplate
+public import Proofs.Flock.Recursive.ZkServerLive
+public import Proofs.Flock.Recursive.ZkServerAccepts
+public import Proofs.Flock.Recursive.ZkServerAny
+public import Proofs.Flock.Recursive.ZkServerWire
+public import Proofs.Flock.Recursive.ZkServerJson
+public import Proofs.Flock.Recursive.ZkServerAdaptive
 public import Proofs.Flock.Recursive.PublicAudit
 public import Proofs.Flock.Recursive.PublicAuditProof
 public import Proofs.Flock.Recursive.HoloExec
-public import Proofs.Flock.Recursive.FirewallObj
-public import Proofs.Flock.Recursive.FirewallSteps
-public import Proofs.Flock.Recursive.FirewallHonest
+public import Proofs.Flock.Recursive.ZkServerObj
+public import Proofs.Flock.Recursive.ZkServerSteps
+public import Proofs.Flock.Recursive.ZkServerHonest
 public import Proofs.Flock.Recursive.StageKinds
 public import Proofs.Flock.Recursive.HoloCoins
 public import Proofs.Flock.Recursive.HoloSched
@@ -95,13 +95,13 @@ public import Proofs.Flock.Claims.Recursion.InnerSetupCount
 public import Proofs.Flock.Claims.Recursion.IVStarCalls
 public import Proofs.Flock.Recursive.Loop
 public import Proofs.Flock.Recursive.LoopZK
-public import Proofs.Flock.Recursive.FirewallSalted
+public import Proofs.Flock.Recursive.ZkServerSalted
 public import Proofs.Flock.Recursive.LoopAny
 public import Proofs.Flock.Recursive.StopCountBudget
 public import Proofs.Flock.Recursive.InnerRows
 public import Proofs.Flock.Recursive.LinksOuter
 public import Proofs.Flock.Recursive.LinksDeployed
-public import Proofs.Flock.Recursive.FirewallFixed
+public import Proofs.Flock.Recursive.ZkServerFixed
 public import Proofs.Flock.Recursive.LoopAnyDeployed
 public import Proofs.Flock.Recursive.LoopWitness
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
@@ -121,19 +121,19 @@ as the prover supplies them, typed where they type and refusing elsewhere, with 
 V*'s (`VStarCheck`, which `RecursiveAudit` doesn't read yet), V*'s outer sessions with the honest prover's self-check
 in them, which never stops (`OuterAbort`), and V*'s outer sessions (`Sessions`) and their zero knowledge, (ii)'s
 `_hOuter`, at the honest prover's code, its self-check included (`OuterZK`), and (ii) stated about the ZK server's code
-and V*'s, with no zero knowledge of V*'s sessions taken (`Firewall`), its proof (`FirewallZK`), the committed-coin
+and V*'s, with no zero knowledge of V*'s sessions taken (`ZkServer`), its proof (`ZkServerZK`), the committed-coin
 statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`) and at V*'s statements
 run by the session loop's switched prover (`Loop`), `RecursiveZK` there with the session released at a stop the coins
-fix, its simulator reading only V*'s public statements (`LoopZK`), `FirewallZK`'s bound when each digest reads the
-salts the ZK server answered before it (`FirewallSalted`), what the ZK server's code sends at every salt list fixed by
-one run (`FirewallRun`), a finished session's sends the schedule's transcript (`FirewallTemplate`), `flock-firewall
-live`, the deployed send check, sending what the ZK server's run sends (`FirewallLive`), and `FirewallSends` from them
-with the honest worker's half left an obligation (`FirewallAccepts`, with (ii) from it and the live send check's sends
+fix, its simulator reading only V*'s public statements (`LoopZK`), `ZkServerZK`'s bound when each digest reads the
+salts the ZK server answered before it (`ZkServerSalted`), what the ZK server's code sends at every salt list fixed by
+one run (`ZkServerRun`), a finished session's sends the schedule's transcript (`ZkServerTemplate`), `flock-zk-server
+live`, the deployed send check, sending what the ZK server's run sends (`ZkServerLive`), and `ZkServerSends` from them
+with the honest worker's half left an obligation (`ZkServerAccepts`, with (ii) from it and the live send check's sends
 from it), the honest worker's requests and rounds read back by `decode`, `frames` and `split` as it meant them
-(`FirewallWire`), a plain value's text parsing back to its canonical form with no fraction or exponent
-(`FirewallJson`), the live ZK server's sends at any requests (`FirewallAny`) and at any worker that reads its answers
-(`FirewallAdaptive`), the live session at a worker whose requests are fixed (`FirewallFixed`), `RecursiveZK` at the
-loop at such a worker, with no `FirewallSends` (`LoopAny`), and at the deployed tables (`LoopAnyDeployed`), each
+(`ZkServerWire`), a plain value's text parsing back to its canonical form with no fraction or exponent
+(`ZkServerJson`), the live ZK server's sends at any requests (`ZkServerAny`) and at any worker that reads its answers
+(`ZkServerAdaptive`), the live session at a worker whose requests are fixed (`ZkServerFixed`), `RecursiveZK` at the
+loop at such a worker, with no `ZkServerSends` (`LoopAny`), and at the deployed tables (`LoopAnyDeployed`), each
 of the loop's two guarantees' premises at one instance and its bound failing at another (`LoopWitness`), and the
 recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof

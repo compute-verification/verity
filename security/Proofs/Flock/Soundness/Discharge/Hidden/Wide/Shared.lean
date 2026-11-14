@@ -32,8 +32,8 @@ import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 /-!
 # Shared rows (`OutputsCommittedWide`, `OutputsBindingWide`)
 
-A shared-row population's sampled `b ‖ c` are its proved units' (`Layout.drawn_digestW`, `Layout.bcChunk_drawnW` and
-`Layout.pop_digest_sizeW`, in `Layout/SharedRows.lean`). `bc_drawnW` is `bc_drawnH` without `pop.tables = none`, and
+A shared-row population's sampled `b ‖ c` are its proved units' (`Layout.sampled_digestW`, `Layout.bcChunk_sampledW` and
+`Layout.pop_digest_sizeW`, in `Layout/SharedRows.lean`). `bc_sampledW` is `bc_sampledH` without `pop.tables = none`, and
 `outputs_committed_wide'` is `outputs_committed_v2'`'s argument through it.
 -/
 
@@ -49,13 +49,13 @@ open FlockSoundness.Discharge.Layout
 
 /-! ## The registered `b ‖ c` at a sampled proof block -/
 
-/-- **`bc_drawnH` with or without shared rows, at any session's `SpecOf`**: the `b ‖ c` a satisfying witness of a sampled
+/-- **`bc_sampledH` with or without shared rows, at any session's `SpecOf`**: the `b ‖ c` a satisfying witness of a sampled
 hidden-output statement holds at a proved unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public
 file, at every row. It reads the session's public file and regions alone, so a templated session's too. -/
-theorem bc_drawnS {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : Coins} {d : Lean.Json} {st : Stmt}
+theorem bc_sampledS {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : Coins} {d : Lean.Json} {st : Stmt}
     (s : SpecOf parsed tags pf coins (some d) st) {pop : Public}
-    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitDraw}
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
+    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitSample}
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
@@ -70,13 +70,13 @@ theorem bc_drawnS {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : C
   have hdrawn : HmRow.drawn { st.c with outPorts := #[] } pop d = .ok st.pub := hdr d rfl
   have hload := loadPublic_nil hpop
   have hpopn : D.population = pop.n := by
-    obtain ⟨D', hD', hpn, -⟩ := Layout.drawn_spec hdrawn
+    obtain ⟨D', hD', hpn, -⟩ := Layout.sampled_spec hdrawn
     rw [hD] at hD'
     cases hD'
     exact hpn
   have hchunk : ∀ g' (hr' : o.val * st.c.g + g' < D.proved.size),
       Layout.bcChunk st.c st.pub o.val g' p = pop.digest D.proved[o.val * st.c.g + g'] p st.c.ports.size :=
-    fun g' hr' => bcChunk_drawnW hload hdrawn hD hlt hr' hp
+    fun g' hr' => bcChunk_sampledW hload hdrawn hD hlt hr' hp
   have hsz128 : ∀ g' ≤ g, (Layout.bcChunk st.c st.pub o.val g' p).size = 128 := fun g' hg' => by
     have hr' : o.val * st.c.g + g' < D.proved.size := by omega
     rw [hchunk g' hr']
@@ -86,13 +86,13 @@ theorem bc_drawnS {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : C
   rw [← hchunk g hr]
   exact bc_pinned' L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
 
-/-- **`bc_drawnH` with or without shared rows**: the `b ‖ c` a satisfying witness of a sampled hidden-output statement
+/-- **`bc_sampledH` with or without shared rows**: the `b ‖ c` a satisfying witness of a sampled hidden-output statement
 holds at a proved unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public file, at every row. -/
-theorem bc_drawnW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
+theorem bc_sampledW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) {pop : Public}
-    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitDraw}
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
+    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitSample}
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
@@ -101,14 +101,14 @@ theorem bc_drawnW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : Li
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
         (L.model regs).addr o (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
       (pop.digest D.proved[o.val * st.c.g + g] p st.c.ports.size).data.toList :=
-  bc_drawnS (setupHidden_specOf h) hpop hD hlt L regs hregs hz o hg hg2 hp hr
+  bc_sampledS (setupHidden_specOf h) hpop hD hlt L regs hregs hz o hg hg2 hp hr
 
-/-- **`bc_drawnS` at `unpin st`'s layout**: the statement without Δ's pinned copies, which has a layout with or without
-pinned outputs (`SpecC.unpinLayout`). It reads the session's public file and regions alone, as `bc_drawnS` does. -/
-theorem bc_drawnS_unpin {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : Coins} {d : Lean.Json} {st : Stmt}
+/-- **`bc_sampledS` at `unpin st`'s layout**: the statement without Δ's pinned copies, which has a layout with or without
+pinned outputs (`SpecC.unpinLayout`). It reads the session's public file and regions alone, as `bc_sampledS` does. -/
+theorem bc_sampledS_unpin {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : Coins} {d : Lean.Json} {st : Stmt}
     (s : SpecOf parsed tags pf coins (some d) st) {pop : Public}
-    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitDraw}
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
+    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitSample}
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
     (L : FlockSoundness.Layout (unpin st))
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
@@ -124,13 +124,13 @@ theorem bc_drawnS_unpin {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coi
   have hdrawn : HmRow.drawn { st.c with outPorts := #[] } pop d = .ok st.pub := hdr d rfl
   have hload := loadPublic_nil hpop
   have hpopn : D.population = pop.n := by
-    obtain ⟨D', hD', hpn, -⟩ := Layout.drawn_spec hdrawn
+    obtain ⟨D', hD', hpn, -⟩ := Layout.sampled_spec hdrawn
     rw [hD] at hD'
     cases hD'
     exact hpn
   have hchunk : ∀ g' (hr' : o.val * st.c.g + g' < D.proved.size),
       Layout.bcChunk st.c st.pub o.val g' p = pop.digest D.proved[o.val * st.c.g + g'] p st.c.ports.size :=
-    fun g' hr' => bcChunk_drawnW hload hdrawn hD hlt hr' hp
+    fun g' hr' => bcChunk_sampledW hload hdrawn hD hlt hr' hp
   have hsz128 : ∀ g' ≤ g, (Layout.bcChunk st.c st.pub o.val g' p).size = 128 := fun g' hg' => by
     have hr' : o.val * st.c.g + g' < D.proved.size := by omega
     rw [hchunk g' hr']
@@ -140,12 +140,12 @@ theorem bc_drawnS_unpin {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coi
   rw [← hchunk g hr]
   exact bc_pinned' (st := unpin st) L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
 
-/-- **`bc_drawnW` at `unpin st`'s layout** (`bc_drawnS_unpin`). -/
-theorem bc_drawnW_unpin {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+/-- **`bc_sampledW` at `unpin st`'s layout** (`bc_sampledS_unpin`). -/
+theorem bc_sampledW_unpin {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) {pop : Public}
-    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitDraw}
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
+    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitSample}
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
     (L : FlockSoundness.Layout (unpin st))
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
@@ -155,7 +155,7 @@ theorem bc_drawnW_unpin {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
         (L.model regs).addr o (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
       (pop.digest D.proved[o.val * st.c.g + g] p st.c.ports.size).data.toList :=
-  bc_drawnS_unpin (setupHidden_specOf h) hpop hD hlt L regs hregs hz o hg hg2 hp hr
+  bc_sampledS_unpin (setupHidden_specOf h) hpop hD hlt L regs hregs hz o hg hg2 hp hr
 
 open Hm Compose Flock.DeriveAll Types.Dag
 
@@ -189,7 +189,7 @@ theorem outputs_committed_wide' : OutputsCommittedWide := by
     rw [getElem!_eq_getD'] at this
     exact this
   rw [← msg_bytesAll L L0 F0 hda hrows hz o hzero hg hj, ← hbc, ← bytesAt_bc L R regs z o hg hpl]
-  exact (bc_drawnW h hpop hD hlt L regs hregs hz o hg hg2 hpl hr).symm
+  exact (bc_sampledW h hpop hD hlt L regs hregs hz o hg hg2 hpl hr).symm
 
 /-- **`OutputsBindingWide` from `OutputsCommittedWide`**. -/
 theorem outputs_binding_wide_of (hC : OutputsCommittedWide) : OutputsBindingWide := by

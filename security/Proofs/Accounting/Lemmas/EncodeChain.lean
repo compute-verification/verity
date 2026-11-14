@@ -84,8 +84,9 @@ of `V` words and the `0` outside it, `n` for a table read of its index's low `n`
 counted apart as property/v1 counts them: a one-word gather of a run-time index is the comparison
 `[i ≤ 0]`, and were it free, thresholds and affine maps would carry a square's column sums back to bytes and the
 chain would cost nothing. Without the extra unit for a
-gather whose column holds a draw-dependent value, a tree of gathers indexed by the sample's bytes, over constant leaves,
-would compute any function of the sample (`(k + 2)·n` bits) for about that many units, a word for about 5,120 at p1024.
+gather whose column holds a sample-dependent value, a tree of gathers indexed by the sample's bytes, over constant
+leaves, would compute any function of the sample (`(k + 2)·n` bits) for about that many units, a word for about 5,120 at
+p1024.
 
 **The target is parity-free.** The dropped bit is the Legendre symbol of the last round's input, and
 `ρ(p − x) = p − ρ(x)` (`Guarantees.Gates.RhoPairs`): the ideal model of a round is a random function on the pairs

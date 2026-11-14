@@ -67,7 +67,7 @@ dispatch bound for a one-register writer. It is a floor except at `tc`, which is
 `mma.sync`. -/
 def h100Floor : Prices100 := { h100LoopFree with int32 := 32, other := 32 }
 
-/-! ## Pinned statements (draft semantics, pending review) -/
+/-! ## Guarantees (draft semantics, pending review) -/
 
 /-- **The distinct-writes bound at Round 8's loop-free prices** (draft semantics, pending review): at
 `h100LoopFree`, every well-formed `MH100w` program on free inputs that matches on `S` a finite set `T` of targets,

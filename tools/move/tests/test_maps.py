@@ -22,13 +22,20 @@ def tables(data: dict) -> list[tuple[list[str] | None, dict[str, str]]]:
 def meet(a: list[str] | None, b: list[str] | None) -> bool:
     """Whether two tables can rename in one file: [words] meets every table, and two globs meet when one matches the
     other or both hold a wildcard and neither's text before its first wildcard rules out the other's (no tree is read,
-    so two such patterns are taken to share a file)."""
+    so two such patterns are taken to share a file), unless each ends in a file extension and the two differ."""
     def head(g: str) -> str:
         return g[:m.start()] if (m := re.search(r"[*?\[]", g)) else g
 
+    def ext(g: str) -> str | None:
+        return m.group(1) if (m := re.search(r"\.(\w+)$", re.split(r"[*?\[\]/]", g)[-1])) else None
+
     def both(x: str, y: str) -> bool:
         return head(x) != x and head(y) != y and (head(x).startswith(head(y)) or head(y).startswith(head(x)))
-    return a is None or b is None or any(x == y or R._match(x, y) or R._match(y, x) or both(x, y) for x in a for y in b)
+
+    def apart(x: str, y: str) -> bool:
+        return None not in (ext(x), ext(y)) and ext(x) != ext(y)
+    return a is None or b is None or any(not apart(x, y) and (x == y or R._match(x, y) or R._match(y, x) or both(x, y))
+                                         for x in a for y in b)
 
 
 def everywhere(data: dict) -> R.Words:
@@ -39,12 +46,15 @@ def everywhere(data: dict) -> R.Words:
 
 def two_names(maps: dict[str, dict]) -> list[str]:
     """Each word two of ``maps`` rename in one file so that the order of their moves decides its name (words compared case
-    folded, a map's words applied to the other's name as `rename.py` applies them to an identifier)."""
+    folded, a map's words applied to the other's name as `rename.py` applies them to an identifier). A prose map
+    (`scope = "prose"`) and an identifier map are two kinds, so one word may have a row in one map of each."""
     words = {p: everywhere(d) for p, d in maps.items()}
     out = []
     ps = sorted(maps)
     for i, a in enumerate(ps):
         for b in ps[i + 1:]:
+            if (maps[a].get("scope") == "prose") != (maps[b].get("scope") == "prose"):
+                continue
             for ga, ta in tables(maps[a]):
                 for gb, tb in tables(maps[b]):
                     if not meet(ga, gb):
@@ -78,12 +88,19 @@ def test_maps_that_agree_or_compose_pass_and_a_second_name_is_found():
     clash = {**agree, "c.toml": {"words": {}, "words_in": [{"files": ["x/**"], "words": {"redraw": "reroll"}}]}}
     assert two_names(clash) == [
         "'redraw': a.toml renames it to 'resample', which c.toml makes 'resample'; c.toml renames it to 'reroll', which "
-        "a.toml makes 'reroll'",
-        "'Redraw': b.toml renames it to 'Resample', which c.toml makes 'Resample'; c.toml renames it to 'reroll', which "
-        "b.toml makes 'reroll'"]
+        "a.toml makes 'reroll'"]
+    kinds = {"ids.toml": {"words": {"firewall": "zk_server", "Firewall": "ZkServer"}},
+             "prose.toml": {"scope": "prose", "words": {"Firewall": "ZK server"}}}
+    assert two_names(kinds) == []
+    assert two_names({**kinds, "more.toml": {"scope": "prose", "words": {"Firewall": "Guard"}}}) == [
+        "'Firewall': more.toml renames it to 'Guard', which prose.toml makes 'Guard'; prose.toml renames it to "
+        "'ZK server', which more.toml makes 'ZK server'"]
     apart = {"d.toml": {"words": {}, "words_in": [{"files": ["Security/A.lean"], "words": {"Session": "Run"}}]},
              "e.toml": {"scope": "prose", "words": {}, "words_in": [{"files": ["bench/**"], "words": {"session": "phase"}}]}}
     assert two_names(apart) == []
+    assert two_names({"g.toml": {"words": {}, "words_in": [{"files": ["**/session.py"], "words": {"SESSION": "PHASE"}}]},
+                      "h.toml": {"words": {}, "words_in": [{"files": ["Security/*.lean"],
+                                                            "words": {"session": "attachment"}}]}}) == []
     assert two_names({**apart, "f.toml": {"words": {}, "words_in": [{"files": ["Security/*.lean"],
                                                                      "words": {"session": "attachment"}}]}}) == [
         "'Session': d.toml renames it to 'Run', which f.toml makes 'Run'; f.toml renames it to 'attachment', which "

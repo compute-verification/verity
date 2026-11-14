@@ -83,7 +83,7 @@ namespace Claims.ZKServer
 
 open _root_.Flock (F128 Transcript TMW)
 open _root_.Flock.Transcript (framed)
-open _root_.Flock.Firewall.Frame (Cfg Masker roundFree LABEL_ZC)
+open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree LABEL_ZC)
 open FlockSoundness.Refine (Frame encs label_enc absorbBytes_enc absorbSlice_enc absorbF_enc framed_enc)
 open FlockComplete (PS asksCut zerocheckCut lincheckCut sampleVecP squeezeP_cut_ok sampleP_cut_ok)
 open FlockComplete.Replay (pF pushes afterSq bind_go liftTM_ok pure_go)
@@ -544,8 +544,8 @@ theorem release_of_roundFree {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : 
   have hs : L.step x ρ h st v = .ok (out, s') := by
     unfold step
     rw [hA]
-    show _root_.Flock.Firewall.Frame.round _ _ _ _ = _
-    unfold _root_.Flock.Firewall.Frame.round
+    show _root_.Flock.ZkServer.Frame.round _ _ _ _ = _
+    unfold _root_.Flock.ZkServer.Frame.round
     rw [hn, hr]
     rfl
   unfold release

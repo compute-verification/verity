@@ -330,8 +330,10 @@ def tmux_command(unit_text: str, unit: str) -> str:
     name = unit.rsplit(".", 1)[0]
     inst = name.partition("@")[2]
     lines = [ln.strip() for ln in unit_text.splitlines()]
-    get = lambda k: [ln.split("=", 1)[1] for ln in lines if ln.startswith(k + "=")]
-    res = lambda s: s.replace("%N", name).replace("%i", inst).replace("$$", "$").replace("%%", "%")
+    def get(k):
+        return [ln.split("=", 1)[1] for ln in lines if ln.startswith(k + "=")]
+    def res(s):
+        return s.replace("%N", name).replace("%i", inst).replace("$$", "$").replace("%%", "%")
     envs = [res(e.lstrip("-")) for e in get("EnvironmentFile")]
     start = res(get("ExecStart")[0].lstrip("-@+!"))
     wd = res((get("WorkingDirectory") or ["/"])[0])
@@ -424,7 +426,8 @@ ACCEPTED = re.compile(r"^(\d+(?:\.\d+)?) .*Accepted publickey for vy-admin ")
 
 def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Callable[[], int | None] = login_uid) -> list[Check]:
     """What the sudoers step needs, each as a Check."""
-    at = lambda p: root / str(p).lstrip("/")
+    def at(p):
+        return root / str(p).lstrip("/")
     out: list[Check] = []
     keys = at("/home/vy-admin/.ssh/authorized_keys")
     admin_sudo = at(SUDOERS_D / ADMIN)
@@ -454,8 +457,8 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Ca
         g = set()
     out.append(Check("ubuntu-unprivileged", not g & {"lxd", "docker", "disk"}, f"ubuntu's groups: {', '.join(sorted(g)) or 'none'}",
                      "vy-lockout harden --apply (lxd is root for its members, and research may act as ubuntu)"))
-    cap = run(["getcap", PY_SPY])
-    out.append(Check("py-spy", "cap_sys_ptrace" not in cap.stdout, cap.stdout.strip() or f"{PY_SPY}: no capability",
+    getcap = run(["getcap", PY_SPY])
+    out.append(Check("py-spy", "cap_sys_ptrace" not in getcap.stdout, getcap.stdout.strip() or f"{PY_SPY}: no capability",
                      "vy-lockout harden --apply (cap_sys_ptrace lets anyone read any process's memory)"))
     admin = [str(p) for p in sorted(at(RESEARCH_KUBE).glob("*")) if p.is_file() and kubeconfig_admin(p.read_text(errors="replace"))] \
         if at(RESEARCH_KUBE).is_dir() else []

@@ -50,7 +50,7 @@ The compiled sampled verifier's sessions (`SamplingGeneric.Compiled.Sessions`) h
 (`SamplingGeneric.sessions_ofDeploy`) given three facts about the deployed sampled verifier at a checked unit's session,
 each a hypothesis to discharge there:
 
-* `DrawFixed`: a checked unit's session is in the second stage, and the checked units don't read its coins.
+* `SampleFixed`: a checked unit's session is in the second stage, and the checked units don't read its coins.
 * `SessionRuns`: at a run that checks `u`, `u`'s session is a Flock run, on its own rounds (an order embedding of
   Flock's), of a Flock prover fixed by the run's coins off them; the session decides the run; and the sampled verifier
   makes the Flock verifier's `H` calls. The session's view needs only the coins before its first round.
@@ -189,9 +189,9 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 
 /-- **The sample precedes the sessions**: a unit checked at `r` has its session's rounds in the second stage, and fresh
 coins on them keep the checked units. -/
-def DrawFixed (D : Deploy Coin Col T) : Prop :=
+def SampleFixed (D : Deploy Coin Col T) : Prop :=
   ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
-    D.rounds x u ⊆ D.stage2 x ∧ ∀ d, D.checked x (forkOn (D.rounds x u) r d) = D.checked x r
+    D.rounds x u ⊆ D.secondStage x ∧ ∀ d, D.checked x (forkOn (D.rounds x u) r d) = D.checked x r
 
 /-- **A checked unit's session is a Flock run**: at coins `r` that check `u`, the session's statement `xS`, an order
 embedding `emb` of Flock's rounds onto `u`'s, and a Flock prover `P'` (the sampled prover with `r`'s coins off `u`'s
@@ -228,11 +228,11 @@ theorem innerNumbersAt_innerN₀ (D : Deploy Coin Col T) : InnerNumbersAt D (fun
   Iff.rfl
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-/-- **`DrawFixed` from the sample's place in the run**: where each checked unit's session is in the second stage and the
+/-- **`SampleFixed` from the sample's place in the run**: where each checked unit's session is in the second stage and the
 checked units read only the coins off the second stage, fresh coins on a session keep them. -/
-theorem drawFixed_of_first (D : Deploy Coin Col T)
-    (hrounds : ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) → D.rounds x u ⊆ D.stage2 x)
-    (hfirst : ∀ x r r', (∀ t ∉ D.stage2 x, r t = r' t) → D.checked x r = D.checked x r') : DrawFixed D := by
+theorem sampleFixed_of_first (D : Deploy Coin Col T)
+    (hrounds : ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) → D.rounds x u ⊆ D.secondStage x)
+    (hfirst : ∀ x r r', (∀ t ∉ D.secondStage x, r t = r' t) → D.checked x r = D.checked x r') : SampleFixed D := by
   intro x r u hu
   refine ⟨hrounds x r u hu, fun d => hfirst x _ _ fun t ht => ?_⟩
   have hn : t ∉ D.rounds x u := fun hm => ht (hrounds x r u hu hm)

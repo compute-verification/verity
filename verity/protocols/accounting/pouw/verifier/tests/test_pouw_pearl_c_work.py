@@ -27,8 +27,8 @@ from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120
 
 # the clear audit is a reference tool (verity/protocols/accounting/pouw/prover/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "prover" / "clear"))
-from clear_audit import Prover  # noqa: E402
-import clear_work as CW  # noqa: E402
+from clear_audit import Prover
+import clear_work as CW
 
 S = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0")
 K = 128
@@ -163,7 +163,8 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
         total = Fraction(0)
         for t in scheme.tiles(s):
             rows, cols = r.credited(t)
-            _, cap = CW.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols), [formed(s.k)] * len(rows))
+            _, cap = CW.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols), [formed(s.k)] * len(rows),
+                                 [formed(s.k)] * len(cols))
             assert cap == scheme.cap * scheme.credit_of(Shape(s.m, kept, s.n)) * Fraction(len(rows) * len(cols), s.m * s.n)
             assert cap < scheme.cap * scheme.credit_of(Shape(len(rows), kept, len(cols)))
             total += cap
@@ -173,7 +174,8 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
     tile = next(t for t in S.tiles(r.matmul.shape) if (t.rows[0], t.cols[0]) == (0, 16))
     rows, cols = r.credited(tile)
     assert (len(rows), len(cols)) == (15, 16)
-    assert CW.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 16, [formed(K)] * 15)[1] == S.cap * CW.cell_credit(S, r) * 15 * 16
+    assert CW.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 16, [formed(K)] * 15, [formed(K)] * 16)[1] == (
+        S.cap * CW.cell_credit(S, r) * 15 * 16)
 
 
 def test_records_bind_every_field_and_the_splits():
@@ -340,22 +342,6 @@ def test_r1_is_a_no_op_on_pearl_c():
     rec = W.UnitRecord(u, 20, K, (0, 3), ())
     reason = CW.check_opened(S, rec, tile, [rows_a[i] for i in tile.rows], [rows_b[j] for j in tile.cols], None)
     assert reason == "A row 0 is excluded but passes the per-row rules"
-
-
-def test_pearl_c4s_per_element_term_3_is_a_no_op_on_pearl_c(monkeypatch):
-    """Pearl-C4's debit (item 3 per element on the witness, `pearl_c4.tile_debit`) is its own: Pearl-C (FP8) brings no
-    `tile_cap`, so its audit never reaches Pearl-C4's witness or debit and accepts as before."""
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_c4
-
-    def unreachable(*args, **kwargs):
-        raise AssertionError("Pearl-C reached Pearl-C4's debit")
-
-    monkeypatch.setattr(pearl_c4, "tile_debit", unreachable)
-    monkeypatch.setattr(pearl_c4, "salt_dead", unreachable)
-    epoch, prover, tr, rows_a, rows_b = lifecycle()
-    assert not hasattr(S, "tile_cap")
-    records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
-    assert CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 
 
 def test_v_ex_is_a_no_op_on_pearl_c():

@@ -16,9 +16,9 @@ from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
     ArgSlot,
     ReturnSlot,
-    runtime_tree_from_paths,
 )
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records.runtime_tree import runtime_tree_from_paths
 
 PD = hashlib.sha256(b"program").hexdigest()
 
@@ -197,6 +197,60 @@ def test_call_boundaries_are_a_native_tap_of_their_module_body():
     assert "body.blocks.0.norm_in/mul_1" not in {h.module for h in plan.hooks()}              # the source installs its own pre-hook
 
 
+ACT, PROJ = "body.blocks.0.act", "body.blocks.0.proj_a"
+
+
+@pytest.mark.parametrize("family,op,member,extra,site", [
+    (P.MOE_FAMILY, ACT, "p0", {"moe_module": ACT}, ("native_tap", ACT, "p0")),
+    (P.TP_FAMILY, PROJ, "out", {}, ("native_tap", PROJ, "out")),
+    ("vocab_range", "body.embed", "out", {}, ("native_tap", "body.embed", "out")),
+    ("scale_products", PROJ, "out", {}, ("native_tap", PROJ, "out")),
+], ids=["moe", "tp", "vocab", "scale"])
+def test_a_tap_family_whose_module_is_in_the_tree_has_one_site(family, op, member, extra, site):
+    plan, _, _ = make_plan(base_rows() + [row(family, op, member, **extra)])
+    v, = (v for v in plan.values if v.family == family)
+    assert plan.complete and [(s.kind, s.module, s.slot) for s in v.sites] == [site] and v.chosen == v.sites[0] and v.why == "one legal site"
+    assert v.rejected == []
+
+
+@pytest.mark.parametrize("family,op,member,extra,kind,slot,why", [
+    (P.MOE_FAMILY, ACT, "p0", {"moe_module": "body.nope"}, "native_tap", "p0", "MoE module body.nope is not a module of the runtime tree"),
+    (P.MOE_FAMILY, ACT, "p0", {}, "native_tap", "p0", "the manifest row names no `moe_module` to anchor the block source on"),
+    (P.TP_FAMILY, "body.nope", "out", {}, "native_tap", "out", "the owning module is not a module of the runtime tree"),
+    ("vocab_range", "body.nope", "out", {}, "native_tap", "out", "the embedding site is not a module of the runtime tree"),
+    ("scale_products", "body.nope", "out", {}, "native_tap", "out", "the linear module is not a module of the runtime tree"),
+    ("router_softmax", ACT, "out", {}, "native_tap", "out", "the manifest row names no `moe_module` to anchor the router-softmax tap on"),
+    ("fa2_hidden_m1_stream", "fa2.m1/L1", "g4x8x2", {"attention_module": "body.nope"}, "native_tap", "*",
+     "attention module body.nope is not a module of the runtime tree"),
+    ("fa2_hidden_m1_stream", "fa2.m1/L1", "g4x8x2", {}, "native_tap", "*", "the manifest row names no `attention_module` to anchor the tap on"),
+    ("run_values", "run/L1", "klen", {}, "native_tap", "*", "the manifest row names no `attention_module` to anchor the run values on"),
+    ("input_token_ids", "body.nope", "in", {}, "consumer_input", "in[0]", "the consuming module is not a module of the runtime tree"),
+    ("weights", "body.nope.weight", "weight", {"step": "*"}, "registered_input", "weight",
+     "neither the weight's owning module 'body.nope' nor a buffer of that name is in the runtime tree"),
+], ids=["moe-absent", "moe-unnamed", "tp-absent", "vocab-absent", "scale-absent", "router-unnamed", "hidden-absent", "hidden-unnamed", "run-unnamed",
+        "input-absent", "weight-absent"])
+def test_a_value_with_no_site_names_the_candidate_it_refused(family, op, member, extra, kind, slot, why):
+    plan, _, _ = make_plan(base_rows() + [row(family, op, member, **extra)])
+    v, = plan.unsupported
+    assert (v.family, v.op_path, v.sites, v.chosen) == (family, op, [], None) and not plan.complete
+    assert v.rejected == [{"kind": kind, "module": op, "slot": slot, "why": why}]
+    assert v.why.startswith(f"no legal site: {kind} at {op}/{slot}: {why}")
+
+
+def test_a_scale_products_values_refused_candidates_are_under_its_plans_digest():
+    """A plan's digest covers each Value's refused candidates, and a scale-products Value given its site has none. So the plan
+    digests otherwise than the same plan with a refusal among that Value's candidates: a rule that ran on past its site to
+    the last refusal of `sites_of` would change the digest of every plan that holds such a Value, and of no other."""
+    plan, _, _ = make_plan(base_rows() + [row("scale_products", PROJ, "out")])
+    body = plan.body()
+    held, = (v for v in body["values"] if v["family"] == "scale_products")
+    assert held["rejected"] == [] and P.plan_digest(body) == plan.digest
+    held["rejected"].append({"kind": "?", "module": PROJ, "slot": "out", "why": "family 'scale_products' has no site rule"})
+    assert P.plan_digest(body) != plan.digest
+    without, _, _ = make_plan(base_rows())
+    assert all(v["family"] != "scale_products" for v in without.body()["values"]) and without.digest != plan.digest
+
+
 def test_sampler_without_runner_is_unsupported():
     rt = tree()
     rt.runner = {"sample": False, "sampler_module": False}
@@ -212,13 +266,31 @@ def test_prescribed_padding_identities():
     v = {v.value_id: v for v in plan.values}["body.blocks.0.act/out"]
     assert not v.prescribed and v.prescribed_identities == 1 and v.identities == 3 and v.chosen.kind == "producer_output"
     assert [s.kind for s in v.sites] == ["prescribed", "producer_output"]
-    # padding identities as the finalize phase knows them: every identity of a Value -> prescribed as a whole
-    pad = [r for r in rows if r["op_path"] == "logits"]
-    plan2, _, _ = make_plan(rows) if False else (P.acquisition_plan(manifest(rows), AcquireCorrespondence(tree()), tables=TABLES, padding_identities=pad), None, None)
+    # every identity of a Value declared padding -> prescribed as a whole
+    plan2, _, _ = make_plan([dict(r, boundary_class="padding") if r["op_path"] == "logits" else r for r in rows])
     lg = {v.value_id: v for v in plan2.values}["logits/out"]
     assert lg.prescribed and lg.chosen.kind == "prescribed" and lg.prescribed_identities == 2
     assert ("logits", "producer_output", "out") not in [h.key() for h in plan2.hooks()]
     assert plan2.complete
+
+
+@pytest.mark.parametrize(("field", "value", "error"), [("invocation", "abc", ValueError), ("invocation", [1], TypeError),
+                                                       ("rank", "1.5", ValueError), ("rank", {"a": 1}, TypeError)])
+def test_a_row_numbers_its_invocation_and_rank_unless_it_declares_itself_prescribed(field, value, error):
+    odd = row("instance_outputs", "body.blocks.0.act", "out", step=5, spec="Act_v1", **{field: value})
+    with pytest.raises(error):
+        P.value_classes({"identities": [*base_rows(), odd]})
+    # a row declared padding or inactive is prescribed before either number is read
+    for declared in ({"boundary_class": "padding"}, {"enablement": "inactive"}):
+        classes = {v.value_id: v for v in P.value_classes({"identities": [*base_rows(), {**odd, **declared}]})}
+        v = classes["body.blocks.0.act/out"]
+        assert v.prescribed_identities == 1 and v.identities == 3
+
+
+def test_a_rows_invocation_is_read_before_its_rank():
+    odd = row("instance_outputs", "body.blocks.0.act", "out", step=5, spec="Act_v1", invocation="abc", rank=[1])
+    with pytest.raises(ValueError):
+        P.value_classes({"identities": [odd]})
 
 
 # ------------------------------------------------------------------------------------------------------------------ residuals
@@ -285,26 +357,34 @@ def test_plan_digest_stable_and_order_independent(tmp_path):
     assert p1.digest == p2.digest and p1.to_json()["plan_digest"] == p1.digest
     path = tmp_path / "plan.json"
     dig = p1.save(path)
-    doc = P.load_plan(path)
-    assert doc["plan_digest"] == dig and doc["schema"] == P.SCHEMA
+    doc = json.loads(path.read_text())
+    assert P.plan_digest(doc) == doc["plan_digest"] == dig and doc["schema"] == P.SCHEMA     # the saved document re-digests to itself
     assert [(h["module"], h["kind"], h["slot"]) for h in doc["hooks"]] == [h.key() for h in p1.hooks()]
-    # any change to the body changes the digest; a tampered file is refused
+    # any change to the body changes the digest; a tampered document no longer re-digests to the digest it carries
     rows2 = copy.deepcopy(rows)
     rows2.append(row("instance_outputs", "body.norm", "out", spec="Norm_v1"))
     p3, _, _ = make_plan(rows2)
     assert p3.digest != p1.digest
     bad = json.loads(path.read_text())
     bad["hooks"] = bad["hooks"][1:]
-    path.write_text(json.dumps(bad))
-    with pytest.raises(ValueError):
-        P.load_plan(path)
+    assert P.plan_digest(bad) != bad["plan_digest"]
     # the digest is over the plan's CONTENT: the runtime tree's provenance string is not part of it -- the meta-instantiated model and the
     # live engine of the same row give the same sites (they did, Value for Value, on the reference row) and so the same digest
     rt = tree()
     rt.source = "other"
     p4, _, _ = make_plan(rows, rt=rt)
     assert p4.digest == p1.digest and p4.body()["runtime_source"] == "other" != p1.body()["runtime_source"]
-    assert P.plan_digest(p1.to_json()) == p1.digest                     # the saved document re-digests to itself (load_plan's check)
+    assert P.plan_digest(p1.to_json()) == p1.digest
+
+
+def test_a_plans_digest_is_sha512s_whole_output_over_its_canonical_body():
+    """The one hash: the digest is SHA-512's 64 bytes over the body's canonical JSON (sorted keys, compact separators) with
+    the provenance keys left out, and the saved document carries the same 128 hex digits."""
+    plan, _, _ = make_plan(base_rows())
+    doc = plan.to_json()
+    canonical = json.dumps({k: v for k, v in doc.items() if k not in P.PROVENANCE_KEYS}, sort_keys=True, separators=(",", ":"))
+    assert plan.digest == doc["plan_digest"] == hashlib.sha512(canonical.encode()).hexdigest()
+    assert len(bytes.fromhex(plan.digest)) == 64
 
 
 def _body_by_site_scan(p):

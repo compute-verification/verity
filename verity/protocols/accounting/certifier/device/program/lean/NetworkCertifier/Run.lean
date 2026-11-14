@@ -5,7 +5,7 @@ public import NetworkCertifier.Grid
 /-!
 # The certifier program: statuses, observations, the egress prediction and acceptance
 
-The executable forms of `Security/Definitions/NetworkCertifier/Run.lean` that the difftest runs, under the same names in
+The executable forms of `Security/Definitions/Certifier/Run.lean` that the difftest runs, under the same names in
 `NetworkCertifier`, written as there. The interaction and its runs have no executable role and stay in the reference only.
 -/
 

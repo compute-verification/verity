@@ -1,4 +1,4 @@
-"""`research worker --dispatch`: stage 1's worker.  It claims `merge-check`, `lean-regen` and `audit-main` jobs from the Job queue
+"""`research worker --dispatch`: step 1's worker.  It claims `merge-check`, `lean-regen` and `audit-main` jobs from the Job queue
 and runs each with today's `research run --on` onto one of the pods it was given, one job per pod at a time.
 
     research worker --dispatch --pods vy-coord-t1,vy-coord-t2 [--name rc] [--kinds merge-check,lean-regen,audit-main] [--once]
@@ -17,7 +17,7 @@ runs where `research run --on` with custody works today, the research coordinato
                 claimed for it (`check.py --record` sets no --timeout, so its launch doesn't extend the lease).  Its rules of its
                 own are about whether a pod is free, not whether it's prepared: no job for a pod whose setup hasn't reported done
                 (a chain that launched a check while `pod_setup.sh` still ran cost train TVC an hour), nor for one with a live run.
-    preflight   whether a pod is prepared is decided in one place, `tools/verity/check/preflight.py`, which `research run --on`
+    preflight   whether a pod is prepared is decided in one place, `tools/check/preflight.py`, which `research run --on`
                 runs on the machine before claiming the run: a `--tool check` run gets it, and a `lean-regen` asks for it with
                 `--preflight check`.  A refusal is an error, retried on another pod, and the pod is benched for BENCH_S.
     launch      in a child process (`python -m research.jobs.dispatch launch SPEC`), so renewals never wait on it: fetch the
@@ -65,7 +65,7 @@ RENEW_S = 60
 POLL_S = 60
 PREFLIGHT_S = 600
 BENCH_S = 1800             # a pod that failed check's preflight sits out this long
-SETUP_MARKER = "~/.research/pod-setup.json"      # tools/verity/check/pod_setup.sh writes it last, on the pod
+SETUP_MARKER = "~/.research/pod-setup.json"      # tools/check/pod_setup.sh writes it last, on the pod
 LAUNCH_TIMEOUT_S = 1800
 DEFAULT_TIMEOUT_S = 2 * 3600       # a cold check took 41 min, a Lean regeneration 30-40
 AUDIT_TIMEOUT_S = 3 * 3600         # a cold check with the Lean agreement
@@ -100,7 +100,7 @@ class Slot:
     launch: str | None = None    # the launch spec's path while launching
     outcome: list | None = None  # [outcome, summary], until the Job queue has it
     phase: str = ""
-    caps: dict | None = None
+    capabilities: dict | None = None
     probed: float | None = None
     problem: str | None = None
     bench_until: float = 0.0     # after a failed preflight
@@ -111,18 +111,18 @@ def lease_needed(timeout_s: int) -> int:
     return int(timeout_s) + RUN_MARGIN_S
 
 
-def describe(caps: dict) -> str:
-    lease = f"lease {caps['lease_s'] / 3600:.1f} h" if caps.get("lease_s") is not None else "NO lease (a job with min_lease_s won't come)"
-    return (f"{lease}, {caps.get('disk_gb')} GB free, {caps.get('mem_gb')} GB, {caps.get('cpus')} cpus"
-            + (", avx512" if caps.get("avx512") else ", no avx512"))
+def describe(capabilities: dict) -> str:
+    lease = f"lease {capabilities['lease_s'] / 3600:.1f} h" if capabilities.get("lease_s") is not None else "NO lease (a job with min_lease_s won't come)"
+    return (f"{lease}, {capabilities.get('disk_gb')} GB free, {capabilities.get('mem_gb')} GB, {capabilities.get('cpus')} cpus"
+            + (", avx512" if capabilities.get("avx512") else ", no avx512"))
 
 
-def unavailable(caps: dict) -> str | None:
+def unavailable(capabilities: dict) -> str | None:
     """Why a pod takes no job now: its setup hasn't reported done, or a run is live on it.  Whether a pod is prepared is
     preflight.py's to say."""
-    if not caps.get("setup_done"):
+    if not capabilities.get("setup_done"):
         return f"pod_setup.sh hasn't reported done ({SETUP_MARKER}): run it there, and it's used once it finishes"
-    return f"{caps['busy']} live research run(s) on it" if caps.get("busy") else None
+    return f"{capabilities['busy']} live research run(s) on it" if capabilities.get("busy") else None
 
 
 @dataclass
@@ -194,7 +194,7 @@ class Dispatcher:
                 continue
             try:
                 status, body = self.client.call("POST", "/api/jobs/claim", {"worker": self.worker, "kinds": list(self.kinds),
-                                                                           "slot": s.pod, "capabilities": s.caps})
+                                                                           "slot": s.pod, "capabilities": s.capabilities})
             except Unreachable as e:
                 self.log(f"claim: the Job queue is unreachable ({e})")
                 break
@@ -209,14 +209,14 @@ class Dispatcher:
         s.probed = self.clock()
         was = s.problem
         try:
-            s.caps = self.runner.probe(s.pod)
-            s.problem = unavailable(s.caps)
+            s.capabilities = self.runner.probe(s.pod)
+            s.problem = unavailable(s.capabilities)
         except Exception as e:  # noqa: BLE001 -- an unreachable or missing pod asks for nothing, and the dispatcher goes on
-            s.caps, s.problem = None, f"can't be measured: {type(e).__name__}: {e}"
+            s.capabilities, s.problem = None, f"can't be measured: {type(e).__name__}: {e}"
         if s.problem and s.problem != was:
             self.log(f"{s.pod}: skipped: {s.problem}")
         elif not s.problem:
-            self.log(f"{s.pod}: {'free again' if was else 'free'}: {describe(s.caps)}")
+            self.log(f"{s.pod}: {'free again' if was else 'free'}: {describe(s.capabilities)}")
 
     def _start(self, s: Slot, claim: dict) -> None:
         now = self.clock()
@@ -225,8 +225,8 @@ class Dispatcher:
         s.run_id, s.outcome, s.phase = None, None, "launching"
         self.log(f"{s.pod}: job {s.job['id']} ({s.job['kind']}) attempt {s.attempt}: launching")
         need = lease_needed(s.job["payload"].get("timeout_s") or DEFAULT_TIMEOUT_S)
-        if (s.caps or {}).get("lease_s") is not None and s.caps["lease_s"] < need and "min_lease_s" not in s.job["requirements"]:
-            self.log(f"{s.pod}: job {s.job['id']} was added without min_lease_s, and the pod's lease ({s.caps['lease_s']} s) is "
+        if (s.capabilities or {}).get("lease_s") is not None and s.capabilities["lease_s"] < need and "min_lease_s" not in s.job["requirements"]:
+            self.log(f"{s.pod}: job {s.job['id']} was added without min_lease_s, and the pod's lease ({s.capabilities['lease_s']} s) is "
                      f"under the {need} s it needs; `research pods extend {s.pod}` before it ends the run")
         try:
             s.launch = self.runner.start(s.job, s.attempt, s.pod)
@@ -397,17 +397,17 @@ try:
     expires = int(open(lease_file).read().split()[0])
 except (OSError, ValueError, IndexError):
     expires = int(os.environ["RESEARCH_LEASE_EXPIRES"]) if os.environ.get("RESEARCH_LEASE_EXPIRES", "").isdigit() else None
-caps = {"avx512": " avx512f" in flags, "mem_gb": mem // 2**30, "cpus": os.cpu_count(),
+capabilities = {"avx512": " avx512f" in flags, "mem_gb": mem // 2**30, "cpus": os.cpu_count(),
         "disk_gb": shutil.disk_usage(probe).free // 2**30, "busy": busy,
         "tools": [t for t in ("uv", "lake", "cargo", "nvidia-smi") if shutil.which(t)]}
 if expires is not None:
-    caps["lease_s"] = max(0, expires - int(time.time()))
+    capabilities["lease_s"] = max(0, expires - int(time.time()))
 try:
-    caps["setup_at"] = json.load(open(marker))["done_utc"]
-    caps["setup_done"] = True
+    capabilities["setup_at"] = json.load(open(marker))["done_utc"]
+    capabilities["setup_done"] = True
 except (OSError, ValueError, KeyError, TypeError):
-    caps["setup_done"] = False
-print(json.dumps(caps))
+    capabilities["setup_done"] = False
+print(json.dumps(capabilities))
 """
 
 
@@ -563,10 +563,10 @@ def command(job: dict, pod: str, python: str, pack: Path | None, preflight: bool
     """What the launch child runs in the commit's worktree.  `preflight`: the launcher's `research run` knows `--preflight`."""
     p = job["payload"]
     if job["kind"] == "merge-check":
-        return [python, "tools/verity/check/check.py", "--record", "--on", pod, "--base", p["base"],
+        return [python, "tools/check/check.py", "--record", "--on", pod, "--base", p["base"],
                 *(["--verdicts-in", str(pack)] if pack else [])]
     if job["kind"] == "audit-main":
-        return [python, "tools/verity/check/check.py", "--record", "--on", pod, "--base", EMPTY_TREE, "--no-cache"]
+        return [python, "tools/check/check.py", "--record", "--on", pod, "--base", EMPTY_TREE, "--no-cache"]
     if job["kind"] == "lean-regen":
         pkgs = " ".join(shlex.quote(x) for x in p["packages"])
         script = (f"python3 tools/verity/lean/check.py --build --update {pkgs}; rc=$?; for p in {pkgs}; do "

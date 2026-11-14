@@ -27,7 +27,7 @@ import pytest
 from verity.circuits.codec import canonical_json, encode_program
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: ``stage/`` (circuit.txt, pub-32.bin, program.json, partition.json), ``session/`` (the sampled plain session's
 #: record and proofs), ``live.json`` (the prover's LIVE record) and ``challenger/`` (its record and release log)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "plain-tree"
@@ -40,7 +40,7 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 def fx():
     assert (FIXTURE / "live.json").is_file(), (
         f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures verity/protocols/proofs/flock/prover/tests/fixtures/plain-tree`")
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     return FIXTURE
 
 
@@ -67,7 +67,7 @@ def test_the_sessions_coins_are_the_challengers(fx):
     assert "link points are not the coins" in C.sessions_tree_reason(trees, [("session", tables, rec)])
 
 
-def test_the_plain_session_on_the_tree_at_a_subset_draw_is_accepted(fx):
+def test_the_plain_session_on_the_tree_at_a_subset_sample_is_accepted(fx):
     import plain_hidden as PH
 
     program, _ = PH.program()
@@ -96,7 +96,7 @@ def test_its_session_key_is_used_once(fx, tmp_path):
     assert second["why"] == "S2: coin_tree.key is an earlier session's; a session key is never reused", second
 
 
-def test_a_changed_proof_or_an_uncovered_law_is_refused(fx, tmp_path):
+def test_a_changed_proof_or_an_uncovered_sampling_design_is_refused(fx, tmp_path):
     flipped = shutil.copytree(fx / "session", tmp_path / "flipped")
     rep = sorted(flipped.glob("*.bin"))[0]
     b = bytearray(rep.read_bytes())

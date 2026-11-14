@@ -49,7 +49,6 @@ from verity.circuits.types import Array
 from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.accounting.certifier.verifier import arith_encode as AE
-from verity.protocols.accounting.certifier.verifier import replay_chain as RC
 from verity.protocols.accounting.certifier.verifier.arith_encode import Carry, ChargeBook
 from verity.protocols.accounting.certifier.verifier.head_check import BIT, _part
 from verity.protocols.proofs.spot.verifier.one_stage import produced
@@ -273,8 +272,8 @@ LENGTH_BITS = 32
 
 def check_length_slots(st: dict) -> dict:
     """`st`, a compile slice's statics, as a slice charging the length terms takes them (`compile_slice_v7`): refused
-    where an output length, LW = bitlen(L) bits (`replay_chain.widths`), is wider than a length slot's `LENGTH_BITS`."""
-    if (lw := RC.widths(SimpleNamespace(**st)).LW) > LENGTH_BITS:
+    where an output length, LW = bitlen(L) bits, is wider than a length slot's `LENGTH_BITS`."""
+    if (lw := max(int(st["L"]).bit_length(), 1)) > LENGTH_BITS:
         raise ValueError(f"statics {dict(st)}: an output length of {lw} bits, wider than a length slot's {LENGTH_BITS}")
     return st
 

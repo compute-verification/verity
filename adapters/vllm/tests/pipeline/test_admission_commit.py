@@ -4,6 +4,7 @@ run total) on three recorded runs with per-step `n_bytes`, and refuses by name o
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -190,10 +191,10 @@ def test_the_commit_admission_counts_the_declared_lag():
     assert C.admission_lag(wl) == GP.workload_target(wl["target"]).lag()
     for declared, lag in ((False, 0), (True, 1)):
         assert C.admission_lag(dict(wl, target={**(wl["target"] or {}), "async_scheduling": declared})) == lag
-    assert "lag=admission_lag(wl)" in inspect.getsource(C.main)
+    assert "lag=admission_lag(wl)" in inspect.getsource(C)
 
 
-def test_the_record_sorts_its_exclusions_before_it_scales_the_envelope_as_on_main():
+def test_the_record_sorts_its_exclusions_before_it_scales_the_envelope():
     """The record's fields are evaluated in their order, `staging` before the envelope's predicted bytes: of exclusions that do
     not sort and an envelope bound that does not scale, the first is the one raised."""
     sizing, wl, _ = _fixture("b16")
@@ -237,7 +238,7 @@ def test_the_commit_admission_covers_the_recorded_peaks(row):
 
 def test_commit_main_passes_the_resident_bytes():
     src = (REPO / "verity_vllm" / "pipeline" / "commit.py").read_text()
-    assert "resident=ADM.committer_resident(wl, host_cap, pairs=args.pairs, replay_workers=args.replay_workers)" in src
+    assert re.search(r"resident=ADM\.committer_resident\(wl, \w+, pairs=args\.pairs, replay_workers=args\.replay_workers\)", src)
 
 
 def test_row74_both_staging_modes():

@@ -4,7 +4,7 @@
     node_parameters(phi, wrapper, *, M, pos0 | LP, T) -> NodeParameters      its parameters alone, no forward built
 
 A rank's Program (`build.build_program`) takes the other ranks' partials as Inputs, world - 1 `peers_<k>` per collective, so an
-isolation block over it reads them as novel: 3.1·10¹⁰ bits a GLM-5.3 B1 rank. The node's Program has no
+inference block over it reads them as novel: 3.1·10¹⁰ bits a GLM-5.3 B1 rank. The node's Program has no
 peer Input. It runs the world's rank forwards, each the one its rank's Program runs (`build.decoder`, `common.drive`), into one
 Builder, one rank at a time in rank order, each up to its next collective. Collective k of every rank then reads every rank's own
 rows at k, in rank order, as `tp_links.json`'s `binding` states the rank's peer Inputs. Joined call by call, the ranks' Programs
@@ -16,7 +16,7 @@ weights record
 rank's samples, rank-major: each rank samples from the same gathered logits and feeds its own sample to its next forward.
 
 The body is one Definition (`NodeResult.node_fn`), and the Program's function (`Node`, bound to it) calls it once, so the root is
-the parameters' input nodes and one Call. `NciCheck.Desc` summarizes a Definition once and keeps a root node's reads as pieces of
+the parameters' input nodes and one Call. `InferenceOnlyCheck.Desc` summarizes a Definition once and keeps a root node's reads as pieces of
 gates, so it reads the node through that Call; a root holding the body's ~10⁷ nodes itself would be ~10¹⁰ pieces on GLM-5.3 B1.
 `NodeResult.spans` says which rank emitted each run of the body's nodes.
 """
@@ -33,9 +33,9 @@ from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
-from verity.definitions.replay import replayer
+from verity_vllm.definitions.replay import replayer
 
-from verity_vllm.program.inputs import check_params
+from verity_torch.inputs import check_params
 
 from .build import (
     BUILDER_ID,
@@ -209,6 +209,8 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     phis, nets, params, theta = P.phis, P.nets, P.params, P.theta
     world, kind = len(phis), (phi.sampling or {}).get("kind", "greedy")
     prompt_rows, decode_steps = request_shape(wrapper, LP, T)
+    lp: Any = LP   # as given: the launch's readers take `int` themselves
+    t: Any = T
     n = M if wrapper == "step" else prompt_rows
     events = 1 if wrapper == "step" else decode_steps + 1
     inputs = [list(_arr_shape(t)) for _, t in params[:P.weights_at[0]]]
@@ -222,7 +224,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         s = phi.sampling
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), S=int(s["splits"]), temperature_bits=f32_bits(s["temperature"]),
                              top_p_bits=f32_bits(s.get("top_p", 1.0)))
-    batch = launch_batch(phis[0], prompt_rows, decode_steps) if wrapper == "request" else None
+    batch = launch_batch(phis[0], lp, t) if wrapper == "request" else None
     lockstep = _Lockstep(B, world)
     peers = [_Joined(lockstep, r) for r in range(world)]
     models = []
@@ -230,7 +232,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         model = nets[r].model(B, W[r], peers[r])
         in_launch(model, batch, nets[r].model_class, note=f", {len(phi.requests)} requests")
         if wrapper == "request" and isinstance(model, _Model):
-            model.ctx = launch_rows(phis[r], prompt_rows, decode_steps)
+            model.ctx = launch_rows(phis[r], lp, t)
         models.append(model)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
     toks: list[list[Coll] | None] = [None] * world

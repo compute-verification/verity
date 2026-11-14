@@ -316,7 +316,7 @@ def test_the_first_starting_while_its_twin_is_launched_ends_the_asker_at_once(wo
 def slot_py(monkeypatch, tmp_path):
     """The tree's slot.py on two machines that are directories, `a` (the first's, named A in the twin's peers) and `b`; its
     ssh to A runs as sh here on a's locks."""
-    spec = importlib.util.spec_from_file_location("asker_slot", REPO / "tools" / "verity" / "check" / "slot.py")
+    spec = importlib.util.spec_from_file_location("asker_slot", REPO / "tools" / "check" / "slot.py")
     s = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(s)
     for name in ("CHECK_SLOT", "CHECK_SLOTS", "RESEARCH_RUN_DIR", s.RUN_MEM_ENV, s.MIN_MEM_ENV):

@@ -1,25 +1,25 @@
-"""Protocol 2's universal unit end to end: a random hidden netlist, padded to its size class, run by the public
+"""Protocol 2's universal unit end to end: a random hidden private circuit, padded to its size class, run by the public
 `UniversalUnit_v1{G, N_IN, N_OUT}` under Flock's circuit prover (M0) with `--zk`, and verified by the Lean verifier.
 
-    python benchmarks/private_circuit/universal.py --cls 16,16,8 --n 64 --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/private_circuit/universal.py --cls 16,16,8 --n 64 --bin flock-circuit --lean verity-verify-proof --out DIR
 
-* **The program.** A netlist of 3/4 of the class's gates over 3/4 of its inputs, every index in range (`_netlist`), padded to
+* **The program.** A private circuit of 3/4 of the class's gates over 3/4 of its inputs, every index in range (`_private_circuit`), padded to
   the class with no-op gates and unread inputs (`universal.pad`). It is a value: the Call's `op`, `src` and `out` parameters.
 * **The statement.** A one-Call Program of the unit, partitioned by `Q_template_instance` (the Call is one unit), each instance
-  one run of the netlist on its own random `x`. The unit's class is a `verity/flock-circuit` statement (`class_statement.stage`,
+  one run of the private circuit on its own random `x`. The unit's class is a `verity/flock-circuit` statement (`class_statement.stage`,
   words packed), one row per source: `op`, `src` and `out` are committed once and opened by every instance (the registered
   program), `x` once per instance; the outputs are hidden rows.
-* **The checks.** Before staging, every instance's outputs agree four ways:   the netlist interpreted (`universal.interpret`),
+* **The checks.** Before staging, every instance's outputs agree four ways:   the private circuit interpreted (`universal.interpret`),
   the hidden program as its own Boolean Definition (`direct`) and the unit, each under `verity.circuits.evaluation` (`evaluate` on the
   first instance, `evaluate_batch` on all), and the flat Definition's transcript that staging lays out (which `class_statement.stage`
   checks against the lowered circuit). The live `serve --zk` / `prove --zk` session must be accepted, then each recorded session
-  is replayed by Lean's `flock-verify verify --zk`, which must accept it, and must refuse it without `--zk` and with a proof byte
+  is replayed by Lean's `verity-verify-proof verify --zk`, which must accept it, and must refuse it without `--zk` and with a proof byte
   flipped.
 * **The row.** `rows.jsonl`: the class, the unit's ANDs (traced, closed form and Flock's lowering), ANDs per hidden gate,
-  the direct netlist's ANDs, the statement's size (k_log, instances per block), prover time, proof bytes, the live and the Lean
+  the direct private circuit's ANDs, the statement's size (k_log, instances per block), prover time, proof bytes, the live and the Lean
   verifier's times.
 * **`--wired`: several units, public topology.** A circuit of four units (`wired_topology`: layer 1 reads layer 0's outputs,
-  layer 2 layers 0 and 1, layer 3 layer 2, beside the circuit's input bits), a random hidden netlist per layer, on `n`
+  layer 2 layers 0 and 1, layer 3 layer 2, beside the circuit's input bits), a random hidden private circuit per layer, on `n`
   instances: a Program of one `batch` of the unit per layer (`wired_program`), whose wiring is the public layout's. Checked
   against `interpret` composed along the topology and `verity.circuits.evaluation` of the Program; `Q_template_instance` makes every
   member one unit, and the topology the partition derives (`derived_topology`) must be the one built. One class statement of
@@ -63,14 +63,14 @@ from verity_flock import partition_units as PU
 SPEC = "q-template-instance"
 
 
-def _netlist(rng: random.Random, G: int, N_IN: int, N_OUT: int, n_in: int | None = None) -> U.Netlist:
+def _private_circuit(rng: random.Random, G: int, N_IN: int, N_OUT: int, n_in: int | None = None) -> U.PrivateCircuit:
     g0, n0 = max(1, 3 * G // 4), n_in or max(1, 3 * N_IN // 4)
     gates = tuple((rng.randrange(4), rng.randrange(n0 + g), rng.randrange(n0 + g)) for g in range(g0))
-    return U.Netlist(n0, gates, tuple(rng.randrange(n0 + g0) for _ in range(N_OUT)))
+    return U.PrivateCircuit(n0, gates, tuple(rng.randrange(n0 + g0) for _ in range(N_OUT)))
 
 
-def direct(net: U.Netlist, name: str):
-    """The hidden netlist as its own Boolean Definition (unregistered): the program run directly."""
+def direct(net: U.PrivateCircuit, name: str):
+    """The hidden private circuit as its own Boolean Definition (unregistered): the program run directly."""
     def build(C, x):
         w = list(x)
         for op, a, b in net.gates:
@@ -83,8 +83,8 @@ def direct(net: U.Netlist, name: str):
                          register=False)
 
 
-def lanes(units, cl, net: U.Netlist, xs: list[list[int]]):
-    """`class_statement.class_lanes`'s (inputs, outputs, row identities) for the given netlist and inputs: the program's
+def lanes(units, cl, net: U.PrivateCircuit, xs: list[list[int]]):
+    """`class_statement.class_lanes`'s (inputs, outputs, row identities) for the given private circuit and inputs: the program's
     sources are one row for every instance, x one row per instance."""
     act = units.activation(cl.definition)
     uc = cl.representative
@@ -115,7 +115,7 @@ def _sessions(d: Path) -> list[Path]:
 
 def lean_verify(lean: str, circuit: Path, pub: Path, partition: Path, sessions: list[Path], zk: bool = True,
                 program: Path | None = None) -> tuple[list[dict], float, str]:
-    """``flock-verify verify`` of the sessions; ``program``: the program's descriptor, so the verifier derives the units itself."""
+    """``verity-verify-proof verify`` of the sessions; ``program``: the program's descriptor, so the verifier derives the units itself."""
     cmd = [lean, "verify", "--circuit", str(circuit), "--public", str(pub), "--partition", str(partition),
            *(["--program", str(program)] if program else []), *(["--zk"] if zk else []), "--session", *map(str, sessions)]
     t0 = time.monotonic()
@@ -176,7 +176,7 @@ def live_session(a, stage: Path, n: int, d: Path, pin: str, warm: int, runs: int
 def run_class(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
     rng = random.Random(f"pc-flock/{a.seed}/{G}/{N_IN}/{N_OUT}")
     fn = bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
-    small = _netlist(rng, G, N_IN, N_OUT)
+    small = _private_circuit(rng, G, N_IN, N_OUT)
     net = U.pad(small, G, N_IN)
     hidden = direct(small, f"HiddenNetlistG{G}N{N_IN}O{N_OUT}S{a.seed}")
     xs_small = [[rng.randrange(2) for _ in range(small.n_in)] for _ in range(a.n)]
@@ -248,7 +248,7 @@ def run_class(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
         neg["proof_byte_flipped"] = {"refused": not fl["accepted"], "why": fl["why"][:160], "file": proof.name}
         # another hidden program of the class on the same x and salts: the same circuit byte for byte, and a public file that
         # differs only where the rows differ (the program's and the outputs'), against which the honest session must fail
-        other = U.pad(_netlist(random.Random(f"pc-flock/other/{a.seed}/{G}/{N_IN}/{N_OUT}"), G, N_IN, N_OUT), G, N_IN)
+        other = U.pad(_private_circuit(random.Random(f"pc-flock/other/{a.seed}/{G}/{N_IN}/{N_OUT}"), G, N_IN, N_OUT), G, N_IN)
         so = CS.stage(units, SPEC, shape, cl, lanes(units, cl, other, xs), d / "other-program", salt_key, packed=True)
         opub = d / "other-program" / f"pub-{n}.bin"
         op = (lean_verify(a.lean, circ, opub, part, recorded[:1])[0] or [none])[0]
@@ -352,14 +352,14 @@ def derived_topology(tp, n: int, n_in: int, nc: int, layers: int) -> dict:
 
 
 def run_wired(a, G: int, N_IN: int, N_OUT: int, out: Path) -> dict:
-    """The wired circuit (`wired_topology`) on ``a.n`` instances, a random hidden netlist per layer, as one class statement of
+    """The wired circuit (`wired_topology`) on ``a.n`` instances, a random hidden private circuit per layer, as one class statement of
     ``4 a.n`` instances (Q_template_instance: every member of every layer one unit); the honest staging and a cheating one whose
     layer 1 reads a made-up input in place of layer 0's outputs, every unit correct on the input it is given."""
     rng = random.Random(f"pc-flock/wired/{a.seed}/{G}/{N_IN}/{N_OUT}")
     fn = bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
     nc, topo = wired_topology(N_IN, N_OUT)
     L = len(topo)
-    smalls = [_netlist(rng, G, N_IN, N_OUT, n_in=N_IN) for _ in topo]
+    smalls = [_private_circuit(rng, G, N_IN, N_OUT, n_in=N_IN) for _ in topo]
     nets = [U.pad(s, G, N_IN) for s in smalls]
     cs = [[rng.randrange(2) for _ in range(nc)] for _ in range(a.n)]
     root, program = wired_program(fn, a.n, nc, topo)
@@ -520,7 +520,7 @@ def write_result(rows: list[dict], a) -> None:
            "workload_fingerprint": {"kind": "private-circuit/universal-e2e/v0", "statement": FC.STATEMENT, "zk": True,
                                     "classes": a.cls, "n": a.n, "warm": a.warm, "runs": a.runs, "seed": a.seed, "wired": a.wired},
            "validation": {"status": "passed" if rows and all(r["pass"] for r in rows) else "failed",
-                          "checker": "flock-circuit serve --zk (live) and Lean flock-verify verify --zk, outputs against verity.circuits.evaluation",
+                          "checker": "flock-circuit serve --zk (live) and Lean verity-verify-proof verify --zk, outputs against verity.circuits.evaluation",
                           "detail": f"{sum(r['pass'] for r in rows)} of {len(rows)} rows passed" + "".join(
                               f"; wired {r['class']['G']},{r['class']['N_IN']},{r['class']['N_OUT']} made-up input: "
                               f"{(r.get('made_up_input') or {}).get('verdict')}, wrong salt: {(r.get('wrong_salt') or {}).get('verdict')}"
@@ -532,9 +532,9 @@ def write_result(rows: list[dict], a) -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--cls", action="append", required=True, help="G,N_IN,N_OUT (repeatable)")
-    ap.add_argument("--n", type=int, default=64, help="instances: runs of the one netlist on as many random x")
+    ap.add_argument("--n", type=int, default=64, help="instances: runs of the one private circuit on as many random x")
     ap.add_argument("--bin", default="flock-circuit")
-    ap.add_argument("--lean", default=None, help="flock-verify (Lean): replay every recorded session with --zk")
+    ap.add_argument("--lean", default=None, help="verity-verify-proof (Lean): replay every recorded session with --zk")
     ap.add_argument("--out", required=True)
     ap.add_argument("--warm", type=int, default=1)
     ap.add_argument("--runs", type=int, default=3)

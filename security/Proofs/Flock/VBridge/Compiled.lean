@@ -38,7 +38,7 @@ statement about V* or the verifier, so that each can be proved on its own agains
   (`zerocheck_of_residuals`, `lincheck_of_residuals`, `ringSwitch_of_residuals`, `ligerito_of_residuals`), each stage's
   converse (the checks hold, so the verifier's stage returns), the openings from V*'s `rec-open` units
   (`sound_recOpen`), and `table_tableAfterL` with `flockInnerCL_accepts`.
-* `VCommits`, `VDecodes`, `VFull`: facts about V*'s public files and laws, the other three conjuncts of
+* `VCommits`, `VDecodes`, `VFull`: facts about V*'s public files and sampling designs, the other three conjuncts of
   `Flock.Assumptions.VBridge` as they stand. They are about a concrete V* statement family, which Lean has not built
   yet (G item 6).
 
@@ -81,10 +81,10 @@ def AccHolds (sh : Shape) (d : RepData) : Prop :=
 
 section outer
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
 
 /-- **An accepted outer proof**: at the history `(R, ω, t)` and registration `R₂`, every session's outcome
-`flock-verify --zk --registered` accepts and every session's value layer is `Good`, no two sessions' registrant
+`verity-verify-proof --zk --registered` accepts and every session's value layer is `Good`, no two sessions' registrant
 records clash there (`RegColl`), and each session's record is a genuine session-game outcome: one its game reaches
 against `τ j` (`Game.Outcome`; `VBridgeOff RegColl`'s premise). -/
 def Accepted (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -137,11 +137,11 @@ variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintyp
 /-- **VBridge G: V*'s circuits compute Flock's compiled inner verifier.** `Flock.Assumptions.VBridge` with the inner
 protocol `flockInnerCL` (the compiled table on the class's hidden statements, the schedule `(T, CT)` with live coins),
 from the pieces still open: the algebra decoded from V*'s layers (`AlgebraDecodes`), the running sums' chain
-(`AccChains`), the inner verifier's stages run from E's conclusions (`StagesAccept`), and V*'s files and laws
+(`AccChains`), the inner verifier's stages run from E's conclusions (`StagesAccept`), and V*'s files and sampling designs
 (`VCommits`, `VDecodesR`, `VFullR`). -/
 theorem vbridge_compiled (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
-    (sch : FlockSoundness.Accounting.Schedule) {n : ℕ} {L : Law n} {Reg : Type} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    (sch : FlockSoundness.Accounting.Schedule) {n : ℕ} {L : SamplingDesign n} {Reg : Type} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (zs : Reg → L.Ω → List (Cm × (flockInnerCL T CT A H E Lf cls regs sch).Coin) → Reg₂ → (j : Fin S) →
       (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (x : Reg → L.Ω → Hidden cls)
@@ -155,7 +155,7 @@ theorem vbridge_compiled (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     -- G items 1–3, 4 and 5
     (halg : AlgebraDecodes zs dg N k Rw sh fun _ _ _ => rep) (hacc : AccChains zs dg N k Rw sh fun _ _ _ => rep)
     (hst : StagesAccept zs dg N k Rw sh rep x wmsg)
-    -- V*'s public files and laws (G item 6)
+    -- V*'s public files and sampling designs (G item 6)
     (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg)
     (hfull : VFullR (flockInnerCL T CT A H E Lf cls regs sch).r Sk) :
     Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg :=

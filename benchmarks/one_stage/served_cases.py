@@ -1,6 +1,6 @@
-"""A served window's cases, each on the window's registration record R and beside its own Lean answer, in the directory
-form a composition of the window's subprotocols reads as a case: sampled proofs' one-stage v1 case (no composite's),
-both composites' sampled proofs case (one-stage v2's in the form ``one-stage``) and the inference-only case from its
+"""A served window's cases, each on the window's docket R and beside its own Lean answer, in the directory
+form a composition of the window's subprotocols reads as a case: SPOT's one-stage v1 case (no composite's),
+both composites' SPOT case (one-stage v2's in the form ``one-stage``) and the inference-only case from its
 records audit, PoUW's period case held to the same record, Pearl+'s run case naming it, and with ``--v2`` one-stage v2's
 bare case too:
 
@@ -20,20 +20,20 @@ H1's tie, `served_verdicts.sh`'s H1_TIE, the record H1 named as the window's Com
 written: that digest is what remote's record tie compares (`Core.Remote.windows`).
 
 * **`verity/sampled-proofs/one-stage/v1`** (`window_case`, `V1`): a5's ``window/case.json`` as a5 wrote it
-  (`a5.write_case`: the registration record, the evidence the audit's record was handed, the sessions' verdicts among
+  (`a5.write_case`: the docket, the evidence the audit's record was handed, the sessions' verdicts among
   it, and the verifier's params), exactly those three, and none when a5 wrote its ``case-error.txt`` instead (which says
-  why). No composite takes it: both name sampled proofs (`VStar.Recursive.Sampled`) among their subprotocols
+  why). No composite takes it: both name SPOT (`VStar.Recursive.Sampled`) among their subprotocols
   (`Core.Onsite.components`, `Core.Remote.components`), which refuses it by name (`VStar.Recursive.Sampled.V1_REFUSED`).
   It is written because the other cases are read off it (v2's, the inference-only case's), and its answer,
-  `sampled-proofs-one-stage check` on the case, goes to the verdicts alone.
-* **`verity/sampled-proofs/v1`** (`sampled_case`, `SAMPLED`): both composites' sampled proofs subprotocol
+  `spot-one-stage check` on the case, goes to the verdicts alone.
+* **`verity/sampled-proofs/v1`** (`sampled_case`, `SAMPLED`): both composites' SPOT subprotocol
   (`Core.Remote.components`, `Core.Onsite.components`, `VStar.Recursive.Sampled`), v2's case (`v2_case`, below) with
   ``form`` ``one-stage`` in its params and its evidence (`with_form`), which the dispatcher splits off before one-stage
   v2's decoders read the rest:
   its params name ``proofs`` and its evidence the proofs' files in place of v1's verdicts, as the dispatcher requires.
-  None when v2's case is refused, which the refusal says, and each composite then names sampled proofs missing. a5
+  None when v2's case is refused, which the refusal says, and each composite then names SPOT missing. a5
   writes v2's case only for a `--zk` audit that drew exactly one member (`a5.v2_proof`), and v2 refuses a windowed
-  registration (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's law is
+  docket (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's sampling design is
   `stratified:1`, a sampled reader of each table W registers. Its answer is `vstar-recursive sampled check` on the case
   and its blobs.
 * **The inference-only case** (`inference_only_case`, `INFERENCE_ONLY`: `verity/inference-only/v0`, the inference-only
@@ -44,7 +44,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
     either no case is written), ``log`` (the deployment's records before R, from its first, whose ``previous`` is
     null, as the policy's check reads them. It has three sources, tried in this order, and the first that is there is
     the whole log, none filled in from another: (1) ``--log``, a file the caller hands; (2) with ``--serve-dir``, the
-    serve's H1 log through R's ``previous``, `h1_log`, each window's registration W and record R up to the window's W;
+    serve's H1 log through R's ``previous``, `h1_log`, each window's docket W and record R up to the window's W;
     (3) the serve's own registration records, walked back from R's ``previous`` by digest to a record whose
     ``previous`` is null, `pearl_log`: on a serve whose window record is Pearl+'s, that W and before it the serve's
     first registration record, W from Pearl+'s case's parts on the served node and, on a copy of the compose hand-off,
@@ -54,7 +54,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
     ``parameters`` (its program function's, which the descriptor doesn't carry: the population program rebuilt over its
     root's templates, and the registered values v1's own ``parameters`` name ahead of them, held to the record's
     ``program``, `parameters`);
-  - commitment: the registration record R;
+  - commitment: the docket R;
   - evidence: ``owner`` per root node of the Program, ``theta`` and ``provenance``. The window's Program is its
     population program (`interface.Circuit.program`), one batch node per template holding that template's instances for
     every slot, so no division into one block a slot is a division of its root nodes: every non-input node is block 0,
@@ -67,6 +67,9 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   compose its v0, which publishes the division and its blocks' profiles, as a stated exception (`composite.EXCEPTIONS`).
   The policy's Lean package and the Python its check is held to are named by the module `POLICY`, loaded when this
   case is asked for; on a tree that leaves the policy out the case is refused saying so.
+* **The inference-only rows case** (`inference_only_rows_case`, `INFERENCE_ONLY_ROWS`: `verity/inference-only/rows/v1`,
+  the policy's check counted in rows of the templates' circuit files) is an interface whose body is not written; no
+  composite lists the protocol, and `produce` makes no such case.
 * **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
   `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
   ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
@@ -91,16 +94,16 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   (`a5.case_v2`: v1's case with the verdicts replaced by the one sampled member's proof's files, its params naming that
   member's circuit, public file and registered file, and ``blobs``), refused here when it commits to another record
   than v1's case or names a blob that isn't there, and when a5 wrote none (its ``case-v2-error.txt`` says why: v2
-  verifies one table's `--zk` session on its circuit and public file). Its answer is `sampled-proofs-one-stage-zk
+  verifies one table's `--zk` session on its circuit and public file). Its answer is `spot-one-stage-zk
   check` on the case and its blobs. Neither composite names v2's bare case (remote reads it in its form, above), so it
   is made only when asked.
 
 Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``sampled-proofs/``,
 ``inference-only/``, ``pouw-period/``, ``pouw-pearl-plus/``, ``sampled-proofs-v2/``; 0700, files 0600): ``case.json``
-(``{"params", "commitment", "evidence"}``, hex commitment and evidence, and sampled proofs', v2's, the period's and
+(``{"params", "commitment", "evidence"}``, hex commitment and evidence, and SPOT's, v2's, the period's and
 Pearl+'s ``blobs``) and ``answer.json``, its Lean answer line (and, given ``--from-division``, the inference-only case's
 ``policy.json``). A composition is handed only the directories whose answer's protocol is one of its product's
-subprotocols: remote's are sampled proofs', the inference-only case's and the period's (v1's, Pearl+'s in the period's
+subprotocols: remote's are SPOT's, the inference-only case's and the period's (v1's, Pearl+'s in the period's
 place), onsite's the same three among its own, and neither's one-stage v1's case or v2's bare case. The Lean runs on
 files in a 0700 scratch directory under ``--private``; the period's answer is the one `pouw_piece.py` wrote, and
 Pearl+'s the Lean verdict of record's.
@@ -110,7 +113,7 @@ Each check is its own process in a systemd user scope of its own (``MemoryMax`` 
 `CHECK_MEM_GB`, no swap), and on a host with no such scope it is not started (``CHECK_SCOPE=none`` runs it under no
 limit, a development host's choice, which its line then says). The executables read every blob file into memory before
 they check anything (`Core.BlobProtocol`), so a case whose blob files sum past ``CHECK_BLOBS_GB`` (default
-`CHECK_BLOBS_GB`) is not started either. And a v2 case, remote's sampled proofs' or the bare one, is not asked where
+`CHECK_BLOBS_GB`) is not started either. And a v2 case, remote's SPOT case or the bare one, is not asked where
 its proofs are not one statement's sessions (the per-member form, `proofs.statements_v2`): one-stage v2 refuses that
 form when it parses the evidence (`OneStageZk.proofsOf`), after it has read every blob, so its answer is known and the
 check is not run.
@@ -146,21 +149,27 @@ from typing import Any
 from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import period_check as PC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]
 V1 = R.PROTOCOL
-V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
+V1_LEAN = (VF.PACKAGE, "spot-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
-SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/recursion/verifier/recursive", "vstar-recursive")
-#: `vstar-recursive`'s command for sampled proofs (`VStar.Recursive.Sampled.main`), ahead of ``check``
+SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock_recursion/verifier/lean", "vstar-recursive")
+#: `vstar-recursive`'s command for SPOT (`VStarRecursiveMain.main` sends ``sampled`` to
+#: `VStar.Recursive.Sampled.protocol`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
-#: The form remote's sampled proofs case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
+#: The form remote's SPOT case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
 ONE_STAGE = "one-stage"
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
+#: the policy's check in rows of the templates' circuit files (`InferenceOnly.RowsProtocol`), whose case
+#: `inference_only_rows_case` makes
+INFERENCE_ONLY_ROWS = "verity/inference-only/rows/v1"
+#: the goal `inference_only_rows_case` serves
+ROWS_GOAL = "network/policy-check-counts-rows"
 #: the module beside this file that says where the tree holds the policy's check: its Lean package and executable
 #: (``LEAN``) and the Python that check is held to (``reference``), which `policy` loads by name
 POLICY = "inference_only_lean"
@@ -289,7 +298,7 @@ def _json(path: Path) -> Any:
 
 
 def record_of(case: Mapping[str, Any]) -> tuple[dict[str, Any], str]:
-    """The registration record ``case`` commits to, held to be canonical JSON, and its digest (`registration.digest`)."""
+    """The docket ``case`` commits to, held to be canonical JSON, and its digest (`registration.digest`)."""
     try:
         b = bytes.fromhex(case["commitment"])
         rec = json.loads(b)
@@ -301,7 +310,7 @@ def record_of(case: Mapping[str, Any]) -> tuple[dict[str, Any], str]:
 
 
 def window_case(audit: Path) -> dict[str, Any]:
-    """v1's case of the audit (module docstring), whose commitment is the window's registration record."""
+    """v1's case of the audit (module docstring), whose commitment is the window's docket."""
     w = audit / "window"
     if not (w / "case.json").is_file() and (w / "case-error.txt").is_file():
         raise Refused(f"no v1 case: {(w / 'case-error.txt').read_text().strip()}")
@@ -318,7 +327,7 @@ PER_MEMBER = ("the case's proofs are not one statement's sessions but the per-me
 
 
 def v2_case(audit: Path, env: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """Sampled proofs' v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs. One
+    """SPOT's v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs. One
     whose proofs are in the per-member form is not asked (`PER_MEMBER`: `NotStarted`, with its blobs' sum and the limit
     of ``env``, default the environment)."""
     w = audit / "window"
@@ -347,7 +356,7 @@ def v2_case(audit: Path, env: Mapping[str, str] | None = None) -> dict[str, Any]
 
 
 def with_form(case: Mapping[str, Any], form: str = ONE_STAGE) -> dict[str, Any]:
-    """``case`` as sampled proofs reads it (`VStar.Recursive.Sampled`): its params and its evidence each with ``form``,
+    """``case`` as SPOT reads it (`VStar.Recursive.Sampled`): its params and its evidence each with ``form``,
     which the dispatcher splits off before that form's decoders read the rest."""
     try:
         evidence = json.loads(bytes.fromhex(case["evidence"]))
@@ -361,7 +370,7 @@ def with_form(case: Mapping[str, Any], form: str = ONE_STAGE) -> dict[str, Any]:
 
 
 def sampled_case(audit: Path) -> dict[str, Any]:
-    """Remote's sampled proofs case (module docstring): v2's (`v2_case`) in the form ``one-stage``."""
+    """Remote's SPOT case (module docstring): v2's (`v2_case`) in the form ``one-stage``."""
     return with_form(v2_case(audit))
 
 
@@ -442,7 +451,7 @@ def __getattr__(name: str) -> Any:
 
 
 def _reference():
-    """`nci_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
+    """`inference_only_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
     return policy().reference()
 
 
@@ -464,7 +473,7 @@ def _chain(log: Sequence[Mapping[str, Any]], rec: Mapping[str, Any]) -> None:
 
 def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
     """The deployment's records before ``rec``, oldest first, as the serve's H1 log ``path`` names them (`H1_LOG`), through
-    the one ``rec`` names as its ``previous``: under H1's tie each window's registration W and record R, up to the
+    the one ``rec`` names as its ``previous``: under H1's tie each window's docket W and record R, up to the
     window's own W, which its R is chained right after. Empty when ``rec`` names no previous record."""
     if rec.get("previous") is None:
         return []
@@ -599,6 +608,17 @@ def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamm
               "parameters": parameters(desc, root, v1["params"].get("parameters")), "program": text}
     evidence = {"owner": ["input" if i else 0 for i in inputs], "provenance": [], "theta": []}
     return {"commitment": v1["commitment"], "evidence": codec.canonical_json(evidence).hex(), "params": params}
+
+
+def inference_only_rows_case(v1: Mapping[str, Any], record: str, circuits: Sequence[tuple[str, Path]],
+                             alpha: Fraction | int | str, gamma: int, log: Sequence[Mapping[str, Any]] = (),
+                             pins: Sequence[str] = (), order: Any = None) -> dict[str, Any]:
+    """The rows case (`INFERENCE_ONLY_ROWS`) from v1's case of the window's audit: params ``alpha`` and ``gamma`` (α
+    and Γ in rows), ``circuits`` (each of ``record``'s templates, in its order, with the SHA-512 of its circuit file
+    in ``circuits``), ``log``, ``pins`` and ``program`` (v1's params' Program as canonical text); commitment R;
+    evidence ``{"record"}``, or ``{"order", "record"}`` given ``order``: the execution phase's circuit record ``record``
+    (the text R commits); blobs the circuit files."""
+    raise NotImplementedError(f"{INFERENCE_ONLY_ROWS}'s served case is not written: goal {ROWS_GOAL}")
 
 
 def division_policy(v1: Mapping[str, Any], log: Sequence[Mapping[str, Any]], exe: str | os.PathLike,

@@ -71,7 +71,7 @@ from ..schemes import pearl_kw as P
 from ..schemes.pearl_c_device import DEVICES
 from . import anchors as A
 from . import leaves as L
-from . import pc4
+from . import tile_units as U
 from . import words as W
 
 F32, BF16, E4M3, OK = W.F32, W.BF16, Value(8), L.OK
@@ -89,7 +89,7 @@ BASIS = lambda k: Array(k, LINE)                                                
 CODES = lambda n, k: Array(n, Array(k, E4M3))                                       # noqa: E731
 
 
-def _chain(e: pc4._Emit, a, b, k: int, dev: str, acc=0):
+def _chain(e: U._Emit, a, b, k: int, dev: str, acc=0):
     """The device's replay of a·b (`pearl_c.chain`): per window of G atoms a fresh +0 accumulator chains them, and one
     FP32 add promotes it into the total; unpromoted, one accumulator from +0 over all of k.  ``acc`` is the total (or the
     accumulator) the chain starts from: +0, or the carry of the k positions before ``a`` and ``b`` (`rowk`)."""
@@ -109,7 +109,7 @@ def _chain(e: pc4._Emit, a, b, k: int, dev: str, acc=0):
     return total
 
 
-def _moments(e: pc4._Emit, x, k: int):
+def _moments(e: U._Emit, x, k: int):
     """(s, ρ, α, β_row, θ) of one row of k FP32 words: max |x|, `pearl_c.s5_stats` and `live_row`'s threshold."""
     mag = [e.call(F32Fabs, x[t]) for t in range(k)]
     s = mag[0]
@@ -123,7 +123,7 @@ def _moments(e: pc4._Emit, x, k: int):
     while o:
         part = [e.call(F32AddV2, part[j], part[j + o]) for j in range(o)]
         o //= 2
-    rho = e.call(W.PouwF32SqrtRn, e.call(F32DivV2, part[0], pc4._f32(float(len(positions)))))
+    rho = e.call(W.PouwF32SqrtRn, e.call(F32DivV2, part[0], U._f32(float(len(positions)))))
     t = e.call(F32AddV2, s, e.call(F32MulV2, C.S5_FOUR, rho))
     alpha = e.call(F32DivV2, C.S5_QMAX, e.call(F32Fmaxf, t, C.S5_FLOOR))
     beta = e.call(F32MulV2, e.call(F32MulV2, rho, alpha), C.S5_LINE)
@@ -134,21 +134,21 @@ def _moments(e: pc4._Emit, x, k: int):
     return s, rho, alpha, beta, th
 
 
-def _dead(e: pc4._Emit, x, th, lo: int, hi: int, dead=0):
+def _dead(e: U._Emit, x, th, lo: int, hi: int, dead=0):
     """``dead`` plus the number of positions t in [lo, hi) whose word is dead at the threshold θ (`live_row`)."""
     for t_ in range(lo, hi):
         dead = e.call(I32Add, dead, e.call(SelectI32, e.call(W.PouwSqGe, x[t_], th), 1, 0))
     return dead
 
 
-def _bounds(e: pc4._Emit, s, rho, alpha):
+def _bounds(e: U._Emit, s, rho, alpha):
     """The row's noise floor bit and its finiteness bit (module docstring)."""
     floor = e.call(I32Le, 0, e.call(F32FmaV2, rho, alpha, MINUS_ONE))
     finite = e.call(BitAnd, e.call(I32Le, s, F32_MAX), e.call(I32Le, rho, F32_MAX))
     return floor, finite
 
 
-def _stats(e: pc4._Emit, x, k: int):
+def _stats(e: U._Emit, x, k: int):
     """(α, β_row, ok) of one row of k FP32 words (`pearl_c.s5_stats`, `live_row`, the noise floor; module docstring)."""
     s, rho, alpha, beta, th = _moments(e, x, k)
     dead = _dead(e, x, th, 0, k)
@@ -157,12 +157,12 @@ def _stats(e: pc4._Emit, x, k: int):
     return alpha, beta, ok
 
 
-def _ep(e: pc4._Emit, beta, line):
+def _ep(e: U._Emit, beta, line):
     """E′ = e4m3(β·E), the row's scaled noise line."""
     return [e.call(F32ToE4m3Sat, e.call(F32MulV2, beta, e.call(E4m3ToF32, line[p]))) for p in range(R)]
 
 
-def _codes(e: pc4._Emit, x, alpha, ep_line, basis, lo: int, hi: int, dev: str, accs: list | None = None):
+def _codes(e: U._Emit, x, alpha, ep_line, basis, lo: int, hi: int, dev: str, accs: list | None = None):
     """The codes e4m3(atom(α·x_t, E′, F_t)) of positions t in [lo, hi), ``basis`` holding F's lines from position lo; each
     accumulator α·x_t is appended to ``accs`` when given."""
     atom = ATOMS[DEVICES[dev].atom.name]
@@ -175,7 +175,7 @@ def _codes(e: pc4._Emit, x, alpha, ep_line, basis, lo: int, hi: int, dev: str, a
     return out
 
 
-def _form(e: pc4._Emit, x, alpha, beta, line, basis, k: int, dev: str):
+def _form(e: U._Emit, x, alpha, beta, line, basis, k: int, dev: str):
     """A row's E′ = e4m3(β·E) (with E′'s FP32 decode), its codes e4m3(atom(α·x_t, E′, F_t)) (`pearl_c.form_v1`) and their
     accumulators α·x_t."""
     ep = _ep(e, beta, line)
@@ -191,17 +191,17 @@ def _row_sig(S_, second: str, extra: tuple = ()):
     return params, Tuple(Array(k, E4M3), P_ROW, OK)
 
 
-def _row_a(e: pc4._Emit, k: int, dev: str, x, line, fa, fb):
+def _row_a(e: U._Emit, k: int, dev: str, x, line, fa, fb):
     """Row i of A's outputs (`Pc8RowA`), then its forming's accumulators α·x_t and β, which the inert-work bound's row
     reads."""
     alpha, beta, ok = _stats(e, x, k)
     codes, ew, accs = _form(e, x, alpha, beta, line, fa, k, dev)
     af = [e.call(F2fpBf16, _chain(e, codes, fb.take(1, p), k, dev)) for p in range(R)]
-    return (codes, array_of([e.call(F2fpBf16, w) for w in ew] + af), pc4.ok_word(e, ok)), accs, beta
+    return (codes, array_of([e.call(F2fpBf16, w) for w in ew] + af), U.ok_word(e, ok)), accs, beta
 
 
 def _row_a_body(B, S_, x, line, fa, fb):
-    outs, _accs, _beta = _row_a(pc4._Emit(B), S_.K, S_.DEV, x, line, fa, fb)
+    outs, _accs, _beta = _row_a(U._Emit(B), S_.K, S_.DEV, x, line, fa, fb)
     return tuple_of(*outs)
 
 
@@ -212,7 +212,7 @@ Pc8RowADef = CompositeDefinition(
 
 
 def _row_b_body(B, S_, x, line, fb, fa, g):
-    e, k, dev = pc4._Emit(B), S_.K, S_.DEV
+    e, k, dev = U._Emit(B), S_.K, S_.DEV
     alpha, beta, ok = _stats(e, x, k)
     codes, ew, _accs = _form(e, x, alpha, beta, line, fb, k, dev)
     mid = []
@@ -222,7 +222,7 @@ def _row_b_body(B, S_, x, line, fb, fa, g):
             acc = e.call(F32FmaV2, ew[p], g[p][q], acc)
         bf = _chain(e, codes, fa.take(1, q), k, dev)
         mid.append(e.call(F2fpBf16, e.call(F32AddV2, acc, e.call(F32Neg, bf))))
-    return tuple_of(codes, array_of(mid + [e.call(W.PouwBf16Neg, e.call(F2fpBf16, w)) for w in ew]), pc4.ok_word(e, ok))
+    return tuple_of(codes, array_of(mid + [e.call(W.PouwBf16Neg, e.call(F2fpBf16, w)) for w in ew]), U.ok_word(e, ok))
 
 
 Pc8RowBDef = CompositeDefinition(
@@ -233,7 +233,7 @@ Pc8RowBDef = CompositeDefinition(
 
 
 def _tile_body(B, S_, ac, bc, pa, pb):
-    e, k, dev = pc4._Emit(B), S_.K, S_.DEV
+    e, k, dev = U._Emit(B), S_.K, S_.DEV
     peel = PEELS[DEVICES[dev].peel.name]
     cs, us = [], []
     for i in range(S_.TM):
@@ -400,8 +400,8 @@ def templates(k: int, tile: tuple[int, int] = TILE, dev: str = "sm120",
 
 # ---- the Programs --------------------------------------------------------------------------------------------------------
 
-class _Ports(pc4.RowK):
-    """`Shape.ports`: `cap.PORTS` on a shape with the inert-work bound, else `pc4.RowK`'s (today's, or with ``row_k``
+class _Ports(U.RowK):
+    """`Shape.ports`: `cap.PORTS` on a shape with the inert-work bound, else `tile_units.RowK`'s (today's, or with ``row_k``
     the cut's)."""
 
     def __get__(self, shape, cls=None) -> dict:
@@ -429,7 +429,7 @@ class Shape:
     row_k: int | None = None
     row_rho: int | None = None
     ports = _Ports(PORTS, "PORTS8")
-    derivations = pc4.RowK(DERIVATIONS, "DERIVATIONS8")
+    derivations = U.RowK(DERIVATIONS, "DERIVATIONS8")
     seeds: ClassVar[dict] = SEEDS
 
     def check(self) -> None:
@@ -607,7 +607,7 @@ def check(shape: Shape) -> SpecializedDefinition:
 
 # ---- the partition -------------------------------------------------------------------------------------------------------
 
-ROLES = pc4.ROLES
+ROLES = U.ROLES
 _ROLE_OF = {id(Pc8RowBDef): "row_b", id(Pc8RowADef): "row_a", id(Pc8TileDef): "tile", id(Pc8TileHiddenDef): "tile",
             id(Pc8TileHiddenH3Def): "tile"}
 
@@ -637,16 +637,17 @@ def query(shape: Shape, side: str = "check") -> dict[str, Any]:
     return PO.template_instances_query([t for r in ROLES[side] for t in (tile_templates(shape) if r == "tile" else [tp[r]])])
 
 
-def units(fn: SpecializedDefinition) -> tuple[pc4.ProofBlock, ...]:
-    """Every unit of a Program built from the unit templates (`pc4.units`)."""
-    return pc4.units(fn, _role_of())
+def units(fn: SpecializedDefinition) -> tuple[U.ProofBlock, ...]:
+    """Every unit of a Program built from the unit templates (`tile_units.units`)."""
+    return U.units(fn, _role_of())
 
 
 def unit_cut(fn: SpecializedDefinition):
-    """The whole Program's cut, checked by `cut.check_cut` (`pc4.unit_cut`)."""
-    return pc4.unit_cut(fn, _role_of())
+    """The whole Program's cut, checked by `cut.check_cut` (`tile_units.unit_cut`)."""
+    return U.unit_cut(fn, _role_of())
 
 
-__all__ = ["ATOMS", "BASIS", "DERIVATIONS", "DIGESTS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "SEEDS",
-           "SIDE_PORTS", "TILE", "Shape", "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query",
-           "side_tile", "templates", "tile_templates", "unit_cut", "units", "weight"]
+__all__ = ["ATOMS", "BASIS", "CODES", "DERIVATIONS", "DIGESTS", "E4M3", "F32", "GRAM", "LINE", "MINUS_ONE", "OK",
+           "PEEL", "PEELS", "PORTS", "P_ROW", "R", "ROLES", "SEEDS", "SIDE_PORTS", "SLICE", "TILE", "Pc8TileHiddenDef",
+           "Pc8TileHiddenH3Def", "Pc8TileSideDef", "Shape", "basis_fa", "basis_fb", "call", "check", "gram_g",
+           "line_ea", "line_eb", "query", "side_tile", "templates", "tile_templates", "unit_cut", "units", "weight"]

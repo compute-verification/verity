@@ -323,7 +323,7 @@ def test_v1_rho_reads_every_eighth_position_only():
         if p % C.S5_STRIDE:
             y[p] = f32w(rng.uniform(-1, 1))
     assert C.s5_stats(x)[1] == C.s5_stats(y)[1]
-    exact = sum((P.f32_of_bits(x[p]) ** 2 for p in range(0, 512, 8))) / 64
+    exact = sum(P.f32_of_bits(x[p]) ** 2 for p in range(0, 512, 8)) / 64
     assert abs(P.f32_of_bits(C.s5_stats(x)[1]) / exact ** 0.5 - 1) < 1e-6
 
 
@@ -621,13 +621,12 @@ def test_h3_is_the_default_and_h0_and_sha256_are_named():
     hm96 tile trees don't take.  A name with no hashing suffix still means h0."""
     from verity.protocols.accounting.pouw.verifier import audit
     from verity.protocols.accounting.pouw.prover.circuit import pc8
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_c4
     from verity.protocols.accounting.pouw.verifier.serving import SchemeId
 
-    assert C.PearlC(forming="v1").hashing == pearl_c4.PearlC4().hashing == "h3"
+    assert C.PearlC(forming="v1").hashing == "h3"
     assert C.leaf(C.Checked([[0]], [[0]])) == C.leaf(C.Checked([[0]], [[0]]), "h3")
     assert SchemeId("pearl-c", "h100", "v1", "e4m3").name == "pearl-c-h100-v1-h3"
-    assert [get(n).hashing for n in ("pearl-c-h100-v1", "pearl-c-sm120-v1", "pearl-c-nvfp4-v0")] == ["h0"] * 3
+    assert [get(n).hashing for n in ("pearl-c-h100-v1", "pearl-c-sm120-v1")] == ["h0"] * 2
     assert {get(n).commitment_hash for n in ("ncp-v1", "pearl-fp8-v4")} == {"sha256"}
     d = audit.rows_domain(b"\0" * 64, -2, 4)
     assert isinstance(d, audit.Hm96Domain) and d.hash == "sha512"
