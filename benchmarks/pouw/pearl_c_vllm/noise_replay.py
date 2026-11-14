@@ -74,7 +74,7 @@ LAYOUTS = ("served", "outlier-last")
 SHAPES = {(2048, 3072): "qkv", (2048, 2048): "o", (2048, 16384): "gate_up", (8192, 2048): "down"}
 HEADS, HEAD_DIM, Q_PER_KV = 32, 64, 4
 CAUSES = ("zero",) + tuple(f"{w}_{c}" for w in ("own", "earlier") for c in ("n", "a", "b", "ab"))
-FP8_VALUE = np.array([P.fp8_to_f32(c) for c in range(256)], np.float64)
+FP8_VALUE = np.array([np.nan if c & 0x7F == 0x7F else P.fp8_to_f32(c) for c in range(256)], np.float64)
 #: per pass: (manifest, epoch, records, served scheme, the files' blob paths by path)
 PASSES: dict[int, tuple] = {}
 #: per (pass, matmul position): the outlier-last permutation of k, and where its score came from
