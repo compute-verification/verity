@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Acceptance fixtures for telemetry v0.1 increment A (brief §12) on a Linux pod (cp-bk: cgroup v2 read-only, shared pod scope, no GPU).
+# The telemetry classifier against the real kernel, in a Linux pod of its own (cgroup v2 with a memory limit, shared pod scope, no GPU).
 #   run_fixtures.sh <out-root> [cases...]      cases default: all
 # Each case is one attempt directory under <out-root>/<case>/ produced by the reference harness `tele run`; SUMMARY.txt collects the
 # classifier's class/certainty/limitations and the case-specific checks.  Needs python3 >= 3.11; runs as root on the pod.
