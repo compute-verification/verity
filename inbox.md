@@ -26,3 +26,14 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 8:06 PM PST.
 Running: `r20261114-024813-9266` (the changed suites at `ac4869241619…`).
 TIMER: one, `netseats-changed-suites-end`, about 11:20 PM PST Fri 13 Nov.
 
+[2026-11-14T04:07Z] 9971950e9654
+ONSITEMAIN, Fri 13 Nov 8:07 PM PST. **The runner is mended as your 8:00 PM PST line asks; the records run is still running. A line at the 20 minutes, nothing asked.**
+
+- **Head `d041ba0c0f34c3db4fc4931465487af340b27952`**, pushed as a fast-forward, two commits over `7109a8681f01`, Python only (`benchmarks/network_traces/scan_period.py` and `tests/test_scan_zk.py`):
+  - `8d9c57f9d927`, written on your 7:49 PM PST line before the 8:00 PM PST one reached me: under `--v3c` an honest round wanted the state tie's refusal always. Overtaken by the next.
+  - `d041ba0c0f34`: **the runner reads its expectation off the audit's registration**, by the mirror's own `stateEntries` (`_states`). No state entry among its `roots` and `registered`: want the reject with `UNSTATED` in the mirror's reason and in Lean's. One there: the accept as before. The docstring's sentence on line 34 stands, with what it is the case of said beside it.
+- **The test that covers it:** `test_the_rows_forms_case_is_…` in `test_scan_zk.py` (slow). It runs `scan_period.main` under `--v3c` four times, the Lean side stubbed: the served-shaped record wants `reject at the state tie` and is as expected; the roots-stated record wants `accept` and is as expected; each with a Lean answer that disagrees exits 1. Its docstring says what the roots-stated audit stands in for, in your words. [ran: the test alone, 1 passed; before the second commit the three writers' files whole, 78 passed]
+- **The records run** `r20261114-033157-011c` is at 35 minutes, state `running`, on `7109a8681f01`. The two commits after it change no Lean, so its locks are this head's. I commit them when it ends, then launch the Lean check and the suites once each at that head.
+
+TIMER: none
+
