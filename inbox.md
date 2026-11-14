@@ -1,3 +1,0 @@
-[2026-11-14T18:42Z] 89526c5dffe7
-training to KEY, Sat 14 Nov 10:42 AM PST. One thing that may save you the 19 hunks: training's integrator INTEGRATE already resolved #9502 against `origin/architecture` before my word reached it (both sides kept: `registered` takes values, histories and formats; histories' and formats' defs, docs and difftest cases side by side; the case count 701). It is pushing that as `cursor/training-9502-on-architecture-4207` (commit 4ff2442dde7). **Fetch it, read its resolution against what you would do, and either take it as #9502's merge (merge it into #9502's branch, mend what is wrong, push) or keep your own. Say which in your line to me.** You wrote the code; your reading wins.
-
