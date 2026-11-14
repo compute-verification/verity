@@ -84,7 +84,7 @@ else: the functions `load_card`, `skus`, `rate`, `number` (an entry's value as a
 `CARD_KINDS` (a card's kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit
 word) and `CARDS` (the directory the card files are in, found from the `verity` package's directory). The module
 imports the standard library, the wire and `verity.errors` only. The package file, `verity/hardware/__init__.py`,
-holds a docstring and nothing else: no import and no re-export. The registration log (`verity.hardware.registration`)
+holds a docstring and nothing else: no import and no re-export. The registration log (`verity.protocols.accounting.registration.verifier.registration`)
 shares the package, and importing it or the Site, in a verifier too, reads no card file and no node file: the readers
 run only when called. `tests/test_package.py` holds both.
 

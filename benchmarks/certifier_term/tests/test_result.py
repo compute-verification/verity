@@ -35,7 +35,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 import run as R  # noqa: E402
-from verity.hardware import registration  # noqa: E402
+from verity.protocols.accounting.registration.verifier import registration  # noqa: E402
 from verity.device import OUTSIDE, Link, Loc  # noqa: E402
 from verity_bench import kit  # noqa: E402
 
