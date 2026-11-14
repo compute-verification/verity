@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The onsite demo's minutes from its first command to its verdict, read off its two runs' records: the metric
-``vllm/onsite-demo-minutes`` (`benchmarks/metrics.toml`). Standard library only.
+``vllm/onsite-demo-minutes`` (`demos/onsite_served/metrics.toml`). Standard library only.
 
     research run --cwd source -- python3 demos/onsite_served/minutes.py PROVER_RUN AUDITOR_RUN [--runs-dir DIR] [--main REF]
 
