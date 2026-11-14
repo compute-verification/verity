@@ -57,11 +57,9 @@ writer and no output port, so one reader (`Spot.Wires.Wire.ofJson`) reads both. 
 def asWire (r : Json) : Json :=
   Json.mkObj ((entries r).toList.filter (·.1 != "param") ++ [("writer", getD r "param"), ("out", .str "")])
 
-def absent (j : Json) : Bool := match j with | .null => true | _ => false
-
 /-- A read from its record, as a wire whose `writer` is its parameter (`asWire`); none unless it is a read's record. -/
 def readOf? (r : Json) : Option Spot.Wires.Wire :=
-  if absent (getD r "writer") && absent (getD r "out") then (Spot.Wires.Wire.ofJson (asWire r)).toOption else none
+  if (field? r "writer").isNone && (field? r "out").isNone then (Spot.Wires.Wire.ofJson (asWire r)).toOption else none
 
 def listOf? (rec : Json) (k : String) : Option (Array Json) :=
   match getD rec k with
@@ -431,5 +429,64 @@ def check (allow : Bool) (g : Given) (rec : Json) (records : Array Json) (served
     (regs : Array Spot.Ranks.Registered) (root : String) (logged : String → Bool) (sample : Array (String × Nat))
     (stmts : List Json) : Check :=
   (failures allow g rec records served regs root logged sample stmts).foldl (fun c x => c.fail x.1 x.2) {}
+
+/-- A registration's member from `{key, base, units, outs}`, `outs` a list of `[port, leaves]`. -/
+def heldOf? (j : Json) : Option Spot.Ranks.Held := do
+  let .str key := getD j "key" | none
+  let .arr os := getD j "outs" | none
+  let outs ← os.mapM fun o => match o with
+    | .arr #[.str p, n] => do pure (p, ← nat? n)
+    | _ => none
+  pure { key, base := ← nat? (getD j "base"), units := ← nat? (getD j "units"), outs }
+
+/-- A rank's registration from `{rank, digest, circuit, run, members}`. -/
+def registeredOf? (j : Json) : Option Spot.Ranks.Registered := do
+  let .str digest := getD j "digest" | none
+  let .str circuit := getD j "circuit" | none
+  let .str run := getD j "run" | none
+  let .arr ms := getD j "members" | none
+  pure { rank := ← nat? (getD j "rank"), digest, circuit, run, members := ← ms.mapM heldOf? }
+
+/-- A list of `[name, x]` pairs, each name a string, `x` read by `f`. -/
+def pairsOf? {α : Type} (f : Json → Option α) (j : Json) : Option (Array (String × α)) := do
+  let .arr xs := j | none
+  xs.mapM fun x => match x with
+    | .arr #[.str k, v] => do pure (k, ← f v)
+    | _ => none
+
+/-- A verdict of record's `{header, registered, draw, tables}` (`Spot.SecondStage.Checked`). -/
+def checkedOf? (j : Json) : Option Spot.SecondStage.Checked := do
+  let .str header := getD j "header" | none
+  pure { header, registered := getD j "registered", draw := getD j "draw", tables := getD j "tables" }
+
+def isObj (j : Json) : Bool := match j with | .obj _ => true | _ => false
+
+/-- The `second_window` piece: `{allow, given, record, records, served, registrations, root, logged, sample, statements}`
+to `{failures}`, each `[code, detail]` in `failures`' order, `given` `{dockets, boundary, verified, refs, ref_reads}`. -/
+def piece (j : Json) : Except String Json := do
+  let .bool allow := getD j "allow" | throw "allow is not a boolean"
+  let gj := getD j "given"
+  let .arr dockets := getD gj "dockets" | throw "given.dockets is not a list"
+  let some verified := (match getD gj "verified" with | .arr a => a.mapM checkedOf? | _ => none)
+    | throw "given.verified is not a list of {header, registered, draw, tables}, header a string"
+  let some refs := pairsOf? some (getD gj "refs") | throw "given.refs is not a list of [name, x]"
+  let some refReads := pairsOf? some (getD gj "ref_reads") | throw "given.ref_reads is not a list of [name, x]"
+  let rec_ := getD j "record"
+  unless isObj rec_ do throw "record is not an object"
+  let .arr records := getD j "records" | throw "records is not a list"
+  unless records.all isObj do throw "records is not a list of objects"
+  let some served := pairsOf? (fun v => match v with | .str s => some s | _ => none) (getD j "served")
+    | throw "served is not a list of [digest, circuit], strings"
+  let some regs := (match getD j "registrations" with | .arr a => a.mapM registeredOf? | _ => none)
+    | throw "registrations is not a list of {rank, digest, circuit, run, members}"
+  let .str root := getD j "root" | throw "root is not a string"
+  let some logged := (match getD j "logged" with
+      | .arr a => a.mapM fun x => match x with | .str s => some s | _ => none
+      | _ => none) | throw "logged is not a list of strings"
+  let some sample := pairsOf? nat? (getD j "sample") | throw "sample is not a list of [template, unit]"
+  let .arr stmts := getD j "statements" | throw "statements is not a list"
+  let g : Given := { dockets, boundary := getD gj "boundary", verified, refs, refReads }
+  let fs := failures allow g rec_ records served regs root (logged.contains ·) sample stmts.toList
+  return Json.mkObj [("failures", .arr (fs.map fun (c, d) => Json.arr #[.str c, d]).toArray)]
 
 end Spot.SecondWindow
