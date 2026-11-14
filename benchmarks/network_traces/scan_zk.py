@@ -1341,7 +1341,7 @@ SlotEntry = CompositeDefinition(
 def _defs(cls: IS.Class) -> dict[str, object]:
     st = {k: getattr(cls, k) for k in IS.STATICS}
     sh = cls.egress
-    return {"first": bind(IS.IngressScanFirst, **st), "ingress": bind(IS.IngressScanBucket, **st),
+    return {"ingress": bind(IS.IngressScanBucket, **st),
             "egress": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D),
             "block": bind(SlotEntry, KO=cls.KO, IDB=cls.IDB), "start": bind(IS.IngressScanStart, **st)}
 
@@ -1351,7 +1351,7 @@ def scan_root(members: list[tuple[object, int, int]], nb: int, every: int) -> Pr
     `members` one batch over its n units, in order, its first `fixed` parameters inputs of its own (``<i>.<name>``),
     and each later one, lane j's ``prog<j>``, at bucket t (the first unit that reads slot entries bucket 0, each next
     such unit the next bucket) row ⌊t / every⌋ (`entry_at`) of lane j's input ``prog<j>``, its slot entries of nb
-    boundaries. A template that reads none (the egress units, the carried start's) counts no bucket."""
+    boundaries. A template that reads none (the egress units, the start unit) counts no bucket."""
     sigs = [t.signature() for t, _, _ in members]
     lanes = [len(ps) - fixed for (ps, _), (_, _, fixed) in zip(sigs, members)]
     entry = next(ps[fixed][1] for (ps, _), (_, _, fixed), L in zip(sigs, members, lanes) if L)
@@ -1378,11 +1378,11 @@ def scan_root(members: list[tuple[object, int, int]], nb: int, every: int) -> Pr
                         counts=tuple(n for _, n, _ in members), nb=nb, every=every))
 
 
-def scan_program(cls: IS.Class, templates: tuple[str, ...], G: int, T: int) -> Program:
-    """The scan's Program of `templates` (`TEMPLATES`, or the carried shape's `CARRIED`) over G link-windows of T
-    buckets, in the generator form (`scan_root`)."""
-    defs, counts = _defs(cls), counts_of(members_of(templates, G, T))
-    return scan_root([(defs[tp], counts[tp], FIXED[tp]) for tp in templates], G * T // cls.EVERY, cls.EVERY)
+def scan_program(cls: IS.Class, templates: tuple[str, ...], T: int) -> Program:
+    """The scan's Program of `templates` (`TEMPLATES`) over a link-window of T buckets, in the generator form
+    (`scan_root`)."""
+    defs, counts = _defs(cls), counts_of(members_of(templates, T))
+    return scan_root([(defs[tp], counts[tp], FIXED[tp]) for tp in templates], T // cls.EVERY, cls.EVERY)
 
 
 def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls: IS.Class, nb: int) -> dict:
@@ -1398,7 +1398,7 @@ def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls:
         raise SystemExit(f"one-stage's reads refuse the scan's Program: {e}") from e
     want = {p: (p, [None] * sum(len(m.buckets) for m in members)) for p in lane_kinds(cls)}
     for m in members:
-        for k, b in enumerate(m.buckets if m.template in ("first", "ingress") else ()):
+        for k, b in enumerate(m.buckets if m.template == "ingress" else ()):
             for p in lane_kinds(cls):
                 want[p][1][m.base + k] = entry_at(cls, b)
     if got != want:
@@ -1406,7 +1406,7 @@ def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls:
     return got
 
 
-def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: Path) -> SimpleNamespace:
+def program(M, cls: IS.Class, templates: tuple[str, ...], T: int, out: Path) -> SimpleNamespace:
     """A round's Program and partition (`members_of`'s templates and counts) and each template's stager, every output
     its own row. The scan's three templates' (`TEMPLATES`) is the generator form (`scan_root`), its one-stage reads
     of the slot entries each unit's (`entry_reads`), and its ``prog<j>``, one a lane, the values it names tied
@@ -1415,10 +1415,10 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
     registration verdict publishes them (`rests_on_period_check`): the round's acceptance rests on that period
     check, which refuses the block round's stand-in; every other round's a population of its templates, which names
     none."""
-    defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T), lanes=cls.NR)
+    defs, members = _defs(cls), members_of(templates, T, entries=entries_of(cls, T), lanes=cls.NR)
     counts = counts_of(members)
-    nb, scan = G * T // cls.EVERY, templates in (TEMPLATES, CARRIED)
-    prog = scan_program(cls, templates, G, T) if scan else \
+    nb, scan = T // cls.EVERY, templates == TEMPLATES
+    prog = scan_program(cls, templates, T) if scan else \
         M.P.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
     query = M.P.template_instances_query([defs[tp] for tp in templates])
     part = M.P.partition(prog, query)
@@ -1537,28 +1537,29 @@ def staged_wires(members: list[dict]) -> list[str]:
 # --- the challenger's coins ---------------------------------------------------------------------------------------------
 
 def window_root(at: SimpleNamespace) -> str:
-    """The root the challenger's session opens on (128 hex digits): the SHA-512 of the warden's session and the group's
-    registrations, each link's in link-window order, whose heads the warden signed. The gate opens a root once, ever,
-    so a warden run's group is sampled once."""
+    """The root the challenger's session opens on (128 hex digits) for link-window `at` (`window_of`): the SHA-512 of
+    the warden's session and the link-window's registrations, one a link, whose heads the warden signed. The gate
+    opens a root once, ever, so a warden run's link-window is sampled once."""
     return hashlib.sha512(canonical_json({"format": WINDOW_ROOT, "session": at.session.hex(),
-                                          "registrations": {s: [x.registration for x in ws]
-                                                            for s, ws in sorted(at.sides.items())}})).hexdigest()
+                                          "registrations": {s: x.registration
+                                                            for s, x in sorted(at.sides.items())}})).hexdigest()
 
 
 @contextmanager
-def challenger(a, at: SimpleNamespace, out: Path):
-    """The challenger's session for the honest round's sample (``--challenger``, as prove_path's `records_audit.audit`
-    starts it): `a5_coins.start` on `window_root` for one rank, its evidence copied to ``out / "challenger"``; once the
-    rounds are done the rank's turn ends whether or not it sampled (`Draws.skip`) and the session's evidence is published,
-    which the yielded namespace's ``published`` then holds. None without ``--challenger``. Needs `WZ._one_stage`'s path
-    (a5_coins is one-stage's)."""
-    if not a.challenger:
+def challenger(a, at: SimpleNamespace | None, out: Path):
+    """The challenger's session for a link-window's honest round's sample (``--challenger``, as prove_path's
+    `records_audit.audit` starts it): `a5_coins.start` on `window_root` for one rank, its evidence copied to ``out``;
+    once the link-window's rounds are done the rank's turn ends whether or not it sampled (`Draws.skip`) and the
+    session's evidence is published, which the yielded namespace's ``published`` then holds. None without
+    ``--challenger``, and for no link-window (``at`` None: the stale round, which has no honest round). Needs
+    `WZ._one_stage`'s path (a5_coins is one-stage's)."""
+    if not a.challenger or at is None:
         yield None
         return
     import a5_coins as AC
 
     root = window_root(at)
-    manager, draws, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.gate_key,
+    manager, draws, finisher = AC.start(a.challenger, root, [0], out, a.main, ssh_key=a.gate_key,
                                         peer=a.peer, key_record=a.challenger_key)
     coins = SimpleNamespace(AC=AC, draws=draws, root=root, challenger=a.challenger, published=None)
     try:
@@ -1592,7 +1593,7 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     strata = [s["template"] for s in DR.derive(pg.program, pg.query, named,
                                                S.selection_table(law, pg.program, pg.query, None)).get("strata") or ()]
     public = [("population", "N, the round's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
-              ("window", "the round's provenance: the group's link-windows of the warden's run"),
+              ("window", "the round's provenance: its link-window of the warden's run"),
               ("leaf_layer", "the leaf layer over the members' public files"),
               *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain"))]
     check = S.Check(tuple(PA.program_digest(Program(u)) for u in units), pg.query,
@@ -1715,11 +1716,12 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     port the OS picks free. Writes what the verifier received under ``out / "verifier"``. An accepted audit carries its
     charge terms (`charge_terms`) and each member's cost per sampled proof block; on the challenger's coins, the outcome
     of record is the stream's (`coins_outcome`). Every outcome carries the tied values R8 let through
-    (``rests_on_period_check``, the registration verdict's), on whose period check its acceptance rests. A carried
-    round's (``carry``, `carry_of`) record is a v2 record, its ``previous`` the log's last record and its one
-    registered value the carried start, checked with the verifier's log and its hold of that value; its outcome carries
-    the record's changed forms' codes (``registration_negatives``) and the root the verdicts of record opened the
-    start unit's ``sin`` against (``carried_start``, `audit.session_registered`)."""
+    (``rests_on_period_check``, the registration verdict's), on whose period check its acceptance rests. The record
+    of a round with a start unit (``carry``, `carry_of`) is a v2 record, its ``previous`` the log's last record and
+    its one registered value the start, checked with the verifier's log and its hold of that value; its `window`
+    opens a start that is the empty state's (``empty``); its outcome carries the record's changed forms' codes
+    (``registration_negatives``) and the root the verdicts of record opened the start unit's ``sin`` against
+    (``carried_start``, `audit.session_registered`)."""
     from prove_leg import frame_ports  # one-stage's (`WZ._one_stage` puts it on the path)
 
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
@@ -1746,7 +1748,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     k = n if k is None else k
     rule = f"stratified:{k}" if coins is None else rule_of(k, n)
     law, table = (M.D.parse_design(rule), None) if coins is None else S.params_law(rule, pg.program, pg.query, None)
-    win = {"kind": "stand-in", "of": f"round {name}: link-windows {at.windows} of {at.source}, their ingress and egress "
+    win = {"kind": "stand-in", "of": f"round {name}: link-window {at.number} of {at.source}, its ingress and egress "
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}
                        for m in members},
@@ -1755,7 +1757,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                    "view, inputs and outputs, at the prover's registered roots (scan/*)"}
     reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
     win |= ({"reads": {"scan/state": reads}} if reads else {}) | (
-        {"empty": {"scan/state": state_empty(trees["state"])}} if "state" in trees and not carry else {})
+        {"empty": {CARRY: carry.empty}} if carry and carry.empty else {})
     rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table,
                    **(carry.record if carry else {}))
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
@@ -1872,12 +1874,11 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         sent += [{"unit": m["base"] + i, "o0": w, "salt/o0": m["salts"]["o0"][i].hex()}
                  for i, w in enumerate(m["outputs"]) if (m["base"] + i) in held]
     (vdir / "openings.json").write_text(json.dumps(sent, indent=1))
-    for side, ws in at.sides.items():
-        for w, s in zip(at.windows, ws):
-            (vdir / f"warden-registration-{side}-{w}.json").write_text(json.dumps(s.registration, indent=1,
-                                                                                  sort_keys=True))
-    if name == "tampered":
-        (vdir / f"warden-registration-egress-{at.windows[at.tampered.window]}-tampered.json").write_text(
+    for side, s in at.sides.items():
+        (vdir / f"warden-registration-{side}-{at.number}.json").write_text(json.dumps(s.registration, indent=1,
+                                                                                      sort_keys=True))
+    if kind_of(name) == "tampered":
+        (vdir / f"warden-registration-egress-{at.number}-tampered.json").write_text(
             json.dumps(at.tampered.registration, indent=1, sort_keys=True))
     streamed = (out / "receipt.json", out / "segment.json", out / "coins.json") if stream is not None else ()
     for f in (out / "registration.json", pg.partition_file, pg.program_file, out / "draw.json", out / "audit.json",
