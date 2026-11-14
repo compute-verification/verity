@@ -125,7 +125,7 @@ from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.circuits.boolean.trace import part as _part
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.circuits.defs import bind
+from verity.circuits.defs import SpecializedDefinition, StaticValue, bind
 from verity.circuits.types import Array, Tuple
 
 STATICS = ("R", "W", "A", "M", "T", "L", "B", "H", "CH", "WM", "FULL", "PC", "NB", "IW", "AS", "EW")
@@ -139,7 +139,7 @@ def _bitlen(v: int) -> int:
     return max(int(v).bit_length(), 1)
 
 
-def widths(S) -> SimpleNamespace:
+def widths(S: SimpleNamespace) -> SimpleNamespace:
     if S.B < 1 or S.B & (S.B - 1):
         raise ValueError(f"block size {S.B}: a power of 2")
     if (min(S.R, S.W, S.A, S.M, S.T, S.L, S.NB, S.IW) < 1 or min(S.H, S.WM, S.EW) < 0
@@ -229,7 +229,7 @@ class Out:
     looked: tuple[int, ...] = ()            # with EW, per candidate: whether the step read its lookup
 
 
-def empty(S) -> State:
+def empty(S: SimpleNamespace) -> State:
     return State((), (), S.NB - 1)
 
 
@@ -237,7 +237,7 @@ def _at(xs: Sequence[int], k: int) -> int:
     return xs[k] if k < len(xs) else 0
 
 
-def reference(S, st: State, inp: Inputs) -> Out:
+def reference(S: SimpleNamespace, st: State, inp: Inputs) -> Out:
     """One step as `replay._Sched` schedules and updates it (FCFS; with AS, one schedule and the update of the step
     before it), on the size class `S`; `Out(False)` refuses."""
     if len(st.running) > S.R or len(st.waiting) > S.W or len(inp.arrivals) > S.A:
@@ -880,7 +880,7 @@ def statics(R: int, W: int, A: int, engine: dict, IW: int, EW: int = 0) -> dict:
             "NB": int(e["num_gpu_blocks"]), "IW": IW, "AS": int(bool(e.get("async_scheduling"))), "EW": EW}
 
 
-def unit(**st):
+def unit(**st: StaticValue) -> SpecializedDefinition:
     return bind(ReplayStep, **st)
 
 
@@ -1000,13 +1000,12 @@ def _staged(key: tuple) -> dict[str, int]:
     return C.phase_counts()
 
 
-def size(**st_) -> dict[str, int]:
+def size(**st_: StaticValue) -> dict[str, int]:
     """The proof block's ANDs by stage at statics `st_` (traced on a counting circuit, no gates written)."""
     out = dict(_staged(tuple(st_[k] for k in STATICS)))
     out["ands"] = sum(out.values())
     return out
 
 
-__all__ = ["ENGINE_DRAFT", "ENGINE_HELD", "ENGINE_INERT", "ENGINE_READ", "Inputs", "Out", "ReplayStep", "Req", "STATICS",
-           "State", "arguments", "decode", "empty", "evaluate", "from_json", "reference", "size", "statics", "to_json", "unit",
-           "widths"]
+__all__ = ["ENGINE_DRAFT", "ENGINE_HELD", "ENGINE_INERT", "ENGINE_READ", "Inputs", "Out", "Req", "STATICS", "State",
+           "cdiv", "empty", "evaluate", "from_json", "reference", "size", "statics", "to_json", "unit", "widths"]
