@@ -111,7 +111,7 @@ def fetched(p: Path) -> dict:
 def _numbers(dev: str, proposed: dict) -> dict:
     """A device's numbers: its card file's (the SMs, clock.sm, every rate, memory.bandwidth in words a second and every
     format's weight), and the envelope's proposed rates and weights, none of which the card file may hold."""
-    from verity.hardware.cards import number, rate   # here: only a reader of the card needs verity
+    from verity.device import number, rate   # here: only a reader of the card needs verity
 
     def plain(x):
         return int(x) if x.denominator == 1 else float(x)
