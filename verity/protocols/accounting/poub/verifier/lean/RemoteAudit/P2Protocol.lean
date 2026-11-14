@@ -17,7 +17,7 @@ meta import RemoteAudit.Verifier
 /-!
 # A session over PoUS's P2 store as a core protocol
 
-PoUB-P2's session (`P2Session`, as the verifier's process decides it live, `p2_party.py`) behind the core interface
+PoUB-P2's session (`P2Session`, as the verifier's process decides it live, `p2_parties.py`) behind the core interface
 (`Core.Protocol`), so that onsite can take it as its bandwidth component: its registered store is PoUS's `C*`, so the
 store it audits is the one PoUS's setup published. Its bytes are canonical JSON (`p2_case.py` writes them):
 

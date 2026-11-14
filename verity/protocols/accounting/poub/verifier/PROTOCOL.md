@@ -1635,18 +1635,18 @@ path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p
 path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
 nothing (`append`).
 
-**Of record** (`lean/RemoteAudit/P2Session.lean`). The Lean verifier's process decides a P2 session (`p2_party.py`):
+**Of record** (`lean/RemoteAudit/P2Session.lean`). The Lean verifier's process decides a P2 session (`p2_parties.py`):
 it holds the registration file's bytes (its digest recomputed from its fields, a stated `digest` refused unless it is
 theirs) and reads the prover's request and each root and openings line as sent, a line out of form rejecting the
 session `malformed` at the window filling. Its bookkeeping is §4–§6's over the U units, and its openings are checked
 as above, on the registered vk root. `audit.AuditRun` over the P2 codec runs beside it as a veto: where the two
 differ the session is rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
-(`p2_party.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
-values, by name, before the first coin, and so does the Lean, naming each in `p2_party.params_of`'s words
+(`p2_parties.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
+values, by name, before the first coin, and so does the Lean, naming each in `p2_parties.params_of`'s words
 (`P2Session.heldTo`). The process holds its pinned `P2Session.SESSION` unless the auditor's party names a toy's
 (`p2_hold`'s `session`), and the session's core case (`p2_case.py`), whose request no digest binds, is replayed under
 `SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there. The case's log is signed: the memory
-challenger's key closes it (`p2_party.Closer`, its line count and chain, `RemoteAudit.P2Close`) under the session id the
+challenger's key closes it (`p2_parties.Closer`, its line count and chain, `RemoteAudit.P2Close`) under the session id the
 auditor gave it, which its session log records before the first coin, and the check refuses a close that doesn't sign
 the log under a key and a session the case's params name before it replays any entry (`P2Protocol.closeRefusal`).
 

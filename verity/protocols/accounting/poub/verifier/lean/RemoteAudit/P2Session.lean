@@ -6,12 +6,12 @@ public import RemoteAudit.Pooled
 public import RemoteAudit.Session
 
 /-!
-# A session over a P2 store, of record: `p2_party.py`
+# A session over a P2 store, of record: `p2_parties.py`
 
-The verifier's side of a remote bandwidth session over PoUS's P2 store (`p2.Session`, as `p2_party.session` drives
+The verifier's side of a remote bandwidth session over PoUS's P2 store (`p2.Session`, as `p2_parties.session` drives
 it), read from the bytes it holds and the prover sends, and decided here:
 
-* the auditor's registration file (`heldOf`, `p2_party.registration_json`'s bytes): its fields' registration, its
+* the auditor's registration file (`heldOf`, `p2_parties.registration_json`'s bytes): its fields' registration, its
   digest recomputed from them (a `digest` it states must be theirs), and the plan every pass reads over the store's U
   units;
 * the prover's request line (`paramsOf`), refused unless it is the registration's node's and restates the auditor's
@@ -19,14 +19,14 @@ it), read from the bytes it holds and the prover sends, and decided here:
   (`Verifier`'s `p2_hold`), so the prover chooses none of them;
 * each root's line (`receive`) and each window's openings line (`verify`), every opening checked on PoUS's vk root
   (`checkOpenings`, `P2.checkOpeningWith`);
-* the answer (`answer`, `p2_party.answer`'s): the credited reads under the pooled bound at δ = 2^-40
+* the answer (`answer`, `p2_parties.answer`'s): the credited reads under the pooled bound at δ = 2^-40
   (`Pooled.pooled`).
 
 The bookkeeping (seeds, plans, steps, deadlines, order, draws) is `Session`'s over the store's units: the registration
 stands in as one of U blocks (`standIn`) and the session's digest is the P2 registration's (`init`), so only an
 opening's check is P2's. A P2 store is fixed at setup and its sessions take no appends or releases: the verifier's
 process (`Verifier`) takes a start, a boundary or a close through `Session.step`, a root or an openings line here. A
-line out of form rejects the session `malformed` at the window filling (`fail`), as `p2_party` does when it can't
+line out of form rejects the session `malformed` at the window filling (`fail`), as `p2_parties` does when it can't
 read the prover's message. The registration's C* is too large to read whole: what is checked of it is each opened
 unit's four blocks, on the registered vk root.
 -/
@@ -70,7 +70,7 @@ private def runsOf (j : Json) : V (Array (Int × Int)) := do
     if xs.size ≠ 2 then throw "a registration's plan is a list of runs [first, count]"
     pure (← J.asInt xs[0]! "registration.plan", ← J.asInt xs[1]! "registration.plan")
 
-/-- `p2_party.registration_of` and `plan_of` on the registration file's bytes: its fields' registration
+/-- `p2_parties.registration_of` and `plan_of` on the registration file's bytes: its fields' registration
 (`P2.Registration.make?`), refused if the `digest` it states isn't theirs, and its `plan` of runs over the store's
 units, every unit without one. -/
 def heldOf (bytes : ByteArray) : V Held := do
@@ -94,7 +94,7 @@ def Held.json (h : Held) : Json :=
     ("plan", .arr (h.plan.runs.map fun (f, c) => .arr #[toJson f, toJson c])), ("plan_units", toJson h.plan.length),
     ("units", toJson h.reg.units)]
 
-/-- `p2_party.message(line, key)`: the value of a line's one key `key`; `none` for a line its sender didn't end (a
+/-- `p2_parties.message(line, key)`: the value of a line's one key `key`; `none` for a line its sender didn't end (a
 newline, its last byte), one not UTF-8 JSON, or not an object of that one key. -/
 def messageOf (line : ByteArray) (key : String) : Option Json := do
   if line.size == 0 || line.get! (line.size - 1) != 10 then none
@@ -108,7 +108,7 @@ private def positive (j : Json) (k ctx : String) : V Nat := do
   if n = 0 then throw s!"{ctx}.{k} is a positive integer"
   pure n
 
-/-- A session's parameters as the auditor sets them, a request's keys but its node (`p2_party.SESSION`'s). -/
+/-- A session's parameters as the auditor sets them, a request's keys but its node (`p2_parties.SESSION`'s). -/
 structure Auditor where
   deadlineNs : Nat
   passes : Nat
@@ -117,12 +117,12 @@ structure Auditor where
   windows : Nat
   deriving BEq, Repr
 
-/-- `p2_party.SESSION`, pinned: the served bandwidth piece's session, six windows of at least 20 s, four passes each,
+/-- `p2_parties.SESSION`, pinned: the served bandwidth piece's session, six windows of at least 20 s, four passes each,
 1,024 openings a window and an allowance of 1 s. The case's replay (`P2Protocol`) holds every request to it, and the
 verifier's process does unless the auditor names a toy's (`Verifier`'s `p2_hold`). -/
 def SESSION : Auditor := { deadlineNs := 10 ^ 9, passes := 4, samples := 1024, windowNs := 20 * 10 ^ 9, windows := 6 }
 
-/-- `SESSION`'s keys with their fields, in the order a refusal names them (`p2_party.SESSION`'s). -/
+/-- `SESSION`'s keys with their fields, in the order a refusal names them (`p2_parties.SESSION`'s). -/
 def SESSION_KEYS : List (String × (Auditor → Nat)) :=
   [("deadline_ns", (·.deadlineNs)), ("passes", (·.passes)), ("samples", (·.samples)), ("window_ns", (·.windowNs)),
    ("windows", (·.windows))]
@@ -157,14 +157,15 @@ def askedOf (held : Held) (r : Json) : V Auditor := do
          windows := ← positive r "windows" "request" }
 
 /-- What `asked` asks for held to the auditor's `a`: the session's parameters, `a`'s, refused unless every value is
-`a`'s, naming each that isn't, as `p2_party.params_of` refuses it. -/
+`a`'s, naming each that isn't, as `p2_parties.params_of` refuses it. -/
 def heldTo (a asked : Auditor) : V Session.Params := do
   let off := SESSION_KEYS.filter fun (_, f) => f asked != f a
   unless off.isEmpty do
     throw ("; ".intercalate (off.map fun (k, f) => s!"the request's {k} is not the auditor's ({f asked}, not {f a})"))
   pure a.params
 
-/-- `p2_party.params_of` on the prover's request R under the auditor's session parameters `a` (`askedOf`, `heldTo`). -/
+/-- `p2_parties.params_of` on the prover's request R under the auditor's session parameters `a` (`askedOf`,
+`heldTo`). -/
 def requestOf (held : Held) (a : Auditor) (r : Json) : V Session.Params := do
   heldTo a (← askedOf held r)
 
@@ -222,7 +223,7 @@ def checkOpeningsChunked (size : Nat) (reg : P2.Registration) (w : WindowRecord)
     if t.get ≠ .accept then return t.get
   return .accept
 
-/-- A line out of form, or a prover gone: the session rejected `malformed` at the window filling, as `p2_party`
+/-- A line out of form, or a prover gone: the session rejected `malformed` at the window filling, as `p2_parties`
 rejects it, or refused once it has its outcome. -/
 def fail (s : Session.State) : Session.Result × Session.State :=
   if s.outcome.isNone then s.fail s.filling .malformed else (.refused "the session has its outcome", s)
@@ -247,7 +248,7 @@ private def hexesOf (j : Json) : Option (Array ByteArray) := do
     | .str s => (unhex s).toOption
     | _ => none
 
-/-- `p2_party.opening_of`: an opening from its JSON (`opening_json`), `none` for anything else. -/
+/-- `p2_parties.opening_of`: an opening from its JSON (`opening_json`), `none` for anything else. -/
 def openingOf (j : Json) : Option P2.Opening := do
   let get := fun (k : String) => (j.getObjVal? k).toOption
   let int := fun (k : String) => (get k).bind fun v => v.getInt?.toOption
@@ -306,7 +307,7 @@ def credit (sm : Session.Summary) : Credit :=
   { receipts := us, wrong, bound, draws := ws.map (·.2), qBytes := (us - wrong) * P2.UNIT_BYTES,
     spanNs := ((sm.windows.back?.map (·.deadlineNs)).getD 0) - ((sm.windows[0]?.map (·.releasedNs)).getD 0) }
 
-/-- `p2_party.answer` less its `reason`: `accept` with the credited reads (`credit`), `reject` with the failure, its
+/-- `p2_parties.answer` less its `reason`: `accept` with the credited reads (`credit`), `reject` with the failure, its
 window and the draw it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass reads. -/
 def answer (held : Held) (s : Session.State) : Json :=
   let windows := s.windows.map fun w => Json.mkObj [("passes", toJson w.roots.size),

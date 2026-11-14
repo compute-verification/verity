@@ -58,7 +58,7 @@ worker_gb = 6
 # and templates: a8's scan tests import a8, which imports a0.
 # `benchmarks/pous/p2_v1` and p2_stage's modules: served_bandwidth's session over the toy's P2 store (`bandwidth.py`, which
 # serves it through kernels' staging decode, and the toy), run through bash, which no tracer sees; its party's Lean
-# verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean, is under `verity`.
+# verifier, `remote-audit-verifier`, which `p2_parties` has `lake` build in remote_bandwidth/lean, is under `verity`.
 # `benchmarks/pous/onsite_pieces.sh`: onsite's pieces and cases, which served_verdicts.sh and served_composite.sh source.
 # `adapters/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
 # cells of a network certifier run its tests drive tick by tick (`test_warden_serve._run`).

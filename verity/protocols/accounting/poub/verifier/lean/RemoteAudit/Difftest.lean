@@ -26,8 +26,8 @@ reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused":
 so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `RemoteAudit.Schedule`).
 `p2.py`'s P2 store (`RemoteAudit.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
 and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); and a whole P2 session as
-`p2_party.py` runs it (`p2_session`, `RemoteAudit.P2Session`), on the registration file's bytes and the prover's lines.
-`remote-audit-difftest` serves them.
+`p2_parties.py` runs it (`p2_session`, `RemoteAudit.P2Session`), on the registration file's bytes and the prover's
+lines. `remote-audit-difftest` serves them.
 -/
 
 @[expose] public section
@@ -763,7 +763,7 @@ hex), the auditor's session parameters (`P2Session.Auditor.ofJson`, or `P2Sessio
 `{"t", "i", "now", "line"}` and `openings` `{"t", "line"}` (each line lowercase hex, as the prover sent it), and `fail`.
 The held store (`Held.json`), every event's result (`resultJ`) and the answer (`P2Session.answer`); a registration
 or a request refused is `{"refused": "registration"}` or `{"refused": "request"}`, and a request off the auditor's
-session `{"refused": "request", "reason": why}` (`P2Session.heldTo`'s, `p2_party.params_of`'s words). -/
+session `{"refused": "request", "reason": why}` (`P2Session.heldTo`'s, `p2_parties.params_of`'s words). -/
 def p2SessionFn (j : Json) : V Json := do
   let .ok held := P2Session.heldOf (← hex j "registration") | pure (Json.mkObj [("refused", .str "registration")])
   let auditor ← match ← J.get j "session" "input" with

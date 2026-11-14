@@ -44,7 +44,7 @@ differ, or one the Lean answers with an error, rejects the session `disagreement
 it. What the
 Lean takes as given is the clock's readings and the coins the challenger (`coins.local`, on this host) releases.
 
-`python -m verity.protocols.accounting.poub.verifier.p2_party (--registration FILE | --pous-record DIR --pous-session SID)
+`python -m verity.protocols.accounting.poub.verifier.p2_parties (--registration FILE | --pous-record DIR --pous-session SID)
 (--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE] [--challenger DIR
 --session SID]` is the verifier's side (`main`), each session with fresh coins, the memory challenger's key and session
 log in `--challenger`'s directory (`pous.verifier.period.challenger`) signing the close of the one session the auditor
@@ -54,11 +54,8 @@ on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
 (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s party verbs), where it keeps each session's case's
 digest too, a line of `private/case-digests.txt` (`CASE_DIGESTS`, `case_digest`; 0700, the file 0600), and none of the
-case's values. `prove(reader, writer, prover)` is the prover's: it answers each
-message with `prover`'s `hold`, `run`, `open` and `end` until the answer, which it returns, and hands the case to its
-`case`, if it has one. It also reads a verifier that
-sends each challenge as the coin's whole opening and discloses no coins at the end, the form before `Released`: the
-challenge is read as its released part, and `end` never comes.
+case's values. The prover's side is `verity/protocols/accounting/poub/prover/p2_party_prover.py`'s `prove`, which
+reads the lines this module writes (`send`, `recv`).
 """
 
 from __future__ import annotations
@@ -75,7 +72,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, BinaryIO, Protocol
+from typing import Any, BinaryIO
 
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
@@ -87,7 +84,7 @@ from . import period as P
 from .p2_lean import Lean, LeanError
 from .receipts import Plan
 
-MODULE = "verity.protocols.accounting.poub.verifier.p2_party"
+MODULE = "verity.protocols.accounting.poub.verifier.p2_parties"
 PROTOCOL = "verity/remote-bandwidth/p2/v0"
 CASE_DIGESTS = "case-digests.txt"
 """The file under a party's ``private/`` that `_keep` appends each session's `case_digest` to."""
@@ -715,59 +712,6 @@ def _last(f_out: BinaryIO, out: dict[str, Any], end: dict[str, Any] | None = Non
     return out
 
 
-class Prover(Protocol):
-    """The prover's side as `prove` drives it. One that also has `case(doc)` is handed the session's core case
-    (`p2_case`), witness it keeps privately."""
-
-    def hold(self, registration: Mapping[str, Any]) -> None:
-        """The verifier's registration, before any coin: refuse a registration that isn't the store's."""
-
-    def run(self, challenge: C.Released, t: int, i: int, previous: bytes) -> bytes:
-        """Pass i of window t: one step's reads under the pass's seed, its receipts committed; the root."""
-
-    def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[p2.Opening]:
-        """Window t's sampled receipts `(pass, position)` opened."""
-
-    def end(self, commitment: C.LiveCommitment, openings: Sequence[C.LiveOpening]) -> None:
-        """The session's coin commitment and every released coin's opening, after its last root: refuse them unless
-        every challenge this prover was sent opens against them (`coins.received_reason`)."""
-
-
-def released_of(doc: Any) -> C.Released:
-    """A run's challenge: a released coin, or the coin's whole opening (with its `path` and `salt`) read as its released
-    part."""
-    if isinstance(doc, dict) and "path" in doc and "salt" in doc:
-        doc = {k: v for k, v in doc.items() if k not in ("path", "salt")}
-    return C.Released.from_json(doc)
-
-
-def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Prover, request: Mapping[str, Any],
-          log: Callable[[str], None] = lambda _m: None) -> dict[str, Any]:
-    """The prover's side of one session over the channel: `request` sent, then each message answered by `prover`
-    until the verifier's answer, which it returns."""
-    send(f_out, {"request": dict(request)})
-    while True:
-        (kind, m), = recv(f_in).items()
-        if kind == "hold":
-            prover.hold(m["registration"])
-        elif kind == "run":
-            root = prover.run(released_of(m["challenge"]), m["t"], m["i"], bytes.fromhex(m["previous"]))
-            send(f_out, {"root": root.hex()})
-        elif kind == "open":
-            send(f_out, {"openings": [opening_json(o) for o in prover.open(m["t"], [tuple(d) for d in m["draws"]])]})
-        elif kind == "end":
-            prover.end(C.LiveCommitment.from_json(m["commitment"]), [C.LiveOpening.from_json(o) for o in m["openings"]])
-        elif kind == "case":
-            keep = getattr(prover, "case", None)
-            if keep is not None:
-                keep(m)
-        elif kind == "answer":
-            return m
-        else:
-            raise ValueError(f"no message {kind!r}")
-        log(f"{kind} answered")
-
-
 def case_digest(case: Mapping[str, Any]) -> str:
     """The SHA-512, as 128 lowercase hex digits, of `case`'s JSON line: its keys sorted, then a newline."""
     return hashlib.sha512((json.dumps(dict(case), sort_keys=True) + "\n").encode()).hexdigest()
@@ -829,7 +773,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         cases = a.device / "private" / CASE_DIGESTS
 
     def log(m: str) -> None:
-        print(f"p2_party {time.strftime('%H:%M:%SZ', time.gmtime())}: {m}", file=sys.stderr, flush=True)
+        print(f"p2_parties {time.strftime('%H:%M:%SZ', time.gmtime())}: {m}", file=sys.stderr, flush=True)
 
     def done(out: dict[str, Any]) -> None:
         if a.answer is not None:
@@ -880,10 +824,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["Books", "CASE_DIGESTS", "Closer", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "SESSION", "Twin",
+__all__ = ["Books", "CASE_DIGESTS", "Closer", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "SESSION", "Twin",
            "answer", "case_digest", "core_answer", "held_json", "hold", "main", "message", "opening_json", "opening_of",
-           "params_of", "plan_of", "pous_record", "prove", "registration_json", "registration_of",
-           "registration_of_setup", "released_of", "request_of", "session", "verdict_json"]
+           "params_of", "plan_of", "pous_record", "recv", "registration_json", "registration_of",
+           "registration_of_setup", "request_of", "send", "session", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())

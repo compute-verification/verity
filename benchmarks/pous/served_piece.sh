@@ -18,7 +18,7 @@
 # vy-auditor-2's bandwidth party for at most BW_PARTY_MIN minutes (default 10, the gate's cap), the case answered by
 # remote-audit-p2-protocol; its answer goes to DIR's sibling bandwidth, which BANDWIDTH_CMD collects
 # (served_bandwidth.py collect), and its case to SERVE_DIR/private/bandwidth. The session it asks for is the auditor's
-# (p2_party.SESSION), which the party holds every request to: with another value in POUS_ARGS's --bw-* the party refuses
+# (p2_parties.SESSION), which the party holds every request to: with another value in POUS_ARGS's --bw-* the party refuses
 # it and the bandwidth answer is undecided. POUS_ARGS adds served_piece.py's options (--node, --private, --rounds,
 # --challenger-*, --trusted-sha512, --device, --bw-*, --no-bandwidth). Logs: DIR/build.log, DIR/lake-build.log and
 # DIR/pous.log (its stderr). Exit: served_piece.py's (0 accept, 1 another answer, 2 no answer made), 3 when the library

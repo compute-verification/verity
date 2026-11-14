@@ -1,4 +1,4 @@
-"""PoUB-P2's core case: a session over PoUS's P2 store (`p2_party.session`) in the core interface's form, which
+"""PoUB-P2's core case: a session over PoUS's P2 store (`p2_parties.session`) in the core interface's form, which
 `RemoteAudit.P2Protocol` (`remote-audit-p2-protocol`, in `lean/`) replays, and the store it names, which onsite holds
 to PoUS's.
 
@@ -6,13 +6,13 @@ A case (`case_of`) is ``{"params", "commitment", "evidence", "store_root"}``, th
 in hex:
 
 * ``params``: ``{"not_before_ns": n, "request": R, "session": hex, "trusted": [hex, …]}``, the verifier's clock floor,
-  the prover's request R, which the replay refuses unless it restates `p2_party.SESSION` (`P2Session.SESSION`, pinned
+  the prover's request R, which the replay refuses unless it restates `p2_parties.SESSION` (`P2Session.SESSION`, pinned
   there, since no digest binds R), naming each value that doesn't, so a toy party's case is refused; the session id
   the auditor gave the memory challenger that ran the party; and the memory challengers' keys the check trusts;
-* ``commitment``: the auditor's registration file, its fields and its plan (`p2_party.registration_json`), whose digest
+* ``commitment``: the auditor's registration file, its fields and its plan (`p2_parties.registration_json`), whose digest
   (`digest`) is SHA-512 of `DIGEST_DOMAIN` and those bytes, so it binds the plan with the registration;
 * ``evidence``: ``{"close": {"chain", "lines", "public_key", "signature"}, "log": [...]}``. The log is every request the
-  verifier's Lean process answered of the session after it opened, in order (`p2_party.Twin` records them), each
+  verifier's Lean process answered of the session after it opened, in order (`p2_parties.Twin` records them), each
   line's bytes as the prover sent them in hex: ``{"op": "p2_event", "event", "coin"}`` (the challenger's whole coin,
   `COIN_BYTES`, of which the process read the first `coins.COIN_BYTES`), ``{"op": "p2_root", "t", "i", "now",
   "line"}``, ``{"op": "p2_openings", "t", "line"}`` and ``{"op": "p2_fail"}``. The close (`close_of`) is the memory
@@ -26,7 +26,7 @@ The evidence holds `C*`'s opened blocks and the verifier's coins and clock: it i
 in a private directory (0700, its files 0600). The case's answer (`answer`) is the core form of the session's own
 answer (`P2Session.answer`), which the Lean's replay of the case is held to; `judged` is the Lean's, given its
 executable. A session the Python's books vetoed, one refused before its first coin, or one with no memory challenger to
-sign its close (`p2_party.Closer`), has no case.
+sign its close (`p2_parties.Closer`), has no case.
 """
 
 from __future__ import annotations
@@ -45,15 +45,15 @@ from verity.commitments import domains
 from verity.commitments.identity import canonical_json_bytes
 from verity.protocols.accounting.pous.verifier.run import Setup
 
-from . import p2_party
+from . import p2_parties
 
-PROTOCOL = p2_party.PROTOCOL
+PROTOCOL = p2_parties.PROTOCOL
 EXE = "remote-audit-p2-protocol"
 DIGEST_DOMAIN = b"verity/remote-bandwidth/p2/commitment/v0\0"
 STORE_ROOT = re.compile(r"[0-9a-f]{128}")
 CASE, ANSWER = "case.json", "answer.json"
 #: what an accepted case's `eps` sums, as `RemoteAudit.P2Protocol.certify` does
-EPS_TERMS = p2_party.EPS_TERMS
+EPS_TERMS = p2_parties.EPS_TERMS
 #: P2's tag, NUL-ended (`RemoteAudit.P2Close.CLOSE_TAG`): the log's chain starts from it and the close's record opens
 #: with it
 CLOSE_TAG = domains.REMOTE_BANDWIDTH_P2_CLOSE.encode() + b"\0"
@@ -90,7 +90,7 @@ def close_of(signer: Any, session: bytes, log: Sequence[Mapping[str, Any]]) -> d
 def case_of(registration: Mapping[str, Any], request: Mapping[str, Any], not_before_ns: int,
             log: Sequence[Mapping[str, Any]], *, session: bytes, trusted: Sequence[bytes],
             close: Mapping[str, Any]) -> dict[str, Any]:
-    """The case of a session over the store `registration` (`p2_party.registration_json`, with its plan): the
+    """The case of a session over the store `registration` (`p2_parties.registration_json`, with its plan): the
     prover's `request`, the verifier's clock floor, the memory challenger's `session` id, the keys the check
     `trusted`, its process's `log` and the memory challenger's `close` of it (`close_of`; module docstring)."""
     commitment = canonical_json_bytes(dict(registration))
@@ -114,7 +114,7 @@ def store_root(case: Mapping[str, Any]) -> bytes:
     if type(s) is not str or not STORE_ROOT.fullmatch(s):
         raise ValueError("the case names no store: store_root is not 128 lowercase hex characters")
     try:
-        registered = p2_party.registration_of(json.loads(bytes.fromhex(case["commitment"]))).root
+        registered = p2_parties.registration_of(json.loads(bytes.fromhex(case["commitment"]))).root
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"the case's commitment is no PoUB-P2 registration: {type(e).__name__}: {e}") from None
     if registered.hex() != s:
@@ -140,8 +140,8 @@ def same_store(case: Mapping[str, Any], pous_case: Mapping[str, Any]) -> str | N
 
 
 def answer(case: Mapping[str, Any], session: Mapping[str, Any]) -> dict[str, Any]:
-    """The case's answer in the core interface's form from the session's own answer `session` (`p2_party.answer`'s,
-    `P2Session.answer`), as `RemoteAudit.P2Protocol` answers a case of `p2_party.SESSION`'s session: accepted,
+    """The case's answer in the core interface's form from the session's own answer `session` (`p2_parties.answer`'s,
+    `P2Session.answer`), as `RemoteAudit.P2Protocol` answers a case of `p2_parties.SESSION`'s session: accepted,
     `{"eps", "q_bytes", "span_ns"}` and the rest of the answer as its profile; rejected with the failure, its window and
     its draw; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
     which the replay refuses, is answered here as its session was."""

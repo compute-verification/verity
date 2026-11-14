@@ -711,7 +711,7 @@ def test_party_key_prints_only_the_public_half_made_on_the_host(svc):
 def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
     """The parties run on the host's python3 (`-s -E`), where no package is installed: the modules resolve in the tree."""
     code = ("import verity.protocols.accounting.pous.verifier.wipe_party, verity.protocols.accounting.pous.verifier.period, "
-            "verity.protocols.accounting.pous.device.challenger_party, verity.protocols.accounting.poub.verifier.p2_party; "
+            "verity.protocols.accounting.pous.device.challenger_party, verity.protocols.accounting.poub.verifier.p2_parties; "
             "print('ok')")
     p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", code], capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0 and p.stdout.strip() == "ok", p.stderr[-2000:]
@@ -779,7 +779,7 @@ def test_a_party_answers_only_a_caller_from_a_registered_node(svc):
 
 def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc):
     (rc, _), ran = party(svc, ["bw_party", "--fixture", "--minutes", "10"])
-    assert rc == 0 and ran[0][-9:] == ["-m", "verity.protocols.accounting.poub.verifier.p2_party", "--device", str(svc.parties / "bw"),
+    assert rc == 0 and ran[0][-9:] == ["-m", "verity.protocols.accounting.poub.verifier.p2_parties", "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", "--registration",
                                        "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json", "minutes=10"]
     assert "bw_party takes (--pous-session SID | --fixture) [--session SID]" in refused(

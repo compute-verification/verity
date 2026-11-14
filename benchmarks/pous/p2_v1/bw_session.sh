@@ -5,11 +5,11 @@
 #   OUT=DIR RESEARCH_RUN_DIR=RUN GPU_LEASE_WHO=bw-h200 [PARTY='ssh ... VERB' PARTY_HOST=ADDRESS] \
 #     bash benchmarks/pous/p2_v1/bw_session.sh      # on the demo card's node; RUN/inputs/ may hold store-layout.json, p2lib.tar
 #
-# The verifier is `p2_party` on this host by default (VERIFIER, a shell command speaking --stdio), which certifies
-# nothing. PARTY is the auditor's instead: the ssh command to the auditor host's gate verb that starts `p2_party --listen`
+# The verifier is `p2_parties` on this host by default (VERIFIER, a shell command speaking --stdio), which certifies
+# nothing. PARTY is the auditor's instead: the ssh command to the auditor host's gate verb that starts `p2_parties --listen`
 # there, once a session (the honest one, then the cheat), whose port this host reaches at PARTY_HOST and whose stdout
 # ends with the verifier's own record of the answer (`bandwidth.py session --party`). Or CONNECT=HOST:PORT reaches a
-# `p2_party --listen --sessions 2` already listening, the cheat at CHEAT_CONNECT (by default the same listener), with
+# `p2_parties --listen --sessions 2` already listening, the cheat at CHEAT_CONNECT (by default the same listener), with
 # TUNNEL ('SSH_OPTIONS USER@HOST') through `ssh -L` to TUNNEL's host, CONNECT then the address there. The registration
 # the verifier holds is the tracked bandwidth-mem69-v2.json, and the store must be it, its plan the layout's tensors'
 # units (not the padding past lm_head). ENC is only ever read. The lib
@@ -43,7 +43,7 @@ MODE=${MODE:-both}
 WINDOWS=${WINDOWS:-2} PASSES=${PASSES:-1} SAMPLES=${SAMPLES:-1024} WINDOW_S=${WINDOW_S:-1} DEADLINE_S=${DEADLINE_S:-1}
 SKIP_LAYER=${SKIP_LAYER:-51} CHEAT_SAMPLES=${CHEAT_SAMPLES:-1024}
 LEASE_MIN=${LEASE_MIN:-10}
-VERIFIER=${VERIFIER:-$PY -m verity.protocols.accounting.poub.verifier.p2_party --registration $REG --stdio}
+VERIFIER=${VERIFIER:-$PY -m verity.protocols.accounting.poub.verifier.p2_parties --registration $REG --stdio}
 CONNECT=${CONNECT:-}; CHEAT_CONNECT=${CHEAT_CONNECT:-$CONNECT}; TUNNEL=${TUNNEL:-}
 PARTY=${PARTY:-} PARTY_HOST=${PARTY_HOST:-}
 S=$(mktemp -d)
@@ -83,7 +83,7 @@ step registration $?
 "$PY" "$D/bandwidth.py" toy "$S/toy" > "$O/toy.log" 2>&1 \
   && "$PY" "$D/bandwidth.py" session --store "$S/toy/store" --layout "$S/toy/layout.json" --node p2-toy-node \
     --registration "$S/toy/registration.json" --device cpu --ref-decode --samples 16 --window-s 0.001 --deadline-s 0.001 \
-    --verifier "$PY -m verity.protocols.accounting.poub.verifier.p2_party --registration $S/toy/registration.json --stdio \
+    --verifier "$PY -m verity.protocols.accounting.poub.verifier.p2_parties --registration $S/toy/registration.json --stdio \
       --windows 2 --passes 2 --samples 16 --window-ns 1000000 --deadline-ns 1000000" \
     --out "$O/toy" --expect accept >> "$O/toy.log" 2>&1
 step toy $?

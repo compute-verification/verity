@@ -6,7 +6,7 @@ honest, under a prover that answers every other round with zeros, the honest aud
 another salt (refused by the setup tie), and an honest run on another store (`OTHER_STORE`, accepted, which onsite's
 store tie refuses beside PoUB-P2's case); PoUB-P2's (`p2_case`, its sessions over a socket pair against
 `remote-audit-verifier`, as `remote_bandwidth/lean/tests/test_p2_party.py` runs them, held to the auditor's session
-`p2_party.SESSION`, the only one whose case the replay takes) honest, under a prover whose receipts skip a unit's reads,
+`p2_parties.SESSION`, the only one whose case the replay takes) honest, under a prover whose receipts skip a unit's reads,
 and the honest session's log stopped before its last window is verified; and of each, its honest case with params or
 evidence that don't decode. A P2 case is recorded as the composition hands it, without its `store_root`: onsite reads
 the store off its commitment's registration."""
@@ -24,7 +24,7 @@ from verity.protocols.accounting.pous.verifier import period as pous
 from verity.protocols.accounting.pous.verifier import run as RUN
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
-from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_lean, p2_party
+from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_lean, p2_parties
 from verity.commitments.identity import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[6]
@@ -136,8 +136,8 @@ def build(tmp: Path) -> None:
             def case(self, doc) -> None:
                 kept.append(doc)
 
-        proved, answer = T.run(exe, store, lambda c: Keeping(store, c, **kw), T.request(store, p2_party.SESSION),
-                               auditor=p2_party.SESSION)
+        proved, answer = T.run(exe, store, lambda c: Keeping(store, c, **kw), T.request(store, p2_parties.SESSION),
+                               auditor=p2_parties.SESSION)
         assert proved == answer and len(kept) == 1, answer
         assert p2_case.same_store(kept[0], honest.case) is None
         return _served(kept[0]), p2_case.answer(kept[0], answer)

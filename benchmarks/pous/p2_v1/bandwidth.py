@@ -1,5 +1,5 @@
 """A PoUB session over PoUS's P2 store on the card that serves from it: the prover's side of
-`verity.protocols.accounting.poub.verifier.p2_party`, whose verifier runs on another host.
+`verity.protocols.accounting.poub.verifier.p2_parties`, whose verifier runs on another host.
 
     bandwidth.py toy OUT                                  # the toy's C* as an encoded store, and its registration
     bandwidth.py registration --store ENC --node NODE --layout F --out FILE
@@ -9,7 +9,7 @@
                  [--skip-layer L | --cache] [--expect accept|reject] [--device cuda] [--ref-decode]
                  [--case-dir DIR [--case-exe EXE]]
 
-**The plan.** A pass reads the units of the registration's plan (`p2_party.plan_of`), which the verifier holds and sends
+**The plan.** A pass reads the units of the registration's plan (`p2_parties.plan_of`), which the verifier holds and sends
 with it: `tensor_plan`, the units holding a tensor's block, so not the store's padding past the last tensor (it is
 PoUS's, and the decode never reads it). `registration --layout` writes it into the registration.
 
@@ -25,8 +25,8 @@ sample held to hashlib and to `p2.Sketcher` each pass), and the pass's receipt t
 in worker processes). The sketch is a pass of its own over the chunk's rows, not fused into the decode kernel, so each
 byte is read from HBM twice.
 
-**The session.** `session` starts the verifier with `--verifier CMD` (the ssh command that runs `p2_party --stdio` on
-the auditor's host; on one host, the module itself, which certifies nothing), reaches `p2_party --listen` at
+**The session.** `session` starts the verifier with `--verifier CMD` (the ssh command that runs `p2_parties --stdio` on
+the auditor's host; on one host, the module itself, which certifies nothing), reaches `p2_parties --listen` at
 `--connect HOST:PORT`, or starts it as a party of the auditor's gate (`--party CMD`, the ssh command to the gate's verb,
 whose stdout says the port, reached at `--party-host`, and then the verifier's own record of the answer, which must be
 the one the session ended with), sends the request and answers each pass,
@@ -37,7 +37,7 @@ receipts of the units they hold are from what was read, so a sample that lands t
 is another: every pass after the session's first reads nothing of the store and replays the first pass's σ from its
 cache under the pass's seed, so a sample of a later pass is rejected (`receipt`).
 
-**The case.** The verifier sends the session's core case before its answer (`p2_party`'s `{"case": ...}`, `p2_case`):
+**The case.** The verifier sends the session's core case before its answer (`p2_parties`'s `{"case": ...}`, `p2_case`):
 `--case-dir DIR` writes it with its answer, `case.json` and `answer.json`, into DIR (0700, each file 0600), the
 answer `RemoteAudit.P2Protocol`'s with `--case-exe` (`remote-audit-p2-protocol`), else `p2_case.answer`'s. The case
 holds the store's opened blocks and the verifier's coins, so DIR is private and never under OUT: `session.json` says
@@ -78,7 +78,8 @@ sys.path.insert(0, str(STAGE))
 from verity.protocols.accounting.pous.verifier import verifier as V
 from verity.protocols.accounting.pous.verifier.labels import salt_value, tag
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.accounting.poub.verifier import coins, p2, p2_case, p2_party, receipts
+from verity.protocols.accounting.poub.prover import p2_party_prover
+from verity.protocols.accounting.poub.verifier import coins, p2, p2_case, p2_parties, receipts
 from verity.commitments.merkle import merkle_depth
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS
@@ -538,7 +539,7 @@ class Engine:
 
 
 class Prover:
-    """The prover's side of `p2_party.prove` over an encoded store served by `Engine`."""
+    """The prover's side of `p2_party_prover.prove` over an encoded store served by `Engine`."""
 
     def __init__(self, engine: Engine, vk: VkPaths, pool: ProcessPoolExecutor | None, log=print,
                  spot: int = 16, cache: bool = False) -> None:
@@ -555,9 +556,9 @@ class Prover:
         self.kept = doc
 
     def hold(self, registration: dict) -> None:
-        if p2_party.registration_of(registration) != self.registration:
+        if p2_parties.registration_of(registration) != self.registration:
             raise ValueError("the verifier's registration is not this store's")
-        self.engine.serve(p2_party.plan_of(registration, self.registration))
+        self.engine.serve(p2_parties.plan_of(registration, self.registration))
 
     def end(self, commitment: coins.LiveCommitment, openings: list[coins.LiveOpening]) -> None:
         why = coins.received_reason(commitment, [self.received[t] for t in sorted(self.received)], openings)
@@ -638,7 +639,7 @@ class Prover:
 
 
 def registration_file(reg: p2.Registration, path: Path, plan: receipts.Plan | None = None) -> None:
-    path.write_text(json.dumps(p2_party.registration_json(reg, plan), indent=1, sort_keys=True) + "\n")
+    path.write_text(json.dumps(p2_parties.registration_json(reg, plan), indent=1, sort_keys=True) + "\n")
 
 
 # --- the toy as an encoded store ---------------------------------------------------------------------------------------
@@ -701,7 +702,7 @@ def verdict_line(answer: dict, expect: str | None, record: dict | None = None) -
 
 
 def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> tuple[dict, dict | None, int]:
-    """A session with a party the auditor's gate starts (`--party CMD`, `p2_party --listen` on the gate's host): its
+    """A session with a party the auditor's gate starts (`--party CMD`, `p2_parties --listen` on the gate's host): its
     `{"listening": port}` read from CMD's stdout, the session over TCP to `--party-host` at that port, and then its own
     record of the answer from the rest of CMD's stdout. The gate kills a party once its session's minutes run out
     (`bw_party --minutes M`) and says so on that stdout, `{"killed": why}`: a session cut off so fails naming it."""
@@ -730,7 +731,7 @@ def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> t
             try:
                 with (socket.create_connection((a.party_host, port)) as conn, conn.makefile("rb") as r,
                       conn.makefile("wb") as w):
-                    answer = p2_party.prove(r, w, prover, request)
+                    answer = p2_party_prover.prove(r, w, prover, request)
             except (OSError, ValueError) as e:
                 rest()
                 if killed is not None:
@@ -750,7 +751,7 @@ def session(a: argparse.Namespace) -> int:
         list(pool.map(abs, range(a.workers)))  # a fork pool starts every worker at its first task: before CUDA does
     node = a.node.encode()
     reg = registration_of_store(a.store, node)
-    if a.registration is not None and p2_party.registration_of(json.loads(a.registration.read_text())) != reg:
+    if a.registration is not None and p2_parties.registration_of(json.loads(a.registration.read_text())) != reg:
         raise SystemExit("the store's registration is not --registration's")
     with open(out / "prover.log", "a") as log_f:
 
@@ -764,7 +765,7 @@ def session(a: argparse.Namespace) -> int:
                         skip_layer=a.skip_layer, ref_decode=a.ref_decode)
         prover = Prover(engine, vk, pool, log, cache=a.cache)
         setup_s = time.perf_counter() - t0
-        request = p2_party.request_of(node, windows=a.windows, passes=a.passes, samples=a.samples,
+        request = p2_parties.request_of(node, windows=a.windows, passes=a.passes, samples=a.samples,
                                       window_ns=int(a.window_s * 1e9), deadline_ns=int(a.deadline_s * 1e9))
         log(json.dumps({"start": {"node": a.node, "units": reg.blocks, "registration": reg.digest.hex(),
                                   "request": request, "setup_s": round(setup_s, 3), "host": socket.gethostname(),
@@ -778,13 +779,13 @@ def session(a: argparse.Namespace) -> int:
                 host, _, port = a.connect.rpartition(":")
                 with (socket.create_connection((host, int(port))) as conn, conn.makefile("rb") as r,
                       conn.makefile("wb") as w):
-                    answer = p2_party.prove(r, w, prover, request)
+                    answer = p2_party_prover.prove(r, w, prover, request)
             else:
                 with open(out / "verifier.err", "ab") as err:
                     proc = subprocess.Popen(a.verifier, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                             stderr=err)
                     try:
-                        answer = p2_party.prove(proc.stdout, proc.stdin, prover, request)
+                        answer = p2_party_prover.prove(proc.stdout, proc.stdin, prover, request)
                     finally:
                         proc.stdin.close()
                         rc = proc.wait()
@@ -806,7 +807,7 @@ def session(a: argparse.Namespace) -> int:
         record = {"verdict": "missing", "reason": "the party's stdout held no answer"}
     line = verdict_line(answer, a.expect, record)
     verifier = (f"party {a.party} at {a.party_host}" if a.party else a.verifier or f"tcp {a.connect}")
-    doc = {"answer": answer, "request": request, "registration": p2_party.registration_json(reg, engine.plan),
+    doc = {"answer": answer, "request": request, "registration": p2_parties.registration_json(reg, engine.plan),
            "steps": prover.steps,
            "opened": prover.opened, "setup_s": round(setup_s, 3), "session_wall_s": round(wall, 3),
            "verifier_rc": rc, "verifier": verifier, "verifier_record": record, "prover_host": socket.gethostname(),
@@ -834,9 +835,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--node", required=True)
     s.add_argument("--registration", type=Path, help="the registration the store must have (registration_json)")
     to = s.add_mutually_exclusive_group(required=True)
-    to.add_argument("--verifier", help="the shell command that starts p2_party --stdio")
-    to.add_argument("--connect", help="HOST:PORT where p2_party --listen waits (the gate's port, through ssh -L)")
-    to.add_argument("--party", help="the shell command (ssh to the auditor's gate) that starts p2_party --listen there")
+    to.add_argument("--verifier", help="the shell command that starts p2_parties --stdio")
+    to.add_argument("--connect", help="HOST:PORT where p2_parties --listen waits (the gate's port, through ssh -L)")
+    to.add_argument("--party", help="the shell command (ssh to the auditor's gate) that starts p2_parties --listen there")
     s.add_argument("--party-host", help="with --party: the address its port is reached at from here")
     s.add_argument("--out", type=Path, required=True)
     s.add_argument("--windows", type=int, default=2)

@@ -67,7 +67,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/protocols/accounting/pous/verifier/wipe_party.py`, port 47611) and its block challenger
   (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--session SID] [--minutes M]` the remote
-  bandwidth audit's P2 party (`verity/protocols/accounting/poub/verifier/p2_party.py`, port 47612, with the registration the host
+  bandwidth audit's P2 party (`verity/protocols/accounting/poub/verifier/p2_parties.py`, port 47612, with the registration the host
   names; with `--session SID`, the session id the auditor gives the memory challenger, it signs the session's close with
   the block challenger's key and claims SID in its session log, `<root>/parties/pous/`, and keeps the session's case), as
   `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
@@ -172,7 +172,7 @@ MODEL_PINS = Path("verity/protocols/accounting/pouw/verifier/lean/check/models.j
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
 PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.verifier.wipe_party", 47611),
            "challenger_party": ("pous", "verity.protocols.accounting.pous.device.challenger_party", 47610),
-           "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_party", 47612)}
+           "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_parties", 47612)}
 PARTY_FIXED = {"bw_party": ["--registration", "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json"]}
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
 which `bw_party --fixture` holds."""

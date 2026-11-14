@@ -15,7 +15,7 @@ from types import ModuleType
 import pytest
 
 from verity.protocols.accounting.poub.prover import period_prover as PP
-from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_party
+from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_parties
 from verity.protocols.accounting.poub.verifier import period as P
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period as pous
@@ -109,7 +109,7 @@ def cases(tmp_path_factory) -> dict[str, dict]:
     other = pous.run("n0", OTHER_POUS_STORE, COINS, point=pous.point_for(len(OTHER_POUS_STORE), pous.W, pous.C0, k=8),
                      **kw)
     sid = hashlib.sha512(b"a P2 session").digest()[:32]
-    reads = p2_case.case_of(p2_party.registration_json(reg, None), REQUEST | {"node": reg.node.hex()}, 10 ** 9, [],
+    reads = p2_case.case_of(p2_parties.registration_json(reg, None), REQUEST | {"node": reg.node.hex()}, 10 ** 9, [],
                             session=sid, trusted=[kw["signer"].public_key],
                             close=p2_case.close_of(kw["signer"], sid, []))
     c = Clock()

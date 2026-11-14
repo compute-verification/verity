@@ -59,7 +59,7 @@ DIR``).
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
    piece's, `served_bandwidth.py collect`). With ``--bw-case-exe`` (``remote-audit-p2-protocol``) the Lean answers the
    case, and its answer is the one written. ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
-   ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_party.SESSION`: two minutes), which
+   ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_parties.SESSION`: two minutes), which
    its party holds every request to: it refuses one with another value before its first coin, naming each, and the
    bandwidth answer is then undecided. ``--no-bandwidth`` runs none.
 

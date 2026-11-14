@@ -1,5 +1,5 @@
 """The Lean verifier of a P2 session, the process `remote-audit-verifier` (`RemoteAudit.Verifier`'s `p2_*`
-requests, `RemoteAudit.P2Session`, in `lean/`), as `p2_party.py` runs it beside `audit.AuditRun` over the P2 codec:
+requests, `RemoteAudit.P2Session`, in `lean/`), as `p2_parties.py` runs it beside `audit.AuditRun` over the P2 codec:
 one request a JSON line on its stdin, a line's or a file's bytes right after it, each answered by one line on its
 stdout, `{"answer": JSON}` or `{"error": why}`. The standard library only, so the party runs as the auditor's gate
 starts it (`python3 -S -E`)."""
@@ -42,7 +42,7 @@ def build(package: Path = PACKAGE) -> Path:
 
 
 def exe(given: Path | None = None) -> Path:
-    """The executable: `given` (the caller's, `p2_party --lean-exe`), else built here (`build`), or, where `lake` isn't
+    """The executable: `given` (the caller's, `p2_parties --lean-exe`), else built here (`build`), or, where `lake` isn't
     on the PATH, the one already built here: an auditor gate's party, whose pinned tree, never changed after,
     `vy-verifier-pin` built it in."""
     if given is not None:

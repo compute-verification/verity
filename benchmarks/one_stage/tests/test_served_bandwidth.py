@@ -1,5 +1,5 @@
 """The bandwidth audit's piece (`served_bandwidth.sh`, BANDWIDTH_CMD) as `served_verdicts.py pieces` runs it, on the toy's
-P2 store on the CPU (P2's reference decode) against `p2_party --listen` on loopback in the auditor gate's party shape:
+P2 store on the CPU (P2's reference decode) against `p2_parties --listen` on loopback in the auditor gate's party shape:
 the honest session's answer is a core accept that `piece_row` reads, with its credited reads, eps, δ and γ, and the
 scope beside the served window; a prover that serves later passes from its cache of the first's, reading nothing of
 the store, is rejected (`receipt`); and a session that left no record, asked about a window that wasn't served, is a
@@ -27,7 +27,7 @@ import served_verdicts as S  # noqa: E402
 from p2_v1 import bandwidth as B  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
-from verity.protocols.accounting.poub.verifier import ledger, p2, p2_party  # noqa: E402
+from verity.protocols.accounting.poub.verifier import ledger, p2, p2_parties  # noqa: E402
 
 CMD = 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 
@@ -43,7 +43,7 @@ def _serve_dir(path: Path) -> Path:
 
 def _env(tmp: Path, cheat: str = "") -> dict[str, str]:
     toy = tmp / "toy"
-    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_party "
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_parties "
              f"--device {tmp / 'party'} --listen 127.0.0.1:0 --registration {toy / 'registration.json'} "
              "--windows 1 --passes 2 --samples 64 --window-ns 1000000 --deadline-ns 1000000")
     return dict(os.environ) | {"BANDWIDTH_CMD": CMD, "PY": sys.executable, "BW_STORE": str(toy / "store"),
@@ -74,7 +74,7 @@ def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_pa
     served = json.loads((tmp_path / "honest" / "bandwidth" / "served.json").read_text())
     assert served["served"] == {"window": 0, "serve_dir": str(serve), "steps": [0, 3], "requests": 1}
     kept = [json.loads(x) for x in (tmp_path / "party" / "answers.jsonl").read_text().splitlines()]
-    assert p2_party.core_answer(kept[-1], 10**9)["public"] == {k: q[k] for k in ("eps", "gamma", "q_bytes",
+    assert p2_parties.core_answer(kept[-1], 10**9)["public"] == {k: q[k] for k in ("eps", "gamma", "q_bytes",
                                                                                   "r_bytes_per_s", "span_ns")}
     assert not (tmp_path / "honest" / "bandwidth" / "scratch").exists()
 
@@ -86,7 +86,7 @@ def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_pa
 
 
 COLLECT = 'python benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'
-HELD = {"commitment": "ab" * 64, "protocol": p2_party.PROTOCOL, "reason": None, "verdict": "accept",
+HELD = {"commitment": "ab" * 64, "protocol": p2_parties.PROTOCOL, "reason": None, "verdict": "accept",
         "public": {"eps": "1/1099511627776", "gamma": "1/2", "q_bytes": 8224, "r_bytes_per_s": 1000, "span_ns": 16448},
         "profile": {"delta": "1/1099511627776", "draws": [0], "receipts": 1, "wrong": 0, "units": 1,
                     "scope": "beside the served window"}}
@@ -149,10 +149,10 @@ def test_a_session_with_no_record_is_a_reject_that_says_its_window_was_not_serve
 
 def test_the_served_pieces_request_is_the_auditors_session() -> None:
     """`served_bandwidth.sh` requests, by default, the session the auditor's party holds every session to
-    (`p2_party.SESSION`, the held session's in the PoUS piece), as `bandwidth.py session` turns its flags into the
+    (`p2_parties.SESSION`, the held session's in the PoUS piece), as `bandwidth.py session` turns its flags into the
     request: one off it is refused before any coin."""
     text = (ROOT / "benchmarks" / "one_stage" / "served_bandwidth.sh").read_text()
     got = dict(re.findall(r"\$\{BW_(WINDOWS|PASSES|SAMPLES|WINDOW_S|DEADLINE_S):-([0-9.]+)\}", text))
     assert {"windows": int(got["WINDOWS"]), "passes": int(got["PASSES"]), "samples": int(got["SAMPLES"]),
             "window_ns": int(float(got["WINDOW_S"]) * 1e9),
-            "deadline_ns": int(float(got["DEADLINE_S"]) * 1e9)} == p2_party.SESSION
+            "deadline_ns": int(float(got["DEADLINE_S"]) * 1e9)} == p2_parties.SESSION
