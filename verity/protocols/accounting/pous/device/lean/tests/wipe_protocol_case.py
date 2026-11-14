@@ -29,13 +29,14 @@ import json
 import random
 from collections.abc import Callable
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from typing import Any
 
 import mc_cases as M
 import verity_difftest as D
 import wipe_cases as WC
 from verity_difftest import protocol as P
+
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_period as WP
@@ -150,7 +151,7 @@ def _small(r: random.Random) -> sw.WipeParams:
                          WC.tiers_of(labels, [r.randint(1, labels - 1)], ["gpu", "host-dram"]))
 
 
-@lru_cache(maxsize=None)
+@cache
 def _build(m: str, seed: int) -> dict:
     r = random.Random(f"wipe-protocol {m} {seed}")
     signer = M.deployed_signer()

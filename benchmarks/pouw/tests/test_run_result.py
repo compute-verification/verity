@@ -69,7 +69,7 @@ def _kits(run_dir: Path, ok: bool, checker: str, detail: str, record: str, measu
     w.measurement_file(record)
     w.validation("passed" if ok else "failed", checker, detail, [record])
     for name, value, unit in measurements:
-        w.measurement(name, float(value), unit)
+        w.measurement(name, float(value), unit, mark="measured")
     return json.loads((run_dir / "result.json").read_text())
 
 
@@ -144,5 +144,5 @@ def test_outside_a_run_the_kit_writes_out_s_result_where_the_old_writers_write_n
     out = tmp_path / "local"
     R.write(out / "bench.json", True, "a checker", "a detail", [("items", 3, "count")])
     assert not out.exists()
-    kit.writer(out).measurement("items", 3, "count")
+    kit.writer(out).measurement("items", 3, "count", mark="measured")
     assert [p.name for p in out.iterdir()] == ["result.json"] and not (a_run / "result.json").exists()
