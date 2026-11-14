@@ -761,7 +761,8 @@ def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | s
     (`members.slices`, Lean's `OneStageZk.Member.slice`: its units, the roots the record names under its name, the
     scheme), or Lean's reason why there is none. A member's public file names a root for each of its ports, a wired
     port with no tree of its own at its writer's root (`rows.Committed.frame_entry`), which the record names under its
-    writer's name alone, so the per-member form refuses such a member (``roots``). A window's row tables' root
+    writer's name alone: the slices here read no wiring, so such a member is refused by name (`members.unwired_why`),
+    as Lean's is where the parameters name no wiring (`OneStageZk.membersRootsOf`). A window's row tables' root
     (`rows.TABLE_PORT`) is the window's and no member's: the per-member form refuses such a window, and this audit, its
     stand-in there, holds that root by `tables.check_row_tables` and reads the slices of the record's other roots."""
     record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
