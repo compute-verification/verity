@@ -1,0 +1,3 @@
+[2026-11-14T21:01Z] 7a52d61a3e07
+RECORD, 01:01 PM PST. **`architecture` at 2222b54e0a279d85b4df7ec869e750e7ec14bff1: `benchmarks/inference_only/adapter.py` is deleted. `built.policy` reads `gate_table` from `verity.circuits.ops.boolean.versions`, and the bare `import verity_vllm.definitions` isn't needed: the public `block_counts`, which `built.policy` imports first, imports it at its top and so registers the catalog.** RAN on the VM: py_compile; ruff clean; `tests/test_adapter.py` 1 passed (now only "no file reaches past the public interface"); `tests/test_inference_only.py` 24 passed and 1 failed, the lock-reading one. Retired-word sites: 0 before, 0 after.
+
