@@ -55,7 +55,9 @@
 #                each forgery refused by Lean at one of its parts (a ZK server's refusal, or a session with no proof, is
 #                "not exercised" and fails),
 #                and the inner statement's units were derived from the program (lean_verdicts.py); with every V* part run,
-#                Lean composes them over the challenger's record (rec-compose)
+#                Lean composes them over the challenger's record (rec-compose). A run without that record (any MODES
+#                but the ZK server's alone), or of some of V*'s parts, exits 0 on its parts and is not composed: the
+#                step's last line says so, and out/lean/rec-compose.json says whether Lean composed and accepted
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
