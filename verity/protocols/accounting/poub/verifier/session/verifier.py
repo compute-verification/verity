@@ -938,6 +938,13 @@ class Pair:
                      str(failure["failure"]))
 
 
+def node_refused(node: ledger.Node) -> str | None:
+    """Why the session's ledger can't take `node` handed in, or None: its tiers must be the two the ledger reads."""
+    if sorted(node.tiers) != ["dram", "hbm"]:
+        return "a node handed in states its tiers, every GPU's HBM (hbm) and the host's DRAM (dram)"
+    return None
+
+
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
                  jitter_ns: int, clock=None, log=print, checks=None, lifetime: int | None = None,
@@ -953,8 +960,8 @@ class Verifier:
         if node is not None and (disk_bytes_per_s or link_bytes_per_s or disk_burst_bytes is not None
                                  or link_burst_bytes is not None):
             raise ValueError("a node handed in states its own disk and link ceilings and bursts: give them in it")
-        if node is not None and sorted(node.tiers) != ["dram", "hbm"]:
-            raise ValueError("a node handed in states its tiers, every GPU's HBM (hbm) and the host's DRAM (dram)")
+        if node is not None and (why := node_refused(node)) is not None:
+            raise ValueError(why)
         self.node = node
         self.groups_per_coin = groups_per_coin
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
@@ -1659,7 +1666,12 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
     if a.node is not None:
         if a.disk_bytes_per_s or a.link_bytes_per_s or a.disk_burst_bytes is not None or a.link_burst_bytes is not None:
             ap.error("--node states the disk and link ceilings and bursts: drop --disk-* and --link-*")
-        capacities = ledger.Node.of_json(json.loads(a.node.read_text()))
+        try:
+            capacities = ledger.Node.of_json(json.loads(a.node.read_text()))
+        except (OSError, TypeError, ValueError) as e:
+            ap.error(f"--node {a.node}: {e}")
+        if (why := node_refused(capacities)) is not None:
+            ap.error(f"--node {a.node}: {why}")
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
         print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, host_bytes=a.host_bytes)} | (
@@ -1815,6 +1827,6 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
 
 __all__ = ["AVERAGE", "GPU_HBM_BYTES", "HBM_BYTES", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
            "WORST_PASS", "ingress_bursts", "lean_record", "load_registry", "main", "memory", "memory_error",
-           "node_line", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
+           "node_line", "node_refused", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
            "recorded_paced", "recorded_rates", "recorded_windows", "regions_of", "save_registry", "sketch_at",
            "timing_parts"]
