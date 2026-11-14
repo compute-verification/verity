@@ -4,8 +4,9 @@ that counts its own, and of a schedule Pearl-C's path can't run; `_layers`' of a
 layers that share a quant method; and H1's install's of a layout without its rows or its steps.  Under the option,
 `circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's, the
 quantizer's of a value that is not finite, and the native prover's of a unit outside a call's population.  Pearl-C's of
-a kernel directory without one cubin, of a pass whose coins don't parse or are no object and of B̃'s prefetch on a
-kernel without it, and the in-process certifier's of fewer coin bytes than it asks for."""
+a kernel directory without one cubin, of a pass whose coins don't parse or are no object, of a live salt over other
+weights than its workload's and of B̃'s prefetch on a kernel without it, and the in-process certifier's of fewer coin
+bytes than it asks for."""
 from __future__ import annotations
 
 import random
@@ -18,9 +19,18 @@ import pytest
 from verity.protocols.accounting.pouw.prover.circuit import SCHEMES
 from verity.protocols.accounting.pouw.prover.circuit.ncp2 import Shape
 from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import (
+    Workload,
+    salt_of,
+    weights_root,
+)
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
-from verity.protocols.accounting.pouw.verifier.protocol import DomainError
+from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul
+from verity.protocols.accounting.pouw.verifier.protocol import Shape as MatmulShape
 from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES, Schedule
+from verity.protocols.proofs.spot.device import challenger as LC
 
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.interface import Context
@@ -280,6 +290,23 @@ def test_a_pass_whose_coins_are_no_object_is_refused_as_malformed_before_a_parse
                 PPD.manifest_epoch({**man, key: value}, ch.commitment)
     with pytest.raises(DomainError, match="^the pass's coins are malformed: 'coins'$"):
         PPD.manifest_epoch({k: v for k, v in man.items() if k != "coins"}, ch.commitment)
+
+
+def test_a_live_salt_is_refused_unless_every_weight_of_the_workload_and_only_those_is_committed():
+    """A live session's salt coin re-starts an execution phase only over its workload's own weights: roots that miss one,
+    or name a weight the workload doesn't have, are refused before the session's coin is checked; its weights' roots
+    alone give the session's salt."""
+    roots = {0: b"\x05" * 64}
+    workload = Workload((Matmul(0, MatmulShape(16, 1024, 128), 0),))
+    live = LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, random.Random(2).randbytes)
+    opening = LC.LiveRecord(live, Wd.SALT).record(PS.epoch_open_root(weights_root(roots), 3))
+    said = "every weight of the workload is committed, and only those"
+    others: tuple[dict[int, bytes], ...] = ({}, {**roots, 1: b"\x06" * 64}, {1: roots[0]})
+    for other in others:
+        with pytest.raises(DomainError, match=f"^{re.escape(said)}$"):
+            PPD.epoch_of(workload, other, live.commitment, opening, 3)
+    assert PPD.epoch_of(workload, roots, live.commitment, opening, 3).salt == salt_of(live.commitment, opening.coin,
+                                                                                     weights_root(roots))
 
 
 def test_a_prefetch_of_b_is_refused_on_a_kernel_whose_pipeline_lacks_it():
