@@ -2,7 +2,8 @@
 `F32Fmaxf`, `F32Mul`, `DivFullScaleA`, `DivFullRcp`, `F32ToE4m3Sat`, `Bf16ToF32`), so each one's word view is its `_v1` at the same
 statics.  `DsMlaFp8Tile_v2{T}` is one traced circuit (`boolean_dsa.flat`: the reciprocal of the scale computed once, as every
 value its calls share); `DsaLatentRowDsMla_v2{KVL, R, TILE, EPS}` is a composite of `boolean_dsa_norm.DsaRMSNormSumSq_v2`, the
-products and `F2fpBf16_v2` over bits, `boolean_rope.RoPEHeadGptJ_v3` and `DsMlaFp8Tile_v2`."""
+products and `F2fpBf16_v2` over bits, `boolean_rope.RoPEHeadGptJ_v3` and `DsMlaFp8Tile_v2`; `DsaLatentRowDsMlaTile_v2{TILE}`, the row's step for one tile given its scale,
+is a composite of the products, `F2fpBf16_v2` and `DsMlaFp8Tile_v2`."""
 from __future__ import annotations
 
 from verity.circuits.defs import bind
@@ -36,4 +37,16 @@ DsaLatentRowDsMlaV2 = EW.on_bits(
                Tuple(Array(S.KVL + S.R, BF16), Array(S.KVL, E4M3), Array(S.KVL // S.TILE, F32))),
     _row, M.DsaLatentRowDsMla)
 
-BOOLEAN_DSA_DS_MLA = [DsMlaFp8TileV2, DsaLatentRowDsMlaV2]
+
+
+def _tile_part(B, S, x, w, r):
+    """`DsaLatentRowDsMlaTile_v1`'s body on bits."""
+    return M.tile_part(bit_ops(B), S, x, w, r, BG.F2fpBf16, bind(DsMlaFp8TileV2, T=S.TILE), BF16, F32, E4M3)
+
+
+DsaLatentRowDsMlaTileV2 = EW.on_bits(
+    "DsaLatentRowDsMlaTile", 2, ["TILE"],
+    lambda S: ((("x", Array(S.TILE, BF16)), ("w", Array(S.TILE, BF16)), ("r", F32)), Tuple(Array(S.TILE, BF16), Array(S.TILE, E4M3), F32)),
+    _tile_part, M.DsaLatentRowDsMlaTile)
+
+BOOLEAN_DSA_DS_MLA = [DsMlaFp8TileV2, DsaLatentRowDsMlaV2, DsaLatentRowDsMlaTileV2]

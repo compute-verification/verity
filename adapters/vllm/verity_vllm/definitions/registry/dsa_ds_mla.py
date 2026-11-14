@@ -133,4 +133,31 @@ def DsaLatentRowDsMla(B, S, kv, w, cs):
                       bind(RoPEHeadGptJV2, D=S.R), bind(DsMlaFp8Tile, T=S.TILE))
 
 
-DSA_DS_MLA_COMPOSITES = [DsMlaFp8Tile, DsaLatentRowDsMla]
+_TILE_CONF = ("model-untested: `DsaLatentRowDsMla_v1` cut at its scale; the scale part, the tile parts and the rotary part return "
+              "its words (`adapters/vllm/verity_vllm/definitions/tests/test_dsa_ds_mla_split.py`)")
+
+
+def tile_part(o: D.Ops, S, x, w, r, to_bf16, tile, t=BF16, f32=F32, e4m3=E4M3):
+    """`latent_row`'s step for one tile given the norm's scale r: y_i = r * x_i * f32(w_i), kv_c its Calls of ``to_bf16``, and
+    nope and scale one Call of ``tile``."""
+    check_tile(S.TILE)
+    y = [o.mul(o.mul(r, o.cvt(x[i])), o.cvt(w[i])) for i in range(S.TILE)]
+    kvc = [o.B.call(to_bf16, v) for v in y]
+    q = o.B.call(tile, Coll(Array(S.TILE, f32), concat([v.refs for v in y])))
+    return tuple_of(Coll(Array(S.TILE, t), concat([v.refs for v in kvc])), Coll(Array(S.TILE, e4m3), q[0].refs), q[1])
+
+
+def _sig_tile_part(S):
+    return ((("x", Array(S.TILE, BF16)), ("w", Array(S.TILE, BF16)), ("r", F32)), Tuple(Array(S.TILE, BF16), Array(S.TILE, E4M3), F32))
+
+
+@composite("DsaLatentRowDsMlaTile", 1, ["TILE"], _sig_tile_part, conformance=_TILE_CONF)
+def DsaLatentRowDsMlaTile(B, S, x, w, r):
+    """`DsaLatentRowDsMla_v1` cut at its scale, one tile of it: given the norm's scale r (`DsaRMSNormSumSq_v1{KVL, EPS}`), y_i =
+    `F32Mul(F32Mul(r, f32(x_i)), f32(w_i))` over TILE of kv's first KVL words and their weights; kv_c = `F2fpBf16`(y), the tile's
+    words of the latent, and nope and scale = `DsMlaFp8Tile_v1{TILE}`(y).  The scale part, a tile part a tile and
+    `RoPEHeadGptJ_v2{R}` of kv's last R words compose to the row."""
+    return tile_part(D.word_ops(B), S, x, w, r, P.F2fpBf16, bind(DsMlaFp8Tile, T=S.TILE))
+
+
+DSA_DS_MLA_COMPOSITES = [DsMlaFp8Tile, DsaLatentRowDsMla, DsaLatentRowDsMlaTile]
