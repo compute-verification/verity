@@ -50,7 +50,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
           "verity/protocols/interface", "verity/commitments/identity", "verity/commitments/randomness", "verity/protocols/proofs/flock/verifier/Flock",
           "verity/protocols/proofs/flock/verifier/lakefile.toml", "verity/protocols/proofs/flock/verifier/lake-manifest.json",
           # the deployment layer and its wire, which the period hook's memory challenger is started through
-          # (`deploy.stream.Side`) and runs on
+          # (`verity.runtime.stream.Side`) and runs on
           "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "verity/tests/tests/test_channel.py",
           "verity/protocols/proofs/flock/verifier/lean-toolchain", "benchmarks/pous/p2_v1/vectors.json",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
@@ -61,5 +61,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
           "verity/protocols/accounting/pous/device/timed_audit.py", "benchmarks/pous/band_gpu/harness.py",
           "verity/protocols/accounting/pous/device/lean", "verity/commitments/attest/lean", "verity/commitments/lms/lean",
           # the deployment layer and its wire, which the period hook's memory challenger is started through
-          # (`deploy.stream.Side`) and runs on
+          # (`verity.runtime.stream.Side`) and runs on
           "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py"]
