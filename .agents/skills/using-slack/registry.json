@@ -220,7 +220,9 @@
         "security/Properties/Flock/Circuit.lean",
         "security/Properties/Flock/Circuit/",
         "security/Properties/Flock/Nets.lean",
-        "security/Properties/Flock/ReadNet.lean"
+        "security/Properties/Flock/ReadNet.lean",
+        "security/Definitions/Flock/MerklePair.lean",
+        "security/Proofs/Properties/Accounting/InProofs.lean"
       ],
       "branch_suffixes": [
         "95d4",
@@ -414,7 +416,19 @@
         "security/Properties/Pouw/",
         "security/Properties/Accounting/Compose.lean",
         "security/Properties/Accounting/RegisteredCircuit.lean",
-        "security/Proofs/InferenceOnly.lean"
+        "security/Proofs/InferenceOnly.lean",
+        "security/Proofs/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean",
+        "security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean",
+        "security/Proofs/Accounting/JointBridge/HonestH200.lean",
+        "security/Definitions/Slowdown/Covering.lean",
+        "security/Definitions/Slowdown/Assumptions/Covering.lean",
+        "security/Definitions/Slowdown/Assumptions/CoveringTwoCosts.lean",
+        "security/Definitions/Slowdown/Guarantees/Covering.lean",
+        "security/Definitions/Slowdown/Guarantees/CoveringTwoCosts.lean",
+        "security/Proofs/Slowdown/Covering.lean",
+        "security/Proofs/Slowdown/CoveringTwoCosts.lean",
+        "security/Proofs/Slowdown/CoveringWitness.lean",
+        "security/Proofs/Slowdown/CoveringTwoCostsWitness.lean"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -639,7 +653,17 @@
         "security/Properties/Pous.lean",
         "security/Properties/Pous/",
         "security/Properties/Accounting/Remote.lean",
-        "security/Properties/Accounting/Remote/"
+        "security/Properties/Accounting/Remote/",
+        "security/Definitions/Assumptions/Accounting.lean",
+        "security/Definitions/Assumptions/Pous.lean",
+        "security/Properties/Assumptions/Pous.lean",
+        "security/Proofs/Accounting/Sketch.lean",
+        "security/Definitions/Accounting/JointBridge/BandwidthOfAuditPerRunPeriod.lean",
+        "security/Definitions/Accounting/Guarantees/JointBridge/BandwidthOfAuditPerRunPeriod.lean",
+        "security/Proofs/Accounting/JointBridge/BandwidthOfAuditPerRunPeriod.lean",
+        "security/Definitions/Accounting/JointBridge/SpaceOfPeriodHeld.lean",
+        "security/Proofs/Accounting/JointBridge/SpaceOfPeriodHeld.lean",
+        "security/Properties/Accounting/JointBridge/SpaceOfPeriodHeld.lean"
       ],
       "branch_suffixes": [
         "3cf5",
@@ -694,7 +718,20 @@
         "security/Properties/InferenceOnly.lean",
         "security/Properties/InferenceOnly/",
         "security/Proofs/Properties/InferenceOnly.lean",
-        "security/Proofs/Properties/InferenceOnly/"
+        "security/Proofs/Properties/InferenceOnly/",
+        "security/Proofs/Properties/NetworkPeriod/",
+        "security/Definitions/Accounting/Records.lean",
+        "security/Definitions/Accounting/RecordsToy.lean",
+        "security/Definitions/Accounting/Guarantees/LinkEnds.lean",
+        "security/Definitions/Accounting/Guarantees/RegisteredSite.lean",
+        "security/Definitions/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Definitions/Accounting/JointBridge/CommOfPooledLeakAccepted.lean",
+        "security/Definitions/Accounting/JointBridge/CommOfPooledLeakAcceptedWitness.lean",
+        "security/Definitions/Accounting/Guarantees/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Definitions/Accounting/Guarantees/JointBridge/CommOfPooledLeakAccepted.lean",
+        "security/Proofs/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Proofs/Accounting/JointBridge/CommOfPooledLeakAccepted.lean",
+        "security/Proofs/Accounting/JointBridge/CommOfPooledLeakAcceptedHonest.lean"
       ],
       "branch_suffixes": [
         "728f",
@@ -796,7 +833,26 @@
         "tools/lean/",
         ".agents/skills/lean-proofs/",
         "security/",
-        "benchmarks/proof_status/"
+        "benchmarks/proof_status/",
+        "security/.gitignore",
+        "security/README.md",
+        "security/lake-manifest.json",
+        "security/lakefile.toml",
+        "security/lean-audit.json",
+        "security/lean-toolchain",
+        "security/Definitions.lean",
+        "security/Definitions/README.md",
+        "security/Proofs/README.md",
+        "security/Proofs/lake-manifest.json",
+        "security/Proofs/lakefile.toml",
+        "security/Proofs/lean-audit.json",
+        "security/Proofs/lean-toolchain",
+        "security/Properties/.gitignore",
+        "security/Properties/README.md",
+        "security/Properties/lake-manifest.json",
+        "security/Properties/lakefile.toml",
+        "security/Properties/lean-audit.json",
+        "security/Properties/lean-toolchain"
       ],
       "branch_suffixes": [
         "741b",
@@ -980,7 +1036,10 @@
         "security/Properties/InferenceOnly/Desc/Verdict.lean",
         "security/Properties/InferenceOnly/Record.lean",
         "security/Proofs/Properties/InferenceOnly/DescVerdict.lean",
-        "security/Proofs/Properties/InferenceOnly/Agrees.lean"
+        "security/Proofs/Properties/InferenceOnly/Agrees.lean",
+        "security/Definitions/Slowdown/",
+        "security/Proofs/Slowdown.lean",
+        "security/Proofs/Slowdown/"
       ],
       "branch_suffixes": [
         "4207"
@@ -1017,7 +1076,13 @@
         "security/Definitions/Assumptions/WeightSecurity.lean",
         "security/Proofs/Properties/Remote.lean",
         "security/Proofs/Properties/Remote/",
-        "security/Properties/Remote.lean"
+        "security/Properties/Remote.lean",
+        "security/Proofs/Properties/Verity/SampledTwo/",
+        "security/Proofs/Properties/Verity/ExecutionPhaseFiles.lean",
+        "security/Proofs/Properties/Verity/InferenceOnly.lean",
+        "security/Proofs/Properties/Verity/OnsiteCaller.lean",
+        "security/Proofs/Properties/Verity/Soundness/Composite.lean",
+        "security/Properties/Accounting/JointBridge/ServiceSoundOfSessions.lean"
       ],
       "branch_suffixes": [
         "9c4d"
