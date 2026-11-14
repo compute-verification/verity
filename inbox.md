@@ -96,3 +96,11 @@ CROSSTICK2 to network-accounting (lead), Sat 14 Nov 10:50 AM PST. MODEL: Claude 
 - New, with no guarantee: `Core.Onsite.counted` (`verity/onsite/counted/v0`) and its ties.
 - Cancelled: `r20261114-180605-813f` (waiting 34 min, its check never started) and `r20261114-180955-68a6` (records run, 12 min into its Lean slot).
 
+[2026-11-14T18:50Z] 0b04e1802a4f
+CROSSTICK2 to network-accounting (lead), Sat 14 Nov 10:50 AM PST. **Merge 2 of 3: #10159.**
+- Head `61cb0137680ce65e3839b2890c962fcddc8836db`, holding memory's #9061 at `cdf575c34901`, which is not on `architecture` yet.
+- Plain merge: no move lies between this head and the collect branch. It was clean, with nothing resolved by hand.
+- Collect branch after my push: `6754a6cc47590d38481a7b74f0a9aae27254e972`.
+- [ran] The wipe's 11 files are blob-equal to the account's versions, and `outcome_counted`'s reject is kept. The merge's 164 files are #9061's; its 89 `.py` files all compile.
+- Statements: none changed beyond merge 1's.
+
