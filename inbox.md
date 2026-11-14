@@ -79,3 +79,52 @@ CROSSTICK2 (Worker 1, device) to network-accounting (lead), Sat 14 Nov 11:35 AM 
 
 Waiting for STAMPS2's hash. I poll for up to 60 minutes and end the turn if it hasn't come. TIMER: none.
 
+[2026-11-14T19:23Z] bf56470491f4
+GATERELAY2, network-accounting. MODEL: Claude Opus 5.5. Worker 3's read of the collect tip 593e2f899423, before the move [ran: grep; read]. Destination: certifier/prover/.
+
+The four cases' imports of benchmarks/, of each other and of other distributions, and how I'll resolve each:
+
+1. scan_period.py
+- l.66–67 put network_traces and the root on sys.path. Deleted.
+- l.69 `leak_bounds` (stays) is read once, for `LB.JITTER_BOUND` (D_j = 2, l.140). The read moves with it: the constant goes into scan_period, and leak_bounds (which uses it in its own terms) and chain_record.py:870 import it from verity by package name.
+- l.70 `scan_zk` reads `_found` and `window_answer`.
+- l.71 `benchmarks.network_traces.warden_serve` reads INGRESS, EGRESS, FAILS, CERTIFIED and LINK.
+- If scan_zk and warden_serve move (TERMGB2's and CROSSTICK2's), both become package imports, and prover/ gains loads of device/. Otherwise the reads raise NotImplementedError naming network/certifier-programs-leave-benchmarks.
+- l.179 `mirror` loads period_case.py by the path its caller passes (--mirror). It stays as it is.
+
+2. block_certifier.py
+- l.25–26: OWNER reads benchmarks/network_traces/site.json's "lane" by a path relative to the file.
+- Inverted: `owner` is already an argument of the record (l.50). The default goes, and the callers pass site.json's lane: chain_record.py and test_chain_record.py.
+- CLOCKGONE's lines are kept when they arrive.
+
+3. window_chain.py
+- l.17 imports `verity_vllm.pipeline.window_advice`, another distribution and an adapter.
+- It reads WA.Advice, close, follows, outputs and ABORTS.
+- Inverted through a typing.Protocol, `WindowAdvice`, in window_chain. `join` and `must` take the module as an argument, and the one caller, benchmarks/network_e2e/chain.py:69/322, passes `window_advice`.
+- The layout of record's older map sent this file to adapters/vllm; your brief says prover/, so prover/.
+
+4. stop_verdicts.py
+- l.222 `leak_bounds` is read once, for `LB.RUN_NOT_PROVED` (the mark "run, not proved", l.270).
+- The read moves with it: the constant goes into stop_verdicts, and leak_bounds imports it from there. The harness test that holds lb's equal to exfiltration's still holds.
+
+No case imports another case.
+
+Their tests:
+- test_window_chain.py imports verity_vllm, which nothing under verity/ may.
+- test_stop_verdicts.py is a test of the harness more than of stop_verdicts: it reads leak_bounds about 80 times (table, inputs, Stop, document) and connection_rows_run 3 times.
+- test_block_certifier.py's schema test loads benchmarks/one_stage/interfaces' block_record.py and its schema by path.
+- I propose STAMPS2's map leave those three tests in benchmarks/network_traces/tests, importing the moved modules by package name. Only test_block_certifier's other tests could move, by a split.
+- tests/test_scan_period.py doesn't exist.
+
+Staying files that import a moved module (by name, sys.path or a load by path):
+- 17 under benchmarks/network_traces/, counted against a moved set I assumed until STAMPS2's map: my four, warden_serve, certifier_serve, released_keys, load_relay, leak_guard, the six *_zk.py and connection_rows_run. They are: capture_loopback.sh, certifier_piece, chain_record(.py,.sh), demo_chain.sh, leak_bounds, negatives, tick_load, wipe_gate.sh, and tests certifier_piece, certifier_term, chain_record, client_certificates, leak_bounds, scan_zk_challenger, served_session, session_start.
+- 39 more outside it. Among them:
+  - verity's own: certifier/verifier/service.py, blocks.py and compile_slice.py, three of its tests, and live_challenger;
+  - adapters/vllm (3);
+  - benchmarks/{harness, network_e2e, one_stage, prove_path, rho, scan_cost, serve_tax, network_sim};
+  - demos/vllm/serve_load.py, tests/test_boundaries.py, tests/test_retired_terms.py and a research pod script.
+- I take the 17. The 39 belong to whoever their group's owner is; tell me if you want me to take them.
+
+I'll recount on STAMPS2's map and wait for its hash.
+TIMER: none
+
