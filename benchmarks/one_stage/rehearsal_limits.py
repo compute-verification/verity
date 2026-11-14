@@ -36,6 +36,16 @@ ROOT = HERE.parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "adapters/vllm"), str(HERE), str(ROOT / "benchmarks/prove_path")]
 
 
+def held(slots: int, k: int, gamma: int, refused: type[Exception]) -> dict:
+    """The record form's pair from the class's numbers alone, a block a slot: gamma over the slots, and slots × k over
+    gamma in lowest terms; ``refused`` raised unless the slots divide gamma."""
+    if gamma % slots:
+        raise refused(f"the class's {slots} slots don't divide the profile's gamma {gamma}, so no block a slot has gamma "
+                      "over the slots as its gates: no held pair")
+    alpha = Fraction(slots * k, gamma)
+    return {"alpha": [alpha.numerator, alpha.denominator], "gamma": gamma // slots}
+
+
 def main(argv: list[str]) -> int:
     phi, cls_arg, scheme, policy, out = argv[:5]
     rejects = "--rejects" in argv[5:]
@@ -97,12 +107,7 @@ def main(argv: list[str]) -> int:
                               "input_bits": str(alpha * gamma)}
             write()
             if pol is not None:
-                slots = PP.window_class_of(cls_arg).slots
-                if gamma % slots:
-                    raise SC.Refused(f"the class's {slots} slots don't divide the profile's gamma {gamma}, so no block "
-                                     "a slot has gamma over the slots as its gates: no held pair")
-                held = Fraction(slots * pol["k"], gamma)
-                doc["held"] = {"alpha": [held.numerator, held.denominator], "gamma": gamma // slots}
+                doc["held"] = held(PP.window_class_of(cls_arg).slots, pol["k"], gamma, SC.Refused)
                 write()
 
             def ask(a, g):
