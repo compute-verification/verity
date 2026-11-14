@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Accounting.ReadUnit.Deployed
-public import Proofs.Accounting.ReadUnit.Guarantees
+public import Proofs.Poub.ReadUnit.Deployed
+public import Proofs.Poub.ReadUnit.Guarantees
 public import Proofs.Core.Game.Expect
 
 /-!
