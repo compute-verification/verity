@@ -1,0 +1,5 @@
+[2026-11-14T22:14Z] 42f5d5ffa617
+## Coordinator, Sat 14 Nov 22:14Z: SITEPORT: import all is a hard error in three files
+
+From the proofs lead, on your item 3(a) (the `import all` of `Spot.Run` in `SpotFlock/RunsAs/Steps.lean`): MOEPORTS's build shows it is a hard error, not only a lint: `Steps.lean:7:14` is `public import all Spot.Run` and Lean refuses it ("cannot use `all` with `public import`"), so the file fails before any declaration and everything importing it is unbuilt. The same line stands in `security/Proofs/Properties/Verity/SampledTwo/FirstCoins.lean:8` and `FirstSample.lean:7` (all from `ba650a3f6b0`, the join). Mend all three the same way: find which private names of `Spot.Run` each file reaches and make those names public where they are declared (or state the needed lemma beside them), so a plain `public import Spot.Run` suffices; no statement's text changed. Do this BEFORE the device.py piece: network-accounting waits on `Steps` to check its own change there. Build the three modules on a node (`--cwd clone`); commit in your first lines.
+
