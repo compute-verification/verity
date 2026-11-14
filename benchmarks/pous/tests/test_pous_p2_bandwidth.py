@@ -265,9 +265,12 @@ def test_with_case_exe_the_case_answer_is_the_executables(tmp_path) -> None:
     """`--case-exe`: the executable answers the case (`p2_case.judged`, through `serve`), and its answer is the one
     written, not the session's own: a stand-in that rejects every case, against an honest session the party accepted."""
     reg = B.toy(tmp_path / "toy")
-    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_parties "
+    (tmp_path / "challenger").mkdir()
+    mc.SessionLog.create(tmp_path / "challenger" / "sessions")
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E {Path(__file__).resolve().parent / 'p2_party_at_leaf.py'} "
              f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
-             f"--registration {tmp_path / 'toy' / 'registration.json'} {held_to(1, 1, 8)}")
+             f"--registration {tmp_path / 'toy' / 'registration.json'} {held_to(1, 1, 8)} "
+             f"--challenger {tmp_path / 'challenger'} --session {hashlib.sha512(b'judged').hexdigest()[:64]}")
     exe = tmp_path / "judge"
     exe.write_text(JUDGE.format(python=sys.executable, commitment="00" * 64, protocol=p2_case.PROTOCOL))
     exe.chmod(0o755)
