@@ -6,7 +6,7 @@ the attention output and the short-context fill), `dsa.DsaMqaLogit_v3{64,128}` (
 replicated, top 1024 of the compressed keys) and the o-projection's input (16 local heads of 512 in 2 groups of 8).  vLLM d9105ea80;
 line numbers under `vllm/models/deepseek_v4/` unless named.
 
-One GPU process writes `<out>/dsv4_indexer_capture.json`, the property record `dsv4_indexer_capture` (`properties.record`), and the
+One GPU process writes `<out>/dsv4_indexer_capture.json`, the property record `dsv4_indexer_capture` (`records.property_record`), and the
 four Triton kernels' PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one line per phase, then
 `DSV4-INDEXER GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else runs when it fails (exit 3).
 The Triton cache and DeepGEMM's JIT cache are in the scratch directory.  A phase that raises records its error and fails the verdict
@@ -89,7 +89,7 @@ from verity.definitions.registry import dsv4_indexer as I
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as X
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-indexer-capture/v1"
 RECORD = "dsv4_indexer_capture.json"

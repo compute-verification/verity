@@ -95,7 +95,7 @@ class NormScaleSource:
         self.kinds = sorted(set(self.modules.values()))
         self.so_path = so_path
         self.ns: Any = None
-        so_sha256: str | None = None
+        loaded: str | None = None
         if "cuda" in self.kinds:
             if not so_path:
                 raise RuntimeError("norm scales: the manifest names fused norms and no tap build was given (--norm-tap-so, ops/pod_norm_tap.sh)")
@@ -104,14 +104,14 @@ class NormScaleSource:
             version = int(self.ns.tap_version())
             if version != TAP_VERSION:
                 raise RuntimeError(f"norm scales: {so_path} is tap version {version}, this source launches version {TAP_VERSION}")
-            so_sha256 = _file_sha256(so_path)
+            loaded = so_path
         self.words_per_token = int(words_per_token or len(self.modules))
         self._hooks = hooks.Hooks()
         self._handles: list[Any] = []
         self._scope: list[tuple[str, tuple[int, ...]]] = []
         self._held: list[Any] = []
         self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "by_kind": {k: 0 for k in self.kinds}, "errors": 0, "modules": len(self.modules),
-                                      "so": so_path, "so_sha256": so_sha256, "triton_source": None}
+                                      "so": so_path, "so_sha256": _file_sha256(loaded) if loaded is not None else None, "triton_source": None}
         self.active = False
 
     # ------------------------------------------------------------------------------------------------------------ install / uninstall
