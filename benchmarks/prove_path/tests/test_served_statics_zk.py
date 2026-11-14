@@ -13,8 +13,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import compile_slice as CS, served_rows as SR
-from verity.protocols.accounting.certifier.prover import served_statics as SS
+from verity_vllm.compiler import compile_slice as CS, served_rows as SR
+from verity_vllm.compiler import served_statics as SS
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.commitments import advice as ADV
 
