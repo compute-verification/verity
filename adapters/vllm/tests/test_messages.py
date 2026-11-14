@@ -106,3 +106,13 @@ def test_advice_bytes_unchanged(tmp_path):
     for name in ("advice.bin", *texts):
         assert (after / name).read_bytes() == (before / name).read_bytes()
         assert M.read(after / name, "Advice") == (before / name).read_bytes()
+
+
+def test_pearl_pass_bytes_unchanged(tmp_path):
+    coins = {"source": "live", "seeds": ["0a" * 32], "note": "é"}
+    doc = {"schema": "pearl-served/v1", "window": 0, "passes": [{"pass": 0, "units": 3}], "coins": coins, "ok": True}
+    texts = {"coins.json": json.dumps(coins) + "\n", "served.json": json.dumps(doc, indent=1) + "\n"}
+    for name, text in texts.items():
+        (tmp_path / f"before-{name}").write_text(text)
+        M.write(tmp_path / f"after-{name}", "PearlPass", text.encode())
+        assert (tmp_path / f"after-{name}").read_bytes() == (tmp_path / f"before-{name}").read_bytes()
