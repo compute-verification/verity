@@ -136,15 +136,15 @@ theorem plain_obj {m : Std.TreeMap.Raw String Json} (hm : m.WF)
     (hk : ∀ k, (m.get? k).isSome = true → PlainStr k) (h : ∀ k v, m.get? k = some v → Plain v) :
     Plain (.obj m) := .obj hm hk h
 
-/-- **An object given as a key–value list is `Plain`** (`Lean.Json.mkObj`, the `.obj` of `Std.TreeMap.Raw.ofList`), which
-is how the honest witness writes its objects (keys in `canon`'s strictly sorted order). The tree is well formed for free
-(`Std.TreeMap.Raw.WF.ofList`); the keys and values are read, as the verifier reads them, through the built map's `get?`. -/
-theorem plain_mkObj (l : List (String × Json))
+/-- **An object given as a key–value list is `Plain`** (`.obj (Std.TreeMap.Raw.ofList l)`, which is `Lean.Json.mkObj l`),
+which is how the honest witness writes its objects (keys in `canon`'s strictly sorted order). The tree is well formed for
+free (`Std.TreeMap.Raw.WF.ofList`); the keys and values are read, as the verifier reads them, through the built map's
+`get?`. -/
+theorem plain_ofList (l : List (String × Json))
     (hk : ∀ k, ((Std.TreeMap.Raw.ofList l).get? k).isSome = true → PlainStr k)
     (h : ∀ k v, (Std.TreeMap.Raw.ofList l).get? k = some v → Plain v) :
-    Plain (Json.mkObj l) := by
-  show Plain (.obj (Std.TreeMap.Raw.ofList l))
-  exact plain_obj Std.TreeMap.Raw.WF.ofList hk h
+    Plain (.obj (Std.TreeMap.Raw.ofList l)) :=
+  plain_obj Std.TreeMap.Raw.WF.ofList hk h
 
 /-! ## Convenience: printable strings -/
 
