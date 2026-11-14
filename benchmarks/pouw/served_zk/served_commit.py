@@ -54,7 +54,7 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   level, so the challenger holds one Stream per level.
 - **Of record** (`of_record`): the challenger's checks are Lean's.  PoUW's rule (`core_check.registered`, which
   `public_problem` mirrors for the committer), R1-R6, the pass's execution phase, the sample, PoUW's check over the stream's outcome
-  (`core_check.case`) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
+  (`core_check.case_twin` the Python) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
   decides and is the published items', both go in the execution phase's witness (``outcome.json``'s ``of_record``, the opening
   verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  The service's public-items
   rule is Lean's too (``public``, `Service.checkPublic` beside `service.check_public`), and `check`'s reading of the

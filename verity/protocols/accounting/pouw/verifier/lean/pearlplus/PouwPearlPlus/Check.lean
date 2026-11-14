@@ -31,7 +31,7 @@ public import PouwPearlPlus.Credit
   tile's reason is `pass i tile t: why`, joined by `; `.
 * **The work** an accepted run publishes: its credit at its scheme's named assumption at δ = 1/100 (`creditAtAssumption`), at X_O,
   the number of samples on tiles over their bound, which are credited nothing. A test instance's credits nothing
-  (`credited` 0), as `--recorded`'s salt claims nothing.
+  (`credited` 0).
 
 Out of scope, refused by name in `load`: sm_120's schemes.
 -/
@@ -176,7 +176,7 @@ def plan (i : Input) : Except Refusal Plan := do
   tryCatch (afterTie i passes tie) fun r => throw { r with tie := r.tie <|> tie }
 
 /-- The verdict of every tile of `pl.todo`, in order, replayed in parallel: the fixed operand's noise once per pass and
-weight, then each tile on it. -/
+fixed operand, then each tile on it. -/
 def replay (pl : Plan) (opener : Nat → Nat → Except String TileOpening) : List TileVerdict := Id.run do
   let mut noise : List ((Nat × Nat) × Task (Except String FixedNoise)) := []
   let mut tasks : Array (Task TileVerdict) := #[]
