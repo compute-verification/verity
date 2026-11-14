@@ -31,11 +31,13 @@ Arms:
                  stats are the op's calls by M
     exact-eager  served_h1's engine without the option: `engine.build.build_engine` on the int8-exact profile (int8_exact=all),
                  as SERVE-H1 runs it (eager, batch-invariant)
-    exact        the int8-exact linears (`verity_int8::row_quant` + `verity_int8::scaled_mm`, torch._int_mm) compiled with
-                 CUDA graphs, attention vLLM's: today's served y in a compiled engine (built here, outside `build_engine`,
-                 which runs int8_exact eagerly only; both ops are custom ops, opaque to Inductor)
-    exact-fused  exact with both ops' CUDA bodies `benchmarks/hash/exactlin`'s two Triton kernels (`exactlin.install`): the
-                 same values, so its tokens must equal exact's (gated)
+    exact        the int8-exact linears (`verity_int8::row_quant` + `verity_int8::scaled_mm`, whose CUDA bodies are
+                 `engine.int8_fused`'s `row_quant` and `product`, as `engine.int8_ops` registers them) compiled with CUDA graphs,
+                 attention vLLM's: today's served y in a compiled engine (built here, outside `build_engine`, which runs
+                 int8_exact eagerly only; both ops are custom ops, opaque to Inductor)
+    exact-fused  the same engine as exact, under the name the dither arms' ratios (gamma_*_vs_exact_fused) and the
+                 served tables read; its tokens must equal exact's (gated), and sbench.sh runs exactlin's kgate.py on
+                 those kernels in the lease before it is timed
     dither       exact with every linear's y from Dither's fused GEMM (`dither_fused`: z = xq W^T and its dequantization in
                  one kernel that also computes the previous step's receipts; A, admit and z tables, the round, the live
                  coin and the seeds between steps)
@@ -110,13 +112,9 @@ Arms:
                  in the warm-up, bounded by $DITHER_SPILL_MAX_GB), and the ended execution phase's check opens three of its
                  steps from them; -wea (`-so<D>[-ov...]-wea`) holds A and the scales alone (about 27 MB a step), z/y
                  recomputed from them at an opening
-    ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
-                 serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
-                 ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh runs exactlin's
-                 kgate.py in the lease before an -xl or exact-fused arm is timed
     ARM-a2       any dither arm with each call's A table from `h1c_a_call2_k` (DITHER_A_FORM=2: the same table, its
                  compressions paired); ARM-a3 from `h1c_a_call3_k` (DITHER_A_FORM=3: paired, its messages in registers);
-                 the suffixes compose (ARM-a3-xl), each gated as ARM
+                 the suffixes compose, each gated as ARM
     ARM-j10r     a dither-a-so arm with its units under J10-R's call-scale noise (DITHER_SO_UNITS=j10r, `dither_so`)
     ARM-smqQ, ARM-smqQoD  a dither-a-so arm with its units on the SMs whose id % D < Q (DITHER_SO_UNITS_SMQ=Q/D, D 8
                  without it); -smq0 on every SM, whatever the run's environment sets; ARM-smqQoDcC with at most C of
@@ -355,14 +353,6 @@ def kernels_of(llm: LLM) -> dict:
     return seen
 
 
-def install_exactlin() -> None:
-    sys.path.insert(0, str(HERE.parent / "exactlin"))
-    import exactlin
-    if not getattr(exactlin, "_sbench_installed", False):
-        exactlin.install()
-        exactlin._sbench_installed = True
-
-
 def a_form(f: int) -> Callable[[], None]:
     def set_form() -> None:
         os.environ["DITHER_A_FORM"] = str(f)
@@ -416,7 +406,7 @@ def smq_mm_cfg() -> None:
     os.environ["DITHER_MM_CFG"] = MM_CFGS[smq]
 
 
-SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r"),
+SUFFIXES = {"-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r"),
             "-kcb": kc_b, "-zy1": env_of("DITHER_ZY1_KC", "1"), "-cgp": env_of("DITHER_SO_CAPTURE_PRIO", "1"),
             "-mc32": env_of("CUDA_DEVICE_MAX_CONNECTIONS", "32"), "-skip": env_of("DITHER_UNITS_SKIP_DEAD", "1"),
             "-rd0": env_of("DITHER_SO_RDEAD", "0"), "-lag1": env_of("DITHER_SO_ROOT_LAG", "1"),
@@ -493,19 +483,15 @@ def build(arm: str, scratch: Path, gpu_mem: float) -> LLM:
 
         import dither_fused as DF
         int8_vllm.register()
-        if arm == "exact-fused":
-            install_exactlin()
-            llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
-            return llm
         a = engine_args(gpu_mem)
-        if arm != "exact":
-            DF.patch(t=a["max_num_batched_tokens"], h1c=settings.need("DITHER_H1C"), h1f=settings.need("DITHER_H1F"), gate=True,
-                     rc="side" if arm == "dither-side" else "fused")
+        if arm in ("exact", "exact-fused"):
+            return LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
+        DF.patch(t=a["max_num_batched_tokens"], h1c=settings.need("DITHER_H1C"), h1f=settings.need("DITHER_H1F"), gate=True,
+                 rc="side" if arm == "dither-side" else "fused")
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
-        if arm != "exact":
-            win = DF.hook(llm)
-            llm.dither_stats = win.stats
-            llm.dither_win = win
+        win = DF.hook(llm)
+        llm.dither_stats = win.stats
+        llm.dither_win = win
         return llm
     if arm in ("dither-1s", "dither-1s-credit", "dither-1s-warp", "dither-1s-split", "dither-1s-percall0",
                "dither-1s-percall-rtt", "dither-1s-cpeel", "dither-1s-split-cpeel", "dither-1s-block2-cpeel",

@@ -3,7 +3,7 @@ with C(T, M)·p^M within δ, against hand counts at small T; an HBM-only wipe's 
 meeting its bound except with T·eps; every number that is short by a wipe's PRF advantage says so beside it, in the
 same closing words, and no number moved for it; the cadence is a parameter; an uncounted wipe stays vacuous, since every
 egress record is refused, a covered one over the session's own real-time window too; a rejected wipe pools nothing; the
-periods are the reporting grid's `PERIODS`."""
+periods are the reporting grid's `MONITORING_PERIODS`."""
 
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ from fractions import Fraction
 import pytest
 
 import pous_test_signer as ts
+from verity import protocol
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_monitoring as WM
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
-from verity.protocols import reporting
 
 HBM = sw.WipeParams(64, W.READS, 1, 1_000, ((WM.HBM, 64 * sw.LABEL_BYTES),))
 STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GPU-test", "nvml_total_bytes": 64 * 64,
@@ -77,7 +77,7 @@ def test_an_hbm_only_wipe_over_a_week_a_month_and_a_year(counted):
         row = r["periods"][name]
         t = 3 * days
         assert (row["wipes"], row["wipes_per_machine"]) == (t, days)
-        for d in reporting.DELTAS:
+        for d in protocol.DELTAS:
             assert row[str(d)]["failing_at_most"] == 0 and row[str(d)]["meeting_at_least"] == t
         assert row["per_wipe"]["except_with"] == f"T·eps = {float(t * W.EPS):.3g}, plus {SUM}"
     assert r["leaves_out"][0] == WM.EXCEPT and any(s.startswith("link control") for s in r["leaves_out"][1:])
@@ -91,7 +91,7 @@ def test_the_cadence_is_a_parameter(counted):
 
 
 def test_the_periods_are_the_reporting_grids():
-    assert WM.PERIODS is reporting.PERIODS
+    assert WM.MONITORING_PERIODS is protocol.MONITORING_PERIODS
 
 
 def test_the_table_pools_at_the_answers_eps(counted):
