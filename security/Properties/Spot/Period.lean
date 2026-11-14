@@ -29,7 +29,7 @@ digest is the verifier's own parameter `registration`, and under another registr
   the ledger's half's windows in order, and of its other sessions what `Spot.Period.registeredIn` returns. Each
   window has exactly one audit (`AuditedAt`): its session is the one the ledger
   sealed, run from a commit the pins log records on main's first-parent line, with its coin commitment withheld;
-  its log shows the sample's coins released after exactly one registration; and the audit accepted that
+  its log shows exactly one registration, over every family it reserved; and the audit accepted that
   registration at the verifier's parameters for the window, which name the period's challenger and the window's own
   root and hold the records of the registrations audited at the windows before it.
 * `CommittedOnce`: every root committed under this registration is one published window. Under an accept, every
@@ -68,12 +68,14 @@ digest is the verifier's own parameter `registration`, and under another registr
 * What one-stage v2 holds through `seed_salt`, `day` and `declarations`. The check sets none of them at a window,
   and one-stage v2 holds nothing through one that is absent: the lane's declared program and the window's seed salt
   are not held in a period's audit.
-* A registration under another family. "Exactly one registration" is of the sample's family: a second registration
-  after which the session released another family's coins is passed over.
+* Which family the one registration is in. "Exactly one registration" is over every family the session reserved,
+  the window's own root aside; that it stands in the sample's family is one-stage v2's reading of the sample's
+  coins, and the statements are of every audit `inner`.
 * That some registration passes. The statements are of every audit `inner`; that one-stage v2 accepts a window is
   not among them.
-* A window whose session sampled several registrations of the sample's family, and a registration whose public
-  file's header names `shared_rows`: the check refuses both.
+* A window whose session shows a second commitment in any family (another rank's or a second stage's in a family
+  of its own, or the sample's family's second), and a registration whose public file's header names `shared_rows`:
+  the check refuses both.
 -/
 
 @[expose] public section
@@ -131,8 +133,9 @@ def LedgerMeans : Prop :=
 registrations audited at the windows before it, and the audit `a` published for it with the record `record`: the
 ledger's window on `w`'s root is read (`auditedIn`); its session ran from a commit the pins log records
 (`pinsReason`) on main's first-parent line (`firstParentReason`); the evidence's session files are that session's,
-under the verifier's key (`sessionNamed`); every open of the root withholds its coin commitment (`withheldOn`); the
-session's log shows the sample's coins released after exactly one registration, `a`'s (`sampledOn`); the evidence
+under the verifier's key (`challengePhaseNamed`); every open of the root withholds its coin commitment
+(`withheldOn`); the roots the session's log shows in every family it reserved, the window's own aside, are exactly
+one registration, `a`'s (`sampledOn`); the evidence
 holds one case, of that registration, whose record is `record`; the parameters at the window, which the check
 composes from the verifier's own, the window's root, the case's public file's digest and `before` (`paramsAt`),
 are one-stage v2's; that public file's header names no `shared_rows`; the case's evidence, with the period's
@@ -145,9 +148,9 @@ def AuditedAt (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) 
     auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) ∧
     pinsReason au.session opened e.pins = none ∧
     firstParentReason au.session au.pinned p.main = none ∧
-    sessionNamed au p.ledger.key we.session = .ok (lc, roots) ∧
+    challengePhaseNamed au p.ledger.key we.session = .ok (lc, roots) ∧
     withheldOn c.ledger w.root = true ∧
-    sampledOn p.ledger.label w.root roots = #[a.registration] ∧
+    sampledOn w.root roots = #[a.registration] ∧
     we.audits = #[k] ∧
     (Flock.canon k.registration >>= fun s => OneStage.commitmentOf s.toUTF8) = .ok cm ∧
     Flock.hexOf cm.digest = a.registration ∧ record = cm.record ∧
