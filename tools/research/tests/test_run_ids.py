@@ -1,5 +1,5 @@
 """`research run` takes its run dir by making it (`runs.take_run_dir`): a fresh id whose dir exists, which two runs in one
-second draw once in 65,536 pairs, is drawn again a bounded number of times; an id the caller gives whose dir exists is refused
+second pick once in 65,536 pairs, is picked again a bounded number of times; an id the caller gives whose dir exists is refused
 as before. Each test fixes the id source (`runs.new_run_id`), so none depends on the clock or on chance."""
 from __future__ import annotations
 
@@ -30,11 +30,11 @@ def _run(runs: Path, *flags: str) -> int:
     return cli.main(["run", "--runs-dir", str(runs), "--no-sampler", *flags, "--", sys.executable, "-c", "pass"])
 
 
-def test_two_runs_that_draw_the_same_fresh_id_both_start_with_different_ids(tmp_path, monkeypatch, capsys):
+def test_two_runs_that_pick_the_same_fresh_id_both_start_with_different_ids(tmp_path, monkeypatch, capsys):
     handed = _ids(monkeypatch, A, A, B)
     runs = tmp_path / "runs"
     assert _run(runs) == 0 and _run(runs) == 0
-    assert handed == [A, A, B], "the second run met the first's dir and drew again"
+    assert handed == [A, A, B], "the second run met the first's dir and picked again"
     assert sorted(d.name for d in runs.iterdir()) == sorted([A, B])
     assert {json.loads((runs / i / "job.json").read_text())["run"]["id"] for i in (A, B)} == {A, B}
     assert "already exists" not in capsys.readouterr().err
@@ -56,13 +56,14 @@ def test_an_id_the_caller_gives_whose_dir_exists_is_refused_here_on_a_machine_an
     assert launched == placed == [] and (runs / A / "job.json").read_text() == job, "nothing launched, the first run's dir untouched"
 
 
-def test_fresh_ids_are_drawn_a_bounded_number_of_times_then_the_run_is_refused(tmp_path, monkeypatch, capsys):
+def test_fresh_ids_are_picked_a_bounded_number_of_times_then_the_run_is_refused(tmp_path, monkeypatch, capsys):
     handed = _ids(monkeypatch, A)
     runs = tmp_path / "runs"
     (runs / A).mkdir(parents=True)
     assert _run(runs) == 2
     err = capsys.readouterr().err
-    assert f"research run: refused: {R.FRESH_ID_TRIES} fresh run ids in a row each named a run dir that already exists" in err
+    assert (f"research run: refused: {R.FRESH_ID_TRIES} fresh run ids in a row each named a run dir that already exists under "
+            f"{runs} ({A}), so nothing ran") in err
     assert len(handed) == R.FRESH_ID_TRIES and [d.name for d in runs.iterdir()] == [A]
 
 
