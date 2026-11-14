@@ -23,7 +23,8 @@ query is of clocks.
 ~~~text
 research run --on NODE --project verity --source . --cwd source --env CARD=NODE \
   --env CLOCK=MHZ --env GPU_LEASE_WHO=LANE -- bash benchmarks/int8_class_rate/run.sh
-PYTHONPATH=. python3 benchmarks/int8_class_rate/summarize.py ~/.research/runs/RUN1/out ~/.research/runs/RUN2/out [--json FILE]
+PYTHONPATH=. python3 benchmarks/int8_class_rate/summarize.py ~/.research/runs/RUN1/out ~/.research/runs/RUN2/out \
+  [--json FILE]
 ~~~
 
 `run.sh`'s header lists its knobs: classes, encodings, kernels, ratios, seconds an arm, rounds and clock. Nothing here

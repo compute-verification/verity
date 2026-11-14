@@ -9,7 +9,6 @@ import csv
 import io
 import json
 import re
-import subprocess
 from pathlib import Path
 
 import clocks
@@ -611,13 +610,10 @@ def test_sm89_ji_points_join_only_their_own_family(tmp_path):
     assert [n.split("@")[0] for *_, n in pts["iadd3"]] == [n.split("@")[0] for *_, n in pts["lop3"]] == ["j32_axi_q64_a3u1_w2"]
 
 
-def test_clock_ceiling_refuses_without_the_memory_clock_before_the_build(tmp_path):
-    """The memory clock clock_ceiling.sh relocks on exit is the card's `clock.memory`, which it takes as a required
-    argument and never states: without CLOCK_RELOCK_MEM_MHZ it stops before it builds or writes anything."""
-    out = tmp_path / "out"
-    out.mkdir()
-    done = subprocess.run(["bash", str(POUW / "opcode_probe" / "clock_ceiling.sh")],
-                          env={"PATH": "/usr/bin:/bin", "OUT": str(out)}, capture_output=True, text=True, check=False)
-    assert done.returncode != 0
-    assert "clock.memory" in done.stderr
-    assert not any(out.iterdir())
+def test_clock_ceiling_requires_the_memory_clock_naming_clock_memory_with_no_default():
+    """The memory clock clock_ceiling.sh relocks on exit is the card's `clock.memory`, which both its scripts take as a
+    required argument (`CLOCK_RELOCK_MEM_MHZ`, refused by name when unset) and neither states as a default."""
+    for script in ("clock_ceiling.sh", "clock_ceiling_lease.sh"):
+        text = (POUW / "opcode_probe" / script).read_text()
+        assert re.search(r"\$\{CLOCK_RELOCK_MEM_MHZ:\?[^}]*clock\.memory[^}]*\}", text), script
+        assert not re.search(r"\$\{CLOCK_RELOCK_MEM_MHZ:?[-=]", text), script
