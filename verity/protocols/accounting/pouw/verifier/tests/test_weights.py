@@ -170,7 +170,8 @@ def test_bytes_like_rows_and_slots_released(workers, monkeypatch):
     shapes, rows = random_model(7)
     want = Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY, workers=1)
     for kind in (bytearray, memoryview):
-        assert Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: map(kind, rows[w]), KEY, workers=workers) == want
+        assert Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w, kind=kind: map(kind, rows[w]), KEY,
+                                workers=workers) == want
     assert Wt._SLOTS == {}
     with pytest.raises(ValueError, match="gave"):
         Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w][:-1], KEY, workers=workers)

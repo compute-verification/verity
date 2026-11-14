@@ -60,5 +60,5 @@ def test_two_roundings_miss_the_rows_the_fixture_names():
     fused = block_rmsnorm_rows(X, W, EPS, BLOCK, WARPS)
     assert [int(v) for v in (two["out"].astype(np.uint16) != Y).sum(axis=1)] == [r["definition_off_words"] for r in FIXTURE["rows"]]
     e: np.ndarray = np.full(len(Y), bits_of(np.float32(EPS)), dtype=np.uint32)
-    gap = fused["mean"].astype(np.int64) - DR.add_rn(e, two["mean"]).astype(np.int64)
-    assert gap.tolist() == [r["eps_sum_ulps"] for r in FIXTURE["rows"]]
+    ulps = fused["mean"].astype(np.int64) - DR.add_rn(e, two["mean"]).astype(np.int64)
+    assert ulps.tolist() == [r["eps_sum_ulps"] for r in FIXTURE["rows"]]
