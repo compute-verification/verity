@@ -353,9 +353,9 @@ def counted(params: WardenParams) -> bool:
 
 
 def most_released(params: WardenParams) -> int:
-    """The most ids a response of the schedule releases: its `max_tokens_cap` where it has one, since a released
-    request asks for no more and its response is held to what it asks, and else one `DATA` cell fewer than its
-    `egress_cells`, an id a cell."""
+    """The most ids a response of the schedule releases: the limit it registers on every response where it registers
+    one, since a released request asks for no more and its response is held to what it asks, and else one `DATA`
+    cell fewer than its `egress_cells`, an id a cell."""
     return params.egress_cells - 1 if params.max_tokens_cap is None else params.max_tokens_cap
 
 
@@ -363,7 +363,7 @@ def classes(params: WardenParams) -> tuple[tuple[int, ...], ...]:
     """A schedule's classes as its parameters hold them (the module docstring's "The classes"), each (P, O, rows)
     under the lengths rows' form 1 and (P, O) under form 2, or ValueError naming what is none: a class of the
     other form's numbers, a size that is none, or no class of the largest P that holds the most ids a response
-    releases (`most_released`). `WardenParams` calls it where it is built and keeps what it returns, so no schedule
+    releases (`most_released`). The schedule calls it where it is built and keeps what it returns, so no schedule
     holds classes of another form."""
     if params.lengths is None:
         raise ValueError("the content rows' tables are listed in the connection rows' head, so a schedule with "
