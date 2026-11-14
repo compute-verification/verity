@@ -153,6 +153,8 @@ def _served_table(args: Any) -> int:
         print(json.dumps(table, indent=1, sort_keys=True))
     else:
         print(served_table.render(table), end="")
+    if args.metrics and settings.is_set("RESEARCH_RUN_DIR"):
+        served_table.record(table, args.metrics)
     return 0
 
 
@@ -351,8 +353,9 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
-    """`metrics`: a runner's metric ids, each for the total of `prove`'s table it names (`prove_records.FIGURES`),
-    which `prove` records in a research run's result."""
+    """`metrics`: a runner's metric ids, each for what its command's table names, which the command records in a
+    research run's result: for `prove` a total of its table (`prove_records.FIGURES`), for `served-table` a row's
+    ``SPEC/POINT`` (`served_table.measurements`)."""
 
     args = _parser().parse_args(argv)
     args.metrics = dict(metrics or {})

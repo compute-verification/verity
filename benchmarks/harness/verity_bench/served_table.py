@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs
+from verity_bench import jobs, kit, settings
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, expand_sweep, resolve_spec
 from verity_bench.vllm.runner import summarize
@@ -39,6 +39,9 @@ LIVE_CAVEAT_KEYS = ("label", "row", "note")
 SUPERSEDED_BY = "superseded_by"
 RUN_OF_RECORD = "run_of_record"
 POINT_TOOL = "vllm_bench_point"
+#: what a research run keeps of the table, relative to its directory (`record`)
+TABLE = "out/served-table.json"
+OVERHEAD_UNIT = "% over stock FP8's time per output token"
 
 # Validation comes from result.json alone; rc 0 rules out a run killed after writing it, and a dirty tree ran code its
 # commit doesn't name (jobs.StoreCompletion's rule, keyed here by spec and point rather than by one commit's identity).
@@ -470,6 +473,60 @@ def build(*, store: Any = None, root: Path | None = None, local_only: bool = Fal
         when = added or (lambda spec: spec_added(root, spec))
         completion.pull_since(min(when(spec) for spec in specs))
     return collect(completion.store, protocols=protocols, factors=factors, live=live, breakdowns=breakdowns)
+
+
+def _percent(ratio: float) -> float:
+    return (ratio - 1) * 100
+
+
+def measurements(table: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
+    """Each of `metrics` (an id for the row it names, ``SPEC/POINT``) as `kit.Writer.measurement`'s arguments: the row's
+    arm over stock as served (`SERVED`) in time per output token, as a percent over stock, with its 95% interval, its
+    run and result art as inputs and its caveats; a row with no ratio has no value and says why."""
+
+    rows = {f"{row['spec']}/{row['point']}": row for row in table["rows"]}
+    skipped = {f"{s['spec']}/{s['point']}": s["why"] for s in table["skipped"]}
+    out = []
+    for name, at in metrics.items():
+        row = rows.get(at) or {}
+        ratio = (row.get("over_served") or {}).get(PER_OUTPUT)
+        m: dict[str, Any] = {"name": name, "unit": OVERHEAD_UNIT, "mark": "measured",
+                             "extra": {"protocol": row.get("protocol"), "arm": row.get("arm"), "stock": SERVED,
+                                       "device": row.get("device"), "at": at}}
+        if ratio is None:
+            why = skipped.get(at) or ("no row: no protocol in `PROTOCOLS` serves it" if not row else
+                                      "no passing run of it in the store" if row["run"] is None else
+                                      f"a rep lacks {PER_OUTPUT} or stock's is zero")
+            out.append(m | {"value": None, "why": f"no served ratio at {at}: {why}"})
+            continue
+        ci = ratio.get("ci95")
+        m["extra"] |= {"reps": ratio.get("n"), "ratio": ratio["mean"]}
+        if caveat := _caveat(row["caveats"]):
+            m["extra"]["caveats"] = caveat
+        out.append(m | {"value": _percent(ratio["mean"]), "interval": (_percent(ci[0]), _percent(ci[1])) if ci else None,
+                        "inputs": [row["run"], *([row["art"]] if row["art"] else [])]})
+    return out
+
+
+def record(table: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
+    """Writes the table into this research run's result (`kit.writer`): the table as `TABLE`, named a measurement file
+    and the validation's evidence, the rows' runs in the fingerprint, `measurements` under `metrics`' ids, and a
+    validation passed only when every metric has a value."""
+
+    writer = kit.writer(settings.RESEARCH_RUN_DIR)
+    kept = writer.out / TABLE
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    kept.write_text(json.dumps(table, indent=1, sort_keys=True) + "\n")
+    writer.fingerprint(benchmark="served-table", served_stock=SERVED,
+                       runs=sorted({row["run"] for row in table["rows"] if row["run"]}))
+    writer.measurement_file(TABLE)
+    found = measurements(table, metrics)
+    for m in found:
+        writer.measurement(m.pop("name"), m.pop("value"), m.pop("unit"), **m)
+    missing = [name for name, m in zip(metrics, found, strict=True) if "why" in m]
+    writer.validation("failed" if missing else "passed", "verity_bench.served_table.collect",
+                      f"{len(metrics) - len(missing)} of {len(metrics)} metrics have a served ratio"
+                      + (f"; none for {', '.join(missing)}" if missing else ""), [TABLE])
 
 
 def _ratio(summary: Mapping[str, Any] | None) -> str:
