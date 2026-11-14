@@ -133,7 +133,10 @@ What it does not say:
 * **That a unit's rows are the Program's gates.** It holds a wired row to its writer's row; that a unit's file
   computes its template is not in it.
 * **That the wiring is well formed.** It reads the wires of the record's text as they stand, without
-  `Spot.Wires.check`, whose templates the text does not hold. -/
+  `Spot.Wires.check`, whose templates the text does not hold.
+* **Anything of a composite whose policy check is another one.** The case is the one `NciCheck.Protocol.protocol`
+  decodes (`PolicyCase`); at a composite whose list has another policy check in its place no case decodes, and the
+  claim holds of every play. -/
 def WiresHold (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (o : Exchange) : Prop :=
   ∀ p r e, PolicyCase k o.sent p r e → ∀ W, RecordWiring r.record W →
