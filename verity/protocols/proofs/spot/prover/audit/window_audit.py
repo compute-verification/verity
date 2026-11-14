@@ -297,7 +297,7 @@ CHALLENGER = "a5.py on the auditor's challenger's coins"
 
 
 def tie(a: argparse.Namespace) -> dict[str, Any]:
-    """The window's tie to the earlier docket of the values its program takes (``a.tie``, records_audit's
+    """The window's tie to the earlier registration of the values its program takes (``a.tie``, records_audit's
     ``--tie``): one-stage's ``log`` (that record), ``registered`` (each value's words), ``outputs`` (each value that
     record's) and ``schemas`` (their row formats), as `verifier.check` takes them; empty without one."""
     return dict(getattr(a, "tie", None) or {})

@@ -670,12 +670,12 @@ def publish(out: Path, private: Path) -> list[str]:
     return held
 
 
-#: The advice docket's fields that state the advice's own length, which `public_docket` pads to the cap.
+#: The advice registration's fields that state the advice's own length, which `public_docket` pads to the cap.
 PADDED = ("binding.advice.bits", "rows")
 
 
 def public_docket(reg: Mapping[str, Any]) -> dict[str, Any]:
-    """What the run publishes of a window's advice docket: the advice's length (`PADDED`) at its compiler's
+    """What the run publishes of a window's advice registration: the advice's length (`PADDED`) at its compiler's
     ``cap_bits``, the one length the class declares (its rows at ``row_bits`` each), no count or refusal of its requests,
     no window's number (`public_json`), and the rest as registered. ``padded`` names the fields padded."""
     cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])

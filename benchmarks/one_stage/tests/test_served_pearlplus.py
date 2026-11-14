@@ -161,7 +161,7 @@ def test_under_pearlplus_tie_verify_holds_the_passes_to_the_windows_class(tmp_pa
 
 
 def test_under_pearlplus_tie_w_is_chained_after_the_serves_first_registration_record(tmp_path):
-    """Where the window serve wrote its first docket (served_verdicts.sh's weights():
+    """Where the window serve wrote its first registration record (served_verdicts.sh's weights():
     SERVE_DIR/deployment-registration.json, which registers the weights before the first request), `retain` gets it as
     ``--previous-record`` beside ``--window-record W``, so W is chained after it and the weights' record is the log's
     first; a serve dir with none leaves W chained after nothing (the test above)."""

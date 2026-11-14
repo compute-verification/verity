@@ -12,6 +12,8 @@
 # else keeps its name:
 # - a registered value, and the verb: a value is registered before any coin (`registered`, `register`, `registers`,
 #   `Registered`, `registered.py`), and a docket registers it;
+# - an integration's registration of registered values (vLLM's weights, advice and per-expert tables registrations, the
+#   committer's), and the serve's first record of the registration log (its deployment record);
 # - the accounting protocol's names in SPOT's files: the registration log, `accounting.registration`, `RegistrationLog`;
 # - what a served record or a verifier's input already carries, until a format version: the formats
 #   `verity/registration/v1`, `v2` and `verity/registration-receipt/v1`, the keys `"registration"`, `stream_registration`
@@ -60,6 +62,11 @@ patterns = [
   'registration-[\w-]+',
   # names SPOT imports from another lane, which follow that lane's rename
   'WeightsRegistration',
+  # an integration's registration of registered values, and the serve's first record of the registration log
+  '(?:weights|advice|tables\x27?|[Cc]ommitter\x27s|rank\x27s|own window) registration\w*',
+  'registration (?:of the per-expert|of the values|as the first record)',
+  'first registration record',
+  'registrations, sessions',
   # the message type and a verdict record's key
   'Registration \{block\}',
   'stream_registration',
