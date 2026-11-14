@@ -52,7 +52,7 @@ def _id(name: str, **statics: object) -> str:
 
 
 def workload_phi(row: str, case: str) -> Phi:
-    """The φ of a workload row of record (`config.row_file`, fetched when absent), its checkpoint's config.json the package's
+    """The φ of a workload of record (`config.row_file`, fetched when absent), its checkpoint's config.json the package's
     pinned copy (`hf_configs/<case>.config.json`), as `score.phi_of` makes it."""
     from . import score as S
     w = json.loads(row_file(row).read_text())

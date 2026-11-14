@@ -26,7 +26,7 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 OUT = Path(os.environ.get("OPS_DIR", "/workspace/pouw/infra"))
@@ -43,7 +43,7 @@ _last_alert: dict[str, float] = {}
 
 
 def now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def iso(t: datetime | None = None) -> str:
@@ -405,7 +405,7 @@ def stop_at() -> datetime | None:
             ends.append(int(f.read_text().split()[0]) - margin)
         except (OSError, ValueError, IndexError):
             pass
-    return datetime.fromtimestamp(min(ends), timezone.utc) if ends else None
+    return datetime.fromtimestamp(min(ends), UTC) if ends else None
 
 
 def fill_alerts() -> None:
@@ -426,7 +426,7 @@ def page() -> str:
     left = (stop - t).total_seconds() / 3600 if stop else float("nan")
     lease = subprocess.run(["gpu-lease", "status"], capture_output=True, text=True).stdout.strip().splitlines()
     s = last_sample() or {}
-    age = (t - datetime.strptime(s["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)).total_seconds() if s else 1e9
+    age = (t - datetime.strptime(s["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)).total_seconds() if s else 1e9
     if age > 180:
         alert("stale", "sampler", f"gpu_util_sampler's last sample is {age / 60:.0f} min old")
     fill = (FILL / "status.txt").read_text().strip().splitlines() if (FILL / "status.txt").exists() else ["(no fill runner)"]
@@ -438,9 +438,9 @@ def page() -> str:
     L = [f"# vy-nebius-2 at {iso(t)}", "",
          (f"Stops itself at {stop:%Y-%m-%dT%H:%MZ} (lease and deadline): {left:.1f} h, {8 * left:.0f} GPU-h left. " if stop else
           "Stop time unknown: the lease and deadline files are unreadable. ") +
-         f"Clocks locked at 2,100 MHz. Refreshed every minute by node_ops.py; `cat /workspace/pouw/infra/status.md`.", ""]
+         "Clocks locked at 2,100 MHz. Refreshed every minute by node_ops.py; `cat /workspace/pouw/infra/status.md`.", ""]
     alerts = [json.loads(l) for l in (OUT / "alerts.jsonl").read_text().splitlines()[-20:]] if (OUT / "alerts.jsonl").exists() else []
-    recent = [a for a in alerts if (t - datetime.strptime(a["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)).total_seconds() < 7200]
+    recent = [a for a in alerts if (t - datetime.strptime(a["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)).total_seconds() < 7200]
     paused = [f"- pgid {k} for {int((time.monotonic() - v['t0']) / 60)} min: `{v['cmd'][:120]}`" for k, v in (QUIET.paused.items() if QUIET else [])]
     hourly = (OUT / "hourly.txt").read_text().strip().splitlines()[-8:] if (OUT / "hourly.txt").exists() else []
     L += [f"**Utilisation:** {busy_last_hour()}.", "", "By hour (the infra lane's hourly record):", ""] + \

@@ -10,6 +10,8 @@ to a deployment configuration (`config.Component`), which is where it says what 
   and the messages sent before them (`after`);
 - its messages: the wire schemas (`verity.channel.Schema`), each with its kind.
 
+`ProtocolDef` is the protocol as a run takes it: its manifest with a factory for each of its parties (`party.Party`).
+
 `place` checks a binding of the parties to a site's machines: each party's principal owns its machine (`principal`), the
 machine provides what the party needs (`needs`), a coin-carrying channel passes no developer-owned machine (`coins-hop`),
 and each channel's link meets its latency bound (`latency`). It refuses anything else by name, or, in a `simulated`
@@ -42,12 +44,15 @@ monitoring period raises `PeriodError`.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from verity.channel import NAME, MessageTypes, Refused, Schema
+
+if TYPE_CHECKING:
+    from .party import Party
 
 PRINCIPALS = ("developer", "auditor", "anyone")
 OWNERS = ("developer", "auditor")
@@ -133,6 +138,14 @@ class Manifest:
     def peers(self, party: str) -> tuple[str, ...]:
         return tuple(sorted({c.receiver for c in self.channels if c.sender == party}
                             | {c.sender for c in self.channels if c.receiver == party}))
+
+
+@dataclass(frozen=True)
+class ProtocolDef:
+    """A protocol as a run takes it: its manifest, and a factory for each of its parties."""
+
+    manifest: Manifest
+    parties: Mapping[str, Callable[[], Party]]
 
 
 # --- placement ----------------------------------------------------------------------------------------------------------
@@ -397,4 +410,4 @@ class MonitoringPeriod:
 
 
 __all__ = ["DELTAS", "MONITORING_PERIODS", "Channel", "Cut", "Manifest", "MonitoringPeriod", "PeriodError", "PlaceResult",
-           "Role", "TickSpan", "Topology", "block_count", "place", "site_of"]
+           "ProtocolDef", "Role", "TickSpan", "Topology", "block_count", "place", "site_of"]
