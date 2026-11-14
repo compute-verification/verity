@@ -25,7 +25,7 @@ from verity_config.settings import of
 
 import dither_a as DA
 import dither_one as DO
-from verity.protocols.experimental.dither.prover.h1r import H1R
+from h1r_torch import H1R
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
