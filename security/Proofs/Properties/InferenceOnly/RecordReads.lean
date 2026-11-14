@@ -31,7 +31,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.RecordText (Row)
+open Spot.RecordText (Row)
 
 /-- **A gate lies in one unit**: two units that hold one gate are one unit of one template. -/
 theorem unit_of_gate {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)

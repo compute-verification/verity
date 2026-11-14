@@ -330,8 +330,8 @@ class Binding:
     its row tables, grouped by segment in rising order and in the integration's order within one, every rank of each the row of
     at least one linked member's ``x`` table (rows of the tables' schema, `TABLE_SCHEMA`, refused otherwise: a linked row
     takes its row table row's salt, which then hides one string), under ``context`` (hex, 64 bytes known before the first
-    segment: the live coin commitment's root).  A ``work`` law
-    samples by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
+    segment: the live coin commitment's root).  A ``work`` sampling design
+    samples by the verifier's ``work_table`` (`draw.work_table`), which the registration's sampling design is expanded under."""
     program: Any
     query: dict[str, Any]
     law: dict[str, Any]

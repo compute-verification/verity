@@ -31,8 +31,8 @@ opening verifies to its index).
 rejects with probability at most `ε`, `right ≤ PieceOk`, and an accepted run's proof blocks open the carried rows to one
 value or its SHA-512 inputs hold a collision (`Carried`), then the event `r.accepts ∧ ClearOk ∧ verdict rejects the
 session the run opens (sessionOf) ∧ no collision in r.hashInputs` has probability at most `ε`. The guarantee that
-instantiates it builds `r.ports` from the counted extractor `IntegrityPeriod` reads and `r.hashInputs` from the run, sets
-`right` to each proof block's circuit, takes `Gives` from `IntegrityPeriod` at `K₀ = 1` over the session's statements
+instantiates it builds `r.ports` from the counted extractor `IntegrityMonitoringPeriod` reads and `r.hashInputs` from the run, sets
+`right` to each proof block's circuit, takes `Gives` from `IntegrityMonitoringPeriod` at `K₀ = 1` over the session's statements
 (sampling term `0` under `All`, so `ε` is the statements' `ε_ks + ε_bind` summed) and `Carried` from the carried form;
 `cr/sha-512` then bounds the collision at a finder built from the prover, outside this lemma.
 -/

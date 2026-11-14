@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Device
+public import Definitions.Registration.Device
 public import Definitions.Core.Requirement
 
 /-!

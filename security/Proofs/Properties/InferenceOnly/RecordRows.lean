@@ -33,7 +33,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref Ty Defn isInputId fieldsOf)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.RecordText (Row outerOf)
+open Spot.RecordText (Row outerOf)
 open InferenceOnlyCheck.Record.SecurityProofs (RootFirst ranges_spec)
 open InferenceOnlyCheck.Properties.SecurityProofs
 
