@@ -843,9 +843,8 @@ class DriveFlags:
     #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), one file's path from
     #: the root, or a file name glob; none, the lane lands nothing
     lowrisk_excludes: tuple[str, ...] = ()
-    #: what keeps a candidate on the whole check where the land verdicts gate (`research queue vqueue --gate verdict`,
-    #: `vqueue_loop.Loop._plain`), written as `lowrisk_excludes` is: what must take the whole check before it lands, though
-    #: each member has a land verdict of its own; none, no candidate is plain
+    #: what the land verdicts gate (`research queue vqueue --gate verdict`, `vqueue_loop.Loop._plain`) keeps on the whole
+    #: check beyond `lowrisk_excludes`, written as it is: the gate reads both (`plain_excludes`); none, no candidate is plain
     verdict_excludes: tuple[str, ...] = ()
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
@@ -871,6 +870,15 @@ class DriveFlags:
     signed_verdicts: str = "off"
     #: the restacks across a move the syncs run at once in the background, each `restack.py` on one head (`Queue._restack`)
     restack_jobs: int = 3
+
+    @property
+    def plain_excludes(self) -> tuple[str, ...]:
+        """What keeps a candidate on the whole check where the land verdicts gate: `lowrisk_excludes`, then `verdict_excludes`,
+        each entry once, so a change the low-risk lane keeps off is never plain.  With either list empty, none: as `lowrisk`
+        reads no excludes, nothing is plain."""
+        if not (self.lowrisk_excludes and self.verdict_excludes):
+            return ()
+        return tuple(dict.fromkeys(self.lowrisk_excludes + self.verdict_excludes))
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":

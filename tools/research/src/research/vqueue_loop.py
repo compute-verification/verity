@@ -96,8 +96,8 @@ as `--shards` shards on `--on`'s machines (`vqueue_slim.start` with ``shards``: 
 plan of the candidate's tree, which splits pytest by suite), judged on every step `main` waits for,
 and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  With `verdict`,
 the land verdicts gate: as `check`, but a plain candidate (`Loop._plain`: each member has a land verdict of its own at its
-head, is no move, changes no Lean input and meets nothing drive.toml's `verdict_excludes` at `main` names) lands on those
-verdicts and the quick tier on its own merge (`vqueue_slim.start_quick`).  `main`'s whole check follows each such landing
+head, is no move, changes no Lean input and meets nothing drive.toml's `lowrisk_excludes` or `verdict_excludes` at `main`
+names) lands on those verdicts and the quick tier on its own merge (`vqueue_slim.start_quick`).  `main`'s whole check follows each such landing
 (`Loop._below`), and a red of it (`Loop._main_red`) reverts the one PR landed since `main`'s last passed check whose change
 meets what the failure read (`World.revert`), holding the ready PRs that meet it too until `main`'s check passes again; with
 no such PR it reverts none, and every candidate takes the whole check until `main`'s passes.  Every other candidate takes the
@@ -2988,10 +2988,10 @@ class Loop:
     def _plain(self, ready: list[Ready], main: str) -> dict[int, str]:
         """The plain PRs of ``ready``, by number at their heads: each with a land verdict of its own at its head
         (`World.reviewed`), no Lean change, no Lean input of the tree changed and no move, and its change meeting nothing
-        drive.toml's `verdict_excludes` at ``main`` names (read as `queue.lowrisk` reads the low-risk lane's own list, which
-        this gate doesn't read: Lean, its locks and Lake files, the check, and the code that lands and reverts; with no
-        excludes, none is plain)."""
-        excludes = flags_at(self.world.repo, main).verdict_excludes
+        drive.toml at ``main`` names in `lowrisk_excludes` or in `verdict_excludes` (`DriveFlags.plain_excludes`, read as
+        `queue.lowrisk` reads the low-risk lane's list: what that lane keeps off, and what this gate adds to it; with either
+        list empty, none is plain)."""
+        excludes = flags_at(self.world.repo, main).plain_excludes
         return {x.number: x.head for x in ready if x.number in self.world.reviewed and not (x.lean or x.lean_input or x.move)
                 and lowrisk(x.files, excludes)}
 
@@ -4415,7 +4415,8 @@ def main(argv: list[str]) -> int:
                          f"once both end, a drop's after it (at most {KEPT_MAX} so at once, the oldest cancelled past them), "
                          f"and deciding nothing; `{VERDICT_GATE}`, `{CHECK_GATE}` but for a plain candidate, each member with a "
                          "land verdict of its own at its head, no move, and no change to a Lean input or a path of drive.toml's "
-                         "`verdict_excludes`, which lands on those verdicts and the quick tier on its own merge (a `research "
+                         "`lowrisk_excludes` or `verdict_excludes` (with either empty, none is plain), which lands on those "
+                         "verdicts and the quick tier on its own merge (a `research "
                          "run` on --on's machines), `main`'s whole check following each such landing; a red of it reverts "
                          "the one PR landed since `main`'s last passed check whose change meets what the failure read "
                          "(`git revert -m 1`, pushed as the loop lands) and holds the ready PRs that meet it too, and with no "

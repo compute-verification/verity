@@ -185,23 +185,29 @@ def test_the_low_risk_lane_excludes_what_runs_with_the_control_pods_or_every_age
         assert path in excludes, f"drive.toml's lowrisk_excludes lacks {path}"
 
 
-def test_the_land_verdicts_gate_excludes_lean_its_locks_the_check_and_the_code_that_lands_and_reverts():
-    """Where the land verdicts gate (`research queue vqueue --gate verdict`), a change to Lean, a lock, a Lake file or the
-    trusted hashes (`main` moves only to regenerated records), to the check, or to the code that lands a candidate and reverts
-    a culprit takes the whole check before it lands, whatever its land verdicts: drive.toml's `verdict_excludes` names each,
-    and a change to it is a change under tools/verity/check/."""
-    import tomllib
-
+def test_the_land_verdicts_gate_reads_lowrisk_excludes_and_adds_verdict_excludes():
+    """Where the land verdicts gate (`research queue vqueue --gate verdict`), what keeps a change on the whole check
+    (`DriveFlags.plain_excludes`) is `lowrisk_excludes` and then `verdict_excludes`, each entry once; with either absent,
+    nothing.  Over this tree's drive.toml, a change to Lean, a lock, a Lake file or the trusted hashes, the check, the
+    research tool (the code that lands and reverts among it), the Lean check, the circuit language, the root's tests, a
+    verifier, a device, infra/ or the agent guard takes the whole check before it lands, whatever its land verdicts."""
+    flags = DriveFlags.parse('lowrisk_excludes = ["*.lean", "a/"]\nverdict_excludes = ["a/", "b/x.py"]\n')
+    assert flags.plain_excludes == ("*.lean", "a/", "b/x.py")
+    for text in ('lowrisk_excludes = ["a/"]\n', 'verdict_excludes = ["a/"]\n', ""):
+        assert DriveFlags.parse(text).plain_excludes == () and not lowrisk(["README.md"], DriveFlags.parse(text).plain_excludes)
     root = Path(__file__).resolve().parents[3]
     flags = DriveFlags.parse((root / "tools/verity/check/drive.toml").read_text())
-    assert flags.verdict_excludes == tuple(tomllib.loads((root / "tools/verity/check/drive.toml").read_text())["verdict_excludes"])
     for path in ("security/Proofs/Core/X.lean", "tools/pous_grader/lean-audit.json", "security/lakefile.toml",
                  "security/lean-toolchain", "security/lake-manifest.json", "x/TRUSTED.sha256", ".gitattributes",
                  "tools/verity/check/check.py", "tools/verity/check/drive.toml", "tools/verity/check/policy.toml",
-                 *(f"tools/research/src/research/{m}.py" for m in ("queue", "landing", "vqueue", "vqueue_loop", "vqueue_slim"))):
-        assert not lowrisk([path, "README.md"], flags.verdict_excludes), f"drive.toml's verdict_excludes lets {path} through"
-    for path in ("tests/test_tree.py", "verity/circuits/program.py", "tools/research/src/research/cli.py", "x/queue.py"):
-        assert lowrisk([path], flags.verdict_excludes), f"drive.toml's verdict_excludes keeps {path} on the whole check"
+                 *(f"tools/research/src/research/{m}.py" for m in ("queue", "landing", "vqueue", "vqueue_loop", "vqueue_slim",
+                                                                    "cli", "merge", "carry", "labelauth")),
+                 "tools/verity/lean/check.py", "verity/circuits/program.py", "verity/commitments/x.py", "verity/claims/x.py",
+                 "tests/test_tree.py", "verity/protocols/accounting/pouw/verifier/audit.py",
+                 "verity/protocols/compose/device/live_challenger/auditor.py", "infra/README.md", "tools/agent-guard/boot.sh"):
+        assert not lowrisk([path, "README.md"], flags.plain_excludes), f"drive.toml's excludes let {path} land on a verdict"
+    for path in ("GLOSSARY.md", "benchmarks/census/README.md"):
+        assert lowrisk([path], flags.plain_excludes), f"drive.toml's excludes keep {path} on the whole check"
 
 
 #: drive.toml's `lowrisk_excludes`
