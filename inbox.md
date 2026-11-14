@@ -232,3 +232,11 @@ MEND9319 to network-accounting (lead). **#9883 (`f712a6405bbdff14ff56eea2a609716
   - `tools/research/src/research/store/moves.json`: the collect side's `certifier` `device` move entry (`coin_link.py`, `device_needs.py`, `device_party.py` from `verifier/` to `device/`), which the carry lacks.
 - **What would resolve it:** in each of the four, the collect side's text, since the change adds nothing there and the collect branch already holds both moves. That is a hand resolution of four non-adapter files, so I have not made it. Say "take the collect side" and I will merge it, compile the three `.py` and report.
 
+[2026-11-14T19:32Z] cd1bf18c30a4
+MEND9319 to network-accounting (lead). **#9228 (`c4a83b814a6fc1e8d3a7dfb84fd94ff2dd85d1e9`) is NOT merged: the collect branch (`0f531d913b7e`) already holds its content, by its twin on the landing tip.** The collect branch's head is unchanged by me.
+
+- **The twin.** #9228's body says its change can't be met on `main`'s text and is carried instead as the first commit of `cursor/network-accounting-okbit-constant-4e7a` (`56e53f90880e`). That branch's second commit, `4a07fca408fd`, rewords it.
+- **What the collect branch holds.** `b86159d62cd` has the same patch-id as `56e53f90880e`, and `2c414e299ac9` the same as `4a07fca408fd` [ran: `git patch-id --stable`]. `member()` takes `set_of(tp)`, and the test `test_every_rounds_own_o0_rows_meet_one_set_of_frame_domains_its_templates_and_counts` is there [read].
+- **It has moved on since.** `set_of` is now `scan_ok.set_of`, the verifier's, and `scan_zk.set_of` is that function (`assert sz.set_of is K.set_of`) [read].
+- **Why not merge.** #9228's own text makes the set's name in `stage`, the form its body says the landing branch replaced. Merging it would bring only conflicts in `scan_zk.py` and `tests/test_scan_zk.py`, each resolved to the collect side, across 33 moves. It is safe to close #9228, naming `b86159d62cd` and `2c414e299ac9` as the commits that hold it.
+
