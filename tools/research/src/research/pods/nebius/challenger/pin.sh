@@ -75,7 +75,7 @@ done
 runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$pkg' && lake build sampled-proofs-verifier" \
   | tail -1
 net=$T/verity/protocols/accounting/certifier/verifier/lean
-if [ -d "$net" ] && [ -f "$T/benchmarks/network_traces/warden_serve.py" ]; then
+if [ -d "$net" ]; then
   runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$net' && lake build network-records" \
     | tail -1
 fi

@@ -28,7 +28,7 @@ export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/accounting/certifier/ver
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
   > "$OUT/build-firewall.log" 2>&1
-[ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "n2zk: no firewall frame"; exit 7; }
+[ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "n2zk: no ZK server frame"; exit 7; }
 
 RUN=$W/run
 mkdir -p "$RUN" && tar -xzf "${RESEARCH_RUN_DIR:?}/inputs/${N2_RUN:?}" -C "$RUN" || { log "n2zk: no run in $N2_RUN"; exit 7; }

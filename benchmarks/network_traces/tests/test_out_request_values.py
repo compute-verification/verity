@@ -82,7 +82,7 @@ def test_n2_zk_publishes_a_network_certifier_runs_public_files_and_not_its_traff
     assert published(out) == sorted(f"run/{f}" for f in public)
 
 
-def test_scan_zk_publishes_a_warden_rehearsals_public_files_and_not_its_traffic_or_responses(tmp_path):
+def test_scan_zk_publishes_a_network_certifier_rehearsals_public_files_and_not_its_traffic_or_responses(tmp_path):
     w, out = tmp_path / "W", tmp_path / "OUT"
     public = {"deployment.json": {"windows": 2}, "cells.jsonl": [{"registration": {"root": "ab"}}],
               "certified.jsonl": [{"window": 0, "head": "cd"}], "check.json": {"accepted": True},
