@@ -146,6 +146,52 @@ def test_a_sample_copies_each_vms_deadline_into_its_registry_entry_once(tmp_path
     assert F.record_deadlines(rows, F.registry()) == [] and len(synced) == 1
 
 
+def test_each_sample_pass_replaces_its_last_sample_whole_with_no_vm_running_too(tmp_path, monkeypatch):
+    """infra/control/loop_metrics.py reads the last pass: a pass with no RUNNING VM is an empty one, not a missing one, and the
+    file is replaced, never appended to."""
+    monkeypatch.setattr(F, "FLEET_DIR", tmp_path / "fleet")
+    monkeypatch.setattr(F, "MACHINES_D", tmp_path / "machines.d")
+    monkeypatch.setattr(F, "sync_registry", lambda m: None)
+    vms = [{"name": "vy-nebius-cpu-1", "id": "i1", "state": "RUNNING", "platform": "cpu-d3", "preset": "p", "region": "r"},
+           {"name": "vy-nebius-cpu-2", "id": "i2", "state": "STOPPED", "platform": "cpu-d3", "preset": "p", "region": "r"}]
+    monkeypatch.setattr(F, "instances", lambda: vms)
+    t = int(datetime(2026, 11, 14, 5, tzinfo=UTC).timestamp())
+    F.sample(t)
+    last = F.FLEET_DIR / F.LAST_SAMPLE
+    got = json.loads(last.read_text())
+    assert got["t"] == F.utc(t) and [r["name"] for r in got["rows"]] == ["vy-nebius-cpu-1"]
+    os.link(last, before := tmp_path / "before")
+    vms[0]["state"] = "STOPPED"
+    F.sample(t + 300)
+    assert json.loads(last.read_text()) == {"t": F.utc(t + 300), "rows": []}
+    assert json.loads(before.read_text())["t"] == F.utc(t), "replaced, not written in place"
+    assert [p.name for p in F.FLEET_DIR.iterdir() if p.name.startswith(".")] == []
+
+
+def test_a_last_sample_write_that_raises_is_one_line_and_the_pass_publishes_as_before(tmp_path, monkeypatch, capsys):
+    """The last sample is only for infra/control/loop_metrics.py: when it can't be written, the pass's samples, deadlines,
+    reachability watch and panels go on as before, and the failure is one line where the loop logs."""
+    monkeypatch.setattr(F, "FLEET_DIR", tmp_path / "fleet")
+    monkeypatch.setattr(F, "MACHINES_D", tmp_path / "machines.d")
+    monkeypatch.setattr(F, "sync_registry", lambda m: None)
+    monkeypatch.setattr(F, "instances", lambda: [{"name": "vy-nebius-cpu-1", "id": "i1", "state": "RUNNING", "platform": "cpu-d3",
+                                                  "preset": "p", "region": "r"}])
+    (F.FLEET_DIR / F.LAST_SAMPLE).mkdir(parents=True)                       # replacing a directory with a file raises
+    calls: dict[str, list] = {}
+    for name in ("record_deadlines", "watch_unreachable", "publish", "daily"):
+        monkeypatch.setattr(F, name, lambda *a, _n=name, **k: calls.setdefault(_n, []).append(a[0]) or [])
+    monkeypatch.setattr(F, "quota_findings", lambda: [])
+    monkeypatch.setattr(F, "archive", lambda now: None)
+    t = int(datetime(2026, 11, 14, (F.REPORT_HOUR_UTC + 1) % 24, tzinfo=UTC).timestamp())
+    assert F.loop(clock=lambda: t, sleep=lambda s: None, send=lambda args, text: None, passes=1) == 0
+    names = lambda rows: [r["name"] for r in rows]                             # noqa: E731
+    assert {k: [names(v) for v in vs] for k, vs in calls.items()} == {
+        "record_deadlines": [["vy-nebius-cpu-1"]], "watch_unreachable": [["vy-nebius-cpu-1"]], "publish": [["vy-nebius-cpu-1"]]}
+    assert names(F.load_samples(t - 1, t + 1)) == ["vy-nebius-cpu-1"]
+    err = capsys.readouterr().err.splitlines()
+    assert len(err) == 1 and err[0].startswith(f"{F.utc(t)} {F.LAST_SAMPLE} failed: IsADirectoryError"), err
+
+
 def test_the_card_alerts_at_80_percent_of_its_daily_limit_only_when_one_is_set(monkeypatch):
     rows = [{"rate_usd_per_hour": 120.0}] * 100                                  # 100 samples of 5 min at $120/h: $1,000
     monkeypatch.delenv("FLEET_CARD_DAILY_USD", raising=False)
@@ -340,10 +386,15 @@ def test_each_days_samples_are_put_in_the_store_once_the_day_is_over(tmp_path, m
 def test_a_panel_goes_only_to_an_https_site(monkeypatch):
     """The panels key is sent only over https: with $FLEET_PANELS_URL unset or not https, put_panel sends nothing and says why."""
     panel = {"id": "compute/online", "rows": []}
-    monkeypatch.setattr(F.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("nothing is sent")))
+    sent = []
+    monkeypatch.setattr(F.metrics, "send_json", lambda *a: sent.append(a))
     for url in (None, "http://site.invalid", "file:///etc/passwd"):
         monkeypatch.setattr(F, "PANELS_URL", url)
         assert F.put_panel(panel, "k") == f"compute/online: $FLEET_PANELS_URL is {url!r}, not an https URL: nothing sent"
+    assert not sent
+    monkeypatch.setattr(F, "PANELS_URL", "https://site.invalid")
+    assert F.put_panel(panel, "k") is None
+    assert sent == [("PUT", "https://site.invalid/api/panels/compute/online", panel, "k", "compute/online")]
 
 
 def test_an_unreadable_archive_state_is_the_passes_error_and_nothing_is_put(tmp_path, monkeypatch):
@@ -359,5 +410,18 @@ def test_fleet_runs_by_path_with_no_research_importable(tmp_path):
     """cloud_watch.toml runs `python3.12 .../fleet.py instances` with no PYTHONPATH, where `research` isn't installed: a top-level
     `from research...` import failed there with ModuleNotFoundError. -S keeps the venv's installed `research` out of the run."""
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    p = subprocess.run([sys.executable, "-S", str(Path(F.__file__)), "--help"], capture_output=True, text=True, env=env, cwd=tmp_path)
+    assert p.returncode == 0 and "instances" in p.stdout, p.stderr[-500:]
+
+
+def test_fleet_runs_by_path_beside_an_older_research_that_has_no_metrics(tmp_path):
+    """A host whose site-packages holds an older `research`, with `settings` but no `metrics`: fleet.py run by path imports
+    every `research` module from its own tree, none from the older one."""
+    old = tmp_path / "site"
+    (old / "research" / "pods" / "nebius").mkdir(parents=True)
+    for d in ("research", "research/pods", "research/pods/nebius"):
+        (old / d / "__init__.py").write_text("")
+    (old / "research" / "pods" / "nebius" / "settings.py").write_text("OLDER = True\n")
+    env = {**{k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, "PYTHONPATH": str(old)}
     p = subprocess.run([sys.executable, "-S", str(Path(F.__file__)), "--help"], capture_output=True, text=True, env=env, cwd=tmp_path)
     assert p.returncode == 0 and "instances" in p.stdout, p.stderr[-500:]

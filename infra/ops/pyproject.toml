@@ -32,6 +32,7 @@ untraced = [
     "tests/test_drive_sh.py",
     "tests/test_gh_read_token.py",
     "tests/test_keeper.py",
+    "tests/test_loop_metrics.py",
     "tests/test_vqueue_unit.py", "tests/test_nightly_check.py",
     "tests/test_watchers.py",
 ]
@@ -76,7 +77,11 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           # the pod's door: its gate and its setup, with research's side of it (pods/door.py, and budgets.py's notes_sync above)
           "infra/control/vy-control-gate", "infra/control/door_setup.sh",
           # the coordinators' launcher, whose `tell` is tested here with the registry above
-          "infra/cursor/launch_coordinator.py"]
+          "infra/cursor/launch_coordinator.py",
+          # the pod's loops' numbers, sent with research's sender, their rows (the compute row's floor is the limit the script
+          # reads), and the store index loop whose pass record they read
+          "infra/control/loop_metrics.py", "infra/control/metrics.toml", "infra/control/store_index.sh",
+          "tools/research/src/research/metrics.py"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

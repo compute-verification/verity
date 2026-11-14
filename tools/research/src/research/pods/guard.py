@@ -5,7 +5,9 @@
     research pods guard stop [--dry-run]
 
 Scope.  Live pods (desiredStatus not EXITED/TERMINATED) whose name a budget line covers or a `[guard] project` prefix starts.  The
-guard's own host and `[guard] exempt` names are never counted or terminated; every other pod on the account is invisible to it.
+guard's own host and `[guard] exempt` names are never counted or terminated; every other pod on the account is invisible to it,
+but for the state's `rate_all` and `unrated`: every live pod's costPerHr summed, and the pods that list none or one that is not
+a number (infra's hourly total, infra/control/loop_metrics.py, reads them).
 
 Every `--poll` seconds (default 60), from the budgets in memory (the last good read):
   tally      each pod's costPerHr x the time since the last poll (RunPod bills a running pod whether or not anything uses it), added
@@ -48,6 +50,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import math
 import os
 import signal
 import subprocess
@@ -266,6 +269,13 @@ def budgets_from_state(state: dict[str, Any]) -> B.Budgets | None:
 
 # ---- one poll ---------------------------------------------------------------------------------------------------------------------------------
 
+def listed_rate(v: Any) -> float | None:
+    """A pod's listed costPerHr as dollars an hour, or None when it is not a finite JSON number (a string included)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    return float(v) if math.isfinite(v) else None
+
+
 def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: float, log: Callable[[str], None]) -> list[dict[str, Any]]:
     """One guard step over the provider's current pod list: tally, decide, terminate, and only then log.  Returns the terminations it
     made (or would make)."""
@@ -303,6 +313,11 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
             del w[k]
         t["window_usd"] = sum(w.values())
     state["last_poll"], state["rate_now"] = now, rate_now
+    # every listed pod, its own host, exempt and foreign ones too: what the account pays an hour (infra/control/loop_metrics.py);
+    # a rate that is not a number makes its pod unrated and never fails the poll
+    rates = {p["id"]: listed_rate(p.get("costPerHr")) for p in listed}
+    state["rate_all"] = sum(r for r in rates.values() if r is not None)
+    state["unrated"] = sorted(k for k, r in rates.items() if r is None)
 
     balance = floor = None
     if budgets.balance_floor is not None:
