@@ -2410,6 +2410,11 @@
       "paths": {
         "benchmarks/hash/maxtput/build_job.sh": "adapters/vllm/verity_vllm/ops/served_build.sh"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/clear/": "verity/protocols/accounting/pouw/prover/clear/"
+      }
     }
   ]
 }
