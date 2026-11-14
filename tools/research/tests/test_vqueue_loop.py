@@ -6077,3 +6077,42 @@ def test_under_gate_check_a_shadow_read_holds_one_candidate_s_graphs_at_a_time(e
         tracemalloc.stop()
     assert loop.reads.hits == 0 and len(loop.reads.used) == 3
     assert peak < 2.5 * one, f"a tick of three shadow reads peaked at {peak / one:.1f} graphs"
+
+
+class Prebuilder:
+    """A `vqueue_prebuild.Prebuilds` that records what each tick gave it and launches one build a tick of the first ready PR."""
+
+    def __init__(self, fail: Exception | None = None):
+        self.seen, self.fail = [], fail
+
+    def tick(self, lines, ready, held, main, key):
+        if self.fail is not None:
+            raise self.fail
+        self.seen.append({"lines": len(lines), "ready": [x.number for x in ready], "held": held, "main": main, "key": key})
+        x = ready[0]
+        return [{"number": x.number, "heads": [x.head], "base": main, "machine": "vy-a", "lean_key": key,
+                 "launch": {"dir": f"/launches/{len(self.seen)}", "pid": 1, "at": 0}}]
+
+
+def test_a_tick_logs_each_prebuild_its_prebuilder_starts_on_the_ready_prs_and_mains_lean_key(env):
+    head = env.put(7, {"pkg/A.lean": "def a := 1\n"})
+    pre = Prebuilder()
+    loop = env.loop(lambda s: [], prebuild=pre)
+    recs = loop.tick()
+    assert [(r["action"], r["number"], r["heads"], r["machine"]) for r in recs if r["action"] == "prebuild"] == \
+        [("prebuild", 7, [head], "vy-a")]
+    assert pre.seen == [{"lines": 0, "ready": [7], "held": set(), "main": env.main(),
+                         "key": vqueue_slim.lean_key(loop.world.repo, env.main())}]
+    loop.tick()
+    assert pre.seen[1]["lines"] == 1, "the next tick reads the prebuilds the log holds"
+    assert [r["launch"]["dir"] for r in env.lines() if r["action"] == "prebuild"] == ["/launches/1", "/launches/2"]
+
+
+def test_no_prebuild_runs_in_the_shadow_and_a_failed_one_stops_no_tick(env):
+    env.put(7, {"pkg/A.lean": "def a := 1\n"})
+    pre = Prebuilder()
+    env.loop(lambda s: [], shadow=True, prebuild=pre).tick()
+    assert pre.seen == [] and not any(r["action"] == "prebuild" for r in env.lines())
+    loop = env.loop(lambda s: [], prebuild=Prebuilder(fail=OSError("no fork")))
+    loop.tick()
+    assert any("the Lean prebuilds failed: no fork" in o for o in env.out)
