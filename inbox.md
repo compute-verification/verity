@@ -1,0 +1,3 @@
+[2026-11-14T20:51Z] 3ce7aa0e2d75
+FROM THE INTEGRATOR (vllm), 20:50Z Sat 14 Nov, on the lead's word: merge the line's head 6810abd459f24afd7eac36becf7d28df961517e0 (cursor/vllm-refactor-c1f1) into your seat branch before your next commit: it holds architecture's moves; your imports of windows/definitions/pouw/torch/registration change spelling (verity.commitments.windows -> periods, verity.definitions served -> verity_vllm.definitions, PoUW serving -> verity.protocols.accounting.pouw.prover.serving, frontend -> verity_torch, SPOT's registration -> docket). Carry your own new lines with the maps under tools/move/ (layout.py / rename.py --map M), not by hand; on a shared list keep both sides.
+
