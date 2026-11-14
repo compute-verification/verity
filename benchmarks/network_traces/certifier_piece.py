@@ -190,7 +190,7 @@ UNNAMED = "a machine the chain step did not name"
 SESSION = "session.json"
 #: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
 #: every key at its level). Each is public as the protocol's output, its sample or its structure: the chain's and each
-#: step's verdict, ε at δ (the sample's law, population and size) and where it runs in the clear, what the path stubs
+#: step's verdict, ε at δ (the sample's sampling design, population and size) and where it runs in the clear, what the path stubs
 #: and how its negatives came out. Everything else stays in the kept run: the scan's answers (its registration and
 #: each execution phase's answer and row registrations, the period check's evidence less its certificates: witness, as a
 #: case's evidence is), the endpoint's report (each Commit window's request, carried, step and output counts, its

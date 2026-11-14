@@ -1,7 +1,7 @@
 // Verity: stable-ABI torch library registration for the
 // rebuilt FA2 forward.  Mirrors the pinned csrc/flash_attn/flash_api_torch_lib.cpp
 // (vllm-project/flash-attention @ 506341a1) for `varlen_fwd` only (identical
-// schema), plus the lane's tap-configuration op (only when VERITY_TAP > 0).
+// schema), plus the tap's configuration op (only when VERITY_TAP > 0).
 #include "namespace_config.h"
 
 #include <torch/csrc/stable/tensor.h>

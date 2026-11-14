@@ -17,7 +17,7 @@ class ObserverConfig:
     reenter: bool = True
     triton: bool = True
     module_hooks: bool = True
-    write_log: bool = True               # False: build every event, discard the buffer at step end (M0 rungs c-f)
+    write_log: bool = True               # False: build every event, discard the buffer at step end (the overhead ladder's rungs c-f)
     snapshot_steps: frozenset = frozenset()
     snapshot_dir: Path | None = None
     snapshot_max_bytes: int = 32 << 20

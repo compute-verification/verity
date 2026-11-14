@@ -150,7 +150,7 @@ def A3PrimeLam : Prop :=
 
 /-- **Pinned as drafted** (`PousTargets.a5_rabin_gcd`).
 
-A5. The Rabin regeneration leg: two square roots that differ other than by sign split `N`. -/
+A5. The Rabin regeneration step: two square roots that differ other than by sign split `N`. -/
 def A5RabinGcd : Prop :=
   ∀ (N : ℕ) (x y : ZMod N) (h : x ^ 2 = y ^ 2) (hxy : x ≠ y) (hxy' : x ≠ -y),
     1 < Nat.gcd (x - y).val N ∧ Nat.gcd (x - y).val N < N
