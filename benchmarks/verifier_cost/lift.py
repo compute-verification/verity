@@ -23,6 +23,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.circuits.types import Array
 from verity_vllm.definitions import boolean as BB
+import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
 _CONST = re.compile(r"Const(\d+)\[0x([0-9a-f]+)\]")
 
