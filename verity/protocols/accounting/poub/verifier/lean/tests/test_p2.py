@@ -1,8 +1,8 @@
-"""`p2.py`, PoUB over PoUS's P2 store, held to its Lean (`RemoteAudit.P2`, through `remote-audit-difftest`) on
+"""`p2.py`, PoUB over PoUS's P2 store, held to its Lean (`Poub.P2`, through `poub-difftest`) on
 sampled inputs that include what both sides must refuse: a registration's digest (`p2.Registration.digest`, with
 `codec.P2Codec`'s refusals), a unit's sketch from its blocks' partials (`p2.Sketcher`: π a block, σ their sum, and y
 from σ against y of the unit's bytes) and an opening's check (`p2.check`) on stores of sampled blocks under PoUS's leaf
-and vk tree, honest or with one field changed; a whole session of record (`RemoteAudit.P2Session`, which `p2_parties.py`
+and vk tree, honest or with one field changed; a whole session of record (`Poub.P2Session`, which `p2_parties.py`
 runs) against `p2_parties.Books` on the bytes the verifier reads, the registration file, the request and each root and
 openings line, under the auditor's session parameters, recorded from a prover over a sampled store, honest or with one
 deviation; and the committed C* (`tests/fixtures/p2-c-star.bin`, PoUS's setup's prover bytes): its registration's
@@ -58,7 +58,7 @@ def p2_blocks() -> st.SearchStrategy:
                          lambda b: (b * p2.BLOCK_BYTES)[:p2.BLOCK_BYTES]))
 
 
-# --- decoding, as `RemoteAudit.Difftest` decodes ----------------------------------------------------------------------
+# --- decoding, as `Poub.Difftest` decodes ----------------------------------------------------------------------
 
 def registration_of(v) -> p2.Registration:
     c = M._get(v, "codec")
@@ -658,7 +658,7 @@ def test_an_honest_session_over_the_committed_store_is_accepted_in_lean(server, 
 
 def committed_session(server, committed, session: dict | None, asked: dict) -> D.Outcome:
     """The Lean's outcome, held to the books', of an honest session over the committed store, every unit a pass,
-    checked two draws at a time: the request `asked`, held to the auditor's `session` (`SESSION` for None)."""
+    checked two samples at a time: the request `asked`, held to the auditor's `session` (`SESSION` for None)."""
     reg = committed.registration
     req = p2_parties.request_of(reg.node, **asked)
     held = p2_parties.SESSION if session is None else session

@@ -107,14 +107,14 @@ theorem B1IndepSet : Pous.Guarantees.B1IndepSet := @PousPebbling.b1_indep_set
 theorem B2Stacking : Pous.Guarantees.B2Stacking := @PousB2.b2_stacking
 
 /-- `PousPebbling.chain` is `Pous.HashChain.chain`, the trusted chain of the guarantee. -/
-theorem chain_eq_pinned {m D : ℕ} (H : Fin (D + 1) × Fin m → Fin m) (x₀ : Fin m) :
+theorem chain_eq_guarantee {m D : ℕ} (H : Fin (D + 1) × Fin m → Fin m) (x₀ : Fin m) :
     ∀ i, Pous.HashChain.chain H x₀ i = PousPebbling.chain H x₀ i
   | 0 => rfl
-  | i + 1 => by simp only [Pous.HashChain.chain, PousPebbling.chain, chain_eq_pinned H x₀ i]
+  | i + 1 => by simp only [Pous.HashChain.chain, PousPebbling.chain, chain_eq_guarantee H x₀ i]
 
 theorem B3Chain : Pous.Guarantees.B3Chain := by
   intro m D q _ x₀ P hP
-  simpa only [chain_eq_pinned] using PousPebbling.b3_chain m D q x₀ P hP
+  simpa only [chain_eq_guarantee] using PousPebbling.b3_chain m D q x₀ P hP
 
 theorem FischClaim13 : Pous.Guarantees.FischClaim13 := @PousFisch.claim13
 theorem FischClaim14 : Pous.Guarantees.FischClaim14 := @PousFisch.claim14
@@ -128,17 +128,17 @@ theorem N10Refuted : Pous.Guarantees.N10Refuted := PousP3Forward.not_invExPostFa
 theorem SampledAuditProd : Pous.Guarantees.SampledAuditProd := @PousAudit.sampled_audit_prod
 
 /-- `PousThm1.seqState` is `Pous.Sampled.seqState`, the trusted definition the guarantee reads. -/
-theorem seqState_eq_pinned {M : Pous.IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
+theorem seqState_eq_guarantee {M : Pous.IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
     (step : ℕ → Pous.Bits S → Fin B → Pous.OracleAlgorithm M (Pous.Bits ℓ × Pous.Bits S)) :
     ∀ (j : ℕ) (h : List (Fin B)) (σ : Pous.Bits S),
       Pous.Sampled.seqState f step j h σ = PousThm1.seqState f step j h σ
   | _, [], _ => rfl
   | j, i :: is, σ => by
-      simp only [Pous.Sampled.seqState, PousThm1.seqState, seqState_eq_pinned f step (j + 1) is]
+      simp only [Pous.Sampled.seqState, PousThm1.seqState, seqState_eq_guarantee f step (j + 1) is]
 
 theorem SampledAuditSeq : Pous.Guarantees.SampledAuditSeq := by
   intro M sch S D Q t k p W A₁ A₂ h
-  exact PousAudit.sampled_audit_seq sch S D Q t k p W A₁ A₂ (by simpa only [seqState_eq_pinned] using h)
+  exact PousAudit.sampled_audit_seq sch S D Q t k p W A₁ A₂ (by simpa only [seqState_eq_guarantee] using h)
 
 theorem SampledAuditSim : Pous.Guarantees.SampledAuditSim := @PousAudit.sampled_audit_sim
 theorem StackedAuditSeq : Pous.Guarantees.StackedAuditSeq := @PousAudit.stacked_audit_seq

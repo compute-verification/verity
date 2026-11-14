@@ -18,6 +18,7 @@ configuration nobody committed gives a rehearsal with no bound."""
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -40,6 +41,7 @@ from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier.period import decided_by
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
 
@@ -97,6 +99,21 @@ def test_an_uncounted_egress_bounds_nothing() -> None:
         assert w.verdict == "accept" and w.answer["public"] == VACUOUS and w.answer["profile"]["gaps"] == gaps
         assert json.loads(bytes.fromhex(w.case["evidence"]))["egress_mib"] == egress
     assert W.egress_of(None) == sw.EGRESS_MAX_UNITS and W.egress_of(0) == 0
+
+
+def test_the_counted_check_rejects_a_session_with_no_end_message(monkeypatch) -> None:
+    """Where the signed session's end message can't be formed (a batch record past a field's width), `named` raises
+    and the counted check rejects, as the Lean's `checkCounted` does where its `named` refuses. `outcome` accepts no
+    such session, its signature being over that message, so here `outcome` is made to accept it."""
+    w = _run(egress_mib=2)
+    c, (b0, *rest) = w.signed.commitment, w.signed.batches
+    wide = dataclasses.replace(w.signed, batches=(dataclasses.replace(b0, b=2 ** 32), *rest))
+    with pytest.raises(OverflowError):
+        W.named(c, wide, 2)
+    monkeypatch.setattr(W, "outcome", lambda *a, **kw: ("accept", W.uncounted(c.params), W.profile(c.params, 2)))
+    verdict, reason = W.outcome_counted(c.server, c.session, [], c, wide, egress_mib=2)
+    assert verdict == "reject" and reason not in (W.NO_COUNT, W.NO_MARK), reason
+    assert W.outcome_counted(c.server, c.session, [], c, w.signed, egress_mib=2) == ("reject", W.NO_MARK)
 
 
 @pytest.mark.parametrize("egress", [0, sw.EGRESS_MAX_UNITS - 1])
@@ -208,7 +225,7 @@ def _split(params: sw.WipeParams, prover: WS.Prover, signer, stop_after: int | N
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=ts.session_log(),
+            got["c"] = WC.serve(f, WP.request_of("n0", params), signer=signer, log=ts.session_log(),
                                 clock=Clock(10 ** 9, 1))
 
     t = threading.Thread(target=side)
@@ -529,6 +546,26 @@ def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, mo
     with pytest.raises(ValueError, match="wipe.trusted_sha512 is unset with the memory challenger on auditor"):
         wipe_run.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"], side_of=side_of)
     assert not started and not (tmp_path / "out").exists()
+
+
+def test_run_itself_refuses_a_party_on_another_host_with_no_key_pinned(monkeypatch) -> None:
+    """`run`, whoever calls it: a party on another host than the node with `trusted_sha512` unset is refused before
+    its session starts, so no caller's session is ever judged under the key it came with. The same party under a pin,
+    and an unpinned one on the node itself, reach their sessions."""
+    started = []
+
+    def session(party, *args, **kw):
+        started.append(party.host)
+        raise ConnectionError("the session started")
+    monkeypatch.setattr(wipe_run, "session", session)
+    there, here = Side("auditor", ("true",)), Side("n0", ("true",))
+    with pytest.raises(ValueError, match=r"no key is pinned \(trusted_sha512\) with the memory challenger on auditor"):
+        wipe_run.run("n0", SMALL, party=there)
+    assert not started
+    for party, pin in ((there, "ab" * 64), (here, None)):
+        with pytest.raises(ConnectionError, match="the session started"):
+            wipe_run.run("n0", SMALL, party=party, trusted_sha512=pin)
+    assert started == ["auditor", "n0"]
 
 
 def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path, monkeypatch) -> None:

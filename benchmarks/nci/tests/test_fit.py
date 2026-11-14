@@ -28,7 +28,7 @@ def test_n_star_depends_on_the_target_not_on_the_loss_floor():
 
 
 def test_reach_at_sequence_threads_kimi_k2():
-    """The falsification test of the conjectures `Nci.Assumptions.Reach` and `ReachSlots` over all recipes: one sequence
+    """The falsification test of the conjectures `InferenceOnly.Assumptions.Reach` and `ReachSlots` over all recipes: one sequence
     of Kimi K2's pretraining, at its shortest length, uses at least N* weights in its counted multiplications (87.6B,
     the Besiroglu refit at a 405B-class target) when its tokens' routed slots spread over the experts as kappa.py routes
     them, 8 of 384 a token, load-balanced; one token uses fewer, so Reach is false at token threads, the threading the
@@ -49,7 +49,7 @@ def test_reach_at_sequence_threads_kimi_k2():
     assert (S, fewest) == (4096, 30) and fewest <= reached
     entry = json.loads((ROOT / "security" / "lean-audit.json").read_text())["shape"]["conjectures"]
     test = f"benchmarks/nci/tests/{Path(__file__).name}::test_reach_at_sequence_threads_kimi_k2"
-    for name in ("Nci.Assumptions.Reach", "Nci.Assumptions.ReachSlots"):
+    for name in ("InferenceOnly.Assumptions.Reach", "InferenceOnly.Assumptions.ReachSlots"):
         assert entry[name] | {"why": ""} == {"status": "open", "test": test, "why": ""}
 
 
@@ -105,8 +105,8 @@ def test_the_fit_bound_charges_each_servers_first_window():
     row = F.row(6.0, N, L)
     first = p["mfu"] * periods * p["wipe_s"] / (p["years"] * T.YEAR)
     assert periods == 4 and row["mu_fit"] == pytest.approx(F.share(p, rate) + first) == F.fit_mu(p, R, N, w)
-    assert F.dampener(p, F.share(p, rate), T.evaluate(p, T.TIERS["T4"])["declared"]) == pytest.approx(217.6, abs=0.5)
-    assert row["D_fit"] == pytest.approx(198, abs=0.5)
+    assert F.slowdown(p, F.share(p, rate), T.evaluate(p, T.TIERS["T4"])["declared"]) == pytest.approx(217.6, abs=0.5)
+    assert row["slowdown_fit"] == pytest.approx(198, abs=0.5)
     assert F.left_out(F.params(6.0, years=2.0), periods) == pytest.approx(first / 2)
 
 
@@ -116,8 +116,8 @@ def test_the_fit_bound_is_void_once_a_window_holds_n_star_weights():
     assert F.fit_rate(p, R, 1e10, F.BOUNDARY["central"]) == (math.inf, 0)
     assert F.fit_rate(p, 0.99 * R, 1e10, F.BOUNDARY["central"])[0] < math.inf
     assert F.window_mults(1e10 * p["b_w"], 1e10, F.BOUNDARY["central"], p["b_w"]) == math.inf
-    q = F.params(6.0, residual=0.1)
-    assert 1 < F.dampener(q, math.inf, 0.0) == pytest.approx(1 / F.residual_with_lag(q))
+    q = F.params(6.0, free=0.1)
+    assert 1 < F.slowdown(q, math.inf, 0.0) == pytest.approx(1 / F.free_with_lag(q))
 
 
 def test_the_table_against_the_red_teams_closed_form():
@@ -126,9 +126,9 @@ def test_the_table_against_the_red_teams_closed_form():
     memory rungs have it; at central boundary bits the fit
     bound is stronger there, and void from 50 GB, where a server holds N* weights at b_w."""
     rows = {r["wipe_gb"]: r for r in F.summary()["rows"]}
-    assert T.audited_residual(F.params(1.0)) == pytest.approx(0.323, abs=5e-4)
-    assert rows[1.0]["D_closed"] == rows[6.0]["D_closed"] == rows[13.0]["D_closed"] == pytest.approx(3.022, abs=1e-3)
-    assert rows[6.0]["D_fit"] > rows[6.0]["D_closed"] and rows[13.0]["D_fit"] > rows[13.0]["D_closed"]
+    assert T.audited_free(F.params(1.0)) == pytest.approx(0.323, abs=5e-4)
+    assert rows[1.0]["slowdown_closed"] == rows[6.0]["slowdown_closed"] == rows[13.0]["slowdown_closed"] == pytest.approx(3.022, abs=1e-3)
+    assert rows[6.0]["slowdown_fit"] > rows[6.0]["slowdown_closed"] and rows[13.0]["slowdown_fit"] > rows[13.0]["slowdown_closed"]
     assert rows[50.0]["periods"] == 0 and rows[166.0]["periods"] == 0
     assert rows[50.0]["visits"] < 1 and rows[50.0]["visits_train"] > 1
 

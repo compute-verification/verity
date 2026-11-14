@@ -212,8 +212,8 @@ for step in $STEPS; do
     session)
       # The verifier's Lean, built on the cores before the card is taken.
       LEAN=verity/protocols/accounting/poub/verifier/lean
-      if (cd "$LEAN" && lake build remote-audit-verifier) > "$O/lean-build.log" 2>&1; then
-        export LEAN_EXE=$TREE/$LEAN/.lake/build/bin/remote-audit-verifier
+      if (cd "$LEAN" && lake build poub-verifier) > "$O/lean-build.log" 2>&1; then
+        export LEAN_EXE=$TREE/$LEAN/.lake/build/bin/poub-verifier
         leased session bash "$TREE/$RS/rows.sh" session
       else
         say "session: not started, the Lean verifier did not build (out/lean-build.log)"; false

@@ -23,7 +23,7 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.program import Program
 from verity.circuits.types import Array
-from verity_vllm.definitions import boolean as SW
+from verity.circuits.ops.boolean import versions as SW
 from verity_vllm.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.definitions.registry import boolean_marlin_moe as BM
 from verity_vllm.definitions.registry import marlin_moe as MM

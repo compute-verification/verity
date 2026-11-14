@@ -104,31 +104,30 @@ to = "workers"
 messages = ["H1Coins"]
 
 [[channel]]
-from = "prover"
-to = "memory-challenger"
-messages = ["Setup", "Response", "FillAck", "Answer"]
-
-[[channel]]
 from = "memory-challenger"
 to = "prover"
-messages = ["Challenge", "Fill", "FillDone", "Read", "End"]
+messages = ["Warmup", "Index", "End", "Fill", "FillDone", "Read"]
+
+[[channel]]
+from = "prover"
+to = "memory-challenger"
+messages = ["Block", "FillAck", "Answer"]
 
 [[channel]]
 from = "memory-challenger"
 to = "verifier"
 messages = ["SignedRun", "WipeReport"]
-after = ["Response", "End"]
-
-[[channel]]
-from = "prover"
-to = "bandwidth-verifier"
-messages = ["Register", "Root", "Openings"]
+after = ["End"]
 
 [[channel]]
 from = "bandwidth-verifier"
 to = "prover"
-messages = ["Hold", "Run", "Open", "End"]
-after = ["Register"]
+messages = ["Hold", "Run", "Open", "End", "Case", "Answer"]
+
+[[channel]]
+from = "prover"
+to = "bandwidth-verifier"
+messages = ["Request", "Root", "Openings", "Malformed"]
 
 [[channel]]
 from = "bandwidth-verifier"
@@ -139,9 +138,9 @@ after = ["Openings"]
 [[channel]]
 from = "network-certifier"
 to = "workers"
-messages = ["out-opening"]
+messages = ["out-opening", "records", "cells-salts"]
 
 [[channel]]
 from = "network-certifier"
 to = "verifier"
-messages = ["out-record"]
+messages = ["out-record", "certificate", "registration", "load", "deployment", "groups"]

@@ -32,6 +32,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
+from fractions import Fraction
 from types import MappingProxyType
 
 from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile
@@ -191,7 +192,7 @@ class Node:
         return cls(**{**j, "tiers": {name: Tier(**t) for name, t in tiers.items()}})
 
 
-def sketch(record: audit.Record) -> float:
+def sketch(record: audit.Record) -> Fraction:
     """`SketchBound`'s δ for a sketch-sha512 record (`Accounting.Guarantees.Remote.SketchBoundDeployed` at 64 rows,
     `SketchBoundRun` at r = 12 at 16), every compression of the prover's budget a guess or a key:
     Q = 2^`audit.QUERIES_LOG2` (`timing.sketch_failure`, at the record's rows); 0 for another receipt kind. It is the δs
@@ -199,8 +200,8 @@ def sketch(record: audit.Record) -> float:
     line's trace read on the sketch outcomes, and `Accounting.Guarantees.Remote.SketchBoundLine` carries it to the
     line's coins."""
     if record.receipt != receipts.SKETCH_SHA512:
-        return 0.0
-    return float(timing.sketch_failure(record.passes, record.rows, blocks=record.blocks))
+        return Fraction(0)
+    return timing.sketch_failure(record.passes, record.rows, blocks=record.blocks)
 
 
 OPENING_HASHES = 64 + 5
@@ -209,7 +210,7 @@ path's nodes, at most 64 since a rank is a u64, the frame leaf, the hm96 leaf, i
 row digest."""
 
 
-def rejection(record: audit.Record) -> float:
+def rejection(record: audit.Record) -> Fraction:
     """The sample's rejection, `PooledSample`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt sample t
     requested, k_t the record's `samples` in every sample (the k at which `DrawsOfRecord` holds), one sample a window, or
     ⌈W/g⌉ samples at `groups_per_coin` g.  Not the receipts sampled (`profile.drawn`, min(k_t, U_t), short of k_t in a sample
@@ -218,10 +219,11 @@ def rejection(record: audit.Record) -> float:
     if record.samples is None:
         raise ValueError("the record states no samples, the receipts every draw requested, at which the memory line's "
                          "δ charges the draw's rejection (Σ_t k_t/2^64): give the record its session's Params.samples")
-    return coins.openings_coins(len(record.windows), record.groups_per_coin) * record.samples * 2.0 ** -REJECTION_LOG2
+    return Fraction(coins.openings_coins(len(record.windows), record.groups_per_coin) * record.samples,
+                    2 ** REJECTION_LOG2)
 
 
-def hiding(record: audit.Record) -> float:
+def hiding(record: audit.Record) -> Fraction:
     """The coin commitment's hiding terms over the record's n windows, `LineHeld`'s Σ_t hide_t (`Committed.hide`):
     window t's two distances between coin t's hm96 leaf and a leaf committing zeros, each within 2^-192 under the
     pinned key, n·2^-191 in all (claims `statistical-hiding`, `common-reference-string`, `hash-derived-key`).  The
@@ -230,9 +232,12 @@ def hiding(record: audit.Record) -> float:
     return hiding_over(len(record.windows))
 
 
-def hiding_over(windows: int) -> float:
-    """`hiding` over a session of `windows` windows."""
-    return 2 * 2.0 ** receipts.HM96.statistical_distance_log2(windows, key_failure_log2=64)
+def hiding_over(windows: int) -> Fraction:
+    """`hiding` over a session of `windows` windows, exactly: two of hm96's distances a window at its pinned key."""
+    leaf = receipts.HM96.statistical_distance_log2(1, key_failure_log2=64)
+    if not leaf.is_integer():
+        raise ValueError(f"hm96's distance a leaf is 2^{leaf}, which no exact power of two states")
+    return 2 * windows * Fraction(2) ** int(leaf)
 
 
 def window_receipts(pace: audit.Pace | None, blocks: int, append_coins: int, max_blocks: int) -> int:
@@ -245,15 +250,23 @@ def window_receipts(pace: audit.Pace | None, blocks: int, append_coins: int, max
     return passes * (blocks if append_coins == 0 else max_blocks)
 
 
-def binding_over(draws: int, receipts: int, samples: int, queries: int) -> float:
+BINDING_ROOT_BITS = 64
+"""The bits below the point at which `binding_over` rounds its square root up."""
+
+
+def binding_over(draws: int, receipts: int, samples: int, queries: int) -> Fraction:
     """`binding` over a session of `draws` samples, at most `receipts` receipts a sample (`window_receipts` times the
     windows a sample covers) and a sample cap of `samples`, its prover making at most `queries` SHA-512 compressions over
-    the session."""
+    the session: samples·√(receipts·s)·q/2^256.5, its √(receipts·s/2) rounded up at 2^-`BINDING_ROOT_BITS`, so the exact
+    value is at least the term."""
     s = min(samples, receipts)
-    return draws * math.sqrt(receipts * s) * (2 * queries + 2 * s * OPENING_HASHES) / 2 ** 256.5
+    m = receipts * s << (2 * BINDING_ROOT_BITS - 1)
+    root = math.isqrt(m)
+    root += root * root < m
+    return Fraction(draws * root * (2 * queries + 2 * s * OPENING_HASHES), 2 ** (256 + BINDING_ROOT_BITS))
 
 
-def binding(record: audit.Record) -> float:
+def binding(record: audit.Record) -> Fraction:
     """The receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`): the probability that some opened
     receipt was presented with an accepted row other than the one its root holds (`Receipts.held`, the plurality of
     the rows it shows over its window's continuations from the cut before its coin).  Window t's fork finder runs the
@@ -299,7 +312,7 @@ class SamplingTerms:
 
 def draw(record: audit.Record) -> SamplingTerms:
     """The record's sampling terms."""
-    return SamplingTerms(rejection(record), binding(record))
+    return SamplingTerms(float(rejection(record)), float(binding(record)))
 
 
 def windows(record: audit.Record) -> list[tuple[int, int]]:
@@ -398,21 +411,21 @@ def gamma(record: audit.Record, node: Node, capacity_bytes_per_s: float, *,
     lg = audit.ledger(record, capacity_bytes_per_s=capacity_bytes_per_s, chip_bytes=node.chip_bytes,
                       rebuild=node.rebuild(record.codec), wrong=wrong)
     ws = lg.windows if record.pace is None else _fixed(record, lg, node.chip_bytes, capacity_bytes_per_s)
-    return Gamma(capacity_bytes_per_s, lg, ws, sketch(record), draw(record))
+    return Gamma(capacity_bytes_per_s, lg, ws, float(sketch(record)), draw(record))
 
 
 @dataclass(frozen=True, slots=True)
 class Line:
     """One form of the memory line: the registered bytes the session shows held in node memory are at least
-    `held_bytes` = (1 − ε)·N·b, except with probability `delta` + Σ_t adv_t (`DELTA_FORM`: `delta` is the number, and
-    `to_json` names the term it leaves out beside it).  `lost_blocks` is the blocks of N it charges, on average over
+    `held_bytes` = (1 − ε)·N·b, except with probability `delta` + Σ_t adv_t (`DELTA_FORM`: `delta` is the number, exact,
+    which `to_json` writes as ratio text, and names the term it leaves out beside it).  `lost_blocks` is the blocks of N it charges, on average over
     the passes (snapshot) or over the credited span (the paced forms), and ε their share of N; or `refused`, why the
     session has no line of this form."""
 
     form: str
     blocks: int
     block_bytes: int
-    delta: float
+    delta: Fraction
     lost_blocks: float | None = None
     refused: str | None = None
 
@@ -427,7 +440,7 @@ class Line:
     def to_json(self) -> dict:
         if self.refused is not None:
             return {"form": self.form, "refused": self.refused}
-        return {"delta": self.delta, "epsilon": self.epsilon, "form": self.form, "held_bytes": self.held_bytes,
+        return {"delta": line.text(self.delta), "epsilon": self.epsilon, "form": self.form, "held_bytes": self.held_bytes,
                 "lost_blocks": self.lost_blocks, "named": NAMED_TERMS}
 
 
@@ -463,29 +476,28 @@ def _paced(record: audit.Record) -> str | None:
     return None
 
 
-def delta_parts(record: audit.Record) -> dict[str, float]:
+def delta_parts(record: audit.Record) -> dict[str, Fraction]:
     """The memory line's δ (`memory`'s `Line.delta`, its parts added in `DELTA_PARTS`' order) in its six parts: the
     windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, the coin commitment's hiding terms
     (`hiding`), the receipts' binding term at the session's bounds (`binding`), SketchBound's δs (`sketch`) and the
-    sample's rejection (`rejection`).  The windows' PRF advantages are no part of it (`DELTA_FORM`)."""
-    return {"profile": record.windows[0].profile.delta, "slack": record.passes * 2.0 ** -audit.SLACK_LOG2,
+    sample's rejection (`rejection`), each exact, the binding term rounded up (`binding_over`).  The windows' PRF
+    advantages are no part of it (`DELTA_FORM`)."""
+    return {"profile": Fraction(record.windows[0].profile.delta), "slack": Fraction(record.passes, 2 ** audit.SLACK_LOG2),
             "hiding": hiding(record), "binding": binding(record), "sketch": sketch(record),
             "rejection": rejection(record)}
 
 
 def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
     """The memory line's three forms (`FORMS`): each form's charge `line.charges_of`'s and the paced forms
-    `line.session_lost`'s, in floats."""
+    `line.session_lost`'s, in floats, and their δ the sum of `delta_parts`, exact."""
     N, b, P = record.blocks, record.block_bytes, record.passes
     W = audit.pooled(record)[0]
-    delta = (record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + hiding(record) + binding(record)
-             + sketch(record))
+    delta = sum(delta_parts(record).values(), Fraction(0))
     S = -(-node.chip_bytes // b)
     c = line.charges_of(node.rebuild(record.codec).squarings_per_s / record.codec.encode_squarings,
                         node.disk_bytes_per_s, node.link_bytes_per_s, node.rebuild_burst_bytes, node.disk_burst_bytes,
                         node.link_burst_bytes, b)
     planned = sum(sum(w.credited(False)) for w in record.windows)
-    delta += rejection(record)
     X, B = c[TIME_HELD].rate, c[TIME_HELD].burst
     snapshot = Line(SNAPSHOT, N, b, delta, N - (planned - W - (X * record.span_ns + B) - P * S) / P)
     if (why := _paced(record)) is not None:
@@ -523,5 +535,6 @@ def declared(record: audit.Record, node: Node, *,
                     gamma(record, node, node.read_bytes_per_s, wrong=once), memory(record, node))
 
 
-__all__ = ["DELTA_FORM", "DELTA_PARTS", "FORMS", "NAMED_TERMS", "Node", "PRF_CLAIM", "REJECTION_LOG2", "SNAPSHOT",
-           "TIER_KEYS", "TIME_HELD", "Tier", "binding_over", "hiding_over", "window_receipts"]
+__all__ = ["BINDING_ROOT_BITS", "DELTA_FORM", "DELTA_PARTS", "FORMS", "NAMED_TERMS", "Node", "PRF_CLAIM",
+           "REJECTION_LOG2", "SNAPSHOT", "TIER_KEYS", "TIME_HELD", "Tier", "binding_over", "hiding_over",
+           "window_receipts"]

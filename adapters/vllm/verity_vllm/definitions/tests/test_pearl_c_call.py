@@ -1,4 +1,4 @@
-"""A -h3 call's rows and cells as registered Definitions (`verity_vllm.definitions.registry.pearl_c_call`), against PoUW's
+"""A -h3 call's rows and cells as registered Definitions (`verity.protocols.accounting.pouw.prover.circuit.pearl_c_call`), against PoUW's
 scheme (`schemes.pearl_c`: `PearlC.encode`, a tile's formed operands and peel factors, and `PearlC.checked`, its C̃ and U)
 with every noise input the Definitions' own derivation from the salt and the fixed operand's root, and their layout in
 units.
@@ -22,10 +22,10 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import compile as compile_bits
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
-from verity_vllm.definitions.boolean import boolean_version
-from verity_vllm.definitions.registry import pearl_c_call as K
-from verity_vllm.definitions.registry import pearl_c_forming as F
-from verity_vllm.definitions.registry import pearl_c_noise as N
+from verity.circuits.ops.boolean.versions import boolean_version
+from verity.protocols.accounting.pouw.prover.circuit import pearl_c_call as K
+from verity.protocols.accounting.pouw.prover.circuit import pearl_c_forming as F
+from verity.protocols.accounting.pouw.prover.circuit import pearl_c_noise as N
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
@@ -33,7 +33,7 @@ from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVIC
 #: each device record's atom and promotion period as the Definitions' statics
 ATOMS = {"h100": (HopperE4m3QgmmaDot32, 4), "sm120": (BlackwellE4m3QmmaDot32, 4)}
 SALT, ROOT_A, ROOT_B, UNIT = bytes(range(32)), bytes(range(100, 164)), bytes((7 * i + 3) % 256 for i in range(64)), 3
-REGISTRY_DIR = Path(K.__file__).parent
+REGISTRY_DIR = (Path(K.__file__).parent.parent.parent.parent.parent.parent.parent / "adapters" / "vllm" / "verity_vllm" / "definitions" / "registry")
 #: the Definitions a row is laid out in, by name: -h3's hashes and a line's codes, the forming's codes, the atom, and the
 #: FP32 steps of the statistics, the promotions and the peel factors
 UNITS_A = {"PearlCRowBlock", "PearlCShaBlock", "PearlCRowSeedHead", "PearlCRowSeedTail", "PearlCLineKey", "PearlCLineRaw",

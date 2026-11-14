@@ -35,7 +35,7 @@ default (`ROLE=both` runs the two on one machine, a test of the scripts that aud
   live_verifier's host run:
   `verity/protocols/accounting/poub/verifier/session/verifier.py`'s `main`, handed what a verifier imports none of, the LMS
   verify a served or gate session's signatures are checked with and the live challenger's `serve.py`. That verifier
-  runs the Lean verifier, `remote-audit-verifier` (`lean_verifier.py` beside it), beside `audit.AuditRun`, and refuses
+  runs the Lean verifier, `poub-verifier` (`lean_verifier.py` beside it), beside `audit.AuditRun`, and refuses
   a run where the two differ; `wire.py` beside it frames the messages between the two processes.
 - `verity/protocols/accounting/poub/prover/remote_session/prover.py`: the prover's process, PoUB's prover's, which these scripts
   run; its GPU backend is `device.py` with `session.cu` beside it (which includes `../codec_tensor/reader.cu`), and
@@ -45,7 +45,9 @@ default (`ROLE=both` runs the two on one machine, a test of the scripts that aud
 **Reads and writes:** a store (synthetic, or a pinned checkpoint `store_layout.py` writes) and the prover's plan (`PLAN`:
 `honest`, or `skip:F`, a fraction F of the chunks dropped); it writes `verifier.json`, `prover.json` and their logs, which
 `summary.py`, `sampling_inputs.py` and `gate_whatif.py` read. **Backs:** its line reads the conclusions of
-`Accounting.Guarantees.Remote.HeldOverTime` and `HeldOverTimeLinks`, and `Properties.RemoteAudit.Line`'s `LineHeld` and
+`Accounting.Guarantees.Remote.HeldOverTime` and `HeldOverTimeLinks`, and `Properties.Poub.Line`'s `LineHeld` and
 `LineHeldIdentity` state that line holds, with the named assumption `NoOutsideCompute` among their premises. The
 line's error reads δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed): the table prints it in those words
 (`ledger.DELTA_FORM`) with δ's number after them, and every error of the document names the term (`NAMED_TERMS`).
+A line's δ is its credited sessions' summed; where that is 1 or more the line holds no share and says "no bound at
+this period" with the sum (`verity/protocol.py`'s rule for every row's error).

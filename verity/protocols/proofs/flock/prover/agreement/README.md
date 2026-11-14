@@ -73,7 +73,7 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 - The guarantee statements: `security/Definitions/Flock/Guarantees/` (`ClaimsStated`, `SamplingClaimsStated`,
   `RecursionClaimsStated`, and the record sizing in `Audit.lean`); the proved ones are the `Flock.SecurityProofs.*`
   entries of `security/lean-audit.json`, among them `EndToEnd`, `EndToEndHidden`, `ZeroKnowledgeHidden`, `MaskedZK`,
-  `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityHorizon`, each stated in a `Statement.lean` (or
+  `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityPooled`, each stated in a `Statement.lean` (or
   `KSStatement.lean`, `PublicAudit.lean`) of its area under `security/Proofs/Flock/`.
 - The named assumptions, the lock's `assumptions`: `security/Definitions/Assumptions/Flock.lean` (`SHA512CRStrict`,
   `SHA512CRExpected`, `UniformRandomBytes`, `UniformRandomBytesTest`). The other assumptions, the lock's `open` and
@@ -268,7 +268,7 @@ sampling design or missing sample alone as accepted, and every set so compares a
 | D19 | a V* cap session that doesn't read its level's tops at the verifier's shared rows |
 | D20 | a record not in its canonical text |
 | D21 | a nonzero proof-of-work nonce |
-| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `NciCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on `NciCheck`'s mistyped descriptors |
+| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `InferenceOnlyCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on `InferenceOnlyCheck`'s mistyped descriptors |
 
 Where the paper is silent, the verifier follows upstream:
 

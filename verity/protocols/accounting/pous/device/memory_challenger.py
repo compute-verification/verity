@@ -537,7 +537,8 @@ class SessionLog:
     One session an id rests on the host keeping this file as written: it is never restored from a snapshot, a backup or
     another older copy, and the memory challenger is never restarted onto host-held state older than the sessions it
     has run.  A file can see neither.  The claim that the host does neither is `trusted-device`
-    (`verity.claims`): its host never restores an earlier copy of the state the device keeps there."""
+    (Lean's `Verity.Assumptions.TrustedDevice` states its part about one run): its host never restores an earlier copy
+    of the state the device keeps there."""
 
     def __init__(self, path: str | os.PathLike) -> None:
         self.path = Path(path)
@@ -777,7 +778,7 @@ class MemoryChallenger:
 @contextmanager
 def collector_paused() -> Iterator[None]:
     """Python's cyclic garbage collector off inside, and as it was after. A timed round can't absorb a collection: the
-    first full one after `period.challenger` loads the deployed key, whose tree is 2^21 objects, stalls the process
+    first full one after `onsite.device_key` loads the deployed key, whose tree is 2^21 objects, stalls the process
     for about 35 ms, 40 times Δ + RTT at the certified point, and where it falls is set by the allocation count."""
     was = gc.isenabled()
     gc.disable()

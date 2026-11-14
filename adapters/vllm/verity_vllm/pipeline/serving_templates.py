@@ -241,7 +241,8 @@ def template(t: str) -> Template:
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import CompositeDefinition, bind
-    from verity_vllm.definitions import boolean as BB
+    from verity.circuits.ops.boolean import versions as BB
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     from verity.circuits.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -515,7 +516,8 @@ def fused_block(spec: str, n: int) -> Any:
     from verity.circuits.codec import lookup_primitive
     from verity.circuits.defs import REGISTRY
     from verity.commitments.gates.embedding import read
-    from verity_vllm.definitions import boolean as BB
+    from verity.circuits.ops.boolean import versions as BB
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     S = spec_statics(spec)

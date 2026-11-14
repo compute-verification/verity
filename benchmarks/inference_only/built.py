@@ -35,6 +35,7 @@ from typing import Any
 import numpy as np
 from verity.device import load_card
 
+import adapter as A
 import policy as P
 
 # a served step's pricing, `block_work`'s
@@ -47,7 +48,7 @@ H200 = {"compute_capability": (9, 0), "num_sms": load_card("h200-sxm-141gb")["sm
         "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
 #: the inference-only policy's check, a Lake package
-PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
+PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/lean"
 
 
 def _declared() -> tuple[tuple[str, ...], str]:
@@ -115,10 +116,8 @@ def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     gate table and each template's gates a unit."""
     from verity_vllm.program.predict import block_counts as BC
 
-    from verity_vllm.definitions.boolean import gate_table
-
     fn, m, steps = BC.session(doc)
-    table, unpriced = gate_table([fn])
+    table, unpriced = A.gate_table([fn])
     memo: dict = {}
     c, missing = BC.gates(fn, table, memo)
     if unpriced or missing:

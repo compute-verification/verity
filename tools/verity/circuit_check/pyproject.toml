@@ -78,8 +78,8 @@ workers = 14
 # spot/service.py, which the records digest as such an import site too and which a whole build never imports, with
 # spot/second_stage.py, which service.py imports, and spot/schedule.py, which second_stage.py imports.
 # pouw/weights.py and spot/__init__.py: h1zy reads an
-# H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. spot/challenger.py and
-# claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
+# H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. spot/challenger.py:
+# pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
 # verity_config: conftest.py reads the session's variables through the suite's registry (settings.py), built on its registry.
 inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
@@ -95,7 +95,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           # core_check.py imports it for the salt check's verdict of record
           "verity/protocols/accounting/pouw/verifier/verifier.py",
           "verity/protocols/accounting/pouw/verifier/serving.py", "verity/protocols/accounting/pouw/verifier/registration.py", "verity/protocols/accounting/pouw/verifier/coins.py",
-          "verity/protocols/proofs/spot/device/challenger.py", "verity/claims/__init__.py",
+          "verity/protocols/proofs/spot/device/challenger.py",
           "verity/protocols/accounting/pouw/verifier/grind.py", "verity/protocols/accounting/pouw/prover/circuit", "verity/protocols/accounting/pouw/prover/schemes",
           "verity/protocols/experimental/dither/prover", "verity/protocols/experimental/__init__.py",
           "verity/protocols/experimental/dither/__init__.py",
@@ -131,6 +131,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/certifier/verifier/io_request.circuit-check.json",
           "verity/protocols/accounting/certifier/verifier/warden.py", "verity/protocols/accounting/certifier/verifier/pacer.py",
           "verity/protocols/accounting/certifier/verifier/release.py",
+          "verity/protocols/accounting/certifier/verifier/link_frame.py", "verity/protocols/accounting/certifier/verifier/id_form.py", "verity/protocols/accounting/certifier/verifier/run_clock.py",
           "verity/protocols/accounting/certifier/prover/io_ids.py", "verity/protocols/accounting/certifier/prover/io_ids.circuit-check.py",
           "verity/protocols/accounting/certifier/prover/io_ids.circuit-check.json",
           "verity/protocols/accounting/certifier/prover/ingress_scan.py", "verity/protocols/accounting/certifier/prover/ingress_scan.circuit-check.py",
@@ -162,7 +163,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/proofs/spot/verifier/window_place.py",
           "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/weights.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py", "adapters/vllm/verity_vllm/program",
-          "adapters/vllm/verity_vllm/__init__.circuit-check.py",
+          "adapters/vllm/verity_vllm/__init__.circuit-check.py", "adapters/torch/verity_torch",
           "adapters/vllm/verity_vllm/check", "adapters/vllm/verity_vllm/commit", "adapters/vllm/verity_vllm/correspondence",
           "adapters/vllm/verity_vllm/observe", "adapters/vllm/verity_vllm/query", "adapters/vllm/verity_vllm/records",
           "adapters/vllm/verity_vllm/engine/hooks.py", "adapters/vllm/verity_vllm/engine/spec.py",
@@ -213,7 +214,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/certifier/verifier/connection_rows.py", "verity/protocols/accounting/certifier/verifier/warden_rows.py",
           "verity/protocols/accounting/certifier/verifier/served_rows.py", "verity/protocols/accounting/certifier/verifier/warden.py",
           "verity/protocols/accounting/certifier/verifier/release.py",
-          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/certifier/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/certifier/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py",
           "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments",
           "adapters/vllm/tests/__init__.py", "verity/protocols/accounting/pous/__init__.py", "adapters/vllm/tests/check/__init__.py",
           # test_superseded_versions.py: the list it holds the superseded versions to

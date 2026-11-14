@@ -38,7 +38,7 @@ variable {Q R S : Type}
 open Classical in
 theorem rev1_tile_cap_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (hadd : 0 ≤ d.prices.add)
     (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ < 1) (U : Workload) (hD : pearlCDomainDev d U.layout)
-    (H : Q → R) (s : S) (τ : Transcript) :
+    (H : Q → R) (s : S) (τ : Trace) :
     ∑ g ∈ goodTiles (pearlCProtocolDevRev1 d sem ρ') (pearlCTilesDevRev1 d sem ρ') U H s τ,
         (pearlCTilesDevRev1 d sem ρ').credit H s U g
           (actOf τ (((pearlCTilesDevRev1 d sem ρ').tiling U.layout).unit g)) ≤
@@ -115,7 +115,7 @@ theorem ttOutTilePearlCDevRev1_cap_transfer [Fintype Q] [DecidableEq Q] [Fintype
     rw [← Rat.cast_mul, show (1 - ρ') / (1 - ρ) * ((1 - ρ) / (1 - ρ')) = 1 by field_simp, Rat.cast_one]
   refine ⟨h.1, fun U hU T hT q hq A hA => le_trans (Pouw.pr_mono ?_) (h.2 U hU T hT q hq A hA)⟩
   intro x hx
-  have hsum := rev1_tile_cap_credit_sum_le d sem ρ ρ' hadd hbf hle hρ1 U hU.2 x.1 x.2 (A.transcript U x.1 x.2)
+  have hsum := rev1_tile_cap_credit_sum_le d sem ρ ρ' hadd hbf hle hρ1 U hU.2 x.1 x.2 (A.trace U x.1 x.2)
   rw [show 1 - (1 - (1 - g₀) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ)) = (1 - g₀) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ) by ring,
     div_mul_eq_div_div] at hx
   have h2 := lt_of_lt_of_le hx hsum

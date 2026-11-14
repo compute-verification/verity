@@ -128,10 +128,10 @@ def blockStrings (pk : ByteArray) (dev : Challengers) (C : Array (Array ByteArra
 /-- The run's own data holds a break: two distinct strings it hashes with one SHA-512 digest (`cr/sha-512`), or a
 signature verifying under a trusted key over a session message the device never signed (`euf-cma/lms-sha512-n64`,
 under the one-role reading of `MemoryChallenger.Properties`). Every witness is bounded by the run. -/
-def RunBreak (trusted : List ByteArray) (s : SignedSession) (dev : Challengers) (C : Array (Array ByteArray)) : Prop :=
+def RunBreak (trusted : List ByteArray) (s : SignedChallengePhase) (dev : Challengers) (C : Array (Array ByteArray)) : Prop :=
   (let xs := runStrings s dev ++ blockStrings s.publicKey dev C
    ∃ x ∈ xs, ∃ y ∈ xs, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) ∨
-    ∃ p m, SCHEMES.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧ sessionMessage s = some m ∧
+    ∃ p m, SCHEMES.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧ challengePhaseMessage s = some m ∧
       LmsVerifies p s.publicKey m s.signature ∧ ¬ Signed dev s.publicKey m
 
 /-- `C*` decodes to a payload other than `W` whose commitment is `W`'s: two distinct strings `Commit.commit` hashes,
@@ -147,7 +147,7 @@ def CommitBreak (W : ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array
 /-- The session audits the setup `pub` at the deployed point: the setup published `2^19` blocks under a 24-byte salt,
 and the session audits every one of them in `k = 105` rounds, within `Δ + RTT`, with answers of the point's 2,056
 bytes, bound to the published root. -/
-def AuditsSetup (pub : SetupProtocol.Public) (sc : SessionCommitment) : Prop :=
+def AuditsSetup (pub : SetupProtocol.Public) (sc : ChallengePhaseCommitment) : Prop :=
   pub.blocks = q.blocks ∧ pub.salt.size = Run.SALT ∧ sc.blocks = q.blocks ∧ sc.k = K ∧ sc.limitNs ≤ LIMIT_NS ∧
     sc.blockBytes = q.blockBytes ∧ sc.binding = pub.root
 

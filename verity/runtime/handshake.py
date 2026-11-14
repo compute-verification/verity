@@ -12,17 +12,19 @@ protocol or protocol version (`handshake-protocol`), another configuration hash 
 than the one the configuration gives the peer (`handshake-key`), its own nonce sent back (`handshake-nonce`), and a
 signature that doesn't verify (`handshake-signature`). Each side's signature covers both nonces and its own name, so
 neither a recorded exchange nor the other side's signature passes for it. Signing and verifying are the caller's (a party
-key, LMS in deployment, `Key`, `Verify`): this unit imports none. Soundness doesn't rest on the handshake; it binds a
-channel to the configuration and to the parties' keys, as hygiene.
+key, LMS in deployment, `verity.party.Key`, `Verify`): this unit imports none. Soundness doesn't rest on the handshake; it
+binds a channel to the configuration and to the parties' keys, as hygiene.
 """
 
 from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import Any
 
-from verity.channel import NAME, WIRE_VERSION, Body, Hex, Int, Message, MessageTypes, Phase, Refused, Schema, Str
+from verity.channel import NAME, Body, Hex, Int, Message, MessageTypes, Phase, Refused, Schema, Str
+from verity.party import Key
+from verity.runtime.framing import WIRE_VERSION, decode, encode
 
 HELLO = Schema("Hello", 1, "structure", {"wire": Int(1, (1 << 16) - 1), "party": Str(64, NAME.pattern),
                                          "peer": Str(64, NAME.pattern), "protocol": Str(128),
@@ -34,14 +36,6 @@ TAG = b"verity/wire/handshake/v1\0"
 NONCE_BYTES = 32
 REFUSALS = ("handshake-version", "handshake-party", "handshake-protocol", "handshake-configuration", "handshake-key",
             "handshake-nonce", "handshake-signature")
-
-
-class Key(Protocol):
-    """A party's key: its public half, and `sign(message)`, which a stateful hash-based scheme refuses past its last leaf."""
-
-    public_key: bytes
-
-    def sign(self, message: bytes) -> bytes: ...
 
 
 type Verify = Callable[[bytes, bytes, bytes], bool]
@@ -81,7 +75,7 @@ class Handshake:
     def start(self) -> list[bytes]:
         if self.frames:
             raise RuntimeError("a handshake starts once")
-        out = REGISTRY.encode(self.hello)
+        out = encode(REGISTRY, self.hello)
         self.frames.append(out)
         self.phase.expect("Hello")
         return [out]
@@ -93,12 +87,12 @@ class Handshake:
     def on(self, data: bytes) -> list[bytes]:
         if self.done or not self.frames:
             raise Refused("out-of-phase", "a frame outside the handshake's exchange")
-        msg = self.phase.check(REGISTRY.decode(data))
+        msg = self.phase.check(decode(REGISTRY, data))
         if msg.type == "Hello":
             self._check(msg.fields)
             self.frames.append(bytes(data))
             self.peer_hello = dict(msg.fields)
-            sig = REGISTRY.encode(Message("Signature", body=bytes(self.key.sign(signed(self.party, *self._hellos())))))
+            sig = encode(REGISTRY, Message("Signature", body=bytes(self.key.sign(signed(self.party, *self._hellos())))))
             self.frames.append(sig)
             self.phase.expect("Signature")
             return [sig]
@@ -134,4 +128,4 @@ class Handshake:
             raise Refused("handshake-nonce", "the peer's nonce is this side's own")
 
 
-__all__ = ["HELLO", "NONCE_BYTES", "REFUSALS", "REGISTRY", "SIGNATURE", "TAG", "Handshake", "Key", "Verify", "signed"]
+__all__ = ["HELLO", "NONCE_BYTES", "REFUSALS", "REGISTRY", "SIGNATURE", "TAG", "Handshake", "Verify", "signed"]

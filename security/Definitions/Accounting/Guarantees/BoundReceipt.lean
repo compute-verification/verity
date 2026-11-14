@@ -12,7 +12,7 @@ import Mathlib.Basic.ENNReal.Real
 
 The game is `Security/Definitions/Accounting/BoundReceipt.lean`; proofs are in
 `Security/Proofs/Accounting/BoundReceipt/`. No named assumption of its own: the generic-mix model (the mix a random
-oracle, the tile outputs uniform) is the game, and the claims registry carries it to the deployed receipt
+oracle, the tile outputs uniform) is the game, and deployment premises carry it to the deployed receipt
 (`random-oracle` for the mix and the sketch inside it,
 `rate-codec-work` for `c_enc`, `bandwidth-instantiation` for the store), with the ideal tile's work half stated in
 PoUW's game (`TileUnpredictable`), from PoUW's named assumptions.
@@ -210,7 +210,7 @@ def TileUnpredictable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fi
     (P : Pouw.Protocol Q R S) (credit : Pouw.Shape → ℝ) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Pouw.Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Pouw.Adversary CM,
     A.Bounded U T q → ∀ u : ℕ, T / (1 - γ₀) < credit (U.layout.shape u) →
-      Pouw.pr (fun x : (Q → R) × S => u ∈ Pouw.checkedSet P U x.1 x.2 (A.transcript U x.1 x.2)) ≤ ε q U.layout.N
+      Pouw.pr (fun x : (Q → R) × S => u ∈ Pouw.checkedSet P U x.1 x.2 (A.trace U x.1 x.2)) ≤ ε q U.layout.N
 
 /-- **PoUW's `TT` gives `TileUnpredictable` at the unit's work `m·k·n`.** For every cost model that hashes nothing
 (`Pouw.CostModel.Hashless`, so that TT's event, which excludes a run that breaks SHA-512, is the tile game's), protocol,
@@ -260,7 +260,7 @@ def TileUnpredictablePearlC {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
     (D : Pouw.PearlC.Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Pouw.PearlC.Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Pouw.PearlC.Adversary CM, A.Bounded U T q → ∀ u : ℕ, T / (1 - g₀) < credit (U.layout.shape u) →
-      Pouw.pr (fun x : (Q → R) × S => u ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.transcript U x.1 x.2)) ≤
+      Pouw.pr (fun x : (Q → R) × S => u ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.trace U x.1 x.2)) ≤
         δ q U.layout.N
 
 /-- **An assumption of `TT_OUT`'s shape at W1 gives `TileUnpredictablePearlC` at W1.** For every W1 device `dv`, salt

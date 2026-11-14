@@ -63,7 +63,7 @@ claims `CompiledTwo.KS` and `CompiledTwo.Exfil` they read have their `fails` wit
 namespace Claims.Witness.SamplingGeneric
 
 open Claims.SamplingGeneric
-open Claims.Sampling (forkOn InScopeTwo cell escCell footprint wrongIn)
+open Claims.Sampling (forkOn InScopeTwo cell escCell footprint incorrectIn)
 open Claims.Witness.Sampling (rejCm rejCm_val toyStmt toyPart toyPart_blocks inScope_toy toy_Pa)
 
 /-! ## A two-stage verifier that accepts with an empty relation -/
@@ -84,10 +84,10 @@ theorem sksLTwo_scope {Coin : Type} (x : Msg) : (sksLTwo Coin).Scope x :=
   ⟨toyStmt, toyPart, toyTwo, rfl, rfl, rfl, inScopeTwo_toy⟩
 
 /-- The proof block is incorrect under any witness at any interior values: `rejCm` opens nothing. -/
-theorem toy_wrongIn (H : Msg → Msg) (w : Claims.Sampling.Wit) (ι : ℕ → Bool) :
-    0 ∈ wrongIn H rejCm toyStmt toyPart toyPart w 0 0 ι := by
+theorem toy_incorrectIn (H : Msg → Msg) (w : Claims.Sampling.Wit) (ι : ℕ → Bool) :
+    0 ∈ incorrectIn H rejCm toyStmt toyPart toyPart w 0 0 ι := by
   classical
-  unfold wrongIn
+  unfold incorrectIn
   refine Finset.mem_filter.2 ⟨by decide, ?_⟩
   rintro ⟨u, r, hu, hr, hc⟩
   rw [toyPart_blocks] at hu hr
@@ -99,7 +99,7 @@ theorem toy_wrongIn (H : Msg → Msg) (w : Claims.Sampling.Wit) (ι : ℕ → Bo
 
 theorem toy_footprint (H : Msg → Msg) (w : Claims.Sampling.Wit) (ι : ℕ → ℕ → Bool) :
     1 ≤ footprint H rejCm toyStmt toyPart toyPart w ι 0 0 :=
-  Finset.card_pos.2 ⟨0, toy_wrongIn H w (ι 0)⟩
+  Finset.card_pos.2 ⟨0, toy_incorrectIn H w (ι 0)⟩
 
 theorem escCell_one_one {m : ℕ} (hm : 1 ≤ m) : escCell 1 1 m = 0 := by
   simp [escCell, Nat.sub_eq_zero_of_le hm]
@@ -485,11 +485,11 @@ theorem zeroTwo_Pa (fp : ℕ → ℕ → ℕ) : zeroTwo.Pa toyPart fp = 1 := by
   rw [hlen, Finset.range_one, hps, Finset.sum_pair (Finset.singleton_ne_empty 0).symm]
   simp [zeroTwo_esc, h1]
 
-theorem zeroTwo_wrongBlocks {fp : ℕ → ℕ → ℕ} (h : 1 ≤ fp 0 0) : (zeroTwo.wrongBlocks toyPart fp).card = 1 := by
+theorem zeroTwo_incorrectBlocks {fp : ℕ → ℕ → ℕ} (h : 1 ≤ fp 0 0) : (zeroTwo.incorrectBlocks toyPart fp).card = 1 := by
   have hlen : zeroTwo.part.blocks.length = 1 := rfl
   have hs : toyPart.strata.length = 1 := rfl
   have hp : ∃ t < toyPart.strata.length, 0 < fp 0 t := ⟨0, by rw [hs]; exact Nat.one_pos, h⟩
-  unfold Design.Two.wrongBlocks
+  unfold Design.Two.incorrectBlocks
   rw [hlen, Finset.range_one, Finset.filter_singleton, if_pos hp, Finset.card_singleton]
 
 /-- **`CapTwo`'s conclusion fails** at a second stage that samples nothing: the toy's one proof block is incorrect at
@@ -497,9 +497,9 @@ every interior, so the footprint marks its one replay block and the bound at rat
 `P̄_a = 1`. -/
 theorem capTwo_nontrivial :
     ¬ (zeroTwo.Pa toyPart (footprint id rejCm toyStmt toyPart zeroTwo.part ⟨[]⟩ fun _ _ => false) ≤
-      (1 - 1 * 1) ^ (zeroTwo.wrongBlocks toyPart
+      (1 - 1 * 1) ^ (zeroTwo.incorrectBlocks toyPart
         (footprint id rejCm toyStmt toyPart zeroTwo.part ⟨[]⟩ fun _ _ => false)).card) := by
-  rw [zeroTwo_Pa, zeroTwo_wrongBlocks (fp := footprint id rejCm toyStmt toyPart zeroTwo.part ⟨[]⟩ fun _ _ => false)
+  rw [zeroTwo_Pa, zeroTwo_incorrectBlocks (fp := footprint id rejCm toyStmt toyPart zeroTwo.part ⟨[]⟩ fun _ _ => false)
     (toy_footprint id ⟨[]⟩ _)]
   norm_num
 

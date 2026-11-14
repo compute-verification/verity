@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits import word as word_query
 from verity.circuits.codec import definition_digest
 from verity.circuits.defs import bind
 from verity.circuits import word as word_query

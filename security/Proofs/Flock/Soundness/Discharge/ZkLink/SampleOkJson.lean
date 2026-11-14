@@ -168,7 +168,7 @@ private abbrev dS : Draw.UnitSample := { samplingDesign := .stratified K strata,
 private theorem sample_population : (dS K pop strata us).toJson.getObjVal? "population" = .ok (Lean.toJson pop) :=
   getObjVal?_mkObj (by simp) (by simp)
 
-private theorem draw_design : (dS K pop strata us).toJson.getObjVal? "law" = .ok (.str "stratified") :=
+private theorem sample_design : (dS K pop strata us).toJson.getObjVal? "law" = .ok (.str "stratified") :=
   getObjVal?_mkObj (by simp) (by simp)
 
 private theorem draw_k : (dS K pop strata us).toJson.getObjVal? "k" = .ok (Lean.toJson K) :=
@@ -187,7 +187,7 @@ private theorem ofJson_toJson_stratified {D : Draw.UnitSample} (h : Draw.UnitSam
     D = dS K pop strata us := by
   obtain ⟨e, he⟩ := sample_closure K pop strata us
   unfold Draw.UnitSample.ofJson at h
-  simp only [J.nat, J.arr, J.str, J.get, J.asStr, J.asArr, sample_population, draw_design, draw_k, sample_strata, draw_units,
+  simp only [J.nat, J.arr, J.str, J.get, J.asStr, J.asArr, sample_population, sample_design, draw_k, sample_strata, draw_units,
     he, asNat_toJson, ok_bind, Json.getArr?, Json.getStr?, pure, Except.pure] at h
   simp only [throw_bind'] at h
   repeat' walk_step

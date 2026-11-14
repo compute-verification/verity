@@ -14,9 +14,11 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
 - ``runtime``: a party of its protocol's `ProtocolDef` (`Session`), which `verity run` starts on the machine the
   configuration places it on through the runtime (`verity.runtime.runner.run`), one run of the protocol a piece: the
   wipe's, PoUS's rounds' and PoUB's parties. The auditor's side listens at its ``address`` binding and the prover's side
-  dials it; a party whose manifest needs a clock gets the clock its header names (`RealClock(read, name)`). What this
-  machine hands the party (`held`: the served store, the auditor's signer and session log, its party key and the run's
-  request) doesn't reach the table yet, and raises `NotImplementedError` (`NOT_YET`) before anything starts;
+  dials it; a party whose manifest needs a clock gets the clock its header names (`RealClock(read, name)`). Its
+  protocol starts it (`ProtocolDef.starts`: from the configuration, the piece's bindings and the party's state
+  directory, its request and its capabilities, the auditor's signer refused first unless the configuration pins it), and
+  this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
+  request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
 - ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
   composed verdict is the period's.
 
@@ -30,6 +32,7 @@ proof or timed response, and validation: the pieces and the onsite check).
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -41,16 +44,19 @@ import time
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity import config as K
 from verity.config import Component, Workload
-from verity.protocol import Channel, ProtocolDef, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.policy.inference_only.verifier import parties as IO
+from verity.protocols.accounting.poub.verifier import p2_parties as P2
 from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.protocols.accounting.registration.verifier import registration as RL
+from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
@@ -81,7 +87,7 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 # --- what each component and the workload declare -------------------------------------------------------------------
 
 def _law(law: str, params: Mapping[str, Any]) -> None:
-    """The served window's rule is a rate, which its audit states to its stream (`service.Law`): a fixed count is refused
+    """The served window's rule is a rate, which its audit states to its stream (`service.SamplingDesign`): a fixed count is refused
     by name, with the rate to state in its place, and so is a work rate, for which the window's class has no work table."""
     strata = parse_strata_rate(law)
     if parse_rate(law) is None and (strata is None or strata[0]):
@@ -92,7 +98,8 @@ def _law(law: str, params: Mapping[str, Any]) -> None:
 
 
 def _pous(params: Mapping[str, Any]) -> dict[str, Any]:
-    """PoUS's served piece: ``challenges``, the memory challenger's reads in the period (320: ε = 2^-20)."""
+    """PoUS's served piece: ``challenges``, the memory challenger's reads in the period (320: ε = 1% + 2^-128,
+    ``period.certify``'s, since more reads than a certificate's keep its ε)."""
     if extra := sorted(set(params) - {"challenges"}):
         raise Refused("unknown-key", f"[params.\"{SP.IDS['pous']}\"]: {', '.join(extra)} (known: challenges)")
     k = params["challenges"]
@@ -126,7 +133,19 @@ def _served(params: Mapping[str, Any]) -> dict[str, Any]:
 
 _VERIFIER = Role(VERIFIER, "auditor", needs=("audit", "component", "product"))
 _PROVER = Role(PROVER, "developer", per="server", needs=("store",))
-_MEMORY_CHALLENGER = Role(MEMORY_CHALLENGER, "auditor", needs=("clock", "coins", "signing-key"))
+
+
+def _named(manifest: Manifest, names: Mapping[str, str]) -> tuple[tuple[Role, ...], tuple[Channel, ...]]:
+    """``manifest``'s parties and channels with each of its roles as the configuration names its party (``names``)."""
+    def n(role: str) -> str:
+        return names.get(role, role)
+
+    return (tuple(replace(r, name=n(r.name)) for r in manifest.parties),
+            tuple(replace(c, sender=n(c.sender), receiver=n(c.receiver)) for c in manifest.channels))
+
+
+#: PoUB's P2 parties and channels, its verifier the configuration's bandwidth verifier (its ``verifier`` is onsite's)
+_P2_PARTIES, _P2_CHANNELS = _named(P2.MANIFEST, {P2.VERIFIER: BANDWIDTH_VERIFIER})
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
               needs=frozenset({"windows"}), law=_law, default_law="rate:1/3481648"),
@@ -137,17 +156,11 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
     Component("pearl-plus", SP.IDS["pearl-plus"], parties=(_VERIFIER,), needs=frozenset({"windows"})),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
-    Component("pous", SP.IDS["pous"], parties=(_MEMORY_CHALLENGER, _PROVER, _VERIFIER),
-              channels=(Channel(PROVER, MEMORY_CHALLENGER, ("Setup", "Response")),
-                        Channel(MEMORY_CHALLENGER, PROVER, ("Challenge",), carries_coins=True),
-                        Channel(MEMORY_CHALLENGER, VERIFIER, ("SignedRun",), after=("Response",))),
+    Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
+              channels=(*CS.MANIFEST.channels, Channel(MEMORY_CHALLENGER, VERIFIER, ("SignedRun",), after=("End",))),
               needs=frozenset({"store"}), params=_pous, default_params={"challenges": 320}),
-    Component("bandwidth", SP.IDS["bandwidth"],
-              parties=(Role(BANDWIDTH_VERIFIER, "auditor", needs=("clock", "coins")), _PROVER, _VERIFIER),
-              channels=(Channel(PROVER, BANDWIDTH_VERIFIER, ("Register", "Root", "Openings")),
-                        Channel(BANDWIDTH_VERIFIER, PROVER, ("Hold", "Run", "Open", "End"), carries_coins=True,
-                                after=("Register",)),
-                        Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
+    Component("bandwidth", SP.IDS["bandwidth"], parties=(*_P2_PARTIES, _VERIFIER),
+              channels=(*_P2_CHANNELS, Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
               needs=frozenset({"receipts"})),
     Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
@@ -247,19 +260,22 @@ class Session:
     each a ``module:attribute`` (`_protocol_def`), whose manifests are one; each configuration party's role in it
     (``roles``); for each role that reads a clock, the read and the name its header gives (``clocks``); the
     configuration party that listens (``listener``, the auditor's), and whether the run ends before the served window
-    starts (``before``) or runs beside it."""
+    starts (``before``) or runs beside it. ``reads`` gives a configuration party's start, beside its bindings, the state
+    directory of another party's run on the same machine: binding name -> (component, party)."""
 
     halves: tuple[str, ...]
     roles: Mapping[str, str]
     clocks: Mapping[str, tuple[Callable[[], int], str]]
     listener: str
     before: bool = False
+    reads: Mapping[str, Mapping[str, tuple[str, str]]] = field(default_factory=dict)
 
     def protocol(self) -> ProtocolDef:
         defs = [_protocol_def(h) for h in self.halves]
         if any(d.manifest != defs[0].manifest for d in defs):
             raise ValueError(f"{', '.join(self.halves)} are halves of more than one manifest")
-        return ProtocolDef(defs[0].manifest, {r: f for d in defs for r, f in d.parties.items()})
+        return ProtocolDef(defs[0].manifest, {r: f for d in defs for r, f in d.parties.items()},
+                           {r: f for d in defs for r, f in d.starts.items()})
 
     def absent(self) -> list[str]:
         """The halves' modules that aren't in this tree."""
@@ -267,19 +283,16 @@ class Session:
 
 
 class Held(NamedTuple):
-    """What a machine hands a runtime party: its capabilities, its party key and the check of its peer's, and the run's
-    request (its parameters)."""
+    """What a machine hands a runtime party beside what its protocol's start gives it: its party key and the check of
+    its peer's."""
 
-    capabilities: Mapping[str, Any]
     key: Any
     verify: Callable[[bytes, bytes, bytes], bool]
-    params: Mapping[str, Any]
 
 
 def held(piece: Piece, role: Role) -> Held:
-    """What this machine hands ``role``, ``piece``'s party: on the prover node the served store (``store``: the card's
-    fill, P2's C*, the engine's store), on the auditor's host its signer and session log (``signing-key``), and on each
-    its party key and the request the store's registration gives. None of it reaches the table yet."""
+    """What this machine hands ``role``, ``piece``'s party: its party key, which the channels authenticate. It doesn't
+    reach the table yet."""
     raise NotImplementedError(NOT_YET)
 
 
@@ -383,23 +396,30 @@ POUS = Session(("verity.protocols.accounting.pous.device.challenger_party:PROTOC
                {MEMORY_CHALLENGER: CS.CHALLENGER, PROVER: CS.PROVER}, {CS.CHALLENGER: (time.monotonic_ns, MONOTONIC)},
                MEMORY_CHALLENGER)
 #: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
-#: the verifier's monotonic clock
+#: the verifier's monotonic clock; the verifier reads the memory challenger's PoUS key from that party's run beside it
+#: on the auditor's host (``challenger``)
 POUB = Session(("verity.protocols.accounting.poub.verifier.p2_parties:PROTOCOLS",
                 "verity.protocols.accounting.poub.prover.p2_party_prover:PROTOCOL"),
-               {BANDWIDTH_VERIFIER: "verifier", PROVER: "prover"}, {"verifier": (time.monotonic_ns, MONOTONIC)},
-               BANDWIDTH_VERIFIER)
+               {BANDWIDTH_VERIFIER: P2.VERIFIER, PROVER: P2.PROVER}, {P2.VERIFIER: (time.monotonic_ns, MONOTONIC)},
+               BANDWIDTH_VERIFIER, reads={BANDWIDTH_VERIFIER: {"challenger": ("pous", MEMORY_CHALLENGER)}})
 
 
 #: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
 #: 503-byte payload of the front's 512-byte cells; every other request is answered as before
 ID_FORM = "--protocol ids --id-payload 503"
+#: the certifier's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
+#: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
+#: served_verdicts.sh's default class
+SCAN_CLASS = "8,32,4,4,16"
 
 
 def _certifier_piece(cfg, params, bound):
     py = ".venv/bin/python"
     return {"SERVE_ARGS": ID_FORM,
             "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
-            "CERTIFIER_CMD": f'{py} {CERTIFIER_PIECE} piece "$1" "$2" "$3"'}
+            "CERTIFIER_CHAIN_CMD": f'{py} {CERTIFIER_PIECE} chain "$@"',
+            "CERTIFIER_PERIOD_CMD": f'{py} {CERTIFIER_PIECE} period "$@"',
+            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
@@ -449,8 +469,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
     },
     "certifier": {
         WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the certifier's developer side: its front before the "
-                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece, the chain and the "
-                       "period check on the kept warden run", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
+                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
+                       "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
+                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
                        binds=("gate",), hooks=_certifier_piece),
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate: its "
                                  "warden in front of serve-openai before the requests"),
@@ -523,23 +544,56 @@ def deployment(cfg: Mapping[str, Any], piece: Piece, protocol: ProtocolDef, addr
                        **({"listen": address} if c == s.listener else {})} for c, r in sorted(s.roles.items())]}
 
 
+def request_bound(protocol: ProtocolDef, params: Mapping[str, Any]) -> None:
+    """That the two sides of ``protocol``'s run start on one request, ``params`` this side's: each side's start computes
+    the request on its own machine, and the run's handshake compares only the configuration's hash, the onsite
+    configuration's that the deployment states (`deployment`) so that a signed session names it. The two sides would
+    compare SHA-512 of the request's canonical JSON at the session's start; the runtime's ``Hello``
+    (`verity/runtime/handshake.py`) has no field for it, and neither side's messages carry it, so a run raises here
+    (`NOT_YET`) until one does."""
+    raise NotImplementedError(NOT_YET)
+
+
 def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], piece: Piece) -> Callable[[], Any]:
-    """``piece``'s party run through the runtime (`verity.runtime.runner.run`), ready to start: its `ProtocolDef`, what
-    this machine hands it (`held`), its clock, and the listener's address, which it listens at or dials. Refused
-    ``no-piece`` while a half of its protocol isn't in this tree."""
+    """``piece``'s party run through the runtime (`verity.runtime.runner.run`), ready to start: its `ProtocolDef`, its
+    protocol's start (`ProtocolDef.starts`: its request and capabilities, from the configuration, the piece's bindings and
+    its state directory ``state/runs/<component>/<party>``), the two sides' request bound (`request_bound`), what this
+    machine hands it (`held`), its clock, and the listener's address, which it listens at or dials. Refused ``no-piece`` while a half of its protocol isn't in this
+    tree; a party its protocol declares no start for raises `NOT_YET`."""
     s = piece.session
     if absent := s.absent():
         raise Refused("no-piece", f"{piece.party}'s {piece.component} piece: {', '.join(absent)} is not in this tree")
     protocol = s.protocol()
     role = protocol.manifest.role(s.roles[piece.party])
+    if role.name not in protocol.starts:
+        raise NotImplementedError(NOT_YET)
+    here = state / "runs" / piece.component / piece.party
+    bound = {**piece._bindings(bindings),
+             **{k: str(state / "runs" / c / p) for k, (c, p) in s.reads.get(piece.party, {}).items()}}
+    begun = protocol.starts[role.name](cfg, bound, here)
+    request_bound(protocol, begun.params)
     h = held(piece, role)
-    address, listener = piece._bindings(bindings)["address"], s.roles[s.listener]
+    address, listener = bound["address"], s.roles[s.listener]
     sources = {role.name: {"clock": RealClock(*s.clocks[role.name])}} if "clock" in role.needs else None
-    return lambda: runner.run(deployment(cfg, piece, protocol, address, h.params), [role.name], "live",
-                              state / "runs" / piece.component / piece.party,
+    return lambda: runner.run(deployment(cfg, piece, protocol, address, begun.params), [role.name], "live", here,
                               protocols={protocol.manifest.protocol: protocol}, keys={role.name: h.key},
-                              verify=h.verify, sources=sources, capabilities={role.name: h.capabilities},
+                              verify=h.verify, sources=sources, capabilities={role.name: begun.capabilities},
                               dial_to=None if role.name == listener else {listener: address}).outcomes[role.name]
+
+
+def placement(cfg: Mapping[str, Any], piece: Piece, outcome: Mapping[str, Any] | None) -> dict[str, str] | None:
+    """`trusted-device`'s premise for a memory challenger's ``piece``, from its outcome: the key its session is signed
+    under (the outcome's ``public_key``) against the pins the configuration gives that party for that protocol, under the
+    configuration's hash (`memory_challenger.trusted_device`, `committed` its committed set). ``None`` for a party that
+    signs no session; a session that reports no key reads rehearsal."""
+    if piece.party != MEMORY_CHALLENGER:
+        return None
+    key = (outcome or {}).get("public_key")
+    machine = {p["name"]: p["machine"] for p in cfg["party"]}[piece.party]
+    return {mc.PREMISE: mc.trusted_device(cfg.get("pin", []), piece.party, piece.component,
+                                          None if key is None else hashlib.sha512(bytes.fromhex(key)).hexdigest(),
+                                          f"the {piece.party} ran on {machine}", configuration=K.digest(cfg),
+                                          committed=mc.committed())}
 
 
 def composite(env: Mapping[str, str]) -> dict[str, str]:
@@ -597,12 +651,28 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
             "verdict": "undecided" if verdict == "accept" and absent else verdict}
 
 
+#: what a registration raises with once its configuration item is written, while no run's log holds the item: the goal
+#: that brings it
+REGISTRATION_GOAL = "memory-accounting/architecture-on-branch"
+
+
 def registration(cfg: Mapping[str, Any], state: Path) -> str:
-    """The digest of the run's registration, the VERDICT line's ``registration``: a registration log
-    (`verity.protocols.accounting.registration`) whose entries name the configuration's hash, ``K.digest(cfg)``, the
-    ``configuration`` of ``state``'s ``run.json``, which `verity run` writes before any party starts and so before any
-    coin; a ``run.json`` under another hash is refused. Until it is written the line's ``registration`` is ``None``."""
-    raise NotImplementedError("MEM-300")
+    """The head of the run's registration log, the VERDICT line's ``registration``, once an information entry of it
+    registers the configuration's hash (the item ``{"kind": "configuration", "digest": K.digest(cfg)}``), before any
+    party starts and so before any coin: `live` calls it after it has prepared the parties here and before it starts
+    one. The hash is ``state``'s ``run.json``'s ``configuration``, which `verity run` writes first; a ``run.json`` under
+    another hash, or none, is refused (``registration``). The item is the registration log's own
+    (`verity.protocols.accounting.registration.verifier.registration.configuration`), whose writer raises
+    `NotImplementedError` (``proofs/architecture-on-branch``) while the log has no coin to order it before; once it
+    returns, the run's log holding it beside θ and the builder isn't written either (`REGISTRATION_GOAL`). Until then
+    the line's ``registration`` is ``None``."""
+    f, digest = state / "run.json", K.digest(cfg)
+    run = json.loads(f.read_text()) if f.is_file() else {}
+    if run.get("configuration") != digest:
+        raise Refused("registration", f"{f} names configuration {str(run.get('configuration'))[:16]}…, not this "
+                                      f"configuration's {digest[:16]}…: the registration names the run's own hash")
+    RL.configuration(digest)
+    raise NotImplementedError(REGISTRATION_GOAL)
 
 
 def coins_of(cfg: Mapping[str, Any]) -> str:
@@ -616,7 +686,8 @@ def coins_of(cfg: Mapping[str, Any]) -> str:
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     """The pieces of the parties ``here`` (module docstring): each runtime party's run, the wipe's before the served
     window and the others' beside it; the served window when the workload's party is here; a gate's side as started by
-    the gate; and the onsite check when the verifier is here. Refused by name (``unbound``) while a listed piece's
+    the gate; and the onsite check when the verifier is here, its line with each memory challenger's `trusted-device`
+    premise as `placement` read it from the challenger's outcome here (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
     binding is missing, and raised while a runtime party's `held` does, before anything starts."""
     bindings = bindings_of(state)
     runtime = [x for p in here for x in pieces(cfg, p) if x.runs == RUNTIME]
@@ -624,12 +695,16 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
             k for x in runtime for k in x.unbound(bindings))):
         raise Refused("unbound", f"the deploy bindings (verity run --bindings) don't bind {', '.join(missing)}")
     ready = [(x, prepare(cfg, state, bindings, x)) for x in runtime]
+    if ready:
+        registration(cfg, state)
     out: dict[str, dict[str, Any]] = {}
 
     def done(x: Piece, got: Mapping[str, Any]) -> None:
         mine = out.setdefault(x.party, {"outcome": {}, "refused": None})
         mine["outcome"][x.component] = got.get("outcome")
         mine["refused"] = mine["refused"] or got.get("refused")
+        if (where := placement(cfg, x, got.get("outcome"))) is not None:
+            mine.setdefault("placement", {})[x.component] = where
 
     for x, start in ready:
         if x.session.before:
@@ -654,13 +729,15 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
             out[p] = {"outcome": {"started": f"by the auditor's gate, for {', '.join(x.component for x in mine)}"},
                       "refused": None}
     if VERIFIER in here:
+        devices = {c: where[mc.PREMISE] for x in out.values() for c, where in x.get("placement", {}).items()}
         try:
-            out[VERIFIER] = {"outcome": {"verdicts": [onsite_check(cfg, state)]}, "refused": None}
+            out[VERIFIER] = {"outcome": {"verdicts": [{**onsite_check(cfg, state), mc.PREMISE: devices}]},
+                             "refused": None}
         except Refused as e:
             out[VERIFIER] = {"outcome": {"error": e.detail}, "refused": e.name}
     return Result(out)
 
 
-__all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "SERVED", "WORKLOADS", "Held",
-           "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "prepare", "served_window", "unbound",
-           "variables"]
+__all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL", "SERVED",
+           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "placement",
+           "prepare", "registration", "request_bound", "served_window", "unbound", "variables"]

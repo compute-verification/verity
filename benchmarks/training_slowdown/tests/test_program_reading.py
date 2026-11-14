@@ -1,6 +1,6 @@
 """A training circuit's work read off its Program (`circuit_properties.work`, which reads the circuit alone) beside this
 benchmark's reading of the same loop body from a trace (`capture_step`'s rows, `work.he_of_rows` and `calculator.slowdown`),
-on the lf model's tiny step (`adapters/vllm/tests/program/train_step_lf.py`, loaded by its path) under AdamW, at each
+on the lf model's tiny step (`adapters/torch/tests/frontend/train_step_lf.py`, loaded by its path) under AdamW, at each
 k of `products.DIAL_K` at which (H) states β(k).
 
 The Program is the training-step frontend's step (`step_program`) as the body of a scan over iterations: the carry the
@@ -63,7 +63,7 @@ from circuit_properties import work as WK  # noqa: E402
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.evaluation.bits import compile as compile_bits  # noqa: E402
 from verity.circuits.program import Program, is_input  # noqa: E402
-from verity_vllm.definitions.boolean import boolean_version  # noqa: E402
+from verity.circuits.ops.boolean.versions import boolean_version  # noqa: E402
 from verity_vllm.definitions.registry import prims as PRIMS  # noqa: E402
 from verity_torch.frontend.train_step import AdamW, step_program  # noqa: E402
 

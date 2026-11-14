@@ -13,7 +13,8 @@ Definitions/Pous.lean               trusted, the definitions: imports every modu
 Definitions/Pous/Game/{Prob,Oracle}.lean
                                     bits, uniform probability, ideal primitive, parallel oracle programs
 Definitions/Pous/Model/{Scheme,Audit,Inc}.lean
-                                    encoding schemes, the audit game, INC and TimedINC
+                                    encoding schemes, the audit game and INC
+Definitions/Assumptions/Pous.lean   TimedINC, INC against a time-bounded expander: a named assumption
 Definitions/Pous/Model/{M1,M1p,HashChain,Pebbling,Labelling,Invertible,ColumnGame,Dense,SampledAudit}.lean
                                     model M1, M1 on `[0, p)` (`m1p`, the abstract model at P2's domain),
                                     B3's chain, Fisch's stacked DRGs and white/green game,
@@ -113,8 +114,9 @@ Lean's kernel; the Mathlib pin; the grader and its sandbox. Everything else is c
 as `lean/submissions/…` and `docs/…` name the POUS Project store, where the provers' drafts and reviews live.
 
 `ObligationWide320` is stated at uniform indices. The 320-read certificate (`p2.wide320_certificate`, and
-`PousCheck.RunProtocol.wide320Certificate` in Lean) adds `ε_prf = 2^-127` for the memory challenger's SHA-512
-indices (`Hash.Assumptions.Sha512Prf`, claim `prf/sha-512`).
+`PousCheck.RunProtocol.wide320Certificate` in Lean) adds `2^-127` for the memory challenger's SHA-512 indices, assuming
+`ε_prf ≤ 2^-127` under `prf/sha-512`: `Hash.Assumptions.Sha512Prf` takes the advantage as a parameter, which no model
+fixes.
 
 **The audit.** `tools/verity/lean/check.py` audits every declaration of PoUS's modules: allowed axioms, named assumptions,
 escapes, orphan files, import layers (Definitions imports no assumption, guarantee or proof; Assumptions only
@@ -140,7 +142,8 @@ graded proof moves into `security/Proofs/Pous/` as a module, with its theorem ad
 then review the records' diff).
 
 **Changing the trusted layer** means editing the files listed in `TRUSTED.sha256` (among them Core's `prCoin`, in
-`Definitions/Core/Game.lean`, and the proved files `Sanity.lean` imports) or adding a `.lean` file under
+`Definitions/Core/Game.lean`, the named assumption `TimedINC`, in `Definitions/Assumptions/Pous.lean`, and the proved
+files `Sanity.lean` imports) or adding a `.lean` file under
 `Definitions/Pous`, regenerating it from this directory (`tools/check/pins.py --regen` runs this command, and
 `--stale` fails while it would hash a file the list lacks), and running the audit (`bash check.sh`). A file the command
 starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them too (`verity/protocols/accounting/pous/verifier/tests/test_pous_trusted.py` names it):
@@ -150,6 +153,7 @@ sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Regist
   ../../security/lean-toolchain ../../security/lakefile.toml ../../security/lake-manifest.json \
   ../../security/Proofs/lakefile.toml ../../security/Proofs/lake-manifest.json \
   ../../security/Definitions/Pous.lean ../../security/Definitions/Core/Game.lean \
+  ../../security/Definitions/Assumptions/Pous.lean \
   ../../security/Proofs/Pous/Statements.lean ../../security/Proofs/Pous/Sanity.lean \
   ../../security/Proofs/Pous/Prob.lean ../../security/Proofs/Core/Game/Basic.lean \
   ../../security/Proofs/Pous/Accounting/Numbers.lean \

@@ -6,8 +6,9 @@
 #     --by LANE -- bash benchmarks/network_traces/scan_zk.sh
 # env: SC_MEM_GB (what job.sh's stages may take, within the slot's)  SC_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  SC_DRY=1 (the run and the host's read of every round only)
-#      SC_CLASS=w63|w63k4|test (`prove --class`: test is the certifier tests' class, a CPU window)  SC_GROUP=G
-#      (`prove --group G`: link-windows 0 … G − 1 in one registration)
+#      SC_CLASS=w63|w63k4|test|test2 (`prove --class`: test is the certifier tests' class, a CPU window; test2 its two
+#      execution phases)  SC_GROUP=G (`prove --group G`: execution phases 0 … G − 1, each a registration of its
+#      own, started from the record before it)
 #      SC_WARDEN_RUN=DIR (a warden_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
 #      `warden_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
 #      fake's id-form answer SC_FIRST_MS after each (past the warden's delay: a void run), SC_PROMPT_MAX and
@@ -80,11 +81,11 @@ fi
 if [ -n "${SC_REHEARSE:-}" ]; then
   log "sczk: rehearsing the warden at scan_zk's schedule"
   # shellcheck disable=SC2046
-  "$PY" benchmarks/network_traces/warden_serve.py rehearse --fake --ids --out "$W/warden" \
+  "$PY" verity/protocols/accounting/certifier/device/warden_serve.py rehearse --fake --ids --out "$W/warden" \
     --requests "${SC_REQUESTS:-12}" --rate "${SC_RATE:-2}" --tail "${SC_TAIL:-6}" --start-in 2 \
     ${SC_FIRST_MS:+--first-ms "$SC_FIRST_MS"} ${SC_PROMPT_MAX:+--prompt-max "$SC_PROMPT_MAX"} \
     ${SC_MAX_TOKENS:+--max-tokens "$SC_MAX_TOKENS"} \
-    $("$PY" benchmarks/network_traces/scan_zk.py schedule ${SC_CLASS:+--class "$SC_CLASS"}) 2>&1 \
+    $("$PY" verity/protocols/accounting/certifier/prover/scan_zk.py schedule ${SC_CLASS:+--class "$SC_CLASS"}) 2>&1 \
     | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
   mkdir -p "$OUT/warden"
@@ -108,7 +109,7 @@ if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-pa
 fi
 SC_PORT=${SC_PORT:-$("$PY" -c 'import os; print(7811 + 16 * min(os.sched_getaffinity(0)))')}
 log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}, sessions from port $SC_PORT"
-"$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
+"$PY" verity/protocols/accounting/certifier/prover/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
   ${SC_CLASS:+--class "$SC_CLASS"} ${SC_GROUP:+--group "$SC_GROUP"} \
   ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} "${CH[@]}" 2>&1 \
   | tee -a "$OUT/sczk.log" | cut -c1-4000

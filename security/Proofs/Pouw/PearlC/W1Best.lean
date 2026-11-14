@@ -48,8 +48,8 @@ def CostModel.DominatedBy (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layou
   ∀ U : Workload, U.InDomain P D → ∀ A : Adversary CM, ∃ p' : CM'.Prog, ∀ (H : Q → R) (s : S),
     CM'.cost p' H U A.act (A.pre.eval H) s ≤ CM.cost A.online H U A.act (A.pre.eval H) s ∧
       CM'.calls p' H U A.act (A.pre.eval H) s ≤ CM.calls A.online H U A.act (A.pre.eval H) s ∧
-      ∑ g ∈ goodTiles P TR U H s (A.transcript U H s),
-          TR.credit H s U g (actOf (A.transcript U H s) ((TR.tiling U.layout).unit g)) ≤
+      ∑ g ∈ goodTiles P TR U H s (A.trace U H s),
+          TR.credit H s U g (actOf (A.trace U H s) ((TR.tiling U.layout).unit g)) ≤
         ∑ g ∈ goodTiles P TR U H s (CM'.run p' H U A.act (A.pre.eval H) s),
           TR.credit H s U g (actOf (CM'.run p' H U A.act (A.pre.eval H) s) ((TR.tiling U.layout).unit g))
 
@@ -79,7 +79,7 @@ def CostModel.SimulatedBy (CM CM' : CostModel Q R S) : Prop :=
     CM'.run p' H U act σ s = CM.run p H U act σ s ∧ CM'.cost p' H U act σ s ≤ CM.cost p H U act σ s ∧
       CM'.calls p' H U act σ s ≤ CM.calls p H U act σ s
 
-/-- A simulation is a domination on any tiles: the simulating program commits the same transcript. -/
+/-- A simulation is a domination on any tiles: the simulating program commits the same trace. -/
 theorem CostModel.dominatedBy_of_simulatedBy {CM CM' : CostModel Q R S} (P : Protocol Q R S) (TR : TileRules Q R S)
     (D : Layout → Prop) (h : CM.SimulatedBy CM') : CM.DominatedBy P TR D CM' := by
   intro U _ A

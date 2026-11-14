@@ -2,6 +2,8 @@ module
 
 public import Definitions.Accounting.PerRun
 public import Definitions.Accounting.Pouw
+public import Definitions.Assumptions.Accounting
+public import Definitions.Assumptions.Pouw
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.PearlC.W1Stop
 public import Definitions.Pouw.Assumptions.Game
@@ -36,7 +38,8 @@ so `PearlCStopEndToEndPerRun` and `ComputeOfPearlCStopPerRunPriced` rest on `GGa
 choose no budget, which runs, costs and calls as at `CM`, so a run that realizes Pearl-C's audit at `CM` realizes it on
 the stopping machine (`Accounting.RealizesPearlCPriced.withStop`), and `ComputeOfPearlCStopPerRunPriced` covers every
 run `ComputeOfPearlCPerRunPriced` covers, whether or not the device ever stops one. At W1 priced (`w1Priced`) the one
-open hypothesis is `GGapPerCoin`, a conjecture (claim `pouw-gamma-per-coin`). PoUW's reads and the bandwidth audit's window reads are different device-model
+hypothesis is `GGapPerCoin`, a named conjecture (claim `pouw-gamma-per-coin`, in `Definitions.Assumptions.Pouw`).
+PoUW's reads and the bandwidth audit's window reads are different device-model
 accounts' over one window (`Accounting.Run.ReadsAttributed`), so no bit read is certified twice (`JointPerRunPriced`),
 and the covert residual is one priced budget, `(F + pRead·BW)·T − (W + pRead·Q)` (`CovertResidualPerRunPriced`). The
 unpriced statements stay: a compute guarantee on the work alone gives the priced one at any `pRead ≥ 0`
@@ -68,7 +71,7 @@ def PouwEndToEndPerRun : Prop :=
     ∀ U : Workload, U.InDomain D → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, CallsWithin A U q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
-          AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AuditAccepts (correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
           onlineCost A U x.1 x.2.1 < (1 - reductionGap g₀ Ωmax) * (1 - εs) * totalWref P U.layout ∧
           ¬ A.Breaks U x.1 x.2.1)
         ≤ (1 - εs) ^ t + δ q U.layout.N
@@ -134,7 +137,7 @@ def PearlCEndToEndPerRun : Prop :=
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) →
     ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : PearlC.Adversary CM, CallsWithinPearlC A U q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : PearlCCoins Q R S U w t =>
-          AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
           onlineCostPearlC A U x.1 x.2.1 < (1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
@@ -164,7 +167,7 @@ units' `W_ref` are `κ ≥ 0` times their ticket weights `w`, every oracle bound
 oracle calls (with no bound on its cost) on `CM.withStop`, the audit with `t` tickets accepts while the adversary's
 online cost on that run is below the certified `(1 − g)(1 − ε_s)·∑_u W_ref(u)` with probability at most
 `(1 − ε_s)^t + δ(q, N)`. `CM.withStop`, `CM` with an optional budget at which a run is stopped, is a proof device: an
-adversary of `CM` is one of `CM.withStop` with no budget, at the same transcript, cost and calls. At
+adversary of `CM` is one of `CM.withStop` with no budget, at the same trace, cost and calls. At
 `CM = W1.w1Priced dv salt`, the cost is the run's arithmetic, charged to the compute account, plus its first fetches,
 charged to the bandwidth account. -/
 def PearlCStopEndToEndPerRun : Prop :=
@@ -178,7 +181,7 @@ def PearlCStopEndToEndPerRun : Prop :=
     ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : PearlC.Adversary CM.withStop, CallsWithinPearlC A U q →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : PearlCCoins Q R S U w t =>
-          AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
           onlineCostPearlC A U x.1 x.2.1 < (1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
         ≤ (1 - εs) ^ t + δ q U.layout.N
 

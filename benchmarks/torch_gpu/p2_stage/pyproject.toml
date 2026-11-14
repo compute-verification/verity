@@ -19,7 +19,7 @@ untraced = ["tests/test_sketch.py"]
 # and its host twin's sources. sketch.py reads its variables through its settings.py, and the engine's through the
 # torch_gpu benchmarks' (sha512_rows/torch_engine.py, beside that registry's pyproject.toml), on verity_config.settings.
 inputs = ["tools/config/verity_config",
-          "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/claims/__init__.py",
+          "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py",
           "verity/protocols/accounting/pous", "verity/protocols/interface",
           "verity/protocols/accounting/pous/prover",
           "verity/channel.py",
@@ -40,7 +40,7 @@ inputs = ["tools/config/verity_config",
           "benchmarks/kernels/s8_linear/int_mm.py",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
           "verity/circuits/ops", "verity/circuits/silicon",
-          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/hardware/__init__.py", "verity/protocols/accounting/poub/__init__.py"]
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/protocols/accounting/poub/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
