@@ -10,7 +10,7 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
 - N, the registered blocks; P, the credited passes; `planned`, their registered receipts (each pass's `lengths` less
   its post-seed reads); W, the most of them wrong (`audit.pooled`'s, at the record's δ); S, S_chip/b rounded up;
 - X = s/E + β, what can bring a block back into node memory a ns: the node's squaring ceiling over the codec's
-  squarings a block (`audit.Rebuild`), plus its disks' read ceiling, plus, link-charged, its boundary links' β_l;
+  squarings a block (`audit.Rebuild`), plus its disks' measured read rate (`Disks`' β), plus, link-charged, its boundary links' β_l;
 - B = B_r + B_d, what can come back at once beyond that rate, in blocks: one maximal rebuild batch and one maximal
   disk read (plus, link-charged, one link burst B_l), `Node`'s bursts (X and B: `line.charges_of`);
 - snapshot: `planned − W − (X·span + B) − P·S` blocks over the passes, `span` the record's;
@@ -94,28 +94,28 @@ class Node:
     read bandwidth R at spec, the headline, and measured (every GPU's HBM and the host's DRAM, bytes a second), its
     on-chip storage S_chip (bytes), its squaring ceiling at each codec width (squarings a second), its SHA-512
     compressions a second and the outside-compute factor F over them (the sketch's term, `timing.SKETCH_OUTSIDE`: the
-    prover's compressions over a session at most F times the node's), and the read ceilings of its own disks and of
-    its boundary links (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
+    prover's compressions over a session at most F times the node's), and the read rates of its own disks (`Disks`' β) and
+    of its boundary links (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
     beyond its rate (`SquaringCeiling`, `Disks` and `Links` hold over every interval as rate·length + burst): one
     maximal rebuild batch, one maximal disk read and one link burst.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
     and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
-    the node states no DPU's (`timing.HOST_WRITE_BYTES_PER_S`).  `stated` takes `timing`'s, which a reported read rate
-    can only raise.  `tiers` are the memory tiers R and S_chip are summed over (`Tier`), for what states the node or
-    splits its R by tier; the ledger's terms read the sums."""
+    the node states no DPU's (`timing.HOST_WRITE_BYTES_PER_S`).  `stated` takes them from the node's `timing.Figures`,
+    whose read rate a reported one can only raise.  `tiers` are the memory tiers R and S_chip are summed over (`Tier`),
+    for what states the node or splits its R by tier; the ledger's terms read the sums."""
 
     spec_bytes_per_s: float
     read_bytes_per_s: float
     chip_bytes: int
     squarings_per_s: Mapping[str, float]
-    sha512_per_s: float = timing.SHA512_PER_S
+    sha512_per_s: float
+    gpu_write_bytes_per_s: float
+    host_write_bytes_per_s: float
     disk_bytes_per_s: float = 0.0
     link_bytes_per_s: float = 0.0
     rebuild_burst_bytes: float = 0.0
     disk_burst_bytes: float = 0.0
     link_burst_bytes: float = 0.0
-    gpu_write_bytes_per_s: float = timing.GPU_WRITE_BYTES_PER_S
-    host_write_bytes_per_s: float = timing.HOST_WRITE_BYTES_PER_S
     sketch_outside: int = timing.SKETCH_OUTSIDE
     tiers: Mapping[str, Tier] = field(default_factory=dict)
 
@@ -140,23 +140,23 @@ class Node:
         object.__setattr__(self, "tiers", MappingProxyType(tiers))
 
     @classmethod
-    def stated(cls, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
+    def stated(cls, figures: timing.Figures, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
                link_bytes_per_s: float = 0.0, disk_burst_bytes: float | None = None,
                link_burst_bytes: float | None = None, sketch_outside: int = timing.SKETCH_OUTSIDE) -> Node:
-        """`timing`'s node: R measured is the larger of `timing.READ_BYTES_PER_S` and the prover's reported read, R
-        at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
-        a term.  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
-        second at the disks' ceiling, which is a one-second peak; its link burst `timing.LINK_WINDOW_BYTES` when the
-        links are charged.  Its tiers are every GPU's HBM and the host's DRAM, which no reported read raises."""
-        measured = max(timing.READ_BYTES_PER_S, _rate(reported_read_bytes_per_s, "a reported read"))
+        """The node of `figures`: R measured is the larger of its `read_bytes_per_s` and the prover's reported read, R
+        at spec the larger of its `spec_bytes_per_s` and that, so a prover reporting a slower read can't shrink a term.
+        Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one second at the disks'
+        rate, which is a highest second; its link burst `figures.link_window_bytes` when the links are charged.  Its
+        tiers are every GPU's HBM and the host's DRAM, which no reported read raises."""
+        f = figures
+        measured = max(f.read_bytes_per_s, _rate(reported_read_bytes_per_s, "a reported read"))
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
-        link = (timing.LINK_WINDOW_BYTES if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
-        tiers = {"hbm": Tier(timing.GPUS, timing.GPU_SPEC_BYTES_PER_S, timing.GPU_READ_BYTES_PER_S,
-                             timing.GPU_CHIP_BYTES),
-                 "dram": Tier(1, timing.HOST_SPEC_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S, timing.HOST_CHIP_BYTES)}
-        return cls(max(timing.SPEC_BYTES_PER_S, measured), measured, timing.CHIP_BYTES, timing.SQUARINGS_PER_S,
-                   timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link,
-                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S, sketch_outside, tiers)
+        link = (f.link_window_bytes if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
+        tiers = {"hbm": Tier(f.gpus, f.gpu_spec_bytes_per_s, f.gpu_read_bytes_per_s, f.gpu_chip_bytes),
+                 "dram": Tier(1, f.host_spec_bytes_per_s, f.host_read_bytes_per_s, f.host_chip_bytes)}
+        return cls(max(f.spec_bytes_per_s, measured), measured, f.chip_bytes, f.squarings_per_s, f.sha512_per_s,
+                   f.gpu_write_bytes_per_s, f.host_write_bytes_per_s, disk_bytes_per_s, link_bytes_per_s,
+                   float(f.chip_bytes), disk, link, sketch_outside, tiers)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
         """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""

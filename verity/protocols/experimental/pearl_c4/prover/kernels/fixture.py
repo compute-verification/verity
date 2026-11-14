@@ -2,7 +2,7 @@
 twin (`twin.py`) and `verity.protocols.accounting.pouw.prover.schemes.pearl_c4`'s hashing.  dev.py's check compares each device buffer with these
 byte for byte.
 
-  uv run python benchmarks/pouw/pearl_c4/fixture.py OUT [--fmt nvfp4|mxfp4|both] [--shape MxNxK]
+  uv run python verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py OUT [--fmt nvfp4|mxfp4|both] [--shape MxNxK]
 
 OUT/<fmt>/ gets one raw little-endian file per buffer (the layouts are pearl_c4.cu's header) and manifest.json: the shape,
 the kernels' parameters, and each file's size and sha256.  Inputs are derived: word t of row i of operand X is the BF16 value
@@ -20,7 +20,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-import twin as T
 
 from verity.commitments.crypto.turboshake import turboshake128
 from verity.circuits.kernels.tc import group_sum_total_batch
@@ -30,6 +29,7 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.accounting.pouw.verifier import audit as AU
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.experimental.pearl_c4.prover.kernels import twin as T
 
 SHAPE = (128, 128, 1024)
 WEIGHT = 1
