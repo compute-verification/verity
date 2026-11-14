@@ -73,16 +73,16 @@ def test_their_gates_are_the_rows(KVL, R, TILE):
 
 
 def test_on_bits_the_tile_part_is_its_boolean_version_and_returns_its_words():
-    """The switch takes the word tile part to `boolean_dsa_ds_mla`'s `_v2`, which returns its words on every row kind, the scale
-    each row's own."""
-    TILE = 32
+    """The switch takes the word tile part to `boolean_dsa_ds_mla`'s `_v2`, which returns its words on every row kind of the
+    least row, on its first TILE words and weights and its own scale."""
+    TILE, KVL = 32, 256
     tile = bind(M.DsaLatentRowDsMlaTile, TILE=TILE)
     bits = boolean_version(tile)
     assert BL.is_boolean(bits) and TR.word_of(bits).id == tile.id
-    rows = _rows(np.random.default_rng(11), TILE)
-    x, w = (np.stack([r[k] for r in rows]) for k in (1, 3))
-    sumsq = bind(DN.DsaRMSNormSumSq, N=TILE, EPS=1e-5)
-    r = np.array([_flat(evaluate(sumsq, _words(x[i])))[0] for i in range(len(rows))], np.uint32)
+    rows = _rows(np.random.default_rng(11), KVL)
+    sumsq = bind(DN.DsaRMSNormSumSq, N=KVL, EPS=1e-5)
+    r = np.array([_flat(evaluate(sumsq, _words(row[1])))[0] for row in rows], np.uint32)
+    x, w = (np.stack([row[k][:TILE] for row in rows]) for k in (1, 3))
     got = [np.asarray(a).reshape(len(rows), -1) for a in BS.evaluate_words(bits, x, w, r)]
     for i in range(len(rows)):
         want = _flat(evaluate(tile, _words(x[i]), _words(w[i]), int(r[i])))
