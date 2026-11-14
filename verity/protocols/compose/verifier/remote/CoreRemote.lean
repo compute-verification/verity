@@ -177,9 +177,8 @@ private def strayOf (policy : String) (rs : List String) : Option String :=
     fun c => [VStar.Recursive.Sampled.protocol.digest c]
 #guard strayOf (record 0) [record 0, record 0] == none
 -- a executionPhase on another record
-#guard (strayOf (record 0) [record 0, record 1]).map (·.startsWith
-  "record: verity/inference-only/v0 committed ") == some true
-#guard (strayOf (record 0) [record 0, record 1]).map (contains · ", verity/pouw/period/v1 committed ") == some true
+#guard strayOf (record 0) [record 0, record 1] ==
+  some "record: verity/inference-only/v0 and verity/pouw/period/v1 named different values"
 -- every executionPhase on a record that isn't the policy's
 #guard (strayOf (record 1) [record 0]).isSome
 -- a executionPhase naming no Commit record leaves the period to refuse it
@@ -405,7 +404,7 @@ private def arowOn (rec : Json) : Option (Except (String × String) Unit) :=
 -- the tie: the period's one executionPhase on `R` holds it, a executionPhase on `W` is a stray
 #guard executionPhases.strays [policyOn #[recW] recR, monitoringPeriodNaming [recR]] == none
 #guard executionPhases.strays [policyOn #[recW] recR, monitoringPeriodNaming [recW]] ==
-  some s!"record: {InferenceOnlyCheck.Protocol.protocolId} committed {digestOf recR}, {PouwCheck.Period.protocolId} committed {digestOf recW}"
+  some s!"record: {InferenceOnlyCheck.Protocol.protocolId} and {PouwCheck.Period.protocolId} named different values"
 
 -- remote on the three cases: the policy accepts `R` and the executionPhase names it, so remote's refusals are the period's own,
 -- whose credit reads an auditor's ledger, here empty, and SPOT's, whose coins no challenger signed
@@ -448,7 +447,7 @@ private def creditingOn (executionPhase : Json) : Answer :=
 #guard (creditingOn recR).verdict == .accept
 #guard (creditingOn recW).verdict == .reject
 #guard (creditingOn recW).reason ==
-  some s!"record: {InferenceOnlyCheck.Protocol.protocolId} committed {digestOf recR}, {PouwCheck.Period.protocolId} committed {digestOf recW}"
+  some s!"record: {InferenceOnlyCheck.Protocol.protocolId} and {PouwCheck.Period.protocolId} named different values"
 
 /-! ## `verity/remote/v1`, the composite of record -/
 
@@ -539,8 +538,8 @@ private def runStray (policy run : String) : Option String :=
 #guard (digestOf (record 0)).size == 64
 #guard runRecord (pearlOn (record 0)) == policyRecord (committing InferenceOnlyCheck.Protocol.protocol (record 0))
 #guard runStray (record 0) (record 0) == none
-#guard (runStray (record 1) (record 0)).map (·.startsWith "record: verity/inference-only/v0 committed ") == some true
-#guard (runStray (record 1) (record 0)).map (contains · ", verity/pouw/pearl-plus/v1 committed ") == some true
+#guard runStray (record 1) (record 0) ==
+  some "record: verity/inference-only/v0 and verity/pouw/pearl-plus/v1 named different values"
 -- a run whose commitment doesn't decode leaves Pearl+ to refuse it
 #guard V1.run.strays [committing InferenceOnlyCheck.Protocol.protocol (record 0), refused PouwCheck.PearlPlus.Protocol.protocol] ==
   none
@@ -555,10 +554,8 @@ private def executionPhaseStray (policy : String) (w : String) : Option String :
 #guard runExecutionPhase (pearlIn (record 0) (record 9)) == some [digestOf (record 9)]
 #guard policyPrevious (committing InferenceOnlyCheck.Protocol.protocol (chainedAfter 0 (record 9))) == some [digestOf (record 9)]
 #guard executionPhaseStray (chainedAfter 0 (record 9)) (record 9) == none
-#guard (executionPhaseStray (chainedAfter 0 (record 8)) (record 9)).map
-  (·.startsWith "window: verity/inference-only/v0 committed ") == some true
-#guard (executionPhaseStray (chainedAfter 0 (record 8)) (record 9)).map (contains · ", verity/pouw/pearl-plus/v1 committed ") ==
-  some true
+#guard executionPhaseStray (chainedAfter 0 (record 8)) (record 9) ==
+  some "window: verity/inference-only/v0 and verity/pouw/pearl-plus/v1 named different values"
 #guard (executionPhaseStray (record 0) (record 9)).isSome
 -- both ties hold on a run on the policy's record whose W that record is chained right after
 #guard (ties.findSome? (·.strays [committing InferenceOnlyCheck.Protocol.protocol (chainedAfter 0 (record 9)),
