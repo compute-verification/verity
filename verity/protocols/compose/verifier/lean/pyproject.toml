@@ -52,7 +52,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "tools/config/verity_config/
           "verity/commitments/lms/lean",
           "verity/commitments/identity", "verity/commitments/randomness",
           # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through
-          # (`deploy.stream.Side`)
+          # (`verity.runtime.stream.Side`)
           "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/circuits", "verity/commitments", "verity/hardware/__init__.py",
           "verity/definitions", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/tool.py",
