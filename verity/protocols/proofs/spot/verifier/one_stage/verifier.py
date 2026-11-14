@@ -1,4 +1,4 @@
-"""The one-stage audit's verifier: its Lean port (`sampled-proofs-verifier`, the Lake package
+"""The one-stage audit's verifier: its Lean port (`spot-verifier`, the Lake package
 `verity/protocols/proofs/spot/verifier/lean`, built with `lake` on first use) and this package's Python, the reference, run side by
 side on every check.
 
@@ -61,12 +61,12 @@ from verity.protocols.proofs.spot.verifier.one_stage import audit, caller as C, 
 from .verdict import Verdict
 
 RECORD_VERDICT = "lean"
-"""Whose verdict is the record's: `"lean"` (`sampled-proofs-verifier`) or `"python"` (this package's, the reference)."""
+"""Whose verdict is the record's: `"lean"` (`spot-verifier`) or `"python"` (this package's, the reference)."""
 
 DISAGREE = "disagree"
 ROOT = Path(__file__).resolve().parents[6]
 PACKAGE = ROOT / "verity/protocols/proofs/spot/verifier/lean"
-EXE = "sampled-proofs-verifier"
+EXE = "spot-verifier"
 #: SPOT's caller's check's Lean (`VStar.Recursive.Caller.check`), which SPOT's package can't load: its own executable
 CALLER_PACKAGE = ROOT / "verity/protocols/proofs/spot_flock/verifier/lean"
 CALLER_EXE = "spot-flock-caller"
@@ -81,7 +81,7 @@ class LeanError(RuntimeError):
 
 @functools.cache
 def executable(exe: str = EXE, package: Path = PACKAGE) -> Path:
-    """`lake build sampled-proofs-verifier` (or `exe` of `package`), once per process, under `BUILD_LOCK`; the
+    """`lake build spot-verifier` (or `exe` of `package`), once per process, under `BUILD_LOCK`; the
     executable's path."""
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
@@ -174,7 +174,7 @@ atexit.register(_caller_server.close)
 
 
 def lean(fn: str, value: Any) -> dict[str, Any]:
-    """The Lean's answer (`spot-flock-caller`'s for ``caller``, else `sampled-proofs-verifier`'s): its output, or
+    """The Lean's answer (`spot-flock-caller`'s for ``caller``, else `spot-verifier`'s): its output, or
     `{"refused": reason}` where it refuses the input. Where it can't be built or run, or answers outside its protocol,
     `{"refused": reason, "answered": False}`: a refusal that is not the Lean's."""
     server = _caller_server if fn == "caller" else _server

@@ -64,7 +64,7 @@ public import Proofs.Poub.RemoteHeld.Sample
 public import Proofs.Poub.RemoteHeld
 public import Proofs.Poub.RemoteHeld.Meets
 public import Proofs.Poub.RemoteHeld.OverTime
-public import Proofs.Poub.RemoteHeld.Draw
+public import Proofs.Poub.RemoteHeld.Sample
 public import Proofs.Poub.RemoteHeld.DrawMeets
 public import Proofs.Poub.RemoteHeld.Binding
 public import Proofs.Poub.RemoteHeld.Sketch

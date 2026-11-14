@@ -40,7 +40,7 @@ path = "../../verity/protocols/proofs/recursion/verifier/vstar_cli"
 name = "core_vstar_recursive"
 path = "../../verity/protocols/proofs/spot_flock/verifier/lean"
 
-# Sampled proofs' recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
+# SPOT's recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
 # `RecursiveKSAt`'s event
 [[require]]
 name = "spot_flock_recursion"

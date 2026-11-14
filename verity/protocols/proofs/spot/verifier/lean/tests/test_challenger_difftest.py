@@ -1,5 +1,5 @@
 """The proof system's challenger in Lean (`Spot.Challenger`, the verifier) against its Python mirror
-(`verity.protocols.proofs.spot.device.challenger`), through `sampled-proofs-difftest`'s challenger pieces: a coin
+(`verity.protocols.proofs.spot.device.challenger`), through `spot-difftest`'s challenger pieces: a coin
 commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`; and the challenger's signed record
 (`Spot.ChallengerRecord`): the verifier's key and a record as `from_json` reads them, with `record_message`, and
 `trusted_reason`.
@@ -79,7 +79,7 @@ from verity.commitments.identity import canonical_json_text
 from verity.commitments.crypto import lms
 
 PACKAGE = Path(__file__).resolve().parents[1]
-PIECES = "sampled-proofs-difftest"
+PIECES = "spot-difftest"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 LABELS = ["pouw/salt", "pouw/draw", "pouw/round", "vllm/positions", "vllm/identities", "memory/audit", "a", "x-1"]

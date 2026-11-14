@@ -4357,6 +4357,16 @@
     },
     {
       "paths": {
+        "verity/protocols/accounting/certifier/prover/tests/test_egress_zk.py": "benchmarks/network_traces/tests/test_egress_zk.py",
+        "verity/protocols/accounting/certifier/prover/tests/test_leak_scan.py": "benchmarks/network_traces/tests/test_leak_scan.py",
+        "verity/protocols/accounting/certifier/prover/tests/test_n2_zk.py": "benchmarks/network_traces/tests/test_n2_zk.py",
+        "verity/protocols/accounting/certifier/prover/tests/test_scan_zk_challenger.py": "benchmarks/network_traces/tests/test_scan_zk_challenger.py",
+        "verity/protocols/accounting/certifier/prover/tests/test_scan_zk_lean_one.py": "benchmarks/network_traces/tests/test_scan_zk_lean_one.py",
+        "verity/protocols/accounting/certifier/prover/tests/test_warden_zk.py": "benchmarks/network_traces/tests/test_warden_zk.py"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/accounting/certifier/verifier/compile_slice.py": "adapters/vllm/verity_vllm/compiler/compile_slice.py",
         "verity/protocols/accounting/certifier/verifier/compile_slice.circuit-check.py": "adapters/vllm/verity_vllm/compiler/compile_slice.circuit-check.py",
         "verity/protocols/accounting/certifier/verifier/compile_slice.circuit-check.json": "adapters/vllm/verity_vllm/compiler/compile_slice.circuit-check.json",

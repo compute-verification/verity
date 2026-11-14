@@ -194,7 +194,7 @@ parts = 3
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
 artifacts = ["verity/protocols/accounting/pouw/verifier/lean/check/.lake/build/bin/pouw-check",
              "verity/protocols/accounting/pouw/verifier/lean/check/.lake/build/bin/pouw-check-difftest",
-             "verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest"]
+             "verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-difftest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
