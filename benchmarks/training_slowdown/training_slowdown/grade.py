@@ -8,7 +8,7 @@ A config (an attack's TOML file) names its `start`, its `target.gain`, its `poli
 with `split` `search` or `final`. `--honest` is the honest config's DIR, and each `--also` another config's at the
 same start and gain. The grade reads no file of a served run. A record may say where it came from (`provenance`, which
 no job writes): the grade never reads it and passes it on, beside each record it read (`records`) and, for the record
-ρ read, in what S rests on (`rests_on`). It prints the block (`text`) and writes `OUT/slowdown.json` (`SCHEMA`):
+whose slowdown it read, in what S rests on (`rests_on`). It prints the block (`text`) and writes `OUT/slowdown.json` (`SCHEMA`):
 
 - **the gain**, through the fit of the start's data (`fit`): L(C) = E + A·C^(−γ) through the registry's starts on that
   data, each at its training compute C0 and its loss. A loss's effective compute is the C at which the fit reaches it,
@@ -35,28 +35,28 @@ no job writes): the grade never reads it and passes it on, beside each record it
   states it on while its op log names a GEMM float32 is refused, with the way out (`TF32_FIX`): no dtype of
   torch's says a product ran in TF32, and the exact product's price is not that job's. Those rows named `tf32` are
   priced as the TF32 GEMM, which holds only where the term's M holds none of them: a trace names no TF32, so a
-  product of M named so is priced apart from its trace and ρ is refused (`priced_apart`);
-- **ρ**, the attack's own cost at the config's policy (`policy.named`): `formalism.published` at (c, k) on the search
+  product of M named so is priced apart from its trace and the record's slowdown is refused (`priced_apart`);
+- **the record's slowdown**, the attack's own cost at the config's policy (`policy.named`): `formalism.published` at (c, k) on the search
   record, at its first checkpoint reaching the gain on the search split, else at its last, which the block says. It
   reads the record's `trace`, the step the job traced itself, and prices its product rows here (`traced`,
   `work.priced`): the grade holds no price. Where the Fit fails it is the slowdown the benchmark's one entry point
   gives on those products (`calculator.slowdown`, which `formalism.bound` calls): the grade computes none. A search
   record with no trace, with one the capture refused or of a capture version this tree doesn't read, with one that
-  prices a product of M in another dtype than the record's op log names for it (`priced_apart`: ρ divides the
+  prices a product of M in another dtype than the record's op log names for it (`priced_apart`: the record's slowdown divides the
   trace's work by the record's count, and the two have one price), or with a step `formalism.measure` refuses, has
-  no ρ, and then there is no S; the reason names how the trace is taken again (`retrace`). So does a record whose
-  trace was not taken (`trace.failed`: the process that traced the step raised, or ended), whose ρ is unmeasured,
+  no slowdown, and then there is no S; the reason names how the trace is taken again (`retrace`). So does a record whose
+  trace was not taken (`trace.failed`: the process that traced the step raised, or ended), whose slowdown is unmeasured,
   not refused: nothing was found against the step;
-- **the sensitivities** beside ρ, never in it (`formalism.SENSITIVITIES`' reduction and update), and the version of
+- **the sensitivities** beside the record's slowdown, never in it (`formalism.SENSITIVITIES`' reduction and update), and the version of
   the code that took the trace (`capture_code`): from the trace's `circuit`, the measured step's own cut of its
-  gradient and its structure, and its `capture_code`. A record whose trace has neither still grades, at the same ρ
+  gradient and its structure, and its `capture_code`. A record whose trace has neither still grades, at the same slowdown
   where τ's stub changes no step count: the block says which figures are blank and why (`blank`);
-- **S = p·ρ** against each H, a lower bound where ρ is one (`partial`), with what each factor rests on, and with
+- **S = p·ρ** against each H, a lower bound where the record's slowdown is one (`partial`), with what each factor rests on, and with
   `capture.products.ATTENTION_PREMISE` where the search record's trace prices an attention call's products on it
   (`capture.products.on_premise`);
 - **the bound of record** at the same policy (the `bound` of `calculator.slowdown`'s result there): the least
-  slowdown of any partition of the attack's traced circuit, by the theorem's count solved for the fewest blocks. ρ's
-  products term is this bound, so where products bind ρ is it and S is p times it (`BOUND_IS_SLOWDOWN`). The block prints
+  slowdown of any partition of the attack's traced circuit, by the theorem's count solved for the fewest blocks. The
+  products term of the record's slowdown is this bound, so where products bind the record's slowdown is it and S is p times it (`BOUND_IS_SLOWDOWN`). The block prints
   it under S with its statement and what it rests on;
 - **per period** (`per_period`): the run's AND gates at S, C·ρ, and their share of one datacenter's and of the
   world's compute over a window, a week, a month and a year (`calculator.fleets`, `calculator.periods`), with the
@@ -107,18 +107,18 @@ PER_DECADE, FIT_MIN, FIT_SPAN, FIT_TARGET, PARAMS, DIGITS = 20, 3, 10.0, 5, 3, 6
 GAMMAS = np.linspace(0.01, 2.0, 399)
 #: a checkpoint's facts about its output that `formalism.measure` reads, where the record has them
 OUTPUT = ("e_bytes", "format", "rebuild_macs", "decoder_gates")
-#: what ρ reads of a record's `trace` (`traced`) and has no figure without; the job writes more (`traced.trace_step`)
+#: what a record's slowdown reads of its `trace` (`traced`) and has no figure without; the job writes more (`traced.trace_step`)
 TRACE = ("capture", "tokens", "k", "rows", "p_match", "at", "data_dependent", "carried_scalars")
 #: what the grade reads of a trace beside `TRACE`, where the trace has it, each with what it is: a record without one
 #: still grades, the figures that read it blank (`blank`)
 BESIDE = {"circuit": "the measured step's cut of its gradient and its structure, which the reduction and update "
                      "sensitivities read",
           "capture_code": "the version of the code that took the trace"}
-#: how the bound of record stands to ρ, which the block says under it: `calculator.slowdown` scores each choice of the
+#: how the bound of record stands to the record's slowdown, which the block says under it: `calculator.slowdown` scores each choice of the
 #: work by the calculator's bound, so the products term is the bound of record on the work it chose
 BOUND_IS_SLOWDOWN = ("the products term of the record's slowdown is this bound, the theorem's count solved for the fewest blocks, times c/|C|, on "
                 "the same N, O, β, b and F: where products bind, the record's slowdown is it and S is p times it")
-#: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which the reason names where ρ
+#: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which the reason names where the record's slowdown
 #: has no trace to read: one refused, or one that was not taken. `RETRACE_ON` is the job less its device, for a trace
 #: that is to be taken on a device of the job's kind
 RETRACE_ON = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device "
@@ -270,7 +270,7 @@ def rows_of(record: dict) -> list[dict]:
     """One row per checkpoint of a run record, as `formalism.measure` reads one: its step, its loss (`val_bpb`, the
     checkpoint's `score.bpb`), the start's loss on the same split (`start_bpb`, its `score.start_bpb`), the split, the
     `formalism` block and op log of the run's prefix through it, its output's facts (`OUTPUT`) and the record's
-    `invalid`. The block is the count's (`formalism.of_record`); what the record's `trace` gives it is added where ρ
+    `invalid`. The block is the count's (`formalism.of_record`); what the record's `trace` gives it is added where the record's slowdown
     reads it (`traced`)."""
     out = []
     for cp in record["checkpoints"]:
@@ -365,10 +365,10 @@ def ratio(c: dict | None, h: dict | None) -> dict | None:
     return c and h and {"p": c["mean"] / h["mean"], "range": [c["min"] / h["max"], c["max"] / h["min"]]}
 
 
-# ---- ρ, the bound of record and the periods --------------------------------------------------------------------------
+# ---- the record's slowdown, the bound of record and the periods ------------------------------------------------------
 
 def retrace(record: dict, on: str = "cpu") -> str:
-    """How a record's trace is taken again, which a record ρ can't read says: by the job that re-traces a record's
+    """How a record's trace is taken again, which a record whose slowdown can't be read says: by the job that re-traces a record's
     own config (`RETRACE`), which reads its `config.text`, takes the trace with the capture of the tree it runs in
     (so this tree's, for a trace this grade is to read) and refuses a tree that reads the config as another program
     than the record's; a record without its `config.text` or its `commit` has no config to re-trace from. The job
@@ -418,9 +418,9 @@ def with_circuit(record: dict, circuit: dict) -> dict:
 
 def priced_apart(tr: dict, log: dict) -> list[dict]:
     """The products of a record's trace `tr` that the products term's M holds (`work.in_m`) and that the trace prices
-    in another dtype (`capture.products.priced_dtype`) than the record's op log names for them: ρ divides the work of
+    in another dtype (`capture.products.priced_dtype`) than the record's op log names for them: the record's slowdown divides the work of
     the trace's products by the record's count, so the two have one price only where the two dtypes are one. `log` is
-    the record's `macs_log` through the checkpoint ρ is read at. A product is matched to the log's ops as
+    the record's `macs_log` through the checkpoint the record's slowdown is read at. A product is matched to the log's ops as
     `formalism.other_program` matches a trace to a run, by its shape (m, K, n) in either orientation, from the one
     reading of a log's products (`formalism.products_of_log`), and by whether it is the backward's; the dtypes the
     log names for it are those of every op of that shape. Each found is {"row", "priced", "named"}, the largest first
@@ -450,7 +450,7 @@ def priced_apart(tr: dict, log: dict) -> list[dict]:
 
 
 def priced_apart_reason(record: dict, found: list[dict]) -> str:
-    """Why ρ is refused where `priced_apart` finds products in `record`'s trace, with the way out: the work would be
+    """Why the record's slowdown is refused where `priced_apart` finds products in `record`'s trace, with the way out: the work would be
     priced in one dtype and the count it is divided by in another. It names how many, and the largest with its two
     dtypes. For a product its capture's rule prices in another dtype than its circuit counts it in (a capture before
     `capture.products.PRICED_AS_TRACED_FROM`), the way out is the trace taken again by this tree's capture, which
@@ -478,7 +478,7 @@ def priced_apart_reason(record: dict, found: list[dict]) -> str:
 
 
 def traced(record: dict, row: dict) -> dict:
-    """`row` (one of `rows_of(record)`) as ρ reads it: with the products of the record's `trace`, the step its job
+    """`row` (one of `rows_of(record)`) as the record's slowdown reads it: with the products of the record's `trace`, the step its job
     traced (`traced.trace_step`), in its `formalism` block, as `formalism.measure` takes a traced record's. Each raw
     product row is priced here (`work.priced`), at the k the job classified the rows at and at each
     other k of the console's dial (`at`), and the traced step stands for every step through the row's checkpoint
@@ -504,21 +504,21 @@ def traced(record: dict, row: dict) -> dict:
 
     tr = record.get("trace")
     if not tr:
-        raise F.Refused(f"the search record has no trace, and ρ reads a traced step; {retrace(record)}")
+        raise F.Refused(f"the search record has no trace, and its slowdown reads a traced step; {retrace(record)}")
     if "failed" in tr:
-        raise ValueError(f"the search record's trace was not taken ({tr['failed']}), and ρ reads a traced step; "
+        raise ValueError(f"the search record's trace was not taken ({tr['failed']}), and its slowdown reads a traced step; "
                          f"{retrace(record)}")
     if "refused" in tr:
         r = tr["refused"]
         raise F.Refused(f"the capture refused the search record's step ({r.get('reason')}, {r.get('op')}: "
-                        f"{r.get('message')}), and ρ reads a traced step; {retrace(record)}")
+                        f"{r.get('message')}), and its slowdown reads a traced step; {retrace(record)}")
     if tr.get("capture") not in products.READS:
         reads = " and ".join(f"{c}'s" for c in products.READS)
         raise F.Refused(f"the search record's trace is capture {tr.get('capture')}'s, and this grade reads capture "
                         f"{reads}; {retrace(record)}")
     lacks = [k for k in TRACE if k not in tr]
     if lacks:
-        raise F.Refused(f"the search record's trace has no {', '.join(lacks)}, which ρ reads; {retrace(record)}")
+        raise F.Refused(f"the search record's trace has no {', '.join(lacks)}, which its slowdown reads; {retrace(record)}")
     apart = priced_apart(tr, row.get("macs_log") or {})
     if apart:
         raise F.Refused(priced_apart_reason(record, apart))
@@ -548,7 +548,7 @@ def traced(record: dict, row: dict) -> dict:
 
 
 def blank(record: dict, got: dict, unmeasured: dict) -> dict:
-    """The figures beside ρ (`got`, `formalism.published`'s) that have no value, each with why. On a record whose
+    """The figures beside the record's slowdown (`got`, `formalism.published`'s) that have no value, each with why. On a record whose
     trace lacks a key of `BESIDE`: the reduction and update sensitivities without its `circuit`, the `capture_code`
     without its own, each with how the trace is taken again (`retrace`; this tree's job keeps both). On a trace that
     has its circuit, a sensitivity the bound leaves without a figure, with the bound's reason (`unmeasured`)."""
@@ -565,14 +565,14 @@ def blank(record: dict, got: dict, unmeasured: dict) -> dict:
 
 
 def slowdown_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> tuple[dict, dict]:
-    """ρ at the policy `pol` from the config's search job `run`, a start of `shape`, and the bound of record there:
+    """The record's slowdown at the policy `pol` from the config's search job `run`, a start of `shape`, and the bound of record there:
     `formalism.published` at (c, k) on its first scored checkpoint at or below its target, else on its last (`at`
     says which), read with its record's trace (`traced`), with the theorem's inputs there (`work`, the bound of
     record's: none where the record gives no slowdown or its M is empty), the capture that traced it, the figures
     beside it that have no value (`blank`), what the bound says of a sensitivity that sums only some of the
     record's parts (`unmeasured`) and, where M left out the positions the record's steps counted as repeats on the
     batch's tokens, that count (`repeats`, `work.batch_count`'s). The bound of record is the `bound` of `calculator.slowdown`'s result on the
-    record, which ρ's products term is of too (`formalism.bound`'s `entry`). No ρ, with why, and the bound not
+    record, which the products term of the record's slowdown is of too (`formalism.bound`'s `entry`). No record's slowdown, with why, and the bound not
     available, without a search record, without a scored checkpoint, on a record whose trace `traced` refuses, or on
     one `formalism.measure` refuses or can't measure."""
     none = calculator.slowdown(pol, None)["bound"]
@@ -606,15 +606,15 @@ def slowdown_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> 
 def per_period(run_gates: float, slowdown: dict) -> dict:
     """The run's gates at S (`run_gates`, C·ρ) in AND gates, at a served-precision GEMM's gates an AND, and their share
     of each fleet's compute over each period (`calculator.fleets`, `calculator.periods`), with what is measured, what
-    is proved (on the batch, the premise `work.batch_premise` states of ρ's `repeats`) and what is scaled."""
+    is proved (on the batch, the premise `work.batch_premise` states of the record's slowdown's `repeats`) and what is scaled."""
     run_and = run_gates / gates.per_and(f"gemm/{policy.SERVED_PRECISION}")
     rows = [{"over": fl["over"], "fleet": fl["fleet"], "locations": fl["locations"], "period": name, "seconds": s,
              "fleet_and_gates": fl["and_per_s"] * s, "share": run_and / (fl["and_per_s"] * s)}
             for fl in calculator.fleets() for name, s in calculator.periods().items()]
     return {"run_and_gates": run_and, "window": calculator.window()[0], "rows": rows, "parts": {
-        "measured": "|C| of each seed and H, the counted gates of the records read, so p; ρ's inputs, one traced step "
+        "measured": "|C| of each seed and H, the counted gates of the records read, so p; the inputs of the record's slowdown, one traced step "
                     "of the search record",
-        "proved": (f"the count ρ's products term solves for the fewest blocks, {calculator.theorem()}'s first "
+        "proved": (f"the count the products term of the record's slowdown solves for the fewest blocks, {calculator.theorem()}'s first "
                    "conjunct (`HEShared`'s where its products share arrays): a lower bound at the N, O, β_w, β_x and "
                    "b_y the traced step gives, given (H), (E), the theorem's hypotheses on the circuit, which the "
                    f"trace doesn't check, and that {work.batch_premise(slowdown.get('repeats'))}; the solving is the "
@@ -686,7 +686,7 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
     wanted = (config.get("seeds") or {}).get("search") or [None]
     search = next((r for r in jobs[me] if r["split"] == "search" and wanted[0] in (None, r["seed"])), None)
     slowdown, of_record = slowdown_of(search, f, g, pol, entry["shape"])
-    why = two or ((slowdown.get("why") or "ρ is unmeasured") if slowdown["rho"] is None else
+    why = two or ((slowdown.get("why") or "the record's slowdown is unmeasured") if slowdown["rho"] is None else
                   None if C else f"no seed of the config reaches {g:g}x on {SPLITS[basis]}")
     S = {k: None if why or not p[k] else p[k]["p"] * slowdown["rho"] for k in H} | {
         "why": why, "lower_bound": bool(slowdown.get("partial"))}
