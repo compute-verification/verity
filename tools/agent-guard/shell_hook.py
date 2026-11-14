@@ -1082,7 +1082,8 @@ def weight(text: str) -> int:
     """The heaviest simple command of `text` run on this VM: a command through `research run` or over ssh runs elsewhere."""
     try:
         commands = words_of(text)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split weighs nothing ({e})", file=sys.stderr)
         return 0
     return max((weight_words(words) for words, _ in commands), default=0)
 
@@ -1096,23 +1097,25 @@ def available() -> tuple[float, float] | None:
     try:
         info = dict(re.findall(r"^(\w+):\s+(\d+) kB", meminfo.read_text(), re.M))
         avail, total = int(info["MemAvailable"]) * 1024, int(info["MemTotal"]) * 1024
-    except (OSError, KeyError, ValueError):
+    except (OSError, KeyError, ValueError) as e:
+        print(f"shell_hook: {meminfo} unread, so memory is not known ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     # the balloon's pages are counted as used, but the hypervisor hands them back as the VM asks for memory
     if (vmstat := meminfo.with_name("vmstat")).is_file():
         v = dict(re.findall(r"^(balloon_inflate|balloon_deflate) (\d+)$", vmstat.read_text(), re.M))
         avail = min(total, avail + max(0, int(v.get("balloon_inflate", 0)) - int(v.get("balloon_deflate", 0))) * 4096)
     try:
-        rel = open("/proc/self/cgroup").read().split("::", 1)[1].strip()
+        rel = open("/proc/self/cgroup").read().partition("::")[2].strip()
         cg = settings.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
-        limit = open(f"{cg}/memory.max").read().strip()
+        limit = open(f"{cg}/memory.max").read().strip() if rel and os.path.exists(f"{cg}/memory.max") else "max"
         if limit != "max" and int(limit) < total:
             meminfo_avail, used, total = avail, int(open(f"{cg}/memory.current").read()), int(limit)
             avail = min(meminfo_avail, total - used)        # stands when memory.stat can't be read
             cache = int(dict(re.findall(r"^(\w+) (\d+)$", open(f"{cg}/memory.stat").read(), re.M)).get("inactive_file", 0))
             avail = min(meminfo_avail, total - max(0, used - cache))
-    except (OSError, IndexError, ValueError):
-        pass
+    except (OSError, ValueError) as e:
+        print(f"shell_hook: the cgroup's memory unread, so what was read before stands ({type(e).__name__}: {e})",
+              file=sys.stderr)
     return avail, total
 
 
@@ -1188,7 +1191,8 @@ def blocks_text(text: str) -> float:
     """The longest any simple command of `text` plainly blocks for; one sent to the background (`&`) blocks nothing."""
     try:
         commands = words_of(text)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split blocks for no time ({e})", file=sys.stderr)
         return 0.0
     return max((blocks_words(words) for words, op in commands if op != "&"), default=0.0)
 
@@ -1292,7 +1296,8 @@ def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     worktree_guard = guard()
     try:
         raw, (dirs, _) = flattened(command), cd_dirs(command, cwd)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split passes the checkout guard ({e})", file=sys.stderr)
         return None
     next_ok = [assigned(w, "AGENT_GUARD_PUSH_NEXT_OK") for w in raw]
     return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok, git_env(raw), dirs)
@@ -1347,9 +1352,12 @@ def delivery(conversation: str) -> str | None:
         return None
     box = os.path.join(INBOX, conversation + ".md")
     taking = box + ".taking"
+    if not os.path.exists(box):
+        return None
     try:
         os.replace(box, taking)
-    except OSError:
+    except OSError as e:
+        print(f"shell_hook: {box} not taken, so not delivered now ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     try:
         with open(taking) as f:
@@ -1472,7 +1480,8 @@ def main() -> int:
             print(f"shell_hook: inbox poll failed: {e}", file=sys.stderr)
         try:
             message = delivery(conversation)
-        except Exception:                               # an unreadable inbox must not block the agent's command
+        except (OSError, ValueError) as e:              # an unreadable inbox must not block the agent's command
+            print(f"shell_hook: inbox unreadable, no message delivered: {type(e).__name__}: {e}", file=sys.stderr)
             message = None
         try:
             merge_drivers(command, cwd)

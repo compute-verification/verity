@@ -498,9 +498,12 @@ def sent_path() -> Path:
 
 
 def load_sent() -> dict:
+    if not sent_path().exists():
+        return {}
     try:
         d = json.loads(sent_path().read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        log(f"{sent_path()} unreadable, so no line counts as posted before ({type(e).__name__}: {e})")
         return {}
     return d if isinstance(d, dict) else {}
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_bench import served_table
+from verity_bench import served_render, served_table
 from verity_bench.cli import main
 from verity_bench.vllm.arms import Arm
 from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, load_spec, resolve_spec
@@ -199,7 +199,7 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
     assert others and all(row["run"] is None and row["over_served" if "protocol" in row else "factor"] is None
                           for row in others)
 
-    markdown = served_table.render(table)
+    markdown = served_render.render(table)
     [line] = [line for line in markdown.splitlines() if line.startswith("| Commit |") and "b8-p512-mixed" in line]
     assert line.startswith(f"| Commit | {RTX} | `{COMMIT_SPEC}` | b8-p512-mixed |")
     assert "| 1.500× ± 0.000 | 1.500× ± 0.000 | 1.500× ± 0.000 | 3 | r20261024-030000-0002 |" in line
@@ -320,7 +320,7 @@ def test_a_run_of_record_is_a_labelled_run_or_a_labelled_arts_runs_from_a_fresh_
     [factor] = table["factors"]
     assert factor["factor"]["time_per_output_token_s"]["mean"] == pytest.approx(0.5)
 
-    markdown = served_table.render(table)
+    markdown = served_render.render(table)
     assert f"| r20261024-020000-0001 | `{b32[:16]}` (record `{listed[:16]}`) | prices it, doesn't credit it |" in markdown
     assert f"| by id | {H200} | `{COMMIT_SPEC}` | b8-p512-mixed | 1.500× ± 0.000 |" in markdown
     assert "r20261024-040000-0004" in markdown.split("Passed over")[1]
@@ -374,7 +374,7 @@ def test_a_live_pouw_row_is_its_runs_median_decode_step_over_its_controls_and_st
     assert why["r20261024-210000-0003"] == "timed tokens differ from exact's"
     assert why["r20991231-000000-0000"] == "not in the store or on its remote"
 
-    markdown = served_table.render(table)
+    markdown = served_render.render(table)
     assert (f"| H200 | vy-dc-h200 | 32 | 64 | 16.480 | `{LIVE_CONTROL}` | 3.744 | 4.402× | 3 | off-node | "
             f"r20261024-210000-0001 | `{record[:16]}` | H200 gated live: gamma 4.40 |") in markdown
     assert "per step, not per token" in markdown
@@ -399,6 +399,55 @@ def test_the_served_table_command_prints_markdown_and_json(tmp_path, monkeypatch
     table = json.loads(capsys.readouterr().out)
     assert table["schema"] == served_table.SCHEMA
     assert _commit_rows(table)["b8-p512-mixed"]["run"] == "r20261024-020000-0001"
+
+
+def test_under_a_research_run_the_served_table_records_its_metrics(tmp_path, monkeypatch, capsys):
+    """Under a research run, `served-table` with a runner's metrics writes each into the run's result through the kit:
+    its row's arm over stock as served in time per output token as a percent over stock, measured, with its interval,
+    its run and result art, and its row's caveats; a row with no run has no value and says why, and the run's
+    validation then fails naming it. Outside a run it writes nothing."""
+
+    from verity_bench import kit
+
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
+                                                    "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi"})
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
+    producer = Producer(tmp_path)
+    art = producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.25, reps=3))
+    producer.label("r20261024-020000-0001", "note", "no pinned sm_120 build", "2026-10-24T05:00:00Z")
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "fresh"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(producer.config))
+    monkeypatch.setattr(served_table, "spec_added", lambda root, spec: ADDED)
+    monkeypatch.setattr(served_table, "PROTOCOLS", BY_SPEC["protocols"])
+    monkeypatch.setattr(served_table, "FACTORS", BY_SPEC["factors"])
+    monkeypatch.setattr(served_table, "BREAKDOWNS", BY_SPEC["breakdowns"])
+    metrics = {"benchmarks/served-overhead-commit": f"{COMMIT_SPEC}/b8-p512-mixed",
+               "benchmarks/served-overhead-pous-bandwidth-audit": "llama31-8b-fp8-1gpu-bandwidth-served-r6/b8-p512-mixed"}
+
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    assert main(["served-table"], metrics=metrics) == 0 and not list(tmp_path.rglob(kit.RESULT))
+    outside = capsys.readouterr().out
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    assert main(["served-table"], metrics=metrics) == 0
+    assert capsys.readouterr().out == outside
+
+    got = json.loads((run_dir / kit.RESULT).read_text())
+    commit, pous = got["measurements"]
+    assert (commit["name"], commit["unit"], commit["mark"]) == (
+        "benchmarks/served-overhead-commit", served_render.OVERHEAD_UNIT, "measured")
+    assert commit["value"] == pytest.approx((1.2 * 1.25 - 1) * 100) and commit["ci95"] == pytest.approx([50.0, 50.0])
+    assert commit["inputs"] == ["measured", "r20261024-020000-0001", art]
+    assert (commit["protocol"], commit["device"], commit["reps"], commit["caveats"]) == ("Commit", RTX, 3, "no pinned sm_120 build")
+    assert pous["value"] is None and pous["why"] == ("no served ratio at llama31-8b-fp8-1gpu-bandwidth-served-r6/b8-p512-mixed: "
+                                                     "no passing run of it in the store")
+    assert got["measurement_files"] == [served_render.TABLE]
+    assert json.loads((run_dir / served_render.TABLE).read_text())["schema"] == served_table.SCHEMA
+    assert got["validation"] == {"status": "failed", "checker": "verity_bench.served_table.collect",
+                                 "detail": "1 of 2 metrics have a served ratio; none for "
+                                           "benchmarks/served-overhead-pous-bandwidth-audit",
+                                 "evidence": [served_render.TABLE]}
 
 
 def test_every_record_has_its_own_name_in_the_vocabularys_form():

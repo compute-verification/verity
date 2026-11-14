@@ -159,8 +159,9 @@ def _die_with_parent() -> None:
     os.setsid()
     try:
         ctypes.CDLL(None, use_errno=True).prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
-    except (OSError, AttributeError):
-        pass
+    except (OSError, AttributeError) as e:
+        os.write(2, f"watchers: this loop will not stop with its supervisor: prctl(PR_SET_PDEATHSIG) failed "
+                    f"({type(e).__name__}: {e})\n".encode())
 
 
 class Supervisor:
@@ -227,13 +228,15 @@ class Supervisor:
     def status(self, now: float) -> dict:
         commit = self.cfg["src"] + "/COMMIT"
         try:
-            commit = Path(commit).read_text().strip()
-        except OSError:
+            commit = Path(commit).read_text().strip() if Path(commit).exists() else None
+        except OSError as e:
+            self.log(f"status: {commit} unreadable, so the commit is reported as none ({type(e).__name__}: {e})")
             commit = None
         cw = self.cfg.get("cloud_watch_state")
         try:
-            cw_t = iso(Path(cw).stat().st_mtime) if cw else None
-        except OSError:
+            cw_t = iso(Path(cw).stat().st_mtime) if cw and Path(cw).exists() else None
+        except OSError as e:
+            self.log(f"status: {cw} unreadable, so the cloud watch's time is reported as none ({type(e).__name__}: {e})")
             cw_t = None
         return {"schema": SCHEMA, "t": iso(now), "host": self.cfg.get("host") or socket.gethostname(), "commit": commit,
                 "all_up_t": iso(self.all_up_t) if self.all_up_t else None, "cloud_watch_t": cw_t,
@@ -253,7 +256,7 @@ class Supervisor:
                 try:
                     os.killpg(lp.proc.pid, signal.SIGTERM)
                 except ProcessLookupError:
-                    pass
+                    self.log(f"{lp.name}: process group {lp.proc.pid} was gone before SIGTERM")
         for lp in self.loops.values():
             if lp.state == "running":
                 try:

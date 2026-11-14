@@ -84,10 +84,14 @@ def records(fd: int):
 
 
 def last_seq() -> int:
+    if not LOG.exists():
+        return -1
     try:
         lines = LOG.read_text().splitlines()
         return max(json.loads(ln).get("seq", -1) for ln in lines) if lines else -1
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"oom_watch: {LOG} unreadable, so every kill still in the ring buffer is reported again ({type(e).__name__}: {e})",
+              file=sys.stderr)
         return -1
 
 
@@ -125,8 +129,8 @@ def announce(rec: dict) -> None:
     try:
         subprocess.run([str(RESEARCH), "msg", "send", "--channel", "agent-alerts", "--as", "infra", "--kind", "alert", "--text", text],
                        cwd="/workspace", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
-    except (OSError, subprocess.SubprocessError):
-        pass
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"oom_watch: kill {rec['seq']} recorded but not announced ({type(e).__name__})", file=sys.stderr)
 
 
 def scan() -> list[dict]:
