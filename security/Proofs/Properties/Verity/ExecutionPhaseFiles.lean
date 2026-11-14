@@ -1,13 +1,13 @@
 module
 
 public import Proofs.Core.Circuit
-public import Properties.Verity.WindowFiles
+public import Properties.Verity.ExecutionPhaseFiles
 public import Definitions.Accounting.JointLive
 
 /-!
 # Circuits side by side: a unit of the whole is a unit of its own circuit
 
-`Properties.Verity.WindowFiles` reads a window's committed files as its members' circuits side by side
+`Properties.Verity.ExecutionPhaseFiles` reads a window's committed files as its members' circuits side by side
 (`Circuit.beside`, `Partition.beside`). Here a unit of the two side by side is correct, and bound, exactly when it is
 in its own circuit at that circuit's part of the trace, so the units a trace doesn't bind are each circuit's own:
 
@@ -20,7 +20,7 @@ in its own circuit at that circuit's part of the trace, so the units a trace doe
   fixed is, at a gate of either, evaluating that circuit with its own fixed gates.
 * **A unit's recomputation, committed gates and correctness** (`Partition.localEval_beside_left`,
   `mem_committed_beside_left`, `mem_io_beside_left`, `correct_beside_left` and their `right` forms).
-* **The incorrect and the unbound units** (`Partition.wrong_beside`, `unbound_beside`, `card_unbound_beside`): those
+* **The incorrect and the unbound units** (`Partition.incorrect_beside`, `unbound_beside`, `card_unbound_beside`): those
   of the two side by side are `C`'s at `C`'s part of the trace, then `D`'s at `D`'s, so their counts add.
 * **A window's members** (`FileRead.unitsWith_eq_sum`, `FileRead.unboundWith`, `FileRead.card_unbound_partsWith`):
   the window's units are the members' summed, and the units a trace of the window's circuit doesn't bind are counted
@@ -336,14 +336,14 @@ theorem correct_beside_right (X : (C.beside D).Trace) (u : Fin m) :
 
 open Classical in
 /-- **The incorrect proof blocks of two partitions side by side**: `P`'s at `C`'s part of the trace, then `Q`'s at `D`'s. -/
-theorem wrong_beside (X : (C.beside D).Trace) :
-    (P.beside Q).wrong X = (P.wrong (Circuit.traceLeft X)).map (Fin.castAddEmb m) ∪
-      (Q.wrong (Circuit.traceRight X)).map (Fin.natAddEmb n) := by
+theorem incorrect_beside (X : (C.beside D).Trace) :
+    (P.beside Q).incorrect X = (P.incorrect (Circuit.traceLeft X)).map (Fin.castAddEmb m) ∪
+      (Q.incorrect (Circuit.traceRight X)).map (Fin.natAddEmb n) := by
   ext w
   rw [mem_incorrect, Finset.mem_union]
   refine Fin.addCases (motive := fun w => ¬ (P.beside Q).Correct X w ↔
-    w ∈ (P.wrong (Circuit.traceLeft X)).map (Fin.castAddEmb m) ∨
-      w ∈ (Q.wrong (Circuit.traceRight X)).map (Fin.natAddEmb n)) (fun u => ?_) (fun u => ?_) w
+    w ∈ (P.incorrect (Circuit.traceLeft X)).map (Fin.castAddEmb m) ∨
+      w ∈ (Q.incorrect (Circuit.traceRight X)).map (Fin.natAddEmb n)) (fun u => ?_) (fun u => ?_) w
   · rw [P.correct_beside_left Q, ← P.mem_incorrect]
     constructor
     · exact fun h => Or.inl (Finset.mem_map_of_mem _ h)

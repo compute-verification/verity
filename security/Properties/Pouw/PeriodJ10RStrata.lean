@@ -142,7 +142,7 @@ def pullAt {C β : Type} {r m nB mB : ℕ} (h : r = m) (σ : Fin nB → Fin mB) 
 /-- **The period's `Credit.window` inputs on stratum `s`'s view**: each window's registration and the rest of its
 inputs, the period's at the coins the view relabels. -/
 def creditAt {C : Type} {r m nB mB n : ℕ} (h : r = m) (σ : Fin nB → Fin mB) (s : Fin mB)
-    (ws : CreditWindows (StrataCoin C m σ) n) : CreditWindows (Coin C (Rest σ s) r σ s) n where
+    (ws : CreditExecutionPhases (StrataCoin C m σ) n) : CreditExecutionPhases (Coin C (Rest σ s) r σ s) n where
   reg := pullAt h σ s ws.reg
   ev := pullAt h σ s ws.ev
 
@@ -150,7 +150,7 @@ def creditAt {C : Type} {r m nB mB n : ℕ} (h : r = m) (σ : Fin nB → Fin mB)
 
 /-- **Stratum `s`'s proof block relation**: `pinnedAt` at the window's salt and the place of the stratum's tiles, on its view. -/
 def relAt {C V : Type} {r m nB mB n : ℕ} (h : r = m) (σ : Fin nB → Fin mB) (s : Fin mB)
-    (ws : CreditWindows (StrataCoin C m σ) n) (place : Paths (StrataCoin C m σ) n → Fin n → Fin (tileCount σ s) → Place)
+    (ws : CreditExecutionPhases (StrataCoin C m σ) n) (place : Paths (StrataCoin C m σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop) :
     Paths (Coin C (Rest σ s) r σ s) n → Fin n → Fin (tileCount σ s) → (ℕ → V) → Prop :=
   pinnedAt (saltOf (creditAt h σ s ws)) (pullAt h σ s place) tile
@@ -166,7 +166,7 @@ def rightAt {C V : Type} {r m nB mB n : ℕ} (h : r = m) (hr : 0 < r) (σ : Fin 
 `Credit.window` inputs and the service's openings. -/
 noncomputable def runAt {ι C V : Type} (Cd : Declared ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (s : Fin mB) (unitOf : Fin nB → ℕ)
-    (ws : CreditWindows (StrataCoin C m σ) n) (opened : Paths (StrataCoin C m σ) n → Fin n → ℕ → ℕ → V)
+    (ws : CreditExecutionPhases (StrataCoin C m σ) n) (opened : Paths (StrataCoin C m σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : Paths (StrataCoin C m σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop) :
     PeriodRun C (Equiv.Perm (Fin (tileCount σ s)) × Rest σ s) Cd.rounds (k s) (tileCount σ s) n V :=
@@ -176,7 +176,7 @@ noncomputable def runAt {ι C V : Type} (Cd : Declared ι) (hr : 0 < Cd.rounds) 
 /-- **Stratum `s`'s proofs as the IR defines them**: `tileLayer` at the stratum, on its view. -/
 noncomputable def layerAt {ι C V : Type} (Cd : Declared ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (s : Fin mB) (unitOf : Fin nB → ℕ)
-    (ws : CreditWindows (StrataCoin C m σ) n) (opened : Paths (StrataCoin C m σ) n → Fin n → ℕ → ℕ → V)
+    (ws : CreditExecutionPhases (StrataCoin C m σ) n) (opened : Paths (StrataCoin C m σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : Paths (StrataCoin C m σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop) :
     SampledLayer C (Equiv.Perm (Fin (tileCount σ s)) × Rest σ s) n Cd.rounds (k s) (Fin (tileCount σ s)) ℕ (Fin n × ℕ) V :=
@@ -196,8 +196,8 @@ stream is expanded from the live coin by SHA-512, reading it as the uniform perm
 oracle (R-ACCEL-3). -/
 def StrataSampleIsCoin {C : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (S : Finset (Fin mB)) (unitOf : Fin nB → ℕ)
-    (ws : CreditWindows (StrataCoin C m σ) n) : Prop :=
-  ∀ (x : Paths (StrataCoin C m σ) n) (w : Fin n), WindowAccepts (ws.reg x w) (ws.ev x w) →
+    (ws : CreditExecutionPhases (StrataCoin C m σ) n) : Prop :=
+  ∀ (x : Paths (StrataCoin C m σ) n) (w : Fin n), ExecutionPhaseAccepts (ws.reg x w) (ws.ev x w) →
     ∃ d : Array ℕ, creditDrawn (ws.reg x w) (ws.ev x w) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s ((coinAt x w).2 s), unitOf b = u
 
@@ -207,7 +207,7 @@ period, on its view) in each window before the first window `Credit.window` refu
 noncomputable def stratumLive {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (s : Fin mB)
     (Wp : ExecutionPhasePlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
-    (ws : CreditWindows (StrataCoin C m σ) n) (x : Paths (StrataCoin C m σ) n) : ℝ :=
+    (ws : CreditExecutionPhases (StrataCoin C m σ) n) (x : Paths (StrataCoin C m σ) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo x w then
     ∑ t : Fin (tileCount σ s), (liveWords Sc Cd (tileCount σ s) (Wp.liveAt (pathsAt C hM σ s n x) w) t : ℝ) else 0
 
@@ -227,7 +227,7 @@ def H1J10RCheckedCreditPeriodStrata : Prop :=
     (S : Finset (Fin mB)) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Fin mB → Declared ι) {n : ℕ} (_hn : 0 < n)
     (_hN : ∀ s ∈ S, (Cd s).units ≤ tileCount σ s) (hr : ∀ s, 0 < (Cd s).rounds) (hM : ∀ s, (Cd s).rounds = 1)
     (_hKd : ∀ s ∈ S, 1 ≤ k s)
-    (ws : CreditWindows (StrataCoin C 1 σ) n) (opened : Paths (StrataCoin C 1 σ) n → Fin n → ℕ → ℕ → V)
+    (ws : CreditExecutionPhases (StrataCoin C 1 σ) n) (opened : Paths (StrataCoin C 1 σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : (s : Fin mB) → Paths (StrataCoin C 1 σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : (s : Fin mB) → Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop)
     (Wp : (s : Fin mB) → ExecutionPhasePlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)

@@ -13,7 +13,7 @@ import Proofs.Properties.Certifier.Device.Lms
 /-!
 # PoUS's session inside proofs: an accepted run gives a session `verdict` accepts
 
-`SessionGives` holds for any run of a session's proof blocks that meets its three hypotheses (`Gives` at the relation
+`RunGives` holds for any run of a session's proof blocks that meets its three hypotheses (`Gives` at the relation
 `right`, `right ≤ PieceOk` and `Carried`); it says nothing of the deployed run until proofs' period form of V5 and their
 per-session form with carried leaves give `Gives` and `Carried` there.
 
@@ -26,7 +26,7 @@ digest `m` is one registered row the first two read, and each round's record one
 verifier's clear checks run on what is public (`ClearOk`: the scheme is accepted, the key trusted, and each round's coin
 opening verifies to its index).
 
-`SessionGives`, in `Verity.InProofs`'s shape at `K₀ = 1`: if an accepted run leaves a proof block whose value `right`
+`RunGives`, in `Verity.InProofs`'s shape at `K₀ = 1`: if an accepted run leaves a proof block whose value `right`
 rejects with probability at most `ε`, `right ≤ PieceOk`, and an accepted run's proof blocks open the carried rows to one
 value or its SHA-512 inputs hold a collision (`Carried`), then the event `r.accepts ∧ ClearOk ∧ verdict rejects the
 session the run opens (sessionOf) ∧ no collision in r.hashInputs` has probability at most `ε`. The guarantee that
@@ -55,12 +55,12 @@ structure Vals where
 
 /-- **The session a run opens**: the commitment, scheme and key the verifier holds, how it ended and its rounds at the
 signed digest's proof block, and the signature at the signature's. -/
-def sessionOf (c : SessionCommitment) (scheme : String) (pk : ByteArray) (sd sg : Vals) : SignedSession :=
+def sessionOf (c : ChallengePhaseCommitment) (scheme : String) (pk : ByteArray) (sd sg : Vals) : SignedChallengePhase :=
   { commitment := c, ended := sd.ended, rounds := sd.rounds, scheme := scheme, publicKey := pk, signature := sg.sig }
 
 /-- **The verifier's clear checks**: the scheme is accepted, the key trusted, and each round `j`'s coin opening (the last
 for `j`, as `verdict` reads it) opens its coin to the public index `idx j`. -/
-def ClearOk (schemes : Schemes) (trusted : List ByteArray) (scheme : String) (pk : ByteArray) (c : SessionCommitment)
+def ClearOk (schemes : Schemes) (trusted : List ByteArray) (scheme : String) (pk : ByteArray) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (idx : Nat → Nat) : Prop :=
   (∃ p, schemes.lookup scheme = some p) ∧ pk ∈ trusted ∧
     ∀ j < c.k, ∃ o, openings.findRev? (·.j == j) = some o ∧ o.index = idx j ∧ verifyCoin c o = true
@@ -68,7 +68,7 @@ def ClearOk (schemes : Schemes) (trusted : List ByteArray) (scheme : String) (pk
 /-- **Each proof block's piece of today's check**: the signature's, `lmsVerify` on `m` under the scheme's parameters; the
 signed digest's, `m` the record digest of its rounds, ended complete after `c.k` rounds, each on time; round `j`'s, its
 record is round `j` at the index `idx j`, below `c.blocks`, with the expected digest. -/
-def PieceOk (schemes : Schemes) (scheme : String) (pk : ByteArray) (c : SessionCommitment)
+def PieceOk (schemes : Schemes) (scheme : String) (pk : ByteArray) (c : ChallengePhaseCommitment)
     (expected : Nat → Option ByteArray) (idx : Nat → Nat) (u : Fin (c.k + 2)) (v : Vals) : Prop :=
   if u.val = 0 then ∀ p, schemes.lookup scheme = some p → lmsVerify p pk c.session v.m v.sig = .ok true
   else if u.val = 1 then
@@ -81,7 +81,7 @@ def PieceOk (schemes : Schemes) (scheme : String) (pk : ByteArray) (c : SessionC
 /-- **The carried rows open to one value, or the run carries a collision**: whenever the verifier accepts, the
 signature's and the signed digest's proof blocks hold one `m` and each round's proof block holds the record the signed
 digest's holds at its round, or the run's SHA-512 inputs hold a collision. -/
-def Carried {Ω : Type} (c : SessionCommitment) (r : Verity.InProofs.Run Ω (c.k + 2) fun _ => Vals) : Prop :=
+def Carried {Ω : Type} (c : ChallengePhaseCommitment) (r : Verity.InProofs.Run Ω (c.k + 2) fun _ => Vals) : Prop :=
   ∀ ω, r.accepts ω →
     ((r.ports ⟨0, by omega⟩ ω).m = (r.ports ⟨1, by omega⟩ ω).m ∧
       ∀ j (hj : j < c.k), (r.ports ⟨1, by omega⟩ ω).rounds[j]? = some (r.ports ⟨j + 2, by omega⟩ ω).round) ∨
@@ -94,8 +94,8 @@ expected digests `expected`, and a run `r` of the session's `c.k + 2` proof bloc
 whose value `right` rejects with probability at most `ε`, every value `right` accepts meets its piece of today's check
 (`PieceOk`), and `Carried` holds, then `r.accepts ∧ ClearOk ∧` `verdict` rejects the session the run opens `∧` no
 collision in `r.hashInputs` has probability at most `ε`. -/
-def SessionGives : Prop :=
-  ∀ (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (c : SessionCommitment)
+def RunGives : Prop :=
+  ∀ (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (scheme : String) (pk : ByteArray) (idx : Nat → Nat)
     (Ω : Type) (μ : PMF Ω) (r : Verity.InProofs.Run Ω (c.k + 2) fun _ => Vals) (right : Fin (c.k + 2) → Vals → Prop)
     (ε : ℝ≥0∞),
@@ -111,13 +111,13 @@ def SessionGives : Prop :=
 def constRun {n : ℕ} {V : Type} (v : Fin n → V) : Verity.InProofs.Run Unit n fun _ => V :=
   ⟨fun _ => True, fun u _ => v u, fun _ => []⟩
 
-/-- **`SessionGives`' hypotheses hold, with `verdict`'s acceptance, at an honest session**: a key `Lms.keygen` derives at
+/-- **`RunGives`' hypotheses hold, with `verdict`'s acceptance, at an honest session**: a key `Lms.keygen` derives at
 S1's deployed parameters, trusted alone, signs a session of one round that ended complete on time, its coin opened from a
 coin tree of one leaf. The run that always accepts holds that session's values at each of its three proof blocks and hashes
 nothing: no proof block fails `PieceOk` (`Gives` at `K₀ = 1`, `ε = 0`), `Carried` holds, the clear checks pass, and
 `verdict` accepts the session the run opens. -/
-def SessionGivesHonest : Prop :=
-  ∃ (seed : ByteArray) (k : Lms.PrivateKey) (expected : Nat → Option ByteArray) (c : SessionCommitment)
+def RunGivesHonest : Prop :=
+  ∃ (seed : ByteArray) (k : Lms.PrivateKey) (expected : Nat → Option ByteArray) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (idx : Nat → Nat) (v : Fin (c.k + 2) → Vals),
     Lms.keygen Lms.deployed seed = .ok k ∧ c.k = 1 ∧
       Gives (PMF.pure ()) (constRun v) (PieceOk SCHEMES LMS k.publicKey c expected idx) 1 0 ∧
@@ -126,11 +126,11 @@ def SessionGivesHonest : Prop :=
         (sessionOf c LMS k.publicKey ((constRun v).ports ⟨1, by omega⟩ ()) ((constRun v).ports ⟨0, by omega⟩ ())) c
         openings).accepted = true
 
-/-- **`SessionGives`' conclusion fails without its hypotheses**: under S1's scheme (`SCHEMES`, `LMS`) and a trusted key,
+/-- **`RunGives`' conclusion fails without its hypotheses**: under S1's scheme (`SCHEMES`, `LMS`) and a trusted key,
 a session of no rounds that did not end complete passes the clear checks and `verdict` rejects it, so a run that always
 accepts it and hashes nothing gives the event probability `1`, and the bound fails at `ε = 0`. -/
-def SessionGivesNontrivial : Prop :=
-  ∃ (c : SessionCommitment) (pk : ByteArray) (v : Fin (c.k + 2) → Vals),
+def RunGivesNontrivial : Prop :=
+  ∃ (c : ChallengePhaseCommitment) (pk : ByteArray) (v : Fin (c.k + 2) → Vals),
     ¬ prPMF (PMF.pure ()) (fun ω => (constRun v).accepts ω ∧ ClearOk SCHEMES [pk] LMS pk c #[] (fun _ => 0) ∧
         (verdict SCHEMES [pk] (fun _ => none)
           (sessionOf c LMS pk ((constRun v).ports ⟨1, by omega⟩ ω) ((constRun v).ports ⟨0, by omega⟩ ω)) c
@@ -152,7 +152,7 @@ namespace MemoryChallenger.Properties.InProofs.SecurityProofs
 open MemoryChallenger MemoryChallenger.Properties.InProofs MemoryChallenger.Properties.SecurityProofs
 open Verity.InProofs Properties.Accounting.InProofs Verity.Game
 
-theorem sessionGives : SessionGives := by
+theorem runGives : RunGives := by
   intro schemes trusted expected c openings scheme pk idx Ω μ r right ε g h hc
   refine le_trans (prPMF_mono μ fun ω hω => ⟨hω.1, ?_⟩) (Gives.mono h g)
   classical
@@ -192,13 +192,13 @@ theorem sessionGives : SessionGives := by
     exact ⟨⟨o, ho, hrj, by rw [hoi, hri], hvc⟩, hb, hd, ht⟩
 
 /-- The honest session's coin: round 0 at block 0, its tree's one leaf. -/
-def honestSession : ByteArray := ⟨Array.replicate 32 0⟩
+def honestWipe : ByteArray := ⟨Array.replicate 32 0⟩
 def honestCoinKey : ByteArray := ⟨Array.replicate 256 0⟩
 def honestSalt : ByteArray := ⟨Array.replicate 192 0⟩
-def honestRound : Round := ⟨0, 0, 0, 0, .empty⟩
+def honestRound : Round := ⟨0, 0, 0, 0, ⟨Array.replicate 64 0⟩⟩
 def honestOpening : CoinOpening := ⟨0, 0, honestSalt, #[]⟩
 
-theorem honest_leaf : ∃ leaf, coinLeaf honestCoinKey honestSession 0 0 honestSalt = .ok leaf := by
+theorem honest_leaf : ∃ leaf, coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf := by
   have hk : honestCoinKey.size = HM96.keyBytes ∧ honestCoinKey.get! (HM96.keyBytes - 1) &&& 128 = 0 := by
     refine ⟨by simp [honestCoinKey, ByteArray.size, HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits], ?_⟩
     have h255 : HM96.keyBytes - 1 = 255 := by simp [HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits]
@@ -208,11 +208,11 @@ theorem honest_leaf : ∃ leaf, coinLeaf honestCoinKey honestSession 0 0 honestS
   simp [coinLeaf, coinDigest, beN, checkKey, checkSalt, Bind.bind, Except.bind, Pure.pure, Except.pure, hk, hs]
 
 /-- The commitment of a session of one round over one block, its coin root the one leaf `leaf`. -/
-def honestCommitment (leaf : ByteArray) : SessionCommitment :=
-  { session := honestSession, coinRoot := (domain COIN_BINDING honestSession 1).leaf 0 0 COIN_SCHEMA leaf,
+def honestCommitment (leaf : ByteArray) : ChallengePhaseCommitment :=
+  { session := honestWipe, coinRoot := (domain COIN_BINDING honestWipe 1).leaf 0 0 COIN_SCHEMA leaf,
     coinKey := honestCoinKey, blocks := 1, k := 1, limitNs := 20000000, blockBytes := 4096, binding := .empty }
 
-theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestSession 0 0 honestSalt = .ok leaf) :
+theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf) :
     verifyCoin (honestCommitment leaf) honestOpening = true := by
   simp [verifyCoin, honestCommitment, honestOpening, h]
   simp [Flock.FV3.Domain.verifyOpening, Flock.FV3.Domain.climb, Flock.FV3.Scheme.climbL, domain,
@@ -221,9 +221,10 @@ theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestSession
   exact ⟨by decide, Properties.CertifierDevice.Proofs.Lms.beq_self _⟩
 
 theorem honest_message (leaf : ByteArray) : ∃ m, message (honestCommitment leaf) COMPLETE #[honestRound] = .ok m := by
-  simp [message, recordsRoot, Round.value, honestRound, beN, Bind.bind, Except.bind, Pure.pure, Except.pure]
+  simp [message, recordsDigest, recordsStream, Round.value, honestRound, ByteArray.size, beN, Bind.bind, Except.bind,
+    Pure.pure, Except.pure]
 
-theorem sessionGives_honest : SessionGivesHonest := by
+theorem runGives_honest : RunGivesHonest := by
   obtain ⟨k, hkg, I, hk⟩ := Wipe.honest_keygen
   obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
   subst hIk
@@ -234,7 +235,7 @@ theorem sessionGives_honest : SessionGivesHonest := by
   have hI : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
   obtain ⟨leaf, hleaf⟩ := honest_leaf
   obtain ⟨m, hm⟩ := honest_message leaf
-  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I honestSession m = .ok M := by
+  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I honestWipe m = .ok M := by
     unfold memoryChallengerMessage
     simp [hIs]
     exact ⟨_, rfl⟩
@@ -242,7 +243,7 @@ theorem sessionGives_honest : SessionGivesHonest := by
     Properties.CertifierDevice.Proofs.Lms.lmsSigns 64 1 20 false Lms.deployed k.I _ k 0 M rfl hk (by decide)
   obtain ⟨hver, hdec⟩ :=
     Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed k.I _ k 0 M sig rfl hk hsig
-  have hlms : lmsVerify Lms.deployed k.publicKey honestSession m sig.encode = .ok true := by
+  have hlms : lmsVerify Lms.deployed k.publicKey honestWipe m sig.encode = .ok true := by
     unfold lmsVerify
     simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, Bind.bind, Except.bind]
   have hcoin := honest_coin hleaf
@@ -285,14 +286,14 @@ theorem sessionGives_honest : SessionGivesHonest := by
       by simp [sessionOf, constRun, V, honestRound, Round.elapsedNs, honestCommitment]⟩
 
 /-- The values of a session that ended nowhere: no digest, no signature, no rounds. -/
-def noSession : Vals := ⟨.empty, .empty, "", #[], default⟩
+def noRun : Vals := ⟨.empty, .empty, "", #[], default⟩
 
-theorem sessionGives_nontrivial : SessionGivesNontrivial := by
-  refine ⟨default, .empty, fun _ => noSession, fun h => ?_⟩
+theorem runGives_nontrivial : RunGivesNontrivial := by
+  refine ⟨default, .empty, fun _ => noRun, fun h => ?_⟩
   have hclear : ClearOk SCHEMES [ByteArray.empty] LMS .empty default #[] (fun _ => 0) :=
     ⟨⟨_, rfl⟩, List.mem_singleton.2 rfl, fun j hj => absurd hj (Nat.not_lt_zero _)⟩
   have hrej : (verdict SCHEMES [ByteArray.empty] (fun _ => none)
-      (sessionOf default LMS .empty noSession noSession) default #[]).accepted = false := by
+      (sessionOf default LMS .empty noRun noRun) default #[]).accepted = false := by
     rw [Bool.eq_false_iff]
     intro ha
     obtain ⟨-, -, he, -⟩ := verdictAccepts _ _ _ _ _ _ ha

@@ -298,10 +298,10 @@ variable {N b h ρ : ℕ} {α : Type}
 
 /-- The provenance's step answers at store `E`, stream `R` and oracle `O`, one after another: bit `i` of the run's
 bits, and `false` past them. -/
-def transcript (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ → Bool
+def trace (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ → Bool
   | done _, _ => false
-  | input x f k, i => if hi : i < x then f E R O ⟨i, hi⟩ else (k (f E R O)).transcript E R O (i - x)
-  | encode j x _ f k, i => if hi : i < x then f (E j) ⟨i, hi⟩ else (k (f (E j))).transcript E R O (i - x)
+  | input x f k, i => if hi : i < x then f E R O ⟨i, hi⟩ else (k (f E R O)).trace E R O (i - x)
+  | encode j x _ f k, i => if hi : i < x then f (E j) ⟨i, hi⟩ else (k (f (E j))).trace E R O (i - x)
 
 /-- **A gate budget bounds the encoded bits**: under the encode bound at `E` nonlinear units a word of `8·bytes` bits,
 the encoded bits times `E` are at most `8·bytes` times the encodes' nonlinear units. -/
@@ -392,11 +392,11 @@ def walk (dflt : α) (k : β → PIChip N b h ρ α) : ℕ → ℕ → PassProve
   | B, o, .encode _ x _ _ k' =>
     if x ≤ B then readOdd x o (fun z => walk dflt k (B - x) (o + x) (k' z)) else done dflt
 
-/-- Where the side sources answer the provenance's transcript from `2·o + 1` on, within its budget, the rerun program
+/-- Where the side sources answer the provenance's trace from `2·o + 1` on, within its budget, the rerun program
 returns and reads what `k` does at the provenance's values. -/
 theorem walk_eq {τ : ℕ} (dflt : α) (k : β → PIChip N b h ρ α) (tier : ℕ → Fin τ) (t : Fin τ) (w : IWorld N b h ρ)
     (v : List Bool) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
-    ∀ (c : PassProvenance N b h ρ β) (B o : ℕ), (∀ i, w.side v (2 * (o + i) + 1) = c.transcript E R O i) →
+    ∀ (c : PassProvenance N b h ρ β) (B o : ℕ), (∀ i, w.side v (2 * (o + i) + 1) = c.trace E R O i) →
       c.inputs E R O + c.encoded E R O ≤ B →
       (walk dflt k B o c).run w v = (k (c.run E R O)).run w v ∧
         (walk dflt k B o c).tierBits tier t w v = (k (c.run E R O)).tierBits tier t w v := by
@@ -410,11 +410,11 @@ theorem walk_eq {τ : ℕ} (dflt : α) (k : β → PIChip N b h ρ α) (tier : �
     have hz : (fun i : Fin x => w.side v (2 * (o + i) + 1)) = f E R O := by
       funext i
       rw [hw i]
-      simp [PassProvenance.transcript, i.2]
-    have hw' : ∀ i, w.side v (2 * (o + x + i) + 1) = (k' (f E R O)).transcript E R O i := by
+      simp [PassProvenance.trace, i.2]
+    have hw' : ∀ i, w.side v (2 * (o + x + i) + 1) = (k' (f E R O)).trace E R O i := by
       intro i
       rw [show o + x + i = o + (x + i) by omega, hw (x + i)]
-      simp [PassProvenance.transcript]
+      simp [PassProvenance.trace]
     obtain ⟨h₁, h₂⟩ := ih (f E R O) (B - x) (o + x) hw' (by omega)
     simp only [walk, hx, ↓reduceIte, readOdd_run, readOdd_tierBits, hz, PassProvenance.run]
     exact ⟨h₁, h₂⟩
@@ -425,11 +425,11 @@ theorem walk_eq {τ : ℕ} (dflt : α) (k : β → PIChip N b h ρ α) (tier : �
     have hz : (fun i : Fin x => w.side v (2 * (o + i) + 1)) = f (E j) := by
       funext i
       rw [hw i]
-      simp [PassProvenance.transcript, i.2]
-    have hw' : ∀ i, w.side v (2 * (o + x + i) + 1) = (k' (f (E j))).transcript E R O i := by
+      simp [PassProvenance.trace, i.2]
+    have hw' : ∀ i, w.side v (2 * (o + x + i) + 1) = (k' (f (E j))).trace E R O i := by
       intro i
       rw [show o + x + i = o + (x + i) by omega, hw (x + i)]
-      simp [PassProvenance.transcript]
+      simp [PassProvenance.trace]
     obtain ⟨h₁, h₂⟩ := ih (f (E j)) (B - x) (o + x) hw' (by omega)
     simp only [walk, hx, ↓reduceIte, readOdd_run, readOdd_tierBits, hz, PassProvenance.run]
     exact ⟨h₁, h₂⟩
@@ -592,12 +592,12 @@ variable {N b h ρ S L' q : ℕ}
 
 /-- The device that reruns its carrier's circuit `K` over the side link and answers the carrier's reads, `B`'s side
 reads at odd addresses, from the circuit's values on chip: its side sources are `B`'s at even addresses and `K`'s
-transcript at odd ones, of which it reads at most `C` bits. -/
+trace at odd ones, of which it reads at most `C` bits. -/
 def stack (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProvenance N b h ρ (ℕ → Bool))
     (hL : ∀ st w, (B.chip st).linkBitsEven w [] ≤ L) : PIDevice N b h ρ S (L + C) q where
   state := B.state
   mem := B.mem
-  side E R O v a := if a % 2 = 0 then B.side E R O v a else K.transcript E R O (a / 2)
+  side E R O v a := if a % 2 = 0 then B.side E R O v a else K.trace E R O (a / 2)
   chip st := PIChip.walk (fun _ _ => false) (fun κ => (B.chip st).answer κ) C 0 K
   bounded st w := PIChip.walk_bounded _ _ w [] (fun κ =>
     ⟨(PIChip.answer_linkBits κ w (B.chip st) []).trans_le (hL st _),
@@ -605,7 +605,7 @@ def stack (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProvenance N b h �
 
 theorem stack_side_odd (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProvenance N b h ρ (ℕ → Bool)) (hL)
     (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (v : List Bool) (i : ℕ) :
-    (B.stack L C K hL).side E R O v (2 * (0 + i) + 1) = K.transcript E R O i := by
+    (B.stack L C K hL).side E R O v (2 * (0 + i) + 1) = K.trace E R O i := by
   simp only [stack, show (2 * (0 + i) + 1) % 2 ≠ 0 by omega, ↓reduceIte, show (2 * (0 + i) + 1) / 2 = i by omega]
 
 /-- Where `B`'s odd side reads answer `K`'s values, the stacked device's world with them answered on chip is `B`'s. -/
@@ -660,17 +660,17 @@ theorem stack_ceiling (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProven
 
 end PIDevice
 
-namespace DeployedSession
+namespace DeployedRun
 
 variable {n P N b h ρ S L' q r s d G : ℕ}
 
 /-- The session with every pass device stacked on its carrier (`PIDevice.stack`), with the same candidates and
 picks. -/
-def stack (A : DeployedSession n P N b h ρ S L' q r s d G) (L C : ℕ)
+def stack (A : DeployedRun n P N b h ρ S L' q r s d G) (L C : ℕ)
     (K : ∀ (w : Fin n) (_ : {v : Fin n // v < w} → WindowCoins P N b h ρ r s d) (j : Fin P)
       (_ : {i : Fin P // i < j} → PassCoins N b h ρ r s) (_ : Fin G), PassProvenance N b h ρ (ℕ → Bool))
     (hL : ∀ w η j ι c st wd, (((A.window w η).device j ι c).chip st).linkBitsEven wd [] ≤ L) :
-    DeployedSession n P N b h ρ S (L + C) q r s d G where
+    DeployedRun n P N b h ρ S (L + C) q r s d G where
   window w η :=
     { device := fun j ι c => ((A.window w η).device j ι c).stack L C (K w η j ι c) (hL w η j ι c)
       cand := (A.window w η).cand
@@ -678,7 +678,7 @@ def stack (A : DeployedSession n P N b h ρ S L' q r s d G) (L C : ℕ)
 
 /-- **The stacked session's windows pass and read what the session's do**, where every device's odd side reads answer
 its carrier's values and every carrier is within the budget `C`. -/
-theorem stack_win {τ : ℕ} (A : DeployedSession n P N b h ρ S L' q r s d G) (L C : ℕ)
+theorem stack_win {τ : ℕ} (A : DeployedRun n P N b h ρ S L' q r s d G) (L C : ℕ)
     (K : ∀ (w : Fin n) (_ : {v : Fin n // v < w} → WindowCoins P N b h ρ r s d) (j : Fin P)
       (_ : {i : Fin P // i < j} → PassCoins N b h ρ r s) (_ : Fin G), PassProvenance N b h ρ (ℕ → Bool))
     (hL : ∀ w η j ι c st wd, (((A.window w η).device j ι c).chip st).linkBitsEven wd [] ≤ L)
@@ -694,7 +694,7 @@ theorem stack_win {τ : ℕ} (A : DeployedSession n P N b h ρ S L' q r s d G) (
   · exact (PIDevice.stack_eq ((A.win w ω).dev j E ω') L C _ (hL w _ j _ _) (hside w _ j _ _) tier t E (ω' j).1
       ((A.win w ω).oracle j E ω') (hbud w _ j _ _ _ _ _)).2
 
-end DeployedSession
+end DeployedRun
 
 end Accounting.Rate
 
@@ -1159,13 +1159,13 @@ theorem StackedRunConservationRelay : Accounting.Guarantees.StackedRunConservati
       ∃ w, ((A.stack L C K hL).win w ω).reads tier Es (ω w).1 +
           P * (S + (L + C - ρ) + Rate.Deployed.rebuildBits b rounds cRoot F + (lam + m * b)) <
         (((A.stack L C K hL).win w ω).correctAll Es (ω w).1).card * b
-  have hunif := Rate.DeployedSession.pr_unpaid_le (A.stack L C K hL) tier _ _
+  have hunif := Rate.DeployedRun.pr_unpaid_le (A.stack L C K hL) tier _ _
     (Remote.window_relay_le (lam := lam) (m := m) (A.stack L C K hL) tier hrc hW
       (fun w η j ι c => Rate.PIDevice.stack_ceiling _ L C (K w η j ι c) (hL w η j ι c) (hF w η j ι c)))
   have base := Remote.run_relay_of_unpaid (fun y => appendCoinBlocks enc choose slot y) (A.stack L C K hL) tier
     lam m rounds cRoot F dbar dw hn hP hN hb hdw _ (hu.trans (add_le_add hunif le_rfl))
   refine ((Bandwidth.pr_mono fun y hy => ?_).trans base).trans (le_of_eq ?_)
-  · have e := fun w => Rate.DeployedSession.stack_win A L C K hL hside hC tier w y.2
+  · have e := fun w => Rate.DeployedRun.stack_win A L C K hL hside hC tier w y.2
       (appendCoinBlocks enc choose slot y.1) (y.2 w).1
     simp only [fun w => (e w).1, fun w => (e w).2]
     exact hy

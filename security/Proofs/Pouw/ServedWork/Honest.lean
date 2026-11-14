@@ -42,7 +42,7 @@ import Proofs.Pouw.ServedWork
 # `ServedWork` is honest and nontrivial
 
 The honest and nontrivial lemmas of `Properties.Pouw.Served.ServedWork`, over `Proofs.Pouw.PeriodJ10R.Honest`'s honest J10-R
-period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the windows' inputs (`hacc`, `hsalt`, `hdraw`).
+period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the executionPhases' inputs (`hacc`, `hsalt`, `hdraw`).
 
 * `fm`, `fa c`: a flat machine. A program is any function, and every run uses `c` units of one resource at rate 1 and
   exchanges nothing, so its cost at price 1 is `c` (`fa_cost`). It meets the device premises (`fa_G1`, `fa_G2`).
@@ -53,7 +53,7 @@ period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the windo
 * `served_rest`, `served_meets`: at any `c ≥ 0` and `p = 1` the honest inventory meets every premise `ServedWork` adds
   to `H1J10RCheckedCreditPeriod`'s, which `j10r_meets` gives, but `SAKServed`, and at `c = N_p` that one too;
   `served_honest` is the conclusion there.
-* `served_nontrivial`: `ServedWork` is false without `SAKServed`. On the free machine (`fa 0`), at `n ≥ 17` windows
+* `served_nontrivial`: `ServedWork` is false without `SAKServed`. On the free machine (`fa 0`), at `n ≥ 17` executionPhases
   and `δ_s = e^{−1}`, every other premise holds, `SAKServed` fails (`not_sakServed_free`: the honest program gets
   every tile right at no cost), and every path is accepted and earns credit `(1 − ε(n))·N_p·n > 0` for no work, so the
   event has probability 1, past the bound `e^{−1}`.
@@ -210,7 +210,7 @@ theorem served_meets (n : ℕ) :
 /-- **`ServedWork`'s conclusion at the honest J10-R period with the honest inventory**: `j10r_meets` and
 `served_meets` give it every premise, so except with probability `δ_s` its `N_p` a window of priced work is at least
 `(1 − ε(n))₊` of its `N_p·n` live words. -/
-theorem served_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
+theorem served_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
@@ -219,15 +219,15 @@ theorem served_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf 
       ∑ w, (fa (tileCount σ sT)).cost (fun _ => 1) (work (tileCount σ sT) (Np := tileCount σ sT) x w)
         ((), saltCoin (hr1 _) x w) <
         1 * creditPrefix Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)
-          ((windows σ sT regOf evOf n).prefixLen x)
+          ((executionPhases σ sT regOf evOf n).prefixLen x)
           (creditLive Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-            (windows σ sT regOf evOf n) x) 1 1 (j10rRate (k sT) 1) δs - ∑ _w : Fin n, (0 : ℝ)) ≤
+            (executionPhases σ sT regOf evOf n) x) 1 1 (j10rRate (k sT) 1) δs - ∑ _w : Fin n, (0 : ℝ)) ≤
       δs + n * (0 + 0) + n * 0 := by
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hLucks, hUF, -, -, -⟩ :=
     j10r_meets σ k hk sT unitOf regOf evOf enc hKd hacc hsalt hdraw n hn hδs
   obtain ⟨g1, g2, p1, p2, hSAK, hSt, hext, hIn, hp, hFix, hRight⟩ := served_meets σ k sT n
   exact servedWork σ k hk sT unitOf Honest.scheme (circuit (tileCount σ sT)) hn hN (hr1 _) hM hKd
-    (windows σ sT regOf evOf n) opened enc place tile (period (Ω1 σ sT) (tileCount σ sT) n)
+    (executionPhases σ sT regOf evOf n) opened enc place tile (period (Ω1 σ sT) (tileCount σ sT) n)
     (play Unit (tileCount σ sT) (k sT) n) (fun _ => (tileCount σ sT : ℝ)) 1 δs 0 0
     (fa (tileCount σ sT)) (fun _ => 1) Set.univ hon 1 (fun _ => 0) (fun _ => 0) 0 (fun _ _ => ()) (fun _ _ => ())
     (work (tileCount σ sT)) hS one_pos le_rfl hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks hUF
@@ -246,14 +246,14 @@ theorem prob_true {Ω : Type} [Fintype Ω] [Nonempty Ω] {P : Ω → Prop} (h : 
   exact div_self (Nat.cast_pos.mpr Fintype.card_pos).ne'
 
 include hk in
-/-- **The credit of the honest period is positive** past `n ≥ 17` windows at `δ_s = e^{−1}`: `ε(n) = Λ/n` with
+/-- **The credit of the honest period is positive** past `n ≥ 17` executionPhases at `δ_s = e^{−1}`: `ε(n) = Λ/n` with
 `Λ = j10rRate (k s_T) 1 ≤ 16`. -/
-theorem creditPrefix_pos (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n : ℕ) (hn : 17 ≤ n)
+theorem creditPrefix_pos (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β)) (n : ℕ) (hn : 17 ≤ n)
     (x : Paths (Ω1 σ sT) n) :
     0 < creditPrefix Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)
-      ((windows σ sT regOf evOf n).prefixLen x)
+      ((executionPhases σ sT regOf evOf n).prefixLen x)
       (creditLive Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-        (windows σ sT regOf evOf n) x) 1 1 (j10rRate (k sT) 1) (Real.exp (-1)) := by
+        (executionPhases σ sT regOf evOf n) x) 1 1 (j10rRate (k sT) 1) (Real.exp (-1)) := by
   have hN : (0 : ℝ) < tileCount σ sT := Nat.cast_pos.mpr (Nat.lt_of_lt_of_le hKd (hk sT))
   have hn17 : (17 : ℝ) ≤ n := by exact_mod_cast hn
   have hn0 : (0 : ℝ) < n := by linarith
@@ -304,11 +304,11 @@ theorem not_sakServed_free (hKd : 1 ≤ k sT) :
   linarith
 
 /-- **`ServedWork` is false without `SAKServed`.** On the free machine (`fa 0`: every program costs nothing), at the
-honest J10-R period of `n ≥ 17` windows, `δ_s = e^{−1}`, price 1 a word, no luck allowance, no degenerate salts and
+honest J10-R period of `n ≥ 17` executionPhases, `δ_s = e^{−1}`, price 1 a word, no luck allowance, no degenerate salts and
 the honest inventory, every other premise of `ServedWork` holds, in its order (`j10r_meets`, `served_rest`), and
 `SAKServed` fails (`not_sakServed_free`). The conclusion fails with it: every accepted path is in its event, with no
 work and positive credit (`creditPrefix_pos`), so its probability is 1, past the bound `e^{−1}`. -/
-theorem served_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
+theorem served_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
@@ -329,23 +329,23 @@ theorem served_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (re
         (period (Ω1 σ sT) (tileCount σ sT) n) ∧
     (period (Ω1 σ sT) (tileCount σ sT) n).EveryExecutionPhase
       (fun live _ => DeadConeDead Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) live) ∧
-    PrefixOf (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
-      (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
+    PrefixOf (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened
+      (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
       (play Unit (tileCount σ sT) (k sT) n).game ∧
-    (∀ w, prob (fun x => (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n)
-      opened (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile)
+    (∀ w, prob (fun x => (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (executionPhases σ sT regOf evOf n)
+      opened (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile)
       (j10rAtCoin (hr1 _) enc place tile)).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (windows σ sT regOf evOf n) ∧ TileSampleIsCoin σ k hk sT unitOf (windows σ sT regOf evOf n) ∧
-    TileServiceSound σ sT unitOf (windows σ sT regOf evOf n) opened
-      (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) 0 ∧
-    Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (windows σ sT regOf evOf n)) enc ∧
+    RegisteredBeforeDraw (executionPhases σ sT regOf evOf n) ∧ TileSampleIsCoin σ k hk sT unitOf (executionPhases σ sT regOf evOf n) ∧
+    TileServiceSound σ sT unitOf (executionPhases σ sT regOf evOf n) opened
+      (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) 0 ∧
+    Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (executionPhases σ sT regOf evOf n)) enc ∧
     SharedNoiseLucks Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n) ∧
     UnitFixed (play Unit (tileCount σ sT) (k sT) n)
-      (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
-        (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
+      (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened
+        (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
       (monitoringPeriodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-        (tileRun σ k hk sT unitOf (windows σ sT regOf evOf n) opened
-          (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
+        (tileRun σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened
+          (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
       (fun _ t => (tileWords Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t : ℝ))
       (fun _ => (tileCount σ sT : ℝ)) ∧
     (fa 0).G1 ∧ (fa 0).G2 ∧ (fa 0).P1 ∧ (fa 0).P2 ∧
@@ -362,9 +362,9 @@ theorem served_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (re
     ¬ prob (fun x => (play Unit (tileCount σ sT) (k sT) n).accepts x ∧
       ∑ w, (fa 0).cost (fun _ => 1) (work 0 (Np := tileCount σ sT) x w) ((), saltCoin (hr1 _) x w) <
         1 * creditPrefix Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)
-          ((windows σ sT regOf evOf n).prefixLen x)
+          ((executionPhases σ sT regOf evOf n).prefixLen x)
           (creditLive Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-            (windows σ sT regOf evOf n) x) 1 1 (j10rRate (k sT) 1) (Real.exp (-1)) - ∑ _w : Fin n, (0 : ℝ)) ≤
+            (executionPhases σ sT regOf evOf n) x) 1 1 (j10rRate (k sT) 1) (Real.exp (-1)) - ∑ _w : Fin n, (0 : ℝ)) ≤
       Real.exp (-1) + n * (0 + 0) + n * 0 := by
   have hn0 : 0 < n := by omega
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hLucks, hUF, -, -, -⟩ :=

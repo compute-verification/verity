@@ -404,7 +404,7 @@ words = { "params_law" = "params_sampling_design" }
 
 [[words_in]]
 files = ["adapters/vllm/verity_vllm/pipeline/serving_rows.py"]
-words = { "params_law" = "params_sampling_design" }
+words = { "params_law" = "params_sampling_design", "law_of" = "sampling_design_of" }
 
 [[words_in]]
 files = ["adapters/vllm/verity_vllm/pipeline/boundary_rows.py"]
@@ -412,7 +412,11 @@ words = { "selection_law" = "selection_sampling_design" }
 
 [[words_in]]
 files = ["adapters/vllm/verity_vllm/pipeline/window_law.py"]
-words = { "params_law" = "params_sampling_design" }
+words = { "params_law" = "params_sampling_design", "law_of" = "sampling_design_of" }
+
+[[words_in]]
+files = ["verity/protocols/tests/tests/test_profile.py"]
+words = { "_law" = "_sampling_design" }
 
 [[words_in]]
 files = ["benchmarks/network_traces/scan_zk.py"]

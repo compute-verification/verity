@@ -178,7 +178,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Pous"
   "Proofs.Properties.Verity.Sampled.Window.Trees", "Proofs.Properties.Verity.Sampled.Window.Record",
   "Proofs.Properties.Verity.Sampled.Window.Counts", "Proofs.Properties.Verity.Sampled.Window.Closing",
   "Proofs.Properties.Verity.Sampled.Window.Steps", "Proofs.Properties.Verity.Sampled.Window.Read",
-  "Proofs.Properties.Verity.Sampled.Window.Instance", "Proofs.Properties.Verity.WindowFiles",
+  "Proofs.Properties.Verity.Sampled.Window.Instance", "Proofs.Properties.Verity.ExecutionPhaseFiles",
   "Proofs.Properties.Verity.Sampled.Window.Unbound", "Proofs.Properties.Verity.Sampled.Window.UnboundMember",
   "Proofs.Properties.Verity.Sampled.Window.UnboundLaid", "Proofs.Flock.SpotFlock.HeldOfReads",
   "Proofs.Flock.SpotFlock.ReadsCheck", "Proofs.Properties.Verity.SampledTwo.Messages",

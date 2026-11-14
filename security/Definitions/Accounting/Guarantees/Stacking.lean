@@ -241,7 +241,7 @@ def StackedRunConservationRelay : Prop :=
     (Fc : Gates.Field) (k B es εnum εden : ℕ) (tier : ℕ → Fin τ) (δ : ℝ≥0∞) {Ω Ca Ch : Type} [Fintype Ω]
     [Fintype Ca] (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → Pous.Bits b)
     (choose : Ω → (a : Fin T) → ({c : Fin T // c < a} → Ca) → Ch) (slot : Fin N ↪ Fin T × Fin M)
-    (A : Rate.DeployedSession n P N b h ρ S Lall q r s d G) (dbar dw : ℝ),
+    (A : Rate.DeployedRun n P N b h ρ S Lall q r s d G) (dbar dw : ℝ),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 → 0 < E → 0 < Fc.bytes →
     Assumptions.KeyBinding T M δ enc →
     Assumptions.WorkHardness b rounds cRoot cost →
@@ -383,7 +383,7 @@ def StackedRequirementRelay : Prop :=
     (Fc : Gates.Field) (k B es εnum εden : ℕ) (tier : ℕ → Fin τ) (δ : ℝ≥0∞) {Ω Ca Ch : Type} [Fintype Ω]
     [Fintype Ca] (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → Pous.Bits b)
     (choose : Ω → (a : Fin T) → ({c : Fin T // c < a} → Ca) → Ch) (slot : Fin N ↪ Fin T × Fin M)
-    (A : Rate.DeployedSession n P N b h ρ S Lall q r s d G) (dbar dw : ℝ)
+    (A : Rate.DeployedRun n P N b h ρ S Lall q r s d G) (dbar dw : ℝ)
     {V : Type} [DecidableEq V] (W : Requirement.Wiring V) (e : Requirement.Execution V)
     (ℓ : Requirement.Store.Placement V) (mm : Requirement.Store) (plan : ℕ → Finset ℕ) (win : Window),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 → 0 < E → 0 < Fc.bytes →

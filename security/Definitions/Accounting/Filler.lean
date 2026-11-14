@@ -36,8 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The filler's cell check (trusted)
 
-What the filler's per-check luck is about, as `verity/protocols/accounting/pouw/prover/kernels/filler/pfill_ref.py`
-computes a tile and the service checks it:
+What the filler's per-check luck is about, as `benchmarks/pouw/filler/pfill_ref.py` computes a tile and the service checks it:
 
 * **The noise** (`Noise`): a round's A rows, `K` bits each, and its B columns. The tile's noise is SHA-512 of the
   round's live coins (`pfill_ref.digest`, one counter per row block and per column block), read here as uniform and
