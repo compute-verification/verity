@@ -144,12 +144,12 @@ def test_preserved_refuses_and_names_the_labels_part_when_a_label_push_fails(env
     rc = main(["preserved", RUN])
     out = capsys.readouterr().out
     assert rc == 1 and "labels                 NOT durable: 2 local assertion(s) absent on the remote  2 local, 0 on remote" in out
-    assert "NOT PRESERVED: 1 item(s) not verifiably on the remote  (legs failing: labels)" in out
+    assert "NOT PRESERVED: 1 item(s) not verifiably on the remote  (parts failing: labels)" in out
     rep = P.check(st, [RUN])
-    assert rep["preserved"] is False and rep["targets"][0]["legs"] == {"manifest": True, "artifacts": True, "labels": False}
+    assert rep["preserved"] is False and rep["targets"][0]["parts"] == {"manifest": True, "artifacts": True, "labels": False}
     assert [x["kind"] for x in rep["not_preserved"]] == ["labels"] and all(x.endswith(".json: absent on the remote") for x in rep["not_preserved"][0]["errors"])
     # the artifact alone: its own assertion is its part
-    assert main(["preserved", art]) == 1 and "legs failing: labels" in capsys.readouterr().out
+    assert main(["preserved", art]) == 1 and "parts failing: labels" in capsys.readouterr().out
     # a publish in the same condition says so (never raises into the runner)
     d = tmp_path / "runs" / RUN_ID
     shutil.copytree(FIXTURES / "run_v0.2", d)
@@ -166,10 +166,10 @@ def test_preserved_refuses_and_names_the_labels_part_when_a_label_push_fails(env
     assert "labels: 2 pushed, 0 already there" in capsys.readouterr().out
     assert main(["preserved", RUN]) == 0
     out = capsys.readouterr().out
-    assert "DURABLE  2 local, 2 on remote" in out and "legs failing" not in out
+    assert "DURABLE  2 local, 2 on remote" in out and "parts failing" not in out
     st2 = LocalStore()
-    assert P.check(st2, [RUN])["targets"][0]["legs"] == {"manifest": True, "artifacts": True, "labels": True}
-    assert P.check(st2, [RUN], mode="recorded")["targets"][0]["legs"]["labels"] is None, "offline: not checked, not counted"
+    assert P.check(st2, [RUN])["targets"][0]["parts"] == {"manifest": True, "artifacts": True, "labels": True}
+    assert P.check(st2, [RUN], mode="recorded")["targets"][0]["parts"]["labels"] is None, "offline: not checked, not counted"
     # --no-labels is explicit about leaving the labels out: the push reports no labels line and the gate stays shut for a new assertion
     st2.add_label(RUN, "note", "late", "alice")
     assert main(["push", RUN, "--no-labels"]) == 0 and "labels:" not in capsys.readouterr().out

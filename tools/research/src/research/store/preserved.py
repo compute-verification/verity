@@ -3,7 +3,7 @@
     check(store, targets, mode="head") -> report; report["preserved"] is the gate
 
 A target is a run id (every artifact its manifest names under `outputs` and `telemetry`, plus the attempt manifest itself) or
-an `art:` id.  Three legs, each reported by name (`legs`: `manifest`, `artifacts`, `labels`):
+an `art:` id.  Three parts, each reported by name (`parts`: `manifest`, `artifacts`, `labels`):
   manifest   the attempt manifest is on the remote (HEAD);
   artifacts  an artifact is PRESERVED when the remote holds its manifest (read back, sha256 == id) and every blob: remote size ==
              manifest size and, per `mode`, `head` = when the blob is local, the remote ETag == its MD5 (single-part) or the
@@ -16,7 +16,7 @@ an `art:` id.  Three legs, each reported by name (`legs`: `manifest`, `artifacts
              listed on the remote under its content key and HEADs back with its canonical size (`labels_sync.verify_targets`) --
              a preserved Attempt is not preserved until its assertions are durable too (r20: labels lived only on the pods).
              Not checkable offline: `recorded` mode reports it as not checked and does not count it, like the attempt manifest.
-Nothing is uploaded here: `research data push` is the repair (it pushes the labels leg too).
+Nothing is uploaded here: `research data push` is the repair (it pushes the labels part too).
 
 Withdrawn files: before checking an artifact against the remote its labels are pulled (`labels_sync.read_through`), and a blob
 absent on the remote that a `withdrawn` label covers (`research data withdraw`, withdraw.py: every file, or those under its
@@ -192,7 +192,7 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
                 seen[a] = _check_artifact(st, a, mode, head_fallback)
             return seen[a]
 
-    def labels_leg(t: str, label_targets: list[str], bad: list[dict[str, Any]]) -> tuple[bool | None, dict[str, Any] | None]:
+    def labels_part(t: str, label_targets: list[str], bad: list[dict[str, Any]]) -> tuple[bool | None, dict[str, Any] | None]:
         """(ok | None when not checkable, report).  Missing or wrong-sized assertions land in `bad` as kind `labels`."""
         if mode == "recorded" or r is None:
             return None, None
@@ -229,8 +229,8 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
             tr: dict[str, Any] = {"target": t, "kind": "artifact", "preserved": a["preserved"], "artifacts": {t: a}}
             if not a["preserved"]:
                 bad.append(_bad(a))
-            lab_ok, tr["labels"] = labels_leg(t, [t], bad)
-            tr["legs"] = {"artifacts": a["preserved"], "labels": lab_ok}
+            lab_ok, tr["labels"] = labels_part(t, [t], bad)
+            tr["parts"] = {"artifacts": a["preserved"], "labels": lab_ok}
             tr["preserved"] = a["preserved"] and lab_ok is not False
             tr["verdict"] = _verdict([a["verdict"]], lab_ok is not False)
         elif ids.is_run_id(t):
@@ -272,8 +272,8 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
                         tr["missing_names"].append(name)
                         bad.append(_bad(ar, name=f"{t}:{name}"))
                 arts_ok = all(x["preserved"] for x in tr["artifacts"].values())
-                lab_ok, tr["labels"] = labels_leg(t, LS.attempt_targets(doc), bad)
-                tr["legs"] = {"manifest": man_ok, "artifacts": arts_ok, "labels": lab_ok}
+                lab_ok, tr["labels"] = labels_part(t, LS.attempt_targets(doc), bad)
+                tr["parts"] = {"manifest": man_ok, "artifacts": arts_ok, "labels": lab_ok}
                 tr["preserved"] = man_ok and arts_ok and lab_ok is not False
                 tr["verdict"] = _verdict([x["verdict"] for x in tr["artifacts"].values()], man_ok and lab_ok is not False)
                 tr["n_artifacts"] = len(named)
@@ -334,26 +334,26 @@ def _bad(a: dict[str, Any], **extra: Any) -> dict[str, Any]:
 
 
 def _labels_line(t: dict[str, Any]) -> str:
-    legs = t.get("legs") or {}
+    parts = t.get("parts") or {}
     lab = t.get("labels")
-    if legs.get("labels") is None:
-        return f"  {'labels':<22} not checked" + (" (recorded mode)" if lab is None and legs else "")
+    if parts.get("labels") is None:
+        return f"  {'labels':<22} not checked" + (" (recorded mode)" if lab is None and parts else "")
     if lab and lab.get("error"):
         return f"  {'labels':<22} NOT durable: {lab['error']}"
     n_local, n_remote, n_missing = lab["local"], lab["remote"], lab["missing"]
     extra = n_remote - (n_local - n_missing)
     tail = f"{n_local} local, {n_remote} on remote" + (f" ({extra} asserted elsewhere)" if extra > 0 else "")
-    if legs["labels"]:
+    if parts["labels"]:
         return f"  {'labels':<22} DURABLE  {tail}"
     return f"  {'labels':<22} NOT durable: {n_missing} local assertion(s) absent on the remote  {tail}" + ("; " + "; ".join(lab["errors"][:3]) if lab.get("errors") and n_missing == 0 else "")
 
 
-def _failing_legs(rep: dict[str, Any]) -> list[str]:
+def _failing_parts(rep: dict[str, Any]) -> list[str]:
     out: list[str] = []
     for t in rep["targets"]:
-        for leg, ok in (t.get("legs") or {}).items():
-            if ok is False and leg not in out:
-                out.append(leg)
+        for part, ok in (t.get("parts") or {}).items():
+            if ok is False and part not in out:
+                out.append(part)
         if t.get("error") and "attempt" not in out and t["kind"] == "attempt":
             out.append("attempt")
     return out
@@ -394,14 +394,14 @@ def format_summary(rep: dict[str, Any]) -> list[str]:
     on = f" on {rep['remote']}" if rep.get("remote") else ""
     if rep.get("reason") and not rep["preserved"]:
         lines.append(f"remote: {rep['reason']}")
-    legs = _failing_legs(rep)
+    parts = _failing_parts(rep)
     if rep["preserved"]:
         lines.append(f"PRESERVED{on}")
     elif rep.get("verdict") == WITHDRAWN:
         lines.append(f"WITHDRAWN: everything else is PRESERVED{on}, but {n_wd} file(s) were withdrawn from the shared store on purpose "
                      f"(`research data withdraw`, the reasons above): {DELETE_COPIES}")
     else:
-        lines.append(f"NOT PRESERVED: {n_bad} item(s) not verifiably on the remote" + (f"  (legs failing: {', '.join(legs)})" if legs else "")
+        lines.append(f"NOT PRESERVED: {n_bad} item(s) not verifiably on the remote" + (f"  (parts failing: {', '.join(parts)})" if parts else "")
                      + (f"; and {n_wd} file(s) were withdrawn on purpose: {DELETE_COPIES}" if n_wd else ""))
     return lines
 
