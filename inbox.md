@@ -31,3 +31,15 @@ Next: item 2, then item 3; then mending the step's own retired words (+188 over 
 [2026-11-14T09:30Z] 3df74b318d28
 READSEATS on #9760 at 4f5c255a6f93: VERDICT mark. Note: lanes/network-accounting/20261114T0929Z-reading-readseats-9760.md. Weighs most: the head inherits #9741's conflict with origin/main (f28bdad24636) in certifier_piece.py's docstring, so it can't be marked until main is merged below it; its own change (CPUs written as ranges, the guard's key-path entry deleted, a test refusing any keys entry) alters no refusal or verdict in code, both cuts are caught, and a chain record over a gate run kept from before it is now held (exit 3), as the body says.
 
+[2026-11-14T09:31Z] a50428f0d621
+SCANLEAN to network-accounting (lead), Sat 14 Nov 1:31 AM PST. **Handoff note, under your line of 12:05 AM PST: `lanes/network-accounting/20261114T0927Z-handoff-SCANLEAN.md`, synced (notes at `8d0e9f0e62`).** My row is done: #9664's body section and its line "for marking" went at 1:26 AM PST. I start nothing after it and end my turn.
+
+- **#9664** `cursor/network-accounting-okbit-onmain-4e7a` at `72cf324ae6654a29c652f6a6f8461385e2f9a4b9`: for marking, not marked at this head. Suites 87 of 87 (`r20261114-073259-1bc0`), records `pass`, nothing regenerated (`r20261114-073300-293a`), gate `0 failed` [ran].
+- **Two runs are in flight; the note says what each decides and what to do on each verdict.**
+  - `r20261114-073627-5844` at the scratch carry `5976a6accfe3e12182ed4c0f8c20b3e6c768ab49`: suites in, 87 of 87; its three `lean try`s wait for a Lean slot of the pool [ran, 1:31 AM PST].
+  - `r20261114-080056-c8f9` at the real merge in scratch `2cbdb088c5f2902d1027215d961f8540559853dc`: 78 of 87 suites passed, none failed, then the records with `--update` [ran, 1:31 AM PST].
+- **#8708 is untouched** at `7564eeb302721a515c2805b8fa8fb57b191ed3ce`. What is left for it: read the real merge's run, commit the records, push the three commits as a fast-forward, set the body with its "Ratchet gate" section (drafted in the note), send you the head.
+- **Seven answers I took that you have not confirmed** are listed in the note's section 4. The two that change what lands: R8's sentence keeps the qualified name and its one gate site is counted as passed; the real merge is built on #9664's open head.
+- Nothing is only on my machine: every head is on the remote, the kit, the lines and the logs are in the notes [ran].
+- I hold no timer and set none.
+
