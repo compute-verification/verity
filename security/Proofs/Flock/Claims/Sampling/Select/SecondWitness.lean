@@ -32,8 +32,8 @@ set_option backward.privateInPublic.warn false
 
 open Spot
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
-open private Spot.Draw.STRATUM_KEYS Spot.Draw.WORK_STRATUM_KEYS Spot.Draw.samplingDesignKeys
-  Spot.Draw.stratum? from Spot.Draw
+open private Spot.Sample.STRATUM_KEYS Spot.Sample.WORK_STRATUM_KEYS Spot.Sample.samplingDesignKeys
+  Spot.Sample.stratum? from Spot.Sample
 
 namespace Properties.Spot.SecurityProofs
 
@@ -294,15 +294,15 @@ theorem subset_fn : Flock.Draw.subset = subsetFn := by
 two proof blocks, one sampled, on 82 zero bytes (its stratum's `need`). The kernel evaluates `selectSecond`
 (`decide +kernel`) once its well-founded sorts and canonical JSON, its `repeat` and its map are their fuelled twins. -/
 theorem secondMisses_honest : (Select.selectSecond #[0] #[2] #[1] ⟨Array.replicate 82 0⟩).isOk = true := by
-  unfold Select.selectSecond Draw.sampleFirstRead Draw.sampleUnits Flock.Draw.drawWith Flock.Draw.stratifiedWith
-    Draw.flockSamplingDesign Draw.strataProblem Flock.Draw.workProblem Draw.checkDraw Draw.checkSampleFull
-    Draw.strataMessage Draw.sameSamplingDesign Draw.samplingDesignOf Spot.Draw.samplingDesignKeys Spot.Draw.stratum?
-    Spot.Draw.STRATUM_KEYS Spot.Draw.WORK_STRATUM_KEYS keys? sortStrings jeq
+  unfold Select.selectSecond Sample.sampleFirstRead Sample.sampleUnits Flock.Draw.drawWith Flock.Draw.stratifiedWith
+    Sample.flockSamplingDesign Sample.strataProblem Flock.Draw.workProblem Sample.checkDraw Sample.checkSampleFull
+    Sample.strataMessage Sample.sameSamplingDesign Sample.samplingDesignOf Spot.Sample.samplingDesignKeys Spot.Sample.stratum?
+    Spot.Sample.STRATUM_KEYS Spot.Sample.WORK_STRATUM_KEYS keys? sortStrings jeq
   simp only [onWith_fuel _ _ _ 2, canon_fuel 16, qsort_fuel, subset_fn]
   decide +kernel
 
-theorem proved_null : Draw.proved Json.null = #[] := by
-  unfold Draw.proved
+theorem proved_null : Sample.proved Json.null = #[] := by
+  unfold Sample.proved
   simp only [qsort_fuel]
   decide +kernel
 

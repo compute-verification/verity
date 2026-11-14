@@ -25,7 +25,7 @@ module
 public import CoreProtocol.Profile
 public import Flock.WindowRecord
 public import Spot.Bound
-public import Spot.Draw
+public import Spot.Sample
 public import Spot.PyJson
 public import Std.Data.HashMap
 import Lean.Data.Json.Parser
@@ -33,7 +33,7 @@ import Std.Data.HashMap.Lemmas
 meta import CoreProtocol.Profile
 meta import Flock.WindowRecord
 meta import Spot.Bound
-meta import Spot.Draw
+meta import Spot.Sample
 meta import Spot.PyJson
 meta import Std.Data.HashMap
 
@@ -120,8 +120,8 @@ only when they fail. `digest` is the registration's, `units` the sample's. -/
 def checks (reg receipt draw samplingDesign : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json) (digest : String)
     (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
     (sessionRegistered : Option (Array (String × Json))) : Array (String × Check) := Id.run do
-  let mut out := #[("draw", Draw.checkSampleFull draw (getD reg "population") samplingDesign),
-    ("proved", Draw.checkProvedFull draw provedUnits instances)]
+  let mut out := #[("draw", Sample.checkSampleFull draw (getD reg "population") samplingDesign),
+    ("proved", Sample.checkProvedFull draw provedUnits instances)]
   if !jeq (getD receipt "registration") (Json.str digest) then
     out := out.push ("receipt", failed "receipt" (obj [("receipt", getD receipt "registration")]))
   if let some s := served then
@@ -217,8 +217,8 @@ def ownRegisteredFast (rec : Json) (opened : Option (Array (String × Json))) : 
 def checksFast (reg receipt draw samplingDesign : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json)
     (digest : String) (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
     (sessionRegistered : Option (Array (String × Json))) : Array (String × Check) := Id.run do
-  let mut out := #[("draw", Draw.checkSampleFull draw (getD reg "population") samplingDesign),
-    ("proved", Draw.checkProvedFull draw provedUnits instances)]
+  let mut out := #[("draw", Sample.checkSampleFull draw (getD reg "population") samplingDesign),
+    ("proved", Sample.checkProvedFull draw provedUnits instances)]
   if !jeq (getD receipt "registration") (Json.str digest) then
     out := out.push ("receipt", failed "receipt" (obj [("receipt", getD receipt "registration")]))
   if let some s := served then
@@ -255,13 +255,13 @@ def profileSample (samplingDesign : Json) : Option Core.SamplingDesign :=
   | .str "subset" => (nat? (getD samplingDesign "k")).map .subset
   | .str "bernoulli" => do
     let .str p := getD samplingDesign "p" | none
-    let (a, b) ← Draw.probability? p
+    let (a, b) ← Sample.probability? p
     return .bernoulli (← Core.Ratio.mk' a b)
   | .str "stratified" | .str "work" => do
     let .arr ss := getD samplingDesign "strata" | none
     let strata ← ss.mapM fun s => do
       let .str t := getD s "template" | none
-      let rs ← Draw.ranges? (getD s "units")
+      let rs ← Sample.ranges? (getD s "units")
       return ({ name := t, size := (rs.foldl (fun (a : Int) ((lo, hi) : Int × Int) => a + (hi - lo)) 0).toNat,
                 k := ← nat? (getD s "k") } : Core.Stratum)
     return .stratified strata
@@ -385,7 +385,7 @@ private def strataSampled (draw : Json) (units : Array Int) : Json :=
   obj ((match getD draw "strata" with | .arr ss => ss | _ => #[]).toList.filterMap fun s =>
     match getD s "template" with
     | .str t =>
-      let rs := (Draw.ranges? (getD s "units")).getD #[]
+      let rs := (Sample.ranges? (getD s "units")).getD #[]
       some (t, Lean.toJson (units.filter fun u => rs.any fun (lo, hi) => lo ≤ u && u < hi).size)
     | _ => none)
 
@@ -465,7 +465,7 @@ def record (i : Input) : V Json := do
         [("per_template", obj ((strata.getD #[]).toList.map fun s => (s.name, Lean.toJson (Bound.stratumBound s i.delta))))]
       else [])
   return obj [("format", Json.str FORMAT), ("registration", reg), ("registration_digest", Json.str digest),
-    ("receipt", i.receipt), ("draw", i.draw), ("law", Draw.samplingDesignOf i.draw), ("proved_units", Json.arr i.provedUnits),
+    ("receipt", i.receipt), ("draw", i.draw), ("law", Sample.samplingDesignOf i.draw), ("proved_units", Json.arr i.provedUnits),
     ("statement", i.statement), ("checks", obj (cs.toList.map fun (n, c) => (n, c.toJson))),
     ("verdicts", obj i.verdicts.toList), ("accepted", Json.bool accepted), ("complete", Json.bool (allRan i.verdicts)),
     ("profile", profile), ("integrity_profile", integrity), ("wrong_units", wrongUnits)]

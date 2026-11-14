@@ -4132,6 +4132,31 @@
       "paths": {
         "adapters/vllm/verity_vllm/pipeline/window_law.py": "adapters/vllm/verity_vllm/pipeline/window_sampling_design.py"
       }
+    },
+    {
+      "paths": {
+        "security/Proofs/Flock/Bridge/Draw.lean": "security/Proofs/Flock/Bridge/Sample.lean",
+        "security/Proofs/Flock/Claims/Sampling/Draws.lean": "security/Proofs/Flock/Claims/Sampling/Samples.lean",
+        "security/Proofs/Flock/EndToEnd/Joint/Drawn.lean": "security/Proofs/Flock/EndToEnd/Joint/Sampled.lean",
+        "security/Proofs/Flock/EndToEnd/Joint/MT/Draw.lean": "security/Proofs/Flock/EndToEnd/Joint/MT/Sample.lean",
+        "security/Proofs/Flock/EndToEnd/Joint/MT/Drawn.lean": "security/Proofs/Flock/EndToEnd/Joint/MT/Sampled.lean",
+        "security/Proofs/Flock/Recursive/ZkReg/DrawnRefines.lean": "security/Proofs/Flock/Recursive/ZkReg/SampledRefines.lean",
+        "security/Proofs/Flock/Soundness/Audit/RegDraw.lean": "security/Proofs/Flock/Soundness/Audit/RegSample.lean",
+        "security/Proofs/Flock/Soundness/Discharge/Layout/Drawn.lean": "security/Proofs/Flock/Soundness/Discharge/Layout/Sampled.lean",
+        "security/Proofs/Flock/Soundness/PlanDraw.lean": "security/Proofs/Flock/Soundness/PlanSample.lean",
+        "security/Proofs/Flock/SpotFlock/AddressFacts/RowDraw.lean": "security/Proofs/Flock/SpotFlock/AddressFacts/RowSampleJson.lean",
+        "security/Proofs/Flock/SpotFlock/Drawn.lean": "security/Proofs/Flock/SpotFlock/Sampled.lean",
+        "security/Proofs/Properties/Challenger/Drawn.lean": "security/Proofs/Properties/Challenger/Sampled.lean",
+        "security/Proofs/Properties/Verity/Sampled/Members/Draw.lean": "security/Proofs/Properties/Verity/Sampled/Members/Sample.lean",
+        "security/Proofs/Properties/Verity/Sampled/RecordDraw.lean": "security/Proofs/Properties/Verity/Sampled/RecordSample.lean",
+        "security/Proofs/Properties/Verity/Sampled/Window/Draw.lean": "security/Proofs/Properties/Verity/Sampled/Window/Sample.lean",
+        "security/Proofs/Properties/Verity/SampledDraw.lean": "security/Proofs/Properties/Verity/SampledUnits.lean",
+        "security/Proofs/Properties/Verity/SampledTwo/DrawRoots.lean": "security/Proofs/Properties/Verity/SampledTwo/SampleRoots.lean",
+        "security/Proofs/Properties/Verity/SampledTwo/FormDraw.lean": "security/Proofs/Properties/Verity/SampledTwo/FormSample.lean",
+        "security/Properties/Spot/Draw.lean": "security/Properties/Spot/Sample.lean",
+        "verity/protocols/proofs/flock/verifier/Flock/Test/FullDraw.lean": "verity/protocols/proofs/flock/verifier/Flock/Test/FullSample.lean",
+        "verity/protocols/proofs/spot/verifier/lean/Spot/Draw.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/Sample.lean"
+      }
     }
   ]
 }

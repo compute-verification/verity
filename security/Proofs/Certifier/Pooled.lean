@@ -37,7 +37,7 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Claims.Sampling.Samples
 import Proofs.Flock.Soundness.Audit.Periods
 import Proofs.Flock.Soundness.Game
 import Proofs.Certifier.MonitoringPeriodSum

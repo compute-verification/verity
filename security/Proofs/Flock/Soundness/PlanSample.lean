@@ -18,7 +18,7 @@ the window's one key, and the window around it:
 
 @[expose] public section
 
-namespace FlockSoundness.PlanDraw
+namespace FlockSoundness.PlanSample
 
 open Randomness
 
@@ -57,4 +57,4 @@ def sampleAll (key : ByteArray) : List Call → Nat → Option (List Nat)
 def executionPhase (key : ByteArray) (calls : List Call) (L : Nat) : Option (List Nat) :=
   if (calls.map fun c => frames c.index).Nodup then sampleAll key calls L else none
 
-end FlockSoundness.PlanDraw
+end FlockSoundness.PlanSample

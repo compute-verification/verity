@@ -81,7 +81,7 @@ stratum's `k` at most its size, so those two hypotheses follow from the verifier
 neither: their sampling design is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
 (`liveStrata_of_ofJson`: non-empty at an accepted sample file's sampling design). `sampleOS_subset_escape_le`,
 `sampleOS_stratified_escape_le` and `sampleOS_work_escape_le` (`ExecSampleOS.lean`), **the live sample**:
-`Flock.Draw.drawWith` on the challenger's coins (`Spot.Draw.sampleUnits`; `Flock.Draw.sampleOS` is `drawWith` on
+`Flock.Draw.drawWith` on the challenger's coins (`Spot.Sample.sampleUnits`; `Flock.Draw.sampleOS` is `drawWith` on
 `IO.getRandomBytes`, `sampleOS_def`), extending a stream that runs out and rerunning, misses $B$ with probability at most
 the same miss probabilities, on a byte source that A3 makes uniform (`Assumptions.UniformRandomBytes`);
 `execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
@@ -195,7 +195,7 @@ such as an executable sample; `audit_executionPhase_of_le_slack` and, at the com
 keyed sample needs, and `audit_executionPhase_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-unit
 terms, with `extraction_audit_executionPhase_split_of_record_of_le_slack` at the compiled layer. `audit_executionPhase_of_record`:
 $2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_executionPhase_split_of_record`: the same for the per-call
-split with y's floors, the sampling design the PoUW window runs (`PlanDraw.lean`). The product design assumes each call's sample is under a distinct
+split with y's floors, the sampling design the PoUW window runs (`PlanSample.lean`). The product design assumes each call's sample is under a distinct
 context.
 
 **Two-stage sampling** is stated in `Claims.SamplingTwo` and proved in `Proofs.Flock.SamplingGeneric.Two`

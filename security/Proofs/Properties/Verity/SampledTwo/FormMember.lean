@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.FormDraw
+public import Proofs.Properties.Verity.SampledTwo.FormSample
 public import Proofs.Properties.Verity.Recursive.BaseSetup
 public import Proofs.Flock.SpotFlock.ParamsWf
 public import Proofs.Flock.Soundness.ExecStrataOf
@@ -351,9 +351,9 @@ theorem array_mapM_some_size {α β : Type} {f : α → Option β} {xs : Array �
     subst h
     simpa using list_mapM_some_length hl
 
-/-- The ranges `Spot.Draw.ranges?` reads are not empty. -/
-theorem ranges_size {j : Json} {rs : Array (Int × Int)} (h : Spot.Draw.ranges? j = some rs) : 0 < rs.size := by
-  unfold Spot.Draw.ranges? at h
+/-- The ranges `Spot.Sample.ranges?` reads are not empty. -/
+theorem ranges_size {j : Json} {rs : Array (Int × Int)} (h : Spot.Sample.ranges? j = some rs) : 0 < rs.size := by
+  unfold Spot.Sample.ranges? at h
   split at h
   · split at h
     · cases h
@@ -367,7 +367,7 @@ theorem ranges_size {j : Json} {rs : Array (Int × Int)} (h : Spot.Draw.ranges? 
   · cases h
 
 /-- **A member `membersOf` returns has a range, and each of its ranges holds a unit**: its units read as a nonempty
-list of ranges (`Spot.Draw.ranges?`), ascending (`Spot.OneStageZk.ascending`). -/
+list of ranges (`Spot.Sample.ranges?`), ascending (`Spot.OneStageZk.ascending`). -/
 theorem membersOf_units {shared : Spot.OneStageZk.Own} {j : Json} {ms : Array Spot.OneStageZk.Member}
     (h : Spot.OneStageZk.membersOf shared j = .ok ms) :
     ∀ m ∈ ms, 0 < m.units.size ∧ ∀ r ∈ m.units, r.1 < r.2 := by

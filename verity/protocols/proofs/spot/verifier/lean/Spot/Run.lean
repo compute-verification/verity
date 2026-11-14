@@ -8,7 +8,7 @@ check the stream ran on it, in the stream's order.
   more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate sampling design
   whose strata or table don't apply), then R1–R8 (`Docket.check`) against the challenger's copies under the sampling design the rule names over
   that population (`Select.Rule.samplingDesignOver`, whatever sampling design the copies carry) and that work table, a `bernoulli` sampling
-  design at any `p` (`Draw.bernoulli`: `bernoulli`), a
+  design at any `p` (`Sample.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
 * `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
@@ -23,7 +23,7 @@ check the stream ran on it, in the stream's order.
   (`coinsCode`, code `coins`), missing evidence, no key, no window or no family refused, and a family whose log shows a
   root other than the registration's digest refused by its own code (`family`: a family's coins follow one registration, so a
   second registration's coins are another family's, and an interior registration's too); then the sample is held to the
-  registration and the expanded sampling design (`Draw.checkDraw`);
+  registration and the expanded sampling design (`Sample.checkDraw`);
 * under a two-stage rule (`Select.Rule.twoStage grain replay k`), the registration is the boundary commitment over the
   replay blocks, the population of the challenger's program under its query, which is the rule's `grain` (else `grain`),
   and `select` is the first stage, its replay sample. Then `interiors`: the interior registration (`Interior`) over the
@@ -336,13 +336,13 @@ private def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
     Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
   | none => return (true, [])
   | some (it, receipt, draw, samplingDesign, read) => do
-    let proved := it.provedUnits.getD (Draw.proved draw)
+    let proved := it.provedUnits.getD (Sample.proved draw)
     let rec_ ← audit i it.params.verifier it.record receipt draw samplingDesign proved (it.instances.getD proved.size) it.served
       it.sessionRoots
     let strata ← Partition.strata it.params.verifier.program it.params.verifier.query
     let own : SecondStage.Own :=
       { sample, parts := SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
-        drawn := (Draw.proved draw).map Int.toNat,
+        drawn := (Sample.proved draw).map Int.toNat,
         links := SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
         reported := Record.sessionRegistered i.verdicts, verified := SecondStage.verifiedOf i.verdicts,
         refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
@@ -379,18 +379,18 @@ def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
   let v := { v with samplingDesign, workTable }
   let codes := Docket.check i.record v
   if !codes.isEmpty then return refused "register" codes
-  if Draw.bernoulli samplingDesign then return refused "register" #["bernoulli"]
+  if Sample.bernoulli samplingDesign then return refused "register" #["bernoulli"]
   if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]
   let receipt ← receipt i.record i.challenger i.received
-  let derived ← Draw.derive v.program v.query samplingDesign v.workTable
+  let derived ← Sample.derive v.program v.query samplingDesign v.workTable
   if i.closure.isSome then return refused "select" #["closure"]
   let (draw, _, read) ← Select.select (← Select.resolve i.rule v.program v.query) v.program v.query v.workTable
     i.closure i.source
   if let some code := coinsCode i.key i.main i.coins i.record v.windowRoot i.family (i.source.extract 0 read) then
     return refused "select" #[code]
-  let codes := Draw.checkDraw draw (getD i.record "population") derived
+  let codes := Sample.checkDraw draw (getD i.record "population") derived
   if !codes.isEmpty then return refused "select" codes
-  let drawn := Draw.proved draw
+  let drawn := Sample.proved draw
   match ← secondStage i (drawn.map Int.toNat) with
   | .error (step, codes) => return refused step codes
   | .ok inner =>

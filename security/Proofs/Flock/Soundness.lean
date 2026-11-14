@@ -125,9 +125,9 @@ public import Proofs.Flock.Soundness.ExecStratified
 public import Proofs.Flock.Soundness.ExecStrataOf
 public import Proofs.Flock.Soundness.ExecSampleOS
 public import Randomness
-public import Proofs.Flock.Soundness.PlanDraw
+public import Proofs.Flock.Soundness.PlanSample
 public import Proofs.Flock.Soundness.KeyedSample
-public import Proofs.Flock.Soundness.Audit.RegDraw
+public import Proofs.Flock.Soundness.Audit.RegSample
 public import Proofs.Flock.Soundness.Audit.StratifiedMiss
 public import Proofs.Flock.Soundness.Audit.Work
 public import Proofs.Flock.Soundness.Audit.Closure

@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.Sampled.Window.Draw
+public import Proofs.Properties.Verity.Sampled.Window.Sample
 public import Proofs.Properties.Verity.Sampled.CouplingAt
 
 /-!

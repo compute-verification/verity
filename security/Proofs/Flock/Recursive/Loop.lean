@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Claims.Sampling.Samples
 import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
 

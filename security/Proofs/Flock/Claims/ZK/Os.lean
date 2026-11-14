@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.Sampling.Samples
 public import Proofs.Flock.Claims.ZK.Release
 public import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
 import Mathlib.Algebra.Order.Floor.Extended

@@ -191,13 +191,13 @@ theorem qs_vbP_execSel_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 →
         (kd : ℝ) * (2 ^ 64 : ℝ)⁻¹ * ((n : ℝ) * ((c.ports.size + pubBits c hU pi : ℕ) : ℝ)) := by
   classical
   have hbad : ((Finset.univ.filter fun ω : Ω => ¬ ∃ units read,
-      Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf (src ω 0)) = .ok (units, read)).card : ℝ) /
+      Spot.Sample.sampleUnits samplingDesign n (Properties.Spot.bytesOf (src ω 0)) = .ok (units, read)).card : ℝ) /
       Fintype.card Ω ≤ (kd : ℝ) * (2 ^ 64 : ℝ)⁻¹ :=
     card_div_le_of_prCoin_le _ kd (execSel_error_le src hA3 hlaw hns hLb)
   have h := qs_vbP_le_split (dj := dj) (y₀ := y₀) (ht := ht) (hc := hc) (hscope := hscope) (hU := hU) (hpi := hpi)
     (hpub := hpub) (Reg := Reg) (execSel (n := n) src samplingDesign n) kd
     (Finset.univ.filter fun ω : Ω => ¬ ∃ units read,
-      Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf (src ω 0)) = .ok (units, read))
+      Spot.Sample.sampleUnits samplingDesign n (Properties.Spot.bytesOf (src ω 0)) = .ok (units, read))
     (fun ω hω => execSel_card_le src hlaw ω (by
       by_contra h0
       exact hω (Finset.mem_filter.2 ⟨Finset.mem_univ _, h0⟩)))

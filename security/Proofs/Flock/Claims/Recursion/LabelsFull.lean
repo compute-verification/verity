@@ -42,7 +42,7 @@ import Proofs.Flock.Claims.Recursion.DeployScopeRuns
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 
 /-!
 # A staged part's table labels its instances `0..n-1`

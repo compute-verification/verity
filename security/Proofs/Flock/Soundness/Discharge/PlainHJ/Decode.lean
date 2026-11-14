@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 import Proofs.Flock.Soundness.Refine.Seam

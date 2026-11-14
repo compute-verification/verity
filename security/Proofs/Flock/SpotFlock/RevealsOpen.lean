@@ -86,7 +86,7 @@ theorem card_biUnion_toFinset_le (l : List ℕ) (f : ℕ → Finset ℕ) :
 theorem RegTwo.checked_subset (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) :
     (g.checked N src₁ src₂).toFinset ⊆ (Finset.range N).filter (fun v => g.always v = true) ∪
-      ((Spot.Draw.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat).toFinset := by
+      ((Spot.Sample.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat).toFinset := by
   intro v hv
   rw [List.mem_toFinset] at hv
   simp only [RegTwo.checked, hsel] at hv
@@ -103,27 +103,27 @@ theorem RegTwo.card_biUnion_checked_le (g : RegTwo) (N : ℕ) (src₁ src₂ : B
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (needs : ℕ → Finset ℕ) :
     ((g.checked N src₁ src₂).toFinset.biUnion needs).card ≤
       ∑ v ∈ (Finset.range N).filter (fun v => g.always v = true), (needs v).card +
-        ((Spot.Draw.proved draw).toList.map fun j => (needs (g.blockAt (g.sample src₁) j.toNat)).card).sum := by
+        ((Spot.Sample.proved draw).toList.map fun j => (needs (g.blockAt (g.sample src₁) j.toNat)).card).sum := by
   refine (Finset.card_le_card
     (Finset.biUnion_subset_biUnion_of_subset_left needs (g.checked_subset N src₁ src₂ hsel))).trans ?_
   rw [Finset.union_biUnion]
   refine (Finset.card_union_le _ _).trans (Nat.add_le_add Finset.card_biUnion_le ?_)
   have := card_biUnion_toFinset_le
-    ((Spot.Draw.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat) needs
+    ((Spot.Sample.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat) needs
   simpa only [List.map_map, Function.comp_def] using this
 
 /-- With no always-checked block, at most the sampled blocks' count times the most gates a block needs. -/
 theorem RegTwo.card_biUnion_checked_le_mul (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (needs : ℕ → Finset ℕ)
     (hal : ∀ v, g.always v = false) (M : ℕ) (hM : ∀ u, (needs u).card ≤ M) :
-    ((g.checked N src₁ src₂).toFinset.biUnion needs).card ≤ (Spot.Draw.proved draw).size * M := by
+    ((g.checked N src₁ src₂).toFinset.biUnion needs).card ≤ (Spot.Sample.proved draw).size * M := by
   have h0 : (Finset.range N).filter (fun v => g.always v = true) = ∅ :=
     Finset.filter_false_of_mem fun v _ => by simp [hal v]
   have hb := g.card_biUnion_checked_le N src₁ src₂ hsel needs
   rw [h0, Finset.sum_empty, Nat.zero_add] at hb
   refine hb.trans ?_
   have hs := List.sum_le_length_nsmul
-    ((Spot.Draw.proved draw).toList.map fun j => (needs (g.blockAt (g.sample src₁) j.toNat)).card) M
+    ((Spot.Sample.proved draw).toList.map fun j => (needs (g.blockAt (g.sample src₁) j.toNat)).card) M
     (by
       intro y hy
       obtain ⟨j, _, rfl⟩ := List.mem_map.1 hy
@@ -190,7 +190,7 @@ theorem code_card_biUnion_le (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy
     (((code h).checked x r).toFinset.biUnion needs).card ≤
       ∑ v ∈ (Finset.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).filter
           (fun v => h.reg.always v = true), (needs v).card +
-        ((Spot.Draw.proved draw).toList.map fun j =>
+        ((Spot.Sample.proved draw).toList.map fun j =>
           (needs (h.reg.blockAt (h.reg.sample (src (r (order h x).first))) j.toNat)).card).sum :=
   (Finset.card_le_card (Finset.biUnion_subset_biUnion_of_subset_left needs fun u hu =>
     List.mem_toFinset.2 (code_checked_sub h x r u (List.mem_toFinset.1 hu)))).trans
@@ -203,7 +203,7 @@ theorem code_card_biUnion_le_mul (x : Msg) (r : Fin ((code h).V.k x) → FlockDe
     (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
       (stageSrc (stageCoins h x r)) = .ok (draw, n))
     (hal : ∀ v, h.reg.always v = false) (M : ℕ) (hM : ∀ u, (needs u).card ≤ M) :
-    (((code h).checked x r).toFinset.biUnion needs).card ≤ (Spot.Draw.proved draw).size * M :=
+    (((code h).checked x r).toFinset.biUnion needs).card ≤ (Spot.Sample.proved draw).size * M :=
   (Finset.card_le_card (Finset.biUnion_subset_biUnion_of_subset_left needs fun u hu =>
     List.mem_toFinset.2 (code_checked_sub h x r u (List.mem_toFinset.1 hu)))).trans
     (h.reg.card_biUnion_checked_le_mul _ _ _ hsel needs hal M hM)

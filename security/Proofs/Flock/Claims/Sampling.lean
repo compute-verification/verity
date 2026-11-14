@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.Sampling.Committed
 public import Proofs.Flock.Claims.Sampling.Count
 public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.Sampling.Down
-public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.Sampling.Samples
 public import Proofs.Flock.Claims.Sampling.EndToEndDeploy
 public import Proofs.Flock.Claims.Sampling.EndToEndSample
 public import Proofs.Flock.Claims.Sampling.Escape

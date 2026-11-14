@@ -39,7 +39,7 @@ import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Recursive.VStarCheck
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Refine.Walk
 
 /-!

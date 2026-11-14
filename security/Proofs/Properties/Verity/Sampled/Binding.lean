@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled
 public import Proofs.Properties.Challenger
 public import Proofs.Core.Game.Tape
 public import Proofs.Properties.Challenger.Break
-public import Proofs.Properties.Challenger.Drawn
+public import Proofs.Properties.Challenger.Sampled
 public import Proofs.Properties.Verity.Sampled.Trees
 public import Proofs.Properties.Challenger.CanonLine
 public import Proofs.Properties.Challenger.Limits
@@ -35,7 +35,7 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   them.
 * **An accepted read is a run's log** (`accepted_run`): where v2's check reads a log, it is what `readLog` reads
   from the lines of a run of the device that the device's ledger opens withheld on the sample's window, whose release
-  log reads as its coin commitment's, with the run's released coins as the sample's (`Challenger.Drawn.sampled_log`), or
+  log reads as its coin commitment's, with the run's released coins as the sample's (`Challenger.Sampled.sampled_log`), or
   one of the records under `keyOf`'s key carries a break. The records the evidence names give each round that
   run's log opens the coins its line shows (`Lines.TreeLines`), in either form of v2's check: the one statement's
   records each pass the coin trees `coinTreesOf` reads from the log (`trees_of`, `records_of`), and a member's

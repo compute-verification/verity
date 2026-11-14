@@ -13,10 +13,10 @@ import Std.Data.TreeMap.Raw.Lemmas
 # The units a first-stage sample proves are the ones its select drew (part 1)
 
 `Select.select` under a sampling design, with no closure map, builds its sample object from the sampling design's entries, the population and the
-units it drew (`select_shape`), and checks it (`Draw.checkDraw`). The sampling design `Draw.flockSamplingDesign` accepts has no `closure` key
+units it drew (`select_shape`), and checks it (`Sample.checkDraw`). The sampling design `Sample.flockSamplingDesign` accepts has no `closure` key
 (`flockSamplingDesign_keys`, `closure_not_key`), so the sample carries none, and the checked sample's units ascend; so the units the
-sample proves (`Draw.proved`, read back as naturals) are the select's (`proved_select`). This is the step from the
-run's sample, `(Draw.proved draw).map Int.toNat`, to the model's, `RegTwo.sample`, which is the select's units.
+sample proves (`Sample.proved`, read back as naturals) are the select's (`proved_select`). This is the step from the
+run's sample, `(Sample.proved draw).map Int.toNat`, to the model's, `RegTwo.sample`, which is the select's units.
 -/
 
 @[expose] public section
@@ -34,9 +34,9 @@ theorem getD_mkObj_last (l : List (String × Json)) (k : String) (v : Json) :
   rfl
 
 /-- **A sampling design `flockSamplingDesign` accepts has its kind's keys**, none of them `closure`. -/
-theorem flockSamplingDesign_keys {samplingDesign : Json} {n : ℕ} {r : Flock.Draw.SamplingDesign} (h : Spot.Draw.flockSamplingDesign samplingDesign n = .ok r) :
+theorem flockSamplingDesign_keys {samplingDesign : Json} {n : ℕ} {r : Flock.Draw.SamplingDesign} (h : Spot.Sample.flockSamplingDesign samplingDesign n = .ok r) :
     ∃ names : Array String, Spot.keys? samplingDesign = some (Spot.sortStrings names) ∧ "closure" ∉ names := by
-  unfold Spot.Draw.flockSamplingDesign at h
+  unfold Spot.Sample.flockSamplingDesign at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   split at h
   all_goals
@@ -71,9 +71,9 @@ entries with the population and the units it drew, and `checkDraw` passes it. -/
 private theorem select_shape {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} {table : Option Json}
     {src : ByteArray} {draw : Json} {units : Array ℕ} {read : ℕ} (hr : rule ≠ .all)
     (h : Spot.Select.select rule p query table none src = .ok (draw, units, read)) :
-    ∃ (n : ℕ) (samplingDesign : Json) (parsed : Flock.Draw.SamplingDesign), Spot.Draw.flockSamplingDesign samplingDesign n = .ok parsed ∧
+    ∃ (n : ℕ) (samplingDesign : Json) (parsed : Flock.Draw.SamplingDesign), Spot.Sample.flockSamplingDesign samplingDesign n = .ok parsed ∧
       draw = Json.mkObj ((Spot.entries samplingDesign).toList ++ [("population", Lean.toJson n), ("units", Spot.natsJson units)]) ∧
-      ¬(!(Spot.Draw.checkDraw draw (Lean.toJson n) samplingDesign).isEmpty) = true := by
+      ¬(!(Spot.Sample.checkDraw draw (Lean.toJson n) samplingDesign).isEmpty) = true := by
   unfold Spot.Select.select at h
   cases rule with
   | all => exact absurd rfl hr
@@ -99,13 +99,13 @@ private theorem select_shape {rule : Spot.Select.Rule} {p : Spot.Program} {query
          exact ⟨_, _, _, by assumption, rfl, by assumption⟩)
 
 /-- **Part 1: the units a first-stage sample proves are the ones its select drew**: under a sampling design, with no closure map,
-`(Draw.proved draw).map Int.toNat` is the select's units. -/
+`(Sample.proved draw).map Int.toNat` is the select's units. -/
 theorem proved_select {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} {table : Option Json}
     {src : ByteArray} {draw : Json} {units : Array ℕ} {read : ℕ} (hr : rule ≠ .all)
     (h : Spot.Select.select rule p query table none src = .ok (draw, units, read)) :
-    (Spot.Draw.proved draw).map Int.toNat = units := by
+    (Spot.Sample.proved draw).map Int.toNat = units := by
   obtain ⟨n, samplingDesign, parsed, hfl, rfl, hcd⟩ := select_shape hr h
-  have hcd' : Spot.Draw.checkDraw (Json.mkObj ((Spot.entries samplingDesign).toList ++
+  have hcd' : Spot.Sample.checkDraw (Json.mkObj ((Spot.entries samplingDesign).toList ++
       [("population", Lean.toJson n), ("units", Spot.natsJson units)])) (Lean.toJson n) samplingDesign = #[] := by
     simpa using hcd
   obtain ⟨-, -, -, -, -, us, xs, hus, hxs, hasc, -, -⟩ := (Properties.Spot.checkSample_nil _ _ _).1 hcd'
@@ -129,7 +129,7 @@ theorem proved_select {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json
     apply Array.toList_inj.1
     rw [Array.toList_filterMap, Array.toList_map, Array.toList_map, List.filterMap_map, hf,
       List.filterMap_eq_map]
-  unfold Spot.Draw.proved
+  unfold Spot.Sample.proved
   dsimp only
   rw [hu, hcl]
   dsimp only [Spot.natsJson]

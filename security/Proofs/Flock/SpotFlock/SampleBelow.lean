@@ -19,9 +19,9 @@ open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
 /-- **A `subset` sample that ends holds units below the population**: `sampleUnits`' units are `Draw.subset`'s, the
 values of a permutation that keeps `[0, n)` on `[0, k)`, and `k ≤ n` (`subset_spec`). -/
 theorem sampleUnits_subset_lt {k n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ}
-    (h : Spot.Draw.sampleUnits (.subset k) n src = .ok (units, read)) : ∀ x ∈ units, x < n := by
-  unfold Spot.Draw.sampleUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take src need) (.subset k) n).run 0 with
+    (h : Spot.Sample.sampleUnits (.subset k) n src = .ok (units, read)) : ∀ x ∈ units, x < n := by
+  unfold Spot.Sample.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Sample.take src need) (.subset k) n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok y =>
     obtain ⟨r, read'⟩ := y
@@ -36,7 +36,7 @@ theorem sampleUnits_subset_lt {k n : ℕ} {src : ByteArray} {units : Array ℕ} 
     unfold Flock.Draw.drawWith at hw
     dsimp only at hw
     rw [StateT.run_bind] at hw
-    cases ho : (Flock.Draw.onWith (fun need => Spot.Draw.take src need)
+    cases ho : (Flock.Draw.onWith (fun need => Spot.Sample.take src need)
         (2 * k * Flock.Draw.width n + 64) (Flock.Draw.subset k n)).run 0 with
     | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
     | ok z =>
@@ -76,10 +76,10 @@ theorem select_subset_lt {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : Byt
   rw [hpu hc]
   rcases hcase with ⟨hall, -⟩ | ⟨-, parsed, read', hp, hu⟩
   · exact absurd hall hne
-  · have hp' : Spot.Draw.flockSamplingDesign named n = .ok parsed := hp
+  · have hp' : Spot.Sample.flockSamplingDesign named n = .ok parsed := hp
     rw [hf] at hp'
     obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
-    have hu' : Spot.Draw.sampleUnits (.subset K) n src = .ok (units, read') := hu
+    have hu' : Spot.Sample.sampleUnits (.subset K) n src = .ok (units, read') := hu
     exact _root_.Flock.Bridge.sampleUnits_subset_lt hu'
 
 end SpotFlock

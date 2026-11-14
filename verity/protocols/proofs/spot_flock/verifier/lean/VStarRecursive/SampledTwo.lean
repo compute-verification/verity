@@ -89,7 +89,7 @@ the form and runs this check. The package's root imports it, so the package's au
 registration is sampled under two sampling designs: its record's, a subset of all its `m` proof blocks (`subsetDesign`), which R1
 holds it to as the run of record does, and the second stage's, which its sample is sampled under. It reads the sample the
 coins `ξ₂` give under the second stage's sampling design, every coin opened read (`OneStage.coinsReason`), then R1–R8 at the
-subset design, the evidence's sample held to the second stage's sampling design (`Draw.checkDraw`), the record's checks over its proved
+subset design, the evidence's sample held to the second stage's sampling design (`Sample.checkDraw`), the record's checks over its proved
 units (`Record.checks`), the verdicts (`OneStage.verdictOf`), and the bound under the second stage's sampling design. The record's
 checks are the function the run of record of step 4 calls for the interior's record (`Record.record`'s
 `Record.checks`), at the reads it hands it under a two-stage rule (`own_reads`): a session's read of one of the
@@ -715,7 +715,7 @@ def secondDesignOf (p : Params) (run : Json) : V Json := do
   let q := p.interior.verifier.query
   let ns ← Select.replayCells p.replay q
   let ks ← k.over (← Select.templateIds q) ns
-  pure (Select.secondSamplingDesign ((Draw.proved (getD run "draw")).map Int.toNat) ns ks)
+  pure (Select.secondSamplingDesign ((Sample.proved (getD run "draw")).map Int.toNat) ns ks)
 
 /-- The interior registration's sampling design as the run of record reads it: a subset of all its `m` proof blocks. -/
 def subsetDesign (m : Nat) : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)]
@@ -731,7 +731,7 @@ def secondChecked (v : Docket.Verifier) (delta : Core.Ratio) (c : OneStage.Commi
   let rec_ := c.record
   let codes := Docket.check rec_ v
   if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
-  let sampleCodes := Draw.checkDraw e.draw (getD rec_ "population") design
+  let sampleCodes := Sample.checkDraw e.draw (getD rec_ "population") design
   if !sampleCodes.isEmpty then .reject s!"draw: {", ".intercalate sampleCodes.toList}" else
   let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
   let cs := Record.checks rec_ e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson)
@@ -749,7 +749,7 @@ def secondChecked (v : Docket.Verifier) (delta : Core.Ratio) (c : OneStage.Commi
     let units := match getD e.draw "units" with | .arr us => us.filterMap nat? | _ => #[]
     let str := fun (k : String) => match getD rec_ k with | .str s => s | _ => ""
     .accept
-      { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
+      { drawn := units, proved := (Sample.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
         bound := Bound.boundOf m prof delta,
         perTemplate := (Bound.strataOf m prof).map (·.map fun s => (s.name, Bound.stratumBound s delta)),
         complete := Record.allRan e.verdicts }
@@ -761,7 +761,7 @@ def secondChecked (v : Docket.Verifier) (delta : Core.Ratio) (c : OneStage.Commi
 /-- **The interior audit's check at the second stage's sampling design** (check, 5; module docstring, **the last
 step**): the interior registration's population `m`; the sample the coins `ξ₂` give under `design`
 (`OneStage.coinsReason` at the verifier whose sampling design is `subsetDesign m`, so that the sample is `design`'s,
-`Draw.flockSamplingDesign`), every coin opened read; then `secondChecked` at that verifier. -/
+`Sample.flockSamplingDesign`), every coin opened read; then `secondChecked` at that verifier. -/
 def secondCheck (v : Docket.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (design : Json)
     (ξ₂ : ByteArray) (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
   match nat? (getD c.record "population") with

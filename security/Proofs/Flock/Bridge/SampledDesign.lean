@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Bridge.Sample
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Spot.OneStage
@@ -11,7 +11,7 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 # The sampling design the audit samples under (`Bridge.sampledDesign`)
 
 The deployed sample (`Spot.OneStage.sampledFrom`) samples under the sampling design the registration's sampling design object expands to
-over its strata (`Draw.deriveSamplingDesign` over `Partition.strata`), else the sampling design `flockSamplingDesign` parses from the sampling design object,
+over its strata (`Sample.deriveSamplingDesign` over `Partition.strata`), else the sampling design `flockSamplingDesign` parses from the sampling design object,
 and refuses a Bernoulli one (`OneStage.coveredDesign`).
 `sampledDesign desc q lj tb n` is that sampling design, from the registration's descriptor bytes `desc`, query `q`, sampling design object `lj` and
 work table `tb`, at the population `n`:
@@ -40,12 +40,12 @@ namespace Flock.Bridge
 open Properties.Spot
 
 /-- **The sampling design the audit samples under**: the registration's sampling design object `lj` expanded over the strata of the descriptor
-`desc` under the query `q` (`Draw.deriveSamplingDesign`, with the work table `tb`), else the sampling design `flockSamplingDesign` parses from it at the
+`desc` under the query `q` (`Sample.deriveSamplingDesign`, with the work table `tb`), else the sampling design `flockSamplingDesign` parses from it at the
 population `n`, a Bernoulli one refused, as `OneStage.sampledFrom` samples (`sampledFrom_sampledDesign`). -/
 def sampledDesign (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Except String Flock.Draw.SamplingDesign := do
   let p ← Spot.Program.parse ⟨desc.toArray⟩
-  let derived ← Spot.Draw.deriveSamplingDesign p q lj tb
-  let parsed ← Spot.Draw.flockSamplingDesign (SecurityProofs.samplingDesignObj lj derived) n
+  let derived ← Spot.Sample.deriveSamplingDesign p q lj tb
+  let parsed ← Spot.Sample.flockSamplingDesign (SecurityProofs.samplingDesignObj lj derived) n
   Spot.OneStage.coveredDesign (derived.getD parsed)
 
 /-- `OneStage.coveredDesign` refuses a Bernoulli sampling design. -/
@@ -72,19 +72,19 @@ def samplingDesignK : Flock.Draw.SamplingDesign → ℕ
   | .work _ ws => (ws.toList.map (·.k)).sum
 
 /-- **The deployed sample is `sampleUnits` under `sampledDesign`**: at a verifier whose program the descriptor `desc` parses to,
-under the sampling design object `Draw.derive` writes from its own, `sampledFrom` samples under the sampling design `sampledDesign` reads off its query,
+under the sampling design object `Sample.derive` writes from its own, `sampledFrom` samples under the sampling design `sampledDesign` reads off its query,
 sampling design object and work table. -/
 theorem sampledFrom_sampledDesign {desc : Claims.Msg} {v : Spot.Docket.Verifier} {lo : Lean.Json}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
-    (hlo : Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) (n : ℕ) (src : ByteArray) :
+    (hlo : Spot.Sample.derive v.program v.query v.samplingDesign v.workTable = .ok lo) (n : ℕ) (src : ByteArray) :
     Spot.OneStage.sampledFrom v lo n src =
-      (sampledDesign desc v.query v.samplingDesign v.workTable n >>= fun samplingDesign => Spot.Draw.sampleUnits samplingDesign n src) := by
-  unfold Spot.Draw.derive at hlo
+      (sampledDesign desc v.query v.samplingDesign v.workTable n >>= fun samplingDesign => Spot.Sample.sampleUnits samplingDesign n src) := by
+  unfold Spot.Sample.derive at hlo
   obtain ⟨derived, hd, hlo⟩ := SecurityProofs.bind_eq_ok.1 hlo
   obtain rfl : SecurityProofs.samplingDesignObj v.samplingDesign derived = lo := Except.ok.inj hlo
   unfold Spot.OneStage.sampledFrom sampledDesign
   rw [hp, SecurityProofs.bind_ok, hd, SecurityProofs.bind_ok, SecurityProofs.bind_ok]
-  cases Spot.Draw.flockSamplingDesign (SecurityProofs.samplingDesignObj v.samplingDesign derived) n <;> rfl
+  cases Spot.Sample.flockSamplingDesign (SecurityProofs.samplingDesignObj v.samplingDesign derived) n <;> rfl
 
 /-- **The verifier samples `kd` units under `samplingDesign`**: `samplingDesign` is the sampling design it samples under from the registration's descriptor
 `desc`, query `q`, sampling design object `lj` and work table `tb` at the population `n` (`sampledDesign`), and `kd` the units it samples
@@ -94,25 +94,25 @@ def SamplesUnder (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) 
   sampledDesign desc q lj tb n = .ok samplingDesign ∧ samplingDesignK samplingDesign = kd
 
 /-- **Every sample the one-stage verifier samples is under a sampling design `SamplesUnder` names**: where `sampledFrom` samples,
-at a verifier whose program the descriptor `desc` parses to and under the sampling design object `Draw.derive` writes,
+at a verifier whose program the descriptor `desc` parses to and under the sampling design object `Sample.derive` writes,
 its sample is `sampleUnits` under a `samplingDesign` with `SamplesUnder desc v.query v.samplingDesign v.workTable n samplingDesign (samplingDesignK samplingDesign)`. -/
 theorem samplesUnder_of_sampledFrom {desc : Claims.Msg} {v : Spot.Docket.Verifier} {lo : Lean.Json}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
-    (hlo : Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
+    (hlo : Spot.Sample.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : Spot.OneStage.sampledFrom v lo n src = .ok r) :
     ∃ samplingDesign, SamplesUnder desc v.query v.samplingDesign v.workTable n samplingDesign (samplingDesignK samplingDesign) ∧
-      Spot.Draw.sampleUnits samplingDesign n src = .ok r := by
+      Spot.Sample.sampleUnits samplingDesign n src = .ok r := by
   rw [sampledFrom_sampledDesign hp hlo] at h
   obtain ⟨samplingDesign, hl, hd⟩ := SecurityProofs.bind_eq_ok.1 h
   exact ⟨samplingDesign, ⟨hl, rfl⟩, hd⟩
 
 /-- `sampledDesign`'s steps: the descriptor's program, the sampling design `deriveSamplingDesign` expands over its strata, if any, and the sampling design
-`flockSamplingDesign` parses from the sampling design object `Draw.derive` writes. -/
+`flockSamplingDesign` parses from the sampling design object `Sample.derive` writes. -/
 theorem sampledDesign_ok {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign}
     (h : sampledDesign desc q lj tb n = .ok samplingDesign) :
     ∃ p derived parsed, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧
-      Spot.Draw.deriveSamplingDesign p q lj tb = .ok derived ∧
-      Spot.Draw.flockSamplingDesign (SecurityProofs.samplingDesignObj lj derived) n = .ok parsed ∧ samplingDesign = derived.getD parsed := by
+      Spot.Sample.deriveSamplingDesign p q lj tb = .ok derived ∧
+      Spot.Sample.flockSamplingDesign (SecurityProofs.samplingDesignObj lj derived) n = .ok parsed ∧ samplingDesign = derived.getD parsed := by
   unfold sampledDesign at h
   obtain ⟨p, hp, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨derived, hd, h⟩ := SecurityProofs.bind_eq_ok.1 h
@@ -324,13 +324,13 @@ theorem designAt_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean
   | error _ => rfl
 
 /-- **Every sample the one-stage verifier samples is under `designAt`**: where `sampledFrom` samples, at a verifier whose program
-the descriptor `desc` parses to and under the sampling design object `Draw.derive` writes, its sample is `sampleUnits` under
+the descriptor `desc` parses to and under the sampling design object `Sample.derive` writes, its sample is `sampleUnits` under
 `designAt desc v.query v.samplingDesign v.workTable n`. -/
 theorem sampledFrom_designAt {desc : Claims.Msg} {v : Spot.Docket.Verifier} {lo : Lean.Json}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
-    (hlo : Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
+    (hlo : Spot.Sample.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : Spot.OneStage.sampledFrom v lo n src = .ok r) :
-    Spot.Draw.sampleUnits (designAt desc v.query v.samplingDesign v.workTable n) n src = .ok r := by
+    Spot.Sample.sampleUnits (designAt desc v.query v.samplingDesign v.workTable n) n src = .ok r := by
   obtain ⟨samplingDesign, ⟨hl, -⟩, hd⟩ := samplesUnder_of_sampledFrom hp hlo h
   unfold designAt
   rw [hl]

@@ -189,7 +189,7 @@ def paramsParsed (j : Json) : V Params := do
 
 /-- **The one statement's parameters** (`paramsParsed`), with every sampling design that is no `subset` one refused by
 its kind (`SUBSET_ONLY`), after every refusal of `paramsParsed`. The kind is the parsed sampling design's, the one the
-sample is sampled under (`OneStage.sampledFrom`, `Draw.deriveSamplingDesign`): v1 has already resolved a rate stated as text over
+sample is sampled under (`OneStage.sampledFrom`, `Sample.deriveSamplingDesign`): v1 has already resolved a rate stated as text over
 the population (`OneStage.design`), so `rate:NUM/DEN[:T]` is a `subset` one here and passes, and `stratified-rate:` and
 `work-rate:` are refused as `stratified` and `work`. -/
 def paramsOfJson (j : Json) : V Params := do
@@ -679,7 +679,7 @@ def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFile
     (verdictOf I scope ksFiles population r.coinKeys record draw st (filesOf bs s st) coinKey)
 
 /-- The units the accepted sessions proved (`proved`, in session order) held to the evidence's `proved_units` (`want`):
-sorted, they must be it. `want` is strictly ascending (`Draw.checkSampleFull`), so a unit two sessions prove (or one
+sorted, they must be it. `want` is strictly ascending (`Sample.checkSampleFull`), so a unit two sessions prove (or one
 session twice) refuses, and so does a sampled proof block no session proves. -/
 def provedHeld (proved want : Array Nat) : V Unit :=
   if proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
@@ -885,7 +885,7 @@ def membersOf (shared : Own) (j : Json) : V (Array Member) := do
     if name.isEmpty then throw "proofs: a member's name is empty"
     exactly m #["circuit", "public", "registered", "units", "vus_per_block"] s!"member {name}"
     let (circuit, pub, registered) ← committedOf m
-    let some units := (Draw.ranges? (getD m "units")).bind fun rs =>
+    let some units := (Sample.ranges? (getD m "units")).bind fun rs =>
         rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
       | throw s!"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
     if !ascending 0 units.toList then
@@ -918,7 +918,7 @@ def membersOfApart (shared : Own) (j : Json) : V (Array Member) := do
     if name.isEmpty then throw "proofs: a member's name is empty"
     exactly m #["circuit", "public", "registered", "units", "vus_per_block"] s!"member {name}"
     let (circuit, pub, registered) ← committedOf m
-    let some units := (Draw.ranges? (getD m "units")).bind fun rs =>
+    let some units := (Sample.ranges? (getD m "units")).bind fun rs =>
         rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
       | throw s!"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
     if !ascending 0 units.toList then

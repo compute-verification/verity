@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Game.Defs
-public import Properties.Spot.Draw
+public import Properties.Spot.Sample
 public import PouwPearlPlus
 public import Mathlib.Algebra.BigOperators.Fin
 

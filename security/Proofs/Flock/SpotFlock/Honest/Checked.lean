@@ -102,7 +102,7 @@ theorem secondProblem_counts_pos {sample ns ks : Array ℕ}
 as the sample holds it, an integer. -/
 theorem checked_of_proved (g : RegTwo) {N : ℕ} {j : ℤ} {src₁ src₂ : ByteArray} {draw : Lean.Json} {read : ℕ}
     (h : _root_.Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, read))
-    (hj : j ∈ _root_.Spot.Draw.proved draw) (hv : g.blockAt (g.sample src₁) j.toNat < N) :
+    (hj : j ∈ _root_.Spot.Sample.proved draw) (hv : g.blockAt (g.sample src₁) j.toNat < N) :
     g.blockAt (g.sample src₁) j.toNat ∈ g.checked N src₁ src₂ := by
   unfold RegTwo.checked
   rw [h]
@@ -118,17 +118,17 @@ position (`size_proved_selectSecond`), one of a template's cell at a sampled rep
 theorem sampled_block {h : Held} {s : AuditStatement} {d : Design.Two} (h2 : two h s = some d)
     (hSS : AddressRow.SampleSlots h) {b₁ b₂ : ByteArray} {draw : Lean.Json} {read : ℕ}
     (hsel : _root_.Spot.Select.selectSecond (h.reg.sample b₁) h.reg.ns h.reg.ks b₂ = .ok (draw, read)) :
-    ∃ j ∈ _root_.Spot.Draw.proved draw,
+    ∃ j ∈ _root_.Spot.Sample.proved draw,
       h.reg.blockAt (h.reg.sample b₁) j.toNat < (membersPart h.ms).blocks.length := by
   have hq := (Properties.Spot.SecurityProofs.selectSecond_units hsel).1
   have hs0 : 0 < (h.reg.sample b₁).size := by
     have hne := (Properties.Spot.SecurityProofs.secondProblem_sample hq).1
     refine Nat.pos_of_ne_zero fun h0 => ?_
     exact absurd ((Array.isEmpty_iff_size_eq_zero.mpr h0).symm.trans hne) (by decide)
-  have hpos : 0 < (_root_.Spot.Draw.proved draw).size := by
+  have hpos : 0 < (_root_.Spot.Sample.proved draw).size := by
     rw [Properties.Spot.SecurityProofs.size_proved_selectSecond hsel]
     exact Nat.mul_pos hs0 (secondProblem_counts_pos hq)
-  obtain ⟨j, hj⟩ : ∃ j, j ∈ _root_.Spot.Draw.proved draw := ⟨_, Array.getElem_mem hpos⟩
+  obtain ⟨j, hj⟩ : ∃ j, j ∈ _root_.Spot.Sample.proved draw := ⟨_, Array.getElem_mem hpos⟩
   obtain ⟨t, i, p, ht, hi, hpn, hjt⟩ := AddressRow.proved_in_cell hsel hj
   have htm : t < h.ms.length := by
     obtain ⟨l, -, -, -, -, hfo⟩ := two_eq h h2

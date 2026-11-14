@@ -1,10 +1,10 @@
 module
 
-public import Proofs.Properties.Verity.Sampled.RecordDraw
+public import Proofs.Properties.Verity.Sampled.RecordSample
 public import Proofs.Flock.Claims.Complete.Json.Stmt
 public import Proofs.Flock.Claims.Bridge.Custody
 public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Proofs.Flock.Bridge.V5.Accepted
@@ -833,8 +833,8 @@ theorem checkAt_proved {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneSta
     obtain ⟨-, -, -, -, -, us, is, hus, hm, hasc, -⟩ := hd
     have hcl : _root_.Spot.getD e.draw "closure" = .null := by
       simp only [_root_.Spot.getD, hc, Option.getD_none]
-    have hpr : _root_.Spot.Draw.proved e.draw = is := by
-      unfold _root_.Spot.Draw.proved
+    have hpr : _root_.Spot.Sample.proved e.draw = is := by
+      unfold _root_.Spot.Sample.proved
       dsimp only
       rw [hus, hcl]
       dsimp only

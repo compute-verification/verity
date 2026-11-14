@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Claims.Sampling.KS
 public import Proofs.Flock.Claims.Sampling.Select.Misses
 public import Proofs.Flock.Claims.Sampling.Session
-public import Properties.Spot.Draw
+public import Properties.Spot.Sample
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star

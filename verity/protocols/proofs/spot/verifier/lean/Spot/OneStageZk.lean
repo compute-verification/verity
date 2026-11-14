@@ -909,7 +909,7 @@ theorem paramsOfJson_parsed {j : Json} {p : Params} (h : paramsOfJson j = .ok p)
   (paramsOfJson_ok h).1
 
 /-- **Parsed parameters' sampling design is a `subset` one**: whatever `paramsOfJson` returns names a sampling design of
-kind `subset`, the kind the sample reads (`Draw.deriveSamplingDesign`, `Draw.flockSamplingDesign`). -/
+kind `subset`, the kind the sample reads (`Sample.deriveSamplingDesign`, `Sample.flockSamplingDesign`). -/
 theorem paramsOfJson_subset {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
     getD p.base.verifier.samplingDesign "law" = .str "subset" :=
   (paramsOfJson_ok h).2

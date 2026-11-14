@@ -12,7 +12,7 @@ public import Proofs.Flock.Soundness.Finders
 its own statement at one table (`SampledKSLiveV5`'s binders: its circuit file's descriptor, public input ports and public
 file, and the verifier's own recomputation `own`), as one-stage v2 verifies them. The window's audit (`JointAuditV5`)
 registers every member, samples one sample over all their proof blocks on live coins with the deployed sample
-(`Bridge.execSel`, `Spot.Draw.sampleUnits` on one stream) under the registration's sampling design (`Bridge.SamplingDesignOn`: subset,
+(`Bridge.execSel`, `Spot.Sample.sampleUnits` on one stream) under the registration's sampling design (`Bridge.SamplingDesignOn`: subset,
 stratified or work, a stratum free to span members), each member's proof blocks `MemberV5.emb` into the population, and
 then runs one verity-verify-proof session per member in the registration's order, member `m` proving its part of the sample
 (`MemberV5.part`, sampled by `subset |part|`). A member's sampled count is random and may be zero. The deployed sample
@@ -185,11 +185,11 @@ noncomputable def link (L : SamplingDesign m.n) : ℝ≥0∞ :=
 
 end MemberV5
 
-/-- **The sample ended** on the bytes `src ω`: the deployed sample (`Spot.Draw.sampleUnits`) under `design` over
+/-- **The sample ended** on the bytes `src ω`: the deployed sample (`Spot.Sample.sampleUnits`) under `design` over
 `[0, pop)` returned a sample before the stream ran out. `Bridge.execSel` samples every unit where it did not. -/
 def sampleEnded {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (design : Flock.Draw.SamplingDesign)
     (pop : ℕ) (ω : Ω) : Bool :=
-  match Spot.Draw.sampleUnits design pop (Properties.Spot.bytesOf (src ω 0)) with
+  match Spot.Sample.sampleUnits design pop (Properties.Spot.bytesOf (src ω 0)) with
   | .ok _ => true
   | .error _ => false
 

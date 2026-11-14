@@ -26,7 +26,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
 import Proofs.Flock.Soundness.Discharge.Hm.Bc
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 
 /-!

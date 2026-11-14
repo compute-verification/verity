@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Core.Game.InterleaveBridge
 import Proofs.Properties.Verity.Sampled.CoinMap
-import Proofs.Properties.Verity.Sampled.RecordDraw
+import Proofs.Properties.Verity.Sampled.RecordSample
 
 /-!
 # The two-stage leg's projection, assembled

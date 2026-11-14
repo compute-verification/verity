@@ -44,7 +44,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Refine.Walk
 
 @[expose] public section

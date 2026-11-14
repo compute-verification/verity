@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.Hm.Bc
 public import Proofs.Flock.Soundness.Discharge.Hm.Delta
 public import Proofs.Flock.Soundness.Discharge.Hm.Place
 public import Proofs.Flock.Soundness.Discharge.Hm.Port
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd

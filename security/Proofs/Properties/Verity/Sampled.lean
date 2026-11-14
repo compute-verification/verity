@@ -2,7 +2,7 @@ module
 
 public import Properties.Verity.Game
 public import Proofs.Properties.Verity.Soundness.Composite
-public import Properties.Spot.Draw
+public import Properties.Spot.Sample
 public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Claims.Bridge.CustodyZkP
@@ -34,7 +34,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
   V5's `RecordCustodyZKJPLaw` holds at it under the sample file's sampling design with no premise (`Live.hCust`). At the device's
   bytes as deployed, its one-stage rounds' bytes in order, A3 holds with no premise (`Live.deployed`).
 * **The sample** (`Live.L`): the sampling design the parameters' selection rule derives over the population (`design`), sampled as
-  `Spot.Select.select` samples it, by `Spot.Draw.sampleUnits` on the device's one byte stream (`src`); a
+  `Spot.Select.select` samples it, by `Spot.Sample.sampleUnits` on the device's one byte stream (`src`); a
   sample that fails samples every unit. It is V5's sample at the session's bytes and sampling design (`Live.L_eq`, `Flock.Bridge.execSel`).
 * **The live audit at the session** (`Live.game`), and V5's simulator and extractor at any strategy of it (`Live.sim`,
   `Live.Xr`), at the sample file's sampling design (`decodesZCJH_custodyP`); the sample and `δ` are the sampling design's (`Live.L`,
@@ -341,11 +341,11 @@ noncomputable def extend (S : Widening) : Live where
   hA3 := uniform_fst A.hA3
 
 /-- **The sample's sampling design**: the session's sampling design over the population as `Spot.Select.select` samples it,
-`Spot.Draw.sampleUnits` on the device's bytes in order; a sample that fails samples every unit. -/
+`Spot.Sample.sampleUnits` on the device's bytes in order; a sample that fails samples every unit. -/
 noncomputable def L : FlockSoundness.Audit.SamplingDesign A.n where
   Ω := A.Ω
   draw ω :=
-    match _root_.Spot.Draw.sampleUnits A.design A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
+    match _root_.Spot.Sample.sampleUnits A.design A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
     | .ok (d, _) => Finset.univ.filter fun u => u.val ∈ d
     | .error _ => Finset.univ
 
@@ -353,7 +353,7 @@ noncomputable def L : FlockSoundness.Audit.SamplingDesign A.n where
 theorem L_eq : A.L = Flock.Bridge.execSel (n := A.n) A.src A.design A.n := by
   unfold Live.L Flock.Bridge.execSel
   refine congrArg (@Verity.SamplingDesign.mk (Fin A.n) A.Ω _ _) (funext fun ω => ?_)
-  rcases _root_.Spot.Draw.sampleUnits A.design A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
+  rcases _root_.Spot.Sample.sampleUnits A.design A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
     _ | ⟨d, x⟩ <;> rfl
 
 /-- **Flock's live audit at the session**, the game V5 bounds: the prover registers, the device's bytes sample, and
@@ -666,13 +666,13 @@ def OneStatement (θ : ByteArray) : Prop :=
   ∀ p, ParamsAt θ p → p.members = none
 
 /-- **The Flock sampling design the sample reads over `n` units** under the verifier `v`'s agreed sampling design: the sampling design
-`Spot.Draw.deriveSamplingDesign` derives, or else the expanded rule's (`Spot.Draw.flockSamplingDesign` at
-`Spot.Draw.derive`'s), as `Spot.OneStage.sampledFrom` reads it before `Spot.Draw.sampleUnits`
+`Spot.Sample.deriveSamplingDesign` derives, or else the expanded rule's (`Spot.Sample.flockSamplingDesign` at
+`Spot.Sample.derive`'s), as `Spot.OneStage.sampledFrom` reads it before `Spot.Sample.sampleUnits`
 samples. -/
 def samplingDesignAt (v : _root_.Spot.Docket.Verifier) (n : ℕ) : Flock.V Flock.Draw.SamplingDesign := do
-  let samplingDesignJ ← _root_.Spot.Draw.derive v.program v.query v.samplingDesign v.workTable
-  let derived ← _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
-  pure (derived.getD (← _root_.Spot.Draw.flockSamplingDesign samplingDesignJ n))
+  let samplingDesignJ ← _root_.Spot.Sample.derive v.program v.query v.samplingDesign v.workTable
+  let derived ← _root_.Spot.Sample.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
+  pure (derived.getD (← _root_.Spot.Sample.flockSamplingDesign samplingDesignJ n))
 
 /-- **`A` is the session v2 sets up on the parameters `θ` and the committed files `F`**: v2's parameters in the
 composite's (`ParamsAt`), which name no members, so the session is the one statement's (`single`, `OneStatement`; a

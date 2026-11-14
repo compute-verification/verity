@@ -110,7 +110,7 @@ one that runs out of coins fails the window (`OneStageZk.RAN_OUT`).
 module
 
 public import Flock.WindowRecord
-public import Spot.Draw
+public import Spot.Sample
 public import Spot.Registered
 public import Spot.Supplied
 public import Spot.LinkPoints
@@ -192,7 +192,7 @@ def Pool.spentBefore (p : Pool) (log : Array Json) : Bool :=
 structure Verifier where
   program : Program
   query : Json
-  /-- the agreed sampling design: a rule, which `Draw.derive` expands -/
+  /-- the agreed sampling design: a rule, which `Sample.derive` expands -/
   samplingDesign : Json
   workTable : Option Json
   scheme : String
@@ -580,9 +580,9 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R1
   if !(jeq (get "format") (if v2 then FORMAT_V2 else FORMAT) && jeq (get "protocol") PROTOCOL) then
     c := addCode c "R1-protocol"
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+  match Sample.derive v.program v.query v.samplingDesign v.workTable with
   | .error _ => c := addCode c "R1-law"
-  | .ok mine => if !Draw.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
+  | .ok mine => if !Sample.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
   let w := get "window"
   if !(w matches .obj _) || !KINDS.any (jeq (getD w "kind") ·) then c := addCode c "window"
   -- R2
@@ -645,9 +645,9 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R1
   if !(jeq (get "format") (if v2 then FORMAT_V2 else FORMAT) && jeq (get "protocol") PROTOCOL) then
     c := addCode c "R1-protocol"
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+  match Sample.derive v.program v.query v.samplingDesign v.workTable with
   | .error _ => c := addCode c "R1-law"
-  | .ok mine => if !Draw.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
+  | .ok mine => if !Sample.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
   let w := get "window"
   if !(w matches .obj _) || !KINDS.any (jeq (getD w "kind") ·) then c := addCode c "window"
   -- R2

@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.Sampled.Members.Draw
+public import Proofs.Properties.Verity.Sampled.Members.Sample
 public import Proofs.Properties.Verity.Sampled.Members.Widen
 
 /-!

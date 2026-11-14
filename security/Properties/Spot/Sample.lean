@@ -84,11 +84,11 @@ the sampling design `Select.select` samples (`all` for the `All` rule), and the 
 def slotDesign (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) : Flock.V Claims.Sampling.Design := do
   let n ← Partition.units d query
   let named ← rule.samplingDesignOver n
-  let derived ← Draw.deriveSamplingDesign d query named table
+  let derived ← Sample.deriveSamplingDesign d query named table
   let first ← match rule with
     | .all => pure Claims.Sampling.OneStage.all
     | _ => do
-      let parsed ← Draw.flockSamplingDesign ((derived.map (·.toJson)).getD named) n
+      let parsed ← Sample.flockSamplingDesign ((derived.map (·.toJson)).getD named) n
       pure (oneStageOf (derived.getD parsed))
   return ⟨[first, .all]⟩
 

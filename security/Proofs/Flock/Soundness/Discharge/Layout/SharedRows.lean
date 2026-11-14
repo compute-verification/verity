@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Setup

@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Challenger.Plain
 public import Proofs.Properties.Challenger.Steps
 public import Proofs.Properties.Challenger.CanonLine
-public import Proofs.Properties.Verity.Sampled.RecordDraw
+public import Proofs.Properties.Verity.Sampled.RecordSample
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Zk.Json.Record
 public import Proofs.Core.QSort

@@ -1,20 +1,20 @@
 module
 
-public import Spot.Draw
+public import Spot.Sample
 public import Spot.Rate
 
 /-!
 The challenger's sample from a Spec's selection rule on (`service.selection_samplingDesign`, `draw.derive` and `service.select_draw`,
 which `Stream.register` and `Stream.select` run): the sampling design the rule names over the population of the verifier's own
 program and query, that sampling design expanded over them, and the sample from the challenger's own bytes (every unit for `All`), with
-a work sample's closure under the challenger's closure map, held to `Draw.checkDraw` as the stream holds it. With the sample,
+a work sample's closure under the challenger's closure map, held to `Sample.checkDraw` as the stream holds it. With the sample,
 the number of bytes of the coins it read.
 
 A rule's sampling design text is a rate: a rate sampling design (`parseRate`: `rate:NUM/DEN[:T]`), or a stratified or work rate sampling design
 (`parseStrataRate`: `stratified-rate:NUM/DEN`, `work-rate:NUM/DEN`). The population a rule samples is the registration's,
 which the prover sizes, so a fixed count (`subset:K`, `stratified:K`, `work:K`), whose proof blocks are each sampled with
 `K/N` as the prover pads `N`, is refused (`Rule.ofJson`, `FIXED`); `bernoulli:NUM/DEN` parses and is refused at
-registration (`Draw.bernoulli`). A rate names no sampling design until the population is known. Over `n` units a rate sampling design
+registration (`Sample.bernoulli`). A rate names no sampling design until the population is known. Over `n` units a rate sampling design
 is `subset:k` at `k = Rate.count` (`Rule.over`, `resolve`), so the sample, the registration's sampling design and the audit are a
 uniform `k`-subset's, and `select` runs on that rule. A stratified rate sampling design is `stratified:K` at the `K` its strata need
 (`Rate.stratK` over `strataSizes`), and a work rate sampling design `work:K` at `K = ⌈NUM·n/DEN⌉` over the work table
@@ -90,7 +90,7 @@ def parseStrataRate (text : String) : Option (Bool × Nat × Nat) :=
   else none
 
 /-- A rule's sampling design text is a rate: a rate sampling design, a stratified or work rate sampling design, or `bernoulli:NUM/DEN`, which registration
-refuses (`Draw.bernoulli`). -/
+refuses (`Sample.bernoulli`). -/
 def rate? (t : String) : Bool :=
   (parseRate t).isSome || (parseStrataRate t).isSome ||
     match parseDesign t with
@@ -181,7 +181,7 @@ def Rule.ofJson (j : Json) : V Rule := do
   | _ => pure ()
   throw "a selection rule the stream runs is {rule: all}, {rule: law, law} or {rule: two-stage, grain, replay, k}"
 
-/-- `service.selection_samplingDesign`, after `Rule.over`: the sampling design a rule names over `n` units, before `Draw.derive` expands it; a
+/-- `service.selection_samplingDesign`, after `Rule.over`: the sampling design a rule names over `n` units, before `Sample.derive` expands it; a
 two-stage rule's is its first stage's, over `n` replay blocks. -/
 def Rule.samplingDesignOver : Rule → Nat → V Json
   | .all, n => return Json.mkObj [("law", "subset"), ("k", Lean.toJson n)]
@@ -293,15 +293,15 @@ def secondProblem (sample : Array Nat) (ns ks : Array Nat) : Option String :=
   else none
 
 /-- `service.select_second`: the second stage on the coins `src`, read after the interior registration's digest: the
-sample object of `secondSamplingDesign` over the interior's `sample.size · Σ n_t` proof blocks (`Draw.sampleFirstRead`), held to
-`Draw.checkDraw`, and the number of bytes it read. An error where the Python raises: `secondProblem`, or a sample the
+sample object of `secondSamplingDesign` over the interior's `sample.size · Σ n_t` proof blocks (`Sample.sampleFirstRead`), held to
+`Sample.checkDraw`, and the number of bytes it read. An error where the Python raises: `secondProblem`, or a sample the
 coins don't end. -/
 def selectSecond (sample : Array Nat) (ns ks : Array Nat) (src : ByteArray) : V (Json × Nat) := do
   if let some e := secondProblem sample ns ks then throw e
   let samplingDesign := secondSamplingDesign sample ns ks
   let m := sample.size * ns.toList.sum
-  let (draw, read) ← Draw.sampleFirstRead samplingDesign m src
-  let codes := Draw.checkDraw draw (Lean.toJson m) samplingDesign
+  let (draw, read) ← Sample.sampleFirstRead samplingDesign m src
+  let codes := Sample.checkDraw draw (Lean.toJson m) samplingDesign
   if !codes.isEmpty then throw s!"the second stage's draw is not well formed under its law: {codes}"
   return (draw, read)
 
@@ -330,20 +330,20 @@ def resolve (rule : Rule) (p : Program) (query : Json) : V Rule := do
 
 /-- `selection_samplingDesign`, `draw.derive` and `select_draw` on the coins `src`, then `Stream.select`'s `draw.check_draw`, under
 a rule `resolve` gives (`parseDesign` refuses a rate sampling design itself): the
-sample object over the population of `p` under `query` (`Partition.units`), the units it proves (`Draw.proved`'s: the sampled
+sample object over the population of `p` under `query` (`Partition.units`), the units it proves (`Sample.proved`'s: the sampled
 proof blocks, then a work sample's closure) and the number of bytes of `src` it read. The sampling design is the rule's over that population,
-expanded (`Draw.derive`, with the work `table`); `All` samples every unit and reads nothing, any other rule samples its Flock
-sampling design by `Draw.sampleUnits`, as `Draw.sampleFirstRead` does: the sampling design `Draw.flockSamplingDesign` reads from the sampling design object, or, for
-`stratified` and `work`, once `flockSamplingDesign` accepts that object, the expansion it was written from (`Draw.deriveSamplingDesign`), the
+expanded (`Sample.derive`, with the work `table`); `All` samples every unit and reads nothing, any other rule samples its Flock
+sampling design by `Sample.sampleUnits`, as `Sample.sampleFirstRead` does: the sampling design `Sample.flockSamplingDesign` reads from the sampling design object, or, for
+`stratified` and `work`, once `flockSamplingDesign` accepts that object, the expansion it was written from (`Sample.deriveSamplingDesign`), the
 same sampling design. With the closure map `cm`, a work sample carries
 the sampled proof blocks' closure (`Flock.Draw.closureOf`) when it is not empty. An error where the Python raises: the query
 doesn't apply, the rule's sampling design or its expansion is refused, a closure map is given for another sampling design or names a unit outside
-the population, the sample is refused (`sampleFirstRead`), or it is not well formed under the sampling design (`Draw.checkDraw`). -/
+the population, the sample is refused (`sampleFirstRead`), or it is not well formed under the sampling design (`Sample.checkDraw`). -/
 def select (rule : Rule) (p : Program) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
     (src : ByteArray) : V (Json × Array Nat × Nat) := do
   let n ← Partition.units p query
   let named ← rule.samplingDesignOver n
-  let derived ← Draw.deriveSamplingDesign p query named table
+  let derived ← Sample.deriveSamplingDesign p query named table
   let samplingDesign := (derived.map (·.toJson)).getD named
   if let some cm := cm then
     if !(jeq (getD samplingDesign "law") "work" && cm.all fun (u, cs) => inRange n u && cs.all (inRange n)) then
@@ -351,14 +351,14 @@ def select (rule : Rule) (p : Program) (query : Json) (table : Option Json) (cm 
   let (units, read) ← match rule with
     | .all => pure (Array.range n, 0)
     | _ => do
-      let parsed ← Draw.flockSamplingDesign samplingDesign n
-      Draw.sampleUnits (derived.getD parsed) n src
+      let parsed ← Sample.flockSamplingDesign samplingDesign n
+      Sample.sampleUnits (derived.getD parsed) n src
   let draw := Json.mkObj ((entries samplingDesign).toList ++ [("population", Lean.toJson n), ("units", natsJson units)])
   let closure := match cm with
     | some cm => Flock.Draw.closureOf (cm.foldl (fun m (u, cs) => m.insert u.toNat (cs.map Int.toNat)) {}) units
     | none => #[]
   let draw := if closure.isEmpty then draw else Json.mkObj ((entries draw).toList ++ [("closure", natsJson closure)])
-  let codes := Draw.checkDraw draw (Lean.toJson n) samplingDesign
+  let codes := Sample.checkDraw draw (Lean.toJson n) samplingDesign
   if !codes.isEmpty then throw s!"the draw is not well formed under the law: {codes}"
   return (draw, units ++ closure, read)
 

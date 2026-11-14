@@ -207,7 +207,7 @@ def partition (j : Json) : V Json := do
     ("population", orNull Lean.toJson (Partition.units v.program v.query)),
     ("strata", orNull (fun ss => Json.arr (ss.map fun (t, rs) => Json.arr #[Json.str t, Json.arr (rs.map range)]))
       (Partition.strata v.program v.query)),
-    ("law", orNull id (Draw.derive v.program v.query v.samplingDesign v.workTable))]
+    ("law", orNull id (Sample.derive v.program v.query v.samplingDesign v.workTable))]
 
 /-- `{"program", "X"}`, a program object and a natural number, to `[[definition, bits, bits by walk], …]`: per distinct
 Definition `Q_call` v1 at X cuts (`Flock.Qcall.evaluate`), its units' committed bits read off its layout
@@ -357,21 +357,21 @@ def knownPort (j : Json) : V Json := do
 def checkDraw (j : Json) : V Json := do
   if (int? (getD j "population")).isNone then throw "population is not an integer"
   if !(getD j "law" matches .obj _) then throw "law is not an object"
-  return (Draw.checkSampleFull (getD j "draw") (getD j "population") (getD j "law")).toJson
+  return (Sample.checkSampleFull (getD j "draw") (getD j "population") (getD j "law")).toJson
 
 /-- `{"law", "population", "source"}`, the sampling design an object, the population a natural number and the source hex, to the sample
 `coins.draw_first` samples from the source's bytes; refused where it raises. -/
 def draw (j : Json) : V Json := do
   if !(getD j "law" matches .obj _) then throw "law is not an object"
   let some n := nat? (getD j "population") | throw "population is not a natural number"
-  Draw.sampleFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw"))
+  Sample.sampleFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw"))
 
-/-- `draw`'s input to `{"ran_out"}`: whether that sample runs out of the source's bytes (`Draw.ranOutOf`,
+/-- `draw`'s input to `{"ran_out"}`: whether that sample runs out of the source's bytes (`Sample.ranOutOf`,
 `coins.ran_out`); refused, as `draw`, where it refuses otherwise. -/
 def ranOut (j : Json) : V Json := do
   if !(getD j "law" matches .obj _) then throw "law is not an object"
   let some n := nat? (getD j "population") | throw "population is not a natural number"
-  let b ← Draw.ranOutOf (Draw.sampleFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw")))
+  let b ← Sample.ranOutOf (Sample.sampleFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw")))
   return Json.mkObj [("ran_out", Json.bool b)]
 
 /-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's sample
@@ -464,7 +464,7 @@ def checkProved (j : Json) : V Json := do
   if let some c := field? draw "closure" then let _ ← ints c "closure"
   let us ← ints (getD j "proved_units") "proved_units"
   if (int? (getD j "instances")).isNone then throw "instances is not an integer"
-  return (Draw.checkProvedFull draw (us.map Lean.toJson) (getD j "instances")).toJson
+  return (Sample.checkProvedFull draw (us.map Lean.toJson) (getD j "instances")).toJson
 
 /-- `{"strata": [{"name", "size", "k"}], "delta"}` to `{"bound", "per_stratum"}` (`Stratified.count_bound` and
 `stratum_bound`); refused where `Stratified` is: no strata, a name empty or twice, `k > size`, δ not in (0, 1). -/

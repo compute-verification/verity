@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Bridge.CustodyZkP
-public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Bridge.Sample
 public import Proofs.Flock.Bridge.SampledDesign
 public import Proofs.Properties.Verity.SampledCoins
 

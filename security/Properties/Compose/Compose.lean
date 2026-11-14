@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Compose.Compose
-public import Properties.Spot.Draw
+public import Properties.Spot.Sample
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -69,7 +69,7 @@ program `p` and query:
 It is stated, not proved: nothing builds a `Declared` from a compiled Program yet, which is the composed statement's
 open faithfulness gap. The extractor that builds one, with this property proved of it, closes it; tying each value to
 its leaf under the weights' or the transcript's root is the extractor's too. The sample conjunct is over the code alone
-and could be proved first (`Select.select`'s subset sample from bytes, `Draw.sampleUnits`), beside
+and could be proved first (`Select.select`'s subset sample from bytes, `Sample.sampleUnits`), beside
 `Properties.Spot.DrawMisses`.
 -/
 

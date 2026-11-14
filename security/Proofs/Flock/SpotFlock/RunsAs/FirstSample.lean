@@ -35,10 +35,10 @@ theorem firstSample {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha
         .ok workTable ∧
       Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable none i.source =
         .ok (Spot.getD j "draw", rest, read) ∧
-      (Spot.Draw.proved (Spot.getD j "draw")).map Int.toNat = rest ∧
+      (Spot.Sample.proved (Spot.getD j "draw")).map Int.toNat = rest ∧
       Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
       Spot.Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
-      Spot.Select.selectSecond ((Spot.Draw.proved (Spot.getD j "draw")).map Int.toNat) ns ks it.source =
+      Spot.Select.selectSecond ((Spot.Sample.proved (Spot.getD j "draw")).map Int.toNat) ns ks it.source =
         .ok (draw₂, read₂) := by
   obtain ⟨hcl, workTable, resolved, draw, rest, read, ht, hres, hsel, -, grain, replay, k, ns, ids, ks, draw₂,
     read₂, -, hrule, hns, hids, hks, hss, -, -, -⟩ := accepted_steps ha
@@ -57,7 +57,7 @@ it read are `sampleFirstRead`'s under `Select.secondSamplingDesign` of that samp
 cells. -/
 theorem selectSecond_samplingDesign {sample ns ks : Array ℕ} {src : ByteArray} {d : Json} {r : ℕ}
     (h : Spot.Select.selectSecond sample ns ks src = .ok (d, r)) :
-    Spot.Draw.sampleFirstRead (Spot.Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) src =
+    Spot.Sample.sampleFirstRead (Spot.Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) src =
       .ok (d, r) := by
   unfold Spot.Select.selectSecond at h
   cases hq : Spot.Select.secondProblem sample ns ks with

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Claims.SamplingTwo
-public import Properties.Spot.Draw
+public import Properties.Spot.Sample
 
 /-!
 # The second stage misses proof blocks no more often than the cells' escapes (`Select.selectSecond`)
@@ -23,9 +23,9 @@ open Spot
 
 namespace Properties.Spot
 
-/-- The proof blocks the second stage's sample proves (`Draw.proved`), none where it is refused. -/
+/-- The proof blocks the second stage's sample proves (`Sample.proved`), none where it is refused. -/
 def secondOf : Flock.V (Json × ℕ) → Array Int
-  | .ok (draw, _) => Draw.proved draw
+  | .ok (draw, _) => Sample.proved draw
   | .error _ => #[]
 
 /-- The first proof block of template `t`'s cells in the template-major interior over a replay sample of `q`, each

@@ -118,7 +118,7 @@ theorem sample_of_stmtOk {x m₁ m₂ : Claims.Msg} {c₀ : FlockDeploy.Coin} {c
     ∃ draw w b d, secondDraw h c₀ c₁ = some draw ∧ FlockDeploy.decode (stmtAt h m₂ t) = some w ∧
       pinOk h t w = true ∧ w.draw = some b ∧ FlockDeploy.jsonOf "draw" b = .ok d ∧
       Spot.jeq d (Spot.SecondStage.ownSample (h.reg.sample (src c₀)).size
-        (partAt h (h.reg.sample (src c₀)).size t) ((Spot.Draw.proved draw).map Int.toNat)) = true := by
+        (partAt h (h.reg.sample (src c₀)).size t) ((Spot.Sample.proved draw).map Int.toNat)) = true := by
   obtain ⟨st, rec, draw, w, S, -, -, hd, hw, hS, hc, hpin⟩ := reads_of_stmtOk hok ht
   obtain ⟨b, hb, hj⟩ := AddressRow.stmtJsonOf_sample hS
   exact ⟨draw, w, b, S.draw, hd, hw, hpin, hb, hj, sample_of_codesOk hc⟩

@@ -11,7 +11,7 @@ no reason under them (`coinsCode_read`); where it read none, it carries no evide
 
 `RunCoinsFromDevice` (`RunsAs/Statement.lean`) is proved from `coinsCode_read` in
 `Proofs.Properties.Challenger.RunCoins`, beside the proof it reads of the challenger's sample
-(`Proofs.Properties.Challenger.Drawn`), which this file does not import.
+(`Proofs.Properties.Challenger.Sampled`), which this file does not import.
 -/
 
 @[expose] public section

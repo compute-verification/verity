@@ -66,38 +66,38 @@ theorem RegTwo.sum_checked_le (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray)
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (w : ℕ → ℕ) (M : ℕ)
     (hM : ∀ u, w u ≤ M) :
     ((g.checked N src₁ src₂).map w).sum ≤
-      (((List.range N).filter fun v => g.always v).map w).sum + (Spot.Draw.proved draw).size * M := by
+      (((List.range N).filter fun v => g.always v).map w).sum + (Spot.Sample.proved draw).size * M := by
   have hc : g.checked N src₁ src₂ = (List.range N).filter fun v =>
-      g.always v || (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v := by
+      g.always v || (Spot.Sample.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v := by
     unfold RegTwo.checked
     rw [hsel]
   rw [hc]
   refine (sum_filter_or_le _ _ _ w).trans (Nat.add_le_add_left ?_ _)
   have hs := List.sum_le_length_nsmul (((List.range N).filter fun v =>
-      (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v).map w) M (by
+      (Spot.Sample.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v).map w) M (by
     intro y hy
     obtain ⟨v, _, rfl⟩ := List.mem_map.1 hy
     exact hM v)
   rw [List.length_map, smul_eq_mul] at hs
   refine hs.trans (Nat.mul_le_mul_right _ ?_)
   have hsub : ((List.range N).filter fun v =>
-      (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v).toFinset ⊆
-      ((Spot.Draw.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat).toFinset := by
+      (Spot.Sample.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v).toFinset ⊆
+      ((Spot.Sample.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat).toFinset := by
     intro v hv
     obtain ⟨-, hq⟩ := List.mem_filter.1 (List.mem_toFinset.1 hv)
     rw [← Array.any_toList] at hq
     obtain ⟨j, hj, hjv⟩ := List.any_eq_true.1 hq
     exact List.mem_toFinset.2 (List.mem_map.2 ⟨j, hj, beq_iff_eq.1 hjv⟩)
   calc ((List.range N).filter fun v =>
-        (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v).length
+        (Spot.Sample.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v).length
       = ((List.range N).filter fun v =>
-          (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v).toFinset.card :=
+          (Spot.Sample.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v).toFinset.card :=
         (List.toFinset_card_of_nodup (List.nodup_range.filter _)).symm
-    _ ≤ ((Spot.Draw.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat).toFinset.card :=
+    _ ≤ ((Spot.Sample.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat).toFinset.card :=
         Finset.card_le_card hsub
-    _ ≤ ((Spot.Draw.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat).length :=
+    _ ≤ ((Spot.Sample.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat).length :=
         List.toFinset_card_le _
-    _ = (Spot.Draw.proved draw).size := by rw [List.length_map, Array.length_toList]
+    _ = (Spot.Sample.proved draw).size := by rw [List.length_map, Array.length_toList]
 
 /-- **The refused second stage, in expectation**: over coins `ω` with first-stage bytes `src₁ ω` and second-stage
 bytes `src₂ ω`, a function `F` of the checked blocks at most `B ≥ 0` wherever the second stage accepts averages at most
@@ -122,7 +122,7 @@ plus `C·M`, plus the refusal's probability times every block's weight below `N`
 theorem RegTwo.ex_sum_checked_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (g : RegTwo) (N : ℕ)
     (src₁ src₂ : Ω → ByteArray) (w : ℕ → ℕ) (M C : ℕ) (hM : ∀ u, w u ≤ M)
     (hC : ∀ ω draw n, Spot.Select.selectSecond (g.sample (src₁ ω)) g.ns g.ks (src₂ ω) = .ok (draw, n) →
-      (Spot.Draw.proved draw).size ≤ C) :
+      (Spot.Sample.proved draw).size ≤ C) :
     Ex (fun ω => (((g.checked N (src₁ ω) (src₂ ω)).map w).sum : ℝ)) ≤
       ((((List.range N).filter fun v => g.always v).map w).sum + C * M : ℕ) +
         Pr (fun ω => Except.toBool (Spot.Select.selectSecond (g.sample (src₁ ω)) g.ns g.ks (src₂ ω)) = false) *

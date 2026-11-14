@@ -13,7 +13,7 @@ the challenger's coins, raw bytes with no derivation, which `sampleFirst` reads 
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace Spot.Draw
+namespace Spot.Sample
 
 open Lean (Json)
 open Flock (V)
@@ -314,4 +314,4 @@ def ranOutOf {α : Type} (r : Except String α) : Except String Bool :=
   | .ok _ => pure false
   | .error e => if e == RAN_OUT then pure true else throw e
 
-end Spot.Draw
+end Spot.Sample

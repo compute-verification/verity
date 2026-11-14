@@ -39,7 +39,7 @@
   "Properties.Core.Period",
   "Properties.NetworkScan",
   "Properties.Spot",
-  "Properties.Spot.Draw",
+  "Properties.Spot.Sample",
   "Properties.Spot.Bits",
   "Properties.Spot.Interval",
   "Properties.Spot.FactorUpper",
@@ -1414,11 +1414,11 @@
    "honest": ["Pous.Period.SecurityProofs.pooledShort_log_honest"],
    "nontrivial": "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
   },
-  "Properties.Challenger.Drawn.familyOneCommitment": {
+  "Properties.Challenger.Sampled.familyOneCommitment": {
    "honest": ["Properties.Challenger.familyOneCommitment_honest"],
    "nontrivial": "Properties.Challenger.familyOneCommitment_nontrivial"
   },
-  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+  "Properties.Challenger.Sampled.familyOneCommitmentRead": {
    "honest": ["Properties.Challenger.familyOneCommitmentRead_honest"],
    "nontrivial": "Properties.Challenger.familyOneCommitmentRead_nontrivial"
   },
@@ -2246,7 +2246,7 @@
    "imports": [
     "PouwPearlPlus",
     "Definitions.Pouw.Game.Defs",
-    "Properties.Spot.Draw",
+    "Properties.Spot.Sample",
     "Mathlib.Algebra.BigOperators.Fin"
    ],
    "except": [],
@@ -2304,12 +2304,12 @@
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
   "Properties.Accounting.Served": {
-   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw", "Properties.Compose.Compose"],
+   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Sample", "Properties.Compose.Compose"],
    "except": [],
-   "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`Spot.Slots.layout`, `Spot.Partition.units`) and the verifier's population draw (`Spot.Draw.sampleUnits`, from bytes as `Properties.Spot.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
+   "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`Spot.Slots.layout`, `Spot.Partition.units`) and the verifier's population draw (`Spot.Sample.sampleUnits`, from bytes as `Properties.Spot.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
   },
   "Properties.Pouw.Credit": {
-   "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.Spot.Draw"],
+   "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.Spot.Sample"],
    "except": [],
    "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.Spot.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
   },
@@ -2477,7 +2477,7 @@
   "Properties.Spot": {
    "imports": ["Spot"],
    "except": [
-    "Properties.Spot.Draw",
+    "Properties.Spot.Sample",
     "Properties.Spot.Bits",
     "Properties.Spot.Second",
     "Properties.Spot.Interval",
@@ -2491,13 +2491,13 @@
    ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.Spot.Draw": {
+  "Properties.Spot.Sample": {
    "imports": ["Definitions.Claims", "Spot"],
    "except": [],
    "why": "what the draw misses is stated against `Select.select`'s slots (`Spot.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
   },
   "Properties.Spot.Second": {
-   "imports": ["Definitions.Claims", "Spot", "Properties.Spot.Draw"],
+   "imports": ["Definitions.Claims", "Spot", "Properties.Spot.Sample"],
    "except": [],
    "why": "what the two-stage rule's second stage misses is stated against `Select.selectSecond` and the claims' escape `escCell` (`Definitions.Claims.SamplingTwo`), with `Properties.Spot.bytesOf`'s reading of uniform bytes, never a proof"
   },
@@ -2666,7 +2666,7 @@
    "sealed": true
   },
   "Properties.Compose.Compose": {
-   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw"],
+   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Sample"],
    "except": [],
    "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Compose.Compose`) are stated against the verifier's own partition of its program (`Spot.Slots.layout`) and the challenger's draw from bytes (`Spot.Select.select`, read as `Properties.Spot.bytesOf` reads them), never a proof"
   },
@@ -13758,11 +13758,11 @@
     "function": ["PouwCommit.rowsDomain", "PouwCheck.PearlPlus.opens"],
     "outcome": "accept"
    },
-   "Properties.Challenger.Drawn.familyOneCommitment": {
+   "Properties.Challenger.Sampled.familyOneCommitment": {
     "function": "Spot.Challenger.sampleCoins",
     "outcome": "accept"
    },
-   "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "Properties.Challenger.Sampled.familyOneCommitmentRead": {
     "function": "Spot.Challenger.coinsReason",
     "outcome": "accept"
    },
@@ -14183,7 +14183,7 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns: DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates), none under shape.premises.",
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditMonitoringPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (SampledLayer.Good under monitoringPeriodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's SampledLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileSampleIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditMonitoringPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
    "Properties.Challenger.LiveAnswer": "unstated: a live check's answer at the coins its evidence reads is its answer, proved in security_proofs by Properties.Challenger.liveAnswer; a draft statement, which gets a guarantee entry once the one theorem reads it",
-   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from SampledByDevice in security_proofs by Properties.Challenger.coinsFromLog, and so with no premise by Properties.Challenger.Drawn.coinsFromLog_holds; a draft statement, which gets a guarantee entry once the one theorem reads it",
+   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from SampledByDevice in security_proofs by Properties.Challenger.coinsFromLog, and so with no premise by Properties.Challenger.Sampled.coinsFromLog_holds; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.Pouw.Served.SecurityProofs.servedWork": "frozen (no-function,world-unlisted): ServedWork, the served PoUW protocol's work in the remote form: H1J10RCheckedCreditMonitoringPeriod's fixed words priced on the prover's inventory, one machine of the accelerator model (Pouw.Dither.Accel) at its device premises G1, G2, P1 and P2, wherever it ran (no network certifier, wipe or latency check), except with probability delta_s + n(delta_bind + delta_ks) + n kappa_deg(B); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, each listed under assumptions: Pouw.Assumptions.SAKServed, SakLb.SAKResidual's claim at the served words, proposed, whose truth on the accelerator model as Definitions.Core.Accel writes it is open (it prices register reductions, so the four Russians' method pays at least an alu lane a MAC, but SAKMatmul as written still fails at a dual price that leaves those pipes cheap), so whether the guarantee is non-vacuous there is open; FixedAreRight, the bridge from the play's fixed words to the inventory's right words, to be made provable with UnitFixed's adaptive model; FixedBeforeSalt, a protocol-code fact (each window's instance, advice and program fixed before its salt, which SaltIsLiveCoin's discharge orders). The inventory's closure (ext = 0) and the advice bound are the statement's framing. Its honest and nontrivial lemmas are Proofs.Pouw.ServedWork.Honest's served_honest and served_nontrivial. Proved from h1J10RCheckedCreditMonitoringPeriod (Proofs.Pouw.ServedWork).",
    "Properties.Pouw.Served.SecurityProofs.servedFreed": "frozen (no-function,world-unlisted): ServedFreed, the served PoUW protocol's freed compute in the onsite form: an accepted period whose network certifier counted it in (cert) frees at most eps(x) C + beta K_c of the registered devices' capacity C = sum_r mu_r H_r at the period's dual price mu (Pouw.Dither.FreedWithin at W = 1, Period.DualOpt), with eps(x) = max 0 (C - ServedWork's credit at the period's accepted prefix + beta K_c) / C, except with probability ServedWork's delta_s + n(delta_bind + delta_ks) + n kappa_deg(B) plus the certifier's delta; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. It is ServedWork's premises less the inventory's closure (ext = 0), which OutsourceWithinEgressServed supplies, and adds two premises, each listed under assumptions: OutsourceWithinEgressServed, the price of an exchanged bit over the period's programs together, implied by the per-program Pouw.Assumptions.OutsourceWithinEgress (outsourceServed_of_perProgram); CertifiedExchange, the network certifier's guarantee at the period (its count in, K_c, exceeded with probability at most delta), the form network accounting's certifier is to instantiate, on a trusted-device device whose coins are witness (WitnessPathPrivate discharges CoinsConfidential). DualOpt and the capacity's positivity are the statement's framing. Whether SAKServed holds on the accelerator model as Definitions.Core.Accel writes it, which prices register reductions, is open, as for ServedWork. Its honest and nontrivial lemmas are Proofs.Pouw.ServedFreed.Honest's servedFreed_honest and servedFreed_nontrivial. Proved from servedWork and Pouw.SecurityProofs.Dither.FreedOfFloor (Proofs.Pouw.ServedFreed).",
    "Pous.Component.SecurityProofs.runAccepts_by": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: RunAccepts is RunAcceptsBy at PoUS's compiled run check (Iff.rfl), which ties runAccepts_fails to the guarantee",
@@ -14234,7 +14234,7 @@
    "Properties.Spot.MonitoringPeriod.LedgerLinesOfDevice": "unstated: each line of a ledger the period's check reads (Spot.MonitoringPeriod.read) is an entry under its place's number that says, its signature aside, what a line of the device's own ledger under the verifier's key says, or the fixed finder outputs a break (an LMS forgery or a SHA-512 collision); proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.ledgerLinesOfDevice; it does not say the presented ledger is whole; a draft statement, which gets a guarantee entry with its honest and nontrivial witnesses",
    "Properties.Spot.MonitoringPeriod.LedgerOfDevice": "unstated: the ledger the period's check reads (Spot.MonitoringPeriod.read) is the device's own from its first line, none dropped and none added, up to a line stamped at or after the monitoring period's end, or a break; it takes Properties.Spot.MonitoringPeriod.Numbered (a line of the device's ledger that is an entry numbered i is its line i), a hypothesis of this statement alone that no guarantee takes, and a lemma of the modelled device once the model builds its whole ledger; proved from that hypothesis in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDevice; no guarantee entry while it takes it",
    "Properties.Spot.MonitoringPeriod.LedgerOfDeviceSigned": "unstated: every line of the ledger the period's check reads (Spot.MonitoringPeriod.read) but the last is the device's own line whole, its signature included, so the LMS leaf read from each is the device's, or the finder at the lines' whole texts (Properties.Spot.MonitoringPeriod.findLineBreak: Properties.Challenger.findBreak on the ledger, else a SHA-512 collision among the presented lines' and the device's whole texts) outputs a break; the last presented line's signature stays free; it takes Properties.Spot.MonitoringPeriod.Numbered and Properties.Spot.MonitoringPeriod.Chained (the device's line after a line names as prev the SHA-512 of that line's whole text), hypotheses of this statement alone that no guarantee takes, and lemmas of the modelled device once the model builds its whole ledger; proved from them in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDeviceSigned; no guarantee entry while it takes them",
-   "Properties.Challenger.SampledByDevice": "unstated: Challenger.sampleCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Drawn.sampledByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it",
+   "Properties.Challenger.SampledByDevice": "unstated: Challenger.sampleCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Sampled.sampledByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "InferenceOnlyCheck.Properties.DescCountsCK": "unstated: a published complies of the count of (c, k)-inference blocks (InferenceOnlyCheck.Count.check, the judgment against n alone) means the Boolean declaration the Program lowers to by the gate table complies with InferenceOnly.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and InferenceOnlyCheck.Desc's summaries to cover the parameter leaves a Definition's gates read",
    "InferenceOnlyCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
    "Properties.Poub.Subprotocol.QBytesAtSubprotocol": "unstated: on the subprotocol's acceptance, the `q_bytes` it publishes is at most `BLOCK_BYTES` times the record's receipts the trace gets right, except with `LineHeldAtSubprotocol`'s bound at `DELTA`, under `Live`, `Refused` and `Counted`; unproved, a statement that gets a guarantee entry, and a shape.properties entry naming `Poub.Protocol.check`'s accept, with its proof",

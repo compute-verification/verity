@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Recursive.ZkReg.DrawnRefines
+public import Proofs.Flock.Recursive.ZkReg.SampledRefines
 public import Proofs.Flock.Recursive.ZkReg.RegLink
 public import Proofs.Flock.Soundness.Registered.ReadsX
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ

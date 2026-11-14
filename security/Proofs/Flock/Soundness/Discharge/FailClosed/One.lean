@@ -35,7 +35,7 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
 import Proofs.Flock.Soundness.Discharge.PlainJ.Sound
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup

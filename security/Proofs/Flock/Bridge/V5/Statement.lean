@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Bridge.LeafMap
 public import Proofs.Flock.Bridge.LeafRoots
-public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Bridge.Sample
 public import Proofs.Flock.Bridge.SampledDesign
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
 public import Proofs.Flock.Soundness.Discharge.Hidden.Built
@@ -26,12 +26,12 @@ holds at every `own`:
   verity-verify-proof's acceptance at `own` (`AcceptsZKP`, through `decodesZCJH_custodyP`);
 * the sampling design `samplingDesign` the verifier samples under, sampling `kd` proof blocks (`Bridge.designAt`, `kd` its `Bridge.samplingDesignK`): the
   registration's sampling design object expanded over the strata of the registration's layout, else the sampling design it parses to
-  (`Bridge.sampledDesign`: `Draw.deriveSamplingDesign` over `Partition.strata`, else `Draw.flockSamplingDesign`, as `OneStage.sampledFrom` samples,
+  (`Bridge.sampledDesign`: `Sample.deriveSamplingDesign` over `Partition.strata`, else `Sample.flockSamplingDesign`, as `OneStage.sampledFrom` samples,
   `Bridge.sampledFrom_sampledDesign` and `Bridge.sampledFrom_designAt`), and `subset 0` at a registration that names none; never a
   Bernoulli sampling design, which `sampledFrom` refuses (`Bridge.notBernoulli_designAt`). `Bridge.SampledKSLiveV5R` states the bound at any `samplingDesign` the verifier samples
   under (`Bridge.SamplesUnder`). At `PopMatches` it is on those strata (`Bridge.SamplingDesignOn` at `Bridge.nsOf`,
   `Bridge.samplingDesignOn_samplesUnder`): `subset kd` (`All` is `subset n`), or `stratified K` or `work K` over them. The verifier
-  samples under it from its own bytes (`Bridge.execSel`, `Spot.Draw.sampleUnits` on one stream), and `δ` is that
+  samples under it from its own bytes (`Bridge.execSel`, `Spot.Sample.sampleUnits` on one stream), and `δ` is that
   sampling design's own miss of a set `B` of proof blocks (`P_a(B)` of `designOf (oneStageOf samplingDesign)` on `partOf P κ ns`), not a
   parameter;
 * `live-verifier` at `own` and the sampling design (`Assumptions.Zk.RecordCustodyZKJPLaw`);
@@ -313,7 +313,7 @@ it is `C(n − K₀, kd)/C(n, kd)` (`Bridge.pa_subset_range`), and under `All`, 
 (`Bridge.designAt`: every sample `OneStage.sampledFrom` samples is under it, `Bridge.sampledFrom_designAt`), with no hypothesis that
 the registration names one: at a registration that names none, which the verifier refuses, `designAt` is `subset 0`, which
 samples no proof block, so `δ` is 1. It is on its layout's strata at `PopMatches` (`Bridge.samplingDesignOn_samplesUnder`), and no
-Bernoulli sampling design, though `Draw.flockSamplingDesign` parses one: `sampledFrom` refuses it (`OneStage.coveredDesign`, `Bridge.notBernoulli_designAt`). The link finders are charged `t'` per run
+Bernoulli sampling design, though `Sample.flockSamplingDesign` parses one: `sampledFrom` refuses it (`OneStage.coveredDesign`, `Bridge.notBernoulli_designAt`). The link finders are charged `t'` per run
 (`cTZC`), one run's SHA-512 evaluations, the prover's and the verifier's: V2's `t' + v`. No hypothesis is taken on the
 registration's roots: two ports with one root and different domains are a SHA-512 collision that recomputing the roots finds, so the
 bound carries `ecr/sha-512`'s term at that finder (`Bridge.rootsFinderL`, no coins, `Bridge.rootsCostL` SHA-512 calls),

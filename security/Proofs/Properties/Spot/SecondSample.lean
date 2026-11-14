@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Json.Record
 public import Proofs.Pouw.MonitoringPeriod.Sort
 public import Proofs.Flock.Recursive.ZkServerObj
-import Spot.Draw
+import Spot.Sample
 import Spot.Json
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
@@ -18,11 +18,11 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 /-!
 # The second stage accepts the sample its coins give
 
-`Select.selectSecond` refuses a replay sample and cells `secondProblem` refuses, a sampling design `Draw.flockSamplingDesign`
-doesn't read, a sample the coins don't end (`Draw.sampleUnits`), and a sample object `Draw.checkDraw` finds at fault. This
+`Select.selectSecond` refuses a replay sample and cells `secondProblem` refuses, a sampling design `Sample.flockSamplingDesign`
+doesn't read, a sample the coins don't end (`Sample.sampleUnits`), and a sample object `Sample.checkDraw` finds at fault. This
 file shows the last never happens on its own: where the second stage's sampling design is well formed (`SecondFormed`:
-`Draw.flockSamplingDesign` reads it and `Draw.strataMessage` finds nothing), every sample `Draw.sampleUnits` returns under it passes
-`Draw.checkDraw`, so `selectSecond` returns it. The second stage therefore refuses only where its units are not
+`Sample.flockSamplingDesign` reads it and `Sample.strataMessage` finds nothing), every sample `Sample.sampleUnits` returns under it passes
+`Sample.checkDraw`, so `selectSecond` returns it. The second stage therefore refuses only where its units are not
 sampled, which `drawUnits_second_error_le` bounds.
 
 * `entries_mkObj_perm`, `keys_mkObj_perm`: an object built from members with distinct keys has those keys.
@@ -30,7 +30,7 @@ sampled, which `drawUnits_second_error_le` bounds.
 * `countIn_cell`: `checkDraw`'s count of the units in a cell, as the list's.
 * `SecondFormed`: the sampling design is well formed, which `secondFormed` shows wherever `secondProblem` passes.
 * `drawn_secondObj`, `checkDraw_secondObj`: the sample object is `Properties.Spot.Drawn`, so `checkDraw` passes.
-* `selectSecond_of_units`: `selectSecond` returns the sample `Draw.sampleUnits` gives.
+* `selectSecond_of_units`: `selectSecond` returns the sample `Sample.sampleUnits` gives.
 * `selectSecond_refused_le_of`: under a well-formed sampling design, on a uniform stream of at least `secondRead` bytes,
   `selectSecond` refuses with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`.
 -/
@@ -75,7 +75,7 @@ theorem keys_mkObj_perm {L : List (String × Json)} {ks : List String} (hp : (L.
 /-! ## The sample object -/
 
 /-- **The second stage's sample object** over the interior's `|sample| · Σ_t n_t` proof blocks with the units `units`,
-as `Draw.sampleFirstRead` builds it: `secondSamplingDesign`'s members, the population and the units. -/
+as `Sample.sampleFirstRead` builds it: `secondSamplingDesign`'s members, the population and the units. -/
 def secondObj (sample ns ks units : Array ℕ) : Json :=
   Json.mkObj ((entries (Select.secondSamplingDesign sample ns ks)).toList ++
     [("population", Lean.toJson (sample.size * ns.toList.sum)), ("units", natsJson units)])
@@ -130,8 +130,8 @@ theorem jeq_self {a : Json} {t : String} (h : Flock.canon a = .ok t) : jeq a a =
 
 /-- The sampling design the sample object names is `secondSamplingDesign`. -/
 theorem samplingDesignOf_secondObj (sample ns ks units : Array ℕ) :
-    Draw.samplingDesignOf (secondObj sample ns ks units) = Select.secondSamplingDesign sample ns ks := by
-  unfold Draw.samplingDesignOf
+    Sample.samplingDesignOf (secondObj sample ns ks units) = Select.secondSamplingDesign sample ns ks := by
+  unfold Sample.samplingDesignOf
   have hw : jeq (getD (secondObj sample ns ks units) "law") "work" = true := by
     rw [getD_obj_samplingDesign]
     obtain ⟨t, ht⟩ := FlockComplete.JsonRT.canon_ok_some _ (Claims.Json.Good.str "work")
@@ -139,10 +139,10 @@ theorem samplingDesignOf_secondObj (sample ns ks units : Array ℕ) :
   simp only [hw, Bool.or_true, ↓reduceIte]
   rfl
 
-/-- `Draw.strataMessage` reads the sample object's `samplingDesign`, `k` and strata, which are `secondSamplingDesign`'s. -/
+/-- `Sample.strataMessage` reads the sample object's `samplingDesign`, `k` and strata, which are `secondSamplingDesign`'s. -/
 theorem strataMessage_secondObj (sample ns ks units : Array ℕ) (n : Int) :
-    Draw.strataMessage (secondObj sample ns ks units) n = Draw.strataMessage (Select.secondSamplingDesign sample ns ks) n := by
-  unfold Draw.strataMessage
+    Sample.strataMessage (secondObj sample ns ks units) n = Sample.strataMessage (Select.secondSamplingDesign sample ns ks) n := by
+  unfold Sample.strataMessage
   simp only [getD_obj_samplingDesign, getD_obj_strata, getD_obj_k, getD_secondSamplingDesign_samplingDesign, getD_secondSamplingDesign_k]
 
 /-! ## `Flock.canon` prints `secondSamplingDesign` -/
@@ -209,16 +209,16 @@ theorem foldl_count {g : Int → ℕ → Int} (p : ℕ → Bool)
       ring
     · rw [ite_eq_right hu, List.filter_cons_of_neg hu]
 
-/-- A cell's two bounds, as `Draw.ranges?` reads them. -/
+/-- A cell's two bounds, as `Sample.ranges?` reads them. -/
 theorem ranges_pair_ok {a b : ℕ} (hab : a < b) :
-    Draw.ranges? (Json.arr #[natsJson #[a, b]]) = some #[((a : Int), (b : Int))] := by
-  unfold Draw.ranges?
+    Sample.ranges? (Json.arr #[natsJson #[a, b]]) = some #[((a : Int), (b : Int))] := by
+  unfold Sample.ranges?
   simp only [natsJson, Array.isEmpty, List.map_toArray, List.map_cons, List.map_nil, Array.mapM_eq_mapM_toList]
   simp [hab, int_toJson]
 
 /-- **`checkDraw`'s count of the units in a cell** `[lo, hi)` is the number of the units' list in it. -/
 theorem countIn_cell (units : Array ℕ) (lo hi : ℕ) (s : Json)
-    (hr : Draw.ranges? (getD s "units") = some #[((lo : Int), (hi : Int))]) :
+    (hr : Sample.ranges? (getD s "units") = some #[((lo : Int), (hi : Int))]) :
     countIn (units.map fun a : ℕ => (a : Int)) s =
       ((units.toList.filter fun u => decide (u ∈ expand [(lo, hi)])).length : Int) := by
   unfold countIn
@@ -236,10 +236,10 @@ theorem countIn_cell (units : Array ℕ) (lo hi : ℕ) (s : Json)
 /-! ## A well-formed sampling design, and the sample object under it -/
 
 /-- **The second stage's sampling design is well formed** over the interior's `|sample| · Σ_t n_t` proof blocks:
-`Draw.flockSamplingDesign` reads it, and `Draw.strataMessage` finds nothing at fault. Neither reads the coins. -/
+`Sample.flockSamplingDesign` reads it, and `Sample.strataMessage` finds nothing at fault. Neither reads the coins. -/
 def SecondFormed (sample ns ks : Array ℕ) : Prop :=
-  (∃ parsed, Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) = .ok parsed) ∧
-    Draw.strataMessage (Select.secondSamplingDesign sample ns ks) ((sample.size * ns.toList.sum : ℕ) : Int) = none
+  (∃ parsed, Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) = .ok parsed) ∧
+    Sample.strataMessage (Select.secondSamplingDesign sample ns ks) ((sample.size * ns.toList.sum : ℕ) : Int) = none
 
 /-- A cell `(t, i)` of a second stage `secondProblem` passes has `n_t > 0` proof blocks. -/
 theorem cell_lt {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) {z : ℕ × ℕ}
@@ -310,18 +310,18 @@ theorem checkDraw_secondObj {sample ns ks : Array ℕ} (hp : Select.secondProble
     (hcnt : ∀ z ∈ cellPairs sample.size ns.size,
       (units.toList.filter fun u => decide (u ∈ expand (cellStratum sample ns ks z).units.toList)).length =
         ks.getD z.1 0) :
-    Draw.checkDraw (secondObj sample ns ks units) (Lean.toJson (sample.size * ns.toList.sum))
+    Sample.checkDraw (secondObj sample ns ks units) (Lean.toJson (sample.size * ns.toList.sum))
       (Select.secondSamplingDesign sample ns ks) = #[] :=
   (checkSample_nil _ _ _).2 (drawn_secondObj hp hf hasc hlt hcnt)
 
 /-- **`selectSecond` returns the sample its coins give**: where `secondProblem` passes and the sampling design is well
-formed, a sample `Draw.sampleUnits` returns under the sampling design `Draw.flockSamplingDesign` reads is the one `selectSecond`
+formed, a sample `Sample.sampleUnits` returns under the sampling design `Sample.flockSamplingDesign` reads is the one `selectSecond`
 returns, with the bytes it read. -/
 theorem selectSecond_of_units {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none)
     (hf : SecondFormed sample ns ks) {parsed : Flock.Draw.SamplingDesign}
-    (hl : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) = .ok parsed)
+    (hl : Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) = .ok parsed)
     {src : ByteArray} {units : Array ℕ} {read : ℕ}
-    (hu : Draw.sampleUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read)) :
+    (hu : Sample.sampleUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read)) :
     Select.selectSecond sample ns ks src = .ok (secondObj sample ns ks units, read) := by
   obtain ⟨ws, rfl, hws⟩ := flockSamplingDesign_second_strata sample ns ks _ parsed hl
   have hmap : ws.toList.map (fun s => (s.units, s.k)) =
@@ -331,9 +331,9 @@ theorem selectSecond_of_units {sample ns ks : Array ℕ} (hp : Select.secondProb
   obtain ⟨hasc, hlt, hcnt⟩ := drawUnits_work_units hu (positions_second hmap)
   have hcheck := checkDraw_secondObj hp hf hasc hlt fun z hz =>
     hcnt (cellStratum sample ns ks z) (hws ▸ List.mem_map_of_mem hz)
-  have hdfr : Draw.sampleFirstRead (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) src =
+  have hdfr : Sample.sampleFirstRead (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) src =
       .ok (secondObj sample ns ks units, read) := by
-    unfold Draw.sampleFirstRead
+    unfold Sample.sampleFirstRead
     rw [hl, bind_ok, hu, bind_ok]
     rfl
   unfold Select.selectSecond

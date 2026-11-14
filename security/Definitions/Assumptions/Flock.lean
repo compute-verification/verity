@@ -96,7 +96,7 @@ sample reads, and for the epoch salt, are such a source, every call's bytes inde
 every `L`. That the challenger releases those coins only after the registration they sample is recorded rests on
 `trusted-device`, not on A3. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with
 A3: the theorems read `drawWith` on a model byte source, the unit sample runs it on the challenger's coins read in order
-(`Spot.Draw.sampleUnits`), and `sampleOS` runs it on `IO.getRandomBytes` (`sampleOS_def`).
+(`Spot.Sample.sampleUnits`), and `sampleOS` runs it on `IO.getRandomBytes` (`sampleOS_def`).
 
 The CSPRNG is idealized as exactly uniform here, for every event. That is refutable at the deployed source: Linux's CRNG
 (5.18 and later, `drivers/char/random.c`) answers a read past 32 bytes with a ChaCha20 stream under one 256-bit key, so

@@ -9,7 +9,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../../../../../.." && pwd)
 pkg=$(cd "${1:-$root/security/Proofs}" && pwd)
 out=$(mktemp)
-(cd "$pkg" && lake build Proofs.Flock.Soundness.PlanDraw >&2 &&
+(cd "$pkg" && lake build Proofs.Flock.Soundness.PlanSample >&2 &&
   lake env lean --run "$here/RandomnessVectors.lean" "$root/verity/commitments/randomness/tests/vectors.json") > "$out"
 python3 - "$out" "$here" "$pkg" "$root" <<'PY'
 import hashlib, json, sys
@@ -23,7 +23,7 @@ data["inputs"] = {
     "verity/commitments/randomness/Randomness.lean":
         sha(root / "verity/commitments/randomness/Randomness.lean"),
     **{"security/Proofs/" + f: sha(pkg / f) for f in (
-        "Flock/Soundness/PlanDraw.lean", "lake-manifest.json", "lean-toolchain")},
+        "Flock/Soundness/PlanSample.lean", "lake-manifest.json", "lean-toolchain")},
     **{f: sha(root / f) for f in ("verity/circuits/base/Base/Hash.lean",
                                   "verity/commitments/lean/Commitments/Draw.lean")}}
 (here.parent / "fixtures" / "randomness_lean.json").write_text(json.dumps(data, indent=1) + "\n")

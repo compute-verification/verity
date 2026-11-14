@@ -1,14 +1,14 @@
 module
 
 public import Proofs.Core.Game.Tape
-public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Bridge.Sample
 public import Proofs.Flock.Bridge.QsRows.RunsOut
 public import Proofs.Flock.Claims.Sampling.Select.Take
 
 /-!
 # The deployed sample runs out of bytes with probability at most `k_d·2⁻⁶⁴`
 
-The deployed sample (`Spot.Draw.sampleUnits`) reads one byte stream in order (`Spot.Draw.take`): a subset sample is one
+The deployed sample (`Spot.Sample.sampleUnits`) reads one byte stream in order (`Spot.Sample.take`): a subset sample is one
 stage, a stratified or work sample one stage per stratum, each stage's sampler run on its first `need` bytes and on
 `need` more whenever it returns nothing (`Flock.Draw.onWith`). A stage whose sampler returns a sample on its first read
 reads nothing more, so the next stage's first read starts where it ends. On a stream that holds every stage's first
@@ -180,13 +180,13 @@ theorem stage_firstBounded (s : Flock.Draw.Stratum) (hk : s.k ≤ s.size) (miss 
 /-- **`onWith` on `take` returns on its first read** when its sampler samples on it: the `N` bytes from `p`. -/
 theorem onWith_take_first (src : ByteArray) (N : ℕ) (run : ByteArray → Option (Array ℕ)) (p : ℕ) (D : Array ℕ)
     (hle : p + N ≤ src.size) (hrun : run (src.extract p (p + N)) = some D) :
-    (Flock.Draw.onWith (fun need => _root_.Spot.Draw.take src need) N run).run p = .ok (some D, p + N) := by
+    (Flock.Draw.onWith (fun need => _root_.Spot.Sample.take src need) N run).run p = .ok (some D, p + N) := by
   have hnot : ¬ src.size < p + N := by omega
-  have hfuel : (onWithFuel (fun need => _root_.Spot.Draw.take src need) N run (0 + 1)
+  have hfuel : (onWithFuel (fun need => _root_.Spot.Sample.take src need) N run (0 + 1)
       (src.extract p (p + N))).run (p + N) = .ok (some D, p + N) :=
     (congrArg (fun x : StateT ℕ (Except String) (Option (Array ℕ)) => x.run (p + N))
-      (SamplingDesign.onWithFuel_succ_some (fun need => _root_.Spot.Draw.take src need) N run 0 _ D hrun)).trans rfl
-  rw [onWith_fuel (fun need => _root_.Spot.Draw.take src need) N run (0 + 1), StateT.run_bind, take_run,
+      (SamplingDesign.onWithFuel_succ_some (fun need => _root_.Spot.Sample.take src need) N run 0 _ D hrun)).trans rfl
+  rw [onWith_fuel (fun need => _root_.Spot.Sample.take src need) N run (0 + 1), StateT.run_bind, take_run,
     ite_eq_right hnot, bind_ok]
   exact hfuel
 
@@ -195,13 +195,13 @@ theorem onWith_take_first (src : ByteArray) (N : ℕ) (run : ByteArray → Optio
 theorem stratifiedWith_take_first (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p : ℕ)
     (miss : ℕ → Array ℕ → Prop)
     (h : FirstOk ((List.range' 0 strata.size).map fun i => stage strata[i]! (miss i)) src p) :
-    ∃ D p', (Flock.Draw.stratifiedWith (fun _ need => _root_.Spot.Draw.take src need) strata).run p =
+    ∃ D p', (Flock.Draw.stratifiedWith (fun _ need => _root_.Spot.Sample.take src need) strata).run p =
       .ok (some D, p') := by
   have loop : ∀ (l : List ℕ) (out : Array ℕ) (pos : ℕ),
       FirstOk (l.map fun i => stage strata[i]! (miss i)) src pos →
       ∃ out' pos₁,
         (forIn (m := StateT ℕ (Except String)) l ((none : Option (Option (Array ℕ))), out) (fun i __s => do
-          let __x ← Flock.Draw.onWith (fun need => _root_.Spot.Draw.take src need) strata[i]!.need
+          let __x ← Flock.Draw.onWith (fun need => _root_.Spot.Sample.take src need) strata[i]!.need
             (Flock.Draw.subset strata[i]!.k strata[i]!.size)
           match __x with
           | some local_ => pure (ForInStep.yield (none, __s.2 ++ Array.map strata[i]!.unit local_))
@@ -227,7 +227,7 @@ theorem stratifiedWith_take_first (src : ByteArray) (strata : Array Flock.Draw.S
       dsimp only
       exact hih
   obtain ⟨out', pos₁, hl⟩ := loop (List.range' 0 strata.size) (#[] : Array ℕ) p h
-  have key : ∀ r, (Flock.Draw.stratifiedWith (fun _ need => _root_.Spot.Draw.take src need) strata).run p = r →
+  have key : ∀ r, (Flock.Draw.stratifiedWith (fun _ need => _root_.Spot.Sample.take src need) strata).run p = r →
       ∃ D p', r = .ok (some D, p') := by
     intro r hr
     unfold Flock.Draw.stratifiedWith at hr
@@ -256,8 +256,8 @@ theorem stratifiedWith_take_first (src : ByteArray) (strata : Array Flock.Draw.S
 /-- **`sampleUnits` returns a sample** where every stage's first read samples. -/
 theorem units_ok_of_firstOk (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (src : ByteArray) (miss : ℕ → Array ℕ → Prop)
     (h : FirstOk (samplingDesignStages samplingDesign n miss) src 0) :
-    ∃ units read, _root_.Spot.Draw.sampleUnits samplingDesign n src = .ok (units, read) := by
-  have key : ∀ r, (Flock.Draw.drawWith (fun _ need => _root_.Spot.Draw.take src need) samplingDesign n).run 0 = r →
+    ∃ units read, _root_.Spot.Sample.sampleUnits samplingDesign n src = .ok (units, read) := by
+  have key : ∀ r, (Flock.Draw.drawWith (fun _ need => _root_.Spot.Sample.take src need) samplingDesign n).run 0 = r →
       ∃ d read, r = .ok (some d, read) := by
     intro r hr
     cases samplingDesign with
@@ -296,7 +296,7 @@ theorem units_ok_of_firstOk (samplingDesign : Flock.Draw.SamplingDesign) (n : �
       exact ⟨_, _, hr.symm⟩
   obtain ⟨d, read, hd⟩ := key _ rfl
   refine ⟨d.units, read, ?_⟩
-  unfold _root_.Spot.Draw.sampleUnits
+  unfold _root_.Spot.Sample.sampleUnits
   rw [hd]
   rfl
 
@@ -352,7 +352,7 @@ samples (`units_ok_of_firstOk`), and stage `s`'s fails with probability at most 
 theorem units_error_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd n : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd)
     (hns : ns.sum = n) (L : ℕ) (hL : firstRead samplingDesign n ≤ L) :
     prCoin (fun f : Fin L → Fin 256 => ¬ ∃ units read,
-      Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf f) = .ok (units, read)) ≤
+      Spot.Sample.sampleUnits samplingDesign n (Properties.Spot.bytesOf f) = .ok (units, read)) ≤
       (kd : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
   refine le_trans (prCoin_mono (q := fun f : Fin L → Fin 256 =>
     ¬ Properties.Spot.SecurityProofs.FirstOk (Properties.Spot.SecurityProofs.samplingDesignStages samplingDesign n fun _ _ => True)
@@ -405,11 +405,11 @@ theorem execSel_error_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : F
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) {samplingDesign : Flock.Draw.SamplingDesign}
     {ns : List ℕ} {kd : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd) (hns : ns.sum = n) (hL : firstRead samplingDesign n ≤ L 0) :
     prCoin (fun ω => ¬ ∃ units read,
-      Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf (t ω 0)) = .ok (units, read)) ≤
+      Spot.Sample.sampleUnits samplingDesign n (Properties.Spot.bytesOf (t ω 0)) = .ok (units, read)) ≤
       (kd : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
   classical
   let E : (i : Fin 1) → (Fin (L i) → Fin 256) → Prop := fun _ g => ¬ ∃ units read,
-    Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf g) = .ok (units, read)
+    Spot.Sample.sampleUnits samplingDesign n (Properties.Spot.bytesOf g) = .ok (units, read)
   calc prCoin (fun ω => E 0 (t ω 0))
       = prCoin (fun f : (i : Fin 1) → Fin (L i) → Fin 256 => E 0 (f 0)) := ht fun f => E 0 (f 0)
     _ ≤ prCoin (fun f : (i : Fin 1) → Fin (L i) → Fin 256 => ∀ s ∈ (univ : Finset (Fin 1)), E s (f s)) :=
@@ -423,11 +423,11 @@ theorem execSel_error_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : F
 theorem execSel_card_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ}
     (hlaw : SamplingDesignOn samplingDesign ns kd) (ω : Ω)
-    (h : ∃ units read, Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf (t ω 0)) = .ok (units, read)) :
+    (h : ∃ units read, Spot.Sample.sampleUnits samplingDesign n (Properties.Spot.bytesOf (t ω 0)) = .ok (units, read)) :
     ((execSel (n := n) t samplingDesign n).draw ω).card ≤ kd := by
   obtain ⟨units, read, hu⟩ := h
   have hd : (execSel (n := n) t samplingDesign n).draw ω = univ.filter fun u : Fin n => u.val ∈ units := by
-    change (match Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf (t ω 0)) with
+    change (match Spot.Sample.sampleUnits samplingDesign n (Properties.Spot.bytesOf (t ω 0)) with
       | .ok r => univ.filter fun u : Fin n => u.val ∈ r.1
       | .error _ => univ) = univ.filter fun u : Fin n => u.val ∈ units
     rw [hu]

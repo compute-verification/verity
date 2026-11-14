@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.EndToEnd.Joint.MT.Drawn
+public import Proofs.Flock.EndToEnd.Joint.MT.Sampled
 public import Proofs.Flock.EndToEnd.Joint.MT.Statement
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

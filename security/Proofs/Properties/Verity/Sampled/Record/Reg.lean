@@ -133,8 +133,8 @@ theorem deriveSamplingDesign_congr (p : _root_.Spot.Program) (q : Json) (tbl : O
     (hl : _root_.Spot.getD a "law" = _root_.Spot.getD b "law")
     (hn : _root_.Spot.nat? (_root_.Spot.getD a "k") =
       _root_.Spot.nat? (_root_.Spot.getD b "k")) :
-    _root_.Spot.Draw.deriveSamplingDesign p q a tbl = _root_.Spot.Draw.deriveSamplingDesign p q b tbl := by
-  unfold _root_.Spot.Draw.deriveSamplingDesign
+    _root_.Spot.Sample.deriveSamplingDesign p q a tbl = _root_.Spot.Sample.deriveSamplingDesign p q b tbl := by
+  unfold _root_.Spot.Sample.deriveSamplingDesign
   rw [hl, hn]
 
 /-- `Flock.Draw.deriveWork` refuses `k = 0`. -/
@@ -150,10 +150,10 @@ theorem deriveWork_k {k : ℕ} {S : Array (String × Array (ℕ × ℕ))} {tab :
 
 /-- **`deriveSamplingDesign`'s expansion is the sampling design's kind at its `k`**, of at least one unit. -/
 theorem deriveSamplingDesign_some {p : _root_.Spot.Program} {q samplingDesign : Json} {tbl : Option Json} {L : Flock.Draw.SamplingDesign}
-    (h : _root_.Spot.Draw.deriveSamplingDesign p q samplingDesign tbl = .ok (some L)) :
+    (h : _root_.Spot.Sample.deriveSamplingDesign p q samplingDesign tbl = .ok (some L)) :
     ∃ k, _root_.Spot.nat? (_root_.Spot.getD samplingDesign "k") = some k ∧ 1 ≤ k ∧
       ((kindOf samplingDesign = "stratified" ∧ ∃ S, L = .stratified k S) ∨ (kindOf samplingDesign = "work" ∧ ∃ S, L = .work k S)) := by
-  unfold _root_.Spot.Draw.deriveSamplingDesign at h
+  unfold _root_.Spot.Sample.deriveSamplingDesign at h
   split at h
   next s hs =>
     have hk : kindOf samplingDesign = s := by simp [kindOf, hs]
@@ -195,9 +195,9 @@ theorem deriveSamplingDesign_some {p : _root_.Spot.Program} {q samplingDesign : 
       exact absurd (by decide) hc
 
 theorem flockSamplingDesign_subset_text (K n : ℕ) (hk : 1 ≤ K) (hn : K ≤ n) :
-    _root_.Spot.Draw.flockSamplingDesign (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson K)]) n =
+    _root_.Spot.Sample.flockSamplingDesign (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson K)]) n =
       .ok (.subset K) := by
-  unfold _root_.Spot.Draw.flockSamplingDesign
+  unfold _root_.Spot.Sample.flockSamplingDesign
   rw [show _root_.Spot.getD (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson K)]) "law" =
     .str "subset" from rfl]
   dsimp only
@@ -219,8 +219,8 @@ theorem splitOn_slash_repr (a b : ℕ) :
   simp only [List.map_cons, List.map_nil, String.ofList_toList]
 
 theorem probability_repr (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
-    _root_.Spot.Draw.probability? s!"{a}/{b}" = some (a, b) := by
-  unfold _root_.Spot.Draw.probability?
+    _root_.Spot.Sample.probability? s!"{a}/{b}" = some (a, b) := by
+  unfold _root_.Spot.Sample.probability?
   rw [show s!"{a}/{b}" = Nat.repr a ++ "/" ++ Nat.repr b from rfl, splitOn_slash_repr]
   dsimp only
   simp only [toNat!_repr, decide_eq_true hb, decide_eq_true hab, Bool.and_true]
@@ -230,9 +230,9 @@ theorem probability_repr (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
     exact absurd (Bool.and_eq_true_iff.2 ⟨digits_repr a, digits_repr b⟩) hc
 
 theorem flockSamplingDesign_bernoulli_text (a b n : ℕ) (hb : 0 < b) (hab : a ≤ b) :
-    _root_.Spot.Draw.flockSamplingDesign (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]) n =
+    _root_.Spot.Sample.flockSamplingDesign (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]) n =
       .ok (.bernoulli a b) := by
-  unfold _root_.Spot.Draw.flockSamplingDesign
+  unfold _root_.Spot.Sample.flockSamplingDesign
   rw [show _root_.Spot.getD (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]) "law" =
     .str "bernoulli" from rfl]
   dsimp only
@@ -247,9 +247,9 @@ theorem flockSamplingDesign_bernoulli_text (a b n : ℕ) (hb : 0 < b) (hab : a �
 expansion where there is one. -/
 theorem samplingDesignAt_ok {v : _root_.Spot.Docket.Verifier} {n : ℕ} {L : Flock.Draw.SamplingDesign}
     (h : samplingDesignAt v n = .ok L) :
-    ∃ derived parsed, _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable = .ok derived ∧
-      _root_.Spot.Draw.flockSamplingDesign (samplingDesignObj v.samplingDesign derived) n = .ok parsed ∧ L = derived.getD parsed := by
-  unfold samplingDesignAt _root_.Spot.Draw.derive at h
+    ∃ derived parsed, _root_.Spot.Sample.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable = .ok derived ∧
+      _root_.Spot.Sample.flockSamplingDesign (samplingDesignObj v.samplingDesign derived) n = .ok parsed ∧ L = derived.getD parsed := by
+  unfold samplingDesignAt _root_.Spot.Sample.derive at h
   obtain ⟨samplingDesignJ, hJ, h⟩ := bind_eq_ok.1 h
   obtain ⟨d, hd, hJ⟩ := bind_eq_ok.1 hJ
   obtain ⟨d', hd', h⟩ := bind_eq_ok.1 h

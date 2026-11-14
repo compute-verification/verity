@@ -24,7 +24,7 @@ The package `security_proofs` (`security/Proofs/lakefile.toml`): every proof, `<
     (`Proofs.Flock.Soundness.Audit.Influence`, `Proofs.Flock.Soundness.Audit.StratifiedMiss`) and
     `ExfiltrationTwoVectors.lean` (`Proofs.Flock.SamplingGeneric.TwoTable`), both beside it.
   - `verity/protocols/proofs/flock/prover/tests/lean/generate.sh` runs `RandomnessVectors.lean` beside it
-    (`Proofs.Flock.Soundness.PlanDraw`).
+    (`Proofs.Flock.Soundness.PlanSample`).
   - `verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py` builds `Proofs.Flock.Verifier`, which its scratch
     files import; `test_security_inputs.py` beside it checks that the suite's inputs hold that module's imports.
   - `benchmarks/two_stage/tests/guard_node.py` builds `Proofs.Flock.SpotFlock.Code` and

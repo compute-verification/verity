@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Select.SecondStrata
 public import Proofs.Flock.Bridge.QsRows.FirstReads
-import Spot.Draw
+import Spot.Sample
 import Proofs.Flock.Claims.Sampling.Select.Misses
 import Proofs.Flock.Claims.Sampling.Select.Steps
 
@@ -11,7 +11,7 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 
 `secondSamplingDesign` is a work sampling design at `k = 1` over one stratum per cell, each of unit work and floor `k_t`. Where
 `secondProblem` passes, each cell samples `1 ≤ k_t ≤ n_t` of its `n_t` proof blocks, and the work rule gives each cell
-exactly its floor, so what `Draw.flockSamplingDesign` reads from it is a sampling design on the cells (`Flock.Bridge.SamplingDesignOn`) that
+exactly its floor, so what `Sample.flockSamplingDesign` reads from it is a sampling design on the cells (`Flock.Bridge.SamplingDesignOn`) that
 samples `|sample| · Σ_t k_t` proof blocks.
 
 * `secondProblem_counts`: `secondProblem` passing gives `1 ≤ k_t ≤ n_t` for each template.
@@ -96,10 +96,10 @@ theorem cellPairs_fst {q T : ℕ} {z : ℕ × ℕ} (hz : z ∈ cellPairs q T) : 
   exact List.mem_range.1 ht
 
 /-- **`secondSamplingDesign` is a sampling design on its cells that samples `|sample| · Σ_t k_t` proof blocks**: where
-`secondProblem` passes, what `Draw.flockSamplingDesign` reads from it has the cells as its strata, in order and tiling the
+`secondProblem` passes, what `Sample.flockSamplingDesign` reads from it has the cells as its strata, in order and tiling the
 interior, each stratum's count the work rule's. -/
 theorem samplingDesignOn_second {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) {m : ℕ}
-    {parsed : Flock.Draw.SamplingDesign} (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
+    {parsed : Flock.Draw.SamplingDesign} (h : Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     Flock.Bridge.SamplingDesignOn parsed (cellSizes sample.size ns) (sample.size * ks.toList.sum) := by
   obtain ⟨ws, rfl, hws⟩ := flockSamplingDesign_second_strata sample ns ks m parsed h
   have hmap : ws.toList.map (fun s => (s.units, s.k)) =
@@ -167,7 +167,7 @@ theorem firstRead_work (K n : ℕ) (ws : Array Flock.Draw.WorkStratum) :
 
 /-- **The second stage's strata read `secondRead` bytes first.** -/
 theorem firstRead_second {sample ns ks : Array ℕ} {m : ℕ} {parsed : Flock.Draw.SamplingDesign}
-    (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
+    (h : Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     Flock.Bridge.firstRead parsed m = secondRead sample.size ns ks := by
   obtain ⟨ws, rfl, hws⟩ := flockSamplingDesign_second_strata sample ns ks m parsed h
   have hf : (((cellPairs sample.size ns.size).map (cellStratum sample ns ks)).map (·.toStratum)).map (·.need) =
@@ -183,14 +183,14 @@ theorem firstRead_second {sample ns ks : Array ℕ} {m : ℕ} {parsed : Flock.Dr
   rfl
 
 /-- **The second stage's units are not sampled with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`**, on a uniform
-stream of at least `secondRead` bytes: where `secondProblem` passes, `Draw.sampleUnits` under what `Draw.flockSamplingDesign` reads
+stream of at least `secondRead` bytes: where `secondProblem` passes, `Sample.sampleUnits` under what `Sample.flockSamplingDesign` reads
 from `secondSamplingDesign` returns no sample only where some cell's first read samples nothing. -/
 theorem drawUnits_second_error_le {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none)
     {parsed : Flock.Draw.SamplingDesign}
-    (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) = .ok parsed) (len : ℕ)
+    (h : Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) = .ok parsed) (len : ℕ)
     (hlen : secondRead sample.size ns ks ≤ len) :
     prCoin (fun f : Fin len → Fin 256 => ¬ ∃ units read,
-      Draw.sampleUnits parsed (sample.size * ns.toList.sum) (bytesOf f) = .ok (units, read)) ≤
+      Sample.sampleUnits parsed (sample.size * ns.toList.sum) (bytesOf f) = .ok (units, read)) ≤
       ((sample.size * ks.toList.sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ :=
   Flock.Bridge.units_error_le (samplingDesignOn_second hp h) (cellSizes_sum _ _) len (by rw [firstRead_second h]; exact hlen)
 

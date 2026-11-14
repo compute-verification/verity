@@ -291,7 +291,7 @@ noncomputable def extend (S : Widening) : ExecutionPhase where
   hA3 := uniform_fst W.hA3
   hcls := fun m hm ω hω => W.hcls m hm ω.1 hω
 
-/-- **The window's sample's sampling design**: the registration's sampling design over the population, as `Spot.Draw.sampleUnits` samples it on
+/-- **The window's sample's sampling design**: the registration's sampling design over the population, as `Spot.Sample.sampleUnits` samples it on
 the device's bytes in order (`Flock.Bridge.execSel`); a sample that fails samples every proof block. -/
 noncomputable def L : FlockSoundness.Audit.SamplingDesign W.nJ := Flock.Bridge.execSel (n := W.nJ) W.src W.samplingDesign W.nJ
 

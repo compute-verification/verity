@@ -6,7 +6,7 @@ import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Setup

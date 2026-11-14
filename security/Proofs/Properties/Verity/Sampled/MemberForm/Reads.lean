@@ -112,7 +112,7 @@ theorem executionPhaseRead_members {V : Vocab d α} {k : Verity.Registration.Com
     exact h1.symm
   have hMA := hset.toExecutionPhaseOn.membersAt
   obtain ⟨read', hok⟩ := joint_sampleUnits_of_drew hdrew (W.joint 0) ω hL hnJ hpre
-  have hok' : _root_.Spot.Draw.sampleUnits W.samplingDesign W.nJ (_root_.Properties.Spot.bytesOf (W.src ω 0)) =
+  have hok' : _root_.Spot.Sample.sampleUnits W.samplingDesign W.nJ (_root_.Properties.Spot.bytesOf (W.src ω 0)) =
       .ok (sampledBlocks ev.base.draw, read') := hok
   have hended : Flock.Guarantees.sampleEnded W.src W.samplingDesign W.nJ ω = true := by
     simp only [Flock.Guarantees.sampleEnded, hok']

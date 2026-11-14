@@ -15,7 +15,7 @@ session without the inner record.
 
 @[expose] public section
 
-namespace Flock.Test.FullDraw
+namespace Flock.Test.FullSample
 
 open Lean (Json)
 open Flock
@@ -79,4 +79,4 @@ def innerWhy (src : Option RecCoins.Source) : Option String :=
 #guard innerWhy none == none
 #guard RecSetup.noInnerSample.startsWith "refused: the inner session's record (--rec-inner-session) holds no draw"
 
-end Flock.Test.FullDraw
+end Flock.Test.FullSample

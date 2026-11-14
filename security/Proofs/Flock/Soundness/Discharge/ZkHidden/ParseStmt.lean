@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.ParseStmt
 import Proofs.Flock.Soundness.Refine.Walk
 

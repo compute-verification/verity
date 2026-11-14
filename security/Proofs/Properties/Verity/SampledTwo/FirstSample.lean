@@ -16,7 +16,7 @@ the run of record returned. That `draw` is the first stage's sample of record:
 
 * `run_sample`: a run of record whose symbol is `accept` ran the sample of record (`Select.select`, under
   `Select.resolve`'s rule and the work table the rule expands) on the bytes it was handed, held that sample to the
-  registration (`Draw.checkDraw`, under the sampling design the rule gives the population), and its `draw` is that
+  registration (`Sample.checkDraw`, under the sampling design the rule gives the population), and its `draw` is that
   sample. A refused run names no symbol, and the entry a second stage adds to the answer is named `interior`.
 * `accepted_secondSamplingDesign`: where the two-stage check accepts, the sampling design its last step holds the interior audit's sample to is
   `Select.secondSamplingDesign` of the proved units of the first stage's sample, the one `Select.select` drew on the first
@@ -88,13 +88,13 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
       rule.samplingDesignOver n = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
       ¬(!(Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
-      ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧
+      ∃ derived, Sample.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧
         ∃ resolved, Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
         ∃ draw rest read, Select.select resolved i.params.verifier.program i.params.verifier.query
             workTable i.closure i.source = .ok (draw, rest, read) ∧
-          ¬(!(Draw.checkDraw draw (getD i.record "population") derived).isEmpty) = true ∧
+          ¬(!(Sample.checkDraw draw (getD i.record "population") derived).isEmpty) = true ∧
           ∃ inner acc₂ staged receipt symbol pub audit,
-            Spot.Run.interiorAudit form i ((Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
+            Spot.Run.interiorAudit form i ((Sample.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
             j = Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read), ("symbol", symbol),
               ("public", pub), ("audit", audit)] ++ staged) := by
   unfold Spot.Run.run at h
@@ -111,7 +111,7 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
 
 /-- **An accepted run of record's `draw` is its first stage's sample**: a run of `Spot.Run.run`, at either switch,
 whose symbol is `accept` drew the sample of record (`Select.select` under `Select.resolve`'s rule and the work table
-`Rule.tableOver` expands) on the bytes it was handed, held it to the registration (`Draw.checkDraw` under the
+`Rule.tableOver` expands) on the bytes it was handed, held it to the registration (`Sample.checkDraw` under the
 sampling design `Rule.over` gives the population), and lists it as its `draw`. -/
 theorem run_sample {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run.run i form = .ok run)
     (ha : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true) :
@@ -120,11 +120,11 @@ theorem run_sample {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run
       i.rule.over n (Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
       rule.samplingDesignOver n = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
-      Draw.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧
+      Sample.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧
       Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
       Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
         .ok (draw, rest, read) ∧
-      (Draw.checkDraw draw (getD i.record "population") derived).isEmpty = true ∧
+      (Sample.checkDraw draw (getD i.record "population") derived).isEmpty = true ∧
       Spot.getD run "draw" = draw := by
   rcases run_path h with ⟨step, codes, hj⟩ | ⟨n, rule, samplingDesign, workTable, hn, -, hrule, hlaw, htab, -, derived, hder,
       resolved, hres, draw, rest, read, hsel, hchk, inner, acc₂, staged, receipt, symbol, pub, audit, hia, hj⟩
@@ -152,7 +152,7 @@ theorem run_sample {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run
 /-- **The second stage's sampling design is computed from the first stage's accepted sample.** Where the two-stage check accepts,
 the run of record's first stage drew `draw` on the first stage's bytes `ξ` (`Select.select`, under the rule
 `Select.resolve` gives the parameters' rule at the boundary's program and query, with no closure), held it to the
-boundary registration's record `j₁` as the check read it (`readBack`; `Draw.checkDraw`, under the sampling design the
+boundary registration's record `j₁` as the check read it (`readBack`; `Sample.checkDraw`, under the sampling design the
 rule gives its population), and listed it as
 its `draw`; and the sampling design the last step held the interior audit's sample to (`secondCheck` at `samplingDesign`) is
 `Select.secondSamplingDesign` of `draw`'s proved units, over the replay block's cells under the interior's query at the rule's
@@ -169,16 +169,16 @@ theorem accepted_secondSamplingDesign {form : Bool} {p : Params} {c : OneStage.C
         rule.samplingDesignOver n = .ok samplingDesign₁ ∧
         p.rule.tableOver p.boundary.verifier.program p.boundary.verifier.query p.boundary.verifier.workTable =
           .ok workTable ∧
-        Draw.derive p.boundary.verifier.program p.boundary.verifier.query samplingDesign₁ workTable = .ok derived ∧
+        Sample.derive p.boundary.verifier.program p.boundary.verifier.query samplingDesign₁ workTable = .ok derived ∧
         Select.resolve p.rule p.boundary.verifier.program p.boundary.verifier.query = .ok resolved ∧
         Select.select resolved p.boundary.verifier.program p.boundary.verifier.query workTable none ξ =
           .ok (draw, rest, read) ∧
-        (Draw.checkDraw draw (getD j₁ "population") derived).isEmpty = true ∧
+        (Sample.checkDraw draw (getD j₁ "population") derived).isEmpty = true ∧
         Spot.getD run "draw" = draw ∧
         ∃ grain replay k ns ids ks, p.rule = .twoStage grain replay k ∧
           Select.replayCells p.replay p.interior.verifier.query = .ok ns ∧
           Select.templateIds p.interior.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
-          samplingDesign = Select.secondSamplingDesign ((Draw.proved draw).map Int.toNat) ns ks := by
+          samplingDesign = Select.secondSamplingDesign ((Sample.proved draw).map Int.toNat) ns ks := by
   obtain ⟨-, c₂, ξ₂, r, i, run, hi, hr, -, -, hj, samplingDesign, hl, htwo⟩ := accepted_steps h
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, hio, hj₁, -⟩ := inputAt_ok hi
   obtain ⟨n, rule, samplingDesign₁, workTable, derived, resolved, draw, rest, read, hn, hrule, hlaw, htab, hder, hres, hsel,

@@ -20,7 +20,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched

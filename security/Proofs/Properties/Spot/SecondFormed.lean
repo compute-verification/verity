@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Spot.SecondSample
 public import Proofs.Flock.Soundness.ExecStrataOf
-import Spot.Draw
+import Spot.Sample
 import Spot.Json
 import Batteries.Tactic.OpenPrivate
 import Proofs.Core.QSort
@@ -12,9 +12,9 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 /-!
 # The second stage's sampling design is well formed wherever `secondProblem` passes
 
-`Select.selectSecond` reads its sampling design (`secondSamplingDesign`) twice before it reads a coin: `Draw.flockSamplingDesign` parses it
-(`Draw.strataProblem`, `Flock.Draw.workProblem`), and `Draw.checkDraw` holds the sample object's strata to
-`Draw.strataMessage`. Both walk the strata in loops. This file runs those loops on `secondSamplingDesign`'s cells: where
+`Select.selectSecond` reads its sampling design (`secondSamplingDesign`) twice before it reads a coin: `Sample.flockSamplingDesign` parses it
+(`Sample.strataProblem`, `Flock.Draw.workProblem`), and `Sample.checkDraw` holds the sample object's strata to
+`Sample.strataMessage`. Both walk the strata in loops. This file runs those loops on `secondSamplingDesign`'s cells: where
 `secondProblem` passes, the cells have distinct templates, each is one nonempty range sampling `1 ≤ k_t ≤ n_t` of it,
 and their ranges follow each other from `0` to `|sample| · Σ_t n_t`, so neither finds a fault. The second stage then
 refuses an honest run only where its coins sample no units, with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`.
@@ -36,8 +36,8 @@ refuses an honest run only where its coins sample no units, with probability at 
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open private Spot.Draw.stratum? Spot.Draw.natRanges Spot.Draw.WORK_STRATUM_KEYS Spot.Draw.STRATUM_KEYS
-  Spot.Draw.sumSizes from Spot.Draw
+open private Spot.Sample.stratum? Spot.Sample.natRanges Spot.Sample.WORK_STRATUM_KEYS Spot.Sample.STRATUM_KEYS
+  Spot.Sample.sumSizes from Spot.Sample
 
 open Spot
 
@@ -283,9 +283,9 @@ theorem workProblem_cells (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : Li
 /-- Cell `z`'s object `φ z` reads as its work stratum: a work stratum's keys, its template a string, its units the one
 range, unit work, and its count and floor `kk z`. -/
 structure CellJson (φ : γ → Json) (tpl : γ → String) (lo hi kk : γ → ℕ) (z : γ) : Prop where
-  keys : keys? (φ z) = some Spot.Draw.WORK_STRATUM_KEYS
+  keys : keys? (φ z) = some Spot.Sample.WORK_STRATUM_KEYS
   template : getD (φ z) "template" = .str (tpl z)
-  units : Spot.Draw.ranges? (getD (φ z) "units") = some #[((lo z : Int), (hi z : Int))]
+  units : Spot.Sample.ranges? (getD (φ z) "units") = some #[((lo z : Int), (hi z : Int))]
   k : int? (getD (φ z) "k") = some (kk z : Int)
   work : int? (getD (φ z) "work") = some 1
   floor : int? (getD (φ z) "floor") = some (kk z : Int)
@@ -295,15 +295,15 @@ theorem nat_of_int {j : Json} {n : ℕ} (h : int? j = some (n : Int)) : nat? j =
   rw [h]
   simp
 
-theorem natRanges_pair_ok (a b : ℕ) : Spot.Draw.natRanges #[((a : Int), (b : Int))] = some #[(a, b)] := by
-  unfold Spot.Draw.natRanges
+theorem natRanges_pair_ok (a b : ℕ) : Spot.Sample.natRanges #[((a : Int), (b : Int))] = some #[(a, b)] := by
+  unfold Spot.Sample.natRanges
   simp
 
 /-- A cell's object parses to its work stratum. -/
 theorem stratum_ok {φ : γ → Json} {tpl : γ → String} {lo hi kk : γ → ℕ} {z : γ}
     (h : CellJson φ tpl lo hi kk z) :
-    Spot.Draw.stratum? true (φ z) = some (cellW tpl lo hi kk z) := by
-  unfold Spot.Draw.stratum?
+    Spot.Sample.stratum? true (φ z) = some (cellW tpl lo hi kk z) := by
+  unfold Spot.Sample.stratum?
   simp [h.keys, h.template, h.units, nat_of_int h.k, nat_of_int (n := 1) h.work, nat_of_int h.floor,
     natRanges_pair_ok, cellW]
 
@@ -317,18 +317,18 @@ theorem list_mapM_map_some {α β : Type} (f : α → Option β) (φ : γ → α
 
 theorem mapM_cells {φ : γ → Json} {tpl : γ → String} {lo hi kk : γ → ℕ} {zs : List γ}
     (hc : ∀ z ∈ zs, CellJson φ tpl lo hi kk z) :
-    (zs.map φ).toArray.mapM (Spot.Draw.stratum? true) = some (zs.map (cellW tpl lo hi kk)).toArray := by
+    (zs.map φ).toArray.mapM (Spot.Sample.stratum? true) = some (zs.map (cellW tpl lo hi kk)).toArray := by
   rw [List.mapM_toArray, list_mapM_map_some _ φ (cellW tpl lo hi kk) zs fun z hz => stratum_ok (hc z hz)]
   rfl
 
-/-- **`Draw.strataProblem` passes a work sampling design at `k = 1` over such cells.** -/
+/-- **`Sample.strataProblem` passes a work sampling design at `k = 1` over such cells.** -/
 theorem strataProblem_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : List γ) (m : ℕ)
     (samplingDesign : Json) (hw : jeq (getD samplingDesign "law") (Json.str "work") = true)
     (hss : getD samplingDesign "strata" = Json.arr (zs.map φ).toArray) (hk : int? (getD samplingDesign "k") = some 1)
     (hc : ∀ z ∈ zs, CellJson φ tpl lo hi kk z)
     (hne : zs ≠ []) (hz : ∀ z ∈ zs, lo z < hi z ∧ 1 ≤ kk z ∧ kk z ≤ hi z - lo z)
     (hnd : (zs.map tpl).Nodup) (hch : Chain 0 m (zs.map fun z => (lo z, hi z))) :
-    Spot.Draw.strataProblem samplingDesign (m : Int) = false := by
+    Spot.Sample.strataProblem samplingDesign (m : Int) = false := by
   have hm := cells_pos lo hi zs m hne (fun z h => (hz z h).1) hch
   have hwp := workProblem_cells tpl lo hi kk zs m hne hz hnd hch
   have hany : ((zs.map (cellW tpl lo hi kk)).toArray.any fun s =>
@@ -340,13 +340,13 @@ theorem strataProblem_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk :
     have : (zs.map φ).toArray.isEmpty = false := by simpa using hne
     rw [this, Bool.false_or, Bool.or_eq_false_iff]
     exact ⟨by decide, decide_eq_false (by omega)⟩
-  unfold Spot.Draw.strataProblem
+  unfold Spot.Sample.strataProblem
   simp only [hss, hk, hw, h0, mapM_cells hc, hany]
   have h1 : Int.toNat 1 = 1 := rfl
   simp only [Bool.false_eq_true, ↓reduceIte, h1, Int.toNat_natCast, hwp]
   rfl
 
-/-- **`Draw.flockSamplingDesign` reads a work sampling design at `k = 1` over such cells** as the one on their strata. -/
+/-- **`Sample.flockSamplingDesign` reads a work sampling design at `k = 1` over such cells** as the one on their strata. -/
 theorem flockSamplingDesign_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : List γ) (m : ℕ)
     (samplingDesign : Json) (hl : getD samplingDesign "law" = Json.str "work") (hw : jeq (getD samplingDesign "law") (Json.str "work") = true)
     (hkeys : keys? samplingDesign = some (sortStrings #["law", "k", "strata"]))
@@ -354,9 +354,9 @@ theorem flockSamplingDesign_cells (φ : γ → Json) (tpl : γ → String) (lo h
     (hc : ∀ z ∈ zs, CellJson φ tpl lo hi kk z)
     (hne : zs ≠ []) (hz : ∀ z ∈ zs, lo z < hi z ∧ 1 ≤ kk z ∧ kk z ≤ hi z - lo z)
     (hnd : (zs.map tpl).Nodup) (hch : Chain 0 m (zs.map fun z => (lo z, hi z))) :
-    Spot.Draw.flockSamplingDesign samplingDesign m = .ok (.work 1 (zs.map (cellW tpl lo hi kk)).toArray) := by
+    Spot.Sample.flockSamplingDesign samplingDesign m = .ok (.work 1 (zs.map (cellW tpl lo hi kk)).toArray) := by
   have hsp := strataProblem_cells φ tpl lo hi kk zs m samplingDesign hw hss hk hc hne hz hnd hch
-  unfold Spot.Draw.flockSamplingDesign
+  unfold Spot.Sample.flockSamplingDesign
   rw [hl]
   dsimp only
   split
@@ -391,13 +391,13 @@ theorem foldl_stepG (tpl : γ → String) (lo hi : γ → ℕ) : ∀ (zs : List 
     rw [List.foldl_cons, stepG, foldl_stepG tpl lo hi zs]
     simp
 
-theorem sumSizes_pair (a b : Int) : Spot.Draw.sumSizes #[(a, b)] = b - a := by
-  simp [Spot.Draw.sumSizes]
+theorem sumSizes_pair (a b : Int) : Spot.Sample.sumSizes #[(a, b)] = b - a := by
+  simp [Spot.Sample.sumSizes]
 
 theorem foldl_total {φ : γ → Json} {tpl : γ → String} {lo hi kk : γ → ℕ} : ∀ (zs : List γ) (init : Int),
     (∀ z ∈ zs, CellJson φ tpl lo hi kk z) → (∀ z ∈ zs, lo z < hi z) →
     (zs.map φ).foldl (fun a s => a + (int? (getD s "work")).getD 0 *
-        Spot.Draw.sumSizes ((Spot.Draw.ranges? (getD s "units")).getD #[])) init =
+        Spot.Sample.sumSizes ((Spot.Sample.ranges? (getD s "units")).getD #[])) init =
       init + ((((zs.map fun z => (lo z, hi z)).map fun r => r.2 - r.1).sum : ℕ) : Int)
   | [], init, _, _ => by simp
   | z :: zs, init, hc, hz => by
@@ -427,14 +427,14 @@ theorem qsort_chainI {l : List (ℕ × ℕ)} {a c : ℕ} (h : Chain a c l) (hlt 
       have h3 : ¬ i < j := by omega
       simp [h1, h2, h3]
 
-/-- **`Draw.strataMessage` finds nothing at fault in a work sampling design at `k = 1` over such cells.** -/
+/-- **`Sample.strataMessage` finds nothing at fault in a work sampling design at `k = 1` over such cells.** -/
 theorem strataMessage_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : List γ) (m : ℕ)
     (samplingDesign : Json) (hw : jeq (getD samplingDesign "law") (Json.str "work") = true)
     (hss : getD samplingDesign "strata" = Json.arr (zs.map φ).toArray) (hk : int? (getD samplingDesign "k") = some 1)
     (hc : ∀ z ∈ zs, CellJson φ tpl lo hi kk z)
     (hne : zs ≠ []) (hz : ∀ z ∈ zs, lo z < hi z ∧ 1 ≤ kk z ∧ kk z ≤ hi z - lo z)
     (hnd : (zs.map tpl).Nodup) (hch : Chain 0 m (zs.map fun z => (lo z, hi z))) :
-    Spot.Draw.strataMessage samplingDesign (m : Int) = none := by
+    Spot.Sample.strataMessage samplingDesign (m : Int) = none := by
   have hm := cells_pos lo hi zs m hne (fun z h => (hz z h).1) hch
   have hlt : ∀ r ∈ zs.map fun z => (lo z, hi z), r.1 < r.2 := by
     intro r hr
@@ -452,21 +452,21 @@ theorem strataMessage_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk :
     rw [this, Bool.false_or, Bool.or_eq_false_iff]
     exact ⟨by decide, decide_eq_false (by omega)⟩
   have hall : ((zs.map φ).toArray.all fun a =>
-      keys? a == some (if True then Spot.Draw.WORK_STRATUM_KEYS else Spot.Draw.STRATUM_KEYS) &&
+      keys? a == some (if True then Spot.Sample.WORK_STRATUM_KEYS else Spot.Sample.STRATUM_KEYS) &&
         (nat? (getD a "work")).isSome && (nat? (getD a "floor")).isSome &&
-          (Spot.Draw.ranges? (getD a "units")).isSome) = true := by
+          (Spot.Sample.ranges? (getD a "units")).isSome) = true := by
     simp only [List.all_toArray, List.all_map, List.all_eq_true]
     intro z hz'
     have h := hc z hz'
     simp [h.keys, nat_of_int (n := 1) h.work, nat_of_int h.floor, h.units]
   have htotal : Array.foldl (fun a s => a + (int? (getD s "work")).getD 0 *
-      Spot.Draw.sumSizes ((Spot.Draw.ranges? (getD s "units")).getD #[])) 0 (zs.map φ).toArray = (m : Int) := by
+      Spot.Sample.sumSizes ((Spot.Sample.ranges? (getD s "units")).getD #[])) 0 (zs.map φ).toArray = (m : Int) := by
     rw [List.foldl_toArray' (h := rfl), foldl_total zs 0 hc fun z h => (hz z h).1]
     omega
   have hm0 : ((m : Int) == 0) = false := by
     rw [beq_eq_false_iff_ne]
     omega
-  unfold Spot.Draw.strataMessage
+  unfold Spot.Sample.strataMessage
   simp only [hss, hk, hw, h0, hall, htotal, hm0]
   simp only [Bool.false_eq_true, ↓reduceIte, Bool.not_true, List.forIn_toArray]
   rw [forIn_map_yield_foldl φ (stepG tpl lo hi)]
@@ -675,8 +675,8 @@ theorem cell_counts {sample ns ks : Array ℕ} (hp : Select.secondProblem sample
   have e : (z.2 + 1) * ns.getD z.1 0 = z.2 * ns.getD z.1 0 + ns.getD z.1 0 := Nat.succ_mul _ _
   omega
 
-theorem keys_cellObj (o n k i r t : ℕ) : keys? (Select.cellObj o n k i r t) = some Spot.Draw.WORK_STRATUM_KEYS := by
-  unfold Select.cellObj Spot.Draw.WORK_STRATUM_KEYS
+theorem keys_cellObj (o n k i r t : ℕ) : keys? (Select.cellObj o n k i r t) = some Spot.Sample.WORK_STRATUM_KEYS := by
+  unfold Select.cellObj Spot.Sample.WORK_STRATUM_KEYS
   exact keys_mkObj_perm (ks := ["template", "units", "work", "floor", "k"]) (List.Perm.refl _) (by decide)
 
 theorem keys_secondSamplingDesign (sample ns ks : Array ℕ) :
@@ -686,9 +686,9 @@ theorem keys_secondSamplingDesign (sample ns ks : Array ℕ) :
 
 /-- **The second stage's sampling design parses, and its strata are well formed**, wherever `secondProblem` passes. -/
 theorem second_parses {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) :
-    Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) =
+    Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) =
         .ok (.work 1 ((cellPairs sample.size ns.size).map (cellStratum sample ns ks)).toArray) ∧
-      Spot.Draw.strataMessage (Select.secondSamplingDesign sample ns ks) ((sample.size * ns.toList.sum : ℕ) : Int) = none := by
+      Spot.Sample.strataMessage (Select.secondSamplingDesign sample ns ks) ((sample.size * ns.toList.sum : ℕ) : Int) = none := by
   let φ : ℕ × ℕ → Json := fun z =>
     Select.cellObj (cellOff sample.size ns z.1) (ns.getD z.1 0) (ks.getD z.1 0) z.2 (sample.getD z.2 0) z.1
   let tpl : ℕ × ℕ → String := fun z => s!"{sample.getD z.2 0}/{z.1}"
@@ -714,7 +714,7 @@ theorem second_parses {sample ns ks : Array ℕ} (hp : Select.secondProblem samp
     (congrArg int? (getD_secondSamplingDesign_k sample ns ks)).trans (int_toJson 1)
   have hc : ∀ z ∈ cellPairs sample.size ns.size, CellJson φ tpl lo hi kk z := fun z hz =>
     ⟨keys_cellObj _ _ _ _ _ _, getD_cellObj_template _ _ _ _ _ _,
-      (congrArg Draw.ranges? (getD_cellObj_units _ _ _ _ _ _)).trans (ranges_pair_ok (cell_counts hp hz).1),
+      (congrArg Sample.ranges? (getD_cellObj_units _ _ _ _ _ _)).trans (ranges_pair_ok (cell_counts hp hz).1),
       (congrArg int? (getD_cellObj_k _ _ _ _ _ _)).trans (int_toJson _),
       (congrArg int? (getD_cellObj_work _ _ _ _ _ _)).trans (int_toJson 1),
       (congrArg int? (getD_cellObj_floor _ _ _ _ _ _)).trans (int_toJson _)⟩
@@ -731,14 +731,14 @@ theorem second_parses {sample ns ks : Array ℕ} (hp : Select.secondProblem samp
 
 /-- **The second stage's sampling design parses to its cells' strata** wherever `secondProblem` passes. -/
 theorem flockSamplingDesign_second_ok {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) :
-    Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) =
+    Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) =
       .ok (.work 1 ((cellPairs sample.size ns.size).map (cellStratum sample ns ks)).toArray) :=
   (second_parses hp).1
 
-/-- **The second stage's strata are well formed** wherever `secondProblem` passes: `Draw.strataMessage` finds nothing
+/-- **The second stage's strata are well formed** wherever `secondProblem` passes: `Sample.strataMessage` finds nothing
 at fault in them. -/
 theorem strataMessage_second {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) :
-    Draw.strataMessage (Select.secondSamplingDesign sample ns ks) ((sample.size * ns.toList.sum : ℕ) : Int) = none :=
+    Sample.strataMessage (Select.secondSamplingDesign sample ns ks) ((sample.size * ns.toList.sum : ℕ) : Int) = none :=
   (second_parses hp).2
 
 /-- **The second stage's sampling design is well formed** (`SecondFormed`) wherever `secondProblem` passes. -/

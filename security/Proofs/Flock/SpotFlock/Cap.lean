@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.Facts
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.Claims.Sampling.Select.OS
-public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Bridge.Sample
 
 /-!
 # SPOT[Flock]'s replay cap
@@ -38,7 +38,7 @@ def firstKOf (g : Reg) : Option ℕ :=
   | .ok n =>
     match g.rule.samplingDesignOver n with
     | .ok named =>
-      match Spot.Draw.flockSamplingDesign named n with
+      match Spot.Sample.flockSamplingDesign named n with
       | .ok (.subset k) => some k
       | _ => none
     | .error _ => none
@@ -54,7 +54,7 @@ def firstK (g : Reg) : Option ℕ :=
 
 theorem firstK_some {g : Reg} {K : ℕ} (hK : firstK g = some K) :
     g.closure = none ∧ g.rule ≠ .all ∧ ∃ n named, Spot.Partition.units g.program g.query = .ok n ∧
-      g.rule.samplingDesignOver n = .ok named ∧ Spot.Draw.flockSamplingDesign named n = .ok (.subset K) := by
+      g.rule.samplingDesignOver n = .ok named ∧ Spot.Sample.flockSamplingDesign named n = .ok (.subset K) := by
   have h3 : g.closure = none ∧ g.rule ≠ .all ∧ firstKOf g = some K := by
     unfold firstK at hK
     cases hc : g.closure <;> cases hr : g.rule <;> simp [hc, hr] at hK <;> exact ⟨rfl, by simp, hK⟩
@@ -67,7 +67,7 @@ theorem firstK_some {g : Reg} {K : ℕ} (hK : firstK g = some K) :
     cases hl : g.rule.samplingDesignOver n with
     | error e => simp [hn, hl] at hK'
     | ok named =>
-      cases hf : Spot.Draw.flockSamplingDesign named n with
+      cases hf : Spot.Sample.flockSamplingDesign named n with
       | error e => simp [hn, hl, hf] at hK'
       | ok samplingDesign =>
         cases samplingDesign <;> simp [hn, hl, hf] at hK'
@@ -80,10 +80,10 @@ theorem select_proved (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (draw : Json) (proved : Array ℕ) (read : ℕ)
     (h : Spot.Select.select rule d query table cm src = .ok (draw, proved, read)) :
     ∃ n named derived, Spot.Partition.units d query = .ok n ∧ rule.samplingDesignOver n = .ok named ∧
-      Spot.Draw.deriveSamplingDesign d query named table = .ok derived ∧
+      Spot.Sample.deriveSamplingDesign d query named table = .ok derived ∧
         ∃ units : Array ℕ, (cm = none → proved = units) ∧ ((rule = .all ∧ units = Array.range n) ∨
-          (rule ≠ .all ∧ ∃ parsed read', Spot.Draw.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed ∧
-            Spot.Draw.sampleUnits (derived.getD parsed) n src = .ok (units, read'))) := by
+          (rule ≠ .all ∧ ∃ parsed read', Spot.Sample.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed ∧
+            Spot.Sample.sampleUnits (derived.getD parsed) n src = .ok (units, read'))) := by
   unfold Spot.Select.select at h
   obtain ⟨n, hn, h⟩ := bind_eq_ok.1 h
   obtain ⟨named, hnamed, h⟩ := bind_eq_ok.1 h
@@ -133,10 +133,10 @@ theorem select_subset_size {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : B
   rw [hpu hc]
   rcases hcase with ⟨hall, -⟩ | ⟨-, parsed, read', hp, hu⟩
   · exact absurd hall hne
-  · have hp' : Spot.Draw.flockSamplingDesign named n = .ok parsed := hp
+  · have hp' : Spot.Sample.flockSamplingDesign named n = .ok parsed := hp
     rw [hf] at hp'
     obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
-    have hu' : Spot.Draw.sampleUnits (.subset K) n src = .ok (units, read') := hu
+    have hu' : Spot.Sample.sampleUnits (.subset K) n src = .ok (units, read') := hu
     exact _root_.Flock.Bridge.sampleUnits_size (samplingDesign := .subset K) (ns := [K]) (kd := K) ⟨rfl, by simp⟩ hu'
 
 /-! ## The cap -/

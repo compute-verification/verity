@@ -323,14 +323,14 @@ theorem slotDesign_of_firstSamplingDesign {rule : Spot.Select.Rule} {d : Spot.Pr
   rcases h2 : rule.samplingDesignOver n with e | named
   · simp only [h2, error_bind] at h; cases h
   simp only [h2, ok_bind] at h ⊢
-  rcases h3 : Spot.Draw.deriveSamplingDesign d q named tb with e | derived
+  rcases h3 : Spot.Sample.deriveSamplingDesign d q named tb with e | derived
   · simp only [h3, error_bind] at h; cases h
   simp only [h3, ok_bind] at h ⊢
   cases rule with
   | all => cases h; rfl
   | _ =>
     simp only at h ⊢
-    rcases h4 : Spot.Draw.flockSamplingDesign ((derived.map (·.toJson)).getD named) n with e | parsed
+    rcases h4 : Spot.Sample.flockSamplingDesign ((derived.map (·.toJson)).getD named) n with e | parsed
     · simp only [h4, error_bind] at h; cases h
     simp only [h4, ok_bind] at h ⊢
     cases h

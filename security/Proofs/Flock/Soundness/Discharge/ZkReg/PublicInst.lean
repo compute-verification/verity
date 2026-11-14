@@ -22,7 +22,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup

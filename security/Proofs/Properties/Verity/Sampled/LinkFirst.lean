@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.Sampled.RecordDraw
+public import Proofs.Properties.Verity.Sampled.RecordSample
 
 /-!
 # The sample, then the link, then the other rounds, on the device's log

@@ -287,12 +287,12 @@ theorem accepted_ownReads {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Jso
       subst ho
       simp only [Option.getD_some]
       exact (Array.mem_filter.1 hv).1
-  rcases reported_stated (own := runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂) hc hrep with
+  rcases reported_stated (own := runOwn i it ((Spot.Sample.proved draw).map Int.toNat) strata draw₂) hc hrep with
     hnull | ⟨ps, hp, k', hk', s, p, port, e, hs, hf, hpe, hval, hjr, hok⟩
   · exact Or.inl hnull
   · refine Or.inr ?_
     unfold HeldRead
-    exact ⟨runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂, ss, ps, hss, hc, rfl, rfl, hp, k', hk',
+    exact ⟨runOwn i it ((Spot.Sample.proved draw).map Int.toNat) strata draw₂, ss, ps, hss, hc, rfl, rfl, hp, k', hk',
       s, p, port, e, hs, hf, hpe, hval, hjr, hok⟩
 
 /-- **The fact `Record.checks` rests on at the reads a two-stage run hands it**: the run of record and the form's

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Select.Second
 public import Proofs.Flock.Claims.Sampling.Select.Size
-import Spot.Draw
+import Spot.Sample
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import Proofs.Core.QSort
@@ -36,8 +36,8 @@ over the `|sample|·Σ n_t` proof blocks, and carries those units and no closure
 theorem selectSecond_units {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
     Select.secondProblem sample ns ks = none ∧
-      ∃ parsed units, Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) = .ok parsed ∧
-        Draw.sampleUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read) ∧
+      ∃ parsed units, Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) = .ok parsed ∧
+        Sample.sampleUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read) ∧
           getD draw "units" = natsJson units ∧ getD draw "closure" = Json.null := by
   unfold Select.selectSecond at h
   cases hq : Select.secondProblem sample ns ks with
@@ -51,7 +51,7 @@ theorem selectSecond_units {sample ns ks : Array ℕ} {src : ByteArray} {draw : 
     · exact absurd h (throw_bind_ne _ _ _)
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-    unfold Draw.sampleFirstRead at hd
+    unfold Sample.sampleFirstRead at hd
     obtain ⟨parsed, hp, hd⟩ := bind_eq_ok.1 hd
     obtain ⟨⟨units, read''⟩, hu, hd⟩ := bind_eq_ok.1 hd
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hd
@@ -66,8 +66,8 @@ theorem size_filterMap_map_some {α β γ : Type} (xs : Array α) (g : α → β
 
 /-- A sample object whose `units` are `units`, with no closure, proves exactly as many units. -/
 theorem size_proved_of_units {draw : Json} {units : Array ℕ} (hu : getD draw "units" = natsJson units)
-    (hc : getD draw "closure" = Json.null) : (Draw.proved draw).size = units.size := by
-  unfold Draw.proved
+    (hc : getD draw "closure" = Json.null) : (Sample.proved draw).size = units.size := by
+  unfold Sample.proved
   dsimp only
   rw [hu, hc, Verity.QSort.size_qsort, Array.size_append]
   simp only [natsJson, Array.size_empty, Nat.add_zero]
@@ -75,9 +75,9 @@ theorem size_proved_of_units {draw : Json} {units : Array ℕ} (hu : getD draw "
 
 /-- **A work sampling design's sample returns its strata's counts**: `units` has `Σ_s k_s` entries. -/
 theorem sampleUnits_work_size {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray} {units : Array ℕ}
-    (h : Draw.sampleUnits (.work K ws) n src = .ok (units, read)) : units.size = (ws.toList.map (·.k)).sum := by
-  unfold Draw.sampleUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) (.work K ws) n).run 0 with
+    (h : Sample.sampleUnits (.work K ws) n src = .ok (units, read)) : units.size = (ws.toList.map (·.k)).sum := by
+  unfold Sample.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Sample.take src need) (.work K ws) n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
     obtain ⟨r, read'⟩ := x
@@ -92,7 +92,7 @@ theorem sampleUnits_work_size {K n read : ℕ} {ws : Array Flock.Draw.WorkStratu
     unfold Flock.Draw.drawWith at hw
     dsimp only at hw
     rw [StateT.run_bind] at hw
-    cases ho : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) (ws.map (·.toStratum))).run 0 with
+    cases ho : (Flock.Draw.stratifiedWith (fun _ need => Sample.take src need) (ws.map (·.toStratum))).run 0 with
     | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
     | ok y =>
       obtain ⟨v, p⟩ := y
@@ -154,7 +154,7 @@ theorem sum_range_getD (a : Array ℕ) : ((List.range a.size).map fun t => a.get
 blocks. -/
 theorem size_proved_selectSecond {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
-    (Draw.proved draw).size = sample.size * ks.toList.sum := by
+    (Sample.proved draw).size = sample.size * ks.toList.sum := by
   obtain ⟨hq, parsed, units, hp, hu, hdu, hdc⟩ := selectSecond_units h
   obtain ⟨ws, rfl, hmap⟩ := flockSamplingDesign_second sample ns ks _ parsed hp
   rw [size_proved_of_units hdu hdc, sampleUnits_work_size hu]

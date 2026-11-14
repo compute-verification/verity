@@ -77,11 +77,11 @@ def firstSamplingDesign (rule : Spot.Select.Rule) (d : Spot.Program) (query : Js
     V (Option Draw.SamplingDesign) := do
   let n ← Spot.Partition.units d query
   let named ← rule.samplingDesignOver n
-  let derived ← Spot.Draw.deriveSamplingDesign d query named table
+  let derived ← Spot.Sample.deriveSamplingDesign d query named table
   match rule with
   | .all => pure none
   | _ => do
-    let parsed ← Spot.Draw.flockSamplingDesign ((derived.map (·.toJson)).getD named) n
+    let parsed ← Spot.Sample.flockSamplingDesign ((derived.map (·.toJson)).getD named) n
     pure (some (derived.getD parsed))
 
 /-- **A sampling design is well formed over strata of sizes `ns`**; `none`, the `All` rule's, always is. -/

@@ -22,7 +22,7 @@ the bytes a stream's run read (`familyOneCommitmentRead`).
 
 @[expose] public section
 
-namespace Properties.Challenger.Drawn
+namespace Properties.Challenger.Sampled
 
 open Lean (Json)
 open Spot Spot.Challenger
@@ -122,4 +122,4 @@ theorem familyOneCommitmentRead : FamilyOneCommitmentRead := by
 theorem coinsFromLog_holds : CoinsFromLog :=
   coinsFromLog sampledByDevice
 
-end Properties.Challenger.Drawn
+end Properties.Challenger.Sampled

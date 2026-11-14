@@ -70,14 +70,14 @@ def partitionOf (v : Docket.Verifier) : Json :=
 
 /-- R1: the record has exactly a v1 record's keys, or a v2 record's when the verifier expects values registered or holds
 certified entries; its format
-is the matching one and its protocol one-stage's; its sampling design is `samplingDesign`, the verifier's agreed sampling design as `Draw.derive` expands it
+is the matching one and its protocol one-stage's; its sampling design is `samplingDesign`, the verifier's agreed sampling design as `Sample.derive` expands it
 over the verifier's own program and query; and its window is an object of kind `served` or `stand-in`. -/
 def R1 (rec : Json) (v : Docket.Verifier) (samplingDesign : Json) : Prop :=
   keys? rec = some (if v.registered.isEmpty && v.certified.isEmpty then Docket.KEYS else Docket.KEYS_V2) ∧
   jeq (getD rec "format")
     (.str (if v.registered.isEmpty && v.certified.isEmpty then Docket.FORMAT else Docket.FORMAT_V2)) ∧
   jeq (getD rec "protocol") (.str Docket.PROTOCOL) ∧
-  Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (getD rec "law") samplingDesign ∧
+  Sample.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (getD rec "law") samplingDesign ∧
   (getD rec "window" matches .obj _) ∧ ∃ k ∈ Docket.KINDS, jeq (getD (getD rec "window") "kind") (.str k)
 
 /-- The window's declared day (`Docket.Verifier.declared`), for a verifier that reads the registration log's
@@ -376,29 +376,29 @@ def Ascending (xs : Array Int) : Prop := ∀ i (h : i + 1 < xs.size), xs[i] < xs
 
 /-- The sample's units of stratum `s`: those in one of its ranges. -/
 def countIn (units : Array Int) (s : Json) : Int :=
-  let rs := (Draw.ranges? (getD s "units")).getD #[]
+  let rs := (Sample.ranges? (getD s "units")).getD #[]
   units.foldl (fun acc u => if rs.any (fun (lo, hi) => lo ≤ u && u < hi) then acc + 1 else acc) 0
 
 /-- A sample of the sampling design `samplingDesign` over the registered `population` (`draw.check_draw`): an object naming subset, bernoulli,
 stratified or work, with exactly its sampling design's keys; the sampling design it names is `samplingDesign` and its population the registered one; its
 units integers, strictly ascending, in `[0, population)`; a subset's `k` its number of units; a Bernoulli `p` written
 `NUM/DEN` with `0 ≤ NUM ≤ DEN`, `0 < DEN`; a stratified or work sample's strata well formed over its population
-(`Draw.strataMessage` none: each stratum exactly its keys, a distinct string template, its ranges ascending, disjoint and
+(`Sample.strataMessage` none: each stratum exactly its keys, a distinct string template, its ranges ascending, disjoint and
 tiling `[0, population)`, its `k` the rule's), and each stratum's `k`, where its template is a string (as
-`Draw.strataMessage` none has every one), the number of units sampled in it; and a work sample's closure, when it has one,
+`Sample.strataMessage` none has every one), the number of units sampled in it; and a work sample's closure, when it has one,
 integers, non-empty, strictly ascending, in `[0, population)` and none of them sampled. -/
 def Drawn (draw population samplingDesign : Json) : Prop :=
   let kind := kindOf draw
   let closure := kind == "work" && (field? draw "closure").isSome
   (draw matches .obj _) ∧ kind ∈ ["subset", "bernoulli", "stratified", "work"] ∧
   keys? draw = some (sampleKeys kind closure) ∧
-  jeq (Draw.samplingDesignOf draw) samplingDesign ∧ jeq (getD draw "population") population ∧
+  jeq (Sample.samplingDesignOf draw) samplingDesign ∧ jeq (getD draw "population") population ∧
   ∃ us units, getD draw "units" = .arr us ∧ us.mapM int? = some units ∧ Ascending units ∧
     (∀ (h : 0 < units.size), 0 ≤ units[0] ∧ ∃ n, int? (getD draw "population") = some n ∧ units[units.size - 1] < n) ∧
     (kind = "subset" → int? (getD draw "k") = some (units.size : Int)) ∧
-    (kind = "bernoulli" → ∃ p, getD draw "p" = .str p ∧ (Draw.probability? p).isSome) ∧
+    (kind = "bernoulli" → ∃ p, getD draw "p" = .str p ∧ (Sample.probability? p).isSome) ∧
     ((kind = "stratified" ∨ kind = "work") →
-      ∃ n, int? (getD draw "population") = some n ∧ Draw.strataMessage draw n = none ∧
+      ∃ n, int? (getD draw "population") = some n ∧ Sample.strataMessage draw n = none ∧
         ∀ ss, getD draw "strata" = .arr ss → ∀ s ∈ ss, ∀ t, getD s "template" = .str t →
           int? (getD s "k") = some (countIn units s)) ∧
     (closure → ∃ cs ys, getD draw "closure" = .arr cs ∧ cs.mapM int? = some ys ∧ ∃ (h : 0 < ys.size),
@@ -439,7 +439,7 @@ own roots (`openedRoots`), is a value the record registers, the read opened agai
 (`Record.registeredRoots`, each value's last entry). A registered value no verifier reports a read of is not required
 to have one. -/
 def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
-  e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
+  e.instances = (Sample.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Sample.proved e.draw ∧
   Receipt c e ∧
   (∀ served, e.served = some served →
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
@@ -468,7 +468,7 @@ ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBo
 for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
 def publicOf (p : Params) (e : Evidence) (samplingDesign : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
   { drawn := sampledNats e.draw,
-    proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
+    proved := (Sample.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
     perTemplate := if jeq (getD samplingDesign "law") "stratified" || jeq (getD samplingDesign "law") "work" then
       (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none,

@@ -16,7 +16,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on Windows. Re-read it at every
   toolchain bump.
 - **What ties the statement to the verifier.** The verifier has no randomness of its own: the live sample is
-  `Flock.Draw.drawWith` on the challenger's coins, read in order (`Spot.Draw.sampleUnits`), which the challenger
+  `Flock.Draw.drawWith` on the challenger's coins, read in order (`Spot.Sample.sampleUnits`), which the challenger
   flips from `IO.getRandomBytes` on its own host (`sampled-proofs-verifier`'s `coins`). The theorems are about
   `drawWith`, and `sampleOS_def` states that `Flock.Draw.sampleOS` is `drawWith` with every stream's bytes from
   `IO.getRandomBytes`. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with A3.

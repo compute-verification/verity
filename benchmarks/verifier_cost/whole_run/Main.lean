@@ -95,7 +95,7 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
   let _ ← timed "slots.layout" v.program (fun pr => Slots.layout pr v.query) isOk
   let _ ← timed "popOk" v.program (fun pr => Slots.popOk pr v.query n) id
   let receipt ← IO.ofExcept (← timed "receipt" rec_ (fun r => Run.receipt r challenger received) isOk)
-  let derived ← IO.ofExcept (← timed "derive" v.program (fun pr => Draw.derive pr v.query samplingDesign v.workTable) isOk)
+  let derived ← IO.ofExcept (← timed "derive" v.program (fun pr => Sample.derive pr v.query samplingDesign v.workTable) isOk)
   let res ← IO.ofExcept (← timed "resolve" v.program (fun pr => Select.resolve rule pr v.query) isOk)
   let (draw, _, read) ← IO.ofExcept (← timed "select" v.program
     (fun pr => Select.select res pr v.query v.workTable none source) isOk)
@@ -105,8 +105,8 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
     | k => some <$> IO.ofExcept (Challenger.ChallengerKey.ofJson k)
   let _ ← timed "coinsCode" (getD j "coins")
     (fun c => Run.coinsCode key (getD j "main") c rec_ v.windowRoot family (source.extract 0 read)) (·.isNone)
-  let _ ← timed "checkDraw" draw (fun d => Draw.checkDraw d (getD rec_ "population") derived) (·.isEmpty)
-  let proved := Draw.proved draw
+  let _ ← timed "checkDraw" draw (fun d => Sample.checkDraw d (getD rec_ "population") derived) (·.isEmpty)
+  let proved := Sample.proved draw
   let _ ← timed "checkVerdicts" verdicts (fun vs => Service.checkVerdicts vs sessions outputs)
     (fun c => match c with | .ok c => c.codes.isEmpty | .error _ => false)
   let auditIn := Json.mkObj [("registration", rec_), ("receipt", receipt), ("draw", draw), ("law", derived),

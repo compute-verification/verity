@@ -10,7 +10,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # A sequential sample from one byte source misses no more often than its stages' bounds multiplied
 
-`Slots.select` reads its coins from one byte source in order (`Spot.Draw.take`): a stratified or work sample runs
+`Slots.select` reads its coins from one byte source in order (`Spot.Sample.take`): a stratified or work sample runs
 its strata in turn, each stratum's sampler on a stream it extends and reruns until it samples (`Flock.Draw.onWith`), the
 next stratum starting where it stopped. Each stratum stops at a time its own bytes decide, and the bytes after it are
 uniform and unread, so the strata's samples are independent.

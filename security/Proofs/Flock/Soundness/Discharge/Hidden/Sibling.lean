@@ -7,7 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.EmptySample
 public import Proofs.Flock.Soundness.Discharge.Hidden.OkWith
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
 public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 public import Proofs.Flock.Soundness.Refine.Setup
 public import Proofs.Flock.Soundness.Refine.Walk
 import all Lean.Data.Json.Basic

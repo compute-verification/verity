@@ -50,7 +50,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
 import Proofs.Flock.Soundness.Discharge.Hm.Site
 import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 

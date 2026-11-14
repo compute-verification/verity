@@ -3,7 +3,7 @@ module
 public import Properties.Pous.Pooled
 public import Proofs.Pous.PeriodDeployed
 public import Proofs.Flock.Soundness.Audit.Periods
-public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.Sampling.Samples
 public import Mathlib.Analysis.Complex.ExponentialBounds
 public import Batteries.Data.ByteArray
 public import Properties.Pous.Period

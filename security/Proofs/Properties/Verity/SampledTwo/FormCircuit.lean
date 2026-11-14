@@ -7,7 +7,7 @@ public import Proofs.Properties.Verity.SampledTwo.FormStmts
 public import Proofs.Properties.Verity.SampledTwo.FormLast
 public import Proofs.Properties.Verity.SampledTwo.FormLink
 public import Proofs.Properties.Verity.SampledTwo.FormPrint
-public import Proofs.Properties.Verity.SampledTwo.FormDraw
+public import Proofs.Properties.Verity.SampledTwo.FormSample
 public import Proofs.Properties.Verity.SampledTwo.FormBytes
 public import Proofs.Properties.Verity.SampledTwo.FormMember
 public import Proofs.Properties.Verity.SampledTwo.FirstEarly

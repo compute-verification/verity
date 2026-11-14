@@ -75,7 +75,7 @@ theorem RegTwo.error_mem (g : RegTwo) {N v : ℕ} {src₁ src₂ : ByteArray} {e
 
 theorem RegTwo.ok_mem (g : RegTwo) {N j : ℕ} {src₁ src₂ : ByteArray} {draw : Json} {read : ℕ}
     (h : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, read))
-    (hj : (j : Int) ∈ Spot.Draw.proved draw) (hv : g.blockAt (g.sample src₁) j < N) :
+    (hj : (j : Int) ∈ Spot.Sample.proved draw) (hv : g.blockAt (g.sample src₁) j < N) :
     g.blockAt (g.sample src₁) j ∈ g.checked N src₁ src₂ := by
   unfold RegTwo.checked
   rw [h]

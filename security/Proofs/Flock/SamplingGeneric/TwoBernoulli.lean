@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.Claims.Sampling.EndToEndDeploy
-import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Claims.Sampling.Samples
 
 /-!
 # The deployed first stage is below Bernoulli(Q/N)

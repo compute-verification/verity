@@ -80,7 +80,7 @@ theorem secondSamplingDesignOf_ok {p : Params} {run samplingDesign : Json} (h : 
     ∃ grain replay k ns ids ks, p.rule = .twoStage grain replay k ∧
       Select.replayCells p.replay p.interior.verifier.query = .ok ns ∧
       Select.templateIds p.interior.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
-      samplingDesign = Select.secondSamplingDesign ((Draw.proved (getD run "draw")).map Int.toNat) ns ks := by
+      samplingDesign = Select.secondSamplingDesign ((Sample.proved (getD run "draw")).map Int.toNat) ns ks := by
   unfold secondDesignOf at h
   split at h
   · try dsimp only at h
@@ -108,7 +108,7 @@ theorem accepted_samplingDesign_run {form : Bool} {p : Params} {c : OneStage.Com
       i.rule = .twoStage grain replay k ∧
       Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
       Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
-      samplingDesign = Select.secondSamplingDesign ((Draw.proved (Spot.getD run "draw")).map Int.toNat) ns ks := by
+      samplingDesign = Select.secondSamplingDesign ((Sample.proved (Spot.getD run "draw")).map Int.toNat) ns ks := by
   obtain ⟨-, c₂, ξ₂, r, i, run, hi, hr, -, -, hj, samplingDesign, hl, htwo⟩ := accepted_steps h
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, hio, -, -⟩ := inputAt_ok hi
   obtain ⟨grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw⟩ := secondSamplingDesignOf_ok hl

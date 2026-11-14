@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.Window.Accepts
-public import Proofs.Properties.Verity.SampledDraw
+public import Proofs.Properties.Verity.SampledUnits
 
 /-!
 # What an accept of the per-member form holds

@@ -36,7 +36,7 @@ role per key: a key also used for another role is outside the model, and a `forg
 only under that one-role reading.
 
 **The coins are raw bits.** A coin is `Challenger.COIN_BYTES` bytes the device drew, and a sample reads the concatenation
-of the coins it was released (`take`, in `Spot.Draw.sampleUnits`), with no hash between: no SHA-512-expanded
+of the coins it was released (`take`, in `Spot.Sample.sampleUnits`), with no hash between: no SHA-512-expanded
 stream is read as uniform. In the causal game each coin is one release of `8 * COIN_BYTES` bits (`bitsOf`), after the
 bytes it answers (for one-stage, the registration's digest), at most `MAX_COINS` of them (`oneStageRounds`); a withheld
 run's releases are those bits alone.

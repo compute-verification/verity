@@ -4,7 +4,7 @@ public import Batteries.Tactic.OpenPrivate
 -- `Ledger` realizes the match equations `mvcgen` splits `challengePhaseNamed` with; realizing them here too clashes wherever
 -- both modules are imported.
 public import Proofs.Properties.Pouw.LiveSalt.Ledger
-public import Proofs.Properties.Verity.SampledDraw
+public import Proofs.Properties.Verity.SampledUnits
 public import Proofs.Properties.Verity.SampledLog
 public import Proofs.Properties.Verity.Sampled.Trees
 public import Std.Tactic.Do

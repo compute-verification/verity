@@ -9,7 +9,7 @@ public import Proofs.Flock.Soundness.ExecStrataOf
 /-!
 # The deployed sample at the registration's strata
 
-`SampledKSLiveV5` samples with the deployed sample (`Spot.Draw.sampleUnits`, `Flock.Draw.drawWith` on the
+`SampledKSLiveV5` samples with the deployed sample (`Spot.Sample.sampleUnits`, `Flock.Draw.drawWith` on the
 challenger's coins read in order as one stream) under a Flock sampling design over the registration's strata, and its `δ` is that
 sampling design's own `P_a`. This file holds what the statement reads and how the sample meets it:
 
@@ -206,7 +206,7 @@ theorem strata_bound_on (samplingDesign : Flock.Draw.SamplingDesign) (St : Array
     (hon : St.toList.flatMap (fun s => Properties.Spot.SecurityProofs.expand s.units.toList) = List.range n)
     (U : Finset ℕ) (hU : U ⊆ Finset.range n) (L : ℕ) :
     Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
-        Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf src) = .ok (units, read) ∧
+        Spot.Sample.sampleUnits samplingDesign n (Properties.Spot.bytesOf src) = .ok (units, read) ∧
           ∀ u ∈ U, u ∉ units) ≤
       Claims.Sampling.strataPa (St.toList.map fun s => (s.size, s.k)) 0 U := by
   refine le_trans (Claims.Pr_mono fun src ⟨units, read, hu, hm⟩ => ⟨units, read, hu, fun v hv => ?_⟩)
@@ -219,7 +219,7 @@ theorem strata_bound_on (samplingDesign : Flock.Draw.SamplingDesign) (St : Array
 theorem sampleUnits_miss_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd n : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd) (hns : ns.sum = n)
     (U : Finset ℕ) (hU : U ⊆ Finset.range n) (L : ℕ) :
     Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
-        Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf src) = .ok (units, read) ∧
+        Spot.Sample.sampleUnits samplingDesign n (Properties.Spot.bytesOf src) = .ok (units, read) ∧
           ∀ u ∈ U, u ∉ units) ≤
       (Properties.Spot.oneStageOf samplingDesign).Pa ns U := by
   cases samplingDesign with
@@ -239,12 +239,12 @@ theorem sampleUnits_miss_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : L
     rw [Array.toList_map, ← hns]
     exact hon
 
-/-- **The deployed sample as a sampling design**: `Spot.Draw.sampleUnits` under `samplingDesign` over `[0, pop)` on the source `t`'s bytes,
+/-- **The deployed sample as a sampling design**: `Spot.Sample.sampleUnits` under `samplingDesign` over `[0, pop)` on the source `t`'s bytes,
 read in order as one stream; a sample that runs out of them samples every unit. -/
 def execSel {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ} (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256)
     (samplingDesign : Flock.Draw.SamplingDesign) (pop : ℕ) : Audit.SamplingDesign n where
   Ω := Ω
-  draw ω := match Spot.Draw.sampleUnits samplingDesign pop (Properties.Spot.bytesOf (t ω 0)) with
+  draw ω := match Spot.Sample.sampleUnits samplingDesign pop (Properties.Spot.bytesOf (t ω 0)) with
     | .ok r => univ.filter fun u => u.val ∈ r.1
     | .error _ => univ
 
@@ -263,12 +263,12 @@ theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : 
     obtain ⟨v, -, rfl⟩ := Finset.mem_map.1 hu
     exact Finset.mem_range.2 v.isLt
   let E : (i : Fin 1) → (Fin (L i) → Fin 256) → Prop := fun _ g => ∃ units read,
-    Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf g) = .ok (units, read) ∧
+    Spot.Sample.sampleUnits samplingDesign n (Properties.Spot.bytesOf g) = .ok (units, read) ∧
       ∀ u ∈ W.map Fin.valEmbedding, u ∉ units
   have hfin : prCoin (E 0) ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (Audit.SampleExec.prCoin_le_one _)
   calc (execSel (n := n) t samplingDesign n).missProb W ≤ prCoin (fun ω => E 0 (t ω 0)) := by
         refine prCoin_mono fun ω hd => ?_
-        change Disjoint (match Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf (t ω 0)) with
+        change Disjoint (match Spot.Sample.sampleUnits samplingDesign n (Properties.Spot.bytesOf (t ω 0)) with
           | .ok r => univ.filter fun u => u.val ∈ r.1
           | .error _ => univ) W at hd
         split at hd
@@ -291,7 +291,7 @@ theorem samplingDesignOn_all (ns : List ℕ) : SamplingDesignOn (.subset ns.sum)
 /-- **Under `All` the deployed sample holds every unit**: a sample of `subset n` over `[0, n)` that ends is the image of
 `[0, n)` under a permutation that keeps it (`subset_spec`), so all of `[0, n)`, whatever the bytes. -/
 theorem sampleUnits_all (n : ℕ) (src : ByteArray) (r : Array ℕ × ℕ)
-    (h : Spot.Draw.sampleUnits (.subset n) n src = .ok r) (u : ℕ) (hu : u < n) : u ∈ r.1 := by
+    (h : Spot.Sample.sampleUnits (.subset n) n src = .ok r) (u : ℕ) (hu : u < n) : u ∈ r.1 := by
   have hs : Properties.Spot.SecurityProofs.SeqMiss
       [⟨2 * n * Flock.Draw.width n + 64, Flock.Draw.subset n n, fun D => ∀ x ∈ D, x ∈ r.1⟩] src 0 :=
     Properties.Spot.SecurityProofs.sampleUnits_seq (.subset n) n src r.1 r.2 h
@@ -311,7 +311,7 @@ theorem sampleUnits_all (n : ℕ) (src : ByteArray) (r : Array ℕ × ℕ)
 /-- **Under `All` the verifier samples every unit, for any coins**: `execSel` at `subset n` over the `n` units. -/
 theorem execSel_all {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ω : Ω) : (execSel (n := n) t (.subset n) n).draw ω = univ := by
-  change (match Spot.Draw.sampleUnits (.subset n) n (Properties.Spot.bytesOf (t ω 0)) with
+  change (match Spot.Sample.sampleUnits (.subset n) n (Properties.Spot.bytesOf (t ω 0)) with
     | .ok r => univ.filter fun u : Fin n => u.val ∈ r.1
     | .error _ => univ) = univ
   split
@@ -443,13 +443,13 @@ open Properties.Spot.SecurityProofs in
 floors at least one (`workTableOfJson`) and its work nonzero (`deriveWork`). -/
 theorem wellFormed_of_samplingDesignOn {p : Spot.Program} {query samplingDesign samplingDesignJ : Lean.Json} {table : Option Lean.Json}
     {n : ℕ} {derived : Option Flock.Draw.SamplingDesign} {parsed : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ}
-    (hJ : Spot.Draw.derive p query samplingDesign table = .ok samplingDesignJ)
-    (hd : Spot.Draw.deriveSamplingDesign p query samplingDesign table = .ok derived)
-    (hp : Spot.Draw.flockSamplingDesign samplingDesignJ n = .ok parsed) (hlaw : SamplingDesignOn (derived.getD parsed) ns kd) :
+    (hJ : Spot.Sample.derive p query samplingDesign table = .ok samplingDesignJ)
+    (hd : Spot.Sample.deriveSamplingDesign p query samplingDesign table = .ok derived)
+    (hp : Spot.Sample.flockSamplingDesign samplingDesignJ n = .ok parsed) (hlaw : SamplingDesignOn (derived.getD parsed) ns kd) :
     (Properties.Spot.oneStageOf (derived.getD parsed)).WellFormed ns := by
   rcases deriveSamplingDesign_cases p query samplingDesign table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S, k, samplingDesign', hS, rfl, hlaw'⟩
   · have hJ' : samplingDesignJ = samplingDesign := by
-      unfold Spot.Draw.derive at hJ
+      unfold Spot.Sample.derive at hJ
       rw [hd] at hJ
       exact (Except.ok.inj hJ).symm
     subst hJ'
@@ -514,7 +514,7 @@ open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
 /-- **`stratifiedWith` on the verifier's bytes samples each stratum's `k`**: a run that returns a sample holds `∑ k_s` units,
 each stratum's `subset` returning its `k` (`subset_size`). -/
 theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
-    (h : (Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need) strata).run p =
+    (h : (Flock.Draw.stratifiedWith (fun _ need => Spot.Sample.take src need) strata).run p =
       .ok (some D, p')) :
     D.size = (strata.toList.map (·.k)).sum := by
   unfold Flock.Draw.stratifiedWith at h
@@ -527,7 +527,7 @@ theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum
     show ([:strata.size] : Std.Legacy.Range).step = 1 from rfl] at h
   have loop : ∀ (l : List ℕ) (out : Array ℕ) (pos : ℕ) (r : Option (Option (Array ℕ))) (out' : Array ℕ) (pos₁ : ℕ),
       (forIn (m := StateT ℕ (Except String)) l ((none : Option (Option (Array ℕ))), out) (fun i __s => do
-          let __x ← Flock.Draw.onWith (fun need => Spot.Draw.take src need) strata[i]!.need
+          let __x ← Flock.Draw.onWith (fun need => Spot.Sample.take src need) strata[i]!.need
             (Flock.Draw.subset strata[i]!.k strata[i]!.size)
           match __x with
           | some local_ => pure (ForInStep.yield (none, __s.2 ++ Array.map strata[i]!.unit local_))
@@ -544,7 +544,7 @@ theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum
     | cons i is ih =>
       intro out pos r out' pos₁ hl
       rw [List.forIn_cons, StateT.run_bind, StateT.run_bind] at hl
-      cases ho : (Flock.Draw.onWith (fun need => Spot.Draw.take src need) strata[i]!.need
+      cases ho : (Flock.Draw.onWith (fun need => Spot.Sample.take src need) strata[i]!.need
           (Flock.Draw.subset strata[i]!.k strata[i]!.size)).run pos with
       | error e => rw [ho] at hl; exact absurd hl (by rw [bind_error, bind_error]; simp)
       | ok x =>
@@ -581,10 +581,10 @@ open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
 /-- **The deployed sample under such a sampling design samples `kd` units**: a sample from `src` that ends holds `kd` units, `subset k`'s
 `k` (`subset_size`), and a stratified or work sampling design's `k_s` in each stratum (`stratifiedWith_size`), at any population. -/
 theorem sampleUnits_size {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd n : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd) {src : ByteArray}
-    {units : Array ℕ} {read : ℕ} (h : Spot.Draw.sampleUnits samplingDesign n src = .ok (units, read)) :
+    {units : Array ℕ} {read : ℕ} (h : Spot.Sample.sampleUnits samplingDesign n src = .ok (units, read)) :
     units.size = kd := by
-  unfold Spot.Draw.sampleUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take src need) samplingDesign n).run 0 with
+  unfold Spot.Sample.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Sample.take src need) samplingDesign n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
     obtain ⟨r, read'⟩ := x
@@ -602,7 +602,7 @@ theorem sampleUnits_size {samplingDesign : Flock.Draw.SamplingDesign} {ns : List
       unfold Flock.Draw.drawWith at hw
       dsimp only at hw
       rw [StateT.run_bind] at hw
-      cases ho : (Flock.Draw.onWith (fun need => Spot.Draw.take src need)
+      cases ho : (Flock.Draw.onWith (fun need => Spot.Sample.take src need)
           (2 * k * Flock.Draw.width n + 64) (Flock.Draw.subset k n)).run 0 with
       | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
       | ok y =>
@@ -619,7 +619,7 @@ theorem sampleUnits_size {samplingDesign : Flock.Draw.SamplingDesign} {ns : List
       unfold Flock.Draw.drawWith at hw
       dsimp only at hw
       rw [StateT.run_bind] at hw
-      cases ho : (Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need) St).run 0 with
+      cases ho : (Flock.Draw.stratifiedWith (fun _ need => Spot.Sample.take src need) St).run 0 with
       | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
       | ok y =>
         obtain ⟨v, p⟩ := y
@@ -635,7 +635,7 @@ theorem sampleUnits_size {samplingDesign : Flock.Draw.SamplingDesign} {ns : List
       unfold Flock.Draw.drawWith at hw
       dsimp only at hw
       rw [StateT.run_bind] at hw
-      cases ho : (Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need)
+      cases ho : (Flock.Draw.stratifiedWith (fun _ need => Spot.Sample.take src need)
           (ws.map (·.toStratum))).run 0 with
       | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
       | ok y =>

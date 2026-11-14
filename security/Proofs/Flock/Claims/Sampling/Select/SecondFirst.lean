@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Select.SecondUnits
-import Spot.Draw
+import Spot.Sample
 import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take
 import Proofs.Flock.Soundness.ExecSample
@@ -38,9 +38,9 @@ theorem subset_ascending {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Floc
 
 /-- A subset sampling design's sample that ends is strictly ascending. -/
 theorem drawUnits_subset_ascending {k n read : ℕ} {src : ByteArray} {units : Array ℕ}
-    (h : Draw.sampleUnits (.subset k) n src = .ok (units, read)) : units.toList.Pairwise (· < ·) := by
-  unfold Draw.sampleUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) (.subset k) n).run 0 with
+    (h : Sample.sampleUnits (.subset k) n src = .ok (units, read)) : units.toList.Pairwise (· < ·) := by
+  unfold Sample.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Sample.take src need) (.subset k) n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
     obtain ⟨r, read'⟩ := x
@@ -56,7 +56,7 @@ theorem drawUnits_subset_ascending {k n read : ℕ} {src : ByteArray} {units : A
     unfold Flock.Draw.drawWith at hw
     dsimp only at hw
     rw [StateT.run_bind] at hw
-    cases ho : (Flock.Draw.onWith (fun need => Draw.take src need) (2 * k * Flock.Draw.width n + 64)
+    cases ho : (Flock.Draw.onWith (fun need => Sample.take src need) (2 * k * Flock.Draw.width n + 64)
         (Flock.Draw.subset k n)).run 0 with
     | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
     | ok y =>

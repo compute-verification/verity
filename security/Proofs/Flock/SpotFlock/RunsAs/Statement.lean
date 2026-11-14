@@ -53,7 +53,7 @@ sample `sample`, the interior's strata and the second stage's sample. -/
 def runOwn (i : Spot.Run.Input) (it : Spot.Run.Interior) (sample : Array ℕ)
     (strata : Array (String × Array (ℕ × ℕ))) (draw : Json) : Spot.SecondStage.Own :=
   { sample, parts := Spot.SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
-    drawn := (Spot.Draw.proved draw).map Int.toNat,
+    drawn := (Spot.Sample.proved draw).map Int.toNat,
     links := Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
     reported := Spot.Record.sessionRegistered i.verdicts, verified := Spot.SecondStage.verifiedOf i.verdicts,
     refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),

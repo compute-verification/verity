@@ -154,9 +154,9 @@ theorem pa_slots (first : OneStage) (pop ic : Array (Array Slots.ProofBlock)) (B
 theorem slotDesign_ok (rule : Select.Rule) (d : Program) (query : Lean.Json) (table : Option Lean.Json)
     (D : Design) (h : slotDesign rule d query table = .ok D) :
     ∃ n named derived, Partition.units d query = .ok n ∧ rule.samplingDesignOver n = .ok named ∧
-      Draw.deriveSamplingDesign d query named table = .ok derived ∧
+      Sample.deriveSamplingDesign d query named table = .ok derived ∧
       ((rule = .all ∧ D = ⟨[.all, .all]⟩) ∨
-        (rule ≠ .all ∧ ∃ parsed, Draw.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed ∧
+        (rule ≠ .all ∧ ∃ parsed, Sample.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed ∧
           D = ⟨[oneStageOf (derived.getD parsed), .all]⟩)) := by
   unfold slotDesign at h
   obtain ⟨n, hn, h⟩ := bind_eq_ok.1 h
@@ -221,13 +221,13 @@ theorem samplingDesign_bound (d : Program) (query : Lean.Json) (rs : Array Flock
     (hlays : List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList
       pop.toList)
     (named : Lean.Json) (table : Option Lean.Json) (derived : Option Flock.Draw.SamplingDesign) (parsed : Flock.Draw.SamplingDesign)
-    (hd : Draw.deriveSamplingDesign d query named table = .ok derived)
-    (hp : Draw.flockSamplingDesign (samplingDesignObj named derived)
+    (hd : Sample.deriveSamplingDesign d query named table = .ok derived)
+    (hp : Sample.flockSamplingDesign (samplingDesignObj named derived)
       (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).length = .ok parsed)
     (W : Finset ℕ) (hW : W ⊆ range (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).length)
     (L : ℕ) :
     Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
-      Draw.sampleUnits (derived.getD parsed)
+      Sample.sampleUnits (derived.getD parsed)
         (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).length (bytesOf src) =
           .ok (units, read) ∧
         ∀ v ∈ W, (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).getD v 0 ∉ units) ≤
@@ -333,8 +333,8 @@ theorem sampleMisses : DrawMisses := by
   have hstep : ∀ src, E src → window (popUnits S).length (popBlocks (inputClass d)).length B = ∅ ∧
       ∃ units : Array ℕ, (∀ v ∈ window 0 (popUnits S).length B, (popUnits S).getD v 0 ∉ units) ∧
         ((rule = .all ∧ units = Array.range (popUnits S).length) ∨
-          (rule ≠ .all ∧ ∃ parsed read', Draw.flockSamplingDesign (samplingDesignObj named derived) (popUnits S).length = .ok parsed ∧
-            Draw.sampleUnits (derived.getD parsed) (popUnits S).length (bytesOf src) = .ok (units, read'))) := by
+          (rule ≠ .all ∧ ∃ parsed read', Sample.flockSamplingDesign (samplingDesignObj named derived) (popUnits S).length = .ok parsed ∧
+            Sample.sampleUnits (derived.getD parsed) (popUnits S).length (bytesOf src) = .ok (units, read'))) := by
     intro src hs
     obtain ⟨l', c, hs, hm⟩ := hev src hs
     obtain ⟨hl', draw, proved, read, hsel, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs

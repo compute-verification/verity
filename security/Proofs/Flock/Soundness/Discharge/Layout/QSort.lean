@@ -8,7 +8,7 @@ public import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
 import all Init.Data.Array.QSort.Basic
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 
 @[expose] public section
 

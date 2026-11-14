@@ -16,7 +16,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.EndToEnd.Joint.MT.Draw
+import Proofs.Flock.EndToEnd.Joint.MT.Sample
 import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded

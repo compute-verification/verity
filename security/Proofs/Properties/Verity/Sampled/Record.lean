@@ -89,9 +89,9 @@ def coinsAt {k : ℕ} (r : Fin k → FlockDeploy.Coin) : List FlockDeploy.Coin :
 def sampleBytes (cs : List FlockDeploy.Coin) : ByteArray := ⟨(cs.flatMap FlockDeploy.Coin.bytes).toArray⟩
 
 /-- **The units the coins' bytes `src` sample** under the session's sampling design over its population, as v2's challenger sample
-reads them (`Spot.Draw.sampleUnits`); a sample that fails samples every unit (`Live.L`). -/
+reads them (`Spot.Sample.sampleUnits`); a sample that fails samples every unit (`Live.L`). -/
 def drawn (A : Live) (src : ByteArray) : List ℕ :=
-  match _root_.Spot.Draw.sampleUnits A.design A.n src with
+  match _root_.Spot.Sample.sampleUnits A.design A.n src with
   | .ok (d, _) => d.toList
   | .error _ => List.range A.n
 

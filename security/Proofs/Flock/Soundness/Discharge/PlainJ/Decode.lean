@@ -21,7 +21,7 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Reps
 import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 import Proofs.Flock.Soundness.Discharge.Tables.Accepts

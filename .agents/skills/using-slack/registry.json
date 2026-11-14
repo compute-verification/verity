@@ -205,7 +205,7 @@
         "security/Proofs/Properties/Core/Period.lean",
         "security/Proofs/Properties/Core/Site.lean",
         "security/Proofs/Properties/Verity/SampledCoins.lean",
-        "security/Proofs/Properties/Verity/SampledDraw.lean",
+        "security/Proofs/Properties/Verity/SampledUnits.lean",
         "security/Proofs/Properties/Verity/SampledLog.lean",
         "security/Proofs/Properties/Verity/SampledRead.lean",
         "security/Properties/Annot.lean",

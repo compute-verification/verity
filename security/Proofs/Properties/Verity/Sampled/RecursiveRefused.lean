@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.SampledDraw
+public import Proofs.Properties.Verity.SampledUnits
 public import Proofs.Properties.Verity.Soundness
 
 /-!

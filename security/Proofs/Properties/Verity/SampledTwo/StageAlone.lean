@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.StageCut
 public import Proofs.Properties.Challenger.Coins
-public import Proofs.Properties.Verity.Sampled.RecordDraw
+public import Proofs.Properties.Verity.Sampled.RecordSample
 
 /-!
 # On two windows the first session's read holds none of the second stage's coins

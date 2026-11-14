@@ -9,7 +9,7 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 # A stage's sample reads no byte past its source
 
 `readsWithin`: `ReadsWithin` (`OfRun.lean`) at every held copy whose first-stage registration has no closure map. A
-sample takes its bytes in order (`Draw.take`), which throws where the source runs out, so a sample that ends at position
+sample takes its bytes in order (`Sample.take`), which throws where the source runs out, so a sample that ends at position
 `R` ends within the source: `sampleUnits_within`, and through the stages' samples, `select_within` (with no closure map)
 and `selectSecond_within`. The walk is `RunsAs.Released`'s, step for step, with "the position stays within the source"
 in place of "the same on any source with the same prefix".
@@ -70,7 +70,7 @@ theorem forIn_within {α β : Type} (f : α → β → StateT ℕ (Except String
 /-- **A sampler's reads end within the source**: `onWith` on `take` ends at its last read's end, which `take` gave. -/
 theorem onWith_within {ξ : ByteArray} {N : ℕ} (hN : 0 < N) {run : ByteArray → Option (Array ℕ)} {p : ℕ}
     {x : Option (Array ℕ) × ℕ}
-    (h : (Flock.Draw.onWith (fun need => Spot.Draw.take ξ need) N run).run p = .ok x) : x.2 ≤ ξ.size := by
+    (h : (Flock.Draw.onWith (fun need => Spot.Sample.take ξ need) N run).run p = .ok x) : x.2 ≤ ξ.size := by
   obtain ⟨u, p'⟩ := x
   obtain ⟨j, D, -, rfl, hs⟩ := onWith_take ξ N hN run p p' u h
   unfold StopsAt at hs
@@ -78,7 +78,7 @@ theorem onWith_within {ξ : ByteArray} {N : ℕ} (hN : 0 < N) {run : ByteArray �
 
 theorem stratifiedWith_within {ξ : ByteArray} {strata : Array Flock.Draw.Stratum} {p : ℕ}
     {x : Option (Array ℕ) × ℕ} (hp : p ≤ ξ.size)
-    (h : (Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take ξ need) strata).run p = .ok x) :
+    (h : (Flock.Draw.stratifiedWith (fun _ need => Spot.Sample.take ξ need) strata).run p = .ok x) :
     x.2 ≤ ξ.size := by
   unfold Flock.Draw.stratifiedWith at h
   try dsimp only at h
@@ -96,7 +96,7 @@ theorem stratifiedWith_within {ξ : ByteArray} {strata : Array Flock.Draw.Stratu
 
 theorem sampleWith_within {ξ : ByteArray} (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) {p : ℕ}
     {x : Option Flock.Draw.UnitSample × ℕ} (hp : p ≤ ξ.size)
-    (h : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) samplingDesign n).run p = .ok x) : x.2 ≤ ξ.size := by
+    (h : (Flock.Draw.drawWith (fun _ need => Spot.Sample.take ξ need) samplingDesign n).run p = .ok x) : x.2 ≤ ξ.size := by
   cases samplingDesign with
   | subset k =>
     unfold Flock.Draw.drawWith at h
@@ -122,9 +122,9 @@ theorem sampleWith_within {ξ : ByteArray} (samplingDesign : Flock.Draw.Sampling
 /-- **A sample reads no byte past its source**: the units a sampling design samples from `ξ`, having read `r.2` bytes, read them within
 `ξ`. -/
 theorem sampleUnits_within {ξ : ByteArray} {samplingDesign : Flock.Draw.SamplingDesign} {n : ℕ} {r : Array ℕ × ℕ}
-    (h : Spot.Draw.sampleUnits samplingDesign n ξ = .ok r) : r.2 ≤ ξ.size := by
-  unfold Spot.Draw.sampleUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) samplingDesign n).run 0 with
+    (h : Spot.Sample.sampleUnits samplingDesign n ξ = .ok r) : r.2 ≤ ξ.size := by
+  unfold Spot.Sample.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Sample.take ξ need) samplingDesign n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok y =>
     obtain ⟨o, rd⟩ := y
@@ -137,8 +137,8 @@ theorem sampleUnits_within {ξ : ByteArray} {samplingDesign : Flock.Draw.Samplin
       exact hb
 
 theorem sampleFirstRead_within {samplingDesign : Json} {n : ℕ} {ξ : ByteArray} {r : Json × ℕ}
-    (h : Spot.Draw.sampleFirstRead samplingDesign n ξ = .ok r) : r.2 ≤ ξ.size := by
-  unfold Spot.Draw.sampleFirstRead at h
+    (h : Spot.Sample.sampleFirstRead samplingDesign n ξ = .ok r) : r.2 ≤ ξ.size := by
+  unfold Spot.Sample.sampleFirstRead at h
   obtain ⟨parsed, hp, h⟩ := bind_eq_ok.1 h
   obtain ⟨ur, hu, h⟩ := bind_eq_ok.1 h
   obtain ⟨u, rd⟩ := ur

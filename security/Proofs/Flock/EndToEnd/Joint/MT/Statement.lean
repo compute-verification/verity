@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.EndToEnd.Joint.MT.Draw
+public import Proofs.Flock.EndToEnd.Joint.MT.Sample
 public import Proofs.Flock.EndToEnd.Period.Run
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 public import Proofs.Flock.Soundness.Assumptions.Zk

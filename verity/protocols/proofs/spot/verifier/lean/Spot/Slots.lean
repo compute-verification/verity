@@ -12,7 +12,7 @@ verifier evaluates, as the claims read it, and the slots of the proof blocks a s
   `Q_word` unit owns, which another unit's gates may interleave. The input class is one stratum (none when the root has
   no input) of every gate of the root's input nodes, in gate order, each a proof block of its own; the claims' design
   reads it `all`, as `partition_object`'s input unit is never sampled. No run opens an input row on its own: `Run.run`
-  proves the sampled proof blocks (`Draw.proved`), whose session (`HmRow.drawn`) opens only the rows its units read, and
+  proves the sampled proof blocks (`Sample.proved`), whose session (`HmRow.drawn`) opens only the rows its units read, and
   registration opens none. So an input row is opened only through a sampled proof block that reads it.
 * **Slots.** A proof block's slot is its index in class, stratum and block order (`Partition.blocks`). Where no two
   strata's units interleave, unit `i`'s slot is `i`.

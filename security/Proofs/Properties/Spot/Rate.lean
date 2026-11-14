@@ -142,7 +142,7 @@ theorem textOver_cases {t t' : String} {n : Nat} {sizes : List Nat} (hr : Select
       · rename_i l hl
         have hlaw : getD l "law" = .str "bernoulli" := SpotFlock.str_of_jeq (SpotFlock.jeq_symm hr)
         refine Or.inr (Or.inr (Or.inr ⟨l, rfl, hl, ?_⟩))
-        unfold Draw.bernoulli
+        unfold Sample.bernoulli
         rw [hlaw]
         rfl
       · exact absurd hr (by simp)

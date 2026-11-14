@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
 public import Proofs.Flock.Soundness.Discharge.Layout.Site
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 

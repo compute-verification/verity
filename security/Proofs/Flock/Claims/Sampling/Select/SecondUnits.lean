@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Select.SecondCount
 public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
-import Spot.Draw
+import Spot.Sample
 import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take
 import Proofs.Flock.Claims.Sampling.Select.Steps
@@ -16,13 +16,13 @@ import Proofs.Flock.Soundness.ExecStrataOf
 `Flock.Draw.stratifiedWith` samples each stratum's `k` local indices (`Flock.Draw.subset`), maps them to the stratum's
 units, and returns the strata's units together, sorted. Over strata whose slots hold each unit once, the sample it
 returns is therefore strictly ascending, lies in the strata's slots, and holds exactly each stratum's `k` units in that
-stratum's slots: what `Draw.checkDraw` asks of a sample's units.
+stratum's slots: what `Sample.checkDraw` asks of a sample's units.
 
 * `subset_nodup`: a `subset` sample that succeeds holds each index once, each below `n`.
 * `pieces_count`: lists taken one from each stratum's slots, each without repeats, are together without repeats, and
   the ones in a stratum's slots are that stratum's list.
 * `stratifiedWith_parts`: a stratified sample that ends is the strata's `subset` samples, as units, sorted.
-* `stratifiedWith_units`, `drawUnits_work_units`: the three facts above, of `stratifiedWith` and of `Draw.sampleUnits`
+* `stratifiedWith_units`, `drawUnits_work_units`: the three facts above, of `stratifiedWith` and of `Sample.sampleUnits`
   under a work sampling design.
 -/
 
@@ -122,7 +122,7 @@ theorem pieces_count {α : Type} (E : α → List ℕ) {St : List α} {Ps : List
 /-- **A stratified sample that ends is the strata's `subset` samples, as units, sorted**: one sample `Dl` per stratum,
 of its `k` among its `size` local indices, the units `out` those index in order, and `D` those units sorted. -/
 theorem stratifiedWith_parts (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
-    (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run p = .ok (some D, p')) :
+    (h : (Flock.Draw.stratifiedWith (fun _ need => Sample.take src need) strata).run p = .ok (some D, p')) :
     ∃ (Ds : List (Array ℕ)) (out : Array ℕ),
       List.Forall₂ (fun (s : Flock.Draw.Stratum) (Dl : Array ℕ) => ∃ b, Flock.Draw.subset s.k s.size b = some Dl)
         strata.toList Ds ∧
@@ -139,7 +139,7 @@ theorem stratifiedWith_parts (src : ByteArray) (strata : Array Flock.Draw.Stratu
     show ([:strata.size] : Std.Legacy.Range).step = 1 from rfl] at h
   have loop : ∀ (l : List ℕ) (out : Array ℕ) (pos : ℕ) (r : Option (Option (Array ℕ))) (out' : Array ℕ) (pos₁ : ℕ),
       (forIn (m := StateT ℕ (Except String)) l ((none : Option (Option (Array ℕ))), out) (fun i __s => do
-          let __x ← Flock.Draw.onWith (fun need => Draw.take src need) strata[i]!.need
+          let __x ← Flock.Draw.onWith (fun need => Sample.take src need) strata[i]!.need
             (Flock.Draw.subset strata[i]!.k strata[i]!.size)
           match __x with
           | some local_ => pure (ForInStep.yield (none, __s.2 ++ Array.map strata[i]!.unit local_))
@@ -161,7 +161,7 @@ theorem stratifiedWith_parts (src : ByteArray) (strata : Array Flock.Draw.Stratu
     | cons i is ih =>
       intro out pos r out' pos₁ hl
       rw [List.forIn_cons, StateT.run_bind, StateT.run_bind] at hl
-      cases ho : (Flock.Draw.onWith (fun need => Draw.take src need) strata[i]!.need
+      cases ho : (Flock.Draw.onWith (fun need => Sample.take src need) strata[i]!.need
           (Flock.Draw.subset strata[i]!.k strata[i]!.size)).run pos with
       | error e => rw [ho] at hl; exact absurd hl (by rw [bind_error, bind_error]; simp)
       | ok x =>
@@ -219,7 +219,7 @@ theorem piece_of_subset {s : Flock.Draw.Stratum} {b : ByteArray} {Dl : Array ℕ
 /-- **A stratified sample over strata whose slots hold each unit once**: the units it returns are strictly ascending,
 each in some stratum's slots, and each stratum's `k` of them in that stratum's. -/
 theorem stratifiedWith_units (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
-    (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run p = .ok (some D, p'))
+    (h : (Flock.Draw.stratifiedWith (fun _ need => Sample.take src need) strata).run p = .ok (some D, p'))
     (hnd : (strata.toList.flatMap fun s => expand s.units.toList).Nodup) :
     D.toList.Pairwise (· < ·) ∧ (∀ u ∈ D.toList, u ∈ strata.toList.flatMap fun s => expand s.units.toList) ∧
       ∀ s ∈ strata.toList, (D.toList.filter fun u => decide (u ∈ expand s.units.toList)).length = s.k := by
@@ -253,11 +253,11 @@ theorem stratifiedWith_units (src : ByteArray) (strata : Array Flock.Draw.Stratu
 
 /-- A work sampling design's sample that ends is its strata's stratified sample. -/
 theorem drawUnits_work_run {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray} {units : Array ℕ}
-    (h : Draw.sampleUnits (.work K ws) n src = .ok (units, read)) :
-    (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) (ws.map (·.toStratum))).run 0 =
+    (h : Sample.sampleUnits (.work K ws) n src = .ok (units, read)) :
+    (Flock.Draw.stratifiedWith (fun _ need => Sample.take src need) (ws.map (·.toStratum))).run 0 =
       .ok (some units, read) := by
-  unfold Draw.sampleUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) (.work K ws) n).run 0 with
+  unfold Sample.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Sample.take src need) (.work K ws) n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
     obtain ⟨r, read'⟩ := x
@@ -273,7 +273,7 @@ theorem drawUnits_work_run {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} 
     unfold Flock.Draw.drawWith at hw
     dsimp only at hw
     rw [StateT.run_bind] at hw
-    cases ho : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) (ws.map (·.toStratum))).run 0 with
+    cases ho : (Flock.Draw.stratifiedWith (fun _ need => Sample.take src need) (ws.map (·.toStratum))).run 0 with
     | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
     | ok y =>
       obtain ⟨v, p⟩ := y
@@ -289,7 +289,7 @@ theorem drawUnits_work_run {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} 
 /-- **A work sampling design's sample over strata whose slots are the units `[0, m)` in order**: the units it returns
 are strictly ascending, below `m`, and each stratum's `k` of them in that stratum's slots. -/
 theorem drawUnits_work_units {K n m read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray}
-    {units : Array ℕ} (h : Draw.sampleUnits (.work K ws) n src = .ok (units, read))
+    {units : Array ℕ} (h : Sample.sampleUnits (.work K ws) n src = .ok (units, read))
     (hon : (ws.map (·.toStratum)).toList.flatMap (fun s => expand s.units.toList) = List.range m) :
     units.toList.Pairwise (· < ·) ∧ (∀ u ∈ units.toList, u < m) ∧
       ∀ s ∈ ws.toList, (units.toList.filter fun u => decide (u ∈ expand s.units.toList)).length = s.k := by

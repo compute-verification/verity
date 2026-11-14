@@ -858,7 +858,7 @@ sample's units, the design's links and wires and the rows their units read, and 
 registered reads, which the registration fixes before the run. -/
 def ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) : Spot.SecondStage.Own :=
   { sample := h.reg.sample (src c₀), parts := some (partsAt h (h.reg.sample (src c₀)).size), interior := rec,
-    boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
+    boundary := st.record, drawn := (Spot.Sample.proved draw).map Int.toNat, links := h.links, wires := h.wires,
     rows := h.rows, refs := refsOf h, refReads := refRegisteredOf h }
 
 /-- **Round 2's statement check passes template `t`'s statement `S`** against the template's part, with what the

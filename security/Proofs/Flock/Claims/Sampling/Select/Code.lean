@@ -20,7 +20,7 @@ And of `Spot.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"ste
 the population and R1–R8 (`Docket.check`) under the sampling design of the rule over the population (`Select.Rule.over`)
 and the work table it expands (`Select.Rule.tableOver`), ran
 the sample of record (`Select.select`, under `Select.resolve`'s rule) on the challenger's bytes (`source`) and held it to
-the registration (`Draw.checkDraw`), and its `draw` and `read` are that sample's (under a two-stage rule, the first
+the registration (`Sample.checkDraw`), and its `draw` and `read` are that sample's (under a two-stage rule, the first
 stage's, with the second stage's after them).
 -/
 
@@ -128,11 +128,11 @@ theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
       rule.samplingDesignOver n = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
       ¬(!(Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
-      ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧
+      ∃ derived, Sample.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧
         ∃ resolved, Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
         ∃ draw rest read, Select.select resolved i.params.verifier.program i.params.verifier.query
             workTable i.closure i.source = .ok (draw, rest, read) ∧
-          ¬(!(Draw.checkDraw draw (getD i.record "population") derived).isEmpty) = true ∧
+          ¬(!(Sample.checkDraw draw (getD i.record "population") derived).isEmpty) = true ∧
           ∃ receipt symbol pub audit staged, j = Json.mkObj ([("receipt", receipt), ("draw", draw),
             ("read", Lean.toJson read), ("symbol", symbol), ("public", pub), ("audit", audit)] ++ staged) := by
   unfold run at h

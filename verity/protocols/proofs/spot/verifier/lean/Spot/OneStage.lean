@@ -155,13 +155,13 @@ private def nats (j : Json) (what : String) : V (Array Nat) := do
     | some n => pure n
     | none => throw s!"{what} is not a list of natural numbers"
 
-/-- The agreed sampling design, a rule `Draw.derive` expands. -/
+/-- The agreed sampling design, a rule `Sample.derive` expands. -/
 def rule (samplingDesign : Json) : V Json := do
   match getD samplingDesign "law" with
   | .str "bernoulli" =>
     exactly samplingDesign #["law", "p"] "the law"
     let .str p := getD samplingDesign "p" | throw "the law's p is not NUM/DEN"
-    if (Draw.probability? p).isNone then throw "the law's p is not NUM/DEN, 0 <= NUM <= DEN, 0 < DEN"
+    if (Sample.probability? p).isNone then throw "the law's p is not NUM/DEN, 0 <= NUM <= DEN, 0 < DEN"
   | .str "subset" | .str "stratified" | .str "work" =>
     exactly samplingDesign #["k", "law"] "the law"
     if (nat? (getD samplingDesign "k")).isNone then throw "the law's k is not a natural number"
@@ -477,14 +477,14 @@ def CERTIFIED_REFUSED : String :=
   "the parameters name certified entries, which the registration check and the run of record read: the sampled " ++
   "audit takes none"
 
-/-- The parameters (`paramsParsed`), with every `bernoulli` sampling design refused, at any `p` (`Draw.bernoulli`): the
+/-- The parameters (`paramsParsed`), with every `bernoulli` sampling design refused, at any `p` (`Sample.bernoulli`): the
 sampled audit's soundness statement covers none. Parameters that name `certified` are refused too
 (`CERTIFIED_REFUSED`): the registration check and the run of record read the entries (`Pieces`), and the audits that
 read their parameters here take none. -/
 def paramsOfJson (j : Json) : V Params := do
   if (field? j "certified").isSome then throw CERTIFIED_REFUSED
   let p ← paramsParsed j
-  if Draw.bernoulli p.verifier.samplingDesign then throw Draw.BERNOULLI
+  if Sample.bernoulli p.verifier.samplingDesign then throw Sample.BERNOULLI
   return p
 
 def commitmentOf (b : ByteArray) : V Commitment := do
@@ -568,15 +568,15 @@ def coinsOf (p : Params) (c : Commitment) (e : Evidence) : V (Option ByteArray) 
 /-- The sampling design `samplingDesign`, refused when it is a Bernoulli one: the sampled audit's soundness statement covers none,
 at any `p`. -/
 def coveredDesign : Flock.Draw.SamplingDesign → V Flock.Draw.SamplingDesign
-  | .bernoulli _ _ => throw Draw.BERNOULLI
+  | .bernoulli _ _ => throw Sample.BERNOULLI
   | samplingDesign => pure samplingDesign
 
 /-- The sample the coins `src` give over `population` units under the expanded `samplingDesign` (`Select.select`'s for a sampling design rule):
 its units, and the number of bytes of `src` it read. A Bernoulli sampling design is refused (`coveredDesign`). -/
 def sampledFrom (v : Docket.Verifier) (samplingDesign : Json) (population : Nat) (src : ByteArray) : V (Array Nat × Nat) := do
-  let derived ← Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
-  let l ← coveredDesign (derived.getD (← Draw.flockSamplingDesign samplingDesign population))
-  Draw.sampleUnits l population src
+  let derived ← Sample.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
+  let l ← coveredDesign (derived.getD (← Sample.flockSamplingDesign samplingDesign population))
+  Sample.sampleUnits l population src
 
 /-- Why the sample is not the one the coins `src` give under `samplingDesign` (`sampledFrom`), every coin opened read; none when it is. -/
 def coinsReason (v : Docket.Verifier) (samplingDesign rec_ draw : Json) (src : ByteArray) : Option String :=
@@ -601,10 +601,10 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
   let rec_ := c.record
   let codes := Docket.check rec_ v
   if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+  match Sample.derive v.program v.query v.samplingDesign v.workTable with
   | .error err => .reject s!"registration: R1-law: {err}"
   | .ok samplingDesign =>
-  let drawCodes := Draw.checkDraw e.draw (getD rec_ "population") samplingDesign
+  let drawCodes := Sample.checkDraw e.draw (getD rec_ "population") samplingDesign
   if !drawCodes.isEmpty then .reject s!"draw: {", ".intercalate drawCodes.toList}" else
   let failed := recordChecks rec_ (Flock.hexOf c.digest) e (v.certified.map (·.1.value))
   if !failed.isEmpty then .reject s!"the audit's checks failed: {", ".intercalate failed.toList}" else
@@ -620,7 +620,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
     let perTemplate := if jeq (getD samplingDesign "law") "stratified" || jeq (getD samplingDesign "law") "work" then
       strata.map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none
     .accept
-      { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
+      { drawn := units, proved := (Sample.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
         bound := Bound.boundOf population draw p.delta, perTemplate, complete := Record.allRan e.verdicts }
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := population, draw := some draw }],
@@ -631,16 +631,16 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
 is, and when the sampling design doesn't derive, which `check` refuses. -/
 def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Option String :=
   let v := p.verifier
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+  match Sample.derive v.program v.query v.samplingDesign v.workTable with
   | .ok samplingDesign => coinsReason v samplingDesign c.record e.draw src
   | .error _ => none
 
 /-- Whether the coins `src` run out before the sample under the verifier's sampling design as derived ends (`sampledFrom` refused with
-`Draw.RAN_OUT`); false when the sampling design doesn't derive or the record names no population, which `check` refuses. -/
+`Sample.RAN_OUT`); false when the sampling design doesn't derive or the record names no population, which `check` refuses. -/
 def ranOut (p : Params) (c : Commitment) (src : ByteArray) : Bool :=
   let v := p.verifier
-  match Draw.derive v.program v.query v.samplingDesign v.workTable, nat? (getD c.record "population") with
-  | .ok samplingDesign, some n => match Draw.ranOutOf (sampledFrom v samplingDesign n src) with | .ok b => b | .error _ => false
+  match Sample.derive v.program v.query v.samplingDesign v.workTable, nat? (getD c.record "population") with
+  | .ok samplingDesign, some n => match Sample.ranOutOf (sampledFrom v samplingDesign n src) with | .ok b => b | .error _ => false
   | _, _ => false
 
 /-- The check at the coins `ξ` (module docstring, **check**): with coins, a refusal when they don't sample the sample

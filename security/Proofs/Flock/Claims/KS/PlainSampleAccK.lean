@@ -44,7 +44,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop

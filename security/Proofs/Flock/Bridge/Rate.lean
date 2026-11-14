@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Bridge.Sample
 
 /-!
 # A sampling design at a rate samples at least the rate of its units

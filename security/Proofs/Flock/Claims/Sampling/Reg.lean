@@ -92,7 +92,7 @@ is refused. -/
 def RegTwo.checked (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) : List ℕ :=
   match Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ with
   | .ok (draw, _) => (List.range N).filter fun v =>
-      g.always v || (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v
+      g.always v || (Spot.Sample.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v
   | .error _ => List.range N
 
 /-- **The two-stage sampled verifier's code with its Lean samples**: `c` with `checked` the two stages' on the

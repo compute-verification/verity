@@ -6,7 +6,7 @@ public import Proofs.Properties.Verity.SampledTwo.SecondRead
 public import Proofs.Properties.Verity.SampledTwo.RoundsRise
 public import Proofs.Properties.Verity.SampledTwo.PrefixFixed
 public import Proofs.Properties.Verity.SampledTwo.SessionDev
-public import Proofs.Properties.Verity.SampledTwo.DrawRoots
+public import Proofs.Properties.Verity.SampledTwo.SampleRoots
 public import Proofs.Properties.Verity.SampledTwo.GoodCase
 public import Proofs.Flock.Claims.Sampling.Select.Second
 public import Proofs.Flock.Claims.Sampling.Select.OS
@@ -22,7 +22,7 @@ registration's digest: the second stage's first coin is released after it. So th
 is the bytes the release that ends the log before round 1 answers (`Messages.endAnswers`), the string it shows is the
 text that digest hashes (`interiorTagged`), and the round's message is that string without its tag.
 
-**The second stage reads a coin.** The check refuses a sampling design with no stratum (`Draw.strataProblem`), and each
+**The second stage reads a coin.** The check refuses a sampling design with no stratum (`Sample.strataProblem`), and each
 stratum's sample reads at least 64 bytes, so an accepted case's second-stage bytes are at least 64
 (`VStar.Recursive.SampledTwo.second_source_size`). The log shows those bytes as coins of the second stage's family
 (`SecondShown`), so it holds one, and no premise says the design has a stratum.
@@ -59,11 +59,11 @@ open Lean (Json)
 
 /-! ## The second stage's sample reads a coin -/
 
-/-- **A design the check does not refuse has a stratum**: where `Draw.strataProblem` is false, the design's `strata`
+/-- **A design the check does not refuse has a stratum**: where `Sample.strataProblem` is false, the design's `strata`
 are an array that is not empty. -/
-theorem strataProblem_strata {samplingDesign : Json} {n : Int} (h : ¬ Draw.strataProblem samplingDesign n = true) :
+theorem strataProblem_strata {samplingDesign : Json} {n : Int} (h : ¬ Sample.strataProblem samplingDesign n = true) :
     ∃ ss, getD samplingDesign "strata" = .arr ss ∧ ss.isEmpty = false := by
-  unfold Draw.strataProblem at h
+  unfold Sample.strataProblem at h
   split at h
   · rename_i ss hss
     refine ⟨ss, hss, ?_⟩
@@ -90,13 +90,13 @@ theorem forall₂_size_pos {α β : Type} {R : α → β → Prop} {a : Array α
   have h2 := size_pos_of_isEmpty hne
   omega
 
-/-- **The second stage's design has a stratum**: `Select.secondSamplingDesign`'s design, as `Draw.flockSamplingDesign` parses it, is the
+/-- **The second stage's design has a stratum**: `Select.secondSamplingDesign`'s design, as `Sample.flockSamplingDesign` parses it, is the
 work design at `k = 1` over at least one stratum, since the check refuses a design with none
-(`Draw.strataProblem`). -/
+(`Sample.strataProblem`). -/
 theorem second_design_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.SamplingDesign)
-    (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
+    (h : Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧ 0 < ws.size := by
-  unfold Draw.flockSamplingDesign at h
+  unfold Sample.flockSamplingDesign at h
   rw [getD_secondSamplingDesign_samplingDesign] at h
   dsimp only at h
   split at h

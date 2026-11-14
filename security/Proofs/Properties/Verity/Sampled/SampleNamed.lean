@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.Sampled.RecordDraw
+public import Proofs.Properties.Verity.Sampled.RecordSample
 public import Proofs.Properties.Composition
 
 /-!

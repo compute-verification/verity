@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Window.Steps
 public import Proofs.Properties.Verity.Sampled.Window.Assembled
-public import Proofs.Properties.Verity.Sampled.RecordDraw
+public import Proofs.Properties.Verity.Sampled.RecordSample
 
 /-!
 # SPOT's leg over a window: the sessions of the window's one sample

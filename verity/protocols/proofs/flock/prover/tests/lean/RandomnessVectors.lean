@@ -1,19 +1,19 @@
-import Proofs.Flock.Soundness.PlanDraw
+import Proofs.Flock.Soundness.PlanSample
 
 /-!
 Vectors for `verity.randomness` v2 and the PoUW window draw, from the soundness package's Lean spec
-(`FlockSoundness/Randomness.lean`, `FlockSoundness/PlanDraw.lean`), for `tests/fixtures/randomness_lean.json`.
+(`FlockSoundness/Randomness.lean`, `FlockSoundness/PlanSample.lean`), for `tests/fixtures/randomness_lean.json`.
 
 * `kat`: `verity/primitives/randomness/tests/vectors.json` recomputed from its inputs, its `wide` cases under `deriveWide` and
   `streamWide`, which the tests hold equal to it.
 * `extra`: keys, streams, `uniform` and `subset` values on inputs of the spec's own, among them PoUW's closure-draw domain
   and `plan.draw`'s `("call", forward, position, "stratum", name)` contexts, which Python's `Key` must match.
-* `window`: `PlanDraw.executionPhase` on small executionPhases: the draw of each, and a repeated call index refused.
+* `window`: `PlanSample.executionPhase` on small executionPhases: the draw of each, and a repeated call index refused.
 
 Regenerate with `tests/lean/generate.sh`.
 -/
 
-open Lean FlockSoundness.Randomness FlockSoundness.PlanDraw
+open Lean FlockSoundness.Randomness FlockSoundness.PlanSample
 
 def hexOf (b : ByteArray) : String :=
   let d := "0123456789abcdef".toList.toArray

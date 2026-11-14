@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.Reading
 public import Proofs.Properties.Verity.SampledTwo.Steps
-public import Proofs.Properties.Verity.SampledDraw
+public import Proofs.Properties.Verity.SampledUnits
 public import Proofs.Properties.Challenger.CanonRead
 public import Proofs.Flock.SpotFlock.Jeq
 public import all Spot.Run
@@ -144,8 +144,8 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
         (i.source.extract 0 read) = some code → False) ∧
       ∃ (inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)) (acc₂ : Bool)
         (staged : List (String × Json)) (receipt symbol shown audit : Json),
-        Spot.Run.secondStage i ((Spot.Draw.proved draw).map Int.toNat) = .ok (.ok inner) ∧
-        Spot.Run.interiorAudit form i ((Spot.Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
+        Spot.Run.secondStage i ((Spot.Sample.proved draw).map Int.toNat) = .ok (.ok inner) ∧
+        Spot.Run.interiorAudit form i ((Spot.Sample.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
         j = Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read), ("symbol", symbol),
           ("public", shown), ("audit", audit)] ++ staged) := by
   unfold Spot.Run.run at h

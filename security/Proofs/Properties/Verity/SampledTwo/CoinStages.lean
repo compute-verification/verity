@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
 public import Proofs.Properties.Verity.SampledTwo.CoinMapDistribution
-public import Proofs.Properties.Verity.SampledDraw
+public import Proofs.Properties.Verity.SampledUnits
 public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!

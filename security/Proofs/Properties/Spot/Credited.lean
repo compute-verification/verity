@@ -115,7 +115,7 @@ theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {
     {e : OneStage.Evidence} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : OneStage.checkAt p c (some ξ) e = .accept pub prof) (hcl : field? e.draw "closure" = none) :
     ∃ samplingDesign n units read,
-      Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable = .ok samplingDesign ∧
+      Sample.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable = .ok samplingDesign ∧
       nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.verifier samplingDesign n ξ = .ok (units, read) ∧
       e.provedUnits = units.qsort (· < ·) := by
   cases hw : OneStage.coinsWhy p c e ξ with
@@ -125,7 +125,7 @@ theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {
   | none =>
     simp only [OneStage.checkAt, Option.bind_some, hw] at h
     obtain ⟨samplingDesign, -, n, hreg, hdrawn, hunits, -, -, hn, -, -⟩ := acceptMeans p c e pub prof h
-    have hder : Draw.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable = .ok samplingDesign :=
+    have hder : Sample.derive p.verifier.program p.verifier.query p.verifier.samplingDesign p.verifier.workTable = .ok samplingDesign :=
       hreg.1.2.2.2.1
     obtain ⟨-, -, -, -, -, us, xs, hus, hxs, hasc, h0, -⟩ := hdrawn
     simp only [OneStage.coinsWhy, hder] at hw
@@ -145,9 +145,9 @@ theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {
       · rename_i hne
         have hu : units = us.filterMap nat? := by simpa only [bne_iff_ne, ne_eq, not_not] using hne
         refine ⟨samplingDesign, n, units, read, hder, hn, hd, ?_⟩
-        have hp : Draw.proved e.draw = xs.qsort (· < ·) := by
+        have hp : Sample.proved e.draw = xs.qsort (· < ·) := by
           have hgc : getD e.draw "closure" = .null := by simp only [getD, hcl, Option.getD_none]
-          unfold Draw.proved
+          unfold Sample.proved
           dsimp only
           rw [hus, hgc]
           dsimp only
@@ -213,7 +213,7 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ s pubB B record samplingDesign n units read, e.sessions = #[s] ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
-      Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable =
+      Sample.derive p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable =
         .ok samplingDesign ∧
       nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.base.verifier samplingDesign n ξ = .ok (units, read) ∧
       OneStageZk.provedUnits pubB record = .ok (units.qsort (· < ·)) := by
@@ -317,7 +317,7 @@ theorem unitsAt_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : One
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ s pubB B record samplingDesign n units read, e.sessions = #[s] ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
-      Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable =
+      Sample.derive p.base.verifier.program p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable =
         .ok samplingDesign ∧
       nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.base.verifier samplingDesign n ξ = .ok (units, read) ∧
       ∀ (tags : Flock.Tags) (cc : Flock.Circuit) (pi : Flock.HmIn.Ports) (P : Flock.Public) (D : Json),

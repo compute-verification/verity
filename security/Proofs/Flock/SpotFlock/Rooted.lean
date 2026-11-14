@@ -5,7 +5,7 @@ public import Proofs.Flock.Bridge.TransportsRefs
 public import Proofs.Flock.Claims.Bridge.Transports
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
 public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 public import Proofs.Flock.Soundness.Discharge.Layout.QSort
 public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 

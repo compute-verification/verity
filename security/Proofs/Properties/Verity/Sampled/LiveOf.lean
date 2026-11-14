@@ -10,7 +10,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
 public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 public import Proofs.Flock.Claims.ZK.MaskedTables
 
 /-!
@@ -93,12 +93,12 @@ theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp
 /-! ## The sampling design -/
 
 /-- **Where v2 samples, `samplingDesignAt` reads `designAt`'s design**: at a verifier whose program the descriptor `desc` parses
-to, under the sampling design object `Draw.derive` writes, a sample `sampledFrom` makes is under `sampledDesign`'s design
+to, under the sampling design object `Sample.derive` writes, a sample `sampledFrom` makes is under `sampledDesign`'s design
 (`samplesUnder_of_sampledFrom`), which is `designAt`'s there and the one `samplingDesignAt` reads: the design `deriveSamplingDesign` expands,
 else the one `flockSamplingDesign` parses from the object. -/
 theorem samplingDesignAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Docket.Verifier} {lo : Json}
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
-    (hlo : _root_.Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
+    (hlo : _root_.Spot.Sample.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : _root_.Spot.OneStage.sampledFrom v lo n src = .ok r) :
     samplingDesignAt v n = .ok (Flock.Bridge.designAt desc v.query v.samplingDesign v.workTable n) := by
   obtain ⟨samplingDesign, ⟨hl, -⟩, -⟩ := Flock.Bridge.samplesUnder_of_sampledFrom hp hlo h
@@ -109,7 +109,7 @@ theorem samplingDesignAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Docket.Ve
     rw [hl]
   rw [hdes]
   have hlo' := hlo
-  unfold _root_.Spot.Draw.derive at hlo'
+  unfold _root_.Spot.Sample.derive at hlo'
   obtain ⟨derived', hd', hlo'⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 hlo'
   obtain rfl : derived' = derived := Except.ok.inj (hd'.symm.trans hd)
   obtain rfl : Properties.Spot.SecurityProofs.samplingDesignObj v.samplingDesign derived' = lo := Except.ok.inj hlo'

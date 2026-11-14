@@ -4,7 +4,7 @@ public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Assumptions.NCP.Assumptions
 public import Proofs.Flock.Soundness.Audit.Extraction
-public import Proofs.Flock.Soundness.Audit.RegDraw
+public import Proofs.Flock.Soundness.Audit.RegSample
 public import Proofs.Flock.Soundness.Audit.Window
 
 /-!

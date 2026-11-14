@@ -33,7 +33,7 @@ open OneStage (Params Commitment Evidence Public)
 clauses, the last at `opened`: when the record registers values or `opened` holds reads, those reads were opened
 against exactly the record's `{value: root}` (`Record.registeredRoots`). -/
 def UnitsAt (c : Commitment) (e : Evidence) (opened : Option (Array (String × Json))) : Prop :=
-  e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
+  e.instances = (Sample.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Sample.proved e.draw ∧
   Receipt c e ∧
   (∀ served, e.served = some served →
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧

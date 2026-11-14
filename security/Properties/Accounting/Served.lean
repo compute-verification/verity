@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The served window's units and sample are the service's, per call (`Spot.Slots.layout`, `Draw.sampleUnits`)
+# The served window's units and sample are the service's, per call (`Spot.Slots.layout`, `Sample.sampleUnits`)
 
 The served replacement of `Properties.Compose.UnitsOfLayout` for a window of per-call Programs
 (`Accounting.Served.Shape`, `Accounting.Served.Tie`). `UnitsOfLayout` reads one Program's partition and puts every
@@ -53,7 +53,7 @@ the served schedule, which `Tie.commit` and `Tie.receipt` state. What stays of i
 * **population** (`ServedUnits`): each linear's Program has the shape's unit count, and the declared circuit's units are
   the window's `population`;
 * **the sample** (`SampleMissesSubset`): the verifier's `subset:K_d` sample over the window's population from `L` uniform bytes
-  (`Spot.Draw.sampleUnits`, what `verity-verify-proof draw --population N --k K` runs) misses a set `U` no more often
+  (`Spot.Sample.sampleUnits`, what `verity-verify-proof draw --population N --k K` runs) misses a set `U` no more often
   than `Pouw.Window.subsetDraw K_d` of a uniform permutation does. It is over the code alone, like
   `Properties.Spot.DrawMisses`.
 
@@ -105,7 +105,7 @@ probability at most the probability that `Pouw.Window.subsetDraw K` of a uniform
 def SampleMissesSubset : Prop :=
   ∀ (K N L : ℕ) (U : Finset ℕ), K ≤ N →
     prob (fun src : Fin L → Fin 256 => ∃ r,
-        Spot.Draw.sampleUnits (.subset K) N (Properties.Spot.bytesOf src) = .ok r ∧
+        Spot.Sample.sampleUnits (.subset K) N (Properties.Spot.bytesOf src) = .ok r ∧
           ∀ u ∈ U, u ∉ r.1) ≤
       prob (fun β : Equiv.Perm (Fin N) => ∀ t ∈ Pouw.Window.subsetDraw K β, t.val ∉ U)
 

@@ -5,7 +5,7 @@ public import Proofs.Flock.Claims.Sampling.ExecBernoulli
 public import Proofs.Flock.Claims.Sampling.Select.Layout
 public import Proofs.Flock.Claims.Sampling.Select.Steps
 public import Proofs.Flock.Claims.Sampling.Select.Take
-public import Properties.Spot.Draw
+public import Properties.Spot.Sample
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,7 +40,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Claims.Sampling.Samples
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
@@ -134,10 +134,10 @@ theorem Pr_le_of_prCoin {L : ℕ} (E : (Fin L → Fin 256) → Prop) (q : ℝ≥
 `((den − num)/den)^|U|`. -/
 theorem one_bound (n : ℕ) (U : Finset ℕ) (hU : U ⊆ range n) (L : ℕ) :
     (∀ k, k ≤ n → Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
-        Draw.sampleUnits (.subset k) n (bytesOf src) = .ok (units, read) ∧ ∀ u ∈ U, u ∉ units) ≤
+        Sample.sampleUnits (.subset k) n (bytesOf src) = .ok (units, read) ∧ ∀ u ∈ U, u ∉ units) ≤
       ((n - U.card).choose k : ℝ) / (n.choose k : ℝ)) ∧
     (∀ num den, 0 < den → num ≤ den → Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
-        Draw.sampleUnits (.bernoulli num den) n (bytesOf src) = .ok (units, read) ∧ ∀ u ∈ U, u ∉ units) ≤
+        Sample.sampleUnits (.bernoulli num den) n (bytesOf src) = .ok (units, read) ∧ ∀ u ∈ U, u ∉ units) ≤
       (((den - num : ℕ) : ℝ) / den) ^ U.card) := by
   refine ⟨fun k hk => ?_, fun num den hden h => ?_⟩
   · have hle := seqMiss_le [(⟨2 * k * Flock.Draw.width n + 64, Flock.Draw.subset k n, fun D => ∀ u ∈ U, u ∉ D⟩,
@@ -273,7 +273,7 @@ sizes and samples, its strata's units in order as slots. -/
 theorem strata_bound (samplingDesign : Flock.Draw.SamplingDesign) (St : Array Flock.Draw.Stratum)
     (hSt : (∃ k, samplingDesign = .stratified k St) ∨ ∃ k ws, samplingDesign = .work k ws ∧ St = ws.map (·.toStratum)) (n : ℕ)
     (W : Finset ℕ) (L : ℕ) :
-    Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read, Draw.sampleUnits samplingDesign n (bytesOf src) = .ok (units, read) ∧
+    Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read, Sample.sampleUnits samplingDesign n (bytesOf src) = .ok (units, read) ∧
       ∀ v ∈ W, (St.toList.flatMap fun s => expand s.units.toList).getD v 0 ∉ units) ≤
     strataPa (St.toList.map fun s => (s.size, s.k)) 0 W := by
   have hstages : ∀ units : Array ℕ, samplingDesignStages samplingDesign n (fun i Dl => ∀ x ∈ Dl, unitOf samplingDesign i x ∈ units) =

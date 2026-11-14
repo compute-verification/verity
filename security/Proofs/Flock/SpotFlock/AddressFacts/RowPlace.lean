@@ -148,10 +148,10 @@ at the `i`-th sampled outer block. The stage's weighted count at `offCells` is `
 (`sum_proved_selectSecond_le`). -/
 theorem proved_in_cell {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (hd : Spot.Select.selectSecond sample ns ks src = .ok (draw, read)) {j : ℤ}
-    (hj : j ∈ Spot.Draw.proved draw) :
+    (hj : j ∈ Spot.Sample.proved draw) :
     ∃ t i p, t < ns.size ∧ i < sample.size ∧ p < ns.getD t 0 ∧
       j.toNat = cellOff sample.size ns t + i * ns.getD t 0 + p := by
-  have hs : ((Spot.Draw.proved draw).toList.map fun j => offCells sample.size ns j.toNat).sum ≤
+  have hs : ((Spot.Sample.proved draw).toList.map fun j => offCells sample.size ns j.toNat).sum ≤
       sample.size * ((List.range ns.size).map fun t => ks.getD t 0 * 0).sum :=
     Properties.Spot.SecurityProofs.sum_proved_selectSecond_le hd (offCells sample.size ns) (fun _ => 0)
       (fun t i p ht hi hp => by
@@ -308,7 +308,7 @@ theorem AddressRow.sits_of_slots {h : Held} (hna : ∀ v, h.reg.always v = false
     rw [hPn]
     exact _root_.Flock.Bridge.Members.rank_mul_add_lt hi hp
   -- a sampled proof block the registration maps to the inner block is its own outer block's cell's
-  have key : ∀ j : ℤ, j ∈ Spot.Draw.proved draw → h.reg.blockAt (sampleOf h r) j.toNat = r.u →
+  have key : ∀ j : ℤ, j ∈ Spot.Sample.proved draw → h.reg.blockAt (sampleOf h r) j.toNat = r.u →
       ∃ i, i < (sampleOf h r).size ∧ (sampleOf h r).getD i 0 = r.ρ ∧
         j.toNat = (partOf h r).lo + (i * h.reg.ns.getD t 0 + p) := by
     intro j hj hju
@@ -328,7 +328,7 @@ theorem AddressRow.sits_of_slots {h : Held} (hna : ∀ v, h.reg.always v = false
     rw [hlo]
     omega
   -- the instance is one of the session's
-  obtain ⟨j, hj, hju⟩ : ∃ j ∈ Spot.Draw.proved draw, h.reg.blockAt (sampleOf h r) j.toNat = r.u :=
+  obtain ⟨j, hj, hju⟩ : ∃ j ∈ Spot.Sample.proved draw, h.reg.blockAt (sampleOf h r) j.toNat = r.u :=
     AddressRow.proved_of_checked hna hu hsel0
   obtain ⟨i, hi, -, hje⟩ := key j hj hju
   have hfind : ∃ x ∈ D.proved.toList,

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.EndToEnd.Joint.V5.Layout
-public import Proofs.Properties.Verity.Sampled.RecordDraw
+public import Proofs.Properties.Verity.Sampled.RecordSample
 public import Proofs.Properties.Verity.Sampled.Deployed
 
 /-!
@@ -95,7 +95,7 @@ theorem card_filter_ascending {n : ℕ} {units : Array ℕ} (h : unitsAscending 
 
 /-- **The window's sample at coins whose sample ends** with `units` is the proof blocks they name. -/
 theorem joint_sample_eq (w : JointAuditV5) (ω : w.L.Ω) {units : Array ℕ} {read : ℕ}
-    (h : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read)) :
+    (h : _root_.Spot.Sample.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read)) :
     w.L.draw ω = Finset.univ.filter fun u => u.val ∈ units :=
   Finset.ext fun u => (w.draw_ok ω h u).trans (by simp)
 
@@ -105,7 +105,7 @@ theorem joint_sampleUnits_of_drew {k : Verity.Registration.Composite} {s : Verit
     {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units)
     (w : JointAuditV5) (ω : w.L.Ω) (hL : w.samplingDesign = L) (hn : w.nJ = n)
     (hξ : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (w.src ω 0))) :
-    ∃ read, _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) =
+    ∃ read, _root_.Spot.Sample.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) =
       .ok (units, read) := by
   obtain ⟨_, _, _, _, _, _, _, _, _, _, read, hdu⟩ := h
   obtain ⟨t, ht⟩ := append_of_bitsOf_prefix hξ
@@ -128,7 +128,7 @@ theorem joint_sample_of_drew {k : Verity.Registration.Composite} {s : Verity.Sen
 units `u` with `base k ≤ u < base k + n_k`, each less the member's base. -/
 theorem member_sample_eq {w : JointAuditV5} (hw : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {units : Array ℕ}
     {read : ℕ}
-    (h : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read)) :
+    (h : _root_.Spot.Sample.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read)) :
     (w.design k).draw ω = Finset.univ.filter fun v : Fin (w.ms.get k).n =>
       v.val ∈ (MemberLayout.memberUnits w.counts k.1 (w.ms.get k).n units.toList).toArray := by
   ext v
@@ -151,7 +151,7 @@ theorem member_sample_of_drew {k : Verity.Registration.Composite} {s : Verity.Se
 (`printedPart`) is `UnitSample.toJson` of its part of `units`, in its own indices, under `subset` of that part's size. -/
 theorem printedPart_member {w : JointAuditV5} (hw : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {units : Array ℕ}
     {read : ℕ}
-    (h : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read))
+    (h : _root_.Spot.Sample.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read))
     (hu : unitsAscending w.nJ units = true) :
     printedPart ((w.design k).draw ω) =
       Flock.Draw.UnitSample.toJson

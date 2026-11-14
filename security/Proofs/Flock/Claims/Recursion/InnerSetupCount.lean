@@ -42,7 +42,7 @@ import Proofs.Flock.Claims.Recursion.InnerForm
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 
 /-!
 # The inner session's setup calls at an accepted statement, in any hash

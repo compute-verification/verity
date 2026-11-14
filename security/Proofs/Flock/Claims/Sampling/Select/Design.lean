@@ -382,7 +382,7 @@ theorem partition_covered (d : Program) (query : Lean.Json) (rs : Array Flock.Te
 theorem first_wf (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
     (derived : Option Flock.Draw.SamplingDesign) (parsed : Flock.Draw.SamplingDesign) (S : Array (String × Array (ℕ × ℕ)))
     (hS : Partition.strata d query = .ok S)
-    (hd : Draw.deriveSamplingDesign d query named table = .ok derived) (hp : Draw.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed)
+    (hd : Sample.deriveSamplingDesign d query named table = .ok derived) (hp : Sample.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed)
     (hsum : strataSize S = n) (hpos : ∀ m ∈ S.toList.map (fun p => rsSize p.2), 1 ≤ m) :
     (oneStageOf (derived.getD parsed)).WellFormed (S.toList.map fun p => rsSize p.2) := by
   have hsum' : (S.toList.map fun p => rsSize p.2).sum = n := hsum

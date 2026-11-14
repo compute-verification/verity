@@ -257,7 +257,7 @@ variable (w)
 /-- **The window's sample on the verifier's bytes**: where `sampleUnits` samples the list `r.1`, the units of that
 list. -/
 theorem draw_ok (ω : w.L.Ω) {r : Array ℕ × ℕ}
-    (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r) (u : Fin w.nJ) :
+    (hr : _root_.Spot.Sample.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r) (u : Fin w.nJ) :
     u ∈ w.L.draw ω ↔ u.val ∈ r.1 := by
   dsimp only [JointAuditV5.L, Bridge.execSel]
   rw [hr]
@@ -265,7 +265,7 @@ theorem draw_ok (ω : w.L.Ω) {r : Array ℕ × ℕ}
 
 /-- **The window's sample where the verifier's bytes run out**: every unit. -/
 theorem sample_error (ω : w.L.Ω) {e : String}
-    (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e)
+    (hr : _root_.Spot.Sample.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e)
     (u : Fin w.nJ) :
     u ∈ w.L.draw ω := by
   dsimp only [JointAuditV5.L, Bridge.execSel]
@@ -298,7 +298,7 @@ theorem mem_sample_iff (h : w.Laid) (ω : w.L.Ω) (u : Fin w.nJ) :
 population, member `k`'s sample is its part of that list (`MemberLayout.memberUnits`): the members' samples are read
 off the one sampled list in order, by the registered bases and counts. -/
 theorem design_sample_ok (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {r : Array ℕ × ℕ}
-    (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r)
+    (hr : _root_.Spot.Sample.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r)
     (v : Fin (w.ms.get k).n) :
     v ∈ (w.design k).draw ω ↔ v.val ∈ MemberLayout.memberUnits w.counts k.1 (w.ms.get k).n r.1.toList := by
   have hlt : w.base k + v.val < w.nJ := by
@@ -311,7 +311,7 @@ theorem design_sample_ok (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {r : A
 
 /-- **Member `k`'s sample where the verifier's bytes run out**: every one of its proof blocks. -/
 theorem design_sample_error (k : Fin w.ms.length) (ω : w.L.Ω) {e : String}
-    (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e) :
+    (hr : _root_.Spot.Sample.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e) :
     (w.design k).draw ω = Finset.univ :=
   Finset.eq_univ_iff_forall.2 fun v => (w.mem_part k _ v).2 (w.sample_error ω hr _)
 

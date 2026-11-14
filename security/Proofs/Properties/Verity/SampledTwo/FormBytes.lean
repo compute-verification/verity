@@ -1,14 +1,14 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.FormDraw
+public import Proofs.Properties.Verity.SampledTwo.FormSample
 public import Proofs.Properties.Verity.SampledTwo.CoinBytes
 public import Proofs.Properties.Verity.SampledTwo.Fits
 public import Proofs.Properties.Verity.SampledTwo.Within
 public import Proofs.Properties.Verity.SampledTwo.RoundOne
 public import Proofs.Properties.Verity.SampledTwo.StageLog
 public import Proofs.Properties.Verity.SampledTwo.FirstCoins
-public import Proofs.Properties.Verity.Sampled.RecordDraw
-public import Proofs.Properties.Verity.SampledDraw
+public import Proofs.Properties.Verity.Sampled.RecordSample
+public import Proofs.Properties.Verity.SampledUnits
 
 /-!
 # One pair of stage coins, from the stages' bytes

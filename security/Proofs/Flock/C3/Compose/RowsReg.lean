@@ -20,7 +20,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
 import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteHP
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 

@@ -37,7 +37,7 @@ Two weightings of the same sample: `w`, the work (each tile's W_ref on the tile 
   weight (`unsoundWork` under `v`) at least `T_y` with probability at most `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + ε_ks + δ_link`. The larger,
   not the sum: both bound the missProb of the one incorrect set the prover committed before the sample (`audit_profile`).
   `audit_executionPhase_of_record`: at `K = K_y = 27,713`, a 0.1% share of either with at most `2^-40 + ε_ks + δ_link`, and
-  `audit_executionPhase_split_of_record` for the per-call split with y's floors, the sampling design `PlanDraw` runs.
+  `audit_executionPhase_split_of_record` for the per-call split with y's floors, the sampling design `PlanSample` runs.
 
 **`hone` is needed, and not only by this route.** When a call's share `⌈K · W_c / W⌉` is capped at its units `N_c`, a
 second stratum doing work in the call can sample well below its share, and then the window bound itself fails. With call 0

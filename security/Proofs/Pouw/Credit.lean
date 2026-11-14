@@ -41,7 +41,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Served
-import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Claims.Sampling.Samples
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.VBridge.Full

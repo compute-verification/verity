@@ -600,8 +600,8 @@ RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener
 #: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or on `next` when the rule came; an
 #: entry whose FILE the tree doesn't have waits for the change on `next` that adds it
 IMPORT_ALL: dict[str, str] = {
-    "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
-        "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
+    "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Sample":
+        "its proofs open `Spot.Sample`'s private `stratum?` and `natRanges` to read the stratified law's strata",
     "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean: Spot.ChallengerSession":
         "`pinnedChallengePhaseWith` restates `pinnedChallengePhase`, which reads the private `strOf`, and is held to it by "
         "`rfl`; a copy of `strOf` is another constant, so the `rfl` fails",

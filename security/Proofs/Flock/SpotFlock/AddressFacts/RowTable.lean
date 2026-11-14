@@ -14,11 +14,11 @@ import Proofs.Flock.Soundness.Discharge.Exec.Setup
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
-import Proofs.Flock.SpotFlock.AddressFacts.RowDraw
+import Proofs.Flock.SpotFlock.AddressFacts.RowSampleJson
 import Proofs.Flock.SpotFlock.Depths
 import Proofs.Flock.SpotFlock.EntriesAt
 import Proofs.Flock.SpotFlock.HeaderRoots
@@ -235,7 +235,7 @@ the session's public file labels each sampled proof block by its slot in the par
 theorem sampled_of_ok (hr : r.Ok h) :
     ∃ dj D draw, r.ins.read.draw = some dj ∧ _root_.Flock.Draw.UnitSample.ofJson dj = .ok D ∧
       secondDraw h r.c₀ r.c₁ = some draw ∧ r.sts[0]!.pub.n = D.proved.size ∧
-      D.proved = ((((Spot.Draw.proved draw).map Int.toNat).filter
+      D.proved = ((((Spot.Sample.proved draw).map Int.toNat).filter
         ((partOf h r).holds (sampleOf h r).size)).map (· - (partOf h r).lo)) ∧
       ∀ idx, _root_.Flock.Registered.unitIndices r.sts[0]!.pub = .ok idx → ∀ n < D.proved.size,
         idx.getD n 0 = (partOf h r).lo + D.proved.getD n 0 := by
@@ -298,7 +298,7 @@ theorem sampled_of_ok (hr : r.Ok h) :
     | some _ => rw [e] at hdl; cases hdl
   have hWd : Claims.Json.Wf S.draw := wf_of_jsonOf hjb
   have hj : Spot.jeq (_root_.Flock.norm S.draw) (subsetJson ((sampleOf h r).size * (partOf h r).n)
-      ((((Spot.Draw.proved draw).map Int.toNat).filter ((partOf h r).holds (sampleOf h r).size)).map
+      ((((Spot.Sample.proved draw).map Int.toNat).filter ((partOf h r).holds (sampleOf h r).size)).map
         (· - (partOf h r).lo))) = true := by
     unfold Spot.jeq
     rw [FlockDeploy.canon_jsonEquiv (FlockDeploy.jsonEquiv_norm _ hWd)]

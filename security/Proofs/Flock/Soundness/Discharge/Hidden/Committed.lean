@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Hm.Bc
 import Proofs.Flock.Soundness.Discharge.Layout.Bytes
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.Layout.Region
 import Proofs.Flock.Soundness.Refine.Setup
 

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Select.Seq
-public import Spot.Draw
+public import Spot.Sample
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
@@ -43,10 +43,10 @@ theorem loop_inv_ex {σ ε β : Type} (f : Unit → β → StateT σ (Except ε)
         exact ih b' s₁ (by omega) hI' r s' h
 
 theorem take_run (src : ByteArray) (need p : ℕ) :
-    (Draw.take src need).run p =
-      if src.size < p + need then Except.error Draw.RAN_OUT
+    (Sample.take src need).run p =
+      if src.size < p + need then Except.error Sample.RAN_OUT
       else Except.ok (src.extract p (p + need), p + need) := by
-  unfold Draw.take
+  unfold Sample.take
   by_cases h : src.size < p + need <;> simp [h, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get,
     StateT.get, set, StateT.set, pure, StateT.pure, throw, throwThe, MonadExceptOf.throw, StateT.lift, Except.bind,
     Except.pure]
@@ -63,7 +63,7 @@ theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β
 at `p + j·N`. -/
 theorem onWith_take (src : ByteArray) (N : ℕ) (hN : 0 < N) (run : ByteArray → Option (Array ℕ)) (p p' : ℕ)
     (u : Option (Array ℕ))
-    (h : (Flock.Draw.onWith (fun need => Draw.take src need) N run).run p = .ok (u, p')) :
+    (h : (Flock.Draw.onWith (fun need => Sample.take src need) N run).run p = .ok (u, p')) :
     ∃ j D, u = some D ∧ p' = p + j * N ∧ StopsAt N run src p j D := by
   unfold Flock.Draw.onWith at h
   rw [StateT.run_bind, take_run] at h
@@ -150,7 +150,7 @@ theorem seqMiss_mono (strata : ℕ → Flock.Draw.Stratum) (m m' : ℕ → Array
 /-- **`stratifiedWith` on `take`**: a run from `p` that returns a sample `D` runs each stratum's `subset` in turn, each
 stopping where `onWith` stops it, every unit it samples in `D`. -/
 theorem stratifiedWith_take (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
-    (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run p = .ok (some D, p')) :
+    (h : (Flock.Draw.stratifiedWith (fun _ need => Sample.take src need) strata).run p = .ok (some D, p')) :
     SeqMiss ((List.range' 0 strata.size).map fun i =>
       stage strata[i]! fun Dl => ∀ x ∈ Dl, strata[i]!.unit x ∈ D) src p := by
   unfold Flock.Draw.stratifiedWith at h
@@ -163,7 +163,7 @@ theorem stratifiedWith_take (src : ByteArray) (strata : Array Flock.Draw.Stratum
     show ([:strata.size] : Std.Legacy.Range).step = 1 from rfl] at h
   have loop : ∀ (l : List ℕ) (out : Array ℕ) (pos : ℕ) (r : Option (Option (Array ℕ))) (out' : Array ℕ) (pos₁ : ℕ),
       (forIn (m := StateT ℕ (Except String)) l ((none : Option (Option (Array ℕ))), out) (fun i __s => do
-          let __x ← Flock.Draw.onWith (fun need => Draw.take src need) strata[i]!.need
+          let __x ← Flock.Draw.onWith (fun need => Sample.take src need) strata[i]!.need
             (Flock.Draw.subset strata[i]!.k strata[i]!.size)
           match __x with
           | some local_ => pure (ForInStep.yield (none, __s.2 ++ Array.map strata[i]!.unit local_))
@@ -181,7 +181,7 @@ theorem stratifiedWith_take (src : ByteArray) (strata : Array Flock.Draw.Stratum
     | cons i is ih =>
       intro out pos r out' pos₁ hl
       rw [List.forIn_cons, StateT.run_bind, StateT.run_bind] at hl
-      cases ho : (Flock.Draw.onWith (fun need => Draw.take src need) strata[i]!.need
+      cases ho : (Flock.Draw.onWith (fun need => Sample.take src need) strata[i]!.need
           (Flock.Draw.subset strata[i]!.k strata[i]!.size)).run pos with
       | error e => rw [ho] at hl; exact absurd hl (by rw [bind_error, bind_error]; simp)
       | ok x =>
@@ -229,10 +229,10 @@ def unitOf (samplingDesign : Flock.Draw.SamplingDesign) (i x : ℕ) : ℕ :=
 /-- **`sampleUnits` as stages**: a sample from `src` that ends runs `samplingDesign`'s stages in turn from its first byte, every unit
 each stage samples among the units it returns. -/
 theorem sampleUnits_seq (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (src : ByteArray) (units : Array ℕ) (read : ℕ)
-    (h : Draw.sampleUnits samplingDesign n src = .ok (units, read)) :
+    (h : Sample.sampleUnits samplingDesign n src = .ok (units, read)) :
     SeqMiss (samplingDesignStages samplingDesign n fun i Dl => ∀ x ∈ Dl, unitOf samplingDesign i x ∈ units) src 0 := by
-  unfold Draw.sampleUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) samplingDesign n).run 0 with
+  unfold Sample.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Sample.take src need) samplingDesign n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
     obtain ⟨r, read'⟩ := x
@@ -249,7 +249,7 @@ theorem sampleUnits_seq (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (
       unfold Flock.Draw.drawWith at hw
       dsimp only at hw
       rw [StateT.run_bind] at hw
-      cases ho : (Flock.Draw.onWith (fun need => Draw.take src need) (2 * k * Flock.Draw.width n + 64)
+      cases ho : (Flock.Draw.onWith (fun need => Sample.take src need) (2 * k * Flock.Draw.width n + 64)
           (Flock.Draw.subset k n)).run 0 with
       | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
       | ok y =>
@@ -263,7 +263,7 @@ theorem sampleUnits_seq (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (
       unfold Flock.Draw.drawWith at hw
       dsimp only at hw
       rw [StateT.run_bind] at hw
-      cases ho : (Flock.Draw.onWith (fun need => Draw.take src need) (2 * n * Flock.Draw.width b + 64)
+      cases ho : (Flock.Draw.onWith (fun need => Sample.take src need) (2 * n * Flock.Draw.width b + 64)
           (Flock.Draw.bernoulli a b n)).run 0 with
       | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
       | ok y =>
@@ -277,7 +277,7 @@ theorem sampleUnits_seq (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (
       unfold Flock.Draw.drawWith at hw
       dsimp only at hw
       rw [StateT.run_bind] at hw
-      cases ho : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run 0 with
+      cases ho : (Flock.Draw.stratifiedWith (fun _ need => Sample.take src need) strata).run 0 with
       | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
       | ok y =>
         obtain ⟨v, p⟩ := y
@@ -292,7 +292,7 @@ theorem sampleUnits_seq (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (
       unfold Flock.Draw.drawWith at hw
       dsimp only at hw
       rw [StateT.run_bind] at hw
-      cases ho : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) (strata.map (·.toStratum))).run 0 with
+      cases ho : (Flock.Draw.stratifiedWith (fun _ need => Sample.take src need) (strata.map (·.toStratum))).run 0 with
       | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
       | ok y =>
         obtain ⟨v, p⟩ := y

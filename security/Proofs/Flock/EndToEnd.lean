@@ -16,7 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 

@@ -94,7 +94,7 @@ theorem stmtOk_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Js
     sample_read (by rw [hreg]; exact hcl) hsel' (hpc.1 _ _ _ hsel')
   have hsel0 := hsel
   rw [hcl] at hsel0
-  have hproved : (Spot.Draw.proved draw).map Int.toNat = rest := proved_select (resolve_ne_all hrule hres) hsel0
+  have hproved : (Spot.Sample.proved draw).map Int.toNat = rest := proved_select (resolve_ne_all hrule hres) hsel0
   have hns' : ns = h.reg.ns := Except.ok.inj (hns.symm.trans hm.ns)
   obtain ⟨grain', replay', k', hrule', ids', hids', hks'⟩ := hm.ks
   rw [hrule] at hrule'
@@ -109,7 +109,7 @@ theorem stmtOk_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Js
   have hsd : secondDraw h c₀ c₁ = some draw₂ := secondSample_read h c₀ c₁ hss' (hpc.2 _ _ hss')
   have hpa := hm.parts draw rest read strata hsel' hstrata
   rw [← hproved] at hpa
-  have hown : OwnAgrees h (runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂)
+  have hown : OwnAgrees h (runOwn i it ((Spot.Sample.proved draw).map Int.toNat) strata draw₂)
       ⟨i.record, portRoots i.record⟩ it.record draw₂ c₀ := by
     unfold Round2.OwnAgrees Round2.core runOwn ownOf
     rw [hsample, ← hproved, hpa, hm.links, hm.wires, hm.rows, hm.refs, hm.refReads]

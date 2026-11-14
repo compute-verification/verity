@@ -17,7 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 
 /-!
 # A sample verity-verify-proof accepts under hidden outputs sets up

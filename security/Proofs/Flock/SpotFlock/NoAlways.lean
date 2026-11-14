@@ -37,13 +37,13 @@ def RegTwo.noAlways (g : RegTwo) : RegTwo := { g with always := fun _ => false }
 theorem RegTwo.mem_noAlways_checked (g : RegTwo) {N u : ℕ} {src₁ src₂ : ByteArray} {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) :
     u ∈ g.noAlways.checked N src₁ src₂ ↔
-      u < N ∧ ∃ j ∈ Spot.Draw.proved draw, g.blockAt (g.sample src₁) j.toNat = u := by
+      u < N ∧ ∃ j ∈ Spot.Sample.proved draw, g.blockAt (g.sample src₁) j.toNat = u := by
   have hsel' : Spot.Select.selectSecond (g.noAlways.sample src₁) g.noAlways.ns g.noAlways.ks src₂ =
       .ok (draw, n) := hsel
   unfold RegTwo.checked
   rw [hsel']
   show u ∈ (List.range N).filter (fun v => false ||
-    (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v) ↔ _
+    (Spot.Sample.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v) ↔ _
   constructor
   · intro hu
     obtain ⟨hN, hor⟩ := List.mem_filter.1 hu
@@ -128,7 +128,7 @@ theorem code_card_biUnion_noAlways_le (x : Msg) (r : Fin ((code h).V.k x) → Fl
     (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
       (stageSrc (stageCoins h x r)) = .ok (draw, n)) :
     (((code h.noAlways).checked x r).toFinset.biUnion needs).card ≤
-      ((Spot.Draw.proved draw).toList.map fun j =>
+      ((Spot.Sample.proved draw).toList.map fun j =>
         (needs (h.reg.blockAt (h.reg.sample (src (r (order h x).first))) j.toNat)).card).sum := by
   have h0 : (Finset.range (SamplingDeploy.units ((base h.noAlways).atOrder (order h.noAlways)) x)).filter
       (fun v => h.noAlways.reg.always v = true) = ∅ :=
@@ -143,7 +143,7 @@ theorem code_card_biUnion_noAlways_le_mul (x : Msg) (r : Fin ((code h).V.k x) �
     (needs : ℕ → Finset ℕ) {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
       (stageSrc (stageCoins h x r)) = .ok (draw, n)) (M : ℕ) (hM : ∀ u, (needs u).card ≤ M) :
-    (((code h.noAlways).checked x r).toFinset.biUnion needs).card ≤ (Spot.Draw.proved draw).size * M :=
+    (((code h.noAlways).checked x r).toFinset.biUnion needs).card ≤ (Spot.Sample.proved draw).size * M :=
   code_card_biUnion_le_mul h.noAlways x r needs hsel (fun _ => rfl) M hM
 
 /-- **The replay cap at the emptied registration**: the `K · Σ_t n_t` proof blocks of `K` replay blocks where the

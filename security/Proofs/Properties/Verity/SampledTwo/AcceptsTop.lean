@@ -547,7 +547,7 @@ theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNon
     have hnames := names_of_formAccepts hof hA hi hit hns hids
     have hsel0 := hsel
     rw [hcl] at hsel0
-    have hproved : (Spot.Draw.proved draw).map Int.toNat = rest :=
+    have hproved : (Spot.Sample.proved draw).map Int.toNat = rest :=
       SpotFlock.RunsAs.proved_select (SpotFlock.RunsAs.resolve_ne_all hr hres) hsel0
     unfold SpotFlock.HeldOf.firstOf at hf
     simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf

@@ -38,7 +38,7 @@ theorem RegTwo.sample_size_le (g : RegTwo) {K : ℕ} (hK : firstK g.first = some
 `K · Σ_t k_t` proof blocks. -/
 theorem RegTwo.proved_size_le (g : RegTwo) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) {K : ℕ}
-    (hK : firstK g.first = some K) : (Spot.Draw.proved draw).size ≤ K * g.ks.toList.sum := by
+    (hK : firstK g.first = some K) : (Spot.Sample.proved draw).size ≤ K * g.ks.toList.sum := by
   rw [Properties.Spot.SecurityProofs.size_proved_selectSecond hsel]
   exact Nat.mul_le_mul_right _ (g.sample_size_le hK src₁)
 
@@ -52,7 +52,7 @@ theorem RegTwo.card_biUnion_checked_le_count (g : RegTwo) (N : ℕ) (src₁ src�
       ∑ v ∈ (Finset.range N).filter (fun v => g.always v = true), (needs v).card + K * g.ks.toList.sum * M := by
   refine (g.card_biUnion_checked_le N src₁ src₂ hsel needs).trans (Nat.add_le_add_left ?_ _)
   have hs := List.sum_le_length_nsmul
-    ((Spot.Draw.proved draw).toList.map fun j => (needs (g.blockAt (g.sample src₁) j.toNat)).card) M
+    ((Spot.Sample.proved draw).toList.map fun j => (needs (g.blockAt (g.sample src₁) j.toNat)).card) M
     (by
       intro y hy
       obtain ⟨j, _, rfl⟩ := List.mem_map.1 hy

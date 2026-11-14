@@ -78,9 +78,9 @@ theorem toJson_nat_int (n : Nat) : int? (Lean.toJson n) = some (n : Int) := by
   simp [Lean.toJson, int?, Lean.JsonNumber.fromNat]
 
 theorem checkProved_nil (draw : Json) (us : Array Nat) (n : Nat) :
-    (Draw.checkProvedFull draw (us.map Lean.toJson) (Lean.toJson n)).codes = #[] ↔
-      n = (Draw.proved draw).size ∧ us.map (fun n : Nat => (n : Int)) = Draw.proved draw := by
-  unfold Draw.checkProvedFull
+    (Sample.checkProvedFull draw (us.map Lean.toJson) (Lean.toJson n)).codes = #[] ↔
+      n = (Sample.proved draw).size ∧ us.map (fun n : Nat => (n : Int)) = Sample.proved draw := by
+  unfold Sample.checkProvedFull
   extract_lets want c0 j1 j0 c1
   simp (config := {failIfUnchanged := false}) only [↓jp_ite, ↓jp_ite']
   simp only [j0]
@@ -151,7 +151,7 @@ theorem checks_ok (reg receipt draw samplingDesign : Json) (units : Array Int) (
     (opened : Option (Array (String × Json))) :
     (∀ x ∈ Record.checks reg receipt draw samplingDesign units provedUnits instances digest served sessionRoots opened,
       Fails x = false) ↔
-    (Draw.checkProvedFull draw provedUnits instances).codes = #[] ∧
+    (Sample.checkProvedFull draw provedUnits instances).codes = #[] ∧
     jeq (getD receipt "registration") (.str digest) = true ∧
     (∀ s, served = some s → s.qsort (· < ·) = units.qsort (· < ·)) ∧
     (∀ roots, sessionRoots = some roots → roots ≠ #[] ∧
@@ -1018,17 +1018,17 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
       exact Iff.rfl)
   have h1r := reset h1
   have h0 : ∀ c, j0 () c = #[] ↔ c = #[] ∧
-      (∃ samplingDesign, Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (get "law") samplingDesign = true) ∧
+      (∃ samplingDesign, Sample.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (get "law") samplingDesign = true) ∧
       j1 () #[] = #[] := by
     intro c
     simp only [j0]
-    rcases hd : Draw.derive v.program v.query v.samplingDesign v.workTable with a | samplingDesign
+    rcases hd : Sample.derive v.program v.query v.samplingDesign v.workTable with a | samplingDesign
     · rw [h1r]
       simp only [addCode_ne_nil, false_and, false_iff]
       rintro ⟨_, ⟨samplingDesign, hl, _⟩, _⟩
       cases hl
     · simp only []
-      have hs : Draw.sameSamplingDesign (get "law") samplingDesign = jeq (get "law") samplingDesign := rfl
+      have hs : Sample.sameSamplingDesign (get "law") samplingDesign = jeq (get "law") samplingDesign := rfl
       rw [hs]
       cases hl : jeq (get "law") samplingDesign
       · simp only [Bool.not_false, ↓reduceIte]
@@ -1049,7 +1049,7 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
         keys? rec = some (if v2 = true then Docket.KEYS_V2 else Docket.KEYS) ∧
         (jeq (get "format") (if v2 = true then Json.str Docket.FORMAT_V2 else Json.str Docket.FORMAT) = true ∧
           jeq (get "protocol") (Json.str Docket.PROTOCOL) = true) ∧
-        (∃ samplingDesign, Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (get "law") samplingDesign = true) ∧
+        (∃ samplingDesign, Sample.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (get "law") samplingDesign = true) ∧
         j1 () #[] = #[]) := by
     intro bk bf hk hf
     cases bk
@@ -1106,8 +1106,8 @@ theorem ascending_iff (xs : Array Int) :
     exact h i (by omega)
 
 theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop samplingDesign : Json) :
-    (Draw.checkSampleFull (.obj kvs) pop samplingDesign).codes = #[] ↔ Drawn (.obj kvs) pop samplingDesign := by
-  unfold Draw.checkSampleFull Drawn
+    (Sample.checkSampleFull (.obj kvs) pop samplingDesign).codes = #[] ↔ Drawn (.obj kvs) pop samplingDesign := by
+  unfold Sample.checkSampleFull Drawn
   extract_lets kind closure want have_ c0 n us j2 raw cs bad problem ok j1 j0 c1 dk dcl
   have hw : want = sampleKeys kind closure := rfl
   have hkd : dk = kind := rfl
@@ -1177,11 +1177,11 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
         have e : Json.arr xs = Json.arr us' := hxs.symm.trans h1
         cases e; rw [hm] at h2; cases h2; exact h3
       · intro h; exact ⟨xs, units, hxs, hm, h⟩
-    have hpn : ∀ m, int? (getD (Json.obj kvs) "population") = some m → Draw.strataMessage (Json.obj kvs) m = none →
+    have hpn : ∀ m, int? (getD (Json.obj kvs) "population") = some m → Sample.strataMessage (Json.obj kvs) m = none →
         problem = none := by
       intro m h1 h2; simp only [problem, n, h1]; exact h2
     have hpe : problem = none → ∃ m, int? (getD (Json.obj kvs) "population") = some m ∧
-        Draw.strataMessage (Json.obj kvs) m = none := by
+        Sample.strataMessage (Json.obj kvs) m = none := by
       intro h; simp only [problem, n] at h; revert h
       cases int? (getD (Json.obj kvs) "population") <;> simp
     have hcs_some : ∀ ys, cs = some ys → ∃ zs, getD (Json.obj kvs) "closure" = .arr zs ∧ zs.mapM int? = some ys := by
@@ -1205,7 +1205,7 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
     all_goals simp only [hkd, hcl, hex, and_assoc, true_and, hmem, hkeys']
     all_goals
       refine and_congr ?_ (and_congr ?_ (and_congr ?_ (and_congr ?_ (and_congr ?_ (and_congr ?_ (and_congr ?_ ?_))))))
-      · simp [Draw.sameSamplingDesign]
+      · simp [Sample.sameSamplingDesign]
       · simp only [Bool.not_eq_false']; exact Iff.rfl
       · simp only [Bool.not_eq_false']; exact ascending_iff units
       · apply forall_congr'; intro h
@@ -1267,20 +1267,20 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
     · intro h; exact absurd h (fail_ne_nil _ _ _)
     · rintro ⟨_, _, _, _, _, us', units', h1, h2, _⟩
       exact (hnone units' (by simp only [us, h1]; exact h2)).elim
-theorem checkSample_nil (draw pop samplingDesign : Json) : Draw.checkDraw draw pop samplingDesign = #[] ↔ Drawn draw pop samplingDesign := by
-  unfold Draw.checkDraw
+theorem checkSample_nil (draw pop samplingDesign : Json) : Sample.checkDraw draw pop samplingDesign = #[] ↔ Drawn draw pop samplingDesign := by
+  unfold Sample.checkDraw
   cases draw
   case obj kvs => exact checkSampleFull_obj_nil kvs pop samplingDesign
   all_goals
     constructor
     · intro h
-      unfold Draw.checkSampleFull at h
+      unfold Sample.checkSampleFull at h
       simp only [Bool.not_false, Bool.true_or, ↓reduceIte, Id.run_pure] at h
       exact absurd h (fail_ne_nil _ _ _)
     · rintro ⟨h, _⟩; cases h
 
 theorem registered_samplingDesign {v : Docket.Verifier} {rec samplingDesign : Json} (h : Registered v rec samplingDesign) :
-    Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign := h.1.2.2.2.1
+    Sample.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign := h.1.2.2.2.1
 
 /-- The check accepts exactly what `AcceptMeans` says of an accept and a reported read of each certified value
 (`UnitsRead`). -/
@@ -1300,7 +1300,7 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
       rw [hd] at this
       exact (Except.ok.inj this).symm
     simp only [h1, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hd]
-    by_cases h2 : Draw.checkDraw e.draw (getD c.record "population") samplingDesign = #[]
+    by_cases h2 : Sample.checkDraw e.draw (getD c.record "population") samplingDesign = #[]
     · simp only [h2, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
       by_cases h3 : OneStage.recordChecks c.record (Flock.hexOf c.digest) e
           (p.verifier.certified.map (·.1.value)) = #[]
@@ -1344,7 +1344,7 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
         simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
         rintro ⟨samplingDesign', d', n', -, -, hu, -⟩
         exact h3 ((recordChecks_nil p c e).2 hu)
-    · have : (Draw.checkDraw e.draw (getD c.record "population") samplingDesign).isEmpty = false := by
+    · have : (Sample.checkDraw e.draw (getD c.record "population") samplingDesign).isEmpty = false := by
         simpa [Array.isEmpty_iff] using h2
       simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
       rintro ⟨samplingDesign', d', n', hreg', hdr, -⟩

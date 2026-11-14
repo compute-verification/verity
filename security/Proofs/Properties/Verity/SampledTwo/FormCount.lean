@@ -74,10 +74,10 @@ theorem parts_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Jso
     exact hsel
   have hsel0 := hsel
   rw [hcl] at hsel0
-  have hproved : (Spot.Draw.proved draw).map Int.toNat = rest := proved_select (resolve_ne_all hrule hres) hsel0
+  have hproved : (Spot.Sample.proved draw).map Int.toNat = rest := proved_select (resolve_ne_all hrule hres) hsel0
   have hpa := hm.parts draw rest read strata hsel' hstrata
   rw [← hproved] at hpa
-  exact ⟨runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂, _, hpa, hcodes⟩
+  exact ⟨runOwn i it ((Spot.Sample.proved draw).map Int.toNat) strata draw₂, _, hpa, hcodes⟩
 
 end SpotFlock.RunsAs
 

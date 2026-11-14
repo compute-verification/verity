@@ -13,10 +13,10 @@ public import Proofs.Properties.Verity.SampledTwo.SessionTreeless
 public import Proofs.Properties.Verity.SampledTwo.Reached
 public import Proofs.Properties.Verity.SampledTwo.Fits
 public import Proofs.Properties.Verity.SampledTwo.AcceptsTop
-public import Proofs.Properties.Verity.SampledTwo.DrawRoots
+public import Proofs.Properties.Verity.SampledTwo.SampleRoots
 public import Proofs.Properties.Verity.SampledTwo.GoodCaseHeld
 public import Proofs.Properties.Verity.SampledTwo.BlobFinder
-public import Proofs.Properties.Verity.SampledTwo.FormDraw
+public import Proofs.Properties.Verity.SampledTwo.FormSample
 
 /-!
 # The two-stage leg's projection at the form's accept, from the coin map's distribution

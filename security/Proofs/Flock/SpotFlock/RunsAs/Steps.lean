@@ -104,8 +104,8 @@ theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run
         (i.source.extract 0 read) = some code → False) ∧
       ∃ (inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)) (acc₂ : Bool)
         (staged : List (String × Json)) (receipt : Json) (sym : String) (pub audit : Json),
-        Spot.Run.secondStage i ((Spot.Draw.proved draw).map Int.toNat) = .ok (.ok inner) ∧
-        Spot.Run.interiorAudit form i ((Spot.Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
+        Spot.Run.secondStage i ((Spot.Sample.proved draw).map Int.toNat) = .ok (.ok inner) ∧
+        Spot.Run.interiorAudit form i ((Spot.Sample.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
         j = Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),
           ("symbol", Json.str sym), ("public", pub), ("audit", audit)] ++ staged) ∧
         (sym = "accept" → ∃ rec_, (Spot.jeq (Spot.getD rec_ "accepted") (.bool true) && acc₂) = true) := by
@@ -174,8 +174,8 @@ private theorem interiorAudit_some {form : Bool} {i : Spot.Run.Input} {sample : 
     {receipt draw samplingDesign : Json} {read : ℕ} {acc : Bool} {staged : List (String × Json)}
     (h : Spot.Run.interiorAudit form i sample (some (it, receipt, draw, samplingDesign, read)) = .ok (acc, staged)) :
     (∃ e, staged = [("interior", e)]) ∧ ∃ rec_ strata,
-      Spot.Run.audit i it.record receipt draw samplingDesign (it.provedUnits.getD (Spot.Draw.proved draw))
-        (it.instances.getD (it.provedUnits.getD (Spot.Draw.proved draw)).size) it.served it.sessionRoots =
+      Spot.Run.audit i it.record receipt draw samplingDesign (it.provedUnits.getD (Spot.Sample.proved draw))
+        (it.instances.getD (it.provedUnits.getD (Spot.Sample.proved draw)).size) it.served it.sessionRoots =
           .ok rec_ ∧
       Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata ∧
       acc = Spot.jeq (Spot.getD (Spot.SecondStage.attach rec_
@@ -233,11 +233,11 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
         i.rule = .twoStage grain replay k ∧
         Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
         Spot.Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
-        Spot.Select.selectSecond ((Spot.Draw.proved draw).map Int.toNat) ns ks it.source = .ok (draw₂, read₂) ∧
+        Spot.Select.selectSecond ((Spot.Sample.proved draw).map Int.toNat) ns ks it.source = .ok (draw₂, read₂) ∧
         Spot.Run.coinsCode i.key i.main it.coins it.record it.params.verifier.windowRoot it.family
           (it.source.extract 0 read₂) = none ∧
         Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata ∧
-        (Spot.SecondStage.check true (runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂)
+        (Spot.SecondStage.check true (runOwn i it ((Spot.Sample.proved draw).map Int.toNat) strata draw₂)
           it.statements).codes = #[] := by
   obtain ⟨grain, replay, k, hr⟩ := ha.two
   rcases run_path ha.run with ⟨step, codes, hj⟩ | ⟨_, _, _, workTable, resolved, draw, rest, read, -, -, -, ht,
@@ -283,10 +283,10 @@ theorem accepted_registered {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : J
         .ok (draw, rest, read) ∧
       Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
       Spot.nat? (Spot.getD it.record "population") =
-        some (((Spot.Draw.proved draw).map Int.toNat).size * ns.toList.sum) ∧
+        some (((Spot.Sample.proved draw).map Int.toNat).size * ns.toList.sum) ∧
       (Spot.Docket.check it.record { it.params.verifier with
         samplingDesign := Json.mkObj [("law", Json.str "subset"),
-          ("k", Lean.toJson (((Spot.Draw.proved draw).map Int.toNat).size * ns.toList.sum))] }).isEmpty = true := by
+          ("k", Lean.toJson (((Spot.Sample.proved draw).map Int.toNat).size * ns.toList.sum))] }).isEmpty = true := by
   obtain ⟨grain, replay, k, hr⟩ := ha.two
   rcases run_path ha.run with ⟨step, codes, hj⟩ | ⟨n, rule, samplingDesign, workTable, resolved, draw, rest, read, hn, hrule,
       hlaw, ht, hchk, -, hres, hsel, -, inner, acc₂, staged, receipt, sym, pub, audit, hsec, -, -, -⟩

@@ -3581,7 +3581,7 @@
   "PouwCommit.Bindings",
   "PouwPearlPlus",
   "Spot",
-  "Properties.Spot.Draw",
+  "Properties.Spot.Sample",
   "Properties.Spot.Second",
   "Properties.Spot.Members",
   "Properties.Spot.Bits",

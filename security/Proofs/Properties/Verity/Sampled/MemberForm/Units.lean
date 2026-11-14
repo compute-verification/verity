@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.MemberForm.Sample
 public import Proofs.Properties.Verity.Sampled.MemberForm.Read
-public import Proofs.Properties.Verity.Sampled.Members.Draw
+public import Proofs.Properties.Verity.Sampled.Members.Sample
 public import Proofs.Properties.Verity.Sampled.Window.Steps
 public import Proofs.Flock.Soundness.ExecSample
 

@@ -17,7 +17,7 @@ parts:
   replay design, it is `subset:k` with `1 ≤ k ≤ n` and `NUM·n ≤ DEN·k`. Under `stratified-rate:NUM/DEN` it is
   `stratified:K` with `1 ≤ K ≤ n`, at which Flock's stratified rule (`Flock.Draw.stratumK`) gives every stratum of `s`
   of the `n` units a count `k_s` with `NUM·s ≤ DEN·k_s`. Under `work-rate:NUM/DEN` it is `work:K` with `1 ≤ K ≤ n`. The
-  one other text `Rule.ofJson` parses is `bernoulli:NUM/DEN`, which stays itself, a sampling design `Draw.bernoulli`
+  one other text `Rule.ofJson` parses is `bernoulli:NUM/DEN`, which stays itself, a sampling design `Sample.bernoulli`
   marks;
 * the work table `Select.Rule.tableOver` writes for a work rate design has an entry under each stratum's template, over
   the strata of the program under the query: some work and the floor `Rate.floor NUM DEN n_s f` at some `f`, at which
@@ -81,10 +81,10 @@ def WorkAtRate (t t' : String) (n : Nat) : Prop :=
 
 /-- **What a design text names over `n` units in strata of `sizes` units**, as the text `t'`: a rate design's count
 (`SubsetAtRate`), a stratified rate design's `K` (`StrataAtRate`), a work rate design's `K` (`WorkAtRate`), or a
-Bernoulli design, itself, which `Draw.bernoulli` marks. -/
+Bernoulli design, itself, which `Sample.bernoulli` marks. -/
 def TextAtRate (t t' : String) (n : Nat) (sizes : List Nat) : Prop :=
   SubsetAtRate t t' n ∨ StrataAtRate t t' n sizes ∨ WorkAtRate t t' n ∨
-    ∃ l, t' = t ∧ Select.parseDesign t = .ok l ∧ Draw.bernoulli l = true
+    ∃ l, t' = t ∧ Select.parseDesign t = .ok l ∧ Sample.bernoulli l = true
 
 /-- **What a rule is over `n` units in strata of `sizes` units**, as the rule `r`: `all` stays `all`; a design's text is
 `TextAtRate`'s; a two-stage rule keeps its grain and its counts, and its replay design is a rate design's count

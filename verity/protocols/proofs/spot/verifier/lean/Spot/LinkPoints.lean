@@ -9,7 +9,7 @@ different counts, a member whose fewest is none, and a sampling design no sample
 `Docket.check`'s `link-points`). A member whose fewest is none is one some sample that ends misses: that sample
 gives it no statement (`OneStageZk.sampledHeld`), so the check sets up no session of its circuit.
 
-A sample that ends (`Draw.sampleUnits`) samples, under `subset k`, `k` distinct units of the population (`k` above the
+A sample that ends (`Sample.sampleUnits`) samples, under `subset k`, `k` distinct units of the population (`k` above the
 population never ends); under `bernoulli a b`, none when `a = 0`, each unit when `a ≥ b > 0`, and any number of them
 otherwise (`b = 0 < a` never ends); and under `stratified` and `work`, `k_s` distinct units of each stratum `s` (a
 stratum with `k_s` above its size never ends). The fewest is what is left after the sample's units fill the rest of the
@@ -20,9 +20,9 @@ has a sample that ends. O(members × strata × ranges), the descriptor's size, n
 module
 
 public import Flock.Net
-public import Spot.Draw
+public import Spot.Sample
 meta import Flock.Net
-meta import Spot.Draw
+meta import Spot.Sample
 
 /-!
 # A member's link points over the samples that end
@@ -104,12 +104,12 @@ def refused (samplingDesign : Flock.Draw.SamplingDesign) (population : Nat) (ms 
     | none => false
 
 /-- The sampling design the sample runs on (`OneStage.sampledFrom`): the verifier's own expanded over its program and query
-(`Draw.deriveSamplingDesign`), else its subset or Bernoulli sampling design as Flock reads it (`Draw.flockSamplingDesign`); with the population. -/
+(`Sample.deriveSamplingDesign`), else its subset or Bernoulli sampling design as Flock reads it (`Sample.flockSamplingDesign`); with the population. -/
 def samplingDesignOf (p : Program) (query samplingDesign : Json) (table : Option Json) : V (Flock.Draw.SamplingDesign × Nat) := do
   let population ← Partition.units p query
-  match ← Draw.deriveSamplingDesign p query samplingDesign table with
+  match ← Sample.deriveSamplingDesign p query samplingDesign table with
   | some l => pure (l, population)
-  | none => pure (← Draw.flockSamplingDesign samplingDesign population, population)
+  | none => pure (← Sample.flockSamplingDesign samplingDesign population, population)
 
 /-- The members a difftest piece is handed (`piece`, `Pieces.registration`): a list, each `{"units", "vus_per_block"}`,
 its units' `[lo, hi)` ranges and its circuit's units a proof block. -/
@@ -117,17 +117,17 @@ def membersOfJson (j : Json) : V (Array (Array (Nat × Nat) × Nat)) := do
   let .arr ms := j | throw "the members are not a list"
   ms.mapM fun m => do
     let some g := nat? (getD m "vus_per_block") | throw "a member's vus_per_block is not a natural number"
-    let some us := (Draw.ranges? (getD m "units")).bind fun rs =>
+    let some us := (Sample.ranges? (getD m "units")).bind fun rs =>
         rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
       | throw "a member's units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
     pure (us, g)
 
-/-- `{"law", "population", "members"}` (the sampling design as `Draw.flockSamplingDesign` reads it, the members as `membersOfJson`
+/-- `{"law", "population", "members"}` (the sampling design as `Sample.flockSamplingDesign` reads it, the members as `membersOfJson`
 reads them) to `{"bounds": [[fewest, most], ...], "refused": [index, ...]}`; a malformed sampling design or member, or
 a sampling design no sample of which ends (`NEVER_ENDS`), is refused. -/
 def piece (j : Json) : V Json := do
   let some population := nat? (getD j "population") | throw "the population is not a natural number"
-  let samplingDesign ← Draw.flockSamplingDesign (getD j "law") population
+  let samplingDesign ← Sample.flockSamplingDesign (getD j "law") population
   let ms ← membersOfJson (getD j "members")
   let bs ← bounds samplingDesign population ms
   let pair : Option (Nat × Nat) → Json

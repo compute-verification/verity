@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.RoundsRead
 public import Proofs.Properties.Verity.Sampled.Layout
 public import Proofs.Properties.Verity.Sampled.Device
-public import Proofs.Properties.Verity.Sampled.RecordDraw
+public import Proofs.Properties.Verity.Sampled.RecordSample
 public import Proofs.Flock.Claims.Complete.Json.Parse
 public import Proofs.Flock.Soundness.Refine.Walk
 import all Lean.Data.Json.Basic

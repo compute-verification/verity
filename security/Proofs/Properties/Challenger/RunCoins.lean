@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.RunsAs.Coins
-public import Proofs.Properties.Challenger.Drawn
+public import Proofs.Properties.Challenger.Sampled
 
 /-!
 # An accepted two-stage run's challenges are the device's, or a break
@@ -10,12 +10,12 @@ Each stage of an accepted two-stage run got no code from `Run.coinsCode` on the 
 the challenger's check finds no reason under the verifier's key, window and family, after the record's digest
 (`SpotFlock.RunsAs.coinsCode_read`). The check reads the challenger's sample under that key, window and family
 (`Properties.Challenger.Coins.coinsReason_sample`), and the sample's challenges are the device's or the model's finder
-outputs a break (`Properties.Challenger.Drawn.sampledByDevice`), so the stage's bytes are (`fromDevice_of_reason`,
+outputs a break (`Properties.Challenger.Sampled.sampledByDevice`), so the stage's bytes are (`fromDevice_of_reason`,
 `runCoinsFromDevice`). No premise names the key: it is the run's own (`Input.key`).
 
 `runCoinsFromDevice` is the proof of `SpotFlock.RunsAs.RunCoinsFromDevice`, which
 `Proofs.Flock.SpotFlock.RunsAs.Statement` states. The three theorems are declared in that statement's namespace and
-kept in this directory, beside `Proofs.Properties.Challenger.Drawn`, which they read.
+kept in this directory, beside `Proofs.Properties.Challenger.Sampled`, which they read.
 -/
 
 @[expose] public section
@@ -32,7 +32,7 @@ theorem fromDevice_of_reason (dev : Properties.Challenger.History) {key : Spot.C
     FromDevice dev key w label after coins read := by
   obtain ⟨ξ, hd, hle, hpre⟩ := Properties.Challenger.Coins.coinsReason_sample h
   have hst : Starts read ξ := And.intro hle hpre
-  rcases Properties.Challenger.Drawn.sampledByDevice dev key w label after coins ξ hd with ⟨s, hs, ho, he⟩ | hb
+  rcases Properties.Challenger.Sampled.sampledByDevice dev key w label after coins ξ hd with ⟨s, hs, ho, he⟩ | hb
   · exact Or.inl ⟨s, hs, ho, he ▸ hst⟩
   · exact Or.inr hb
 

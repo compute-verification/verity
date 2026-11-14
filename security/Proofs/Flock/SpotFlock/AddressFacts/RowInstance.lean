@@ -24,7 +24,7 @@ sample is accepted. -/
 theorem proved_of_checked {g : RegTwo} {N u : ℕ} {src₁ src₂ : ByteArray} {draw : Json} {read : ℕ}
     (hna : ∀ v, g.always v = false) (hu : u ∈ g.checked N src₁ src₂)
     (hd : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, read)) :
-    ∃ j ∈ Spot.Draw.proved draw, g.blockAt (g.sample src₁) j.toNat = u := by
+    ∃ j ∈ Spot.Sample.proved draw, g.blockAt (g.sample src₁) j.toNat = u := by
   unfold RegTwo.checked at hu
   rw [hd] at hu
   obtain ⟨-, hv⟩ := List.mem_filter.1 hu

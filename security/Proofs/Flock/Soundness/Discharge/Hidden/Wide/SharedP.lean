@@ -20,7 +20,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Refine.Setup

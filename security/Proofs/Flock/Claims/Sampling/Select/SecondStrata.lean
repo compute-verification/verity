@@ -4,7 +4,7 @@ public import Proofs.Flock.Claims.Sampling.Select.SecondCount
 public import Proofs.Flock.Claims.Sampling.Select.Bounds
 public import Proofs.Flock.Claims.Sampling.Reg
 public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
-import Spot.Draw
+import Spot.Sample
 import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take
 import Proofs.Flock.Claims.Sampling.Select.Steps
@@ -44,7 +44,7 @@ theorem le_sup_unit (W : ℕ → ℕ) (s : Flock.Draw.Stratum) {j : ℕ} (hj : j
 /-- **A stratified sample's weights**: the units a run of `stratifiedWith` on `take` returns weigh at most each
 stratum's `k` times the largest weight on its units, summed over the strata. -/
 theorem stratifiedWith_sum_le (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
-    (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run p = .ok (some D, p'))
+    (h : (Flock.Draw.stratifiedWith (fun _ need => Sample.take src need) strata).run p = .ok (some D, p'))
     (W : ℕ → ℕ) :
     (D.toList.map W).sum ≤ (strata.toList.map fun s => s.k * (expand s.units.toList).toFinset.sup W).sum := by
   unfold Flock.Draw.stratifiedWith at h
@@ -57,7 +57,7 @@ theorem stratifiedWith_sum_le (src : ByteArray) (strata : Array Flock.Draw.Strat
     show ([:strata.size] : Std.Legacy.Range).step = 1 from rfl] at h
   have loop : ∀ (l : List ℕ) (out : Array ℕ) (pos : ℕ) (r : Option (Option (Array ℕ))) (out' : Array ℕ) (pos₁ : ℕ),
       (forIn (m := StateT ℕ (Except String)) l ((none : Option (Option (Array ℕ))), out) (fun i __s => do
-          let __x ← Flock.Draw.onWith (fun need => Draw.take src need) strata[i]!.need
+          let __x ← Flock.Draw.onWith (fun need => Sample.take src need) strata[i]!.need
             (Flock.Draw.subset strata[i]!.k strata[i]!.size)
           match __x with
           | some local_ => pure (ForInStep.yield (none, __s.2 ++ Array.map strata[i]!.unit local_))
@@ -75,7 +75,7 @@ theorem stratifiedWith_sum_le (src : ByteArray) (strata : Array Flock.Draw.Strat
     | cons i is ih =>
       intro out pos r out' pos₁ hl
       rw [List.forIn_cons, StateT.run_bind, StateT.run_bind] at hl
-      cases ho : (Flock.Draw.onWith (fun need => Draw.take src need) strata[i]!.need
+      cases ho : (Flock.Draw.onWith (fun need => Sample.take src need) strata[i]!.need
           (Flock.Draw.subset strata[i]!.k strata[i]!.size)).run pos with
       | error e => rw [ho] at hl; exact absurd hl (by rw [bind_error, bind_error]; simp)
       | ok x =>
@@ -120,10 +120,10 @@ theorem stratifiedWith_sum_le (src : ByteArray) (strata : Array Flock.Draw.Strat
 /-- **A work sampling design's sample by stratum**: `units` weighs at most each stratum's `k` times the largest weight
 on its units, summed over the strata. -/
 theorem workUnits_sum_le {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray}
-    {units : Array ℕ} (h : Draw.sampleUnits (.work K ws) n src = .ok (units, read)) (W : ℕ → ℕ) :
+    {units : Array ℕ} (h : Sample.sampleUnits (.work K ws) n src = .ok (units, read)) (W : ℕ → ℕ) :
     (units.toList.map W).sum ≤ (ws.toList.map fun s => s.k * (expand s.units.toList).toFinset.sup W).sum := by
-  unfold Draw.sampleUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) (.work K ws) n).run 0 with
+  unfold Sample.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Sample.take src need) (.work K ws) n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
     obtain ⟨r, read'⟩ := x
@@ -138,7 +138,7 @@ theorem workUnits_sum_le {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {s
     unfold Flock.Draw.drawWith at hw
     dsimp only at hw
     rw [StateT.run_bind] at hw
-    cases ho : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) (ws.map (·.toStratum))).run 0 with
+    cases ho : (Flock.Draw.stratifiedWith (fun _ need => Sample.take src need) (ws.map (·.toStratum))).run 0 with
     | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
     | ok y =>
       obtain ⟨v, p⟩ := y
@@ -161,8 +161,8 @@ theorem filterMap_map_some {α β γ : Type} (xs : Array α) (g : α → β) (f 
 /-- A sample object whose `units` are `units`, with no closure, proves those units: a weight sums alike over both. -/
 theorem sum_proved_of_units {draw : Json} {units : Array ℕ} (hu : getD draw "units" = natsJson units)
     (hc : getD draw "closure" = Json.null) (W : ℕ → ℕ) :
-    ((Draw.proved draw).toList.map fun j => W j.toNat).sum = (units.toList.map W).sum := by
-  unfold Draw.proved
+    ((Sample.proved draw).toList.map fun j => W j.toNat).sum = (units.toList.map W).sum := by
+  unfold Sample.proved
   dsimp only
   rw [hu, hc, ((Array.perm_iff_toList_perm.1 (SampleExec.qsort_perm _ _)).map _).sum_eq]
   simp only [natsJson]
@@ -193,7 +193,7 @@ theorem sum_proved_selectSecond_le {sample ns ks : Array ℕ} {src : ByteArray} 
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) (W M : ℕ → ℕ)
     (hW : ∀ t i j, t < ns.size → i < sample.size → j < ns.getD t 0 →
       W (cellOff sample.size ns t + i * ns.getD t 0 + j) ≤ M t) :
-    ((Draw.proved draw).toList.map fun j => W j.toNat).sum ≤
+    ((Sample.proved draw).toList.map fun j => W j.toNat).sum ≤
       sample.size * ((List.range ns.size).map fun t => ks.getD t 0 * M t).sum := by
   obtain ⟨-, parsed, units, hp, hu, hdu, hdc⟩ := selectSecond_units h
   obtain ⟨ws, rfl, hmap⟩ := flockSamplingDesign_second sample ns ks _ parsed hp
@@ -232,7 +232,7 @@ replay sample `g.sample src₁` (at most `K` blocks), this is the by-template co
 theorem RegTwo.sum_proved_blockAt_le (g : RegTwo) (sample : Array ℕ) (src : ByteArray) {draw : Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond sample g.ns g.ks src = .ok (draw, n)) (w M : ℕ → ℕ)
     (hM : ∀ ρ t i, t < g.ns.size → i < g.ns.getD t 0 → w (g.blockOf ρ t i) ≤ M t) :
-    ((Spot.Draw.proved draw).toList.map fun j => w (g.blockAt sample j.toNat)).sum ≤
+    ((Spot.Sample.proved draw).toList.map fun j => w (g.blockAt sample j.toNat)).sum ≤
       sample.size * ((List.range g.ns.size).map fun t => g.ks.getD t 0 * M t).sum :=
   sum_proved_selectSecond_le hsel (fun j => w (g.blockAt sample j)) M fun t i j ht hi hj => by
     show w (g.blockAt sample (cellOff sample.size g.ns t + i * g.ns.getD t 0 + j)) ≤ M t
@@ -274,7 +274,7 @@ theorem RegTwo.sum_checked_le_strata (g : RegTwo) (N : ℕ) (src₁ src₂ : Byt
       (((List.range N).filter fun v => g.always v).map w).sum +
         K0 * ((List.range g.ns.size).map fun t => g.ks.getD t 0 * M t).sum := by
   have hc : g.checked N src₁ src₂ = (List.range N).filter fun v =>
-      g.always v || (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v := by
+      g.always v || (Spot.Sample.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v := by
     unfold RegTwo.checked
     rw [hsel]
   have hor : ∀ (xs : List ℕ) (p q : ℕ → Bool),

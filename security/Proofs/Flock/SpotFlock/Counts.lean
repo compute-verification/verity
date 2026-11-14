@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.SpotFlock.Drawn
+public import Proofs.Flock.SpotFlock.Sampled
 public import Proofs.Flock.SamplingGeneric.TwoFirstHitAt
 public import Proofs.Flock.SamplingGeneric.SessCount
 public import Proofs.Flock.Claims.Sampling.Refused

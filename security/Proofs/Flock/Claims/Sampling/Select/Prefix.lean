@@ -4,7 +4,7 @@ public import Proofs.Flock.Claims.Sampling.Select.Take
 
 /-! # A sample from bytes samples the same from any extension of them
 
-`Draw.sampleUnits` reads its source in order (`Draw.take`) and stops when its sampling design's sample ends, so a sample that ends on
+`Sample.sampleUnits` reads its source in order (`Sample.take`) and stops when its sampling design's sample ends, so a sample that ends on
 `ξ`'s bytes reads only `ξ` and ends the same on `ξ ++ t` (`sampleUnits_append`). -/
 
 @[expose] public section
@@ -34,7 +34,7 @@ theorem extract_append_of_le {a b : ByteArray} {i j : ℕ} (hj : j ≤ a.size) :
   rw [ByteArray.extract_append, he, ByteArray.append_empty]
 
 theorem take_append {ξ t : ByteArray} {need p : ℕ} {x : ByteArray × ℕ}
-    (h : (Draw.take ξ need).run p = .ok x) : (Draw.take (ξ ++ t) need).run p = .ok x := by
+    (h : (Sample.take ξ need).run p = .ok x) : (Sample.take (ξ ++ t) need).run p = .ok x := by
   rw [take_run] at h ⊢
   split at h
   · cases h
@@ -91,8 +91,8 @@ theorem forIn_append {α β : Type} (f g : α → β → StateT ℕ (Except Stri
 
 theorem onWith_append {ξ t : ByteArray} {N : ℕ} (hN : 0 < N) {run : ByteArray → Option (Array ℕ)} {p : ℕ}
     {x : Option (Array ℕ) × ℕ}
-    (h : (Flock.Draw.onWith (fun need => Draw.take ξ need) N run).run p = .ok x) :
-    (Flock.Draw.onWith (fun need => Draw.take (ξ ++ t) need) N run).run p = .ok x := by
+    (h : (Flock.Draw.onWith (fun need => Sample.take ξ need) N run).run p = .ok x) :
+    (Flock.Draw.onWith (fun need => Sample.take (ξ ++ t) need) N run).run p = .ok x := by
   unfold Flock.Draw.onWith at h ⊢
   try dsimp only at h ⊢
   refine run_bind_of h (fun r hr => take_append hr) (fun r _ hr => ?_)
@@ -115,8 +115,8 @@ theorem onWith_append {ξ t : ByteArray} {N : ℕ} (hN : 0 < N) {run : ByteArray
 
 theorem stratifiedWith_append {ξ t : ByteArray} {strata : Array Flock.Draw.Stratum} {p : ℕ}
     {x : Option (Array ℕ) × ℕ}
-    (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take ξ need) strata).run p = .ok x) :
-    (Flock.Draw.stratifiedWith (fun _ need => Draw.take (ξ ++ t) need) strata).run p = .ok x := by
+    (h : (Flock.Draw.stratifiedWith (fun _ need => Sample.take ξ need) strata).run p = .ok x) :
+    (Flock.Draw.stratifiedWith (fun _ need => Sample.take (ξ ++ t) need) strata).run p = .ok x := by
   unfold Flock.Draw.stratifiedWith at h ⊢
   dsimp only at h ⊢
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h ⊢
@@ -124,8 +124,8 @@ theorem stratifiedWith_append {ξ t : ByteArray} {strata : Array Flock.Draw.Stra
   exact run_bind_of hz (fun r hr => onWith_append (by unfold Flock.Draw.Stratum.need; omega) hr) (fun _ _ hk => hk)
 
 theorem sampleWith_append {ξ t : ByteArray} (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) {p : ℕ} {x : Option Flock.Draw.UnitSample × ℕ}
-    (h : (Flock.Draw.drawWith (fun _ need => Draw.take ξ need) samplingDesign n).run p = .ok x) :
-    (Flock.Draw.drawWith (fun _ need => Draw.take (ξ ++ t) need) samplingDesign n).run p = .ok x := by
+    (h : (Flock.Draw.drawWith (fun _ need => Sample.take ξ need) samplingDesign n).run p = .ok x) :
+    (Flock.Draw.drawWith (fun _ need => Sample.take (ξ ++ t) need) samplingDesign n).run p = .ok x := by
   cases samplingDesign with
   | subset k =>
     unfold Flock.Draw.drawWith at h ⊢
@@ -147,9 +147,9 @@ theorem sampleWith_append {ξ t : ByteArray} (samplingDesign : Flock.Draw.Sampli
 /-- **A sample reads only what it needs.** The units a sampling design samples from `ξ`'s bytes, and the bytes it read, are the same
 from `ξ ++ t`. -/
 theorem sampleUnits_append {ξ t : ByteArray} {samplingDesign : Flock.Draw.SamplingDesign} {n : ℕ} {r : Array ℕ × ℕ}
-    (h : Draw.sampleUnits samplingDesign n ξ = .ok r) : Draw.sampleUnits samplingDesign n (ξ ++ t) = .ok r := by
-  unfold Draw.sampleUnits at h ⊢
-  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take ξ need) samplingDesign n).run 0 with
+    (h : Sample.sampleUnits samplingDesign n ξ = .ok r) : Sample.sampleUnits samplingDesign n (ξ ++ t) = .ok r := by
+  unfold Sample.sampleUnits at h ⊢
+  cases hw : (Flock.Draw.drawWith (fun _ need => Sample.take ξ need) samplingDesign n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok y =>
     rw [hw] at h

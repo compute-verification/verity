@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.RelativeSecurity
 public import Properties.Pouw.Strata
-public import Properties.Spot.Draw
+public import Properties.Spot.Sample
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

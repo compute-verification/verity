@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Claims.ZKOut
-public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.Sampling.Samples
 public import Proofs.Flock.ZkAny.Generic
 public import Proofs.Flock.ZkAny.Relay
 public import Proofs.Flock.ZkAny.RelayFrames

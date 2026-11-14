@@ -5,7 +5,7 @@ public import Spot.Program
 public import Spot.Bits
 public import Spot.Partition
 public import Spot.PartitionRef
-public import Spot.Draw
+public import Spot.Sample
 public import Spot.LinkPoints
 public import Spot.Supplied
 public import Spot.Docket

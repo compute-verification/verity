@@ -4,7 +4,7 @@ public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Flock.Claims.Sampling.Count
 public import Proofs.Flock.Soundness.ExecSample
 public import Properties.Spot.Second
-import all Spot.Draw
+import all Spot.Sample
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import Mathlib.Data.List.GetD
@@ -30,7 +30,7 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 
 @[expose] public section
 
-open private Spot.Draw.stratum? Spot.Draw.natRanges from Spot.Draw
+open private Spot.Sample.stratum? Spot.Sample.natRanges from Spot.Sample
 
 open Spot
 
@@ -66,24 +66,24 @@ theorem getD_cellObj_floor (o n k i r t : ℕ) : getD (Select.cellObj o n k i r 
 
 theorem int_toJson (a : ℕ) : int? (Lean.toJson a) = some (a : Int) := (rfl)
 
-theorem ranges_pair {a b : ℕ} {rs : Array (Int × Int)} (h : Draw.ranges? (Json.arr #[natsJson #[a, b]]) = some rs) :
+theorem ranges_pair {a b : ℕ} {rs : Array (Int × Int)} (h : Sample.ranges? (Json.arr #[natsJson #[a, b]]) = some rs) :
     rs = #[((a : Int), (b : Int))] := by
-  unfold Draw.ranges? at h
+  unfold Sample.ranges? at h
   simp only [natsJson, Array.isEmpty, List.map_toArray, List.map_cons, List.map_nil, Array.mapM_eq_mapM_toList] at h
   by_cases hab : a < b <;> simp [hab, int_toJson] at h
   exact h.symm
 
-private theorem natRanges_pair {a b : Int} {rs : Array (ℕ × ℕ)} (h : Spot.Draw.natRanges #[(a, b)] = some rs) :
+private theorem natRanges_pair {a b : Int} {rs : Array (ℕ × ℕ)} (h : Spot.Sample.natRanges #[(a, b)] = some rs) :
     rs = #[(a.toNat, b.toNat)] := by
-  unfold Spot.Draw.natRanges at h
+  unfold Spot.Sample.natRanges at h
   by_cases ha : 0 ≤ a <;> simp [ha, Array.mapM_eq_mapM_toList] at h
   exact h.symm
 
 /-- A cell object of `secondSamplingDesign` that parses is `[o + i·n, o + (i+1)·n)` sampling `k`, of unit work and floor `k`. -/
 private theorem stratum_cell {o n k i r t : ℕ} {ws : Flock.Draw.WorkStratum}
-    (h : Spot.Draw.stratum? true (Select.cellObj o n k i r t) = some ws) :
+    (h : Spot.Sample.stratum? true (Select.cellObj o n k i r t) = some ws) :
     ws = { template := s!"{r}/{t}", units := #[(o + i * n, o + (i + 1) * n)], k := k, work := 1, floor := k } := by
-  unfold Spot.Draw.stratum? at h
+  unfold Spot.Sample.stratum? at h
   simp only [getD_cellObj_template, getD_cellObj_units, getD_cellObj_k, getD_cellObj_work, getD_cellObj_floor,
     nat_toJson, ↓reduceIte] at h
   split at h
@@ -149,10 +149,10 @@ def cellStratum (sample ns ks : Array ℕ) (z : ℕ × ℕ) : Flock.Draw.WorkStr
 /-- **The second stage's sampling design as Flock parses it, stratum by stratum**: the work design at `k = 1`, its
 strata the cells' in order (`cellStratum` over `cellPairs`). -/
 theorem flockSamplingDesign_second_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.SamplingDesign)
-    (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
+    (h : Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧
       ws.toList = (cellPairs sample.size ns.size).map (cellStratum sample ns ks) := by
-  unfold Draw.flockSamplingDesign at h
+  unfold Sample.flockSamplingDesign at h
   rw [getD_secondSamplingDesign_samplingDesign] at h
   dsimp only at h
   split at h
@@ -177,7 +177,7 @@ theorem flockSamplingDesign_second_strata (sample ns ks : Array ℕ) (m : ℕ) (
 
 /-- **`secondSamplingDesign`'s Flock sampling design**: the work sampling design at `k = 1`, its strata the cells in order (`cellOf` over `cellPairs`). -/
 theorem flockSamplingDesign_second (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.SamplingDesign)
-    (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
+    (h : Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧
       ws.toList.map (fun s => (s.units, s.k)) = (cellPairs sample.size ns.size).map (cellOf sample.size ns ks) := by
   obtain ⟨ws, rfl, hws⟩ := flockSamplingDesign_second_strata sample ns ks m parsed h
@@ -189,8 +189,8 @@ theorem getD_sample_units (sample ns ks : Array ℕ) (m : ℕ) (units : Array �
 
 /-- A sample object whose `units` are `units` proves each of them. -/
 theorem proved_units (draw : Json) (units : Array ℕ) (hd : getD draw "units" = natsJson units)
-    (u : ℕ) (hu : u ∈ units) : (u : Int) ∈ Draw.proved draw := by
-  unfold Draw.proved
+    (u : ℕ) (hu : u ∈ units) : (u : Int) ∈ Sample.proved draw := by
+  unfold Sample.proved
   rw [FlockSoundness.Audit.SampleExec.mem_qsort]
   refine Array.mem_append_left _ ?_
   dsimp only
@@ -203,9 +203,9 @@ under `secondSamplingDesign`'s Flock sampling design over the `|sample|·Σ n_t`
 theorem selectSecond_ok {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
     Select.secondProblem sample ns ks = none ∧
-      ∃ parsed units, Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) = .ok parsed ∧
-        Draw.sampleUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read) ∧
-          ∀ u ∈ units, (u : Int) ∈ Draw.proved draw := by
+      ∃ parsed units, Sample.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) = .ok parsed ∧
+        Sample.sampleUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read) ∧
+          ∀ u ∈ units, (u : Int) ∈ Sample.proved draw := by
   unfold Select.selectSecond at h
   cases hq : Select.secondProblem sample ns ks with
   | some e => rw [hq] at h; dsimp only at h; exact absurd h (throw_bind_ne _ _ _)
@@ -218,7 +218,7 @@ theorem selectSecond_ok {sample ns ks : Array ℕ} {src : ByteArray} {draw : Jso
     · exact absurd h (throw_bind_ne _ _ _)
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-    unfold Draw.sampleFirstRead at hd
+    unfold Sample.sampleFirstRead at hd
     obtain ⟨parsed, hp, hd⟩ := bind_eq_ok.1 hd
     obtain ⟨⟨units, read''⟩, hu, hd⟩ := bind_eq_ok.1 hd
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hd
@@ -375,7 +375,7 @@ theorem secondMisses : SecondMisses := by
   have hev : ∀ src : Fin L → Fin 256, ((Select.selectSecond sample ns ks (bytesOf src)).isOk = true ∧
         ∀ j ∈ X, (j : Int) ∉ secondOf (Select.selectSecond sample ns ks (bytesOf src))) →
       ∃ draw read, Select.selectSecond sample ns ks (bytesOf src) = .ok (draw, read) ∧
-        ∀ j ∈ X, (j : Int) ∉ Draw.proved draw := by
+        ∀ j ∈ X, (j : Int) ∉ Sample.proved draw := by
     rintro src ⟨hok, hm⟩
     cases h : Select.selectSecond sample ns ks (bytesOf src) with
     | error e => rw [h] at hok; exact absurd hok (by simp [Except.isOk, Except.toBool])

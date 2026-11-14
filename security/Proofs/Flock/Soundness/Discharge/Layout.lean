@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
 public import Proofs.Flock.Soundness.Discharge.Layout.InRegion
 public import Proofs.Flock.Soundness.Discharge.Layout.InCover
 public import Proofs.Flock.Soundness.Discharge.Layout.Pins
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Discharge.Layout.Sampled
 public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 public import Proofs.Flock.Soundness.Discharge.Layout.QSort
 public import Proofs.Flock.Soundness.Discharge.Layout.Site

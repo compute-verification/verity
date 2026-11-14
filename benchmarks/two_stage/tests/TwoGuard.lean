@@ -59,7 +59,7 @@ def secondSampleAt (h : Held) (s₀ s₁ : ByteArray) : Option Json :=
 /-- `SpotFlock.ownOf` at the first stage's bytes `s₀`. -/
 def ownOfAt (h : Held) (st : Roots) (rec draw : Json) (s₀ : ByteArray) : Spot.SecondStage.Own :=
   { sample := h.reg.sample s₀, parts := some (partsAt h (h.reg.sample s₀).size), interior := rec,
-    boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
+    boundary := st.record, drawn := (Spot.Sample.proved draw).map Int.toNat, links := h.links, wires := h.wires,
     rows := h.rows, refs := refsOf h, refReads := refRegisteredOf h }
 
 /-- `SpotFlock.readsOk` at the stages' bytes. -/
@@ -542,7 +542,7 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
     | some st, some rec, some draw, some w =>
       let own : Spot.SecondStage.Own :=
         { sample := h.reg.sample s₀, parts := some (partsAt h (h.reg.sample s₀).size), interior := rec,
-          boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
+          boundary := st.record, drawn := (Spot.Sample.proved draw).map Int.toNat, links := h.links, wires := h.wires,
           rows := h.rows, refs, refReads }
       let _ ← timed s!"t{t} interiorOrderOk" (fun _ => Spot.SecondStage.interiorOrderOk own) b
       let _ ← timed s!"t{t} namesOk" (fun _ => Spot.SecondStage.namesOk own) b

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.Cut
 public import Proofs.Properties.Verity.Sampled.Lines
-public import Proofs.Properties.Challenger.Drawn
+public import Proofs.Properties.Challenger.Sampled
 
 /-!
 # The cut's binding where the device printed the play's log in its two sessions

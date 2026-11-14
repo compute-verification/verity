@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Select.Layout
-public import Properties.Spot.Draw
+public import Properties.Spot.Sample
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -56,10 +56,10 @@ theorem select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Opt
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (draw : Json) (proved : Array ℕ) (read : ℕ)
     (h : Select.select rule d query table cm src = .ok (draw, proved, read)) :
     ∃ n named derived, Partition.units d query = .ok n ∧ rule.samplingDesignOver n = .ok named ∧
-      Draw.deriveSamplingDesign d query named table = .ok derived ∧ ∃ units : Array ℕ, (∀ x ∈ units, x ∈ proved) ∧
+      Sample.deriveSamplingDesign d query named table = .ok derived ∧ ∃ units : Array ℕ, (∀ x ∈ units, x ∈ proved) ∧
         ((rule = .all ∧ units = Array.range n) ∨
-          (rule ≠ .all ∧ ∃ parsed read', Draw.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed ∧
-            Draw.sampleUnits (derived.getD parsed) n src = .ok (units, read'))) := by
+          (rule ≠ .all ∧ ∃ parsed read', Sample.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed ∧
+            Sample.sampleUnits (derived.getD parsed) n src = .ok (units, read'))) := by
   unfold Select.select at h
   obtain ⟨n, hn, h⟩ := bind_eq_ok.1 h
   obtain ⟨named, hnamed, h⟩ := bind_eq_ok.1 h
@@ -97,8 +97,8 @@ theorem select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Opt
 def kindOf (samplingDesign : Json) : String := match getD samplingDesign "law" with | .str s => s | _ => ""
 
 /-- A probability `NUM/DEN` `probability?` accepts has `0 < DEN` and `NUM ≤ DEN`. -/
-theorem probability_ok (p : String) (a b : ℕ) (h : Draw.probability? p = some (a, b)) : 0 < b ∧ a ≤ b := by
-  unfold Draw.probability? at h
+theorem probability_ok (p : String) (a b : ℕ) (h : Sample.probability? p = some (a, b)) : 0 < b ∧ a ≤ b := by
+  unfold Sample.probability? at h
   split at h
   · split at h
     · simp only [Option.some.injEq, Prod.mk.injEq] at h
@@ -118,10 +118,10 @@ theorem throw_ne {ε α : Type} (e : ε) (b : α) : (throw e : Except ε α) ≠
 
 /-- **The sampling design `flockSamplingDesign` accepts**: a subset of the sampling design object's `k` units, at least one and no
 more than the population, a Bernoulli sampling design at a probability, or a sampling design of kind `stratified` or `work`. -/
-theorem flockSamplingDesign_cases (samplingDesign : Json) (n : ℕ) (parsed : Flock.Draw.SamplingDesign) (h : Draw.flockSamplingDesign samplingDesign n = .ok parsed) :
+theorem flockSamplingDesign_cases (samplingDesign : Json) (n : ℕ) (parsed : Flock.Draw.SamplingDesign) (h : Sample.flockSamplingDesign samplingDesign n = .ok parsed) :
     (∃ k, parsed = .subset k ∧ k ≤ n ∧ nat? (getD samplingDesign "k") = some k ∧ 1 ≤ k) ∨
       (∃ a b, parsed = .bernoulli a b ∧ 0 < b ∧ a ≤ b) ∨ kindOf samplingDesign = "stratified" ∨ kindOf samplingDesign = "work" := by
-  unfold Draw.flockSamplingDesign at h
+  unfold Sample.flockSamplingDesign at h
   split at h
   next s hs =>
     have hk : kindOf samplingDesign = s := by simp [kindOf, hs]
@@ -154,12 +154,12 @@ theorem flockSamplingDesign_cases (samplingDesign : Json) (n : ℕ) (parsed : Fl
 /-- **`deriveSamplingDesign`'s expansion**: none for a sampling design of neither kind `stratified` nor `work`, else the stratified or work sampling design
 `Flock.Draw.derive` or `Flock.Draw.deriveWork` expands over the query's strata. -/
 theorem deriveSamplingDesign_cases (d : Program) (query samplingDesign : Json) (table : Option Json)
-    (derived : Option Flock.Draw.SamplingDesign) (h : Draw.deriveSamplingDesign d query samplingDesign table = .ok derived) :
+    (derived : Option Flock.Draw.SamplingDesign) (h : Sample.deriveSamplingDesign d query samplingDesign table = .ok derived) :
     (derived = none ∧ kindOf samplingDesign ≠ "stratified" ∧ kindOf samplingDesign ≠ "work") ∨
       ∃ S k samplingDesign', Partition.strata d query = .ok S ∧ derived = some samplingDesign' ∧
         (Flock.Draw.derive k S = .ok samplingDesign' ∨
           ∃ t tab, Flock.Draw.workTableOfJson t = .ok tab ∧ Flock.Draw.deriveWork k S tab = .ok samplingDesign') := by
-  unfold Draw.deriveSamplingDesign at h
+  unfold Sample.deriveSamplingDesign at h
   split at h
   next s hs =>
     have hk : kindOf samplingDesign = s := by simp [kindOf, hs]
@@ -197,8 +197,8 @@ theorem deriveSamplingDesign_cases (d : Program) (query samplingDesign : Json) (
 /-- **`deriveSamplingDesign` expands no sampling design of neither kind `stratified` nor `work`**: it returns `none` there, whatever
 the program, query and work table. -/
 theorem deriveSamplingDesign_none (d : Program) (query samplingDesign : Json) (table : Option Json) (h1 : kindOf samplingDesign ≠ "stratified")
-    (h2 : kindOf samplingDesign ≠ "work") : Draw.deriveSamplingDesign d query samplingDesign table = .ok none := by
-  unfold Draw.deriveSamplingDesign
+    (h2 : kindOf samplingDesign ≠ "work") : Sample.deriveSamplingDesign d query samplingDesign table = .ok none := by
+  unfold Sample.deriveSamplingDesign
   split
   next s hs =>
     have hk : kindOf samplingDesign = s := by simp [kindOf, hs]
@@ -282,7 +282,7 @@ theorem slots_select_ok (rule : Select.Rule) (d : Program) (query : Json) (table
 /-- The design under the `All` rule samples both classes `all`. -/
 theorem slotDesign_all (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
     (derived : Option Flock.Draw.SamplingDesign) (hn : Partition.units d query = .ok n) (hnamed : Select.Rule.all.samplingDesignOver n = .ok named)
-    (hd : Draw.deriveSamplingDesign d query named table = .ok derived) :
+    (hd : Sample.deriveSamplingDesign d query named table = .ok derived) :
     Properties.Spot.slotDesign .all d query table = .ok ⟨[.all, .all]⟩ := by
   unfold Properties.Spot.slotDesign
   rw [hn, bind_ok, hnamed, bind_ok, hd, bind_ok]
@@ -292,7 +292,7 @@ theorem slotDesign_all (d : Program) (query : Json) (table : Option Json) (n : �
 theorem slotDesign_samplingDesign (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (n : ℕ)
     (named : Json) (derived : Option Flock.Draw.SamplingDesign) (parsed : Flock.Draw.SamplingDesign) (hne : rule ≠ .all)
     (hn : Partition.units d query = .ok n) (hnamed : rule.samplingDesignOver n = .ok named)
-    (hd : Draw.deriveSamplingDesign d query named table = .ok derived) (hp : Draw.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed) :
+    (hd : Sample.deriveSamplingDesign d query named table = .ok derived) (hp : Sample.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed) :
     Properties.Spot.slotDesign rule d query table =
       .ok ⟨[Properties.Spot.oneStageOf (derived.getD parsed), .all]⟩ := by
   unfold Properties.Spot.slotDesign

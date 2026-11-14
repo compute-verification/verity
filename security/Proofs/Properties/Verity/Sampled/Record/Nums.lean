@@ -128,7 +128,7 @@ theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitSample}
 
 /-- **The coins sample `A.kd` units** where the sample ends: `A`'s sampling design is on its strata and samples `A.kd` (`Live.hlaw`). -/
 theorem sampled_length (A : Live) {src : ByteArray} {u : Array ℕ} {rd : ℕ}
-    (h : _root_.Spot.Draw.sampleUnits A.design A.n src = .ok (u, rd)) : (drawn A src).length = A.kd := by
+    (h : _root_.Spot.Sample.sampleUnits A.design A.n src = .ok (u, rd)) : (drawn A src).length = A.kd := by
   unfold drawn
   simp only [h, Array.length_toList]
   exact _root_.Properties.Spot.SecurityProofs.sampleUnits_size A.hlaw h
