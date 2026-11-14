@@ -240,7 +240,7 @@
         "security/Definitions/Nci/",
         "security/Proofs/Nci/",
         "benchmarks/pouw/",
-        "verity/protocols/accounting/pouw/clear/",
+        "verity/protocols/accounting/pouw/prover/clear/",
         "benchmarks/machine_model/",
         "verity/protocols/accounting/pouw/verifier/receipts/",
         "benchmarks/numerical/",

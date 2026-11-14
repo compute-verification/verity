@@ -2405,6 +2405,11 @@
         "verity/protocols/accounting/pouw/verifier/dither/": "verity/protocols/experimental/dither/",
         "verity/protocols/accounting/pouw/verifier/tests/test_circuit_dither.py": "verity/protocols/experimental/dither/tests/test_circuit_dither.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/clear/": "verity/protocols/accounting/pouw/prover/clear/"
+      }
     }
   ]
 }
