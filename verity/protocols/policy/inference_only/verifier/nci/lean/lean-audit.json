@@ -2,10 +2,10 @@
  "format": 1,
  "roots": ["NciCheck"],
  "exempt": {
-  "NciCheck.CheckMain": "the nci-check exe: reads an instance file and the service's trusted input and prints NciCheck.Baseline.check (or, with --unrolled, NciCheck.Baseline.checkUnrolled) on them, or with --policy NciCheck.Desc.check (NciCheck.check) on the instance alone, or with --count NciCheck.Count.check on it (with --count --detail NciCheck.Count.checkDetail, the private record's); IO around the audited check, not a proof",
+  "NciCheck.CheckMain": "the nci-check exe: reads an instance file and the service's trusted input and prints NciCheck.Theta.check (or, with --unrolled, NciCheck.Theta.checkUnrolled) on them, or with --policy NciCheck.Desc.check (NciCheck.check) on the instance alone, or with --count NciCheck.Count.check on it (with --count --detail NciCheck.Count.checkDetail, the private record's); IO around the audited check, not a proof",
   "NciCheck.DescDifftestMain": "the description-sized check's difftest, under `runs`: compiled evaluation of NciCheck.DescDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof",
+  "NciCheck.ThetaDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.ThetaDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.RecordDifftestMain": "the record check's difftest, under `runs`: compiled evaluation of NciCheck.RecordDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.RecordCheckMain": "the inference-only-record-check exe: reads one case of the record difftest's and prints NciCheck.Record.checkDetail and NciCheck.RecordCount.checkDetail on it, each with the seconds since it started; IO around the audited check, not a proof",
   "NciCheck.DescLivenessMain": "the description-sized check's liveness test, under `runs`: compiled evaluation of NciCheck.DescLiveness.main, audited under NciCheck, a test and not a proof",
@@ -14,7 +14,7 @@
   "NciCheck.ProtocolMain": "the inference-only executable's entry point, one line; its command is Core.Protocol.main of NciCheck.Protocol.protocol, audited under CoreProtocol and NciCheck"
  },
  "runs": {
-  "NciCheck.BaselineDifftestMain": {
+  "NciCheck.ThetaDifftestMain": {
    "why": "1,218 declarations with θ, θ's provenance and the service's trusted input (the deployment's registration log in R6's chain, the run's digest and its parameters): 1,200 random, just under half of them broken in one way, 14 pinned on a declaration worked by hand (two accepted, citing the log's first record from the deployment's first run and from its third, one negative per refusal code, theta-not-at-deployment-start citing a record registered mid-deployment, an entry of the output kind θ no longer takes, refused theta-provenance as any unknown kind is, theta-not-registered, and two of a field of another JSON type than the string or null the check compares it with: the cited entry's root a number, refused theta-root, and a record's previous neither its predecessor's digest nor null, refused trusted) and two served windows with θ empty, each accepted on its own registration log, and each one's log with the other's Program, refused run-program, on which NciCheck.Baseline.check gives what scripts/nci_reference.py's check_baseline computes, and, on each one the policy check gives a verdict on, what NciCheck.Baseline.checkUnrolled gives on the case expanded gate by gate",
    "args": [
     "{baseline_difftest/cases.jsonl}",
@@ -27,7 +27,7 @@
     "baseline_difftest/expanded.jsonl": "3f81a967870c4226434ae8b52c2bd6b8d7bf2819edc592421a0f07a255fa185b",
     "baseline_difftest/python.jsonl": "309dad230487b9101c41c22fa269268670210f151d2c797aaa5d5db8df44ec67"
    },
-   "generate": ["python3", "scripts/baseline_difftest_vectors.py", "{repo}", "--out", "{out}"]
+   "generate": ["python3", "scripts/theta_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.CountDifftestMain": {
    "why": "1,687 instances of the count of (c, k)-inference blocks (1,500 random, a quarter of them read across their arrays' rows, 6 on each distinct descriptor of the circuits fixtures, and 7 on a declaration worked by hand: accepted, failing on gates, on fresh bits and on the count, θ empty, the blocks its primitives with a parameter θ at one call site and not the other, and a gate in no block), their blocks every primitive the root reaches with some or all of its composites, about a third malformed in one of the 14 ways NciCheck.Count refuses, on which NciCheck.Count.checkDetail, the private record's whole verdict, gives what scripts/nci_reference.py's check_count_detail computes activation by activation: per block Definition its Boolean gates, fresh bits and blocks, the total, the verdict and the first failure, or the first refusal's code; and NciCheck.Count.check, what the count publishes, gives check_count's: the verdict or the refusal's code, and no other field",
@@ -105,7 +105,7 @@
    "except": [],
    "why": "the description-sized check is code, as NciCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
   },
-  "NciCheck.Baseline": {
+  "NciCheck.Theta": {
    "imports": ["Std", "Circuits.Program", "NciCheck.Check", "NciCheck.Desc"],
    "except": [],
    "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports) and the policy check it runs first"
@@ -125,11 +125,11 @@
     "Flock.TemplateQuery",
     "Spot.Wires",
     "NciCheck.RecordText",
-    "NciCheck.Baseline",
+    "NciCheck.Theta",
     "NciCheck.DefinitionDigest"
    ],
    "except": [],
-   "why": "the check of an execution phase's circuit record is code, as NciCheck.Baseline is: θ's provenance check and what it imports, Flock's template queries, SPOT's reader of the record's wires, what the record's text declares (NciCheck.RecordText) and the Definition's closure digest; nothing of NciCheck.Count, no Mathlib and nothing of Security"
+   "why": "the check of an execution phase's circuit record is code, as NciCheck.Theta is: θ's provenance check and what it imports, Flock's template queries, SPOT's reader of the record's wires, what the record's text declares (NciCheck.RecordText) and the Definition's closure digest; nothing of NciCheck.Count, no Mathlib and nothing of Security"
   },
   "NciCheck.RecordCount": {
    "imports": ["NciCheck.Record", "NciCheck.Count"],
@@ -137,9 +137,9 @@
    "why": "the count of (c, k)-inference blocks on a circuit record is code: the record's summary (NciCheck.Record) and each Definition's Boolean gates by the gate table (NciCheck.Count)"
   },
   "NciCheck.Protocol": {
-   "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
+   "imports": ["NciCheck.Theta", "CoreProtocol.Protocol"],
    "except": [],
-   "why": "the inference-only policy as a core protocol is code: the policy's check (NciCheck.Baseline) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
+   "why": "the inference-only policy as a core protocol is code: the policy's check (NciCheck.Theta) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
   },
   "NciCheck.DefinitionDigest": {
    "imports": ["Base.Bytes", "Base.Canon", "Base.Hash", "Circuits.Steps"],

@@ -89,7 +89,7 @@ The inference-only policy has no rounds and reads no coins. Its case is the regi
 the registration log before the run (params), the run's own registration record (commitment: its digest is the one
 sampled proofs' audit commits to) and the division with θ and θ's provenance (evidence). It accepts exactly
 when the record names the registered circuit (its `program` is the circuit's SHA-512, as sampled proofs' audit asks of its
-own record) and the policy's check (`NciCheck.Baseline.evaluate`) finds that the division complies. Each product ties
+own record) and the policy's check (`NciCheck.Theta.evaluate`) finds that the division complies. Each product ties
 the policy's record to sampled proofs' (one record, below), so the circuit the policy checked is the one sampled proofs
 audited.
 

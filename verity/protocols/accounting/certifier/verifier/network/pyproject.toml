@@ -22,7 +22,7 @@ inputs = ["verity", "tools/difftest/python/verity_difftest"]
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_nci_baseline_difftest.py"]
+tests = ["tests/test_nci_theta_difftest.py"]
 paths = ["verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/certifier/prover", "verity/protocols/accounting/pous/prover", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/windows"]
 
 [[tool.verity.tests.reads]]

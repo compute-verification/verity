@@ -2426,6 +2426,19 @@
       "paths": {
         "security/Proofs/Properties/Nci/Novel.lean": "security/Proofs/Properties/Nci/Fresh.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Nci/Assumptions/Baseline.lean": "security/Definitions/Nci/Assumptions/Theta.lean",
+        "security/Proofs/Properties/Nci/Baseline.lean": "security/Proofs/Properties/Nci/Theta.lean",
+        "security/Proofs/Properties/Nci/BaselineSteps.lean": "security/Proofs/Properties/Nci/ThetaSteps.lean",
+        "security/Properties/Nci/Baseline.lean": "security/Properties/Nci/Theta.lean",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_baseline_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_theta_difftest.py",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Baseline.lean": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Theta.lean",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/BaselineDifftest.lean": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/ThetaDifftest.lean",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/BaselineDifftestMain.lean": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/ThetaDifftestMain.lean",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/baseline_difftest_vectors.py": "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/theta_difftest_vectors.py"
+      }
     }
   ]
 }

@@ -1,14 +1,14 @@
 module
 
-public import Properties.Nci.Baseline
+public import Properties.Nci.Theta
 
 /-!
 # θ's provenance check, step by step
 
-What each step of `NciCheck.Baseline.evaluate` establishes when it returns: the trusted input's reading (`trustedOf_ok`:
+What each step of `NciCheck.Theta.evaluate` establishes when it returns: the trusted input's reading (`trustedOf_ok`:
 the log in R6's chain, each record's digest, the run's record and the parameters), the provenance's (`provenanceOf_ok`),
-one θ entry's checks (`entryStep_ok`), and the loop over θ (`provenance_ok`). `Proofs.Properties.Nci.Baseline` joins them
-with the policy check's θ fold into `BaselineProvenance`.
+one θ entry's checks (`entryStep_ok`), and the loop over θ (`provenance_ok`). `Proofs.Properties.Nci.Theta` joins them
+with the policy check's θ fold into `ThetaProvenance`.
 
 The check compares fields with strings through `strOf?`, never with `Json`'s `==`, which is `partial`: what it compares
 is then what these lemmas read. This module imports no Mathlib.
@@ -16,11 +16,11 @@ is then what these lemmas read. This module imports no Mathlib.
 
 @[expose] public section
 
-namespace NciCheck.Properties.SecurityProofs.BaselineSteps
+namespace NciCheck.Properties.SecurityProofs.ThetaSteps
 
 open Lean (Json)
 open Flock.Program (Ty)
-open NciCheck.Baseline
+open NciCheck.Theta
 
 /-- `mapM` in `Except`, entry by entry. -/
 theorem list_mapM_ok_get {α β ε : Type} [Inhabited α] [Inhabited β] (f : α → Except ε β) :
@@ -303,13 +303,13 @@ theorem forIn_each {α β ε : Type} (f : α → β → Except ε (ForInStep β)
     · exact ⟨b, _, hfy⟩
     · exact forIn_each f hy l b' r h x hx
 
-theorem provenance_ok (j tr : Json) (h : Baseline.provenance j tr (fun _ k => k) = .ok ()) :
+theorem provenance_ok (j tr : Json) (h : Theta.provenance j tr (fun _ k => k) = .ok ()) :
     ∃ i P ps T, parse j = .ok i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧ provenanceOf j i.theta.size = .ok ps ∧
       trustedOf tr = .ok T ∧ strAt T.log[T.run]! "program" = some (Flock.hexOf P.sha512) ∧
       ∀ t < i.theta.size, ∃ n counts width,
         entryStep T ((ownersOf P T.params).getD (Array.replicate n none)) counts
           ((natOf? i.theta[t]!).getD 0) width ps[t]! = .ok () := by
-  unfold Baseline.provenance at h
+  unfold Theta.provenance at h
   rcases h1 : parse j with e | i <;> simp only [h1, bind, Except.bind] at h
   · cases h
   rcases h2 : Flock.Program.decode i.program.toUTF8 with e | P <;> simp only [h2] at h
@@ -339,12 +339,12 @@ theorem provenance_ok (j tr : Json) (h : Baseline.provenance j tr (fun _ k => k)
     · cases hs
     · simp only [Except.ok.injEq] at hs; exact ⟨_, hs.symm⟩
 
-theorem evaluate_ok (j tr out : Json) (h : Baseline.evaluate j tr = .ok out) :
-    Desc.evaluate j = .ok out ∧ Baseline.provenance j tr (fun _ k => k) = .ok () := by
-  unfold Baseline.evaluate at h
+theorem evaluate_ok (j tr out : Json) (h : Theta.evaluate j tr = .ok out) :
+    Desc.evaluate j = .ok out ∧ Theta.provenance j tr (fun _ k => k) = .ok () := by
+  unfold Theta.evaluate at h
   rcases h1 : Desc.evaluate j with e | o <;> simp only [h1, bind, Except.bind] at h
   · cases h
-  rcases h2 : Baseline.provenance j tr (fun _ k => k) with e | ⟨⟩ <;> simp only [h2, pure, Except.pure] at h
+  rcases h2 : Theta.provenance j tr (fun _ k => k) with e | ⟨⟩ <;> simp only [h2, pure, Except.pure] at h
   · cases h
   cases h
   exact ⟨rfl, rfl⟩
@@ -365,9 +365,9 @@ theorem owners_some (o : Option (Array (Option Nat))) (n k p : Nat)
     split at h <;> simp at h
   | some own => exact ⟨own, rfl, by simpa using h⟩
 
-/-- `BaselineProvenance`'s conclusion, given that every θ entry names a node (which the policy check's θ fold gives,
-`Proofs.Properties.Nci.Baseline`). -/
-theorem provenanceHeld_of (j tr out : Json) (h : Baseline.evaluate j tr = .ok out)
+/-- `ThetaProvenance`'s conclusion, given that every θ entry names a node (which the policy check's θ fold gives,
+`Proofs.Properties.Nci.Theta`). -/
+theorem provenanceHeld_of (j tr out : Json) (h : Theta.evaluate j tr = .ok out)
     (hθ : ∀ i, parse j = .ok i → ∀ t < i.theta.size, ∃ k, natOf? i.theta[t]! = some k) : ProvenanceHeld j tr := by
   obtain ⟨-, hprov⟩ := evaluate_ok j tr out h
   obtain ⟨i, P, ps, T, h1, h2, h3, h4, hprog, hsteps⟩ := provenance_ok j tr hprov
@@ -387,4 +387,4 @@ theorem provenanceHeld_of (j tr out : Json) (h : Baseline.evaluate j tr = .ok ou
   exact ⟨prov, ps[t]!.registration, ps[t]!.value, ps[t]!.root, hprovj, hpsz, fk, freg, fval, froot, by omega,
     by rw [← h0r]; exact hdg 0 (by omega), ⟨e, he, her⟩, k, p, own, hk, hown, hp, e', he', her'⟩
 
-end NciCheck.Properties.SecurityProofs.BaselineSteps
+end NciCheck.Properties.SecurityProofs.ThetaSteps

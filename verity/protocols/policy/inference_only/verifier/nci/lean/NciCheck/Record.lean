@@ -1,6 +1,6 @@
 module
 
-public import NciCheck.Baseline
+public import NciCheck.Theta
 public import NciCheck.RecordText
 public import NciCheck.DefinitionDigest
 public import Spot.Wires
@@ -9,11 +9,11 @@ public import Flock.TemplateQuery
 /-!
 # The inference-only policy's check of an execution phase's circuit record
 
-`Baseline` decides the rate rule on a Program that holds every weight it reads and every wire between its
+`Theta` decides the rate rule on a Program that holds every weight it reads and every wire between its
 units. An execution phase's Program holds neither: its root is calls and batches of templates, each unit reading
 committed rows, and which unit reads which registered parameter and which unit feeds which are declarations of the
 phase's circuit record (its wires, registered reads, table reads, openings and ingress), which SPOT checks unit by
-unit. This module does for such a record what `Baseline.evaluate` does for a Program: it reads the record
+unit. This module does for such a record what `Theta.evaluate` does for a Program: it reads the record
 (`read`), takes one summary of it (`summarize`), decides the rate rule on the summary (`rate`), and counts as θ only
 what the registration log registers at the start of the deployment (`isTheta`). It is a library with a difftest
 (`RecordDifftest`): no executable, protocol or verdict reads it.
@@ -35,7 +35,7 @@ An instance is `{"program", "record", "gamma", "alpha", "pins"}`, and optionally
   own: nothing of the Program or the record sets them;
 * `order`: the order of the record's unit ranges, read where the record states none (`Spot.Wires.Wiring.order`).
 
-The trusted input is `Baseline`'s, `{"log", "params", "run"}`: the deployment's registration log, the first
+The trusted input is `Theta`'s, `{"log", "params", "run"}`: the deployment's registration log, the first
 record first, and the digest of the run's own record. `params` is not read.
 
 ## What it reads, and what it refuses
@@ -45,7 +45,7 @@ record first, and the digest of the run's own record. `params` is not read.
 1. `instance`, `params`: a field is missing or of the wrong JSON kind; `Γ`, `α` or a pin is not as stated.
 2. `program`, `not-topological`: the Program is refused as `Desc.evaluate` refuses one before it analyzes it.
 3. `record`: the record's text is no JSON object.
-4. `trusted`: as `Baseline.trustedOf` refuses it.
+4. `trusted`: as `Theta.trustedOf` refuses it.
 5. `run-program`, `run-circuit`: the run's record does not name this Program, or its `window.circuit` is not the
    SHA-512 of this record's text.
 6. `templates`: the record does not name the Program, or its `templates` are not the root's nodes that are no input,
@@ -400,7 +400,7 @@ input, the record, its templates (`RecordText.templatesOf`) and their leaves (`l
 structure Front where
   i : Instance
   P : Prog
-  T : Baseline.Trusted
+  T : Theta.Trusted
   doc : Json
   ts : List Tmpl
   leaves : List Leaves
@@ -415,10 +415,10 @@ def front (j tr : Json) : Except String Front := do
   let doc ← match Flock.JsonParse.parse i.record with
     | .ok (.obj kvs) => pure (Json.obj kvs)
     | _ => throw "record"
-  let T ← Baseline.trustedOf tr
+  let T ← Theta.trustedOf tr
   let run := T.log[T.run]!
-  if Baseline.strAt run "program" != some (Flock.hexOf P.sha512) then throw "run-program"
-  if Baseline.strAt (Baseline.getD run "window") "circuit" !=
+  if Theta.strAt run "program" != some (Flock.hexOf P.sha512) then throw "run-program"
+  if Theta.strAt (Theta.getD run "window") "circuit" !=
       some (Flock.hexOf (Flock.Sha512.hash i.record.toUTF8)) then throw "run-circuit"
   let ts ← templatesOf P doc
   if !ownRows P then throw "own-rows"
@@ -556,11 +556,11 @@ def sameSlot (S : Nat) (gr gw : List Grid) (w : Spot.Wires.Wire) : Bool :=
 /-- Whether the registered parameter `p`, of `leaves` leaves in the record, is θ: the log's first record registers a
 value `p` (its last entry of that name) under the root the run's own record commits `p` under (its
 `window.registered_roots`), with `leaves` leaves in 16-bit words. -/
-def isTheta (T : Baseline.Trusted) (leaves : Nat) (p : String) : Bool :=
-  match Baseline.lastWith T.log[0]! "registered" "value" p,
-      Baseline.strAt (Baseline.getD (Baseline.getD T.log[T.run]! "window") "registered_roots") p with
+def isTheta (T : Theta.Trusted) (leaves : Nat) (p : String) : Bool :=
+  match Theta.lastWith T.log[0]! "registered" "value" p,
+      Theta.strAt (Theta.getD (Theta.getD T.log[T.run]! "window") "registered_roots") p with
   | some e, some root =>
-    Baseline.strAt e "root" == some root && match Baseline.dims e with
+    Theta.strAt e "root" == some root && match Theta.dims e with
       | some (rows, words, wordBits) => rows * words == leaves && wordBits == 16
       | none => false
   | _, _ => false
