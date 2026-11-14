@@ -20,7 +20,8 @@ compiled):
   For H1 + fx1 on DS-120, ♭ binds DS_issue alone: an IMMA.16832, 0.025641 LDSM_X4 and fx1's 8 ALU and 8 IMAD warp
   instructions, 17.025641, and 0.4207% skippable, so B_♭ = 17.097571.
 - 4 · SMs · f_max: the credit is T_cred = B_♭/f_max a unit on one SMSP (`Accounting.TS.Model.credit`), and a GPU's
-  4 · SMs SMSPs share the window's units. SMs is data/table.toml's (188 on sm_120), f_max `clock.sm` (`FMAX_MHZ`).
+  4 · SMs SMSPs share the window's units. SMs is data/table.toml's (188 on sm_120), f_max the family's
+  card's `clock.sm` (`FMAX_MHZ`; the card its model.toml names).
 - ε, PoUW's headline at the sheet: outside δ = 2^-40, an accepted window takes at least (1 − ε) · T_cred a unit over
   every route. ε (Corollary D3's) is what any other route, skipped work and luck can save against ♭, so the figure
   is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, `Sm120SheetHeadline`'s (with A5b: receipt
