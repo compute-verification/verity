@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 from verity_vllm.config import option
 
@@ -34,7 +35,7 @@ class Options:
 
 
 def patch(path, pairs, marker):
-    s = open(path).read()
+    s = Path(path).read_text()
     if marker in s:
         print(f"[fa3_tap] {os.path.basename(path)}: already patched")
         return
@@ -43,7 +44,7 @@ def patch(path, pairs, marker):
         assert n == count, f"{path}: anchor found {n}x (expected {count}):\n{old[:200]}"
         s = s.replace(old, new)
     assert marker in s
-    open(path, "w").write(s)
+    Path(path).write_text(s)
     print(f"[fa3_tap] {os.path.basename(path)}: patched")
 
 
@@ -116,7 +117,7 @@ struct Softmax {
 def _mainloop(hop):
     # 3. mainloop
     ml = os.path.join(hop, "mainloop_fwd_sm90_tma_gmma_ws.hpp")
-    s = open(ml).read()
+    s = Path(ml).read_text()
     if "Verity_mat_ctx_sm90" not in s:
         s = s.replace('#include "utils.h"\n#include "sm90_pipeline_no_cluster.hpp"\n',
                       '#include "utils.h"\n#include "sm90_pipeline_no_cluster.hpp"\n#include "verity_tap_fa3.h"\n', 1)
@@ -180,7 +181,7 @@ def _mainloop(hop):
             assert mid.count(old) == 1, f"mainloop anchor found {mid.count(old)}x:\n{old[:160]}"
             mid = mid.replace(old, new)
         s = head + mid + tail
-        open(ml, "w").write(s)
+        Path(ml).write_text(s)
         print("[fa3_tap] mainloop_fwd_sm90_tma_gmma_ws.hpp: patched")
     else:
         print("[fa3_tap] mainloop_fwd_sm90_tma_gmma_ws.hpp: already patched")
@@ -223,7 +224,7 @@ def _launch_template(hop):
 
 def _torch_lib(hop):
     # 5. torch lib with the verity ops
-    src = open(os.path.join(hop, "flash_api_torch_lib.cpp")).read()
+    src = Path(os.path.join(hop, "flash_api_torch_lib.cpp")).read_text()
     assert "verity_set_tap_v9" not in src
     ops_cpp = r'''
 // ---- [verity fa3 tap] host-side tap configuration (mirrors the FA2 tap's v8 ops, layout version 9)
@@ -303,7 +304,7 @@ REGISTER_EXTENSION(TORCH_EXTENSION_NAME);
     c = "REGISTER_EXTENSION(TORCH_EXTENSION_NAME);\n"
     assert src.count(c) == 1
     src = src.replace(c, impls.lstrip("\n"))
-    open(os.path.join(hop, "fa3_torch_lib_verity.cpp"), "w").write(src)
+    Path(os.path.join(hop, "fa3_torch_lib_verity.cpp")).write_text(src)
     print("[fa3_tap] fa3_torch_lib_verity.cpp: written")
 
 
