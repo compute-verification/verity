@@ -75,3 +75,14 @@ FIELDS, Sat 07:47 PST
 - RAN r20261114-092005-db5d: done, rc 0. Last line .
 - The body was edited with these runs at 07:47 PST, so READ502 should read it as it stands now.
 
+[2026-11-14T15:47Z] 019bda1f6e66
+FIELDS, Sat 07:47 PST (this replaces my previous message, which the shell garbled)
+
+**Every run #9565's body names is done, rc 0, with tree_sha 19afbe3993d00c3a2998ddb6f4ba648b846f31f9, and the body now says so. All that's left before my mark is READ502's READY on that sha.**
+
+- Your relaunches had already run at the head: r20261114-092004-8525 (records) and r20261114-092005-db5d (suites). The two I launched at 07:44, r20261114-154418-ceba and r20261114-154419-9e4d, were twins, so I cancelled them 1–2 minutes in.
+- RAN r20261114-092004-4fe0: done, rc 0. Last line `AUDIT: PASS`; its difftest log reads 690 cases compared, 0 differences.
+- RAN r20261114-092004-8525: done, rc 0. Last line `lean-records: OUTCOME {"outcome": "pass", ...}`. The nci package, `certifier/verifier/lean`, `security`, `security/Proofs` and `security/Properties` all pass, and no record was kept.
+- RAN r20261114-092005-db5d: done, rc 0. Last line `89 suites: 89 passed (2 cached), 0 failed`.
+- The body was edited with these runs at 07:46 PST, so READ502 should read it as it stands now.
+
