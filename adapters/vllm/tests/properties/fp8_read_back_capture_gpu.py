@@ -74,12 +74,12 @@ def sources(block_table: np.ndarray, ws: np.ndarray, starts: np.ndarray | None, 
     in [ws[r], ws[r + 1]) (the last request's end is ``total``), reads source position starts[r] + (o - ws[r]) at block
     block_table[r, pos // block_size], slot pos % block_size. Returns (total, 4): request, position, block, slot; -1 where
     no request writes the row."""
-    out = np.full((total, 4), -1, np.int64)
+    out: np.ndarray = np.full((total, 4), -1, np.int64)
     for r in range(batch):
         b = min(int(ws[r]), total)
         e = min(int(ws[r + 1]) if r + 1 < batch else total, total)
         n = max(e - b, 0)
-        pos = (0 if starts is None else int(starts[r])) + np.arange(n, dtype=np.int64)
+        pos: np.ndarray = (0 if starts is None else int(starts[r])) + np.arange(n, dtype=np.int64)
         out[b:b + n, 0] = r
         out[b:b + n, 1] = pos
         out[b:b + n, 2] = block_table[r, pos // block_size]
@@ -148,13 +148,13 @@ def planted(out: Path) -> dict[str, Any]:
     need = [-(-(int(s) + n) // BS) for s, n in zip(starts, parts)]
     nblocks = sum(need) + 16
     perm = rng.permutation(nblocks).astype(np.int32)
-    table = np.zeros((3, max(need)), np.int32)
+    table: np.ndarray = np.zeros((3, max(need)), np.int32)
     host = rng.integers(0, 256, (nblocks, BS, RB), dtype=np.uint8)
     at, used = 0, 0
     for r, (s, n) in enumerate(zip(starts, parts)):
         table[r, :need[r]] = perm[used:used + need[r]]
         used += need[r]
-        pos = int(s) + np.arange(n)
+        pos: np.ndarray = int(s) + np.arange(n)
         host[table[r, pos // BS], pos % BS] = rows[at:at + n]
         at += n
     ws = np.array([0, parts[0], parts[0] + parts[1]], np.int32)
@@ -198,7 +198,7 @@ def set_gains(model: Any) -> dict[str, Any]:
     with torch.no_grad():
         for name, p in model.named_parameters():
             if name.endswith("kv_a_layernorm.weight") and p.numel() == 512:
-                g = []
+                g: list[Any] = []
                 for x in GAINS:
                     g += spread(rng, 128) if x == "spread" else [x] * 128
                 p.copy_(torch.tensor(g, dtype=torch.float32).to(p.dtype))
@@ -346,7 +346,7 @@ def serve(out: Path) -> dict[str, Any]:
         it += 1
     swept: dict[int, str] = {}
     one = R.params({"temperature": 0.0, "seed": 0}, 2)
-    sweep_runs = []
+    sweep_runs: list[dict[str, Any]] = []
     for k, n in enumerate(SWEEP):
         rid = f"sweep-{k:02d}-{'repeat-' if n < 0 else ''}{abs(n)}"
         reqs[rid] = reqs[swept[-n]] if n < 0 else ids(n)
@@ -363,7 +363,7 @@ def serve(out: Path) -> dict[str, Any]:
     def per_step(s: int) -> dict[str, Any]:
         rs = [r for r in routes if r["step"] == s]
         cs = [c for c in calls if c["step"] == s and c["first_layer"]]
-        b = next((x["batch"] for x in steps if x["step"] == s), [])
+        b: list[dict[str, Any]] = next((x["batch"] for x in steps if x["step"] == s), [])
         return {"step": s, "batch": [{**x, "seq_len": x["computed"] + x["scheduled"]} for x in b],
                 "routes": [{k: r[k] for k in ("dense", "prefill_max_seq_len", "max_query_len", "cached_context")} for r in rs],
                 "gather_rows_first_layer": sum(c["rows"] for c in cs)}

@@ -5,9 +5,10 @@ description: >
   goal is (something that finishes, with one owner and a date), how to title it as a headline Daniel reads cold (three
   to six plain words, no number, none of our own labels), tags from the fixed list of areas, goals and their subgoals
   (a goal under another is its subgoal), what a goal waits on (links to goals and Daniel's asks, never free text), why
-  an off-track goal is off track, and how to write the description so Daniel can skim it (one plain opening sentence,
-  then the shape that fits: landing, research or proof; measured numbers in LaTeX, literals as code, leads as
-  @handle; a lead-in line for every list and no word he has said he doesn't know, refused by the site). Covers
+  an off-track goal is off track, what is not a goal (a day's step, a pull request's progress, a run), and how to
+  write the description for a reader who knows the architecture and has not followed the work (what will be true,
+  what is true today instead, then a target, limits or risks only when they change a decision; measured numbers in
+  LaTeX, literals as code, no word he has said he doesn't know, refused by the site). Covers
   `research goals show|set|confirm|done|remove|replace` and the API it calls. Use when writing, titling, updating or
   confirming a goal, adding a dependency, or rewriting your goals for a sync.
 ---
@@ -21,19 +22,28 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
 
 The page is how Daniel sees what is being done, so it moves when the work does:
 
-- **When a goal's state changes**, rewrite where it stands, and its status the moment it slips; don't wait for a sync.
+- **When a goal's state changes**, rewrite the sentence that says what is true today, and its status the moment it
+  slips; don't wait for a sync. Progress, plans and steps live in the goal's Linear issues, never in the goal.
 - **Work serves a goal on the page:** its issue carries the goal's label (the `goal` label group, one label per id),
   and its PR names that issue and the goal: `research queue open --issue KEY` writes a `Goal <id>` line for each live
   goal KEY's labels name, and `open` and `research queue ready` warn, never refusing, of a body naming no live goal so
   and not saying `Issue: none: REASON`. Work that serves none starts by writing its goal, or asking top.
 - **One outcome, one goal.** Before adding one, look for it under another owner's goal, and make yours its subgoal.
 
-Once a day top rings the owner of a goal past its due, for a new date or its evidence.
+`research goals audit` names, and once a day top rings the owner of, a goal past its due, an off-track goal not written
+in 24 hours, and a goal due within 24 hours not written in the 24 before its due. A goal only under `top/parked` is
+left out.
 
 ## A goal
 
-- **Something that finishes, never an ongoing activity** ("Work on demos"). "X measured" isn't a goal until it names
-  what's delivered: "Second swarm's training results out".
+- **An outcome that finishes:** something true of the system, a result, a decision made. Never an ongoing activity
+  ("Work on demos"). "X measured" isn't a goal until it names what's delivered: "Second swarm's training results out".
+- **Not a goal,** each folded into the goal it serves, where anything a reader would decide on becomes a limit or a
+  risk:
+  - one day's step of another goal;
+  - one pull request's progress: in review, waiting to merge, tests passing, rebased across a move;
+  - a run, which is evidence for the goal that needs its result;
+  - a worker started, a brief written, a review fix, a handoff.
 - **A title is a headline.** Daniel reads the page by its titles, and a title he has to open to understand is
   shorthand. Read yours cold before you save it; top reads every one.
   1. Short: usually three to six words, never more than about ten. It names the outcome at the level Daniel would
@@ -59,18 +69,19 @@ Once a day top rings the owner of a goal past its due, for a new date or its evi
   | GLM-5.3's long DSA rows in provable units | 128k-context attention fits in proof blocks |
   | Remote theorem rests on no open proof | Remote demo's soundness fully proved |
   | The Commit's share of the served step, measured | Commitment overhead measured |
-- **One owner** (`--owner`): the lead of the area the goal mostly builds, who keeps it true. Other areas that do
-  parts of it are @handle in its plan; a check the remote demo runs is the demo lead's goal even when proofs writes
-  it in Lean.
-- **A due date** (`--due YYYY-MM-DD`, the end of that day, or `YYYY-MM-DDTHH:MM-08:00` when the hour matters).
+- **One owner** (`--owner`): the lead of the area the goal mostly builds, who keeps it true. Another area's part of
+  it is that lead's goal, linked; a check the remote demo runs is the demo lead's goal even when proofs writes it in
+  Lean.
+- **A due date**, more precise as it nears (`--due YYYY-MM-DD`, the end of that day, or `YYYY-MM-DDTHH:MM-08:00`):
+  - more than a week away, a day;
+  - inside a week, the day you now expect, moved the day your estimate moves;
+  - inside 24 hours, the hour its last step ends (a run's or a check's end), set that day: 6 PM only when that is
+    the estimate. `research goals confirm ID` if the hour you gave stands.
 - **A priority**, 1 to 3: anyone may set one (`research goals priority ID 1|2|3|clear`), and the page shows
   who set it and when. A goal nobody set takes the highest priority of the goals waiting on it.
-- **Today's work, as a subgoal.** An open goal due within a week waits on a subgoal due within a day: write it
-  (`research goals set SUB ...`), then list it among what the goal waits on (`--wait goal:SUB`, repeated for every
-  link, since `--wait` replaces the list). A goal has no separate next-step field, and the site refuses one.
 - **A status:** `on-track`, `off-track` or `done`, your forecast of whether it will be true by its date.
   - Off track says why: link what it waits on, or say what's wrong in `--blockers`. The site refuses an off-track goal
-    with neither.
+    with neither. The reason is today's: each day it stays off track, rewrite it, or `confirm` it if every word holds.
   - Done needs evidence named in the description: a run, a lock change or a landed commit.
 - **Tags** (`--tag`, repeated) are the development areas responsible for the goal, from one fixed list in
   Daniel's words: `remote-demo`, `onsite-demo`, `proofs`, `circuits`, `lean`, `vllm`, `compute-accounting`,
@@ -93,8 +104,8 @@ Once a day top rings the owner of a goal past its due, for a new date or its evi
   (`--wait goal:ID`). Don't call a goal a "project", a "piece", a "step" or a "tier", in a title or a description.
   - A goal nothing waits on is one of Daniel's own: about a dozen across the plan, each one he would name himself.
     Its description opens with the state that finishes it.
-  - A subgoal is a dated state you can check: the soundness theorem and the H200 accounting are subgoals of the
-    remote demo.
+  - A subgoal is a dated outcome you can check: the soundness theorem and the H200 accounting are subgoals of the
+    remote demo. A day's step toward one is not.
   - **Before adding a goal nothing waits on,** ask whether it's a subgoal of one already in the plan. If nothing
     holds it only because an umbrella is missing, add the umbrella or ask its owner to. A merge isn't a goal of
     Daniel's.
@@ -117,98 +128,111 @@ it shows red. Fix the cause (re-date, re-scope, or chase the dependency) rather 
 
 ## The description
 
-Markdown for Daniel to skim. It never restates a field (due date, status, owner, tags or links): the page shows those.
+Markdown. It never restates a field (due date, status, owner, tags or links): the page shows those.
 
-**Open with one plain sentence** saying precisely what will be true, sharper than the title. Not bold.
+**The reader** knows the architecture and its glossary and has not followed your work day to day. He reads a goal to
+learn what will be true and whether to worry, not to follow the work.
 
-Then the shape that fits the goal:
+1. **Open with what will be true when the goal is done.** One sentence about a thing the reader can identify. If he
+   couldn't identify it, identify it in that same sentence by what it does and where it sits ("the test that the vLLM
+   adapter's int8 matrix multiplication is bit-exact"), never in sentences before it. Not bold.
+2. **Next to it, say what is true today instead, and what that costs.** Skip this when the opening makes it plain.
+3. **Add more only if it changes what the reader would decide:**
+   - `### Target`: a number the outcome must hit, and what it compares to.
+   - `### Limits`: what "done" does not include, which a reader would otherwise assume it does.
+   - `### Risks`: what could make it false or late, that is specific to this goal.
 
-- **Landing** (code reaching main, a migration, a deploy): the path as a numbered list, in order, with times and
-  owners, finished steps first. Sub-bullets hold the detail.
-- **Research** (a measurement or a result): what's measured so far, with the key numbers and what they're on; the plan
-  as a numbered list; then one line on what the numbers rest on (assumptions, unproved theorems, seeds).
-- **Proof** (a theorem in Lean): the statement in plain words, then what's proved and what's left, with other teams'
-  parts linked as goals.
+   Use a section only when it has real content. Most goals need none or one.
 
-Close with the date only when it says something the due date doesn't: "Due **Fri**. **Wed** would need both subgoals
-within two days."
+Test: after the first two sentences, could that reader say what changes and why it matters? If not, fix those two
+sentences. Do not add more around them.
 
 Rules:
 
-- Write what Daniel needs to judge the forecast: what will be true, where it stands, the plan. A derivation, a proof
-  sketch or a list of runs goes in the linked issue or note; the goal links it.
-- Current truth only: no corrections, no "moved to", no history of the goal. The page shows when it was last written.
-- Say where work stands in outcome words: running, in review, waiting to merge, on main. Not the pipeline's words:
-  "approved for landing", "marked", "the landing loop", "drive", "a train".
-- Name who does a step as @handle in its sentence ("@ci moves main on it"), never as a tag in parentheses.
-- A step's day is usually enough ("Tue", "by Wed noon"). Give the hour only when another goal waits on it.
-- Leave out what Daniel doesn't act on: run counts, restarts, idle machines, GPU counts.
-- Plain words over coined ones. "Fresh products", "whole-making", "the sealed shard" and "a live coin" are terms you
-  made; say what they mean ("matrix products whose two inputs were both just computed"), or define the term once.
-
-- Measured numbers are LaTeX: $9.5$ ms, $98.75\%$, $0$ of $6{,}256$ tiles. Bold only dates and decisions waiting on
-  Daniel, never a sentence or a clause.
+- **Do not write what you cannot explain** to that reader: what the thing is, and what breaks without it.
+- **Say what, never who.** No handle and no lead as the subject; the owner is a field. Another lead's part is that
+  lead's goal, linked. The exception is when who holds something is itself the content: which lead owns a directory,
+  or an outcome that is one team's own number ("ci's changes refused for a merge conflict").
+- **No status diary:** no "where it stands", "so far" or "plan", no dated steps, nothing about what is in review or
+  waiting to merge, no run counts, restarts, machines or GPU counts, no corrections, no history of the goal, no who
+  approved what. The page shows when it was last written.
+- **No description of a dependency.** What the goal waits on is a link, and the dependency's state lives on it.
+- **Anything you refer to is a goal he can click, or it is cut.** Link another goal with `[its title](#goal-id)` and
+  an ask with `[text](ask:<card id>)`; both render as chips. Never a bare id, and never a goal by number.
+- **Use the architecture's word for a thing.** No coined synonym ("PoUW's check" for PoUW's output) and no lane
+  shorthand ("the swarm", "the serve"). A term the reader may not know is said in plain words, or added to the
+  page's glossary: tell dashboard.
+- **Parallel items are bullets** under a lead-in line ending in a colon that says what they are, in the goal's own
+  words. Never an inline list with counts. The site refuses a list without a lead-in. Sub-bullets are indented three
+  spaces.
+- Measured numbers are LaTeX, with units and what they compare to: $9.5$ ms, $98.75\%$, $0$ of $6{,}256$ tiles. Keep
+  a number only if it changes what the reader thinks. Math is LaTeX between dollar signs: $\rho$, $2^{-256}$. The site
+  refuses a Greek character or a superscript outside math or code.
 - Code (backticks) is for a literal someone would type, flip or match: a GPU target (`sm_90a`), a number format
-  (`fp8`, `bf16`), a served option (`--enable-chunked-prefill`), a command (`research goals set`). Name the literal
-  when it's the thing someone flips or checks, not "one fast path". Names of things stay plain: vLLM, cuBLASLt,
-  Llama 3.2 1B, the H200. The site refuses a word with an underscore outside code.
-- No fixed labels, but every list has a lead-in line ending in a colon that says what it is, in the goal's own words:
-  "So far, on the pilot:", "Plan:", "Proved:", "Left:", "By Tue 6 AM:". The site refuses a list without one.
-- Math is LaTeX between dollar signs: $\rho$, $p = C/H$, $2^{-256}$. The site refuses a Greek character (ρ, ε) or a
-  superscript (2⁻²⁵⁶) outside math or code.
-- No "why it matters" when the title already says it. No "to check it" unless the evidence isn't obvious, and then one
-  line naming it.
-- Sub-bullets are welcome: indent them three spaces under their item.
-- Times are Pacific, written like "Mon 10 PM", with no zone and never UTC.
-- No PR numbers, ticket ids, branch names, run ids, agent ids, file paths or code names (a package, module or
-  function: "te_core", "page_rho"). Say what the thing does. No goal by number either ("goal 5", "the eleven"):
-  link it by its title.
-- Name a lead as @handle (@ci, @proofs): the page sets it as the lead's chip, apart from the area tags and the
-  software a handle is named after.
+  (`fp8`), a path, a command (`research goals set`). Names of things stay plain: vLLM, Llama 3.2 1B, the H200. The
+  site refuses a word with an underscore outside code.
+- No PR numbers, ticket ids, branch names, run ids, agent ids or code names (a package, module or function:
+  "te_core", "page_rho"). Say what the thing does.
+- Bold only a decision waiting on Daniel. A date appears only when it is the fact ("defaults on **Mon 16 Nov** at
+  6 PM"), written in Pacific time like "Mon 10 PM", with no zone and never UTC.
 - The site refuses a word Daniel has said he doesn't know, and its refusal says what to write instead. The list is
   `UNKNOWN` in the website repository's goals check (`plain.ts`); when he says he doesn't know a word, tell dashboard,
   who adds it with his words.
-- Give numbers with units and what they compare to.
-- Link another goal with `[text](#goal-id)` and an ask with `[text](ask:<card id>)`; both render as chips. Never a
-  bare id.
 
-A research goal, as Daniel approved it:
+An off-track goal's blockers say in one or two plain sentences what stops it today.
+
+Goals as Daniel approved them. An outcome whose problem today needs saying:
 
 ~~~markdown
-For a ladder of fully trained models, the cheapest covert route to each lower loss, measured against the cheapest
-honest one, under the training formalism (v2).
+The network certifier certifies every execution phase of a GLM-5.3 serving run.
 
-So far, on the FineWeb-Edu pilot:
-- slowdown at the default policy is about $200$ to $430$ for most routes;
-- as low as $1$ for adapters on the embedding. That rests on the theorem's attention loose end: **your call**,
-  sent 5:28 PM.
+On Friday's run of record it did not sign the first phase, because it stalled while the operating system moved its
+memory pages. The audit then refused every later phase as well, so no part of that run is certified. The certifier's
+node is now set not to move those pages.
 
-Plan:
-1. Tonight the 20M, 60M and 200M starts retrain on OLMo 2's pretraining mix.
-2. Every frontier point is rerun on the sealed shard at $3$ seeds.
-3. Both training plots from those runs by **Wed 8 AM**.
+### Risks
 
-Every slowdown rests on assumptions A1 and A1′ until the Slowdown theorem is proved in Lean.
+The new setting was tried only on a nearly idle node, where the stall is less likely to show than under serving load.
 ~~~
 
-A proof goal:
+A thing the reader couldn't place, identified in the opening sentence:
 
 ~~~markdown
-What the zero-knowledge server releases reveals at most about $1$ bit a session, plus the counted bits of where a
-session stopped, when the worker runs the honest prover.
+The test that the vLLM adapter's int8 matrix multiplication is bit-exact records which of its two GPU kernels ran on
+each shape. Today that is inferred from the adapter's rule for choosing between them, so the test can pass without the
+second kernel ever having run.
+~~~
 
-Proved:
-- the server's release rounds and the inner proof's rounds, approved for landing;
-- this week, the inner phase checked in Lean instead of Python.
+A measurement:
 
-Left:
-- the honest worker's requests, in Lean, shown to pass the server's checks:
-  [memory accounting](#accounting/honest-requests-pass-firewall), with
-  [proofs making the checks provable](#proofs/firewall-checks-provable);
-- the stop leak, about $11$ bits a session, proved from the session's rules:
-  [network accounting](#accounting/stop-leak-proved).
+~~~markdown
+Dashboard shows how much slower GLM-5.3 serves with Verity on than stock vLLM does under the same load.
 
-Due **Fri**. **Wed** would need both subgoals within two days.
+### Target
+
+At most $2.05$ points slower than stock. Verity's whole compute budget is 10%.
+
+### Risks
+
+The benchmark is accurate to about $\pm 1$ point. That is enough to check the total, and not enough to say what each
+change costs on its own, except the largest.
+~~~
+
+Parallel items, and a limit:
+
+~~~markdown
+One list covers the inference-only policy's Lean:
+
+- each guarantee, with what Lean proves of it today
+- each open part, with its owner and date
+- what the statement for served traffic still lacks
+
+### Limits
+
+Of the $25$ open parts:
+
+- $8$ have no date from their owner
+- $2$ have no owner
 ~~~
 
 ## Commands
