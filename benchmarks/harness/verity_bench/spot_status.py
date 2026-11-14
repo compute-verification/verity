@@ -500,9 +500,9 @@ def render(doc: Mapping[str, Any]) -> str:
     of = ("of the commit the served run's record names and of each of its runs' commits" if sv else
           "of the commit each run's record names")
     lines = ["## SPOT's resampling holes in the code that ran", "",
-             f"Each hole is closed only where its fix's commit (`{doc['fixes']}`; a hole with none is open) is an ancestor "
-             f"{of}. The label is `SPOT soundness` only when both are closed in every "
-             f"{'one, with all four runs read' if sv else 'run read'}.", "", f"- label: **{doc['label']}**"]
+             (f"Each hole is closed only where its fix's commit (`{doc['fixes']}`; a hole with none is open) is an ancestor "
+              f"{of}. The label is `SPOT soundness` only when both are closed in every "
+              f"{'one, with all four runs read' if sv else 'run read'}."), "", f"- label: **{doc['label']}**"]
     partly = sv and f" ({', '.join(sv['read']) or 'its record alone'}); {', '.join(sv['not_given'])} not given"
     runs_at: dict[str, list[str]] = {}
     for r in sv["runs"] if sv else ():
