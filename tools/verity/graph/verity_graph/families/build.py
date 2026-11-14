@@ -5,10 +5,10 @@
   the tree it requires by path; its outputs are the executables its lakefile's
   `defaultTargets` name, each at its path in a built tree (`.lake/build/bin/<exe>`, where the suites that run them look), and
   the rest of the build, each of those packages' `.lake/build` in one archive (`TREE`, its var `builds` the packages).
-- `lean-unit-cut:verity/protocols/proofs/flock/prover/agreement/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
+- `lean-unit-cut:verity/protocols/proofs/flock/prover/agreement/unit_cut_agree.py`: the script on the Lean verifier it reads, the Lean partition
   check's conformance with `verity.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
   reads no data), its output the script's result.json.
-- `lean-agreement:verity/protocols/proofs/flock/prover/agreement`: `check.py --lean-agreement` on the flock-verify it reads, against upstream's Rust
+- `lean-agreement:verity/protocols/proofs/flock/prover/agreement`: `check.py --lean-agreement` on the Lean verifier it reads, against upstream's Rust
   verifier on the upstream build and inputs `upstream.json` pins; its inputs are its directory less its Markdown, which no
   script there reads, and what check.py reads; its output is ci.py's per-set verdicts.
 - `lean-suites:SUITE`: `suites.py` on one of the suites check runs after lean-build (`suites.AFTER_LEAN`, read from its source:
@@ -49,7 +49,7 @@ SUITES = "tools/verity/check/suites.py"
 #: and the parts of one tree hold each file once whichever machines run them.  Each is as many as keep its parts near ten minutes
 #: at its files' recorded seconds, or near its longest file.  A suite that declares `[tool.verity.tests] parts` is in those
 #: parts by test id, as check runs it, and isn't listed here
-PARTS = {"verity-flock": 6, "verity-vllm": 2, "pous-check": 3, "verity-pouw-check-difftest": 2,
+PARTS = {"verity-flock": 6, "pous-check": 3, "verity-pouw-check-difftest": 2,
          "verity/protocols/accounting/certifier/verifier": 2}
 #: a lean-suites task's disk: the suites build Lake packages of their own beside the verifier's
 SUITES_DISK_GB = 60

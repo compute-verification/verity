@@ -48,7 +48,7 @@ managed = ["/usr/local/bin/vy-*", "/usr/local/lib/vy-monitoring/*", "/etc/system
            "/etc/systemd/system.control/*/*",
            "/etc/sysctl.d/61-vy-userns*"]
 
-# the auditor host for proofs' challenger service (us-north1, trusted-host): it runs the challenger as
+# the auditor device for proofs' challenger service (us-north1, trusted-device): it runs the challenger as
 # `auditor` from infra's pinned tree through vy-challenger-gate and takes no `research run` (/etc/vy/auditor), and no cluster pool
 # or check slot lists it. Its deploy user is vy-admin: research's keys there reach only the gate, so the relays' drift skips it
 # (`admin`) and infra's lead reads it with `research deploy drift --on vy-challenger-1` from a machine holding vy-admin's key.
@@ -58,7 +58,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
            "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*"]
 
-# the auditor host for PoUB's verifier (uk-south2, trusted-host, as vy-challenger-1): it runs
+# the auditor device for PoUB's verifier (uk-south2, trusted-device, as vy-challenger-1): it runs
 # the verifier as `auditor` from infra's pinned tree through vy-verifier-gate and takes no `research run` (/etc/vy/auditor), and no
 # cluster pool or check slot lists it. Its deploy user is vy-admin: research's keys there reach only the gate, so the relays' drift
 # skips it (`admin`), as on vy-challenger-1.
@@ -68,7 +68,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
            "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*", "/etc/vy/verifier.json"]
 
-# vy-auditor-2: the same auditor host for the demo H200 (vy-dc-h200-2, us-central1), where PoUS's timed reads need the
+# vy-auditor-2: the same auditor device for the demo H200 (vy-dc-h200-2, us-central1), where PoUS's timed reads need the
 # challenger in-region. A 1x RTX PRO 6000 VM, because the tenant's non-GPU vCPU quota in us-central1 is 0; its GPU is unused.
 [nodes.vy-auditor-2]
 admin = true
@@ -128,8 +128,8 @@ managed = ["/usr/local/bin/vy-*", "/usr/local/sbin/vy-*", "/usr/local/lib/vy-mon
            "/etc/systemd/system/*.d/*vy*", "/etc/systemd/system.control/*/*",
            "/etc/sysctl.d/61-vy-userns*"]
 
-# cpu-7 to cpu-12 (cpu-7, cpu-9, cpu-11 and cpu-12 hold the soundness, research and train pools; the nightly check runs in
-# cpu-8's nightly pool): `managed` names just the OOM order, the memory drop-ins and the user-namespace setting
+# cpu-7 to cpu-12 (cpu-7, cpu-9, cpu-11 and cpu-12 hold the soundness, research and train pools): `managed` names just the OOM
+# order, the memory drop-ins and the user-namespace setting
 [nodes.vy-nebius-cpu-7]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.*",
@@ -186,7 +186,8 @@ managed = ["/usr/local/sbin/vy-vqueue-*", "/usr/local/lib/vy-vqueue/*", "/usr/lo
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf",
            "/etc/sysctl.d/61-vy-userns*"]
 
-# cpu-14 to cpu-17 (uk-south2, train slots): cpu-12's entries; cpu-16 and cpu-17 are staged. pods/nebius/launch.sh creates one
+# cpu-14 to cpu-17 (uk-south2, train slots; the nightly check runs in cpu-14's nightly pool): cpu-12's entries; cpu-16 and
+# cpu-17 are staged. pods/nebius/launch.sh creates one
 # with NEBIUS_VM_NAME, cpu-13's shape (cpu-d3, 192vcpu-768gb, ubuntu24.04-driverless) and a data disk of a multiple of 93 GiB
 [nodes.vy-nebius-cpu-14]
 record = "/workspace/research/deploy/record.jsonl"
@@ -312,7 +313,7 @@ nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1", "vy-neb
          "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
 owner = "infra"
 
-# Memory: user 1001's slice, each login session's scope (a run's own cap), the user manager's OOM score, and ssh.service, where a
+# Memory: user 1001's slice, each login session's scope (a run's own limit), the user manager's OOM score, and ssh.service, where a
 # login goes when logind can't make its scope. install's daemon-reload applies them to running units; nothing restarts.
 [[file]]
 path = "/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf"
@@ -444,7 +445,7 @@ src = "tools/research/src/research/pods/nebius/vy-slot-only.timer"
 nodes = ["vy-nebius-cpu-1"]
 owner = "infra"
 
-# ---- the auditor host: no `research run` (/etc/vy/auditor lists no command: research.remote refuses every one, and slot_only.py
+# ---- the auditor device: no `research run` (/etc/vy/auditor lists no command: research.remote refuses every one, and slot_only.py
 # --auditor stops one from an older tree); after installing, `sudo systemctl enable --now vy-auditor-only.timer`. The challenger runs
 # through vy-challenger-gate (verity/protocols/compose/device/live_challenger/auditor.py): once installed, `sudo vy-challenger-setup GATE_KEYS --lock`
 # (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, each lane's own key, LANE `-` for a key that reads only; setup.sh), then
@@ -542,7 +543,7 @@ by = "infra/control/door_setup.sh"
 nodes = ["vy-control-verity"]
 owner = "infra"
 
-# ---- the verifier's auditor host, vy-auditor-1, an auditor host as above (/etc/vy/auditor, vy-auditor-only.timer). The verifier runs
+# ---- the verifier's auditor device, vy-auditor-1, an auditor device as above (/etc/vy/auditor, vy-auditor-only.timer). The verifier runs
 # through vy-verifier-gate (verity/protocols/accounting/poub/device/live_verifier/host.py): once installed, `sudo vy-verifier-setup GATE_KEYS TUNNEL_KEYS --lock`
 # (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, LANE `-` for a key that reads only; TUNNEL_KEYS: `prover|challenger ADDRESS TYPE
 # BASE64 [COMMENT]`, the audited node's tunnel key and vy-challenger-1's; setup.sh), `sudo systemctl reload ssh`, then
@@ -605,7 +606,7 @@ nodes = ["vy-auditor-1", "vy-auditor-2"]
 owner = "infra"
 
 # ---- both nodes and every CPU node: each live run's oom_score_adj from its memory use against its research.mem reservation,
-# so the OOM killer takes a run over its reservation (or without one) before a run within it, until reservations are caps;
+# so the OOM killer takes a run over its reservation (or without one) before a run within it, until reservations are limits;
 # after installing, `sudo systemctl daemon-reload && sudo systemctl enable --now vy-oom-order.timer`. The timer's oneshot reads
 # the script fresh: nothing to restart
 
@@ -637,7 +638,7 @@ nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy
 run = ["systemd:vy-oom-order.timer"]
 owner = "infra"
 
-# The Lean check cache's caps: lean_audit.py --prune hourly as research, so a node's records trees stay at the 3 last
+# The Lean check cache's limits: lean_audit.py --prune hourly as research, so a node's records trees stay at the 3 last
 # used, or one per `build` Lean slot where lean-slots has more (uncapped, they fill a node's /). lean_audit.py loads its modules
 # by their repository paths, so each keeps that layout: common.py, module_keys.py, settings.py, and module_keys's headers.py and
 # the task graph's contract.py (test_lean_prune runs the prune from these files alone).
@@ -986,12 +987,14 @@ nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
-# The collector on vy-nebius-2 alone also deletes the runs custody did not preserve, once their record has expired
-# (`--unpreserved-runs`): no other node passes the flag.
+# The collector on vy-nebius-2 and vy-nebius-cpu-1 to cpu-15 also deletes the runs custody did not preserve, once their record
+# has expired (`--unpreserved-runs`): no other node passes the flag. A pass takes them only while /workspace is over 80%.
 [[file]]
 path = "/etc/systemd/system/vy-retention-gc.service.d/20-unpreserved-runs.conf"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc_unpreserved.conf"
-nodes = ["vy-nebius-2"]
+nodes = ["vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5",
+         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11",
+         "vy-nebius-cpu-12", "vy-nebius-cpu-13", "vy-nebius-cpu-14", "vy-nebius-cpu-15"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
@@ -1356,6 +1359,20 @@ owner = "infra"
 path = "/workspace/custody/tools/research/store.pod.toml"
 src = "tools/research/store.pod.toml"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-4"]
+owner = "infra"
+
+# the node file and the card pods/nebius/check.py reads its figures from, beside the copy above as in the repository: the
+# node's python3 has no verity package, so the check reads them by path
+[[file]]
+path = "/workspace/custody/hardware/nodes/rtx-pro-6000-server-x8.toml"
+src = "hardware/nodes/rtx-pro-6000-server-x8.toml"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+owner = "infra"
+
+[[file]]
+path = "/workspace/custody/hardware/cards/rtx-pro-6000-server.toml"
+src = "hardware/cards/rtx-pro-6000-server.toml"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
 owner = "infra"
 
 [[file]]
@@ -1816,6 +1833,19 @@ owner = "infra"
 [[file]]
 path = "/usr/local/lib/vy-vqueue/bin/gh"
 src = "tools/research/src/research/pods/nebius/vqueue/bin/gh"
+nodes = ["vy-nebius-cpu-13"]
+owner = "infra"
+
+# loop.sh runs each at its call (graph2's CLI, the Lean cache's publish after a landing): nothing to restart
+[[file]]
+path = "/usr/local/lib/vy-vqueue/graph2.sh"
+src = "tools/research/src/research/pods/nebius/vqueue/graph2.sh"
+nodes = ["vy-nebius-cpu-13"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-vqueue/lean_publish.sh"
+src = "tools/research/src/research/pods/nebius/vqueue/lean_publish.sh"
 nodes = ["vy-nebius-cpu-13"]
 owner = "infra"
 

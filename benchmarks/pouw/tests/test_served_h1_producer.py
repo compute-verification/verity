@@ -17,13 +17,13 @@ unit's blocks: on the CPU through the torch chain (and through `Served`, slow), 
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity_config.settings import of
 
 from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
 
@@ -33,6 +33,7 @@ import producer as PR  # noqa: E402
 
 from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
 
+SETTINGS = of(__file__)
 SERVED_H1 = Path(__file__).resolve().parents[1] / "served_h1"
 SALT, RA, RB = hashlib.sha512(b"salt").digest(), hashlib.sha512(b"A").digest(), hashlib.sha512(b"B").digest()
 #: Llama-3.1-8B's linears (n, K): qkv, o, gate_up, down
@@ -211,8 +212,8 @@ def _held_to_reference(run, codes, weights, made_by, units_of):
     weight, each seeded from its unit's public row as the verifier builds it (`credit.public_table`: the run's salt, its
     Program position and the registered roots), whose table is the ``pub@<c>`` `Served` registered; returns the units
     checked, live and dead."""
-    from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity_vllm.protocols.pouw.h1 import served as SV
     served, pre, seen = run.served, run.served.program.fn.bindings["PREFIX"], {"live": 0, "dead": 0}
     assert not served.refused, served.refused
@@ -258,7 +259,7 @@ def test_each_calls_receipt_table_is_h1tile_reference_through_served():
 
 
 def _kernel():
-    so = os.environ.get(SO)
+    so = getattr(SETTINGS, SO)
     if not so or not torch.cuda.is_available():
         pytest.skip(f"no GPU, or {SO} names no h1u.cu -hbc build (benchmarks/hash/dither/sbench.sh's h1u_kc.so): its run "
                     "is a recorded run on vy-nebius-2, about 5 minutes")
@@ -476,7 +477,7 @@ def test_each_calls_j10r_receipt_table_is_h1tile_j10r_reference_through_served()
 
 
 def _cubin():
-    path = os.environ.get(CUBIN)
+    path = getattr(SETTINGS, CUBIN)
     if not path or not torch.cuda.is_available():
         pytest.skip(f"no GPU, or {CUBIN} names no noise.cu cubin (`receipts.noise_cubin`, or noise.cu's nvcc line): "
                     "its run is a recorded run on vy-nebius-2 (producer_gpu.sh)")
@@ -521,7 +522,7 @@ def test_the_producer_sizes_each_j10r_workspace_through_dither_j10r_ws():
     hits = [f"{p.name}:{i}" for p in sorted(SERVED_H1.glob("*.py"))
             for i, line in enumerate(p.read_text().splitlines(), 1) if call.search(line)]
     assert hits == []
-    assert Path(PR.WS.__file__) == SERVED_H1.parents[1] / "hash" / "dither" / "j10r_ws.py"
+    assert Path(PR.WS.__file__) == SERVED_H1.parents[2] / "benchmarks" / "hash" / "dither" / "j10r_ws.py"
 
 
 def test_the_units_kernels_j10r_receipts_are_h1tile_j10r_reference_at_llama_8b_shapes():
@@ -530,7 +531,7 @@ def test_the_units_kernels_j10r_receipts_are_h1tile_j10r_reference_at_llama_8b_s
     stream when `VERITY_POUW_NOISE_CUBIN` is set, else hashlib's), word for word, and `check` holds the first and last unit
     of each row block to `h1tile.j10r_reference` from its J10-R public row."""
     units = _j10r_kernel()
-    cubin = _cubin() if os.environ.get(CUBIN) else None
+    cubin = _cubin() if getattr(SETTINGS, CUBIN) else None
     rng = np.random.default_rng(20261026)
     seen = {"live": 0, "dead": 0}
     for n, k in LLAMA:

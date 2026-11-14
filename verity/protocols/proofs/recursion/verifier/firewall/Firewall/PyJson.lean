@@ -1,14 +1,15 @@
-/-
-JSON as Python's `json.dumps(v, sort_keys=True)` writes it, the form of every line of the ZK server's record and of the
-values its error messages quote: `", "` and `": "` between items, keys sorted, and every
-character outside `' '`..`'~'` escaped (`\"`, `\\`, `\n`, `\r`, `\t`, `\b`, `\f`, else `\uXXXX` in lowercase hex, a
-character above U+FFFF as its UTF-16 surrogate pair).
--/
 module
 
 public import Lean.Data.Json
 public import Lean.Data.Json.Basic
 meta import Lean.Data.Json
+
+/-!
+JSON as Python's `json.dumps(v, sort_keys=True)` writes it, the form of every line of the ZK server's record and of the
+values its error messages quote: `", "` and `": "` between items, keys sorted, and every
+character outside `' '`..`'~'` escaped (`\"`, `\\`, `\n`, `\r`, `\t`, `\b`, `\f`, else `\uXXXX` in lowercase hex, a
+character above U+FFFF as its UTF-16 surrogate pair).
+-/
 
 @[expose] public section
 set_option backward.privateInPublic true

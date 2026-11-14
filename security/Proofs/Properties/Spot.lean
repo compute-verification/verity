@@ -12,8 +12,9 @@ import all Init.Data.Array.QSort.Basic
 Each check of `OneStage.check` is a pipeline of failure codes (`addCode`, `push`) written with `let mut` and `if`, which
 `do` elaborates into join points. A proof lifts the join points out (`extract_lets`), moves each `if` into the argument of
 the join point it calls (`jp_ite`, `jp_ite'`), unfolds the join points one at a time, and reads the codes' emptiness off
-the pipeline one check at a time (`ite_addCode_nil`, `ite_push_nil`). `acceptMeans_iff` says what the check accepts and
-that it accepts all of it; `acceptMeans` is its first half and `acceptMeans_complete` the converse.
+the pipeline one check at a time (`ite_addCode_nil`, `ite_push_nil`). `acceptMeans_iff` says what the check accepts,
+`AcceptMeans`'s conclusion and the caller's facts (`CallerHeld`), and that it accepts all of it; `acceptMeans` and
+`callerHeld_of_accept` are its first half and `acceptMeans_complete` the converse.
 -/
 
 @[expose] public section
@@ -861,8 +862,10 @@ theorem linkRefused_false_iff (v : Registration.Verifier) : Registration.linkRef
           fun ⟨_, _, h1, h⟩ => by cases h1; rw [hr] at h; exact Except.ok.inj h⟩
   · simp
 
+/-- The registration check finds nothing exactly where the registration keeps R1–R8 (`Registered`) and the caller's
+facts (`CallerHeld`): the one check holds both today. -/
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
-    Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
+    Registration.check rec v = #[] ↔ (∃ law, Registered v rec law) ∧ CallerHeld rec v := by
   rw [Registration.check_eq_checkRef]
   unfold Registration.checkRef
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 jD j4 j3 j2
@@ -1067,15 +1070,16 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hdecl, hsch, hroots, hports,
       h7', h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h6i, h7r, h8, hrl⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
-    exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop, hdecl⟩,
-      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5',
-      ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h6i⟩,
-      fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩, h8, hrl⟩
-  · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop, hdecl⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h6i⟩, h7r, h8, hrl⟩
+    exact ⟨⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
+        ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5',
+        ⟨h6a, h6b⟩, fun hv => ⟨(h7r hv).1, pinnedHeld_of_R7 (h7r hv).1⟩, h8, hrl⟩,
+      hdecl, h6c, h6d, h6e, h6f, h6g, h6h, h6i, fun hv => (h7r hv).2⟩
+  · rintro ⟨⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
+        ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r, h8, hrl⟩,
+      hdecl, h6c, h6d, h6e, h6f, h6g, h6h, h6i, hpool⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4',
-      h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h6i, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, h8, hrl⟩
+      h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h6i, fun hv => ⟨(h7r hv).1, hpool hv⟩, h8, hrl⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3
@@ -1267,9 +1271,11 @@ theorem checkDraw_nil (draw pop law : Json) : Draw.checkDraw draw pop law = #[] 
 theorem registered_law {v : Registration.Verifier} {rec law : Json} (h : Registered v rec law) :
     Draw.derive v.program v.query v.law v.workTable = .ok law := h.1.2.2.2.1
 
-/-- The check accepts exactly what `AcceptMeans` says it accepts. -/
+/-- The check accepts exactly what `AcceptMeans` says it accepts where the record keeps the caller's facts
+(`CallerHeld`), which the registration check holds beside R1–R8. -/
 theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
     OneStage.check p c e = .accept pub prof ↔
+      CallerHeld c.record p.verifier ∧
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
         UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
@@ -1277,7 +1283,8 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
   unfold OneStage.check
   simp only []
   by_cases h1 : Registration.check c.record p.verifier = #[]
-  · obtain ⟨law, hreg⟩ := (registration_nil _ _).1 h1
+  · obtain ⟨⟨law, hreg⟩, hcall⟩ := (registration_nil _ _).1 h1
+    refine Iff.trans ?_ (and_iff_right hcall).symm
     have hd := registered_law hreg
     have uniq : ∀ law', Registered p.verifier c.record law' → law' = law := fun law' h' => by
       have := registered_law h'
@@ -1335,20 +1342,27 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
   · have : (Registration.check c.record p.verifier).isEmpty = false := by
       simpa [Array.isEmpty_iff] using h1
     simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
-    rintro ⟨law', d', n', hreg', -⟩
-    exact h1 ((registration_nil _ _).2 ⟨law', hreg'⟩)
+    rintro ⟨hcall, law', d', n', hreg', -⟩
+    exact h1 ((registration_nil _ _).2 ⟨⟨law', hreg'⟩, hcall⟩)
 
-theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
+theorem acceptMeans : AcceptMeans := fun p c e pub prof h => ((acceptMeans_iff p c e pub prof).1 h).2
 
-/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R8, with a sample of the agreed law over the
-registered population, its units proved and served as sampled, and verdicts that accept, is accepted, publishing
-`publicOf` and the profile `profileOf`. -/
+/-- **The caller's facts at what the check accepts**: a record the check accepts keeps `CallerHeld` against the
+check's own verifier. The registration check holds them beside R1–R8, and `AcceptMeans` doesn't state them. -/
+theorem callerHeld_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
+    (h : OneStage.check p c e = .accept pub prof) : CallerHeld c.record p.verifier :=
+  ((acceptMeans_iff p c e pub prof).1 h).1
+
+/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R8 and the caller's facts, with a sample of
+the agreed law over the registered population, its units proved and served as sampled, and verdicts that accept, is
+accepted, publishing `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat)
-    (hr : Registered p.verifier c.record law) (hd : Drawn e.draw (getD c.record "population") law)
+    (hr : Registered p.verifier c.record law) (hc : CallerHeld c.record p.verifier)
+    (hd : Drawn e.draw (getD c.record "population") law)
     (hu : UnitsProved c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
     (hn : nat? (getD c.record "population") = some n) :
     OneStage.check p c e = .accept (publicOf p e law d n) (profileOf p c e d n) :=
-  (acceptMeans_iff p c e _ _).2 ⟨law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩
+  (acceptMeans_iff p c e _ _).2 ⟨hc, law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩
 
 theorem digestIsRecord's : DigestIsRecord's := by
   intro b c h
@@ -1611,6 +1625,6 @@ root. -/
 theorem pinnedHeld_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (h : OneStage.check p c e = .accept pub prof) (hv : ExpectsV2 p.verifier) : PinnedHeld c.record p.verifier := by
   obtain ⟨law, -, -, hr, -⟩ := acceptMeans p c e pub prof h
-  exact (hr.2.2.2.2.2.2.1 hv).2.2
+  exact (hr.2.2.2.2.2.2.1 hv).2
 
 end Properties.Spot

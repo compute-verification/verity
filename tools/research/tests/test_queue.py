@@ -4,6 +4,7 @@ PRs and writes their `refs/pull/{n}/head`."""
 from __future__ import annotations
 
 import base64
+import calendar
 import dataclasses
 import hashlib
 import itertools
@@ -1197,10 +1198,10 @@ def test_a_merge_record_whose_tree_the_clone_lacks_is_merged_again_and_the_state
     assert len(q.load_state()["merges"]["of"]) == 1
 
 
-#: the Markdown caps' warn gate and the caps it reads at `main`, committed into the origin as they are in this checkout
-CAP_GATE = "tools/verity/check/gates/markdown_caps.py"
-CAP_FILES = {DRIVE_FLAGS: f'warn_gates = ["{CAP_GATE}"]\n', **{f: (Path(__file__).resolve().parents[3] / f).read_text()
-                                                                for f in (CAP_GATE, "tests/test_repository.py")}}
+#: the Markdown size limits' warn gate and the limits it reads at `main`, committed into the origin as they are in this checkout
+SIZE_GATE = "tools/verity/check/gates/markdown_caps.py"
+SIZE_FILES = {DRIVE_FLAGS: f'warn_gates = ["{SIZE_GATE}"]\n', **{f: (Path(__file__).resolve().parents[3] / f).read_text()
+                                                                for f in (SIZE_GATE, "tests/test_repository.py")}}
 #: `doc.md` as `main` holds it (70 bytes), and with line ``at`` replaced by ``text``
 LINES = [f"line {i}\n" for i in range(10)]
 
@@ -1209,24 +1210,24 @@ def _doc(at: int | None = None, text: str = "") -> str:
     return "".join(text if i == at else line for i, line in enumerate(LINES))
 
 
-def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_cap_joins_next_and_its_warning_is_kept_for_drive(world):
-    """A PR whose head alone is under a Markdown file's cap can take the file over it once merged onto `next` above the members
-    that also grow it.  The caps are a warn gate: the sync gives it each PR's merge onto `next`, so the bytes the members below
+def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_limit_joins_next_and_its_warning_is_kept_for_drive(world):
+    """A PR whose head alone is under a Markdown file's limit can take the file over it once merged onto `next` above the members
+    that also grow it.  The limits are a warn gate: the sync gives it each PR's merge onto `next`, so the bytes the members below
     add count, keeps what it says by PR and head (the state's `warned`, which drive tells the owner) and leaves no PR out."""
-    main = _move_main(world, {**CAP_FILES, "doc.md": _doc()})
+    main = _move_main(world, {**SIZE_FILES, "doc.md": _doc()})
     world.gh.put(1, h1 := world.change({"doc.md": _doc(1, "x" * 30000 + "\n")}))            # 30,064 bytes: under 49,152
     world.gh.put(2, h2 := world.change({"doc.md": _doc(8, "y" * 30000 + "\n")}))            # as much alone, 60,058 onto #1
     world.gh.put(3, h3 := world.change({"doc.md": _doc(5, "short\n")}))                     # 60,057 onto #2: over, but shrinks it
     for h in (h1, h2, h3):                                                                  # each head alone passes
-        assert subprocess.run([sys.executable, CAP_GATE, main, h], cwd=world.dev, capture_output=True).returncode == 0
+        assert subprocess.run([sys.executable, SIZE_GATE, main, h], cwd=world.dev, capture_output=True).returncode == 0
     q = world.queue()
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 2, 3] == world.on_next(q) and q.load_state()["conflicts"] == {}
     (said,) = [w["why"] for n, w in q.load_state()["warned"].items() if (n, w["head"]) == ("2", h2)]
-    assert said == (f"the warn gate {CAP_GATE} at `main` {main[:12]} on its merge onto `next`: doc.md is 60058 bytes at "
+    assert said == (f"the warn gate {SIZE_GATE} at `main` {main[:12]} on its merge onto `next`: doc.md is 60058 bytes at "
                     f"{members[1].commit[:12]}, over its 49152-byte cap (tests/test_repository.py), and was 30064 bytes at "
                     f"{members[0].commit[:12]} below; trim doc.md to 49152 bytes or fewer (10906 over): move detail to the notes "
-                    f"store (cite it by note:<id>) (`python3 {CAP_GATE} origin/main HEAD` on the branch merged with `origin/next` "
+                    f"store (cite it by note:<id>) (`python3 {SIZE_GATE} origin/main HEAD` on the branch merged with `origin/next` "
                     "runs it)"), said
     assert int(_git(world.origin, "cat-file", "-s", "refs/heads/next:doc.md")) == 60057
 
@@ -1237,13 +1238,13 @@ def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_cap_joins_next
     assert q.load_state()["warned"] == {}
 
 
-def test_a_file_already_over_its_cap_below_warns_only_of_a_pr_whose_merge_grows_it(world, monkeypatch):
+def test_a_file_already_over_its_limit_below_warns_only_of_a_pr_whose_merge_grows_it(world, monkeypatch):
     """The gate judges only what a merge adds, against the tip it merged onto.  A member kept on `next` that is
-    already over a cap (merged before the gate was listed) mustn't lay a warning on every PR above it: one that doesn't touch
+    already over a limit (merged before the gate was listed) mustn't lay a warning on every PR above it: one that doesn't touch
     the file merges, one that shrinks it merges (the gate notes it), and one that grows it merges with a warning."""
     from research import queue as Q
 
-    _move_main(world, {**CAP_FILES, "doc.md": _doc(), "other.md": "other\n"})
+    _move_main(world, {**SIZE_FILES, "doc.md": _doc(), "other.md": "other\n"})
     world.gh.put(1, world.change({"doc.md": _doc(1, "x" * 60000 + "\n")}))                  # 60,064 bytes: over 49,152
     q = world.queue()
     with monkeypatch.context() as m:
@@ -1258,7 +1259,7 @@ def test_a_file_already_over_its_cap_below_warns_only_of_a_pr_whose_merge_grows_
     assert list(warned) == ["3"] and "doc.md is 60068 bytes at " in warned["3"]["why"]
     assert f"and was 60064 bytes at {members[1].commit[:12]} below" in warned["3"]["why"]
     merge = members[3].commit
-    doc = json.loads(subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / CAP_GATE), "origin/main", merge, "--json"], cwd=q.workdir,
+    doc = json.loads(subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / SIZE_GATE), "origin/main", merge, "--json"], cwd=q.workdir,
                                     capture_output=True, text=True).stdout)
     assert doc["below"] == members[2].commit and doc["failures"] == [] and doc["notes"] == [
         f"doc.md is 60063 bytes, over its 49152-byte cap, but was 60068 bytes at {members[2].commit[:12]} below: not this change's"]
@@ -2196,6 +2197,35 @@ def test_the_review_listing_names_the_marked_prs_onto_main_not_on_it_lacking_a_l
     assert out.index("#5 ") < out.index("#1 ") and "2 marked PR(s) not on `main` lack a land verdict" in out, out
 
 
+def test_the_review_listing_gives_each_rows_minutes_since_its_mark_and_over_keeps_the_older(world, capsys):
+    """A no-reader watch parsed `status` text and read every head's labels by hand for how long each marked PR had waited
+    without a verdict: the listing gives each row its minutes since the mark, and `over` keeps those marked longer ago."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    for n in (1, 2, 3):
+        world.gh.put(n, world.change({f"{n}.txt": "x\n"}))
+    marks = {1: "2026-11-09T10:00:00Z", 2: "2026-11-09T11:30:00Z"}
+    q = world.queue(marked_at=lambda n, h: marks.get(n))
+    labels = StoreLabels(world.store, log=lambda s: None)
+    def now() -> float:
+        return calendar.timegm((2026, 11, 9, 12, 0, 59))
+
+    assert Q.review(q, world.store, labels, None, None, None, None, as_json=True, now=now) == 0
+    assert [(r["pr"], r["waited_min"]) for r in json.loads(capsys.readouterr().out)] == [(3, None), (1, 120), (2, 30)]
+    assert Q.review(q, world.store, labels, None, None, None, None, as_json=True, over=60, now=now) == 0
+    assert [r["pr"] for r in json.loads(capsys.readouterr().out)] == [3, 1]
+    assert Q.review(q, world.store, labels, None, None, None, None, over=60, now=now) == 0
+    out = capsys.readouterr().out
+    assert f"#1 {world.gh.prs[1].head[:12]} lane-1 Lean change: no, marked 2026-11-09T10:00:00Z (120 min ago): " in out, out
+    assert "#2 " not in out and out.rstrip().endswith(
+        "3 marked PR(s) not on `main` lack a land verdict; 2 of them marked over 60 min ago or at a time not known"), out
+    assert Q.waited_min(None, 0) is None
+    with pytest.raises(SystemExit):
+        research_main(["queue", "review", "7", "--land", "--by", "r", "--over", "60"])
+    assert "--over is for the review listing only" in capsys.readouterr().err
+
+
 def test_the_review_listing_says_low_risk_of_a_head_the_loops_rule_lands_on_its_mark_and_never_of_a_move_or_held_pr(world, capsys):
     """The verified queue's loop takes a marked head on its mark alone when drive.toml at `main` excludes none of its files
     (`lands_on_mark`), so its row says so instead of waiting on a reviewer: one whose owner's own land verdict doesn't count
@@ -3002,8 +3032,9 @@ def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(wo
 
 
 #: a fetched fixture's bytes, and the tree that reads it: pkg's test reads it at import, as benchmarks/numerical's
-#: tests/explore/test_authentication.py reads fixtures/typed-obligation-v0's K=1536 vector (`auth.read_openings()`), so the
-#: suite's collection fails without it; `other` registers one too, in a suite no change below touches
+#: tests/explore/test_authentication.py reads benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0's K=1536 vector
+#: (`auth.read_openings()`), so the suite's collection fails without it; `other` registers one too, in a suite no change
+#: below touches
 BIG = b'{"openings": [1, 2, 3]}\n'
 BIG_PATH = "pkg/data/big.json"
 
@@ -3046,7 +3077,7 @@ ROWS_TEST = {"pkg/tests/test_rows.py": "import json\nfrom pathlib import Path\n"
 
 def test_the_preflight_fetches_the_fixtures_of_the_suites_it_collects_and_only_those(world, capsys):
     """A suite whose test reads a fetched fixture at import (as `benchmarks/numerical` reads a vector of
-    fixtures/typed-obligation-v0) fails to collect in a worktree that never fetched it.  The preflight
+    benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0) fails to collect in a worktree that never fetched it.  The preflight
     fetches each collected suite's fetched fixtures into the worktree first, and none of a suite it doesn't collect; a suite
     collected again at `next` has them fetched again there, since the worktree is cleaned in between."""
     from research.queue import MarkOnly, StoreLabels, ready
@@ -3279,28 +3310,28 @@ def test_the_preflight_merges_with_the_drivers_of_next_not_those_of_the_older_ch
     sync, with `next`'s driver, merges as counters.  The preflight runs `next`'s drivers, so the head merges cleanly."""
     from research.queue import MarkOnly, StoreLabels, base_drivers, merged_tree, ready
 
-    caps = "tests/test_lean_packages.py"
+    packages = "tests/test_lean_packages.py"
 
     def counts(sec: int, props: int) -> str:
         return f'UNWITNESSED = {{"security": {sec}, "security/Properties": {props}}}\n'
 
     lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
     world.with_store_remote()
-    old = _move_main(world, {**PREFLIGHT_FILES, caps: counts(354, 184), "tools/verity/lean/merge.py":
+    old = _move_main(world, {**PREFLIGHT_FILES, packages: counts(354, 184), "tools/verity/lean/merge.py":
                              "import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n"})
     _move_main(world, {**{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")},
-                       ".gitattributes": f"{caps} merge=lean-caps\n"})
-    world.gh.put(1, world.change({caps: counts(355, 184)}))
+                       ".gitattributes": f"{packages} merge=lean-caps\n"})
+    world.gh.put(1, world.change({packages: counts(355, 184)}))
     assert [m.pr for m in world.queue().sync()[0]] == [1]
-    world.gh.put(2, h2 := world.change({caps: counts(354, 185)}, base=old), ready=False)    # the checkout stays at #2's head
+    world.gh.put(2, h2 := world.change({packages: counts(354, 185)}, base=old), ready=False)    # the checkout stays at #2's head
     _git(world.dev, "config", "merge.lean-caps.driver", "python3 tools/verity/lean/merge.py --caps %O %A %B %P")
     next_ = _git(world.origin, "rev-parse", "refs/heads/next")
     raw = subprocess.run(["git", f"--attr-source={next_}", "merge-tree", "--write-tree", "--name-only", "--no-messages", next_, h2],
                          cwd=world.dev, capture_output=True, text=True)
-    assert raw.returncode == 1 and raw.stdout.splitlines()[1:] == [caps], raw.stdout + raw.stderr
+    assert raw.returncode == 1 and raw.stdout.splitlines()[1:] == [packages], raw.stdout + raw.stderr
     with base_drivers(world.dev, next_) as config:
         tree, files, _ = merged_tree(world.dev, next_, h2, config=config)
-    assert tree and files == [] and _git(world.dev, "show", f"{tree}:{caps}") == counts(355, 185).strip()
+    assert tree and files == [] and _git(world.dev, "show", f"{tree}:{packages}") == counts(355, 185).strip()
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
     said = next(s for s in world.logs if "preflight: #2 at" in s)
     assert "nothing refused" in said and "checks skipped" not in said, said
@@ -3311,19 +3342,19 @@ def test_the_sync_merges_onto_each_tip_with_that_tips_drivers_not_those_of_its_c
     """Drive's clone sits at `checked`'s tip, so its `merge.py` can predate one a member of `next` brings, and the sync ran that
     old driver for every merge above that member: a PR's lock merged onto `next` by a `merge.py` from before readerless reads
     collapsed the Security lock's reads groups.  Each merge now runs the tip's own drivers."""
-    caps = "tests/test_lean_packages.py"
+    packages = "tests/test_lean_packages.py"
 
     def counts(sec: int, props: int) -> str:
         return f'UNWITNESSED = {{"security": {sec}, "security/Properties": {props}}}\n'
 
     lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
-    _move_main(world, {caps: counts(354, 184), ".gitattributes": f"{caps} merge=lean-caps\n",
+    _move_main(world, {packages: counts(354, 184), ".gitattributes": f"{packages} merge=lean-caps\n",
                        "tools/verity/lean/merge.py": "import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n"})
     world.gh.put(1, world.change({f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}))
-    world.gh.put(2, world.change({caps: counts(355, 184)}))
-    world.gh.put(3, world.change({caps: counts(354, 185)}))
+    world.gh.put(2, world.change({packages: counts(355, 184)}))
+    world.gh.put(3, world.change({packages: counts(354, 185)}))
     assert [m.pr for m in world.queue().sync()[0]] == [1, 2, 3], world.logs     # #3 conflicted under the checkout's driver
-    assert _git(world.origin, "show", f"refs/heads/next:{caps}") == counts(355, 185).strip()
+    assert _git(world.origin, "show", f"refs/heads/next:{packages}") == counts(355, 185).strip()
 
 
 #: what the head writes -> what the refusal says: each a way a train breaks that the merged tree shows at mark time

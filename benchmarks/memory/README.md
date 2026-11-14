@@ -11,7 +11,7 @@ and never copies.
 **Run:**
 
 ~~~text
-verity bench memory PERIOD [--dry-run]        the node run: one session on the whole GPU node, through both auditor hosts
+verity bench memory PERIOD [--dry-run]        the node run: one session on the whole GPU node, through both auditor devices
 verity bench memory --from RUN [--session K]  the number of a recorded run
 verity bench memory --loopback                both processes on this machine, on the CPU: a test of the command
 ~~~
@@ -33,9 +33,11 @@ verity bench memory --loopback                both processes on this machine, on
   first-parent line, whose tree must pin `ROLE`), `ARENA_GIB` and `UTIL` (the arena on each card and vLLM's share of
   it), `HOST_GIB` (whole GiB of the node's host memory the store holds beside the arenas, default none), `LEAF_CTAS`
   (the node's passes by the leaf pass on that many reading CTAs, default today's pass),
-  `PACE_PASS_MS` (the pass the verifier host counts a stretch's groups at), `LEASE_BY`, and `FETCH=1`, which stages
-  the role's checkpoint on the node before checking it. The session's form is `PACED` or `UNPACED` alone: the command
-  sets `gate_run.sh`'s `SESSIONS`, `WINDOWS`, `WINDOW_MS` and `SAMPLES` from `UNPACED`. The command waits for the fire
+  `PACE_PASS_MS` (the pass the verifier host counts a stretch's groups at), `LEASE_BY`, `FETCH=1`, which stages
+  the role's checkpoint on the node before checking it, and the three hosts' addresses, which it doesn't run
+  without (`VY_CHALLENGER_1_HOST`, `VY_AUDITOR_1_HOST`, `VY_NEBIUS_2_HOST`). The session's form is `PACED` or
+  `UNPACED` alone: the command sets `gate_run.sh`'s `SESSIONS`, `WINDOWS`, `WINDOW_MS` and `SAMPLES` from
+  `UNPACED`. The command waits for the fire
   run to reach the evidence store and prints from it; interrupted, `--from` the fire run prints the same. `--dry-run`
   sends nothing to either gate and prints no number.
 - **`--from RUN`** reads the verifier's record of a run in the store: a gate run's fire run, or a run of

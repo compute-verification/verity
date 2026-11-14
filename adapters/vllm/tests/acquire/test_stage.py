@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -9,7 +10,7 @@ torch = pytest.importorskip("torch")
 
 from tests.acquire.test_install import Runner, Tiny, base_rows, row  # noqa: E402
 from verity_vllm.acquire.install import IncompletePlan  # noqa: E402
-from verity_vllm.acquire.plan import load_plan  # noqa: E402
+from verity_vllm.acquire.plan import plan_digest  # noqa: E402
 from verity_vllm.acquire.stage import plan_at_stage  # noqa: E402
 from verity_vllm.correspondence.reader_for_acquire import RuntimeTree  # noqa: E402
 from verity_vllm.query.manifest import format as RM  # noqa: E402
@@ -27,8 +28,8 @@ def test_plan_at_stage_writes_the_documents(tmp_path):
     assert set(docs.paths) == {"runtime_tree", "acquisition_plan"}
     rt = RuntimeTree.load(docs.paths["runtime_tree"])
     assert rt.source == "test-stage" and "blocks.0.norm" in rt.modules and rt.runner["sample"] is True
-    doc = load_plan(docs.paths["acquisition_plan"])
-    assert doc["plan_digest"] == docs.plan.digest
+    doc = json.loads(Path(docs.paths["acquisition_plan"]).read_text())
+    assert plan_digest(doc) == doc["plan_digest"] == docs.plan.digest
     assert any(docs.plan.digest[:16] in ln for ln in docs.log_lines("t"))
     # without a manifest only the runtime tree is written (the CPU gate's off-pod input)
     d2 = plan_at_stage(model, runner, None, tmp_path / "out2", source="test-stage")
