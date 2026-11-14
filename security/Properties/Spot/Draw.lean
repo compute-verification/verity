@@ -45,7 +45,7 @@ and its bytes, and every input is in it, the `L` bytes included, however few.
 
 * **The partition** (`slotPartition`) is `Slots.layout`'s, its classes the population's strata and the input class, each
   proof block its gates.
-* **The design** (`slotDesign`) is the one the sample runs: the first class's design the Flock law it samples
+* **The design** (`slotDesign`) is the one the sample runs: the first class's design the Flock sampling design it samples
   (`Select.select`'s, `oneStageOf`), `all` for the `All` rule; the input class sampled `all`. The bound is `0` where the
   sample is refused before it samples (`missBound`).
 * **The bytes** are `src`'s, in order (`bytesOf`): a sample that would read past them is refused, so it misses nothing.
@@ -71,7 +71,7 @@ def puGates (b : Slots.ProofBlock) : List ℕ := List.range' b.gates.1 (b.gates.
 def slotPartition (l : Slots.SlotOrder) : Claims.Sampling.Partition :=
   ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map puGates⟩
 
-/-- The claims' one-stage design of a Flock law. -/
+/-- The claims' one-stage design of a Flock sampling design. -/
 def oneStageOf : Flock.Draw.Law → Claims.Sampling.OneStage
   | .subset k => .subset k
   | .bernoulli num den => .bernoulli num den

@@ -17,7 +17,7 @@ order (`JointAuditV5.sessions`, `seqG`); sessions run at once are not this leg's
   a field (`Member.toV5`): the registration is the window's joint one, the registration record's digest; the member's
   sample file at its part `S` of the window's sample is the `.subset |S|` print (`printedPart`); each round's digest is
   SHA-512; the writer is `wrZP`; and `live-verifier` holds at it with no premise (`recordCustodyZKJPLaw_part`).
-* **The window** (`Window`): the members in the registration's order, the registration's law on its strata over the
+* **The window** (`Window`): the members in the registration's order, the registration's sampling design on its strata over the
   population of all their proof blocks, the device's one byte stream the sample reads with A3 at it, each member's
   one link-point count at every sample (`JointAuditV5.hcls`), and the claim's share. `Window.joint` is Flock's window
   at `t` SHA-512 calls (the finders' budgets are `MemberV5`'s fields), and `Window.extend` the window with the sample's
@@ -224,7 +224,7 @@ theorem toV5_part (t : ℕ) (S : Finset (Fin nJ)) : (m.toV5 t).part S = m.part S
 end Member
 
 /-- **A window of several members, as v2 sets its sessions up**: the members in the registration's order; the
-registration's law on its strata over the population of all their `nJ` proof blocks, sampling `kd`; the device's one
+registration's sampling design on its strata over the population of all their `nJ` proof blocks, sampling `kd`; the device's one
 byte stream the sample reads, with A3 at it; each member's part of every sample at its session's link points (the
 registration check refuses a member whose fewest and most sampled proof blocks have different counts); the claim's
 share; and the SHA-512 calls of hashing one message a digest is taken of. -/
@@ -260,7 +260,7 @@ namespace Window
 variable (W : Window)
 
 /-- **Flock's window at `t` SHA-512 calls**: the members as Flock's (`Member.toV5`), at the joint registration, the
-registration's law and strata and the device's bytes. -/
+registration's sampling design and strata and the device's bytes. -/
 noncomputable def joint (t : ℕ) : Flock.Guarantees.JointAuditV5 where
   Reg := ByteArray
   nJ := W.nJ
@@ -291,7 +291,7 @@ noncomputable def extend (S : Widening) : Window where
   hA3 := uniform_fst W.hA3
   hcls := fun m hm ω hω => W.hcls m hm ω.1 hω
 
-/-- **The window's sample's law**: the registration's law over the population, as `Spot.Draw.drawUnits` samples it on
+/-- **The window's sample's sampling design**: the registration's sampling design over the population, as `Spot.Draw.drawUnits` samples it on
 the device's bytes in order (`Flock.Bridge.execSel`); a sample that fails samples every proof block. -/
 noncomputable def L : FlockSoundness.Audit.Law W.nJ := Flock.Bridge.execSel (n := W.nJ) W.src W.law W.nJ
 
