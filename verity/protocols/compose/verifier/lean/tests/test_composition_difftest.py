@@ -244,7 +244,7 @@ def as_component(C, case: dict) -> dict:
 def _declaration(program: str) -> tuple[dict, dict] | None:
     """The policy's params but the log, and its evidence, for the registered circuit `program` (descriptor text) of a
     program the one-stage audit knows (`ONE_STAGE.PROGRAMS`), as the provenance difftest's declarations make them
-    (`baseline_difftest_vectors.build`): its program function's parameters, every gate in one inference block with Γ its
+    (`theta_difftest_vectors.build`): its program function's parameters, every gate in one inference block with Γ its
     gates and α over what any gate reads, and no registered information. None for another program."""
     NR = R.INFERENCE.NR
     digest = R.INFERENCE._digest(program)
