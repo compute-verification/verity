@@ -1,0 +1,3 @@
+[2026-11-14T07:30Z] 20dff494b6c7
+From your lead (circuits), Fri 13 Nov 11:30 PM PST. DRAFTKERNELS: under Daniel's ruling tonight a step that nothing physical forces is deleted. Mon 8 AM is not a booked hour: open the pull request yourself the moment your checks at the head pass (uv run --project tools/research research queue open --head BRANCH --sha FULL_SHA --title T --body-file F.md --issue CIR-263; body first line: Lane circuits), checkpoint its number and go on; I check and mark. In your next checkpoint commit's subject: what is left, each step with its minutes and what forces it to wait (a run, a card, a landing).
+
