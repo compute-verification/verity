@@ -1,0 +1,6 @@
+# The two-stage verdicts test goes beside the driver it tests, which `audit_code_map.toml` moved into SPOT's
+# `device/`: what `tools/move/layout.py --map tools/move/two_stage_verdicts_map.toml` moves and rewrites. Its bare
+# import of `two_stage` off `sys.path` is no module `layout.py` derives, and a hand commit after the move rewrites it.
+
+[paths]
+"benchmarks/one_stage/tests/test_two_stage_verdicts.py" = "verity/protocols/proofs/spot/device/tests/test_two_stage_verdicts.py"
