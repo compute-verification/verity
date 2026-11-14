@@ -119,7 +119,7 @@ def test_every_build_takes_its_sources_from_the_one_directory_of_pouws_prover():
     adapter's own files are, so it is the same in a checkout and in an installed adapter; and every source a build names is a
     file there, the device builds' too, which only nvcc compiles and no test without it reads."""
     pytest.importorskip("torch")
-    from verity.protocols.pouw import prover
+    from verity.protocols.accounting.pouw import prover
     from verity_vllm.protocols.pouw import device as PD
     from verity_vllm.protocols.pouw.h1 import receipts
     from verity_vllm.protocols.pouw.h1 import registered_device as RD

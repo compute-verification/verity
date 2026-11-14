@@ -25,7 +25,7 @@ at R = 1 or 2 each is small enough to lower whole. ``STEP`` is the device's BF16
 accumulator, k = 16: `HopperBF16WgmmaDot16` on every record), which the peel takes over the 2R operands of a row of P_A
 and of P_B sixteen at a time, so there R is a multiple of 8.
 
-These are the functions of PoUW's row units (`verity.protocols.pouw.prover.circuit.pc8`: `Pc8RowA`, `Pc8RowB`), which
+These are the functions of PoUW's row units (`verity.protocols.accounting.pouw.prover.circuit.pc8`: `Pc8RowA`, `Pc8RowB`), which
 compute α and keep it: the same primitives in the same order, so each equals the unit's on every input, a row the unit
 refuses included. Three differences are of form only. The square root is `PearlCSqrt`, a Definition whose body is the
 one Call of `PouwF32SqrtRn_v1`, so that its Boolean version is found here and not in PoUW's package. −bf16(E′) is
@@ -72,7 +72,7 @@ LINE = Array(SLICE, E4M3)
 STRIDE, FLOOR, FOUR, QMAX, LINE_FACTOR = 8, 0x2F800000, 0x40800000, 0x43E00000, 0x3AB504F3
 
 _TESTS = "verity/definitions/tests/test_pearl_c_forming.py"
-_HELD = f"protocol-defined; equal to `verity.protocols.pouw.prover.schemes.pearl_c.{{}}` on its vectors ({_TESTS})"
+_HELD = f"protocol-defined; equal to `verity.protocols.accounting.pouw.prover.schemes.pearl_c.{{}}` on its vectors ({_TESTS})"
 
 
 class _Emit:
