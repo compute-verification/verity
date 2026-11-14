@@ -12,7 +12,7 @@ return `RmsNormMnnvl_v1`'s words (`verity/definitions/tests/test_mnnvl_and_dsa_n
 from __future__ import annotations
 
 from verity.circuits.defs import composite
-from verity.definitions.ops.prims import ZERO32
+from verity.circuits.ops.prims import ZERO32
 from verity.circuits.types import Array
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import tp_allreduce as TA
