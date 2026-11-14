@@ -16,14 +16,14 @@ stamp() { echo "served-zk: $* at $(date -u +%H:%M:%SZ)"; }
 df -h /workspace | tail -1
 
 stamp "ship build"
-CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/build.sh "$S/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
+CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/ship.sh "$S/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
   || { stamp "BUILD_FAIL rc=$?"; tail -20 "$OUT/build.log"; exit 11; }
 tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}"
 
 # the challenger's coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 stamp "pouw-check-difftest build"
-(cd verity/protocols/pouw/verifier/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+(cd verity/protocols/accounting/pouw/verifier/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
   || { stamp "LEAN_BUILD_FAIL rc=$?"; tail -20 "$OUT/lean-coins-build.log"; exit 12; }
 
 export SCHEME=pearl-c-sm120-v1-h3 MODE=smoke RETAIN=1

@@ -1,5 +1,6 @@
-"""`row_tables.step_roots` on the GPU: a step's row tables hashed by `protocol_options/pouw_cuda/row_table.cu` on a side stream,
-behind an event on the serving stream, so the serving loop records the step's root when it is ready, without a host sync.
+"""`row_tables.step_roots` on the GPU: a step's row tables hashed by
+`verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu` on a side stream, behind an event on the serving
+stream, so the serving loop records the step's root when it is ready, without a host sync.
 
 `step_roots` takes what `row_tables.step_roots` takes, with ``codes`` and ``scales`` CUDA tensors that hold until the result is
 ready (a step's quantize outputs, in buffers the next step does not write), and returns a `Pending`: ``ready()`` asks the side
@@ -38,13 +39,14 @@ from verity.commitments.identity import tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
 from verity.circuits.kernels import ROW_COMMIT, SHA512
+from verity.protocols.accounting.pouw import prover
 
 from . import row_tables as RTB
 
 __all__ = ["CFLAGS", "DEVICE_SOURCES", "NVCC_FLAGS", "SEG_BYTES", "TAB_WORDS", "Args", "DeviceLibrary", "Pending", "Plan", "built",
            "device_lib", "host_lib", "host_step", "nvcc", "plan", "record_ready", "side_stream", "step_roots", "table_domain_id"]
 
-CUDA_DIR = Path(__file__).resolve().parents[1] / "protocols" / "pouw" / "pouw_cuda"
+CUDA_DIR = Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table_host.cpp")
 #: the headers `ncp2.cuh` and `row_table.cuh` include by name from outside CUDA_DIR (the GPU's one SHA-512 and row commitment):

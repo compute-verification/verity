@@ -44,7 +44,7 @@ request's values are its own tokens' alone (the served engine is batch-invariant
 with it.  The samples barely differ between rungs, so the replay moves the totals, not s*.
 
 **Targets.**  Free compute: C = `EPS` of the scope's MACs, at the window and pooled over each monitoring period
-(`reporting.PERIODS`: a week, a month and a year) of windows at the stock step; the samples are about Λ/ε whatever
+(`verity.protocol`'s `MONITORING_PERIODS`: a week, a month and a year) of windows at the stock step; the samples are about Λ/ε whatever
 the scope, the commitment grows with it.  Exfiltration: ℓ = `LEAK_BITS` a window.
 
     uv run python benchmarks/sampling_plan/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
@@ -63,11 +63,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from inputs import EPILOGUE, I, K_MAX, KEY, S8_STEP, block_k_log, cap, observations
 
-from verity.protocols import reporting
-from verity.protocols.spot.verifier.profile import WINDOW_DELTA
-from verity.protocols.spot.prover.costfit import Fitted, fit
-from verity.protocols.spot.verifier.one_stage.partition import UNIT_CLASS_MAX
-from verity.protocols.spot.prover.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
+from verity.protocol import MONITORING_PERIODS
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
+from verity.protocols.proofs.spot.prover.costfit import Fitted, fit
+from verity.protocols.proofs.spot.verifier.one_stage.partition import UNIT_CLASS_MAX
+from verity.protocols.proofs.spot.prover.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
                                                            Objective, ReplayGrain, for_target, grain_costs, leak_count,
                                                            loc_bits, met_replay, row_ands, sqrt_grain)
 
@@ -368,7 +368,7 @@ def readings() -> dict[str, float]:
 
 
 def scopes() -> dict[str, float]:
-    return {"window": 1.0} | {name: seconds / IN["step_s"].value for name, seconds in reporting.PERIODS}
+    return {"window": 1.0} | {name: seconds / IN["step_s"].value for name, seconds in MONITORING_PERIODS}
 
 
 def run(weight: float = 1.0, *, rates: tuple[float, ...] = RATES, plan: bool = True) -> dict:

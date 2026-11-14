@@ -16,7 +16,7 @@ The served sizes it reads:
 - SPOT: the GLM-5.3 workload card (`benchmarks/spot_figures/cards/workload.glm-5.3.json`): its window of one
   request (the floor), and one request of 3,320.5 computed tokens (`benchmarks/spot_figures/breakeven/reprice.py`), at
   the card's cut.
-- Monitoring periods: `verity/protocols/reporting.py`'s week, month and year, in hourly phases.
+- Monitoring periods: `verity/protocol.py`'s week, month and year, in hourly phases.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ lg = math.log2
 CARD = Path(__file__).resolve().parents[1] / "spot_figures" / "cards" / "workload.glm-5.3.json"
 #: the prover's budget in SHA-512 calls, log2; each row also gives `2^64` where the budget moves it
 T = 80
-#: hourly phases in a week, a month and a year (`verity/protocols/reporting.py`'s PERIODS)
+#: hourly phases in a week, a month and a year (`verity/protocol.py`'s MONITORING_PERIODS)
 PHASES = {"week": 7 * 24, "month": 30 * 24, "year": 365 * 24}
 
 # Flock, one `--zk` session (`security/Proofs/Flock/Claims/NumbersDeploy.lean`): κ ≤ n·2^-202.98 at n tables, at most
@@ -54,7 +54,7 @@ RHO = Fraction(1, 400)
 H100 = {"r": 32, "G": 4, "add": 32, "bf16": 2, "fs": 64, "qa": 4, "c": 0}
 G0 = Fraction(1, 400)
 
-# The deployed PoUW window (`verity/protocols/spot/verifier/profile.py` WINDOW_DELTA) and the served run's sampling δ.
+# The deployed PoUW window (`verity/protocols/proofs/spot/verifier/profile.py` WINDOW_DELTA) and the served run's sampling δ.
 WINDOW_DELTA = Fraction(1, 2**40)
 SERVED_DELTA = Fraction(1, 100)
 # A K_d that `security/Definitions/Accounting/Guarantees/Compose.lean`'s docstring takes as its example; not served.
@@ -62,7 +62,7 @@ COMPOSE_KD = 96000
 # The Sm120 headlines' window (`security/Definitions/Accounting/Guarantees/Headline.lean`): checks·(√δ_fork + n_π·δ_ZK) ≤ 2^-41.
 SM120_CHECKS, SM120_BUDGET = 48000, -41.0
 
-# Dither's design point (`verity/protocols/pouw/verifier/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).
+# Dither's design point (`verity/protocols/experimental/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).
 DITHER = {"delta_coin": 1e-6, "G": 1.15e7, "q": 13816}
 
 # SPOT's binding error ε_bind as its one-stage audit states it, at k = ⌈2^24/e⌉ and M, R_w at 2^192.

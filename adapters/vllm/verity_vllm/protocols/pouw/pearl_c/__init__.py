@@ -3,7 +3,7 @@ by GPU 1's kernel pipeline, one epoch per install over every linear weight, one 
 
 The kernel is a directory (setting ``kernel``): the run tree's ``benchmarks/pouw/pearl_c_sm120``, or ``pearl_c_sm90`` for the
 ``h100`` record (an H100 or H200, sm_90a), whose ``run.py`` has the `Pipeline` (its kernels in order, each a named step of a
-phase, over buffers the caller may own) and whose ``fixture.py`` has the keys (`keys_of`, `unit_block`).  The cubin is
+phase, over buffers the caller may own); a unit's keys are the scheme's (`pearl_c.keys_of`, `pearl_c.unit_block`).  The cubin is
 build.sh's (setting ``cubin``, default the directory's cubin).  This module owns the buffers and runs the pipeline's steps on
 torch's current stream, in the device's primary context:
 
@@ -53,7 +53,7 @@ compiled kernel launched directly after the first launch; `screen` where Triton 
 buffer by one driver copy; filler rows zeroed only where an earlier call wrote them; the stream from torch's raw accessor.
 The filler bookkeeping holds while no call has run under graphs (`eager_only`).
 
-The schedule (`verity.protocols.pouw.verifier.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
+The schedule (`verity.protocols.accounting.pouw.verifier.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
 ``deferred`` hashes tiles on a side lane beside the next calls, ``deferred-a`` A's tree too where the kernel splits A's
 commitment; the commitments are the serial schedule's.  With ``hashing`` off (``pearlc-nohash``) a call skips A's tree, E_A's
 lines, the leaves and the records, for the time split.  ``hashing`` may change between passes, never within.
@@ -66,17 +66,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
-from verity.protocols.pouw.prover.schemes.pearl_c_device import (
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import (
     DEVICES,
     H100,
     SM120,
     SM120_UNPROMOTED,
 )
-from verity.protocols.pouw.verifier.audit import Workload, rows_domain, weight_binding
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.pouw.verifier.serving import (
+from verity.protocols.accounting.pouw.verifier.audit import Workload, rows_domain, weight_binding
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.accounting.pouw.verifier.serving import (
     SERIAL,
     Schedule,
     SchemeId,
@@ -148,12 +148,12 @@ __all__ = ["CALL_CAPACITY", "CALL_STEPS", "EPOCH_STEPS", "FLAG_ROWS", "GRAPH_ROW
            "call_index", "call_keys", "epoch_of", "excluded", "manifest_epoch", "manifest_schema", "new_salt_key",
            "refusals", "rotated", "schedule_of", "scheme_of", "screen_into", "splits", "weight_roots", "write_manifest"]
 
-#: the Pearl-C schemes this device path runs, by name (`verity.protocols.pouw.verifier.serving.SchemeId`: forming, device record, hashing format);
+#: the Pearl-C schemes this device path runs, by name (`verity.protocols.accounting.pouw.verifier.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
 #: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it); ``h100`` (G = 4,
 #: GLM-5.3's FP8 form on the H200) is pearl_c_sm90's.  The format is -h3, SHA-512 throughout (its seeds, lines,
 #: tile leaves and HM96 trees: the one hash), each row's E_A line from its own seed (the work sampling design capping each
-#: credited row too); its tree hash comes from `verity.protocols.pouw.verifier.serving.HASH_FORMATS` through the scheme.
+#: credited row too); its tree hash comes from `verity.protocols.accounting.pouw.verifier.serving.HASH_FORMATS` through the scheme.
 SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED, H100))
 #: each record's kernels' (k, n) grain past its domain: pearl_c_sm120's (1,024, 128); pearl_c_sm90's (256, 64), 1 KiB row segments, 64-wide tiles
 KERNEL_GRAIN = {SM120.name: (1024, 128), SM120_UNPROMOTED.name: (1024, 128), H100.name: (256, 64)}
@@ -360,7 +360,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         self.roots_buf = _zeros(self.nb * CALL_CAPACITY, self.device)
         self.flag_buf = _zeros(2 * flag_rows, self.device).view(flag_rows, 2)
         self.tree_hash = hash_format(scheme).tree_hash
-        self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
+        self.keys, self.uploads = _Keys(salt, self.tree_hash), _Uploads(self.device)
         self.copy = kernel.dev.copy_async if self.device.type == "cuda" else memmove
         self.eager_only = True              # no call has run under graphs, whose replays write rows and keys unseen
         self.fused_screen = self.device.type == "cuda"
@@ -453,7 +453,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         keys = _zeros(128, weight.device)
         mm = Matmul(0, Shape(ROW_ALIGN, k, n), w)
         seed_b = C.seed_b(self.salt, self.roots[w], self.scheme.hashing)
-        kk = K.fixture.keys_of(self.scheme, self.epoch, mm, seed_b)
+        kk = C.keys_of(self.scheme, self.epoch, mm, seed_b)
         _put(keys, kk["line_b"].ljust(64, b"\0") + kk["dom_b"])
         xb = weight.to(torch.float32).contiguous()
         seg = _zeros(size["segdig_b"], weight.device)

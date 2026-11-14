@@ -20,10 +20,10 @@ overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a s
 **Which "remote".** Five things in the tree are called "remote", and this page means the first:
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v1`; v0 is development);
-- PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/poub/verifier/`, `RemoteAudit`,
+- PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/accounting/poub/verifier/`, `RemoteAudit`,
   `Accounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
-- `RemoteChallenger` (`verity/protocols/spot/device/remote.py`), a remote challenger's client;
-- `CertifierClient` (`verity/protocols/certifier/verifier/active.py`), onsite's network certifier, over the network;
+- `RemoteChallenger` (`verity/protocols/proofs/spot/device/remote.py`), a remote challenger's client;
+- `CertifierClient` (`verity/protocols/accounting/certifier/verifier/active.py`), onsite's network certifier, over the network;
 - the overhead bound's remote regime (`Nci.Guarantees.DampenerRemote`, `rho`'s `regime.remote`): a bound over this
   protocol, not in it (part 6 below);
 
@@ -51,10 +51,10 @@ overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a s
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../../../spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/recursion/verifier/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
-| PoUW ([README](../../../pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
+| Sampled proofs ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/recursion/verifier/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
+| PoUW ([README](../../../accounting/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
 | PoUW, v0 | the period's credited work, windows all or nothing | `PouwCheck.Period.protocol` (`pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
-| The inference-only policy ([README](../../../inference_only/verifier/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `NciCheck.Protocol.protocol` (`inference_only/verifier/nci/lean`) | `verity/inference-only/v0` |
+| The inference-only policy ([README](../../../policy/inference_only/verifier/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `NciCheck.Protocol.protocol` (`inference_only/verifier/nci/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied [run, window] components`
 (`remote-v1`), which
@@ -78,7 +78,7 @@ product's rule and its difftest are the composition's ([README](composition/READ
    blocks are B's output on the log's θ and the advice; the committed trace is `Verity.Committed`.
 2. **Execution phase** j. The hardware runs, and the developer commits every value it computes under hiding commitments
    in SHA-512 trees: the committed trace.
-3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, "How an audit works"):
+3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, section 3, "One period, step by step"):
    1. The developer reports its advice a_j, at most ℓ_a bits, committed. B(a_j) outputs the execution block E_j,
       partitioned into inference blocks, each of which is partitioned into proof blocks, with its placement. The
       developer proves through the ZK server that it ran B correctly on the committed advice of at most ℓ_a bits, and
@@ -245,7 +245,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerThreaded` 
 **How it is checked.**
 
 - *By whom.* Not by remote yet: the policy isn't one of its subprotocols (Subprotocols, above). Its check runs on its
-  own, as `nci-check` (`NciCheck.Baseline.check`, `verity/protocols/inference_only/verifier/nci/lean`); once composed, the
+  own, as `nci-check` (`NciCheck.Baseline.check`, `verity/protocols/policy/inference_only/verifier/nci/lean`); once composed, the
   verifier runs it on an auditor host in each verification phase.
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
@@ -295,11 +295,11 @@ part 6's premises say why that shape trains little.
 phase to the coins before it: the chance that some subprotocol of some phase accepts while its claim fails is at most the
 sum of their errors. For sampled proofs,
 Pr[every phase accepted ∧ incorrect proof blocks ≥ ln(1/δ)/q_s] ≤ δ + Σ_t (ε_ks,t + ε_bind,t), q_s the sample's coverage.
-PoUW reports ε at δ_s = 2⁻⁴⁰ (`verity/protocols/pouw/verifier/credit.py`'s `DELTA`), the sample's error alone. Its pooled
+PoUW reports ε at δ_s = 2⁻⁴⁰ (`verity/protocols/accounting/pouw/verifier/credit.py`'s `DELTA`), the sample's error alone. Its pooled
 failure over n verification phases is δ_s + n·(δ_bind + δ_ks), PoUW's own binding and proof-system errors (not sampled
 proofs' ε_bind and ε_ks above). δ_ks rests on the undischarged `ServiceSound`, and δ_bind has no deployed bound, so
 neither has a number yet. Over a week, a month and a year, at one verification phase an hour (n = 168, 720 and 8,760,
-`reporting.PERIODS`), the total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): a year's total below 1% needs δ_bind + δ_ks below about
+`verity.protocol.MONITORING_PERIODS`), the total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): a year's total below 1% needs δ_bind + δ_ks below about
 1.1·10⁻⁶ a phase. A year's n·(δ_bind + δ_ks) below 2⁻¹⁰⁰ needs 2⁻¹¹³·¹ a phase; the total
 also needs δ_s below 2⁻¹⁰⁰.
 
@@ -536,7 +536,7 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
   MFU₀ (`Nci.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
 - **Their status.** Draft (`draft:no-straddle`). `min-cut` sets them, `reference-remote-h200-pouw`'s and
   `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, with `training-cut-hardness` and
-  `training-cut-exports` assumed. `cover` sets `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
+  `training-cut-exports` assumed. `cover` sets `reference-remote-h200-elementary`'s 1, conditional, premises assumed.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
   98%): the figures are the composition's, and with PoUW crediting nothing the same scenario gives 1.
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all
@@ -564,7 +564,7 @@ the vLLM demo runs both halves on one served run, PoUW's as a development run:
   and no remote guarantee exists for its verdicts to reach (the open gap, above).
 
 What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the
-suite `verity-pouw-check-difftest`; `verity/protocols/pouw/verifier/lean/check/README.md`), and the composite's difftest
+suite `verity-pouw-check-difftest`; `verity/protocols/accounting/pouw/verifier/lean/check/README.md`), and the composite's difftest
 (`verity/protocols/compose/verifier/lean/tests`).
 
 ## Read next

@@ -14,9 +14,7 @@ from verity_config.settings import DEBUG, REDACTED, VALUE, WHERE, Registry, Sett
 MEMBER = Path(__file__).resolve().parents[1]
 REGISTRY_FILE = "verity_bench/settings.py"
 #: The files of this member that still use the environment directly, and how often (`direct_uses`).  It only shrinks.
-#: runner.py reads the integration's own VERITY_INDUCTOR_DIR_PER_PROCESS, which outside code can read only once
-#: ``verity_vllm.settings`` is a public interface (``tests/test_vllm_public_api.py``).
-BASELINE = {"verity_bench/vllm/runner.py": 1}
+BASELINE: dict[str, int] = {}
 
 
 def test_every_setting_has_a_type_a_role_and_a_doc() -> None:

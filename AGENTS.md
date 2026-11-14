@@ -12,21 +12,24 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
-  - `verity/protocols/`: one directory per protocol, the list flat: `flock`, `spot`, `recursion`, `pouw`, `pous`, `poub`,
-    `certifier` and `inference_only`. Beside them, `remote` and `onsite` are the two lists of protocols compose accepts:
-    remote is what an auditor with no devices at the datacenter runs, and onsite what an auditor with devices there
-    runs. Target, not yet: `compose/` (today's `remote/verifier/composition/`), a ninth protocol on top of
-    the audits, holding both lists; and `experimental/NAME/` for a whole directory
+  - `verity/protocols/`: the protocols in three group directories, two layers on the proofs: `proofs/` holds `flock`, with
+    `spot` and `recursion` on it, what the other protocols call to prove; `accounting/` holds `pouw`, `pous`, `poub` and
+    `certifier` (compute, memory and network); `policy/` holds `inference_only`, on accounting. Both layers use the
+    proofs, and the proofs use neither. On top of the audits, `compose/` is a ninth protocol. Its `verifier/` holds its
+    Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an auditor with no devices at the
+    datacenter runs, and `onsite/` what an auditor with devices there runs. Its `device/` holds the auditor host's
+    challenger service. Target, not yet: `experimental/NAME/` for a whole directory
     no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
     its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `device/` is the
     auditor's device (the network certifier, the memory challenger, the challenger).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.Firewall`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
-    policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
+    policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only; the policy's Python is its
+    manifest alone (`inference_only/verifier/parties.py`: the verifier, no channel). `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
     keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
-    own): `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
+    own): `pouw/prover/clear/`, `pouw/verifier/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -38,15 +41,17 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU, host or server model, or time base), `nodes/` (one per kind of node), `site` (its
-    types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets in a
-    top-level `hardware/` that holds data only, and the types in `verity/`'s `device.py`.
+  - `verity/hardware/`: the registered hardware: `registration` (the registration log) and `lean` (the Lean card
+    tables' writer); its types, and the readers of the data sheets, which are in the top-level
+    `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
   - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
     channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
     directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
     reads a configuration) and `verity/runtime/`, which runs parties over channels.
   - `verity/claims/`: the security claims' ids. `tools/difftest/`: the Python held to each Lean (target, not yet: under
     `tools/`). `verity/protocols/compose/device/live_challenger/`: the auditor host's challenger service, from `benchmarks/` too.
+- `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
+  base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
@@ -276,8 +281,8 @@ Landing.
   area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
-  executable verifier and the ZK server (`verity/protocols/flock/verifier/`, with the release side in
-  `verity/protocols/recursion/verifier/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  executable verifier and the ZK server (`verity/protocols/proofs/flock/verifier/`, with the release side in
+  `verity/protocols/proofs/recursion/verifier/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `security/`, three trees: definitions
@@ -318,6 +323,9 @@ Landing.
 - Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
   deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
   machinery rather than accumulating them.
+- **Add only what was asked for.** A design, a page, a schema, a goal or a message holds what solves the stated problem
+  and nothing else. A field, count, label, option or caveat goes in only when it answers a question someone has asked:
+  that the information is at hand, or might be useful later, is no reason. Offer an extra in one line, and don't build it in.
 - **Something broken becomes a benchmark.** A step that fails or costs far too much (an OOM, hours where minutes would
   do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
   baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research

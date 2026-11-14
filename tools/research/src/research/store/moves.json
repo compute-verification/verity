@@ -2368,6 +2368,48 @@
         "verity/hardware/cards/__init__.py": "verity/hardware/cards.py",
         "verity/hardware/nodes/__init__.py": "verity/hardware/nodes.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/harness/sass_gate.py": "verity/protocols/pouw/prover/sass_gate.py",
+        "benchmarks/pouw/harness/sass_pins.json": "verity/protocols/pouw/prover/sass_pins.json"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/": "verity/protocols/pouw/prover/kernels/pouw_cuda/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/pouw/receipts/": "verity/protocols/pouw/verifier/receipts/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/flock/": "verity/protocols/proofs/flock/",
+        "verity/protocols/spot/": "verity/protocols/proofs/spot/",
+        "verity/protocols/recursion/": "verity/protocols/proofs/recursion/",
+        "verity/protocols/pouw/": "verity/protocols/accounting/pouw/",
+        "verity/protocols/pous/": "verity/protocols/accounting/pous/",
+        "verity/protocols/poub/": "verity/protocols/accounting/poub/",
+        "verity/protocols/certifier/": "verity/protocols/accounting/certifier/",
+        "verity/protocols/inference_only/": "verity/protocols/policy/inference_only/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/circuit/dither.py": "verity/protocols/experimental/dither/prover/dither.py",
+        "verity/protocols/accounting/pouw/prover/circuit/dither.circuit-check.py": "verity/protocols/experimental/dither/prover/dither.circuit-check.py",
+        "verity/protocols/accounting/pouw/prover/circuit/dither.circuit-check.json": "verity/protocols/experimental/dither/prover/dither.circuit-check.json",
+        "verity/protocols/accounting/pouw/verifier/dither/": "verity/protocols/experimental/dither/",
+        "verity/protocols/accounting/pouw/verifier/tests/test_circuit_dither.py": "verity/protocols/experimental/dither/tests/test_circuit_dither.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/clear/": "verity/protocols/accounting/pouw/prover/clear/"
+      }
     }
   ]
 }

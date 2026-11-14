@@ -1390,7 +1390,7 @@ def _attempts(tmp: Path, rows: list[tuple[str, str, str, list[str]]]):
     return types.SimpleNamespace(sql=lambda q, a=(): db.execute(q, a).fetchall())
 
 
-#: a records run as `research.queue.RECORDS_COMMAND` starts it, and one a lane wrote by hand
+#: a records run as `research run` records its command, and one a lane wrote by hand
 RECORDS_RUN = ["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"]
 RECORDS_BY_HAND = ["bash", "-lc", "uv sync -q && python3 tools/verity/lean/lean_changed.py --records security/Proofs"]
 
@@ -1906,7 +1906,7 @@ def test_the_real_packages_and_their_inputs():
     pkgs = LA.packages(files)
     assert "security/Proofs" in pkgs and not [p for p in pkgs if p.startswith("tools/verity/lean")]
     got = LA.inputs("security/Proofs", files)
-    assert "security/lean-audit.json" in got and "verity/protocols/flock/verifier/FlockVerify.lean" in got
+    assert "security/lean-audit.json" in got and "verity/protocols/proofs/flock/verifier/FlockVerify.lean" in got
     assert "tools/verity/lean/check.py" in got and not [f for f in got if "/.lake/" in f]
     assert "tools/verity/lean/Replay.lean" in got and "tools/verity/lean/README.md" not in got
     assert not [f for f in got if f.startswith("tools/verity/lean/tests/")]
