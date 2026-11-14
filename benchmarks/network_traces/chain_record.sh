@@ -141,7 +141,7 @@ CR_PATH=${CR_PATH:-warden}
 [ "$CR_PATH" = warden ] || { log "chain: CR_PATH=$CR_PATH: the warden path is the only one"; exit 3; }
 PROXY=$(find "$G" \( -name plan.json -o -name calibration.json -o -name proxy.json.gz \) -print -quit)
 [ -z "$PROXY" ] || { log "chain: the warden path reads no certifier rehearsal's run (its records through" \
-  "active.Proxy), and ${PROXY#$G/} is one's"; exit 3; }
+  "the older certifier's proxy), and ${PROXY#$G/} is one's"; exit 3; }
 if [ -n "${CR_WARDEN_RUN:-}" ]; then WARDEN=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
 else WARDEN=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); WARDEN=${WARDEN%/witness}; fi
 [ -n "$WARDEN" ] || { log "chain: the warden path: no warden run (a certified.jsonl) in $CR_GATES"; exit 3; }
