@@ -926,12 +926,9 @@ words = { "| device" = "| accelerator" }
 [[words_in]]
 files = ["security/Definitions/Core/Site.lean", "security/Properties/Core/Site.lean",
          "verity/protocols/interface/CoreProtocol/Site.lean", "verity/protocols/interface/CoreProtocol/Registration.lean",
-         "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Registered.lean"]
+         "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Registered.lean",
+         "security/Proofs/Core/Site.lean"]
 words = { ".device" = ".accelerator" }
-
-[[words_in]]
-files = ["security/Proofs/Core/Site.lean"]
-words = { "kind := .device" = "kind := .accelerator" }
 
 [rewrite]
 # Never rewritten: records of what was, files a digest pins, locks, and what isn't Lean or its prose.
