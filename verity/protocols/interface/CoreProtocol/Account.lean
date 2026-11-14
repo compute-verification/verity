@@ -407,7 +407,7 @@ def stepsWithin (ticks : Nat) (seconds : Ratio) (tick : Figure) (drift : Option 
     ticks * tick.1.num.toNat * (q.1.den - q.1.num.toNat) * seconds.den / (tick.1.den * q.1.den * seconds.num)
 
 /-- **Where a series of steps lies in the monitoring period**: step `first` of the series begins at the period's tick
-`tick`, and `device` is the auditor's device that numbers the steps, on the clock of the auditor's host it is in, so
+`tick`, and `device` is the auditor's device that numbers the steps, on the clock of the auditor's device it is in, so
 the drift the Site states for that host is the series' (`Site.drift?`). A series older than the period gives the step
 it was at when the period began, at tick 0; one that began in the period gives its step 0, at the tick it began. The
 auditor gives it, independent of the device an answer's key names (`Account.witness`). -/
@@ -527,7 +527,7 @@ structure Row where
   premises : List String := []
   deriving DecidableEq, Repr
 
-/-- **A drift taken on a premise**: how far the clock of the auditor's host `host` may run from real time, as a share
+/-- **A drift taken on a premise**: how far the clock of the auditor's device `host` may run from real time, as a share
 of it, where no data sheet bounds it and the Site states none for the host; `premise` is the name of the premise that
 says so, as the row that rests on it prints it. It is the drift of every device of the auditor's in the host. The
 three are the auditor's: no answer states them. -/
@@ -735,12 +735,12 @@ file. `digest` and `A` are the registration's: the sheets' digest and the audito
 Site states no unit of time. Where a link of the Site says no certifier splits it (`Site.mediated` is false),
 bits leave by a way no answer counts, so every row of a link prints no amount, a certified one too, and says why.
 
-A row that takes no premise reads a device's drift from the Site alone: the drift the auditor's host it is in states
+A row that takes no premise reads a device's drift from the Site alone: the drift the auditor's device it is in states
 (`Site.drift?`), and a device at the site, or in a host that states none, times nothing. `premised` lists drifts taken
-on a premise, for auditor's hosts whose locations state none. A flow's amount with a series timed on a device in such a
+on a premise, for auditor's devices whose locations state none. A flow's amount with a series timed on a device in such a
 host has, after its rows that take no premise, the same rows with those series covered at the premised drifts; each
 names the premises it rests on (`Row.premises`). The rows that take no premise are as they are without the list, so a
-premised row adds to none of them and replaces none. A premise for a host that is no auditor's host of the Site is
+premised row adds to none of them and replaces none. A premise for a host that is no auditor's device of the Site is
 refused, by the premise's name: a premise is taken for a clock the registration holds, and no row is printed beside
 one for a clock it does not. -/
 def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (period : Monitored)
@@ -822,7 +822,7 @@ private def hexed (x : Site.Loc) : Site.Loc :=
 /-- The example's locations, its devices' keys in lower-case hex. -/
 private def base : List Site.Loc := Core.Registration.Example.locs.map hexed
 
-/-- An auditor's host, at the site, whose clock may run `drift` from real time, or states none. -/
+/-- An auditor's device, at the site, whose clock may run `drift` from real time, or states none. -/
 private def vm (id : String) (drift : Option Figure) : Site.Loc :=
   { id, kind := .auditorHost, parent := some "site0", owner := .auditor, key := "a2",
     scheme := Core.Registration.Example.lms, timebase := some "tb0", drift }
@@ -830,7 +830,7 @@ private def vm (id : String) (drift : Option Figure) : Site.Loc :=
 /-- The example's auditor, who registers its devices' keys and its host's. -/
 private def auditor : Site.Registration.Auditor := keysOf (base ++ [vm "vm0" none])
 
-/-- The example's locations with its certifier in an auditor's host, `vm0`, which states `drift` for its clock. -/
+/-- The example's locations with its certifier in an auditor's device, `vm0`, which states `drift` for its clock. -/
 private def hostedBy (drift : Option Figure) : List Site.Loc :=
   (base.map fun x => if x.id == "cert0" then { x with parent := some "vm0" } else x) ++ [vm "vm0" drift]
 
@@ -1282,7 +1282,7 @@ private def weekRows (S : Site) (premised : List Premised) : List Row :=
 private def twoHosts : Site := ⟨[sheet], hostedBy none ++ [vm "vm1" none], links⟩
 private def other : List Premised := [{ host := "vm1", drift := fig 1 2000, premise := "ClockRateWithin(vm1, 5e-4)" }]
 #guard weekRows twoHosts other == weekRows bare [] ∧ weekRows twoHosts (other ++ onPremise) == weekRows bare onPremise
--- a premise for a host that is no auditor's host of the Site is refused by name, and no row is printed: one the Site
+-- a premise for a host that is no auditor's device of the Site is refused by name, and no row is printed: one the Site
 -- does not hold, the auditor's device, the prover's host; a certifier at the site is in no host, so no premise times
 -- it and its row covers nothing
 private def refused (S : Site) (host : String) : Option String :=
@@ -1330,7 +1330,7 @@ private def upper (x : Site.Loc) : Site.Loc := if x.id == "cert0" then { x with 
 -- a key names its device: the certifier's its certifier, the challenger's its challenger
 #guard (site.holder auditor certKey).map (·.id) == some "cert0"
 #guard (site.holder auditor chalKey).map (·.id) == some "chal0"
--- and names none: an auditor's host's key, a key no location of the auditor's holds, a key the auditor registers for
+-- and names none: an auditor's device's key, a key no location of the auditor's holds, a key the auditor registers for
 -- none of them, a key two of its devices hold, a key not in lower-case hex though its device holds it: the
 -- registration's example's own, and one in upper case
 #guard (site.holder auditor "a2").isNone ∧ (site.holder auditor "ff").isNone

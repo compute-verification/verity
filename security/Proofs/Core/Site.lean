@@ -339,7 +339,7 @@ def remote : Entry := .site "genesis"
 def next (locs : List Loc) (links : List Link := []) (sheets : List Sheet := []) (previous := "genesis+") : Entry :=
   .site previous ⟨sheets, locs, links⟩
 
-/-- The auditor's host `vm0`, at the site, with its time base and its clock's drift. -/
+/-- The auditor's device `vm0`, at the site, with its time base and its clock's drift. -/
 def vm0 : Loc := { own "vm0" .auditorHost "site0" "key1" with timebase := some "tb0", drift := some (1 / 2000) }
 
 /-- A later entry for each check, with the refusal it samples on the onsite site. -/

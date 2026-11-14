@@ -939,7 +939,7 @@ def g_vm(parent: str = "site0") -> Loc:
 
 
 def test_an_auditors_host_is_the_auditors_own_at_the_site() -> None:
-    """An auditor's host, as the guards state it. `Kinds`: it is at the site, a certifier or a challenger may be in
+    """An auditor's device, as the guards state it. `Kinds`: it is at the site, a certifier or a challenger may be in
     it, it is under no host of the prover's, holds no device and no memory leaf, and no link ends at it. `Owners`: it
     is the auditor's own, with its key, and states its time base, the auditor's for it, held as its key is: refused
     with none, with another, or where the auditor has none for the host; no other location states one, the auditor's
@@ -978,7 +978,7 @@ def test_an_auditors_host_is_the_auditors_own_at_the_site() -> None:
 
 
 def test_a_clocks_drift_is_its_auditors_hosts() -> None:
-    """`Owners`: an auditor's host states the auditor's figure for its clock, or none where the auditor has none;
+    """`Owners`: an auditor's device states the auditor's figure for its clock, or none where the auditor has none;
     refused with another, at 1 or more, and on any other location, the auditor's device in the host among them. The
     clock a device of the auditor's reads is its host's, with the host's drift (`Site.clock`, `Site.drift`); a device
     at the site reads none, and neither does the host itself."""

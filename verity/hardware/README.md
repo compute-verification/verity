@@ -215,7 +215,7 @@ An entry always registers a link out. An interface with no rate takes no certifi
 whose interfaces has a rate is refused. A file that states no interface gives no entry, since the entry would not say
 how the node reaches the outside. Each message says what to read or state.
 
-An auditor's host has no node file: `clock_drift(host, load_card(sku))`, beside `node_entry`, reads the card of the
+An auditor's device has no node file: `clock_drift(host, load_card(sku))`, beside `node_entry`, reads the card of the
 time base its clock runs on (`kind = "timebase"`) and gives, by `drift.max`'s mark, the host's premise
 (`ClockPremise`: `ClockRateWithin(<host>, <drift.max>)`, the number, its mark and its source) or, for a `ceiling`, the
 figure the host states and `Auditor.drift` holds it to. A number marked `premise` never becomes that figure, so a row

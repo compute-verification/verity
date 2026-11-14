@@ -401,7 +401,7 @@ def test_the_sample_site(server):
 
 
 def test_an_auditors_host(server):
-    """An auditor's host with a challenger in it is taken with the host's key and time base, and refused by `owner`
+    """An auditor's device with a challenger in it is taken with the host's key and time base, and refused by `owner`
     without the key, with another time base than the auditor's or with none, and by `kind` under a host of the
     prover's, on both sides; in the views the host and the device in it are in no host of the prover's."""
     log = grown()

@@ -7,7 +7,7 @@ gives a log accepted for `remote` against the auditor the card files give; a fil
 entry holds a link for each way out, none of which a certifier splits. The storage path's link and that of an interface
 that reads no line rate say why (`Link.unmediated`), so neither node's site is mediated; an interface with a rate says
 nothing, so `onsite` refuses the eight-card node by `uncertified`, with a network certifier standing in front of the
-node or without one, and takes the H200 node once a challenger reaches its host. An auditor's host's time base card
+node or without one, and takes the H200 node once a challenger reaches its host. An auditor's device's time base card
 gives the host's clock drift, a premise or the auditor's figure by its mark, and a number marked `premise` never
 becomes `Auditor.drift`."""
 
@@ -757,7 +757,7 @@ def test_an_auditor_holds_its_hosts_time_bases_by_their_cards() -> None:
 
 
 def _clocked(kind: str, card: dict) -> tuple[Registration, Auditor]:
-    """Node `kind`'s remote log with `CERTIFIER` in front of it, in the auditor's host `VM` whose time base's card is
+    """Node `kind`'s remote log with `CERTIFIER` in front of it, in the auditor's device `VM` whose time base's card is
     `card`, and the auditor holding the certifier's and the host's keys and the host's time base."""
     node, log = S.load_node(kind), Registration("remote")
     log = log.append(log.node_entry(node, S.load_card(node["device"]["sku"]), HOST, certifier=CERTIFIER,
@@ -771,7 +771,7 @@ def _clocked(kind: str, card: dict) -> tuple[Registration, Auditor]:
 
 @pytest.mark.parametrize("kind", WIRED)
 def test_a_certifier_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str) -> None:
-    """A certifier registered in an auditor's host reads that host's clock. Where the time base's drift is a premise
+    """A certifier registered in an auditor's device reads that host's clock. Where the time base's drift is a premise
     the host states its time base and no drift, the auditor takes none for it, the log is accepted, the certifier
     reads no drift from the Site, and the premise is the host's `Account.Premised`. Marked a ceiling, the same number
     is the host's drift and the auditor's, the certifier's as the Site reads it, and the log is accepted only by an
@@ -802,7 +802,7 @@ def test_a_certifier_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str)
 
 def test_a_certifier_at_the_site_reads_no_clock() -> None:
     """A certifier registered with no host of the auditor's is under the site, where it reads no clock and no drift.
-    A host given with no certifier, and one that is no auditor's host at the entry's site, are refused; a host the log
+    A host given with no certifier, and one that is no auditor's device at the entry's site, are refused; a host the log
     already holds is not registered twice."""
     kind = WIRED[0]
     node, cert = S.load_node(kind), CERTIFIER[0]

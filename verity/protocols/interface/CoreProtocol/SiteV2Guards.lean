@@ -192,7 +192,7 @@ private def keyed : Registration.Auditor := keyedAt root2
 #guard (bare (some "a stand-in")).toJson.compress ==
   "{\"beta\":1000000000,\"ends\":[\"node0\",\"outside\"],\"id\":\"eth0\",\"latency\":0," ++
   "\"unmediated\":\"a stand-in\"}"
--- an auditor's host: at the site, the auditor's own, with its key; a certifier or a challenger may be in it; it is
+-- an auditor's device: at the site, the auditor's own, with its key; a certifier or a challenger may be in it; it is
 -- under no host of the prover's, holds no device and no memory leaf, and no link ends at it
 private def vm (parent : String := "site0") : Loc :=
   { id := "vm0", kind := .auditorHost, parent := some parent, owner := .auditor, key := "k1", scheme := root2,
@@ -217,14 +217,14 @@ private def vmKeyed : Registration.Auditor :=
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with owner := .prover }] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with key := "k9" }] })
 #guard !decide (Entry.Owners keyed { locs := [root, vm] })
--- its time base: an auditor's host states the auditor's for it, held as its key is; refused with none, with another,
+-- its time base: an auditor's device states the auditor's for it, held as its key is; refused with none, with another,
 -- or where the auditor has none for the host; no other location states one, the auditor's device in the host neither
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with timebase := none }] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with timebase := some "tb1" }] })
 #guard !decide (Entry.Owners { vmKeyed with timebases := [] } { locs := [root, vm] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, vm, { inVm with timebase := some "tb0" }] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { host with timebase := some "tb0" }] })
--- its clock's drift: an auditor's host states the auditor's figure for its clock, or none where the auditor has none;
+-- its clock's drift: an auditor's device states the auditor's figure for its clock, or none where the auditor has none;
 -- refused with another, at 1 or more, and on any other location, the auditor's device in the host among them
 private def drifts (drift : List (String × Figure)) : Registration.Auditor := { vmKeyed with drift }
 private def slow : Loc := { vm with drift := some tenth }

@@ -1,5 +1,5 @@
 """The witnesses against the auditor ledger v1, ported to v2 as the refusals they now meet, where they hit the auditor
-host's code: the gate, the ledger and its publisher.
+device's code: the gate, the ledger and its publisher.
 
 * A root gets one session, whatever period a v1 open named for it, and an open's `by` is its gate key's lane; `serve.py` is
   told the window's root (its refusal of a salt after any other root is `test_serve.py`'s).
