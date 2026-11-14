@@ -724,7 +724,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
     recomputes from public data, each naming its seed and derivation (`Flock.HmRow`). The units read them from ``in``
     regions (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_blocks`).
-    The data guard counts a port whose derivation it does not list as data (``verity.definitions.circuits.operations.public_data``).
+    The data guard counts a port whose derivation it does not list as data (``verity.circuits.operations.public_data``).
 
     ``links`` (``[{"port", "leaves": [lo, hi]}]``, META ``links``, `HmOut`): input rows that hold template parameter
     leaves ``[lo, hi)`` as an output row holds outputs (a word per leaf), so that a reader whose leaves are another unit's outputs

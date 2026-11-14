@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 from verity.commitments import pool_row as R
-from verity.definitions.commitments.gates import block_key as BK
+from verity.commitments.gates import block_key as BK
 
 from verity_vllm.engine import pool_row as PR
 from verity_vllm.errors import Refused
