@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Certifier.JointBridge.WorkOfCreditedWords
-import Proofs.Pouw.Period
+import Proofs.Pouw.MonitoringPeriod
 import Std.Tactic.BVDecide.Normalize.Prop
 public import Proofs.Pouw.PearlC.Records
 
@@ -43,7 +43,7 @@ public import Proofs.Pouw.PearlC.Records
 # Proof of the joint period's PoUW guarantee from H1's checked credit
 
 `Accounting.SecurityProofs.Bridge.WorkOfCreditedWords` at H1's instance: at each value `ξ` of the other audits' coins,
-`Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` at the source's instance there bounds the play's
+`Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod` at the source's instance there bounds the play's
 acceptance with `n` times its fixed words below the check's credit, which is the bound the bridge takes, read through
 `Pouw.pr` (`pr_le_prob_of_equiv` at the identity). The H200's instance is it at `Accounting.h200S8Price`, the H200's
 price with INT8, `receiptWordMacs R C` multiply-adds a word and `receiptUnitMacs K R C` a unit.
@@ -77,7 +77,7 @@ end Accounting
 
 namespace Accounting.SecurityProofs.Bridge
 
-open Properties.Pouw.Period
+open Properties.Pouw.MonitoringPeriod
 
 /-- The uniform probability of `E` on `A` is at most that of `F` on `X` when `e : A ≃ X` maps `E` into `F`. -/
 theorem pr_le_prob_of_equiv {A X : Type} [Fintype A] [Fintype X] (e : A ≃ X) {E : A → Prop} {F : X → Prop}
@@ -95,9 +95,9 @@ theorem pr_le_prob_of_equiv {A X : Type} [Fintype A] [Fintype X] (e : A ≃ X) {
   rw [Finset.card_map] at this
   convert (Nat.cast_le (α := ℝ)).2 this using 3
 
-/-- `WorkOfH1CheckedCreditMonitoringPeriodAt p macs u b_unit` from `H1CheckedCreditPeriod`, at the source's instance at each
+/-- `WorkOfH1CheckedCreditMonitoringPeriodAt p macs u b_unit` from `H1CheckedCreditMonitoringPeriod`, at the source's instance at each
 value of the coins. -/
-theorem workOfH1CheckedCreditMonitoringPeriodAt_of (hsrc : H1CheckedCreditPeriod) (p : Price) (macs : Compose.Kind → ℕ)
+theorem workOfH1CheckedCreditMonitoringPeriodAt_of (hsrc : H1CheckedCreditMonitoringPeriod) (p : Price) (macs : Compose.Kind → ℕ)
     (u bUnit : ℕ) : Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriodAt p macs u bUnit := by
   intro ι α I _ _ Ω _ d C r c ι' K T L U Cn Ξ V _ _ _ _ _ _ _ Sc Cd n hn hN hr hM hK prm enc staged flat δs δbind
     δks ws opened salt Wp Pl folded help real hcost hhelp hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc
@@ -113,7 +113,7 @@ theorem workOfH1CheckedCreditMonitoringPeriodAt_of (hsrc : H1CheckedCreditPeriod
 /-- **The joint period's PoUW guarantee from H1's checked credit**, at every price, per-kind multiply-add count, unit
 count and unit width (`Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod`). -/
 theorem WorkOfH1CheckedCreditMonitoringPeriod : Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod :=
-  workOfH1CheckedCreditMonitoringPeriodAt_of Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod
+  workOfH1CheckedCreditMonitoringPeriodAt_of Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod
 
 /-- **PoUW's per-period guarantee in the joint period from H1's checked credit on the H200, at INT8, for `K`-deep
 `R × C` tiles**: the guarantee above at `Accounting.h200S8Price sha fetch` (an INT8 tensor-core multiply-add `1`, a
