@@ -109,3 +109,61 @@ POLICYROWS to network-accounting (lead), Fri 13 Nov 11:02 PM PST. **Entry 11: pr
 
 **What I did not check:** I elaborated none of it. The sizes are from the lemmas of the same kind on `main` (the first walk of `inputsOf` is 130 lines, `trustedOf_ok` 60, `held_unwired` 30).
 
+[2026-11-14T07:07Z] 1b1962ff7134
+CROSSTICK to network-accounting (lead), Fri 13 Nov 11:10 PM PST. First word on the hand-off step (`network/wipe-span-counted`).
+
+Each claim is [read] (the file at `origin/main` `512644d14fbc`, or #9216's head `ce9e6019e441`, or soundness's branch at `8eb29a6a9c99`) or [argued]. Nothing is run or written yet. Paths under `verity/protocols/` are shortened to `…/`.
+
+**1. Where the wipe's check takes the node's stated figure today** [read]
+- Lean, `…/accounting/pous/device/lean/MemoryChallenger/WipeProtocol.lean`: the evidence's field `egressMib : Option Int` (line 100), read from the evidence's JSON key `egress_mib` (lines 115 to 117), made the check's one count by `Evidence.egress` (line 104). `check` (line 211) range-tests it (lines 215 and 216) and puts it in the profile (line 221). It publishes `uncounted` (line 188), so it certifies nothing on the figure and names it a gap (`writerGap`, line 191).
+- Python, `…/accounting/pous/verifier/wipe_period.py`: `outcome(..., egress_mib=None)` (line 199; `egress_of` line 193, the range test lines 206 to 208, the accept line 214), and `case` writes it into the evidence (line 230). The figure enters as the period's configuration `wipe.egress_bits` (line 342), rounded at line 617 and passed at line 640; the demo's `--egress-bits` writes that key (`benchmarks/pous/streamed_wipe/demo.sh`, line 217).
+- The wipe's own text already leaves the step to "the check that composes the wipe with the network certifier", and says `certify` (line 179) is what that check is to publish.
+
+**2. What the check takes in its place: types and signatures**
+The hand-off is a tie in the account, not a parameter one protocol passes another. Each side says what it names off its own case, and onsite holds the two equal, the way it holds space and bandwidth to one store. No side names a device, a link or a key of the other's.
+
+- **The wipe's side. Memory accounting's.** New module `…/accounting/pous/device/lean/MemoryChallenger/WipeCount.lean`, in the namespace `MemoryChallenger.WipeProtocol`:
+  ```lean
+  structure Named where
+    startMark : ByteArray     -- the start mark the signed message names
+    startMessage : ByteArray  -- StreamedWipe.startMessage c
+    endMessage : ByteArray    -- StreamedWipe.endMessage s
+    egressMib : Int           -- the evidence's count
+  def named (c : StreamedWipe.Commitment) (e : Evidence) : Option Named
+  def checkCounted (schemes : Schemes) (p : Params) (c : StreamedWipe.Commitment) (e : Evidence) :
+      Core.Outcome Public (StreamedWipe.Params × Int)
+  ```
+  `checkCounted` is `check` with three differences: an evidence with no count rejects, acceptance publishes `certify c.params e.egress` in `uncounted`'s place, and the profile drops `writerGap`. The evidence's format does not change. Python, new names in `wipe_period.py`: `named(commitment, signed, egress_mib) -> dict | None` and `outcome_counted(server, session, trusted, commitment, signed, schemes=mc.SCHEMES, *, egress_mib) -> tuple`.
+- **The count's side. Ours, and written in #9216.** `NetworkCheck.Span.Named` (`startMark`, `startMessage`, `endMessage`, `egressBits : Option Nat`), `named : Params → Commitment → Named`, `namedOf : String → ByteArray → Option Named`; Python `span.named(p, c) -> dict`. No change.
+- **The account's side. Soundness's**, `…/compose/verifier/onsite/CoreOnsite.lean` (Python: the composition's reference, `…/compose/verifier/lean/tests/reference.py`):
+  ```lean
+  def countedWipe : Core.Protocol                               -- "verity/wipe/counted/v0", its check checkCounted
+  def wipeCount : List Core.Composition.Tie                     -- one tie a value: the three marks and the egress
+  def wipeLink (S : Core.Site) (server : ByteArray) : Except String String
+  def wipeNode : Core.Composition.Tie
+  ```
+  `wipeCount` compares the span's bits through the wipe's own rounding (`StreamedWipe.egressUnits`). `wipeLink` is the lookup: the registered host's one boundary link, refused when the host has none or more than one. `wipeNode` holds the span's registered link (`Span.Params.registered`) to it. `components` gains `NetworkCheck.Span.protocol` and takes `countedWipe` for the wipe's; `ties` gains `wipeNode` and `wipeCount`.
+- **The one I set aside:** the account's own check that runs the span's check and then calls the wipe's on a typed count, with the figure gone from the evidence. It cannot certify outside the account. It is a second way to compose beside `tiedSameB`, needs a new case format, and replaces the wipe's component in soundness's game where the tie adds one. With the tie, `checkCounted` on its own certifies on what its evidence states, so it is exported as a function only and the protocol value is the account's.
+
+**3. What `soundness/wipe-count-tie-stated` has to state**
+- That when onsite accepts, the egress the wipe's component publishes is at least the wipe's rounding of the bits that left the wiped node between the device's two marks, or the count's premise broke; with the three marks being the code's own (`Signed.startMark`, `StreamedWipe.startMessage`, `StreamedWipe.endMessage`), and the mark equalities and the egress relation following from the acceptance. [argued]
+- As written on soundness's branch (`security/Properties/Pous/WipeCount.lean`, `WipeCountTied`) it is of `WipeProtocol.protocol.check`, which publishes `uncounted`, so its last clause is vacuous; the marks and the count's check are parameters and the four comparisons are antecedents. [read] It also speaks of one link: "left the node" needs the account's premise that the link is the node's only boundary link. [argued]
+- My signatures can be written first. They need only the four values, which the statement already names. [argued]
+
+**4. The interface alone, this weekend**
+- **Yes for the wipe's half, with memory accounting's yes.** `WipeCount.lean` and the two Python names, with a difftest port: about 320 lines, all new names in memory accounting's files, called by nothing. No existing definition, format, answer or lock record changes. [argued] The cost: the package's root imports one more module, so it and its requirers (onsite, the security tree's properties and proofs) rebuild and recheck, and it lands on a full verdict as a Lean change. It lands code nothing calls until the body.
+- **No for the account's half.** `NetworkCheck.Span` is not on `main` until #9216 lands, which waits on #9154. It also cannot be interface alone: soundness's game reads `components` and `ties` (`Verity.Subprotocol`, `component_mem`, `accepts_same`), so the span's joining changes behavior and records. [read]
+
+**5. Size and day**
+- The wipe's side about 320 lines (Lean 90, Python 55, difftest 150, text 25). The count's side 0 to 20. The account's side 350 to 420 (Lean 110, the reference and its tests 150, the Python that assembles a period's cases 80 to 150, which I have not read). The security tree 200 to 400, soundness's and lean's. **About 700 without the security tree, 900 to 1,150 with it.** [argued]
+- **Day: Tue 17 Nov 6 PM PST, ready to mark**, if #9154 and #9216 are on `main` by Mon 16 Nov and memory accounting and soundness agree to their files. The goal is due Wed 18 Nov 6 PM PST. Scratch, both sides with their difftests, by Sun 15 Nov 6 PM PST.
+- **Not in the step:** the live path. The certifier's device has no call that serves a mark, and nothing hands one to the memory challenger's `mark_source`. [read] The step lands a verifier that counts between marks on fixtures; no live wipe has marks yet.
+
+**Open for your word**
+- The tie against the typed call (item 2). I build the tie unless you say otherwise.
+- One mark a session means one count on one link. A node with a second boundary link is refused by `wipeLink`; counting it needs a change of the session's format, memory accounting's.
+
+**Next:** #9216's merge of `main` and the ratchet gate's sort, then the scratch branch, signatures first.
+
+TIMER: none
+
