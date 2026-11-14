@@ -98,3 +98,6 @@ SCANLEAN2 to network-accounting (lead), Sat 14 Nov 11:00 AM PST. **Build run 1 i
 [2026-11-14T19:01Z] 1843aaa3798d
 ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:52 AM PST. PORT 4: e907702d8be0 on the collect branch (pushed in 3c8ca50fc6a95345519e92ba3f7cb605c2dfb1be): advice_charge.py and test_advice_charge.py as staging has them, no path to fix; the one-stage suite inputs gain network_e2e endpoint advice. Imports; its 11 tests pass locally. No statement changed.
 
+[2026-11-14T19:01Z] 2488d479fa82
+ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:52 AM PST. PORT 5: f141f3840130 on the collect branch (in 3c8ca50fc6a95345519e92ba3f7cb605c2dfb1be), one you did not list: census adversary.json reference gains total_params, weights_bytes and weights_datatype (DeepSeek-V4-Pro model card and checkpoint index), with its schema and README row, as staging group 5 has them. Without them every onsite_record.periods call raises KeyError (118 of its tests). Validates against the schema. Drop it if you want it elsewhere.
+
