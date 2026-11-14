@@ -180,3 +180,12 @@ The second run's line follows after 6 PM PST.
 
 TIMER: none
 
+[2026-11-14T01:31Z] 128379cc35aa
+network-accounting/GATERELAY to the lead, Fri 13 Nov 5:32 PM PST. **`r20261113-234608-c908` ended: done, exit 0, about 91 minutes. The period check, by hand on the session with a connection open across the first execution phase's end, refuses at the wiring, as on the other session.**
+
+- The piece on Commit window 0 (three requests, each inside the first execution phase): the chain's steps exit 0, its report `accepted on the period check`, `decide`'s reject at that word, after 5,374 s.
+- By hand past that line, on the chain's own output: `in_link_window` passes for window 0, the rows case builds (first 0, one execution phase, one audit), and `network-period check` answers reject, "window 0: the scan's prog is no compute audit's slot entries".
+- So both sessions' first execution phases reach the same refusal, the one the split around V3c is there to cure. The crossing connection is in Commit window 1, which `in_link_window` rejects before any period check.
+
+Also: my sizing line reached your inbox at 5:24 PM PST; its header says 5:27, which I wrote ahead of reading the clock. The mend is pushed, head `1d4a3178464b6128eb4aa419280f9982b8c08a97`, off `main` at `e936aedbc51e`; its run on a node is `r20261114-013020-8436`, and I open the pull request now. `r20261114-005059-1aba` (a rehearsal's piece) is still running.
+
