@@ -15,7 +15,7 @@ of ``--slots`` slots on the plan's side stream (``slots_gpu.StepCommitter``):
   tree), with each phase's compressions counted from the layout as the engine hashes them, and its G compressions/s;
 - ``--reps`` unmarked steps at each ``--temps`` pass size, ``--leaf-minb`` leaf kernel and ``--graphs`` mode (the first of
   each is the marked step's and the profile's), with the peak memory and how long the host took to enqueue the step (an
-  NVTX range, ``enqueue``, for ``launches.py``); on graphs, after a step that captures them, and each step's roots held to
+  NVTX range, ``enqueue``); on graphs, after a step that captures them, and each step's roots held to
   the marked step's, then one more pair under another salt key;
 - the leaf kernel alone over the widest group's first pass, at 1 and 2 CTAs an SM;
 - one step under torch's profiler (on graphs if they were timed): each kernel's launches and time, and the side stream's

@@ -72,11 +72,13 @@ def _chain_units(**sized):
 
 def test_a_chain_rows_slot_is_its_key_blocks_as_scores_and_values_units_of_64_columns_then_whole():
     units, ways = _chain_units()
-    assert B.CHAIN_COLS == 64 and sorted(ways, key=str) == [128, 16, 256, 32, 64, None]
+    assert B.CHAIN_COLS == 64 and sorted(ways, key=str) == [16, 32, 64, None]
     assert B.slots(CHAIN_ROW, units) == [[ways[64], ways[None]]]
     assert [(u["spec"].split("{")[0], u["n"]) for u in ways[64]] == [
-        ("SparseMlaHeadScores_v1", 32), ("SparseMlaHeadValues_v1", 256), ("SparseMlaHeadScores_v1", 8),
-        ("SparseMlaHeadValues_v1", 64), ("SparseMlaSplitEnd_v1", 320), ("SparseMlaCombine_v1", 64)]
+        ("SparseMlaHeadScoresCols_v1", 32), *[("SparseMlaHeadValues_v1", 32)] * 8, *[("SparseMlaHeadKeysWire_v1", 4)] * 9,
+        ("SparseMlaHeadScoresCols_v1", 8), *[("SparseMlaHeadValues_v1", 8)] * 8, *[("SparseMlaHeadKeysWire_v1", 1)] * 9,
+        ("SparseMlaSplitEnd_v1", 320), ("SparseMlaCombine_v1", 64)]
+    assert [u["spec"].split(",C=")[1] for u in ways[64][1:18]] == [f"{c}}}" for c in (*range(8), *range(9))]
     assert B.slots(CHAIN_ROW, ways[None]) == [[ways[None]]]                         # a census sized before the units existed
 
 
@@ -89,8 +91,9 @@ def test_a_chain_row_takes_its_scores_and_values_units_and_whole_key_blocks_when
 
 
 def test_the_served_sparse_attention_partition_names_a_decode_rows_units_at_the_census_s_width():
-    """The served partition's templates are `CHAIN_ROW`'s units at `CHAIN_COLS` (a scores or values unit its Boolean form), so
-    the planner's card and the served partition hold one cut of the row."""
+    """The served partition's templates are `CHAIN_ROW`'s units at `CHAIN_COLS` (a scores or values unit or a key rows' writer
+    its Boolean form), the cut `chain_ways` gives the row, so the planner rerun cuts the row as the served partition does.  It
+    reads `chain_ways`, not the planner's card on the tree."""
     served = json.loads((HERE.parent / "glm53_sparse_mla_tp8_step16.json").read_text())["templates"]
     assert sorted(B.ST.template(t).word for t in served) == sorted(u for u, _n in dict(B.ST.chain_ways(CHAIN_ROW))[B.CHAIN_COLS])
 

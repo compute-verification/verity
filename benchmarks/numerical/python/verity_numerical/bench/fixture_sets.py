@@ -15,8 +15,9 @@ import inspect
 import json
 import shutil
 import tempfile
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from verity_flock import subcircuit_templates as TM
 from verity_flock import synthetic as SY

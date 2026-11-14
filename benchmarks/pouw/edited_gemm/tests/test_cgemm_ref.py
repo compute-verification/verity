@@ -18,6 +18,9 @@ import pytest
 T, SEED, INV_S = C.T, 0xC6E3, 31.75
 KEY = [0x0123456789ABCDEF, 0xFEDCBA9876543210, 0x0F1E2D3C4B5A6978, 0x8796A5B4C3D2E1F0]
 TM, TN, TILES_N = 1, 2, 4   # row tile 1 and column tile 2 of a 2 x 4 grid: the call's tile 6
+#: b's and c's SHA-512 tags (egemm.cu's DITHER_TAG, cgemm.cu's C_TAG). Written out, so the bits a gate directory is made
+#: with are not under the tags the judge under test binds
+DITHER_TAG, C_TAG = 7, 8
 SFX = f"_{TM}_{TN}.bin"
 FULL, HALF = ("co32c", "h1"), ("cohalf", "cohalf-h1")
 #: each flag a dump answers for, with the dump's file and type
@@ -72,9 +75,9 @@ def write_full(d: Path, numerics: str, drop: tuple[int, int] | None = None) -> N
         V = np.clip(np.floor(x / (np.abs(x).max(axis=1) / np.float32(126)).astype(np.float32)[:, None]), -126, 126)
     else:
         V = np.clip(np.floor(x * np.float32(INV_S)), -127, 126)
-    X = V.astype(np.int64) + C.patch_bits(key, C.DITHER_TAG, TM * T, T, k)
+    X = V.astype(np.int64) + C.patch_bits(key, DITHER_TAG, TM * T, T, k)
     W = rng.integers(-110, 111, (T, k)) if h1 else rng.integers(-63, 63, (T, k))
-    Wc = W + C.patch_bits(key, C.C_TAG, TN * T, T, k)
+    Wc = W + C.patch_bits(key, C_TAG, TN * T, T, k)
     U = (C.u_rows16 if h1 else C.u_rows)(key, TN * T, T)
     Wp = Wc + np.tile(U, (1, k // 32))
     Y = sum(X[:, 32 * t:32 * t + 32] for t in range(k // 32))    # a row's 32 residue sums
@@ -108,9 +111,9 @@ def write_half(d: Path, numerics: str) -> None:
         V = np.floor(x / s.astype(np.float32)[:, None])
     else:
         V = np.clip(np.floor(x * np.float32(INV_S)), -64, 62)
-    X = V.astype(np.int64) + C.patch_bits(key, C.DITHER_TAG, TM * T, T, k)
+    X = V.astype(np.int64) + C.patch_bits(key, DITHER_TAG, TM * T, T, k)
     W = rng.integers(-110, 111, (T, k)) if h1 else rng.integers(-63, 63, (T, k))
-    Wc = W + C.patch_bits(key, C.C_TAG, TN * T, T, k)
+    Wc = W + C.patch_bits(key, C_TAG, TN * T, T, k)
     U = (C.u_rows16_half if h1 else C.u_rows_half)(key, TN * T, T)
     Wp = Wc + np.tile(U, (1, 2))
     Y = X[:, :64] + X[:, 64:]
@@ -137,15 +140,15 @@ def test_the_keys_bits_are_laid_out_as_the_docstring_says():
         return [digest[i // 8] >> (i % 8) & 1 for i in range(512)]
 
     row0, k = 2 * T, 256
-    b, c = C.patch_bits(key, C.DITHER_TAG, row0, T, k), C.patch_bits(key, C.C_TAG, row0, T, k)
+    b, c = C.patch_bits(key, DITHER_TAG, row0, T, k), C.patch_bits(key, C_TAG, row0, T, k)
     u, u16, z = C.u_rows(key, row0, T), C.u_rows16(key, row0, T), C.z_rows(key, row0, T, 3)
     uh, uh16 = C.u_rows_half(key, row0, T), C.u_rows16_half(key, row0, T)
     assert (b.shape, u.shape, z.shape, uh.shape) == ((T, k), (T, 32), (2, 32, T), (T, 64))
     for i, col in ((0, 0), (5, 131), (38, 255), (127, 64)):
         row, r = row0 + i, col % 32
         patch = (row // 4) * (k // 128) + col // 128
-        assert b[i, col] == bits(C.DITHER_TAG, patch)[(row % 4) * 128 + col % 128]
-        assert c[i, col] == bits(C.C_TAG, patch)[(row % 4) * 128 + col % 128]
+        assert b[i, col] == bits(DITHER_TAG, patch)[(row % 4) * 128 + col % 128]
+        assert c[i, col] == bits(C_TAG, patch)[(row % 4) * 128 + col % 128]
         beta = bits(10, row // 2)[8 * ((row % 2) * 32 + r):][:7]
         assert u[i, r] == -64 + sum(p * w for p, w in zip(beta, (1, 2, 4, 8, 16, 32, 65), strict=True))
         assert u16[i, r] == -16 + sum(p * w for p, w in zip(beta, (1, 2, 4, 8, 17), strict=False))

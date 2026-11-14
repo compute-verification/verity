@@ -8,7 +8,7 @@ User=research
 Group=research
 # journalctl -k: the OOM killer's lines
 SupplementaryGroups=systemd-journal
-# it runs in system.slice, outside the user slice's cap, and the OOM killer takes a run before it: it must report the pressure
+# it runs in system.slice, outside the user slice's limit, and the OOM killer takes a run before it: it must report the pressure
 OOMScoreAdjust=-900
 Nice=-5
 TimeoutStartSec=240

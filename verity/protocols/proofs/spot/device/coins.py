@@ -13,7 +13,11 @@ bytes it read (`one_stage.verifier.select`).  A sample from the auditor's challe
 (`ChallengerCoins`): one family's coins opened after the prover's commitment, concatenated in order, each checked against
 the challenger's commitment, and extended with the family's next coins, never stretched.  A family's coins follow one
 commitment: the verifier refuses a family whose log shows any other root (`FAMILY_ROOT`), so a second commitment's
-coins are another family's, and a prover that reads a sample and commits again has a sample no verifier takes.  vLLM's legacy replay
+coins are another family's, and a prover that reads a sample and commits again has a sample no verifier takes.  That holds
+of a verifier that names the family and the window's root itself, which nothing here can check: a verifier that read either
+from a file the prover wrote would give the prover its pick among the families it reserved.  So a caller that builds its
+stream again from a prover's hand-off names both from the registration's record and layout and refuses a hand-off that
+names another, as the two-stage commands do (`two_stage.resume`, `stop_audit.resume`).  vLLM's legacy replay
 challenge derives its own (`verity_vllm.commit.challenge.replay_key`, under the domain
 `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
 
@@ -395,10 +399,13 @@ def coins_reason(key: ChallengerKey, main: Any, coins: Any, window: str, label: 
     (`registration.check`'s `window_root`), never the record's or the evidence's. So a prover picks no window: coins
     another window's session released after the same commitment are refused, and a prover with sessions in several
     windows gets one sample, not the best of them. `label` is the verifier's family, never the segment's: a segment of
-    another family is refused, so a prover that reserved several families picks none of them after reading. The session
-    must be a withheld one (`withheld_on`). `service.Stream.outcome` hands the evidence to the Lean verifier, whose run
-    refuses a sample from the challenger without evidence that holds (`Run.run`'s `select`, code `coins`, or `family`
-    where the reason is `FAMILY_ROOT`)."""
+    another family is refused, so a prover that reserved several families picks none of them after reading. Both are
+    the caller's to keep: this function holds the evidence to the `window` and `label` it is given and cannot tell a
+    verifier's own from a prover's, so a caller that builds its stream again from a prover's hand-off names them from
+    the registration's record and layout and refuses a hand-off that names another (`two_stage.resume`,
+    `stop_audit.resume`). The session must be a withheld one (`withheld_on`). `service.Stream.outcome` hands the
+    evidence to the Lean verifier, whose run refuses a sample from the challenger without evidence that holds
+    (`Run.run`'s `select`, code `coins`, or `family` where the reason is `FAMILY_ROOT`)."""
     try:
         stream = draw_coins(key, window, label, after, coins, verify)
     except CoinError as e:

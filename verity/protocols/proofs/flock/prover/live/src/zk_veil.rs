@@ -79,7 +79,7 @@ pub fn level0_bits(l: usize, q: usize) -> f64 {
 }
 
 /// Goldreich–Kahan's estimate of a verifier's completion probability `p` (M2's simulator): fresh runs (`run`: whether one
-/// reached the proofs) until `t` of them do, with no cap and without the extraction run; returns the runs, so
+/// reached the proofs) until `t` of them do, with no limit and without the extraction run; returns the runs, so
 /// `p̃ = t / runs`. `t = Θ(λ)` keeps `p̃` within `[p/2, 2p]` except with probability `2^-Ω(λ)`. The estimation follows an
 /// extraction run that reached the proofs (probability `p`), so it costs `t` runs in expectation.
 pub fn gk_estimate(t: usize, mut run: impl FnMut() -> bool) -> usize {
@@ -1577,7 +1577,7 @@ mod tests {
         }
     }
 
-    /// The estimate runs until `t` successes whatever `p` (a cap of 64t runs let a tiny `p` stop it at one
+    /// The estimate runs until `t` successes whatever `p` (a limit of 64t runs let a tiny `p` stop it at one
     /// success), lands within `[p/2, 2p]`, and the rewinds it allows all fail with probability `(1 − p)^(4·runs) ≈ e^-4t`.
     #[test]
     fn the_gk_estimate_is_uncapped_and_its_rewinds_suffice() {

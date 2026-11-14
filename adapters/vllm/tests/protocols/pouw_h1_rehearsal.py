@@ -80,7 +80,7 @@ rehearsal's ``out/program/``), its circuit files' directory (``--circuits``), an
       PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
       -m tests.protocols.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --program $RESEARCH_RUN_DIR/inputs \\
       --circuits $RESEARCH_RUN_DIR/inputs/circuits \\
-      --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84" \\
+      --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes GATE_LOGIN" \\
       --peer vy-nebius-2 --at 127.0.0.1:7811 --period vllm-h1-live-1 \\
       --key-sha512 27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc'
 

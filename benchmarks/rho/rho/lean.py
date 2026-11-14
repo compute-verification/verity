@@ -22,10 +22,11 @@ ORDER = ("proved", "assumption", "draft", "absent")
 
 
 @cache
-def _locks() -> tuple[frozenset[str], frozenset[str]]:
+def read(locks: tuple[Path, ...] = LOCKS) -> tuple[frozenset[str], frozenset[str]]:
+    """(the statements ``locks`` list a proof of, the names they list as premises), as `status` reads them."""
     proved: set[str] = set()
     assumed: set[str] = set()
-    for path in LOCKS:
+    for path in locks:
         lock = json.loads(path.read_text())
         for entry in lock["guarantees"].values():
             proved.update(s.rsplit(" : ", 1)[-1] for s in entry.get("signature", ()))
@@ -43,7 +44,7 @@ def status(name: str) -> str:
         return "draft"
     if name.startswith(("art:", "note:", "ruling:")):
         return "evidence"
-    proved, assumed = _locks()
+    proved, assumed = read()
     if name in proved:
         return "proved"
     if name in assumed:

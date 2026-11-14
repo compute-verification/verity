@@ -37,7 +37,7 @@ pub struct Template {
 }
 
 impl Template {
-    /// A `flock-ir-unit/v2` netlist as a template: its input words' rows are the inputs.
+    /// A `flock-ir-unit/v2` circuit description as a template: its input words' rows are the inputs.
     pub fn from_net(net: &crate::ir_block::IrUnitNet) -> Self {
         Template { k_log: net.unit_log, n_in: net.in_words * 128, const_pos: net.const_pos, useful: net.useful, a: net.a.to_vecs(), b: net.b.to_vecs() }
     }

@@ -190,8 +190,8 @@ CANDIDATES = [
         "name": "FP16/BF16 MMA, f32 accumulate (HMMA.*.F32)", "device": "all", "cls": "DECOMPOSE", "D": 1, "escape": False,
         "isa": "mma.sync...f32.f16.f16.f32 / .bf16: int8 operands are exact in f16 (<2048) and bf16 (<256), the product "
                "is exact in f32 (<2^24 accumulate), so one HMMA computes an exact int8 dot product",
-        "reason": "exact for int8, but fp16/bf16 tensor TOPS <= int8's at D=1, so <= 1.0x int8 (ties at most); decision "
-                  "81's per-form LP already lets the cheater pick its best form (IMMA16832 wins)",
+        "reason": "exact for int8, but fp16/bf16 tensor TOPS <= int8's at D=1, so <= 1.0x int8 (ties at most); the "
+                  "per-form LP already lets the cheater pick its best form (IMMA16832 wins)",
     },
     {
         "name": "FP16/BF16 MMA, f16 accumulate (HMMA.*.F16)", "device": "all", "cls": "LOW-PRECISION", "D": None,
@@ -270,20 +270,21 @@ CANDIDATES = [
         "name": "PRMT / FMNMX / LOP3 packing tricks", "device": "all", "cls": "NO-MULTIPLY", "D": None, "escape": False,
         "isa": "PRMT selects bytes, LOP3 is a 3-input bitwise truth table, I/FMNMX is min/max; none multiplies",
         "reason": "byte-select / bitwise / min-max carry no product; the outer-product PACKING that DOES multiply is "
-                  "IMAD/IMAD.WIDE/IDP, priced on the lane route and capped by ISA-CAP (<= 4 fields a word)",
+                  "IMAD/IMAD.WIDE/IDP, priced on the lane route and bounded by ISA-CAP (<= 4 fields a word)",
     },
     {
         "name": "IMAD.WIDE (two destination words)", "device": "all", "cls": "PRICED", "D": 1, "escape": False,
         "isa": "IMAD.WIDE: s32 x s32 -> s64 into a register pair (two words a lane)",
         "reason": "the two words are one s64 product's halves (the high word is carry/sign, not an independent fresh "
-                  "word); priced IMADW at the pi32 floor; ISA-CAP caps its packing at 4 fields a word = IMAD's density",
+                  "word); priced IMADW at the pi32 floor; ISA-CAP holds its packing to 4 fields a word = IMAD's "
+                  "density",
     },
     {
         "name": "IADD.64 / IMNMX.64 / SEL.64 (two destination words, no multiply)", "device": "sm_120",
         "cls": "NO-MULTIPLY", "D": None, "escape": False,
         "isa": "a register pair a lane: add.u64 assembles to one IADD.64 on sm_120a (either "
                "operand negated, the sass_gate fixtures), IMNMX.U64 is in TS.lean's fan-in table and SEL.64 in "
-               "harness/sass_pins.json",
+               "verity/protocols/accounting/pouw/prover/sass_pins.json",
         "reason": "no multiply, so they sum, compare or select existing words (not fresh); as a fold step, fold_wide3.c "
                   "finds no program whose last instruction writes fx1's two outputs as one IADD.64, IMNMX.64 or SEL.64 "
                   "(fold_opt_fx.py --wide3)",

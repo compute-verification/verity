@@ -100,7 +100,7 @@ def ChallengerRecord.toJson (r : ChallengerRecord) : Json :=
 /-- `record_reason` (module docstring): why `record` (`null` when the verifier has none) is not a challenger record
 signed under `key`; `none` when it is. -/
 def recordReason (key : ChallengerKey) (record : Json) : V (Option String) := do
-  if record == Json.null then return some NO_RECORD
+  if record.isNull then return some NO_RECORD
   match ChallengerRecord.ofJson record with
   | .error why => return some s!"the challenger record is malformed: {why}"
   | .ok r =>

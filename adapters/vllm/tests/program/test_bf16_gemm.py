@@ -18,16 +18,16 @@ import numpy as np
 import pytest
 from verity.circuits import boolean as BL
 from verity.circuits import codec
+from verity.circuits import word as WQ
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import evaluate, standalone_call
-from verity.circuits import word as WQ
-from verity.definitions.boolean import boolean_version
 from verity.circuits.ops import fp32 as W
 from verity.circuits.ops import prims as P
 from verity.circuits.ops.boolean import gemm as BG
+from verity.definitions.boolean import boolean_version
 from verity.definitions.registry import bf16_gemm_check as C
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import cublas_gemv as GV

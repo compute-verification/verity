@@ -2,7 +2,8 @@
 `--host-gib` and that much more of the lease's host memory, LEAF_CTAS is the node's `--leaf-ctas`, BIND reaches gate.sh
 (1 when unset), and SESSIONS, WINDOWS, WINDOW_MS and SAMPLES reach gate.sh in place of PACED; with none of them the
 prover's run and the gate steps' variables are the launcher's defaults. A HOST_GIB that isn't whole GiB, a LEAF_CTAS
-that isn't a count of CTAs, and a form or a BIND gate.sh refuses, end it before anything is written or run. The launcher is
+that isn't a count of CTAs, a form or a BIND gate.sh refuses, and a host whose address the environment doesn't hold, end it
+before anything is written or run; the gate steps are handed the two auditor hosts' addresses. The launcher is
 a copy in a throwaway repository whose origin's main names one role; `uv` is a stub on PATH that records
 each `research run` and answers with a run id, so nothing is launched."""
 from __future__ import annotations
@@ -21,6 +22,8 @@ NODE_ARGS = f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {SNAP
 SET = ("HOST_GIB", "LEAF_CTAS", "BIND", "SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES", "PACED", "PACE_PASS_MS", "LEASE_MEM_GB", "LEASE_ON",
        "LEASE_BY", "LEASE_FROM", "ENGINES", "ROLE", "PLAN", "ARENA_GIB", "UTIL", "PORT", "COMMIT", "PIN", "GATE_KEY",
        "GATE_ON", "PROVER_NODE", "PROVER_RUN", "CIRCUIT", "MAXMIN", "GATE_MEM", "SLOTS", "FETCH")
+#: the hosts' addresses as the launcher's environment holds them, here documentation addresses
+HOSTS = {"VY_CHALLENGER_1_HOST": "192.0.2.21", "VY_AUDITOR_1_HOST": "192.0.2.22", "VY_NEBIUS_2_HOST": "192.0.2.23"}
 GIT = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
        "GIT_COMMITTER_EMAIL": "t@t"}
 
@@ -29,9 +32,11 @@ def git(r: Path, *cmd: str) -> str:
     return subprocess.run(["git", *cmd], cwd=r, env=GIT, capture_output=True, text=True, check=True).stdout.strip()
 
 
-def dry_run(tmp_path: Path, **given: str) -> tuple[subprocess.CompletedProcess, list[str], list[list[str]]]:
-    """gate_run.sh --dry-run with GIVEN and nothing else of SET, step 1 skipped: its result, the words of the prover's
-    run it printed and the words of each `research run` it started, in order (the probe, then the fire)."""
+def dry_run(tmp_path: Path, words: tuple[str, ...] = ("--dry-run",), **given: str,
+            ) -> tuple[subprocess.CompletedProcess, list[str], list[list[str]]]:
+    """gate_run.sh --dry-run (or WORDS) with GIVEN, the hosts' addresses and nothing else of SET, step 1 skipped: its
+    result, the words of the prover's run it printed and the words of each `research run` it started, in order (the
+    probe, then the fire)."""
     r, origin, bin_, home = tmp_path / "repo", tmp_path / "origin.git", tmp_path / "bin", tmp_path / "home"
     pin = r / "verity/protocols/accounting/pouw/verifier/lean/check/models.json"
     for d in (pin.parent, r / "benchmarks/remote_session", bin_, home):
@@ -48,10 +53,10 @@ def dry_run(tmp_path: Path, **given: str) -> tuple[subprocess.CompletedProcess, 
     (bin_ / "uv").write_text(f'#!/bin/bash\n(IFS=$\'\\x1f\'; echo "$*") >> {tmp_path}/calls\n'
                              'echo "run r20200101-000000-abcd"\n')
     (bin_ / "uv").chmod(0o755)
-    env = {k: v for k, v in GIT.items() if k not in SET}
-    env |= {"PATH": f"{bin_}{os.pathsep}{env['PATH']}", "HOME": str(home), "TMPDIR": str(tmp_path),
+    env = {k: v for k, v in GIT.items() if k not in (*SET, "PROVER_SSH", "VERIFIER_SSH")}
+    env |= {**HOSTS, "PATH": f"{bin_}{os.pathsep}{env['PATH']}", "HOME": str(home), "TMPDIR": str(tmp_path),
             "CHECKPOINT": "0", "ROLE": "TINY", **given}
-    p = subprocess.run(["bash", str(r / "benchmarks/remote_session/gate_run.sh"), "--dry-run", "ma-remote-coins-9"],
+    p = subprocess.run(["bash", str(r / "benchmarks/remote_session/gate_run.sh"), *words, "ma-remote-coins-9"],
                        cwd=r, env=env, capture_output=True, text=True)
     printed = [line for line in p.stdout.splitlines() if line.startswith("DRY: research run ")]
     calls = (tmp_path / "calls").read_text().splitlines() if (tmp_path / "calls").exists() else []
@@ -91,12 +96,15 @@ def test_a_dry_run_prints_the_provers_run_with_the_host_part_and_hands_the_sessi
     assert unbound == (given.get("BIND") == "0") != ("the host's binding still refuses" in p.stdout)
     line = " ".join(prover)
     assert f"--env NODE_ARGS={node_args} --env VERIFIER_SSH=" in line
+    assert f" prover@{HOSTS['VY_AUDITOR_1_HOST']} --env TUNNEL_WAIT_S=1800" in line
     assert after(prover, "--mem-gb") == mem_gb
     assert [after(c, "--on") for c in calls] == ["vy-nebius-cpu-5", "vy-nebius-cpu-5"]
     assert [c[-1] for c in calls] == [f'bash "$RESEARCH_RUN_DIR/inputs/gate.sh" {verb}' for verb in ("probe", "fire")]
     for c in calls:
         got = envs(c)
         assert got["DRY"] == "1" and got["MODEL"] == "TINY"
+        assert {k: got[k] for k in HOSTS if k in got} == {k: HOSTS[k] for k in ("VY_CHALLENGER_1_HOST", "VY_AUDITOR_1_HOST")}
+        assert got["PROVER_SSH"].endswith(f" research@{HOSTS['VY_NEBIUS_2_HOST']}")
         assert {k: got[k] for k in ("BIND", "PACED", "PACE_PASS_MS", *FORM) if k in got} == form
 
 
@@ -133,3 +141,23 @@ def test_a_bind_that_is_not_0_or_1_is_refused_before_anything_is_written_or_run(
     assert p.returncode == 3, p.stdout + p.stderr
     assert f"BIND is {bind}: 1 binds the store to MODEL's pinned checkpoint, 0 to none" in p.stdout
     assert prover == [] and calls == [] and not (tmp_path / "home" / ".research").exists()
+
+
+@pytest.mark.parametrize("unset, whose", [("VY_CHALLENGER_1_HOST", "the challenger host"),
+                                          ("VY_AUDITOR_1_HOST", "the verifier host"),
+                                          ("VY_NEBIUS_2_HOST", "the prover's node, or PROVER_SSH")])
+def test_a_host_whose_address_the_environment_doesnt_hold_is_refused_by_name_before_anything_is_written_or_run(
+        tmp_path, unset, whose):
+    p, prover, calls = dry_run(tmp_path, **{unset: ""})
+    assert p.returncode == 3 and f"{unset} is unset: the address of {whose}" in p.stdout, p.stdout + p.stderr
+    assert prover == [] and calls == [] and not (tmp_path / "home" / ".research").exists()
+
+
+def test_a_prover_ssh_that_is_given_reads_no_address_of_the_provers_node_and_whatif_reads_no_hosts(tmp_path):
+    """PROVER_SSH given empty is GATE_ON's own /etc/vy/peers line, so the gate steps get none and the prover node's
+    address isn't asked for; whatif reaches no host, so it gets as far as its records with no address at all."""
+    p, _, calls = dry_run(tmp_path, VY_NEBIUS_2_HOST="", PROVER_SSH="")
+    assert p.returncode == 0 and len(calls) == 2, p.stdout + p.stderr
+    assert all("PROVER_SSH" not in envs(c) for c in calls)
+    p, _, calls = dry_run(tmp_path / "whatif", ("whatif",), **dict.fromkeys(HOSTS, ""))
+    assert p.returncode == 3 and "no fire and prover runs in " in p.stdout and calls == [], p.stdout + p.stderr

@@ -938,14 +938,14 @@ def archive_manifest(tar_bytes: bytes) -> dict[str, Any]:
     return _manifest_of(io.BytesIO(tar_bytes))
 
 
-# git's default delta-base cache (96 MiB) and unbounded pack windows put `git archive` itself at ~140 MiB on the laptop; these caps give
+# git's default delta-base cache (96 MiB) and unbounded pack windows put `git archive` itself at ~140 MiB on the laptop; these limits give
 # the same bytes at the same speed in ~70 MiB (what remains is about the largest blob, which git holds whole)
-GIT_ARCHIVE_CAPS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitWindowSize=4m", "-c", "core.packedGitLimit=16m")
+GIT_ARCHIVE_LIMITS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitWindowSize=4m", "-c", "core.packedGitLimit=16m")
 
 
 def _git_archive(git_dir: Path) -> subprocess.Popen:
     err = tempfile.TemporaryFile()
-    proc = subprocess.Popen(["git", *GIT_ARCHIVE_CAPS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=err)
+    proc = subprocess.Popen(["git", *GIT_ARCHIVE_LIMITS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=err)
     proc.archive_stderr = err          # Popen.stderr is None when stderr is a file, so the file is kept here
     return proc
 
@@ -1815,7 +1815,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     if mem_rec:
         remote["mem"] = mem_rec
         env["RESEARCH_MEM_RESERVATION"] = mem_rec["reservation"]      # the runner removes it at exit and does not pass it on
-        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup cap
+        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup limit
     cpus = direct_cpus()
     if cpus:
         remote["cpus"] = f"{format_cpus(cpus)}: {os.environ.get('DIRECT_CPUS_FILE') or DIRECT_CPUS_FILE} (a command may pin itself elsewhere)"
@@ -2512,7 +2512,7 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     """Copy records (or everything) from the machine into the local run dir, with the run dir's files ``also`` names beside the
     records (paths under the run dir: the workload's own small progress files and logs).  Unreachable -> observed_utc
     unchanged, reason recorded.  ``timeout`` lowers each ssh call's own (900 s for the records, 120 s for a probe): a waiter's
-    time left under its cap (research.waitcap)."""
+    time left under its limit (research.waitcap)."""
 
     def within(s: float) -> float:
         return s if timeout is None else max(1.0, min(s, timeout))

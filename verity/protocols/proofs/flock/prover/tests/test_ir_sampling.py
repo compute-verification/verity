@@ -1,6 +1,6 @@
-"""Flock's lowering of GumbelTopPTokenSelect_v1 (``verity_flock.ir_sampling``): the pieces against the IR primitives, the lane
-unit against the IR composites it is lowered from, a row's words against the IR evaluator on synthetic sets (a row whose last
-BLAKE3 chunk is short included), the staged file's units, the native words, the pin, and the negatives."""
+"""Flock's lowering of GumbelTopPTokenSelect_v1 (``verity_flock.ir_sampling``): the pieces against the circuits' primitives, the
+lane unit against the IR composites it is lowered from, a row's words against the circuits' reference evaluator on synthetic sets
+(a row whose last BLAKE3 chunk is short included), the staged file's units, the native words, the pin, and the negatives."""
 from __future__ import annotations
 
 import os
@@ -138,7 +138,7 @@ def _set(tmp_path, V, n=3):
 
 
 def _replay_scan(masked, g, noisy, V):
-    """``GumbelSelectF32``'s scan replayed from its Definition with the IR primitives: every lane's carry out."""
+    """``GumbelSelectF32``'s scan replayed from its Definition with the circuits' primitives: every lane's carry out."""
     y0 = SelectF32.evaluate(noisy, F.F32AddFtz.evaluate(masked[0], g[0]), masked[0])
     carry = (y0, 0, 1)
     out = [carry]
