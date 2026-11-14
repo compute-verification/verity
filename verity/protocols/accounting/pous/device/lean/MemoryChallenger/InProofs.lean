@@ -32,22 +32,22 @@ structure UnitOutcome where
   deriving Inhabited
 
 /-- Unit 0's, unit 1's and each round's outcome. -/
-structure SessionProofs where
+structure RunProofs where
   signature : UnitOutcome
   digest : UnitOutcome
   rounds : Array UnitOutcome
   deriving Inhabited
 
 /-- The signed header of a session that ended complete after its `k` rounds. -/
-def headOf (c : SessionCommitment) : ByteArray := (header c COMPLETE c.k).toUTF8
+def headOf (c : ChallengePhaseCommitment) : ByteArray := (header c COMPLETE c.k).toUTF8
 
 /-- The header row: the header, then a zero byte when its length is odd (a row is whole u16 words). -/
-def headRow (c : SessionCommitment) : ByteArray :=
+def headRow (c : ChallengePhaseCommitment) : ByteArray :=
   let h := headOf c
   if h.size % 2 == 0 then h else h.push 0
 
 /-- What `memory_challenger_message` hashes before the record: the role's tag, `I` and the session id's field. -/
-def ctxOf (c : SessionCommitment) (publicKey : ByteArray) : ByteArray :=
+def ctxOf (c : ChallengePhaseCommitment) (publicKey : ByteArray) : ByteArray :=
   field MEMORY_CHALLENGER_TAG.toUTF8 ++ publicKey.extract 0 16 ++ field (field c.session)
 
 /-- `n` bytes of `x`, least significant first: an integer row's bytes. -/
@@ -56,7 +56,7 @@ def le (n x : Nat) : ByteArray := ByteArray.mk ((Array.range n).map fun i => (x 
 def recordsRows (k : Nat) : Nat := (k + 1) / 2
 
 /-- Unit 0's, unit 1's and each round's program. -/
-def programs (c : SessionCommitment) (p : Lms.Params) : String × String × Array String :=
+def programs (c : ChallengePhaseCommitment) (p : Lms.Params) : String × String × Array String :=
   (s!"PousSessionSig_v1\{N={p.N},W={p.W},H={p.H}}",
    s!"PousSessionDigest_v1\{K={c.k},HEAD={(headOf c).size},LIMIT={c.limitNs}}",
    (Array.range c.k).map fun j => s!"PousRound_v1\{N={c.blockBytes},SLOT={j % 2}}")
@@ -64,7 +64,7 @@ def programs (c : SessionCommitment) (p : Lms.Params) : String × String × Arra
 def byJ (openings : Array CoinOpening) (j : Nat) : Option CoinOpening := openings.findRev? (·.j == j)
 
 /-- `clear_reasons`: the scheme accepted, the key trusted, and every round's last opening opens its committed coin. -/
-def clearReasons (schemes : Schemes) (trusted : List ByteArray) (c : SessionCommitment) (openings : Array CoinOpening)
+def clearReasons (schemes : Schemes) (trusted : List ByteArray) (c : ChallengePhaseCommitment) (openings : Array CoinOpening)
     (scheme : String) (publicKey : ByteArray) : Array String := Id.run do
   let mut reasons : Array String := #[]
   match schemes.lookup scheme with
@@ -79,13 +79,13 @@ def clearReasons (schemes : Schemes) (trusted : List ByteArray) (c : SessionComm
     if !ok then reasons := reasons.push s!"round {j}'s index is not its committed coin"
   return reasons
 
-def clearOk (schemes : Schemes) (trusted : List ByteArray) (c : SessionCommitment) (openings : Array CoinOpening)
+def clearOk (schemes : Schemes) (trusted : List ByteArray) (c : ChallengePhaseCommitment) (openings : Array CoinOpening)
     (scheme : String) (publicKey : ByteArray) : Bool :=
   (clearReasons schemes trusted c openings scheme publicKey).isEmpty
 
 /-- `link_reasons`: the shape, then unit 0's `m` is unit 1's output m and round `j`'s records row is unit 1's records
 output `j / 2`. -/
-def linkReasons (c : SessionCommitment) (proofs : SessionProofs) : Array String := Id.run do
+def linkReasons (c : ChallengePhaseCommitment) (proofs : RunProofs) : Array String := Id.run do
   let d := proofs.digest.rows
   let t := recordsRows c.k
   if proofs.rounds.size != c.k || d.size != 4 + 2 * t || proofs.signature.rows.size != 4 then
@@ -100,11 +100,11 @@ def linkReasons (c : SessionCommitment) (proofs : SessionProofs) : Array String 
       reasons := reasons.push s!"round {j}'s record is not the signed digest's"
   return reasons
 
-def linksOk (c : SessionCommitment) (proofs : SessionProofs) : Bool := (linkReasons c proofs).isEmpty
+def linksOk (c : ChallengePhaseCommitment) (proofs : RunProofs) : Bool := (linkReasons c proofs).isEmpty
 
 /-- `known_reasons`: each public input is the value the verifier computes, and each round's row the registered row at
 its opened index (`registered i`, none past C's blocks). -/
-def knownReasons (c : SessionCommitment) (openings : Array CoinOpening) (publicKey : ByteArray) (proofs : SessionProofs)
+def knownReasons (c : ChallengePhaseCommitment) (openings : Array CoinOpening) (publicKey : ByteArray) (proofs : RunProofs)
     (registered : Nat → Option ByteArray) : Array String := Id.run do
   let mut reasons : Array String := #[]
   let mut want : Array (UnitOutcome × String × Array (Nat × ByteArray)) :=
@@ -128,9 +128,9 @@ def knownReasons (c : SessionCommitment) (openings : Array CoinOpening) (publicK
 
 /-- `check_session`: the session's verdict from its proofs. It fails closed; which rounds were late or wrong stays inside
 the proofs. -/
-def sessionInProofs (schemes : Schemes) (trusted : List ByteArray) (registered : Nat → Option ByteArray)
-    (c : SessionCommitment) (openings : Array CoinOpening) (scheme : String) (publicKey : ByteArray)
-    (proofs : SessionProofs) : Verdict := Id.run do
+def runInProofs (schemes : Schemes) (trusted : List ByteArray) (registered : Nat → Option ByteArray)
+    (c : ChallengePhaseCommitment) (openings : Array CoinOpening) (scheme : String) (publicKey : ByteArray)
+    (proofs : RunProofs) : Verdict := Id.run do
   let mut reasons := clearReasons schemes trusted c openings scheme publicKey
   match schemes.lookup scheme with
   | none => pure ()

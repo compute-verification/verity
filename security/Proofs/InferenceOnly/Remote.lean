@@ -8,8 +8,8 @@ public import Proofs.InferenceOnly.Cut
 /-!
 # Proofs of the slowdown, remote protocol
 
-`CertificateSlack` is Markov's inequality on a finite outcome space (`markov`), applied to the wrong windows' capacity,
-whose expectation `expected_wrong` swaps into the windows' marginals. `VerdictLag` splits off the escaped blocks
+`CertificateSlack` is Markov's inequality on a finite outcome space (`markov`), applied to the incorrect windows' capacity,
+whose expectation `expected_incorrect` swaps into the windows' marginals. `VerdictLag` splits off the escaped blocks
 (`Finset.sum_sdiff`) and sums the rest by identity (`Finset.sum_fiberwise_of_maps_to`): under `TerminalDetection` one
 identity's faulty blocks at or after its first detected one all lie within `Δ` of it, so they skip at most `Φ Δ`.
 `escape_slack` is Markov's inequality again, on the escaped blocks' skipped work, whose expectation `expected_escaped`
@@ -83,31 +83,31 @@ theorem markov {Ω : Type} [Fintype Ω] (μ : PMF Ω) (Z : Ω → ℝ) (hZ : ∀
   · rw [if_neg h, mul_zero]
     exact mul_nonneg hq (hZ ω)
 
-/-- The expected capacity of the wrong windows is the sum of each window's capacity times its probability of being
-wrong. -/
-theorem expected_wrong {Ω : Type} [Fintype Ω] (μ : PMF Ω) {N : ℕ} (c : Fin N → ℝ) (wrong : Ω → Fin N → Prop) :
-    ∑ ω, (μ ω).toReal * wrongCapacity c (wrong ω) = ∑ i, c i * prob μ (fun ω => wrong ω i) := by
-  unfold wrongCapacity
+/-- The expected capacity of the incorrect windows is the sum of each window's capacity times its probability of being
+incorrect. -/
+theorem expected_incorrect {Ω : Type} [Fintype Ω] (μ : PMF Ω) {N : ℕ} (c : Fin N → ℝ) (incorrect : Ω → Fin N → Prop) :
+    ∑ ω, (μ ω).toReal * incorrectCapacity c (incorrect ω) = ∑ i, c i * prob μ (fun ω => incorrect ω i) := by
+  unfold incorrectCapacity
   simp only [prob_eq_sum]
   simp only [Finset.mul_sum]
   refine Finset.sum_comm.trans (Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun ω _ => ?_)
-  by_cases h : wrong ω i <;> simp [h, mul_comm]
+  by_cases h : incorrect ω i <;> simp [h, mul_comm]
 
 theorem CertificateSlack : Guarantees.CertificateSlack := by
-  intro Ω _ μ N c wrong p ε C hp hε hC hc hcC hsound
-  have hZ : ∀ ω, 0 ≤ wrongCapacity c (wrong ω) := by
+  intro Ω _ μ N c incorrect p ε C hp hε hC hc hcC hsound
+  have hZ : ∀ ω, 0 ≤ incorrectCapacity c (incorrect ω) := by
     intro ω
-    unfold wrongCapacity
+    unfold incorrectCapacity
     refine Finset.sum_nonneg fun i _ => ?_
-    by_cases h : wrong ω i <;> simp [h, hc i]
-  have hEp : ∑ i, c i * prob μ (fun ω => wrong ω i) ≤ p * C :=
-    calc ∑ i, c i * prob μ (fun ω => wrong ω i) ≤ ∑ i, c i * p :=
+    by_cases h : incorrect ω i <;> simp [h, hc i]
+  have hEp : ∑ i, c i * prob μ (fun ω => incorrect ω i) ≤ p * C :=
+    calc ∑ i, c i * prob μ (fun ω => incorrect ω i) ≤ ∑ i, c i * p :=
           Finset.sum_le_sum fun i _ => mul_le_mul_of_nonneg_left (hsound i) (hc i)
       _ = (∑ i, c i) * p := (Finset.sum_mul _ _ _).symm
       _ ≤ C * p := mul_le_mul_of_nonneg_right hcC hp
       _ = p * C := mul_comm _ _
-  have hm : ε * C * prob μ (fun ω => ε * C < wrongCapacity c (wrong ω)) ≤ p * C :=
-    ((markov μ (fun ω => wrongCapacity c (wrong ω)) hZ (ε * C)).trans_eq (expected_wrong μ c wrong)).trans hEp
+  have hm : ε * C * prob μ (fun ω => ε * C < incorrectCapacity c (incorrect ω)) ≤ p * C :=
+    ((markov μ (fun ω => incorrectCapacity c (incorrect ω)) hZ (ε * C)).trans_eq (expected_incorrect μ c incorrect)).trans hEp
   rw [le_div_iff₀ hε]
   exact le_of_mul_le_mul_right (by linarith) hC
 
@@ -303,24 +303,24 @@ theorem declared_le_div {C X Md : ℝ} (hC : 0 < C) (h : Md ≤ X) : Md ≤ C / 
   rwa [div_div_cancel₀ hC.ne']
 
 theorem SlowdownRemote : Guarantees.SlowdownRemote := by
-  intro Ω _ μ N cap wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx d c k n γ V _ _ _
+  intro Ω _ μ N cap incorrect p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx d c k n γ V _ _ _
     Wd val βw βx b hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hβw hβx hb
     hcomp hval hshare hHard hExp hM0 hM hu hres hx
   have hdecl : (Wd.N : ℝ) ≤ C / (C / Cut.workHE n k (βw * βx) b Wd.O) :=
     declared_le_div hC (Cut.SecurityProofs.CountHE γ V d Wd val c k n βw βx b hβw hβx hb hval hshare hHard hExp hcomp).1
-  refine prob_ge_of_not μ ?_ ((prob_or_le μ (fun ω => ε * C < wrongCapacity cap (wrong ω))
+  refine prob_ge_of_not μ ?_ ((prob_or_le μ (fun ω => ε * C < incorrectCapacity cap (incorrect ω))
     (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b)).trans
-      (add_le_add (CertificateSlack Ω μ N cap wrong p ε C hp hε hC hcap0 hcC hsound)
+      (add_le_add (CertificateSlack Ω μ N cap incorrect p ε C hp hε hC hcap0 hcC hsound)
         (escape_slack μ bad detected I ident τ w q B θ C hθ hC hw hI hq hq1 hB0 hwB hS)))
   intro ω hbad
   by_contra hgood
   apply hbad
-  have hwrong : wrongCapacity cap (wrong ω) ≤ ε * C := not_lt.1 fun h => hgood (Or.inl h)
+  have hwrong : incorrectCapacity cap (incorrect ω) ≤ ε * C := not_lt.1 fun h => hgood (Or.inl h)
   have hesc : ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b ≤ θ * C := not_lt.1 fun h => hgood (Or.inr h)
   have hlag := VerdictLag β ι (bad ω) (detected ω) I ident τ w Φ Δ H C hH hΔ hΦ (hI ω) (hT ω) (hcap ω)
   have hr : (Mr ω : ℝ) ≤ κ * (C - ((1 - εW) * W - ε * C - lagShare I.card Δ H * C - θ * C)) / 2 := by
-    have h1 : (Mr ω : ℝ) ≤ κ * (C - (1 - εW) * W + wrongCapacity cap (wrong ω) + ∑ b ∈ bad ω, w b) / 2 := hres ω
-    have h2 : κ * (C - (1 - εW) * W + wrongCapacity cap (wrong ω) + ∑ b ∈ bad ω, w b) ≤
+    have h1 : (Mr ω : ℝ) ≤ κ * (C - (1 - εW) * W + incorrectCapacity cap (incorrect ω) + ∑ b ∈ bad ω, w b) / 2 := hres ω
+    have h2 : κ * (C - (1 - εW) * W + incorrectCapacity cap (incorrect ω) + ∑ b ∈ bad ω, w b) ≤
         κ * (C - ((1 - εW) * W - ε * C - lagShare I.card Δ H * C - θ * C)) :=
       mul_le_mul_of_nonneg_left (by linarith) hκ.le
     linarith
