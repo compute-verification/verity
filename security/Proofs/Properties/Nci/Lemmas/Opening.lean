@@ -87,7 +87,8 @@ the unit's constant be registered as 1. Let `u` be correct in the transcript `Yc
 there; let the verdict bit be 1; and let `table` be committed under the root and the domain id the root and domain
 gates hold (`PinnedRead`). Then the row `u` returns in its local evaluation is `table`'s row at the key its key gates
 hold there, or the fill row where the key is at or past the table's count (`Hash.EmbeddingRead.h`), or SHA-512
-collides on what the unit's check and `table`'s opening at the key hashed. -/
+collides on what the unit's check and `table`'s opening at the key hashed. A read inside a fused block is outside it:
+its row goes straight into the block's GEMM and never leaves the unit, so `portsOf` gives no gates for it. -/
 def PinnedReadBinds : Prop :=
   ∀ (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ) (dfn : Defn) (ro : Roles)
     (out : String) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ct : Flock.Circuit)
