@@ -1,16 +1,16 @@
 """rows.sh's gate on the kernels a 64-row pass adds to `session.cu`, and their record: ptxas's report and cuobjdump's
-SASS of those five, through the harness's `mma_gate` (verity/protocols/accounting/pouw/prover/sass_gate.py). Every
+SASS of those seven, through the harness's `mma_gate` (verity/protocols/accounting/pouw/prover/sass_gate.py). Every
 other kernel of the build is held to the base's, instruction for instruction, by `same_sass.py`. Refuses (exit 1, the
 reasons on stderr):
 
-- one of the five missing from the build or from the listing, compiled for another arch, an arch this gate has no
+- one of the seven missing from the build or from the listing, compiled for another arch, an arch this gate has no
   table for (`ARCHS`: sm_90a and sm_120a, each as read from its build), or with a ptxas warning;
-- a sketching kernel (`SKETCHING`, the three that compute σ) whose tensor-core instructions aren't the int8 form alone,
+- a sketching kernel (`SKETCHING`, the five that compute σ) whose tensor-core instructions aren't the int8 form alone,
   IMMA.16832.S8.S8 (mma.m16n8k32 on s8 operands into s32), in a multiple of 4 (64 rows are four of its 16), and any
   tensor-core instruction in the other two;
 - local memory (a stack frame, a spill, LDL or STL) beyond the arch's bytes for the kernel (`local`): none in the
-  pass's receipt grid and the opening's receipts; the consumers' and the two once-a-pass kernels' frames as they
-  are. A build that caps the receipt kernels at 128 registers (-DSK64_PER_SM=2) may add the
+  pass's receipt grid and the opening's receipts; the consumers', the leaf pass's reader's and the two once-a-pass
+  kernels' frames as they are. A build that caps the receipt kernels at 128 registers (-DSK64_PER_SM=2) may add the
   arch's `capped` bytes to a kernel it holds to that, which is what that build gives up;
 - floating point: any instruction that reads or writes a float outside the compiler's unsigned division by a
   runtime divisor, whole (`DIV`: its forms by the divisor's width, each a reciprocal's seed and its truncation), and
@@ -53,20 +53,23 @@ def _harness() -> ModuleType:
 
 H = _harness()
 ATOM = "IMMA.16832.S8.S8"
-#: the kernels that compute σ at 64 rows: the pass's receipt grid, its consumers (a consumer's own tile) and an
-#: opening's receipts
-SKETCHING = {"sketch64_pass_kernel", "pass_consumer_kernel<64>", "subtree64_receipts_kernel"}
+#: the kernels that compute σ at 64 rows: the pass's receipt grid, its consumers (a consumer's own tile), an
+#: opening's receipts, and the leaf pass's reading grid and its consumers
+SKETCHING = {"sketch64_pass_kernel", "pass_consumer_kernel<64>", "subtree64_receipts_kernel", "leaf_pass64_kernel",
+             "leaf_consumer64_kernel"}
 #: a pass's packed signs from its seed, and a chained pass's seed and signs: one launch a pass
 ONCE = {"signs_kernel<64>", "chain_prepare_kernel<64>"}
 WANT = SKETCHING | ONCE
-#: by arch, as CUDA 12.9's ptxas builds them: `local`, the bytes of stack frame or spill a kernel holds (a kernel it
-#: doesn't name, none): the consumers run at the register limit, as their 16-row instances do, and the once-a-pass
-#: kernels keep a SHA-512 schedule on the stack, as theirs do; and `capped`, what a kernel held to CAP registers (two
-#: receipt CTAs an SM) may hold beside
+#: by arch, as ptxas builds them: `local`, the bytes of stack frame or spill a kernel holds (a kernel it doesn't name,
+#: none): the consumers and the leaf pass's reader run at the register limit, as their 16-row twins do, and the
+#: once-a-pass kernels keep a SHA-512 schedule on the stack, as theirs do; and `capped`, what a kernel held to CAP
+#: registers (two receipt CTAs an SM) may hold beside. The leaf pass's two are sm_120a's alone, as CUDA 13.0.88 builds
+#: them; the rest as 12.9's does
 ARCHS = {
     "sm_90a": {"local": {"pass_consumer_kernel<64>": 224, "signs_kernel<64>": 256, "chain_prepare_kernel<64>": 304},
                "capped": {}},
-    "sm_120a": {"local": {"pass_consumer_kernel<64>": 160, "signs_kernel<64>": 368, "chain_prepare_kernel<64>": 352},
+    "sm_120a": {"local": {"pass_consumer_kernel<64>": 160, "signs_kernel<64>": 368, "chain_prepare_kernel<64>": 352,
+                          "leaf_pass64_kernel": 64, "leaf_consumer64_kernel": 88},
                 "capped": {"sketch64_pass_kernel": 32}},
 }
 CAP = 128
@@ -137,7 +140,7 @@ def _check(name: str, r: dict) -> list[str]:
 
 
 def gate(ptxas: str, sass: str, arch: str = "sm_90a") -> tuple[dict, list[str]]:
-    """The five kernels' records by `short` name, and what the gate refuses."""
+    """The seven kernels' records by `short` name, and what the gate refuses."""
     listed = H.sass_functions(sass)
     mine = {n for n in [*listed, *_COMPILING.findall(ptxas)] if short(n) in WANT}
     kept, keep = [], False
