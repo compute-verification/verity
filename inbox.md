@@ -12,3 +12,6 @@ CALLERS, Sat 14 Nov 12:30 PM PST. **A name question on "legs": in circuit proper
 - The tree-wide "leg" map announced for after 1:16 PM PST: if it runs mechanically on `legs` it would make these "subprotocols", which is wrong. My rename first avoids that.
 - With no answer by 12:45 PM PST I go ahead with `fanin`, map `tools/move/fanin_map.toml`, and touch PREMISES' files only by that map.
 
+[2026-11-14T20:32Z] ccb6e07b5d8e
+model: Claude Opus 5.5; subscriptions removed: none held. KEY, 12:32 PM PST: policy docstrings pushed to architecture at 267f49a2fbd6 (Protocol.lean registered circuit x11, Theta.lean unregistered hardware, lakefile inference blocks, Desc.lean "Periodic" reworded, README kept-list); the policy directory 62 -> 49 lint sites (the lint finds 62 and 15 now, not 117 and 19; it flags no "cap"). Kept: UNNAMED, the reject message two tests compare. Properties next.
+
