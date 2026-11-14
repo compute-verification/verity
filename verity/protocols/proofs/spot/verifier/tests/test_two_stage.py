@@ -776,7 +776,7 @@ READ_RECORD = {"roots": [{"port": "t", "root": T_ROOT, "domain": T_DOMAIN, "leav
 #: What the verifier fills of a read: its table's root and domain id, as the bytes it computed for the table, its key,
 #: and the 1 its verdict port reads.
 READ_FILLED = {"root": [[{"bytes": T_ROOT}]], "domain": [[{"bytes": T_DOMAIN}]], "tok": [[{"bytes": "00000002"}]],
-               "one": [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
+               "one": [[{"bytes": "0001"}], [{"bytes": "0001"}]]}
 READ_REF = ((READ_T, {"ports": {"o1": {"value": "one"}}}),)
 #: The rows of the read's root and domain ports: one row a block, which every unit reads.
 READ_ROWS = tuple(SS.Rows(READ_T, p, 1, (SS.Run(0, 1, 0, 0),)) for p in ("root", "domain"))
@@ -826,7 +826,8 @@ READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
     (_holding(READ_VALUES, rows=(READ_ROWS[0], SS.Rows(READ_T, "domain", 2, READ_ROWS[1].runs))), "row"),
     (_holding(READ_VALUES, rows=(READ_ROWS[0], SS.Rows(READ_T, "domain", 1, (SS.Run(0, 1, 0, 1),)))), "row"),
     (_holding(READ_VALUES, supplied={k: v for k, v in READ_FILLED.items() if k != "root"}), "root"),
-    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "00000001"}], [{"bytes": "00000000"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "0001"}], [{"bytes": "0000"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}), "row"),
     (_holding(READ_VALUES, supplied={**READ_FILLED, "one": []}), "row"),
     (_holding(READ_VALUES, supplied={k: v for k, v in READ_FILLED.items() if k != "one"}, fixed=("one",)), "row"),
     (_holding(READ_VALUES, ref_reads=((READ_T, {"ports": {"o1": {"value": f"{READ_T}/o1"}}}),)), "row"),
@@ -1003,6 +1004,29 @@ def test_with_the_switch_on_a_wired_key_passes_only_whole(change, why):
                 SS.KEY_WHY, SS.INPUTS_WHY}) == 7
     off = dataclasses.replace(own, wired_key=False)
     assert dict(SS._interior_failures(off))["second-inputs"] == {"value": "row", "why": SS.KEY_WHY}
+
+
+def test_a_read_whose_key_is_wired_lists_no_table_rows():
+    """A read whose key is wired lists no ``table_rows`` at a port of its opening (its key, row, salt, path or verdict):
+    the rows it reads are a function of a committed value, so listing them would disclose it. Round 2 refuses such an
+    entry with ``second-table-rows`` and `KEY_ROWS_WHY`, the switch on or off. It reads no ``table_rows`` yet, so one
+    listed anywhere else is refused too, with `TABLE_ROWS_WHY`; an entry that lists none, or lists null, passes."""
+    listed = {"value": "row", "table_rows": [0, 2]}
+
+    def stmt(port: str, e: dict) -> dict:
+        return {"template": READ_T, "header": {}, "draw": {}, "registered": {"ports": {port: e}}}
+
+    for own in (_keyed(), _keyed(on=False)):
+        assert all(SS.table_rows_why(own, READ_T, p, listed) == SS.KEY_ROWS_WHY for p in SS.KEYED_PORTS)
+        assert SS.table_rows_why(own, READ_T, "root", listed) == SS.TABLE_ROWS_WHY
+        assert SS.table_rows_why(own, READ_T, "row", {"value": "row"}) is None
+        assert SS.table_rows_why(own, READ_T, "row", {"value": "row", "table_rows": None}) is None
+        assert ("second-table-rows", {"statement": 0, "template": READ_T, "port": "row", "why": SS.KEY_ROWS_WHY}) in \
+            SS._failures(True, own, own.parts, [stmt("row", listed)])
+        assert not any(c == "second-table-rows" for c, _ in SS._failures(True, own, own.parts, [stmt("row", {})]))
+    unwired = dataclasses.replace(_keyed(), wires=())
+    assert SS.table_rows_why(unwired, READ_T, "row", listed) == SS.TABLE_ROWS_WHY
+    assert SS.KEYED_PORTS == ("tok", "row", "salt", "path", "o1")
 
 
 def test_nothing_of_record_turns_the_wired_key_on():

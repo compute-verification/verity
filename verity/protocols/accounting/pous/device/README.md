@@ -38,7 +38,7 @@ What leaves the challenger's host goes into the node that started its party. `ch
 channels only: its stdout, which goes to the node that started it (the salt's source, `{"listening": PORT}`, the report
 with the release, or a refusal), and the one connection its prover makes (the indices and the end frame). A refusal
 names the field and the rule the request breaks and quotes none of the request's bytes (`Refusal`, `setup_of`). Nothing
-else of a party leaves its host: its key, session log, salt log and kept setups stay in `DIR`; the auditor host's gate
+else of a party leaves its host: its key, session log, salt log and kept setups stay in `DIR`; the auditor device's gate
 keeps each party's log for root on the host and serves it to no ssh caller; and it starts a party only for a caller
 whose address is a registered node's (`verity/protocols/accounting/poub/device/live_verifier/README.md`).
 

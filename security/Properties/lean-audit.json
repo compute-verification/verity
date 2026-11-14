@@ -1914,10 +1914,6 @@
    "type_hash": "baaa8304c869d70386cf7d64a46ddc411d7472889b13de6cad574939ad9976dd",
    "unfolded_hash": "954bba068784062bf7ae8a7f433d76af1b1e9ca859912b76ca68d9a45b9fd348"
   },
-  "Properties.Pouw.Window.sampleMisses": {
-   "type_hash": "ee88fb3fee0d31b09d380ff1de1a5cb7ae97730168a6ea9a36ab70f24c9b5389",
-   "unfolded_hash": "3c6da1ce22737558b799737bac2b5c880b8742b0efa8c15f0fc8fddbfbefa3d0"
-  },
   "Properties.Pouw.Window.floorPointGreatest": {
    "type_hash": "afe73b1ea23134dac58880fb9ef88e285709653a31536f16a088d9230a2c05c1",
    "unfolded_hash": "a3249482b4e0fbd3a6f53f8e70e56a25abdc7bb31262db15cee58b7651af7d8a"
@@ -1957,6 +1953,10 @@
   "Properties.Pouw.Window.pointRefuses": {
    "type_hash": "6b3249983259aa1e4b30cdf04a812d8542728e4123f82ff71ade2e0143d81c75",
    "unfolded_hash": "82809a3351d5ae875daddd9071727f9abcea0193ccf3d75e7a3df64aa8784215"
+  },
+  "Properties.Pouw.Window.sampleMisses": {
+   "type_hash": "ee88fb3fee0d31b09d380ff1de1a5cb7ae97730168a6ea9a36ab70f24c9b5389",
+   "unfolded_hash": "3c6da1ce22737558b799737bac2b5c880b8742b0efa8c15f0fc8fddbfbefa3d0"
   },
   "Properties.Pouw.Window.workAtRefuses": {
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09",
@@ -15373,7 +15373,7 @@
    }
   },
   "CoreProtocol.Profile": {
-   "digest": "e6b76f3812922587723013b4837ee97ef2567c7460270aed3810ca15d08a5a40",
+   "digest": "377ab761d73c1e53e9994a5551058838638285fdce38fa7eb83797e9be301d78",
    "definitions": {
     "Core.Integrity": "0727c826facf67aa78ecef833adbd25166324156b8e2d0db0d05dfa5438a3368",
     "Core.Integrity.covered": "a5d4700669f875b25a94758663ff6f6f58d01700b24d752cc197e3a0b55c4e49",
@@ -15413,7 +15413,7 @@
     "Core.WorkStratum": "dae104fd83ddd63ad379c61c0396c714e88d8a13be3c1ccc29385ddb21c33abf",
     "Core.WorkStratum.casesOn": "d5c54316f9c27fce194a3f7ef09c2c594f122f4e8c7b8913703567c24a684830",
     "Core.WorkStratum.floor": "9e7fe8c23fcebf4823677e5ba2bd8af77efc6869da767ac1b56e97a6ad242c3a",
-    "Core.WorkStratum.problem": "45fa4f907718df77e4a732e8cf0cf5b93c7730862a2b5d6da48b4970b6ab9758",
+    "Core.WorkStratum.problem": "ff2fa80023915a61a74922d327a2b6eaaf52be79b5b951a32195264dcdb0b907",
     "Core.WorkStratum.rec": "b0683fb7b383825b607d505823872bb699ba326c2a6f1efd539023db76ccac6f",
     "Core.WorkStratum.toStratum": "b1505ce6ed995248f0c91e69d23d22e50fb501cb39e41c39131beed53c056cdb",
     "Core.WorkStratum.total": "5827837cce2bc97d49fc3a5c957ea093d714423aebec06876fca4eb2ab0e4aff",

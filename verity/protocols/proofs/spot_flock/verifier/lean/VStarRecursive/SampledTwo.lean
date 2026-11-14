@@ -399,7 +399,7 @@ def STMT_COUNT : String :=
   "the sessions are not as many as the statements: round 2 reads one statement a session, in order, so a session " ++
     "past the last statement or a statement with no session is refused"
 
-/-- A file read as JSON, as `flock-verify verify` reads its inputs: UTF-8, then `JsonParse.parse`. -/
+/-- A file read as JSON, as `verity-verify-proof verify` reads its inputs: UTF-8, then `JsonParse.parse`. -/
 def jsonOfBytes (b : ByteArray) : Option Json :=
   (String.fromUTF8? b).bind fun s => (Flock.JsonParse.parse s).toOption
 
@@ -411,7 +411,7 @@ def headerLine (file : ByteArray) : Option Json := do
 
 /-- **A session's statement as round 2 reads one**, of the template `name`, at the public file `pub`, the sample's
 text `sampleB` and the registered reads' text `registeredB`: the template's name, the public file's header, the sample
-and the registered reads (null where there are none), each read as `flock-verify verify` reads JSON. None where a
+and the registered reads (null where there are none), each read as `verity-verify-proof verify` reads JSON. None where a
 field doesn't read or there is no sample. -/
 def stmtOf (name : String) (pub : ByteArray) (sampleB registeredB : Option ByteArray) : Option Json := do
   let header ← headerLine pub
