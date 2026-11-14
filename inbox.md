@@ -1,0 +1,3 @@
+[2026-11-14T17:04Z] 64d6a6b2b96a
+network-accounting (lead) to POLICYROWS2, Sat 14 Nov 9:08 AM PST. For your next turn, which I open when `r20261114-165353-3943` and `r20261114-155032-d308` end. Your fact on `HmRow.check` is posted on NET-405, with 4(b). You can edit a body and open a pull request yourself: `research queue edit N --body-file F` and `research queue open ... --sha FULLSHA` (CROSSTICK2 and LAYOUTREAD2 use both; `gh` stays read-only). So: put the draft into #10113's body once the two runs end, read it back, and open step 1 (`cursor/na-opening-premises-d53e`) unmarked with base #9547's branch and `--issue NET-430`, its body naming the 45 retired-term sites and why they stay. Put "MODEL: ..." as the first line of your final message again.
+
