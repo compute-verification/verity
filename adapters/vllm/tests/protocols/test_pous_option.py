@@ -42,6 +42,7 @@ SMALL = P2Params(period.W, period.C0, 8)
 def _signer_module():
     path = config.ROOT.parent.parent / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "pous_test_signer.py"
     spec = importlib.util.spec_from_file_location("pous_test_signer", path)
+    assert spec is not None and spec.loader is not None, path
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -129,8 +130,8 @@ def test_pous_registers_p2_v4_as_its_default_and_refuses_what_it_cannot_run():
     assert any("not hex" in r for r in pous.refusals(P2, _ctx(ENTRY, settings={"pous": {"salt_source": "zz",
                                                                                         "experimental": True}})))
     band = pous.refusals("band-chain/d12/v1", _ctx("pous:band-chain/d12/v1"))
-    assert band == (f"pous holds C* under {P2} alone, the codec its period's run protocol checks and the staging decode "
-                    "reads, not band-chain/d12/v1",)
+    assert band == ((f"pous holds C* under {P2} alone, the codec its period's run protocol checks and the staging decode "
+                     "reads, not band-chain/d12/v1"),)
     assert not hasattr(pous, "keeps_weight_copy")                                       # POUS keeps only C*
 
 
@@ -223,7 +224,7 @@ def _in_process_party(signer, log):
     """`challenger_session.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
     test signer, a counter clock, its own coins each session) and the prover's over a socket pair
     (`challenger_session.answer`)."""
-    calls = []
+    calls: list[tuple] = []
 
     def session(party, request, respond):
         a, b = socket.socketpair()
@@ -288,7 +289,10 @@ def test_a_dropped_block_rejects(toy, tmp_path):
 
         asked = []
         def lost(blocks):
-            return lambda i: asked.append(i) or (bytes(q.block_bytes) if i == dropped else opt.answer(i))
+            def answer(i):
+                asked.append(i)
+                return bytes(q.block_bytes) if i == dropped else opt.answer(i)
+            return answer
         got = opt.audit(NODE, COINS, log=ts.session_log(tmp_path), prover=lost, **run)
         assert dropped in asked and got.verdict == "reject" and got.answer["reason"] and got.public("s_bits") == 0
 
@@ -302,8 +306,8 @@ def test_a_dropped_block_rejects(toy, tmp_path):
 
 def _fake_pouw(monkeypatch, install, keeps=False):
     mod = types.ModuleType("verity_vllm.protocols.fake_pouw")
-    mod.NAME, mod.schemes, mod.refusals, mod.install = "pouw", lambda: ("ncp-v1",), lambda s, c: (), install
-    mod.keeps_weight_copy = lambda scheme, ctx: keeps
+    vars(mod).update(NAME="pouw", schemes=lambda: ("ncp-v1",), refusals=lambda s, c: (), install=install,
+                     keeps_weight_copy=lambda scheme, ctx: keeps)
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
     monkeypatch.setitem(PO.ADAPTERS, "pouw", "fake_pouw")
 
@@ -318,8 +322,8 @@ def test_pous_wraps_around_pouw_so_pouws_gemm_reads_the_decoded_weight(toy, monk
         return PO.Option(name=f"pouw:{scheme}", hooks=h)
 
     _fake_pouw(monkeypatch, pouw_install)
-    auditor = [sys.executable, "-c", "import json, sys; r = json.loads(sys.stdin.readline()); "
-               "print(json.dumps({'source': r['commitment'][:64]}))"]
+    auditor = [sys.executable, "-c", ("import json, sys; r = json.loads(sys.stdin.readline()); "
+                                      "print(json.dumps({'source': r['commitment'][:64]}))")]
     before = hooks.live()
     with PO.install(toy, _ctx("pouw:ncp-v1", ENTRY, settings={"pous": {"salt_source": {"command": auditor},
                                                                          "experimental": True}})) as comp:
