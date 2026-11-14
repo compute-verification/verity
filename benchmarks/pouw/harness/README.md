@@ -35,7 +35,7 @@ Build (no GPU needed; nvcc 12.9, about 7 GB of memory per CUTLASS 3.x unit):
 export POUW_HARNESS_LIB="$(benchmarks/pouw/harness/native/build.sh)"   # prints the library's path, nothing else
 ```
 
-The build lands in `../../../verity/protocols/accounting/pouw/prover/kernels/harness/native/build/<key>/` (`POUW_HARNESS_BUILD` moves the cache), keyed by the sources, nvcc's version and the
+The build lands in `native/build/<key>/` (`POUW_HARNESS_BUILD` moves the cache), keyed by the sources, nvcc's version and the
 cuBLAS headers', with `build.json` (the key, versions, the library's hash, each kernel's SASS MMA counts); an existing build is
 reused, and so is each object whose unit, headers and flags are unchanged. A run refuses a library its `build.json` doesn't
 describe. Where there is no CUDA 12.9 (the RTX PRO 6000 node has 13.0), `. jobs/toolkit.sh` first assembles it from
