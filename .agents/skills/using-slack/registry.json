@@ -80,8 +80,8 @@
       "owns": [
         "infra/",
         "infra/cluster/",
-        "tools/agent-guard/",
-        "tools/research/",
+        "infra/agent-guard/",
+        "infra/research/",
         ".cursor/",
         ".python-version"
       ],
@@ -762,10 +762,10 @@
         "tools/verity/cli/",
         "tools/verity/graph/",
         "tools/verity/landq/",
-        "tools/move/",
-        "tools/research/src/research/queue.py",
-        "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py",
+        "infra/move/",
+        "infra/research/src/research/queue.py",
+        "infra/research/src/research/quick_tier.py",
+        "infra/research/src/research/merge.py",
         "benchmarks/landing/"
       ],
       "branch_suffixes": [
@@ -817,11 +817,11 @@
       "linear": "COMM",
       "owns": [
         ".agents/skills/using-slack/",
-        "tools/research/src/research/slack.py",
-        "tools/research/tests/test_slack.py",
-        "tools/research/tests/slack_routing_vectors.json",
-        "tools/research/src/research/linear.py",
-        "tools/research/tests/test_linear.py",
+        "infra/research/src/research/slack.py",
+        "infra/research/tests/test_slack.py",
+        "infra/research/tests/slack_routing_vectors.json",
+        "infra/research/src/research/linear.py",
+        "infra/research/tests/test_linear.py",
         "infra/slack-events/"
       ],
       "branch_suffixes": [

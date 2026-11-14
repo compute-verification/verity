@@ -60,7 +60,7 @@ onsite_piece_commands() {
 }
 
 onsite_pous_pins() {
-  PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/config:$TREE/tools/research/src PYTHONDONTWRITEBYTECODE=1 \
+  PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/config:$TREE/infra/research/src PYTHONDONTWRITEBYTECODE=1 \
     "$PY" - "$TREE/benchmarks/pous" "$1" "$2" <<'EOF'
 import sys
 sys.path.insert(0, sys.argv[1])

@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-RESEARCH_SRC = Path(__file__).resolve().parents[3] / "tools" / "research" / "src"
+RESEARCH_SRC = Path(__file__).resolve().parents[3] / "infra" / "research" / "src"
 
 
 def custody_dir(environ: dict[str, str] | None = None) -> Path | None:

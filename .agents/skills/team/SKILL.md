@@ -31,13 +31,13 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 - **No tool call blocks more than 20 minutes.** Every `--wait` stops there, cancels nothing and exits 79 naming the
   command to check back with, and you end your turn.
 - **Code reaches the Nebius nodes** only through `research deploy install` of a pushed commit
-  (`tools/research/src/research/pods/nebius/deploy.toml`). Delete data you don't own on a node only with
+  (`infra/research/src/research/pods/nebius/deploy.toml`). Delete data you don't own on a node only with
   `research retention gc` or `research retention rm --approved-by @OWNER`.
 - **A guard never fails open**, and an agent VM can be suspended at any moment, so nothing that bounds spend or preserves
   results depends on one: pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
   `budgets.toml`) and runs preserve their results from the pod. The lane whose budget line pays for a machine stops it
   when its work there ends.
-- **Secrets.** The shell hook (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that would
+- **Secrets.** The shell hook (`.cursor/hooks.json`, `infra/agent-guard/shell_hook.py`) refuses a command that would
   print the environment, every process's command line, or a key or env file (its names: `envnames.py` beside the
   hook); on a VM where it doesn't run, `research` says so, with the fix. A secret is stored as one line (a
   key as base64, `NAME_B64`).
@@ -64,7 +64,7 @@ it, and fast-forwards `main` only to a candidate with no new failure:
   LANE`), signed as that reviewer once ci's holder registers its agent (`research queue delegate AGENT --by review-NN`);
   no other per-head grant exists. While drive.toml's `lowrisk_lane` is on, a PR touching nothing its
   `lowrisk_excludes` names (Lean, locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark
-  alone, with no verdict (the low-risk lane), as does a move's PR (`Move: tools/move/MAP.toml`), whatever it touches,
+  alone, with no verdict (the low-risk lane), as does a move's PR (`Move: infra/move/MAP.toml`), whatever it touches,
   once the loop certifies its map, from `main`, rerun on its batch's tip; with `signed_verdicts` true, not one changing
   `SIGNED_GUARDS`.
 - The loop builds candidates from the marked PRs with a land verdict or on their mark alone, in the priority file's order
@@ -106,7 +106,7 @@ it, and fast-forwards `main` only to a candidate with no new failure:
   pages. The notes repo is private, so a `note:` id is for agents.
 - **Evidence and generated output** go in the evidence store, never Git: `research run` publishes every run as an
   Attempt, and anything else goes in with `research data put --kind K --file|--tree P --preserve`, cited as `art:<id>`
-  (`tools/research/src/research/store/README.md`). Tables and reports render on demand from code plus the store.
+  (`infra/research/src/research/store/README.md`). Tables and reports render on demand from code plus the store.
   Findings about a run are labels: `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>`.
 - **Architecture decisions** and Daniel's decisions log are in Notion.
 
@@ -134,7 +134,7 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   resume didn't start can run on Fable: its brief has it end such a turn at once. A Fable worker is not resumed: its
   launcher briefs an Opus worker from its note.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
-  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`,
+  `python3 infra/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`,
   and its next shell command delivers it (`--local`: a subagent on your VM, no
   push). Nothing delivers it at a turn's end, and one waiting then may be gone by the next turn: an agent whose turn
   has ended is resumed with the text itself.

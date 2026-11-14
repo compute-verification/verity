@@ -17,8 +17,8 @@ untraced = ["tests/test_pf_rounds.py", "tests/test_pfill_fold.py", "tests/test_p
 # capacity over its data's Π. The ledger reads its variables through PoUW's benchmarks' registry (benchmarks/pouw/settings.py).
 inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "tools/config/verity_config",
           "verity/protocols/accounting/pouw/verifier/receipts", "benchmarks/machine_model/verity_machine_model",
-          "benchmarks/machine_model/data", "tools/research/src/research/__init__.py",
-          "tools/research/src/research/store", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", 
+          "benchmarks/machine_model/data", "infra/research/src/research/__init__.py",
+          "infra/research/src/research/store", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", 
           "verity/protocols/accounting/pouw/verifier/__init__.py",
           "verity/protocols/accounting/pouw/verifier/serving.py",
           # serving.py takes its tags from the table of domain separators, verity.commitments.domains

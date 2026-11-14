@@ -16,7 +16,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-INPUTS = ("infra/slack-events/", "tools/research/src/research/slack.py", ".agents/skills/using-slack/registry.json")
+INPUTS = ("infra/slack-events/", "infra/research/src/research/slack.py", ".agents/skills/using-slack/registry.json")
 BRANCH = "main"
 
 

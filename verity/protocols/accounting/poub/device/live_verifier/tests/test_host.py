@@ -29,7 +29,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[7]
 RS = ROOT / "benchmarks" / "remote_session"
-PACKAGING = ROOT / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "verifier"
+PACKAGING = ROOT / "infra" / "research" / "src" / "research" / "pods" / "nebius" / "verifier"
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(RS))
 sys.path.insert(0, str(ROOT))

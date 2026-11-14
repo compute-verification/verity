@@ -1,4 +1,4 @@
-"""The sweep row's `result.json` for the `research` runner (schema research/result/v0.1, tools/research/src/research/result.py).
+"""The sweep row's `result.json` for the `research` runner (schema research/result/v0.1, infra/research/src/research/result.py).
 
     verity-vllm research-result <evidence-dir> <row-id> <role> <stages> [--run-dir DIR] [--run-id ID]
 

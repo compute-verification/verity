@@ -30,7 +30,7 @@ log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$O/shard.log"; }
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 export PATH=$HOME/.elan/bin:$HOME/.local/bin:$PATH PYTHONDONTWRITEBYTECODE=1
 MAIN=$PWD
-rs() { (cd "$MAIN" && uv run -q --project tools/research research "$@"); }
+rs() { (cd "$MAIN" && uv run -q --project infra/research research "$@"); }
 log "main $(git -C "$MAIN" rev-parse --short=12 HEAD), $(hostname), $(nproc) cpus, $(awk '/MemTotal/ {printf "%.0f", $2/1048576}' /proc/meminfo) GiB"
 
 log "0. the kit and the kept files"

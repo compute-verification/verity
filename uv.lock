@@ -1771,7 +1771,7 @@ wheels = [
 [[package]]
 name = "research"
 version = "0.1.0"
-source = { editable = "tools/research" }
+source = { editable = "infra/research" }
 
 [[package]]
 name = "rpds-py"
@@ -2322,7 +2322,7 @@ dev = [
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-xdist", specifier = ">=3.6" },
     { name = "pyyaml", specifier = ">=6" },
-    { name = "research", editable = "tools/research" },
+    { name = "research", editable = "infra/research" },
     { name = "ruff", specifier = "==0.17.2" },
     { name = "verity", editable = "." },
     { name = "verity-bench", editable = "benchmarks/harness" },
@@ -2382,7 +2382,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "research", editable = "tools/research" }]
+requires-dist = [{ name = "research", editable = "infra/research" }]
 
 [[package]]
 name = "verity-circuit-check"
@@ -2433,7 +2433,7 @@ dependencies = [
 requires-dist = [
     { name = "blake3", specifier = ">=1.0" },
     { name = "numpy" },
-    { name = "research", editable = "tools/research" },
+    { name = "research", editable = "infra/research" },
     { name = "verity", editable = "." },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "adapters/vllm" },
@@ -2567,7 +2567,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "research", editable = "tools/research" }]
+requires-dist = [{ name = "research", editable = "infra/research" }]
 
 [[package]]
 name = "verity-machine-model"
@@ -2601,7 +2601,7 @@ torch = [
 [package.metadata]
 requires-dist = [
     { name = "numpy" },
-    { name = "research", editable = "tools/research" },
+    { name = "research", editable = "infra/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
 ]
 provides-extras = ["torch"]
@@ -2654,7 +2654,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "matplotlib", specifier = ">=3.8" },
-    { name = "research", editable = "tools/research" },
+    { name = "research", editable = "infra/research" },
     { name = "verity", editable = "." },
     { name = "verity-vllm", editable = "adapters/vllm" },
     { name = "z3-solver", specifier = ">=4.13" },
@@ -2669,7 +2669,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "research", editable = "tools/research" }]
+requires-dist = [{ name = "research", editable = "infra/research" }]
 
 [[package]]
 name = "verity-pouw-benchmarks"
@@ -2697,7 +2697,7 @@ research = [
 requires-dist = [
     { name = "blake3", specifier = ">=1.0" },
     { name = "numpy" },
-    { name = "research", marker = "extra == 'research'", editable = "tools/research" },
+    { name = "research", marker = "extra == 'research'", editable = "infra/research" },
     { name = "scipy", specifier = "==1.18.1" },
     { name = "verity", editable = "." },
     { name = "verity-difftest", editable = "tools/difftest" },
@@ -2732,7 +2732,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "numpy" },
-    { name = "research", editable = "tools/research" },
+    { name = "research", editable = "infra/research" },
     { name = "verity", editable = "." },
     { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
@@ -2771,7 +2771,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "numpy" },
-    { name = "research", editable = "tools/research" },
+    { name = "research", editable = "infra/research" },
     { name = "verity", editable = "." },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
@@ -2789,7 +2789,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "numpy" },
-    { name = "research", editable = "tools/research" },
+    { name = "research", editable = "infra/research" },
     { name = "verity", editable = "." },
 ]
 
@@ -2814,7 +2814,7 @@ torch = [
 [package.metadata]
 requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
-    { name = "research", marker = "extra == 'research'", editable = "tools/research" },
+    { name = "research", marker = "extra == 'research'", editable = "infra/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
     { name = "verity-config", editable = "tools/config" },

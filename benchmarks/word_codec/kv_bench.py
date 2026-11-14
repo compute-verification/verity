@@ -682,7 +682,7 @@ def model(res: dict, libs: list[Lib], batches, contexts, capacity: int) -> dict:
 
 
 def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
-    """`research/result/v0.1` in $RESEARCH_RUN_DIR (`tools/research/src/research/result.py`), when the run has one."""
+    """`research/result/v0.1` in $RESEARCH_RUN_DIR (`infra/research/src/research/result.py`), when the run has one."""
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if not run_dir or not run_id:
         return

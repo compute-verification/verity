@@ -75,7 +75,7 @@ def shipped(machine, tmp_path, monkeypatch):
     with (tree / ".git" / "info" / "exclude").open("a") as f:
         f.write(f"/{remote.READY_FILE}\n")
     (tree / remote.READY_FILE).write_text(json.dumps({"schema": remote.READY_SCHEMA, "identity": sha, "checkout": True}) + "\n")
-    data, digest = remote.tool_tarball(tree / "tools" / "research" / "src" / "research")
+    data, digest = remote.tool_tarball(tree / "infra" / "research" / "src" / "research")
     tool = tmp_path / "root" / "tool" / digest
     with tarfile.open(fileobj=io.BytesIO(data)) as tf:
         tf.extractall(tool, filter="data")

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, ints, not_zero, one, present, words
 
-#: the files that run outside the tree, relative to this one; `tools/move/layout.py` follows a `./` path to a file it
+#: the files that run outside the tree, relative to this one; `infra/move/layout.py` follows a `./` path to a file it
 #: moves, and a bare one only in a file it moves too
 STANDALONE = ("../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/run.py",
               "../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/run.py",

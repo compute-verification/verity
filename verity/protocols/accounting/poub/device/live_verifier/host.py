@@ -139,7 +139,7 @@ TREE = Path(__file__).resolve().parents[6]
 VERIFIER = TREE / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "remote_session" / "verifier_process.py"
 REPLAY = TREE / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "lean" / "tests"
 DIFFTEST = TREE / "tools" / "difftest" / "python"
-RESEARCH = TREE / "tools" / "research" / "src"
+RESEARCH = TREE / "infra" / "research" / "src"
 
 PORTS = range(7951, 7959)
 """The ports a run listens on, each 127.0.0.1's, the tunnel account's `PermitOpen` (`12-vy-verifier.conf`): outside the

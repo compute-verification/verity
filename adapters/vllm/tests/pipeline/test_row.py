@@ -16,7 +16,7 @@
   complete; an unresolved checkpoint dir is named in row.log;
 * the taps run by default (NORM_TAP=0 etc. for A/B only), each attached only where the row's manifest names its family, and a TP
   row runs the guarded-max build and every tap that applies to it;
-* a tree without the run store's tool beside it (`tools/research/src`) refuses a row at setup, by name: what a row does past
+* a tree without the run store's tool beside it (`infra/research/src`) refuses a row at setup, by name: what a row does past
   setup is `test_row_setup`'s.
 """
 from __future__ import annotations
@@ -197,14 +197,14 @@ def test_a_foreign_verity_tree_is_refused_by_name(tmp_path, capsys):
 
 
 def test_a_tree_without_the_run_stores_tool_beside_it_is_refused_by_name(tmp_path, capsys):
-    """A row's stages run with the run store's tool on their path, so a tree without `tools/research/src` beside it, as the public
+    """A row's stages run with the run store's tool on their path, so a tree without `infra/research/src` beside it, as the public
     tree is, refuses the row at setup before any stage."""
     r = _row(tmp_path)
     r.tree = str(tmp_path / "tree" / "adapters" / "vllm")
     os.makedirs(r.tree)
     with pytest.raises(Stop) as e:
         r.setup({})
-    assert e.value.rc == 3 and f"PRECHECK_FAIL_SOURCE_IDENTITY: no tools/research/src beside {r.tree}" in capsys.readouterr().err
+    assert e.value.rc == 3 and f"PRECHECK_FAIL_SOURCE_IDENTITY: no infra/research/src beside {r.tree}" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------------------------------------------- cancel

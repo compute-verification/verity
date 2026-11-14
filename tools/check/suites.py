@@ -263,7 +263,7 @@ REGISTRY = "artifacts.json"
 #: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
 #: remote's manifest on an empty local store), and the bucket pin, when the remote is the environment's (`R2_*`). Neither changes
 #: what a fetch returns, which is checked against its id whichever replica or remote serves it.
-STORE_READS = (REGISTRY, "tools/research/store.pod.toml")
+STORE_READS = (REGISTRY, "infra/research/store.pod.toml")
 
 
 def _norm(name: str) -> str:

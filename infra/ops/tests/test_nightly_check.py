@@ -257,9 +257,9 @@ STEPS_RED = [("pytest", "failed"), ("lean-build", "passed"), ("lean-audit", "fai
 CONTRADICTS = [{"suite": "verity/circuits", "contradicts": ["tests/test_ops.py::test_add", "tests/test_ops.py::test_mul"]}]
 RECORDS = {
     "passed": dict(status={"state": "done", "rc": 0, "wall_s": 14520.4}, result=result("passed", STEPS_OK),
-                   suites=[suite("tools/research", "passed"), suite("infra/ops", "cached")]),
+                   suites=[suite("infra/research", "passed"), suite("infra/ops", "cached")]),
     "failed": dict(status={"state": "failed", "rc": 1, "wall_s": 5700}, result=result("failed", STEPS_RED),
-                   suites=[suite("tools/research", "failed"), suite("verity/circuits", "passed")],
+                   suites=[suite("infra/research", "failed"), suite("verity/circuits", "passed")],
                    lean=[suite("verity/protocols/proofs/flock/verifier", "failed")]),
     "contradicted": dict(status={"state": "failed", "rc": 1, "wall_s": 5700},
                          result=result("failed", STEPS_RED[:2], cache_contradictions=CONTRADICTS),
@@ -305,7 +305,7 @@ def test_a_passed_check_with_nothing_contradicted_is_passed(tmp_path):
 
 def test_a_failed_check_names_each_failed_step_and_suite(tmp_path):
     got = read(tmp_path, "failed")
-    assert got == N.Read("failed", "failed steps: `pytest`, `lean-audit`; failed suites: `tools/research`, "
+    assert got == N.Read("failed", "failed steps: `pytest`, `lean-audit`; failed suites: `infra/research`, "
                          "`verity/protocols/proofs/flock/verifier`. Its result names no cached pass it contradicts.", 95)
 
 
@@ -1041,7 +1041,7 @@ def test_the_clone_follows_origins_main_and_each_night_gets_a_worktree_of_its_ti
     origin = tmp_path / "origin"
     origin.mkdir()
     git("init", "-q", "-b", "main", cwd=origin)
-    (origin / "tools" / "research" / "src").mkdir(parents=True)
+    (origin / "infra" / "research" / "src").mkdir(parents=True)
     (origin / "tools" / "research" / "src" / "marker.py").write_text("FIRST = 1\n")
     git("add", "-A", cwd=origin)
     git("commit", "-q", "-m", "first", cwd=origin)
@@ -1058,7 +1058,7 @@ def test_the_clone_follows_origins_main_and_each_night_gets_a_worktree_of_its_ti
     show = [sys.executable, "-c", "import os; print(os.environ['PYTHONPATH']); print(os.environ['TMPDIR']); print(os.getcwd()); "
             f"print('research: run {RUN} launched')"]
     rc, out = p.launch(show, tree)
-    assert rc == 0 and out.splitlines() == [str(tree / "tools" / "research" / "src"), str(tmp_path / "scratch" / "tmp"), str(tree),
+    assert rc == 0 and out.splitlines() == [str(tree / "infra" / "research" / "src"), str(tmp_path / "scratch" / "tmp"), str(tree),
                                             f"research: run {RUN} launched"]
     assert p.cfg.launch_log == tmp_path / "nightly-check.launch.log" and p.launch_output() == out
     assert dispatch.LAUNCHED.search(out).group(1) == RUN and f"launch: research: run {RUN} launched" in lines

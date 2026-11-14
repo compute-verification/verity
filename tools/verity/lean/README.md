@@ -65,7 +65,7 @@ research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --c
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, and checks the closure
-again on every run, so it runs nightly on `main` instead (`[[run]]` in `tools/research/README.md`, `tool.py`). `--closure`
+again on every run, so it runs nightly on `main` instead (`[[run]]` in `infra/research/README.md`, `tool.py`). `--closure`
 with a kept cache, which `check` runs, checks the same closure once per change of its `.olean` files.
 
 ## What it checks

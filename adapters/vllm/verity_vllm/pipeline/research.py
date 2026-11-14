@@ -22,7 +22,7 @@
   preserved.
 
 The research CLI is ``--research-bin``, else ``research`` on PATH, else ``python3 -m research`` with the tree's copy of
-``tools/research/src`` when the interpreter has none.  Relative ``RESEARCH_STORE_CONFIG`` / ``RESEARCH_STORE`` /
+``infra/research/src`` when the interpreter has none.  Relative ``RESEARCH_STORE_CONFIG`` / ``RESEARCH_STORE`` /
 ``RESEARCH_RUNS`` are made absolute before any nested run (they resolve against the reader's cwd).
 """
 from __future__ import annotations
@@ -75,7 +75,7 @@ def research_argv(research_bin: str | None, research_py: str, env: dict[str, str
     exe = shutil.which("research", path=env.get("PATH"))
     if exe:
         return [exe], env
-    src = os.path.join(REPO_ROOT, "tools/research/src")
+    src = os.path.join(REPO_ROOT, "infra/research/src")
     if subprocess.run([research_py, "-c", "import research"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env).returncode != 0 \
             and os.path.isdir(src):
         env = {**env, "PYTHONPATH": src + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")}
@@ -328,7 +328,7 @@ guard_terminate_self "verity-vllm row shed: stage outputs preserved"
 def shed(o: Any) -> int:
     """Terminate the pod only when every Attempt it registered is preserved (``--force`` overrides the gate)."""
     env = o.env
-    guard = next((g for g in (env.pod_guard, os.path.join(REPO_ROOT, "tools/research/src/research/pods/sh/pod_guard.sh")) if os.path.isfile(g)), None)
+    guard = next((g for g in (env.pod_guard, os.path.join(REPO_ROOT, "infra/research/src/research/pods/sh/pod_guard.sh")) if os.path.isfile(g)), None)
     if guard is None:
         print("verity-vllm row shed: no pod_guard.sh found; not terminating", file=sys.stderr)
         return 2

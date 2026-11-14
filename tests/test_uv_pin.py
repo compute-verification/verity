@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-NEBIUS = ROOT / "tools/research/src/research/pods/nebius"
+NEBIUS = ROOT / "infra/research/src/research/pods/nebius"
 
 
 def test_the_nebius_first_boot_and_base_image_install_the_uv_check_pins() -> None:

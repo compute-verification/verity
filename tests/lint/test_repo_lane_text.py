@@ -65,7 +65,7 @@ SKIP = {
 }
 #: the kinds a path prefix's prose may hold, each with its reason
 OWN_KINDS = {
-    "tools/research/": (("run", "art"), "runs and the evidence store mint and read these ids: they are its subject"),
+    "infra/research/": (("run", "art"), "runs and the evidence store mint and read these ids: they are its subject"),
     "infra/": (("run", "art", "name"), "the machines launch runs and fetch evidence by these ids, act with Daniel's "
                "user key and relay his decisions to his Asks pages: they are its subject"),
 }
@@ -322,7 +322,7 @@ def test_what_is_lane_text_and_what_is_not() -> None:
     ids = ("# r20261025-031300-0fcc, art:23a3; not x-r20261025-031300-0fcc, cart:23a3 or art:<id>\n"
            "RUN, ART = 'r20261025-031300-0fcc', 'art:23a3'\n")
     assert [w for _, w in sites(ids, "a.py")] == ["run: r20261025-031300-0fcc", "art: art:23a3"]
-    assert sites(ids, "tools/research/src/research/a.py") == sites(ids, "infra/a.sh") == []
+    assert sites(ids, "infra/research/src/research/a.py") == sites(ids, "infra/a.sh") == []
     lean = ("/-- Lean's (Daniel, 8 Oct)\n  /- nested -/ still (12 Oct) -/\n"
             'def s := "-- (12 Oct) is a string"  -- PRF-12\n/-! #4040 -/\n')
     assert [(line, w.split(":")[0]) for line, w in sites(lean, "A.lean")] == [

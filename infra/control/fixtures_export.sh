@@ -19,7 +19,7 @@ while :; do
     [ -d "$REPO/.git" ] || git clone -q --filter=blob:none --no-checkout git@github.com:compute-verification/verity.git "$REPO" || exit 1
     git -C "$REPO" fetch -q origin main && git -C "$REPO" checkout -q -f --detach FETCH_HEAD || exit 1
     set -a; . /root/.config/verity/r2.env; set +a
-    cd "$REPO/tools/research" && PYTHONPATH=src RESEARCH_EXPORT_BUCKET=verity-public timeout 3000 \
+    cd "$REPO/infra/research" && PYTHONPATH=src RESEARCH_EXPORT_BUCKET=verity-public timeout 3000 \
       python3.12 -m research data export --store /data/infra/fixtures-export-store --repo "$REPO" --jobs 16
   ) >> "$LOG" 2>&1
   echo "$(date -u +%FT%TZ) pass rc=$? $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
@@ -32,7 +32,7 @@ while :; do
     git -C "$REPO" worktree add -q --detach "$W" FETCH_HEAD || exit 1
     echo "next $(git -C "$W" rev-parse --short HEAD)"
     set -a; . /root/.config/verity/r2.env; set +a
-    cd "$REPO/tools/research" && PYTHONPATH=src RESEARCH_EXPORT_BUCKET="$(grep -o 'RESEARCH_EXPORT_BUCKET=[^ ]*' "$0" | head -1 | cut -d= -f2)" \
+    cd "$REPO/infra/research" && PYTHONPATH=src RESEARCH_EXPORT_BUCKET="$(grep -o 'RESEARCH_EXPORT_BUCKET=[^ ]*' "$0" | head -1 | cut -d= -f2)" \
       timeout 3000 python3.12 -m research data export --store /data/infra/fixtures-export-store --repo "$W" --jobs 16
     rc=$?; git -C "$REPO" worktree remove --force "$W"; exit $rc
   ) >> "$LOG" 2>&1

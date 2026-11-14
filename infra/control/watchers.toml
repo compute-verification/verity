@@ -16,7 +16,7 @@ cloud_watch_state = "/data/cloud-watch/state.json"
 # {src}/infra/control/bin comes first: its `gh` runs {dir}/bin/gh with the pod's read-only App token of that call
 # (/data/infra/gh_read_token.sh --cached), so no loop reads GitHub with a token from an env file or from its start
 PATH = "{src}/infra/control/bin:{dir}/bin:/data/nebius/bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
-PYTHONPATH = "{src}/tools/research/src:{src}/infra/ops"
+PYTHONPATH = "{src}/infra/research/src:{src}/infra/ops"
 HOME = "/root"
 LC_ALL = "C.UTF-8"
 RESEARCH_SLACK_REGISTRY = "{src}/.agents/skills/using-slack/registry.json"
@@ -34,7 +34,7 @@ env_files = ["/root/.config/verity/monitor.env"]
 # every Nebius VM sampled every 5 min, the quota watch, and the 24-h compute report at 15:00Z (fleet.py; tmux `fleet`)
 [[loop]]
 name = "fleet"
-argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/fleet.py", "loop"]
+argv = ["python3.12", "-s", "{src}/infra/research/src/research/pods/nebius/fleet.py", "loop"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/monitor.env"]
 env = { FLEET_DIR = "{dir}/fleet", FLEET_MACHINES_D = "/data/steward/research-notes/machines.d", FLEET_SSH_KEY = "/root/.runpod/ssh/runpodctl-ssh-key", FLEET_RESEARCH = "{src}/infra/control/bin/research" }
 
@@ -70,7 +70,7 @@ env = { AGENT_WATCH_ON_POD = "1", AGENT_WATCH_OFFSET = "{dir}/agent-watch-offset
 # a few minutes
 [[loop]]
 name = "preflight-probe"
-argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/preflight_probe.py", "--tree", "{dir}/preflight-tree",
+argv = ["python3.12", "-s", "{src}/infra/research/src/research/pods/nebius/preflight_probe.py", "--tree", "{dir}/preflight-tree",
         "--state", "{dir}/preflight-probe.json"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
 needs = ["{dir}/preflight-tree/.git"]

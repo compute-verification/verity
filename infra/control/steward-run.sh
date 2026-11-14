@@ -4,7 +4,7 @@
 # (gh_app_token.sh, verity-drive's App token): if watch.log shows FETCH-FAILED, take --reap out until the fetch works again.
 cd /workspace/steward/verity
 PY=/data/uv/python/cpython-3.12-linux-x86_64-gnu/bin/python3.12
-export PYTHONPATH="$(PYTHONPATH=tools/research/src "$PY" -m research env --source . | sed -n 's/^export PYTHONPATH=//p')"
+export PYTHONPATH="$(PYTHONPATH=infra/research/src "$PY" -m research env --source . | sed -n 's/^export PYTHONPATH=//p')"
 export RESEARCH_REPO=/workspace/steward/verity RESEARCH_NOTES=/workspace/steward/research-notes RESEARCH_STORE=/workspace/steward/store
 export RESEARCH_MACHINES_D=/workspace/steward/research-notes/machines.d GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8
 while :; do

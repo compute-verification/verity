@@ -17,7 +17,7 @@ set -uo pipefail
 [ "${BUILD_ONLY:-0}" = 1 ] || : "${BUNDLE:?BUNDLE=art:... is required}"
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/ptv-$$}/out}; mkdir -p "$O"
 W=${PT_WORK:-/workspace/cache/proof-throughput}; mkdir -p "$W" || { echo "cannot make $W (PT_WORK=)" >&2; exit 1; }
-PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$W" --owner @proofs --expires 14d --priority low \
+PYTHONPATH=$REPO/infra/research/src python3 -m research keep "$W" --owner @proofs --expires 14d --priority low \
   --regenerate "bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1" \
   --why "proof_throughput's Lean verifier builds and venv: a cache, rebuilt by the next point" > "$O/keep.json" 2>&1 \
   || echo "no retention record on $W: $(tail -1 "$O/keep.json")" >&2

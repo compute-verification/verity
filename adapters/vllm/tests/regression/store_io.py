@@ -1,4 +1,4 @@
-"""The ONE module that talks to the `research` data API (`research data ...`, `research.store`; main's `tools/research/src/research/store/README.md`).
+"""The ONE module that talks to the `research` data API (`research data ...`, `research.store`; main's `infra/research/src/research/store/README.md`).
 
 Every other file of this harness reaches the evidence store through these three functions, so a change of the store's CLI or Python
 API touches this file only:

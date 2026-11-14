@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 SILICON = ROOT / "verity/circuits/silicon"
 #: The directories the checker's rule covers, the circuit language's and the catalog's. Each is a path from the root that
-#: names the directory, or a module in it, so that `tools/move/layout.py` rewrites it to where that goes: the language's
+#: names the directory, or a module in it, so that `infra/move/layout.py` rewrites it to where that goes: the language's
 #: own directory is named by two modules, the language's and the library's, which a move may put in two directories.
 CIRCUITS = ((ROOT / "verity/circuits/__init__.py").parent, (ROOT / "verity/circuits/library.py").parent,
             ROOT / "verity/circuits/evaluation", ROOT / "verity/circuits/ops", SILICON,

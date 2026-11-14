@@ -1,5 +1,5 @@
 # The verified queue's flags, their one source: its loop (`research queue vqueue`) reads this file at `main` each tick
-# (`DriveFlags`, `flags_at` in tools/research/src/research/queue.py), so a change here is a reviewed commit and needs no
+# (`DriveFlags`, `flags_at` in infra/research/src/research/queue.py), so a change here is a reviewed commit and needs no
 # restart, and a temporary setting is a commit here too. The ready mark's preflight reads `landing_gates`, `warn_gates` and
 # `land_into` here at `main`, each key alone (`gates_at`, `land_into_key`). tests/test_drive_toml.py fails on a key the strict
 # parse doesn't take and on one whose code was deleted (`DELETED_KEYS`). Its owner is the handle whose `owns` in
@@ -75,9 +75,9 @@ lowrisk_per_tick = 20
 # whole-tree invariants (root tests/: the import order and its listing, verifier cost), the check and this file
 # (tools/check/), the graph lister that lists the executor's gating tasks (tools/verity/graph/), the merge drivers
 # (.gitattributes), and the landing rules themselves (queue.py); and what
-# runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (tools/research/),
-# the move scripts and maps the loop runs and certifies a move against (tools/move/), the agent guard and its hooks
-# (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
+# runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (infra/research/),
+# the move scripts and maps the loop runs and certifies a move against (infra/move/), the agent guard and its hooks
+# (infra/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
                     "verity/claims/", "verity/runtime/", "verity/circuits/evaluate/", "verity/circuits/requirement/", "tools/difftest/", "verity/protocols/interface/world/", "record.py", "registration.py", "verity/protocols/accounting/certifier/device/", "verity/protocols/accounting/certifier/verifier/", "verity/protocols/proofs/flock/verifier/sigma/", "verity/protocols/proofs/flock/verifier/", "verity/protocols/policy/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/compose/verifier/onsite/", "verity/protocols/accounting/poub/verifier/", "verity/protocols/accounting/pous/device/", "tools/pous_grader/", "verity/protocols/accounting/pous/verifier/", "verity/protocols/accounting/pouw/verifier/", "verity/protocols/proofs/recursion/verifier/", "verity/protocols/compose/verifier/remote/", "verity/protocols/compose/verifier/lean/", "verity/protocols/proofs/spot/", "verity/protocols/tests/",
                     "verity/party.py", "verity/protocol.py", "verity/config.py", "verity/channel.py", "verity/device.py", "verity/errors.py", "verity/tests/", "hardware/",
@@ -87,7 +87,7 @@ lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain",
                     "verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/", "verity/circuits/kernels/", "verity/commitments/", "adapters/vllm/verity_vllm/commitments/", "adapters/vllm/tests/commitments/", "verity/commitments/crypto/", "verity/commitments/randomness/",
                     "tools/verity/lean/", "tests/", "tools/check/", "tools/verity/graph/", ".gitattributes",
                     "queue.py",
-                    "infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
+                    "infra/", "infra/research/", "infra/move/", "infra/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
 # count a ready mark or land verdict only when its `label_auth` label authenticates it as its author's, a Cursor identity token
 # minted by the agent holding that handle in the registry or by a worker it delegated to (`research queue delegate`); ejections
 # and holds count unsigned (`research.labelauth`). A PR reader's name (`review-36`) counts only under a delegation by the

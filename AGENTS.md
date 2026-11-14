@@ -67,8 +67,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
   deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
   layout set aside went with the directory; `git checkout 61f13c2275 -- archive` restores it as it last stood.
-- The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
-  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here, and this
+- The team's own tooling and machines, which nothing in `verity/` reads: `infra/research/` (runs, the evidence store,
+  messaging, pods), `infra/agent-guard/`, `infra/move/` and `infra/` (the team skill). They stay here, and this
   repository is public whole; new infra goes here too. The `platform` repository (compute-verification/infra) is where
   the team's development, coordination and CI harness live: the website, the executor (its `infra/`) and its `.cursor`.
 
@@ -346,8 +346,8 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   asks each to answer on reading it, with what they know now, and sets no later deadline. An answer that lacks a figure
   says "not known" and the hour it will be known. Each answer is passed on as it arrives, not held for the rest.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
-  `show-environment`, and an env file's with `python3 tools/agent-guard/envnames.py FILE...` (on another machine,
-  `ssh HOST python3 - FILE... < tools/agent-guard/envnames.py`), never `cat`, `sed`, `cut` or `grep` on it or on a glob
+  `show-environment`, and an env file's with `python3 infra/agent-guard/envnames.py FILE...` (on another machine,
+  `ssh HOST python3 - FILE... < infra/agent-guard/envnames.py`), never `cat`, `sed`, `cut` or `grep` on it or on a glob
   over its directory, which matches the keys beside it. Look at a key with `stat`, `sha256sum` or
   `openssl pkey -in FILE -pubout`.
 

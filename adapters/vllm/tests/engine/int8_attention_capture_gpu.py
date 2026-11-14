@@ -2,7 +2,7 @@
 `TargetProfile.int8_exact` "all" under the Match capture (`pipeline.m1_capture`, observer on, snapshots of steps 0 and 1), then one
 layer's attention scope cut out of it (`int8_attention_cut`) as the test's fixture.
 
-    cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
+    cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../infra/research/src
     $PY -m tests.engine.int8_attention_capture_gpu --out DIR --at ISO_TIME --by LANE [--layer 0]
 
 The workload is the int8 Llama-3.2-1B sweep workload's engine and target (`WORKLOAD_FROM`, the same int8 arm and CUSTOM attention backend)

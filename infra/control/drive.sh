@@ -1,6 +1,6 @@
 #!/bin/sh
 # Drive: `research queue drive` ticks, ci's landing automation, from the control pod. Each pass fetches
-# origin/main into /data/drive/verity and runs one tick from that tree's tools/research, checked out at the commit
+# origin/main into /data/drive/verity and runs one tick from that tree's infra/research, checked out at the commit
 # /data/drive/deployed pins (`drive.sh deploy SHA`, a landed commit) or else at main's tip, in that
 # checkout, as lane ci (RESEARCH_LANE), with its flags from tools/check/drive.toml at main (read fresh each tick, their one
 # source) plus whatever /data/drive/args holds (`#` lines skipped): only flags drive.toml's `command_line` lets override its keys
@@ -145,13 +145,13 @@ locked() {
   GH_TOKEN=$(/data/infra/gh_app_token.sh --cached) || exit 1; export GH_TOKEN
   checkout "$1" || exit 1
   if [ "$1" = merge ]; then cd "$FAST/queue-verity"; else cd "$REPO"; fi || exit 1
-  RESEARCH_DRIVE=1 PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research "$@"
+  RESEARCH_DRIVE=1 PYTHONPATH=$REPO/infra/research/src exec python3.12 -m research "$@"
 }
 # `queue baseline` and `queue promote` only fast-forward main, reading the queue's clone and drive's state and writing neither,
 # so they run beside a tick: no tick lock, and no checkout, which would change the code a running tick imports from $REPO
 unlocked() {
   set -a; . $CONF/r2.env; set +a
-  cd "$REPO" && RESEARCH_DRIVE=1 PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research "$@"
+  cd "$REPO" && RESEARCH_DRIVE=1 PYTHONPATH=$REPO/infra/research/src exec python3.12 -m research "$@"
 }
 # Drive's merged trees (the sync's codemod worktrees) go under --preflight-root, on the container disk: under TMPDIR, on the
 # network volume, each worktree add and remove takes minutes.

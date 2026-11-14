@@ -3,7 +3,7 @@ r"""Serving's per-step row-table hashing on the GPU, overlapped: what ``row_tabl
 decode step of Llama-3.1-8B at batch ``--batch``, on one GPU.
 
     research run --on auto --cpus 8 --mem-gb 32 --cwd source -- bash -lc 'cd adapters/vllm && export PATH=/usr/local/cuda/bin:$PATH \
-        PYTHONPATH=.:../..:../../tools/research/src && GPU_LEASE_WHO=<you> gpu-lease 1 --wait --max-min 20 -- \
+        PYTHONPATH=.:../..:../../infra/research/src && GPU_LEASE_WHO=<you> gpu-lease 1 --wait --max-min 20 -- \
         /workspace/jobs/venv312/bin/python3 ../../benchmarks/commitments/step_root_gpu.py'
 
 The step is a proxy of the ``int8_exact`` profile's decode linears: per layer qkv, o, gate_up and down (K = 4096, 4096, 4096,

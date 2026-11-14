@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "tools" / "research" / "src"))
+sys.path.insert(0, str(REPO / "infra" / "research" / "src"))
 
 from research import result as R  # noqa: E402
 from research.store import derivation as D  # noqa: E402

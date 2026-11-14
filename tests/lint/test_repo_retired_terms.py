@@ -25,7 +25,7 @@ What a row retires:
 
 The lint reads the whole text of what the lane-text lint reads (``test_repo_lane_text.py``: code, Lean, shell and
 config, and Markdown), identifiers, strings and prose alike, outside what ``SKIP`` names, with each reason, and outside
-what the word maps of ``tools/move/`` keep: a domain tag or format id (``verity/flock-netlist/v1``), and ``note:``,
+what the word maps of ``infra/move/`` keep: a domain tag or format id (``verity/flock-netlist/v1``), and ``note:``,
 ``art:``, branch and lane names.  A goal's id is a name too, kept as written where a TOML file gives it as a ``goal``
 key's value (``goal = "vllm/serving-cost-benchmark"``, ``GOAL``); the tree holds no list of goal ids, so the same id
 elsewhere still counts.  A word's other senses aren't counted: by the words about it (``OTHER_SENSES``: a power law,
@@ -61,7 +61,7 @@ LEFT_OUT = ()
 #: what isn't read, by path prefix (or a whole path), each with its reason
 SKIP = {
     GLOSSARY: "the term source: its table of older names says where each old name stays",
-    "tools/move/": "the word maps name the words they retire",
+    "infra/move/": "the word maps name the words they retire",
     "tools/check/tests/test_move_check.py": "its toy moves rename the words the maps retire",
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
     "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
@@ -915,7 +915,7 @@ def test_a_name_that_already_says_the_row_s_term_is_not_a_site_of_its_glob() -> 
 
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
     assert holds("verity/a.py") and holds("security/A.lean") and holds("README.md") and holds("a/b.toml")
-    assert not holds("x.json") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
+    assert not holds("x.json") and not holds(GLOSSARY) and not holds("infra/move/x_map.toml")
     assert not holds("a/tests/fixtures/b.py") and not holds("a/CHANGELOG.md") and not holds(f"tests/lint/test_{NAME}.py")
     assert sites("C-Flock", "x.json") == []
 

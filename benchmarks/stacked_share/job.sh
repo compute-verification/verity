@@ -6,7 +6,7 @@
 #
 #   (cd adapters/vllm && OUT=DIR bash ../../benchmarks/stacked_share/job.sh)      # from a clone's root
 set -euo pipefail
-export PY=/workspace/jobs/venv312/bin/python3 PYTHONPATH=.:../..:../../tools/research/src HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
+export PY=/workspace/jobs/venv312/bin/python3 PYTHONPATH=.:../..:../../infra/research/src HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
   TOKENIZERS_PARALLELISM=false
 ROW=llama31-8b__int8__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager
 REPO=verity-int8/Llama-3.1-8B-INT8

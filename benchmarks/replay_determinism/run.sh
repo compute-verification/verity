@@ -33,7 +33,7 @@ if [[ ${1:-} == fetch ]]; then
   mkdir -p "$WORK"
   HF_HUB_OFFLINE=0 HF_HOME="$WORK/hf" "$PY" "$here/replay_det.py" fetch --dir "$MODEL_DIR"
   rm -rf "$WORK/hf" "$MODEL_DIR/.cache"
-  PYTHONPATH="$root/tools/research/src" "$PY" -m research keep "$MODEL_DIR" --owner "${KEEP_OWNER:-@vllm}" \
+  PYTHONPATH="$root/infra/research/src" "$PY" -m research keep "$MODEL_DIR" --owner "${KEEP_OWNER:-@vllm}" \
     --expires "${KEEP_EXPIRES:-never}" --priority "${KEEP_PRIORITY:-keep}" \
     --regenerate "MODEL_DIR=$MODEL_DIR bash benchmarks/replay_determinism/run.sh fetch" \
     --why "replay_determinism's model at its pinned revision, read by every phase" \

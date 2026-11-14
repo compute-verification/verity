@@ -4,7 +4,7 @@ This package (`pous_grader`) is code: the grader, its driver `grade.sh`, the tru
 imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game, whose responder gets no
 outside help (a deployment accounts for help: `../../verity/protocols/accounting/pous/verifier/PROTOCOL.md`, "The problem"), are part of the security analysis,
 `security/`, listed below by their paths there. Declarations kept their names
-(`python3 tools/move/lean.py --resolve MODULE` maps a module's old name). Conventions follow the other Lean packages:
+(`python3 infra/move/lean.py --resolve MODULE` maps a module's old name). Conventions follow the other Lean packages:
 the same toolchain and Mathlib pin, `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a
 check file.
 

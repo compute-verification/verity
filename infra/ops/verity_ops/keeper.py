@@ -160,7 +160,7 @@ def cmd_set(argv: list[str]) -> int:
         from research.store import tools_registry
 
         if ns.tool not in tools_registry.REGISTRY:
-            print(f"research keeper set: this research package does not know tool {ns.tool!r}; pass --source with tools/research",
+            print(f"research keeper set: this research package does not know tool {ns.tool!r}; pass --source with infra/research",
                   file=sys.stderr)
             return 3
     harness_args = ["--stage", ns.stage, "--project", ns.project, *harness_opts, *(["--tool", ns.tool] if ns.tool else []),

@@ -84,7 +84,7 @@ def _args(**kw: object) -> Any:
 
 
 def test_store_declaration_registered_and_parses_flags() -> None:
-    tools_registry = pytest.importorskip("research.store.tools_registry")  # the pod venvs have numpy but not tools/research
+    tools_registry = pytest.importorskip("research.store.tools_registry")  # the pod venvs have numpy but not infra/research
 
     tool = tools_registry.load("instances_hw", ROOT)
     assert tool.name == "instances_hw" and tool.spec == "benchmarks.tc_probe.tool:INSTANCES_HW"

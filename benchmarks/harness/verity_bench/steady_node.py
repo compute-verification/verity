@@ -65,7 +65,7 @@ STOP_S = 30
 #: the exit code `_ask` gives for a command the node couldn't run at all, as a shell gives it
 NOT_RUN = 127
 #: the lease tool in the tree, which a node has on its path as `gpu-lease`
-LEASE_SOURCE = "tools/research/src/research/pods/sh/gpu_lease.sh"
+LEASE_SOURCE = "infra/research/src/research/pods/sh/gpu_lease.sh"
 #: the files of a staged statement the node side reads; the prover reads the rest
 STAGED = ("stage.json", "circuit.txt", "pin.txt")
 #: the store's fetch, from the shipped tree (`steady_point.sh` puts its package on the path)

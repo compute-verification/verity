@@ -8,7 +8,7 @@ Checked today, against ``allowlists/p12_shared_keys.json``:
   the row id gets parsed.
 * ``root-list``: a hand-written list, tuple or set of string literals naming code roots (``verity_vllm``, ``verity``,
   ``research``, ``adapters/vllm``, ``verity/...``, ``verity/circuits/...`` (its census aside), ``verity/circuits/kernels/...``,
-  ``verity/protocols/...``, ``tools/research/...`` or paths under them), which is
+  ``verity/protocols/...``, ``infra/research/...`` or paths under them), which is
   how code identity gets defined outside the one ``code_identity()``.
 
 The row-id grammar's owner is ``config.py``; code identity's, ``pipeline/identity.py``, does not exist yet.  The modules
@@ -29,7 +29,7 @@ RULE = "P12 (each shared key has one owner)"
 OWNERS = frozenset({"verity_vllm/config.py", "verity_vllm/pipeline/identity.py", "verity_vllm/target_family.py",
                     "verity_vllm/pipeline/source_identity.py", "verity_vllm/pipeline/release_json.py"})
 ROW_REGEX = re.compile(r"__\(?(?:\?:)?(?:tp|bi|b|i|o|c)?\(?\\d|__\[\^_\]|\[\^_\]\+__")
-CODE_ROOT = re.compile(r"^(?:\.\./)*(?:(verity_vllm|verity|verity.circuits|verity.circuits.kernels|verity.protocols|research|adapters/vllm|tools/research)(?:/|$)"
+CODE_ROOT = re.compile(r"^(?:\.\./)*(?:(verity_vllm|verity|verity.circuits|verity.circuits.kernels|verity.protocols|research|adapters/vllm|infra/research)(?:/|$)"
                        r"|verity/circuits/(?!census)|verity/circuits/kernels/|verity/protocols/)")
 
 

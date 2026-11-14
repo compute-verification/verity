@@ -143,7 +143,7 @@ BENCHMARKS_IMPORTERS = {
         "verity/protocols/proofs/flock/prover/tests/test_gemm_hill.py", "verity/protocols/proofs/flock/prover/tests/test_ir_lowering_bench.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
-    **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tools/research/tests/test_store_prov.py"),
+    **dict.fromkeys(("infra/research/src/research/store/tools_registry.py", "infra/research/tests/test_store_prov.py"),
                     "infra: the store's tool registry names `benchmarks.<probe>.tool` modules (tc_probe, tc_probe_fp4, "
                     "native_peak, commitments, pouw)"),
     # tests and vector scripts that check against a benchmark's reference

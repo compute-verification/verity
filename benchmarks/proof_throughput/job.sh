@@ -25,7 +25,7 @@ set -uo pipefail
 [ "${ZK:-0}" = 1 ] && export FLOCK_ZK=1 FC_FIREWALL=${FC_FIREWALL:-1} FC_HOST_WITNESS=1 BUNDLE=0
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/pt-$$}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
-PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @proofs --expires 14d --priority low \
+PYTHONPATH=$REPO/infra/research/src python3 -m research keep "$FLOCK_WORK" --owner @proofs --expires 14d --priority low \
   --regenerate "bash benchmarks/proof_throughput/job.sh WORKLOAD=$WORKLOAD B=$B" \
   --why "proof_throughput's prover builds, venv and stage cache: a cache, rebuilt by the next point" > "$O/keep.json" 2>&1 \
   || echo "no retention record on $FLOCK_WORK: $(tail -1 "$O/keep.json")" >&2

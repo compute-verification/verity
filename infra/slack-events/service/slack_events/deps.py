@@ -43,7 +43,7 @@ class Queue(Protocol):
 
 @dataclass
 class Deps:
-    rs: ModuleType                                                # research_slack: `tools/research/src/research/slack.py`
+    rs: ModuleType                                                # research_slack: `infra/research/src/research/slack.py`
     registry: dict
     cache: Cache
     queue: Queue

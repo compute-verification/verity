@@ -14,7 +14,7 @@ description: >
 
 # Using Slack
 
-The tool is `research msg` (`tools/research/src/research/slack.py`, whose docstring lists every subcommand and flag);
+The tool is `research msg` (`infra/research/src/research/slack.py`, whose docstring lists every subcommand and flag);
 every subcommand takes `--dry-run`, which sends nothing and prints each request. `registry.json` beside this file names
 every handle (remit, charter, user group, the paths it `owns`, its Linear team, its coordinator's agent id as a fallback
 holder (who else posts as it is its route's), the PR reader names it `staffs`, up to 5 `examples` of

@@ -182,7 +182,7 @@ runpod_control_usd_per_hour = 0.23
 
 [nebius]
 key_env = ["NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_KEY_B64"]
-# every VM as JSON (name, state, preset), with the nebius CLI on PATH; the store index's tools/research tree has fleet.py
+# every VM as JSON (name, state, preset), with the nebius CLI on PATH; the store index's infra/research tree has fleet.py
 instances_command = ["python3.12", "/data/infra/store-index-src/src/research/pods/nebius/fleet.py", "instances"]
 machines_d = ["/workspace/steward/research-notes/machines.d", "~/.research/notes/machines.d"]   # each VM's rate_usd_per_hour
 

@@ -3,7 +3,7 @@
 `attempt_provenance` check (the re-run cites the fixture row's configuration; Match cites the Build artifact, Commit cites both).
 
 Self-contained: three fake stage Attempts are published into a temporary LocalStore (the `research` package of this checkout,
-`tools/research/src`; skipped when absent), so it needs neither VERITY_REGRESSION=1, a GPU, nor R2.  Run from adapters/vllm:
+`infra/research/src`; skipped when absent), so it needs neither VERITY_REGRESSION=1, a GPU, nor R2.  Run from adapters/vllm:
     python -m pytest tests/regression/test_attempt_resolution.py -q
 """
 from __future__ import annotations
@@ -18,8 +18,8 @@ import pytest
 from . import resolver, store_io
 from .checks import attempt_provenance as AP
 
-RESEARCH_SRC = store_io.REPO_ROOT / "tools" / "research" / "src"
-RUN_FIXTURE = store_io.REPO_ROOT / "tools" / "research" / "tests" / "fixtures" / "run_v0.2"
+RESEARCH_SRC = store_io.REPO_ROOT / "infra" / "research" / "src"
+RUN_FIXTURE = store_io.REPO_ROOT / "infra" / "research" / "tests" / "fixtures" / "run_v0.2"
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager"
 IDS = {"build": "r20260923-060930-553f", "match": "r20260923-071000-0a1b", "commit": "r20260923-072000-0c2d"}
 PD = "9ce48951f04eb440501c4e829e3a492a58ca963997ca707d47fb129fe73cf590"
@@ -30,7 +30,7 @@ CONFIG = {"row": ROW, "role": "LLAMA32_1B", "model": "unsloth/Llama-3.2-1B", "re
           "sampling": "greedy", "exec": "bi-eager", "query": "Q_word_v1{X=16,W=32,R=no-recompute}", "lp": None, "t": None}
 
 pytestmark = pytest.mark.skipif(not (RESEARCH_SRC / "research" / "store").is_dir() or not RUN_FIXTURE.is_dir(),
-                                reason="needs tools/research/src (research.store) and its run_v0.2 fixture in this checkout")
+                                reason="needs infra/research/src (research.store) and its run_v0.2 fixture in this checkout")
 
 
 def _research():

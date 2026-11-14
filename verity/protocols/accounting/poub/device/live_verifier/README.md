@@ -4,8 +4,8 @@
 (`verity/protocols/accounting/poub/verifier/session/verifier.py`) run only as `auditor`, from a tree infra pinned, one run at a time, behind the
 gate `vy-verifier-gate` that every key of the host's `research` is forced to. Its docstring is the reference: who reaches
 the gate, what runs, a run, a bound run, a replay and the store. The host's deployed files are
-`tools/research/src/research/pods/nebius/verifier/`, and infra deploys `host.py` and owns their entries in
-`tools/research/src/research/pods/nebius/deploy.toml`.
+`infra/research/src/research/pods/nebius/verifier/`, and infra deploys `host.py` and owns their entries in
+`infra/research/src/research/pods/nebius/deploy.toml`.
 
 ## Interface
 

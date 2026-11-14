@@ -28,7 +28,7 @@ One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, 
             (`engine.int8_k_scales`; `VERITY_VLLM_INT8_K_SCALES` names a calibration run's table).
             Each decode's window is checked against the K and V written in the earlier steps.
 
-    cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
+    cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../infra/research/src
     $PY tests/engine/int8_exact_gpu.py --out DIR --at ISO_TIME --by LANE
 """
 from __future__ import annotations

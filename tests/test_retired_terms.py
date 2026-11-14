@@ -6,7 +6,7 @@ proof block (Glossary, "Incorrect proof block"). The proof service is the proof 
 Scanned: every tracked text file but the Lean packages' `lakefile.toml` and their locks' reasons (`lean-audit.json`), the
 lints that name the terms (``LINTS``: `tests/lint/test_repo_retired_terms.py` holds every term the table retires, in the
 whole text of each file, to the file's count, while this one holds its terms at zero in prose outside the Lean) and the
-word maps of `tools/move/`, which name the words they retire; and of a `.lean` file only its comments and docstrings
+word maps of `infra/move/`, which name the words they retire; and of a `.lean` file only its comments and docstrings
 (``lean_prose``, the lane-text lint's reader), where every site is held to its file's count in ``LEAN_LIST``: a file past
 its count, or with a site and no entry, fails, and the ratchet gate holds the list's total from rising, so it only shrinks
 (``--prune`` lowers it to what the tree holds). A term matches case-insensitively as two words, hyphenated, or wrapped onto
@@ -20,7 +20,7 @@ record or a digest (``ALLOWED``, one reason each; an entry that matches nothing 
 The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name that carries one of the Glossary's older
 names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
 sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
-(`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
+(`infra/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
@@ -238,7 +238,7 @@ ALLOWED: dict[str, str] = {
 #: the lints that name the terms to find them: this one, and the ratchet over every term `GLOSSARY.md`'s table retires
 LINTS = ("tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py")
 #: the word maps a move renames by, which name the words they retire
-MAPS = "tools/move/"
+MAPS = "infra/move/"
 
 
 def scanned(files: list[str]) -> list[str]:

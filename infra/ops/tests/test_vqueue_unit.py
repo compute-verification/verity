@@ -216,10 +216,10 @@ def test_a_tick_runs_research_from_ci_s_pinned_checkout_not_from_its_origin_main
     [t] = node.ticks()
     pin = tmp_path / "pin"
     git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-C", str(pin)]
-    (pin / "tools/research").mkdir(parents=True)
+    (pin / "infra/research").mkdir(parents=True)
     subprocess.run(["git", "init", "-q", str(pin)], check=True)
     for version in ("pin", "main"):
-        (pin / "tools/research/version").write_text(version)
+        (pin / "infra/research/version").write_text(version)
         subprocess.run([*git, "add", "-A"], check=True)
         subprocess.run([*git, "commit", "-qm", version], check=True)
     subprocess.run([*git, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)

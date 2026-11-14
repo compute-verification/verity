@@ -1,4 +1,4 @@
-"""`tools/agent-guard/hook.sh` runs origin/main's hooks and Slack registry whatever the branch has: a branch that tracks
+"""`infra/agent-guard/hook.sh` runs origin/main's hooks and Slack registry whatever the branch has: a branch that tracks
 `.cursor/hooks.json` runs hooks from its own tree, so without it a branch cut before a guard landed would never run that
 guard (a cloud agent on such a branch could write Linear through the MCP connector under its connecting user's name)."""
 import json
@@ -25,21 +25,21 @@ def test_an_old_branch_runs_main_s_hooks_and_registry_and_its_own_without_main(t
         return subprocess.run(["git", *a], cwd=ws, check=True, capture_output=True, text=True, env=env).stdout
 
     def hook(name, event):
-        p = subprocess.run(["sh", "tools/agent-guard/hook.sh", name], cwd=ws, input=json.dumps(event), capture_output=True,
+        p = subprocess.run(["sh", "infra/agent-guard/hook.sh", name], cwd=ws, input=json.dumps(event), capture_output=True,
                            text=True, env=env, check=True)
         return json.loads(p.stdout)["permission"]
 
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git")], check=True, env=env)
     subprocess.run(["git", "clone", "-q", str(tmp_path / "origin.git"), str(ws)], check=True, env=env, capture_output=True)
-    shutil.copytree(ROOT / "tools/agent-guard", ws / "tools/agent-guard")
+    shutil.copytree(ROOT / "infra/agent-guard", ws / "infra/agent-guard")
     (ws / REGISTRY).parent.mkdir(parents=True)
     (ws / REGISTRY).write_text(json.dumps({"handles": [{"handle": "proofs", "holder": f"proofs ({HOLDER})"}]}))
     git("add", "-A")
     git("commit", "-q", "-m", "main")
     git("push", "-q", "origin", "HEAD:main")
     git("checkout", "-q", "-b", "old")
-    (ws / "tools/agent-guard/task_hook.py").write_text(ALLOW_ALL)
-    (ws / "tools/agent-guard/shell_hook.py").write_text(ALLOW_ALL)
+    (ws / "infra/agent-guard/task_hook.py").write_text(ALLOW_ALL)
+    (ws / "infra/agent-guard/shell_hook.py").write_text(ALLOW_ALL)
     (ws / REGISTRY).write_text(json.dumps({"handles": []}))
     git("commit", "-q", "-am", "an old branch: hooks without today's guards, a registry without the holder")
     git("fetch", "-q", "origin")

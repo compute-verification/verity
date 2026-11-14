@@ -1,4 +1,4 @@
-"""The service against fakes: a Slack Web API in memory (the part of `tools/research/tests/test_slack.py`'s FakeSlack the
+"""The service against fakes: a Slack Web API in memory (the part of `infra/research/tests/test_slack.py`'s FakeSlack the
 service calls, answered through `Slack`'s transport, so no socket), a cache, a queue, the notes repository's contents API
 and a clock the tests move.  No real token, workspace, cache, queue or repository is involved."""
 from __future__ import annotations

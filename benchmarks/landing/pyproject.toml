@@ -9,10 +9,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # the marks and percentiles are the queue table's own functions; the result is written through the harness kit's writer,
 # whose settings.py is built on verity_config's registry
 inputs = [
-    "tools/research/src/research/__init__.py",
-    "tools/research/src/research/auto.py",
-    "tools/research/src/research/queue_table.py",
-    "tools/research/src/research/reds.py",
+    "infra/research/src/research/__init__.py",
+    "infra/research/src/research/auto.py",
+    "infra/research/src/research/queue_table.py",
+    "infra/research/src/research/reds.py",
     "tools/config/verity_config",
     "verity/__init__.py",
     "tools/config/verity_config/verity_settings.py",

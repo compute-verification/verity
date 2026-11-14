@@ -1277,11 +1277,11 @@ TAIL = '          "verity/protocols/accounting/pous/prover/circuit.py"]\n'
 UNDER_A_COMMENT = ('          "verity/protocols/accounting/pous/prover/circuit.py",\n'
                    "          # the nightly check's loop, tested here: it reads a run as the dispatcher reads a check's, writes the state the\n"
                    "          # monitors' nightly-check reads, and pushes its label as the queue pushes a ready mark\n"
-                   '          "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",\n'
-                   '          "tools/research/src/research/store/labels_sync.py"]\n')
+                   '          "infra/control/nightly_check.py", "infra/research/src/research/jobs", "infra/research/src/research/monitors.py",\n'
+                   '          "infra/research/src/research/store/labels_sync.py"]\n')
 #: what the other side adds there, with no comment
 PLAIN = ('          "verity/protocols/accounting/pous/prover/circuit.py",\n'
-         '          "tools/research/src/research/__init__.py", "tools/research/src/research/telemetry/__init__.py"]\n')
+         '          "infra/research/src/research/__init__.py", "infra/research/src/research/telemetry/__init__.py"]\n')
 
 
 def test_inputs_one_side_adds_under_a_comment_merge_with_the_other_sides_and_the_comment_stays_above_them(tmp_path):
@@ -1293,15 +1293,15 @@ def test_inputs_one_side_adds_under_a_comment_merge_with_the_other_sides_and_the
     assert ours != PYPROJECT != theirs
     text, left = _pyproject(tmp_path, PYPROJECT, ours, theirs)
     assert left == 0, text
-    want = ["verity/protocols/accounting/pous/prover/circuit.py", "tools/research/src/research/__init__.py",
-            "tools/research/src/research/telemetry/__init__.py", "infra/control/nightly_check.py",
-            "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",
-            "tools/research/src/research/store/labels_sync.py"]
+    want = ["verity/protocols/accounting/pous/prover/circuit.py", "infra/research/src/research/__init__.py",
+            "infra/research/src/research/telemetry/__init__.py", "infra/control/nightly_check.py",
+            "infra/research/src/research/jobs", "infra/research/src/research/monitors.py",
+            "infra/research/src/research/store/labels_sync.py"]
     assert tomllib.loads(text)["tool"]["verity"]["tests"]["inputs"][-7:] == want
     lines, comment = text.splitlines(), UNDER_A_COMMENT.splitlines()[1:3]
     at = lines.index(comment[0])
     assert lines[at + 1] == comment[1] and lines[at + 2].startswith('          "infra/control/nightly_check.py", ')
-    assert lines[at - 1].endswith('"tools/research/src/research/telemetry/__init__.py",')
+    assert lines[at - 1].endswith('"infra/research/src/research/telemetry/__init__.py",')
     assert all(text.count(c) == 1 for c in (*comment, "          # the H1 units read both."))
     assert max(len(s) for s in lines if s not in comment) <= M.WIDTH and text.endswith('labels_sync.py"]\nuntraced = ["fixtures"]\n')
     # merged the other way round, as a branch merged into `main` is: the same items, and the comment above the same one

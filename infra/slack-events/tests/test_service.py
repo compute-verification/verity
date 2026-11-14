@@ -34,10 +34,10 @@ def test_the_build_vendors_slack_py_and_the_registry_byte_for_byte(tmp_path):
     build = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(build)
     assert build.main([str(tmp_path)]) == 0
-    assert (tmp_path / "research_slack.py").read_bytes() == (REPO / "tools/research/src/research/slack.py").read_bytes()
+    assert (tmp_path / "research_slack.py").read_bytes() == (REPO / "infra/research/src/research/slack.py").read_bytes()
     assert (tmp_path / "registry.json").read_bytes() == (REPO / ".agents/skills/using-slack/registry.json").read_bytes()
     assert vendor.slack().__file__ in (str(SERVICE / "_vendor" / "research_slack.py"),
-                                       str(REPO / "tools/research/src/research/slack.py"))
+                                       str(REPO / "infra/research/src/research/slack.py"))
 
 
 def test_the_bundled_registry_passes_research_msgs_own_check():

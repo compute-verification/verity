@@ -31,7 +31,7 @@ _ph_root="$(cd "$_ph_here/../../../.." && pwd)"
 export PYTHONPATH="$_ph_root:$_ph_root/tools/config:$_ph_root/verity/protocols/accounting/pouw/verifier${PYTHONPATH:+:$PYTHONPATH}"
 
 if [[ "$_ph_build" == art:* ]]; then
-  _ph_build="$(PYTHONPATH="$_ph_here/../../../../tools/research/src" python3 -m research data fetch "$_ph_build" \
+  _ph_build="$(PYTHONPATH="$_ph_here/../../../../infra/research/src" python3 -m research data fetch "$_ph_build" \
     --to "$POUW_HARNESS_ENV/builds/${_ph_build#art:}" | tail -1)" || return 1
 fi
 [[ -f "$_ph_build/libpouw_harness.so" && -f "$_ph_build/build.json" ]] || { echo "no build in $_ph_build" >&2; return 1; }

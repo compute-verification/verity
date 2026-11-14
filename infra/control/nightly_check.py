@@ -9,7 +9,7 @@ stopped and nothing is launched or posted twice:
     prepare   fetch origin's `main` into the loop's own clone (`--work`/repo, made on first use, over https with the credential
               helper) and add a worktree of its tip under `--work`/trees. Both are on the pod's own disk: on /data's NFS a tree
               takes minutes to add and remove. Origin unreachable is tried again each pass, and is an error after PREPARE_S.
-    launch    in that worktree, with its own tools/research/src alone on PYTHONPATH and TMPDIR `--tmp`:
+    launch    in that worktree, with its own infra/research/src alone on PYTHONPATH and TMPDIR `--tmp`:
                   python tools/check/check.py --record --on NODE --pool POOL --base <git's empty tree> --no-cache --timeout S
               the dispatcher's `audit-main` command (`research.jobs.dispatch.command`) in a pool of its own: every path counts as
               changed, so every step runs and the Lean agreement's inputs are sent. The launch returns once the run is launched;
@@ -660,7 +660,7 @@ class Pod:
     def launch(self, argv: list[str], tree: Path) -> tuple[int, str]:
         """`argv` in `tree`, with the tree's own research first and alone on PYTHONPATH, its output in the launch log: (its
         exit code, its output). In a session of its own, so a restart of the loop doesn't end a launch that is under way."""
-        env = {**os.environ, "PYTHONPATH": str(tree / "tools" / "research" / "src")}
+        env = {**os.environ, "PYTHONPATH": str(tree / "infra" / "research" / "src")}
         if self.cfg.tmp is not None:
             self.cfg.tmp.mkdir(parents=True, exist_ok=True)
             env["TMPDIR"] = str(self.cfg.tmp)

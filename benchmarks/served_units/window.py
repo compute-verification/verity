@@ -440,7 +440,7 @@ def prove(units: list[Unit]) -> int:
     scratch = Path(tempfile.mkdtemp(prefix="window-bin-"))
     path = env("PATH")
     if not shutil.which("gpu-lease"):
-        (scratch / "gpu-lease").symlink_to(REPO / "tools/research/src/research/pods/sh/gpu_lease.sh")
+        (scratch / "gpu-lease").symlink_to(REPO / "infra/research/src/research/pods/sh/gpu_lease.sh")
         path = f"{scratch}:{path}"
     per = len(cpus) // ngpu
     jobs = []

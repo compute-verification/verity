@@ -74,11 +74,11 @@ with open(archive, "rb") as f, tarfile.open(fileobj=zstandard.ZstdDecompressor()
 if [ -x /workspace/verity-guest/bin/gpu-lease ] && [ -e /run/gpu-lease/pool.gpus ]; then
   LEASE=(env GPU_LEASE_DIR=/run/gpu-lease GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus /workspace/verity-guest/bin/gpu-lease)
 else
-  LEASE=(bash "$REPO/tools/research/src/research/pods/sh/gpu_lease.sh")
+  LEASE=(bash "$REPO/infra/research/src/research/pods/sh/gpu_lease.sh")
 fi
 others() {   # the cards other runs' leases hold (kernels' fused.sh)
   local n; n=$(ls "${GPU_LEASE_DIR:-/run/gpu-lease}" 2>/dev/null | sed -n 's/^\([0-9]*\)\.lock$/\1/p' | sort -n | tail -1)
-  GPU_LEASE_COUNT=$(( ${n:--1} + 1 )) bash "$REPO/tools/research/src/research/pods/sh/gpu_lease.sh" status 2>/dev/null \
+  GPU_LEASE_COUNT=$(( ${n:--1} + 1 )) bash "$REPO/infra/research/src/research/pods/sh/gpu_lease.sh" status 2>/dev/null \
     | grep -E '^[0-9]+ held' | grep -v " run=${RESEARCH_RUN_ID:-no-run-id} " | sed 's/ cmd=.*//' | cut -c1-200
 }
 apps() {   # every card's compute processes, "GPU i pid P M"
@@ -99,7 +99,7 @@ card_free() {   # card COLD_CARD holds no other run's lease and no compute proce
 
 if [ "$STAGE" = probe ]; then
   log "probe: archive $(ls -l "${COLD_ARCHIVE:?}" | awk '{print $5}') B, sha256 $(sha256sum "$COLD_ARCHIVE" | cut -c1-16)"
-  PYTHONPATH=$REPO/tools/research/src python3 -m research keep "${COLD_ARCHIVE%/*}" --owner @proofs --expires 3d --priority low \
+  PYTHONPATH=$REPO/infra/research/src python3 -m research keep "${COLD_ARCHIVE%/*}" --owner @proofs --expires 3d --priority low \
     --why "cold_sessions.sh's copy of a kept audit window, read by its run stage" > "$O/keep.json" 2>&1 \
     || log "no retention record on ${COLD_ARCHIVE%/*}: $(tail -1 "$O/keep.json")"
   unpack 1; rc=$?

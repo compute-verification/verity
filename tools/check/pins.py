@@ -20,7 +20,7 @@ stale when a file it records has another digest in the tree (or is gone), or, fo
 arguments (a `find` among them) name a file it doesn't list or no longer name one it does (`Pin.gap`), and its command, run
 at the root of a checkout, rewrites it from the tree.
 `tests/test_pins.py` fails while a pin is stale, naming its command, and while a tracked file records the digest of a Lean source
-(`*.lean`, a Lake manifest, lakefile or toolchain) without being listed here. `tools/move/restack.py` runs `--regen` on every
+(`*.lean`, a Lake manifest, lakefile or toolchain) without being listed here. `infra/move/restack.py` runs `--regen` on every
 restacked branch. Not listed, since another check owns them: a `lean-audit.json`'s records (the Lean check, `check.py --update`)
 and `tools/verity/lean/lean-deps.json`, a bundle per manifest that a cold run exports (preflight names its command).
 
@@ -174,7 +174,7 @@ WRITERS = (
 WRITER_DIRS = (CIRCUITS_TESTS, VLLM_PROGRAM_TESTS)
 SETUP = "tools/verity/lean/setup.sh"
 #: tracked files that record Lean sources' digests and are someone else's to keep: the Lean check's locks, and the moves' history
-EXEMPT = re.compile(r"(^|/)lean-audit\.json$|^tools/move/")
+EXEMPT = re.compile(r"(^|/)lean-audit\.json$|^infra/move/")
 
 
 def ignored(root: Path, paths: list[str]) -> set[str]:

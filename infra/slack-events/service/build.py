@@ -13,7 +13,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-SOURCES = {"research_slack.py": "tools/research/src/research/slack.py",
+SOURCES = {"research_slack.py": "infra/research/src/research/slack.py",
            "registry.json": ".agents/skills/using-slack/registry.json"}
 
 

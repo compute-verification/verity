@@ -10,10 +10,10 @@ and loop to its code.
 
 | What | Code |
 |---|---|
-| Node provisioning: create, set up, stop and tear down a Nebius VM | `tools/research/src/research/pods/nebius/` (`launch.sh`, `vm_setup.sh`, `vm_stop.sh`, `teardown.sh`) |
-| What is installed on each node, from a pushed commit (`research deploy install`) | `tools/research/src/research/pods/nebius/deploy.toml` |
-| A node's systemd units (GPU adoption, custody, keepers, the IPv4-options drop, MPTCP off) | `tools/research/src/research/pods/nebius/units/` and the `vy-*.service` files beside `deploy.toml` |
-| The fleet's 5-minute usage samples and the compute panels | `tools/research/src/research/pods/nebius/fleet.py` |
+| Node provisioning: create, set up, stop and tear down a Nebius VM | `infra/research/src/research/pods/nebius/` (`launch.sh`, `vm_setup.sh`, `vm_stop.sh`, `teardown.sh`) |
+| What is installed on each node, from a pushed commit (`research deploy install`) | `infra/research/src/research/pods/nebius/deploy.toml` |
+| A node's systemd units (GPU adoption, custody, keepers, the IPv4-options drop, MPTCP off) | `infra/research/src/research/pods/nebius/units/` and the `vy-*.service` files beside `deploy.toml` |
+| The fleet's 5-minute usage samples and the compute panels | `infra/research/src/research/pods/nebius/fleet.py` |
 | The node list each placer reads | the notes' `machines.d`, one file per machine (`research pods register`) |
 | Policy, planner and allocation ledger for the shared nodes (`cluster`, stdlib only) | `infra/cluster/` |
 | GPU-hours held, busy and useful per node and hour (`cluster usage`, which `research usage` runs) | `infra/cluster/src/cluster/usage.py` |
@@ -29,12 +29,12 @@ research deploy install NODE --by WHO    install them from a pushed commit; a dr
 research keeper status --on NODE         a node's standing targets (`set` and `stop` change them)
 ~~~
 
-`ops/verity_ops/deploy.py` reads the manifest `tools/research/src/research/pods/nebius/deploy.toml`, `keeper.py` sets
+`ops/verity_ops/deploy.py` reads the manifest `infra/research/src/research/pods/nebius/deploy.toml`, `keeper.py` sets
 the targets a node's keeper fills, and `agent_watch.py` is the control pod's agent watch (below). The `tests/` beside
 them hold the control pod's tests too.
 
 `infra/nebius` holds two units, `nebius/verity-console.service` and `nebius/verity-console.timer`: every five minutes
-node 1 runs the console's `node1` group (`tools/research/console/`). The manifest installs both.
+node 1 runs the console's `node1` group (`infra/research/console/`). The manifest installs both.
 
 ## The control pod
 
@@ -62,5 +62,5 @@ node 1 runs the console's `node1` group (`tools/research/console/`). The manifes
 |---|---|
 | Launching, handing over and archiving the coordinators | `infra/cursor/launch_coordinator.py`, `infra/cursor/README.md` |
 | The Slack events service, which routes people's posts to lanes | `infra/slack-events/` |
-| The agent VM's secret guard and shell hook, and the reader that lists an env file's variable names and no value (`envnames.py`) | `tools/agent-guard/` |
-| The run recorder and the run-store client (`research`) | `tools/research/`, the store's contract in `tools/research/src/research/store/README.md` |
+| The agent VM's secret guard and shell hook, and the reader that lists an env file's variable names and no value (`envnames.py`) | `infra/agent-guard/` |
+| The run recorder and the run-store client (`research`) | `infra/research/`, the store's contract in `infra/research/src/research/store/README.md` |

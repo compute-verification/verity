@@ -31,7 +31,7 @@ mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$KEPT"
 export PY=$VENV/bin/python PY312=$VENV/bin/python HF_HOME HF_HUB_OFFLINE=1
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src VERITY_WORKLOADS=$TREE/demos/vllm/workloads
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/infra/research/src VERITY_WORKLOADS=$TREE/demos/vllm/workloads
 export GPU_LEASE=${GPU_LEASE:-gpu-lease} GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-llama1b-commit}
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 if grep -q staged_sources "$TREE/adapters/vllm/verity_vllm/commit/committer/native_jit.py"; then

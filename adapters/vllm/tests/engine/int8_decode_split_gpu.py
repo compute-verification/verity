@@ -13,7 +13,7 @@ A decode step's time is the profiled generation of `--max-tokens` tokens less th
 time is also taken unprofiled.  Writes
 `<out>/int8_decode_split.<role>.json`; `--compare A.json B.json` prints the two runs' greedy-token agreement and splits.
 
-    cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
+    cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../infra/research/src
     $PY tests/engine/int8_decode_split_gpu.py --role LLAMA31_8B_INT8_V2 --workload workloads/ROW.json --out DIR
     $PY tests/engine/int8_decode_split_gpu.py --compare DIR/int8_decode_split.LLAMA31_8B_INT8.json DIR/int8_decode_split.LLAMA31_8B_INT8_V2.json
 """

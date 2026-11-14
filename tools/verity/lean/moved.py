@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Where a path of an earlier layout is now, and where a path was, by the layout moves this tree records.
 
-`tools/research/src/research/store/moves.json` lists each layout move's renamed paths, oldest first, and a move's generated
-commit appends its own entry. So it says which moves have happened in this tree, where a map under `tools/move/` is on
+`infra/research/src/research/store/moves.json` lists each layout move's renamed paths, oldest first, and a move's generated
+commit appends its own entry. So it says which moves have happened in this tree, where a map under `infra/move/` is on
 `main` before its move is, and it holds every move, where a map holds one. Standard library only, and syntax Python 3.10
 parses: `setup.sh` runs it with the machine's own `python3`.
 
@@ -28,7 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 #: research's record of the layout moves: `{"moves": [{"paths": {old: new}}, ...]}`, a directory's entry ending in `/`
-MOVES = "tools/research/src/research/store/moves.json"
+MOVES = "infra/research/src/research/store/moves.json"
 LAKEFILES = ("lakefile.toml", "lakefile.lean")
 
 

@@ -30,4 +30,4 @@ inputs = ["benchmarks/census", "benchmarks/numerical/bench-instances", "verity/c
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_instances_hw.py"]
-paths = ["*/pyproject.toml", "tools/research/src/research"]
+paths = ["*/pyproject.toml", "infra/research/src/research"]

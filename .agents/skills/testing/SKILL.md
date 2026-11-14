@@ -134,7 +134,7 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 
 - **Deterministic:** seeded randomness, no ordering dependence, no network unless an opt-in variable asks, and no
   wall-clock time (AGENTS.md "Tests"): wait on the event (a child's exit, a line of its output, a FIFO the test holds
-  open: `tools/research/tests/waits.py`), and inject the clock the code measures with (`monkeypatch.setattr(mod,
+  open: `infra/research/tests/waits.py`), and inject the clock the code measures with (`monkeypatch.setattr(mod,
   "clock", ...)`). No result may depend on load, a shared machine or what holds it (GPU leases, check slots, pods), ports
   and sockets, a race between processes, or an outside service. `suites.py` reports a test that passed and failed under
   one key as `nondeterministic`: it is deleted, not fixed or rerun. On a CPU with AMX (a cloud VM), oneDNN's AMX kernel

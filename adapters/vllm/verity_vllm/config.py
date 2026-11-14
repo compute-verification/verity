@@ -82,7 +82,7 @@ def run_store(module: str, entry: str) -> ModuleType:
         if not f"{module}.".startswith(f"{e.name}."):
             raise
         raise UsageError(f"{entry} is refused: {module} is not on this tree. It needs the run store (`research`), the tool that "
-                         "records the source identity and runs a row's stages as Attempts: put tools/research/src on PYTHONPATH "
+                         "records the source identity and runs a row's stages as Attempts: put infra/research/src on PYTHONPATH "
                          "(verity-vllm row exports it)") from e
 
 
@@ -369,7 +369,7 @@ def _fetch(paths: list[Path]) -> None:
     for repo, ps in by_repo.items():
         rels = [os.path.relpath(p.resolve(), repo) for p in ps]
         env = settings.environ()
-        env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(repo / "tools" / "research" / "src"), env.get("PYTHONPATH")]))
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(repo / "infra" / "research" / "src"), env.get("PYTHONPATH")]))
         # absolute: fetch-fixtures reads a relative PATH from its working directory, not from --repo
         r = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(repo), "--json",
                             *(str(p.resolve()) for p in ps)], capture_output=True, text=True, env=env)

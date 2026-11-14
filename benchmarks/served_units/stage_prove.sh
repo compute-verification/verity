@@ -51,7 +51,7 @@ fi
 ngroups=1
 if [ "$DEV" = gpu ] && has prove; then
   CARDS=${CARDS:?the cards, comma-separated indices}; SM=${SM:?the cards compute capability}
-  command -v gpu-lease > /dev/null || { ln -s "$PWD/tools/research/src/research/pods/sh/gpu_lease.sh" "$S/gpu-lease"; export PATH=$S:$PATH; }
+  command -v gpu-lease > /dev/null || { ln -s "$PWD/infra/research/src/research/pods/sh/gpu_lease.sh" "$S/gpu-lease"; export PATH=$S:$PATH; }
   echo "$CARDS" > "$S/cards"; export GPU_LEASE_ALLOWED_FILE=$S/cards
   st=$(gpu-lease status 2>&1); echo "$st" > "$OUT/lease-at-start.txt"
   apps=$(nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name --format=csv,noheader 2>&1); echo "$apps" > "$OUT/cards-at-start.txt"
