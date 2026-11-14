@@ -79,8 +79,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   member's files are read, sampled or not (`membersFiles`): its statement must read as a sampled member's does
   (`Member.statement`), on its own lookup tables, the blobs' pinned tables its own circuit looks up (`ownTables`), each
   of which the blobs must hold (`tablesMatch`, `NO_TABLES`): the members of a window may look up different tables, and
-  a member's inputs hold no table its circuit does not look up (`Member.statement_tables`). Its files pass what a
-  session's verdict checks of the files alone (`StepAt.filesHeld`: the
+  a member's inputs hold no table its circuit does not look up (`Properties.Spot.TablesRegistered`). Its files pass
+  what a session's verdict checks of the files alone (`StepAt.filesHeld`: the
   scope, the files' ports and roots, the form the sampled audit's knowledge soundness covers without a session's
   sample, `Flock.KsScope.filesOf`, and the population check), so a member the sample missed is refused where its
   session's verdict would have refused its files (`membersRun_files`). Then each
@@ -1220,76 +1220,6 @@ def Member.statement (m : Member) (slice : Json) (bs : Core.Blobs) : V StepAt :=
   ownTables m.own bs >>= fun tables =>
   statementOf m.own (m.population slice) tables bs >>= fun a =>
   m.blockHeld (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.tables) >>= fun _ => pure a
-
-/-- What `tablesMatch` accepts: the tables handed are, by name and in order, the ones wanted. -/
-theorem tablesMatch_ok {tables : List (String × ByteArray)} {want : List String}
-    (h : tablesMatch tables want = .ok ()) : tables.map (·.1) = want := by
-  unfold tablesMatch at h
-  try dsimp only at h
-  split at h
-  · cases h
-  · rename_i hne
-    simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hne
-    exact hne
-
-/-- What `ownTables` returns: the circuit file is among the blobs, and the tables are the blobs' pinned tables among
-the names it looks up. -/
-theorem ownTables_ok {p : Own} {bs : Core.Blobs} {tables : List (String × ByteArray)}
-    (h : ownTables p bs = .ok tables) :
-    ∃ circuitB names, bs.get p.circuit "circuit" = .ok circuitB ∧ lookupsOf circuitB = .ok names ∧
-      tables = tablesAmong names bs := by
-  unfold ownTables at h
-  obtain ⟨circuitB, hc, h⟩ := Flock.HmNets.bind_ok h
-  obtain ⟨names, hl, h⟩ := Flock.HmNets.bind_ok h
-  have ht : tablesAmong names bs = tables := Except.ok.inj h
-  exact ⟨circuitB, names, hc, hl, ht.symm⟩
-
-/-- **What a statement holds of the tables it is handed**: where `statementOf` returns a statement, the circuit file
-is among the blobs, the tables handed are, by name, exactly the ones it looks up, and the statement's inputs hold
-those tables and no other. -/
-theorem statementOf_tables {p : Own} {population : ByteArray → V Unit} {tables : List (String × ByteArray)}
-    {bs : Core.Blobs} {a : StepAt} (h : statementOf p population tables bs = .ok a) :
-    ∃ circuitB names, bs.get p.circuit "circuit" = .ok circuitB ∧ lookupsOf circuitB = .ok names ∧
-      tables.map (·.1) = names ∧ a.I.tables = tables := by
-  unfold statementOf at h
-  obtain ⟨circuitB, hc, h⟩ := Flock.HmNets.bind_ok h
-  obtain ⟨names, hl, h⟩ := Flock.HmNets.bind_ok h
-  obtain ⟨⟨⟩, hm, h⟩ := Flock.HmNets.bind_ok h
-  split at h
-  · cases h
-  · rename_i tags0 _
-    split at h
-    · cases h
-    · split at h
-      · cases h
-      · obtain ⟨pubB, _, h⟩ := Flock.HmNets.bind_ok h
-        split at h
-        · cases h
-        · obtain ⟨rd, _, h⟩ := Flock.HmNets.bind_ok h
-          have ha : StepAt.ofOwn p tags0 circuitB pubB tables rd (population pubB) = a := Except.ok.inj h
-          subst ha
-          exact ⟨circuitB, names, hc, hl, tablesMatch_ok hm, rfl⟩
-
-/-- **A member's statement holds its own circuit's lookup tables, and only those**: where a member's statement reads,
-its circuit file is among the blobs, and the lookup tables its inputs hold are the blobs' pinned tables among the
-names its circuit looks up (`tablesAmong`), every one of those names, whatever other pinned table the blobs hold. -/
-theorem Member.statement_tables {m : Member} {slice : Json} {bs : Core.Blobs} {a : StepAt}
-    (h : m.statement slice bs = .ok a) :
-    ∃ circuitB names, bs.get m.own.circuit "circuit" = .ok circuitB ∧ lookupsOf circuitB = .ok names ∧
-      a.I.tables = tablesAmong names bs ∧ a.I.tables.map (·.1) = names := by
-  unfold Member.statement at h
-  obtain ⟨tables, ht, h⟩ := Flock.HmNets.bind_ok h
-  obtain ⟨a', hs, h⟩ := Flock.HmNets.bind_ok h
-  obtain ⟨⟨⟩, _, h⟩ := Flock.HmNets.bind_ok h
-  have ha : a' = a := Except.ok.inj h
-  subst ha
-  obtain ⟨circuitB, names, hc, hl, hta⟩ := ownTables_ok ht
-  obtain ⟨circuitB', names', hc', hl', hn, hI⟩ := statementOf_tables hs
-  have hcc : circuitB' = circuitB := Except.ok.inj (hc'.symm.trans hc)
-  subst hcc
-  have hnn : names' = names := Except.ok.inj (hl'.symm.trans hl)
-  subst hnn
-  exact ⟨circuitB', names', hc, hl, hI.trans hta, (congrArg (List.map (·.1)) hI).trans hn⟩
 
 /-- **A statement's files held to what its sessions' verdicts check of the files alone**, with no session: the scope
 (`scope`), the files' ports and roots (`ksFiles`), the form the sampled audit's knowledge soundness covers, without a
