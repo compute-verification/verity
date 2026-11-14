@@ -909,6 +909,13 @@
    "due": "2026-11-30"
   }
  },
+ "choosing": {
+  "FlockSoundness.Rows.ofNet": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  }
+ },
  "trust": {
   "base": {
    "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",

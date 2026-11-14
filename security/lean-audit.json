@@ -3352,6 +3352,668 @@
    "due": "2026-11-17"
   }
  },
+ "choosing": {
+  "Accounting.ReadUnit.Reads.finder": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Accounting.Remote.Draw.Receipts.finder": {
+   "owner": "@memory-accounting",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Accounting.TS.HashedOpenings.finder": {
+   "owner": "@compute-accounting",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.Bridge.CustodyZkP.wrA": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.Deploy.k": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-18"
+  },
+  "Claims.Flock.Numbers.weightOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.levelZero": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.plainThetaD": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.zkLevelZero": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.zkThetaD": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.γ": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.Flock.κ": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.GS.novelInvEquiv": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.GS.padInvEquiv": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.GS.plainAgreeR": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.GS.zkAgreeR": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.IRS.threshold": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.RecGeneric.Comp.ofRec": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.RecGeneric.Compiled.toComp": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.Recursion.Nums.k": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-18"
+  },
+  "Claims.Recursion.Nums.γ": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.Recursion.Nums.κ": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.Sampling.Deploy.innerK": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-18"
+  },
+  "Claims.Sampling.Reference.sessErrAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Sampling.κF": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.SamplingGeneric.Arg.ofFlock": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-18"
+  },
+  "Claims.SamplingGeneric.ofDeployAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Witness.Flock.ksD": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.Layout.flatten._f": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.Masked.cellAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.Masked.dummy": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.Masked.hiEmbOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.Masked.zkTab": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.RefSession.kP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.RefSession.kT": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.progOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.stopIdx": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ecrBound": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Flock.Bridge.witDep": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockDeploy.KS.CpDep": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockDeploy.readRep": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockLevel3.equivAdj": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockLevel3.equivPhi": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockLevel3.instFieldGF128": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockLevel3.instFieldGF256": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.mcaA": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.padMcaA": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.padQueryError": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.padRadius": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.queryError": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.radius": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Audit.Partition.IsRowsUnit.decode": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Composed.DrawSetupZJ.tabAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Composed.tableShJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Composed.tableZJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Composed.treeEquiv": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.DecodeZL.framesOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Exec.capOfRoot": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Exec.opOfVL": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Exec.plurSL": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.HiddenExec.TableHP.acc": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.HiddenExec.instOutRowOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.HiddenExec.outRowOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.HiddenExec.outRowOfP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.HiddenExec.tableAtH": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Integrate.tableAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Layout.gateAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Layout.outBitOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.PlainHJ.tablePHJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.PlainJ.tablePJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.ZkOuterR.Typable.S₀": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.ZkOuterR.Typable.d₀": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.ZkOuterR.Typable.y₀": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.forkPick": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.freshName": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.zsOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Tables.coinJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Tables.roundJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Tables.simEndJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkBind.tableSh": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ.tabAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.DrawSetupZHJP.tabAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.DrawSetupZKH.tabAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.ZkTab.table": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableAtZKH": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableShH": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableShHJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableShHJP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableZHJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableZHJP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.DrawSetupZK.tabAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.XvalZC": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.ksAvgStrictZ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.ksStrictZ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.opOfVZC": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.plurSZ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.rateZ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.rowsOutZC": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.tableAtZK": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkReg.outRegZC": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkSession.coords": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkSession.εInner": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Game.Sim.deadOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.LinkFinder.outOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.LinkFinder.pull": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Registered.ReadsX.offAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Rows.ofNet": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.StrictCR.collOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.xP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "RecDeploy.coinOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "RecDeploy.coverW": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "RecDeploy.pick": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "SamplingDeploy.deployOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.FirstHit.outOfAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Game.avg": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Game.pickIn": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Game.revealMode": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Rec.slotP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Instance.extractOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Instance.sampledBound": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Live.delta": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Live.drawMiss": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Live.hidingTerm": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Live.sessionDelta": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Live.twoRun": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.afterAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.bindReveal": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.coinBytesEquiv": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.fileWith": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.labelAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.openingOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.pinnedFile": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  }
+ },
  "trust": {
   "base": {
    "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
@@ -3421,18 +4083,22 @@
    "Accounting.Assumptions.SketchRank",
    "Accounting.Assumptions.SquaringFloor"
   ],
-  "Flock.SecurityProofs.RecursiveKSDeployed": ["Claims.Flock.ListWithin", "Claims.Hm96Hiding", "RecDeploy.DenseAt"],
+  "Flock.SecurityProofs.RecursiveKSDeployed": ["Claims.Flock.ListWithin", "Claims.Hm96Hiding", "RecDeploy.DenseAt", "choice:Claims.Finder.Pr"],
   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": [
    "Claims.ZKMal.RefSession.SwCausalOn",
    "Flock.Guarantees.ReleaseReadsNoStop",
    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
-   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
+   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized",
+   "choice:Claims.Finder.Pr"
   ],
+  "Flock.SecurityProofs.SampledKSLiveV3": ["choice:FlockSoundness.Assumptions.SHA512CRExpected", "choice:FlockSoundness.Assumptions.SHA512CRStrict"],
+  "Flock.SecurityProofs.SampledKSLiveV5": ["choice:FlockSoundness.Assumptions.SHA512CRExpected", "choice:FlockSoundness.Assumptions.SHA512CRStrict"],
   "Flock.SecurityProofs.SessionLoopZKDeployed": [
    "Claims.ZKMal.RefSession.SwCausalOn",
    "Claims.ZKServer.LeanRelease.FillRoundEq",
    "Claims.ZKServer.LeanRelease.LiveRoundEq",
-   "Flock.Guarantees.LoopInnerRound0"
+   "Flock.Guarantees.LoopInnerRound0",
+   "choice:Claims.Finder.Pr"
   ],
   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.CertifierRegisters", "NetTiming.ScopeAcc"]
  },
