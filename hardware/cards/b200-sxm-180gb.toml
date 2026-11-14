@@ -1,8 +1,8 @@
 # The NVIDIA B200 SXM 180 GB (HGX B200, 1000 W): the one source of its numbers (verity/hardware/README.md).
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU exceeds it, whatever firmware it
 # runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
-# "placeholder" (neither, open). Per-SM rates are a SM-clock's. No Lean card table is held to this file yet: the B200's
-# numbers in Lean are security/Definitions/Accounting/Sheets/B200.lean's. The host the card sits in is its own card.
+# "placeholder" (neither, open). Per-SM rates are a SM-clock's. The B200's numbers in Lean are
+# security/Definitions/Accounting/Sheets/B200.lean's, held to this file. The host the card sits in is its own card.
 
 kind = "gpu"
 sku = "b200-sxm-180gb"
@@ -35,7 +35,7 @@ l2 = { value = 132120576, unit = "B", mark = "placeholder", source = "126 MiB: B
 dram = { value = 193273528320, unit = "B", mark = "ceiling", source = "Lenovo HGX B200 180GB 1000W GPU Product Guide Table 2: 'GPU Memory 180 GB HBM3e', taken as 180 GiB, above the 183,359 MiB the driver reports (art:a597e0beaf00)" }
 dram_installed = { value = 206158430208, unit = "B", mark = "ceiling", source = "192 GiB, the memory on the board, eight HBM3e stacks (memory.bus) of 24 GB, of which store.dram is what a program gets: NVIDIA Blackwell Architecture Technical Brief, Table 3, a GPU of the HGX B200, 'Up to 192 GB HBM3e' (read in V1.1; memory.bus cites V2.1's table for the same line), taken as 192 GiB; the brief counts no stacks, and no document read says what the 180 GB board holds back" }
 
-# The resources' rates, each a SM-clock (a Lean table's rho would be SMs x this x clock.sm, the tensor's x clock.tensor).
+# The resources' rates, each a SM-clock (the Lean's rho is SMs x this x clock.sm, the tensor's x clock.tensor).
 [rate]
 tensor = { value = 8192, unit = "s8 MAC/SM-clock", mark = "measurement", source = "tcgen05.mma kind::i8 measured at 8195 MACs a SM-clock (benchmarks/pouw/sass_census/unpriced_fp4.cu, art:bf3d67eee74a) and at 8193 in the DC-100 census, UTCIMMA M128 N256 every 511.9 SMSP-cycles (art:175d28515b3b); both rows carry the probe's throttled tag, and the card holds the whole 512 cycles, 8192; the data sheets' 4.5 dense INT8 petaOPS (Lenovo Product Guide Table 2; Technical Brief V2.1 Table 3) over 2 x 148 SMs is 8192 at 1854 MHz, but no document states the clock it is quoted at (Accounting.TS.Sheets.B200's impliedMHz), so the per-clock rate is measured only" }
 issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.9.1 (CC 10.x), as section 18.8.1: '4 warp schedulers ... each scheduler issues one instruction for one of its assigned warps'; a uniform instruction takes the slot too (Accounting.TS.Sheets.B200, A2u)" }

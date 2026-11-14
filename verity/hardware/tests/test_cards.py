@@ -3,9 +3,11 @@ others."""
 
 from __future__ import annotations
 
+import ast
 import copy
 import importlib.util
 import math
+import operator
 import re
 import shutil
 import sys
@@ -16,7 +18,7 @@ import pytest
 
 from verity.errors import InvalidArtifact
 from verity import device as S
-from verity.device import CARD_KINDS, MARKS, load_card, skus
+from verity.device import CARD_KINDS, MARKS, load_card, number, skus
 
 
 def entries(table: dict, at: str = "") -> dict[str, dict]:
@@ -139,7 +141,7 @@ def test_the_extra_registers_cover_the_resident_warps(sku: str) -> None:
 def test_the_registers_a_run_found_on_the_rtx_pro_6000() -> None:
     """The RTX PRO 6000's `store.reg_extra` is its 80 uniform registers a warp, its predicates and its uniform
     predicates and nothing more, pinned with the on-chip bytes its stores then give a sheet (the registers, shared
-    memory and L2) so that a change to either is deliberate: a Lean table and every sheet of the card move with it."""
+    memory and L2) so that a change to either is deliberate: every sheet of the card moves with it."""
     card = load_card("rtx-pro-6000-server")
     assert value(card, "store.reg_extra") == 80 * 48 + 336 + 11 == 4187
     sms = value(card, "sm.count")
@@ -358,6 +360,40 @@ def test_the_rates_readers_quote() -> None:
                           (lambda: S.rate(h200, fmt="fp8"), "weighs tensor MACs only")):
         with pytest.raises((KeyError, ValueError), match=refusal):
             call()
+
+
+SHEET = Path(__file__).resolve().parents[3] / "security/Definitions/Accounting/Sheets/B200.lean"
+OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
+
+
+def evaluate(expr: str) -> Fraction:
+    """A Lean arithmetic literal (numerals, ``+ - * / ^``, parentheses) as an exact rational."""
+    def go(node: ast.AST) -> Fraction:
+        if isinstance(node, ast.Constant) and isinstance(node.value, int):
+            return Fraction(node.value)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow):
+            base, exp = go(node.left), go(node.right)
+            assert exp.denominator == 1, f"{expr}: a non-integer exponent"
+            return base ** int(exp)
+        if isinstance(node, ast.BinOp) and type(node.op) in OPS:
+            return OPS[type(node.op)](go(node.left), go(node.right))
+        raise AssertionError(f"{expr}: not a literal this test evaluates ({ast.dump(node)})")
+    return go(ast.parse(expr.replace("^", "**"), mode="eval").body)
+
+
+def test_the_b200_sheet_agrees_with_its_card_file() -> None:
+    """``Accounting.TS.Sheets.B200`` states the B200 card's clock, SMs and pipe widths, and each format's peak as
+    ``rate.tensor`` over that format's weight. The sheet's implied and FP64 clocks, its FP6 peak and its uniform pipe
+    have no key in the card file."""
+    card = load_card("b200-sxm-180gb")
+    sheet = dict(re.findall(r"^def (\w+) : ℝ := (.+)$", SHEET.read_text(encoding="utf-8"), re.M))
+    keys = {"fmaxMHz": ("clock", "sm"), "smCount": ("sm", "count"), "widthAlu": ("rate", "alu"),
+            "widthImad": ("rate", "imad"), "widthShfl": ("rate", "shfl")}
+    peaks = {"peakS8": "s8", "peakE4m3": "e4m3", "peakE5m2": "e5m2", "peakF16": "f16", "peakBf16": "bf16",
+             "peakTf32": "tf32", "peakFp4": "nvf4", "peakFp4_f8f6f4": "e2m1", "peakF64": "f64"}
+    want = {name: number(card[section][key]) for name, (section, key) in keys.items()}
+    want |= {name: number(card["rate"]["tensor"]) / number(card["weight"][fmt]) for name, fmt in peaks.items()}
+    assert {name: evaluate(sheet[name]) for name in want} == want
 
 
 def test_an_unknown_sku_names_the_cards() -> None:
