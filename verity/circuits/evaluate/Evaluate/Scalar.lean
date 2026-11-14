@@ -10,8 +10,8 @@ bit `0` or `1`. Each function takes its operands unmasked, as the Python does, a
 non-negative integer; `Int` holds the Python's signed integers, and Python's `&` of a negative integer and `2^k - 1` is
 `Int.emod` by `2^k`.
 
-Each definition's doc names the definition of `Security/Definitions/Core/Scalar.lean` it must equal, to be proved in
-`Security/Proofs` as the certifier's copies are; where Security defines none yet, the Python function is the definition.
+Each definition's doc names the definition of `security/Definitions/Core/Scalar.lean` it must equal, to be proved in
+`security/Proofs` as the certifier's copies are; where Security defines none yet, the Python function is the definition.
 -/
 
 @[expose] public section

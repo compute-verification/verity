@@ -6,7 +6,7 @@ public import Evaluate.Fp32
 # The word casts
 
 Executable transcriptions of the casts of `verity.ml.circuits.ops.prims` and of the functions of
-`verity.ml.circuits.silicon.cast` they evaluate, copies of `Security/Definitions/Core/Prims.lean` where it defines them.
+`verity.ml.circuits.silicon.cast` they evaluate, copies of `security/Definitions/Core/Prims.lean` where it defines them.
 Words as in `Evaluate.Scalar`: an E4M3 code is below `2^8` and an E2M1 code below `2^4`.
 
 `cast.f32_to_e4m3_sat_word` computes with exact rationals, every one of which is a dyadic `m · 2^e`, carried here as its

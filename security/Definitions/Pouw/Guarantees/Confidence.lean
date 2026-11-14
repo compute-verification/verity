@@ -18,7 +18,7 @@ The actual-circuit model's composition and fit.
 * `Fit`: when `μ` adds over the confidence set and some run of it implements `P`, `req_μ(P)` is at most the residual
   `min(cap, obs) − cert`, given that every run of the set uses at most `cap` and at most `obs`.
 
-The proofs are in `Security/Proofs/Accounting/Actual/Confidence.lean`.
+The proofs are in `security/Proofs/Accounting/Actual/Confidence.lean`.
 -/
 
 @[expose] public section

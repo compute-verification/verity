@@ -7,7 +7,7 @@ public import Definitions.Core.Prims
 
 Each theorem is one input of a cast of `verity.ml.circuits.ops.prims` and the word its Python returns, checked by the
 kernel against `Verity.Prims`, except the two exhaustive ones: `e4m3ToF32` on all 256 codes, and `bf16ToF32` on all 65536
-words. `verity/ml/circuits/ops/tests/test_lean_scalar_vectors.py` checks the same vectors against the Python, so a change on either
+words. `verity/circuits/ops/tests/test_lean_scalar_vectors.py` checks the same vectors against the Python, so a change on either
 side fails a build: the transcription cannot drift silently. Every operand is a word of its parameter's width.
 -/
 

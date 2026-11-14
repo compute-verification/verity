@@ -9,7 +9,7 @@ public import Definitions.Poub.RateAuditRemote
 
 The game is `RateAudit.lean`'s with interactive side sources (`Definitions/Poub/RateAuditInteractive.lean`), and
 the tiers, correct receipts and chained passes of `Definitions/Poub/RateAuditRemote.lean`; proofs are in
-`Security/Proofs/Poub/RateAudit/Conservation.lean` and `Chain.lean`. No named assumption: as for `RateAudit`, the
+`security/Proofs/Poub/RateAudit/Conservation.lean` and `Chain.lean`. No named assumption: as for `RateAudit`, the
 device's bounds define the class the guarantees quantify over, and deployment premises carry them to a deployed node
 (`bandwidth-s-chip` at every pass boundary, `bandwidth-side-cap` at the node's NIC, `rate-codec-work` for `c_enc`,
 `random-oracle` for the receipt and the chained seed, `fiat-shamir` for its derivation from the prover's root).
