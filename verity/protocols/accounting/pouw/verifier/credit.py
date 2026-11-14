@@ -151,7 +151,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   ``req``), when it registers one, is round 0's: its root is ``request_table`` and its domain binds the session alike.
   That the Commit's values are the model's computation is the Commit's sample's, not credit's.
 * **The window serves its period's fixed length** (`committed_length`, `_length`): correct
-  tokens served past the honest run's end of sequence are not useful work, so a row of record serves each request's
+  tokens served past the honest run's end of sequence are not useful work, so a workload of record serves each request's
   public max_tokens whatever it samples (ignore_eos, circuits' ``public-cap`` done source). The period's open commits
   them before any window (`LENGTH_FIELD`, ``{max_tokens, stop}``, stop `window.STOP_FIXED`), so they are the verifier's
   own; an open with none (``no-fixed-length``) or an EOS-keyed stop mode (``eos-keyed-row``) credits nothing. Every
@@ -1381,8 +1381,8 @@ def _proved(drawn: list[int], proofs: Any) -> tuple[str, str] | None:
     return None
 
 
-def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
-          ) -> tuple[list[int] | None, tuple[str, str] | None]:
+def drawn_twin(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
+               ) -> tuple[list[int] | None, tuple[str, str] | None]:
     """The units the sampling coin `coin` (its value, a SHA-512 digest in hex) samples from the window `layout` (`strata`)
     under `law` at the committed K `k`, ascending (`core_check.work_units` under the stream's digest `stream`, the
     registration `registration` and its `receipt`), and None; or None and the refusal (``layout``, ``draw``,
@@ -1396,6 +1396,19 @@ def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, 
     return _drawn(c, stream, registration, receipt, ss, k)
 
 
+def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
+          ) -> tuple[list[int] | None, tuple[str, str] | None]:
+    """The sampled units of record and None, or None and the refusal: the Lean `Credit.drawn`'s (`verifier.of_record` on
+    ``drawn``), with `drawn_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
+    got, why = drawn_twin(coin, stream, registration, receipt, layout, k)
+    said = V.of_record("drawn", {"coin": coin, "stream": stream, "registration": registration, "receipt": receipt,
+                                 "layout": layout, "k": k},
+                       {"refused": list(why)} if why is not None else {"drawn": got})
+    if "drawn" in said:
+        return said["drawn"], None
+    return None, tuple(said["refused"])
+
+
 def _outcome(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any, proofs: Any
             ) -> tuple[str, str] | None:
     """None when every unit the sampling coin samples from the window (`drawn`, never a list the prover hands in) has exactly
@@ -1403,7 +1416,7 @@ def _outcome(coin: Any, stream: Any, registration: Any, receipt: Any, layout: An
     other unit has one; else the refusal (``layout``, ``draw``, ``sampler``, ``outcome``, ``missing`` or ``failed``, and
     why): the whole window is refused, with no partial credit. `window`'s rule on the sampling coin it read, the units
     sampled under the served window's arguments."""
-    got, why = drawn(coin, stream, registration, receipt, layout, k)
+    got, why = drawn_twin(coin, stream, registration, receipt, layout, k)
     return why if got is None else _proved(got, proofs)
 
 
@@ -2784,7 +2797,7 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
     return (None, why) if got is None else (got[0], None)
 
 
-def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
+def period_twin(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `roots` are exactly the sessions the auditor's ledger `ledger` lists in period `name`'s close, by their
     open roots in its order (a served window's session, then its sample session's: `_period_of`), and that close is complete: every session
     between the period's open and its close, each opened and ended complete (`challenger.verify_periods`, under the
@@ -3000,7 +3013,7 @@ DRAW_UNIT = "the draw session of window"
 CALL_RANGE_CODE, REPEATED_CALL = "call-range", "repeated-call"
 
 
-def passes_distinct(passes: Any) -> tuple[str, str] | None:
+def passes_distinct_twin(passes: Any) -> tuple[str, str] | None:
     """Why the Pearl-C pass manifests `passes`, credited together, are refused, or None: every call index below
     `protocol.CALL_RANGE` (``call-range``), and no index held by two passes of one epoch, nor twice by one pass
     (``repeated-call``). The epoch is the manifest's salt, since -h3's row seed binds the salt and the index but no pass,
@@ -3040,8 +3053,8 @@ EARLIER_FORM = ("the lane's earlier credited Pearl-C epochs are not a list of [w
 SALT_ONLY, PASS_REFUSED, INDEX = "salt-only", "pass", "index"
 
 
-def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, passes: Any, earlier: Any,
-                          verify: Ch.Verify) -> tuple[dict | None, tuple[str, str] | None]:
+def pearl_c_period_credit_twin(key: Any, ledger: Any, pins: Any, main: Any, name: Any, passes: Any, earlier: Any,
+                               verify: Ch.Verify) -> tuple[dict | None, tuple[str, str] | None]:
     """Pearl-C period `name`'s credit and None, or None and the refusal (the Pearl-C period rule). A
     live Pearl-C pass earns only inside a Pearl-C period, and the period earns only when every clause holds, each
     refused with its own code:
@@ -3091,7 +3104,7 @@ def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any
         manifests.append(m)
         epochs.append((w, k, PS.epoch_open_root(w, k).hex()))
     roots = list(dict.fromkeys(r for _, _, r in epochs))
-    why = period(key, ledger, name, roots, verify)
+    why = period_twin(key, ledger, name, roots, verify)
     if why is not None:
         return None, why
     ck, audited = Ch.ChallengerKey.from_json(key), []
@@ -3138,10 +3151,31 @@ def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any
                                  "weights' root, its epochs numbered from 0")
         nxt[w] = k + 1
         out.append([w, k])
-    why = passes_distinct(manifests)
+    why = passes_distinct_twin(manifests)
     if why is not None:
         return None, why
     return {"epochs": out, "passes": manifests}, None
+
+
+
+def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
+    """The verdict of record on a credit period's presented roots: the Lean `Credit.periodRoots`'s, not yet written, so
+    this raises (`verifier.not_written`); `period_twin` is its Python twin."""
+    return V.not_written("period", "PouwCheck.Credit.periodRoots")
+
+
+def passes_distinct(passes: Any) -> tuple[str, str] | None:
+    """The verdict of record on passes credited together: the Lean `PouwPearlPlus.passesDistinct`'s (Pearl+'s run
+    verdict reads it), which no interface here reaches yet, so this raises (`verifier.not_written`);
+    `passes_distinct_twin` is its Python twin."""
+    return V.not_written("passes_distinct", "PouwPearlPlus.passesDistinct")
+
+
+def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, passes: Any, earlier: Any,
+                          verify: Ch.Verify) -> tuple[dict | None, tuple[str, str] | None]:
+    """A Pearl-C credit period's credit of record: the Lean `Credit.pearlCPeriodCredit`'s, not yet written, so this
+    raises (`verifier.not_written`); `pearl_c_period_credit_twin` is its Python twin."""
+    return V.not_written("pearl_c_period_credit", "PouwCheck.Credit.pearlCPeriodCredit")
 
 
 def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
@@ -3216,7 +3250,7 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
         return None, ("period", form)
     roots = [r for w in windows for r in (w["window"].get("root") if isinstance(w["window"], dict) else None,
                                           w["draw"].get("root") if isinstance(w["draw"], dict) else None)]
-    why = period(key, ledger, name, roots, verify)
+    why = period_twin(key, ledger, name, roots, verify)
     if why is not None:
         return None, why
     big_k, why = committed_k(ledger, name)
@@ -3615,7 +3649,8 @@ __all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "CO
            "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PASS_REFUSED", "PEARL_C_FORM", "PEARL_C_KEYS", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
            "SALT_ONLY", "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
-           "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "law", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
-           "merkle_depth", "partition_of", "passes_distinct", "pearl_c_period_credit", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
+           "credited_work", "domain_of", "draw_root", "drawn", "drawn_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "law", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
+           "merkle_depth", "partition_of", "passes_distinct", "passes_distinct_twin", "pearl_c_period_credit",
+           "pearl_c_period_credit_twin", "period", "period_twin", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
            "weights_root", "window"]

@@ -340,7 +340,7 @@ Inside a selected block, its proof block p is sampled with probability W_p/W_b.
 
 It needs a sampling-design object beside `draw.parse_design`'s and the Lean verifier's `Flock.Draw`. Its miss probability bound
 is `WorkSound`'s sampling term, a moment bound at rate ηq/W_reg a unit of cost, rather than `work_escape_le`. The
-integrity profile has no field for a cost-weighted moment bound; that field is sampled proofs', which produce the
+integrity profile has no field for a cost-weighted moment bound; that field is SPOT's, which produces the
 profile.
 
 ### Registration
