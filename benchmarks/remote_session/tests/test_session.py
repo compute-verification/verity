@@ -31,6 +31,7 @@ from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
 FIGURES = timing.RTX_PRO_6000_NODE
+BARE = dataclasses.replace(FIGURES, gpu_chip_bytes=0, host_chip_bytes=0, gpu_squarings_per_s={"p512": 0.0})
 
 
 VERIFIER, PROVER = 0, 1
@@ -154,7 +155,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, then=None,
         transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
-        binding=None, groups_per_coin: int = 1, **kv):
+        binding=None, groups_per_coin: int = 1, figures: timing.Figures = FIGURES, **kv):
     """The verifier's sessions and the prover's over one registration, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
     (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a sample; `then(v)` once
@@ -175,7 +176,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
 
     th = threading.Thread(target=prove, daemon=True)
     th.start()
-    v = verifier.Verifier(vconn, figures=FIGURES, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
+    v = verifier.Verifier(vconn, figures=figures, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           lifetime=lifetime, host_bytes=host_bytes, transcript=transcript,
                           challenger=challenger, appends=appends, binding=binding, groups_per_coin=groups_per_coin)
@@ -289,8 +290,8 @@ def test_a_sessions_lines_deduct_the_on_chip_bytes_and_rebuilds_of_the_node_its_
     squarings, where `timing`'s has 3,105,652,736 B and a squaring ceiling."""
     B, stated = rcodec.BLOCK_BYTES, ledger.Node.stated
 
-    def small(**kw) -> ledger.Node:
-        return dataclasses.replace(stated(**kw), chip_bytes=4 * B, rebuild_burst_bytes=4.0 * B,
+    def small(figures, **kw) -> ledger.Node:
+        return dataclasses.replace(stated(figures, **kw), chip_bytes=4 * B, rebuild_burst_bytes=4.0 * B,
                                    squarings_per_s={"p512": 0.0})
 
     monkeypatch.setattr(ledger.Node, "stated", small)
@@ -311,8 +312,8 @@ def test_a_sessions_record_and_timing_parts_state_the_tiers_of_the_node_its_ledg
     stated = ledger.Node.stated
     tiers = {"hbm": ledger.Tier(2, 8e12, 7e12, 4096), "dram": ledger.Tier(1, 4e12, 2e12, 8192)}
 
-    def other(**kw) -> ledger.Node:
-        return dataclasses.replace(stated(**kw), spec_bytes_per_s=2e13, read_bytes_per_s=1.6e13, tiers=tiers)
+    def other(figures, **kw) -> ledger.Node:
+        return dataclasses.replace(stated(figures, **kw), spec_bytes_per_s=2e13, read_bytes_per_s=1.6e13, tiers=tiers)
 
     monkeypatch.setattr(ledger.Node, "stated", other)
     block = rcodec.BLOCK_BYTES
@@ -650,8 +651,6 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
     Unlabelled, the whole registered store is filler and no weights are credited.  The node has no on-chip storage
     here, which would hold the whole store."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
-    monkeypatch.setattr(timing, "CHIP_BYTES", 0)
     seen = {}
     memory = verifier.memory
 
@@ -662,7 +661,7 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
     monkeypatch.setattr(verifier, "memory", keep)
     layout = [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
               {"kind": "kv", "tier": "hbm", "first": 8, "blocks": 8}]
-    (r,), (p,) = run("kv:2", samples=4096, kv_every=4, kv_pool=8, layout=layout)
+    (r,), (p,) = run("kv:2", samples=4096, kv_every=4, kv_pool=8, layout=layout, figures=BARE)
     assert r["accepted"] and p["accepted"] and r["appended"] > 0
     B, mem, pub = rcodec.BLOCK_BYTES, r["ledger"]["memory"], r["record"]["public"]
     assert mem["labels"] and not mem["kv_credited"] and mem["hbm_bytes"] == FIGURES.hbm_bytes == 8 * 96 * 2 ** 30
@@ -716,8 +715,6 @@ def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(mon
     verdict; each share is of HBM plus DRAM, the residual what the total leaves, and the line is its worst window's.
     The node has no on-chip storage here."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
-    monkeypatch.setattr(timing, "CHIP_BYTES", 0)
     seen, memory = {}, verifier.memory
 
     def keep(*a, **kw):
@@ -729,7 +726,7 @@ def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(mon
               {"kind": "filler", "tier": "hbm", "first": 8, "blocks": 4},
               {"kind": "filler", "tier": "host", "first": 12, "blocks": 4}]
     host = 1843 * 10 ** 9
-    (r,), (p,) = run("honest", samples=4096, layout=layout, host_bytes=host)
+    (r,), (p,) = run("honest", samples=4096, layout=layout, host_bytes=host, figures=BARE)
     assert r["accepted"] and p["accepted"]
     B, node, whole = rcodec.BLOCK_BYTES, r["ledger"]["memory"]["node"], FIGURES.hbm_bytes + host
     assert node["node_bytes"] == whole and node["host_bytes"] == host and node["lost_bytes"] == 0
@@ -761,7 +758,6 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     same line in both forms (`recorded_memory`), a record written before the worst-pass form charged the chip
     included."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
     seen, memory = {}, verifier.memory
 
     def keep(*a, **kw):
@@ -771,7 +767,8 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     monkeypatch.setattr(verifier, "memory", keep)
     layout = [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
               {"kind": "filler", "tier": "hbm", "first": 8, "blocks": 8}]
-    (r,), (p,) = run("honest", samples=200, layout=layout)
+    (r,), (p,) = run("honest", samples=200, layout=layout,
+                     figures=dataclasses.replace(FIGURES, gpu_squarings_per_s={"p512": 0.0}))
     assert r["accepted"] and p["accepted"]
     (record, plans, regions), kw = seen["args"]
     assert kw["chip_bytes"] == timing.CHIP_BYTES
