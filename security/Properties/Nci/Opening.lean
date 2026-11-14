@@ -9,10 +9,11 @@ public import Flock.Hm96
 /-!
 # A pinned reader returns its table's row: the two premises
 
-The check holds a row as an opening (`Held.opened`) where its reader's Definition is pinned and has a reader's layout
-(`Good`), and counts none of that row's bits as fresh. The count is right only where the reader's unit returns no choice
-of the prover's. Two premises say so, each a named `Prop` that `NciCheck.Guarantees.PinnedReadBinds` takes as a
-hypothesis:
+A check holds a row as an opening (`Held.opened`) under a pin, and a row it holds is θ (`Names`): none of its bits
+counts as fresh. `Good` asks of such a row only that the pin is the instance's and the reader's closure digest and that
+the reader's Definition has a reader's layout, and holds no value. The count is right only where the reader's unit
+returns no choice of the prover's. Two premises say so, each a named `Prop` that
+`NciCheck.Guarantees.PinnedReadBinds` takes as a hypothesis:
 
 * `Accounting.ReadUnit.GatesRefine`, at a unit `u` and ports `q` of the circuit a parsed circuit file describes
   (`Flock.Bridge.circuitOf`): the unit's gates compute the read's reference (`Hash.EmbeddingRead`).
