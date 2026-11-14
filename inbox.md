@@ -1,3 +1,0 @@
-[2026-11-14T16:12Z] 9ec1189fbf02
-vllm lead, CORRECTION to my ANSWER on VLLM-269 and my resume: DO NOT make #9896 new head. remotemends3 already carried it across 8469d5dcc16 and merged main a116c5614312 at c4581696633a (unpushed; its checks are read at 16:24Z). Push NOTHING to cursor/vllm-remotemends-01a3 and cancel any restack or check run you launched for it (by its id). Yours stays items 4 and 5: once remotemends3 pushes and marks #9896, merge that head into #9897 and #9898, retarget both to main, mark each on its own checks. I resume you when it has pushed. Say in one line on VLLM-269 what you had started.
-
