@@ -7,7 +7,7 @@ public import Definitions.Accounting.RateAuditSketch
 
 The model `Accounting.Remote.Held.Assumptions.SketchBound` is derived on (`Accounting.Guarantees.Remote`'s
 `SketchBoundRun`). A PoUB session over a registered store of `N` blocks runs `P` credited passes. Pass `j`'s
-seed (`seed_i` in `remote_bandwidth.receipts`) fixes its key: the `k_s × 4096` signs `S_i` it derives and the receipt
+seed (`seed_i` in `poub.receipts`) fixes its key: the `k_s × 4096` signs `S_i` it derives and the receipt
 hash at that seed, `y = SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be(j) ‖ σ)` with `σ = S_i·e_j`, an `h`-bit
 tag of the block's index and its sketch words (`RateSketch.sketch`). There is no certified stream (`ρ = 0`). The prover
 may grind a pass's seed: pass `j` has `G j` candidate seeds, each with its own key, and the receipts it sends are one
@@ -40,7 +40,7 @@ abbrev Key (N m h ks : ℕ) : Type := SketchSigns ks m × Oracle N 0 h Sector (F
 abbrev Keys (P N m h ks : ℕ) (G : Fin P → ℕ) : Type := (j : Fin P) → Fin (G j) → Key N m h ks
 
 /-- The model's coins: the prover's own, the registered store, and the keys. Not the live coins (`Verity.Coins`): they
-hold no index draw, and the prover's own coins are among them. -/
+hold no index sample, and the prover's own coins are among them. -/
 abbrev ModelCoins (β : Type) (P N m h ks : ℕ) (G : Fin P → ℕ) : Type := β × Data N m 0 Sector × Keys P N m h ks G
 
 /-- A session's outcome: the prover's own coins, the registered store, and `Hs`, what SHA-512's outputs are read

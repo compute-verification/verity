@@ -75,7 +75,6 @@ untraced = [
 # test_pearl_c_vllm holds a Pearl+ answer's named assumption to its def in Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean.
 inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
-          "verity/claims/__init__.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/accounting/pouw/verifier", "verity/protocols/proofs/spot",
           "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/certifier/prover",
           "verity/protocols/accounting/certifier",

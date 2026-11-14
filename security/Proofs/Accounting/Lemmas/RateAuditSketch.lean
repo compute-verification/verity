@@ -8,7 +8,7 @@ public import Definitions.Accounting.Guarantees.RateAuditSketch
 Statements beside `Definitions.Accounting.Guarantees.RateAuditSketch`'s guarantees that are none: devices accepted on
 every coin. The honest one shows `RateAuditSketch`'s event is not vacuous, and is no witness of it (a witness constructs
 its instance, and it quantifies over every digest and size). The table is a counterexample outside the verbatim class,
-which the claims registry cites for `rate-sketch-verbatim`, not a property of a function. Each is a `def G : Prop` under
+which the deployment premise `rate-sketch-verbatim` cites, not a property of a function. Each is a `def G : Prop` under
 the guarantees' namespace, proved by the `SecurityProofs` theorem of the same name, and audited with the proofs: no
 record pins it.
 

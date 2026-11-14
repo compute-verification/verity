@@ -105,7 +105,7 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remot
         multiple_bound(0.4, s, (1 - s) * u), rel=1e-12)
     ctx = tiers_context()
     s, u = ctx.fleet.eps_unreg, envelopes.regime(REG, "remote").uncertified(ctx)
-    # the inference blocks hold a little weight too, under their caps
+    # the inference blocks hold a little weight too, under their yields
     pad = evaluate_named(REG, "remote-tiers-kimi").families[0].combined.padded
     assert pad <= 1 / (s + (1 - s) * u) and pad == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
 
@@ -245,7 +245,7 @@ def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest
     `user` at 406), and its prompt is K0 + (C − 1) K = 12 + 46 · 45 = 2,082 ids: 36,382 bits in. A bucket is
     4 ⌈log₂ 6⌉ = 12 bits, and a request 1,095 out (1,088 id bits and the count). A link-window holds `4 ⌈32 / 28⌉ = 8`
     requests, so a server takes at most 291,440 bits in a 3.2 s window, 91.1 kbit/s in and 2.7 kbit/s out, against the
-    warden's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 52.1 kbit/s, which it
+    network certifier's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 52.1 kbit/s, which it
     equals only at T = D + 1. An incorrect ingress unit, which this honest-δ form excludes, would add 356,592 bits
     (8 · 512 · 16 + 2 · 4 · 36,382), 122% of a window. `regime.onsite` doesn't take it."""
     assert envelopes.REQUEST_HEAD == {"connection ordinal": 32, "content-length": 32, "max_tokens": 32, "seed": 32,
@@ -304,7 +304,7 @@ def test_onsite_w63_beside_the_reference():
     a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits. No
     bound a lock states limits a block of either size, so the lower bound's padded size ratio is remote's at both
     (2.99, at the card table's clock), with the best attack's at 249 and 250. With the draft bounds admitted
-    (`bounds.lock_only` off) it rises from 98.7 to 99.8, which an unregistered share of 1% caps near 100, and at line
+    (`bounds.lock_only` off) it rises from 98.7 to 99.8, which an unregistered share of 1% holds near 100, and at line
     rate both fall to remote's. The cadence feeds the serving this package credits only if outputs outnumber prompts
     more than 20:1, so it isn't the default."""
     def padded(reg, digits):

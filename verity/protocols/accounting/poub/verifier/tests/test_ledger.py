@@ -11,8 +11,8 @@ import math
 from fractions import Fraction
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
-from test_remote_bandwidth import (  # noqa: F401
+from poub_fakes import Clock, Entropy
+from test_poub import (  # noqa: F401
     SCHEDULE,
     A,
     N,
@@ -24,9 +24,9 @@ from test_remote_bandwidth import (  # noqa: F401
     store,
 )
 
-from verity import claims
+from verity.commitments import claim_ids
 from verity.protocols.accounting.poub.prover import audit_prover
-from verity.protocols.accounting.poub.verifier import audit, codec, ledger, line, receipts, timing
+from verity.protocols.accounting.poub.verifier import audit, codec, ledger, line, monitoring, period, receipts, timing
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, Pace
 
 PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
@@ -182,6 +182,28 @@ def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
     assert out.to_json()["gamma"]["spec"]["error"]["draw"] == d.to_json()
 
 
+def test_a_periods_table_reads_the_sessions_error_from_its_declared_outputs(store) -> None:
+    """`monitoring.table` takes a session's whole error from the ledger's declared outputs, the horizon's: what the
+    answer's `eps` holds (the pooled bound's δ and the rejection) with the passes' slack, the receipts' binding term
+    and the sketch's term, which `eps` leaves out."""
+    s, prover, passes, clock = drive(store, params(delta=float(period.DELTA)), SCHEDULE)
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    r, n = s.record(), node(squarings=1e9)
+    public, profile = period.certified(r)
+    out = ledger.declared(r, n)
+    error = monitoring.ledger_error(out.to_json())
+    assert error == out.spec.to_json()["error"] == monitoring.ledger_error({"declared": out.to_json()})
+    table = monitoring.table({"verdict": "accept", "public": public, "profile": profile}, error, 1, 600)
+    eps, sk = Fraction(public["eps"]), ledger.sketch(r)
+    assert eps == period.DELTA + Fraction(len(r.windows) * r.samples, 2 ** 64) and sk > 0
+    assert table["observed"]["error"] == out.spec.error_horizon > float(eps)
+    assert out.spec.error_horizon == pytest.approx(
+        float(eps) + r.passes * 2.0 ** -audit.SLACK_LOG2 + ledger.binding(r) + sk, rel=1e-12)
+    assert table["observed"]["error_terms"]["sketch"] == float(sk)
+    week = table["periods"]["week"]
+    assert week["error"] == float(1008 * Fraction(out.spec.error_horizon)) and week["q_bytes"] == 1008 * public["q_bytes"]
+
+
 def test_a_paced_session_reads_gamma_per_fixed_window(k1) -> None:
     """`k1` spans [0, 1620) (its last deadline, 1250 + A), so at T = 1,000 its fixed windows are [0, 1000) and
     [1000, 1620), whatever its coins' times.  A pass is in the one that holds it whole, from its challenge to its
@@ -243,7 +265,7 @@ def test_the_coin_commitments_hiding_is_charged(store) -> None:
 
 
 def test_the_binding_term_is_exact_and_never_below_its_formula() -> None:
-    """`binding_over` is draws·√(receipts·s)·q/2^256.5 with √(receipts·s/2) rounded up at 2^-`BINDING_ROOT_BITS`: the
+    """`binding_over` is samples·√(receipts·s)·q/2^256.5 with √(receipts·s/2) rounded up at 2^-`BINDING_ROOT_BITS`: the
     root it takes is at least the true one and less than one step above it."""
     step = Fraction(1, 2 ** ledger.BINDING_ROOT_BITS)
     for draws, held, samples, queries in ((1, 1, 1, 0), (7, 10 ** 9, 33_273, 2 ** 80), (3, 2, 5, 12_345)):
@@ -255,9 +277,9 @@ def test_the_binding_term_is_exact_and_never_below_its_formula() -> None:
 
 def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part_of_delta() -> None:
     """`LineHeld`'s Σ_t adv_t has no numeric value: nothing prices it and the line doesn't assume it.  The ledger names
-    it by its claim (`PRF_CLAIM`, which the registry holds as an assumption of the protocols that do take it) and puts
-    it in no part of δ."""
-    assert claims.get(ledger.PRF_CLAIM).kind == "assumption" and ledger.PRF_CLAIM not in ledger.DELTA_PARTS
+    it by its claim (`PRF_CLAIM`, which the claim ids' table holds as an assumption of the protocols that do take it)
+    and puts it in no part of δ."""
+    assert claim_ids.get(ledger.PRF_CLAIM)["kind"] == "assumption" and ledger.PRF_CLAIM not in ledger.DELTA_PARTS
 
 
 def test_no_delta_the_ledger_renders_comes_without_the_prf_term_it_leaves_out(k1) -> None:

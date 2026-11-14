@@ -100,7 +100,7 @@ HIT_CAP, GAP_CAP, INDEX_CAP = 1 << 16, 1 << 24, 1 << 24
 ZIG_CAP = 2 * INDEX_CAP + 1
 #: the widths of a hit's value, an order entry's position and its rank
 HW, PW, RW = HIT_CAP.bit_length(), 32, INDEX_CAP.bit_length()
-#: the width of a length term's max_tokens and output_len, u32s of the certified body (`active.id_request`)
+#: the width of a length term's max_tokens and output_len, u32s of the certified body (`id_form.id_request`)
 MW = CC.LENGTH_BITS
 MT_CAP = (1 << MW) - 1
 #: `code_v1._window`'s integer symbols in its order, each a table of the book

@@ -1843,7 +1843,7 @@ FRONT_PORT = 18746
 #: read within ``ingress_buckets`` buckets, and an answer at most the ids its last field, the response limit, allows
 CELLS = {"cell_bytes": 4096, "slots": 1, "bucket_ms": 250, "delay": 60, "window": 600, "ingress_cells": 4,
          "ingress_buckets": 16, "egress_cells": 4096, "max_tokens_cap": 2048}
-CERTIFIER = ROOT / "benchmarks/network_traces/warden_serve.py"
+CERTIFIER = ROOT / "verity/protocols/accounting/certifier/device/warden_serve.py"
 SHIM = HERE / "cell_shim.py"
 #: the server's side's record in its directory, which holds no meta.json: no table and no cost reads it as an arm
 SERVER_RECORD = "server.json"

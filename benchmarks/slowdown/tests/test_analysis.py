@@ -143,7 +143,7 @@ def test_lo_grows_with_the_statuses_admitted_and_admitting_all_is_lo(name):
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_the_slowdown(name):
+def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_bounds_the_slowdown(name):
     r = analysis.result(REG, name)
     terms = analysis.attribution(r)
     assert sum(t.share for t in terms) == pytest.approx(1.0)
@@ -262,8 +262,8 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     run.main()
     text = capsys.readouterr().out
     assert ("**Certified ingress:** 9.11e+04 bit/s into a location, intake 0.0282 × α Φ: 1 × each server's declared "
-            "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the warden "
-            "form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress "
+            "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the network "
+            "certifier form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress "
             "unit's 3.57e+05 bits are excluded, and 0 when every ingress unit is drawn)") in text
     assert "line rate, 5.01e+12 bit/s, is its upper end until Lean proves that bound" in text
     assert text.count("Certified") == 1

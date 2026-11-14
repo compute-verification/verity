@@ -20,7 +20,7 @@ tree over the challenger's table (`row_leaf` of each row digest), whose root mus
 
 **The outputs**: `held` leaves the session's record and its case, not yet answered (`HELD`), in the private directory;
 `decide` answers that case. The session's core case and its answer (`p2_case.write`, the Lean's with
-``remote-audit-p2-protocol``) and everything that names the store (the registration, the verifier's logs, the session's
+``poub-p2-protocol``) and everything that names the store (the registration, the verifier's logs, the session's
 record, the hiding commitment's opening) go to the private directory; the public answer is the case's answer in the core
 form under a hiding commitment to the case's digest (one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512`` tree,
 `verity.commitments.advice`, bound to the window), its profile without the registration's digest.
@@ -30,7 +30,7 @@ form under a hiding commitment to the case's digest (one ``hm96-sha512/row/v2`` 
 its party holds every request to). At δ = 2^-40 an accepted session's ε is δ + Σ samples/2^64, which leaves out
 Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed; `p2_parties.EPS_TERMS`), and the pooled bound leaves at most
 0.45% of its receipts wrong at those defaults over a store of 2^17
-units (6 windows of 4 passes, 1,024 draws each; `pooled.bound`), so q_bytes is at least 99.5% of the reads.
+units (6 windows of 4 passes, 1,024 samples each; `pooled.bound`), so q_bytes is at least 99.5% of the reads.
 """
 from __future__ import annotations
 
@@ -278,7 +278,7 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     """The answer to the session `held` left in `private`, with no store and no card: the case and its answer to
     `private` (`p2_case.write`), the public answer and a summary to `public` (``answer.json``, ``bandwidth.json``); the
     public answer, also returned. With `pous_case` (PoUS's run case), a case whose store isn't PoUS's
-    (`p2_case.same_store`) is refused. With `case_exe` (``remote-audit-p2-protocol``) the Lean answers the case and
+    (`p2_case.same_store`) is refused. With `case_exe` (``poub-p2-protocol``) the Lean answers the case and
     its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the session undecided and no
     case written; without it the session's reject or undecided stands and its accept is undecided
     (`p2_case.unjudged`). The summary names the program whose verdict the answer is and the host it ran on

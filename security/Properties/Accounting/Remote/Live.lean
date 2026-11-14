@@ -1,11 +1,11 @@
 module
 
-public import RemoteAudit.Verifier
+public import Poub.Verifier
 
 /-!
 # The verifier's process accepts what `Shared.run g` accepts (`LiveIsRun`)
 
-The verifier's process (`RemoteAudit.Verifier`, `remote-audit-verifier`) doesn't run `Shared.run`: it takes a
+The verifier's process (`Poub.Verifier`, `poub-verifier`) doesn't run `Shared.run`: it takes a
 session's events one request at a time, each with the coin the challenger released for it (`Verifier.eventOn`: the coin
 set first, `withCoin`, and an event that read a coin never sent refused, `unset`), checks a window's openings on
 threads of their own when the driver asks (`verify`, `Verifier.windowCheck`: the frames read by `Wire.openingsOf`, the
@@ -22,9 +22,9 @@ settled window as a `verify` of its frames, read by the same `Wire.openingsOf`.
   challenger sent (every coin the session holds, of a coin's size, and every append coin): every result the same,
   and the same session but for its coins. So its outcome and record (`State.outcome`, `State.summary`, which read no
   coin) are `Shared.run g`'s, and a transcript that pads the coins never sent (`benchmarks/remote_session/
-  lean_verifier.py`) replays to the process's verdict. At `g = 1` that is `Session.run` (`RemoteAudit.Shared.run_one`).
+  lean_verifier.py`) replays to the process's verdict. At `g = 1` that is `Session.run` (`Poub.Shared.run_one`).
 
-It needs `1 ≤ g` and `1 ≤ min_passes` (`Properties.RemoteAudit.Coins`: with none, an empty window sampled at its deadline
+It needs `1 ≤ g` and `1 ≤ min_passes` (`Properties.Poub.Coins`: with none, an empty window sampled at its deadline
 could take a root before its verdict is settled), which the process's `session` request checks (`Difftest.sessionOf`'s
 `positive`). The model is the process at two windows in flight, where `Verifier.eventOn`'s `Flight.step` is
 `Shared.step g` (`Flight.step_two`); a session at one in flight isn't in it, as no property covers one yet (`Flight`).
@@ -35,9 +35,9 @@ accepted. The process's IO (reading requests and frames, threads, writing answer
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit.Live
+namespace Properties.Poub.Live
 
 /-- A request of the process's, on the one session: an event and the coin released for it (`event`), window `t`'s
 check on its frames under the driver's id (`verify`, with the `openings` requests' frames in the order they came), and
@@ -97,9 +97,9 @@ def run (chunk g : Nat) (p : Proc) (qs : List Req) :
     let (a, e?, p') ← step chunk g acc.2.2 q
     pure (acc.1 ++ [a], acc.2.1 ++ e?.toList, p')) ([], [], p)
 
-end Properties.RemoteAudit.Live
+end Properties.Poub.Live
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-- The process's run of a session from `State.init` sampled `g` windows a coin, on the coins it was sent, is
 `Shared.run g` on the events its transcript records, from `State.init` on coins `c` and append coins `a` that agree
@@ -115,4 +115,4 @@ def LiveIsRun : Prop :=
       Shared.run g (Session.State.init params reg c a notBeforeNs) es.toArray =
         .ok ((answers.filterMap Live.Reply.result?).toArray, { p.session with coins := c, appendCoins := a })
 
-end Properties.RemoteAudit
+end Properties.Poub
