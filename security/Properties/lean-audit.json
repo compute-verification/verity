@@ -25,12 +25,9 @@
   "Properties.InferenceOnly.Desc",
   "Properties.InferenceOnly.Desc.Verdict",
   "Properties.InferenceOnly.Desc.Cover",
-  "Properties.Certifier.Device",
   "Properties.Pous",
   "Properties.Certifier.Check",
   "Properties.Certifier.Check.TransferBlocks",
-  "Properties.Certifier.DeviceOutput",
-  "Properties.Certifier.DeviceOutput.Runs",
   "Properties.Hash.Identity",
   "Properties.Annot",
   "Properties.Core.Evaluate",
@@ -710,18 +707,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Properties.Certifier.Observes": {
-   "owner": "@network-accounting",
-   "digest": "d92d4a950294ff745f05bb5221187f8348e3c61db2f865425adcdc7dc655d605",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Properties.Certifier.OpensFrames": {
-   "owner": "@network-accounting",
-   "digest": "a31edfd11ee10f10f56befb43637d44e98cc1bb0e4252878e82324e714d2b3ef",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Properties.NetworkRecords.FramesOf": {
    "owner": "@network-accounting",
    "digest": "15939184318b9517079ed653af45cc40bfc707ff19a88343c31ce50a25ce0549",
@@ -1053,14 +1038,12 @@
   "Base",
   "Circuits",
   "Commitments",
-  "Properties.Certifier.Device",
   "NetworkCertifier",
   "NetworkCheck",
   "Lms",
   "Properties.Hash.Identity",
   "Properties.Certifier.Check",
   "Definitions.Certifier",
-  "Properties.Certifier.DeviceOutput",
   "Properties.Pous",
   "PousCheck.P2",
   "PousCheck.Params",
@@ -1481,10 +1464,6 @@
   "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
    "nontrivial": "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
   },
-  "Proofs.Certifier.encardProgramRunsLeExecutionPhases": {
-   "honest": ["Proofs.Certifier.encardProgramRunsLeExecutionPhases_honest"],
-   "nontrivial": "Proofs.Certifier.encardProgramRunsLeExecutionPhases_nontrivial"
-  },
   "Properties.Poub.codeLayoutTiles": {
    "honest": ["Properties.Poub.codeLayoutTiles_honest"],
    "nontrivial": "Properties.Poub.codeLayoutTiles_nontrivial"
@@ -1724,18 +1703,6 @@
   "PousCheck.Properties.SecurityProofs.timedAuditAccepts": {
    "type_hash": "0f53ba049259791adadc5f1d70c663732dd8fd92cf36ccfdd2d5758122d1bbd4",
    "unfolded_hash": "d16e8f3e2a6ff3d2bdabdc2709488831ff94bcef0fb55bbf9dd6fdfd9e1c7837"
-  },
-  "Proofs.Certifier.acceptedRunsAreProgramRuns": {
-   "type_hash": "c149bb063996cfd7747078d73e0e18672f15cd3c9580fec061994328bb9d7f9b",
-   "unfolded_hash": "f0c9716126c9cf8ceed6f3ff5cf74b044a53c656ce5616e12a2174c2f39c66da"
-  },
-  "Proofs.Certifier.encardAcceptedObservationsLe": {
-   "type_hash": "e6864860dcc529afba634806f512b5d695318aac5fc33da7bcbd8452570ec5dd",
-   "unfolded_hash": "f4e495414acf85516695966cd01d342c99755c914894a213e7ae8466dbd3690b"
-  },
-  "Properties.Certifier.acceptedRowsAreProgramRows": {
-   "type_hash": "c8aafb7a6a13db849ae25237b62ea987e1165cc75c194b0ad265b5908068c101",
-   "unfolded_hash": "194fa267bd2fc2b3e80f13bb9c4e57dd8c3574164a7a958fbc75504bbd881b41"
   },
   "Properties.Certifier.acceptsOneRecordEach": {
    "type_hash": "d42de92f7820044006cc71b9e70572f5e891cf1517633894a1af4134899c7cf5",
@@ -2572,11 +2539,6 @@
    "except": [],
    "why": "whose ledger the period's check reads is stated against the check's own reader (`Spot.MonitoringPeriod.read`), the vocabulary of the period's statements (`Properties.Spot.MonitoringPeriod`) and the challenger's model of the device's log (`Properties.Challenger`: `History`, `Break`), on Lean core: nothing of Mathlib or of `security`, never a proof"
   },
-  "Properties.Certifier.Device": {
-   "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
-   "except": [],
-   "why": "the properties are stated against the device's own step and issuer, on Lean core: nothing of Mathlib or of `security`"
-  },
   "Properties.Certifier.Check": {
    "imports": ["NetworkCheck.Check", "NetworkCheck.TransferBlocks", "Properties.Hash.Identity", "Lms.Sign"],
    "except": [],
@@ -2586,17 +2548,6 @@
    "imports": ["NetworkCheck.RecordsGrid", "Properties.Certifier.Check"],
    "except": [],
    "why": "what the records check's acceptance means is stated against its own functions and the reference Program's grid, with v2's statements of the evidence, the syncs and the heads, never a proof"
-  },
-  "Properties.Certifier.DeviceOutput": {
-   "imports": [
-    "Properties.Certifier.Device",
-    "Properties.Certifier.Check",
-    "Properties.Certifier.DeviceOutput",
-    "Definitions.Certifier",
-    "Mathlib.Data.Set.Card"
-   ],
-   "except": [],
-   "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.Certifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
   },
   "Properties.ZkServer": {
    "imports": ["ZkServer"],
@@ -12649,7 +12600,6 @@
  },
  "shape": {
   "premises": [
-   "Definitions.Certifier.Premises",
    "Definitions.Accounting.Assumptions",
    "Properties.Compose.Remote.Line.Premises",
    "Properties.Compose.Remote.Schedule"
@@ -13778,18 +13728,6 @@
     "function": "PouwCheck.PearlPlus.draw",
     "outcome": "none"
    },
-   "Proofs.Certifier.acceptedRunsAreProgramRuns": {
-    "function": "NetworkCheck.Check.protocol.check",
-    "outcome": "accept"
-   },
-   "Proofs.Certifier.encardAcceptedObservationsLe": {
-    "function": "NetworkCheck.Check.protocol.check",
-    "outcome": "none"
-   },
-   "Properties.Certifier.acceptedRowsAreProgramRows": {
-    "function": "NetworkCheck.Check.protocol.check",
-    "outcome": "accept"
-   },
    "Properties.Certifier.acceptsOneRecordEach": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
@@ -13821,10 +13759,6 @@
    "Properties.Certifier.transferBlocksAcceptMeans": {
     "function": "NetworkCheck.TransferBlocks.verdict",
     "outcome": "accept"
-   },
-   "Proofs.Certifier.expectedGridCausal": {
-    "function": "NetworkCheck.Check.expectedGrid",
-    "outcome": "none"
    },
    "Properties.ZkServer.admitNext": {
     "function": "Core.ZkServer.admit",
@@ -13981,10 +13915,6 @@
    "InferenceOnlyCheck.SecurityProofs.ServedComplies": {
     "function": ["InferenceOnlyCheck.Properties.Record.Form.read", "InferenceOnlyCheck.Properties.Record.Form.rate"],
     "outcome": "accept"
-   },
-   "Proofs.Certifier.encardProgramRunsLeExecutionPhases": {
-    "function": "NetworkCertifier.handingBuckets",
-    "outcome": "none"
    },
    "Properties.Poub.acceptChecksOpenings": {
     "function": "Poub.verifyWindow",
