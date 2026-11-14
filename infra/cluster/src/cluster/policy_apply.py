@@ -417,7 +417,7 @@ def main_apply(description: str | Path, which: str, prefix: str | None, applying
         return 2
     keys = d[1]
     now = int(policy.clock())
-    runner = runner or (lambda node: status.ssh(policy.HOSTS[node], key))
+    runner = runner or (lambda node: status.reach(node, key))
     plans, results = [], {}
     for node in policy._nodes(which):
         run = runner(node)

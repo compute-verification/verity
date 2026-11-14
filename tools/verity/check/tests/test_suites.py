@@ -85,6 +85,25 @@ def test_a_tree_that_is_not_a_checkout_is_refused(tmp_path, monkeypatch, capsys)
     assert S.main(["--list"]) == 2 and "is not a git checkout" in capsys.readouterr().err
 
 
+def test_a_tmpdir_in_the_runs_shared_scratch_is_refused_before_any_suite_with_the_cure(tmp_path, monkeypatch, capsys):
+    """A job that exports TMPDIR into the shared scratch for its own files fails tests that are right to refuse it (custody's
+    directory another user can change, a Unix socket's path too long): the runner stops first and says how to run instead."""
+    S = _suites(monkeypatch, tmp_path)
+    research = tmp_path / "research"
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(research / "runs" / "r1"))
+    monkeypatch.setenv("TMPDIR", str(research / "scratch" / "r1" / "tmp"))
+    assert S.main([]) == 2
+    err = capsys.readouterr().err
+    assert f"is inside {research / 'scratch'}, the runs' shared scratch" in err
+    assert f"unset TMPDIR, or point it at a directory outside {research / 'scratch'}" in err
+    for tmp in (research / "tmp", tmp_path / "elsewhere"):
+        monkeypatch.setenv("TMPDIR", str(tmp))
+        assert S.scratch_tmp() is None
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    monkeypatch.setenv("TMPDIR", str(research / "scratch" / "r1" / "tmp"))
+    assert S.scratch_tmp() is None, "outside a run there is no runs root to place the scratch by"
+
+
 def test_the_tests_get_the_callers_pythonpath_entries_inside_the_tree_only(tmp_path, monkeypatch):
     """An `export PYTHONPATH=...` naming another checkout, left in a shell, would run this tree's tests against that checkout."""
     S = _suites(monkeypatch, tmp_path)
@@ -140,7 +159,8 @@ def test_every_declared_package_is_probed_whatever_its_name_and_one_that_wont_im
 def test_a_member_that_builds_but_declares_no_package_is_named(tmp_path, monkeypatch):
     _member(tmp_path, "odd", "odd", None)
     S = _suites(monkeypatch, tmp_path)
-    assert S.foreign({"odd": "odd"}, dict(os.environ)) == "odd's package from nowhere (its build configuration declares none)"
+    found = S.foreign({"odd": "odd"}, dict(os.environ))
+    assert found == "odd's package from nowhere (its build configuration declares none)"
     (tmp_path / "odd" / "src" / "odd").mkdir(parents=True)
     (tmp_path / "odd" / "src" / "odd" / "__init__.py").write_text("")       # hatch's default layout
     assert S.importable({"odd": "odd"}) == {"odd": "odd"}
@@ -233,6 +253,25 @@ def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     (tmp_path / "pkg" / ".lake" / "cache").mkdir()
     keys.append(S.key(suite, {}, {}, []))
     assert len(set(keys)) == 3 and S.artifact_ids(suite)["pkg/.lake/cache"] == "directory"
+
+
+def test_a_suites_bound_stretches_for_fewer_workers_than_it_was_measured_on(tmp_path, monkeypatch):
+    """verity-vllm's 14,400 s holds for the 5 workers its 10,000 s was measured on; a whole check on an 11-core slot ran it on 3
+    and killed it at 14,400 s, short of the 16,700 s 3 workers take. Its bound follows the workers it gets, never below its own."""
+    (tmp_path / "pkg").mkdir()
+    pyproject = tmp_path / "pkg" / "pyproject.toml"
+    head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n'
+    pyproject.write_text(head + "timeout_s = 14400\ntimeout_workers = 5\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    [suite] = S.discover()
+    assert suite.timeout_workers == 5
+    assert [S.bound(suite, n) for n in (3, 2, 5, 16)] == [24000.0, 36000.0, 14400.0, 14400.0]
+    assert S.bound(S.Suite("x", "x", (), ()), 2) == S.SUITE_TIMEOUT_S, "undeclared: the fixed bound, whatever the workers"
+    for bad in ("timeout_s = 60\ntimeout_workers = 0\n", "timeout_s = 60\ntimeout_workers = 2.5\n", "timeout_workers = 5\n"):
+        pyproject.write_text(head + bad)
+        with pytest.raises(ValueError, match="timeout_workers"):
+            S.discover()
 
 
 def test_what_the_lean_verifier_builds_keys_the_suite_by_its_sources(tmp_path, monkeypatch):
@@ -849,7 +888,7 @@ def test_fetched_fixtures_are_the_registry_entries_git_does_not_hold(tmp_path, m
     (tmp_path / "pkg" / "fx" / "small.json").write_text("{}\n")
     reg = {"art:" + "a" * 64: "pkg/fx/small.json", "art:" + "b" * 64: "pkg/fx/big.proof", "art:" + "c" * 64: "other/big.bin",
            "previous": {"art:" + "a" * 64: ["art:" + "d" * 64]}}
-    (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    (tmp_path / "artifacts.json").write_text(json.dumps(reg))
     S = _suites(monkeypatch, tmp_path)
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
@@ -884,7 +923,7 @@ def _shipped_workspace(root: Path, *, absent: bool) -> None:
     if absent:
         reg["art:" + hashlib.sha256(b"never shipped").hexdigest()] = "pkg/tests/fixtures/big.proof"
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    (root / "artifacts.json").write_text(json.dumps(reg))
     (root / ".gitignore").write_text("__pycache__/\n")
     _git(root, "init", "-q")
     _git(root, "add", ".")
@@ -1008,8 +1047,8 @@ def test_a_fresh_run_builds_the_verifier_and_runs_the_suites_with_lakes_artifact
     root = tmp_path / "tree"
     _env_workspace(root, {"verity-flock": "import os\n\ndef test_env():\n"
                                           "    assert os.environ.get('LAKE_ARTIFACT_CACHE') == os.environ['WANT']\n"})
-    (root / "verity" / "protocols" / "flock" / "verifier").mkdir(parents=True)
-    (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
     (root / ".gitignore").write_text(".lake/\n")
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
@@ -1066,7 +1105,7 @@ def test_inside_a_research_run_the_fixture_fetch_gets_its_custody_key_and_fetche
     _env_workspace(root, {"pkg": "from pathlib import Path\n\ndef test_reads_it():\n    assert (Path(__file__).parent / 'fixtures' / "
                                  "'big.proof').read_bytes() == b'in the store alone\\n'\n"})
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
+    (root / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
     (root / ".gitignore").write_text("pkg/tests/fixtures/big.proof\n")                  # as the root's lists each fetched entry
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "registered")
@@ -1156,9 +1195,9 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     root, log = tmp_path / "tree", tmp_path / "lake.log"
     _env_workspace(root, {"verity-flock": "import shutil\n\ndef test_lake():\n    assert shutil.which('lake')\n",
                           "other": "def test_other():\n    pass\n"})
-    (root / "verity" / "protocols" / "flock" / "verifier").mkdir(parents=True)
-    (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").write_text('name = "flock"\n')
-    (root / "verity" / "protocols" / "flock" / "verifier" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "lakefile.toml").write_text('name = "flock"\n')
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
     # ELAN puts $HOME/.elan/bin first on the PATH, so on a machine with elan its real lake would shadow one only on the PATH
@@ -1175,10 +1214,10 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     assert p.returncode == 0 and not log.exists(), p.stdout
     p = _run_suite(root, tmp_path, "--fresh", extra=extra)
     assert p.returncode == 0 and "passed  verity-flock" in p.stdout and "passed  other" in p.stdout, p.stdout
-    assert log.read_text() == f"{root / 'verity/protocols/flock/verifier'} build\n"
+    assert log.read_text() == f"{root / 'verity/protocols/proofs/flock/verifier'} build\n"
 
     p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "FAKE_LAKE_RC": "1"})
-    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/protocols/flock/verifier exited 1" in p.stdout
+    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/protocols/proofs/flock/verifier exited 1" in p.stdout
     assert "passed  other" in p.stdout, p.stdout
 
 
@@ -1234,6 +1273,24 @@ def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
     [r] = json.loads((tmp_path / "out.json").read_text())
     assert r["status"] == "failed" and r["timed_out"] == 0.5
     assert [f.name for f in (tmp_path / "cache").glob("*.json")] == ["durations.json"], "no pass kept"
+
+
+def test_a_suite_on_fewer_workers_than_its_bound_holds_for_runs_to_the_stretched_bound(tmp_path):
+    """The run applies `bound` with the workers the suite got: the hanging suite declares 0.25 s on 4 workers, runs on 1, and is
+    killed at 1 s."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    for f in tests.glob("test_*.py"):
+        f.unlink()
+    fifo = tmp_path / "never-written"
+    os.mkfifo(fifo)
+    (tests / "test_hangs.py").write_text(f"def test_hangs():\n    open({str(fifo)!r}).read()\n")
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text() + "timeout_s = 0.25\ntimeout_workers = 4\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "hangs")
+    p = _run_suite(root, tmp_path, "--fresh", "--timeouts")
+    assert p.returncode == 1 and "TIMED OUT: still running after 1 s, so its process group was killed" in p.stdout, p.stdout
 
 
 def test_oom_kills_reads_the_kernels_count(monkeypatch, tmp_path):
@@ -1643,16 +1700,16 @@ def test_an_edit_to_a_nested_suite_reuses_the_outer_suites_pass_and_reading_it_u
 
 
 def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds_while_it_is_unchanged(tmp_path):
-    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `fixtures/artifacts.json` for
+    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `artifacts.json` for
     repo replicas: in the test's process or a child's, that read fails no suite, and the test's own read is watched."""
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
     (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text("{}\n")
+    (root / "artifacts.json").write_text("{}\n")
     (tests / "test_registry.py").write_text(
         "import os, subprocess, sys\n\ndef test_registry():\n"
-        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'fixtures', 'artifacts.json')\n"
+        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'artifacts.json')\n"
         "    open(p).read()\n"
         "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
     _git(root, "add", ".")
@@ -1660,7 +1717,7 @@ def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
     assert "cached  pkg" in _run_suite(root, tmp_path).stdout
-    (root / "fixtures" / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
+    (root / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout
 
@@ -2159,6 +2216,38 @@ def test_the_longest_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_pr
         "a share that holds no worker of a suite's worker_gb keeps one lane"
 
 
+def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_what_the_parallel_suites_have(tmp_path, monkeypatch):
+    """circuit_check's workers each build its catalog before any test runs, so their count bounds its run; a share by last
+    durations (`shared_lanes`) left it a few, behind verity/definitions' larger one or after a run that reused most of its
+    passes. Declaring `workers`, it has a lane of its own with that many wherever its share gives it fewer, up to half the
+    processes and half the GB at its worker_gb, and the others split the rest as before."""
+    S = _suites(monkeypatch, tmp_path)
+    cc = S.Suite("cc", "cc", (), (), parallel=True, worker_gb=8, workers=14)
+    defs, a, b = (S.Suite(n, n, (), (), parallel=True) for n in ("defs", "a", "b"))
+    seconds = [300.0, 900.0, 200.0, 100.0]
+    [shared] = [x for x in S.shared_lanes([cc, defs, a, b], seconds, 88, 260.0) if cc in x.suites]
+    assert shared.suites == [cc, a, b] and S.wide_workers(cc, shared.procs, shared.gb) == 13
+    lanes = S.wide_lanes([cc, defs, a, b], seconds, 88, 260.0)
+    assert lanes == [S.Lane([cc], 14, 112.0), *S.shared_lanes([defs, a, b], seconds[1:], 74, 148.0)]
+    longest = [3000.0, *seconds[1:]]
+    assert S.wide_lanes([cc, defs, a, b], longest, 88, 260.0) == S.shared_lanes([cc, defs, a, b], longest, 88, 260.0), \
+        "a share that gives it as many already is as it was"
+    assert S.wide_lanes([cc, defs], seconds[:2], 20, 260.0)[0] == S.Lane([cc], 10, 80.0), "at most half the processes"
+    assert S.wide_lanes([cc, defs], seconds[:2], 88, 100.0)[0] == S.Lane([cc], 6, 48.0), "at most half the GB at its worker_gb"
+    assert S.wide_lanes([cc, defs], seconds[:2], 40, None) == [S.Lane([cc], 14, None), S.Lane([defs], 26, None)]
+    assert S.wide_lanes([cc], [300.0], 88, 260.0) == [S.Lane([cc], 88, 260.0)], "alone, all of them"
+    (tmp_path / "pkg").mkdir()
+    pyproject = tmp_path / "pkg" / "pyproject.toml"
+    head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\n'
+    pyproject.write_text(head + "parallel = true\nworkers = 14\n")
+    _git(tmp_path, "init", "-q")
+    assert [s.workers for s in S.discover()] == [14]
+    for bad in ("parallel = true\nworkers = 1\n", "parallel = true\nworkers = 2.5\n", "workers = 14\n"):
+        pyproject.write_text(head + bad)
+        with pytest.raises(ValueError, match="workers"):
+            S.discover()
+
+
 def _line_end(S, lanes, cost) -> float:
     """When a plan's parallel suites end on a simulated clock: each lane from 0, its suites one after another, each lasting
     ``cost(suite, workers)`` at the workers its lane gives it (`wide_workers`)."""
@@ -2321,3 +2410,117 @@ def test_a_report_a_dying_pytest_left_empty_or_cut_short_is_no_report(monkeypatc
         assert S.read_report(report) is None, text
     report.write_text('{"reads": {}, "outside": {}}')
     assert S.read_report(report) == {"reads": {}, "outside": {}}
+
+
+_PASSES = "def test_it():\n    assert True\n"
+
+
+def test_a_suite_whose_key_is_its_bases_is_lent_and_one_the_change_touches_runs(tmp_path):
+    """`--lend-from BASE`, through the runner: of the suites with no pass here, the one whose key in BASE's tree is its key
+    here is left out, reported as lent and given no pass of its own, and the one the change since BASE touches runs. A change
+    to the workspace's metadata or to the runner since BASE lends nothing, and neither does a name that is no commit."""
+    root, out = tmp_path / "tree", tmp_path / "out.json"
+    _env_workspace(root, {"a": _PASSES, "b": _PASSES})
+    base = _git(root, "rev-parse", "HEAD")
+    (root / "b" / "tests" / "test_it.py").write_text(_PASSES + "\n\ndef test_more():\n    pass\n")
+    _git(root, "commit", "-q", "-am", "a change to b alone")
+    p = _run_suite(root, tmp_path, "--lend-from", base, "--json", str(out))
+    assert p.returncode == 0 and f"suites: {base[:12]}'s check answers for 1 of the 2 suites with no pass here" in p.stdout, p.stdout
+    assert re.search(rf"lent    a +its key in {base[:12]}'s tree is its key here", p.stdout) and "passed  b" in p.stdout, p.stdout
+    assert "2 suites: 2 passed (0 cached, 1 lent), 0 failed" in p.stdout, p.stdout
+    rows = {r["name"]: r for r in json.loads(out.read_text())}
+    assert (rows["a"]["status"], rows["a"]["lent"], rows["a"]["since"], rows["a"]["forced_by"]) == ("cached", base, {"commit": base}, None)
+    assert rows["b"]["status"] == "passed" and "lent" not in rows["b"]
+    assert not list((tmp_path / "cache").glob(f"{rows['a']['key']}*")), "a lent suite earned no pass: none is kept for it"
+
+    p = _run_suite(root, tmp_path)                 # with no base to answer for it, it runs: nothing above stood in for its pass
+    assert p.returncode == 0 and "passed  a" in p.stdout and "cached  b" in p.stdout, p.stdout
+    p = _run_suite(root, tmp_path, "--lend-from", base)
+    assert p.returncode == 0 and "lent " not in p.stdout and "answers for" not in p.stdout, "a pass kept here is reused, not lent"
+
+    def edit(name: str, n: int) -> None:           # a suite's own test file: a traced pass is kept on what its tests read
+        (root / name / "tests" / "test_it.py").write_text(_PASSES + f"\n\ndef test_{n}():\n    pass\n")
+
+    edit("a", 1)
+    edit("b", 1)
+    _git(root, "commit", "-q", "-am", "a change to both")
+    for n, name in enumerate(("0" * 40, "no-such-ref"), 2):
+        p = _run_suite(root, tmp_path, "--lend-from", name, "--skip", "b")
+        assert p.returncode == 0 and "passed  a" in p.stdout, p.stdout
+        assert f"answers for 0 of the 1 suites with no pass here: {name} names no commit here" in p.stdout, p.stdout
+        edit("a", n)
+    _git(root, "commit", "-q", "-am", "a change to a")
+    head = _git(root, "rev-parse", "HEAD")
+
+    (root / "b" / "pyproject.toml").write_text((root / "b" / "pyproject.toml").read_text() + "\n[tool.verity.tests]\ninputs = []\n")
+    _git(root, "commit", "-q", "-am", "metadata")
+    p = _run_suite(root, tmp_path, "--lend-from", head, "--skip", "b")
+    assert p.returncode == 0 and "passed  a" in p.stdout, p.stdout
+    assert "answers for 0 of the 1 suites with no pass here: b/pyproject.toml changed since" in p.stdout, p.stdout
+
+    edit("a", 4)
+    _git(root, "commit", "-q", "-am", "a, then")
+    head = _git(root, "rev-parse", "HEAD")
+    runner = root / "tools" / "verity" / "check" / "suites.py"
+    runner.write_text(runner.read_text() + "\n# another runner\n")
+    _git(root, "commit", "-q", "-am", "the runner")
+    p = _run_suite(root, tmp_path, "--lend-from", head, "--skip", "b")
+    assert p.returncode == 0 and "passed  a" in p.stdout, p.stdout
+    assert "answers for 0 of the 1 suites with no pass here: tools/verity/check changed since" in p.stdout, p.stdout
+
+    head = _git(root, "rev-parse", "HEAD")
+    edit("a", 5)
+    _git(root, "commit", "-q", "-am", "a alone")
+    p = _run_suite(root, tmp_path, "--lend-from", head, "--skip", "b")
+    assert p.returncode == 0 and "passed  a" in p.stdout, p.stdout
+    assert "answers for 0 of the 1 suites with no pass here: each one's inputs, fixtures or build sources changed since" in p.stdout
+
+    for flag in (["--fresh"], ["--quick"], ["--changed", head]):
+        p = _run_suite(root, tmp_path, "--lend-from", head, *flag)
+        assert p.returncode == 2 and "--lend-from takes none of --fresh, --quick and --changed" in p.stderr, p.stderr
+
+
+def test_a_suite_is_lent_only_with_its_fixtures_and_build_sources_as_they_are(tmp_path, monkeypatch):
+    """`lent_by` on what a key holds beside its inputs: a fixture the registry names another artifact for since the base, or a
+    Lake build output whose package changed since, is another key, and a build output no Lake package builds is keyed by what
+    the machine holds, which the base's tree doesn't say: none of them is lent."""
+    root = tmp_path
+    (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["fix", "lake", "disk", "plain"]\n')
+    declared = {"fix": "", "lake": '\n[tool.verity.tests]\nartifacts = ["lean/.lake/build/bin/v"]\n',
+                "disk": '\n[tool.verity.tests]\nartifacts = ["disk/out/v"]\n', "plain": ""}
+    for name, more in declared.items():
+        (root / name / "tests").mkdir(parents=True)
+        (root / name / "pyproject.toml").write_text(f'[project]\nname = "{name}"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n{more}')
+        (root / name / "tests" / "test_it.py").write_text(_PASSES)
+    (root / "lean").mkdir()
+    (root / "lean" / "lakefile.toml").write_text('name = "v"\n')
+    (root / "lean" / "V.lean").write_text("def v := 1\n")
+    (root / ".gitignore").write_text("fix/big.bin\n.lake/\n")
+    (root / "artifacts.json").write_text(json.dumps({"art:one": "fix/big.bin"}))
+    _git(root, "init", "-q")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "base")
+    base = _git(root, "rev-parse", "HEAD")
+    S = _suites(monkeypatch, root)
+
+    def lent() -> list[str]:
+        suites, pkgs, tree = S.discover(), S.members(), S.worktree()
+        inputs = {s: S.inputs_of(s, pkgs) for s in suites}
+        cuts = {s: S.dropped(s, inputs[s]) for s in suites}
+        fixtures = S.fetched_fixtures(tree, {p for ps in inputs.values() for p in ps})
+        ids = {}
+        for s in suites:
+            ids[s] = S.input_ids(tree, sorted(set(inputs[s]) | set(S.RUNNER)), S.markdown(s), cuts[s])
+            ids[s].update({f"fixture:{p}": art for p, art in fixtures.items() if S.covered(p, inputs[s], cuts[s])})
+        S._SOURCES.clear()
+        got, why = S.lent_by(base, tree, ids, inputs, cuts)
+        assert bool(why) == (not got)
+        return sorted(s.name for s in got)
+
+    assert lent() == ["fix", "lake", "plain"], "a build output no Lake package builds is never lent"
+    (root / "artifacts.json").write_text(json.dumps({"art:two": "fix/big.bin"}))
+    assert lent() == ["lake", "plain"], "the registry names another artifact for its fixture"
+    (root / "lean" / "V.lean").write_text("def v := 2\n")
+    assert lent() == ["plain"], "its build output is built from other sources"
+    (root / "plain" / "tests" / "test_it.py").write_text(_PASSES + "\n")
+    assert lent() == []

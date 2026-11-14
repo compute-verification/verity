@@ -10,7 +10,8 @@ The records, every one in the window's directory but the advice's opening:
 * **the values**, committed before any coin: the registration (``registration.json``) and the files `rows.write` writes;
 * **on a sample, the sampled proof blocks' openings** (``m<k>-private.bin``), which reach only the prover behind the ZK server.
 
-The verifier's window is `interface.of_records`'s, each template resolved in Verity's catalog (`catalog_resolve`), or, for a
+The verifier's window is `interface.of_records`'s, each template resolved among the Definitions a catalog registers
+(`catalog_resolve`), or, for a
 template the verifier lowers from its own input set (``--template-sets``), that set's Definition; a window with row tables
 is refused until its records carry their segment roots. Before the sample the audit holds the registration to that circuit,
 to the run root the run published (``--run``) and, for a compiled circuit, to the compiler and advice it was compiled from
@@ -18,7 +19,10 @@ to the run root the run published (``--run``) and, for a compiled circuit, to th
 opens the registered root under the registered compiler, and that compiler, run as the command the verifier's own table
 names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
-registered (``--circuit``). Then `a5.audit`, its stream's rule the rate of the window's design in its population (`rule_of`):
+registered (``--circuit``). Then `a5.audit`, its stream's rule the rate its caller states (``--law``: ``rate:NUM/DEN``,
+``stratified-rate:NUM/DEN`` or ``work-rate:NUM/DEN``; a fixed count ``subset:K``, ``stratified:K`` or ``work:K`` is refused
+by name, `service.Law`) and the window's sampling design the one that rate names over the window's own proof blocks
+(`verifier_window`), which the stream holds the registration to:
 the registration checked by Lean and Python, the sample on live coins read after
 the receipt, Flock ``--zk`` behind the Lean ZK server on the sampled members, Lean's verdicts and the audit record. Then the
 advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
@@ -44,8 +48,8 @@ lists its members (a served window's) declares its reads beside them, as a serve
 members' own rows or a shared-row table of them (`interface.listed_reads`), audited and counted as a stated record's
 reads are, and the count names every parameter it reads whose window root is no pin (``unpinned``), whose reads count
 free. A history table (`interface.History`) is pinned at the root the window's registration records for it
-(`history.pins`), which a5's registration check before the draw and its stream's registrations hold to the root the
-verifier of record computes over its writers' public bodies (a5's ``history``, `history.params` of the same pins as the
+(`history.pins`), which a5's registration check before the sample and its stream's registrations hold to the root the
+verifier computes over its writers' public bodies (a5's ``history``, `history.params` of the same pins as the
 reads); a held run's strings it doesn't hold, so a window with one is refused.
 
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
@@ -59,12 +63,30 @@ too, but the prover chose its rows: its reads count free, and the count names it
 have theirs pinned through ``--registered``, from the window's entries.
 
 A circuit whose program takes values ahead of its templates' parameters (`interface.Registered.values`: a served window's
-H1 tables, which its proof blocks make where the model makes them) has them registered first by an earlier record W
-(``--tie W``: PoUW H1's registration of the window, fixed before H1's sample coin), and the window's registration, chained
-right after W, registers each as W's table `credit.window_table` of it under ``--tie-prefix`` (one-stage's ``outputs``,
-`tie_of`): R7 takes its domain and root from W's entry, so the proof blocks read the tables at W's roots (each pinned at
-W's entry, `interface.registered_reads`) and nothing of them is registered afresh. Their readers are sampled like any
-other proof block (under ``stratified:K``, a stratum a table), never proved whole as an output class.
+H1 tables, or each Pearl+ call's A rows and y, which its proof blocks make where the model makes them) has them registered
+first by an earlier record W (``--tie W``: PoUW H1's registration of the window, fixed before H1's sample coin, or Pearl+'s
+window record of its retained timed rounds, written after the retention and before the verifier's coin), and the window's
+registration, chained right after W, registers each as
+W's entry of it (one-stage's ``outputs``, `tie_of`): H1's table `credit.window_table` of it under ``--tie-prefix``, or
+Pearl+'s by the value's own name. R7 takes its domain and root from W's entry, so the proof blocks read the values at W's
+roots (each pinned at W's entry, `interface.registered_reads`) and nothing of them is registered afresh. Their readers are
+sampled like any other proof block (under a stratified rate, a stratum a table), never proved whole as an output class.
+The summary's ``tie`` names W, and for Pearl+'s W what holds its roots to the ones its passes credited: Pearl+'s verdict,
+the prover's development verifier (`PEARL_CREDIT`). Once the records are read and before any proof, a ``TIE`` line and
+``OUT/tie.json`` name W too, with the registration's ``previous`` and whether it is W's digest (``chained``), so an
+audit stopped before its proofs end still says what it was tied to.
+
+``--day N --day-log LOG``: the window is day N's, and the deployment's registration log declares the day's one circuit
+(`verity.protocols.accounting.registration.verifier.registration.Declaration`). R2 holds the registration's program to
+it (`declared_day`, one-stage's Declared day), a negative moves the declaration to another program, and the summary's
+``day`` names the day's declared program and where the day came from (`DAY_SOURCES`). ``--day`` and the prover's log
+are the development fallback: they bind the day to no time the auditor's device signed. ``--day-ledger LEDGER`` reads
+the day from the challenger's signed ledger instead (`device_day`, the challenger's ``declared_day``): the UTC day of
+the window's signed open and the declarations its lane signed before it, so a window that opens before UTC midnight
+and closes after is its open's day's.
+It reads the device's own ledger whole: a copy PoUS cut to a window's sessions
+(`pous.period.cite`) drops the declarations and the chain, and is refused. A window opened before its day's declaration,
+or of a lane that never declares, has no declaration of its day, so R2 refuses it (``R2-undeclared``).
 
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
@@ -76,9 +98,9 @@ quotes the warm's beside it.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-        --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
-        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W --tie-prefix P] [--skip-negatives] \\
-        [--compose-cache DIR]
+        --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
+        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
+        [--compose-cache DIR] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER]
     records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
@@ -86,8 +108,9 @@ quotes the warm's beside it.
 ``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
 the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
 registration (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
-``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and its
-terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
+``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`:
+undecided for an accepted audit whose record names no challenger key and session a check verified its coins under, or
+doesn't say whether it wrote the case for the compiled check), and its terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
 values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
 the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state.
 
@@ -121,14 +144,22 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
 ``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on, as `prove_path.py audit`
-takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session on the challenger
+takes them: ``local``, a development session on this machine (with ``--deployed-key``, under a key made at the deployed
+LMS parameters, the only ones SPOT's v2 reads a challenger's signatures under), ``loopback:HOST:PORT``, that session on the challenger
 party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor host through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
-``--forged``: the window holds a forged unit, and the
-audit passes when every check before the sample passed and Lean refused the outcome (the prover runs with its self-check
-skipped, ``FC_ZK_SELF_CHECK=skip``, so it sends proofs of the false witness).
+``--forged``: the window holds a forged unit, and the audit passes when every check before the sample passed, the audit
+record rejects and the ZK server released no proof of the false member (`forged_outcome`). The prover runs with its
+self-check skipped, ``FC_ZK_SELF_CHECK=skip``, so it proves the false witness, and the ZK server holds the proof back.
+
+``--forged-read``: the window holds no false unit and a registered read that opens no pinned root (values served as the
+registered ones that are not), and the audit passes when every check before the sample passed, the audit record rejects
+and the Lean verifier refused a session while setting its statement up, on a row of that read not opening the root the
+verifier holds (`forged_outcome`'s ``read_refused``, `READ_OPENS_NO_ROOT`). The window's units are their Definitions',
+so its prover runs as an honest window's does and its proofs may leave: the audit passes on that refusal alone, never
+on a proof held back or refused, and under ``--forged`` never on that refusal.
 """
 from __future__ import annotations
 
@@ -156,9 +187,12 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.protocols.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
-from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity import device as ST  # noqa: E402
+from verity.protocols.accounting.registration.verifier import registration as G  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, registration as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.windows import history as HW, interface as IF  # noqa: E402
 
@@ -171,7 +205,7 @@ REFUSED = 2
 
 
 def catalog_resolve(tid: str) -> Any:
-    """`interface.resolve` over the whole of Verity's catalog, the registry's Definitions loaded too (a window's io shell and
+    """`interface.resolve` over every catalog's Definitions, the registry's loaded too (a window's io shell and
     its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
     from verity.definitions.registry.catalog import load
 
@@ -525,37 +559,116 @@ def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any],
 def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None,
            prefix: str | None) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     """The window's tie to ``w`` (``--tie``: W, the earlier registration that registered first the values the circuit's
-    program takes, `interface.Registered.values`; PoUW H1's registration of the window, which registers each value, a
-    Commit table, as its window table `credit.window_table` under ``prefix``, its descriptor's ``PREFIX``): a5's ``tie``,
-    one-stage's ``log`` (W), ``registered`` (each value's words), ``outputs`` (each value W's entry of its table) and
-    ``schemas`` (`registered.SCHEMA_V2`, W's tables' rows), and the pins of the values, each W's entry under the value's
-    name, which `interface.registered_reads` holds to the rows the value's readers read. ``({}, {})`` for a circuit that
-    takes no values with no W. Refused (ValueError) for values without W or a prefix, W without values, and W
-    registering a value's table other than once."""
+    program takes, `interface.Registered.values`): a5's ``tie``, one-stage's ``log`` (W), ``registered`` (each value's
+    words), ``outputs`` (each value W's entry of it) and ``schemas`` (each value's rows, `interface.value_format`), and the
+    pins of the values, each W's entry under the value's name, which `interface.registered_reads` holds to the rows the
+    value's readers read. W names a value under ``prefix``, its descriptor's ``PREFIX``, as its table
+    `credit.window_table` (PoUW H1's registration of the window, each value a Commit table in ``row/v2`` rows), or, with
+    no prefix, by the value's own name (Pearl+'s window record, `pearl_c.window`: each call's A rows and y, FP32 words in
+    ``row-seg/v1`` rows, beside each weight's B rows, which the circuit doesn't take). ``({}, {})`` for a circuit that
+    takes no values with no W. Refused (ValueError) for values without W, W without values, and W registering a value
+    other than once."""
     reg = IF.declarations(circuit)[2]
     values = tuple(reg.values) if reg is not None else ()
     if not values and w is None:
         return {}, {}
     if w is None:
-        raise ValueError(f"the circuit takes values {list(values)}, an earlier registration's: tie the audit to it (--tie W "
-                         "--tie-prefix P)")
+        raise ValueError(f"the circuit takes values {list(values)}, an earlier registration's: tie the audit to it (--tie W, "
+                         "and --tie-prefix P for a W that names its tables under a PREFIX)")
     if not values:
         raise ValueError("the audit is tied to an earlier registration (--tie), and the circuit takes no values")
-    if not isinstance(prefix, str):
-        raise ValueError("--tie: give --tie-prefix, the earlier registration's descriptor's PREFIX, which its tables' names "
-                         "take")
     entries: dict[str, list[dict[str, Any]]] = {}
     for e in w.get("registered") or ():
         entries.setdefault(e.get("value") if isinstance(e, Mapping) else None, []).append(dict(e))
     pins, outputs, d = {}, {}, R.digest(w)
     for v in values:
-        name = CR.window_table(v, prefix)
+        name = v if prefix is None else CR.window_table(v, prefix)
         if len(got := entries.get(name, [])) != 1:
             raise ValueError(f"the earlier registration registers the circuit's value {v!r} as {name!r} {len(got)} times, "
-                             "not once")
+                             "not once" + ("" if prefix is not None else " (a W naming its tables under its descriptor's "
+                                                                          "PREFIX, H1's: give --tie-prefix)"))
         pins[v], outputs[v] = {**got[0], "value": v}, {"record": d, "value": name}
     return ({"log": [dict(w)], "registered": {v: int(pins[v]["words"]) for v in values}, "outputs": outputs,
-             "schemas": {v: REG.SCHEMA_V2 for v in values}}, pins)
+             "schemas": {v: IF.value_format(reg, v)[0] for v in values}}, pins)
+
+
+#: what holds the roots of Pearl+'s window record to the ones its passes credited, which an audit tied to it rests on
+PEARL_CREDIT = ("W's roots are the ones Pearl+'s verdict credits (`served_passes.py verify --tie W`), the prover's "
+                "development verifier: it reads the prover's salt key and opens drawn rows in the clear, values this audit's "
+                "proof hides")
+
+
+def declared_day(day: int | None, log: str | None, params: str | None,
+                 w: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """``--day N --day-log LOG``: the window's day and the declarations of the registration log the verifier holds (its
+    view's, `registration.check_log` under ``--day-params``, by default the log's composite under an auditor of no sheets or
+    keys), as one-stage's R2 takes them (a5's ``declared``); empty without ``--day``. ValueError where core's check refuses
+    the log, and where the tied W (``--tie``) names a day's declaration (its window's ``day`` and ``declaration``,
+    `serve_day.Day.naming`) other than one of day N the log holds by digest, or names one and the audit has no ``--day``."""
+    named = {k: (w.get("window") or {}).get(k) for k in ("day", "declaration")} if isinstance(w, Mapping) else {}
+    if day is None:
+        if log or params:
+            raise ValueError("--day-log and --day-params go with --day")
+        if any(v is not None for v in named.values()):
+            raise ValueError(f"the tied registration names day {named['day']}'s declaration, and the audit has no --day: "
+                             "R2 holds its window to that day with --day and --day-log")
+        return {}
+    if not log:
+        raise ValueError("--day needs --day-log, the registration log whose declarations R2 reads")
+    composite, entries = G.log_of(json.loads(Path(log).read_text()))
+    p = G.params_of(json.loads(Path(params).read_text())) if params else (composite, ST.Auditor())
+    got = G.check_log(p, (composite, entries))
+    if got[0] != "accept":
+        raise ValueError(f"--day-log {log}: core's check refuses it, {got[1]}")
+    if w is not None:
+        _held_naming(named, day, {_rebuilt(e.day, e.program, e.blocks) for e in entries
+                                  if isinstance(e, G.Declaration) and e.day == day}, f"--day-log {log}")
+    return {"day": day, "declarations": got[1]["declarations"]}
+
+
+def _rebuilt(day: int, program: str, blocks: Any) -> str:
+    """The digest a window names its day's declaration by (serve_day's ``named``): `registration.Declaration`'s with no
+    ``previous``, rebuilt alike from the prover's log and from the challenger device's entry."""
+    return G.Declaration(day, program, tuple(blocks)).digest()
+
+
+def _held_naming(named: Mapping[str, Any], day: int, digests: set[str], where: str) -> None:
+    if named.get("day") != day or named.get("declaration") not in digests:
+        raise ValueError(f"the tied registration names day {named.get('day')}'s declaration "
+                         f"{str(named.get('declaration'))[:16]}…, not one of day {day}'s in {where}")
+
+
+#: where R2's day came from, as the summary's ``day`` says: the challenger device's signed ledger, or the development
+#: fallback, DAY and the prover's own registration log, which binds no day to a time the auditor's device signed
+DAY_SOURCES = {"device": "the challenger's signed ledger (--day-ledger)",
+               "development": "development: --day and the prover's --day-log, not device-bound"}
+
+
+def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, bytes, bytes], bool],
+               w: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """``--day-ledger LEDGER``: the window's day and its prover's declarations as the auditor's challenger device signed
+    them, read by the challenger's ``declared_day`` from the device's ledger ``lines`` (``{day, declarations}`` in
+    one-stage R2's shape: the UTC day of the window open's signed ``started_utc``, and the declarations its lane signed
+    before that open), never ``--day``. The tied W's naming is held to `registration.Declaration` rebuilt from the
+    device's entry of its day. ValueError (`challenger.CoinError`) where the reader refuses the ledger."""
+    from verity.protocols.proofs.spot.device import challenger as Ch
+    got = Ch.declared_day(lines, {"root": root}, key, verify)
+    day = got["day"]
+    declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
+    if w is not None:
+        named = {k: (w.get("window") or {}).get(k) for k in ("day", "declaration")}
+        _held_naming(named, day, {_rebuilt(d["day"], d["program"], d["blocks"]) for d in declarations if d["day"] == day},
+                     "the challenger's ledger")
+    return {"day": day, "declarations": declarations}
+
+
+def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
+    """The audit summary's ``tie`` for a5's ``tie`` (`tie_of`): W's digest and the values tied to it, and for Pearl+'s window
+    record (a W whose window names a Pearl-C scheme) what credits its roots (`PEARL_CREDIT`)."""
+    w = tied["log"][0]
+    scheme = (w.get("window") or {}).get("scheme")
+    pearl = isinstance(scheme, str) and scheme.startswith("pearl-c-")
+    return {"record": R.digest(w), "values": sorted(tied["outputs"]), **({"credited_by": PEARL_CREDIT} if pearl else {})}
 
 
 def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -699,17 +812,24 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
     return {"answer": answer, "free": count["free"], "program": program, "registration": rec, "steps": 0}
 
 
-def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Path | None) -> tuple[Any, dict, dict]:
+def verifier_window(window_dir: Path, law: Mapping[str, Any] | str, template_sets: Path | None) -> tuple[Any, dict, dict]:
     """The verifier's window and circuit record from the records (`interface.of_records`), and a5's template sets: each
     statement's template composed from its Definition (`composer`), every other template lowered from the verifier's own
-    input set, whose Definition it resolves to; any other template from Verity's catalog (`catalog_resolve`). A window
-    with row tables is refused: a5 checks their segment roots against the ones recorded before each coin (``step_roots``),
-    which the records don't carry yet."""
+    input set, whose Definition it resolves to; any other template from a catalog (`catalog_resolve`). ``law`` is
+    the window's sampling design, or as text the rate a stream states as its rule (`service.Law`, which refuses a fixed
+    count by name): the window's sampling design and work table are then the ones that rate names over the window's own proof
+    blocks (`a5.rated`), as the stream derives them. A window with row tables is refused: a5 checks their segment roots
+    against the ones recorded before each coin (``step_roots``), which the records don't carry yet."""
     import a5 as A5
 
     own = A5.template_sets(template_sets) if template_sets else {}
     resolve = lambda t: own[t][1] if t in own else catalog_resolve(t)  # noqa: E731
-    mine, doc = IF.of_records(window_dir, law, resolve)
+    if isinstance(law, str):
+        S.Law(law)
+        mine, doc = IF.of_records(window_dir, {}, resolve)
+        mine = A5.rated(mine, law)
+    else:
+        mine, doc = IF.of_records(window_dir, law, resolve)
     if mine.row_tables:
         raise ValueError(f"the window has {len(mine.row_tables)} row tables, and its records don't carry the segment roots "
                          "recorded before each segment's coin, so the audit can't check the tables against them: refused "
@@ -756,7 +876,7 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
     bit flipped (``public-bit-*``) under the honest proof."""
     import a0
     # the directory of `zk_mutants.py` and the modules it imports beside it
-    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/flock/agreement/zk_mutants.py").parent))
+    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/proofs/flock/prover/agreement/zk_mutants.py").parent))
     import zk_mutants as ZM
 
     k, honest = next(((k, s.parent) for k in range(len(members))
@@ -789,17 +909,102 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
             "cases": cases}
 
 
-def rule_of(law: Mapping[str, Any], population: int) -> str:
-    """The rule the audit's stream states for a window registered under the fixed design ``law`` over ``population`` proof
-    blocks. A selection rule's law is a rate (`service.Law` refuses a fixed count), so the rule is the rate of the
-    design's K in the window's N: ``rate:K/N`` for a subset design, ``stratified-rate:K/N`` for a stratified one (at K = 1,
-    one proof block a stratum) and ``work-rate:K/N`` for a work one. The stream holds the registration to the design its
-    rule names over the window (R1), so a design its rate doesn't reproduce is refused there, by name; a Bernoulli design
-    states its own text."""
-    kind = {"subset": "rate", "stratified": "stratified-rate", "work": "work-rate"}.get(law.get("law"))
-    if kind is None:
-        return f"bernoulli:{law.get('p')}"
-    return f"{kind}:{min(law['k'], population)}/{population}"
+def zk_server_refused() -> str:
+    """How the ZK server's reason for a message it holds back opens (its Lean's own text, under the prover's name for
+    it, `rec_live.refused`), which the prover's record of its session gives as why it stopped (``prover_stopped``; live
+    PROTOCOL.md, the ZK server's send check)."""
+    from verity_flock import rec_live
+
+    return rec_live.refused("")
+
+
+#: how a Lean verdict's reason opens where a file of the session's (its record, a rep's proof) was not there to read
+#: (`FlockVerify`'s ``verify``): like a refusal at setup, which `a0.lean_refused` leaves out, the verifier read no proof
+NO_SESSION_FILES = "session files:"
+#: what a Lean verdict's reason names where a table row of a statement's registered read does not open the root the
+#: verifier holds for the value read (`Registered.checkPort` in Flock's verifier: ``registered reads: port P: table row R
+#: does not open V's registered root at position N``), a check `verify` makes while it sets the statement up (the
+#: reason opens ``setup:``) and before it reads a proof. The registered reads' other refusals there do not name it: a
+#: verifier that holds no root for a read, or a statement that names none, is no row seen not to open one
+READ_OPENS_NO_ROOT = "'s registered root at position "
+
+
+def session_proofs(sdir: Path) -> dict[str, Any]:
+    """What member session ``sdir`` (a5's ``session-m<k>``) records of its proofs leaving the prover: ``proofs``, how many
+    proof streams the verifier's record of the session lists (``session.json``'s ``proof_sha512``; None where the session
+    has no record, or its record no such list), and ``prover_stopped``, why the prover's record says it stopped short (its
+    ``LIVE`` line; None where it didn't, or printed no such line). A session that was a process pair of its own has the
+    line in its ``prove.log`` (`a0.session`). One the audit's proof server proved (`a5.proof_server`) has none: its line
+    is in that server's prover's log, ``proof-server/prover-*.log`` beside the sessions, among every session's of that
+    prover, and is the one whose ``label`` is the session's directory, as a5 submits it. A ``LIVE`` line is one that
+    opens ``LIVE`` and a tab and holds a JSON object from there to its end. A line not opened so, or holding JSON that
+    is no object, is none and gives no stop; one opened so that holds no JSON raises, as the proof server's own read of
+    it does."""
+    recs = sorted((sdir / "sessions").glob("*/session.json"))
+    listed = json.loads(recs[-1].read_text()).get("proof_sha512") if recs else None
+
+    def lines(log: Path) -> list[dict]:
+        found = [json.loads(x[5:]) for x in (log.read_text(errors="replace").splitlines() if log.is_file() else ())
+                 if x.startswith("LIVE\t")]
+        return [v for v in found if isinstance(v, dict)]
+    own = lines(sdir / "prove.log")
+    served = [v for log in sorted((sdir.parent / "proof-server").glob("prover-*.log")) for v in lines(log)
+              if v.get("label") == str(sdir.resolve())]
+    live = next(iter(own or served), {})
+    return {"proofs": None if listed is None else len(listed), "prover_stopped": live.get("prover_stopped")}
+
+
+def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping[str, bool] | None = None,
+                   read: bool = False) -> dict[str, Any]:
+    """A forged window's verdict, from a5's summary ``s`` and its audit directory ``wdir`` (``audit.json``, each sampled
+    member's ``session-m<k>``). Every check before the sample passed, ``more`` (the caller's own checks) holds, the audit
+    record rejects, and the window was stopped where what it forges is. The caller says what that is, a false unit or
+    (``read``) a registered read, and the window passes on the one check that calls for, never on another's:
+
+    * a false unit behind the ZK server (the summary's ``arm`` is ``fw``, which a5 writes where the sessions ran behind
+      its binary and nowhere else), no proof of which may leave the prover:
+      ``no_proof_released``, the session of the member holding the forged unit (``member``; any sampled member's where
+      None) has no proof in the verifier's record of it, and the prover's record gives the ZK server's refusal as why it
+      stopped (`session_proofs`, `zk_server_refused`). The Lean verifier refuses that session too, for want of its files:
+      a verdict on no proof.
+    * a false unit behind none (a plain audit), whose proof leaves, and Lean's own verdict must refuse it:
+      ``lean_refused``, the Lean verifier refused a proof it read (`a0.lean_refused`, and not for want of the session's
+      files, `NO_SESSION_FILES`).
+    * ``read``, a registered read that opens no pinned root, in a window of no false unit: ``read_refused``, some
+      session's Lean verdict is a refusal naming a row of a registered read that does not open the verifier's root,
+      which Lean checks at setup (`a0.lean_refused` naming `READ_OPENS_NO_ROOT`). The units are their Definitions', so
+      the sessions' proofs may leave, and none is refused: neither is asked of the window, or held against it.
+
+    ``checks`` holds the three, and the window passes on the one named (``passes_on``); the other two are shown and not
+    counted. A check with nothing to read has no value, and ``no_value`` says why: ``no_proof_released`` behind no ZK
+    server, and ``lean_refused`` where Lean refused only sessions it read no proof of (False where it refused none).
+    ``sessions`` is what each session read records (`session_proofs`), and ``why`` the audit's reasons."""
+    import a0
+
+    audit, behind, no_value = s.get("audit") or {}, s.get("arm") == "fw", {}
+    record = json.loads((wdir / "audit.json").read_text()) if (wdir / "audit.json").is_file() else {}
+    lean = {k: v for k, v in (record.get("verdicts") or {}).items() if k.startswith("lean-verify/") and v.get("accepted") is not True}
+    on_proof = [k for k, v in lean.items() if a0.lean_refused(v) and not v["why"].startswith(NO_SESSION_FILES)]
+    refused: bool | None = bool(on_proof)
+    if lean and not on_proof:
+        refused = None
+        no_value["lean_refused"] = "the Lean verifier read no proof: " + "; ".join(
+            f"{k}: {(v.get('why') or 'no reason given').split(chr(10), 1)[0]}" for k, v in sorted(lean.items()))
+    dirs = sorted(wdir.glob("session-m*")) if member is None else [wdir / f"session-m{member}"]
+    sessions = {d.name.removeprefix("session-"): session_proofs(d) for d in dirs}
+    no_proof_released: bool | None = None
+    if behind:
+        no_proof_released = any(x["proofs"] == 0 and str(x["prover_stopped"] or "").startswith(zk_server_refused())
+                                for x in sessions.values())
+    else:
+        no_value["no_proof_released"] = "the sessions ran behind no ZK server"
+    stopped = {"no_proof_released": no_proof_released, "lean_refused": refused,
+               "read_refused": any(a0.lean_refused(v, READ_OPENS_NO_ROOT) for v in lean.values())}
+    on = "read_refused" if read else "no_proof_released" if behind else "lean_refused"
+    checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()), **(more or {}),
+              "rejected": audit.get("accepted") is False, **stopped}
+    return {"ok": all(v is True for c, v in checks.items() if c == on or c not in stopped), "checks": checks, "passes_on": on,
+            "no_value": no_value, "sessions": sessions, "why": audit.get("why")}
 
 
 def audit(a: argparse.Namespace) -> int:
@@ -810,9 +1015,8 @@ def audit(a: argparse.Namespace) -> int:
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    law = D.parse_design(a.law)
     try:
-        mine, doc, sets = verifier_window(wdir, law, Path(a.template_sets) if a.template_sets else None)
+        mine, doc, sets = verifier_window(wdir, a.law, Path(a.template_sets) if a.template_sets else None)
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else catalog_resolve(t)
@@ -822,7 +1026,8 @@ def audit(a: argparse.Namespace) -> int:
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
         pins |= ties | untied
-        tied, tie_pins = tie_of(doc, json.loads(Path(a.tie_file).read_text()) if a.tie_file else None, a.tie_prefix)
+        w_tie = json.loads(Path(a.tie_file).read_text()) if a.tie_file else None
+        tied, tie_pins = tie_of(doc, w_tie, a.tie_prefix)
         if twice := sorted(set(tie_pins) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")
         pins |= tie_pins
@@ -835,6 +1040,12 @@ def audit(a: argparse.Namespace) -> int:
             raise ValueError(f"values {twice} are both pinned and the window's history tables")
         pins |= histories
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
+        if a.day_ledger:
+            from verity.protocols.proofs.spot.device import challenger as Ch, remote as SPR
+            key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
+            day = device_day(SPR.ledger_lines(a.day_ledger), mine.run, key, AC.lms_verify, w_tie)
+        else:
+            day = declared_day(a.day, a.day_log, a.day_params, w_tie)
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
         (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True))
@@ -858,14 +1069,18 @@ def audit(a: argparse.Namespace) -> int:
     more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
-    a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, rule_of(mine.law, mine.population)
+    a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
                              own=set(ties) | set(untied) | set(tie_pins))
-    a.tie = tied
+    a.tie, a.declared = tied, day
+    if tied:
+        named = {**tie_row(tied), "previous": rec.get("previous"), "chained": rec.get("previous") == R.digest(tied["log"][0])}
+        (out / "tie.json").write_text(json.dumps(named, indent=1, sort_keys=True))
+        print("TIE " + json.dumps(named, sort_keys=True), flush=True)
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
-                                          peer=a.peer, key_record=a.challenger_key)
+                                          peer=a.peer, key_record=a.challenger_key, deployed=a.deployed_key)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
@@ -877,7 +1092,7 @@ def audit(a: argparse.Namespace) -> int:
         published = a.coins.evidence()
         manager.shutdown()
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
-           "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
+           "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs")}}
@@ -888,7 +1103,10 @@ def audit(a: argparse.Namespace) -> int:
     if reads:
         row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
     if tied:
-        row["tie"] = {"record": R.digest(tied["log"][0]), "values": sorted(tied["outputs"])}
+        row["tie"] = tie_row(tied)
+    if day:
+        row["day"] = {"day": day["day"], "declared": [d["program"] for d in day["declarations"] if d["day"] == day["day"]],
+                      "source": DAY_SOURCES["device" if a.day_ledger else "development"]}
     acts = committed_activations(w)
     if acts is not None:
         row["activations"] = acts
@@ -906,12 +1124,8 @@ def audit(a: argparse.Namespace) -> int:
             ordered = ordered and row["after_draw"]["refused"]
     else:
         ordered = False
-    if a.forged:
-        verdicts = (s.get("audit") or {}).get("verdicts") or {}
-        checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()),
-                  "rejected": (s.get("audit") or {}).get("accepted") is False,
-                  "lean_refused": any(v is False for k, v in verdicts.items() if k.startswith("lean-verify/"))}
-        row["forged"] = {"ok": all(checks.values()), "checks": checks, "why": (s.get("audit") or {}).get("why")}
+    if a.forged or a.forged_read:
+        row["forged"] = forged_outcome(s, out / "window", read=a.forged_read)
         row["ok"] = row["forged"]["ok"] and ordered
     else:
         row["ok"] = ok and ordered and (compiled is None or compiled["ok"])
@@ -931,7 +1145,7 @@ def audit(a: argparse.Namespace) -> int:
                                      "leak": {k: row["leak"][k] for k in ("other_inputs", "free", "registered", "advice_bits",
                                                                           "bound", "unpinned", "untied", "window")
                                               if k in row["leak"]},
-                                     **({"forged": row["forged"]} if a.forged else {})}, sort_keys=True, default=str))
+                                     **({"forged": row["forged"]} if "forged" in row else {})}, sort_keys=True, default=str))
     return 0 if row["ok"] else 1
 
 
@@ -942,7 +1156,7 @@ def warm(a: argparse.Namespace) -> int:
     import a5 as A5
 
     t0 = time.time()
-    mine, _doc, sets = verifier_window(Path(a.window), D.parse_design(a.law), Path(a.template_sets) if a.template_sets else None)
+    mine, _doc, sets = verifier_window(Path(a.window), a.law, Path(a.template_sets) if a.template_sets else None)
     window_s = round(time.time() - t0, 1)
     got = A5.warm(a, sets, mine, a.jobs)
     for g in got:
@@ -959,7 +1173,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("audit", help="a window's audit from its records alone")
     p.add_argument("--window", required=True, help="the window's directory: circuit.json, registration.json, the value files")
-    p.add_argument("--law", required=True, help="the proof system's law of the window (subset:K, stratified:K, work:K)")
+    p.add_argument("--law", required=True, help="the rate the audit's stream states as its rule (rate:NUM/DEN, "
+                   "stratified-rate:NUM/DEN or work-rate:NUM/DEN), whose sampling design over the window's proof blocks the "
+                   "registration is held to; a fixed count (subset:K, stratified:K, work:K) is refused")
     p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile unit")
     p.add_argument("--compilers", help="with --opening: the registered compilers the verifier holds, {name: {digest, argv, "
                    "code, pythonpath}}")
@@ -982,12 +1198,18 @@ def main(argv: list[str] | None = None) -> int:
                    "every member with a proved unit, a sample needing more refused before any listens (default one a member)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
-    p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
+    forges = p.add_mutually_exclusive_group()
+    forges.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
+    forges.add_argument("--forged-read", action="store_true", help="the window holds a registered read that opens no pinned "
+                        "root, and no forged unit: the Lean verifier must refuse it at setup on that read")
     p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins): local, loopback:HOST:PORT or "
                    "gate:USER@HOST (the auditor host through its SSH gate, with --peer and --challenger-key)")
+    p.add_argument("--deployed-key", action="store_true",
+                   help="with --challenger local: the session's key at the deployed LMS parameters (a5_coins.start's deployed), "
+                   "its whole tree made over this machine's cores")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
@@ -996,18 +1218,27 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "
                    "values} (`pinned`), for a circuit that reads them")
-    p.add_argument("--tie", dest="tie_file", help="the earlier registration W (PoUW H1's of the window) that registered "
-                   "first the values the circuit's program takes, which the window's registration registers as W's, "
-                   "chained right after it (`tie_of`); a circuit with values needs it")
+    p.add_argument("--tie", dest="tie_file", help="the earlier registration W (PoUW H1's of the window, or Pearl+'s window "
+                   "record) that registered first the values the circuit's program takes, which the window's registration "
+                   "registers as W's, chained right after it (`tie_of`); a circuit with values needs it")
     p.add_argument("--tie-prefix", help="with --tie: W's descriptor's PREFIX, which its tables' names take "
-                   "(`credit.window_table`; h1/ for PoUW H1's window)")
+                   "(`credit.window_table`; h1/ for PoUW H1's window). Without it, W names each value as the circuit does "
+                   "(Pearl+'s)")
+    p.add_argument("--day", type=int, default=None, help="the window's day, by its index among the monitoring period's days: "
+                   "R2 holds the registration's program to the day's one declaration in --day-log (`declared_day`)")
+    p.add_argument("--day-log", help="with --day: the deployment's registration log (verity/registration/log/v1)")
+    p.add_argument("--day-params", help="with --day: the log's parameters, {auditor, composite} (default the log's composite "
+                   "under an auditor of no sheets or keys)")
+    p.add_argument("--day-ledger", help="the challenger device's own ledger (windows.jsonl, whole: never a copy PoUS cut), "
+                   "verified under --challenger-key: R2's day is the window open's signed UTC day and its declarations the "
+                   "device's (`device_day`), in place of --day's development fallback")
     p.add_argument("--skip-negatives", action="store_true", help="no negatives in this audit (module docstring): a run of "
                    "several audits runs them in its first")
     p.add_argument("--compose-cache", help="a5's compose cache, which `warm` filled under this tree and FLOCK_* environment: "
                    "staging links each kept circuit and composes none (default none: every template composed here)")
     p = sub.add_parser("warm", help="every template of a window composed into a5's compose cache, before its timed audit")
     p.add_argument("--window", required=True, help="the window's directory, as its audit takes it")
-    p.add_argument("--law", required=True, help="the window's law, as its audit takes it")
+    p.add_argument("--law", required=True, help="the window's rule, as its audit takes it")
     p.add_argument("--template-sets", help="the verifier's own input sets, as its audit takes them")
     p.add_argument("--compose-cache", required=True, help="the cache the audit's --compose-cache names")
     p.add_argument("--jobs", type=int, default=1, help="templates composed at once, each in a forked process: what the "
@@ -1066,10 +1297,15 @@ def main(argv: list[str] | None = None) -> int:
     if a.challenger:
         if a.challenger != "local" and not a.challenger.startswith(("gate:", "loopback:")):
             ap.error(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST, not {a.challenger!r}")
+        if a.deployed_key and a.challenger != "local":
+            ap.error("--deployed-key is a local session's key: it goes with --challenger local")
         if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
             ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
         if not a.main:
             ap.error("--challenger needs --main")
+    if a.day_ledger and (a.day is not None or a.day_log or a.day_params or not a.challenger_key):
+        ap.error("--day-ledger reads the day from the challenger's signed ledger under --challenger-key, without --day, "
+                 "--day-log or --day-params")
     return audit(a)
 
 

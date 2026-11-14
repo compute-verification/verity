@@ -35,7 +35,7 @@ p = ¾'s log₂(4/3).
 (one seed a matmul, a head) lose a unit's floor when one operand row's noise is matched. That is visible after the seed,
 so the cheater picks the matched rows: each of N rows of b bits read by u units has moment 1 − 2^{-b} + 2^{-b}e^{θu},
 and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`; `visible_premium`,
-`verity.protocols.pouw.verifier.grind`'s, which compile's seed-group check reads too). attn_noise's own form,
+`verity.protocols.accounting.pouw.verifier.grind`'s, which compile's seed-group check reads too). attn_noise's own form,
 log₂(T/δ)/(h·N) with h the least row's noise bits over the units reading it, leaves out which rows the cheater picks:
 it sits 0.5–8% below at decode and 10–21% below at prefill's QKᵀ, where the bound is smallest. Both are tabled, with
 the (query head, request) pairs a decode seed must cover. A seed over several query heads samples a KV head's K rows' and
@@ -59,11 +59,17 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.protocols.pouw.verifier.grind import DELTA_BITS, FLAG, LN2, ln_t_over_delta, visible_premium
+from verity.protocols.accounting.pouw.verifier.grind import DELTA_BITS, FLAG, LN2, ln_t_over_delta, visible_premium
 
-sys.path.insert(0, str(Path(__file__).parent))
 import budget as BU
 import eps_budget as EB
+
+#: what the tests read
+__all__ = [
+    "BU", "EB", "FLAG", "H1_NOISE", "KAPPAS", "KAPPA_LIVE", "PREFILL", "PREFILL_COVER_CTX", "PROVED", "P_ALIVE",
+    "Q_BIT", "Q_KEYED", "SEG", "SeedGroup", "TILE", "decode_cover", "h1_attention", "h1_h_form", "levers",
+    "ln_t_over_delta", "prefill_cover", "premium", "regimes", "sites", "table", "visible_premium", "y_star",
+]
 
 T_BITS = (80, 128)                   # the cheater's hash queries a salt's epoch
 TILE = (32, 32)                      # h1tile's r × c (compile.Scheme.tile)
@@ -418,7 +424,7 @@ def render(t: dict) -> str:
     lines += ["", "## Deployed H1 attention's floor (ATTN-NOISE §5's h), visible matched rows", "",
               ("Each cell is the rows the cheater picks after the seed (`visible_premium`), then ATTN-NOISE's h form "
                "log₂(T/δ)/(h·N) (QKᵀ: h = d/L at prefill, 448/L at decode; P·V: h = 1 at prefill, 1.75 at decode), which "
-               "leaves the pick out. A call's seed draws a KV head's K rows and V columns once, read by its heads/kv "
+               "leaves the pick out. A call's seed samples a KV head's K rows and V columns once, read by its heads/kv "
                "query heads (GQA), so its prefill h is those over heads/kv; at decode the query's rows bind."), "",
               "| model | regime | T | QKᵀ, a seed a head | P·V, a seed a head | QKᵀ, a seed a call | P·V, a seed a call |",
               "|---|---|---|---|---|---|---|"]

@@ -2,7 +2,13 @@
 a few steps at a small shape through its route, and the same steps written here against torch's own optimizers and
 its own average of the weights, or against the published rule where torch has none. The two end at the same output
 model. An entry whose output is an average over a horizon is held to torch's average of the weights the entry beside
-it writes, the one whose output is those weights, which has its own reference."""
+it writes, the one whose output is those weights, which has its own reference.
+
+What is held to a reference is the update's rule, so both sides run their forward in float32 (`forward_in_float32`):
+a reference sums a gradient in another order than its route (accumulation's micro-batches against the whole batch,
+LoRA's two factors against the merged matrix), and under the routes' bf16 autocast the two orders differ in the
+gradient's third digit, enough to turn the sign of an Adam step."""
+import contextlib
 import fnmatch
 import math
 import tomllib
@@ -13,12 +19,12 @@ import torch.nn.functional as F
 from synthetic import SHAPE as TINY
 from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 
-from training_slowdown import config, library
+from training_slowdown import config, library, run, starts
 from training_slowdown.model import LM
 from training_slowdown.routes import subset
 from training_slowdown.routes._optimizers import Muon, newton_schulz
 
-#: six blocks, as the entries' patterns name them, 16 wide
+#: 16 wide; an entry's own test runs it at its start's depth (`at_its_depth`), so each block its patterns name is there
 SHAPE = TINY | {"n_layer": 6}
 STEPS, BATCH, CTX = 3, 4, 8
 #: the steps of an entry whose average has a horizon: enough that a tenth of them is over a step, where the average
@@ -26,11 +32,24 @@ STEPS, BATCH, CTX = 3, 4, 8
 LONG = 24
 
 
+@pytest.fixture(autouse=True)
+def forward_in_float32(monkeypatch):
+    """The routes' forward in float32: their bf16 autocast (`subset.step`'s and `qat.step`'s) is switched off for
+    these tests."""
+    monkeypatch.setattr(torch, "autocast", lambda *args, **kwargs: contextlib.nullcontext())
+
+
 def entry(name: str):
     """An entry's route and its dials, the route's defaults filled in, as a job reads them."""
     raw = tomllib.loads((library.ENTRIES / f"{name}.toml").read_text())
     route = config.route(raw["route"])
     return route, config.dials(route, raw.get("dials", {}), name)
+
+
+def at_its_depth(name: str, monkeypatch) -> None:
+    """`SHAPE` with the blocks of the entry's start."""
+    raw = tomllib.loads((library.ENTRIES / f"{name}.toml").read_text())
+    monkeypatch.setitem(SHAPE, "n_layer", starts.start(raw["start"]).shape["n_layer"])
 
 
 def steps_of(dials: dict) -> int:
@@ -44,9 +63,14 @@ def batches(steps: int = STEPS) -> list[torch.Tensor]:
 
 def routed(route, dials: dict) -> dict:
     """The output model after the route's own steps. A weight the route hands over as its trained parts is the one
-    the route's plan rebuilds on the start from its packing of them, as a job's checkpoint takes it."""
+    the route's plan rebuilds on the start from its packing of them, as a job's checkpoint takes it. A route whose
+    model starts otherwise than as the start (`origin`) starts from what the harness builds of the start by it."""
+    torch.manual_seed(0)
+    theta = LM.of(SHAPE).state_dict()
     torch.manual_seed(0)
     model, optimizers = route.build(SHAPE, dials)
+    if hasattr(route, "origin"):
+        model.load_state_dict(run.start_state(theta, model.state_dict(), route.origin(SHAPE, dials)))
     start = {k: v.clone() for k, v in model.state_dict().items()}
     steps = steps_of(dials)
     for t, rows in enumerate(batches(steps)):
@@ -155,21 +179,33 @@ def qat(dials: dict) -> dict:
 
     The latents step under the route's own Muon, which the Muon entries hold to the published rule, and the scale is
     summed as the codec sums it: one rounding apart before Muon's bf16 Newton-Schulz moves a latent by percents of
-    its step, and a latent that crosses the rounding's threshold is a weight a whole scale off."""
+    its step, and a latent that crosses the rounding's threshold is a weight a whole scale off.
+
+    Under a `grad_code` of B bits each matrix's gradient is rounded to the nearest multiple of its row's scale, the
+    row's largest magnitude over 2^(B-1) - 1 as bf16 holds it, within 2^(B-1) - 1 of them: the codes' values, with
+    none of the packing the route sends them in. Under `low_state` the latents are bf16 and step under the route's
+    Muon with its `low_state`, which test_routes holds to the rule written out."""
     torch.manual_seed(0)
     model = LM.of(SHAPE)
     theta = {k: v.detach().clone() for k, v in model.state_dict().items()}
-    latents = {k: torch.zeros_like(v, requires_grad=True) for k, v in theta.items() if v.ndim == 2 and any(
-        fnmatch.fnmatchcase(k, p.strip()) for p in dials["targets"].split(","))}
-    opt = Muon(list(latents.values()), lr=dials["lr"])
+    dtype = torch.bfloat16 if dials["low_state"] else torch.float32
+    latents = {k: torch.zeros_like(v, dtype=dtype, requires_grad=True) for k, v in theta.items()
+               if v.ndim == 2 and any(fnmatch.fnmatchcase(k, p.strip()) for p in dials["targets"].split(","))}
+    opt = Muon(list(latents.values()), lr=dials["lr"], low_state=dials["low_state"])
+    bits = {"fp32": 0, "rtn4": 4, "rtn8": 8}[dials["grad_code"]]
+
+    def coded(g: torch.Tensor) -> torch.Tensor:
+        top = 2 ** (bits - 1) - 1
+        step = (g.abs().amax(1, keepdim=True) / top).bfloat16().float()
+        return torch.where(step > 0, (g / step).round().clamp(-top, top) * step, 0.0)
 
     def built() -> dict:
         out = {}
         for k, v in latents.items():
-            a = v.detach().abs().reshape(1, -1)
+            a = v.detach().float().abs().reshape(1, -1)
             kept = (a >= a.topk(math.ceil(dials["keep"] * a.numel())).values[0, -1]) & (a > 0)
             scale = ((a * kept).sum(1) / kept.sum(1).clamp(min=1)).half().float()
-            out[k] = theta[k] + (v.detach().sign().reshape(1, -1) * kept * scale).view_as(v)
+            out[k] = theta[k] + (v.detach().float().sign().reshape(1, -1) * kept * scale).view_as(v)
         return out
 
     for t, rows in enumerate(batches()):
@@ -177,7 +213,7 @@ def qat(dials: dict) -> dict:
         logits = torch.func.functional_call(model, theta | weights, (rows[:, :-1],))
         F.cross_entropy(logits.flatten(0, 1), rows[:, 1:].flatten()).backward()
         for k, v in latents.items():
-            v.grad = weights[k].grad
+            v.grad = (coded(weights[k].grad) if bits else weights[k].grad).to(dtype)
         torch.nn.utils.clip_grad_norm_(list(latents.values()), dials["clip"])
         left = min(1.0, (1 - t / STEPS) / dials["decay"])
         fall = {"linear": left, "sqrt": 1 - math.sqrt(1 - left)}[dials["cooldown"]]
@@ -185,6 +221,48 @@ def qat(dials: dict) -> dict:
         opt.step()
         opt.zero_grad()
     return theta | built()
+
+
+def deepened(dials: dict) -> tuple[dict, dict]:
+    """The start and the model `grow` starts from, written out: block j of `depth` a copy of the start's block
+    j·L/depth rounded down, and where it repeats the block before it, with `zero`, its two output projections zero."""
+    torch.manual_seed(0)
+    theta = LM.of(SHAPE).state_dict()
+    n, blocks = dials["depth"], SHAPE["n_layer"]
+    start = {k: v.clone() for k, v in theta.items() if not k.startswith("blocks.")}
+    for j in range(n):
+        i = j * blocks // n
+        for k, v in theta.items():
+            if k.startswith(f"blocks.{i}."):
+                rest = k.removeprefix(f"blocks.{i}.")
+                zero = dials["zero"] and j and (j - 1) * blocks // n == i and rest in ("wo.weight", "w_down.weight")
+                start[f"blocks.{j}.{rest}"] = torch.zeros_like(v) if zero else v.clone()
+    return theta, start
+
+
+def grown(dials: dict) -> dict:
+    """`grow` written out: the deepened model, its blocks' matrices under the published Muon at `lr` with the decay
+    decoupled, its gains at `adam_lr` and its embedding at `embed_lr` under torch's AdamW, undecayed, the gradient
+    clipped at 1, the rate a linear ramp over `warmup` steps falling linearly to 0, one forward and backward over the
+    whole batch."""
+    model = LM.of(SHAPE | {"n_layer": dials["depth"]})
+    model.load_state_dict(deepened(dials)[1])
+    model.embed.requires_grad_(dials["embed_lr"] > 0)
+    matrices = [p for n, p in model.named_parameters() if p.ndim == 2 and n != "embed"]
+    adam = [{"params": [p for p in model.parameters() if p.ndim == 1], "lr": dials["adam_lr"]}] + (
+        [{"params": [model.embed], "lr": dials["embed_lr"]}] if dials["embed_lr"] else [])
+    opts = [Rule(matrices, muon_rule, lr=dials["lr"], weight_decay=dials["weight_decay"]),
+            torch.optim.AdamW(adam, betas=(0.9, 0.95), weight_decay=0.0)]
+    for t, rows in enumerate(batches()):
+        F.cross_entropy(model(rows[:, :-1]).flatten(0, 1), rows[:, 1:].flatten()).backward()
+        torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0)
+        for o in opts:
+            for g in o.param_groups:
+                ramp = min(1.0, (t + 1) / dials["warmup"]) if dials["warmup"] else 1.0
+                g["lr"] = g.setdefault("rate", g["lr"]) * ramp * (1 - t / STEPS)
+            o.step()
+            o.zero_grad()
+    return model.state_dict()
 
 
 def adamw(d: dict):
@@ -262,7 +340,11 @@ REFERENCES = {
     "l16-t20-1.1x-fullmuon-fe-wsd-5383-ema": (averaged, CLOSE),
     "l16-t20-1.1x-fullmuon-fe-wsd-ema": (averaged, CLOSE),
     "l16-t20-1.1x-ref-optim-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
+    "l16-t20-1.1x-ref-optim-fullmuon-fe-wsd-102": (under(muon), CLOSE_BF16),
     "l16-t20-1.1x-ref-optim-fullmuon-wsd": (under(muon), CLOSE_BF16),
+    "l16-t20-1.1x-shallow-depthshare-4": (under(muon), CLOSE_BF16),
+    "l16-t20-2x-fullmuon-fe-wsd-40326": (under(muon), CLOSE_BF16),
+    "l16-t20-2x-hybrid-grow-depth": (grown, CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-4611": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-4611-ema": (averaged, CLOSE),
@@ -272,6 +354,7 @@ REFERENCES = {
     "m-t20-1.1x-shallow-depthshare-4": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-shallow-depthshare-8": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
+    "m-t20-2x-hybrid-grow-depth": (grown, CLOSE_BF16),
     "s-t20-1.1x-accumulate": (under(adamw), CLOSE),
     "s-t20-1.1x-adafactor": (under(adafactor), CLOSE),
     "s-t20-1.1x-adamw": (under(adamw), CLOSE),
@@ -286,7 +369,20 @@ REFERENCES = {
     "s-t20-1.1x-muon-whole": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-qat-top2": (qat, CLOSE),
     "s-t20-1.1x-qat-top3": (qat, CLOSE),
+    "s-t20-1.1x-qat-top3-3000": (qat, CLOSE),
+    "s-t20-1.1x-qat-top3-grad4": (qat, CLOSE),
     "s-t20-1.1x-qat-top4": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep10": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep15": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep15-2380": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep15-grad4-lowstate": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep15-grad8-lowstate": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep30": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep30-grad8-lowstate": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep50": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep50-7080": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep50-grad4-lowstate": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep7.5-decay60": (qat, CLOSE),
     "s-t20-1.1x-ref-optim": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim-1027": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim-747": (under(muon), CLOSE_BF16),
@@ -301,6 +397,8 @@ REFERENCES = {
     "s-t20-1.1x-shampoo-whole": (under(shampoo), CLOSE),
     "s-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
     "xl-t20-1.1x-ref-optim-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
+    "xl-t20-1.1x-ref-optim-fullmuon-fe-wsd-3884": (under(muon), CLOSE_BF16),
+    "xl-t20-1.1x-shallow-depthshare-4": (under(muon), CLOSE_BF16),
 }
 
 
@@ -310,12 +408,13 @@ def test_every_entry_of_the_library_has_a_reference():
 
 
 @pytest.mark.parametrize("name", sorted(REFERENCES))
-def test_an_entrys_steps_end_at_its_references_weights(name):
+def test_an_entrys_steps_end_at_its_references_weights(name, monkeypatch):
+    at_its_depth(name, monkeypatch)
     route, dials = entry(name)
     reference, close = REFERENCES[name]
     got, want = routed(route, dials), reference(dials)
     torch.manual_seed(0)
-    start = LM.of(SHAPE).state_dict()
+    start = deepened(dials)[1] if reference is grown else LM.of(SHAPE).state_dict()
     moved = [k for k in got if not torch.equal(got[k], start[k])]
     assert moved and set(moved) == {k for k in want if not torch.equal(want[k], start[k])}
     for k in moved:

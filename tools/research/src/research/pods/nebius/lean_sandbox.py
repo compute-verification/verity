@@ -56,7 +56,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
@@ -270,7 +270,7 @@ def probe(spec: dict, environ=None, connect=_connect, resolve=_resolve, sudo=_su
     for name, fn in zip(PROBES, (user, privileges, sudo_, network, sockets, secrets, writes, private, environment, processes)):
         try:
             held, detail = fn()
-        except Exception as e:                                      # noqa: BLE001: a probe that can't answer didn't hold
+        except Exception as e:                                      # noqa: BLE001 (a probe that can't answer didn't hold)
             held, detail = False, f"the probe raised {type(e).__name__}: {e}"
         out.append({"probe": name, "held": bool(held), "detail": detail})
     return out
@@ -638,7 +638,7 @@ def _unlink(name: str, dir_fd: int) -> None:
         pass
 
 
-def take(slots: Path, who: dict, wait_s: float | None = None, now=lambda: datetime.now(timezone.utc),
+def take(slots: Path, who: dict, wait_s: float | None = None, now=lambda: datetime.now(UTC),
          sleep=time.sleep) -> tuple[int, int] | None:
     """A slot of the `build` pool, in arrival order with lean_slot.py's waiters: (its index, the descriptor holding it), or
     None when ``wait_s`` passed first."""
@@ -936,7 +936,7 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
-def main(argv: list[str], run: Runner = systemd_run, now=lambda: datetime.now(timezone.utc), sleep=time.sleep,
+def main(argv: list[str], run: Runner = systemd_run, now=lambda: datetime.now(UTC), sleep=time.sleep,
          geteuid=os.geteuid, getpwnam=pwd.getpwnam, proc: Path = PROC, systemctl: Systemctl = _systemctl, **prep) -> int:
     if argv[:1] == ["_probe"]:
         print(MARK + json.dumps(probe(json.loads(argv[1]))), flush=True)

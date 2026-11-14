@@ -10,7 +10,7 @@ modifies a circuit puts its report in the PR, and `check` runs `circuit-check --
   names) and `structural` are imported as modules too.
 - **Loaded by:** `check`, which runs the command and plans it by target (`tools/verity/check/plan.py`); the benchmarks
   that stage or lower a catalog target (`benchmarks/one_stage`, `benchmarks/proof_throughput`, `benchmarks/served_units`,
-  `benchmarks/unit_lowering`); Flock's pod catalog (`verity/protocols/flock/pod/catalog.py`); and a migration tool under
+  `benchmarks/unit_lowering`); Flock's pod catalog (`verity/protocols/proofs/flock/prover/pod/catalog.py`); and a migration tool under
   `adapters/vllm/tools`.
 - **Loads:** every Definition module's sidecar and pins, and the module each belongs to, `verity.circuits`,
   `verity.definitions` and Flock (`verity_flock`). It imports no integration by name: a package under `adapters/`
@@ -47,13 +47,23 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 | `ranges.py` | a family a sidecar registers over a range of statics (`RANGES`), checked at its spots (`--ranges`), and the report's `ranges` |
 | `vectors.py` | the edge and seeded random input vectors |
 | `structural.py`, `structural_slots.py`, `ambient.py`, `by_calls.py` | `--structural` on a template and on a split (`verity_flock.struct_slots`), `--ambient`, and a Program root checked by its calls alone |
-| `cache.py`, `units.py` | the result cache, and the catalog bindings' records, each reused while what it read is unchanged |
+| `cache.py`, `units.py` | the result cache, and the catalog bindings' records, each reused while what it read is unchanged; a checker version no run has used for 72 hours is removed by the next run that uses the cache |
 | `entries.py` | the shared lists' layout, one file per entry (`pins/`) |
 | `cli.py` | the command line and the report (`verity-circuit-check/v1`) |
 
-`heavy.json` holds the peak memory, in GiB, of each target that grows past 4 GiB: the `--all` scheduler reads it to
-decide which targets run side by side, never what a check computes. A new Definition gets a binding in its
-module's sidecar: the suite fails any registered Definition family the catalog doesn't reach.
+circuit-check names no circuit of the catalog it is handed (`tests/test_handed_names.py`): what it knows of one is in
+the sidecars of the module that defines it. Beside a module's binding file (`<module>.circuit-check.py`) and pins file
+(`.circuit-check.json`), its unkeyed file (`.circuit-check.unkeyed.json`) holds what the scheduler, the task list's guard
+and the report read and no check does, so no key holds it: the peak memory, in GiB, of each of its targets that grows
+past 4 GiB and of each of its bindings whose build grows past 2 GiB (`cli.heavy`, `units.built_apart`), its Definitions
+past Flock's block that the report holds, with why (`block_held`), and its families' counts in the last task list that
+passed. A new Definition gets a binding in its module's sidecar: the suite fails any registered Definition family the
+catalog doesn't reach.
+
+`--all` refuses a task list far larger than the last that passed before any target is checked: a family of more than
+`floor` targets and more than `factor` times its count then, or the list past `factor` times its length then
+(`task_list.json`, with the families' counts in their owners' unkeyed files). A growth on purpose is accepted with
+`circuit-check --all --accept-task-list`, whose files the change commits.
 
 circuit-check imports `verity` and Flock, and no integration. A package under `adapters/` registers itself by a
 sidecar of its own module (`<package>/__init__.circuit-check.py`), and then its sidecars are found like `verity`'s. What

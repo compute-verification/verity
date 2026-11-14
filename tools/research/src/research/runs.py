@@ -20,6 +20,8 @@ from . import record, result
 DEFAULT_ROOT = Path.home() / ".research" / "runs"
 TERMINAL = ("done", "failed", "cancelled")
 ACTIVE = ("submitted", "admitted", "waiting", "running", "preserving")
+#: the states `summarize` gives a remote run that will not change again
+ENDED = (*TERMINAL, "refused", "launcher-exited", "runner-gone")
 #: a check's slot record in its run dir, kept by tools/verity/check/slot.py (RUN_SLOT): `waiting` in a machine's check line, `held`
 #: (the slot and when it was taken) or `left`; while it waits, the run is `waiting`, since its check hasn't started
 SLOT_FILE = "slot.json"
@@ -64,6 +66,41 @@ def new_run_id(now: float | None = None) -> str:
     """Sortable, human-typable: r20260921-171502-3f9a.  Identifies this attempt; two identical repetitions get two ids."""
     t = datetime.fromtimestamp(time.time() if now is None else now, tz=timezone.utc)
     return f"r{t:%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
+
+
+#: how many fresh ids `take_run_dir` picks while each names a run dir that exists (two picked in one second share one in 65,536)
+FRESH_ID_TRIES = 8
+
+
+class RunDirTaken(Exception):
+    """The run dir `take_run_dir` would make exists already; the message is the refusal."""
+
+
+def take_run_dir(root: Path, run_id: str | None = None, *, tries: int = FRESH_ID_TRIES) -> Path:
+    """The dir of a new run under `root`, made here by one `mkdir` (never a check, then a make), so no two runs, in one process
+    or two, get one id. A given `run_id` whose dir exists is refused; with none, a fresh id (`new_run_id`) is picked again while
+    its dir exists, `tries` times at most. RunDirTaken says which."""
+    root.mkdir(parents=True, exist_ok=True)
+    met: list[str] = []
+    for _ in range(1 if run_id else tries):
+        run_dir = root / (run_id or new_run_id())
+        try:
+            run_dir.mkdir()
+        except FileExistsError:
+            met.append(run_dir.name)
+            continue
+        return run_dir
+    if run_id:
+        raise RunDirTaken(f"{run_dir} already exists; a rerun gets a fresh id")
+    raise RunDirTaken(f"refused: {tries} fresh run ids in a row each named a run dir that already exists under {root} "
+                      f"({', '.join(sorted(set(met)))}), so nothing ran: something else makes run dirs there; give the run --id or "
+                      "another --runs-dir")
+
+
+def drop_run_dir(run_dir: Path) -> None:
+    """Remove a dir `take_run_dir` made that no run wrote in (it is empty); one a run wrote in stays."""
+    if run_dir.is_dir() and not any(run_dir.iterdir()):
+        run_dir.rmdir()
 
 
 def _read(path: Path) -> dict[str, Any] | None:
@@ -129,6 +166,7 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         "rc": status.get("rc"),
         "signal": status.get("signal"),
         "wall_s": status.get("wall_s"),
+        "memory": status.get("memory"),
         "class": failure.get("class"),
         "certainty": failure.get("certainty"),
         "why": failure.get("why"),

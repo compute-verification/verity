@@ -35,8 +35,11 @@ import time
 from collections import Counter
 from pathlib import Path
 
+from verity.device import load_card
+
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
-TARGET = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "attention_backend": None,
+TARGET = {"compute_capability": [9, 0], "num_sms": load_card("h200-sxm-141gb")["sm"]["count"]["value"], "batch_invariant": False,
+          "attention_backend": None,
           "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": "NVIDIA H200",
           "moe_backend": "triton"}
 ENGINE = {"max_num_batched_tokens": 2048, "max_model_len": 4096, "long_prefill_token_threshold": 256, "max_num_seqs": 256,
@@ -81,7 +84,7 @@ def scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, seq
 
 def session(reqs: list[tuple[int, int, int]]):
     """The window's I1 advice and certified bodies: greedy requests `q<i>` to their max_tokens, prompts of token ids below 256."""
-    from verity.protocols.certifier.verifier import advice as I1
+    from verity.protocols.accounting.certifier.verifier import advice as I1
     steps = scheduled(reqs, ENGINE["max_num_batched_tokens"], ENGINE["long_prefill_token_threshold"])
     requests = tuple(I1.RequestAdvice(f"q{i}", lp, m, "length") for i, (_, lp, m) in enumerate(reqs))
     advice = I1.Advice(requests, tuple(I1.StepAdvice(tuple(

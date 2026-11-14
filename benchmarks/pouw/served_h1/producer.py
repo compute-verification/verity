@@ -28,8 +28,8 @@ from typing import Any
 import numpy as np
 import torch
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity_vllm.protocols.pouw.h1 import receipts as RC
 
 HERE = Path(__file__).resolve().parent
@@ -257,4 +257,4 @@ def check(kept: dict[str, Any], units: list[int]) -> dict[str, Any]:
     return out
 
 
-__all__ = ["Units", "check", "j10r_fields", "public_fields"]
+__all__ = ["Units", "WS", "check", "j10r_fields", "public_fields"]

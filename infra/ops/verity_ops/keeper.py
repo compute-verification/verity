@@ -135,7 +135,7 @@ def cmd_set(argv: list[str]) -> int:
     for bad, why in (([k for k in env if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", k)], "not a variable name"),
                      ([k for k in env if re.fullmatch(r"GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES|CUDA_DEVICE_ORDER|RESEARCH_KEEPER_\w*", k)],
                       "the chunks' lease, the GPUs it grants and their seeds are the keeper's"),
-                     ([k for k in env if SECRET_KEY.search(k)], "a secret's name, and a chunk's env is set on its command line, inside "
+                     ([k for k in env if SECRET_KEY.search(k)], "a secret's or a machine address's name, and a chunk's env is set on its command line, inside "
                       "its lease (launch.json records it as it is)")):
         if bad:
             print(f"research keeper set: --env {', '.join(sorted(bad))}: {why}", file=sys.stderr)

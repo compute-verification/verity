@@ -7,18 +7,18 @@ Its writer is `check.match.global_match` (`check`, and its CLI's `impl`; the per
 A check's evidence and a request's entry are each check's own (`check.match.match_run.NamedCheck.info`): each is kept as written
 (`entry`, which `dump` writes back), with the fields a reader reads typed from it.
 
-    gm = GlobalMatch.load(row_dir / "global_match.json")       # MissingField / UnknownField name the file and the field
+    gm = GlobalMatch.of(json.loads(text), "global_match.json")  # MissingField / UnknownField name the file and the field
     gm.check("G6").lengths_by_request
 """
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from verity_vllm.records.fields import RecordError, objects, only, optional, required
+
+__all__ = ["GlobalMatch", "SCHEMA"]
 
 SCHEMA = "cb-a/global-match/v1"
 #: what the account link doesn't interpret: the checker's provenance, the Program it read, the batch-decomposition evidence (`x09`) and the other criterion's
@@ -28,9 +28,7 @@ INFO = frozenset({"comparator", "rules_version", "utc", "oracle_dir", "log", "gl
                   "alternate_verdict", "phases", "impl", "fold_form"})
 
 
-def _strs(v: Sequence[Any] | None, where: str, name: str) -> tuple[str, ...] | None:
-    if v is None:
-        return None
+def _strs(v: Sequence[Any], where: str, name: str) -> tuple[str, ...]:
     if not all(isinstance(x, str) for x in v):
         raise RecordError(where, name, "holds a value that is not a string")
     return tuple(v)
@@ -113,14 +111,10 @@ class GlobalMatch:
                    reasons=_strs(required(doc, "reasons", where, (list, tuple)), where, "reasons"),
                    checks=tuple(MatchCheck.of(c, where, f"checks[{i}]") for i, c in enumerate(objects(doc, "checks", where))),
                    requests=tuple(MatchRequest.of(r, where, f"requests[{i}]") for i, r in enumerate(objects(doc, "requests", where))),
-                   failed_checks=_strs(optional(doc, "failed_checks", where, (list, tuple)), where, "failed_checks"),
+                   failed_checks=(None if doc.get("failed_checks") is None else
+                                  _strs(required(doc, "failed_checks", where, (list, tuple)), where, "failed_checks")),
                    lag=optional(doc, "lag", where, Mapping),
                    info={k: doc[k] for k in INFO if k in doc})
-
-    @classmethod
-    def load(cls, path: str | Path) -> GlobalMatch:
-        with open(path) as f:
-            return cls.of(json.load(f), str(path))
 
     def dump(self) -> dict[str, Any]:
         """The JSON its writer writes: every field it holds, an absent optional one left out."""

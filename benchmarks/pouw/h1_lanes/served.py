@@ -1,5 +1,5 @@
 """served.py extract|prepare|summarize: one unit a served H1 window's own sample selected (`h1_prove/served.py`, core's
-`credit.drawn` on the window's signed sampling coin), proved as its 32 lanes (`h1zy.PouwH1LaneZy_v1`, option A, run.py's lane
+`credit.drawn` on the window's signed sampling coin), proved as its 32 lanes (`h1zy.PouwH1LaneZy_v1`, option A, leaf.py's lane
 statement) from the window's trace, each lane one Flock --zk statement whose rows open the window's own
 registered tables at the rows the verifier reads them.
 
@@ -16,14 +16,14 @@ registered tables at the rows the verifier reads them.
   position. The openings (rows and salts, private) go to ``--out``, never under the run's ``out/``; ``--public`` gets
   the unit, the entries and the checks.
 * **prepare** (hidden_zk's venv): the unit's leaf from those rows, the lane statement's Program (`h1window.leaf_program`
-  of the window Program rebuilt from ``--descriptor`` and held to its bytes, run.py's `derived`; without one, run.py's
+  of the window Program rebuilt from ``--descriptor`` and held to its bytes, leaf.py's `derived`; without one, leaf.py's
   one-call window: each statement is unit 0 of it), the lanes' partials committed after the sample
   (`produced`, under a registration record of the lane Program that names the window's three entries), and each lane
   staged with its ports read through ``--registered`` at the window's rows: ``a<s>`` row M·j + 32 rb + i of
   ``h1/a/<K>@<s>`` (j the call's place among its step's calls of K), ``b<t>`` row b0 + 32 cb + j of ``h1/b/<K>``,
   ``zy`` row t of ``h1/zy@<c>`` (the window's roots and
   domains, `credit.registered_file`'s), ``partials`` row l of the produced tree, and ``pub``, ``admit`` and ``o0`` known
-  rows (run.py's `known_rows`). The lane's public values are conventions of this harness, named in its report: salt
+  rows (leaf.py's `known_rows`). The lane's public values are conventions of this harness, named in its report: salt
   `pouw_h1_challenger.program_salt_of` of the window's commitment, position the sampled proof block u, roots (root of the call's
   A table, root of ``h1/b/<K>``), admit bit i 1 exactly when slot 32 rb + i is one of the call's served rows.
   The negatives, each proved and checked like the lanes: ``tampered-zy`` (lane 0 given the record with cell 2's z low
@@ -58,15 +58,15 @@ sys.path.insert(0, str(HERE.parent / "h1_prove"))
 sys.path.insert(0, str(HERE))
 
 import h1unit as U  # noqa: E402
-import run as L  # noqa: E402
+import leaf as L  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.protocols.pouw.verifier import leaf_lanes as LL  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import produced as PR  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R  # noqa: E402
 
 RC = L.RC
 EXPECT = {"tampered-zy": "REJECT", "other-call-a": "REJECT"}
@@ -86,8 +86,8 @@ def _window(path: str):
     each K's template held to the descriptor's by its descriptor id (which names every binding, so the 870 MB descriptor
     is parsed, never re-encoded), and its digest: the lane statement is `h1window.leaf_program`'s of it, which reads only
     the template at K, as a served window's verifier derives it."""
-    from verity.protocols.pouw.verifier import credit as CR
-    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.protocols.accounting.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
     from verity.circuits.codec import descriptor_id
 
     raw = _descriptor(path)
@@ -115,10 +115,10 @@ def _data_port(port: str) -> bool:
     return port.startswith(("a_k", "b_k")) or port == "zy"
 
 
-def extract(a) -> None:
+def extract(a: argparse.Namespace) -> None:
     import pickle
 
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import handoff as HO
     from verity_vllm.protocols.pouw.h1 import prover as PV
@@ -126,17 +126,17 @@ def extract(a) -> None:
 
     t0 = time.time()
     doc = json.loads(Path(a.calls).read_text())
-    drawn = json.loads(Path(a.drawn).read_text())
+    sampled = json.loads(Path(a.drawn).read_text())
     commits = doc["commitment"]
     root = commits["session"]["root"]
     steps, psalt = int(commits["steps"]), PHC.program_salt_of(commits).hex()
-    if drawn["window"] != root:
-        raise SystemExit(f"the drawn units are window {drawn['window'][:16]}...'s, not {root[:16]}...")
+    if sampled["window"] != root:
+        raise SystemExit(f"the sampled proof blocks are window {sampled['window'][:16]}...'s, not {root[:16]}...")
     if (why := PHC.manifest_reason(doc)) is not None:
         raise SystemExit(f"REFUSED: {why}")
     raw = _descriptor(a.descriptor)
     program = hashlib.sha512(raw).hexdigest()
-    if program != drawn["circuit"]:
+    if program != sampled["circuit"]:
         raise SystemExit("the descriptor is not the circuit the window's period committed")
     layout, why = CR.layout_of(raw)
     if why is not None:
@@ -146,9 +146,9 @@ def extract(a) -> None:
     roots: dict[str, list[str]] = {}
     for e in entries:
         roots.setdefault(e["value"], []).append(e["root"])
-    mine = sorted((u for u in drawn["units"] if u["k"] == a.k), key=lambda u: u["unit"])
+    mine = sorted((u for u in sampled["units"] if u["k"] == a.k), key=lambda u: u["unit"])
     if not mine:
-        raise SystemExit(f"the draw selected no unit at K = {a.k}: {sorted({u['k'] for u in drawn['units']})}")
+        raise SystemExit(f"the sample holds no unit at K = {a.k}: {sorted({u['k'] for u in sampled['units']})}")
     unit = mine[0]
     u, c = unit["unit"], unit["call"]
     reg, why = CR.registered_file(program, layout, shape, c, roots, root, steps, psalt)
@@ -206,7 +206,7 @@ def extract(a) -> None:
     with os.fdopen(fd, "w") as f:
         json.dump(out, f)
     pub = {**{x: out[x] for x in ("window", "program", "draw_root", "k", "unit", "served_rows", "other")},
-           "drawn": len(drawn["units"]), "drawn_at_k": [x["unit"] for x in mine],
+           "drawn": len(sampled["units"]), "drawn_at_k": [x["unit"] for x in mine],
            "entries": {p: v["entry"] for p, v in ports.items()},
            "reads": {p: v["opening"]["position"] for p, v in ports.items()}, "checks": checks,
            "seconds": round(time.time() - t0, 1)}
@@ -214,7 +214,7 @@ def extract(a) -> None:
     print("EXTRACTED " + json.dumps({x: pub[x] for x in ("unit", "served_rows", "drawn", "seconds")}), flush=True)
 
 
-def smoke(a) -> None:
+def smoke(a: argparse.Namespace) -> None:
     """A stand-in window at ``--k`` in `extract`'s form: its A, B and z/y tables of random rows, committed as a served
     window's (the record's tables under a random window root and Program digest, B under none), unit 3 of a 64 × 64 call
     sampled: the harness's own check, never a served result."""
@@ -264,7 +264,7 @@ class Served:
     leaf: L.Leaf
     roots: tuple
     registration: str
-    draw: str
+    sample: str
     tree: G.Registered
     record: dict
     ports: dict
@@ -305,7 +305,7 @@ def expected(sw: Served, ln: int, ins: dict) -> list[int]:
                              sw.roots, ln, RC)]
 
 
-def statement(ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> dict:
+def statement(ctx: L.Ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> dict:
     """Stage lane ``ln`` as ``tag`` and write the verifier's files: ``ins`` each input port's opening; ``entries`` each
     read port's ``(value, entry, row)`` as the verifier holds it (the window's, or the produced partials')."""
     st = ctx.stagers[LL.LANE]
@@ -355,7 +355,7 @@ def statement(ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> d
 CTX = None
 
 
-def lane_ins(ctx, sw: Served, ln: int) -> tuple[dict, dict]:
+def lane_ins(ctx: L.Ctx, sw: Served, ln: int) -> tuple[dict, dict]:
     """Lane ``ln``'s honest openings and the verifier's read entries."""
     ins, entries = {}, {}
     for port, wp in lane_reads(ctx.k, ln).items():
@@ -389,7 +389,7 @@ def run_job(job: tuple) -> dict:
     return statement(ctx, ln, tag, sw, ins, entries)
 
 
-def prepare(a) -> None:
+def prepare(a: argparse.Namespace) -> None:
     global CTX
     t0 = time.time()
     work = Path(a.work)
@@ -492,7 +492,7 @@ def prepare(a) -> None:
 
 # -- summarize --------------------------------------------------------------------------------------------------------------
 
-def summarize(a) -> int:
+def summarize(a: argparse.Namespace) -> int:
     work, out = Path(a.work), Path(a.out)
     plan, prep = json.loads((work / "plan.json").read_text()), json.loads((work / "prepare.json").read_text())
     rows, opened = {}, {}
@@ -526,7 +526,7 @@ def summarize(a) -> int:
 SHARED = ("k", "unit", "window", "draw_root", "roots", "lane_program", "registration", "produced", "ands")
 
 
-def merge(a) -> int:
+def merge(a: argparse.Namespace) -> int:
     """The summaries of jobs that each proved a share of one unit's lanes (H1L_LANES), as one: every share read the same
     window, sample, unit, registration and produced tree, each lane and negative was checked once, every lane accepted and
     both negatives were refused."""

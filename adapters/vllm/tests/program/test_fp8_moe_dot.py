@@ -18,29 +18,37 @@ import dataclasses
 
 import numpy as np
 import pytest
-
+from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.codec import lookup_primitive
+from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity.circuits import boolean as BL
-from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import gemm as BG
-from verity.circuits.boolean import trace as TR
-from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32 as BW
-from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.definitions import boolean as SW
-from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.definitions.numerics import fp8_moe_rows as MR
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32 as BW
+from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import fp8_moe as M
 from verity.definitions.registry import fp8_moe_experts as X
+
+from tests.program.test_boolean_fp8 import _flat, _inputs
+from tests.program.test_fp8_moe import (
+    ONE,
+    _bf16,
+    _ffma,
+    _fmul,
+    _operands,
+    _twin_agrees,
+    _wide,
+)
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as T
-from tests.program.test_boolean_fp8 import _flat, _inputs
-from tests.program.test_fp8_moe import ONE, _bf16, _ffma, _fmul, _operands, _twin_agrees, _wide
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
-PAIRS = [(M.MoeExpertFp8BlockCoordinate, M.MoeExpertFp8BlockCoordinateV3), (M.MoeExpertFp8BlockCoordinateW, M.MoeExpertFp8BlockCoordinateWV3),
-         (M.MoeExpertFp8BlockGemm, M.MoeExpertFp8BlockGemmV3), (M.MoeExpertFp8BlockGemmW, M.MoeExpertFp8BlockGemmWV3)]
+PAIRS = [(M.MoeExpertFp8BlockCoordinate, M.MoeExpertFp8BlockCoordinateV3), (M.MoeExpertFp8BlockCoordinateW, M.MoeExpertFp8BlockCoordinateWV3)]
 
 
 def _model(dot, x, sx, w, sw, K: int, G: int, KB: int, g: int | None = None) -> int:
@@ -55,22 +63,20 @@ def _model(dot, x, sx, w, sw, K: int, G: int, KB: int, g: int | None = None) -> 
     return _bf16(acc if g is None else _fmul(acc, g))
 
 
-def _args(fam, x, sx, g, w, ws, rows: bool):
+def _args(fam, x, sx, g, w, ws):
     weighted = "W" in fam.name.removeprefix("MoeExpertFp8Block")
-    lead = (x, sx, g) if weighted else (x, sx)
-    return lead + ((sum(w, []), sum(ws, [])) if rows else (w[0], ws[0]))
+    return ((x, sx, g) if weighted else (x, sx)) + (w[0], ws[0])
 
 
 @pytest.mark.parametrize("v1,v3", PAIRS, ids=[p[1].name for p in PAIRS])
 def test_the_dot_forms_with_the_hopper_step_are_the_v1_definitions(v1, v3) -> None:
     K, N, G = 256, 72, 64
-    rows = "Gemm" in v1.name
     rng = np.random.default_rng(len(v1.name))
     x, sx, w, ws = _operands(rng, K, G, N)
     g = int(np.float32(0.4375).view(np.uint32))
     for KB, SWAP in ((32, False), (64, True)):
-        st = {"K": K, "G": G, "KB": KB, "SWAP": SWAP, **({"N": N} if rows else {})}
-        args = _args(v1, x, sx, g, w, ws, rows)
+        st = {"K": K, "G": G, "KB": KB, "SWAP": SWAP}
+        args = _args(v1, x, sx, g, w, ws)
         assert evaluate(bind(v3, **st, DOT=HP), *args) == evaluate(bind(v1, **st), *args)
 
 
@@ -129,7 +135,8 @@ def test_the_pair_forms_gather_the_routed_experts_rows(W: bool) -> None:
     rng = np.random.default_rng(17 + W)
     x, sx, _, _ = _operands(rng, K, G)
     stack = [_operands(rng, K, G, N)[2:] for _ in range(E)]
-    w, ws = sum((s[0] for s in stack), []), sum((s[1] for s in stack), [])
+    w: list[int] = sum((s[0] for s in stack), [])
+    ws: list[int] = sum((s[1] for s in stack), [])
     g = int(np.float32(0.6875).view(np.uint32))
     pair = bind(X.MoeExpertFp8GemmW if W else X.MoeExpertFp8Gemm, E=E, K=K, N=N, G=G, KB=32, SWAP=False, DOT=BW)
     block = bind(M.MoeExpertFp8BlockGemmWV3 if W else M.MoeExpertFp8BlockGemmV3, K=K, N=N, G=G, KB=32, SWAP=False, DOT=BW)
@@ -154,8 +161,6 @@ def test_the_gathers_are_column_reads() -> None:
 def test_the_gathers_resolve_by_id_in_a_cold_decode() -> None:
     """A descriptor naming `GatherE4m3x{V}_v1` / `GatherF32x{V}_v1` decodes in a process that never built the program (the gathers
     are made per vocabulary while deriving): the lazy families resolve them like `GatherBf16x{V}_v1` (the GLM-5.3 Match of record)."""
-    from verity.circuits.codec import lookup_primitive
-    from verity.circuits.defs import REGISTRY
     assert lookup_primitive(REGISTRY, "GatherE4m3x256_v1") is X.gather_e4m3(256)
     assert lookup_primitive(REGISTRY, "GatherF32x256_v1") is X.gather_f32(256)
 

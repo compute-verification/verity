@@ -48,7 +48,7 @@ from verity.definitions.registry import io_shell as IO
 from verity.definitions.registry import stop_check as SC
 from verity.definitions.registry.topp_geometry import registered_splits
 
-import verity.protocols.certifier.verifier.advice as I1
+import verity.protocols.accounting.certifier.verifier.advice as I1
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.partition_object import calls
@@ -178,7 +178,7 @@ def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_t
 
 def test_an_unseeded_stochastic_requests_seed_is_derived_from_its_id_and_the_window_seed_salt_or_refused_by_name():
     """A seed is its certified body's or derived from the request's id and the window's seed salt, never one serving fills in
-    or draws: with no seed salt, or for a request the window carries in (whose admitting window's seed salt this compile doesn't
+    or samples: with no seed salt, or for a request the window carries in (whose admitting window's seed salt this compile doesn't
     read), an unseeded stochastic request is refused by name. The derived seed is the request's alone and in its batch."""
     unseeded = {**STOCH, "seed": None}
     assert policy_of(0, unseeded, 188, request_id="q1", salt=SALT) == (STOCH_POLICY, derived(SALT, "q1"))

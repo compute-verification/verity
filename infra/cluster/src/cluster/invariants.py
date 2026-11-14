@@ -67,10 +67,10 @@ def check(cluster: Cluster, node: str, allocations: Iterable[Allocation], now: i
                 out.append(f"{node}: guest {a.id} is quiet or not preemptible")
     for s in (s for s in cluster.shares if s.node == node):
         theirs = [a for a in mine if a.job.project == s.project]
-        for cap, used, what in ((s.max_gpus, sum(len(a.gpus) for a in theirs), "GPUs"), (s.max_jobs, len(theirs), "jobs"),
+        for limit, used, what in ((s.max_gpus, sum(len(a.gpus) for a in theirs), "GPUs"), (s.max_jobs, len(theirs), "jobs"),
                                 (s.max_cpus, sum(len(a.cpus) for a in theirs), "CPUs"),
                                 (s.max_memory_gib, sum(a.memory_gib for a in theirs), "memory")):
-            if cap is not None and used > cap:
+            if limit is not None and used > limit:
                 out.append(f"{node}: {s.project}'s share of {what} exceeded")
     for w in (w for w in cluster.workstreams if w.node == node and w.borrow_gpus is not None):
         if sum(len(a.gpus) for a in mine if a.job.workstream == w.name) > w.gpus + w.borrow_gpus:

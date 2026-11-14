@@ -26,7 +26,8 @@ MMA forms, the table route, the headline's designs, the attack families, the dev
 
 ## Interface
 
-What code outside this directory uses, and may. The rest is the model's own and changes with it.
+What code outside this directory uses, and may; each module below lists it in its `__all__`. The rest is the model's
+own and changes with it.
 
 - **The command** `machine-model` ("Commands").
 - **`verity_machine_model.model`**, the data as objects: `DATA` (this `data/`), `device(name)` and `devices()`,
@@ -34,8 +35,19 @@ What code outside this directory uses, and may. The rest is the model's own and 
   `holds(m, since, until, epoch)`, `attacks(m, epoch, data)`, `all_attacks(data)` and `u_of`.
 - **`verity_machine_model.eps`**, a design's ε: `design(name, data)` and `designs(data)`, `honest(name, data)`,
   `forms(data)`, `machine(name, data)`, `table(data)`, `setup(d, pi, data)` and `eps(d, pi, q, data)`, with `Design`,
-  `Honest`, `Form`, `PRODUCTS`, `LANES`, `UNI` and `MMA`. `commands.eps` is the same computation as the command
-  prints it.
+  `Honest`, `Form`, `PRODUCTS`, `LANES`, `UNI` and `MMA`.
+- **`verity_machine_model.commands.eps`**, the same computation as the command prints it:
+  `record(d, pi, q, data, operands, credit)`, what `eps --json` prints for one design.
+- **`verity_machine_model.skip`**, ε_skip as made: `design_skip(d, rates, data, vector)`, the number a design's
+  `[skip]` records and the Lean headline exporters read, with what it is made of: `summary`, `parts`, `products`,
+  `floor_skip`, `floor_eps`, `prices`, `pv_ts`, the models' shapes (`MODELS`, `Shape`) and the rates (`RATES`).
+- **`verity_machine_model.lean_headline`**, sm_120's headline instances as exact data, which `lean-headline` writes as
+  Lean: `instance()` and `measured()`, with `stars`, `load`, `mload`, `price`, `coef`, `branches` and the constants
+  its `__all__` lists.
+- **`verity_machine_model.dc_reading`**, the H200's and B200's headline instances as exact data:
+  `reading(family, vector, full, q)` with `FAMILIES` and `SM90`, and the constants its `__all__` lists; and
+  **`verity_machine_model.lean_headline_dc`**, which `lean-headline` writes them as Lean with: `render_measured`,
+  `write` and `main`.
 - **`verity_machine_model.headline`**, what the Lean headline files are exported from: `spec(data)` and
   `row(family, reading, data)`, with `READINGS`, `OPERANDS` and `CREDIT`.
 - **`verity_machine_model.capacity`**, certified capacity: `Work`, `Cell` and `cell(pi, groups)`, `tensor_filler`,
@@ -43,7 +55,15 @@ What code outside this directory uses, and may. The rest is the model's own and 
 - **`verity_machine_model.sheet`**, a device's data sheet: `Sheet`, `sheet(data)`, `row(name)`, `omega(s)` and
   `lines(s, peaks)`.
 - **`data/` by path**, for a probe or a calculator that reads one file without the package: `census/`, `rows.csv`,
-  `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout").
+  `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout"). One test
+  outside this directory, `benchmarks/pouw/tests/test_census_cover.py`, also reads every table of class counts the
+  data holds: `honest/`, `designs/` and `headline.toml` by path, and `attacks/` through `all_attacks`.
+
+What it uses: scipy (pinned: a vector's margin is read at the vertex its LP solver returns) and numpy; a device's card
+file through `verity.device`, imported only where a ceiling is read (`model.card`, the card table, the opcode
+table), so only `theta`, `cover` and `render`'s `theta` section need `verity`; and nothing else of the workspace. A
+design's perplexity arm and a sheet's Lean module are named in the data by path and never read by a computation. It
+measures nothing: no command starts a process, reads the environment or the network, or needs a GPU.
 
 ## Commands
 
@@ -64,6 +84,7 @@ uv run machine-model eps --table          # every design, one line each
 uv run machine-model eps --table --credit floor --operands floor --lookups
 uv run machine-model eps --device sm_89 --table --credit floor --operands floor
 uv run machine-model headline             # each family's design of record at the data-sheet and measured readings
+uv run machine-model lean-headline [--check]   # write every family's headline instances as Lean, or check them
 uv run machine-model redteam [DESIGN]     # the binding and near-binding rows, and how far each can move
 uv run machine-model margin [DESIGN]      # the worst core with every near measured row moved 2% at once
 uv run machine-model --device sm_90 sheet [--eps]   # the data sheet's lines against the census
@@ -76,6 +97,13 @@ uv run machine-model cover [--holes|--check]   # the opcode table
 
 `--device sm_NN` reads `data/devices/sm_NN/` ("Devices"); `--data DIR` reads any data directory. `solve` exits 1 when
 the vector fails its check or doesn't reproduce a published number.
+
+Every command prints to standard output and writes no file, `sheet --lean` included (it prints the Lean module), with
+two exceptions: `adopt` rewrites, in the data directory it is given, the census files of the epochs it touches and
+`rows.csv` ("Adopt a probe's census"), and `lean-headline` with neither `--check` nor `--numbers` writes the Lean
+files of the families' headline instances, `security/Definitions/Accounting/Headline/Sm120.lean` and
+`Sm120Measured.lean` and the five `Sm*.lean` of `security/Definitions/Accounting/HeadlineDc/`; `--json F` writes the
+data-centre families' readings to `F`.
 
 ## Layout
 
@@ -112,7 +140,7 @@ the vector fails its check or doesn't reproduce a published number.
   or the run that would (`gap`); the exact paths (b1, INT4, FP4); the FP8 atoms' semantics; the units that write
   registers; a verdict for every unit outside the SM pipes (`[[unit]]`); the public SHA-512 figures (`[[public]]`) and
   our kernel's SASS a compression (`[sha512_mix]`); and the host the card sits in (`host.*`). The module and command
-  keep the name `theta`. A ceiling the device's card file holds (`verity/hardware/cards/<sku>.toml`, the SKU
+  keep the name `theta`. A ceiling the device's card file holds (`hardware/cards/<sku>.toml`, the SKU
   `model.toml` names as `card`) is read from it: its table says `card = "rate.tensor / weight.f16"` in place of a
   value, grade and source; `host:PATH` is an entry of the host's card (`model.toml`'s `host`), as in
   `host.sha512`. What keeps a `sheet` value is what no card file holds as a ceiling.
@@ -127,7 +155,7 @@ the vector fails its check or doesn't reproduce a published number.
 - `model`: reading a data directory: `model() -> Model`, `rows()`, `census(m, epoch) -> Census`, `measured_cost(c)`,
   `vector(name) -> Vector`, `vectors()`, `attacks(m, epoch)`, `floors()`, and `device(name)` / `devices()` for the
   device directories.
-- `lp`: the price LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ): `solve(...) -> Solution`, `price`, `cost`.
+- `lp`: the price LP (Charnes–Cooper; the first solve U/F_low, the second τ): `solve(...) -> Solution`, `price`, `cost`.
 - `attacks`: `x_of` (an attack's X, its price over its tensor time), `cheapest`, `margin`, `check` (every price at or
   below measured cost, ρ, every credit, every attack at X ≥ x_min), `under_floor` and `priced` (the claims).
 - `resolve`: `resolve(name) -> Resolved`, a named vector re-solved: `tau`, `uf_low`, `margin`, the cheapest attacks,
@@ -139,7 +167,17 @@ the vector fails its check or doesn't reproduce a published number.
   program could still add beside the pooled verified load n̄: `parse(spec) -> Work`, `hidden`, `pool`.
 - `counts`: n(H)(m, n, k), an honest kernel's instruction counts from its closed form, the model bound it certifies at
   any shape, its fit and its check: `load(name) -> Counts`, `fit`, `names()`.
+- `skip`: ε_skip as made, a design's skippable share of honest work as served: `design_skip(design) -> Summary`, the
+  most over the models, contexts and phases of `floor_eps` (Corollary D3's, `floor_skip` over ♭'s bound at `prices`),
+  and `summary`, `parts` and `products`, the share by int8 products and by honest seconds with γ.
 - `headline`: the per-family headline: `row(family, reading)`, `rows(reading)`, `record()`, `text()`.
+- `lean_headline`: sm_120's headline instances, exact, and their Lean files: `instance() -> Instance` (the data sheet's)
+  and `measured() -> Measured`, each checked against the model's own numbers, `render` and `render_measured`, and
+  `write(check)`.
+- `dc_reading`: the H200's and B200's headline instances, exact: `reading(family, vector, full, q) -> Reading` on a
+  family's data sheet and on its measured vector, whose certificate an LP over the Lean menu finds (`certificate`).
+- `lean_headline_dc`: those readings' Lean files: `render_sheet`, `render_measured` and `render_twin`, and
+  `write(check, numbers, json_to)`.
 - `redteam`: from a device's census alone, how much room an adversary has to beat a row: `audit`, `margin_audit`,
   `least_filler`, `uniform_gap`.
 - `theta`: the card table: `theta(data) -> Theta`, `check`, and what it derives on the data sheet and measured
@@ -157,7 +195,7 @@ An *epoch* is a state of the census and the attacks, named after the vector that
 attack holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector
 re-solves on the data it was published on while new measurements land beside it. An epoch's census lines are a file of
 their own, so the census grows by a file an epoch, and the tests keep every file under a quarter of the repository's 256
-KiB cap. A class's measured cost at an epoch is the largest of its census lines there. A kind with no coefficient on a
+KiB limit. A class's measured cost at an epoch is the largest of its census lines there. A kind with no coefficient on a
 vector's rows is refused, and the check fails on it.
 
 A *row* is a ceiling of the card: one class's rate, a port, or a joint frontier (a facet) of two or more classes. Π is a
@@ -289,12 +327,12 @@ Beside its names, a design file has these keys:
 - `[table]`: `bits` on the operand a table route indexes, by default the coins' width and never below it.
 - `ppl`: a spec in `benchmarks/ppl/specs/`, or `""` while the design's arm isn't on main.
 - The ε terms' accounting: `[skip.served]` and `[mand.PART]`, each with its `eps` and `source`, and `[clock]`, `[luck]`,
-  `[baseline]` and `[routes]`. `[skip.served]` is the number `../pouw/eps_budget.py` gives the design's `[noise]` and `sums`
-  (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served output free),
+  `[baseline]` and `[routes]`. `[skip.served]` is the number `skip.design_skip` gives the design's `[noise]` and `sums`
+  (the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served output free),
   and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
 
 A new design is a file with its own name, title and summary, and a `base` if it varies one. The tests refuse an alias
-that names two designs, a noise leaf or a proof block that isn't defined, a `[skip]` that isn't `eps_budget.py`'s number
+that names two designs, a noise leaf or a proof block that isn't defined, a `[skip]` that isn't `design_skip`'s number
 for the design's noise, an arm that isn't a spec, and a filler off lanes.
 
 ## ε in the tensor–scalar model
@@ -436,14 +474,14 @@ tcgen05.ld.32x32b.x32 that brings each committed word to registers, 1024/L a MMA
 
 ## The opcode table
 
-The card assumption (`CardWithinAccel`) is that every instruction a card executes is dominated by an ACCEL op (`Accel.Op`)
-at no fewer units of the same resource. `data/cover/` is its evidence on the H200 (sm_90) and the RTX PRO 6000 (sm_120):
-evidence, not trusted base, since no verifier and no Lean reads it. `machine-model cover` prints it as Markdown, a table
-a card, with the counts by mark and every hole.
+The card assumption (`CardWithinAccel`) is that every instruction a card executes is dominated by an ACCEL op
+(`Accel.Opcode`) at no fewer units of the same resource. `data/cover/` is its evidence on the H200 (sm_90) and the RTX
+PRO 6000 (sm_120): evidence, not trusted base, since no verifier and no Lean reads it. `machine-model cover` prints it
+as Markdown, a table a card, with the counts by mark and every hole.
 
-- **The envelope** (`envelope.toml`) is `Accel.Op` with its pipes and formats: `mma`, `mmaSp`, `lane` (a lane opcode on
-  a pipe: at most the pipe's `n_in` words in, 2 out), `move`, `atom`, `red`, `branch` and none. Each card's numbers (ρ
-  a SM-clock, format weights) are its card file's (`verity/hardware/cards/`, read by `cover.load`). What the table
+- **The envelope** (`envelope.toml`) is `Accel.Opcode` with its pipes and formats: `mma`, `mmaSp`, `lane` (a lane opcode
+  on a pipe: at most the pipe's `n_in` words in, 2 out), `move`, `atom`, `red`, `branch` and none. Each card's numbers
+  (ρ a SM-clock, format weights) are its card file's (`hardware/cards/`, read by `cover.load`). What the table
   needs that `Accel` lacks is marked `proposed`: the `collective` op and resource, `tex`, and the formats `e3m2`,
   `e2m3`, `mxf8` and `mxf6`.
 - **The pipes**: an opcode goes on the pipe a run or the CUDA Programming Guide places it on, else on `fma`, which
@@ -452,7 +490,7 @@ a card, with the counts by mark and every hole.
   `bu_12_9.json`, CUDA 13's in `sass_isa_tables.json`), every dotted form of the CUDA 13
   libraries' SASS corpus (`corpus.json`, with instruction counts), every census kind, and every unit the card table
   lists (`theta.UNITS`). The three JSON tables, all in `data/cover/`, are generated, so they are fetched fixtures
-  (`fixtures/artifacts.json`, gitignored): `suites.py` fetches them before the tests, and `uv run research data
+  (`artifacts.json`, gitignored): `suites.py` fetches them before the tests, and `uv run research data
   fetch-fixtures benchmarks/machine_model/data/cover` brings them into a checkout. `rows.toml`,
   the reviewed table, stays in Git.
 - **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, ACCEL op (`envelope`) with its pipe, stores or formats,
@@ -462,7 +500,7 @@ a card, with the counts by mark and every hole.
 - **The marks**: `covered` (dominated at the rate), `coarse` (dominated at a coarser bound: a pipe's share, the issue
   slot, the data sheet's peak), `hole` (`low`, bounded at a few percent of a resource; `medium`, measured past a ρ;
   `open`, no rate known; or `outside the card`) and `absent`. An opcode's mark is its worst row's. A row resting on a
-  proposed entry is counted twice: with it, and as a hole on `Accel.Op` alone.
+  proposed entry is counted twice: with it, and as a hole on `Accel.Opcode` alone.
 - **The rule**: each rate of a covered or coarse row, in its op's units a SM-clock (tensor MACs at the format's weight,
   halved for `mmaSp`; a pipe's lanes, `fma`'s the issue slot's 128; fetches; a store's words), is at most its resource's
   ρ, and a lane's or collective's words at most its op's.

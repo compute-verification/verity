@@ -39,7 +39,7 @@ the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice
 
 `benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` from the source tree
 (`REMOTE_SESSION`, below), and `prove` takes the wire from it. The verifier's side, the wire among it, is
-`verity.protocols.poub.verifier.session`.
+`verity.protocols.accounting.poub.verifier.session`.
 """
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.poub.verifier import audit, codec as rcodec, receipts as rb
+from verity.protocols.accounting.poub.verifier import audit, codec as rcodec, receipts as rb
 from verity_vllm import config
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
@@ -461,6 +461,7 @@ class DeviceEncoded(audit.Store):
         self.blocks: list[bytes | None] = list(encoded)
         self.appends: list[audit.Append] = []
         self.pending: dict[int, tuple[bytes, ...]] = {}
+        self.coin_of: dict[int, bytes] = {}
         self.gates = {"registered": len(encoded), "appends": 0, "blocks_checked": len({0, len(encoded) - 1})}
 
     def _gate(self, block: bytes, payload: bytes, j: int, coin: bytes | None = None) -> None:
@@ -476,6 +477,7 @@ class DeviceEncoded(audit.Store):
         encoded = self.device.encode(payloads, first, [rcodec.binding(d, first + u, k, coin) for u, d in enumerate(digests)])
         self._gate(encoded[0], payloads[0], first, coin)
         del self.pending[first]
+        self.coin_of[first] = coin
         self.blocks[first:first + len(encoded)] = encoded
         self.gates["appends"] += 1
         self.gates["blocks_checked"] += 1

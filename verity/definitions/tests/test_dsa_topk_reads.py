@@ -4,7 +4,7 @@
   positions) on masks of no member to every key, and its first count slots are the members' positions, ascending, whenever it
   has at most K; `DsaPositionsMerge_v1` is `merge` on lists with words past their counts, counts past K and lists that fill K;
 * `DsaPositionsMerge_v1`, each block's list and count its own port, is gate for gate the merge over one port of the lists
-  and one of the counts, at small statics and at the served one (M 8, K 2,048);
+  and one of the counts, at small statics and, with ``VERITY_ML_DEFINITIONS_SLOW`` set, at the served one (M 8, K 2,048);
 * `DsaPositionsChunk_v1` and then `DsaPositionsSlot_v1` over its chunk give the merge's element j for every j on the merge's
   own outputs, 0 where it is N or more and at an index out of range, at small statics and the served ones on random rows;
 * the units composed over a row's blocks (each on the outputs before it) give the rows network's order over the whole row
@@ -27,6 +27,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from verity_config import verity_settings as settings
 from verity.circuits import evaluation as E
 from verity.circuits.boolean.trace import Traced, trace
 from verity.circuits.defs import bind
@@ -125,11 +126,7 @@ def test_the_merge_is_merge(M_, K) -> None:
         assert g == R.merge(li, c, K), (li, c, g)
 
 
-@pytest.mark.parametrize("M_,K", [(1, 4), (3, 4), (4, 3), (8, 16),
-                                  pytest.param(8, SERVED_TOPK, marks=pytest.mark.slow, id="served")])
-def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K) -> None:
-    """Against the merge over one port of the M blocks' lists and one of their counts.  The served binding (8 blocks, 2,048
-    slots, 12-bit shifts) is about 6M ANDs; it is the one the long row calls, and no smaller binding's trace is its trace."""
+def _ports_are_one_port(M_: int, K: int) -> None:
     S = SimpleNamespace(M=M_, K=K)
     params, ret = R._merge_sig(S)
     assert [n for n, _ in params] == [f"pos_{b}" for b in range(M_)] + [f"count_{b}" for b in range(M_)]
@@ -137,6 +134,22 @@ def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K)
     split = _digest(trace(R._merge(S), [t for _, t in params], ret))
     one = _digest(trace(R._merge(S), [Array(M_, Array(K, R.I32)), Array(M_, R.I32)], ret))
     assert split == one
+
+
+@pytest.mark.parametrize("M_,K", [(1, 4), (3, 4), (4, 3), (8, 16)])
+def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K) -> None:
+    """Against the merge over one port of the M blocks' lists and one of their counts.  These cases hold the property in
+    `check`: both traces run one builder over the same input words and differ only in how ports group them, which 8 blocks of
+    16 slots already cover, while circuit-check holds the served binding's trace to its digest pin."""
+    _ports_are_one_port(M_, K)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not settings.VERITY_ML_DEFINITIONS_SLOW,
+                    reason="VERITY_ML_DEFINITIONS_SLOW=1 runs it (about 14 minutes on a node: two traces of about 6M ANDs)")
+def test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate() -> None:
+    """The same at the served binding (8 blocks, 2,048 slots, 12-bit shifts), the one the long row calls."""
+    _ports_are_one_port(8, SERVED_TOPK)
 
 
 def _chunk(K: int, W: int, slots: np.ndarray, cs: list[int]) -> list[list[int]]:
@@ -320,14 +333,14 @@ def test_the_cut_counts_its_units() -> None:
         t = bind(R.DsaTopKReadRows, N=N, TOPK=SERVED_TOPK, BLOCK=R.BLOCK, READ=READ)
         cut = dict(R.cut(t))
         bl = X.blocks(N, SERVED_TOPK, R.index_block(N, SERVED_TOPK, R.BLOCK))
-        whole = bind(X.DsaTopKMaskWhole, N=N, TOPK=SERVED_TOPK)
+        whole = bind(X.DsaTopKMaskWholeV2, N=N, TOPK=SERVED_TOPK)
         masks = len(X.plan(N, SERVED_TOPK)) if N > X.WHOLE_MAX else 1
         assert (whole in cut) == (N <= X.WHOLE_MAX) and bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=SERVED_TOPK) not in cut
         assert bl == ([(0, N)] if N <= X.WHOLE_MAX else X.blocks(N, SERVED_TOPK, R.BLOCK))
-        assert cut[READ] == SERVED_TOPK and cut[bind(R.DsaPositionsMerge, M=len(bl), K=SERVED_TOPK)] == 1
+        assert cut[READ] == SERVED_TOPK and cut[bind(R.DsaPositionsMergeV2, M=len(bl), K=SERVED_TOPK)] == 1
         assert cut[bind(R.DsaPositionsChunk, K=SERVED_TOPK, W=R.CHUNK)] == SERVED_TOPK // R.CHUNK == 64
         assert cut[bind(R.DsaPositionsSlot, K=R.CHUNK, N=N)] == SERVED_TOPK
-        assert {(d.bindings["N"], d.bindings["AT"]) for d in cut if d.base_id == "DsaMaskPositions_v1"} == \
+        assert {(d.bindings["N"], d.bindings["AT"]) for d in cut if d.base_id == "DsaMaskPositions_v2"} == \
                {(hi - lo, lo) for lo, hi in bl}
         assert sum(cut.values()) == masks + len(bl) + 1 + 64 + 2 * SERVED_TOPK
     assert R.CUTS == {"DsaTopKReadRows_v1": R.cut}
@@ -336,7 +349,7 @@ def test_the_cut_counts_its_units() -> None:
 #: the row classes the long row serves: N a multiple of TOPK from 4,096 to the table's capacity
 SERVED_CLASSES = range(4096, SERVED_V + 1, SERVED_TOPK)
 #: the units the long row's own Definitions add to its cut: the index's past the mask, and the read
-INDEX_UNITS = ("DsaPositionsMerge_v1", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1", "EmbeddingRead_v1")
+INDEX_UNITS = ("DsaPositionsMerge_v2", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1", "EmbeddingRead_v1")
 
 
 def _served_units() -> dict[str, list]:
@@ -352,8 +365,9 @@ def _served_units() -> dict[str, list]:
 def test_every_served_unit_has_the_rows_flocks_composer_proves() -> None:
     """Every unit of the cut at every served class, its rows read off its ports' bits as the composer reads them (a
     parameter a row, then a return field a row, each whole u16 words): at most `interface.MAX_ROWS` rows, one of them past
-    `interface.LAST_BLOCK_BYTES` bytes so it compresses before its last SHA-512 block, and rows that alone fit a Flock
-    block of 2^K_MAX bits.  circuit-check's block check doesn't read the second: a slot over a chunk of 16 passed it."""
+    `interface.LAST_BLOCK_BYTES` bytes so it compresses before its last SHA-512 block, and a proof block that at no
+    logic fits a Flock block of 2^K_MAX bits (`interface.proof_block_k_log` of its input rows and its output rows).
+    circuit-check's block check doesn't read the second: a slot over a chunk of 16 passed it."""
     units = _served_units()
     assert set(INDEX_UNITS) <= set(units)
     for us in units.values():
@@ -363,24 +377,25 @@ def test_every_served_unit_has_the_rows_flocks_composer_proves() -> None:
             rows = [2 * -(-sum(t.leaf_widths()) // 16) for t in [t for _, t in params] +
                     [f[1] if isinstance(f, tuple) else f for f in fields]]
             assert len(rows) <= IF.MAX_ROWS and max(rows) > IF.LAST_BLOCK_BYTES, (u.id, rows)
-            assert IF.rows_k_log(rows) <= IF.K_MAX, (u.id, rows)
+            assert IF.proof_block_k_log(rows[:len(params)], rows[len(params):]) <= IF.K_MAX, (u.id, rows)
 
 
 def test_the_index_and_read_units_pass_the_window_builders_proof_block_check() -> None:
     """`interface.check_proof_block`, which vllm's window builder runs on every unit it settles, passes the merge, the
     chunks, the slots and the read at every served class, at the least k_log their rows allow: 2^23 for the chunk and the
-    read, 2^21 for the slot (its chunk's 128 bytes the one row past 111), at most 2^26 for the merge of up to 8 blocks."""
+    read, 2^`interface.PACK_LOG` for the slot (its chunk's 128 bytes the one row past 111: its own block is 2^21 bits,
+    and the composer packs proof blocks into a Flock block of that size), at most 2^26 for the merge of up to 8 blocks."""
     units = _served_units()
     k = {b: {IF.check_proof_block(u) for u in units[b]} for b in INDEX_UNITS}
-    assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v1"] == {23} and k["DsaPositionsSlot_v1"] == {21}
-    assert max(k["DsaPositionsMerge_v1"]) <= 26
+    assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v1"] == {23} and k["DsaPositionsSlot_v1"] == {IF.PACK_LOG} == {22}
+    assert max(k["DsaPositionsMerge_v2"]) <= 26
 
 
 #: the mask's units and the block positions, each with the least k_log their rows allow over the served classes: a block's
 #: scores, 64 KiB at 16,384 keys, are most of a unit's rows, and the whole mask's are up to WHOLE_MAX keys, 2^27 from 24,576;
 #: positions over the whole row read up to 5 KiB of mask words
-MASK_UNITS = {"DsaTopKMaskWhole_v1": {24, 25, 26, 27}, "DsaTopKDigitCount_v1": {23, 24, 25, 26}, "DsaTopKDigitPick_v1": {23, 24},
-              "DsaTopKMaskBlock_v1": {23, 24, 25, 26}, "DsaMaskPositions_v1": {23, 24}}
+MASK_UNITS = {"DsaTopKMaskWhole_v2": {24, 25, 26, 27}, "DsaTopKDigitCount_v1": {23, 24, 25, 26}, "DsaTopKDigitPick_v2": {23, 24},
+              "DsaTopKMaskBlock_v2": {23, 24, 25, 26}, "DsaMaskPositions_v2": {23, 24}}
 
 
 def test_the_mask_units_pass_the_window_builders_proof_block_check() -> None:

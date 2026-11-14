@@ -21,7 +21,7 @@ Rules (first match by priority; every rule's evidence refs recorded; ambiguity l
      The run's own queue scope (`cluster-<run id>.scope`, which `research run --queue` starts) counts as the job's own cgroup here and in 7b.
   6b exit by SIGTERM + an oom_kill increment in the run's own queue scope
                                                                   -> CGROUP_OOM_ATTRIBUTED (0.1.4), established: systemd stopped the scope after the kernel
-                                                                     OOM-killed a process in it.  Every OOM class in the job's own cgroup names its cap
+                                                                     OOM-killed a process in it.  Every OOM class in the job's own cgroup names its limit
                                                                      (`MemoryMax=NG`, job.json's environment.cgroup.memory_max_bytes) in `why`.
   COEXISTENCE (rev S-r17-51 c1, brief s6 'retain both'): whenever the job exited by SIGKILL with an oom_kill delta in its interval and rules 3-5
   chose another class (CUDA string, low mount, marker), the class is that first match but certainty = ambiguous, both evidence sets are
@@ -74,12 +74,12 @@ ACTOR_CLASS = {"timeout": "STAGE_TIMEOUT", "deadman": "CANCELLED_DEADMAN", "guar
 SIGNAMES = {9: "SIGKILL", 15: "SIGTERM", 2: "SIGINT", 1: "SIGHUP", 6: "SIGABRT", 11: "SIGSEGV", 7: "SIGBUS"}
 
 
-def _sha(path: Path, cap: int = 64 << 20) -> tuple[str | None, int | None]:
+def _sha(path: Path, limit: int = 64 << 20) -> tuple[str | None, int | None]:
     try:
         n = path.stat().st_size
     except OSError:
         return None, None
-    if n > cap:
+    if n > limit:
         return None, n
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -191,10 +191,10 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     cg_path = str((cg_samples[0]["cgroup"].get("path") if cg_samples else None) or ((jobdoc.get("environment") or {}).get("cgroup") or {}).get("path") or "")
     queue_scope = cg_path.rstrip("/").rsplit("/", 1)[-1] == f"cluster-{run_id}.scope"
     own_scope = cg_scope == "job_cgroup" or queue_scope
-    cap_bytes = ((jobdoc.get("environment") or {}).get("cgroup") or {}).get("memory_max_bytes")
-    cap = (f"MemoryMax={cap_bytes >> 30}G" if cap_bytes % (1 << 30) == 0 else f"MemoryMax={cap_bytes}") if isinstance(cap_bytes, int) else None
+    max_bytes = ((jobdoc.get("environment") or {}).get("cgroup") or {}).get("memory_max_bytes")
+    limit = (f"MemoryMax={max_bytes >> 30}G" if max_bytes % (1 << 30) == 0 else f"MemoryMax={max_bytes}") if isinstance(max_bytes, int) else None
     if queue_scope:
-        ref("cgroup.queue_scope", path=cg_path, memory_max=cap,
+        ref("cgroup.queue_scope", path=cg_path, memory_max=limit,
             note="the run's own allocation (`research run --queue`'s systemd scope): it holds the runner, its sampler and the workload, nothing else")
     oom_delta: dict[str, int] = {}
     delta_windows: list[dict[str, Any]] = []
@@ -477,7 +477,7 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
         # rule 6b (0.1.4): systemd stops a scope (OOMPolicy=stop) with SIGTERM once the kernel OOM-kills a process in it
         cls, certainty = "CGROUP_OOM_ATTRIBUTED", "established"
         why = (f"exit by SIGTERM after an oom_kill increment in the run's own queue scope {cg_path.rsplit('/', 1)[-1]}: the kernel OOM-killed a process "
-               "at the scope's memory cap and systemd then stopped the scope")
+               "at the scope's memory limit and systemd then stopped the scope")
         limitations.append("the recorded signal is systemd's stop of the scope, not the OOM-killed process's SIGKILL")
     elif term_sig is not None:
         timeout_s = status.get("timeout_s") or (status.get("execution") or {}).get("timeout_s")
@@ -538,8 +538,8 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     if cls == "UNKNOWN_SIGNAL" and not samples:
         certainty = "ambiguous"
         limitations.append("no resource samples: a cgroup OOM in this interval could not have been observed")
-    if cap and cls in ("CGROUP_OOM_ATTRIBUTED", "CGROUP_OOM") and own_scope:
-        why += f"; the cap was {cap}" + (" (`research run --queue --mem-gb G` sets it)" if queue_scope else "")
+    if limit and cls in ("CGROUP_OOM_ATTRIBUTED", "CGROUP_OOM") and own_scope:
+        why += f"; the limit was {limit}" + (" (`research run --queue --mem-gb G` sets it)" if queue_scope else "")
 
     out = {"schema": FAILURE_SCHEMA, "classifier_version": CLASSIFIER_VERSION, "attempt_dir": str(d), "inputs": inputs,
            "termination": termination, "class": cls, "certainty": certainty, "why": why, "competing": competing, "location": location,

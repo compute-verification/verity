@@ -6,7 +6,7 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -17,22 +17,25 @@ from verity_bench import (
     overhead,
     overhead_records,
     prove_records,
+    served_render,
     served_table,
     settings,
+    spot_status,
     steady_plan,
     steady_spec,
 )
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
-from verity_bench.vllm.presets import local_checkpoint, served
+from verity_bench.vllm.presets import SweepPoint, local_checkpoint, served
 from verity_bench.vllm.result import write
-from verity_bench.vllm.runner import ProcessEngineFactory, run_benchmark
+from verity_bench.vllm.engine import ProcessEngineFactory
+from verity_bench.vllm.runner import run_benchmark
 from verity_bench.vllm.table import render
 
 
 def _spec_argument(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("spec", help="a spec under benchmarks/specs, or its path")
+    parser.add_argument("spec", help="a spec under benchmarks/harness/specs, or its path")
     parser.add_argument("--local-only", action="store_true",
                         help="find passing runs in this machine's catalog alone, not the store's remote")
 
@@ -78,7 +81,9 @@ def _point(args: Any) -> int:
     run_dir = Path(settings.RESEARCH_RUN_DIR).resolve()
     # A requeued (preempted) point reruns in its run directory: an earlier attempt's verdict must not outlive it.
     (run_dir / "result.json").unlink(missing_ok=True)
-    spec = plan.spec
+    spec, point = jobs.vllm_spec(plan), item.point
+    if not isinstance(point, SweepPoint):
+        raise TypeError(f"{point.id} is a steady-state point: steady_plan runs it")
     jobs.check_point_environment(spec, settings.environ())
     if spec.preset.model_digest is not None:
         found = local_checkpoint(spec.preset, spec.preset.model).model_digest
@@ -90,7 +95,7 @@ def _point(args: Any) -> int:
     doc = run_benchmark(
         preset,
         arms,
-        (item.point,),
+        (point,),
         sweep=spec.sweep.id,
         reps=spec.reps,
         warmups=spec.warmups,
@@ -133,6 +138,7 @@ def _point(args: Any) -> int:
     temporary = run_dir / f"result.json.tmp.{os.getpid()}"
     temporary.write_text(json.dumps(envelope, indent=1) + "\n", encoding="utf-8")
     os.replace(temporary, target)
+    result.record(doc, run_dir, settings.RESEARCH_RUN_ID, "out/benchmark.json")
     print(render(doc), end="")
     return 0 if passed else 3
 
@@ -150,7 +156,9 @@ def _served_table(args: Any) -> int:
     if args.json:
         print(json.dumps(table, indent=1, sort_keys=True))
     else:
-        print(served_table.render(table), end="")
+        print(served_render.render(table), end="")
+    if args.metrics and settings.is_set("RESEARCH_RUN_DIR"):
+        served_render.record(table, args.metrics)
     return 0
 
 
@@ -199,6 +207,8 @@ def _overhead_run(args: Any) -> int:
 
 def _overhead_table(args: Any) -> int:
     table = overhead_records.build(local_only=args.local_only)
+    if args.metrics and settings.is_set("RESEARCH_RUN_DIR"):
+        overhead_records.record(table, args.metrics)
     if args.json:
         print(json.dumps(table, indent=1, sort_keys=True))
     else:
@@ -234,8 +244,12 @@ def _overhead_parser(commands: Any) -> None:
     run.add_argument("--record", metavar="RUN", help="label RUN a run of record, once it stands as a whole")
     run.set_defaults(run=_overhead_run, command_parser=run)
 
-    table = sub.add_parser("table", help="γ per scheme, point and card from labelled runs of record alone")
-    table.add_argument("--json", action="store_true", help="the rows as JSON (each with of_record and why)")
+    table = sub.add_parser("table", help="γ per scheme, point and card from labelled runs of record alone",
+                           description="γ per scheme, point and card from labelled runs of record alone. "
+                                       f"{overhead.covers()} A row whose run's arm committed no y is noted "
+                                       f"\"{overhead.WITHOUT_Y}\".")
+    table.add_argument("--json", action="store_true",
+                       help="the rows as JSON (each with of_record and why, commits_y and note)")
     table.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
     table.set_defaults(run=_overhead_table, command_parser=table)
 
@@ -243,12 +257,18 @@ def _overhead_parser(commands: Any) -> None:
 def _prove(args: Any) -> int:
     doc = prove_records.build(args.system, args.workload, sampling=args.sampling, provers=args.provers,
                               cores=args.cores, local_only=args.local_only)
+    if getattr(args, "metrics", None) and settings.is_set("RESEARCH_RUN_DIR"):
+        prove_records.record(doc, args.metrics)
     if args.steady_rows:
         args.steady_rows.write_text(json.dumps(prove_records.P.steady_rows(doc), indent=1) + "\n")
+    if args.system == "spot":
+        doc["spot_holes"] = spot_status.status(spot_status.runs_of(doc["inputs"]))
     if args.json:
         print(json.dumps(doc, indent=1, sort_keys=True))
     else:
         print(prove_records.render(doc, args.rows), end="")
+        if "spot_holes" in doc:
+            print("\n" + spot_status.render(doc["spot_holes"]))
     return 0
 
 
@@ -338,8 +358,13 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
+    """`metrics`: a runner's metric ids, each for what its command's table names, which the command records in a
+    research run's result: for `prove` a total of its table (`prove_records.FIGURES`), for `overhead table` the γ of a
+    row (`overhead_records.measurements`), for `served-table` a row's ``SPEC/POINT`` (`served_render.measurements`)."""
+
     args = _parser().parse_args(argv)
+    args.metrics = dict(metrics or {})
     try:
         settings.validate(of_record=args.command == "_vllm-point")
         return int(args.run(args))

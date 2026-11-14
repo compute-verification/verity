@@ -1,4 +1,4 @@
-"""The active certifier on recorded traces, in real time: `verity.protocols.certifier.verifier.active` serving a replay of honest traces'
+"""The active certifier on recorded traces, in real time: `verity.protocols.accounting.certifier.verifier.active` serving a replay of honest traces'
 configurations over localhost, then the audit of the records it published.
 
 Each configuration is one run of three processes on the host's monotonic clock, from an origin they share:
@@ -107,8 +107,8 @@ from pathlib import Path
 
 import covert
 import replay
-from verity.protocols.certifier.verifier import online
-from verity.protocols.certifier.verifier.active import (
+from verity.protocols.accounting.certifier.verifier import online
+from verity.protocols.accounting.certifier.verifier.active import (
     CANONICAL_STREAM,
     DATA,
     HEADER,
@@ -141,29 +141,29 @@ from verity.protocols.certifier.verifier.active import (
     wait_until,
     worker,
 )
-from verity.protocols.certifier.verifier.lean_audit import Audit
-from verity.protocols.certifier.verifier.calibration import choose_syncs
-from verity.protocols.certifier.verifier.release import release_head, release_of, with_release
-from verity.protocols.certifier.verifier.commitment import CommittedRecord, commit
-from verity.protocols.certifier.verifier.grid import (
+from verity.protocols.accounting.certifier.verifier.lean_audit import Audit
+from verity.protocols.accounting.certifier.verifier.calibration import choose_syncs
+from verity.protocols.accounting.certifier.verifier.release import release_head, release_of, with_release
+from verity.protocols.accounting.certifier.verifier.commitment import CommittedRecord, commit
+from verity.protocols.accounting.certifier.verifier.grid import (
     COMPLETE,
     GridParams,
     Reason,
-    Record,
+    BlockGrid,
     Status,
     Certifier,
     row_count,
 )
-from verity.protocols.certifier.verifier.schedule import (
+from verity.protocols.accounting.certifier.verifier.schedule import (
     ClockSync,
     LogicalFrame,
     SyncSet,
     handing_buckets,
     run_shaper,
 )
-from verity.protocols.certifier.verifier.served import Admission, ServedProfile, admits
-from verity.protocols.spot.verifier.one_stage import registration as R
-from verity.protocols.spot.verifier.service import WindowCommitmentRecord
+from verity.protocols.accounting.certifier.verifier.served import Admission, ServedProfile, admits
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
 
 MODEL = "llama-3.1-8b-instruct"
 HTTP_HEAD = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncache-control: no-cache\r\n\r\n"
@@ -246,10 +246,10 @@ def live_request_bytes(session: str, body: dict, frames: int | None, frame_bytes
     return _fit(build, frames or request_frame_count(len(build(0)), frame_bytes), frame_bytes)
 
 
-# Records on disk: the reference's `Record`, each slot that is a link frame stored as (kind, stream, payload) and any
-# other slot as its bytes, then zlib. `unpack_record` gives back the same Record.
+# Records on disk: the reference's `BlockGrid`, each slot that is a link frame stored as (kind, stream, payload) and any
+# other slot as its bytes, then zlib. `unpack_record` gives back the same `BlockGrid`.
 
-def pack_record(record: Record) -> bytes:
+def pack_record(record: BlockGrid) -> bytes:
     allocation = len(record.grid[0]) if record.grid else 0
     head = json.dumps({"link": record.link, "window": record.window, "allocation": allocation,
                        "reason": record.status.reason.value if record.status.reason else None}).encode()
@@ -274,7 +274,7 @@ def pack_record(record: Record) -> bytes:
     return zlib.compress(b"".join(parts), 1)
 
 
-def unpack_record(blob: bytes, frame_bytes: int, intern: dict[bytes, bytes] | None = None) -> Record:
+def unpack_record(blob: bytes, frame_bytes: int, intern: dict[bytes, bytes] | None = None) -> BlockGrid:
     data = zlib.decompress(blob)
     head_len, rows = struct.unpack_from(">II", data)
     i = 8 + head_len
@@ -296,7 +296,7 @@ def unpack_record(blob: bytes, frame_bytes: int, intern: dict[bytes, bytes] | No
             slots.append(intern.get(slot, slot) if intern is not None else slot)
         grid.append(tuple(slots) + (None,) * (head["allocation"] - n))
     status = Status(Reason(head["reason"])) if head["reason"] else COMPLETE
-    return Record(head["link"], head["window"], tuple(grid), status)
+    return BlockGrid(head["link"], head["window"], tuple(grid), status)
 
 
 def write_blobs(path: Path, blob: bytes) -> None:
@@ -1209,12 +1209,12 @@ class Publisher:
         self.executor = ThreadPoolExecutor(1) if threaded else None
         self.futures: list = []
 
-    def keep(self, record: Record, params: GridParams) -> None:
+    def keep(self, record: BlockGrid, params: GridParams) -> None:
         write_blobs(self.files[params], pack_record(record))
         with open(self.out / "committed.jsonl", "a") as fh:
             fh.write(committed_line(commit(record, params)) + "\n")
 
-    def __call__(self, record: Record, params: GridParams) -> None:
+    def __call__(self, record: BlockGrid, params: GridParams) -> None:
         if self.executor is None:
             self.keep(record, params)
         else:
@@ -1704,7 +1704,7 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
 
 # The audit.
 
-def ingress_releases(records: Sequence[Record], ingress: GridParams, egress: GridParams) -> tuple[dict, dict]:
+def ingress_releases(records: Sequence[BlockGrid], ingress: GridParams, egress: GridParams) -> tuple[dict, dict]:
     """Each stream's release, as the egress bucket of its last frame's ingress bucket, and every ingress frame's
     release bucket by stream, read from the ingress records in window order: their `DATA` frames cut into requests as
     the proxy cuts them (`active.Requests`), the k-th request stream k."""
@@ -1727,7 +1727,7 @@ def percentiles_ms(values: Sequence[float]) -> dict:
     return replay.hist_percentiles(Counter(values)) if values else {}
 
 
-def released_sessions(records: Sequence[Record]) -> dict[str, int]:
+def released_sessions(records: Sequence[BlockGrid]) -> dict[str, int]:
     """Each live request's session (its `user`, `none-k` without one) and the stream the proxy released it as, read
     from the ingress records as `ingress_releases` cuts them. A fault that drops a window's queue drops its requests,
     so the streams after it aren't the plan's."""
@@ -1944,14 +1944,14 @@ def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit, client
     return out
 
 
-def audit_salt(setup: Setup, salts: dict[int, bytes], in_records: Sequence[Record], out_records: Sequence[Record],
+def audit_salt(setup: Setup, salts: dict[int, bytes], in_records: Sequence[BlockGrid], out_records: Sequence[BlockGrid],
                server: dict, windows: int, audit) -> dict:
     """The audit's read of a salted run's salt frames (`check_salts`, on the raw ingress records and the salts `reveal`
     gave), and where the salt frames went: their count in each window's ingress record and in the egress records,
     whether any egress frame holds a salt, and whether the server received each window's salt."""
     verdicts = check_salts(audit, setup.ingress_link, in_records, windows, salts)
 
-    def salt_frames(r: Record) -> int:
+    def salt_frames(r: BlockGrid) -> int:
         return sum(len(f) >= HEADER.size and decode_frame(f)[0] == SALT
                    for row in r.grid for f in row[: row_count(row)])
 

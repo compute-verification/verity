@@ -5,7 +5,7 @@
 `GemmF32Out_v1`), and each model's lm_head shard and indexer projection (``F.linear``, core's `Gemm_v2`), at their TP8 shapes
 (`MODELS`) at vLLM's default cuBLAS configuration, with the former split-K-off route kept as a named comparison variant.
 
-One GPU process writes `<out>/glm53_bf16_gemm_capture.json`, the property record `glm53_bf16_gemm_capture` (`properties.record`),
+One GPU process writes `<out>/glm53_bf16_gemm_capture.json`, the property record `glm53_bf16_gemm_capture` (`records.property_record`),
 and prints one line per case and then `GLM53-BF16-GEMM GO` or `NO-GO` with each model's verdict.  `ok` (GO) = every check below,
 for every model run.  The device gate runs first and nothing else runs when it fails (exit 3).  A case that raises records its
 error and fails the verdict without stopping the others.
@@ -108,11 +108,19 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 import numpy as np
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.batch import type_shape
+from verity.circuits.ops import gemm as CG
+from verity.circuits.ops.boolean import gemm as BG
+from verity.definitions.registry import cublas_bf16 as CB
+from verity.definitions.registry import ll_bf16 as LL
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v6"
 RECORD = "glm53_bf16_gemm_capture.json"
@@ -259,8 +267,8 @@ def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int 
     rng = np.random.default_rng(seed + K + splits + N + (output == "bf16"))
     values = np.array([s * 2.0 ** e for e in (-20, -10, -1, 0, 1, 10, 20, 30, 50) for s in (-1, 1)] + [0.0], np.float32)
     pool = (values.view(np.uint32) >> np.uint32(16)).astype(np.uint16)
-    x = np.full((1, K), 0x3F80, np.uint16)
-    w = np.zeros((N, K), np.uint16)
+    x: np.ndarray = np.full((1, K), 0x3F80, np.uint16)
+    w: np.ndarray = np.zeros((N, K), np.uint16)
     w[:, 0:K:16] = rng.choice(pool, (N, K // 16))
     starts = [int(cols[0]) for cols in BC._split_cols(K, splits, "contiguous")]
     if splits >= 3:
@@ -446,7 +454,10 @@ def distributed(work: Path) -> None:
     """vLLM's TP and PP groups at world size 1 (`ReplicatedLinear` reads the TP group's rank), under the current vLLM config.  Not
     `vllm_meta.ensure_distributed`: importing that module pins `engine.env.EXPORT` (test_env holds every capture that clears
     `SERVED_DEFAULTS` to importing no pinning module)."""
-    from vllm.distributed import ensure_model_parallel_initialized, init_distributed_environment
+    from vllm.distributed import (
+        ensure_model_parallel_initialized,
+        init_distributed_environment,
+    )
 
     init_distributed_environment(world_size=1, rank=0, distributed_init_method=f"file://{work / 'dist_store'}", local_rank=0,
                                  backend="gloo")
@@ -513,7 +524,8 @@ class Weights:
     dequantized kv_b_proj weight with `W_UK_T` and `W_UV` as views of its transpose."""
 
     def __init__(self, work: Path, seed: int):
-        self.work, self.seed, self.made = work, seed, {}
+        self.work, self.seed = work, seed
+        self.made: dict[tuple[str, str], tuple[Any, Any]] = {}
 
     def get(self, model: str, name: str):
         key = (model, name)
@@ -638,7 +650,7 @@ def scan_routes(regimes: list[dict[str, Any]]) -> list[list[int | None]]:
     """The regimes as `bf16_gemm_check`'s route table rows: maximal [m0, m1, split] runs (split None: the serial chain)."""
     runs: list[list[int | None]] = []
     for r in regimes:
-        if runs and runs[-1][2] == r["split"] and runs[-1][1] + 1 == r["m0"]:
+        if runs and runs[-1][2] == r["split"] and runs[-1][1] == r["m0"] - 1:
             runs[-1][1] = r["m1"]
         else:
             runs.append([r["m0"], r["m1"], r["split"]])
@@ -861,7 +873,7 @@ def route_table(scans: list[dict[str, Any]], run_record: str) -> dict[str, Any]:
     from verity.definitions.registry import bf16_gemm_check as BC
 
     conditions: dict[str, Any] | None = None
-    runs: dict[str, list[list[int | None]]] = {}
+    runs: dict[str, list[list[Any]]] = {}
     for i, doc in enumerate(scans):
         if not doc.get("ok"):
             bad = [k for k, c in doc.get("cases", {}).items() if not c.get("ok")]
@@ -883,7 +895,7 @@ def route_table(scans: list[dict[str, Any]], run_record: str) -> dict[str, Any]:
         raise ValueError("no scan holds a router, linear or f32out case")
     table: dict[str, list[list[int | None]]] = {}
     for key, rs in sorted(runs.items()):
-        joined: list[list[int | None]] = []
+        joined: list[list[Any]] = []
         for r in sorted(rs, key=lambda r: r[0]):
             want = joined[-1][1] + 1 if joined else (BC.LL_MAX_M + 1 if key.startswith("router ") else 1)
             if r[0] != want:
@@ -1075,14 +1087,6 @@ TOTALS = ("words", "mismatch", "dotprod_words", "fma1_mismatch", "fma0_mismatch"
 
 def _reference(job: dict[str, Any], a: dict[str, np.ndarray], r: int, n: int, fma: int | None) -> tuple[int, ...]:
     """The plain-integer reference of the word Definition at one output coordinate (row r, column n; head n // N for bmm)."""
-    from verity.circuits.boolean.trace import word_of
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.ops import gemm as CG
-    from verity.definitions.ops.boolean import gemm as BG
-    from verity.definitions.registry import cublas_bf16 as CB
-    from verity.definitions.registry import ll_bf16 as LL
-
     hop = word_of(BG.HopperBF16WgmmaDot16)
     K, N = job["K"], job["N"]
     if job["phase"] == "bmm":
@@ -1119,8 +1123,9 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
 
     a = _load(job["paths"])
     r0, r1 = job["rows"]
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     k = job.get("kernel") or {}
+    want: dict[int | None, np.ndarray]
     if job["phase"] == "bmm":
         got = np.asarray(a["out"][:, r0:r1]).transpose(1, 0, 2).reshape(r1 - r0, -1)
         want = {None: BC.bmm_rows(np.asarray(a["a"][:, r0:r1]), np.asarray(a["b"])).transpose(1, 0, 2).reshape(r1 - r0, -1)}
@@ -1175,20 +1180,14 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------------------------------------------------------------ bind
-def bind_check(models: list[str] = list(MODELS), launches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """Every Definition binds at each model's statics, including each default split count pinned from the profiled route."""
-    from verity.circuits.boolean.trace import word_of
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.batch import type_shape
-    from verity.definitions.ops import gemm as CG
-    from verity.definitions.ops.boolean import gemm as BG
+def bind_check(models: list[str] | None = None, launches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Every Definition binds at each model's statics (every model's when none is named), including each default split count
+    pinned from the profiled route."""
     from verity.definitions.registry import bf16_gemm_check as BC
-    from verity.definitions.registry import cublas_bf16 as CB
-    from verity.definitions.registry import ll_bf16 as LL
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     targets = []
-    for model in models:
+    for model in list(MODELS) if models is None else models:
         m = MODELS[model]
         H, E = m.hidden, m.experts
         gate = [[H], [E, H], [E]]
@@ -1316,8 +1315,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     work = Path(tmp.name)
     env, cleared = environment(a.served_default, work / "triton_cache")
     import torch
-    from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
     from verity.definitions.registry import bf16_gemm_check as BC
+    from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
     tag = "GLM53-BF16-GEMM" + (" (served default)" if a.served_default else "")
     todo = cases(a.quick, only, models)

@@ -3,16 +3,21 @@ reaches 10% of its compute, and a row's sampling plan, from one entry point at a
 
     python -m benchmarks.spot_figures.breakeven.headline rows --out DIR [--rows ROW ...] [--scopes SCOPE ...]
         [--betas BETA ...] [--workers N]      # DIR/rows.jsonl, one row a (row, scope, beta), and DIR/figure.json
-        [--steady ROWS.json [--steady-map MAP.json]]
+        [--steady ROWS.json [--steady-map MAP.json] | --prices [TABLE.json]] [--partition NAME]
     python -m benchmarks.spot_figures.breakeven.headline read ROWS.jsonl ...
     python -m benchmarks.spot_figures.breakeven.headline plan --row ROW --scope SCOPE --beta BETA --out DIR
         [--types MIX.json]                    # DIR/mix.json: the row's plan, block by block
-        [--steady ROWS.json [--steady-map MAP.json]]
+        [--steady ROWS.json [--steady-map MAP.json] | --prices [TABLE.json]] [--partition NAME]
+    python -m benchmarks.spot_figures.breakeven.headline plan --row "(ii) honest" --scope "world year" \
+        --beta 0.05544106123672309 --prices --out DIR    # row (ii) at its plan's budget, at today's table
 
 from the repository's root. A row (`ROWS`) is the proof server's line at its last step
 (`sweep.served_line()["P5+poolwin600"]`) with its case's levers at their measured values, over the 128k workload with
-every sparse-MLA head's blocks (`volume`: the `workload` card's head blocks counted over the serve plan's requests,
-`mla128`), its verification phase a datacenter's window. `price` prices its strata: the planner's per-type pricing, the quant types' host walk, the Lean verifier
+every sparse-MLA head's blocks (`volume`: the `workload` card's sparse-MLA blocks counted over the serve plan's
+requests, `mla128`), its verification phase a datacenter's window. The head is the card's whole key blocks and end
+block, the forms that verify; `--partition UNITS` cuts each head's key block into its scores unit and its values
+units instead (`UNITS`, a `partition` card beside the line's own cut, modeled), and a row so cut names the cut and its
+label (`cut`). `price` prices its strata: the planner's per-type pricing, the quant types' host walk, the Lean verifier
 as measured and the row's scale. `evaluate` charges it: the carried pool's pages recommitted at each edge
 (a copy stratum and the kv arm's hash tax), a request cut at the edge recomputed, its prefix hits reproved, B128's
 wait at paced egress, the pool's AND gates when only replays read it, and a replay block served at most trace128's
@@ -22,13 +27,47 @@ longest output.
 `--steady ROWS.json` prices each block of the row's line that a steady-state row of the file measures at that row
 (`reprice.steady`'s format, which `verity bench prove --steady-rows` writes by census block type), in place of the
 planner's price: the statement's GPU-seconds over its blocks, with the Lean verifier as measured and no walk or scale
-of the row's, which would rescale a measurement. A row prices the line's block of its own name. `--steady-map MAP.json`
-says where the names differ, `{census block type: target}`: the line's block that the row measures; `[block, n]` where
-the row's type is one of the n column blocks the line's block is cut into (n of its blocks a block, a statement of 1/n
-as many); or null, a row this line has no block for, which is listed as unread. A row that prices no block of the line
-and isn't mapped to null is refused by name, so no measurement is dropped unsaid. Each row then names the rows that
-priced it and the ones unread (`steady`), and its split gives the share of the plan's proving each basis prices
-(`split.basis`: `steady`, or the planner's table).
+of the row's, which would rescale a measurement. A row prices the line's block of its own name, and a fused read's
+row (`FUSED`) the line's fused block. `--steady-map MAP.json` says where else the names differ,
+`{census block type: target}`: the line's block that the row measures; `[block, n]` where the row's type is one of the
+n column blocks the line's block is cut into (n of its blocks a block, a statement of 1/n as many); or null, a row
+this line has no block for, which is listed as unread. A row that prices no block of the line and isn't mapped to null
+is refused by name, so no measurement is dropped unsaid. Each row then names the rows that priced it and the ones
+unread (`steady`), and its split gives the share of the plan's proving each basis prices (`split.basis`: `steady`, or
+the planner's table).
+
+`--prices TABLE.json` prices the line's blocks from `verity bench prove --json`'s table instead (`--prices` alone
+reads the evidence store's table now and keeps it as DIR/prices.json, stamped with when it was read; a table's row
+names the line's block by its census type, a fused read's by `FUSED`): a block whose row is its own steady-state row
+or its Definition's at the same static K (`family`) takes that row's seconds a block: its price without the verifier
+(the walk in it) times one factor, so that a block and its share of a statement's fixed seconds come to the row's
+seconds and keep the planner's proportion, and the measured verifier's seconds a statement on top, not its seconds a
+block; neither takes the row's scale, as a block with a steady-state row doesn't: the row is a warm measurement.
+Where the type's own row timed statements of two sizes at its prover count and cores (the row's `sizes`), the line
+through the two gives its fixed seconds a statement and its seconds a block in place of the planner's proportion
+(`timed_split`; the row names it, `prices.fixed_timed`, and `rows` prints it); a line with a negative fixed part
+or no positive slope is no split, and the planner's proportion stays, said in the block's basis.
+Every other block keeps its price (the planner's, at the row's scale). A row may name a block's Boolean
+version, the same parameters with each function-valued static its Boolean version, as the registry pairs them for
+`verity bench prove` (`verity_bench.boolean`): where the table holds no row of the block's own, that row prices it
+as its own. A table's row for no block of the line, nor a Boolean version of one, is refused by name, but for a block
+of the census (`census_blocks`: the `workload` card's and each `partition` card's) that the line doesn't hold: that
+row measured another partition. A block the row's cut leaves out is counted unread by family (`prices.unread`), as a
+steady-state row of one is listed unread, and any other the row lists unread by name (`prices.not_held`). Each row
+then says which table priced it (`prices`), and its split gives the share of the plan's proving each source prices (`split.sources`: own row,
+family row, either as "its Boolean version" where its row is that, an own row as "fixed part timed" where its two
+sizes split it, the planner's price, the copy stratum, and apart
+from them the Lean verifier's seconds, which no row times) and how each share is priced (`split.priced`: a table
+row's blocks by its source, `steady` or `family`, a Boolean version's row too, the planner's by its own word,
+`computed` where it scales, but its `measured` as the planner's price, and the Lean verifier's `modeled` but for the
+type whose verifier is timed), and the share its scale reaches (`split.scaled`).
+
+`plan` prints its row's GB at the row's own pinned budget, where its total is what the row says, at lambda 1;
+`rows` and `read` print lambda times the GB where a scope's total is 10%, read between the two pinned budgets that
+bracket it; `verity bench exfiltration` reads the headline figure off rows of record with its own line through
+every pinned budget. Each prints beside a figure what its rows' data says a reader must know (`note`, which a row
+also carries): that no table's row priced their proving, or under half of it, and what a row's scale reaches over
+the unscaled row of its case.
 """
 from __future__ import annotations
 
@@ -63,6 +102,12 @@ STEP = "+ the verifier as measured"
 #: the world the rows are priced in, the tree's reference fleet, by the name `verity bench exfiltration` takes a run of
 #: record's rows by; it also reads a row's pinned beta as `b10`, and its step by the prefix "+ the verifier as measured"
 WORLD = "ours"
+#: the classes of gates a sampled proof block's reveals open, each whole, in a row's binding bound: assumed
+CLASSES_A_PROOF_BLOCK = 4130
+#: the symbols of one table's level-0 codewords, at most, in a row's binding bound: assumed
+TABLE_SYMBOLS = 2 ** 23
+#: what a binding bound summed over verification phases takes of the prover: assumed
+ONE_SAMPLE = "one commitment, one sample; every committed window is presented"
 
 #: the GPU prover at its measured 3.71 times, not the 4 times goal (1.101 s against 2.088 s over 3.71)
 PROVER_MEASURED = 1.101 / (2.088 / 3.71)
@@ -74,9 +119,17 @@ MEASURED = {"prover": PROVER_MEASURED, "tmpl": "measured", "dense_k": 2, "verify
             "replay": 5258.0, "live": False, "commit_write": False, "registration": "datacenter"}
 #: the served tokens' line, unfused
 TOKENS = {"line": "tokens", "fuse": False, "fused": ""}
-#: the types whose seconds a warm served block replaces in (iii): the sparse-MLA row's units as the card cuts it (its
-#: head blocks, a head's end, a split's column ends, the combine, a whole row) and the families beside them
-WARM_FAMILIES = ("SparseMlaHeadBlock_v1{", "SparseMlaHeadEnd_v1{", "SparseMlaSplitEndCols_v1{", "Fp8GroupQuantUe8m0_v1{",
+#: the `partition` card that cuts each head's key block into its scores unit and its values units of 64 columns,
+#: beside the line's own cut: modeled, and no unit has staged with a verdict, so a row takes it only when named
+#: (`--partition`); the rows price the head as the `workload` card's whole blocks, whose 64-key block and end block
+#: are at the k_log of the forms that verify
+UNITS = "head-scores-values"
+#: the types whose seconds a warm served block replaces in (iii) (assumed, x0.25, no timing behind it): the sparse-MLA
+#: row's units under either cut (a head block whole, or its scores and values units; a head's end; a split's column
+#: ends; the combine; a whole row) and the families beside them. It reaches only blocks at the planner's price: a
+#: table's row or a steady-state row is already a warm measurement
+WARM_FAMILIES = ("SparseMlaHeadBlock_v1{", "SparseMlaHeadScores_v1{", "SparseMlaHeadValues_v1{", "SparseMlaHeadEnd_v1{",
+                 "SparseMlaSplitEndCols_v1{", "SparseMlaSplitEnd_v1{", "Fp8GroupQuantUe8m0_v1{",
                  "SparseMlaCombine_v1{", "BatchedGemm_v1{", "CublasSplitKGemmF32Out_v1{", "CublasSplitKGemm_v1{",
                  "DsaRMSNorm_v1{", "RmsNormMnnvl_v1{", "AllReduceResidualMnnvl_v1{", "AllReduceMnnvl_v1{",
                  "EmbeddingShard_v1{", "LlBf16DotprodGemm_v1{", "SparseMlaSplit_v1{", "Gemm_v2{")
@@ -88,8 +141,8 @@ def warm(f: float) -> dict:
 
 #: each row's case fields over the P5 line's, and the factors (seconds a block, fixed seconds) its types take
 ROWS = {"(i) honest": {"case": TOKENS | MEASURED, "scale": {}},
-        "(ii) honest": {"case": dict(MEASURED), "scale": {}},
-        "(iii) honest": {"case": dict(MEASURED), "scale": warm(0.25)}}
+        "(ii) honest": {"case": MEASURED, "scale": {}},
+        "(iii) honest": {"case": MEASURED, "scale": warm(0.25)}}
 
 RMS8 = "RMSNormFusedCudaVector8_v1{N=6144,"
 #: the Lean verifier as measured, core-seconds a one-block statement and a block: RMSNorm v8's measured statement times
@@ -106,9 +159,13 @@ QUANT_WALK = (10.53 - 26.84 / 32) / 12 / 2048
 GPU_GIB = 2163991326720 / 2**30 / 8
 #: each type's prover and verifier pair in host memory, GiB: quant at 291 GiB a K6144 pair, other K's in proportion
 #: (assumed); the sparse-MLA head block's as a prover and verifier of a row's 64 keys took at load, a floor (assumed:
-#: the head block's own pair is unmeasured, and at 64 keys it has that statement's MACs and k_log)
+#: the head block's own pair is unmeasured, and at 64 keys it has that statement's MACs and k_log); its scores unit's
+#: the same, at most its k_log, and its values unit's an eighth of it, at three k_log below it or more (assumed: neither
+#: unit's pair is measured)
+HEAD_PAIR_GIB = 64.4 + 72.1
 PAIR_GIB = {**{f"Fp8GroupQuantUe8m0_v1{{K={k},": 291.0 * k / 6144 for k in (6144, 2048, 1536, 256)},
-            "SparseMlaHeadBlock_v1": 64.4 + 72.1}
+            "SparseMlaHeadBlock_v1": HEAD_PAIR_GIB, "SparseMlaHeadScores_v1": HEAD_PAIR_GIB,
+            "SparseMlaHeadValues_v1": HEAD_PAIR_GIB / 8}
 
 
 def host_provers(pair: float, budget: float = GPU_GIB) -> int:
@@ -136,14 +193,31 @@ COMPRESSION_ANDS = 58120
 COPY_ANDS = 2 * (CLASS_MAX // 1024 + 3) * COMPRESSION_ANDS
 #: the compile's core-hours a sampled replay block
 COMPILE_CORE_H = 3.8
-#: the fused reads' types in a plan
-FUSED = {"fr-w13": ("EmbeddingRead_v1{V=256,H=3072}", "MoeExpertFp8BlockGemm_v4"),
-         "fr-w2": ("EmbeddingRead_v1{V=256,H=4096}", "MoeExpertFp8BlockGemmW_v4")}
+#: the fused reads' types in a plan: the read and the GEMM that consumes it, which the line's block is named by
+#: (`levers.fuse_reads`: `Fused[read + GEMM]`), and the one type a census holds the two as (its READ the read, then the
+#: GEMM's parameters)
+FUSED = {"fr-w13": ("EmbeddingRead_v1{V=256,H=3072}", "MoeExpertFp8BlockGemm_v4", "MoeExpertFp8ReadGemm_v1"),
+         "fr-w2": ("EmbeddingRead_v1{V=256,H=4096}", "MoeExpertFp8BlockGemmW_v4", "MoeExpertFp8ReadGemmW_v1")}
 LEFT_OUT = ("PageCopy[",)
 CALL_KEYS = ("block", "kind", "per_token", "seconds_per_block", "fixed_seconds", "statement_blocks", "ands", "k_log",
-             "priced", "macs", "basis")
+             "priced", "macs", "basis", "table", "verifier_priced", "verifier_fixed", "verifier_block", "boolean",
+             "scaled", "fixed_timed")
 #: what priced the carried pages' copy blocks, and a block whose pricing call names no basis
 COPY_BASIS, NO_BASIS = "headline.copy_stratum", "none stated"
+#: the sources of `verity bench prove`'s table that price a block (a type's own steady-state row, its Definition's at
+#: the same static K), as a row's split names them, and what prices every other block
+TABLE_SOURCES = {"steady": "own row", "family": "family row"}
+#: how a row's split names a source whose row is the census block's Boolean version's, after the source, as `verity
+#: bench prove` names a row staged in that form
+BOOLEAN = "its Boolean version"
+#: how a row's split names a source whose fixed seconds a statement its own row's two statement sizes give, after the
+#: source (`timed_split`)
+TIMED = "fixed part timed"
+PLANNER = "planner's price"
+#: the source of a block's Lean verifier seconds, which no table row times and a split counts apart from the row's
+VERIFIER_SOURCE = "Lean verifier"
+#: the command that reads the evidence store's table
+PROVE = ("bench", "prove", "--system", "flock", "--workload", "glm53", "--json")
 #: a row's request count may differ from its plan's by rounding only
 REQUESTS_RTOL = 1e-9
 
@@ -154,20 +228,54 @@ def heads() -> int:
     return SPARSE_MLA_GLM53["NH"]
 
 
-@lru_cache(maxsize=None)
-def _volume(registered: int, n: int) -> tuple:
+def _flat() -> None:
     for path in (HERE, HERE.parent):
         if str(path) not in sys.path:
             sys.path.insert(0, str(path))
+
+
+def partition_card(name: str) -> dict:
+    """GLM-5.3's `partition` card `name`."""
+    _flat()
     import cards
+    got = {c["value"]["name"]: c for c in cards.load_all("partition", MODEL)}
+    if name not in got:
+        raise ValueError(f"{MODEL} has no partition card `{name}`: its cards are {sorted(got)}")
+    return got[name]
+
+
+def workload(partition: str = "") -> dict:
+    """The `workload` card's value, its circuit cut by the `partition` card of that name where one is given (its strata
+    in place of the card's of the kinds it replaces, `total_cost.cut_strata`)."""
+    _flat()
+    import cards
+    v = cards.load("workload", MODEL)["value"]
+    if not partition:
+        return v
+    import total_cost
+    return v | {"strata": total_cost.cut_strata(v["strata"], partition_card(partition))}
+
+
+def replaced(partition: str) -> frozenset:
+    """The `workload` card's blocks that the `partition` card's cut leaves out: a steady-state row or a table's row of
+    one is another cut's measurement, which no block of the cut line takes."""
+    if not partition:
+        return frozenset()
+    return frozenset({x["block"] for x in workload()["strata"]} - {x["block"] for x in workload(partition)["strata"]})
+
+
+@lru_cache(maxsize=None)
+def _volume(registered: int, n: int, partition: str) -> tuple:
+    _flat()
     import mla128
-    return tuple(mla128.volume(cards.load("workload", MODEL)["value"], heads=n).items())
+    return tuple(mla128.volume(workload(partition), heads=n).items())
 
 
-def volume(n: int | None = None) -> dict:
+def volume(n: int | None = None, partition: str = "") -> dict:
     """The 128k workload's sparse-MLA blocks a token over the `workload` card's, by block (`mla128.volume`), its rows
-    counted at `n` heads (GLM-5.3's when not given)."""
-    return dict(_volume(heads(), heads() if n is None else n))
+    counted at `n` heads (GLM-5.3's when not given), on the card cut by the `partition` card of that name (the card's
+    own cut when empty)."""
+    return dict(_volume(heads(), heads() if n is None else n, partition))
 
 
 def factors(x: dict, scale: dict) -> tuple | None:
@@ -190,12 +298,53 @@ def planner() -> SimpleNamespace:
     import reprice
     import sweep
     from common import f1, opt, tc
-    return SimpleNamespace(levers=levers, reprice=reprice, sweep=sweep, f1=f1, opt=opt, tc=tc)
+
+    import binding
+    return SimpleNamespace(levers=levers, reprice=reprice, sweep=sweep, f1=f1, opt=opt, tc=tc, binding=binding)
+
+
+def binding_bound(P: SimpleNamespace, design: dict, sampled: int, sessions: float, phases: float) -> dict:
+    """A row's binding bound, modeled: the two-stage first-hit finder's bound by classes of gates
+    (`binding.over_phases`) of one verification phase of the row's `design` and of the `phases` of its scope, each
+    counted in calls and in compressions, with what Lean proves of one phase. The phase's `sessions` and its sampled
+    proof blocks, `sampled` replay blocks' of them, are the design's. Its classes are `CLASSES_A_PROOF_BLOCK` a
+    sampled proof block, and a session's reruns are those of its largest session, its tables of `TABLE_SYMBOLS`
+    symbols each: both assumed, and listed (`assumed`) with what a sum over phases takes of the prover
+    (`ONE_SAMPLE`)."""
+    tables = max(1, ceil(design["tables"] - 1e-9))
+    blocks = sampled * design["draws"] / design["replay_sample"]
+    return {"what": "the two-stage first-hit finder's bound by classes of gates, every run at the stated calls of "
+                    "SHA-512: of one verification phase of the row's design (`phase`) and of the row's scope of them, "
+                    "their sum (`phases`), a finder's cost counted in calls, as the Lean counts, and in compressions, "
+                    "every call charged as the longest; `lean` is what Lean proves at numbers of one phase's conflict "
+                    "and first-hit part",
+            "status": "modeled", "proof_blocks": blocks, "tables": tables,
+            "assumed": [
+                {"input": "classes of gates a sampled proof block", "value": CLASSES_A_PROOF_BLOCK, "unit": "class",
+                 "source": "no count of the row's own blocks gives the classes one reveal opens whole"},
+                {"input": "symbols of a table's level-0 codewords", "value": TABLE_SYMBOLS, "unit": "symbol",
+                 "source": "the most a table's codewords hold at the sizes Lean's instances are stated at; a "
+                           "session's reruns are counted at its tables times this"},
+                {"input": ONE_SAMPLE, "value": None, "unit": "",
+                 "source": "what a sum over verification phases takes of the prover; the row prices no check that "
+                           "holds it to either"}],
+            **P.binding.over_phases(ceil(sessions - 1e-9), CLASSES_A_PROOF_BLOCK * ceil(blocks - 1e-6),
+                                    P.binding.queries(tables * TABLE_SYMBOLS), ceil(phases - 1e-9))}
+
+
+def fused_block(name: str) -> str | None:
+    """The line's fused block that a census's fused type measures (`FUSED`); None for any other type."""
+    for read, gemm, census in FUSED.values():
+        head = f'{census}{{READ={{"fn":"{read}"}},'
+        if name.startswith(head):
+            return f"Fused[{read} + {gemm}{{{name[len(head):]}]"
+    return None
 
 
 def placed(rows: dict, where: dict) -> tuple[dict, list]:
     """Steady-state rows by the line's block each prices, and the census types left unread. `rows` is by census block
-    type (`reprice.steady`) and `where` maps a type whose name isn't the line's block: to that block, to
+    type (`reprice.steady`): a type prices the line's block of its own name, a fused read's type the line's fused
+    block (`fused_block`). `where` maps a type that prices another: to that block, to
     `[block, n]` (the type is one of n column blocks of it: n of the row's blocks make one, and a statement holds 1/n as
     many), or to None (unread). A map entry no row has, a statement that isn't whole blocks of the target and two rows
     for one block are refused."""
@@ -203,7 +352,8 @@ def placed(rows: dict, where: dict) -> tuple[dict, list]:
         raise ValueError(f"the map names {len(stale)} block types no steady-state row measures: {stale}; remove them")
     by: dict = {}
     for name, r in rows.items():
-        block, n = (name, 1) if name not in where else (where[name], 1) if not isinstance(where[name], list) else where[name]
+        to = where[name] if name in where else fused_block(name) or name
+        block, n = to if isinstance(to, list) else (to, 1)
         if block is None:
             continue
         if n < 1 or r["blocks"] % n:
@@ -222,6 +372,73 @@ def steady(rows_path, map_path=None, P: SimpleNamespace | None = None) -> dict:
     return {"rows": by, "unread": unread}
 
 
+@lru_cache(maxsize=None)
+def census_blocks() -> frozenset:
+    """Every block a row's line may hold: the `workload` card's, and each of its `partition` cards' cut's."""
+    _flat()
+    import cards
+    cuts = [c["value"]["name"] for c in cards.load_all("partition", MODEL)]
+    return frozenset(x["block"] for cut in ["", *cuts] for x in workload(cut)["strata"])
+
+
+def boolean_rows(names, blocks) -> dict:
+    """Each of `names` that is no block of `blocks` but the Boolean version of one, by that block: the pairing `verity
+    bench prove` names a row's form by (`verity_bench.boolean.boolean_version`, from the Definitions' own word links),
+    so the two hold the same parameters, each function-valued static its Boolean version. A name that pairs with
+    none is not in it, and one that pairs with two blocks is refused."""
+    names = sorted(set(names) - set(blocks))
+    if not names:
+        return {}
+    from verity_bench.boolean import boolean_version
+    from verity_bench.prove import definition_id
+    out = {}
+    for name in names:
+        spelled = definition_id(name)
+        if len(of := [b for b in sorted(blocks) if boolean_version(b, spelled)]) > 1:
+            raise ValueError(f"`{name}` is the Boolean version of {len(of)} blocks: {of}")
+        out |= {name: of[0]} if of else {}
+    return out
+
+
+def prices(doc: dict) -> dict:
+    """What a row's spec takes as `prices`: a `verity bench prove --json` table's rows by the line's block each prices
+    (a census type's own name, a fused read's the line's fused block, `fused_block`), with when the table was read
+    (`read`, where it says) and its host's cores. A row for no block of the census (`census_blocks`) but for its
+    Boolean version (`boolean_rows`) prices that block, where the table holds no row of the block's own, and names the
+    Boolean version it measured (`boolean`). A table already keyed by the line's blocks (`cells`) is taken as it is."""
+    if "cells" in doc:
+        cells = doc["cells"]
+    else:
+        cells = {fused_block(r["block"]) or r["block"]: r for r in doc["rows"]}
+        if names := {r["block"] for r in doc["rows"]} & set(cells):
+            for name, block in boolean_rows(names, census_blocks()).items():
+                if block not in cells:
+                    cells[block] = cells.pop(name) | {"boolean": name}
+    above = (doc.get("totals") or {}).get("above_cores") or {}
+    return {"cells": cells, "read": doc.get("read"), "cores": doc.get("cores"),
+            "above_cores": {k: above[k] for k in ("block_types", "time_share", "timed_at") if k in above}}
+
+
+def read_prices(path: Path | None, keep: Path | None = None) -> dict:
+    """`verity bench prove`'s table: the file at `path`, else the evidence store's read now, stamped with the time it
+    was read and kept at `keep`."""
+    if path is not None:
+        return json.loads(path.read_text())
+    import shutil
+    from datetime import UTC, datetime
+    verity = Path(sys.executable).with_name("verity")
+    cmd = [str(verity) if verity.exists() else shutil.which("verity") or "verity", *PROVE]
+    got = subprocess.run(cmd, cwd=ROOT, stdout=subprocess.PIPE, text=True)
+    if got.returncode:
+        raise SystemExit(f"`verity {' '.join(PROVE)}` exited {got.returncode}: it reads the evidence store, so run it "
+                         "where the store is reachable (in a `research run`, with --store-read), or pass the table "
+                         "it wrote with --prices TABLE.json")
+    doc = {"read": datetime.now(UTC).strftime("%Y-%m-%dT%H:%MZ")} | json.loads(got.stdout)
+    if keep is not None:
+        keep.write_text(json.dumps(doc, indent=1) + "\n")
+    return doc
+
+
 def walk(strata: list) -> list:
     """Each quant type's host witness walk added to its seconds a block; a steady-state row timed its own."""
     out = []
@@ -234,20 +451,89 @@ def walk(strata: list) -> list:
 
 def verifier(x: dict, bare: dict, core: float) -> dict:
     """`x`'s verifier seconds (its fixed seconds over `bare`'s, priced without the verifier) at the Lean verifier as
-    measured: a measured type's own seconds a statement and slope, every other type's scaled by `V_OTHER`."""
+    measured: a measured type's own seconds a statement and slope, every other type's scaled by `V_OTHER`, which is
+    modeled. The block says how its verifier is priced and the verifier's share of its fixed seconds and of its
+    seconds a block (`verifier_priced`, `verifier_fixed`, `verifier_block`)."""
     key = next((p for p in V_MEASURED if x["block"].startswith(p)), None)
     if key:
         v_new, slope = V_MEASURED[key][0] / core, V_MEASURED[key][1]
     else:
         v_new, slope = (x["fixed_seconds"] - bare["fixed_seconds"]) * V_OTHER[0], V_OTHER[1]
-    return x | {"fixed_seconds": bare["fixed_seconds"] + v_new, "seconds_per_block": x["seconds_per_block"] + slope / core}
+    fixed, block = bare["fixed_seconds"] + v_new, x["seconds_per_block"] + slope / core
+    return x | {"fixed_seconds": fixed, "seconds_per_block": block, "verifier_priced": "measured" if key else "modeled",
+                "verifier_fixed": v_new / fixed if fixed else 0.0, "verifier_block": slope / core / block if block else 0.0}
 
 
-def pricing(planner_price, scale: dict, core: float, calls: list, rows: dict | None = None):
+def timed_split(row: dict | None) -> dict | None:
+    """A type's fixed seconds a statement and seconds a block from its own table row's statement sizes (`verity bench
+    prove`'s `sizes`, the pricing size first, the most blocks): the line through the pricing size's f blocks at S_f
+    GPU-seconds a statement and the smallest other's q blocks at S_q, fixed (f S_q - q S_f) / (f - q) and a block
+    (S_f - S_q) / (f - q). `ok` is false where the line gives a negative fixed part or no positive seconds a block,
+    which is no split. None for a row that isn't the type's own or timed one size."""
+    sizes = (row or {}).get("sizes") or []
+    if row is None or row.get("source") != "steady" or len(sizes) < 2:
+        return None
+    full, part = sizes[0], sizes[-1]
+    f, q, s_f, s_q = full["blocks"], part["blocks"], full["statement_seconds"], part["statement_seconds"]
+    fixed, block = (f * s_q - q * s_f) / (f - q), (s_f - s_q) / (f - q)
+    return {"fixed_s": fixed, "block_s": block, "fixed_share": fixed / s_f, "blocks": [f, q],
+            "statement_s": [s_f, s_q], "records": sorted({full["record"], part["record"]}),
+            "ok": fixed >= 0 and block > 0}
+
+
+def tabled(x: dict, bare: dict, row: dict | None) -> dict:
+    """`x` at its table row's seconds a block where that row is a steady-state row, its type's own or its family's,
+    with the verifier's seconds a statement on top; else `x` as it is. Where its own row timed two statement sizes
+    (`timed_split`), its fixed seconds a statement and seconds a block are the two sizes' line (`fixed_timed`);
+    else `bare`, `x` priced without the verifier, times the one factor that makes a block and its share of a
+    statement's fixed seconds the row's seconds, keeping the planner's proportion. A row of the block's Boolean
+    version (`prices`) names it (`boolean`)."""
+    own = bare["fixed_seconds"] / max(1, x["statement_blocks"]) + bare["seconds_per_block"]
+    if not row or row["source"] not in TABLE_SOURCES or own <= 0:
+        return x
+    basis = f"{row['source']}: {row['record']}"
+    split = timed_split(row)
+    if split and split["ok"]:
+        timed, block = split["fixed_s"], split["block_s"]
+        basis += f", {TIMED} at {split['blocks'][0]} and {split['blocks'][1]} blocks"
+    else:
+        f = row["seconds"] / own
+        timed, block = f * bare["fixed_seconds"], f * bare["seconds_per_block"]
+        if split:
+            basis += (f", the planner's proportion: its {split['blocks'][0]} and {split['blocks'][1]} blocks timed give "
+                      f"no split ({split['fixed_s']:.4g} s fixed, {split['block_s']:.4g} s a block)")
+    fixed = x["fixed_seconds"] - bare["fixed_seconds"] + timed
+    out = x | {"fixed_seconds": fixed, "seconds_per_block": block, "table": row["source"], "basis": basis,
+               "verifier_block": 0.0, "verifier_fixed": (x["fixed_seconds"] - bare["fixed_seconds"]) / fixed if fixed else 0.0,
+               "fixed_timed": split if split and split["ok"] else None}
+    if form := row.get("boolean"):
+        out |= {"boolean": form, "basis": f"{out['basis']} ({BOOLEAN}, `{form}`)"}
+    return out
+
+
+def pricing(planner_price, scale: dict, core: float, calls: list, rows: dict | None = None,
+            table: dict | None = None, unread: set | None = None):
     """The row's `reprice.apply_server`: the planner's pricing, the quant walk, the measured verifier and the row's
-    scale, each call recorded in `calls` as (verify, strata). A block with a steady-state row
-    (`rows`, by the line's block) costs what the row measured, with the measured verifier and neither the walk nor the
-    scale; a row that prices no block of the line is refused."""
+    scale, each call recorded in `calls` as (verify, strata), a block the scale reaches tagged `scaled`. A block with
+    a steady-state row (`rows`, by the line's block) costs what the row measured, with the measured verifier and
+    neither the walk nor the scale; a row that prices no block of the line is refused. A block whose row of `verity
+    bench prove`'s table (`table`, by the line's block) is a steady-state row costs that row's seconds a block
+    (`tabled`), with the measured verifier and no scale either: the row is a warm measurement, which a scale would
+    rescale. A table's row for a block of the census (`census_blocks`, by the line's name or its own) that this line
+    doesn't hold measured another partition: it is unread, and added to `unread`. A table's row for any other block
+    is refused."""
+    held = {b for b, r in (table or {}).items() if r["source"] in TABLE_SOURCES}
+
+    def priced(strata, kw):
+        out = walk(planner_price(strata, **kw))
+        if kw.get("verify"):
+            bare = walk(planner_price(strata, **(kw | {"verify": 0.0})))
+            out = [verifier(x, b, core) for x, b in zip(out, bare, strict=True)]
+        return [x if x.get("priced") == "steady" or x["block"] in held or (f := factors(x, scale)) is None else
+                x | {"seconds_per_block": x["seconds_per_block"] * f[0], "fixed_seconds": x["fixed_seconds"] * f[1],
+                     "scaled": True}
+                for x in out]
+
     def price(strata, **kw):
         if rows:
             if lost := sorted(set(rows) - {x["block"] for x in strata}):
@@ -256,13 +542,18 @@ def pricing(planner_price, scale: dict, core: float, calls: list, rows: dict | N
                                              for b in lost)
                                  + ". Map each to the line's block it measures, or to null to list it unread (--steady-map)")
             kw = kw | {"steady": rows}
-        out = walk(planner_price(strata, **kw))
-        if kw.get("verify"):
-            bare = walk(planner_price(strata, **(kw | {"verify": 0.0})))
-            out = [verifier(x, b, core) for x, b in zip(out, bare, strict=True)]
-        out = [x if x.get("priced") == "steady" or (f := factors(x, scale)) is None else
-               x | {"seconds_per_block": x["seconds_per_block"] * f[0], "fixed_seconds": x["fixed_seconds"] * f[1]}
-               for x in out]
+        out = priced(strata, kw)
+        if table:
+            absent = set(table) - {x["block"] for x in strata}
+            census = census_blocks()
+            if lost := sorted(b for b in absent if b not in census and table[b].get("block") not in census):
+                raise ValueError(f"{len(lost)} rows of the table price no block of this line: "
+                                 + "; ".join(f"`{b}`" for b in lost[:5]) + ("; ..." if len(lost) > 5 else "")
+                                 + ". It is another cut's table, or the line names those blocks otherwise (`FUSED`)")
+            if unread is not None:
+                unread.update(absent)
+            bare = priced(strata, kw | {"verify": 0.0}) if kw.get("verify") else out
+            out = [tabled(x, b, table.get(x["block"])) for x, b in zip(out, bare, strict=True)]
         calls.append((bool(kw.get("verify")), [{k: x.get(k) for k in CALL_KEYS} for x in out]))
         return out
     return price
@@ -295,6 +586,7 @@ class Trace:
     designs: list = field(default_factory=list)
     models: dict = field(default_factory=dict)
     extra: dict | None = None
+    unread: set = field(default_factory=set)
 
 
 @contextmanager
@@ -311,7 +603,8 @@ def installed(P: SimpleNamespace, spec: dict):
     vol = spec["volume"]
 
     def line(n, strata=None, **kw):
-        strata = list(strata or P.levers.priced_strata(n)) + ([trace.extra] if trace.extra else [])
+        strata = (list(strata or P.levers.priced_strata(n, spec["case"].get("partition", "")))
+                  + ([trace.extra] if trace.extra else []))
         strata = [x | {"per_token": x["per_token"] * next((f for p, f in vol.items() if x["block"].startswith(p)), 1.0)}
                   for x in strata]
         return make_line(n, strata, **kw)
@@ -327,10 +620,12 @@ def installed(P: SimpleNamespace, spec: dict):
         trace.designs.append({"cells": list(cells), "row": row, "kw": kw})
         return row
 
+    table = (spec.get("prices") or {}).get("cells")
     try:
         put(reprice, "K_MAX", HOST_PROVERS | {p: min(m, HOST_PROVERS.get(p, m)) for p, m in reprice.K_MAX.items()})
         put(reprice, "apply_server", pricing(price, spec["scale"], reprice.CORE_PER_GPU, trace.calls,
-                                             (spec.get("steady") or {}).get("rows")))
+                                             (spec.get("steady") or {}).get("rows"),
+                                             **({"table": table, "unread": trace.unread} if table else {})))
         put(sweep, "make_line", line)
         put(f1, "model", capped)
         put(tc, "two_stage_design", designed)
@@ -340,12 +635,26 @@ def installed(P: SimpleNamespace, spec: dict):
             setattr(obj, name, value)
 
 
-def spec_of(row: str, scope: str, beta: float, n_heads: int | None = None, steady: dict | None = None) -> dict:
-    """A job: `ROWS[row]` at `scope` and the pinned `beta`, over every sparse-MLA head, its blocks priced at the
-    steady-state rows of `steady` (`steady()`) where it holds one."""
+def spec_of(row: str, scope: str, beta: float, n_heads: int | None = None, steady: dict | None = None,
+            prices: dict | None = None, partition: str | None = None) -> dict:
+    """A job: `ROWS[row]` at `scope` and the pinned `beta`, over every sparse-MLA head, its line cut by the `partition`
+    card `partition` where one is named (the `workload` card's own cut otherwise), its blocks priced at the steady-state
+    rows of `steady` (`steady()`) where it holds one, or at `verity bench prove`'s table (`prices()`). A row of either
+    for a block the cut leaves out (`replaced`) is listed unread: it measured the census's cut, not this line's."""
+    if steady and prices:
+        raise ValueError("a row is priced at steady-state rows or at a table, not both")
     r = ROWS[row]
-    return {"row": row, "scope": scope, "beta": beta, "case": r["case"], "scale": r["scale"], "steady": steady,
-            "volume": volume(n_heads), "heads": heads() if n_heads is None else n_heads, "S": SERVED_BITS,
+    case = r["case"] | ({} if partition is None else {"partition": partition})
+    gone = replaced(case.get("partition", ""))
+    if steady:
+        steady = {"rows": {b: x for b, x in steady["rows"].items() if b not in gone},
+                  "unread": sorted([*steady["unread"], *(x["type"] for b, x in steady["rows"].items() if b in gone)])}
+    if prices:
+        prices = prices | {"cells": {b: x for b, x in prices["cells"].items() if b not in gone},
+                           "unread": sorted([*prices.get("unread", ()), *(b for b in prices["cells"] if b in gone)])}
+    return {"row": row, "scope": scope, "beta": beta, "case": case, "scale": r["scale"], "steady": steady,
+            "prices": prices, "volume": volume(n_heads, case.get("partition", "")),
+            "heads": heads() if n_heads is None else n_heads, "S": SERVED_BITS,
             "share": SHARE, "step": STEP, "set": CHARGES, "S_case": SERVED_CASE, "mix": MIX, "rule": RULE,
             "run_s": RUN_S}
 
@@ -358,8 +667,9 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
     the pool's AND gates a window when only replays read it, at the line's price an AND; compile is the sampled replay
     blocks' compile; total adds them to beta.  The row's verification phase is its case's (`MEASURED`: a datacenter's
     window), the first stage a whole count of its replay blocks, and the row carries it (`verification_phase`: its
-    size, the count sampled, its sessions and the first limit of today's second-stage code the design meets,
-    `total_cost.limits`); a beta that pays for no sampled replay block of it has no design and is refused."""
+    size, the count sampled, its sessions, the first limit of today's second-stage code the design meets,
+    `total_cost.limits`, and its binding bound, `binding_bound`); a beta that pays for no sampled replay block of it
+    has no design and is refused."""
     P = P or planner()
     sweep, levers, reprice = P.sweep, P.levers, P.reprice
     scope, t, b = spec["scope"], spec["run_s"], spec["beta"]
@@ -407,9 +717,23 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
                "served_bits": L[1]["served_bits"].value, "requests": s.requests, "flop_request": s.flop_request,
                "gpu_seconds": gs, "case": spec["case"], "scale": spec["scale"], "volume": spec["volume"],
                "census_scope": {k: getattr(sweep.SCOPES[scope], k) for k in ("requests", "flop_request")}}
+        row["verification_phase"]["binding"] = binding_bound(P, d["row"], pt["registration_sample"], pt["sessions"],
+                                                             gs / phase)
+        if cut := spec["case"].get("partition"):
+            card = partition_card(cut)
+            row["cut"] = {k: card["value"][k] for k in ("name", "label", "replaces")} | {"art": card.get("art")}
         if st := spec.get("steady"):
             row["steady"] = {"priced": [{k: r[k] for k in ("block", "type", "per_block", "provers", "record")}
                                         for r in st["rows"].values()], "unread": st["unread"]}
+        if pr := spec.get("prices"):
+            unread: dict = {}
+            for b in pr.get("unread", ()):
+                unread[family(b)] = unread.get(family(b), 0) + 1
+            split = {b: s for b, r in pr["cells"].items() if b not in trace.unread and (s := timed_split(r))}
+            row["prices"] = {"read": pr["read"], "cores": pr["cores"], "rows": len(pr["cells"]),
+                             "above_cores": pr["above_cores"], "unread": unread,
+                             **({"not_held": sorted(trace.unread)} if trace.unread else {}),
+                             **({"fixed_timed": split} if split else {})}
         verify = [c for c in trace.calls if c[0]]
         reads = {"design": trace.designs[-1], "strata": strata, "calls": list(trace.calls),
                  "pricing": (verify or trace.calls)[-1][1]}
@@ -436,7 +760,7 @@ def pricing_split(strata: list) -> dict:
 
 
 def type_of(block: str, known: dict) -> str | None:
-    for t, (read, gemm) in FUSED.items():
+    for t, (read, gemm, _census) in FUSED.items():
         if block.startswith(f"Fused[{read} + {gemm}{{"):
             return t
     return known.get(block)
@@ -455,14 +779,15 @@ def plan(spec: dict, row: dict, reads: dict, known: dict, P: SimpleNamespace | N
     st = opt.two_stage_statements(split, drow["k"], drow["registration_sample"], drow["form"])
     total = sum(x["prove"] for x in st)
     s = sweep.SCOPES[spec["scope"]]
-    seconds = dict(f1.PERIODS)[s.period]
+    seconds = dict(f1.MONITORING_PERIODS)[s.period]
     out, left = [], []
     for x, c, t in zip(strata, split, st):
         if t["taken"] <= 0:
             continue
         cell = {"block": x["block"], "type": type_of(x["block"], known), "kind": x.get("kind"),
                 "k_log": x["k_log"], "cap": c.cap, "table": c.table, "taken": t["taken"], "shared": t["shared"],
-                "fixed_s": c.fixed, "block_s": c.prove, "prove_s": t["prove"], "share": t["prove"] / total}
+                "fixed_s": c.fixed, "block_s": c.prove, "sessions": t["sessions"], "prove_s": t["prove"],
+                "share": t["prove"] / total}
         (left if x["block"].startswith(LEFT_OUT) else out).append(cell)
     out.sort(key=lambda c: -c["share"])
     return {"case": f"{spec['row']} | {spec['step']} | {spec['S_case']}", "scope": spec["scope"], "beta": spec["beta"],
@@ -479,30 +804,60 @@ def plan(spec: dict, row: dict, reads: dict, known: dict, P: SimpleNamespace | N
 def plan_split(p: dict, calls: list, strata: list) -> dict:
     """Each block family's share of a sampled replay block's proving in the row's plan `p`, with how its blocks were
     priced (`priced`) and what priced them (`basis`: `steady`, a steady-state row, else the planner's table): by the
-    row's own pricing calls, else by its model's strata."""
+    row's own pricing calls, else by its model's strata; and by source (`sources`: a steady-state row, the type's own
+    or its family's in `verity bench prove`'s table, either followed by `BOOLEAN` where the row is its Boolean
+    version's and by `TIMED` where its fixed part is its row's two sizes' (`timed_split`), the planner's price, the
+    Lean verifier's, or the copy stratum's model). A block a table row prices is
+    priced as the row's source names it (`steady`, `family`), its Boolean version's row too, every other block as the
+    planner priced it (`computed` where it scaled the price), but the planner's `measured`, which is its price's word and
+    no measurement of this row's, as `PLANNER`; a block's Lean verifier seconds, which no row times, are its share
+    apart, priced as `verifier` priced them (`modeled` but for a type whose verifier was timed). Each family gives its
+    share by way (`ways`), and `scaled` is the share of the plan's proving in the blocks the row's scale reached."""
     priced = {x["block"]: str(x.get("priced")) for _v, xs in calls for x in xs}
     priced |= {x["block"]: str(x["priced"]) for x in strata if x.get("priced") and x["block"] not in priced}
     basis = {x["block"]: x.get("basis") for _v, xs in calls for x in xs}
     basis |= {x["block"]: x["basis"] for x in strata if x.get("basis") and x["block"] not in basis}
+    table = {x["block"]: x.get("table") for _v, xs in calls for x in xs}
+    boolean = {x["block"] for _v, xs in calls for x in xs if x.get("boolean")}
+    timed = {x["block"] for _v, xs in calls for x in xs if x.get("fixed_timed")}
+    checked = {x["block"]: x for _v, xs in calls for x in xs if x.get("verifier_priced")}
+    scaled = {x["block"] for _v, xs in calls for x in xs if x.get("scaled")}
     fam: dict = {}
     ways: dict = {}
     bases: dict = {}
+    sources: dict = {}
     for c in p["cells"] + p["left_out"]:
         f = fam.setdefault(family(c["block"]), {"share": 0.0, "prove_s": 0.0, "taken": 0.0, "cells": 0,
-                                                 "priced": set()})
+                                                 "priced": set(), "ways": {}})
         way = priced.get(c["block"], "unknown")
+        t = table.get(c["block"])
+        own = t if t in TABLE_SOURCES else PLANNER if way == "measured" else way
         f["share"] += c["share"]
         f["prove_s"] += c["prove_s"]
         f["taken"] += c["taken"]
         f["cells"] += 1
-        f["priced"].add(way)
-        ways[way] = ways.get(way, 0.0) + c["share"]
-        b = "steady" if way == "steady" else (basis.get(c["block"]) or NO_BASIS).split(", cut into")[0]
+        b = "steady" if way == "steady" else t or (basis.get(c["block"]) or NO_BASIS).split(", cut into")[0]
         bases[b] = bases.get(b, 0.0) + c["share"]
+        s = (TABLE_SOURCES[own] + (f", {BOOLEAN}" if c["block"] in boolean else "")
+             + (f", {TIMED}" if c["block"] in timed else "") if own in TABLE_SOURCES else
+             COPY_BASIS if b == COPY_BASIS else PLANNER)
+        v = checked.get(c["block"])
+        lean = 0.0
+        if v and c["prove_s"]:
+            statements = c.get("sessions", 0.0) * c.get("fixed_s", 0.0)
+            lean = (statements * v["verifier_fixed"] + (c["prove_s"] - statements) * v["verifier_block"]) / c["prove_s"]
+        for w, src, share in [(own, s, c["share"] * (1 - lean))] + (
+                [(v["verifier_priced"], VERIFIER_SOURCE, c["share"] * lean)] if lean > 0 else []):
+            f["priced"].add(w)
+            f["ways"][w] = f["ways"].get(w, 0.0) + share
+            ways[w] = ways.get(w, 0.0) + share
+            sources[src] = sources.get(src, 0.0) + share
     return {"what": "the row's plan at its beta: each block family's share of a sampled replay block's proving, "
                     "priced as the row's pricing calls priced its blocks",
             "X": sum(f["prove_s"] for f in fam.values()), "q": p["q"], "replay_sample": p["replay_sample"],
             "priced": ways, "basis": dict(sorted(bases.items(), key=lambda kv: -kv[1])),
+            "sources": dict(sorted(sources.items(), key=lambda kv: -kv[1])),
+            "scaled": sum(c["share"] for c in p["cells"] + p["left_out"] if c["block"] in scaled),
             "families": {k: v | {"priced": sorted(v["priced"])} for k, v in fam.items()}}
 
 
@@ -516,8 +871,66 @@ def assemble(row: dict, p: dict, calls: list, strata: list, pricing: list) -> di
     if abs(planned / row["requests"] - 1) > REQUESTS_RTOL:
         raise ValueError(f"{row['row']}, {row['scope']}: the row's {row['requests']:.6g} requests are not its plan's "
                          f"{planned:.6g} (replay_sample / q)")
-    return row | {"world": WORLD, "b10": row["beta"], "pricing_split": pricing_split(pricing),
-                  "split": plan_split(p, calls, strata)}
+    out = row | {"world": WORLD, "b10": row["beta"], "pricing_split": pricing_split(pricing),
+                 "split": plan_split(p, calls, strata)}
+    return out | ({"note": said} if (said := note(out)) else {})
+
+
+def table_share(split: dict) -> float | None:
+    """The share of a row's plan's proving that a table's rows or steady-state rows price, by its `sources`, else its
+    `basis`; None where its split records neither."""
+    if sources := split.get("sources"):
+        return sum(v for k, v in sources.items() if k.split(", ")[0] in TABLE_SOURCES.values())
+    if basis := split.get("basis"):
+        return sum(v for k, v in basis.items() if k in TABLE_SOURCES)
+    return None
+
+
+def unscaled(case: dict) -> str | None:
+    """The row of `ROWS` with `case` (its cut aside) and no scale: the row a scaled row of that case differs from by
+    its scale alone."""
+    cut = {k: case[k] for k in ("partition",) if k in case}
+    return next((n for n, r in ROWS.items() if not r["scale"] and r["case"] | cut == case), None)
+
+
+def by_scale(scale: dict) -> str:
+    """A row's scale as a factor, where every family takes the same one."""
+    if len({json.dumps(v, sort_keys=True) for v in scale.values()}) > 1:
+        return "by its scale"
+    v = next(iter(scale.values()))
+    return (f"x{v.get('marg', 1.0):g} a block and x{v.get('fixed_x', 1.0):g} fixed" if isinstance(v, dict)
+            else f"x{v:g}")
+
+
+def by_source(split: dict) -> str:
+    """The share of a plan's proving each source prices (`split.sources`)."""
+    return ", ".join(f"{k} {v * 100:.4g}%" for k, v in split["sources"].items())
+
+
+def note(row: dict, sources: bool = False) -> str:
+    """What a reader of a row's figure must read beside it, from the row's own data: that no table's row priced its
+    plan's proving (`table_share` 0), or that they priced under half of it, with the share each source prices where
+    `sources` asks; and for a row that scales some block families' seconds, the unscaled row of its case (`unscaled`)
+    and the share of its plan's proving the scale reached (`split.scaled`): the blocks still at the planner's price,
+    no table's row or steady-state row taking a scale. Empty for a row that needs neither."""
+    out, split = [], row.get("split") or {}
+    share = table_share(split)
+    if share == 0:
+        out.append("at the planner's prices, not the table's")
+    elif share is not None and share < 0.5:
+        out.append(f"under half priced by the table's rows, {share * 100:.3g}% of its proving"
+                   + (f" (by source: {by_source(split)})" if sources and split.get("sources") else ""))
+    if scale := row.get("scale"):
+        base = unscaled(row.get("case") or {})
+        who, x, n = f"row `{base}`" if base else "its unscaled row", by_scale(scale), len({family(p) for p in scale})
+        if (reached := split.get("scaled")) is None:
+            out.append(f"{who} with {n} block families' seconds scaled {x} (assumed); which of them, not recorded")
+        elif reached:
+            out.append(f"{who} with its blocks of {n} block families at the planner's price scaled {x} (assumed), "
+                       f"{reached * 100:.2g}% of its proving")
+        else:
+            out.append(f"{who}: its scale, {x} on {n} block families, reaches no block of its plan")
+    return "; ".join(out)
 
 
 def run(spec: dict, known: dict | None = None, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
@@ -532,10 +945,11 @@ def _row(args: tuple) -> dict:
     return run(spec_of(*args))[0]
 
 
-def rows(names=("(i) honest",), scopes=SCOPES, betas=BETAS, workers: int = 1, steady: dict | None = None):
+def rows(names=("(i) honest",), scopes=SCOPES, betas=BETAS, workers: int = 1, steady: dict | None = None,
+         prices: dict | None = None, partition: str | None = None):
     """Every (row, scope, beta)'s row, in that order, `workers` at a time over the planner imported once."""
     P = planner()
-    jobs = [(r, s, b, None, steady) for r in names for s in scopes for b in betas]
+    jobs = [(r, s, b, None, steady, prices, partition) for r in names for s in scopes for b in betas]
     if workers <= 1:
         yield from (run(spec_of(*j), P=P)[0] for j in jobs)
         return
@@ -607,7 +1021,9 @@ def read(rows_: list) -> dict:
             for k, tb in {"FP4 l1": w, "FP4 l1.05": w / LAMBDA, "300GB l1.05": 300 * 8e9 / LAMBDA}.items():
                 beta, tot = at(rs, tb)
                 rec[k] = {"beta": beta, "total": tot}
-            out[f"{name} | {scope}"] = rec
+            ten = log(at(rs, rec["gb10"] * 8e9)[0])
+            near = min(rs, key=lambda r: abs(log(r["beta"]) - ten))
+            out[f"{name} | {scope}"] = rec | ({"note": said} if (said := note(near, sources=True)) else {})
     return out
 
 
@@ -617,8 +1033,55 @@ def show(figure: dict) -> str:
         lines.append(f"{r['row'][:44]:44s} | {r['scope']:16s} | {r['e']:.5f} | {r['resid']:.1e} | "
                      f"{r['fixed'] * 100:.3f} | {r['gb10'] * LAMBDA:9.1f} | {r['FP4 l1']['total'] * 100:7.2f} | "
                      f"{r['FP4 l1.05']['total'] * 100:7.2f} | {r['300GB l1.05']['total'] * 100:7.2f} "
-                     f"({r['300GB l1.05']['beta'] * 100:.2f})")
+                     f"({r['300GB l1.05']['beta'] * 100:.2f})" + (f" | {r['note']}" if r.get("note") else ""))
+    lines.append(f"GB@10% x{LAMBDA}: lambda = {LAMBDA} times the bound where the scope's total is 10% of its compute, "
+                 "the total read between the two pinned budgets that bracket it; no design is run at that budget")
     return "\n".join(lines)
+
+
+def show_prices(pr: dict) -> str:
+    """The table a row was priced at: when it was read, its rows and its host's cores, and the share of its proving
+    on rows timed at more cores."""
+    above, unread = pr["above_cores"], pr.get("unread") or {}
+    return (f"verity bench prove's table, read {pr['read'] or '(when: not stated in the file)'}: {pr['rows']} rows"
+            + (f" at {pr['cores']} host cores a card" if pr["cores"] else "")
+            + (f", {above['time_share'] * 100:.3f}% of its proving on {above['block_types']} rows timed at "
+               f"{above['timed_at']} cores" if above.get("time_share") else "")
+            + (f"; unread, of blocks the line's cut leaves out: {sum(unread.values())} rows ("
+               + ", ".join(f"{f} {n}" for f, n in unread.items()) + ")" if unread else "")
+            + "".join(f"\n{show_timed(b, s)}" for b, s in (pr.get("fixed_timed") or {}).items()))
+
+
+def show_timed(block: str, s: dict) -> str:
+    """A block whose own row timed two statement sizes: the split the two give, or that they give none."""
+    (f, q), (s_f, s_q) = s["blocks"], s["statement_s"]
+    timed = f"its own row timed {f} blocks at {s_f:.4g} GPU-s a statement and {q} at {s_q:.4g} ({', '.join(s['records'])})"
+    if not s["ok"]:
+        return f"`{block}`: {timed}, which give no split; priced at the planner's proportion"
+    return (f"`{block}`: {TIMED}, {s['fixed_s']:.4g} s a statement ({s['fixed_share'] * 100:.3g}% of {f} blocks') and "
+            f"{s['block_s'] * 1e3:.4g} ms a block: {timed}")
+
+
+def show_not_held(row: dict) -> str | None:
+    """The table's rows a row left unread as blocks of the census its line doesn't hold, by name; None for none."""
+    names = (row.get("prices") or {}).get("not_held")
+    return names and (f"{row['row']}: unread, the table's rows of {len(names)} blocks of the census its line doesn't "
+                      "hold: " + "; ".join(f"`{b}`" for b in names))
+
+
+def show_what(row: dict) -> str:
+    """What a row's GB is: its bound at its own pinned budget, the share of compute its total is there, and lambda."""
+    said = note(row)
+    return (f"{row['bound_bits'] / 8e9:,.1f} GB: the bound at the pinned budget beta = {row['beta'] * 100:.4g}% of "
+            f"compute, where the row's total is {row['total'] * 100:.4g}% (not read at 10%), at lambda = 1; "
+            f"x{LAMBDA} is lambda times it" + (f" | {said}" if said else ""))
+
+
+def show_row(row: dict) -> str:
+    """A row's bound at its beta, the share of its plan's proving by source, and its `note`."""
+    gb, said = row["bound_bits"] / 8e9, note(row)
+    return (f"{row['row']} | {row['scope']} | beta {row['beta']!r}: {gb:,.1f} GB (x{LAMBDA} {gb * LAMBDA:,.1f}) | "
+            f"the plan's proving by source: {by_source(row['split'])}" + (f" | {said}" if said else ""))
 
 
 def main(argv=None) -> int:
@@ -646,31 +1109,60 @@ def main(argv=None) -> int:
         cmd.add_argument("--steady-map", type=Path, metavar="MAP.json",
                          help="{census block type: the line's block it measures, [block, n] for one of its n column "
                               "blocks, or null to list the row unread}, for the rows whose type isn't a block's name")
+        cmd.add_argument("--prices", nargs="?", type=Path, const=Path("-"), metavar="TABLE.json",
+                         help="price at `verity bench prove --json`'s table: the file, or with no file the evidence "
+                              "store's table read now (kept as DIR/prices.json); a block of the line whose row is its "
+                              "own or its family's steady-state row is priced at it")
+        cmd.add_argument("--partition", metavar="NAME",
+                         help=f"the partition card that cuts every row's line beside its own cut (`{UNITS}`: each "
+                              "head's key block as its scores and values units, modeled); default none, the workload "
+                              "card's whole head blocks")
     a = ap.parse_args(argv)
     if a.cmd != "read" and a.steady_map and not a.steady:
         ap.error("--steady-map maps the rows of --steady")
+    if a.cmd != "read" and a.steady and a.prices:
+        ap.error("--steady and --prices are two pricings: give one")
     measured = steady(a.steady, a.steady_map) if a.cmd != "read" and a.steady else None
+    table = None
+    if a.cmd != "read" and a.prices:
+        a.out.mkdir(parents=True, exist_ok=True)
+        table = prices(read_prices(None if a.prices == Path("-") else a.prices, a.out / "prices.json"))
     if a.cmd == "rows":
         a.out.mkdir(parents=True, exist_ok=True)
         got = []
         with open(a.out / "rows.jsonl", "w") as f:
-            for row in rows(a.rows, a.scopes, a.betas, a.workers, measured):
+            for row in rows(a.rows, a.scopes, a.betas, a.workers, measured, table, a.partition):
                 f.write(json.dumps(row) + "\n")
                 f.flush()
                 got.append(row)
         figure = read(got)
         (a.out / "figure.json").write_text(json.dumps(figure, indent=1) + "\n")
         print(show(figure))
+        if cut := got[0].get("cut"):
+            print(f"cut by the partition card {cut['name']} ({cut['art']}): {cut['label']}")
+        if table:
+            print(show_prices(got[0]["prices"]))
+            for said in dict.fromkeys(filter(None, map(show_not_held, got))):
+                print(said)
     elif a.cmd == "read":
-        print(show(read([json.loads(x) for f in a.files for x in f.read_text().splitlines() if x.strip()])))
+        got = [json.loads(x) for f in a.files for x in f.read_text().splitlines() if x.strip()]
+        print(show(read(got)))
+        for said in dict.fromkeys(filter(None, map(show_not_held, got))):
+            print(said)
     else:
         known = ({c["block"]: c["type"] for c in json.loads(a.types.read_text())["cells"] if c.get("type")}
                  if a.types else {})
-        row, mix = run(spec_of(a.row, a.scope, a.beta, steady=measured), known)
+        row, mix = run(spec_of(a.row, a.scope, a.beta, steady=measured, prices=table, partition=a.partition), known)
         tree = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "mix.json").write_text(json.dumps(mix | {"planner": tree.strip()}, indent=1, default=str) + "\n")
         print(json.dumps(row))
+        print(show_what(row))
+        if table:
+            print(show_row(row))
+            print(show_prices(row["prices"]))
+            if said := show_not_held(row):
+                print(said)
     return 0
 
 

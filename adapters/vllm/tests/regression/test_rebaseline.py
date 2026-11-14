@@ -49,9 +49,37 @@ def test_record_result_writes_the_document_write_reads(monkeypatch, tmp_path):
     assert resolver.record_result(ROW, "x", {}, {}, []) is None
 
 
-def test_write_takes_v2_values_keeps_shape_and_records_the_decision(monkeypatch, tmp_path):
+def _nested(depth: int) -> dict:
+    doc: dict = {}
+    at = doc
+    for _ in range(depth):
+        at["a"] = {}
+        at = at["a"]
+    return doc
+
+
+@pytest.mark.parametrize("make", [lambda: None, list, lambda: _nested(200_000)], ids=["none", "a-list", "nested-past-what-json-writes"])
+def test_a_result_that_cannot_be_recorded_is_not_recorded_and_nothing_raises(monkeypatch, tmp_path, make):
+    """`record_result` never raises: an `actual` that is no mapping, or one nested deeper than `json.dumps` writes, records nothing."""
+    monkeypatch.setenv(resolver.RECORD_ACTUAL_ENV, str(tmp_path))
+    assert resolver.record_result(ROW, "x", {}, make(), []) is None
+    assert not list(tmp_path.rglob("*.json"))
+
+
+def test_results_skips_a_file_it_cannot_read_and_keeps_the_rest(tmp_path, capsys):
+    """A result file that is no JSON, is not text, or is nested deeper than `json.load` reads is named on stderr and left out."""
+    (tmp_path / ROW).mkdir()
+    (tmp_path / ROW / "no_json.json").write_text("{")
+    (tmp_path / ROW / "not_text.json").write_bytes(b"\xff\xfe{}")
+    (tmp_path / ROW / "nested.json").write_text('{"a":' * 200_000 + "1" + "}" * 200_000)
+    (tmp_path / ROW / "kept.json").write_text(json.dumps(_result("kept", {}, {}, [], matched="frozen")))
+    assert list(RB.results(tmp_path)[ROW]) == ["kept"]
+    assert capsys.readouterr().err.count("[rebaseline] unreadable") == 3
+
+
+def test_write_takes_v2_values_keeps_shape_and_records_the_decision():
     row = _row()
-    old = {"row": 57, "class": "FAIL", "reference": {"tag": "v1-reference", "commit": "89af", "release": "r19-int-21", "branch": "lane/vllm-integration"},
+    old: dict = {"row": 57, "class": "FAIL", "reference": {"tag": "v1-reference", "commit": "89af", "release": "r19-int-21", "branch": "lane/vllm-integration"},
            "checks": {"manifest_digest": {"applies": True, "tier": "T0", "strength": "strong"}, "executed_prefix": {"applies": True, "tier": "T0", "strength": "strong"}},
            "manifest_digest": {"complete": False, "identities": 10, "manifest_digest": "old"},
            "executed_prefix": {"g6_lengths": {"r0": 81}}}
@@ -81,7 +109,7 @@ def test_write_takes_v2_values_keeps_shape_and_records_the_decision(monkeypatch,
 
 def test_write_refuses_a_recorded_failure_unless_forced():
     row = _row()
-    old = {"row": 57, "class": "FAIL", "checks": {}, "executed_prefix": {"g6_lengths": {"r0": 81}}}
+    old: dict = {"row": 57, "class": "FAIL", "checks": {}, "executed_prefix": {"g6_lengths": {"r0": 81}}}
     res = {"executed_prefix": _result("executed_prefix", old["executed_prefix"], {"g6_lengths": {"r0": 80}}, ["$.g6_lengths.r0: 81 != 80"], matched="neither")}
     with pytest.raises(SystemExit):
         RB.merge(row, old, res, reference={"tag": "v2-reference"}, force=False)
@@ -100,5 +128,5 @@ def test_write_main_dry_run_touches_nothing(monkeypatch, tmp_path):
     assert rc == 0 and not list(exp_dir.iterdir())
     rc = RB.main(["write", "--record", str(rec), "--commit", "abc", "--branch", "b", "--release", "r", "--run-id", "r2026-1"])
     assert rc == 0
-    out = json.load(open(exp_dir / f"{ROW}.json"))
+    out = resolver.read_json(exp_dir / f"{ROW}.json")
     assert out["executed_prefix"] == {"a": 2} and out["reference"]["runs"] == ["r2026-1"] and out["row"] == 57

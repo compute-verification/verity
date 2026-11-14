@@ -30,13 +30,12 @@ select = ["ANN001", "ANN201", "ANN202", "ANN204", "B006", "B008", "B015", "B018"
 "**/tests/**" = ["F811"]
 # the typed directories: the annotation rules are ignored in every file outside them (`!` negates the pattern). A directory
 # brought to the rules joins the braces; adapters/vllm/ruff.toml has the pattern for the one it lints
-"!{benchmarks/{hash,moe_align,native_peak,tc_probe,tc_probe_fp4,torch_gpu},verity/definitions/kernels}/**" = [
+"!{benchmarks/{hash,moe_align,native_peak,tc_probe,tc_probe_fp4,torch_gpu},verity/circuits/kernels}/**" = [
     "ANN001", "ANN201", "ANN202", "ANN204"]
 # the files that hold `@triton.jit` kernels: a kernel's annotations are read by Triton's compiler (a `tl.constexpr` is a
 # compile-time value), so its arguments and return carry none of Python's. Ruff excepts by file, not by decorator, so
 # the other functions of these files are typed without these three rules holding them to it
 "benchmarks/hash/dither/dither_a.py" = ["ANN001", "ANN201", "ANN202"]
-"benchmarks/hash/exactlin/exactlin.py" = ["ANN001", "ANN201", "ANN202"]
 "benchmarks/torch_gpu/s8_linear/bench.py" = ["ANN001", "ANN201", "ANN202"]
 "benchmarks/torch_gpu/s8_linear/int_mm.py" = ["ANN001", "ANN201", "ANN202"]
 

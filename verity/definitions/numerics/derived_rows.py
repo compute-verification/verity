@@ -9,7 +9,7 @@ semantics (`verity.definitions.registry.b1` / `prims`) in the `rmsnorm_fused` pa
 
   * ``rmsnorm_triton_rows``   — the batch-invariant Triton `_rms_norm_kernel` reduction tree; emits the
     per-row scalars ``(sum, mean_eps, rms, inv)`` — `inv` is the gate
-    ``F32Mul(DivFullScaleA(1, rms), DivFullRcp(rms))`` of `RMSNormTriton_v1` (b1_authored.py line ~81).
+    ``F32Mul(DivFullScaleA(1, rms), DivFullRcp(rms))`` of `RMSNormTriton_v1` (`inv` in `b1.RMSNormTriton`).
   * ``rmsnorm_fused_v2_rows`` — the generic CUDA `fused_add_rms_norm_kernel` under batch-invariance
     (`RMSNormFusedCuda_v2`); emits ``(var, s)`` — `s` is the `RsqrtApprox` gate of the epilogue.
     (Thin wrapper over the committed twin in `rmsnorm_fused`.)
@@ -372,7 +372,7 @@ def _bitlen(m: np.ndarray) -> np.ndarray:
 
 def _tc_dot16_pipeline(acc: np.ndarray, a: np.ndarray, b: np.ndarray, *, groups: tuple[int, ...], width: int,
                        floor: int) -> tuple[np.ndarray, np.ndarray]:
-    """One bf16 k16 tensor-core step under a `verity.definitions.silicon.models.GroupSum`'s parameters, vectorised: acc (...,) f32 words,
+    """One bf16 k16 tensor-core step under a `verity.circuits.silicon.models.GroupSum`'s parameters, vectorised: acc (...,) f32 words,
     a/b (..., 16) bf16 words -> (f32 words, nonfinite mask).  `groups` lists, in k order, how many products each grouped sum
     takes (the incoming accumulator joins the first group and each group's result joins the next); `width` is the adder's
     significand width and `floor` its exponent floor -- exactly `silicon.group_sum` / `silicon.tc_dot`, gate for gate.
@@ -458,7 +458,7 @@ def tc_dot16(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray,
 # Hopper bf16 tensor-core k16 step, vectorised: ONE accumulator coordinate of
 # `wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16` (SASS HGMMA.64xNx16.F32.BF16) as `veritor.core.silicon_total.
 # HOPPER_BF16_WGMMA_K16` defines it -- one group of all sixteen products plus the accumulator, 26-bit adder, exponent floor
-# -133 (measured on the H100: 307,281,920 output words, 0 mismatches; `scale-d = 0` measured equal to acc = +0).  The registered scalar primitive is `verity.definitions.ops.prims.HopperBF16WgmmaDot16`; this twin
+# -133 (measured on the H100: 307,281,920 output words, 0 mismatches; `scale-d = 0` measured equal to acc = +0).  The registered scalar primitive is `verity.circuits.ops.prims.HopperBF16WgmmaDot16`; this twin
 # is checked word for word against it in tests/program/test_derived_rows.py.
 #
 # The k-CHAIN of the Hopper GEMM of record (`Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`, gemm_targets.REGISTERED['hopper']) is
@@ -797,13 +797,15 @@ def silu_mul_rows(gu: np.ndarray):
 BN = b1.BN  # `AttnBlock_v1`'s block (64).  `attn_block` reads the block size from the K block it is given; `attention_head_states` takes ``BN``
 
 
-def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: bool, dot16=None, check: bool = True, rescale_only: bool = False, scale_bits: int | None = None):
+def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: bool, dot16=None, check: bool = True, rescale_only: bool = False, scale_bits: int | None = None,
+               scores: bool = False):
     """`AttnBlock_v1{D, NVIS, FIRST}` vectorised over rows (`AttnBlock_v2{..., BN, DOT}` with ``dot16`` = the DOT step's twin,
     `TC_DOT16_BY_PRIM[DOT]`; default the Ampere `tc_dot16`; `AttnBlock_v4{..., CHECK}` with ``check``: False reads m unguarded; `AttnBlock_v5` also ``rescale_only``; ``scale_bits`` the f32 word of `scale_log2` when the block reads it as an input (`AttnBlock_v10`/`_v11`), else `b1.scale_log2_bits(D)`).
 
     q (R, D), kb/vb (R, BN, D) bf16 words (rows past NVIS must be zero — `Clear_OOB_MN` padding);
     m_prev (R,), l_prev (R, 4), o_prev (R, D) f32 words (ignored when FIRST).
-    Returns (m_new, l (R,4), o (R,D), nonfinite (R,))."""
+    Returns (m_new, l (R,4), o (R,D), nonfinite (R,)); with ``scores`` also what the block's O is computed from, bf16(P) of
+    its NVIS visible keys (R, NVIS) and the rescale every column of the O before takes (R,), None when FIRST."""
     BN = kb.shape[1]  # the block size is the block's: 64 (`AttnBlock_v1`) or `b1.fa2_kblock_n(D)` (`AttnBlock_v3`)
     step = tc_dot16 if dot16 is None else dot16
     R = q.shape[0]
@@ -849,6 +851,8 @@ def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: b
         vt = np.swapaxes(vb[:, k0:k0 + 16, :], 1, 2)  # (R, D, 16)
         o, f = step(o, np.broadcast_to(prow[:, None, :], (R, D, 16)), vt)
         nf |= f.any(axis=-1)
+    if scores:
+        return m_new, l_new, o, nf, pb[:, :NVIS], None if FIRST else scores_scale
     return m_new, l_new, o, nf
 
 

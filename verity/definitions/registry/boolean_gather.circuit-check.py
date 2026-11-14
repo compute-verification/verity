@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+#: the gathers' multiplexer levels, their Boolean versions and the bit selections this module makes only inside other
+#: bodies, which no id names alone (`circuit_check.sidecars.body_family`)
+BODY_FAMILIES = (r"Gather(?:Bf16|I32|F32)x\d+u\d+_v1", r"Gather(?:Bf16|I32|F32)x\d+_v2", r"BitAtx\d+_v2")
+
 
 def _boolean_gather_roots() -> list[Any]:
     """The Boolean embedding (`verity.definitions.registry.boolean_gather`) over gathers traced whole (V = 64), and a gather
@@ -11,7 +15,7 @@ def _boolean_gather_roots() -> list[Any]:
     the two levels of the f32 gather over the training step's vocabulary (V = 50304) that V = 1100 doesn't reach, its partial
     chunk of 128 words and its 50 chunk words. That gather's whole chunks are V = 1100's; the gather itself, 4.8M gates, is too heavy a target for every
     `circuit-check --all`, and its tests pin it and hold it to its word (`adapters/vllm/tests/program/test_boolean_gather.py`).
-    The bf16 widening (`verity.definitions.ops.boolean.cast`) is static-free.
+    The bf16 widening (`verity.circuits.ops.boolean.cast`) is static-free.
 
     The chunked gather at V = 100 in V-chunks of at most 40 (three, 34, 33 and 33 words: its offsets, both widths and the
     three-word XOR), and the levels of the training vocabulary's at `W_MAX` that it doesn't reach: its offsets, the 576-word

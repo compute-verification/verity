@@ -14,18 +14,18 @@ public import Proofs.Flock.Soundness.Refine.Paths
 public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!
-# The draw law at one-stage v2's session
+# The sampling design at one-stage v2's session
 
-* `drawLaw`: the record's draw meets `DrawLaw`. The draw coins are all first-stage (`stage2` is the session's rounds,
+* `drawLaw`: the record's sample meets `DrawLaw`. The sampling coins are all first-stage (`stage2` is the session's rounds,
   `coinsAt_congr`), so a set `B`'s weight is its miss indicator at the first-stage coins. Its mean is the probability that
-  v2's challenger draw (`Spot.Draw.drawUnits`) on the draw coins' bytes misses `B`; a draw checks at most the
+  v2's challenger sample (`Spot.Draw.drawUnits`) on the sampling coins' bytes misses `B`; a sample checks at most the
   population's `n` units (`kd_le_of_lawOn`), so every position it holds is checked. The bytes of `DRAW_ROUNDS` uniform
-  coins are uniform (`pr_drawBytes`), so that probability is at most the law's `P_a(B)` on the registration's strata
+  coins are uniform (`pr_drawBytes`), so that probability is at most the sampling design's `P_a(B)` on the registration's strata
   (`Flock.Bridge.drawUnits_miss_le`), which is the statement's design's on its partition (`Flock.Bridge.pa_partOf`). A
-  failed draw draws every unit and misses no nonempty `B`.
+  failed sample samples every unit and misses no nonempty `B`.
 * `ScopeOk`, `refuses_of_scopeOk`: the record refuses what is out of scope (`Refuses`) where its statement is in scope,
   and of that scope `Live` gives the program's order; `ScopeOk` is the rest.
-* `pr_drawBytes`: the draw coins' bytes, as v2's challenger reads them (`drawBytes`), are a bijective image of the draw
+* `pr_drawBytes`: the sampling coins' bytes, as v2's challenger reads them (`drawBytes`), are a bijective image of the sample
   rounds' coins (`srcOf`: every coin's elements' 16 bytes, in order), so an event of them has its probability on uniform
   bytes.
 -/
@@ -68,9 +68,9 @@ theorem eq_of_flatMap_eq {α β : Type} {f g : α → List β} {m : ℕ} (hf : �
     · exact h1
     · exact eq_of_flatMap_eq hf hg l h2 b hb
 
-/-! ## The draw coins' bytes -/
+/-! ## The sampling coins' bytes -/
 
-/-- The bytes the draw rounds' coins hold. -/
+/-- The bytes the sample rounds' coins hold. -/
 abbrev drawLen : ℕ := DRAW_ROUNDS * (65536 * 16)
 
 theorem f128_bytes_length (a : _root_.Flock.F128) : a.toBytes.data.toList.length = 16 := by
@@ -88,14 +88,14 @@ theorem coin_bytes_inj {c c' : FlockDeploy.Coin} (h : c.bytes = c'.bytes) : c = 
   exact funext fun i =>
     FlockSoundness.Refine.toBytes_inj (ByteArray.ext (Array.ext' (hp i (List.mem_finRange i))))
 
-/-- **The draw rounds' coins' bytes**, in order. -/
+/-- **The sample rounds' coins' bytes**, in order. -/
 def drawList (c : Fin DRAW_ROUNDS → FlockDeploy.Coin) : List UInt8 := (List.ofFn c).flatMap FlockDeploy.Coin.bytes
 
 theorem drawList_length (c : Fin DRAW_ROUNDS → FlockDeploy.Coin) : (drawList c).length = drawLen := by
   unfold drawList
   rw [length_flatMap_const coin_bytes_length, List.length_ofFn]
 
-/-- **The draw rounds' coins as bytes.** -/
+/-- **The sample rounds' coins as bytes.** -/
 def srcOf (c : Fin DRAW_ROUNDS → FlockDeploy.Coin) (j : Fin drawLen) : Fin 256 :=
   ((drawList c)[j.val]'(by rw [drawList_length]; exact j.isLt)).toFin
 
@@ -146,7 +146,7 @@ theorem coinsAt_eq {k : ℕ} (hk : DRAW_ROUNDS ≤ k) (r : Fin k → FlockDeploy
     unfold coinSeq
     exact dite_eq_left (Nat.lt_of_lt_of_le hi hk)
 
-/-- **The draw coins' bytes are uniform**: an event of the bytes the draw rounds' coins hold has its probability on
+/-- **The sampling coins' bytes are uniform**: an event of the bytes the sample rounds' coins hold has its probability on
 uniform bytes. -/
 theorem pr_drawBytes {k : ℕ} (hk : DRAW_ROUNDS ≤ k) (Q : ByteArray → Prop) :
     Pr (fun r : Fin k → FlockDeploy.Coin => Q (drawBytes (coinsAt r))) =
@@ -162,9 +162,9 @@ theorem pr_drawBytes {k : ℕ} (hk : DRAW_ROUNDS ≤ k) (Q : ByteArray → Prop)
   rw [h1, h2]
   exact Claims.ZKMal.Pr_comp_fiber srcOf fiber_srcOf fun src => Q (_root_.Properties.Spot.bytesOf src)
 
-/-! ## The law -/
+/-! ## The sampling design -/
 
-/-- **A law on the strata draws at most the population**: each stratum's `k` is at most its size. -/
+/-- **A sampling design on the strata samples at most the population**: each stratum's `k` is at most its size. -/
 theorem kd_le_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h : Flock.Bridge.LawOn law ns kd) :
     kd ≤ ns.sum := by
   cases law with
@@ -204,14 +204,14 @@ theorem nPU_record : nPU (record A o e) (xOf A o) = A.n := by
   exact hlen
 
 theorem drawn_of_ok {src : ByteArray} {u : Array ℕ} {rd : ℕ}
-    (h : _root_.Spot.Draw.drawUnits A.law A.n src = .ok (u, rd)) : drawn A src = u.toList := by
+    (h : _root_.Spot.Draw.drawUnits A.design A.n src = .ok (u, rd)) : drawn A src = u.toList := by
   simp only [drawn, h]
 
 theorem drawn_of_error {src : ByteArray} {err : String}
-    (h : _root_.Spot.Draw.drawUnits A.law A.n src = .error err) : drawn A src = List.range A.n := by
+    (h : _root_.Spot.Draw.drawUnits A.design A.n src = .error err) : drawn A src = List.range A.n := by
   simp only [drawn, h]
 
-/-- **The record's draw law.** -/
+/-- **The record's sampling design.** -/
 theorem drawLaw : DrawLaw (record A o e) := by
   classical
   intro x s Pt hx hP _ B hB
@@ -242,7 +242,7 @@ theorem drawLaw : DrawLaw (record A o e) := by
     · exact (Pr_congr fun _ => iff_false_intro hE).trans_le Pr_false.le
   · refine (Ex_ind _).trans_le ?_
     have hPa : (stmtA A).design.Pa (partA A) B =
-        (_root_.Properties.Spot.oneStageOf A.law).Pa (Flock.Bridge.nsOf A.desc A.qr) B :=
+        (_root_.Properties.Spot.oneStageOf A.design).Pa (Flock.Bridge.nsOf A.desc A.qr) B :=
       Flock.Bridge.pa_partOf A.P hns _ B hB
     rw [hPa]
     rcases B.eq_empty_or_nonempty with rfl | ⟨v0, hv0⟩
@@ -253,15 +253,15 @@ theorem drawLaw : DrawLaw (record A o e) := by
       rw [V_k_xOf]
       omega
     refine (Pr_mono fun r hr => ?_).trans ((pr_drawBytes hk fun b => ∃ units read,
-      _root_.Spot.Draw.drawUnits A.law A.n b = .ok (units, read) ∧ ∀ u ∈ B, u ∉ units).le.trans
+      _root_.Spot.Draw.drawUnits A.design A.n b = .ok (units, read) ∧ ∀ u ∈ B, u ∉ units).le.trans
       (Flock.Bridge.drawUnits_miss_le A.hlaw hns B hB drawLen))
     have hr' : ∀ v ∈ B, ∀ p : Fin A.n, (drawn A (drawBytes (coinsAt r)))[p.val]? ≠ some v := fun v hv p => by
       have h := hr v hv ⟨p.val, by rw [hnPU]; exact p.isLt⟩
       rwa [record_checked_xOf] at h
-    show ∃ units read, _root_.Spot.Draw.drawUnits A.law A.n (drawBytes (coinsAt r)) = .ok (units, read) ∧
+    show ∃ units read, _root_.Spot.Draw.drawUnits A.design A.n (drawBytes (coinsAt r)) = .ok (units, read) ∧
       ∀ u ∈ B, u ∉ units
     have hv0n : v0 < A.n := Finset.mem_range.1 (hB hv0)
-    cases hd : _root_.Spot.Draw.drawUnits A.law A.n (drawBytes (coinsAt r)) with
+    cases hd : _root_.Spot.Draw.drawUnits A.design A.n (drawBytes (coinsAt r)) with
     | error err =>
       have h := hr' v0 hv0 ⟨v0, hv0n⟩
       rw [drawn_of_error A hd] at h
@@ -280,11 +280,11 @@ theorem drawLaw : DrawLaw (record A o e) := by
 
 /-- **What `Live` doesn't give of the record's scope** (`InScope`): V5's partition at the session's population
 partitions the lowered program into nonempty proof blocks whose committed values fit their public size classes, and the
-law's one-stage rule is well formed over the population's strata. The program's order is the lowering's own
+sampling design's one-stage rule is well formed over the population's strata. The program's order is the lowering's own
 (`Flock.Bridge.topological_progOf`). -/
 def ScopeOk : Prop :=
   (partA A).Partitions (stmtA A).prog ∧
-    (_root_.Properties.Spot.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
+    (_root_.Properties.Spot.oneStageOf A.design).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
 
 theorem inScope_of_scopeOk (h : ScopeOk A) : InScope (partA A) (stmtA A) :=
   ⟨Flock.Bridge.topological_progOf, h.1,

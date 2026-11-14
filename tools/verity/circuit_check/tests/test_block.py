@@ -1,6 +1,6 @@
 """circuit-check's ``block`` (`checks.block_range`): a Definition checked whole fits the Flock block `compose` would place it
 in as one unit, its rows' hash slots and mask beside its own slot, within Flock's proved range of 2^`K_MAX` bits, read off
-the Definition before any lowering; past it, it fails by name with the breakdown and the fix, unless `BLOCK_HELD` says
+the Definition before any lowering; past it, it fails by name with the breakdown and the fix, unless `block_held` says
 why not, and a held one that fits fails as stale, as does one the whole catalog no longer checks.  A Call its module cuts
 (``CUTS``, `checks.cut_of`) is held to the range by each unit of its cut instead."""
 from __future__ import annotations
@@ -36,7 +36,7 @@ def test_a_unit_past_c_flocks_range_is_a_block_failure(monkeypatch):
     monkeypatch.setattr(FC, "K_MAX", b["k_log"] - 1)
     (f,) = [f for f in CK.check_definition(fn, OPTS, as_call=False)["failures"] if f["check"] == "block"]
     assert f["name"].startswith(f"block/past-range CircuitCheckBlock_v1 the unit needs a block of 2^{b['k_log']} bits")
-    assert f["name"].endswith("split the unit (e.g. PoUW's lanes form, verity/protocols/pouw/verifier/leaf_lanes.py), or extend "
+    assert f["name"].endswith("split the unit (e.g. PoUW's lanes form, verity/protocols/accounting/pouw/verifier/leaf_lanes.py), or extend "
                               "the proved range (proofs)")
     assert (f["ands"], f["k_log"], f["sha512x3"]) == (b["ands"], b["k_log"], b["sha512x3"])
     F = CK.Findings()
@@ -69,39 +69,46 @@ def test_rows_that_push_a_fitting_slot_past_the_block_fail():
     assert (f["bits"], f["rows"], f["hm96"]) == (367_263_744, 2, 2)
 
 
+def _held(monkeypatch, entries: dict[str, str]) -> None:
+    from circuit_check import block_held as BH
+
+    monkeypatch.setattr(BH, "held", lambda: {i: (why, "toy.circuit-check.unkeyed.json") for i, why in entries.items()})
+
+
 def test_the_held_list_only_shrinks():
-    """`block_held.HELD` is at most `block_held.MAX` long, and each entry says why, as itself: no PR or Linear id."""
+    """The held Definitions (`block_held.held`) are at most `block_held.MAX`, and each entry says why, as itself: no PR or
+    Linear id."""
     import re
 
     from circuit_check import block_held as BH
 
-    assert len(BH.HELD) <= BH.MAX and all(why.strip() for why in BH.HELD.values())
-    ids = {i: why for why in set(BH.HELD.values()) for i in re.findall(r"#\d+|\b[A-Z]{2,4}-\d+\b(?!\.)", why)}
-    assert not ids, f"block_held.py: state each reason as itself (what serving stages instead), not by PR or issue: {ids}"
+    held = BH.held()
+    assert len(held) <= BH.MAX and all(why.strip() for why, _ in held.values())
+    ids = {i: (why, f) for why, f in set(held.values()) for i in re.findall(r"#\d+|\b[A-Z]{2,4}-\d+\b(?!\.)", why)}
+    assert not ids, f"state each reason as itself (what serving stages instead), not by PR or issue: {ids}"
 
 
 def test_a_held_definition_is_reported_held_and_a_held_one_that_fits_is_stale(monkeypatch):
-    """A Definition `block_held.HELD` names: past the block, the report holds its ``block/past-range`` failure with why and
+    """A Definition `block_held.held` names: past the block, the report holds its ``block/past-range`` failure with why and
     doesn't count it; fitting, the report fails it ``block/stale-hold``, so the list shrinks with each fix.  The target's own
     entry is the same either way: no target's check reads the list."""
-    from circuit_check import block_held as BH
     from verity_flock import circuit as FC
 
     fn = _toy()
-    monkeypatch.setitem(BH.HELD, fn.id, "a toy")
+    _held(monkeypatch, {fn.id: "a toy"})
     entry = CK.check_definition(fn, OPTS, as_call=False)
     s = CK.summarize([entry])
     assert "block_held" not in s
     (name,) = [n for n in s["failure_names"] if n.startswith("block/")]
-    assert name.startswith("block/stale-hold CircuitCheckBlock_v1 its block of 2^20 bits fits 2^27, but block_held.HELD holds it "
-                           "(a toy): delete its entry")
+    assert name.startswith("block/stale-hold CircuitCheckBlock_v1 its block of 2^20 bits fits 2^27, but block_held holds it "
+                           "(a toy): delete its entry (toy.circuit-check.unkeyed.json) and lower MAX (block_held.py)")
     monkeypatch.setattr(FC, "K_MAX", 19)
     F = CK.Findings()
     past = {**entry, "block": CK.block_range(fn, F), "failures": F.failures}
     assert [f["code"] for f in F.failures] == ["past-range"]
     s = CK.summarize([past])
     assert s["block_held"] == {fn.id: "a toy"} and not [n for n in s["failure_names"] if n.startswith("block/")]
-    monkeypatch.delitem(BH.HELD, fn.id)
+    _held(monkeypatch, {})
     assert [n for n in CK.summarize([past])["failure_names"] if n.startswith("block/past-range CircuitCheckBlock_v1")]
 
 
@@ -109,7 +116,6 @@ def test_a_cut_call_is_held_to_the_block_by_each_unit(monkeypatch):
     """A Call whose module's ``CUTS`` names its family (its cut, or the module whose ``cut`` it is): the whole (2^29 bits) needs
     no block, each unit of its cut does; the entry carries the largest unit's block, the whole's and each unit's with its
     count.  A unit past the range fails naming the Call and the unit; a held Call whose units fit is stale."""
-    from circuit_check import block_held as BH
     from verity_flock import circuit as FC
 
     whole, unit = _rows(), _toy()
@@ -124,10 +130,10 @@ def test_a_cut_call_is_held_to_the_block_by_each_unit(monkeypatch):
     assert not F.failures
     assert (b["k_log"], b["whole"]["k_log"]) == (20, 29)
     assert b["cut"] == [{"unit": "CircuitCheckBlock_v1", "count": 3, "ands": b["cut"][0]["ands"], "bits": b["bits"], "k_log": 20}]
-    monkeypatch.setitem(BH.HELD, whole.id, "a toy")
+    _held(monkeypatch, {whole.id: "a toy"})
     (name,) = [n for n in CK.summarize([{"definition": whole.id, "block": b, "failures": []}])["failure_names"]]
     assert name.startswith("block/stale-hold CircuitCheckBlockRows_v1 each unit of its cut fits 2^27 (the largest 2^20 bits), "
-                           "but block_held.HELD holds it (a toy)")
+                           "but block_held holds it (a toy)")
     monkeypatch.setattr(FC, "K_MAX", 19)
     F = CK.Findings()
     CK.block_range(whole, F)
@@ -140,16 +146,14 @@ def test_a_held_id_the_catalog_no_longer_checks_fails(monkeypatch):
     """Over the whole catalog (an unsharded ``--all``, or every shard of one combined), a held id no entry names fails
     ``block/absent-hold``, so a Definition renamed or removed takes its entry with it; a report over some targets can't tell,
     and fails nothing for it."""
-    from circuit_check import block_held as BH
-
     fn = _toy()
-    monkeypatch.setattr(BH, "HELD", {fn.id: "a toy", "CircuitCheckGone_v1": "gone"})
+    _held(monkeypatch, {fn.id: "a toy", "CircuitCheckGone_v1": "gone"})
     entry = CK.check_definition(fn, OPTS, as_call=False)
     assert not [n for n in CK.summarize([entry])["failure_names"] if "absent-hold" in n]
     names = CK.summarize([entry], catalog=True)["failure_names"]
     assert [n for n in names if "absent-hold" in n] == [
-        "block/absent-hold CircuitCheckGone_v1 block_held.HELD holds it (gone), but the catalog checks no Definition of that id "
-        "any longer: delete its entry (tools/verity/circuit_check/src/circuit_check/block_held.py) and lower MAX"]
+        "block/absent-hold CircuitCheckGone_v1 block_held holds it (gone), but the catalog checks no Definition of that id "
+        "any longer: delete its entry (toy.circuit-check.unkeyed.json) and lower MAX (block_held.py)"]
     assert CK.report([entry], OPTS, catalog=True)["summary"]["failure_names"] == names
 
 
@@ -176,20 +180,22 @@ from verity.definitions.registry import b1
 F = CK.Findings()
 b = CK.block_range(bind(b1.TokenSelect, V=154880), F)
 print(json.dumps({"failures": [f["code"] for f in F.failures], "whole": b["whole"]["k_log"], "k_log": b["k_log"],
-                  "cut": [[u["unit"].partition("{")[0], u["count"], u["k_log"]] for u in b["cut"]]}))
+                  "cut": [[u["unit"], u["count"], u["k_log"]] for u in b["cut"]]}))
 """
 
 
 def test_glm53_greedy_select_is_held_to_the_block_by_its_chunks():
     """GLM-5.3's greedy `TokenSelect_v1` at its served vocabulary (V = 154,880) is past the block whole (2^28 bits) and cut by
-    `b1.CUTS` into nine chunks of 16,384 lanes and the combine, which reads the last 7,424, each a quarter of the block.  Checked
-    in a process of its own: a chunk registers a constant for each of its lanes, and every later test of this session that goes
-    through the registry's primitives (`test_declared_tables`) would go through those 16,384."""
+    `b1.CUTS` into nineteen chunks of 7,744 lanes, a Definition a chunk position and each an eighth of the block, and the
+    combine, which reads the last 7,744, a quarter of it.  Checked in a process of its own: a chunk registers a constant for
+    each of its lanes, and every later test of this session that goes through the registry's primitives
+    (`test_declared_tables`) would go through those 7,744."""
     r = subprocess.run([sys.executable, "-c", GREEDY_SERVED], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-3000:]
     assert json.loads(r.stdout.strip().splitlines()[-1]) == {
         "failures": [], "whole": 28, "k_log": 25,
-        "cut": [["GreedyChunk_v1", 1, 25], ["GreedyChunk_v1", 8, 25], ["GreedyCombine_v1", 1, 25]]}
+        "cut": [*[[f"GreedyChunk_v2{{N=7744,OFF={c * 7744}}}", 1, 24] for c in range(19)],
+                ["GreedyCombine_v2{V=154880,N=7744}", 1, 25]]}
 
 
 def test_sparse_mla_split_is_held_to_the_block_by_its_split_chain():

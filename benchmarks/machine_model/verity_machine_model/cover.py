@@ -1,6 +1,6 @@
-"""The coverage table (data/cover/): the evidence for the envelope's coverage premise, that every instruction a
-card executes is dominated by an envelope op (envelope.toml: `Accel.Op`, its pipes and formats, and the entries it
-proposes; each card's numbers are its card file's, `verity/hardware/cards/`) at no fewer units of the same resource,
+"""The opcode table (data/cover/): the evidence for the card assumption, that every instruction a
+card executes is dominated by an ACCEL op (envelope.toml: `Accel.Opcode`, its pipes and formats, and the entries it
+proposes; each card's numbers are its card file's, `hardware/cards/`) at no fewer units of the same resource,
 one row per opcode (rows.toml) on the H200 (sm_90) and the RTX PRO 6000 (sm_120).
 
 An opcode a card lists is in NVIDIA's family table (CUDA Binary Utilities 12.9 §4.3/§4.4, bu_12_9.json, and CUDA 13's,
@@ -9,7 +9,7 @@ one the machine model's census measured (data/census/*.csv for sm_120, data/devi
 every way the table fails that: an opcode, a form or a kind with no row; a row naming an op, pipe, format, store or θ key
 that doesn't exist; a lane or collective reading or writing more words than its op allows; and a covered or coarse row
 whose rate, in its op's units (`demands`), exceeds its resource's ρ. A row whose op, pipe or format is proposed rests on
-it (`rests_on`), and `counts(..., proposed=False)` counts those rows as holes: the table on `Accel.Op` alone.
+it (`rests_on`), and `counts(..., proposed=False)` counts those rows as holes: the table on `Accel.Opcode` alone.
 """
 from __future__ import annotations
 
@@ -19,12 +19,13 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from verity_machine_model import theta as T
 from verity_machine_model.model import DATA, card, device, kind_lists
 
 COVER = DATA / "cover"
-#: corpus.json and the two family tables are in fixtures/artifacts.json and gitignored; this brings them into a checkout
+#: corpus.json and the two family tables are in artifacts.json and gitignored; this brings them into a checkout
 FETCH = "uv run research data fetch-fixtures benchmarks/machine_model/data/cover"
 DEVICES = ("sm_90", "sm_120")
 FAMILY = {"sm_90": "hopper", "sm_120": "blackwell"}
@@ -49,7 +50,7 @@ class Row:
     envelope: str
     raw: dict = field(compare=False, repr=False)
 
-    def get(self, k: str, dev: str | None = None):
+    def get(self, k: str, dev: str | None = None) -> Any:
         v = self.raw.get(k)
         return v.get(dev) if isinstance(v, dict) and dev is not None else v
 
@@ -84,7 +85,7 @@ def _base(op: str) -> str:
     return op if op in ("UIADD3.64", "UMOV.64") else op.split(".")[0]
 
 
-def as_list(v) -> list:
+def as_list(v: Any) -> list:
     return [] if v is None else list(v) if isinstance(v, list) else [v]
 
 
@@ -110,7 +111,7 @@ def fetched(p: Path) -> dict:
 def _numbers(dev: str, proposed: dict) -> dict:
     """A device's numbers: its card file's (the SMs, clock.sm, every rate, memory.bandwidth in words a second and every
     format's weight), and the envelope's proposed rates and weights, none of which the card file may hold."""
-    from verity.hardware.cards import number, rate   # here: only a reader of the card needs verity
+    from verity.device import number, rate   # here: only a reader of the card needs verity
 
     def plain(x):
         return int(x) if x.denominator == 1 else float(x)
@@ -301,7 +302,7 @@ def problems(c: Cover) -> list[str]:
         if r.mark not in MARKS:
             out.append(f"{where}: mark {r.mark!r} isn't one of {', '.join(MARKS)}")
         if r.envelope not in ops:
-            out.append(f"{where}: envelope op {r.envelope!r} isn't in envelope.toml")
+            out.append(f"{where}: ACCEL op {r.envelope!r} isn't in envelope.toml")
             continue
         if r.mark == "hole" and "severity" not in r.raw:
             out.append(f"{where}: a hole says its severity")
@@ -337,7 +338,7 @@ def problems(c: Cover) -> list[str]:
                                f"SM-clock, over ρ {x.resource} = {x.rho:g}")
     for u in c.units:
         if u["envelope"] not in ops:
-            out.append(f"rows.toml unit {u['key']}: envelope op {u['envelope']!r} isn't in envelope.toml")
+            out.append(f"rows.toml unit {u['key']}: ACCEL op {u['envelope']!r} isn't in envelope.toml")
     for dev in DEVICES:
         for op in sorted(c.opcodes[dev]):
             if not plain(c, dev, op):

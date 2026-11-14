@@ -16,7 +16,7 @@ sequentially by this module's orchestrator (`subprocess`), then a torch-free com
                              tensors D2H asynchronously into fresh pinned buffers (stream-ordered right after the module,
                              i.e. before the next layer's in-place `fused_add_rms_norm` overwrites them); after every
                              `engine.step()` the driver synchronises once and hashes.  Output: `hooks.json`, `tokens.json`.
-  (c) `bench/m1_capture.py --no-observer`  fully bare (nothing installed, `vllm_adapter.run_requests`): `tokens.json`.
+  (c) `m1-capture --no-observer`  fully bare (nothing installed, `vllm_adapter.run_requests`): `tokens.json`.
 
 Tensors compared, per step s and layer L (values are bf16 row-major `[M, H]`, M = token rows of the step):
   hidden[s, L]   = `LlamaDecoderLayer.forward` return[0] = the MLP `down_proj` output.
@@ -33,8 +33,8 @@ Tensors compared, per step s and layer L (values are bf16 row-major `[M, H]`, M 
 The observer's snapshot bytes are the *spanned storage bytes* of the view; for these contiguous tensors that is exactly the
 tensor's bytes, which is what (b) hashes (`tensor.contiguous()` bytes; contiguity is recorded and asserted).
 
-Comparison (`--compare DIR`, torch-free; also run automatically by the orchestrator): tokens (a) == (b) == (c) == the accepted
-record (`bench.m1_capture.ACCEPTED_TOKENS`, and `data/logs/m1_ctl_tokens.json` when present); per step the sampled
+Comparison (`--compare --out DIR`, torch-free; also run automatically by the orchestrator): tokens (a) == (b) == (c) == the
+clean control run's (`--accepted-ctl`, by default `data/logs/m1_ctl_tokens.json`; (c)'s own when absent); per step the sampled
 ids of (a)'s `SampleEnd` == (b)'s engine outputs; hashes (a) == (b) for every (step, layer, hidden|residual) + final + logits.
 Writes DIR/noninterference.json and DIR/noninterference.md; exit status 1 on any mismatch.
 
@@ -56,15 +56,17 @@ import re
 import subprocess
 import sys
 import time
-from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import option, workload_arg
-from verity_vllm.properties.noninterference_families import FINAL_NORM_MODULES, parallel_residual_boundaries, unfused_norm_boundaries
-from verity_vllm.properties.record import seal
+from verity_vllm.properties.noninterference_families import (
+    FINAL_NORM_MODULES,
+    parallel_residual_boundaries,
+    unfused_norm_boundaries,
+)
+from verity_vllm.records.property_record import REGISTRY, seal
 
 # the decoder-layer module and the final norm under their family's vLLM names: Llama-style
 # `model.layers.N` / `model.norm` (SmolLM2, Qwen, Gemma-2, Phi-3, the MoE families) and GPT-NeoX `gpt_neox.layers.N` /
@@ -586,7 +588,7 @@ def compare(dir_: str, accepted_ctl: str | None, expected_layers: int | None = N
 # the property record, world-parametric: a run's observed arm against its bare arm
 # ---------------------------------------------------------------------------------------------------------
 
-SCHEMA = "verity-vllm/noninterference/v2"
+SCHEMA = REGISTRY["noninterference"].schema
 #: the tensor-parallel worlds a record is taken at; there are no collective records above two ranks, so a larger world is refused
 WORLDS = (1, 2)
 

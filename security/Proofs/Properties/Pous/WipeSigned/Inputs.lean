@@ -120,7 +120,7 @@ theorem batches_inj {batches batches' : Array StreamedWipe.Batch} {vs : Array By
 theorem recordsRoot_ok {session root : ByteArray} {batches : Array StreamedWipe.Batch}
     (h : StreamedWipe.recordsRoot session batches = .ok root) :
     ∃ vs, batches.mapM StreamedWipe.Batch.value = .ok vs ∧
-      root = FrameV3Sha512.root (domain StreamedWipe.RECORD_BINDING session batches.size)
+      root = (domain StreamedWipe.RECORD_BINDING session batches.size).root
         (WipeTree.leavesOf (domain StreamedWipe.RECORD_BINDING session batches.size) vs) := by
   unfold StreamedWipe.recordsRoot at h
   cases hv : batches.mapM StreamedWipe.Batch.value with
@@ -129,12 +129,13 @@ theorem recordsRoot_ok {session root : ByteArray} {batches : Array StreamedWipe.
     simp only [hv, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
     exact ⟨vs, rfl, h.symm⟩
 
-theorem message_ok {c : StreamedWipe.Commitment} {e : String} {fs fe : Int} {batches : Array StreamedWipe.Batch}
-    {eg : Int} {rec : ByteArray} (h : StreamedWipe.message c e fs fe batches eg = .ok rec) :
+theorem message_ok {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {fs fe : Int}
+    {batches : Array StreamedWipe.Batch} {rec : ByteArray}
+    (h : StreamedWipe.message c e sm fs fe batches = .ok rec) :
     ∃ root, StreamedWipe.recordsRoot c.session batches = .ok root ∧
       rec = Sha512.hash (StreamedWipe.SESSION_TAG ++
-        be64 (StreamedWipe.header c e fs fe batches.size eg).toUTF8.size.toUInt64 ++
-        (StreamedWipe.header c e fs fe batches.size eg).toUTF8 ++ root) := by
+        be64 (StreamedWipe.header c e sm fs fe batches.size).toUTF8.size.toUInt64 ++
+        (StreamedWipe.header c e sm fs fe batches.size).toUTF8 ++ root) := by
   unfold StreamedWipe.message at h
   cases hr : StreamedWipe.recordsRoot c.session batches with
   | error _ => simp [hr, bind, Except.bind] at h

@@ -9,7 +9,7 @@ the task list's build, nor an earlier target's check):
   name and content stand for), every path it only probed (``os.stat``: whether it was a file, a directory or absent; when
   `inspect` or `linecache` probes a loaded module's source file, the module, by its name), every library built in the tree
   that it loaded (``ctypes.dlopen``: by its bytes), and the sources of every C++ model it called (`MODEL`, which each call of a
-  `verity.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
+  C++ model raises: by their content, wherever the library was built and whichever check
   loaded it), and of every one its process, or one it was forked from, called before it ended (`_CALLED`): a process-wide memo
   of a model's result, filled by another target's check or a binding's build, hands it the result without a call;
 - the module of every function that ran (``sys.monitoring``: the first start or resume of each code object in the recording),
@@ -65,12 +65,13 @@ it lists by their names, each module's content used only to follow a move (`_chi
 pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``), unless it is
 the checker's own: those, like the checker code that ran, are held by the checker's version alone.  The checker's
 own version is the digest of this package's code (each module's AST without its docstrings, `_code`, so an edit to its prose or
-comments reruns no target) less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
-peaks, which decide which targets run beside which, never what a check computes, and which no recording holds either,
-`cli.heavy`) and `SHARD` (which targets a shard checks and how
-shards' records are joined).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
+comments reruns no target) less `targets.py`, ``pins/``, `SHARD` (which targets a shard checks and how
+shards' records are joined) and `TASK_LIST` (whether a run starts at all, `cli.task_list_guard`); the scheduler's peaks, which
+decide only which targets run beside which, are beside their owners, outside this package, and no recording holds them
+(`cli.heavy`, read under `internal`).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
-entry, `descriptor`) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment; the task list's, whose build finds the sidecars
+entry, `descriptor`) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment, less the variables no check or build reads
+(`UNKEYED`, `UNKEYED_PREFIXES`); the task list's, whose build finds the sidecars
 itself, also the modules the registries import for having one (`registries`).  Each target's check runs with a memo of its
 own, so no result an earlier target computed stands in for its reads.
 
@@ -133,8 +134,10 @@ module the process imported but the checker's own (its version) and every bindin
 unchanged where it was, never through a move; a run reuses it only when every target it lists is reused that way too, and then
 builds no Definition.
 
-Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``; there is no expiry and no path or time
-shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
+Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``, with no path or time shortcut.  An entry
+counts only for the checker version it was stored by, and a version expires: each run that uses a cache marks its own version
+used when it starts and removes every other one no run has used for `EXPIRE_S` (`expire`; a session reading records only
+marks, `mark`), never its own.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
 An entry holds in itself only the reads no other entry is likely to hold (its pins, and each read that names its Definition); the
 rest are records under ``<dir>/<version>/reads/`` that any number of entries share, each stored once under the SHA-512 of its
 bytes and checked against it when read (`_hold`).  An entry and each record name the records they are read with (``needs``),
@@ -154,6 +157,7 @@ import importlib
 import json
 import os
 import platform
+import re
 import sys
 import time
 from contextlib import contextmanager
@@ -170,7 +174,7 @@ _LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
 UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork")
 #: the audit event each call of a C++ model raises with the files its library is built from
-#: (`verity.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
+#: (named rather than imported from the module that raises it: this module imports nothing of the tree at its import)
 MODEL = "verity.numerics.model"
 #: the sources in the tree of every C++ model this process, or one it was forked from, called while tracing (`MODEL`): a
 #: process-wide memo of a model's result hands it to a later check or build without a call, so every recording holds them all
@@ -180,14 +184,13 @@ _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
 #: the checker's files that are no input of every target: each target holds its own parts of them
 TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
-#: the targets' measured peaks `cli.run` schedules by, and beside them the catalog bindings' (by binding name) the circuit_check
-#: suite's build schedules by (`units.built_apart`): no input of any target, since they decide only which targets run beside
-#: which, and a target whose process the OOM killer took is never stored
-HEAVY = _HERE / "heavy.json"
 #: which targets a ``--shard`` checks and how ``--combine`` joins the shards' records (`circuit_check.shard`): no input of any
 #: target, since no check imports it
 SHARD = _HERE / "shard.py"
-#: a sidecar's name beside its module's (`sidecars`): ``fp8.circuit-check.py`` and ``.json`` of ``fp8.py``
+#: the task list's guard's reference (`cli.task_list_guard`): no input of any target, since it decides only whether a run
+#: starts
+TASK_LIST = _HERE / "task_list.json"
+#: a sidecar's name beside its module's (`sidecars`): ``widget.circuit-check.py`` and ``.json`` of ``widget.py``
 SUFFIX = ".circuit-check"
 #: the binding files beside `targets.py` (each Definition module's sidecar, `sidecars`), absolute; the pins files (``pins/``'s
 #: and the sidecars'), and where a pin is or would be (`sidecars.pin_reads`)
@@ -422,8 +425,14 @@ def _importing() -> bool:
 
 
 #: the functions (module, qualified name) that list a package with ``pkgutil`` only to import each module it lists, naming any
-#: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them
-_ENUMERATORS = frozenset({("verity.definitions.registry.catalog", "load"), ("verity.definitions.boolean", "_load")})
+#: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them.
+#: The sidecar that loads the catalog hands them (`targets.HOOKS`' ``enumerators``)
+_ENUMERATORS: set[tuple[str, str]] = set()
+
+
+def enumerators(functions: Iterable[tuple[str, str]]) -> None:
+    """Hold what each of ``functions`` (module, qualified name) lists by the package's modules, as `_ENUMERATORS`' are."""
+    _ENUMERATORS.update(functions)
 
 
 def _enumerator(f) -> bool:
@@ -736,7 +745,8 @@ def _instrument() -> None:
         batch._KERNELS = _RecordedKernels(batch._KERNELS)
     if not isinstance(D.REGISTRY.defs, _RecordedDefs):
         D.REGISTRY.defs = _RecordedDefs(D.REGISTRY.defs)
-    add0 = D.Registry.add
+    table = type(D.REGISTRY)
+    add0 = table.add
 
     def add(self, d):
         _INTERNAL.append(True)                         # registering is no lookup
@@ -756,7 +766,7 @@ def _instrument() -> None:
                 _REGISTRAR[fid] = mods
         return out
 
-    D.Registry.add = add
+    table.add = add
     build0 = D._build_body
 
     def _build_body(sp):
@@ -2071,10 +2081,10 @@ def _stat(p: str | Path) -> tuple[int, ...] | None:
 
 def version() -> str:
     """The checker's own version: the digest of this package's code (`_code`: no docstring or comment), less `targets.py` and
-    ``pins/`` (each target holds its own parts of them), `HEAVY` and `SHARD` (no target's input).  Computed once a process
+    ``pins/`` (each target holds its own parts of them), `SHARD` and `TASK_LIST` (no target's input).  Computed once a process
     (`key` asks for it once for every target), and again only when a directory or file it read has another stat now (an
     edit in this process, as a test makes), or had one that changed within `RACY_NS` of when it was read."""
-    where = (_HERE, TARGETS, PINS, HEAVY, SHARD)
+    where = (_HERE, TARGETS, PINS, SHARD, TASK_LIST)
     _INTERNAL.append(True)
     try:
         if _VERSION and _VERSION[0][0] == where and all(_stat(p) == s for p, s in _VERSION[0][1]):
@@ -2088,7 +2098,7 @@ def version() -> str:
             files += [Path(d, n) for n in names]
         h = hashlib.sha512()
         for p in sorted(files):
-            if p not in (TARGETS, HEAVY, SHARD):
+            if p not in (TARGETS, SHARD, TASK_LIST):
                 seen.append((str(p), _stat(p)))
                 h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + _code(p) + b"\0")
         _VERSION[:] = [] if any(s is None or max(s[2], s[3]) >= at - RACY_NS for _p, s in seen) else \
@@ -2098,9 +2108,150 @@ def version() -> str:
         _INTERNAL.pop()
 
 
+#: how long a cache keeps a version of the checker that no run has used (`expire`)
+EXPIRE_S = 72 * 3600
+#: a cache's marks, one empty file per version named by it, whose mtime is when a run last used that version or first saw it
+#: unmarked: beside the versions, and hidden, so a verdict pack never walks it (tools/verity/check/verdicts.py's `entries`)
+USED = ".used"
+#: what a version's directory is renamed to before it is deleted, ``<EXPIRED><version>.<pid>.<random>``: hidden for the same
+#: reason, and taken by `sweep` wherever a run left one
+EXPIRED = ".expired-"
+_VERSION_NAME = re.compile(r"[0-9a-f]{128}")
+#: what this process's stores lost because their version's directory went while they wrote (`expire`): an entry (`store`) or
+#: the seconds beside one (`units.store`), each as its key's directory and what it met
+LOST: list[str] = []
+
+
+def _mark(p: Path, now: float) -> None:
+    try:
+        os.utime(p, (now, now))
+    except FileNotFoundError:
+        with open(p, "a"):
+            pass
+        os.utime(p, (now, now))
+
+
+def mark(cache: Path, now: float | None = None) -> str | None:
+    """Mark this checker's version used now in ``cache``, when ``cache`` holds it: a run that only reads the cache (a session of
+    this package's suite taking its catalog from records) leaves this trace of a hit and writes nothing else.  What kept it from
+    marking, or None: an unmarked version only goes `EXPIRE_S` after another run that uses the cache saw it."""
+    now = _clock() / 1e9 if now is None else now
+    own = version()
+    with internal():
+        try:
+            if (Path(cache) / own).is_dir():
+                (Path(cache) / USED).mkdir(exist_ok=True)
+                _mark(Path(cache) / USED / own, now)
+        except OSError as e:
+            return f"not marked: {e!r}"
+    return None
+
+
+def expire(cache: Path, now: float | None = None, delete: Any = None) -> dict[str, list]:
+    """What a run that uses ``cache`` does first: mark this checker's version used now (`USED`), then rename away each other
+    version whose mark is `EXPIRE_S` old, and hand what is renamed away to ``delete`` (default: `sweep` in a process of its own,
+    not waited for).  A version with no mark is marked now, so it goes `EXPIRE_S` after the first run that saw it.  A record: the
+    versions renamed away (``gone``), and what it met and let be, each ``[what, why]`` (``left``).
+
+    It reads the cache's top and each other version's mark, never what a version holds: on a cache of N other versions, all
+    marked, a start makes N + 4 filesystem calls (a mkdir and a stat of `USED`, its own mark's utime, one listing of the top,
+    a stat of each other mark), and a version that goes adds a rename, a stat and an unlink, and starts `sweep`.  Nothing it meets
+    raises: a mark it can't write leaves its version for a later run, and a rename another run made first is that run's.  A run
+    of a version renamed away while it runs (one idle `EXPIRE_S`, which this one's mark rules out but for a run that started
+    between another's reading the mark and renaming) misses what it had, and its stores remake the directory or give none."""
+    now = _clock() / 1e9 if now is None else now
+    own, top = version(), Path(cache)
+    out: dict[str, list] = {"gone": [], "left": []}
+    with internal():
+        try:
+            (top / USED).mkdir(parents=True, exist_ok=True)
+            _mark(top / USED / own, now)
+            names = os.listdir(top)
+        except OSError as e:
+            out["left"].append([str(top), f"not marked or listed: {e!r}"])
+            return out
+        for name in names:
+            if name == own or not _VERSION_NAME.fullmatch(name):
+                continue
+            m = top / USED / name
+            try:
+                try:
+                    at = os.stat(m).st_mtime
+                except FileNotFoundError:
+                    _mark(m, now)
+                    continue
+                if now - at < EXPIRE_S:
+                    continue
+                away = top / f"{EXPIRED}{name}.{os.getpid()}.{os.urandom(4).hex()}"
+                os.rename(top / name, away)
+            except OSError as e:                       # a rename another run made first is the usual one
+                out["left"].append([name, repr(e)])
+                continue
+            out["gone"].append(name)
+            try:
+                if os.stat(m).st_mtime != at:          # a run of it marked it between the two: give it back if it is still free
+                    os.rename(away, top / name)
+                    out["gone"].pop()
+                    out["left"].append([name, "marked while it was renamed away: given back"])
+                    continue
+                m.unlink()
+            except OSError as e:
+                out["left"].append([name, f"renamed away, its mark kept: {e!r}"])
+        if out["gone"] or any(n.startswith(EXPIRED) for n in names):
+            if isinstance(started := (delete or _sweep_apart)(top), OSError):
+                out["left"].append([str(top), f"no sweep started: {started!r}"])
+    return out
+
+
+def sweep(cache: Path) -> str:
+    """Delete every directory `expire` renamed away in ``cache``, one sweeper a cache at a time (a lock under `USED`): another
+    that finds the lock held leaves them to the one holding it, which lists them again until none is left, and to a later run
+    if it ends first.  What it did."""
+    import fcntl
+    import shutil
+
+    top = Path(cache)
+    try:
+        lock = open(top / USED / ".sweep.lock", "a")
+    except OSError as e:
+        return f"no lock: {e!r}"
+    with lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return "another sweeper holds the lock"
+        done: set[str] = set()
+        while left := {n for n in os.listdir(top) if n.startswith(EXPIRED)} - done:
+            for n in sorted(left):
+                shutil.rmtree(top / n, ignore_errors=True)
+            done |= left                               # one it could not delete is not tried again here
+    return f"swept {len(done)}"
+
+
+def _sweep_apart(top: Path) -> Any:
+    """`sweep` in a process of its own that outlives this one, not waited for: a version runs to hundreds of thousands of files,
+    and a check's start does not wait on another version's delete.  The process, or the error that kept it from starting."""
+    import subprocess
+
+    try:
+        return subprocess.Popen([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
+                                 "from circuit_check.cache import sweep; sweep(sys.argv[2])", str(_HERE.parent), str(top)],
+                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                start_new_session=True)
+    except OSError as e:
+        return e
+
+
 #: variables of the keyed prefixes that say where test results are kept, not what a check computes: a check slot sets its own
 #: `VERITY_TEST_CACHE` (`tools/verity/check/slot.py`), which would keep one slot's reports from counting in another
 UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
+#: and those only this package's suite reads: where its session reads and lists the catalog bindings' records (its
+#: ``tests/conftest.py``), and which of its tests run (a ``skipif``).  With them keyed, a record the suite's session has built
+#: would never count in `check`'s circuit-check, nor that one's in the session
+UNKEYED |= {"CIRCUIT_CHECK_RECORDS", "CIRCUIT_CHECK_RECORDS_MANIFEST", "VERITY_CIRCUIT_CHECK_SLOW"}
+#: the suite runner's own variables (tools/verity/check/suites.py and its guard set them for a suite's tests and every Python
+#: they start): how a suite runs, which only the runner and tests read
+UNKEYED_PREFIXES = ("VERITY_SUITE_",)
 
 
 def key(request: dict) -> dict:
@@ -2116,7 +2267,8 @@ def key(request: dict) -> dict:
         _INTERNAL.pop()
     k = {"schema": SCHEMA, "version": version(), "request": request, "python": python, "optimize": sys.flags.optimize,
          "platform": plat, "environment": {k: v for k, v in sorted(os.environ.items())
-                                           if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED}}
+                                           if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED
+                                           and not k.startswith(UNKEYED_PREFIXES)}}
     target = request.get("target")
     if isinstance(target, (list, tuple)) and list(target[:1]) == ["task-list"]:
         # the list's build found the sidecars itself (`sidecars.discover`), reading nothing a recording holds
@@ -2482,7 +2634,8 @@ def _miss(p: Path, x: BaseException) -> None:
 
 
 def unread() -> list[str]:
-    """Each entry this process found under a key it looked up (`lookup`, `recorded`, `units`' records) but could not read,
+    """Each entry this process found under a key it looked up (`lookup`, `recorded`, `units`' records; or under any key,
+    where `units.untaken` asked whether the cache holds a binding's record) but could not read,
     with what reading it raised: a record it names missing (OSError) or not the bytes its name digests (ValueError, `_record`),
     or the entry not one this version writes.  Each counted as no entry; a run's report lists them (its ``cache.unread``)."""
     return list(_MISSED)
@@ -2600,19 +2753,24 @@ def _fresh(root: Path, p: Path, kind: str | None) -> bool:
     return _MEMO[k]
 
 
-def read(p: Path) -> dict:
+def read(p: Path, named: bool = False) -> dict:
     """The entry at ``p``: its key, its reads by kind as `store` was handed them, and its report; OSError or ValueError when it
-    can't be read."""
+    can't be read, and with ``named`` when its bytes are not those its name digests (`store` names an entry by them, so one
+    copied here cut short or changed is no entry)."""
     with internal():
-        e = json.loads(Path(p).read_text())
+        data = Path(p).read_bytes()
+    if named and hashlib.sha512(data).hexdigest() != Path(p).stem:
+        raise ValueError(f"{p}: its bytes are not the entry its name digests")
+    e = json.loads(data)
     try:
         return {"key": e["key"], "reads": _expand(Path(p), e), "report": e["report"]}
     except (KeyError, TypeError, IndexError, AttributeError) as x:
         raise ValueError(f"{p}: no entry it can read ({type(x).__name__}: {x})") from None
 
 
-def held(paths: Iterable[Path]) -> int:
-    """The bytes the entries at ``paths`` take with the records they are read with, each once: what a copy of them copies."""
+def closure(paths: Iterable[Path]) -> set[Path]:
+    """The entries at ``paths`` with the records they are read with (each one's ``needs``, and those records'), each once and
+    normalized: what a copy of them copies."""
     files: set[Path] = set()
     todo = [Path(p) for p in paths]
     with internal():
@@ -2622,6 +2780,13 @@ def held(paths: Iterable[Path]) -> int:
             files.add(p)
             if isinstance(got := json.loads(p.read_bytes()), dict) and isinstance(needs := got.get("needs"), list):
                 todo += [p.parent / n for n in needs if isinstance(n, str)]
+    return files
+
+
+def held(paths: Iterable[Path]) -> int:
+    """The bytes the entries at ``paths`` take with the records they are read with, each once (`closure`)."""
+    files = closure(paths)
+    with internal():
         return sum(p.stat().st_size for p in files)
 
 
@@ -2900,22 +3065,27 @@ def _tree_modules(loaded: set[str] = frozenset()) -> tuple[set[str], dict[str, s
 def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: dict,
           worker: dict[str, dict[str, str | None]] | None = None) -> str | None:
     """Record ``report`` under ``k`` with its reads' digests; None, and nothing stored, when ``worker`` (`seen` in the process that
-    ran the check) differs from them: the tree changed while the run went on, and the report may be of a tree no digest names."""
+    ran the check) differs from them: the tree changed while the run went on, and the report may be of a tree no digest names.
+    None too, and the entry in `LOST`, when the version's directory went while it was written (`expire`)."""
     now = _digests(root, got)
     if worker is not None and worker != now:
         return None
     d = _dir(cache, k)
-    e = {"key": k, **_hold(d.parent, k, now), "report": report}
-    body = json.dumps(e, sort_keys=True, separators=(",", ":"), default=str)
-    eid = hashlib.sha512(body.encode()).hexdigest()
-    d.mkdir(parents=True, exist_ok=True)
-    # a temporary name of this writer's own: two checks may store the same entry at once
-    tmp = d / f".{eid}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
-    tmp.write_text(body)
-    os.replace(tmp, d / f"{eid}.json")
+    try:
+        e = {"key": k, **_hold(d.parent, k, now), "report": report}
+        body = json.dumps(e, sort_keys=True, separators=(",", ":"), default=str)
+        eid = hashlib.sha512(body.encode()).hexdigest()
+        d.mkdir(parents=True, exist_ok=True)
+        # a temporary name of this writer's own: two checks may store the same entry at once
+        tmp = d / f".{eid}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
+        tmp.write_text(body)
+        os.replace(tmp, d / f"{eid}.json")
+    except FileNotFoundError as e:
+        LOST.append(f"{d.name}: {e!r}")
+        return None
     return eid
 
 
-__all__ = ["PINS", "READS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "held", "internal", "key",
+__all__ = ["PINS", "READS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "closure", "held", "internal", "key",
            "lookup", "modules_since", "pin_files", "probed", "produced", "read", "recorded_pins", "recording", "registries", "seen",
            "seen_all", "store", "task_list_reads", "trace", "tracing", "unit_files", "unit_reads", "unread", "untraced", "version", "warm"]

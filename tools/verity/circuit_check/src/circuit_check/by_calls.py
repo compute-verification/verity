@@ -34,7 +34,7 @@ from typing import Any
 
 from verity.circuits import codec as C
 from verity.circuits import ports as P
-from verity.circuits.defs import Builder, Node, PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.defs import Builder, BodyNode, PrimitiveDefinition, SpecializedDefinition
 from verity.circuits.refs import Affine, Coll
 
 from . import cache as CC
@@ -47,7 +47,7 @@ CHECK = "by-calls"
 class _Unlaid(Builder):
     """A `Builder` that lays out no gates: a node's interval is its callee's gate count, which builds the callee's body."""
 
-    def _emit(self, node: Node) -> Coll:
+    def _emit(self, node: BodyNode) -> Coll:
         self.nodes.append(node)
         self.offsets.append(0)
         return Coll(node.out, Affine("n", len(self.nodes) - 1, 0, node.out.leaves))
@@ -275,9 +275,11 @@ def check(fn: SpecializedDefinition) -> dict:
 def joined(entries: list[dict]) -> list[dict]:
     """``entries`` with each by-calls root's relied-on targets' verdicts joined to its own: a target none of ``entries`` is
     fails it with ``by-calls/callee-unchecked``, one that failed with ``by-calls/callee-failed`` (naming its failures); each
-    callee's row says ``verdict``.  A target's ``block/past-range`` failure that `block_held.HELD` holds is not a failure here,
+    callee's row says ``verdict``.  A target's ``block/past-range`` failure that `block_held.held` holds is not a failure here,
     as it isn't in `checks.summarize`.  Entries are copied, never changed."""
-    from .block_held import HELD
+    from . import block_held as BH
+
+    HELD = BH.held()
 
     def counted(got: dict) -> list[dict]:
         return [f for f in got.get("failures", [])

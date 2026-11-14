@@ -24,15 +24,18 @@ import numpy as np
 import pytest
 
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
+# run.py is loaded here by path, not by the suite's `conftest.load`: test_pearl_c_vllm.py runs this file by path, and
+# the suites of benchmarks/one_stage and benchmarks/pouw/pearlplus_lean run that test, where `conftest` is not this
+# suite's.
 _spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", KERNEL / "run.py")
 R = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(R)
 
 from verity.commitments.merkle import tree_levels  # noqa: E402
-from verity.protocols.pouw.verifier import audit  # noqa: E402
-from verity.protocols.pouw.verifier.audit import ROW_SCHEMA, TILE_SCHEMA, activation_binding, rows_domain  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import audit  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, TILE_SCHEMA, activation_binding, rows_domain  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C  # noqa: E402
 
 #: pearl_c_sm120.cu's PD_VARIANT_LIST, the variants the cubin builds
 SERVED_LIST = re.search(r"#define PD_VARIANT_LIST\(X\) (.*)", (KERNEL / "pearl_c_sm120.cu").read_text()).group(1).strip()
@@ -146,6 +149,18 @@ def test_run_py_launches_the_cubins_variants_with_hash_decode_cuhs_constants():
     assert all(v & const("PD_PAIR") and v & R.PD_WHOLE and not v & const("PD_STAMP") for v in SERVED)
     assert R.pd_variant(48, 384, 1024) == 851 and R.pd_variant(64, 384, 1024) == 979 and R.pd_variant(32, 28672, 4096) == 979
     assert R.pd_variant(R.PD_MAX_ROWS + 1, 128, 1024) is None and R.pd_variant(32, 128, 2 * R.PD_MAX_K) is None
+
+
+def test_a_pd_launchs_dynamic_shared_memory_size_is_read_only_as_a_floor():
+    """The kernels read a launch's dynamic shared memory size (``%dynamic_smem_size``) only in pd_dyn_bytes, and that only
+    where a kernel traps below its floor, while the host twin's pd_dyn holds PD_PAIR_SMEM: a launch given more (PD_WHOLE's
+    all, or sm_90a's ``Pipeline.pd_shared`` half an SM) runs the twin's code over the twin's words, so writes its bytes."""
+    lines = [x.strip() for x in SRC.splitlines() if "pd_dyn_bytes()" in x]
+    defs = ["DEV uint32_t pd_dyn_bytes() {", "inline uint32_t pd_dyn_bytes() { return PD_PAIR_SMEM; }"]
+    floor = re.compile(r"if \(.* pd_dyn_bytes\(\) < (\(uint32_t\)PD_PAIR_SMEM|8u \* PD_PAIR_WORDS)\)+ __trap\(\);")
+    assert SRC.count("%%dynamic_smem_size") == 1 and "static uint64_t m[2 * PD_PAIR_WORDS];" in SRC
+    assert [x for x in lines if x in defs] == defs and all(floor.fullmatch(x) for x in lines if x not in defs)
+    assert len(lines) > len(defs)
 
 
 def levels(dom, values: list[bytes], schema, salt_key: bytes, nonce: int) -> bytes:

@@ -17,9 +17,9 @@ and comes before every `open` of its session. Each kind of entry keeps it (`inv_
 holds of the whole ledger (`verifyLedger_inv`).
 
 `checked` parses the ledger's lines into the entries `LiveSalt.entries` reads (`checked_ok`); `auditedOpen` and
-`pinnedSession` take the window whose root the caller names, closed by its v2 `end` (`auditedOpen_ok`,
-`pinnedSession_ok`). So the ledger of a session pinned on root `R` shows its reserve, its one open on `R` and its end
-(`ledgerShows_of`). `sessionNamed` returns the commitment whose root's hex the ledger's `end` recorded
+`pinnedChallengePhase` take the window whose root the caller names, closed by its v2 `end` (`auditedOpen_ok`,
+`pinnedChallengePhase_ok`). So the ledger of a session pinned on root `R` shows its reserve, its one open on `R` and its end
+(`ledgerShows_of`). `challengePhaseNamed` returns the commitment whose root's hex the ledger's `end` recorded
 (`sessionNamed_root`).
 
 The challenger's functions are monadic. Each fact about one is a Hoare triple proved by `mvcgen`, and `of_triple` reads
@@ -140,7 +140,7 @@ theorem chain {v2 : Bool} {e : LedgerEntry} {n : Nat} {prev : String}
   · exact h1
 
 theorem reserve_facts {e : LedgerEntry} {wins : Array Win} {reserves : Array Reserve}
-    (h : ((e.schema == LEDGER_SCHEMA && isReservedSession e.session && !reserves.any fun x => x.session == e.session) &&
+    (h : ((e.schema == LEDGER_SCHEMA && isReservedChallengePhase e.session && !reserves.any fun x => x.session == e.session) &&
       !wins.any fun x => x.opened.session == e.session) = true) :
     e.schema = LEDGER_SCHEMA ∧ ∀ i (hi : i < wins.size), wins[i].opened.session ≠ e.session := by
   simp only [Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq] at h
@@ -466,11 +466,11 @@ theorem checked_ok {ledger : Json} {key : ChallengerKey} {r : Array Win × Array
     | exact ⟨_, entries_arr ‹_›, ‹_›⟩
     | exact (rfl : ([] : List LedgerEntry) = [])
 
-theorem pinnedSession_ok {ledger window : Json} {key : ChallengerKey} {pins main : Json} {a : Audited}
-    (h : pinnedSession ledger window key pins main = .ok a) : ∃ ob, auditedOpen ledger window key = .ok (a, ob) := by
+theorem pinnedChallengePhase_ok {ledger window : Json} {key : ChallengerKey} {pins main : Json} {a : Audited}
+    (h : pinnedChallengePhase ledger window key pins main = .ok a) : ∃ ob, auditedOpen ledger window key = .ok (a, ob) := by
   refine of_triple (Q := fun a => ∃ ob, auditedOpen ledger window key = .ok (a, ob)) ?_ h
   clear h
-  mvcgen [pinnedSession, -Spec.throw_Except, throw_spec, auditedOpen_spec]
+  mvcgen [pinnedChallengePhase, -Spec.throw_Except, throw_spec, auditedOpen_spec]
   all_goals exact ⟨_, by assumption⟩
 
 -- `mvcgen` splits `auditedOpen` into one goal per check it makes of the window and its `end`
@@ -505,6 +505,23 @@ theorem jsonTrue_eq' {j : Json} (h : jsonTrue j = true) : j = .bool true := by
 theorem nat_nonnull {j : Json} {n : Nat} (h : Spot.nat? j = some n) : j.isNull = false := by
   cases j <;> first | rfl | simp [Spot.nat?, Spot.int?] at h
 
+/-! The reader compares a value with `null` or a Boolean by a match (`Json.isNull`, `jsonTrue`, `Spot.jsonBoolIs`), as
+it compares one with a string (`Spot.jsonStrIs`, read back by `LiveSalt.jsonStrIs_eq`), never by `BEq Json`'s `==`, a
+`partial def` no proof reads. Each comparison holds of the value it names (`_self`) and of no other (`_eq`). -/
+
+theorem jsonTrue_self : jsonTrue (.bool true) = true := by rfl
+
+theorem isNull_eq {j : Json} (h : j.isNull = true) : j = .null := by
+  cases j <;> first | rfl | cases h
+
+theorem isNull_self : Json.null.isNull = true := by rfl
+
+theorem jsonBoolIs_eq {j : Json} {b : Bool} (h : Spot.jsonBoolIs j b = true) : j = .bool b := by
+  cases j <;> simp_all [Spot.jsonBoolIs]
+
+theorem jsonBoolIs_self (b : Bool) : Spot.jsonBoolIs (.bool b) b = true := by
+  simp [Spot.jsonBoolIs]
+
 theorem strOf_eq {j : Json} {s : String} (h : strOf j = s) (hs : s ≠ "") : j = .str s := by
   cases j <;> first | (subst h; rfl) | exact absurd h.symm hs
 
@@ -534,7 +551,7 @@ theorem find_mem {ledger : Json} {sid : String} {p : LedgerEntry → Bool} {x : 
 `PouwCheck.liveSaltCheck` finds and checks. -/
 theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {a : Audited} {R : ByteArray}
     {rv op en : LedgerEntry} (hR : Flock.hexOf R ≠ "")
-    (hpin : pinnedSession ledger (Json.mkObj [("root", .str (Flock.hexOf R))]) ck pins main = .ok a)
+    (hpin : pinnedChallengePhase ledger (Json.mkObj [("root", .str (Flock.hexOf R))]) ck pins main = .ok a)
     (hfind : (List.find? (fun x => x.kind == "reserve") (PouwCheck.sessionEntries ledger a.session),
       List.find? (fun x => x.kind == "open") (PouwCheck.sessionEntries ledger a.session),
       List.find? (fun x => x.kind == "end") (PouwCheck.sessionEntries ledger a.session)) = (some rv, some op, some en))
@@ -544,7 +561,7 @@ theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {
       Spot.jeq (Spot.getD en.body "released")
         (Json.mkObj [(PouwWindow.SALT, Lean.toJson (1 : Nat))])) = true) :
     LedgerShows ledger a.session R a.recordLeaf op.seq := by
-  obtain ⟨ob, hao⟩ := pinnedSession_ok hpin
+  obtain ⟨ob, hao⟩ := pinnedChallengePhase_ok hpin
   obtain ⟨wp, win, en', hch, hfw, hsch, hend, hclosed, hrl, hsid, -⟩ := auditedOpen_ok hao
   obtain ⟨es, hes, hvl⟩ := checked_ok hch
   obtain ⟨v2, hI⟩ := verifyLedger_inv hvl
@@ -606,7 +623,7 @@ theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {
       by rw [hop, ← hwl]; exact hl1, hl2⟩, huniq⟩
 
 theorem sessionOf_spec (key : ChallengerKey) (record log close : Json) :
-    ⦃⌜True⌝⦄ sessionOf key record log close ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+    ⦃⌜True⌝⦄ challengePhaseOf key record log close ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
 theorem recordOfJson_spec (j : Json) : ⦃⌜True⌝⦄ ChallengerRecord.ofJson j ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
@@ -617,14 +634,14 @@ theorem commitment_of {q l : Nat} {s t : String} (h : (q == l && s == t) = true)
   simp only [Bool.and_eq_true, beq_iff_eq] at h
   exact h.2
 
--- `mvcgen` splits `sessionNamed` into one goal per check it makes of the session's record
+-- `mvcgen` splits `challengePhaseNamed` into one goal per check it makes of the session's record
 set_option maxHeartbeats 1000000 in
-/-- `sessionNamed` returns the commitment whose root's hex the ledger's `end` recorded. -/
+/-- `challengePhaseNamed` returns the commitment whose root's hex the ledger's `end` recorded. -/
 theorem sessionNamed_root {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
-    (h : sessionNamed a key session = .ok r) : Flock.hexOf r.1.root = a.commitment := by
+    (h : challengePhaseNamed a key session = .ok r) : Flock.hexOf r.1.root = a.commitment := by
   refine of_triple (Q := fun r => Flock.hexOf r.1.root = a.commitment) ?_ h
   clear h
-  mvcgen [sessionNamed, -Spec.throw_Except, throw_spec, sessionOf_spec, recordOfJson_spec, mapM_spec]
+  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, sessionOf_spec, recordOfJson_spec, mapM_spec]
   apply commitment_of <;> with_reducible assumption
 
 end Properties.Pouw.LiveSalt.Ledger

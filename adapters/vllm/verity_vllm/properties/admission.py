@@ -30,16 +30,15 @@ import importlib
 import json
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from dataclasses import dataclass, field
-
-from verity_vllm.config import option
 
 from verity_vllm.commit import challenge as CH
-from verity_vllm.properties.record import seal
+from verity_vllm.config import option
+from verity_vllm.records.property_record import seal
 
 REQUIRED_EDGE_KINDS = ("zeros", "max", "subnormal", "alternating")
 DTYPE_BITS = {"bfloat16": 16, "float16": 16, "float32": 32, "int32": 32, "int64": 64, "uint8": 8, "int8": 8, "bool": 8}
@@ -54,7 +53,8 @@ def words_for(kind: str, shape: list[int], dtype: str, rng: np.random.Generator)
             f = (rng.standard_normal(n) * float(rng.choice([0.05, 1.0, 8.0]))).astype(np.float32)
             return (f.view(np.uint32) >> 16).astype(np.uint16).reshape(shape)
         if kind == "zeros":
-            w = np.zeros(n, np.uint16); w[::7] = 0x8000                       # +0 and -0
+            w = np.zeros(n, np.uint16)
+            w[::7] = 0x8000                                                   # +0 and -0
             return w.reshape(shape)
         if kind == "max":
             w = rng.choice(np.array([0x7F7F, 0xFF7F, 0x4300, 0xC300], np.uint16), n)   # ±max finite, ±128

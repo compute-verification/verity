@@ -1,22 +1,25 @@
 """``circuit-check TARGET... [--out report.json]``: the standard property checks on each target, one machine-readable report.
 
-    circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'     Definitions
+    circuit-check F32Add_v1 'WidgetNorm_v1{N=64,EPS=1e-05}'        Definitions
     circuit-check rope-head gemm-coordinate/k64/sm80-mma-bf16       templates, subcircuits
     circuit-check path/to/build_request_LP3_T2                      a served workload's request Program
-    circuit-check verity/definitions/ops/boolean/gf2k.circuit-check.py
+    circuit-check verity/circuits/ops/boolean/gf2k.circuit-check.py
                                                                     the targets a sidecar's bindings reach that its module defines
     circuit-check --all                                             every registered Definition and template (the suite's set)
-    circuit-check --as-call --ranges SparseMlaSplit_v1              the spots of a family's RANGES rule (`ranges`)
+    circuit-check --as-call --ranges WidgetSplit_v1                 the spots of a family's RANGES rule (`ranges`)
     circuit-check --all --shard 2/4 --shard-dir s2                  only the targets whose id hashes to shard 2 of 4 (`shard`)
     circuit-check --combine s1 s2 s3 s4                             the four shards' records as the unsharded run's report
     circuit-check --all --records-only --cache DIR -j 64            every catalog binding's record, no target (`records`)
+    circuit-check --all --records-only --cache DIR --records-manifest FILE
+                                                                    and the records taken and built listed in FILE
     circuit-check --all --catalog-units --cache DIR --binding NAME  only catalog binding NAME's targets, from the records
     circuit-check --all --records-only --cache DIR --slices S       and each binding's slice in S (`units.slices`)
     circuit-check --all --catalog-units --cache DIR --binding NAME --slice S/X.json S/shared.json
                                                                     NAME's targets from its slice alone (`units.sliced`)
     circuit-check --all --cache DIR --bindings                      each catalog binding's targets, none checked (`bindings`)
+    circuit-check --all --accept-task-list                          this task list's counts as the guard's reference, none checked
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
-    circuit-check --structural split/ SparseMlaHeadEnd_v1{...}       a split (struct_slots), its nets wired to lookup slots
+    circuit-check --structural split/ WidgetHeadEnd_v1{...}          a split (struct_slots), its nets wired to lookup slots
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
 
 A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
@@ -34,7 +37,9 @@ vector (``vectors/edge-only``, ``vectors/none``: `checks.vector_class`) are warn
 under ``unchecked`` by check, with counts, a line before the last counts the targets of each vector class (the summary's
 ``vectors`` names them), and the last line counts the warnings.  A shard fails on its own targets' failures alone
 (a by-calls root's callees' verdicts only ``--combine`` sees), and ``--combine``
-exits 2 when it refuses the shards it was given (`shard.read`).  ``--binding`` fails as a shard does, and exits 2 when the
+exits 2 when it refuses the shards it was given (`shard.read`).  ``--all`` exits 2 before any target is checked when
+its task list is far larger than the last that passed (`task_list_guard`, which names the families and how to accept a growth
+on purpose).  ``--binding`` fails as a shard does, and exits 2 when the
 bindings' records give no task list, its ``--slice`` is not of this tree or the catalog has no binding of that name; its
 report holds what the binding's run read (``reads``: `run`).
 
@@ -48,6 +53,7 @@ they don't build.
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import math
 import os
@@ -364,9 +370,11 @@ def _planned(plan: UN.Plan, opts: CK.Options, cache: Path, forked: bool = False,
     return tasks, keys, hits
 
 
-def _record_units(cache: Path, opts: CK.Options, tasks: list[tuple], keys: list[dict]) -> dict:
+def _record_units(cache: Path, opts: CK.Options, tasks: list[tuple], keys: list[dict], manifest: Path | None = None) -> dict:
     """After a full build: every binding's record (`units.store`), once the suite its records give (`units.derive`) is this
-    run's, target for target, with each one's units, whether it is a Call and its key; else why none was stored."""
+    run's, target for target, with each one's units, whether it is a Call and its key; else why none was stored.  With
+    ``manifest``, the records stored are listed there (`units.listing`).  Where ``cache`` held bindings' records of this
+    version and none under this process's keys, the names of the variables its keys hold (``keyed``, `units.untaken`)."""
     entries = UN.built_entries()
     if entries is None:
         return {"stored": 0, "why": "the registry grew while the catalog was built"}
@@ -387,7 +395,11 @@ def _record_units(cache: Path, opts: CK.Options, tasks: list[tuple], keys: list[
         what = "target" if g is None or w is None or g[0] != w[0] else \
             next(n for n, a, b in zip(("target", "as_call", "units", "key"), g, w) if a != b)
         return {"stored": 0, "why": f"the records give another task list: its {what} at {(g or w)[0]} differs"}
-    return {"stored": UN.store(cache, REPO, entries, only_rebuilt=False)}
+    noted = UN.untaken(cache, entries)
+    stored = UN.store(cache, REPO, entries, only_rebuilt=False)
+    if manifest is not None:
+        UN.write_listing(manifest, UN.listing(cache, entries))
+    return {**noted, "stored": stored}
 
 
 def _calls(specs: list[str]) -> None:
@@ -694,7 +706,8 @@ def _binding_of(plan: UN.Plan, kind: str, label: str) -> set[str]:
 def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
         cache: Path | None = None, mem_gb: int | None = None, progress: Path | None = None, isolate: bool | None = None,
         fork: bool = False, mem_file: Path | None = None, units: bool = False, shard: tuple[int, int] | None = None,
-        binding: str | None = None, sliced: tuple[dict, dict] | None = None) -> dict:
+        binding: str | None = None, sliced: tuple[dict, dict] | None = None, manifest: Path | None = None,
+        guard: str | None = None) -> dict:
     """Every target's checks, in target order.  Isolated (``isolate``; by default when ``jobs`` > 1), each target is checked in a
     process of its own (a `CONSTRUCTED` family's members in batches, `_batched`), up to ``jobs`` at once (`parallel`): forked
     from a process that holds the task list, each check with its own memo, so a target's check never reuses what another's
@@ -716,14 +729,14 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     so a run that is itself killed still leaves them.
 
     Isolated, circuit-check's memory stays under ``mem_gb`` GiB (default: what `memory_gb` leaves this process) as long as every
-    target that grows more than `HEAVY_GB` past the task list it is forked with (``peak_gb - rss_start_gb``) is listed in `HEAVY`
-    with its peak: a target starts only while the peaks of those running and its own add up to at most `budget_gb` (``mem_gb``
+    target that grows more than `HEAVY_GB` past the task list it is forked with (``peak_gb - rss_start_gb``) has its peak listed
+    beside its owner (`heavy`): a target starts only while the peaks of those running and its own add up to at most `budget_gb` (``mem_gb``
     less this process's RSS), counting an unlisted target as `HEAVY_GB`; one heavier than that still runs, alone, and the log
     says it does not fit, or, when the budget is under `HEAVY_GB` and so every target runs alone, says why and what to do
     (`short_budget`; on stderr without ``log``); the listed targets go first, heaviest first.  The sum counts each listed
     process's copy of the task list, which they share, so the bound is conservative by that much per process.  An unlisted target that grows well past
     `HEAVY_GB` can still break it: the process it gets killed in is reported as that target's failure (``circuit-check/killed``,
-    with its peak), the other targets run on, and its peak belongs in `HEAVY`.  Once ``mem_file`` holds a number of GiB
+    with its peak and the file it belongs in, `peak_file`), the other targets run on.  Once ``mem_file`` holds a number of GiB
     (`granted_gb`: check.py writes its slot's mem= there when every step beside circuit-check has ended), that number takes
     ``mem_gb``'s place for the targets not yet started.
 
@@ -731,7 +744,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     (`targets.pinned`: a pin keeps its target): while everything its build could depend on is unchanged
     (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no Definition. Any other run
     builds the list; with ``units``, from the catalog bindings' records (`circuit_check.units`), building only the bindings
-    whose record misses, and a full build stores them.  With ``units``, ``fork`` and more than one job, the bindings are built
+    whose record misses, and a full build stores them; with ``manifest`` too (``--records-manifest FILE``), the records its
+    catalog rests on, taken and built, are listed there once they are stored (`units.listing`).  With ``units``, ``fork`` and
+    more than one job, the bindings are built
     so even with no record to reuse: each in a process of its own, up to ``jobs`` at once within `budget_gb` (`units.plan`'s
     ``apart``), this process building no body; each target they reach, and each one that misses through a binding whose record
     counted, is made by the one zygote that forks the checks of its binding's targets, before it forks that target's
@@ -758,6 +773,13 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     With ``binding`` and the bindings' records, the report's ``reads`` holds the binding with its read set (`_read_sets`): what
     a task keyed on declared inputs checks its run read against.
 
+    With ``guard`` (``check``, as the CLI's ``--all`` without ``--binding`` runs; ``accept``, ``--accept-task-list``), the
+    task list goes through `task_list_guard` once it is known: from a stored task list, before any target is looked up; from
+    the bindings' records, before any target is keyed, looked up or made; from a full build, once its bindings are built,
+    as the list is what they build, and before any target is keyed.  Always before a zygote forks or a target is checked:
+    refused when it is far larger than the last that passed (`TaskListRefused`), or written as the reference
+    (`TaskListAccepted`).
+
     The report's ``prologue_s`` is the seconds from the run's start until it hands the task list to `_checked_all`: the list,
     from the bindings' records or their builds, and the targets' keys, which each shard of a run builds for itself."""
     started = time.time()
@@ -775,6 +797,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                          **({"binding": binding} if binding is not None else {})})
         if (hit := CC.lookup(cache, listed, REPO, moved=False)) is not None:
             ids = [tuple(t) for t in hit[0]["targets"]]
+            if guard is not None and binding is None:
+                task_list_guard(ids, accept=guard == "accept")
             idx = list(range(len(ids))) if shard is None else SH.mine(ids, shard)
             got = [CC.lookup(cache, hit[0]["keys"][i], REPO, moved=False) for i in idx]
             if all(g is not None and not _errored(g[0]) for g in got):
@@ -810,6 +834,10 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                         f"imported every module the bindings' builds did ({time.time() - t0:.1f}s)")
                 if binding is not None:
                     keep = lambda kind, label, plan=plan: binding in _binding_of(plan, kind, label)  # noqa: E731
+                elif guard is not None:
+                    task_list_guard([("definition", fid) for fid in plan.derived.ids]
+                                    + [("template", t[0]) for t in TG.templates()], accept=guard == "accept")
+                    guard = None
             planned = _planned(plan, opts, cache, forked=apart is not None, keep=keep,
                                drop=binding is not None) if plan is not None else None
         except UN.Stale as e:
@@ -829,6 +857,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     else:
         tasks, keys, hits = _tasks(specs, opts, everything, as_call), None, None
     ids = [(t[0], t[1]) for t in tasks]
+    if guard is not None and binding is None:
+        task_list_guard(ids, accept=guard == "accept")
     only = None if shard is None else SH.mine(ids, shard)
     if binding is not None:
         only = [i for i, (kind, label) in enumerate(ids) if keep(kind, label)]
@@ -862,9 +892,12 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     rep["prologue_s"] = round(prologue, 1)
     if units and not CC.untraced():
         if planned is not None:
-            rep["cache"]["units"] = {**plan.stats(), "stored": UN.store(cache, REPO, plan.entries, only_rebuilt=True)}
+            noted = UN.untaken(cache, plan.entries)
+            rep["cache"]["units"] = {**plan.stats(), **noted, "stored": UN.store(cache, REPO, plan.entries, only_rebuilt=True)}
+            if manifest is not None and sliced is None:
+                UN.write_listing(manifest, UN.listing(cache, plan.entries))
         else:
-            rep["cache"]["units"] = {**_record_units(cache, opts, tasks, keys), **({"stale": why} if why else {})}
+            rep["cache"]["units"] = {**_record_units(cache, opts, tasks, keys, manifest), **({"stale": why} if why else {})}
     if shard is not None:
         rep["shard"] = SH.manifest(shard, ids, only, request)
     if group is not None and plan is not None:
@@ -910,7 +943,8 @@ def _whole(d: dict, registries: dict) -> dict:
     return {**d, **{k: sorted({*d.get(k, ()), *registries.get(k, ())}) for k in CC.DECLARED}}
 
 
-def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None, slices: Path | None = None) -> dict:
+def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None, slices: Path | None = None,
+            manifest: Path | None = None) -> dict:
     """``--records-only``: every catalog binding's record in ``cache`` (`circuit_check.units`), and no target keyed or checked.
     Each binding whose record doesn't count is built in a process of its own, up to ``jobs`` at once within `budget_gb`
     (`units.plan`'s ``apart``), and its record stored as `run` stores it after its checks; one that counts is left as it is.
@@ -919,23 +953,31 @@ def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None,
     something the tracer cannot see (`cache.untraced`), nor when a record disagrees with what was built (`units.Stale`), and
     the report says why; a run from the cache builds each binding it misses, as it would with no records.  Beside them the
     catalog's roots record (`units.store_roots`), from which a ``--binding`` run makes only its binding's roots.  The report: the
-    bindings reused and built (`units.Plan.stats`), the most bytes their builds' results held on disk at once
+    bindings reused and built (`units.Plan.stats`), those built whose key held a record that did not count (``skipped``, when
+    there are any), the names of the variables this process's keys hold when ``cache`` held records of this version and none
+    under its keys (``keyed``, `units.untaken`), the most bytes their builds' results held on disk at once
     (``scratch_bytes``, `units.built_apart`), the records stored and the bytes every binding's records and the roots record
     take in ``cache`` (``bytes``), and why none were stored.  With ``slices`` (``--slices DIR``), each binding's slice and the
     part they share there too (`units.slices`, `units.write_slices`), from which a ``--binding --slice`` run reads no other
-    binding's record, and the report's ``slices`` counts them; why there are none is why the run failed."""
+    binding's record, and the report's ``slices`` counts them; why there are none is why the run failed.  With ``manifest``
+    (``--records-manifest FILE``), the records the catalog rests on, taken and built, listed there (`units.listing`), once
+    they are stored: a run that stored none writes none."""
     if not CC.tracing():
         raise RuntimeError("records: the tracer is off (`cache.trace`), so a record would hold no read")
     try:
         plan = UN.plan(cache, REPO, log, (max(1, jobs), budget_gb(mem_gb), heavy()))
     except UN.Stale as e:
         return {"stored": 0, "why": f"a record disagrees with what was built ({e})"}
-    out = {**plan.stats(), "scratch_bytes": plan.scratch}
+    out = {**plan.stats(), **UN.untaken(cache, plan.entries), "scratch_bytes": plan.scratch}
+    if skipped := [e.name for e in plan.entries if not e.reused and e.skipped]:
+        out["skipped"] = skipped
     if why := CC.untraced():
         return {**out, "stored": 0, "why": f"the tracer could not see what it did ({'; '.join(why[:3])})"}
     stored = UN.store(cache, REPO, plan.entries, only_rebuilt=True)
-    UN.store_roots(cache, REPO, plan)
+    roots = UN.store_roots(cache, REPO, plan)
     out.update(stored=stored, bytes=UN.held(cache, plan.entries))
+    if manifest is not None:
+        UN.write_listing(manifest, UN.listing(cache, plan.entries, roots))
     if slices is not None:
         try:
             out["slices"] = UN.write_slices(slices, *UN.slices(plan, UN.owners(plan), SH.binding, REPO))
@@ -1012,10 +1054,12 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
                 stats["errors"].append(r["target"])
             elif untraced:
                 stats["untraced"].append({"target": r["target"], "because": untraced[:3]})
-            elif CC.store(cache, keys[i], REPO, got, r, worker) is None:
-                stats["changed"].append(r["target"])
             else:
-                stats["stored"] += 1
+                lost = len(CC.LOST)
+                if CC.store(cache, keys[i], REPO, got, r, worker) is not None:
+                    stats["stored"] += 1
+                elif len(CC.LOST) == lost:
+                    stats["changed"].append(r["target"])
         if log:
             across = (r.get("partition") or {}).get("recomputed_across")
             qc = (r.get("partition") or {}).get("q_call") or {}
@@ -1072,7 +1116,8 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
                 if isinstance(g, Killed):
                     r = {"failures": [{"check": "circuit-check", "code": "killed", "definition": tasks[i][1],
                                        "name": f"circuit-check/killed {tasks[i][1]}: its process died ({g['how']}: the OOM "
-                                               f"killer?) at a peak of {peak} GiB"}],
+                                               f"killer?) at a peak of {peak} GiB, which belongs in "
+                                               f"{peak_file(tasks[i][0], tasks[i][1])}"}],
                          "warnings": [], "kind": tasks[i][0], "target": tasks[i][1], "seconds": 0.0, "peak_gb": peak, "killed": True}
                     done(i, r)
                 else:
@@ -1130,11 +1175,6 @@ def update_pins(rep: dict) -> dict:
     return CK.load_pins()
 
 
-#: the targets that grow more than `HEAVY_GB` past the task list they are forked with, each with its ``peak_gb`` in GiB in an
-#: isolated `--all` run (`run`'s scheduling; it counts that task list).  The commit that writes a peak
-#: names the run it was measured in.  No key holds it (`cache.HEAVY`), so a new peak reruns no target and needs no edit here.
-#: Beside them, by binding name, how far the catalog bindings whose builds grow past `units.APART_GB` grew (`units.built_apart`)
-HEAVY = CC.HEAVY
 #: what an unlisted target is counted at: nearly all grow less than 1.5 GiB, and their copy-on-write copies of the task list
 #: are small too (16 of them beside a 43 GiB task list hold 62-77 GiB together)
 HEAVY_GB = 4
@@ -1191,8 +1231,111 @@ def granted_gb(path: Path | None) -> int | None:
 
 
 def heavy() -> dict[str, float]:
+    """The measured peaks `run` and `units.built_apart` schedule by, in GiB, each beside its owner in that module's unkeyed
+    file (`sidecars.UNKEYED`): each target that grows more than `HEAVY_GB` past the task list it is forked with, by its label
+    (its ``peak_gb`` in an isolated `--all` run, in the file of the module that defines its Definition, or binds its template
+    row); and each catalog binding whose build grows past `units.APART_GB`, by its name.  No key holds them, so a new
+    peak reruns no target.  A label or binding in two files is an error."""
+    out: dict[str, float] = {}
+    where: dict[str, str] = {}
+    for mod, d in SC.unkeyed().items():
+        mine = {**d.get("peaks", {}),
+                **{",".join(u if u.startswith("<") else f"{mod}{SC.SUFFIX}#{u}" for u in k.split(",")): gb
+                   for k, gb in d.get("binding_peaks", {}).items()}}
+        for k, gb in mine.items():
+            if where.setdefault(k, mod) != mod:
+                raise ValueError(f"the peak of {k} is in {where[k]}'s unkeyed file and in {mod}'s: keep the owner's")
+            out[k] = gb
+    return out
+
+
+def peak_file(kind: str, label: str) -> str:
+    """Where the peak of target ``label`` of ``kind`` goes (`heavy`): its owner's unkeyed file, by its path."""
+    mod = _family_owner(kind, label)
+    p = SC.unkeyed_file(mod) if mod else None
+    return SC.rel(p) if p is not None else f"the unkeyed file of the module that owns {label}"
+
+
+#: the task list's guard's reference (`task_list_guard`): ``targets``, the last passing list's length; ``factor``, how many
+#: times a family's count, or the list's, may grow; ``floor``, the most targets a family may hold with no count of its own
+TASK_LIST = CC.TASK_LIST
+ACCEPT = "circuit-check --all --accept-task-list"
+
+
+class TaskListRefused(Exception):
+    """The task list is far larger than the last that passed (`task_list_guard`), or its reference is missing."""
+
+
+class TaskListAccepted(Exception):
+    """``--accept-task-list`` wrote the task list's counts as the reference (`task_list_guard`): no target was checked."""
+
+
+def task_family(kind: str, label: str) -> str:
+    """A target's family: a Definition's id without its statics, a template's id without its row."""
+    return label.partition("{")[0] if kind == "definition" else label.partition("/")[0] if kind == "template" else kind
+
+
+def _family_owner(kind: str, label: str) -> str | None:
+    """The module that owns a target, as its pins have it (`sidecars.pin_owner`): its Definition's, its template's."""
+    return SC.pin_owner({"definition": "definitions", "template": "units"}.get(kind, kind), label)
+
+
+def task_list_guard(ids: list[tuple[str, str]], accept: bool = False) -> None:
+    """Refuse an ``--all`` task list far larger than the last one that passed, before any target is checked or a zygote forks
+    (`run` says where), by `TaskListRefused` naming each family past it with its counts on both sides: a family of more than
+    ``floor`` targets and more than ``factor`` times its count there (the floor where it has none), or the whole list past ``factor`` times that list's
+    ``targets``.  The reference is `TASK_LIST` (``targets``, ``factor``, ``floor``) and the count of each family over the
+    floor, beside its owner (the ``tasks`` of the unkeyed file of the module that defines it or binds its template,
+    `sidecars.UNKEYED`), so no key holds it; a `TASK_LIST` missing or malformed, or a count in two files, is refused too,
+    never passed.  With ``accept`` (`ACCEPT`), the counts of ``ids`` are written there instead, the factor and floor kept, and
+    `TaskListAccepted` names the files: what a change that grows the list on purpose commits."""
     with CC.internal():
-        return json.loads(HEAVY.read_text()) if HEAVY.exists() else {}
+        try:
+            ref = json.loads(TASK_LIST.read_text())
+            factor, floor, total = float(ref["factor"]), int(ref["floor"]), int(ref["targets"])
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            raise TaskListRefused(f"the task list's reference {SC.rel(TASK_LIST)} is missing or malformed ({e!r}): it holds "
+                                  "the last passing list's length ``targets``, its ``factor`` and ``floor``; restore it from "
+                                  "git, or write it with " + ACCEPT) from e
+    counts = collections.Counter(task_family(*i) for i in ids)
+    if accept:
+        first = {task_family(*i): i for i in reversed(ids)}
+        owner = {f: m if (m := _family_owner(*first[f])) and SC.unkeyed_file(m) else None
+                 for f, n in counts.items() if n > floor}
+        if unowned := sorted(f for f, n in counts.items() if n > floor and owner[f] is None):
+            raise TaskListRefused(f"no module owns these families of more than {floor} targets, so their counts have no "
+                                  f"unkeyed file to go in: {', '.join(unowned)}")
+        by: dict[str, dict[str, int]] = {m: {} for m, d in SC.unkeyed().items() if d.get("tasks")}
+        for f, n in counts.items():
+            if n > floor:
+                by.setdefault(owner[f], {})[f] = n
+        files = [SC.rel(SC.write_unkeyed(m, "tasks", v)) for m, v in sorted(by.items())]
+        with CC.internal():
+            TASK_LIST.write_text(json.dumps({**ref, "targets": len(ids)}, indent=1, sort_keys=True) + "\n")
+        raise TaskListAccepted(f"the task list's {len(ids)} targets are the reference now: {SC.rel(TASK_LIST)} and the tasks "
+                               f"of {len(files)} unkeyed file(s): {', '.join(files)}")
+    have: dict[str, int] = {}
+    where: dict[str, str] = {}
+    for mod, d in SC.unkeyed().items():
+        for f, n in d.get("tasks", {}).items():
+            if where.setdefault(f, mod) != mod:
+                raise TaskListRefused(f"the count of family {f} is in {where[f]}'s unkeyed file and in {mod}'s: keep its owner's")
+            have[f] = int(n)
+    then = {f: have.get(f, floor) for f in counts}
+    past = sorted((f for f, n in counts.items() if n > floor and n > factor * then[f]), key=lambda f: (then[f] - counts[f], f))
+    whole = len(ids) > factor * total
+    if not past and not whole:
+        return
+    grown = past or sorted(counts, key=lambda f: (then[f] - counts[f], f))[:10]
+    raise TaskListRefused(
+        f"the task list holds {len(ids)} targets against {total} when it last passed"
+        + (f", past {factor:g} times that" if whole else "")
+        + (f"; these families hold more than {floor} targets and more than {factor:g} times their count then"
+           if past else "; the families that grew most") + ":\n"
+        + "\n".join(f"  {f}: {counts[f]} against {then[f]}" + ("" if f in have else f" (no count: at most the floor, {floor})")
+                    for f in grown)
+        + f"\nNo target was checked.  A growth on purpose: write the new counts with {ACCEPT} (with this run's --cache "
+          f"and --catalog-units) and commit the files it names; else find what multiplied these families")
 
 
 #: the memory a worker counts on: a cold `--all` grows some workers to 40-155 GiB, and two `--all -j 0` runs, ~130 workers
@@ -1318,12 +1461,11 @@ def _ambient_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     return 1 if any(t["failures"] for t in rep["targets"]) else 0
 
 
-#: what `prebuild` runs in a process of its own: every C++ model of `verity.definitions.numerics` (`twins.preload`), then the
-#: registries, which build there whatever else they build on first use
+#: what `prebuild` runs in a process of its own: every C++ model of the catalog's fast evaluators (`targets.preload`), then
+#: the registries, which build there whatever else they build on first use
 PREBUILD = ("import json\n"
-            "from verity.definitions.numerics import twins\n"
             "from circuit_check import targets\n"
-            "built = twins.preload()\n"
+            "built = targets.preload()\n"
             "targets.load_registries()\n"
             "print(json.dumps(built))\n")
 
@@ -1392,6 +1534,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --all --cache DIR: build each catalog binding whose record misses, each in a process of its own "
                          "up to --jobs at once, store its record and check no target (`records`); a --catalog-units run from a "
                          "copy of DIR, each shard's on its own machine, then builds no binding")
+    ap.add_argument("--records-manifest", type=Path, metavar="FILE",
+                    help="with --all --cache DIR and --catalog-units or --records-only: list in FILE the catalog bindings' "
+                         "records this run took or built, each by its path under DIR, with the read records they need "
+                         "(`units.listing`): what a store that carries the records to another run publishes and names")
     ap.add_argument("--slices", type=Path, metavar="DIR",
                     help="with --records-only: also each catalog binding's slice and the part they share in DIR "
                          "(`units.slices`), from which --binding --slice reads no other binding's record")
@@ -1401,7 +1547,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--shard-dir", type=Path, metavar="DIR", help="with --shard: where its records and manifest go")
     ap.add_argument("--binding", metavar="NAME",
                     help="with --all --catalog-units --cache DIR: key and check only the targets of the catalog binding NAME "
-                         "(`shard.binding`, such as verity.definitions.ops.boolean.gf2k.circuit-check#_gf2k_roots): the list's "
+                         "(`shard.binding`, such as verity.circuits.ops.boolean.gf2k.circuit-check#_gf2k_roots): the list's "
                          "Definitions its roots reach first and the templates it binds, from the bindings' records; exit 1 on "
                          "their own new failures, 2 when the records give no task list")
     ap.add_argument("--slice", type=Path, nargs=2, metavar=("SLICE", "SHARED"),
@@ -1410,6 +1556,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--bindings", action="store_true",
                     help="with --all --cache DIR: every catalog binding's name with the targets --binding checks under it, "
                          "from the bindings' records, and no target checked (`bindings`)")
+    ap.add_argument("--accept-task-list", action="store_true",
+                    help="with --all: write this tree's task list's counts as the reference the guard holds every --all to "
+                         "(`task_list_guard`: the task list file and each owner's unkeyed file) and check no target; commit "
+                         "what it writes when a change grows the list on purpose")
     ap.add_argument("--combine", type=Path, nargs="+", metavar="DIR",
                     help="the report, summary and exit status the unsharded run gives, from the --shard-dir of every shard 1..N "
                          "of one run; refused (exit 2) unless they ran exactly the whole list's targets, each once")
@@ -1441,6 +1591,10 @@ def main(argv: list[str] | None = None) -> int:
                  "--cache, and no target, --no-cache, --update-pins, --shard or --shard-dir")
     if a.slices is not None and not a.records_only:
         ap.error("--slices writes the slices of the records --records-only stores: give --records-only")
+    if a.records_manifest is not None and (not a.all or a.cache is None or a.no_cache or a.update_pins or a.slice is not None
+                                           or not (a.records_only or a.catalog_units)):
+        ap.error("--records-manifest lists the catalog bindings' records a run took or built in --cache DIR: give --all, "
+                 "--cache and --catalog-units or --records-only, and no --no-cache, --update-pins or --slice")
     if a.slice is not None and a.binding is None:
         ap.error("--slice plans one binding's run from its slice: give --binding NAME")
     if a.bindings and (a.targets or not a.all or a.cache is None or a.no_cache or a.update_pins or a.shard or a.shard_dir
@@ -1451,6 +1605,9 @@ def main(argv: list[str] | None = None) -> int:
                                   or a.update_pins or a.shard or a.records_only):
         ap.error("--binding checks one catalog binding's targets from the bindings' records: give --all, --catalog-units and "
                  "--cache DIR, and no target, --no-cache, --update-pins, --shard or --records-only")
+    if a.accept_task_list and (a.targets or not a.all or a.shard or a.binding or a.records_only or a.bindings):
+        ap.error("--accept-task-list writes the whole --all task list's counts: give --all, and no target, --shard, --binding, "
+                 "--records-only or --bindings")
     if a.ranges is not None:
         try:
             a.targets = [*a.targets, *(s for s in RG.spots(a.ranges) if s not in a.targets)]
@@ -1477,6 +1634,9 @@ def main(argv: list[str] | None = None) -> int:
         progress.unlink(missing_ok=True)
     cache = None if a.no_cache or a.update_pins else a.cache or (None if a.all else default_cache())
     if cache:
+        if (ex := CC.expire(cache))["gone"] or ex["left"]:
+            print(f"circuit-check: {len(ex['gone'])} checker version(s) no run used for {CC.EXPIRE_S // 3600} hours removed "
+                  f"from {cache}" + (f"; left: {ex['left'][:3]}" if ex["left"] else ""), file=sys.stderr)
         if (why := prebuild(log=None if a.quiet else print)) is not None:
             print(f"circuit-check: refused: {why}", file=sys.stderr)
             return 2
@@ -1493,7 +1653,14 @@ def main(argv: list[str] | None = None) -> int:
         rep = run(a.targets, opts, everything=a.all, as_call=a.as_call,
                   log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=cache,
                   mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=progress,
-                  units=a.catalog_units, shard=shard, binding=a.binding, sliced=sliced)
+                  units=a.catalog_units, shard=shard, binding=a.binding, sliced=sliced, manifest=a.records_manifest,
+                  guard="accept" if a.accept_task_list else "check" if a.all and not a.targets else None)
+    except TaskListAccepted as e:
+        print(f"circuit-check --accept-task-list: {e}")
+        return 0
+    except TaskListRefused as e:
+        print(f"circuit-check: refused: {e}", file=sys.stderr)
+        return 2
     except UN.Stale as e:
         if a.binding is None:
             raise
@@ -1532,21 +1699,28 @@ def _bindings_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
 
 
 def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
-    """``--records-only`` (`records`): exit 1 unless every binding it built had its record stored."""
+    """``--records-only`` (`records`): exit 1 unless every binding it built had its record stored, or lost it to its version's
+    removal (`cache.expire`), which costs a later run the records and fails nothing."""
     t0 = time.time()
-    rep = records(cache, log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, mem_gb=a.mem_gb, slices=a.slices)
+    rep = records(cache, log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, mem_gb=a.mem_gb, slices=a.slices,
+                  manifest=a.records_manifest)
     rep["seconds"] = round(time.time() - t0, 1)
-    if "why" not in rep and rep["stored"] < len(rep["rebuilt"]):
+    if CC.LOST:
+        rep["lost"] = list(CC.LOST)
+    if "why" not in rep and rep["stored"] < len(rep["rebuilt"]) and not CC.LOST:
         rep["why"] = f"{len(rep['rebuilt']) - rep['stored']} not stored: the tree changed while they were built"
     if a.out:
         a.out.write_text(json.dumps(rep, indent=1) + "\n")
+    note = UN.untaken_note(rep)
     print("circuit-check --records-only: "
-          + (f"{len(rep['rebuilt'])} catalog binding(s) built, {rep['reused']} reused, " if "rebuilt" in rep else "")
+          + (f"{len(rep['rebuilt'])} catalog binding(s) built ({len(rep.get('skipped', []))} of them held a record that did "
+             f"not count), {rep['reused']} reused{f' ({note})' if note else ''}, " if "rebuilt" in rep else "")
           + f"{rep['stored']} record(s) stored in {cache} in {rep['seconds']}s"
           + (f" ({rep['bytes']} bytes of records; the builds' results at most {rep['scratch_bytes']} bytes at once)"
              if "bytes" in rep else "")
           + (f"; {rep['slices']['bindings']} bindings' slices in {a.slices} ({rep['slices']['bytes']} bytes, the shared part "
-             f"{rep['slices']['shared_bytes']})" if "slices" in rep else "") + (f"; {rep['why']}" if "why" in rep else ""))
+             f"{rep['slices']['shared_bytes']})" if "slices" in rep else "") + (f"; {rep['why']}" if "why" in rep else "")
+          + (f"; {len(rep['lost'])} lost: their checker version was removed while they were stored" if "lost" in rep else ""))
     return 1 if "why" in rep else 0
 
 
@@ -1569,12 +1743,14 @@ def _combine_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
 
 
 def _cache_lines(rep: dict) -> None:
-    """What the run reused: its catalog bindings' records, and its targets' cache entries."""
+    """What the run reused: its catalog bindings' records (and, when the cache held some and none under its keys, the names
+    of the variables its keys hold, `units.untaken_note`), and its targets' cache entries."""
     if u := (rep.get("cache") or {}).get("units"):
+        note = UN.untaken_note(u)
         print("circuit-check: catalog bindings: " + (f"{u['reused']} reused, {len(u['rebuilt'])} built ({', '.join(u['rebuilt'][:8])}"
               f"{', ...' if len(u['rebuilt']) > 8 else ''}), " if "reused" in u else "whole catalog built, ")
               + f"{u['stored']} records stored" + (f" ({u['why']})" if u.get("why") else "")
-              + (f"; records stale ({u['stale']})" if u.get("stale") else ""))
+              + (f"; records stale ({u['stale']})" if u.get("stale") else "") + (f"; {note}" if note else ""))
     if c := rep.get("cache"):
         print(f"circuit-check: {c['hits']} of {len(rep['targets'])} targets reused (every file, listing, probe, catalog unit and pin their checks read or resolved is "
               f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "

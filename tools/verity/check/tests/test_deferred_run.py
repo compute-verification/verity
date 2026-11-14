@@ -118,22 +118,26 @@ def test_a_sharded_deferred_run_runs_those_steps_parts_in_its_shard_alone(monkey
 def test_every_shard_of_every_plan_runs_a_step_of_a_check_whose_lean_audit_another_check_lent(monkeypatch, tmp_path):
     """The loop's check of a candidate that takes lean-audit's verdict from the check below (`vqueue_slim.start`'s
     ``audit_from``) defers every step but lean-audit, and a shard holding none of a `--deferred`'s steps is refused (exit 2),
-    which the loop took for the machines failing and retried.  So every shard of every plan holds a step on the gate that each
-    such check sends: lean-agreement, which a run may skip by name, doesn't count."""
-    steps = ",".join(j.name for j in CHECK.DECLARATION.gated(CHECK.JOBS) if j.name not in ("lean-audit", "lean-agreement"))
+    which the loop took for the machines failing and retried.  So every shard of every plan holds a step that each such check
+    sends, every job but lean-audit (`AFTER_LANDING`, those off the gate too): lean-agreement, which a run may skip by name,
+    doesn't count."""
+    steps = ",".join(j.name for j in CHECK.JOBS if j.name not in ("lean-audit", "lean-agreement"))
     for n in CHECK.DECLARATION.plans():
         for k in range(1, n + 1):
             rc, only = _main(monkeypatch, tmp_path, ["--deferred", steps, "--shard", f"{k}/{n}", "--keep-going"])
             assert rc == 0 and only, f"shard {k}/{n} holds none of {steps}"
 
 
-def test_the_shards_of_a_deferred_run_together_run_every_part_ratchet_gate_in_the_last():
-    """ratchet-gate is in no shard of ci.toml's plans: drive's sharded after-landing run never ran it, so drive took each passing
-    run as one that passed without ratchet-gate, verified nothing and ended no red record, while `main` moved on its gate."""
-    for n in CHECK.DECLARATION.plans():
+def test_the_shards_of_a_deferred_run_together_run_every_part_ratchet_gate_in_the_last_unless_named():
+    """ratchet-gate was in no shard of ci.toml's plans: drive's sharded after-landing run never ran it, so drive took each passing
+    run as one that passed without ratchet-gate, verified nothing and ended no red record, while `main` moved on its gate.  A
+    plan that doesn't name it runs it in its last shard."""
+    for n, plan in CHECK.DECLARATION.plans().items():
         got = [CHECK.shard(f"{k}/{n}", gated=False)["parts"] for k in range(1, n + 1)]
-        assert sorted(p for s in got for p in s) == sorted(CHECK.shard_parts()), n
-        assert "ratchet-gate" in got[-1] and all("ratchet-gate" not in CHECK.shard(f"{k}/{n}")["parts"] for k in range(1, n + 1))
+        assert sorted(p for s in got for p in s) == sorted(CHECK.DECLARATION.all_parts(CHECK.JOBS, CHECK._parts_of(plan))), n
+        named = [k for k, s in enumerate(plan) if "ratchet-gate" in s]
+        assert "ratchet-gate" in got[named[0] if named else -1]
+        assert all("ratchet-gate" not in CHECK.shard(f"{k}/{n}")["parts"] for k in range(1, n + 1))
 
 
 def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without_lean(monkeypatch):
@@ -216,3 +220,53 @@ def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, t
     only = [CHECK.CIRCUIT_ENTRIES, CHECK.COMPARED] if circuit_cache else CHECK.COMPARED
     assert [x.get("only") for x in doc["verdicts"]["in"]] == [only]
     assert not urls.exists() and ("recorded checks' packs" in capsys.readouterr().out) == sent
+
+
+def test_record_sends_the_commit_its_suites_lend_from_only_when_it_is_the_runs_base(monkeypatch, capsys):
+    """The verified queue names the candidate a launched candidate is built on (`TRAIN_SUITES_FROM`): a `--deferred` run that
+    reuses passes carries it (`LEND_FILE`) when it is the run's own base, the commit whose check gates before this one's
+    counts.  Named for any other run (another base, an uncached run), or not named, nothing is sent and every suite runs."""
+    real, sent = subprocess.run, {}
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            sent.update({Path(cmd[i + 1]).name: Path(cmd[i + 1]).read_text() for i, x in enumerate(cmd) if x == "--send"})
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(CHECK, "landable", lambda base: True)
+    monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: ["slot"])
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
+    head, below = CHECK._rev("HEAD"), CHECK._rev("HEAD^")
+
+    def launch(*argv: str) -> str | None:
+        sent.clear()
+        assert CHECK.record(["--on", "vy-x", "--priority", "--keep-going", *argv]) == 0
+        return sent.get(CHECK.LEND_FILE)
+
+    monkeypatch.delenv("TRAIN_SUITES_FROM", raising=False)
+    assert launch("--base", "HEAD^", "--deferred", "pytest") is None
+    monkeypatch.setenv("TRAIN_SUITES_FROM", below)
+    assert launch("--base", "HEAD^", "--deferred", "pytest") == f"{below}\n" and "lends no suite" not in capsys.readouterr().out
+    assert launch("--base", "HEAD^", "--deferred", "pytest", "--no-cache") is None
+    assert "lends no suite: only a --deferred run that reuses passes" in capsys.readouterr().out
+    monkeypatch.setenv("TRAIN_SUITES_FROM", head)
+    assert launch("--base", "HEAD^", "--deferred", "pytest") is None
+    assert f"TRAIN_SUITES_FROM {head} lends no suite: it is not the run's base HEAD^" in capsys.readouterr().out
+    monkeypatch.setenv("TRAIN_SUITES_FROM", "no-such-ref")
+    assert launch("--base", "HEAD^", "--deferred", "pytest") is None
+
+
+def test_a_run_sent_a_lender_hands_it_to_both_suite_steps_unless_uncached(tmp_path):
+    """The commit a run was sent as its suites' lender (`LEND_FILE`, among its inputs) reaches `suites.py --lend-from` in the
+    pytest and lean-suites steps alike; a run sent none, and an uncached run, which reuses nothing, pass no such flag."""
+    def suites(**kw) -> dict[str, str]:
+        return {s[0]: " ".join(s[1]) for g in CHECK.groups(tmp_path, 16, **kw) for s in g if s[0] in ("pytest", "lean-suites")}
+
+    assert suites() and not any("--lend-from" in argv for argv in suites().values())
+    (tmp_path / "inputs").mkdir()
+    (tmp_path / "inputs" / CHECK.LEND_FILE).write_text("0123abcd\n")
+    got = suites()
+    assert set(got) == {"pytest", "lean-suites"} and all("--lend-from 0123abcd" in argv for argv in got.values()), got
+    assert not any("--lend-from" in argv for argv in suites(cache=False).values())

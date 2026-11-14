@@ -29,14 +29,15 @@ import random
 import subprocess
 import sys
 import tempfile
+from collections.abc import Container, Iterable, Sequence
 from pathlib import Path
-
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
 
 import fold_root_sweep as sw
 from exact_kit.checks import Checks
 
+from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as rf
+
+HERE = Path(__file__).resolve().parent
 THREADS = str(min(8, len(os.sched_getaffinity(0))))
 
 
@@ -52,7 +53,8 @@ def build(tmp: Path, src: str = "fold_root_kernel.c", edit: tuple[str, str] | No
     return exe
 
 
-def root_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, jobs, flags=()) -> tuple[dict, dict]:
+def root_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, jobs: Iterable[Sequence[int]],
+                 flags: Sequence[str] = ()) -> tuple[dict, dict]:
     """({job: [|K_1|, .., pxn, g3bad, degenerate]}, {(job, R): set of w' != w in K_R}) for jobs (a0, a1, *w). The
     enumerator's K lines name only the keys, so each call gets jobs with distinct key pairs."""
     summ, elems, pending = {}, collections.defaultdict(set), [tuple(j) for j in dict.fromkeys(map(tuple, jobs))]
@@ -72,7 +74,8 @@ def root_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, jobs, flags=())
     return summ, elems
 
 
-def brute_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, word, keys) -> dict:
+def brute_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, word: Sequence[int],
+                  keys: Iterable[tuple[int, int]]) -> dict:
     """fold_kernel.c's {(a0, a1, R): set of w' != w in K_R}."""
     out = subprocess.run([str(exe), str(n), str(r1), str(r2), str(rmax), *map(str, word)],
                          input="".join(f"{a} {b}\n" for a, b in keys), capture_output=True, text=True, check=True,
@@ -84,12 +87,13 @@ def brute_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, word, keys) ->
     return elems
 
 
-def agree(root, brute, word, keys, rmax, degenerate) -> list:
+def agree(root: dict, brute: dict, word: Sequence[int], keys: Iterable[tuple[int, int]], rmax: int,
+          degenerate: Container[tuple[int, int]]) -> list:
     return [(a, b, r) for a, b in keys if (a, b) not in degenerate for r in range(1, rmax + 1)
             if root[((a, b) + tuple(word), r)] != brute[(a, b, r)]]
 
 
-def good(row, rmax) -> bool:
+def good(row: Sequence[int], rmax: int) -> bool:
     ks, pxn, g3bad, degen = row[:rmax], row[rmax], row[rmax + 1], row[rmax + 2]
     return bool(pxn and all(k == ks[0] for k in ks) and g3bad == 0 and degen == 0)
 
@@ -98,10 +102,6 @@ def main() -> int:
     checks = Checks()
     quick = "--quick" in checks.args
     rng = random.Random(20261017)
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/receipts"))
-    sys.path.insert(0, str(HERE.parents[0] / "edited_gemm"))
-    import egemm_depthr_check as fold_ref
-    import receipt_folds as rf
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -237,23 +237,26 @@ def main() -> int:
         if checks.mutations:
             checks.mutation("the chain group without its N_p generators", off, f"{len(off)} mismatches")
 
-        # (7) a join cut at a structured Φ^R settles with more probe states and a higher cap
+        # (7) a join cut at a structured Φ^R settles with more probe states and a higher limit on its candidates
         cut = [(77, 219, 0, 0, 0, 0), (409, 681, 1023, 1023, 1023, 1023)]
         before, _ = root_kernels(exe, n, r1, r2, 6, cut)
         after, _ = root_kernels(exe, n, r1, r2, 6, cut, ("-p", "6", "-c", "28"))
         checks.check("n10, two structured words at scaled-KJ pairs that the filtered sweep cut: cut with 3 probes and "
-                     "cap 2^16", all(before[j][-1] == 1 for j in cut), str([before[j] for j in cut]))
-        checks.check("the same with 6 probes and cap 2^28: uncut, and K_R = K_1 = P/X/N for R = 1..6",
+                     "a limit of 2^16 candidates", all(before[j][-1] == 1 for j in cut), str([before[j] for j in cut]))
+        checks.check("the same with 6 probes and a limit of 2^28 candidates: uncut, and K_R = K_1 = P/X/N for R = 1..6",
                      all(good(after[j], 6) and after[j][0] == 16 for j in cut), str([after[j] for j in cut]))
     return checks.finish()
 
 
-def chain_group_orbit(n: int, a0: int, a1: int, w, R: int, drop_n: bool = False) -> set:
+def chain_group_orbit(n: int, a0: int, a1: int, w: Sequence[int], R: int, drop_n: bool = False) -> set:
     """The words w' such that w' repeated R times is w repeated R times moved by an element of the 2R-pair chain group:
     P_p = (c_p ⊕ t, z_p + t), X_p = (z_p + t, c_(p+1) ⊕ rotl(t, r_(p+1))), N_p = (¬c_p, a_p − 1 − z_p, ¬c_(p+1))."""
     r1, r2 = sw.ROT[n]
     m, t, S = (1 << n) - 1, 1 << (n - 1), 2 * R
-    rot = lambda x, r: ((x << r) | (x >> (n - r))) & m
+
+    def rot(x: int, r: int) -> int:
+        return ((x << r) | (x >> (n - r))) & m
+
     gens = [("P", p) for p in range(S)] + [(k, p) for p in range(S - 1) for k in ("X",) + (() if drop_n else ("N",))]
     out = set()
     for bits in range(1 << len(gens)):
@@ -276,7 +279,7 @@ def chain_group_orbit(n: int, a0: int, a1: int, w, R: int, drop_n: bool = False)
     return out
 
 
-def fold32(y: int, w, a0: int, a1: int) -> int:
+def fold32(y: int, w: Sequence[int], a0: int, a1: int) -> int:
     """One round of the XOR-in(13, 19) fold at 32 bits."""
     m = 0xFFFFFFFF
     y = ((((y << 13) | (y >> 19)) & m ^ w[0]) * a0 + w[1]) & m

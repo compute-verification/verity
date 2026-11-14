@@ -7,13 +7,26 @@ import copy
 import json
 
 import pytest
-from verity_vllm.query.manifest.bind import Binder
-from verity_vllm.query.units import ValueRef
+from verity.circuits import word as W_
+
+from verity_vllm.acquire import plan
+from verity_vllm.acquire import plan as PL
+from verity_vllm.check import oracle_compare as OC
+from verity_vllm.correspondence.reader_for_acquire import (
+    AcquireCorrespondence,
+    runtime_tree_from_paths,
+)
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.pipeline import manifest as M
+from verity_vllm.pipeline import manifest_verify as MV
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query.manifest import verify as V
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import Q_MODULE_BODY_ID, request_manifest
+from verity_vllm.query.units import ValueRef
+from verity_vllm.query import program_view as PV
 
 W = "model.model"
 H = 8
@@ -151,8 +164,6 @@ def test_manifest_modules_refuses_a_module_under_two_families():
 
 
 def test_the_family_is_in_every_vocabulary():
-    from verity_vllm.acquire import plan
-    from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import coverage
 
     assert NS.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[NS.FAMILY] == "norm_tap" and NS.FAMILY in coverage.QUERY_FAMILY_MECHANISM
@@ -163,46 +174,37 @@ def test_the_family_is_in_every_vocabulary():
 
 
 def test_the_plan_takes_the_scale_at_the_norm_module():
-    from verity_vllm.acquire import plan as PL
-    from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, runtime_tree_from_paths
-
     man = _manifest(kernel_program(), norm_scales=True).manifest
     rt = runtime_tree_from_paths({"": ["M"], "model.layers.0.input_layernorm": ["N"], "model.norm": ["N"]}, buffers=[],
                                  runner={"sample": True}, source="synthetic")
-    corr = AnnotationCorrespondence(rt, wrapper_prefix="", aliases={})
+    corr = AcquireCorrespondence(rt, wrapper_prefix="", aliases={})
     vals = {v.value_id: v for v in PL.value_classes(man) if v.family == NS.FAMILY}
     assert sorted(vals) == [f"model.layers.0.input_layernorm/{NS.MEMBER}", f"model.norm/{NS.MEMBER}"]
     for v in vals.values():
         legal, refused = PL.sites_of(v, corr)
         assert [(s.kind, s.module, s.slot) for s in legal] == [("native_tap", v.op_path, NS.MEMBER)] and not refused
     gone = runtime_tree_from_paths({"": ["M"]}, buffers=[], runner={"sample": True}, source="synthetic")
-    legal, refused = PL.sites_of(vals["model.norm/norm_scale"], AnnotationCorrespondence(gone, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(vals["model.norm/norm_scale"], AcquireCorrespondence(gone, wrapper_prefix="", aliases={}))
     assert not legal and refused[0]["why"] == "the norm module is not a module of the runtime tree"
 
 
 def test_word_check_sees_the_tapped_scale_as_committed():
-    from verity.definitions import word as W_
-
     g = {"family": "RMSNormTriton_v1", "statics": {"N": 64, "EPS": 1e-05}, "definition": "RMSNormTriton_v1{N=64,EPS=1e-05}", "calls": 3,
          "where": "model.layers.0.input_layernorm"}
-    plain = W_.check_calls([g])
+    plain = W_.check_calls([g], specialize=PV.specialization)
     assert "acquired_interior_words" not in plain and plain["committed_interior_words"] == 3, "without a tap the output is unchanged"
-    tapped = W_.check_calls([g], acquired=NS.TAP_WORDS)
+    tapped = W_.check_calls([g], acquired=NS.TAP_WORDS, specialize=PV.specialization)
     assert tapped["ok"] and tapped["acquired_interior_words"] == 3 and tapped["groups"][0]["acquired_interior_words"] == 3
     with pytest.raises(W_.QueryRuleViolation, match="interior-not-acquired"):
-        W_.check_calls([g], acquired={"RMSNormTriton_v1": 2})
+        W_.check_calls([g], acquired={"RMSNormTriton_v1": 2}, specialize=PV.specialization)
 
 
 def test_manifest_verify_rebuilds_under_the_callers_policy(tmp_path, monkeypatch):
-    from verity_vllm.pipeline import manifest as M
-    from verity_vllm.pipeline import manifest_verify as MV
-    from verity_vllm.query.manifest import verify as V
-
     P = kernel_program()
     on = _manifest(P, norm_scales=True).manifest
     off = _manifest(P).manifest
     assert V.verify(on, on)["ok"] and not V.verify(on, off)["ok"] and not V.verify(off, on)["ok"]
-    seen = {}
+    seen: dict[str, dict] = {}
     monkeypatch.setattr(M, "build", lambda program, **kw: seen.setdefault("kw", kw) and on)
     MV.rebuild(program="p", norm_scales=True)
     assert seen["kw"]["norm_scales"] is True

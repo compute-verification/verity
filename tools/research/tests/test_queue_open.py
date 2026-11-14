@@ -352,7 +352,7 @@ FOOTER = (f'<div><a href="https://cursor.com/agents/{AGENT}?cursor_ref=pr_footer
           '<img alt="Open in Web" width="114" height="28"></picture></a></div>')
 BEGIN, END = "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->", "<!-- CURSOR_AGENT_PR_BODY_END -->"
 #: a stacked PR's body: the one `open` gave it, then the PR tool's marked section below it, and the footer
-STACKED = f"Lane memory-accounting\n\nthin lanes and a MAC cap\n\n{BEGIN}\nLane memory-accounting\n\nthe rule\n{END}\n\n{FOOTER}\n"
+STACKED = f"Lane memory-accounting\n\nthin lanes and a MAC limit\n\n{BEGIN}\nLane memory-accounting\n\nthe rule\n{END}\n\n{FOOTER}\n"
 
 
 class ViewGh:

@@ -8,32 +8,21 @@ tables (the shared-memory offsets the bank check reads), cut to the same kernels
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import struct
-import sys
 from pathlib import Path
 
 import pytest
+from conftest import load
 
-POUW = Path(__file__).resolve().parents[1]
 FIX = Path(__file__).resolve().parent / "fixtures" / "gpu_kit"
 
 
-def _load(name: str, path: Path):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-G = _load("gpu_kit_sass_gate", POUW / "gpu_kit" / "sass_gate.py")
-banks = _load("gpu_kit_banks", POUW / "gpu_kit" / "banks.py")
-dump = _load("gpu_kit_dump", POUW / "gpu_kit" / "dump.py")
-compare = _load("gpu_kit_compare", POUW / "gpu_kit" / "compare.py")
+#: by `load`, under the names gpu_kit's scripts load each other by, so the test's modules are theirs
+G = load("gpu_kit/sass_gate.py")
+banks = load("gpu_kit/banks.py")
+dump = load("gpu_kit/dump.py")
+compare = load("gpu_kit/compare.py")
 H = G.H
 
 R7_LDSM, R7_STSM = "_Z4k_lmILi1EEvP8BlockClkPii", "_Z4k_lmILi8EEvP8BlockClkPii"
@@ -68,20 +57,20 @@ def r7_off(slot: int, lane: int, warp: int, it: int = 0) -> int:
 def test_ring_rows_are_conflict_free_and_round7_is_8_way():
     for op in ("LDSM.16.M88", "LDSM.16.M88.2", "LDSM.16.M88.4", "STSM.16.M88.4", "LDS.128", "STS.128"):
         for w, it in ((0, 0), (1, 1), (31, 7)):
-            assert all(banks.degree(op, [lm_off(s, l, w, it) for l in range(32)]) == 1 for s in range(8)), op
+            assert all(banks.degree(op, [lm_off(s, lane, w, it) for lane in range(32)]) == 1 for s in range(8)), op
     for op in ("LDSM.16.M88", "STSM.16.M88"):
-        d, phase = banks.worst(op, [r7_off(0, l, 0) for l in range(32)])
+        d, phase = banks.worst(op, [r7_off(0, lane, 0) for lane in range(32)])
         assert d == 8 and phase == [128 * i for i in range(8)]
 
 
 def test_word_accesses_by_width():
-    assert banks.degree("LDS", [4 * l for l in range(32)]) == 1
-    assert banks.degree("LDS", [8 * l for l in range(32)]) == 2
+    assert banks.degree("LDS", [4 * lane for lane in range(32)]) == 1
+    assert banks.degree("LDS", [8 * lane for lane in range(32)]) == 2
     assert banks.degree("LDS", [0] * 32) == 1  # one word: a broadcast
-    assert banks.degree("LDS.64", [8 * l for l in range(32)]) == 1  # 16 lanes a phase
-    assert banks.degree("LDS.128", [16 * l for l in range(32)]) == 1  # 8 lanes a phase
-    assert banks.degree("LDS.128", [32 * l for l in range(32)]) == 2
-    assert banks.degree("ATOMS.ADD", [128 * l for l in range(32)]) == 32
+    assert banks.degree("LDS.64", [8 * lane for lane in range(32)]) == 1  # 16 lanes a phase
+    assert banks.degree("LDS.128", [16 * lane for lane in range(32)]) == 1  # 8 lanes a phase
+    assert banks.degree("LDS.128", [32 * lane for lane in range(32)]) == 2
+    assert banks.degree("ATOMS.ADD", [128 * lane for lane in range(32)]) == 32
     assert banks.degree("LDS", [None] * 31 + [4]) == 1
 
 
@@ -102,7 +91,6 @@ def native_words(digest: bytes) -> bytes:
 
 def test_dump_round_trip_and_its_checks(tmp_path):
     d = [hashlib.sha512(bytes([i])).digest() for i in range(3)]
-    assert dump.digests_from_words(b"".join(native_words(x) for x in d)) == b"".join(d)
     dump.write(tmp_path, "out", b"\x01\x02\x03\x04")
     dump.write(tmp_path, "leaves", b"".join(d), "sha512-be")
     got = dump.read(tmp_path)
@@ -161,7 +149,7 @@ def test_compare_dumps(tmp_path):
 
 
 def r7_smem(op: str) -> list[dict]:
-    return [{"sample": s, "op": op, "lanes": [r7_off(slot, l, w) for l in range(32)]}
+    return [{"sample": s, "op": op, "lanes": [r7_off(slot, lane, w) for lane in range(32)]}
             for s, w in enumerate((0, 1, 31)) for slot in range(8)]
 
 

@@ -9,8 +9,8 @@ import cards
 import figure1 as f1
 import pytest
 import total_cost as t
-from verity.protocols.spot.device import challenger
-from verity.protocols.spot.optimize import Cell
+from verity.protocols.proofs.spot.device import challenger
+from verity.protocols.proofs.spot.prover.optimize import Cell
 
 
 def test_the_configurations_are_the_cards():
@@ -22,11 +22,11 @@ def test_the_configurations_are_the_cards():
 
 
 def test_a_request_line_is_plotted_at_every_registration_and_compared_in_the_sets_form():
-    """(A) and (A′) in the patterns' form at each registration, and in the sets' form at their own, which only
+    """(A), (A′) and (A″) in the patterns' form at each registration, and in the sets' form at their own, which only
     exfiltration plots; a registration's GPU-seconds are its machines' over the census window.  Each replays its whole
     batch, and (A) replayed alone, which needs batch-invariant kernels, is a comparison at one machine's that pays
     their tax."""
-    for name in ("tokens", "per_expert"):
+    for name in ("tokens", "per_expert", "head_units"):
         lines = {n: c for n, c in t.CONFIGURATIONS.items()
                  if (n == name or c.variant_of == name) and c.replay != "request"}
         assert {c.replay for c in lines.values()} == {"block"}
@@ -369,7 +369,7 @@ def test_the_designs_beside_a_line_say_what_no_session_holds():
 
 def test_a_design_names_the_first_limit_of_the_second_stages_code_it_meets(monkeypatch):
     """`limits` counts what a design asks of the code that runs a second stage: the lines of session coins its
-    sessions write (2 a session and `TABLE_LINES` a table, at least) and the bytes its second draw reads (a stream of
+    sessions write (2 a session and `TABLE_LINES` a table, at least) and the bytes its second sample reads (a stream of
     2 k width(n) + 64 for each block type in each sampled replay block), and names the first limit met: a session's
     tables, then the release log's lines, then one layout's bytes; none where it is within all three."""
     cells = [Cell(100.0, 16.0, prove=1e-3, fixed=5.0, cap=64, commit_bytes=2.0, table=64),
@@ -508,7 +508,7 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     assert "serve tax 3%" in caps["exfiltration"] and "measured" in caps["exfiltration"]
     at = out["betas"].index(f1.RATIO_BUDGET)
     lines = {s["config"]: s for s in out["panels"]["exfiltration"]["series"]}
-    for name in ("tokens", "per_expert"):
+    for name in ("tokens", "per_expert", "head_units"):
         spans = [lines[n]["y"] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert all(b <= a * (1 + 1e-9) for x in zip(*spans) for a, b in zip(x, x[1:])), name
         patterns, sets = lines[name]["y"][at], lines[f"{name}_sets"]["y"][at]

@@ -94,7 +94,7 @@ theorem card_changed_counted [Fintype U] [Fintype O] [Fintype I] (P : Population
     (l : List (Traced O (I → V) Tick Adv S V)) (ht : Tied eg L l) (hc : Covered P inp Ou L θ r l) (n : ℕ)
     (hn : n < count L (l.map toServed)) (w : Traced O (I → V) Tick Adv S V) (hw : l[n]? = some w)
     (ha : w.accepted) :
-    (changed (popServed P f eg inp) Ou L θ r (l.map (counted P f)) n).card ≤ F * (P.wrong f w.trace).card := by
+    (changed (popServed P f eg inp) Ou L θ r (l.map (counted P f)) n).card ≤ F * (P.incorrect f w.trace).card := by
   classical
   obtain ⟨σ, ⟨hin, hcor⟩, -⟩ :=
     P.determinate_of_checked h V f (inp θ ((Ou.query r (view Ou L r (l.map toServed) n)).1, w.adv))
@@ -102,7 +102,7 @@ theorem card_changed_counted [Fintype U] [Fintype O] [Fintype I] (P : Population
     rw [List.getElem?_map, hw]
     rfl
   have hsub : changed (popServed P f eg inp) Ou L θ r (l.map (counted P f)) n ⊆
-      (P.wrong f w.trace).biUnion (P.unitsInReach eg) := by
+      (P.incorrect f w.trace).biUnion (P.unitsInReach eg) := by
     intro o ho
     simp only [changed, hw', mem_filter, mem_univ, true_and] at ho
     rw [view_counted] at ho
@@ -114,7 +114,7 @@ theorem card_changed_counted [Fintype U] [Fintype O] [Fintype I] (P : Population
       rw [ht n hn w hw ha, P.outOf_eq h f eg hin hcor]
       exact he
     obtain ⟨i, hi⟩ := Function.ne_iff.1 hne
-    have hmem : eg (o, i) ∈ P.writesOf (P.down (P.wrong f w.trace)) := by
+    have hmem : eg (o, i) ∈ P.writesOf (P.down (P.incorrect f w.trace)) := by
       by_contra hs
       exact hi (P.eq_off_cone (P.covered_of_singleAssignment h.1) h.2 f
         (fun t ht' => (hc n hn w hw ha t ht').trans (hin t ht').symm) subset_rfl
@@ -122,10 +122,10 @@ theorem card_changed_counted [Fintype U] [Fintype O] [Fintype I] (P : Population
     obtain ⟨u, hu, hui⟩ := P.mem_writesOf_down hmem
     exact mem_biUnion.2 ⟨u, hu, mem_filter.2 ⟨mem_univ _, i, mem_inter.2 ⟨mem_image_of_mem eg (mem_univ _), hui⟩⟩⟩
   calc (changed (popServed P f eg inp) Ou L θ r (l.map (counted P f)) n).card
-      ≤ ((P.wrong f w.trace).biUnion (P.unitsInReach eg)).card := card_le_card hsub
-    _ ≤ ∑ u ∈ P.wrong f w.trace, (P.unitsInReach eg u).card := card_biUnion_le
-    _ ≤ ∑ _u ∈ P.wrong f w.trace, F := sum_le_sum fun u _ => hF u
-    _ = F * (P.wrong f w.trace).card := by rw [sum_const, smul_eq_mul, mul_comm]
+      ≤ ((P.incorrect f w.trace).biUnion (P.unitsInReach eg)).card := card_le_card hsub
+    _ ≤ ∑ u ∈ P.incorrect f w.trace, (P.unitsInReach eg u).card := card_biUnion_le
+    _ ≤ ∑ _u ∈ P.incorrect f w.trace, F := sum_le_sum fun u _ => hF u
+    _ = F * (P.incorrect f w.trace).card := by rw [sum_const, smul_eq_mul, mul_comm]
 
 /-- **Tied and covered releases are isolated.** At a checked population whose units' reaches each hold at most `F`
 charge units, a run whose releases are their traces' outputs and whose traces hold the windows' inputs is, counted at
@@ -151,7 +151,7 @@ theorem isolated_counted [Fintype U] [Fintype O] [Fintype I] (P : Population.Dat
   have ha : l[n].accepted := accepted_of_lt_accLen (l.map toServed) n l[n].toServed hnA (by
     rw [List.getElem?_map, hw]
     rfl)
-  have hinc : incorrectAt (l.map (counted P f)) n = (P.wrong f l[n].trace).card := by
+  have hinc : incorrectAt (l.map (counted P f)) n = (P.incorrect f l[n].trace).card := by
     simp [incorrectAt, hw, counted]
   rw [hinc]
   exact card_changed_counted P h f eg inp F hF Ou L θ r l ht hc n hnC l[n] hw ha
@@ -213,9 +213,9 @@ theorem checked : pop.Checked := by
     simp [pop] at hs
 
 /-- The honest assignment gets no unit wrong. -/
-theorem wrong_honest : pop.wrong fns (fun _ => 0) = ∅ := by
+theorem wrong_honest : pop.incorrect fns (fun _ => 0) = ∅ := by
   ext u
-  simp [Population.Dataflow.wrong, Population.Dataflow.Correct, fns]
+  simp [Population.Dataflow.incorrect, Population.Dataflow.Correct, fns]
 
 /-- The toy's covert capacity at one changed charge unit: `16` outputs, `3` names and `3` halts. -/
 theorem rpow_bits :

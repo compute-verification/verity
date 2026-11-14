@@ -1471,8 +1471,10 @@ def tick(dry: bool = False) -> list[str]:
 
 def prom(q: str) -> float | None:
     try:
+        if urllib.parse.urlsplit(PROMETHEUS).scheme not in ("http", "https"):
+            return None
         url = f"{PROMETHEUS}/api/v1/query?" + urllib.parse.urlencode({"query": q})
-        r = json.load(urllib.request.urlopen(url, timeout=10))["data"]["result"]
+        r = json.load(urllib.request.urlopen(url, timeout=10))["data"]["result"]  # noqa: S310 (http or https, checked above)
         return float(r[0]["value"][1]) if r else None
     except Exception:  # noqa: BLE001
         return None

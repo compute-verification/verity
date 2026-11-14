@@ -12,10 +12,8 @@ import shutil
 import signal
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-
-import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
 SCRIPT = VLLM / "verity_vllm" / "ops" / "epoch_row.sh"
@@ -23,7 +21,7 @@ BASH = shutil.which("bash") or "/bin/bash"
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"
 ART = "art:" + "ab" * 32
 #: the job's start, and the "now" the script measures its deadlines from (EPOCH_NOW): no test reads the wall clock
-START = datetime(2026, 1, 1, tzinfo=timezone.utc)
+START = datetime(2026, 1, 1, tzinfo=UTC)
 
 STAGE = """#!/bin/bash
 # stand-in for the `verity-vllm` launcher: `row run ROW ROLE REPO REV --stages S` is a stage whose behaviour FAKE_<S> names (ok | sleep:
@@ -44,14 +42,15 @@ exec "$REAL_PY" -m verity_vllm.pipeline.cli "$@"
 """
 CLI = """#!/bin/bash
 # stand-in for `python3 -m research`: logs every call; `data put` prints an artifact id, and first moves the EPOCH_NOW=@FILE clock on
-# by FAKE_PUT_S seconds when that is set (a store that takes that long per tree)
+# by FAKE_PUT_S seconds when that is set (a store that takes that long per tree), and lists the tree's files in TREES when that is set
 echo "$*" >> "$CALLS"
 if [ "$1 $2" = "data put" ]; then
   [ -n "${FAKE_PUT_S:-}" ] && echo $(( $(cat "${EPOCH_NOW#@}") + FAKE_PUT_S )) > "${EPOCH_NOW#@}"
-  echo '{"artifact": "%s"}'
+  [ -n "${TREES:-}" ] && find "$6" -type f -printf "$(basename "$6") %P\\n" >> "$TREES"
+  echo '{"artifact": "ARTIFACT_ID"}'
 fi
 exit 0
-""" % ART
+""".replace("ARTIFACT_ID", ART)
 PY = """#!/bin/bash
 # stand-in for $PY: the record stage (`-m tests.regression.rebaseline run ...`) is logged and passes; everything else is the real python
 [ "$1 $2" = "-m tests.regression.rebaseline" ] && { echo "record $*" >> "$CALLS"; echo "1 passed"; exit 0; }
@@ -116,6 +115,27 @@ def test_script_parses() -> None:
     for name in ("epoch_row.sh", "epoch_store.sh", "store_trees.sh", "epoch_failfast.sh"):
         r = subprocess.run([BASH, "-n", str(SCRIPT.parent / name)], capture_output=True, text=True)
         assert r.returncode == 0, (name, r.stderr)
+
+
+def test_the_store_leaves_bundles_keeps_placement_and_timing_on_the_node(tmp_path: Path) -> None:
+    """epoch_store.sh's trees hold no replay bundle or slim keep (clear values with their salts), no topology.json (where each rank
+    ran) and no timeline (when each process ran), and store_omitted.txt lists each as private."""
+    env = {**_job(tmp_path), "TREES": str(tmp_path / "trees.txt")}
+    (Path(env["RESEARCH_RUN_DIR"]) / "evidence").mkdir()
+    d = Path(env["SWEEP_DIR"]) / ROW
+    kept = ["build_summary.json", "stages.txt", "match/instances.jsonl", "match/capture/tokens.json", "commit/verdict.json"]
+    private = ["timeline.jsonl", "timeline_report.json", "build/rank0/build_step/topology.json", "match/capture/topology.json",
+               "match/control/topology.json", "commit/replay_bundle_p0/store/salts/s0.bin", "commit/replay_bundle_p0/context.json",
+               "commit/replay_slim_p0/slim.json", "commit/replay_bundle_p0_rank1/MANIFEST.json"]
+    for rel in kept + private:
+        (d / rel).parent.mkdir(parents=True, exist_ok=True)
+        (d / rel).write_text("{}")
+    r = subprocess.run([BASH, str(SCRIPT.parent / "epoch_store.sh"), str(d)], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    stored = {line.split(" ", 1)[1] for line in Path(env["TREES"]).read_text().splitlines()}
+    assert set(kept) <= stored and not stored & set(private), stored
+    omitted = (Path(env["RESEARCH_RUN_DIR"]) / "evidence" / "store_omitted.txt").read_text()
+    assert [p for p in private if f" build/{p}\n" not in omitted and f" records/{p}\n" not in omitted] == [], omitted
 
 
 def test_a_stage_deadline_stops_the_stage_stores_preserves_and_exits(tmp_path: Path) -> None:

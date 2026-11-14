@@ -5,6 +5,7 @@ from __future__ import annotations
 import collections
 import dataclasses
 import functools
+from typing import Any, cast
 
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import global_match_fast as GMF
@@ -13,7 +14,8 @@ from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import projection as PJ
 from verity_vllm.check.match.attribution import Attribution
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
-from verity_vllm.program.compact import n_max_producer as _n_max_producer, n_producers as _n_producers
+from verity_vllm.program.compact import n_max_producer as _n_max_producer
+from verity_vllm.program.compact import n_producers as _n_producers
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
 
 # A leg can run in a forked worker (`GMF.request_legs`), so each problem it returns names its check by role, never by the NamedCheck.
@@ -58,13 +60,12 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
     res, B, within_step, fast, _loaded = run.res, run.fold, run.within_step, run.fast, run.loaded
     per_req, meta_of, weights_nodes, weights_nodes_error, shared_gi = (att.per_req, att.meta_of, att.weights_nodes, att.weights_nodes_error,
                                                                        att.shared_gi)
-    c3 = NamedCheck(res, "G3", "subcircuits_x09: each request's projection canonical-equal to its component over the executed steps (eos-truncated labelled)")
-    c4 = NamedCheck(res, "G4", "identity_map: (request, local step, local index) <-> global node is a bijection over the attributed fold")
-    c5 = NamedCheck(res, "G5", "shared_state: one weights input for all requests (no overlapping fields); node operands same-request, producer step <= consumer step; "
+    c3 = NamedCheck(res, SUBCIRCUITS, "each request's projection canonical-equal to its component over the executed steps (eos-truncated labelled)")
+    c4 = NamedCheck(res, IDENTITY_MAP, "(request, local step, local index) <-> global node is a bijection over the attributed fold")
+    c5 = NamedCheck(res, SHARED_STATE, "one weights input for all requests (no overlapping fields); node operands same-request, producer step <= consumer step; "
                                "a warm request's cached rows (the engine's first scheduled position) and their producers are the Program's declared prefix-cache hit")
     glob2loc: dict[int, tuple[str, int, int]] = {}
     shared_loc: dict[int, dict[str, tuple[str, int, int]]] = {}   # weight-only instance -> {request: its local identity}
-    loc_count = 0
     exec_pop = 0
     unexercised = 0
     A_cache: dict[str, SEQ.RootView] = _loaded.setdefault("components", {})  # decoded components shared with the alternate-criterion run
@@ -101,7 +102,7 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
     def apply(out: dict) -> None:
         """Global reconciliation of one request's facts, in request order: problems to their checks in the order met, the identity map
         over all requests (an instance with two local identities is named), the population sums, the request entry on the record."""
-        nonlocal loc_count, exec_pop, unexercised
+        nonlocal exec_pop, unexercised
         rid, ent = out["rid"], out["ent"]
         for role, msg in out["fails"]:
             checks_by_role[role].fail(msg)
@@ -131,12 +132,10 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
                     # a weight-only instance has one local identity PER request whose leg holds it (never a bijection
                     # with the global node): kept apart from glob2loc, so G7's owner blocks and G8's layout skip it like an unowned node
                     shared_loc.setdefault(gi, {})[rid] = key
-                    loc_count += 1
                     continue
                 if gi in glob2loc:
                     c4.fail(f"global instance {gi} carries two local identities {glob2loc[gi]} and {key}")
                 glob2loc[gi] = key
-                loc_count += 1
         exec_pop += out["exec_pop"]
         unexercised += out["unexercised"]
         res["requests"].append(ent)
@@ -201,7 +200,8 @@ def _prepare_requests(run: MatchRun, att: Attribution, param_of: dict, proj: dic
         P._all_seed_nodes = set(seed_index)
         P.cached_rows = PX.cached_rows(run.header, run.steps, rid)
         proj[rid] = P
-        cd = (g.get("component") or {}).get("dir")
+        declared = g.get("component")   # the request's declared component; its `dir` is None where the Build derived none for the shape
+        cd = declared.get("dir") if declared else None
         A = None
         if cd:
             A = A_cache.get(cd)
@@ -304,6 +304,7 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
     if not cd:
         fails.append((SUBCIRCUITS, f"{rid}: no component Program in the global Program for shape (LP {LP}, T_bound {g.get('T_bound')})"))
         return out
+    A = cast("SEQ.RootView", A)   # a component's directory comes with the component its loader returned
     ent["component"] = {"dir": cd, "digest": A.digest, "steps": len(A.steps), "instances": len(A.inst),
                         "LP": g["component"].get("LP"), "T": g["component"].get("T")}
     want_d = g["component"].get("program_digest")
@@ -314,21 +315,22 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
         ent["global_address"] = ga
         n_addressed = addressed_instances(A)
         if ga.get("n_instances") is not None and int(ga["n_instances"]) != n_addressed:
-            fails.append((IDENTITY_MAP, f"{rid}: address map declares {ga['n_instances']} instances for the request, the component has {n_addressed} "
-                                f"({len(A.inst)} compared + {n_addressed - len(A.inst)} bound splits constants)"))
+            fails.append((IDENTITY_MAP, (f"{rid}: address map declares {ga['n_instances']} instances for the request, the component has {n_addressed} "
+                                         f"({len(A.inst)} compared + {n_addressed - len(A.inst)} bound splits constants)")))
     n_exec = len(P.steps)
     if n_exec > len(A.steps):
         fails.append((SUBCIRCUITS, f"{rid}: executed {n_exec} local steps but the bounded component has {len(A.steps)} (output interface exceeded)"))
     cmp = ops.compare_steps(A, P, unfold_a=False)
     exec_steps = cmp["steps"][:n_exec]
-    bad_seq = [s for s in exec_steps if not s["spec_seq_equal"] or (s.get("wiring") or {}).get("operands_different")]
+    # a step whose spec sequences are equal is wired (`compare_steps`); one whose sequences do not align is compared no further and has no wiring
+    bad_seq = [s for s in exec_steps if not s["spec_seq_equal"] or (s["wiring"].get("operands_different") if s.get("wiring") else None)]
     tail = cmp["steps"][n_exec:]
     ent["eos_truncated"] = bool(tail)
     ent["unexecuted_steps"] = len(tail)
     out["unexercised"] = sum(len(A.steps[s]) for s in range(n_exec, len(A.steps)))
     ent["sequence_equal_steps"] = n_exec - len(bad_seq)
-    ent["operands"] = {"equal": sum((s.get("wiring") or {}).get("operands_equal", 0) for s in exec_steps),
-                       "different": sum((s.get("wiring") or {}).get("operands_different", 0) for s in exec_steps)}
+    wired = [s["wiring"] for s in exec_steps if s.get("wiring")]
+    ent["operands"] = {"equal": sum(w.get("operands_equal", 0) for w in wired), "different": sum(w.get("operands_different", 0) for w in wired)}
     # canonical address of every executed fold instance: (rid, s, j) with j the COMPONENT's index of the corresponding instance.
     #   sequence: j = emission position (X-09 sequence criterion: the fold's order IS the component's order, else G3 fails);
     #   dag:      j = the index of the structurally identical component instance (equal Merkle DAG hash: spec, form, out type,
@@ -336,13 +338,15 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
     local_addr: list[list[int | None]] = []
     if within_step == "dag":
         ha, hb = ops.dag_hashes(A), ops.dag_hashes(P)
-        bad_dag, dag_info = [], []
+        bad_dag: list[dict[str, Any]] = []
+        dag_info: list[dict[str, Any]] = []
         for s in range(min(n_exec, len(A.steps))):
             by_hash: dict[str, list[int]] = collections.defaultdict(list)
             for j, ia in enumerate(A.steps[s]):
                 by_hash[ha[ia]].append(j)
             classes_gt1 = sum(1 for v in by_hash.values() if len(v) > 1)
-            addr, unmatched = [], []
+            addr: list[int | None] = []
+            unmatched: list[int] = []
             for il in P.steps[s]:
                 js = by_hash.get(hb[il])
                 if js:
@@ -353,7 +357,8 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
             leftover = sum(len(v) for v in by_hash.values())
             permuted = sum(1 for j, x in enumerate(addr) if x is not None and x != j)
             if unmatched or leftover:
-                spec = lambda Q, i: Q.inst[i]["spec"].split("{")[0]  # noqa: E731
+                def spec(Q: Any, i: int) -> str:
+                    return Q.inst[i]["spec"].split("{")[0]
                 bad_dag.append({"step": s, "n_a": len(A.steps[s]), "n_b": len(P.steps[s]), "unmatched_fold": len(unmatched), "unmatched_component": leftover,
                                 "unmatched_fold_specs": dict(collections.Counter(spec(P, i) for i in unmatched).most_common(6)),
                                 "unmatched_component_specs": dict(collections.Counter(spec(A, A.steps[s][j]) for v in by_hash.values() for j in v).most_common(6)),
@@ -380,8 +385,8 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
                               "sequence_also_equal": not bad_seq}
         if bad:
             ent["first_divergence"] = bad[0]
-            fails.append((SUBCIRCUITS, f"{rid}: {len(bad)} of {n_exec} executed steps not DAG-equal to the component (first: local step {bad[0]['step']}, "
-                                f"{bad[0]['unmatched_fold']} fold / {bad[0]['unmatched_component']} component instances unmatched)"))
+            fails.append((SUBCIRCUITS, (f"{rid}: {len(bad)} of {n_exec} executed steps not DAG-equal to the component (first: local step {bad[0]['step']}, "
+                                        f"{bad[0]['unmatched_fold']} fold / {bad[0]['unmatched_component']} component instances unmatched)")))
         if fast:
             # G8's per-step Merkle matching of every step G8 may name (its address differs from the emission position
             # anywhere), computed HERE with this process's hash ids -- the leg hands back the matching (facts), never hash dicts:
@@ -396,7 +401,7 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
         ent["criterion"] = "sequence (X-09) over executed steps" + (" of the bounded component (eos-truncated)" if tail else "")
         if bad:
             ent["first_divergence"] = {"step": bad[0]["step"], "n_a": bad[0]["n_a"], "n_b": bad[0]["n_b"], "spec_seq_equal": bad[0]["spec_seq_equal"],
-                                       "wiring_examples": (bad[0].get("wiring") or {}).get("examples", [])[:3]}
+                                       "wiring_examples": bad[0]["wiring"].get("examples", [])[:3] if bad[0].get("wiring") else []}
             fails.append((SUBCIRCUITS, f"{rid}: {len(bad)} of {n_exec} executed steps not canonical-equal (first: local step {bad[0]['step']})"))
             if fast and perm_eligible(A, P, bad[0]["step"]):   # G8 names the first divergence: its matching, computed here
                 s0 = bad[0]["step"]

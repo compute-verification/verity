@@ -10,14 +10,12 @@ word maps of `tools/move/`, which name the words they retire; and of a `.lean` f
 (``lean_prose``, the lane-text lint's reader), where every site is held to its file's count in ``LEAN_LIST``: a file past
 its count, or with a site and no entry, fails, and the ratchet gate holds the list's total from rising, so it only shrinks
 (``--prune`` lowers it to what the tree holds). A term matches case-insensitively as two words, hyphenated, or wrapped onto
-the next line (behind a comment marker or not). Every file under `verity/protocols/inference_only/rho/`, `benchmarks/network_traces/` and the
+the next line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
-(`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
-record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
-queued on `next` rewrites, or whose messages mirror the Lean's (``PENDING``), until that PR lands or the Lean is renamed,
-and the rename follows it.
+(`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``) and a spelling baked into a
+record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too).
 
 The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name that carries one of the Glossary's older
 names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
@@ -49,7 +47,7 @@ _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
 #: Retired in every file under INCORRECT too, and what to write instead.
-INCORRECT = ("verity/protocols/inference_only/rho/", "benchmarks/network_traces/", "verity/protocols/certifier/verifier/network/tests/")
+INCORRECT = ("benchmarks/rho/", "benchmarks/network_traces/", "verity/protocols/accounting/certifier/verifier/network/tests/")
 INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
                    "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
                    "faulty window, wrong unit": "incorrect window, incorrect proof block",
@@ -222,7 +220,7 @@ ALLOWED: dict[str, str] = {
     "report-proof-service-": "a cited note's id",
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
-    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `verity/protocols/inference_only/rho/rho/envelopes.py`, "
+    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
@@ -233,20 +231,9 @@ ALLOWED: dict[str, str] = {
     "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
-    "Verity's two composite protocols": "`verity/protocols/remote/verifier/composition/README.md`, in a Lake package's "
+    "Verity's two composite protocols": "`verity/protocols/compose/verifier/lean/README.md`, in a Lake package's "
                                         "directory, which the protocols' word move rewrites; renamed with it",
 }
-
-PENDING: dict[str, str] = {
-    "verity/protocols/pouw/verifier/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean",
-    "verity/protocols/pouw/verifier/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; "
-                                                            "renamed with the Lean",
-    "adapters/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; "
-                                                             "renamed with the Lean",
-    "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "demos/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-}
-
 
 #: the lints that name the terms to find them: this one, and the ratchet over every term `GLOSSARY.md`'s table retires
 LINTS = ("tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py")
@@ -255,9 +242,9 @@ MAPS = "tools/move/"
 
 
 def scanned(files: list[str]) -> list[str]:
-    """Every file but the Lean packages' configs and locks, PENDING, the LINTS and the word maps."""
+    """Every file but the Lean packages' configs and locks, the LINTS and the word maps."""
     return sorted(f for f in files if not f.endswith(("lean-audit.json", "lakefile.toml"))
-                  and f not in PENDING and f not in LINTS and not f.startswith(MAPS))
+                  and f not in LINTS and not f.startswith(MAPS))
 
 
 _CODE_CHAR = re.compile(r"\S")
@@ -512,7 +499,6 @@ def test_the_scan_reads_each_form():
                    "-- a proof\ndef unit := 2\n"),
         "d.py": '# the Proof-Service and a proof\n# services; proof_service, verity/proof-service/stream/v0; a faulty service\n',
         "c.lean": "-- a proof unit",
-        next(iter(PENDING)): "a proof unit",
         GLOSSARY: '| "proof unit", and "unit" alone meaning one | proof block |\n| other | a proof unit |\n',
     }
     found, used = offenders(list(docs), read=docs.__getitem__)
@@ -527,27 +513,27 @@ def test_the_scan_reads_each_form():
 
 
 def test_the_scan_reads_rho_terms():
-    """`verity/protocols/inference_only/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
+    """`benchmarks/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
     a faulty node, link or device, and the same words outside it stay."""
     docs = {
-        "verity/protocols/inference_only/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
+        "benchmarks/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
                                 'set."""\nx = s["exfil.faulty"], c.faulty_unit_bits  # faultyIngressBits; a faulty node, '
                                 "link or device\n"),
-        "verity/protocols/inference_only/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
+        "benchmarks/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
         "c.py": "# faulty outputs and faulty blocks outside it\n",
     }
     assert offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("verity/protocols/inference_only/rho/a.py", 1, "faulty-outputs"), ("verity/protocols/inference_only/rho/a.py", 1, "faulty step"),
-        ("verity/protocols/inference_only/rho/a.py", 2, "faulty ingress unit"), ("verity/protocols/inference_only/rho/a.py", 2, "faulty set"),
-        ("verity/protocols/inference_only/rho/data/b.toml", 1, "Faulty outputs"), ("verity/protocols/inference_only/rho/data/b.toml", 1, "faulty proof block"),
-        ("verity/protocols/inference_only/rho/data/b.toml", 1, "faulty blocks")]
+        ("benchmarks/rho/a.py", 1, "faulty-outputs"), ("benchmarks/rho/a.py", 1, "faulty step"),
+        ("benchmarks/rho/a.py", 2, "faulty ingress unit"), ("benchmarks/rho/a.py", 2, "faulty set"),
+        ("benchmarks/rho/data/b.toml", 1, "Faulty outputs"), ("benchmarks/rho/data/b.toml", 1, "faulty proof block"),
+        ("benchmarks/rho/data/b.toml", 1, "faulty blocks")]
 
 
 def test_the_scan_reads_the_network_terms():
     """The network tests' and `benchmarks/network_traces`' incorrect proof blocks, windows and K's terms for them, on toy
     files: a key or a name that mirrors the Lean's (`faulty_bits`, `wrong_units`, `faultySets`), a faulty certifier, a
     wrong verdict, and the same words outside them stay."""
-    net = "verity/protocols/certifier/verifier/network/tests/a.py"
+    net = "verity/protocols/accounting/certifier/verifier/network/tests/a.py"
     docs = {
         net: ('"""Its faulty bits, no faulty\n    term and at most 3 wrong units."""\n'
               'class _Faulty(Certifier):  # a faulty certifier; a wrong verdict\n'
@@ -585,7 +571,6 @@ def test_the_doc_scan_reads_each_form():
                 "```sh\nverity example vllm\n```\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
         "benchmarks/pouw/CHANGELOG.md": "a leg",
-        **{f: "a leg" for f in PENDING if f.endswith(".md")},
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [(GLOSSARY, 2, "leg"),
@@ -597,12 +582,12 @@ def test_the_doc_scan_reads_each_form():
 
 def test_the_doc_scan_reads_the_party_terms():
     """The developer, the configurations, the registered circuit and assumptions, on toy files: the proving side's
-    prover, a theorem's premise, a deployment record, `verity.configuration.deploy` and a registered workload stay."""
+    prover, a theorem's premise, a deployment record, `verity.runtime` and a registered workload stay."""
     docs = {
         "a.md": "Nothing the prover runs or hosts; a machine the prover doesn't\ncontrol, the prover's node, a "
                 "prover-controlled host and the prover system. The remote deployment's registered work, under a named\n"
                 "premise and the card premise, in a composite protocol. Flock's prover, a cheating prover, a theorem's "
-                "premise, a deployment record, `verity.configuration.deploy`, the Lean's `Composite` and a registered "
+                "premise, a deployment record, `verity.runtime`, the Lean's `Composite` and a registered "
                 "workload stay.\n",
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
@@ -613,7 +598,7 @@ def test_the_doc_scan_reads_the_party_terms():
 
 
 def test_the_doc_scan_reads_the_protocol_terms():
-    """The protocol's vocabulary (`ARCHITECTURE.md`, "How an audit works"), on toy files: hm96 rows keep their name in the commitments' own docs."""
+    """The protocol's vocabulary (`ARCHITECTURE.md`, Glossary), on toy files: hm96 rows keep their name in the commitments' own docs."""
     docs = {
         "NETWORK.md": "The warden, a network warden's cells, two Wardens.\n"
                       "`warden.py`, `--warden-run`, WardenParams and warden_rows stay.\n",
@@ -664,7 +649,7 @@ def test_the_doc_scan_reads_the_training_terms():
     slowdown lower bound and a window that caps its samples stay."""
     docs = {
         "a.md": "The compute dampener D; Dampeners. NCI's check, novel\ncommunication intensity.\n"
-                "`Nci.Dampener.remoteDampener` and `verity/protocols/inference_only/nci`, the nci directory, NciCheck stay.\n"
+                "`Nci.Dampener.remoteDampener` and `benchmarks/nci`, the nci directory, NciCheck stay.\n"
                 "The machine model's coverage\ntable, an envelope op; a serving block, two server-windows, the server time block.\n"
                 "The overhead lower bound, an exclusion bound, the training classes, per-block caps; dark compute, certified work.\n"
                 "The `machine-model` command, a server block, the slowdown lower bound and a window that caps its samples stay.\n",

@@ -43,8 +43,9 @@ the lock's sections, each naming the docstring with the detail. This is the work
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
   check, `check.py PKG`, runs in the merge queue's check; run it by hand only on a machine of your own.
-- **The fast path is for the lock and the mark**, once `verity lean try` passes: `lean_changed.py --records PKG
-  --update` through `research run` (the README's commands have the line) regenerates PKG's records and its requirers',
+- **The fast path is not owed before a mark**; once `verity lean try` passes, run it for what the candidate's records run
+  can't write (below) or to see a changed record early: `lean_changed.py --records PKG --update` through `research run`
+  (the README's commands have the line) regenerates PKG's records and its requirers',
   with the `--update` printout the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
   `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
   Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
@@ -53,6 +54,8 @@ the lock's sections, each naming the docstring with the detail. This is the work
   (exit 3, no pass), and its regenerated record goes to `allowed-record/`, never `record/`.
 - **A full record**: `check.py --build --update PKG` through `research run` (the README's line), unwrapped, leaves it
   at `lean-audit/audit-TAG/lean-audit.json`.
+- **A Lean pool at 0 is closed on that machine**: a request for it is refused as it arrives, saying why, never left
+  to wait. Run it where `lean_slot.py --status` lists a slot of that pool.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
   /tmp/scratch/Probe.lean`): `#print axioms X`, `example … := by exact?`, or
   `trace_state` before a `sorry`. Probe what you build on too: a section `variable` typed through a local notation can
@@ -93,8 +96,8 @@ the lock's sections, each naming the docstring with the detail. This is the work
 
 - **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
   (a module or a list of them: `security/Properties` also lists `Properties/Assumptions.lean`, for one stated over the
-  code, which the spec can't import), or in a module under it when the public export copies its area (`Assumptions/Flock.lean`, since the root module
-  reads Nci); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
+  code, which the spec can't import), or in a module under it that reads less than the root module (`Assumptions/Flock.lean`,
+  since the root module reads Nci); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
   `Proofs/Flock/Soundness/Assumptions` for now), each owner in the lock. Its docstring opens with its claim id
   (`verity.claims`) and gives its rationale; a ledger points to it.
 - **List what you cite**: a guarantee a ledger, table or PR cites as proved is in `guarantees`, its record committed with
@@ -129,10 +132,10 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
   `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
   them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
   says.
-- Record your lock at your own head, then mark; a passing Lean check, a clean merge of `main` over a passing head, or a
-  commit of exactly the records a passing run kept needs no new run. Your PR's candidate's records run regenerates
-  records another PR moved; re-record only what it can't (a hand-written entry a merge warning says took theirs, `shape`, a
-  move's map).
+- Mark with no records run of your own: the candidate's records run commits every stale record. Record first, by the
+  fast path, only what it can't write: a hand-written entry a merge warning says took theirs; `shape`; a hand edit to
+  the lock (an `exempt` entry deleted while its module is not in `roots` fails the run, and the PR leaves its batch);
+  a guarantee that only moved (`--update --moved MOVES.json`, which the run lacks).
 
 ## Standing rulings
 
@@ -149,8 +152,9 @@ Their history is in the decisions log.
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
   bounded by what the run carries. No assumed advantage bounds but PoUW's named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtractedAt`, in the lock) and the sampled audits' per-finder bound below. An input
-  condition is a verifier refusal, not a hypothesis.
+  (`StraightLineExtraction`, `SeedExtractedAt`), SHA-512 as a PRF, `Hash.Assumptions.Sha512Prf`, whose advantage
+  `ε(t, Q)` is a parameter each bound that takes it adds per test (PoUS's `PeriodHeldSha512`), all in the lock, and
+  the sampled audits' per-finder bound below. An input condition is a verifier refusal, not a hypothesis.
 - One adversary class: every prover strategy τ, no budget class.
   `Pr[accept ∧ the claim fails on E^τ's values] ≤ δ + f(Pr[B^τ exhibits a SHA-512 collision])` (+ LMS forgery), with
   `E` a fixed named extractor and `B` a finder built from τ in about τ's time (`XplurZC`, `outCZC`). Collision
@@ -180,7 +184,7 @@ Their history is in the decisions log.
 - Probability and games are our own minimal definitions over Mathlib's `PMF`; soundness bridges to VCVio where needed.
 - What a physical region reads is not a premise: it follows from the circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `security/Definitions/Accounting/Physical.lean`). A bound per
-  server block is stated on `Accounting.Placed` with `WindowsAt`.
+  server block is stated on `Accounting.Placed` with `ServerBlocksAt`.
 - Verifier code compares `Json` by a match the kernel reduces, never by `BEq Json`'s `==`, a `partial def` no proof can
   read. A string is compared by `Spot.jsonStrIs`, which `Properties.Pouw.LiveSalt.jsonStrIs_eq` reads back.
   Replacing such an `==` or a partial reading with a total one that means the same (it refuses on every parse failure

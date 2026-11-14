@@ -4,12 +4,16 @@ against that arm (methodology.compare). A results file whose gates failed holds 
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
 
 import methodology
 
+__all__ = ["BASELINE_ARMS", "BASELINE_POINTS", "arm_stats", "baseline_check", "baseline_table", "load", "lock", "pct",
+           "point_key", "table"]
 
-def load(paths) -> list[dict]:
+
+def load(paths: Iterable[str | Path]) -> list[dict]:
     return [json.loads(Path(p).read_text()) for p in paths]
 
 
@@ -109,8 +113,8 @@ def baseline_table(lk: dict) -> str:
     """The locked baseline as `run.py tables baseline` prints it: per point and arm, the bench's perplexity, its Δ
     against bf16 and plain int8, tonight's measurement of the same arm, and whether the two reproduce each other
     (methodology.reproduces)."""
-    lines = ["| model · set · context | arm | perplexity | Δ% vs bf16 | Δ% vs plain int8 | tonight | tonight's method | "
-             "Δ% vs tonight | reproduces |", "|---|---|---:|---:|---:|---:|---|---:|---|"]
+    lines = [("| model · set · context | arm | perplexity | Δ% vs bf16 | Δ% vs plain int8 | tonight | tonight's method | "
+              "Δ% vs tonight | reproduces |"), "|---|---|---:|---:|---:|---:|---|---:|---|"]
     runs = []
     for p in lk["points"]:
         where = f"{p['model']} · {p['set']} · {p['ctx'] // 1024}K ({p['windows']} windows)"

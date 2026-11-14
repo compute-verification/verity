@@ -2,7 +2,7 @@
 
 What this module DECIDES (structure + correspondence, no by-name table):
 
-* WHICH Values are required: `verity_vllm.query.units.required_values(P, Q_module_body_v1, policy)` -- every Value that crosses a
+* WHICH Values are required: `verity_vllm.query.units.required_values(P, module_body_partition(P, corr), policy)` -- every Value that crosses a
   module-body boundary in the Program's own dataflow, plus the policy below.  v1's "promotion" of interior rows whose output another
   module reads is not a pass here: such a Value crosses the boundary and is required by definition.  A literal (a Call
   that reads no Value, `module_body.literal_calls`) is the descriptor's: never a boundary Value, never protocol-required.
@@ -52,24 +52,51 @@ from __future__ import annotations
 
 import bisect
 import functools
-import hashlib
 import re
 from collections import Counter, defaultdict
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import reduce
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from verity.circuits import partition_object as PO
-from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by
-from verity_vllm.query.manifest import format as fmt
-from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES
-from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
-from verity.definitions import word as word_query
-from verity_vllm.query.collective_names import NORM_SITE_MEMBER, collective_sites, norm_sites
-from verity_vllm.query.module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls
-from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
+from verity.circuits import word as word_query
 
-__all__ = ["SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "collective_kind",
+from verity_vllm.correspondence.reader_for_query import (
+    CallName,
+    Correspondence,
+    runtime_rows,
+)
+from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
+from verity_vllm.query.collective_names import (
+    NORM_SITE_MEMBER,
+    collective_sites,
+    norm_sites,
+)
+from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query.module_body import (
+    Q_MODULE_BODY_ID,
+    Q_MODULE_BODY_TEXT,
+    boundary_without_literals,
+    literal_calls,
+    module_body_partition,
+)
+from verity_vllm.query.program_view import (
+    CallView,
+    InputView,
+    Port,
+    ProgramView,
+    param_reads,
+    reads_any_of,
+)
+from verity_vllm.query.request_families import (
+    header_families,
+    moe_plane_rows,
+    run_value_rows,
+)
+from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by
+
+__all__ = ["SAMPLING_EVENTS", "collective_kind",
            "member_name", "shared_instances", "collective_sites", "request_manifest", "BridgeResult", "under",
            "CallMember", "Population", "population", "Q_WORD_ID", "Q_WORD_TEXT", "QUERY_OF_RECORD", "QUERIES", "partition_of"]
 
@@ -95,8 +122,6 @@ def partition_of(program_digest: str) -> dict[str, Any]:
 
 #: the sampling event that ends an engine step for one request (verity_vllm.program.sampling_event + the explicit-argmax selector)
 SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
-#: the sampling events that consume a registered runtime input (seed / splits) beside the logits
-STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - set(GREEDY_SELECTS)
 #: the parameters of a `registered_values` Program's supplied inputs (`Population.supplied`): `values`, and `run` / `run_<i>` per request
 SUPPLIED_PARAM = re.compile(r"^(values|run(_\d+)?)$")
 
@@ -153,12 +178,12 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
             f = record_fields.get(v)
             if f is not None:
                 reads[m].add(f)
-    groups: dict[tuple[frozenset[str], tuple], list[str]] = defaultdict(list)
-    for m, fs in reads.items():
-        if fs and m:
+    groups: dict[tuple[frozenset[str], frozenset], list[str]] = defaultdict(list)
+    for m, read in reads.items():
+        if read and m:
             # keyed by (parameters read, body signature): a body with another signature reading the same parameter is a different
             # logical producer (a tied embedding read by the logits Gemm), never an invocation of this one
-            groups[(frozenset(fs), frozenset(sig[m]))].append(m)
+            groups[(frozenset(read), frozenset(sig[m]))].append(m)
     out: dict[str, tuple[str, int]] = {}
     faults: list[str] = []
     for (fs, _sig), group in groups.items():
@@ -184,7 +209,7 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
 # the request manifest
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-DTYPE_OF_WIDTH = {16: "bf16", 32: "f32", 8: "w8", 64: "i64"}
+DTYPE_OF_WIDTH: Mapping[int | None, str] = {16: "bf16", 32: "f32", 8: "w8", 64: "i64"}
 
 
 def _dtype(width: int | None, *, weight: bool = False) -> str:
@@ -247,7 +272,7 @@ class Population:
                  query: str = QUERY_OF_RECORD) -> None:
         if query not in QUERIES:
             raise ValueError(f"unknown query {query!r}: one of {QUERIES}")
-        self.P, self.corr, self.return_slots, self.query = P, corr, return_slots, query
+        self.P, self.corr, self.query = P, corr, query
         self.events = [c.id for c in P.calls if c.family in SAMPLING_EVENTS]
         if not self.events:
             raise ValueError("Program has no sampling event: no step boundary")
@@ -290,12 +315,12 @@ class Population:
         self.literals = literals = literal_calls(P)
         # a check is an output, not a required Value: nothing commits it, and the replay evaluates it from the Values that are required
         returned = replace(P, outputs=tuple(v for v in P.outputs if v not in frozenset(P.checks))) if P.checks else P
-        self.B_module = B_module = boundary_without_literals(returned, Q_module_body_v1(P, corr), literals)
+        B_module = boundary_without_literals(returned, module_body_partition(P, corr), literals)
         if query == Q_WORD_ID:
             self.Q = partition_by(lambda c: c.id)
             self.B = B = boundary_without_literals(returned, self.Q, literals)
         else:
-            self.Q = Q_module_body_v1(P, corr)
+            self.Q = module_body_partition(P, corr)
             self.B = B = B_module
         step_of = self.step_of
         #: UNRETURNED: Calls whose Values no Call reads, the Program does not return and no policy below requires: nothing depends on
@@ -519,15 +544,23 @@ def population(P: ProgramView, corr: Correspondence, *, return_slots: bool = Tru
     return Population(P, corr, return_slots=return_slots, tp=tp, query=query)
 
 
+def _declared_target(res: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The target a Build's `result.json` declares (`target.declared`); an empty one where the Build declared none."""
+    target = res.get("target")
+    declared = target.get("declared") if target else None
+    return declared if declared else {}
+
+
 def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | None]:
     fa = None
-    for v in (res.get("attention_impls_observed") or {}).values():
+    observed = res.get("attention_impls_observed")             # a trace's; predict's Build records none under this name
+    for v in observed.values() if observed else ():
         fa = v.get("vllm_flash_attn_version")
         break
     if profile is None:
         from verity_vllm.program.frontend.target_profile import TargetProfile
 
-        cc = ((res.get("target") or {}).get("declared") or {}).get("compute_capability") or [8, 9]
+        cc = _declared_target(res).get("compute_capability") or [8, 9]
         fa3 = TargetProfile(compute_capability=(int(cc[0]), int(cc[1]))).effective_flash_attn_version() == 3
         profile = "hopper" if (fa == 3 or (fa is None and fa3)) else "ampere"
     return profile, fa
@@ -543,7 +576,7 @@ def query_header(profile: str, *, return_slots: bool, query: str = QUERY_OF_RECO
          ", neither of which is a Call lowered to no runtime tensor whose Values nothing reads" if return_slots else "") + \
         "; unreturned = the Calls whose Values nothing reads, the Program does not return and the policy does not require, listed by identity" + \
         f"; profile = {profile}"
-    return {"query_id": query, "query_id_digest": hashlib.sha256(text.encode()).hexdigest(), "query_text": text,
+    return {"query_id": query, "query_id_digest": fmt.query_id_digest(text), "query_text": text,
             **({"partition": dict(partition)} if word and partition else {}),
             "engine": "q-word" if word else "v2-query", "boundary": "call" if word else "module-body", "profile": profile,
             "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights"] +
@@ -613,18 +646,21 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     """The v1-shaped manifest of ONE request Program (B=1 component) under `query` (+ `norm_scales`, + `taps`: `query.router_softmax` / `vocab_range` POLICY; + its partition given `program_digest`)."""
     pdig = (artifact or {}).get("program_digest") or res["program"]["digest"]
     profile, fa = _profile(res, profile)
-    tpinfo = res.get("tp") if isinstance(res.get("tp"), dict) else {}
+    tpinfo = tp if isinstance(tp := res.get("tp"), dict) else {}
     prog_world, prog_rank = int(tpinfo.get("world") or 1), int(tpinfo.get("rank") or 0)
     if (prog_world > 1 or ranks > 1) and (int(ranks) != prog_world or int(rank) != prog_rank):
         raise ValueError(f"rank Program mismatch: Program is rank {prog_rank} of world {prog_world}, manifest requested rank {rank} of {ranks}")
-    sweep = (workload or {}).get("sweep") or {}
-    wr = (workload or {}).get("requests") or []
+    sweep, wr = fmt.sweep_and_requests(workload)
     workload_request_id = wr[0].get("request_id") if wr and isinstance(wr[0], dict) else None
     request_id = fmt.request_label(request_id, workload)
-    k_req = int(fmt.REQ_RE.match(request_id).group(1))
+    numbered = fmt.REQ_RE.match(request_id)                # `request_label` answers `r-1` for a position below zero
+    if numbered is None:
+        raise ValueError(f"request id {request_id!r} is not `r<k>`, k the request's position in the workload manifest, zero or more")
+    k_req = int(numbered.group(1))
     if wr and k_req < len(wr) and isinstance(wr[k_req], dict) and str(wr[k_req].get("request_id")) != str(workload_request_id):
         workload_request_id = wr[k_req].get("request_id")
-    arr = sweep.get("arrive_steps") or []
+    steps = sweep.get("arrive_steps")                      # this request's, the first where the sweep lists fewer, step 0 where it lists none
+    arr = steps if steps else []
     arrive = int(arr[k_req] if k_req < len(arr) else (arr[0] if arr else 0)) if sweep else 0
     n_seq = 1
     # --- the query and the policy ---------------------------------------------------------------------------------------------------
@@ -713,38 +749,8 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     for (step, mod), rows in sorted(ids_rows.items()):
         add("input_token_ids", step, 0, impl(mod), "in", 0, rows, rows=rows, width=1, dtype="i32")
 
-    # --- the values the served run decides (`fmt.RUN_PARAM`): one request-owned identity per `<op_path>/<member>` field, at its readers' step
-    run = {ValueRef(p.id, port.name): port for p in P.params if p.name == fmt.RUN_PARAM for port in p.port_table if "/" in port.name}
-    if run:
-        read_at: dict[ValueRef, set[int]] = defaultdict(set)
-        reader: dict[ValueRef, CallView] = {}
-        for c in P.calls:
-            for r in param_reads(c):
-                if r in run:
-                    read_at[r].add(step_of(c.id))
-                    reader.setdefault(r, c)
-        for v, port in run.items():
-            steps = sorted(read_at.get(v, ()))
-            if len(steps) != 1:
-                unmodelled[f"run value {port.name}: read at steps {steps} (one step's forward reads it)"] += 1
-                continue
-            op, member = port.name.rsplit("/", 1)
-            add(fmt.RUN_FAMILY, steps[0], 0, impl(op), member, 0, port.elems, dtype="u8", spec=reader[v].family, leaves=[port.lo, port.hi],
-                attention_module=impl(corr.module_of(reader[v].id)), statics=dict(reader[v].statics))
-
-    # --- MoE block planes (kernel geometry, v1's): per (MoE body, step) ----------------------------------------------------------------
-    moe_layers: set[int] = set()
-    lo = 0
-    for step, ev in enumerate(events):                     # the step's Calls are the body slice up to and including its sampling event
-        seg = P.calls[lo: ev + 1]
-        lo = ev + 1
-        for mod, g in fmt.moe_geometry({"spec": c.definition, "name": c.name} for c in seg).items():
-            layer = fmt.layer_of(mod)
-            if g["M"] <= 0 or g["TOPK"] <= 0:
-                continue
-            moe_layers.add(layer)
-            for plane, nw, dtype in fmt.moe_identities(g):
-                add("moe_block_stream", step, 0, f"moe/L{layer}", plane, 0, nw, dtype=dtype, rows=g["M"], topk=g["TOPK"], moe_module=impl(mod))
+    run_value_rows(P, corr, step_of, add, unmodelled)       # the values the served run decides (`fmt.RUN_PARAM`)
+    moe_layers = moe_plane_rows(P, events, impl, add)       # the MoE block planes (kernel geometry, v1's)
 
     for f in alias_faults + pop.tp_faults:
         unmodelled[f] += 1
@@ -752,23 +758,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     tapped = [(t, t.kernel_rows(pop, add, impl, aliases)) for t in taps]                   # the other taps' rows: interior to their Calls
     identities.sort(key=fmt.row_key)
     q = query_header(profile, return_slots=return_slots, query=query, partition=partition_of(program_digest) if program_digest and query == Q_WORD_ID else None, call_boundaries=bool(fam_counts.get("call_boundaries")))
-    if prog_world > 1:
-        q["required_families"].append("tp_rank_partials")
-        q["policy"]["protocol_required"].append(f"TP-04 (world {prog_world}): every collective output and its rank-local partial, with every "
-                                                "port of the partial's producer")
-        q["tp"] = {"world": prog_world, "collectives": len(pop.collectives), "peer_inputs": len(pop.peer_inputs)}
-        if pop.witness:
-            q["tp"]["witness_inputs"] = {fmt.SCHEDULE_PARAM: {"readers": len(pop.witness_readers),
-                                                              "binding": "each reader's own committed rank (port 0)"}}
-    if moe_layers:
-        q["required_families"].append("moe_block_stream")
-        q["moe_layers"] = sorted(moe_layers)
-    if any(f[:8] == "sampler_" for f in fam_counts):
-        q["required_families"] += sorted(f for f in fam_counts if f[:8] == "sampler_")
-    if fam_counts.get(fmt.RUN_FAMILY):
-        q["required_families"].append(fmt.RUN_FAMILY)
-        q["policy"]["protocol_required"].append(f"every `{fmt.RUN_PARAM}` field `<op_path>/<member>`: the request's value of the step "
-                                                f"whose forward reads it (leaves = its leaf range in `{fmt.RUN_PARAM}`)")
+    header_families(q, pop, prog_world, moe_layers, fam_counts)
     alias_out = {impl(m): [impl(canon), k] for m, (canon, k) in aliases.items() if m != canon}
     man = {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": pdig,
            "program": {"dir": program_dir, "function": res["program"].get("function"), "wrapper": res.get("wrapper"), "LP": res.get("LP"), "T": res.get("T"),
@@ -777,7 +767,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
            "correspondence": corr.provenance(),                 # which reader gave the owning modules: the runtime-correspondence/v1 record or the v1 annotations
            "workload": {"row_id": sweep.get("row_id"), "batch": sweep.get("batch"), "request_id": request_id, "workload_request_id": workload_request_id,
                         "arrive_step": arrive} if workload else None,
-           "query": reduce(lambda h, ts: ts[0].header(h, ts[1]), tapped, norm_scales.header(q, scales) if norm_scales else q), "wrapper_prefix": corr.prefix, "op_path_aliases": alias_out, "target": ((res.get("target") or {}).get("declared") or {}),
+           "query": reduce(lambda h, ts: ts[0].header(h, ts[1]), tapped, norm_scales.header(q, scales) if norm_scales else q), "wrapper_prefix": corr.prefix, "op_path_aliases": alias_out, "target": _declared_target(res),
            "flash_attn_version": fa, "ranks": ranks, "rank": rank,
            "steps": list(range(len(events))), "engine_steps": [arrive + s for s in range(len(events))], "requests": [request_id],
            "populations": {"identities": len(identities), "by_family": dict(fam_counts), "steps": len(events),

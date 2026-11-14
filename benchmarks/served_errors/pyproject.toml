@@ -1,0 +1,14 @@
+# `verity bench served_errors` (`run.py`). Not a package: the suite holds the runner's Pearl+ gap to the Lean lemma's
+# literals and runs it (`uv run tools/verity/check/suites.py benchmarks/served_errors`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# The runner reads the GLM-5.3 workload card; the test reads the Lean files whose numerals it is held to.
+inputs = [
+    "benchmarks/spot_figures/cards/workload.glm-5.3.json",
+    "security/Proofs/Pouw/PearlC/ServedH100Rev1Gap.lean",
+    "security/Proofs/Flock/Claims/NumbersDeploy.lean",
+    "security/Proofs/Properties/Verity/Recursive.lean",
+    "security/Proofs/Properties/Verity/Recursive/Audit.lean",
+]

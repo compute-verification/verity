@@ -9,7 +9,7 @@ from typing import Any, Callable
 #: The rows' read spans the row width too: at every W it is one network (`dsa_topk_mask.rows`, by N and K) of
 #: `DsaWaksmanSwap_v2{W,E}` and `DsaWaksmanPick_v2{W,E}`, one AND a payload bit, so the spots check the network at every N at
 #: one word and the latent rows' 576 words at the first class, where they are already over circuit-check's input budget and
-#: read lazily (`circuit_check.targets.LAZY_OPERANDS`)
+#: read lazily (`circuit_check.targets.lazy_operands`)
 RANGES = {
     "DsaTopKMask_v2{N=4096..131072 step 2048,TOPK=2048}": (
         "N=4096", "N=131072",

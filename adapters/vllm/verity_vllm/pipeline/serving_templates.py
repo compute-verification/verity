@@ -148,14 +148,21 @@ KCHUNKS = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8CoordinateChunk_v1"}
 #: the row Definitions whose heads are cut along their keys into chains (the ``chain`` layout, `chain_rows`), by the row family,
 #: the families of its units in their roles (`CHAIN_ROLES`): its block family, one key block carrying the online softmax's state
 #: to the next in FA3's visit order (a chain's first visited block FIRST at its key count, every later one at BN), its end family,
-#: a head's epilogue on its last block's lanes and O, and a split row's (`sparse_mla_split.SparseMlaSplit_v1`, FA3's split
-#: kernel and its combine) split end in column blocks and its combine of each column block of the splits; the units are the cut
-#: the row's module names (`sparse_mla.CUTS`, `sparse_mla_split.CUTS`), which circuit-check holds to the Flock block in the row's
-#: place
-CHAINS = {"SparseMla_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1"),
-          "SparseMlaSplit_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "SparseMlaSplitEndCols_v1", "SparseMlaCombine_v1")}
+#: a head's epilogue on its last block's lanes and O, the three families a key block is served as instead where the partition
+#: names them, its scores family (the block's running max, lanes and bf16 probabilities, its key rows in column blocks of
+#: G columns), its values family (the block's O on one column block of `values_widths`, off the scores unit's probabilities)
+#: and its key rows' writer family (one column block of G columns of the block's key rows, which every head's scores and
+#: values units read), and a split row's (`sparse_mla_split.SparseMlaSplit_v1`, FA3's split kernel and its combine) split end
+#: in column blocks, its combine of each column block of the splits, and its split end on one column block of values units;
+#: the units are the cut the row's module names (`sparse_mla.CUTS`, `sparse_mla_split.CUTS`: in whole key blocks, which
+#: circuit-check holds to the Flock block in the row's place, and at each of `values_widths` in scores, values and key units)
+CHAINS = {"SparseMla_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "SparseMlaHeadScoresCols_v1", "SparseMlaHeadValues_v1",
+                           "SparseMlaHeadKeysWire_v1"),
+          "SparseMlaSplit_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "SparseMlaHeadScoresCols_v1",
+                                "SparseMlaHeadValues_v1", "SparseMlaHeadKeysWire_v1", "SparseMlaSplitEndCols_v1",
+                                "SparseMlaCombine_v1", "SparseMlaSplitEnd_v1")}
 #: a ``CHAINS`` unit's role by its index in its row family's entry
-CHAIN_ROLES = ("block", "end", "cols", "combine")
+CHAIN_ROLES = ("block", "end", "scores", "values", "keys", "cols", "combine", "split")
 CHAIN_OF = {f: CHAIN_ROLES[i] for fs in CHAINS.values() for i, f in enumerate(fs)}
 #: the row Definitions cut into stages (the ``stage`` layout, `stage_rows`), by the row family: its stage families, each carrying
 #: what the stage after it reads.  A stochastic top-p select's are every split count's top-p pipeline (stats blocks and their
@@ -165,7 +172,7 @@ CHAIN_OF = {f: CHAIN_ROLES[i] for fs in CHAINS.values() for i, f in enumerate(fs
 #: in the row's place
 _TOPP_STAGES = ("TopPStatsHead_v1", "TopPStatsExp_v1", "TopPProbs_v1", "TopPStep_v1", "GumbelTopPSelect_v1")
 STAGES = {"GumbelTopPTokenSelect_v1": _TOPP_STAGES, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_STAGES,
-          "TokenSelect_v1": ("GreedyChunk_v1", "GreedyCombine_v1")}
+          "TokenSelect_v1": ("GreedyChunk_v2", "GreedyCombine_v2")}
 STAGE_OF = {f: tuple(row for row, fs in STAGES.items() if f in fs) for fs in STAGES.values() for f in fs}
 _TOPP_PLAN = "verity.definitions.registry.topp_stages"
 #: the module whose ``plan`` and ``cut`` a ``STAGES`` row family's units are
@@ -205,7 +212,9 @@ class Template:
     ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"chain"`` for a ``CHAINS`` unit family,
     ``"stage"`` for a ``STAGES`` stage family, ``"expert"``, ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's
     block GEMMs, fused blocks, table reads and router slots (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``), ``"history"`` for a
-    ``HISTORY`` row's history reads (`history_read`); else ``"row"``).
+    ``HISTORY`` row's history reads (`history_read`); ``"bits"`` for a row template that is a Boolean Definition with no word
+    Definition (DSA's long row's units: the mask's cut and the index), whose ports are bits and no words: each port is committed
+    as a bit row, its bits low first (`interface.unit_rows`, which holds each to whole u16 words); else ``"row"``).
     ``packed``: a row, coordinate, column block, slice, part, K-chunk, chain, stage, expert or slots template with a port that is not 16-bit
     elements, each port's element bits (its parameters', then its return fields'); its ports are committed as their elements'
     bytes. A read's (a history read's too) and a fused block's ports are bits (a key, digests, salt and path, and a fused block's operands' bytes),
@@ -224,7 +233,7 @@ def template(t: str) -> Template:
     """Template ``t`` through its word link: the registered Definition it names, bound to exactly ``t``; the word Definition it computes
     (`trace.word_of` for a Boolean Definition), whose signature is the template's word view; refused by name when ``t`` names no
     Definition or a port of its word view is not 16-bit words (a row or coordinate template's: not whole u16 words of one ``PACKED``
-    width)."""
+    width; a Boolean row template with no word Definition is laid out as its bits, ``"bits"``)."""
     hit = _TEMPLATES.get(t)
     if hit is not None:
         return hit
@@ -233,7 +242,7 @@ def template(t: str) -> Template:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.definitions import boolean as BB
-    from verity.definitions.call_scope import specialization
+    from verity.circuits.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     # registers EmbeddingRead_v1, a read's and a READ static's Definition, which BB.load does not
@@ -268,8 +277,10 @@ def template(t: str) -> Template:
               else "kchunk" if spec_base(word) in KCHUNKS.values()
               else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_OF
               else "history" if history_read(word) else LAYOUTS.get(spec_base(word), "row"))
+    if layout == "row" and w is fn and widths == {1}:
+        layout = "bits"
     packed = None
-    if widths != {16} and layout not in ("s8", "read", "fused", "history"):
+    if widths != {16} and layout not in ("s8", "read", "fused", "history", "bits"):
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
         elems = [ty.width_set() for ty in ports]
         if layout not in ("row", "coord", "cols", "slice", "part", "kchunk", "chain", "stage", "expert", "slots") or any(
@@ -350,6 +361,26 @@ def part(word: str, spec: str) -> tuple | None:
     return PART_OF.get(spec_base(word), {}).get(spec_base(spec))
 
 
+def values_widths(DV: int, DR: int) -> list[int]:
+    """The column widths of a ``CHAINS`` row's values units, coarse to fine: each G = DV / 2^j of at least 16 columns below the
+    row's DV output columns that divides DR too, so a key row [kv_c | k_pe] is whole column blocks of G, each one writer's
+    (`sparse_mla.key_blocks`); a values unit's O on G columns is then at least 64 bytes."""
+    return [DV >> j for j in range(1, DV.bit_length()) if DV % (1 << j) == 0 and DV >> j >= 16 and DR % (DV >> j) == 0]
+
+
+def chain_ways(spec: str) -> list[tuple[int | None, tuple[tuple[str, int], ...]]]:
+    """The ways a ``CHAINS`` row ``spec``'s key blocks are served, each its unit templates with their instances a row: whole
+    key blocks first (None, the cut its module names), then each key block its scores unit and values units of G columns and
+    its key rows' writers, at each G of `values_widths`, coarse to fine."""
+    from verity.circuits.codec import descriptor_id
+    from verity.definitions.registry import sparse_mla, sparse_mla_split
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    sp, chain, S = _bind(spec), {**sparse_mla.CUTS, **sparse_mla_split.CUTS}[spec_base(spec)], spec_statics(spec)
+    return [(g, tuple((descriptor_id(c), n) for c, n in (chain(sp) if g is None else chain(sp, cols=g))))
+            for g in (None, *values_widths(int(S["DV"]), int(S["DR"])))]
+
+
 def chunk_widths(K: int, G: int, KB: int) -> list[int]:
     """The K-chunk widths of a ``KCHUNKS`` coordinate of K weights: each k < K that cuts it into whole scale blocks and tiles."""
     return [K // c for c in range(2, K // G + 1) if K % c == 0 and (K // c) % G == 0 and (K // c) % KB == 0]
@@ -370,7 +401,9 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), for a ``CHAINS``
     row family, its cut (`sparse_mla.head_chain`: per head the first visited block at its key count, the later blocks at BN and
     the end; `sparse_mla_split.split_chain`: a split row's at NS = 1, else per head and split its blocks so and its end in
-    column blocks, and per head the combine of each column block), for a ``STAGES`` row family, its cut (the ``cut`` of the
+    column blocks, and per head the combine of each column block) and then, at each width G of `values_widths`, the units the
+    cut holds with each key block its scores unit, DV / G values units and its key rows' (DV + DR) / G writers (a Definition
+    two of them hold is listed once: the combine of a column block), for a ``STAGES`` row family, its cut (the ``cut`` of the
     module ``STAGE_PLANS`` names: each stage Definition and its units in its ``plan``), for an ``EXPERTS`` row family, at each block of n rows
     (`block_rows`), its
     block family at N = n, the read of a block's rows, ``EmbeddingRead_v1{V=E, H=n K / 2}``, and its ``FUSED`` block reading
@@ -427,9 +460,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
                     if n and (c := _bind(spec, fam, K=kc, FIRST=first, LAST=last)) is not None:
                         hit += ((descriptor_id(c), n * int(S["N"])),)
         if spec_base(spec) in CHAINS:
-            from verity.definitions.registry import sparse_mla, sparse_mla_split
-
-            hit += tuple((descriptor_id(c), n) for c, n in {**sparse_mla.CUTS, **sparse_mla_split.CUTS}[spec_base(spec)](sp))
+            hit += tuple({u: n for _g, units in chain_ways(spec) for u, n in units}.items())
         if spec_base(spec) in STAGES:
             cut = importlib.import_module(STAGE_PLANS[spec_base(spec)]).cut
             hit += tuple((descriptor_id(c), n) for c, n in cut(sp))
@@ -498,6 +529,25 @@ def fused_block(spec: str, n: int) -> Any:
 def block_rows(N: int, G: int) -> list[int]:
     """The rows n of an ``EXPERTS`` row's blocks: each power of two that divides N and G, so a block's rows are one G-block's."""
     return [1 << j for j in range(G.bit_length()) if G % (1 << j) == 0 and N % (1 << j) == 0]
+
+
+#: the most u16 words of a row of an embedding shard's tables (`shard_block`).  A key's tables are at the widths this gives,
+#: so another value is another nonce scheme: `expert_tables.NONCES` changes with it, and a key minted for this one is refused
+SHARD_ROW = 256
+
+
+def shard_block(H: int) -> int:
+    """The one width, in u16 words, an ``EmbeddingShard_v1`` row of H columns is read at and its tables are registered at: the
+    widest H / 2^k of at most `SHARD_ROW` words, a column block of the row a ``READ`` keyed by the token over a table of the
+    whole vocabulary (`expert_rows.shard_param`).  It is a function of H alone, so a field has one width and nothing asks for a
+    second: a table's nonce is its field's place and its block (`expert_tables.nonces`), and a second width of the field would
+    sample the first's salts."""
+    w = int(H)
+    while w > SHARD_ROW and w % 2 == 0:
+        w //= 2
+    if not 1 <= w <= SHARD_ROW:
+        raise ValueError(f"an embedding shard of {H} columns: no H / 2^k of at most {SHARD_ROW} words")
+    return w
 
 
 def _bind(spec: str, family: str | None = None, **over: Any) -> Any:

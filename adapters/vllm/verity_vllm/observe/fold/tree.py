@@ -7,18 +7,30 @@ consumes a whole subtree (or is explicitly asked to descend), so that no event i
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Iterator
 
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Event, SampleEnd, StepEnd, StepLink, StepStart, TritonLaunch,
-                     ViewDesc, views_in)
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Event,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+    views_in,
+)
+
+__all__ = ["step_events"]
 
 
 @dataclass
 class TreeNode:
     enter: DispatchEnter | TritonLaunch
     exit: DispatchExit | None = None
-    children: list["TreeNode"] = field(default_factory=list)
+    children: list[TreeNode] = field(default_factory=list)
 
     @property
     def id(self) -> int:
@@ -29,8 +41,25 @@ class TreeNode:
         return isinstance(self.enter, TritonLaunch)
 
     @property
+    def triton(self) -> TritonLaunch:
+        """The Triton launch this node is (`is_triton`); a dispatcher call has none."""
+        e = self.enter
+        if not isinstance(e, TritonLaunch):
+            raise TypeError(f"event {e.id} is the dispatcher call {e.op}, not a Triton launch")
+        return e
+
+    @property
+    def dispatch(self) -> DispatchEnter:
+        """The dispatcher call this node is; a Triton launch has none."""
+        e = self.enter
+        if isinstance(e, TritonLaunch):
+            raise TypeError(f"event {e.id} is the Triton launch {e.fn}, not a dispatcher call")
+        return e
+
+    @property
     def op(self) -> str:
-        return self.enter.fn if self.is_triton else self.enter.op
+        e = self.enter
+        return e.fn if isinstance(e, TritonLaunch) else e.op
 
     @property
     def phase(self) -> str:
@@ -38,13 +67,15 @@ class TreeNode:
 
     @property
     def args(self) -> list:
-        if self.is_triton:
-            return list(self.enter.args.values())
-        return self.enter.args
+        e = self.enter
+        if isinstance(e, TritonLaunch):
+            return list(e.args.values())
+        return e.args
 
     @property
     def kwargs(self) -> dict:
-        return self.enter.args if self.is_triton else self.enter.kwargs
+        e = self.enter
+        return e.args if isinstance(e, TritonLaunch) else e.kwargs
 
     @property
     def outs(self):
@@ -56,7 +87,7 @@ class TreeNode:
     def output_views(self) -> list[ViewDesc]:
         return list(views_in(self.outs))
 
-    def walk(self) -> Iterator["TreeNode"]:
+    def walk(self) -> Iterator[TreeNode]:
         yield self
         for c in self.children:
             yield from c.walk()
@@ -64,19 +95,13 @@ class TreeNode:
     def ids(self) -> set[int]:
         return {n.id for n in self.walk()}
 
-    def leaves(self) -> Iterator["TreeNode"]:
-        if not self.children:
-            yield self
-        for c in self.children:
-            yield from c.leaves()
-
     def render(self, depth: int = 0, max_depth: int = 8) -> str:
         pad = "  " * depth
-        if self.is_triton:
-            e = self.enter
+        e = self.enter
+        if isinstance(e, TritonLaunch):
             s = f"{pad}Triton {e.fn} grid={e.grid} const={e.constexprs}"
         else:
-            s = f"{pad}{self.enter.op}  in={[repr(v) for v in self.input_views()]} out={[repr(v) for v in self.output_views()]}"
+            s = f"{pad}{e.op}  in={[repr(v) for v in self.input_views()]} out={[repr(v) for v in self.output_views()]}"
         if depth < max_depth:
             for c in self.children:
                 s += "\n" + c.render(depth + 1, max_depth)
@@ -108,6 +133,7 @@ def build_trees(events: list[Event]) -> tuple[list[TreeNode], list[Event]]:
     roots: list[TreeNode] = []
     other: list[Event] = []
     open_stack: list[TreeNode] = []
+    node: TreeNode | None
     for ev in events:
         if isinstance(ev, DispatchEnter):
             node = TreeNode(ev)
@@ -152,7 +178,7 @@ def step_events(step_slice: list[Event]) -> StepEvents:
     sample = next((e for e in other if isinstance(e, SampleEnd)), None)
     links = [e for e in other if isinstance(e, StepLink)]
     end = next((e for e in other if isinstance(e, StepEnd)), None)
-    rest = [e for e in other if not isinstance(e, (SampleEnd, StepLink, StepEnd))]
+    rest: list[Event] = [e for e in other if not isinstance(e, (SampleEnd, StepLink, StepEnd))]
     return StepEvents(start, roots, sample, links, end, rest)
 
 

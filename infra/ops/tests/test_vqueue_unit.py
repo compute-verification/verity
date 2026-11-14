@@ -1,9 +1,11 @@
 """The verified queue's loop as a unit on a node (pods/nebius/vqueue): what loop.sh runs in each mode, with a stand-in for
 `python3.12 -m research queue vqueue` that records its argv and environment; how it stops; whose token git and gh get; what
 root's oneshot writes; and that deploy.toml installs every file the units name on one node, as a user of its own."""
+import inspect
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -12,6 +14,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 
 import pytest
+from research import at_main, merge
 
 from verity_ops import deploy
 
@@ -20,7 +23,10 @@ LOOP = VQ / "loop.sh"
 HELPER = "infra/control/gh_app_token.sh"          # the control pod's own, which token.sh runs on the node
 CONFIG, SKIP = 78, 75
 KEYS = ("HOME", "PATH", "PYTHONPATH", "TMPDIR", "TRAIN_TREES", "GH_TOKEN", "AWS_ACCESS_KEY_ID", "SLACK_BOT_TOKEN",
-        "RESEARCH_AGENT_URL", "RESEARCH_LANE", "GIT_TERMINAL_PROMPT")
+        "RESEARCH_AGENT_URL", "RESEARCH_LANE", "GIT_TERMINAL_PROMPT", merge.DRIVE_ENV, merge.LEAN_PUBLISH_ENV, "R2_BUCKET",
+        "R2_ENDPOINT", at_main.OPT_OUT)
+#: each list's flag, which the loop otherwise reads at the control pod's path, and the node's file under live/
+LISTS = {"--deselect": "deselect", "--keep-runs": "keep-runs", "--wide-file": "wide", "--heavy-file": "heavy", "--pins-file": "pins"}
 # The stand-in tick: one JSON line a call. With VQ_TEST_TERM its first call tells the loop to stop and then goes on, as a tick
 # under `systemctl stop` does; a second call, which a loop that stopped never makes, ends the loop so the test can't hang.
 STUB = """#!{py}
@@ -56,13 +62,14 @@ class Node:
         self.clone = self.home / "verity"
         subprocess.run(["git", "init", "-q", str(self.clone)], check=True)
         self.cred.mkdir()
-        envfile(self.cred / "r2.env", {"AWS_ACCESS_KEY_ID": "dummy-r2", "GH_TOKEN": "dummy-env"})
+        envfile(self.cred / "r2.env", {"AWS_ACCESS_KEY_ID": "dummy-r2"})
         envfile(self.cred / "slack.env", {"SLACK_BOT_TOKEN": "dummy-slack"})
         self.token.parent.mkdir()
         self.token.write_text("dummy-app\n")
         # ci's args as the control pod holds them: its own paths among them, and a comment
         (self.home / "live" / "args").write_text("# depth 2\n--gate check\n--on m1,m2\n--log /data/vqueue/live/decisions.jsonl\n")
-        self.env = {**os.environ, "VQ_HOME": str(self.home), "VQ_CRED": str(self.cred), "VQ_TOKEN": str(self.token),
+        self.env = {**{k: v for k, v in os.environ.items() if k != merge.DRIVE_ENV},
+                    "VQ_HOME": str(self.home), "VQ_CRED": str(self.cred), "VQ_TOKEN": str(self.token),
                     "VQ_PYTHON": str(script(tmp / "stub" / "python", STUB.format(py=sys.executable, keys=KEYS))),
                     "VQ_INTERVAL": "0", "VQ_TEST_OUT": str(self.out)}
 
@@ -86,7 +93,7 @@ def flag(argv: list[str], name: str) -> str:
 def test_with_no_mode_file_a_tick_is_a_dry_run_in_the_node_s_own_paths_as_the_app(node):
     """What a node runs before anyone switches it: --dry-run, which writes nothing, on live/'s copy of the log; the node's
     paths after ci's args, so the pod's --log in args loses; the clone as cwd and ci's pinned tree as the code; the store's
-    key and the Slack token from the credential files, and GH_TOKEN the App's token even when a file sets another."""
+    key and the Slack token from the credential files, and GH_TOKEN the App's token."""
     r = node.loop("once")
     assert r.returncode == 0, r.stderr
     [t] = node.ticks()
@@ -102,6 +109,7 @@ def test_with_no_mode_file_a_tick_is_a_dry_run_in_the_node_s_own_paths_as_the_ap
     assert env["PATH"].split(":")[0] == os.path.realpath(VQ / "bin") and (VQ / "bin" / "gh").is_file()
     assert (env["GH_TOKEN"], env["AWS_ACCESS_KEY_ID"], env["SLACK_BOT_TOKEN"]) == ("dummy-app", "dummy-r2", "dummy-slack")
     assert env["RESEARCH_AGENT_URL"] is None and env["RESEARCH_LANE"] == "ci" and env["GIT_TERMINAL_PROMPT"] == "0"
+    assert env[merge.LEAN_PUBLISH_ENV] == os.path.realpath(VQ / "lean_publish.sh") and flag(argv, "--graph2") == os.path.realpath(VQ / "graph2.sh")
     helper = subprocess.run(["git", "-C", str(node.clone), "config", "--local", "--get", "credential.helper"],
                             capture_output=True, text=True).stdout.strip()
     assert helper == f"!{os.path.realpath(LOOP)} git"
@@ -145,6 +153,255 @@ def test_a_shadow_keeps_its_log_lock_and_args_apart_from_the_live_loop_s(node):
     assert flag(argv, "--priority-file") == str(node.home / "live" / "priority")
 
 
+def test_live_alone_may_move_main_whatever_the_environment_says(node, monkeypatch):
+    """The loop moves `main` only with RESEARCH_DRIVE=1 (`merge.on_drive`).  live's tick has it from mode() though nothing
+    around the loop sets it; dry-run's and shadow's never do, though the unit's environment and a shell variable of mode()'s
+    own name both say 1 (a credential file can say neither: the next test)."""
+    def on_drive(value: str | None) -> bool:
+        if value is None:
+            monkeypatch.delenv(merge.DRIVE_ENV, raising=False)
+        else:
+            monkeypatch.setenv(merge.DRIVE_ENV, value)
+        return merge.on_drive()
+
+    (node.home / "live" / "decisions.jsonl").write_text('{"action": "build"}\n')
+    (node.home / "shadow" / "args").write_text("--gate check\n")
+    (node.home / "mode").write_text("live\n")
+    assert node.loop("once").returncode == 0
+    for mode in ("dry-run", "shadow"):
+        (node.home / "mode").write_text(f"{mode}\n")
+        assert node.loop("once", **{merge.DRIVE_ENV: "1", "drive": "1"}).returncode == 0
+    live, dry, shadow = node.ticks()
+    assert "--dry-run" in dry["argv"] and "--shadow" in shadow["argv"] and not {"--dry-run", "--shadow"} & set(live["argv"])
+    assert on_drive(live["env"][merge.DRIVE_ENV])
+    assert not on_drive(dry["env"][merge.DRIVE_ENV]) and not on_drive(shadow["env"][merge.DRIVE_ENV])
+
+
+#: names a credential file might set to change what a tick runs: the form's own variables, the paths it runs from, what moves
+#: `main` and whose code runs, and the token the App mints
+FORM = ("drive", "flag", "mode", "dir", "H", "CODE", "CLONE", "PY", "LIB", "LISTS", "PATH", "PYTHONPATH", "HOME", "BASH_ENV",
+        merge.DRIVE_ENV, "GH_TOKEN", "RESEARCH_AT_CHECKOUT")
+
+
+def test_a_credential_file_is_data_naming_only_the_keys_the_loop_reads(node):
+    """root's files in /etc/vy/vqueue are read as KEY=VALUE lines, never run: a key the loop doesn't read (`drive=1`, `flag=`,
+    which once turned a dry-run tick into a live one, or anything else of FORM) refuses the tick with 78, naming the file and
+    the key and never the value, in dry-run and shadow alike; a value is taken as written, its quotes aside, and never run."""
+    (node.home / "shadow" / "args").write_text("--gate check\n")
+    zz, secret = node.cred / "zz.env", "not-to-be-printed"
+    for mode in ("dry-run", "shadow"):
+        (node.home / "mode").write_text(f"{mode}\n")
+        for lines in ([f"{k}={secret}" for k in FORM] + ["drive=1\nflag=", "export drive=1", "flag=", f"{secret}"]):
+            zz.write_text(f"# set by hand\n\n{lines}\n")
+            r = node.loop("once")
+            assert r.returncode == CONFIG and not node.ticks() and f"{zz}" in r.stderr and secret not in r.stderr, (mode, lines)
+    ran = node.home / "ran"
+    zz.write_text(f"R2_BUCKET=\"dummy-bucket\"\nexport R2_ENDPOINT='dummy $(touch {ran})'\nSLACK_BOT_TOKEN=a=b\n")
+    assert node.loop("once").returncode == 0 and not ran.exists()
+    [t] = node.ticks()
+    assert "--shadow" in t["argv"] and t["env"]["SLACK_BOT_TOKEN"] == "a=b"
+    assert (t["env"]["R2_BUCKET"], t["env"]["R2_ENDPOINT"]) == ("dummy-bucket", f"dummy $(touch {ran})")
+    # a value sh would read as other than its text is refused, never taken one way where the pod's sh took it another
+    for value in ("a b", "x # note", "a&b", "~/k", '"a$b"', '"a\\b"', "'a'b", '"a"b', "a\\b", "`id`", "$HOME"):
+        zz.write_text(f"R2_BUCKET={value}\n")
+        r = node.loop("once")
+        assert r.returncode == CONFIG and "R2_BUCKET" in r.stderr and len(node.ticks()) == 1, value
+
+
+def test_a_tick_runs_research_from_ci_s_pinned_checkout_not_from_its_origin_main(node, tmp_path, monkeypatch):
+    """`research` re-executes from origin/main's code when the checkout it runs from is only behind it (`at_main.reexec`),
+    and ci's pin is such a checkout whenever main has moved: the tick's environment keeps the pin's code, where the same
+    checkout without it runs origin/main's."""
+    assert node.loop("once").returncode == 0
+    [t] = node.ticks()
+    pin = tmp_path / "pin"
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-C", str(pin)]
+    (pin / "tools/research").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(pin)], check=True)
+    for version in ("pin", "main"):
+        (pin / "tools/research/version").write_text(version)
+        subprocess.run([*git, "add", "-A"], check=True)
+        subprocess.run([*git, "commit", "-qm", version], check=True)
+    subprocess.run([*git, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+    subprocess.run([*git, "checkout", "-q", "--detach", "HEAD~"], check=True)
+    for value, runs_main in ((t["env"][at_main.OPT_OUT], False), (None, True)):
+        if value is None:
+            monkeypatch.delenv(at_main.OPT_OUT, raising=False)
+        else:
+            monkeypatch.setenv(at_main.OPT_OUT, value)
+        ran = []
+        at_main.reexec(["queue", "vqueue"], repo=pin, cache=tmp_path / "cache", execve=lambda *a: ran.append(a))
+        assert bool(ran) == runs_main, value
+
+
+def test_every_tick_reads_the_five_lists_at_the_node_s_paths_and_names_the_missing_in_one_line(node):
+    """The loop's defaults for --deselect, --keep-runs, --wide-file, --heavy-file and --pins-file are the control pod's paths:
+    on the node each is its file under live/, in every mode and after ci's args, so a line of args naming the pod's never wins.
+    A missing file reads as empty there, as it does on the pod, and the tick says which in one line and runs."""
+    live = node.home / "live"
+    (live / "args").write_text("--gate check\n--pins-file /data/drive/pins\n--graph2 /root/g2remote.sh\n")
+    (live / "heavy").write_text("")
+    r = node.loop("once")
+    assert r.returncode == 0, r.stderr
+    said = [ln for ln in r.stderr.splitlines() if "reads each as empty" in ln]
+    assert said == [f"vy-vqueue: no deselect keep-runs wide pins in {live}: the loop reads each as empty; copy ci's from the "
+                    "host the loop ran on"]
+    for f in LISTS.values():
+        (live / f).write_text("")
+    (node.home / "mode").write_text("shadow\n")
+    (node.home / "shadow" / "args").write_text("--gate check\n--keep-runs /data/vqueue/live/keep-runs\n")
+    r = node.loop("once")
+    assert r.returncode == 0 and "reads each as empty" not in r.stderr
+    for t in node.ticks():
+        assert {o: flag(t["argv"], o) for o in LISTS} == {o: str(live / f) for o, f in LISTS.items()}
+        assert flag(t["argv"], "--graph2") == os.path.realpath(VQ / "graph2.sh")
+
+
+FAKE_MAIN = """import json, os, sys
+with open(os.environ["FAKE_CALLS"], "a") as f:
+    f.write(json.dumps(sys.argv[1:]) + "\\n")
+if sys.argv[1:3] == ["pods", "ssh"] and "--print" in sys.argv:
+    if sys.argv[3] != os.environ.get("FAKE_KNOWN", sys.argv[3]):
+        sys.exit(f"research pods ssh: no machine named {sys.argv[3]!r}")
+    print(os.environ["FAKE_SSH"])
+elif sys.argv[1:3] == ["pods", "ssh"]:
+    print(os.environ.get("FAKE_UNIT", "activating"))
+"""
+FAKE_MERGE = """import json, os
+def push_mirror(repo, sha, name):
+    with open(os.environ["FAKE_CALLS"], "a") as f:
+        f.write(json.dumps(["push_mirror", str(repo), sha, name]) + "\\n")
+    print(f"research merge: pushed main ({sha[:12]}) to {name}")
+    return os.environ.get("FAKE_PUSH", "1") == "1"
+"""
+
+
+class Research:
+    """`python3.12 -m research` and `research.merge.push_mirror` as the node's wrappers call them, stood in for under tmp: each
+    call one JSON line in ``calls``; `pods ssh NAME --print` prints FAKE_SSH for a name FAKE_KNOWN allows, `pods ssh NAME --
+    CMD` prints FAKE_UNIT (the unit's state), and push_mirror succeeds unless FAKE_PUSH is 0."""
+
+    def __init__(self, tmp: Path):
+        pkg, self.calls, self.home = tmp / "fake" / "research", tmp / "calls.jsonl", tmp / "home"
+        pkg.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        (pkg / "__main__.py").write_text(FAKE_MAIN)
+        (pkg / "merge.py").write_text(FAKE_MERGE)
+        (self.home / "live").mkdir(parents=True)
+        self.env = {**{k: v for k, v in os.environ.items() if not k.startswith(("VQ_", "FAKE_"))}, "HOME": str(self.home), "PYTHONPATH": str(pkg.parent), "VQ_PYTHON": sys.executable,
+                    "FAKE_CALLS": str(self.calls)}
+
+    def made(self) -> list[list[str]]:
+        return [json.loads(ln) for ln in self.calls.read_text().splitlines()] if self.calls.exists() else []
+
+
+GRAPH2 = ["sudo", "-n", "python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executor/graph2.db", "--events",
+          "/root/executor/events"]
+
+
+def test_graph2_s_wrapper_reaches_its_machine_by_name_with_each_argument_whole(tmp_path):
+    """The pod's wrapper writes graph2's machine as an address; the node's asks the register for the machine's ssh line by
+    name (VQ_GRAPH2_NODE, default vy-nebius-cpu-7) and runs graph2 there over one shared connection, each argument one word
+    to the remote shell however it is spelled, and the register's line taken as words, never run.  A name the register lacks
+    runs nothing."""
+    fake = Research(tmp_path)
+    ssh = script(tmp_path / "bin" / "ssh", f'#!{sys.executable}\nimport json, os, sys\n'
+                 'open(os.environ["SSH_OUT"], "a").write(json.dumps(sys.argv[1:]) + "\\n")\n')
+    out, odd = tmp_path / "ssh.jsonl", tmp_path / "ran"
+    env = {**fake.env, "PATH": f"{ssh.parent}:{fake.env['PATH']}", "SSH_OUT": str(out), "FAKE_KNOWN": "vy-nebius-cpu-7",
+           "FAKE_SSH": shlex.join(["ssh", "-i", "/k", "-p", "22", f"research@$(touch {odd})"])}
+
+    def graph2(*args: str, **more: str) -> subprocess.CompletedProcess:
+        return subprocess.run([str(VQ / "graph2.sh"), *args], env={**env, **more}, capture_output=True, text=True)
+
+    words = ["list", "a b;c $(id)", "it's", "two\nlines", "", "\\'\"", "--json"]
+    assert graph2(*words).returncode == 0
+    [argv] = [json.loads(ln) for ln in out.read_text().splitlines()]
+    assert argv[:-1] == ["-i", "/k", "-p", "22", "-o", "ControlMaster=auto", "-o", f"ControlPath={fake.home}/.runpod/ssh/cm-g2-%C",
+                         "-o", "ControlPersist=600", f"research@$(touch {odd})"] and not odd.exists()
+    # ssh hands the command to the remote user's shell: shlex.split parses it by POSIX sh's rules, bash's alone not among them
+    assert shlex.split(argv[-1]) == [*GRAPH2, *words]
+    assert fake.made() == [["pods", "ssh", "vy-nebius-cpu-7", "--print"]]
+    assert graph2().returncode == 0
+    assert shlex.split(json.loads(out.read_text().splitlines()[-1])[-1]) == GRAPH2
+    r = graph2("list", VQ_GRAPH2_NODE="vy-nowhere")
+    assert r.returncode == 1 and "no machine named 'vy-nowhere'" in r.stderr and len(out.read_text().splitlines()) == 2
+
+
+def test_the_lean_publish_pushes_the_full_sha_to_the_cache_s_machine_then_starts_its_publisher(tmp_path):
+    """After a landing touching Lean, the loop's after-landing step runs lean_publish.sh SHA in a checkout of the loop's
+    clone (merge.lean_publish).  The machine is a registered name (VQ_LEAN_NODE, default vy-nebius-cpu-4); the push is the merge
+    mirror's (push_mirror) of the full sha; the publisher's unit is started without waiting.  A sha the clone lacks, a push
+    that fails and a unit that doesn't start each exit 1, starting nothing after, with the log's last lines on stdout, which
+    merge.lean_publish quotes."""
+    assert list(inspect.signature(merge.push_mirror).parameters)[:3] == ["repo", "sha", "name"]
+    fake, clone = Research(tmp_path), tmp_path / "clone"
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-C", str(clone)]
+    subprocess.run(["git", "init", "-q", str(clone)], check=True)
+    subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "x"], check=True)
+    sha = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    start = ["pods", "ssh", "vy-nebius-cpu-4", "--", "sudo -n systemctl start --no-block vy-lean-cache-daily.service; "
+             "systemctl is-active vy-lean-cache-daily.service"]
+    log = fake.home / "live" / "lean-publish.log"
+
+    def publish(ref: str, **more: str) -> subprocess.CompletedProcess:
+        fake.calls.unlink(missing_ok=True)
+        return subprocess.run([str(VQ / "lean_publish.sh"), ref], cwd=clone, env={**fake.env, **more}, capture_output=True, text=True)
+
+    r = publish(sha[:12])
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert fake.made() == [["push_mirror", str(clone.resolve()), sha, "vy-nebius-cpu-4"], start]
+    lines = log.read_text().splitlines()
+    assert re.fullmatch(rf"\S+Z publish {sha[:12]} on vy-nebius-cpu-4", lines[0]) and lines[-1] == "start: activating"
+    assert r.stdout.splitlines() == lines[-3:]
+    r = publish(sha, FAKE_UNIT="failed")
+    assert r.returncode == 1 and fake.made()[-1] == start and r.stdout.splitlines()[-1] == "start: failed"
+    r = publish(sha, FAKE_PUSH="0")
+    assert r.returncode == 1 and fake.made() == [["push_mirror", str(clone.resolve()), sha, "vy-nebius-cpu-4"]]
+    r = publish("0" * 40)
+    assert r.returncode == 1 and fake.made() == [] and f"{'0' * 40}: no such commit in {clone.resolve()}" in r.stdout
+    assert publish(sha, VQ_LEAN_NODE="vy-other").returncode == 0
+    pushed, started = fake.made()
+    assert pushed[3] == started[2] == "vy-other"
+
+
+def test_the_lean_publish_s_push_and_ssh_end_inside_the_time_merge_gives_the_script():
+    """merge.lean_publish stops waiting at LEAN_PUBLISH_TIMEOUT_S and kills the script alone, so a push or an ssh still
+    running would outlive it: each runs under `timeout` (which ends its whole process group), and the two bounds together
+    fit inside merge's."""
+    text = (VQ / "lean_publish.sh").read_text()
+    bounds = {k: int(v) for k, v in re.findall(r"\b(push_s|start_s)=(\d+)\b", text)}
+    assert set(bounds) == {"push_s", "start_s"} and sum(bounds.values()) < merge.LEAN_PUBLISH_TIMEOUT_S, bounds
+    assert re.search(r"""timeout "\$push_s" "\$py" -c 'import .*push_mirror""", text)
+    assert re.search(r'timeout "\$start_s" "\$py" -m research pods ssh "\$node" --', text)
+    assert len(re.findall(r"\btimeout\b", "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#")))) == 2
+
+
+def started(unit: Path) -> set[str]:
+    """What `systemctl is-active` says of ``unit`` once started and still running: a oneshot is `activating` until its command
+    exits, and `active` only after it, with RemainAfterExit=yes; a unit of any other type is `active`."""
+    service = unit.read_text().partition("[Service]")[2].partition("\n[")[0]
+    keys = dict(ln.split("=", 1) for ln in service.splitlines() if "=" in ln and not ln.lstrip().startswith("#"))
+    if keys.get("Type", "simple") != "oneshot":
+        return {"active"}
+    return {"activating", "active"} if keys.get("RemainAfterExit", "no") in {"yes", "true", "1", "on"} else {"activating"}
+
+
+def test_the_lean_publish_holds_the_publisher_started_by_the_states_its_unit_file_gives(tmp_path):
+    """The publisher's unit, as the tree installs it on the cache's machine, decides what a started publisher reports: the
+    wrapper succeeds on those states and fails on every other, so a unit that ran and ended (or never ran) is no success."""
+    unit = deploy.MANIFEST.parent / "vy-lean-cache-daily.service"
+    fake, clone = Research(tmp_path), tmp_path / "clone"
+    subprocess.run(["git", "init", "-q", str(clone)], check=True)
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-C", str(clone), "commit", "-q",
+                    "--allow-empty", "-m", "x"], check=True)
+    running = started(unit)
+    for state in ("active", "activating", "inactive", "failed", "deactivating", "unknown"):
+        r = subprocess.run([str(VQ / "lean_publish.sh"), "HEAD"], cwd=clone, env={**fake.env, "FAKE_UNIT": state},
+                           capture_output=True, text=True)
+        assert (r.returncode == 0) == (state in running), (state, running)
+
+
 def test_a_node_missing_the_clone_the_pin_or_the_args_says_which_and_runs_nothing(node):
     for gone, fix in ((node.home / "live" / "args", "the loop's flags"), (node.home / "src", "check ci's pin out"),
                       (node.clone / ".git", "copy the loop's clone")):
@@ -154,6 +411,11 @@ def test_a_node_missing_the_clone_the_pin_or_the_args_says_which_and_runs_nothin
         assert r.returncode == CONFIG and fix in r.stderr and not node.ticks(), gone
         kept.rename(gone)
     assert node.loop("once").returncode == 0 and len(node.ticks()) == 1
+    # what args is told to hold is no flag the tick passes itself, which would lose to the tick's
+    own = {a for a in node.ticks()[0]["argv"] if a.startswith("--")} - {"--gate", "--on"}
+    (node.home / "live" / "args").unlink()
+    told = set(re.findall(r"--[a-z][-a-z0-9]*", node.loop("once").stderr))
+    assert told and not told & own, told & own
 
 
 def test_a_missing_or_old_token_skips_the_tick_and_the_loop_goes_on(node):
@@ -226,9 +488,13 @@ def sweep(tmp_path: Path) -> None:
 
 
 def test_the_sweep_takes_what_a_launch_left_40_minutes_ago_and_nothing_else(tmp_path):
+    """A launch's train tree and its log, check.py's Lean deps, and the tree of a job of the steps after a landing that was
+    killed before it removed its own (`research merge`'s `_own_tree`)."""
     trains, tmp = tmp_path / "trains", tmp_path / "tmp"
-    old = [trains / "train-0123456789ab-1of3", trains / "train-0123456789ab-1of3.log", tmp / "check-lean-deps-x", tmp / "train-why.abc"]
-    new = [trains / "train-ba9876543210-2of3", trains / "train-ba9876543210-2of3.log", tmp / "check-lean-deps-y"]
+    old = [trains / "train-0123456789ab-1of3", trains / "train-0123456789ab-1of3.log", tmp / "check-lean-deps-x", tmp / "train-why.abc",
+           trains / "research-after-land-0123456789ab-k1ll3d"]
+    new = [trains / "train-ba9876543210-2of3", trains / "train-ba9876543210-2of3.log", tmp / "check-lean-deps-y",
+           trains / "research-after-land-ba9876543210-runs0n"]
     others = [tmp / "drive-launches", tmp / "research-merged-1"]
     for p in old + others:
         left(p, LIMIT + 1)

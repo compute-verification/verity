@@ -4,7 +4,7 @@ sm_90 by default, against `registry.deepgemm`: the H200's first-hour go/no-go fo
 which quantises its input itself) and `ScaledMmFp8BlockGrouped_v1` (`fp8_einsum("bhr,hdr->bhd", recipe=(1, 128, 128))`), and the
 load-time weight processing whose words they bind as derived Inputs (`kernels.deepgemm_twins`).
 
-One GPU process writes `<out>/deepgemm_capture.json`, the property record `deepgemm_capture` (`properties.record`), and
+One GPU process writes `<out>/deepgemm_capture.json`, the property record `deepgemm_capture` (`records.property_record`), and
 prints one line per case and then `DEEPGEMM GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
 nothing else runs when it fails (exit 3).  vLLM runs with DeepGEMM on (`VLLM_USE_DEEP_GEMM=1`, `VLLM_USE_DEEP_GEMM_E8M0=1`,
 `VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER=1`: the defaults on Hopper) and not batch invariant, so M < 32 takes FlashInfer's branch;
@@ -69,6 +69,7 @@ __models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
 import argparse
 import contextlib
 import glob
+import importlib
 import json
 import multiprocessing
 import os
@@ -81,12 +82,19 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.batch import type_shape
+from verity.definitions.numerics import deepgemm_schedule as S
+from verity.definitions.numerics import deepgemm_twins as T
+from verity.definitions.numerics import derived_rows as R
+from verity.definitions.registry import deepgemm as DG
+from verity.definitions.registry import fp8 as F
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as B
-from verity.definitions.numerics import deepgemm_schedule as S
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/deepgemm-capture/v2"
 RECORD = "deepgemm_capture.json"
@@ -208,7 +216,10 @@ def _raw_scales(ws) -> np.ndarray:
 def _kernel(K: int, N: int):
     import torch
     from vllm.model_executor.kernels.linear import init_fp8_linear_kernel
-    from vllm.model_executor.layers.quantization.utils.quant_utils import GroupShape, create_fp8_quant_key
+    from vllm.model_executor.layers.quantization.utils.quant_utils import (
+        GroupShape,
+        create_fp8_quant_key,
+    )
 
     return init_fp8_linear_kernel(activation_quant_key=create_fp8_quant_key(static=False, group_shape=GroupShape(1, GROUP)),
                                   weight_quant_key=create_fp8_quant_key(static=True, group_shape=GroupShape(GROUP, GROUP)),
@@ -260,11 +271,10 @@ class Taps:
     """Wraps module globals of vLLM modules: each call's name, keyword arguments, operands and outputs (cloned when written)."""
 
     def __init__(self, module: str, names: tuple[str, ...]):
-        self.module, self.names, self.calls = module, names, []
+        self.module, self.names = module, names
+        self.calls: list[dict[str, Any]] = []
 
     def __enter__(self):
-        import importlib
-
         self.mod = importlib.import_module(self.module)
         self.inner = {n: getattr(self.mod, n) for n in self.names}
         for n in self.names:
@@ -432,10 +442,6 @@ def _tally(rec: dict[str, Any], want: np.ndarray, nf: np.ndarray, got: np.ndarra
 
 def _reference_coords(rec: dict[str, Any], K: int, xq, sx, w, ws, want, nf, got, columns) -> None:
     """`ScaledMmFp8BlockCoordinate_v1{K,128}` at ``columns``: the twin's word where it is finite, else the GPU's."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.registry import fp8 as F
-
     fn = bind(F.ScaledMmFp8BlockCoordinate, K=K, G=GROUP)
     for n in sorted(columns):
         y = evaluate(fn, np.asarray(xq).tolist(), np.asarray(sx).tolist(), np.asarray(w[n]).tolist(), np.asarray(ws[n // GROUP]).tolist())
@@ -450,15 +456,9 @@ def _reference_coords(rec: dict[str, Any], K: int, xq, sx, w, ws, want, nf, got,
 def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [r0, r1) of one linear launch: DeepGEMM's branch, the quant twin against the kernel's (q, s) and the GEMM twin over them;
     FlashInfer's, the linear's twin; the references on the sampled rows."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.numerics import deepgemm_twins as T
-    from verity.definitions.numerics import derived_rows as R
-    from verity.definitions.registry import deepgemm as DG
-
     a = B._load(job["paths"])
     K, N, deep, rmap = job["K"], job["N"], job["branch"] == "deepgemm", job["row_map"]
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     r0, r1 = job["rows"]
     for i in range(r0, r1):
         r = rmap[i]
@@ -486,10 +486,8 @@ def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare_weights(job: dict[str, Any]) -> dict[str, Any]:
     """Weight-block rows [b0, b1) of one processed weight against the twin of its processing, block by block."""
-    from verity.definitions.numerics import deepgemm_twins as T
-
     a = B._load(job["paths"])
-    N, b0, b1 = job["N"], *job["block_rows"]
+    N, (b0, b1) = job["N"], job["block_rows"]
     r0, r1 = b0 * GROUP, min(N, b1 * GROUP)
     raw_w = np.asarray(a["raw_w"][r0:r1])
     if job["fmt"] == "e8m0":
@@ -501,7 +499,7 @@ def compare_weights(job: dict[str, Any]) -> dict[str, Any]:
     diff = np.zeros((nb * GROUP, kb * GROUP), dtype=bool)
     diff[:r1 - r0] = np.asarray(a["w"][r0:r1]) != want_w
     bad = diff.reshape(nb, GROUP, kb, GROUP).any(axis=(1, 3)) | (np.asarray(a["ws"][b0:b1]) != want_ws)
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     rec["weight_blocks"] = int((~unres).sum())
     rec["weight_mismatch"] = int((bad & ~unres).sum())
     rec["band_blocks"] = int(unres.sum())
@@ -578,13 +576,11 @@ def einsum_launches(work: Path, Ms: tuple[int, ...], seed: int) -> tuple[list[di
 def compare_einsum(job: dict[str, Any]) -> dict[str, Any]:
     """Tokens [r0, r1) of one einsum launch: every group's words against the grouped twin over the einsum's own operands, the
     reference on the sampled tokens."""
-    from verity.definitions.numerics import deepgemm_twins as T
-
     a = B._load(job["paths"])
     H, K, N, rmap = job["H"], job["K"], job["N"], job["row_map"]
     w = np.asarray(a["w"]).reshape(H, N, K)
     ws = np.asarray(a["ws"]).reshape(H, cdiv(N, GROUP), K // GROUP)
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     r0, r1 = job["rows"]
     for i in range(r0, r1):
         t = rmap[i]
@@ -655,7 +651,7 @@ def jit(cache: Path, predicted: list[list[str]]) -> dict[str, Any]:
     for f in sorted(glob.glob(str(cache / "**" / "kernel.cu"), recursive=True)):
         m = JIT.search(Path(f).read_text(errors="replace"))
         name, args = (m.group(1), [s.strip() for s in m.group(2).split(",")]) if m else (None, [])
-        k = {"impl": name, "args": args}
+        k: dict[str, Any] = {"impl": name, "args": args}
         k["ok"] = name == LAYOUT_IMPL or (name == GEMM_IMPL and len(args) == 20 and args[7] == str(GROUP)
                                           and args[17] in ("GemmType::Normal", "GemmType::Batched")
                                           and args[18] == "cutlass::bfloat16_t" and args[19] == "epilogue::transform::EpilogueIdentity"
@@ -671,10 +667,6 @@ def jit(cache: Path, predicted: list[list[str]]) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at every shape, with the weight-scale rows each reads."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.batch import type_shape
-    from verity.definitions.registry import deepgemm as DG
-
     out: dict[str, Any] = {}
     for shapes, _, _ in MODELS.values():
         for _, K, N in shapes:
@@ -730,6 +722,7 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Each case's own verdict (a linear or the einsum at one M, or one weight's processing): its launch's checks and its words,
     so a NO-GO names what failed."""
     out: dict[str, dict[str, Any]] = {}
+    c: dict[str, Any] | None
     for x in doc["launches"]:
         c = out.setdefault(_case(x), {"launches_ok": True, "branch": x.get("branch"), "totals": {k: 0 for k in TOTALS}})
         c["launches_ok"] = c["launches_ok"] and _launch_ok(x)

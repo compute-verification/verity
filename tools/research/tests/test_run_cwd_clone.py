@@ -337,7 +337,9 @@ def test_a_machine_clone_first_removes_what_finished_runs_left_in_scratch_and_ne
     (victim / "keep").mkdir(parents=True)
     runs = {"done": (exited.pid, {"state": "done", "pgid": exited.pid}), "refused": (exited.pid, None),
             "runner": (os.getpid(), {"state": "done", "pgid": exited.pid}), "group": (exited.pid, {"state": "failed", "pgid": member.pid}),
-            "running": (exited.pid, {"state": "running", "pgid": exited.pid}), "link": (exited.pid, {"state": "done", "pgid": exited.pid})}
+            "running": (exited.pid, {"state": "running", "pgid": exited.pid}), "link": (exited.pid, {"state": "done", "pgid": exited.pid}),
+            # a runner killed with its workload wrote no final status: the process its status records is gone, so the run is over
+            "lost": (exited.pid, {"state": "running", "pgid": exited.pid, "pid": exited.pid, "starttime_ticks": 1})}
     try:
         for rid, (runner, status) in runs.items():
             (root / "runs" / rid).mkdir(parents=True)
@@ -355,6 +357,7 @@ def test_a_machine_clone_first_removes_what_finished_runs_left_in_scratch_and_ne
     assert (victim / "keep").is_dir()
     err = capsys.readouterr().err
     assert f"removed {root / 'scratch' / 'done'}, the clone of finished run done" in err and "finished run refused" in err
+    assert "finished run lost" in err
 
 
 def test_on_a_machine_the_clone_is_the_shipped_commit_beside_src_and_the_shared_tree_is_untouched(tmp_path, repo, machine, outlivers,
@@ -482,23 +485,44 @@ def test_a_source_run_after_a_stream_ship_of_its_commit_runs_in_a_checkout(tmp_p
     assert Path(second["cwd"]) == shared and second["head"] == sha and second["transport"] == "stream+git"
 
 
-@pytest.mark.parametrize("cause", ["stream", "no-git"])
+@pytest.mark.parametrize("cause", ["stream", "no-git", "no-repo"])
 def test_a_command_that_needs_git_is_refused_at_launch_from_a_tree_git_cannot_reach(tmp_path, repo, machine, monkeypatch, capsys, cause):
     """`suites.py` refuses a tree without .git, but only once it runs: in a pool, after waiting in the line for a slot.  The
-    launcher refuses it before anything is claimed, and says what works."""
+    launcher refuses it before anything is claimed, and says what works.  A machine whose own shell finds no git refuses so
+    whatever the commit (CannotStart, which `research run --on auto` answers with another machine), on the launch that ships
+    the tree and on each one after it; the stream the launcher chose, or a push that failed, is not read as the machine's."""
     from test_remote_ship_git import _no_git_machine
 
+    fault, shipped, later = {"stream": ("Refused", "", ""), "no-repo": ("Refused", "(could not create ", "a checkout (could not create "),
+                             "no-git": ("CannotStart", "(the machine has no git); shipping the archive stream",
+                                        "a checkout (the machine has no git)")}[cause]
     if cause == "stream":
         monkeypatch.setenv("RESEARCH_SHIP", "stream")
+    elif cause == "no-git":
+        no_git = _no_git_machine(tmp_path)
+        monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: no_git)
     else:
-        monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: _no_git_machine(tmp_path))
-    rc = main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--source", str(repo), "--no-custody-r2",
-               "--no-sampler", "--cwd", "source", "--", "bash", "-lc", "uv run tools/verity/check/suites.py --changed HEAD --quick"])
-    err = capsys.readouterr().err
-    why = "RESEARCH_SHIP=stream" if cause == "stream" else "the line above says why"
-    assert rc == 3 and f"has no .git, as git couldn't reach m ({why}), and tools/verity/check/suites.py needs a git checkout" in err
-    assert "Relaunch once a git push reaches m (RESEARCH_SHIP unset, git installed there)" in err
-    assert cause == "stream" or "(the machine has no git); shipping the archive stream" in err
+        machine.mkdir()
+        (machine / "git").write_text("where the machine's repository would go\n")
+    refusals, launch = [], remote.launch
+
+    def launched(**kw):
+        try:
+            return launch(**kw)
+        except remote.Refused as e:
+            refusals.append(type(e).__name__)
+            raise
+
+    monkeypatch.setattr(remote, "launch", launched)
+    run = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--source", str(repo), "--no-custody-r2", "--no-sampler"]
+    for said in (shipped, later):
+        rc = main([*run, "--cwd", "source", "--", "bash", "-lc", "uv run tools/verity/check/suites.py --changed HEAD --quick"])
+        err = capsys.readouterr().err
+        why = "RESEARCH_SHIP=stream" if cause == "stream" else "the line above says why"
+        assert rc == 3 and f"has no .git, as git couldn't reach m ({why}), and tools/verity/check/suites.py needs a git checkout" in err
+        assert "Relaunch once a git push reaches m (RESEARCH_SHIP unset, git installed there)" in err and said in err
+    assert main([*run, "--cwd", "clone", "--", PY, "-c", "pass"]) == 3 and "so it has no .git to clone" in capsys.readouterr().err
+    assert refusals == [fault] * 3, "the launch that shipped the tree, the next, and one that needs a clone of it"
     assert not (machine / "runs").exists() and not (machine / "requests").exists(), "nothing claimed, no line joined"
 
 
@@ -526,7 +550,7 @@ def test_a_clone_run_after_a_source_run_shipped_the_commit_without_git_launches(
     ready = json.loads((shared / remote.READY_FILE).read_text())
     assert ready["checkout"] is True and ready["transport"] == "stream+git" and ready["identity"] == sha
     assert (shared / ".lake" / "packages" / "dep").is_dir(), "the source run's tree is the one made a checkout, not a new one"
-    assert remote.tracked_dirt(shared) == [] and _git(shared, "rev-parse", "HEAD") == sha
+    assert remote.tracked_dirt(shared, sha) == [] and _git(shared, "rev-parse", "HEAD") == sha
     assert json.loads((run_dir / "job.json").read_text())["run"]["remote"]["source_transport"] == "stream+git"
     assert go(2, "clone").is_dir() and not list((machine / "src").glob(f"{sha}.git-*")), "reused, nothing left beside it"
 
@@ -563,20 +587,27 @@ def _request(root: Path, src: Path, sha: str, run_id: str, *, custody: bool = Fa
 
 
 def test_the_machine_refuses_a_tree_it_cannot_clone_as_the_shipped_commit(tmp_path, repo):
-    """The launcher's refusals rest on what it shipped; the runner checks the tree it is given."""
+    """The launcher's refusals rest on what it shipped; the machine checks the tree it is given.  A checkout at another commit is
+    refused at the launch request, as for any run of the commit, before a runner starts; the clone asks again, as a run in the
+    shared tree can move its HEAD after that.  A tree without .git reaches the runner, which has nothing to clone."""
     root = tmp_path / "root"
     head = _git(repo, "rev-parse", "HEAD")
     moved, plain = "d" * 40, "e" * 40
     subprocess.run(["git", "clone", "-q", "--shared", str(repo), str(root / "src" / moved)], check=True)
     (root / "src" / plain).mkdir(parents=True)
-    for sha, why in ((moved, f"is at {head}, not {moved}, the commit the run was shipped for"),
-                     (plain, "is not the top level of a git checkout")):
+    with pytest.raises(clone.Refused, match=f"is at {head}, not {moved}, the commit the run was shipped for"):
+        clone.make(root / "src" / moved, tmp_path / "c", commit=moved)
+    for sha, fault, why in ((moved, "SourceNotReady", f"HEAD is at {head}, not at {moved}"),
+                            (plain, "CloneRefused", "is not the top level of a git checkout")):
         out = remote.launch_request(_request(root, root / "src" / sha, sha, f"r-{sha[0]}", custody=True))
-        assert not out["started"] and out["fault"] == "CloneRefused" and why in out["refused"], out
+        assert not out["started"] and out["fault"] == fault and why in out["refused"], out
         run_dir = root / "runs" / f"r-{sha[0]}"
-        wait_runner(run_dir)
+        if fault == "CloneRefused":
+            wait_runner(run_dir)
+        else:
+            assert not (run_dir / "launch.json").exists(), "no runner started"
         refused = json.loads((run_dir / "refused.json").read_text())
-        assert refused["fault"] == "CloneRefused" and why in refused["reason"], refused
+        assert refused["fault"] == fault and why in refused["reason"], refused
         assert R.summarize(run_dir)["state"] == "refused" and not (run_dir / "job.json").exists()
         assert not (root / "scratch" / f"r-{sha[0]}").exists()
         assert not (root / "requests" / f"r-{sha[0]}" / remote.CUSTODY_DIR / "cred.json").exists(), "nothing will publish: the key goes now"

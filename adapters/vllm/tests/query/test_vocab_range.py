@@ -7,18 +7,22 @@ from __future__ import annotations
 import json
 
 import pytest
+from verity.circuits import word as W_
 
 from tests.check.test_sampled_replay_v2_addresses import _tp_rank_program, _v2_manifest
+from tests.properties.vocab_range_exactness import edge_ids, ir_values
+from verity_vllm.acquire import plan
+from verity_vllm.check import oracle_compare as OC
+from verity_vllm.check.replay import coverage
 from verity_vllm.query import vocab_range as VR
 from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query import program_view as PV
 
 V, VS = 16, 8
 
 
 @pytest.mark.parametrize("VS_,H,START", [(8, 32, 0), (8, 32, 8), (24576, 4, 24576)])
 def test_the_shard_commits_the_shifted_id_and_both_range_bits(VS_, H, START):
-    from verity.definitions import word as W_
-
     G = W_.Graph(VR.shard_fn(VS_, H, START))
     cut = W_.units(G, 16, 32)["cut"]
     assert cut.ok and G.recomputed == [], cut.codes
@@ -28,8 +32,6 @@ def test_the_shard_commits_the_shifted_id_and_both_range_bits(VS_, H, START):
 
 
 def test_values_are_the_irs_on_every_edge_id():
-    from verity_vllm.properties.vocab_range_exactness import edge_ids, ir_values
-
     for start in (0, VS):
         for tok in edge_ids(start, VS, V) + [-1, 2**31 - 1, 2**31, 2**32 - 1]:
             assert VR.values(tok, start, VS) == ir_values(VS, start, tok), (start, tok)
@@ -68,14 +70,9 @@ def test_manifest_sites_refuses_two_ranges_at_one_site():
 
 
 def test_the_family_is_in_every_vocabulary():
-    from verity_vllm.acquire import plan
-    from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.replay import coverage
-    from verity.definitions import word as W_
-
     assert VR.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[VR.FAMILY] == "vocab_tap" and VR.FAMILY in coverage.QUERY_FAMILY_MECHANISM
     entry = {"identity": {"op_path": "model.embed_tokens", "output_member": VR.MEMBER}, "name": f"model.embed_tokens/{VR.MEMBER}"}
     assert OC._family_of(entry) == "hidden_stream"
     g = {"family": "EmbeddingShard_v1", "statics": {"VS": 8, "H": 32, "START": 8}, "definition": "EmbeddingShard_v1{VS=8,H=32,START=8}",
          "calls": 3, "where": "model.embed_tokens"}
-    assert W_.check_calls([g], acquired=VR.TAP_WORDS)["acquired_interior_words"] == 9
+    assert W_.check_calls([g], acquired=VR.TAP_WORDS, specialize=PV.specialization)["acquired_interior_words"] == 9

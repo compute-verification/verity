@@ -10,6 +10,9 @@
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
                                     a deployment configuration's parties on this machine, and its verdict (run.py)
     verity config new|check|hash    write, check or hash a deployment configuration (run.py)
+    verity verify proof [ARGS]      Flock's Lean verifier, the executable `lake build` writes in its package, with ARGS as
+                                    its own (`verity verify proof verify --zk --circuit F --public F --session DIR`), run
+                                    in the directory you are in and exiting with its status
     verity tasks list --json [--kind after-landing|preflight] [--changed BASE]
                                     the check's task graph of this checkout (`tasks/v1`, check/tasks.py; its README's "Tasks")
     verity tasks run ID [--out FILE]
@@ -20,7 +23,7 @@
     verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
     verity graph check --local [--family F]
                                     run the graph serially here, uncached: the reference executor
-    verity demo NAME [ARGS]         examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
+    verity demo NAME [ARGS]         demos/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
                                     workload on its placement
     verity demo --status            every demo's protocol, workload, run and proof, and each one's next missing evidence
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
@@ -29,6 +32,10 @@
                                     axioms go beyond the standard three (`sorryAx` too), or none, or each that failed, when
                                     lean has an error on its own lines (on a project machine with
                                     --on auto); --siblings: then fail on a name another module of its package declares too
+    verity lean deployed [--rev REV] [--today YYYY-MM-DD]
+                                    the deployed guarantees' rows as JSON, read from the Lean locks at REV by git alone:
+                                    each one's gap as the running checkout's Lean check computes it, and each open or gap
+                                    premise once by name; --today defaults to today in America/Los_Angeles (deployed.py)
 """
 from __future__ import annotations
 
@@ -47,9 +54,13 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parents[2]
 ROOT = HERE.parents[1]
 LAKEFILES = ("lakefile.lean", "lakefile.toml")
-USAGE = "verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]"
+USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]\n"
+         "verity lean deployed [--rev REV] [--today YYYY-MM-DD]")
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
+#: Flock's Lean verifier, which `verity verify proof` runs: its Lake package and the executable `lake build` writes there
+VERIFIER = "verity/protocols/proofs/flock/verifier"
+VERIFY_PROOF = "flock-verify"
 
 
 def _run(argv: list[str]) -> int:
@@ -131,7 +142,8 @@ def _lean_here(file: str, siblings: bool = False) -> int:
     """`lake env lean` in the directory of the nearest lakefile above FILE, against that package's built imports and with
     its Lean options (`siblings.options`), on a copy of FILE with the axiom probe appended (`axiom_probe.py`), whose line is
     the last; lean's status on FILE's own lines.
-    With ``siblings``, the copy's build then goes through the sibling check (`siblings.py`), whose status it takes."""
+    With ``siblings``, the copy's build then goes through the sibling check (`siblings.py`), whose status it takes; where
+    its stub is refused over a sibling, `lake build` of the siblings the refusal names comes first, once (`siblings.check`)."""
     path = (Path(file) if Path(file).is_file() else _tree(file) / file).resolve()
     pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
     if not path.is_file() or path.suffix != ".lean" or pkg is None:
@@ -163,15 +175,22 @@ def _lean_here(file: str, siblings: bool = False) -> int:
               f"probe after its last line{', then the sibling check' if plan else ''} (in {where})", flush=True)
         rc, said, _ = probe.probe(pkg, at, path.read_text(), lambda copy, show: lean(copy, args, show))
         if rc == 0 and plan:
-            rc, output, line = sib.check(plan, work, lambda a: sib.run([lake, "env", "lean", *a], pkg))
+            rc, output, lines = sib.check(
+                plan, work, lambda a: sib.run([lake, "env", "lean", *a], pkg),
+                lambda refusal: sib.run([lake, "build", *(f"+{m}" for m in sib.named(plan, refusal))], pkg)[:3])
             print(output, end="")
-            print(f"verity lean try: {rel}: {line}", flush=True)
+            for line in lines.splitlines():
+                print(f"verity lean try: {rel}: {line}", flush=True)
     if said:
         print(f"verity lean try: {rel}: {said}", flush=True)
     return rc
 
 
 def _lean(args: list[str]) -> int:
+    if args and args[0] == "deployed":
+        from . import deployed
+
+        return deployed.main(args[1:])
     ap = argparse.ArgumentParser(prog="verity lean try", description="Elaborate one Lean file: `lake env lean FILE` in the Lake "
                                  "package that holds it (the nearest lakefile above FILE), against that package's built "
                                  "imports (`lake build` there first) and with its `[leanOptions]`, as `lake build` gives "
@@ -232,6 +251,20 @@ def _lean(args: list[str]) -> int:
     return rc
 
 
+def _verify(args: list[str]) -> int:
+    """`verity verify proof ARGS`: the Lean verifier's executable with ARGS, in the caller's directory, where the files
+    ARGS name are; its exit status."""
+    if args[:1] != ["proof"]:
+        raise SystemExit((f"verity verify: no command {args[0]!r}\n" if args else "") + "verity verify proof [ARGS]")
+    exe = ROOT / VERIFIER / ".lake" / "build" / "bin" / VERIFY_PROOF
+    try:
+        return subprocess.run([str(exe), *args[1:]]).returncode
+    except FileNotFoundError:
+        raise SystemExit(f"verity verify proof: {VERIFIER}/.lake/build/bin/{VERIFY_PROOF} is not built: `bash "
+                         f"tools/verity/lean/setup.sh {VERIFIER}` installs elan, the toolchain and the package's "
+                         f"dependencies, then `lake build {VERIFY_PROOF}` there builds it") from None
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in ("-h", "--help"):
@@ -262,6 +295,8 @@ def main(argv: list[str] | None = None) -> int:
 
             return run.run_main([str(config), *args[2:]])
         return _runner("demos", "demo", args[1:])
+    if args[0] == "verify":
+        return _verify(args[1:])
     if args[0] == "lean":
         return _lean(args[1:])
     raise SystemExit(f"verity: no command {args[0]!r}\n{__doc__}")

@@ -22,19 +22,18 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity_flock.class_statement import UnitStager
-
-from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity.circuits import evaluation as E
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as BS
 from verity.definitions import boolean as BB
 from verity.definitions.numerics import deepgemm_twins as DT
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity_flock.class_statement import UnitStager
+
+from tests.pipeline import test_serving_rows_splits as SPL
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.query.program_view import spec_statics
-
-from tests.pipeline import test_serving_rows_splits as SPL
 
 ROUTER = 'E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"'
 #: GLM-5.3's unit templates of the five families as its rows hold them (`serving_templates.unit_templates`), at its statics:
@@ -159,13 +158,13 @@ def test_only_a_statement_in_lookup_slots_that_reads_a_slot_s_table_is_refused()
 
 def test_a_partition_for_zk_sessions_refuses_a_slots_form_template_by_name():
     gates16 = SPL.block(16, boolean=True)
-    partition = {"templates": [SPL.F8, SPL.F16, SPL.C2], "law": "stratified:1", "chunk_cap": SPL.CAPS, "zk": True}
+    partition = {"templates": [SPL.F8, SPL.F16, SPL.C2], "law": "stratified:1", "chunk_cap": SPL.PER_CHUNK, "zk": True}
     with pytest.raises(ValueError) as e:
         SRW.population({}, partition, "00" * 64)
     assert str(e.value) == f"a partition for --zk sessions names {CR.zk_refusal(SRW.template(SPL.F16))}"
     assert SPL.F16 in str(e.value) and gates16 in str(e.value)
     for other in ({**partition, "zk": False}, {k: v for k, v in partition.items() if k != "zk"},
-                  {**partition, "templates": [SPL.F8, gates16, SPL.C2], "chunk_cap": {**SPL.CAPS, gates16: 3}}):
+                  {**partition, "templates": [SPL.F8, gates16, SPL.C2], "chunk_cap": {**SPL.PER_CHUNK, gates16: 3}}):
         with pytest.raises(LookupError, match="no rows of SparseMlaHeadBlock_v1{DR=16,DV=32,NVIS=8,"):
             SRW.population({}, other, "00" * 64)
     window = SimpleNamespace(members=[], law="stratified:1", query={"name": SRW.TEMPLATE_QUERIES[0]}, row_tables=(), work_table=None,

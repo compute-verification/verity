@@ -14,7 +14,7 @@ decorators excluded), methods and nested functions each counted on their own.  T
 from __future__ import annotations
 
 import ast
-from functools import lru_cache
+from functools import cache
 
 from . import _ratchet as R
 
@@ -37,6 +37,7 @@ def file_sizes(src: str, rel: str) -> list[R.Violation]:
         out.append(R.Violation(rel, "module", "<module>", "lines", n))
     for node, symbol in R.walk(R.parse_src(src)):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            assert node.end_lineno is not None, "a parsed function has its end line"
             span = node.end_lineno - node.lineno + 1
             if span > FUNCTION_MAX:
                 qual = node.name if symbol == "<module>" else f"{symbol}.{node.name}"
@@ -44,7 +45,7 @@ def file_sizes(src: str, rel: str) -> list[R.Violation]:
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out: list[R.Violation] = []
     for p in R.library_files():

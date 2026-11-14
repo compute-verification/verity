@@ -8,13 +8,23 @@ V's, straight through the rounding, and Muon steps V.
 - `keep`: the share of a group's entries the rounding leaves nonzero; `group`: the entries one scale covers (0: a
   matrix has one scale);
 - `lr`, `warmup`, `decay`, `clip`, `micro_batches`: `subset`'s, the optimizer Muon over the latents; `cooldown`: how
-  the rate falls over the last `decay` share of the steps, `linear`, or `sqrt` for 1 - sqrt of the fall's progress.
+  the rate falls over the last `decay` share of the steps, `linear`, or `sqrt` for 1 - sqrt of the fall's progress;
+- `grad_code`: `fp32`, or `rtn4` and `rtn8`, where each micro-batch's gradient of a coded matrix passes as B-bit
+  codes rounded to nearest at one bf16 scale a row, packed 8/B a byte, then decoded, and the micro-batches' decoded
+  gradients are summed, with no error feedback (`_codes.row_codes`, `passed`);
+- `low_state`: the latents are bf16, each latent's update rounded to it stochastically, and Muon's momentum is int8
+  codes at one bf16 scale a row, coded again stochastically after each step (`_optimizers.Muon`'s `low_state`).
+
+The step's only random values are `low_state`'s roundings', from torch's global generator, which a stopped job keeps
+and its continuation takes back: Muon takes the latents in `targets`' order (the model's), and for each takes its
+momentum's rounding's, one uniform value an entry, then its update's, 16 random bits an entry.
 
 A step decodes each matrix from the codes the step before left (`SparseTernary.apply` on θ's own copy of the
 matrix; the first step's codes are zero, so it reads θ), runs its forwards and backwards on that, steps the latents,
-and rounds them into the next step's codes. So one step hands the next each matrix's codes, two bool planes and its
-scales, which is all the next forward reads of the training; the latents and Muon's momentum, which it hands on
-too, only the update rule reads.
+and rounds them into the next step's codes. The forward runs under bf16 autocast on every device, as `subset`'s
+does, so a job on a CPU runs the program a job on a GPU does. So one step hands the next each matrix's codes, two
+bool planes and its scales, which is all the next forward reads of the training; the latents and Muon's momentum,
+which it hands on too, only the update rule reads.
 
 The latents are parameters θ has none of, and θ's copies and the codes are buffers no state dict holds: θ's load
 leaves them as built, but for each copy, which takes θ's matrix as loaded, in θ's own dtype. A kept state's load,
@@ -34,23 +44,33 @@ from training_slowdown.codecs import Plan, SparseTernary
 from training_slowdown.model import LM, Linear
 
 from . import lora
+from ._codes import row_codes, row_values
 from ._optimizers import Muon
 
 VERSION = 1
 DIALS = {"targets": "blocks.*.weight", "keep": 0.5, "group": 0, "lr": 1.5e-3, "warmup": 0.0, "decay": 1.0,
-         "cooldown": "linear", "clip": 1.0, "micro_batches": 1}
+         "cooldown": "linear", "clip": 1.0, "micro_batches": 1, "grad_code": "fp32", "low_state": False}
+LATER = ("grad_code", "low_state")
 LATENT = ".v"
 #: `cooldown`'s values: the rate's factor at the share `left` of the fall still to go
 COOLDOWNS = {"linear": lambda left: left, "sqrt": lambda left: 1.0 - math.sqrt(1.0 - left)}
+#: `grad_code`'s values: the bits a code (0: the gradient as computed)
+GRAD_CODES = {"fp32": 0, "rtn4": 4, "rtn8": 8}
 
 
 def plan(dials: dict) -> Plan:
     if not 0 < dials["decay"] <= 1 or dials["warmup"] < 0 or dials["micro_batches"] < 1:
         raise ValueError("qat: decay is a share of the steps in (0, 1], warmup is not negative and micro_batches is "
                          "at least 1")
-    if dials["cooldown"] not in COOLDOWNS:
-        raise ValueError(f"qat: cooldown {dials['cooldown']!r} is none of {', '.join(COOLDOWNS)}")
+    for dial, have in (("cooldown", COOLDOWNS), ("grad_code", GRAD_CODES)):
+        if dials[dial] not in have:
+            raise ValueError(f"qat: {dial} {dials[dial]!r} is none of {', '.join(have)}")
     return Plan([(p, SparseTernary(dials["keep"], dials["group"])) for p in lora.patterns(dials)])
+
+
+def passed(g: torch.Tensor, bits: int) -> torch.Tensor:
+    """A matrix's gradient as `grad_code` passes it: its `bits`-bit codes, packed, then decoded."""
+    return row_values(*row_codes(g, bits), bits).to(g.dtype)
 
 
 def coded(model: torch.nn.Module, dials: dict) -> dict[str, Linear]:
@@ -77,7 +97,10 @@ def build(shape: dict, dials: dict):
         w = layer.weight.requires_grad_(True)
         if w.numel() % (dials["group"] or w.numel()):
             raise SystemExit(f"qat: groups of {dials['group']} don't divide {name}'s {w.numel()} entries")
-        layer.v = torch.nn.Parameter(torch.zeros_like(w))
+        if (bits := GRAD_CODES[dials["grad_code"]]) and w.shape[1] % (8 // bits):
+            raise SystemExit(f"qat: grad_code {dials['grad_code']} packs a row's codes a byte at a time, and {name}'s "
+                             f"rows of {w.shape[1]} don't fill whole bytes")
+        layer.v = torch.nn.Parameter(torch.zeros_like(w, dtype=torch.bfloat16 if dials["low_state"] else None))
         for buffer, value in (("start", w.detach().clone()),
                               ("scales", torch.zeros(w.numel() // (dials["group"] or w.numel()), dtype=torch.float16)),
                               ("plus", torch.zeros(w.shape, dtype=torch.bool)),
@@ -85,7 +108,7 @@ def build(shape: dict, dials: dict):
             layer.register_buffer(buffer, value, persistent=False)
         layer.register_load_state_dict_pre_hook(start_as_loaded)
     model.register_load_state_dict_post_hook(latents_are_new)
-    return model, [Muon([layer.v for layer in layers.values()], lr=dials["lr"])]
+    return model, [Muon([layer.v for layer in layers.values()], lr=dials["lr"], low_state=dials["low_state"])]
 
 
 def schedule(dials: dict, t: int, n: int) -> float:
@@ -103,13 +126,21 @@ def step(model, rows, optimizers, dials: dict, t: int, n: int) -> None:
     with torch.no_grad():
         for layer in layers:
             layer.weight.copy_(SparseTernary.apply(layer.start, layer.scales, layer.plus, layer.minus))
+    sums, bits = {}, GRAD_CODES[dials["grad_code"]]
     for x in rows.chunk(dials["micro_batches"]):
-        with torch.autocast(x.device.type, dtype=torch.bfloat16, enabled=x.device.type == "cuda"):
+        with torch.autocast(x.device.type, dtype=torch.bfloat16):
             logits = model(x[:, :-1])
         loss = F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), x[:, 1:].reshape(-1))
         (loss * (len(x) / len(rows))).backward()
-    for layer in layers:
-        layer.v.grad, layer.weight.grad = layer.weight.grad, None
+        if bits:
+            with torch.no_grad():
+                for i, layer in enumerate(layers):
+                    c = passed(layer.weight.grad, bits)
+                    sums[i] = c if i not in sums else sums[i] + c
+                    layer.weight.grad = None
+    for i, layer in enumerate(layers):
+        g = sums[i] if sums else layer.weight.grad
+        layer.v.grad, layer.weight.grad = g.to(layer.v.dtype), None
     if dials["clip"]:
         torch.nn.utils.clip_grad_norm_([layer.v for layer in layers], dials["clip"])
     for o in optimizers:

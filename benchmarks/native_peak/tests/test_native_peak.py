@@ -52,7 +52,8 @@ def test_spec_table_and_size_parsing() -> None:
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.9e12
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "nvfp4")[0] is None
     assert m.spec_peak("NVIDIA H100 PCIe", "bf16")[0] == 756.0e12
-    assert all(m.spec_peak("NVIDIA H200", d)[0] == m.spec_peak("NVIDIA H100 80GB HBM3", d)[0] for d in m.DTYPES)
+    assert m.spec_peak("NVIDIA H200", "bf16")[0] == 989.42976e12 and m.spec_peak("NVIDIA H200", "e4m3")[0] == 1978.85952e12
+    assert m.spec_peak("NVIDIA H200", "nvfp4")[0] is None
     assert m.spec_peak("NVIDIA H200 NVL", "bf16") == (None, None)  # its peaks are lower than the H200 SXM's
     assert m.spec_peak("NVIDIA A10G", "bf16") == (None, None)
     # RTX 5090: the whitepaper's dense FP4-with-FP32-accumulate figure, not the sparse headline 3352
@@ -144,8 +145,18 @@ def test_measure_bf16_small_on_cuda(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert doc["flop_per_second"] > 0 and "1024^3" in doc["sizes"] and doc["sizes"]["1024^3"]["check_ok"]
 
 
+def test_the_cards_reading_by_path_is_verity_devices_rate_at_the_tensor_pipes_clock() -> None:
+    from verity.device import load_card, number, rate
+
+    m = _measure()
+    card = load_card("h200-sxm-141gb")
+    for fmt in ("bf16", "e4m3"):
+        assert m.tensor_reading("h200-sxm-141gb", fmt) == float(2 * rate(card, fmt=fmt, mhz=number(card["clock"]["tensor"])))
+
+
 def test_spec_peaks_agree_with_every_census_line() -> None:
-    """The pod-side table stays standalone (nothing to read on a pod); it must quote benchmarks/census/hardware.json's peak for every line."""
+    """The pod-side table reads nothing on a pod but the shipped tree's cards; it must quote benchmarks/census/hardware.json's peak
+    for every line."""
     m = _measure()
     hardware = json.loads((REPO / "benchmarks" / "census" / "hardware.json").read_text(encoding="utf-8"))
     smi = {"NVIDIA A100 SXM4 80GB": "NVIDIA A100-SXM4-80GB", "NVIDIA H100 SXM5 80GB": "NVIDIA H100 80GB HBM3", "NVIDIA L40S 48GB": "NVIDIA L40S"}

@@ -12,40 +12,53 @@ from __future__ import annotations
 
 import bisect
 import collections
+import contextlib
 import functools
 import math
+from collections.abc import Callable
 
 import numpy as np
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 from torch.utils._python_dispatch import TorchDispatchMode
-
-from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.boundary import gate_width
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops import scalar as SC
 from verity.circuits.parts import Part, n_members
 from verity.circuits.program import is_input
 from verity.circuits.query_ast import GateSet, evaluate, parse
 from verity.circuits.refs import runs as ref_runs
 from verity.definitions.numerics.serve3_reference import materialize
+from verity.circuits.ops import scalar as SC
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import cublas_bf16 as CB
+from verity.definitions.registry import fa2_train as FT
+from verity.definitions.registry import fa2_train_bwd as FTB
 from verity.definitions.registry import moe as MOE
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as R
+
+from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.program_identity import check_identity
 from verity_vllm.program.frontend.report import DeriveReport
+from verity_vllm.program.frontend.rules import TORCH_RULES, VLLM_RULES
 from verity_vllm.program.frontend.rules.training import training_rules
 from verity_vllm.program.frontend.rules.training_survey import survey, with_holes
-from verity_vllm.program.frontend.train_step import AdamW, export_step, in_bits_beyond_theta, step_program, step_report
+from verity_vllm.program.frontend.train_step import (
+    AdamW,
+    _patched,
+    export_step,
+    in_bits_beyond_theta,
+    step_program,
+    step_report,
+    structure_program,
+)
 
 aten = torch.ops.aten
 
@@ -96,8 +109,8 @@ def _run(f, *xs, rules=None) -> tuple[torch.Tensor, torch.Tensor]:
 
 def _same_bits(got: torch.Tensor, want: torch.Tensor) -> None:
     bad = (got.view(torch.int32) != want.view(torch.int32)).nonzero().reshape(-1)
-    assert bad.numel() == 0, f"{bad.numel()} of {got.numel()} words differ, first at {bad[:4].tolist()}: " \
-                             f"{got[bad[:4]].tolist()} vs torch {want[bad[:4]].tolist()}"
+    assert bad.numel() == 0, (f"{bad.numel()} of {got.numel()} words differ, first at {bad[:4].tolist()}: "
+                              f"{got[bad[:4]].tolist()} vs torch {want[bad[:4]].tolist()}")
 
 
 def _data(*shape, positive=False, seed=0) -> torch.Tensor:
@@ -235,7 +248,7 @@ EXACT = {
 }
 
 
-def _f32(v: float) -> int:
+def _f32(v: float | np.floating) -> int:
     return int(np.float32(v).view(np.uint32))
 
 
@@ -520,7 +533,7 @@ def _recip(s: float) -> torch.Tensor:
 #: words are the GPU's (its NaN words are the `_v2` Definitions'): a number is its f32 word, which a bf16 add doesn't round first,
 #: and a division by a number is the product by its f32 reciprocal; an add with alpha is one fma, as on the CPU; addcdiv is
 #: fma(value, t1 / t2, self), as torch CPU's addcmul by a value of 1 computes it
-GPU = {
+GPU: dict[str, tuple[Callable[..., object], tuple[torch.Tensor, ...], Callable[..., torch.Tensor]]] = {
     "add_number_bf16": (lambda a: (a + 0.1,), (XB,), lambda a: (a.float() + _f32_of(0.1)).bfloat16()),
     "sub_tie_bf16": (lambda a: (a - TIE,), (X67B,), lambda a: (a.float() - _f32_of(TIE)).bfloat16()),
     "mul_number_bf16": (lambda a: (a * 3.4445,), (XB,), lambda a: (a.float() * _f32_of(3.4445)).bfloat16()),
@@ -712,8 +725,7 @@ def test_functional_adamw_is_torch_adamw() -> None:
     pp, mm, vv = p.clone(), m.clone(), v.clone()
     for step in (1, 2, 3):
         t.grad = grad * step
-        st = opt.state[t] if t in opt.state else None
-        if st is None:
+        if t not in opt.state:
             opt.state[t] = {"step": torch.tensor(0.0), "exp_avg": m.clone(), "exp_avg_sq": v.clone()}
         opt.step()
         s = {k: torch.tensor(x, dtype=torch.float32) for k, x in f.scalars(step).items()}
@@ -785,7 +797,7 @@ def test_tiny_step_survey_lists_its_one_hole_and_holds_no_program() -> None:
 def test_tiny_bf16_step() -> None:
     """The tiny step with its linears' operands cast to bf16, as bf16 autocast casts them (`LM(matmul_dtype=torch.bfloat16)`). Every
     op derives with either loss, each bf16 matrix product is `LinearRef_v1` rows of bf16 words (attention's are f32: torch's math
-    path computes it from upcast operands), and the casts are among the primitives."""
+    path computes it from upcast operands, and no flash attention Definition is in it), and the casts are among the primitives."""
     model, batch = meta_step("tiny", 2, ctx=16, vocab=64, matmul_dtype=torch.bfloat16)
     opt = AdamW(**ADAMW)
     ex = export_step(model, square_loss, opt, batch)
@@ -794,12 +806,24 @@ def test_tiny_bf16_step() -> None:
     bf16 = ["DT='bf16'" in nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.startswith("LinearRef_v1")]
     mms = sum(n.target is aten.mm.default and n.meta["val"].dtype == torch.bfloat16 for n in ex[0].graph.nodes)
     assert sum(bf16) == mms > 0 and not all(bf16), (sum(bf16), len(bf16), mms)
+    assert not [nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.startswith("Fa2Train")]
     s = step_report(model, loss_fn, opt, batch, survey=True, exported=export_step(model, loss_fn, opt, batch))
     assert s.unsupported is None and s.holes == [], (s.unsupported, s.holes)
     assert {P.Bf16ToF32.id, P.F32ToBf16Rn.id} <= set(s.primitives)
 
 
 CC = CB.TRAIN_CC
+
+
+@pytest.mark.parametrize("kw", [{}, {"cc": CC}, {"cc": CC, "tf32": True}, {"cc": CC, "deterministic": True},
+                                {"cc": CC, "structure": True}],
+                         ids=["cpu", "cc", "cc-tf32", "cc-deterministic", "cc-structure"])
+def test_training_rules_build_on_the_torch_only_list(kw: dict) -> None:
+    """`verity_vllm.program.frontend.rules.training.training_rules` holds every rule of `rules.TORCH_RULES`, in that list's order,
+    and none of `rules.VLLM_RULES`: a training step's rule set names no op of vLLM's."""
+    rules = training_rules(**kw).rules
+    assert [r for r in rules if any(r is t for t in TORCH_RULES)] == list(TORCH_RULES)
+    assert not {r.rule_id for r in rules} & {r.rule_id for r in VLLM_RULES}
 
 
 def _linear_gemms(x, w, dy):
@@ -865,25 +889,94 @@ def test_gpu_gemms_are_their_routes_bit_for_bit(monkeypatch, routes) -> None:
 TINY_STEP_ROUTES = {**{(32, K, N, r): {"kernel": "nosplit"} for K, N in ((64, 64), (64, 192), (192, 64)) for r in ("fwd", "dX", "dW")},
                     (32, 64, 64, "dW"): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"},
                     (32, 64, 192, "dX"): {"kernel": "serialk", "SPLIT_K": 3}}
+#: the tiny step's attention [B, H, T, D], which no capture of torch's flash attention covers: `_tiny_stand_ins` makes it a
+#: stand-in shape, the forward unsplit over key blocks of 16 and the backward over blocks of 16 rows and 16 keys
+TINY_SDPA = (2, 2, 16, 32)
+
+
+def _tiny_stand_ins(monkeypatch) -> None:
+    """The tiny step's stand-ins on sm_120: its linears' routes (`TINY_STEP_ROUTES`) and its attention's shape (`TINY_SDPA`)."""
+    for key, route in TINY_STEP_ROUTES.items():
+        monkeypatch.setitem(CB.TRAIN_ROUTES, key, route)
+    monkeypatch.setitem(FT.TRAIN_SDPA, TINY_SDPA, ("unsplit", 16))
+    monkeypatch.setitem(FTB.TRAIN_SDPA_BWD, TINY_SDPA, (16, 16))
+
+
+@contextlib.contextmanager
+def _deterministic_algorithms(on: bool = True):
+    """torch's deterministic algorithms `on` for the block, and afterwards as they were: the setting is the process's."""
+    was, warn_only = torch.are_deterministic_algorithms_enabled(), torch.is_deterministic_algorithms_warn_only_enabled()
+    torch.use_deterministic_algorithms(on)
+    try:
+        yield
+    finally:
+        torch.use_deterministic_algorithms(was, warn_only=warn_only)
 
 
 def test_tiny_bf16_step_on_sm120(monkeypatch) -> None:
-    """The tiny bf16 step on sm_120 at stand-in routes (`TINY_STEP_ROUTES`): each linear's three GEMMs are their routes'
-    Definitions on words, read off the layouts autograd gives them (nine linears at (K, N) = (64, 64), the lm_head among them,
-    four at (64, 192), two at (192, 64)), and attention's f32 products are `LinearRef_v1` rows as without `cc`."""
-    for key, route in TINY_STEP_ROUTES.items():
-        monkeypatch.setitem(CB.TRAIN_ROUTES, key, route)
+    """The tiny bf16 step on sm_120 under deterministic algorithms, at stand-in routes and attention shape (`_tiny_stand_ins`):
+    each linear's three GEMMs are their routes' Definitions on words, read off the layouts autograd gives them (nine linears at
+    (K, N) = (64, 64), the lm_head among them, four at (64, 192), two at (192, 64)), and each layer's attention is torch's flash
+    attention, its forward and its backward each one batch over the step's 2 x 2 heads of the head Definition its kernels
+    compute, with none of the math path's f32 products or its softmax."""
+    _tiny_stand_ins(monkeypatch)
     model, batch = meta_step("tiny", 2, ctx=16, vocab=64, matmul_dtype=torch.bfloat16)
-    prog = step_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
+    with _deterministic_algorithms():
+        prog = step_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
     assert not isinstance(prog, Unsupported), prog
     got = collections.Counter(nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.split("{")[0] in (
-        "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1", "LinearRef_v1"))
-    want = collections.Counter()
+        "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1"))
+    want: collections.Counter[str] = collections.Counter()
     for (K, N), linears in {(64, 64): 9, (64, 192): 4, (192, 64): 2}.items():
         for role in ("fwd", "dX", "dW"):
             want[word_of(CB.train_linear(role, 32, K, N)).id] += linears
-    assert {k: v for k, v in got.items() if not k.startswith("LinearRef_v1")} == want
-    assert all("DT='f32'" in k for k in got if k.startswith("LinearRef_v1")), got
+    assert got == want
+    heads = TINY_SDPA[0] * TINY_SDPA[1]
+    attention = [(nd.fn.id, nd.n) for nd in prog.root.body.nodes if nd.fn.id.startswith("Fa2Train")]
+    assert attention == [(FT.train_sdpa(*TINY_SDPA).id, heads)] * 2 + [(FTB.train_sdpa_backward(*TINY_SDPA).id, heads)] * 2
+    assert not [nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.startswith(("LinearRef_v1", "SoftmaxRef_v1"))]
+
+
+def _occurrences(prog) -> list[tuple]:
+    return [(o["node"], o["op"], [i["node"] for i in o["inputs"]]) for o in prog.annotations["correspondence"]["occurrences"]]
+
+
+def test_tiny_bf16_steps_structure_on_sm120(monkeypatch) -> None:
+    """The tiny bf16 step on sm_120 as a structure Program (`structure_program`) at 3 rows of 33 tokens: the occurrences of the
+    step's own derivation at the cc, op for op and input for input, lowered with no capture read (no stand-in routes or attention
+    shape, not under deterministic algorithms): its linears `LinearRef_v1`, each layer's flash attention forward and backward one
+    batch over its 3 x 2 heads of the stand-in heads, and the mark that it is no step's Program, which the step's lacks."""
+    model, batch = meta_step("tiny", 3, ctx=32, vocab=64, matmul_dtype=torch.bfloat16)
+    prog = structure_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
+    assert not isinstance(prog, Unsupported), prog
+    assert prog.annotations["train_step"]["structure"] is True
+    ids = [nd.fn.id for nd in prog.root.body.nodes]
+    assert any(i.startswith("LinearRef_v1") for i in ids)
+    assert not [i for i in ids if i.split("{")[0] in ("Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1")]
+    forward, backward = (bind(FT.Fa2TrainHead, T=32, D=32, BN=16), bind(FTB.Fa2TrainBwdHead, T=32, D=32, BM=16, BN=16, NS=1))
+    attention = [(nd.fn.id, nd.n) for nd in prog.root.body.nodes if nd.fn.id.startswith("Fa2Train")]
+    assert attention == [(forward.id, 6)] * 2 + [(backward.id, 6)] * 2
+    _tiny_stand_ins(monkeypatch)
+    model, batch = meta_step("tiny", 2, ctx=16, vocab=64, matmul_dtype=torch.bfloat16)
+    with _deterministic_algorithms():
+        step = step_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
+    assert not isinstance(step, Unsupported), step
+    assert "structure" not in step.annotations["train_step"]
+    assert _occurrences(step) == _occurrences(prog)
+
+
+def test_a_structure_the_stand_in_heads_dont_bind_at_is_refused() -> None:
+    """A structure whose attention T is no whole number of the stand-in heads' blocks of 16 is refused at its flash attention,
+    naming the fix; a structure derivation is of a step at a cc, has no survey, and reads neither setting of the kernels."""
+    model, batch = meta_step("tiny", 3, ctx=4, vocab=64, matmul_dtype=torch.bfloat16)
+    got = structure_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
+    assert isinstance(got, Unsupported)
+    assert "the structure's stand-in head" in got.hint and "derive the structure at another T" in got.hint, got
+    with pytest.raises(ValueError, match="a structure derivation is of a step at a cc"):
+        step_report(model, square_loss, AdamW(**ADAMW), batch, structure=True)
+    for kw in ({}, {"cc": CC, "deterministic": True}, {"cc": CC, "tf32": True}):
+        with pytest.raises(ValueError, match="a structure derivation is of a step at a cc, and reads no setting"):
+            training_rules(structure=True, **kw)
 
 
 def test_gpu_lowers_smollm2s_grid_z_dw_to_its_route() -> None:
@@ -940,6 +1033,24 @@ def test_gpu_export_takes_the_steps_cuda_branches() -> None:
 
     assert dtypes(False) == {torch.float32} and dtypes(True) == {torch.bfloat16}
     assert not isinstance(torch.Tensor.__dict__.get("is_cuda"), property) and torch.zeros(1).is_cuda is False
+
+
+def test_a_patch_is_put_back_as_the_owner_held_it() -> None:
+    """The translator's own patch (`train_step._patched`, which the GPU trace puts on `Tensor.is_cuda`): inside the block the
+    owner answers with the value; afterwards an attribute of its own is that attribute again and one it inherited is inherited
+    again, also when the block raises."""
+    class Base:
+        inherited = "the base's"
+
+    class Owner(Base):
+        own = "the owner's"
+
+    with _patched(Owner, "own", "patched"), _patched(Owner, "inherited", "patched"):
+        assert (Owner.own, Owner.inherited) == ("patched", "patched")
+    assert vars(Owner)["own"] == "the owner's" and "inherited" not in vars(Owner) and Owner.inherited == "the base's"
+    with pytest.raises(RuntimeError, match="inside the block"), _patched(Owner, "inherited", "patched"):
+        raise RuntimeError("inside the block")
+    assert "inherited" not in vars(Owner) and Owner.inherited == "the base's"
 
 
 def test_gpu_export_reads_the_steps_tf32(monkeypatch) -> None:
@@ -1031,6 +1142,7 @@ def test_witness_block_in_bits_beyond_theta() -> None:
     assert in_bits_beyond_theta(prog, one) == _walk_in_bits(prog, one, structure)
 
 
+@pytest.mark.slow
 def test_s_step_reference_mode() -> None:
     """The brief's step: the lf model's s size (d 512, 6 layers, 8 heads, SwiGLU 1408, tied embeddings, vocabulary 50,304, context
     1024), batch 2, plain AdamW, in reference mode, with the z-loss (`_z_loss`). Every op of its forward and its cross-entropy

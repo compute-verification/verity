@@ -13,7 +13,7 @@ import shutil
 import signal
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -29,7 +29,7 @@ needs_flock = pytest.mark.skipif(shutil.which("flock") is None or shutil.which("
 
 
 def t(s: str) -> float:
-    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc).timestamp()
+    return datetime.fromisoformat(s).replace(tzinfo=UTC).timestamp()
 
 
 class Systemd:
@@ -416,7 +416,8 @@ def test_research_keeper_set_status_and_stop_reach_the_nodes_keeper_over_ssh(tmp
     for flags, why in ((["--env", "GPU_LEASE_TIMED=1"], "--env GPU_LEASE_TIMED: the chunks' lease"),
                        (["--env", "CUDA_DEVICE_ORDER=FASTEST_FIRST"], "--env CUDA_DEVICE_ORDER: the chunks' lease"),
                        (["--env", "BASH_FUNC_timeout%%=() { :; }"], "--env BASH_FUNC_timeout%%: not a variable name"),
-                       (["--env", "HF_TOKEN=hf_x"], "--env HF_TOKEN: a secret's name, and a chunk's env is set on its command line"),
+                       (["--env", "HF_TOKEN=hf_x"], "--env HF_TOKEN: a secret's or a machine address's name, and a chunk's env"),
+                       (["--env", "VY_X_HOST=192.0.2.1"], "--env VY_X_HOST: a secret's or a machine address's name, and a chunk's env"),
                        (["--attempt-dir", str(tmp_path / "elsewhere")], "--attempt-dir: the runner sets each chunk's run dir"),
                        (["--job=j"], "--job: the runner sets")):
         assert cli.main([*s, "--until", "2099-01-01T00:00Z", "--owner", "@proofs", *flags, "--", "x", "{seed}"]) == 2

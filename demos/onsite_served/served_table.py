@@ -34,13 +34,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.configuration.deploy import config as K
-from verity.configuration.deploy.config import Component, Workload
-from verity.configuration.deploy.manifest import Channel, Role
-from verity.protocols.pous.verifier import wipe_parties as WP
-from verity.protocols.spot.verifier import parties as SP
-from verity.protocols.spot.verifier.one_stage.draw import parse_design
-from verity.configuration.wire import Refused
+from verity import config as K
+from verity.commitments.domains import LMS_SHA512_N64_W1_H20
+from verity.config import Component, Workload
+from verity.protocol import Channel, Role
+from verity.protocols.accounting.certifier.verifier import parties as NC
+from verity.protocols.policy.inference_only.verifier import parties as IO
+from verity.protocols.accounting.pous.verifier import wipe_parties as WP
+from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
+from verity.channel import Refused
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVED_WINDOW, GATE, CHECK = "served-window", "gate", "check"
@@ -55,7 +58,7 @@ ONSITE = "verity/onsite/v0"
 BINDINGS = "bindings.json"
 WORKERS, FIREWALL, PROVER, VERIFIER = SP.WORKERS, SP.FIREWALL, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_CHALLENGER = SP.CHALLENGER, WP.CHALLENGER
-BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", "network-certifier"
+BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", NC.NETWORK_CERTIFIER
 #: served_verdicts.py's record reads each piece's answer by its runner name
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
@@ -64,10 +67,14 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 # --- what each component and the workload declare -------------------------------------------------------------------
 
 def _law(law: str, params: Mapping[str, Any]) -> None:
-    try:
-        parse_design(law)
-    except ValueError as e:
-        raise Refused("law", str(e)) from None
+    """The served window's rule is a rate, which its audit states to its stream (`service.Law`): a fixed count is refused
+    by name, with the rate to state in its place, and so is a work rate, for which the window's class has no work table."""
+    strata = parse_strata_rate(law)
+    if parse_rate(law) is None and (strata is None or strata[0]):
+        raise Refused("law", f"the served window's rule is a rate (rate:NUM/DEN or stratified-rate:NUM/DEN), not {law!r}: its "
+                             "audit states it to its stream, which refuses a fixed count (subset:K, stratified:K, work:K), "
+                             "since K of N falls as the prover pads the N it registers. In place of a count K, state K over "
+                             "the proof blocks N the window's class registers: rate:K/N, or stratified-rate:K/N")
 
 
 def _pous(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -108,13 +115,13 @@ _PROVER = Role(PROVER, "developer", per="server", needs=("store",))
 _MEMORY_CHALLENGER = Role(MEMORY_CHALLENGER, "auditor", needs=("clock", "coins", "signing-key"))
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-              needs=frozenset({"windows"}), law=_law, default_law="subset:1"),
+              needs=frozenset({"windows"}), law=_law, default_law="rate:1/3481648"),
     Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
                                                Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
-    Component("inference-only", SP.IDS["inference-only"], parties=(_VERIFIER,), requires=("sampled-proofs",)),
+    Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(_MEMORY_CHALLENGER, _PROVER, _VERIFIER),
               channels=(Channel(PROVER, MEMORY_CHALLENGER, ("Setup", "Response")),
                         Channel(MEMORY_CHALLENGER, PROVER, ("Challenge",), carries_coins=True),
@@ -127,10 +134,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                                 after=("Register",)),
                         Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
               needs=frozenset({"receipts"})),
-    Component("certifier", SP.IDS["certifier"],
-              parties=(Role(NETWORK_CERTIFIER, "auditor", needs=("coins", "signing-key")), _VERIFIER),
-              channels=(Channel(NETWORK_CERTIFIER, WORKERS, ("out-opening",)),
-                        Channel(NETWORK_CERTIFIER, VERIFIER, ("out-record",))),
+    Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=((CHALLENGER, NETWORK_CERTIFIER),)),
     Component("wipe", "verity/wipe/v0", parties=(*WP.MANIFEST.parties, _VERIFIER),
@@ -148,19 +152,29 @@ PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host
 PLACEMENT = {WORKERS: PROVER_NODE, FIREWALL: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_CERTIFIER: GATE_HOST, MEMORY_CHALLENGER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
-HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine. Run it on each",
-          "machine with `verity run THIS --on MACHINE --bindings FILE` (demos/onsite_served/README.md); the deploy",
-          "bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.")
+#: the memory challenger's keys the auditor pinned, one for each subprotocol whose sessions it signs: the SHA-512 of
+#: each public key
+PINS = {"pous": "39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
+                "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb",
+        "wipe": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
+                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
+HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys",
+          "the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings",
+          "FILE` (demos/onsite_served/README.md); the deploy bindings hold every host and address, this file none.",
+          "`verity run THIS --dry-run` resolves it all.")
 
 
 def configuration(commit: str) -> dict[str, Any]:
     """The configuration `demos/onsite_served/config.toml` holds, at program ``commit``: `config new`'s over
-    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated."""
+    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated, and the memory challenger's
+    `PINS`."""
     cfg = K.new(SERVED_WINDOW, list(PROTOCOLS), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
     cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
     for p in cfg["party"]:
         p["machine"] = PLACEMENT[p["name"]]
+    cfg["pin"] = [{"party": MEMORY_CHALLENGER, "protocol": c, "scheme": LMS_SHA512_N64_W1_H20, "key-sha512": h}
+                  for c, h in sorted(PINS.items())]
     K.check(cfg, MANIFESTS, {SERVED_WINDOW: SERVED})
     return cfg
 
@@ -234,7 +248,10 @@ _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "
 
 
 def _spot_challenger(cfg, params, bound):
-    return {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
+    """The live challenger's bindings; with no gate bound the sample's coins are a local development session's, which
+    served_verdicts.sh takes only in a development run."""
+    hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
+    return hooks if "gate" in bound else {**hooks, "DEVELOPMENT": "1"}
 
 
 def _pouw(cfg, params, bound):
@@ -257,10 +274,22 @@ def _poub_session(cfg, params, bound):
     return {"SERVE_ARGS": shlex.join(["--remote-verifier", bound["address"]])}
 
 
+#: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
+#: 503-byte payload of the front's 512-byte cells; every other request is answered as before
+ID_FORM = "--protocol ids --id-payload 503"
+#: the certifier's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
+#: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
+#: served_verdicts.sh's default class
+SCAN_CLASS = "8,32,4,4,16"
+
+
 def _certifier_piece(cfg, params, bound):
     py = ".venv/bin/python"
-    return {"CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
-            "CERTIFIER_CMD": f'{py} {CERTIFIER_PIECE} piece "$1" "$2" "$3"'}
+    return {"SERVE_ARGS": ID_FORM,
+            "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
+            "CERTIFIER_CHAIN_CMD": f'{py} {CERTIFIER_PIECE} chain "$@"',
+            "CERTIFIER_PERIOD_CMD": f'{py} {CERTIFIER_PIECE} period "$@"',
+            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
@@ -276,8 +305,8 @@ PARTIES: dict[str, dict[str, Piece]] = {
                         "one at a time, in the records audit"),
         WORKERS: Piece("sampled-proofs", WORKERS, SERVED_WINDOW, "the window's values committed under hiding leaves "
                        "and sealed, its registration before the draw, and the drawn proof blocks proved in C-Flock --zk; "
-                       "the draw on the live challenger when its gate is bound, else on the records audit's own live "
-                       "coins", reaches=CHALLENGER, optional=tuple(_PP), hooks=_spot_challenger),
+                       "the draw on the live challenger when its gate is bound, else on a local development session's "
+                       "coins in a development run", reaches=CHALLENGER, optional=tuple(_PP), hooks=_spot_challenger),
         VERIFIER: Piece("sampled-proofs", VERIFIER, CHECK, "the onsite check: served_verdicts.py record over the "
                         "window's rows (the records audit's verdict the integrity row), the composed verdict and the "
                         "block record", scripts=(VERDICTS_SCRIPT,)),
@@ -312,10 +341,13 @@ PARTIES: dict[str, dict[str, Piece]] = {
         VERIFIER: Piece("bandwidth", VERIFIER, CHECK, "PoUB's row"),
     },
     "certifier": {
+        WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the certifier's developer side: its front before the "
+                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
+                       "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
+                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
+                       binds=("gate",), hooks=_certifier_piece),
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate: its "
-                                 "warden in front of serve-openai before the requests (CERTIFIER_FRONT, which the served "
-                                 "window runs), and its piece, the chain and the period check on the kept warden run",
-                                 scripts=(CERTIFIER_PIECE,), binds=("gate",), hooks=_certifier_piece),
+                                 "warden in front of serve-openai before the requests"),
         VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),
     },
     "wipe": {
@@ -353,12 +385,18 @@ def pieces(cfg: Mapping[str, Any], party: str) -> list[Piece]:
     return out + [PARTIES[c][party] for c in cfg["protocols"] if party in PARTIES.get(c, {})]
 
 
+#: the runner's variables that are serve-openai's flags, which each piece adds its own to
+JOINED = ("SERVE_ARGS",)
+
+
 def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
     """The served window's runner's variables: every listed piece's hooks, whichever party's they are, since the
-    prover's pieces reach the auditor's sides through their bindings."""
+    prover's pieces reach the auditor's sides through their bindings. A variable of `JOINED` is every piece's flags,
+    in the pieces' order; any other is one piece's."""
     out: dict[str, str] = {}
     for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]:
-        out.update(p.variables(cfg, bindings))
+        for k, v in p.variables(cfg, bindings).items():
+            out[k] = f"{out[k]} {v}" if k in JOINED and k in out else v
     return out
 
 
@@ -367,10 +405,19 @@ def unbound(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> list[str]:
             for k in p.unbound(bindings)]
 
 
+def composite(env: Mapping[str, str]) -> dict[str, str]:
+    """The runner's ``COMPOSITE``, set empty: it composes off the served node unless told otherwise, where onsite's
+    composite, which reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses
+    to start. A caller whose environment ``env`` names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` (a development composite
+    on the node) keeps what it named."""
+    return {} if "COMPOSITE" in env or env.get("COMPOSE_OFF_NODE") == "0" else {"COMPOSITE": ""}
+
+
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
-    """The served window's runner with every listed piece's hooks, its public record in ``state/out``; its serve dir
-    stays where the runner keeps it on the node (its ``D`` and ``SERVE_ROOT``, from the environment)."""
-    env = {**os.environ, **variables(cfg, bindings), "OUT": str(state / "out")}
+    """The served window's runner with every listed piece's hooks and no composite unless the caller asks for one
+    (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
+    ``D`` and ``SERVE_ROOT``, from the environment)."""
+    env = {**os.environ, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:
         return subprocess.run(["bash", str(ROOT / RUNNER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,

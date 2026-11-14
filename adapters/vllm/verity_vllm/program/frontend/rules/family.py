@@ -23,15 +23,21 @@ is by construction the registered one; provenance records the verified isomorphi
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import Body, CompositeDefinition, SpecializedDefinition
 from verity.circuits.defs import bind as ir_bind
-from verity.circuits.refs import Affine, Refs, concat
-from verity.circuits.refs import runs as _runs  # pure (was `..derive._runs`): this module must import without torch (capture fold M4 comparison)
-from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type
+from verity.circuits.refs import Affine, Refs, concat, tuple_of
+from verity.circuits.refs import Coll as _Coll
+from verity.circuits.refs import array_of as _array_of
+from verity.circuits.refs import (
+    runs as _runs,  # pure (was `..derive._runs`): this module must import without torch (capture fold M4 comparison)
+)
+from verity.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.types import Tuple as TupleT
+
 from verity_vllm.program.frontend.rules.base import FamilyRule, RuleInfo
 
 Run = tuple[str, int, int, int]  # (space, idx, lo, hi)
@@ -199,6 +205,132 @@ def _align(pr: list[Run], fr: list[Run]):
             pj = 0
 
 
+@dataclass
+class _Matching:
+    """The bijection under construction between a family's leaves and a derived body's nodes: the pairs made so far and the
+    weights' leaf intervals they bind."""
+    leaves: list[_Leaf]
+    flat_runs: list[list[list[Run]]]
+    flat_ids: list[str]
+    flat_out: list[int]
+    pw: int | None  # the family's weights parameter, when the derived body has one
+    flat_weights_param: int | None
+    node_map: dict[int, int] = field(default_factory=dict)  # family leaf -> derived node
+    used: set[int] = field(default_factory=set)
+    wmap: _IntervalMap = field(default_factory=_IntervalMap)
+    deferred: set[int] = field(default_factory=set)  # zero-argument leaves with several candidates: bound through their first reader
+
+    def translate_known(self, runs: list[Run]) -> list[Run] | None:
+        """The family's `runs` in the derived body's spaces, or None while a leaf or a weight they read is unbound."""
+        out: list[Run] = []
+        fw = self.flat_weights_param
+        for space, idx, lo, hi in runs:
+            if space == "x":
+                k = self.node_map.get(idx)
+                if k is None:
+                    return None
+                out.append(("n", k, lo, hi))
+            elif space == "q" and idx == self.pw and fw is not None:
+                tr = self.wmap.translate(lo, hi)
+                if tr is None:
+                    return None
+                out += [("p", fw, a, b) for a, b in tr]
+            elif space == "q":
+                out.append(("p", idx, lo, hi))
+            else:
+                raise _NoMatch(f"unexpected space {space}")
+        return _merge(out)
+
+    def try_candidate(self, leaf: _Leaf, k: int) -> tuple[list[tuple[int, int, int]], dict[int, int]] | None:
+        """Bindings (p_lo, p_hi, f_lo) the match would add plus the zero-arg leaves it binds through this
+        consumer (family leaf -> derived node), or None if k does not match."""
+        new: list[tuple[int, int, int]] = []
+        zero: dict[int, int] = {}
+        if len(leaf.args) != len(self.flat_runs[k]):
+            return None
+        for pr, fr in zip(leaf.args, self.flat_runs[k]):
+            prs = _runs(pr)
+            try:
+                pieces = list(_align(prs, fr))
+            except _NoMatch:
+                return None
+            for (ps, pidx, plo, phi), (fs, fidx, flo, fhi) in pieces:
+                if ps == "x":
+                    kk = self.node_map.get(pidx, zero.get(pidx))
+                    if kk is None and pidx in self.deferred:
+                        # a zero-argument leaf (a constant gate) is identified by who reads it: bind it here if the
+                        # derived node read is an unused gate of the same kind, covering the whole output
+                        if (fs == "n" and fidx not in self.used and fidx not in zero.values() and self.flat_ids[fidx] == self.leaves[pidx].id
+                                and plo == 0 and flo == 0 and phi == self.leaves[pidx].out_leaves and fhi == self.flat_out[fidx]):
+                            zero[pidx] = fidx
+                            continue
+                        return None
+                    if kk is None or fs != "n" or fidx != kk or flo != plo:
+                        return None
+                elif ps == "q" and pidx == self.pw:
+                    if fs != "p" or fidx != self.flat_weights_param:
+                        return None
+                    tr = self.wmap.translate(plo, phi)
+                    if tr is not None:
+                        if tr != [(flo, fhi)]:
+                            return None
+                    else:
+                        if not self.wmap.compatible(plo, phi, flo):
+                            return None
+                        for a, b, c in new:  # consistency among this candidate's own new bindings
+                            if a < phi and plo < b and c - a != flo - plo:
+                                return None
+                        new.append((plo, phi, flo))
+                elif ps == "q":
+                    if fs != "p" or fidx != pidx or flo != plo:
+                        return None
+                else:
+                    return None
+        return new, zero
+
+
+def _weights_parameter(pparams: tuple[tuple[str, Type], ...], pret_t: Type, flat: Body, flat_weights_param: int | None) -> int | None:
+    """The family's weights parameter (its last, when the derived body has one), once the two signatures agree: the same number of
+    parameters, the same type for each one that is not the weights, the same return type."""
+    if len(pparams) != len(flat.params):
+        raise _NoMatch(f"parameter counts differ: family {len(pparams)} vs derived {len(flat.params)}")
+    pw = len(pparams) - 1 if flat_weights_param is not None else None
+    for i, ((_, pt), (_, ft)) in enumerate(zip(pparams, flat.params)):
+        if i == pw:
+            continue
+        if pt != ft:
+            raise _NoMatch(f"input {i} type differs: family {pt!r} vs derived {ft!r}")
+    if pret_t != flat.ret_type:
+        raise _NoMatch(f"return type differs: family {pret_t!r} vs derived {flat.ret_type!r}")
+    return pw
+
+
+def _weights_binding(family_weights: Type, flat_weights: Type, wmap: _IntervalMap) -> tuple[dict[str, str], list[str], list[str]]:
+    """The weights binding at field granularity: family field -> the module tensor it binds whole; then the module tensors no
+    family field binds, and the family fields no leaf reads."""
+    binding: dict[str, str] = {}
+    partial: list[str] = []
+    pfields = _field_intervals(family_weights, "")
+    ffields = _field_intervals(flat_weights, "")
+    fby = {name: (lo, hi) for lo, hi, name in ffields}
+    for lo, hi, name in pfields:
+        segs = [(a, b, c) for a, b, c in wmap.fwd if a < hi and lo < b]
+        if not segs:
+            partial.append(f"{name}: unreferenced by any leaf")
+            continue
+        deltas = {c - a for a, b, c in segs}
+        if len(deltas) != 1:
+            raise _NoMatch(f"family field {name} binds to non-contiguous module leaves")
+        d = next(iter(deltas))
+        f_lo, f_hi = lo + d, hi + d
+        owner = [fn for fn, (a, b) in fby.items() if a <= f_lo and f_hi <= b]
+        if len(owner) != 1 or fby[owner[0]] != (f_lo, f_hi):
+            raise _NoMatch(f"family field {name} does not bind a whole module tensor (leaves [{f_lo},{f_hi}))")
+        binding[name] = owner[0]
+    bound_flat = set(binding.values())
+    return binding, [name for _, _, name in ffields if name not in bound_flat], partial
+
+
 def match_program(flat: Body, spec: SpecializedDefinition, *, flat_weights_param: int | None, allow_extra: bool = False,
                   with_map: bool = False) -> dict:
     """Verified isomorphism between a flat derived body and a registered program's expanded body. Returns a report
@@ -217,98 +349,18 @@ def match_program(flat: Body, spec: SpecializedDefinition, *, flat_weights_param
         leaf_bases = {n.fn.base_id for n in flat.nodes if isinstance(n.fn, SpecializedDefinition)}
         leaves, pret, pparams, pret_t = expand_leaves(spec, leaf_bases)
         rep["family_leaves"] = len(leaves)
-        if len(pparams) != len(flat.params):
-            raise _NoMatch(f"parameter counts differ: family {len(pparams)} vs derived {len(flat.params)}")
-        pw = len(pparams) - 1 if flat_weights_param is not None else None
-        for i, ((_, pt), (_, ft)) in enumerate(zip(pparams, flat.params)):
-            if i == pw:
-                continue
-            if pt != ft:
-                raise _NoMatch(f"input {i} type differs: family {pt!r} vs derived {ft!r}")
-        if pret_t != flat.ret_type:
-            raise _NoMatch(f"return type differs: family {pret_t!r} vs derived {flat.ret_type!r}")
+        pw = _weights_parameter(pparams, pret_t, flat, flat_weights_param)
         if len(leaves) != len(flat.nodes) and not (allow_extra and len(flat.nodes) > len(leaves)):
-            rep["family_leaf_ids"] = _histogram(l.id for l in leaves)
+            rep["family_leaf_ids"] = _histogram(leaf.id for leaf in leaves)
             rep["flat_node_ids"] = _histogram(descriptor_id(n.fn) for n in flat.nodes)
             raise _NoMatch(f"leaf counts differ: family {len(leaves)} vs derived {len(flat.nodes)}")
 
-        flat_runs = [[_runs(a.refs) for a in n.args] for n in flat.nodes]
-        flat_ids = [node_leaf_id(n) for n in flat.nodes]
-        flat_out = [n.out.leaves for n in flat.nodes]
+        m = _Matching(leaves, [[_runs(a.refs) for a in n.args] for n in flat.nodes], [node_leaf_id(n) for n in flat.nodes],
+                      [n.out.leaves for n in flat.nodes], pw, flat_weights_param)
+        flat_runs, flat_ids, node_map, used, deferred = m.flat_runs, m.flat_ids, m.node_map, m.used, m.deferred
         by_id: dict[str, list[int]] = {}
         for k, fid in enumerate(flat_ids):
             by_id.setdefault(fid, []).append(k)
-        node_map: dict[int, int] = {}
-        used: set[int] = set()
-        wmap = _IntervalMap()
-
-        def translate_known(runs: list[Run]) -> list[Run] | None:
-            out: list[Run] = []
-            for space, idx, lo, hi in runs:
-                if space == "x":
-                    k = node_map.get(idx)
-                    if k is None:
-                        return None
-                    out.append(("n", k, lo, hi))
-                elif space == "q" and idx == pw:
-                    tr = wmap.translate(lo, hi)
-                    if tr is None:
-                        return None
-                    out += [("p", flat_weights_param, a, b) for a, b in tr]
-                elif space == "q":
-                    out.append(("p", idx, lo, hi))
-                else:
-                    raise _NoMatch(f"unexpected space {space}")
-            return _merge(out)
-
-        def try_candidate(leaf: _Leaf, k: int) -> tuple[list[tuple[int, int, int]], dict[int, int]] | None:
-            """Bindings (p_lo, p_hi, f_lo) the match would add plus the zero-arg leaves it binds through this
-            consumer (family leaf -> derived node), or None if k does not match."""
-            new: list[tuple[int, int, int]] = []
-            zero: dict[int, int] = {}
-            if len(leaf.args) != len(flat_runs[k]):
-                return None
-            for pr, fr in zip(leaf.args, flat_runs[k]):
-                prs = _runs(pr)
-                try:
-                    pieces = list(_align(prs, fr))
-                except _NoMatch:
-                    return None
-                for (ps, pidx, plo, phi), (fs, fidx, flo, fhi) in pieces:
-                    if ps == "x":
-                        kk = node_map.get(pidx, zero.get(pidx))
-                        if kk is None and pidx in deferred:
-                            # a zero-argument leaf (a constant gate) is identified by who reads it: bind it here if the
-                            # derived node read is an unused gate of the same kind, covering the whole output
-                            if (fs == "n" and fidx not in used and fidx not in zero.values() and flat_ids[fidx] == leaves[pidx].id
-                                    and plo == 0 and flo == 0 and phi == leaves[pidx].out_leaves and fhi == flat_out[fidx]):
-                                zero[pidx] = fidx
-                                continue
-                            return None
-                        if kk is None or fs != "n" or fidx != kk or flo != plo:
-                            return None
-                    elif ps == "q" and pidx == pw:
-                        if fs != "p" or fidx != flat_weights_param:
-                            return None
-                        tr = wmap.translate(plo, phi)
-                        if tr is not None:
-                            if tr != [(flo, fhi)]:
-                                return None
-                        else:
-                            if not wmap.compatible(plo, phi, flo):
-                                return None
-                            for a, b, c in new:  # consistency among this candidate's own new bindings
-                                if a < phi and plo < b and c - a != flo - plo:
-                                    return None
-                            new.append((plo, phi, flo))
-                    elif ps == "q":
-                        if fs != "p" or fidx != pidx or flo != plo:
-                            return None
-                    else:
-                        return None
-            return new, zero
-
-        deferred: set[int] = set()  # zero-argument leaves with several candidates: bound through their first reader
         for j, leaf in enumerate(leaves):
             cands = [k for k in by_id.get(leaf.id, ()) if k not in used]
             if not cands:
@@ -319,13 +371,13 @@ def match_program(flat: Body, spec: SpecializedDefinition, *, flat_weights_param
             # narrow by the first fully known argument
             if len(cands) > 1:
                 for ai, a in enumerate(leaf.args):
-                    tr = translate_known(_runs(a))
+                    tr = m.translate_known(_runs(a))
                     if tr is not None:
                         cands = [k for k in cands if _merge(flat_runs[k][ai]) == tr]
                         break
             chosen = None
             for k in cands:
-                res = try_candidate(leaf, k)
+                res = m.try_candidate(leaf, k)
                 if res is not None:
                     chosen = (k, res)
                     break
@@ -334,7 +386,7 @@ def match_program(flat: Body, spec: SpecializedDefinition, *, flat_weights_param
                                f"({len(by_id.get(leaf.id, ()))} derived calls of that kind, {len(cands)} unused candidates checked)")
             k, (new, zero) = chosen
             for p_lo, p_hi, f_lo in new:
-                wmap.add(p_lo, p_hi, f_lo)
+                m.wmap.add(p_lo, p_hi, f_lo)
             for pj, fk in zero.items():
                 node_map[pj] = fk
                 used.add(fk)
@@ -359,36 +411,16 @@ def match_program(flat: Body, spec: SpecializedDefinition, *, flat_weights_param
             rep["superset"] = True
         if with_map:
             rep["node_map"] = [[node_map[j], leaves[j].path] for j in range(len(leaves))]
-        tr = translate_known(_runs(pret))
+        tr = m.translate_known(_runs(pret))
         if tr is None:
             raise _NoMatch("the family's return references cover unbound weights")
         if tr != _merge(_runs(flat.ret)):
             raise _NoMatch("return reference sequences differ")
 
-        # weights binding at field granularity
         binding: dict[str, str] = {}
-        partial: list[str] = []
         if pw is not None:
-            pfields = _field_intervals(pparams[pw][1], "")
-            ffields = _field_intervals(flat.params[flat_weights_param][1], "")
-            fby = {name: (lo, hi) for lo, hi, name in ffields}
-            for lo, hi, name in pfields:
-                segs = [(a, b, c) for a, b, c in wmap.fwd if a < hi and lo < b]
-                if not segs:
-                    partial.append(f"{name}: unreferenced by any leaf")
-                    continue
-                deltas = {c - a for a, b, c in segs}
-                if len(deltas) != 1:
-                    raise _NoMatch(f"family field {name} binds to non-contiguous module leaves")
-                d = next(iter(deltas))
-                f_lo, f_hi = lo + d, hi + d
-                owner = [fn for fn, (a, b) in fby.items() if a <= f_lo and f_hi <= b]
-                if len(owner) != 1 or fby[owner[0]] != (f_lo, f_hi):
-                    raise _NoMatch(f"family field {name} does not bind a whole module tensor (leaves [{f_lo},{f_hi}))")
-                binding[name] = owner[0]
-            bound_flat = set(binding.values())
-            rep["unused_module_weights"] = [name for _, _, name in ffields if name not in bound_flat]
-            rep["unreferenced_family_fields"] = partial
+            binding, rep["unused_module_weights"], rep["unreferenced_family_fields"] = _weights_binding(
+                pparams[pw][1], flat.params[flat_weights_param][1], m.wmap)
         rep.update(matched=not extra_idx, weights_binding=binding, node_bijection=len(node_map), seconds=round(time.time() - t0, 3))
         if extra_idx:
             rep["reason"] = (f"{len(extra_idx)} derived nodes have no family counterpart (extra computation); every family leaf is "
@@ -488,7 +520,7 @@ SERVE_FAMILY = RegisteredFamily("Family[Serve_v1]", 1, _b1.Serve, _serve_binder,
                                 "structural: verified isomorphism to Serve_v1{C,LP,STEPS} (the certificate of record's program identity)")
 
 
-def _serve_v3_binder(flat_sd, ctx):
+def _padded_serve_binder(flat_sd, ctx):
     """`Serve_v3{C3, LP, D_MAX, GEMM, ATTENTION, NORM}` (serve3.py): the padded circuit. `C3` is the derivation's config
     with `EOS_ID` (spec §10: bound at the binding site, never into a v1/v2 dict); the guards the source computed must
     all test that id. The implementation records come from the vocabulary (a v2-skeleton profile)."""
@@ -514,20 +546,18 @@ def _serve_v3_binder(flat_sd, ctx):
 
 from verity.definitions.registry import serve3 as _serve3  # noqa: E402
 
-SERVE_V3_FAMILY = RegisteredFamily("Family[Serve_v3]", 1, _serve3.ServeV3, _serve_v3_binder,
+SERVE_V3_FAMILY = RegisteredFamily("Family[Serve_v3]", 1, _serve3.ServeV3, _padded_serve_binder,
                                    "structural: verified isomorphism to Serve_v3{C3,LP,D_MAX,GEMM,ATTENTION,NORM} (the padded circuit, serve3-spec)")
 
 
 def _layer_weights_with_table(C: dict) -> RecordType:
     lw = _b1.layer_weights_type(C)
-    from verity.circuits.types import Value
     return RecordType(*(list(lw.fields) + [("cos_sin", Array(C["MAX_POS"], Array(C["D"], Value(16))))]))
 
 
 def _decoder_layer_sig(S):
     C = S.C
     H = C["H"]
-    from verity.circuits.types import Value
     BF = Value(16)
     rows = Array(S.T, Array(H, BF))
     params = [("h", rows)] + ([] if S.L0 else [("res", rows)]) + [("w", _layer_weights_with_table(C))]
@@ -539,7 +569,6 @@ def _decoder_layer_body(B, S, h, *rest):
     K/V rows, LayerPost x T. Layer 0 (`L0`) takes no residual (the residual is `h`)."""
     C, T, T0 = S.C, S.T, S.T0
     res, w = (h, rest[0]) if S.L0 else (rest[0], rest[1])
-    from verity.circuits.refs import Coll as _Coll, array_of as _array_of, tuple_of
     lw = _Coll(_b1.layer_weights_type(C), w.refs.slice(0, _b1.layer_weights_type(C).leaves))
     cs = w["cos_sin"]
     pre = [B.call(ir_bind(_b1.LayerPre, C=C, L0=S.L0), h[i], res[i], lw, cs[T0 + i], name=f"t={T0 + i}/pre") for i in range(T)]
@@ -561,6 +590,8 @@ DecoderLayerT = CompositeDefinition("DeriveOracleDecoderLayer", 1, ("C", "L0", "
 
 
 def _layer_binder(flat_sd, ctx):
+    # imported here: the rule needs torch, which a derivation has and this module's import does not
+    from verity_vllm.program.frontend.rules.profile import RotaryEmbeddingRule
     C = ctx.config
     if not all(k in C for k in ("H", "NL", "NH", "KVH", "D", "I", "QKV", "GU", "EPS", "MAX_POS")):
         return None
@@ -572,12 +603,12 @@ def _layer_binder(flat_sd, ctx):
         return None
     ids = {n.fn.base_id for n in flat_sd.body.nodes if isinstance(n.fn, SpecializedDefinition)}
     L0 = "RMSNormTriton_v1" in ids
-    if L0 != (len(params) == 2):
+    if (len(params) == 2) != L0:
         return None
     T0 = 0
     for a in ctx.applications:
         pos = a.get("preconditions_checked", {}).get("positions")
-        if a["rule"].startswith("RotaryEmbedding") and pos:
+        if a["rule"] == RotaryEmbeddingRule.info.rule_id and pos:
             T0 = pos[0]
             break
     return {"C": C, "L0": L0, "T": h_t.n, "T0": T0}

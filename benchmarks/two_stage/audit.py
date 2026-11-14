@@ -2,7 +2,7 @@
 registration of N spans, the first stage's sample S of Q replay blocks after it, the proof server's interior registration of
 S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 
-* **The stream** (`stream_of`): the challenger's `service.Stream` over the toy's design (`toy.spec`), its `TwoStage` drawing
+* **The stream** (`stream_of`): the challenger's `service.Stream` over the toy's design (`toy.spec`), its `TwoStage` sampling
   both stages with Lean (`Select.select`, `Select.selectSecond`) on one challenger session's coins (`StageCoins`): a
   development session on this machine (`a5_coins.start`'s ``local``, on `ROOT`, pinned on ``--main``), withheld, each
   stage one sample of it after its registration's digest. Its samples show the path, not an auditor's coins.
@@ -45,10 +45,10 @@ those reads (the interior's at the interior record and the links' boundary ports
 ``interior/``, their private files too), a5's records (``audit/``, the run's statement and verdicts in its
 ``case.json``), the challenger session's records (``challenger/``), both stages' coin evidence and the coins each read
 (``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, laws
-and draws, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
+and samples, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
 copies it reads them against (``guard/``, `guard.export`).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
       python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --main FILE \\
         --out DIR [--altered]
 """
@@ -71,8 +71,8 @@ import guard as G  # noqa: E402
 import toy as T  # noqa: E402
 import two_stage as TS  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
-from verity.protocols.spot.device import challenger as Ch, coins as CC  # noqa: E402
-from verity.protocols.spot.verifier import service as S  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC  # noqa: E402
+from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 
 #: what Lean's registered reads refuse each link member of an ``--altered`` run by
 ALTERED = "does not open"
@@ -97,11 +97,16 @@ def publics(c: T.CS.Committed) -> dict[str, bytes]:
 
 
 class StageCoins(CC.ChallengerCoins):
-    """Both stages' coins of the run's one challenger session (``draws``, `a5_coins.Draws`' proxy) as the stream reads
-    them: the first stage's rank 0's, the second's rank 1's, each committed to its registration's digest in turn."""
+    """Both stages' coins of the run's one challenger session (``turns``, `a5_coins.Draws`' proxy) as the stream reads
+    them: the first stage's rank 0's, the second's rank 1's, each its own family's, committed to its registration's
+    digest in turn."""
 
-    def __init__(self, draws) -> None:
-        self.stages, self.at = (AC.RankCoins(draws, 0), AC.RankCoins(draws, 1)), -1
+    def __init__(self, turns) -> None:
+        self.turns, self.stages, self.at = turns, (AC.RankCoins(turns, 0), AC.RankCoins(turns, 1)), -1
+
+    @property
+    def label(self) -> str:
+        return self.stages[max(self.at, 0)].label
 
     def commit(self, after: bytes) -> None:
         self.at += 1
@@ -122,9 +127,10 @@ def needs(stream: S.Stream, n: int, q: int) -> tuple[int, int]:
 def stream_of(a: argparse.Namespace, coins: StageCoins) -> S.Stream:
     """The challenger's two-stage stream over the toy (`toy.spec`, its second stage ``a.k`` proof blocks a cell) on the
     run's challenger session, which opens once both stages have planned the coins their samples read (each plan
-    returns only then, so the two plan at once)."""
+    returns only then, so the two plan at once). It is made with the challenger's key and the verifier's copy of main's
+    history as the session's start had them (`a5_coins.held`), which both stages' coin evidence is read under."""
     stream = S.Stream(T.spec(a.n, a.q, a.k, a.session_timeout * len(T.TEMPLATES)), list(T.TEMPLATES), replay=T.REPLAY,
-                      budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins)
+                      budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins, **AC.held(coins.turns))
     with ThreadPoolExecutor(len(coins.stages)) as ex:
         list(ex.map(lambda c, n: c.plan(n), coins.stages, needs(stream, a.n, a.q)))
     return stream
