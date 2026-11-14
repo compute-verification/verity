@@ -45,9 +45,9 @@ every tile is a consumer's own, and its sessions; then in calibration, the chain
 kept level over the whole store, and its seed and signs against the reference's. Every buffer a gate store's pass or
 opening writes holds 0xA5 before it (`DeviceStore.poison`), and after the first pass a control under the same seed
 launches nothing: the gate must refuse its receipts and root (`no_write`), which are what the poison left of the first
-pass's. So what the gates accept, the pass they ran wrote. At 64 rows (the registration's k_s, which the leaf pass
-does not take) one more pass has no receipt grid (`rs_pass` at −1 CTAs), so every tile is a consumer's own
-(`consumer_tiles`), which no other pass is sure to run.
+pass's. So what the gates accept, the pass they ran wrote. At 64 rows (the registration's k_s) one more pass has no
+receipt grid (`rs_pass` at −1 CTAs), so every tile is a consumer's own (`consumer_tiles`), which no other pass is sure
+to run; the leaf pass's own such pass is its gate's.
 """
 from __future__ import annotations
 
@@ -420,7 +420,7 @@ class DeviceStore:
     the pass's handle in ordinary host memory and frees it for the pass SLOTS later. So no pass allocates.
 
     `rows` is the registration's k_s, 16 or 64 (`set_rows`): both libraries run their passes, subtrees and chained
-    signs at it, and a pass's packed signs are `pack_words(rows)` words. The leaf pass is 16 rows only.
+    signs at it, the leaf pass too, and a pass's packed signs are `pack_words(rows)` words.
 
     With `poison` set (a gate's store), every buffer a pass writes on a device holds POISON before the pass runs
     (`_poison`), and so does each buffer an opening recomputes into: what a gate then reads there, that pass or
@@ -624,12 +624,10 @@ class DeviceStore:
         a consumer warp's own, which is a gate's and no way to run a store. The roots, the kept levels and the
         openings are the same either way, and a host segment is always `rs_pass`'s. A caller sets it for the passes
         it wants and puts it back. The leaf pass pays only where the read sets a pass's time, so it is asked for per
-        card type, after a measurement on that card type. It is 16 rows only (`rows`)."""
+        card type, after a measurement on that card type. It runs at the store's rows, as `rs_pass` does."""
         if leaf_ctas < -1 or (receipts and not leaf_ctas):
             raise ValueError("a leaf pass has reading CTAs or, with -1, none, and only a leaf pass is asked for its "
                              "receipts")
-        if leaf_ctas and self.rows != skr.ROWS:
-            raise ValueError(f"the leaf pass is {skr.ROWS} rows only, not the store's {self.rows}")
         if leaf_ctas and self.h0 > 8:
             raise ValueError(f"a leaf pass keeps its levels from h0 <= 8, not {self.h0}")
         self.sync()
@@ -736,8 +734,6 @@ class DeviceStore:
     def set_rows(self, rows: int) -> None:
         """The registration's k_s, 16 or 64: both libraries' (`Lib.set_rows`), and at a new count the rings again, a
         pass's packed signs being `pack_words(rows)` words. A store made at the registration's rows needs no call."""
-        if rows != skr.ROWS and self.leaf_ctas:
-            raise ValueError(f"the leaf pass is {skr.ROWS} rows only: pass_mode(0) before {rows} rows")
         for lib in (self.lib, self.lib_open):
             lib.set_rows(rows)
         if rows != self.rows:
@@ -844,7 +840,7 @@ class DeviceStore:
                                           ring["pad_out"].data_ptr(), s.cuda_stream, gpu.side.cuda_stream, 0)
                 if leaf and rc == 5:
                     raise RuntimeError(f"rs_leaf_pass on GPU {gpu.index}: the shard does not fit the leaf pass (h0 "
-                                       f"{self.h0} over 8, {self.rows} rows, or its kernels on this device); "
+                                       f"{self.h0} over 8, or its kernels on this device); "
                                        "pass_mode(0) is rs_pass's")
                 if rc:
                     raise RuntimeError(f"{'rs_leaf_pass' if leaf else 'rs_pass'} on GPU {gpu.index}: {rc}")

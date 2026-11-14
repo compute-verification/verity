@@ -21,11 +21,11 @@
 //                    last leaf short and the padding to the tree's width included (`rs_mapped_pass`); an opening's
 //                    subtree is its receipts (`rs_mapped_receipts`) and reader.cu's leaves and levels
 //
-//   rows             the registration's k_s, 16 or 64 (`rs_rows`, 16 until it is called): the pass, the subtrees and
-//                    the chained signs run their 64-row forms at 64 (the receipt kernels and tiles named 64, on
-//                    reader.cu's 64-row sketch and its three-compression receipt) and the 16-row ones otherwise. The
-//                    leaves and the tree are the same at either. The leaf pass and the in-place pass are 16 rows only
-//                    and refuse a library at 64
+//   rows             the registration's k_s, 16 or 64 (`rs_rows`, 16 until it is called): the pass, the leaf pass,
+//                    the subtrees and the chained signs run their 64-row forms at 64 (the kernels and tiles named 64,
+//                    on reader.cu's 64-row sketch and its three-compression receipt) and the 16-row ones otherwise.
+//                    The leaves and the tree are the same at either. The in-place pass is 16 rows only and refuses a
+//                    library at 64
 //
 // A store spans the visible GPUs, a contiguous shard of whole chunks on each, and the receipt tree is the one over the
 // whole store in block order (`receipts.tree`): every position, leaf and node index is the store's. One library serves
@@ -1472,7 +1472,7 @@ int rs_gather64(const uint64_t *addrs, uint64_t n, uint64_t *out, cudaStream_t s
 // The registration's k_s this copy of the library runs at (`rs_rows`).
 static int gRows = SK_ROWS;
 
-// The pass, the subtrees and the chained signs at `rows` (16 or 64) from here on, for every GPU this copy of the
+// The pass, the leaf pass, the subtrees and the chained signs at `rows` (16 or 64) from here on, for every GPU this copy of the
 // library serves. The packed signs (pk) are then SK16_PACK words at 16 rows and SK64_PACK at 64; set it before
 // `rs_chain_set`, which frames it into the sign key.
 int rs_rows(int rows) {
@@ -1849,9 +1849,11 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
 // would hold a reading CTA's SM for the whole pass. The rest of a full device follows the receipt grid on sa, as
 // rs_pass's does. With ctas -1 there is no receipt grid and the whole device is the consumers', so every tile is a
 // consumer warp's own (`help_leaf_tile`), which a pass with a receipt grid reaches only where a consumer CTA is on an
-// SM before any reading CTA: what a gate of that path launches. 5, with nothing queued: the shard does not fit the
-// leaf pass (a library at 64 rows, h0 over 8, 2^36 blocks or more, or the kernels' shared memory on this device), and
-// rs_pass is the caller's.
+// SM before any reading CTA: what a gate of that path launches. At 64 rows (`rs_rows`) pk is reader.py's `pack64`
+// (32 KiB, 16-byte aligned) and the kernels are leaf_pass64_kernel and leaf_consumer64_kernel, on the same grids,
+// counters and streams. 5, with nothing queued: the shard does not fit the leaf pass (h0 over 8, 2^36 blocks or more,
+// or the kernels' shared memory on this device), and rs_pass is the caller's.
+static_assert(LEAF64_WARPS == LEAF_PASS_WARPS, "a reading CTA is 8 warps at either row count");
 int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, unsigned *ctr, uint64_t *ys,
                  uint64_t *leaves, uint64_t *kept, int h0, uint64_t chunk, int ctas, uint64_t pad_r0, uint64_t pad_n,
                  uint64_t *pad, uint64_t *pad_out, cudaStream_t sa, cudaStream_t sb, int receipts) {
@@ -1861,7 +1863,8 @@ int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
   if (!data || !pk || !ctr || !leaves || !kept || (receipts && !ys) || !n || n % PER_LEAF || chunk % 32 ||
       chunk % PER_LEAF || !chunk || n % chunk || base % chunk || ctas < -1)
     return 1;
-  if (gRows != SK_ROWS) return 5;
+  const bool wide = gRows == SK64_ROWS;
+  if (wide && (uintptr_t)pk % 16) return 1;
   const bool reading = ctas >= 0;
   const uint64_t lc = chunk / PER_LEAF, chunks = n / chunk, base_leaf = base / PER_LEAF;
   const int hc = log2_exact(lc);
@@ -1872,13 +1875,17 @@ int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
   const uint64_t ready_blocks = chunk < CONSUMER_READY_BLOCKS ? chunk : CONSUMER_READY_BLOCKS;
   const uint64_t ready_groups = n / ready_blocks;
   const size_t tree_shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
-  const size_t shared = tree_shared > LEAF_STAGING ? tree_shared : LEAF_STAGING;
+  const size_t staging = wide ? LEAF64_STAGING : LEAF_STAGING;
+  const size_t shared = tree_shared > staging ? tree_shared : staging;
+  const size_t reader_shared = wide ? LEAF64_SHARED : LEAF_PASS_SHARED;
+  const void *reader = wide ? (const void *)leaf_pass64_kernel : (const void *)leaf_pass_kernel;
+  const void *consumer = wide ? (const void *)leaf_consumer64_kernel : (const void *)leaf_consumer_kernel;
   // The opt-in to a kernel's dynamic shared memory is a device's, so every call sets it.
-  if (cudaFuncSetAttribute(leaf_pass_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)LEAF_PASS_SHARED) ||
+  if (cudaFuncSetAttribute(reader, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)reader_shared) ||
+      (wide && cudaFuncSetAttribute(consumer, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)shared)) ||
       cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
-      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_p, leaf_pass_kernel, 32 * LEAF_PASS_WARPS,
-                                                    LEAF_PASS_SHARED) ||
-      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_c, leaf_consumer_kernel, CONSUMER_THREADS, shared) ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_p, reader, 32 * LEAF_PASS_WARPS, reader_shared) ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_c, consumer, CONSUMER_THREADS, shared) ||
       occ_p < 1 || occ_c < 1) {
     cudaGetLastError();
     return 5;
@@ -1900,19 +1907,32 @@ int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
   if (cudaMemsetAsync(ctr, 0, 4 * (3 + ready_groups + chunks), sa) || cudaEventRecord(go, sa) ||
       cudaStreamWaitEvent(sb, go, 0))
     return 4;
-  const uint4 *d = (const uint4 *)data;
+  const uint4 *d = (const uint4 *)data, *pk64 = (const uint4 *)pk;
   uint64_t *out = receipts ? ys : nullptr;
-  if (reading)
+  const unsigned tiles_per = (unsigned)(ready_blocks / 32);
+  if (reading && wide)
+    leaf_pass64_kernel<<<readers, 32 * LEAF64_WARPS, LEAF64_SHARED, sa>>>(d, n, base, pk64, leaves, out, ctr,
+                                                                         tiles_per, started);
+  else if (reading)
     leaf_pass_kernel<<<readers, 32 * LEAF_PASS_WARPS, LEAF_PASS_SHARED, sa>>>(d, n, base, pk, leaves, out, ctr,
-                                                                             (unsigned)(ready_blocks / 32), started);
+                                                                             tiles_per, started);
   if (cudaGetLastError()) return 4;
   if (pad_n)
     if (const int rc = pass_pads(pad_r0, pad_n, pad, pad_out, hc, sb)) return rc;
-  leaf_consumer_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>(d, n, base_leaf, pk, leaves, out, ctr, kept,
-                                                                         chunk, ready_blocks, h0, hc, chunks);
-  if (tail)
-    leaf_consumer_kernel<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>(d, n, base_leaf, pk, leaves, out, ctr, kept,
+  if (wide) {
+    leaf_consumer64_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>(d, n, base_leaf, pk64, leaves, out, ctr,
+                                                                             kept, chunk, ready_blocks, h0, hc, chunks);
+    if (tail)
+      leaf_consumer64_kernel<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>(d, n, base_leaf, pk64, leaves, out, ctr,
+                                                                               kept, chunk, ready_blocks, h0, hc,
+                                                                               chunks);
+  } else {
+    leaf_consumer_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>(d, n, base_leaf, pk, leaves, out, ctr, kept,
                                                                            chunk, ready_blocks, h0, hc, chunks);
+    if (tail)
+      leaf_consumer_kernel<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>(d, n, base_leaf, pk, leaves, out, ctr,
+                                                                             kept, chunk, ready_blocks, h0, hc, chunks);
+  }
   if (cudaEventRecord(end, sb) || cudaStreamWaitEvent(sa, end, 0)) return 4;
   return cudaGetLastError() ? 4 : 0;
 }
