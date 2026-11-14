@@ -52,6 +52,7 @@ def test_the_registry_names_each_harness_schema_once():
         glm53_dsa_capture_gpu,
         glm53_fa3_prefill_capture_gpu,
         glm53_fused_rmsnorm_capture_gpu,
+        glm53_index_share_capture_gpu,
         glm53_mtp_eh_norm_capture_gpu,
         glm53_mtp_eh_proj_capture_gpu,
         glm53_mtp_indexer_logits_capture_gpu,
@@ -75,6 +76,7 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["tp4_nccl_tree_capture"].schema == tp4_nccl_tree_replay.SCHEMA
     assert REGISTRY["glm53_fa3_prefill_capture"].schema == glm53_fa3_prefill_capture_gpu.SCHEMA
     assert REGISTRY["glm53_fused_rmsnorm_capture"].schema == glm53_fused_rmsnorm_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_index_share_capture"].schema == glm53_index_share_capture_gpu.SCHEMA
     assert REGISTRY["blackwell_fp8_capture"].schema == fp8_sm120_capture_gpu.SCHEMA
     assert REGISTRY["sigmoid_router_capture"].schema == sigmoid_router_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_flashmla_capture"].schema == dsv4_flashmla_capture_gpu.SCHEMA
