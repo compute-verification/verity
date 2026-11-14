@@ -453,10 +453,13 @@ def ids(product: R.Product) -> str:
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
 ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
 REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
-#: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run has a
-#: reference case only on a served run, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development composite is
-#: no product)
-PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE, serve=(ids(R.ONSITE), "serve"))}
+#: the auditor's pins `product` checks under: none, so its cases, which reject, are the composite's own verdicts
+NO_PINS = Path(__file__).parent / "fixtures" / "no-pins.json"
+#: `product IDS --pins PINS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+
+#: run has a reference case only on a served run, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development
+#: composite is no product)
+PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE,
+                             serve=(ids(R.ONSITE), "--pins", str(NO_PINS), "serve"))}
 onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
 product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
@@ -958,6 +961,22 @@ def test_product_names_only_the_composites():
         assert named(s)[0] == 64, s
     assert named([R.POUW_PERIOD.id, R.POUW_PERIOD.id, R.SAMPLED_PROOFS.id])[0] == 64
     assert named([R.INFERENCE_ONLY.id, "verity/pouw/v1", R.SAMPLED_PROOFS.id])[0] == 64
+
+
+def test_product_checks_only_under_the_auditors_pins(tmp_path):
+    """`product IDS check|serve` runs only under a pins file that reads (`Core.Composites.atPins`, the check
+    `Verity.Accepts` is about): without `--pins`, or under pins that don't read, it is refused (exit 64)."""
+    exe = D.build(ONSITE_PACKAGE, "product")
+    onsite = ids(R.ONSITE)
+
+    def rc(*args: str) -> int:
+        return subprocess.run([exe, onsite, *args], input="", capture_output=True, text=True).returncode
+
+    bad = tmp_path / "pins.json"
+    bad.write_text('{"challenger":null}')
+    assert rc("serve") == 64 and rc("check", "p", "c", "e") == 64
+    assert rc("--pins", str(bad), "serve") == 64
+    assert rc("--pins", str(NO_PINS), "serve") == 0
 
 
 @pytest.mark.slow

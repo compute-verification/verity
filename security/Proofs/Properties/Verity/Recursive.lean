@@ -519,8 +519,8 @@ def SampledCase (k : Verity.Registration.Composite) (s : Verity.Sent) (a cb eb :
       x.1 = VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray s.blobs) ∧
         x.2.1.params.toUTF8 = a ∧ x.2.2.commitment = cb ∧ x.2.2.evidence = eb
 
-/-- **The recursive configuration's verdict at composite `k`**: `Vocab.Verdict k .sampled` at a sampled-proofs case
-whose parameters name the recursive form (`recVerdict_verdict`). The conjuncts:
+/-- **The recursive configuration's verdict at composite `k`**: `Vocab.Verdict k .sampled` but for its pin check, at a
+sampled-proofs case whose parameters name the recursive form (`recVerdict_verdict`). The conjuncts:
 * the committed files passed the commit phase's check (`Registered`, R6);
 * `k` accepted what the prover sent as a `same` composition (`SameAccepts`);
 * sampled proofs' component (`VStar.Recursive.Sampled.protocol`) accepts its own case in what the prover sent, on the
@@ -532,13 +532,13 @@ def RecVerdict (V : Vocab d α) (k : Verity.Registration.Composite) (o : Verity.
         (VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray o.sent.blobs)) a cb eb ∧
       ∃ j p, Core.canonicalJson a = .ok j ∧ VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p)
 
-/-- **The recursive configuration's verdict is composite `k`'s sampled verdict**: `RecVerdict V k` is
-`Vocab.Verdict k .sampled` with the sampled case's form named. -/
+/-- **The recursive configuration's verdict is composite `k`'s sampled verdict**: `RecVerdict V k` under the pins'
+check (`PinnedFor`) is `Vocab.Verdict k .sampled` with the sampled case's form named. -/
 theorem recVerdict_verdict (V : Vocab d α) (k : Verity.Registration.Composite) {o : Verity.Exchange}
-    (h : RecVerdict V k o) : V.Verdict k .sampled o := by
+    (hpin : PinnedFor V.pins .sampled o.sent.params) (h : RecVerdict V k o) : V.Verdict k .sampled o := by
   obtain ⟨hreg, hrec, a, cb, eb, ⟨ps, b, ev, hdec, x, hx, h1, ha, hc, he⟩, hda, -⟩ := h
   subst ha hc he
-  refine ⟨hreg, hrec, VStar.Recursive.Sampled.protocol, ?_, ps, b, ev, hdec, x, hx, h1, by rw [h1]; exact hda⟩
+  refine ⟨hreg, hrec, hpin, VStar.Recursive.Sampled.protocol, ?_, ps, b, ev, hdec, x, hx, h1, by rw [h1]; exact hda⟩
   cases k <;> rfl
 
 /-- **The deployment** `RecursiveKSAt` is stated at (the weights, the brings and the challenger's live-coin part's record), with the
@@ -765,13 +765,13 @@ theorem spotRecursive_nontrivial (q : Dep) (V : Vocab d α) (k : Verity.Registra
     (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (nI vS : Msg → ℕ) (δs lam : ℝ)
-    (hbad : ¬ V.Holds k θ F c σ .sampled ⟨θ, F, c, .empty, [], .empty, [], [], .empty, #[]⟩)
+    (hbad : ¬ V.Holds k θ F c σ .sampled ⟨θ, F, c, .empty, [], .empty, [], [], [], .empty, #[]⟩)
     (hcr : q.FinderCR V S collOf dColl nI vS) (hlt : q.delta V S dColl δs lam < 1) :
     ¬ Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤
       q.errAt V S collOf dColl nI vS δs lam := by
   intro h
   have h1 : Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ = 1 :=
-    prob_play_eq_one (V.families θ) (D := V.signer θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
+    prob_play_eq_one (V.families θ) (D := V.signer θ) (Ds := V.devices θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
       (fun _ _ => ⟨trivial, hbad⟩) σ
   rw [Dep.errAt, if_pos hcr] at h
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le h).trans_lt hlt)

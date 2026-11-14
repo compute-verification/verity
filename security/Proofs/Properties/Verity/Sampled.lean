@@ -1065,7 +1065,8 @@ def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray �
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session
 `S` holds is the one v2 sets up (`SetsUp`); the files the vocabulary reads are v2's, by the digests v2's parameters
 name and the lookup tables the circuit file registers (`DigestsAt`); the device's log as the sampled check reads
-it is v2's (`coinsRead`); the finder is `K`'s read finder and the forger `K`'s, with no loss term; and at each session
+it is v2's (`coinsRead`); the finder is `K`'s read finder and the forger against SPOT's pin (the first) `K`'s,
+with no loss term; and at each session
 the extractor is the
 session's at the projected strategy (`Live.extract`), the vocabulary's openings hold wherever the session's deployed
 commitment opens (`Live.OpensUnder`), `error`'s condition holds SPOT's per-finder premises (`FinderCR`), the
@@ -1078,7 +1079,7 @@ structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Arr
   digests : ∀ θ, DigestsAt V θ
   coinsRead : ∀ s, V.coinsRead .sampled s = Verity.Sampled.coinsRead s
   finder : ∀ θ F c σ, V.finder .sampled θ F c σ = K.readFinder θ F c σ
-  forger : ∀ θ F c σ, V.forger .sampled θ F c σ = K.forger θ F c σ
+  forger : ∀ θ F c σ, V.forger .sampled 0 θ F c σ = K.forger θ F c σ
   loss : ∀ θ x, V.loss .sampled θ x = 0
   extract : ∀ θ F A, S θ F = some A → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
     HEq (V.extract θ F c σ) ((K.live A θ F c σ).extract (K.project A θ F c σ))

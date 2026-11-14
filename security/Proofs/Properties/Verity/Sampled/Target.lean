@@ -198,6 +198,7 @@ theorem spotSound_of_targets {K : Constructions V} {S : ByteArray → Array Byte
   · exact recursiveForm_refused V k θ hP F c σ
   unfold Vocab.error Accounting.condError
   beta_reduce
+  simp only [AuditorPins.reads, List.length_singleton, Nat.cast_one, one_mul]
   split_ifs with hE
   swap
   · exact le_top
@@ -239,8 +240,8 @@ theorem spotSound_of_targets {K : Constructions V} {S : ByteArray → Array Byte
     have hforge : ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify) ≤
         ENNReal.ofReal (V.epsForge θ (V.callsMul θ .sampled * t + V.callsAdd θ .sampled) (V.signatures θ)) := by
       rw [← hD.forger θ F c σ]
-      exact ENNReal.ofReal_le_ofReal
-        (hUf (fun x => V.forger_calls .sampled θ F c σ x) (fun x => V.forger_signed .sampled θ F c σ x))
+      exact ENNReal.ofReal_le_ofReal (hUf 0 (List.mem_singleton_self 0) (fun x => V.forger_calls .sampled 0 θ F c σ x)
+        (fun x => V.forger_signed .sampled 0 θ F c σ x))
     simp only [hD.loss, add_zero]
     refine hver.trans ((hC θ F A hS c σ).trans ?_)
     calc _ ≤ A.sessionDelta t + (A.rounds * Live.twoRun (A.qM t) + Live.twoRun (A.qM t) + Live.twoRun (A.qM t) +

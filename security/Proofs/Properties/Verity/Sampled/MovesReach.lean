@@ -459,9 +459,9 @@ theorem firstStop_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
     {κ : A.Ω → Fin m → Fin 512 → Bool} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP}
     (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ) (ω : (A.extend M.widening).L.Ω)
     (pts : Fin 2 → Fin A.mP → 𝔽) {o : A.Out × CoinTape (V.game θ F c) σ}
-    (hL0 : ¬ linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1) (firstStop V θ F c A rd σ M ω).g' pts)
+    (hL0 : ¬ linkEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1) (firstStop V θ F c A rd σ M ω).g' pts)
     (hr : RoundsReach D M A.dg (A.J ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D))
-      (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
+      (roundEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
       (fun t => (regOf V θ F c A rd σ D, (A.extend M.widening).L.draw ω,
         A.wr ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D) t))
       (D.root (firstStop V θ F c A rd σ M ω).modes) pts A.N (fun _ _ => [])
@@ -511,7 +511,7 @@ theorem firstStop_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
   obtain ⟨L₀, as, ms, ⟨hlog₀, -⟩, ho, hF, hI, hgt, hpw, hcov⟩ := firstStop_order V θ F c A hL ht (hLJ _ _)
     record recordDigest reg rfl rfl σ
     (sampleMap fieldEnc V θ F c A (readingAt tables L record recordDigest) σ label after κ)
-    (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (B := roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
+    (linkEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (B := roundEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
     (linkBits fieldEnc) (fun _ _ => rfl) (fun _ _ h => h) (fun _ x => roundBits fieldEnc x) (fun _ _ _ => rfl)
     (fun _ _ _ h => h) ω pts hK hL0 hr rfl (picksOnce_readingAt tables L record recordDigest hnd) hRN
   refine ⟨_, ho, fun j r => ?_⟩
@@ -767,9 +767,9 @@ theorem firstStop_reps_verdict {V : Vocab d α} {θ : ByteArray} {F : Array Byte
     {after : ByteArray} {m : ℕ} {κ : A.Ω → Fin m → Fin 512 → Bool} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP}
     (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ) (ω : (A.extend M.widening).L.Ω)
     (pts : Fin 2 → Fin A.mP → 𝔽) {o : A.Out × CoinTape (V.game θ F c) σ}
-    (hL0 : ¬ linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1) (firstStop V θ F c A rd σ M ω).g' pts)
+    (hL0 : ¬ linkEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1) (firstStop V θ F c A rd σ M ω).g' pts)
     (hr : RoundsReach D M A.dg (A.J ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D))
-      (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
+      (roundEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
       (fun t => (regOf V θ F c A rd σ D, (A.extend M.widening).L.draw ω,
         A.wr ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D) t))
       (D.root (firstStop V θ F c A rd σ M ω).modes) pts A.N (fun _ _ => [])

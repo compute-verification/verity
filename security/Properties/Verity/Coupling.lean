@@ -166,13 +166,18 @@ def outK (fs₀ : List (String × ℕ)) (t : UpFront fs₀) (ρ : TreeCoins) {β
           ⟨r :: o.1, o.2⟩
 
 /-- **The play of `σ` at the coins flipped up front `t`**, with the coin trees' coins resolved by `ρ`: the parameters, the
-committed files and the commitment, the prover's request, the device's log, the bytes the prover's close leaves to the
-device, the device's sample at the close (`t`'s) and its signatures under `D`, and the evidence `σ` sends after it. -/
-def outUp (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (ρ : TreeCoins) (σ : Game.Strategy (play fs D θ F c)) (t : UpFrontAll fs D) : Exchange :=
-  let o := outK fs t.1 ρ (frames fs) fs [] [] (finish D θ F c σ.1) σ.2
+committed files and the commitment, the prover's request, the devices' log, the bytes the prover's close leaves to the
+devices, SPOT's live challenger's sample at the close (`t`'s) and its signatures under `D`, each further party's under
+`Ds`, and the evidence `σ` sends after it. The coins flipped up front are the play's families', the further parties'
+first (`Parties.families`). -/
+def outUp (fs : List (String × ℕ)) (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (ρ : TreeCoins) (σ : Game.Strategy (play fs D Ds θ F c))
+    (t : UpFrontAll (Parties.families Ds ++ fs) D) : Exchange :=
+  let o := outK (Parties.families Ds ++ fs) t.1 ρ (frames (Parties.families Ds ++ fs)) (Parties.families Ds ++ fs) []
+    [] (finish D Ds θ F c σ.1) σ.2
   let e := (o.2.2 t.2).1
-  ⟨θ, F, c, σ.1, o.1, o.2.1, List.ofFn t.2, D.signatures σ.1 o.1 o.2.1 (List.ofFn t.2), e.1, e.2⟩
+  ⟨θ, F, c, σ.1, o.1, o.2.1, List.ofFn t.2, D.signatures σ.1 (spotLog Ds o.1) o.2.1 (List.ofFn t.2),
+    Ds.map (fun P => P.signatures σ.1 (P.logOf o.1) o.2.1 []), e.1, e.2⟩
 
 namespace Vocab
 
@@ -183,14 +188,14 @@ and `c`, for every strategy and every resolution of the coin trees' coins, the p
 that `acc` holds of the play at them while `a`'s claim fails there is at most `a`'s error at the strategy. -/
 def UpFrontFor (acc : Exchange → Prop) (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (ρ : TreeCoins),
-    Game.prCoin (fun t => acc (outUp (V.families θ) (V.signer θ) θ F c ρ σ t) ∧
-        ¬ V.Holds k θ F c σ a (outUp (V.families θ) (V.signer θ) θ F c ρ σ t)) ≤
+    Game.prCoin (fun t => acc (outUp (V.families θ) (V.signer θ) (V.devices θ) θ F c ρ σ t) ∧
+        ¬ V.Holds k θ F c σ a (outUp (V.families θ) (V.signer θ) (V.devices θ) θ F c ρ σ t)) ≤
       V.error a θ F c σ
 
 /-- **Subprotocol `a`'s bound at its compiled component at composite `k`, over the coins flipped up front**: `UpFrontFor`
 at `a`'s component's acceptance of its own case in what the prover sent. -/
 def UpFrontBound (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
-  V.UpFrontFor (fun o => ComponentAccepts k a o.sent) k a
+  V.UpFrontFor (fun o => ComponentAccepts V.pins k a o.sent) k a
 
 /-- **A period run coupled to the play of `σ` at the resolution `ρ`, for the subprotocol that decides `Audit` `b` at
 composite `k` and the verdict `acc`**: a run of the coins model on a circuit `C` whose coins are in bijection with the
@@ -207,28 +212,32 @@ structure PeriodCoupling (acc : Exchange → Prop) (k : Verity.Registration.Comp
   [decEqI : DecidableEq I]
   [fintypeΩ : ∀ i, Fintype (Ω i)]
   [nonemptyΩ : ∀ i, Nonempty (Ω i)]
-  coins : ((i : I) → Ω i) ≃ UpFrontAll (V.families θ) (V.signer θ)
+  coins : ((i : I) → Ω i) ≃ UpFrontAll (Parties.families (V.devices θ) ++ V.families θ) (V.signer θ)
   run : PeriodRun d α C Ω
   price : Price
   brk : ((i : I) → Ω i) → Prop
-  verdict : ∀ ξ, acc (outUp (V.families θ) (V.signer θ) θ F c ρ σ (coins ξ)) →
-    V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) θ F c ρ σ (coins ξ)) → ¬ brk ξ → run.accepts b ξ
+  verdict : ∀ ξ, acc (outUp (V.families θ) (V.signer θ) (V.devices θ) θ F c ρ σ (coins ξ)) →
+    V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) (V.devices θ) θ F c ρ σ (coins ξ)) → ¬ brk ξ →
+      run.accepts b ξ
   world : ∀ ξ, run.Holds (V.certOf θ) price b ξ →
-    V.Holds k θ F c σ (.ofAudit b) (outUp (V.families θ) (V.signer θ) θ F c ρ σ (coins ξ))
+    V.Holds k θ F c σ (.ofAudit b) (outUp (V.families θ) (V.signer θ) (V.devices θ) θ F c ρ σ (coins ξ))
 
 attribute [instance] PeriodCoupling.fintypeI PeriodCoupling.decEqI PeriodCoupling.fintypeΩ
   PeriodCoupling.nonemptyΩ
 
 /-- **The rest of the event, beyond the run's**: the probability over the coupled run's coins that `acc` holds of the
 play at them while a release `b`'s check read is not the device's or the coupling's break holds is at most the
-probability that `b`'s forger forges under the compiled LMS verifier plus `b`'s loss at its finder's collision
-probability. A release out of place is a forgery of the device's signature over its log, and a break a collision. -/
+probability that one of `b`'s forgers, one per pinned key its check reads, forges under the compiled LMS verifier,
+summed, plus `b`'s loss at its finder's collision probability. A release out of place is a forgery of a pinned key's
+signature over its log, and a break a collision. -/
 def PeriodCoupling.BreakBound {acc : Exchange → Prop} {k : Verity.Registration.Composite} {b : Audit} {θ : ByteArray}
     {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {ρ : TreeCoins}
     (q : V.PeriodCoupling acc k b θ F c σ ρ) : Prop :=
-  Game.prCoin (fun ξ : (i : q.I) → q.Ω i => acc (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ)) ∧
-      (¬ V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ)) ∨ q.brk ξ)) ≤
-    ENNReal.ofReal ((V.forger (.ofAudit b) θ F c σ).Pr lmsVerify) +
+  Game.prCoin (fun ξ : (i : q.I) → q.Ω i =>
+      acc (outUp (V.families θ) (V.signer θ) (V.devices θ) θ F c ρ σ (q.coins ξ)) ∧
+      (¬ V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) (V.devices θ) θ F c ρ σ (q.coins ξ)) ∨ q.brk ξ)) ≤
+    ((V.pins.reads (.ofAudit b)).map fun i =>
+        ENNReal.ofReal ((V.forger (.ofAudit b) i θ F c σ).Pr lmsVerify)).sum +
       V.loss (.ofAudit b) θ (ENNReal.ofReal ((V.finder (.ofAudit b) θ F c σ).Pr sha512Msg))
 
 /-- **The plays at `b`'s subprotocol couple to period runs**: at every `θ`, `F`, `c`, strategy and resolution of the
@@ -265,7 +274,7 @@ end Vocab
 /-- **A subprotocol's target in the play from its bound over the coins flipped up front.** On any device, for any names
 `V` the subprotocols define, any verdict `acc`, composite `k` and subprotocol `a`: if at every resolution of the coin
 trees' coins the probability over the coins flipped up front that `acc` holds while `a`'s claim fails is at most `a`'s
-error, then so is its probability in the play, at every strategy. At `acc = ComponentAccepts k a` it gives
+error, then so is its probability in the play, at every strategy. At `acc = ComponentAccepts V.pins k a` it gives
 `Vocab.ComponentBound k a` from `Vocab.UpFrontBound k a`. -/
 def CoinsCouple : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (acc : Exchange → Prop)
@@ -278,7 +287,7 @@ trees' coins there is a period run coupled to the play (`Vocab.PeriodCoupling`) 
 (`Accounting.PeriodRun.Sound`) within `b`'s published `δ` at the strategy's calls, and whose rest of the event is
 bounded by the forger's and the finder's terms where the finder meets `FinderCR` (`BreakBound`; `Vocab.PeriodsCouple`),
 then `b`'s subprotocol
-meets its target at `acc` in the play. At `acc = ComponentAccepts k (.ofAudit b)` it is
+meets its target at `acc` in the play. At `acc = ComponentAccepts V.pins k (.ofAudit b)` it is
 `Vocab.ComponentBound k (.ofAudit b)`. -/
 def TargetOfPeriods : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (acc : Exchange → Prop)

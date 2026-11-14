@@ -63,7 +63,7 @@ theorem movesReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
       (readingAt A.tables A.layout (record c) (recordDigest c)) σ (decodersAt reg A.layout)
       (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout (record c) (recordDigest c)) σ (labelAt θ)
         (afterAt V k θ F c σ) (srcCoinsAt _root_.Spot.Challenger.MAX_COINS A))
-      (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
+      (linkEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) :=
   movesReach_layout (label := labelAt θ) (after := afterAt V k θ F c σ)
     (κ := srcCoinsAt _root_.Spot.Challenger.MAX_COINS A) hA hDg reg (record c) (recordDigest c)
     rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA) (hO c σ)

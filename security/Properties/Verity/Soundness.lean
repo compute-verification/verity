@@ -38,10 +38,10 @@ import Mathlib.Topology.Sheaves.Init
 The verdicts are not free fields: in the causal game after the parameters, the committed files and the commitment
 (`Vocab.game`), subprotocol `a` accepts at composite `k` when the files pass the commit phase's check, `k` accepted what
 the prover sent as a `same` composition, and `a`'s compiled check accepts its own case in it (`Vocab.Verdict`). The
-event is the verifier's acceptance (`Accepts k`) while the claim of one of `k`'s subprotocols fails
-(`Vocab.Holds`, sampled proofs' on the fixed extractor's transcript), with no break in it: each subprotocol's error at a
-strategy is its published `δ` plus its collision term at the probability that its fixed finder outputs a SHA-512
-collision (`Vocab.error`).
+event is the verifier's acceptance under the deployment's pins (`Accepts V.pins k`) while the claim of one of `k`'s
+subprotocols fails (`Vocab.Holds`, sampled proofs' on the fixed extractor's transcript), with no break in it: each
+subprotocol's error at a strategy is its published `δ` plus its collision term at the probability that its fixed finder
+outputs a SHA-512 collision (`Vocab.error`).
 
 `SoundnessOf` is the one statement, at every composite: each of its subprotocols' targets gives `Vocab.SoundnessAt`,
 with the errors summed over its subprotocols. `Soundness` is it at onsite, from its seven targets

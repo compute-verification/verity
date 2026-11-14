@@ -249,9 +249,9 @@ theorem Live.stops_le_hidingTerm {A : Live} (h : 2 * (1 + A.N) ≤ maxLeaves) :
 variable (e : 𝔽 ≃ (Fin 128 → Bool)) (V : Vocab d α) (k : Verity.Registration.Composite)
 
 /-- **The coupling, assembled from its pieces**: at the assembled constructions, `CouplingTarget` holds at the session
-`A`, the parameters `θ` and the committed files `F` wherever the device printed each play's log after `θ` (`hP`), its
-history at each play signed what the play's signatures are on (`hS`, `Binding.SignsPlay`; `Device.signsPlay_dev` at
-the deployed device), the sample's coins are uniform (`hκ`), the openings' gaps and empty classes over the stops are at
+`A`, the parameters `θ` and the committed files `F` wherever an accepted play's log v2 read that isn't the device's
+carries a break or a collision (`hB`, `Binding.Binds`; `Device.Deployment.binds` at the deployed device), the sample's
+coins are uniform (`hκ`), the openings' gaps and empty classes over the stops are at
 most the hiding term (`hε`, which four gaps a stop meet wherever `2(1 + A.N) ≤ maxLeaves`, `Live.stops_le_hidingTerm`),
 `A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the session's writer keeps
 an accepted transcript's view (`hW`), and on the joint law's support off the empty classes the outcomes beside accepted
@@ -263,26 +263,25 @@ theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Prope
       Decoders A.rounds A.Reg)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (θ : ByteArray) (F : Array ByteArray)
-    (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
-    (hS : ∀ c, Binding.SignsPlay V dev θ F c)
+    (hB : Binding.Binds V k Binding.readsV2 dev θ)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label (afterAt V k) κ A θ F c σ)
-      (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-      (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
-        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
+      (fun q _ s => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+      (fun q => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
         A.hidingTerm)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hW : WritesView A)
     (hM : ∀ c σ, MovesReach V θ F c k
       (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧ SampledDigest k o.sent (afterAt V k θ F c σ))
       A (rd A θ F c) σ
-      (D A θ F c σ) (sampleMaps e V rd label (afterAt V k) κ A θ F c σ) (linkEmpty e (finish (V.signer θ) θ F c σ.1))
-      (roundEmpty e (finish (V.signer θ) θ F c σ.1))) :
+      (D A θ F c σ) (sampleMaps e V rd label (afterAt V k) κ A θ F c σ) (linkEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (roundEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1))) :
     CouplingTarget V k (K.assembled e dev k rd D label (afterAt V k) κ) A θ F :=
   couplingTarget_withProject_of_sample e V k rd ((Binding.withBinding K dev).withBind k) D label (afterAt V k) κ A
     (fun o => Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) θ F
     (fun c σ o => SampledDigest k o.sent (afterAt V k θ F c σ)) hκ
-    (fun c σ => Binding.logged_tables_le V k Binding.readsV2 dev θ F c σ (Binding.binds_of_prints V k dev θ hP) (hS c))
+    (fun c σ => Binding.logged_tables_le V k Binding.readsV2 dev θ F c σ hB)
     (digestBound_of V k _ (by rfl) A θ F) hε (fun c σ => decodes_of_digests hA hDg (fun _ h => h.1.2) hW (hM c σ))
 
 end Verity.Sampled

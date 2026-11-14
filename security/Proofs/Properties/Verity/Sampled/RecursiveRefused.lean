@@ -58,7 +58,7 @@ sent, its parameters name SPOT's one-stage form (`ParamsAt`), since its componen
 (`paramsOfJson_ne_inr`). -/
 theorem paramsAt_of_verdict (V : Vocab d α) (k : Verity.Registration.Composite) {o : Verity.Exchange}
     (hv : V.Verdict k .sampled o) : ∃ p, ParamsAt o.params p := by
-  obtain ⟨-, hS, P, hP, ps, c₀, evs, hd, x, hx, hx1, hacc⟩ := hv
+  obtain ⟨-, hS, -, P, hP, ps, c₀, evs, hd, x, hx, hx1, hacc⟩ := hv
   have hPeq : P = VStar.Recursive.Sampled.protocol := by
     cases k <;> exact (Option.some.inj hP).symm
   subst hPeq

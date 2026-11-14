@@ -691,11 +691,12 @@ theorem playReaches_closeThen {β : Type} (f : List Release → Game β) (t : St
   | _ + 1, _, _, h => h
 
 /-- **The close after a log ends the play at that log.** -/
-theorem log_of_finish {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray} {log : List Release}
-    {s : Strategy (finish sg θ F c rq log)} {ex : Exchange} (h : PlayReaches (finish sg θ F c rq log) s ex) :
+theorem log_of_finish {sg : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray} {log : List Release}
+    {s : Strategy (finish sg Ds θ F c rq log)} {ex : Exchange} (h : PlayReaches (finish sg Ds θ F c rq log) s ex) :
     ex.log = log := by
   obtain ⟨ρ, he⟩ : ∃ ρ : Fin sg.draws → Bool, ex = ⟨θ, F, c, rq, log, s.1, List.ofFn ρ,
-      sg.signatures rq log s.1 (List.ofFn ρ), (s.2 ρ).1.1, (s.2 ρ).1.2⟩ := h
+      sg.signatures rq (spotLog Ds log) s.1 (List.ofFn ρ), Ds.map (fun P => P.signatures rq (P.logOf log) s.1 []),
+      (s.2 ρ).1.1, (s.2 ρ).1.2⟩ := h
   rw [he]
 
 /-- **A close that records the device's log**: every output a play of `E log` reaches reads, under `lg`, the log
@@ -705,8 +706,8 @@ structure RecordsLog {β : Type} (lg : β → List Release) (E : List Release �
   plays : ∀ log, Nonempty (Strategy (E log))
 
 /-- **The period's close records the device's log** (`log_of_finish`). -/
-theorem finish_recordsLog (sg : Signer) (θ : ByteArray) (F : Array ByteArray) (c rq : ByteArray) :
-    RecordsLog Exchange.log (finish sg θ F c rq) where
+theorem finish_recordsLog (sg : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c rq : ByteArray) :
+    RecordsLog Exchange.log (finish sg Ds θ F c rq) where
   reads _ _ _ h := log_of_finish h
   plays _ := ⟨⟨ByteArray.empty, fun _ => ⟨(ByteArray.empty, #[]), PUnit.unit⟩⟩⟩
 
@@ -1116,7 +1117,7 @@ theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω)
 after `σ`'s request (`freshSel`). -/
 noncomputable def sampleSel (σ : Strategy (V.game θ F c)) (label : String) (after : ByteArray) :
     FillSel Exchange (Fin 512 → Bool) :=
-  freshSel (finish (V.signer θ) θ F c σ.1) label after
+  freshSel (finish (V.signer θ) (V.devices θ) θ F c σ.1) label after
 
 /-- **The start that writes the sample's coins into the fresh frames of the sample's family**: on the device's coins and
 a tape of the period's game, the tape filled with the coins `κ` at the fresh frames of the family `label` answering
@@ -1131,7 +1132,7 @@ into the fresh frames of the sample's family (`sampleStart`), and at each stop i
 opening in `σ`'s play, whose log ends in the close after `σ`'s request (`openMap`). -/
 noncomputable def sampleMap (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool) : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP :=
-  openMap e (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ) (sampleStart V θ F c rd σ label after κ)
+  openMap e (finish (V.signer θ) (V.devices θ) θ F c σ.1) (CoinTape (V.game θ F c) σ) (sampleStart V θ F c rd σ label after κ)
 
 /-- The sample at widened coins is the sample at the device's coins. By `dsimp`, not `rfl`: elaborating the two samples
 as definitionally equal reduces their `match` and evaluates `drawUnits`. -/
@@ -1196,13 +1197,13 @@ theorem sampleMap_couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.g
     (D : Decoders A.rounds A.Reg) (label : String) (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
     CouplesWithin V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ)
-      (linkEmpty e (finish (V.signer θ) θ F c σ.1)) (roundEmpty e (finish (V.signer θ) θ F c σ.1))
+      (linkEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (roundEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
       (couplesErr V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ)
-        (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-          openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-        (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
-          openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool))) := by
-  have h := openMap_couples e V θ F c A rd σ D (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
+        (fun q _ s => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+          openEmpty (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+        (fun q => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+          openEmpty (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool))) := by
+  have h := openMap_couples e V θ F c A rd σ D (finish (V.signer θ) (V.devices θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
     (sampleStart V θ F c rd σ label after κ) (sampleMap_fresh e V θ F c A rd σ label after κ)
     (sampleMap_start e V θ F c A rd σ label after κ hκ)
   rwa [zero_add] at h
@@ -1268,17 +1269,17 @@ theorem couplingTarget_withProject_of_sample (rd : Readings) (K : Constructions 
     (ha : LoggedBound V k (K.withProject V rd D (sampleMaps e V rd label after κ)) P θ F)
     (hq : DigestBound V k (K.withProject V rd D (sampleMaps e V rd label after κ)) A θ F Q)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)
-      (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-      (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
-        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
+      (fun q _ s => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+      (fun q => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
         A.hidingTerm)
     (hD : ∀ c σ, Decodes V θ F c k (fun o => P o ∧ Q c σ o) A (rd A θ F c) σ (D A θ F c σ)
-      (sampleMaps e V rd label after κ A θ F c σ) (linkEmpty e (finish (V.signer θ) θ F c σ.1))
-      (roundEmpty e (finish (V.signer θ) θ F c σ.1))) :
+      (sampleMaps e V rd label after κ A θ F c σ) (linkEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (roundEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1))) :
     CouplingTarget V k ((K.withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd) A θ F :=
   couplingTarget_withProject V k rd K D (sampleMaps e V rd label after κ) A P θ F Q
-    (fun c σ => linkEmpty e (finish (V.signer θ) θ F c σ.1)) (fun c σ => roundEmpty e (finish (V.signer θ) θ F c σ.1))
+    (fun c σ => linkEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (fun c σ => roundEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
     ha hq (fun c σ => couples_of_within V θ F c (sampleMap_couples e V θ F c A (rd A θ F c) σ (D A θ F c σ)
       (label θ F c σ) (after θ F c σ) (κ A) hκ) (hε c σ)) hD
 

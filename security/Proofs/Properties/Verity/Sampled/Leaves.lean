@@ -185,8 +185,8 @@ theorem releases_leaves_le (k : ℕ) (fs : List (String × ℕ)) {log : List Rel
 
 /-- **A play writes at most `maxTreeLines` coin-tree lines**: every run of the play after `θ`, `F` and `c` ends with a
 log of at most `maxTreeLines` coin-tree lines, a tree sampled or a round opened each. -/
-theorem play_lines_le {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {o : Exchange} (h : Game.Reaches (play fs D θ F c) o) : logTreeLines o.log ≤ maxTreeLines := by
+theorem play_lines_le {fs : List (String × ℕ)} {D : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {o : Exchange} (h : Game.Reaches (play fs D Ds θ F c) o) : logTreeLines o.log ≤ maxTreeLines := by
   obtain ⟨_, ha⟩ := h
   obtain ⟨log, hlog, _, _, _, he⟩ := Game.reaches_bind ha
   cases he
@@ -195,8 +195,8 @@ theorem play_lines_le {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} 
 
 /-- **A play's coin trees hold at most `maxLeaves` leaves**: every run of the play after `θ`, `F` and `c` ends with a
 log whose `Hello`s sampled coin trees of at most `maxLeaves` (`2^49`) leaves in all. -/
-theorem play_leaves_le {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {o : Exchange} (h : Game.Reaches (play fs D θ F c) o) : logLeaves o.log ≤ maxLeaves := by
+theorem play_leaves_le {fs : List (String × ℕ)} {D : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {o : Exchange} (h : Game.Reaches (play fs D Ds θ F c) o) : logLeaves o.log ≤ maxLeaves := by
   obtain ⟨_, ha⟩ := h
   obtain ⟨log, hlog, _, _, _, he⟩ := Game.reaches_bind ha
   cases he

@@ -87,13 +87,22 @@ def test_an_honest_period_is_a_period_piece_that_accepts(tmp_path):
                    "--windows", str(_json(tmp_path / "w.json", ev["windows"]))]) == 0
     got = json.loads((out / "answer.json").read_text())
     assert got["verdict"] == "accept" and got["protocol"] == P.PERIOD
+    assert not {"registration_head", "head", "place", "part"} & set(got["public"])
     assert got["commitment"] == PC.digest(PC.commitment(bytes.fromhex(case["commitment"]))).hex()
     assert json.loads((out / "case.json").read_text())["evidence"] == case["evidence"]
+    assert json.loads((out / "case.json").read_text())["params"] == p and p["sessions"] != []
+
+
+def test_a_period_piece_takes_no_device(tmp_path):
+    """The period names no device, so the piece takes no registration head or place."""
+    with pytest.raises(SystemExit):
+        P.main(["period", "--out", str(tmp_path / "p"), "--head", "ab" * 64, "--place", "gpu0"])
 
 
 def _period_args(tmp_path: Path, d: dict, windows: list[dict]) -> list[str]:
     return ["--key", str(_json(tmp_path / "k.json", d["key"])), "--main", str(_lines(tmp_path / "main.txt", d["main"])),
-            "--name", d["name"], "--ledger", str(_lines(tmp_path / "ledger.jsonl", d["ledger"])),
+            "--name", d["name"],
+            "--ledger", str(_lines(tmp_path / "ledger.jsonl", d["ledger"])),
             "--pins", str(_lines(tmp_path / "pins.jsonl", d["pins"])),
             "--windows", str(_json(tmp_path / "w.json", windows))]
 

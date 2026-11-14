@@ -7,7 +7,8 @@ No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` 
 stand-in gives them, and the network certifier's entry (`network_certifier`) and every other subprotocol's period check
 (`CHECKS`) likewise. The toy workload provides every subprotocol's hooks, so both composites run on it.
 ``component`` reads ``STATE/record/w<I>/<name>/``'s ``answer.json`` and ``case.json``, and ``product`` runs
-``STATE/tools.json``'s ``product`` as ``product IDS check PARAMS COMMITMENT EVIDENCE``.
+``STATE/tools.json``'s ``product`` as ``product IDS --pins PINS check PARAMS COMMITMENT EVIDENCE``, ``PINS`` its
+``pins``, the auditor's pins file.
 """
 from __future__ import annotations
 
@@ -184,9 +185,10 @@ class Machine:
         return None if ans is None or case is None else (ans, case)
 
     def product(self, ids: Sequence[str], cases: Mapping[str, Any], digests: Mapping[str, str]) -> dict[str, Any]:
-        exe = json.loads((self.state / "tools.json").read_text())["product"]
-        argv = [exe, ",".join(ids)]
+        tools = json.loads((self.state / "tools.json").read_text())
+        argv = [tools["product"], ",".join(ids)]
         pid = subprocess.run([*argv, "id"], capture_output=True, text=True, check=True).stdout.strip()
+        argv += ["--pins", tools["pins"]]
         order = sorted(cases)
         files = {"params.json": canonical_json({"components": [{"id": c, "params": cases[c]["params"]} for c in order]}),
                  "commitment.bin": canonical_json({c: digests[c] for c in order}),

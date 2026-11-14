@@ -38,7 +38,7 @@ strategy, the probability that `a`'s component at `k` accepts its own case in wh
 fails is at most `a`'s error at that strategy. -/
 def ComponentBound (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
-    Game.prob (fun o => ComponentAccepts k a o.sent ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ
+    Game.prob (fun o => ComponentAccepts V.pins k a o.sent ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ
 
 /-- **Subprotocol `a`'s target at composite `k` at the verdict `acc`**: at all `θ`, `F` and `c`, and for every
 strategy, the probability that `acc` holds while `a`'s claim fails is at most `a`'s error at that strategy. -/

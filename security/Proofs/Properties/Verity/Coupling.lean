@@ -586,32 +586,33 @@ committed files, commitment, strategy `σ` and event `q`, the probability of `q`
 probability over the coins flipped up front (the families' coins and the device's sample at the close) at some resolution
 of the coin trees' coins, and at most its probability at another. -/
 def PlayCouples : Prop :=
-  ∀ (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Game.Strategy (play fs D θ F c)) (q : Exchange → Prop),
-    (∃ ρ : TreeCoins, Game.prCoin (fun t => q (outUp fs D θ F c ρ σ t)) ≤ Game.prob q (play fs D θ F c) σ) ∧
-      ∃ ρ : TreeCoins, Game.prob q (play fs D θ F c) σ ≤ Game.prCoin fun t => q (outUp fs D θ F c ρ σ t)
+  ∀ (fs : List (String × ℕ)) (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (play fs D Ds θ F c)) (q : Exchange → Prop),
+    (∃ ρ : TreeCoins, Game.prCoin (fun t => q (outUp fs D Ds θ F c ρ σ t)) ≤ Game.prob q (play fs D Ds θ F c) σ) ∧
+      ∃ ρ : TreeCoins, Game.prob q (play fs D Ds θ F c) σ ≤ Game.prCoin fun t => q (outUp fs D Ds θ F c ρ σ t)
 
 open Game in
 /-- **`PlayCouples`**: the upper half from the device's state after the request (`Coupling.upper`), the close's sample
 being the last coordinate of the coins flipped up front (`Coupling.avg_prod`); the lower half from the upper half of the
 complement, whose probabilities with the event's sum to one in the play and over the coins flipped up front. -/
 theorem play_couples : PlayCouples := by
-  have up : ∀ (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-      (σ : Game.Strategy (play fs D θ F c)) (q : Exchange → Prop),
-      ∃ ρ : TreeCoins, Game.prob q (play fs D θ F c) σ ≤ Game.prCoin fun t => q (outUp fs D θ F c ρ σ t) := by
-    intro fs D θ F c σ q
-    obtain ⟨ρ, h⟩ := Coupling.upper fs q (frames fs) fs [] [] (finish D θ F c σ.1) σ.2 (Coupling.shape_refl fs)
+  have up : ∀ (fs : List (String × ℕ)) (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray)
+      (c : ByteArray) (σ : Game.Strategy (play fs D Ds θ F c)) (q : Exchange → Prop),
+      ∃ ρ : TreeCoins, Game.prob q (play fs D Ds θ F c) σ ≤ Game.prCoin fun t => q (outUp fs D Ds θ F c ρ σ t) := by
+    intro fs D Ds θ F c σ q
+    obtain ⟨ρ, h⟩ := Coupling.upper (Parties.families Ds ++ fs) q (frames (Parties.families Ds ++ fs))
+      (Parties.families Ds ++ fs) [] [] (finish D Ds θ F c σ.1) σ.2 (Coupling.shape_refl _)
     refine ⟨ρ, h.trans (le_of_eq ?_)⟩
     unfold Game.prCoin
     rw [Coupling.avg_prod]
     rfl
-  intro fs D θ F c σ q
-  refine ⟨?_, up fs D θ F c σ q⟩
-  obtain ⟨ρ, h⟩ := up fs D θ F c σ fun o => ¬ q o
+  intro fs D Ds θ F c σ q
+  refine ⟨?_, up fs D Ds θ F c σ q⟩
+  obtain ⟨ρ, h⟩ := up fs D Ds θ F c σ fun o => ¬ q o
   refine ⟨ρ, ?_⟩
-  have e1 := Coupling.prob_add_not q (play fs D θ F c) σ
-  have e2 := Coupling.prCoin_add_not fun t => q (outUp fs D θ F c ρ σ t)
-  have hA : Game.prCoin (fun t => ¬ q (outUp fs D θ F c ρ σ t)) ≠ ⊤ :=
+  have e1 := Coupling.prob_add_not q (play fs D Ds θ F c) σ
+  have e2 := Coupling.prCoin_add_not fun t => q (outUp fs D Ds θ F c ρ σ t)
+  have hA : Game.prCoin (fun t => ¬ q (outUp fs D Ds θ F c ρ σ t)) ≠ ⊤ :=
     ne_top_of_le_ne_top ENNReal.one_ne_top (e2 ▸ le_add_self)
   refine ENNReal.le_of_add_le_add_right hA ?_
   rw [e2, ← e1]
@@ -623,7 +624,7 @@ theorem play_couples : PlayCouples := by
 some resolution of the coin trees' coins (`play_couples`), which the bound takes at every resolution. -/
 theorem coins_couple : CoinsCouple := by
   intro ι α _ d V acc k a h θ F c σ
-  obtain ⟨ρ, hρ⟩ := (play_couples (V.families θ) (V.signer θ) θ F c σ fun o => acc o ∧ ¬ V.Holds k θ F c σ a o).2
+  obtain ⟨ρ, hρ⟩ := (play_couples (V.families θ) (V.signer θ) (V.devices θ) θ F c σ fun o => acc o ∧ ¬ V.Holds k θ F c σ a o).2
   exact hρ.trans (h θ F c σ ρ)
 
 /-- **`TargetOfPeriods`**: at the resolution `play_couples` gives, the coupled run's coins carry the play's event into
@@ -635,25 +636,32 @@ theorem target_of_periods : TargetOfPeriods := by
   split_ifs with hcr
   · classical
     obtain ⟨-, -, hcr, hun⟩ := hcr
-    obtain ⟨ρ, hρ⟩ := (play_couples (V.families θ) (V.signer θ) θ F c σ
+    obtain ⟨ρ, hρ⟩ := (play_couples (V.families θ) (V.signer θ) (V.devices θ) θ F c σ
       fun o => acc o ∧ ¬ V.Holds k θ F c σ (.ofAudit b) o).2
     obtain ⟨q, δ, hs, hδ, hb⟩ := h θ F c σ ρ
-    have hf : ENNReal.ofReal ((V.forger (.ofAudit b) θ F c σ).Pr lmsVerify) ≤
-        ENNReal.ofReal (V.epsForge θ (V.callsMul θ (.ofAudit b) * V.cost θ F c σ + V.callsAdd θ (.ofAudit b))
-          (V.signatures θ)) :=
-      ENNReal.ofReal_le_ofReal (hun (V.forger_calls _ θ F c σ) (V.forger_signed _ θ F c σ))
+    have hf : ((V.pins.reads (.ofAudit b)).map fun i =>
+          ENNReal.ofReal ((V.forger (.ofAudit b) i θ F c σ).Pr lmsVerify)).sum ≤
+        ((V.pins.reads (.ofAudit b)).length : ℝ≥0∞) *
+          ENNReal.ofReal (V.epsForge θ (V.callsMul θ (.ofAudit b) * V.cost θ F c σ + V.callsAdd θ (.ofAudit b))
+            (V.signatures θ)) := by
+      rw [← nsmul_eq_mul, ← List.length_map (f := fun i =>
+        ENNReal.ofReal ((V.forger (.ofAudit b) i θ F c σ).Pr lmsVerify))]
+      refine List.sum_le_card_nsmul _ _ fun x hx => ?_
+      obtain ⟨i, hi, rfl⟩ := List.mem_map.1 hx
+      exact ENNReal.ofReal_le_ofReal (hun i hi (V.forger_calls _ i θ F c σ) (V.forger_signed _ i θ F c σ))
     show _ ≤ V.delta θ (.ofAudit b) (V.cost θ F c σ) +
-      ENNReal.ofReal (V.epsForge θ (V.callsMul θ (.ofAudit b) * V.cost θ F c σ + V.callsAdd θ (.ofAudit b))
-        (V.signatures θ)) +
+      ((V.pins.reads (.ofAudit b)).length : ℝ≥0∞) *
+        ENNReal.ofReal (V.epsForge θ (V.callsMul θ (.ofAudit b) * V.cost θ F c σ + V.callsAdd θ (.ofAudit b))
+          (V.signatures θ)) +
       V.loss (.ofAudit b) θ (ENNReal.ofReal ((V.finder (.ofAudit b) θ F c σ).Pr sha512Msg))
     rw [add_assoc]
     refine hρ.trans ((Coupling.prCoin_equiv q.coins _).symm.trans_le ?_)
     refine (Game.prCoin_mono (q := fun ξ => (q.run.accepts b ξ ∧ ¬ q.run.Holds (V.certOf θ) q.price b ξ) ∨
-      (acc (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ)) ∧
-        (¬ V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ)) ∨ q.brk ξ))) ?_).trans
+      (acc (outUp (V.families θ) (V.signer θ) (V.devices θ) θ F c ρ σ (q.coins ξ)) ∧
+        (¬ V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) (V.devices θ) θ F c ρ σ (q.coins ξ)) ∨ q.brk ξ))) ?_).trans
       ((Coupling.prCoin_or_le _ _).trans (add_le_add ?_ (le_trans (hb hcr) (add_le_add hf le_rfl))))
     · intro ξ ⟨ha, hh⟩
-      by_cases hl : V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ))
+      by_cases hl : V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) (V.devices θ) θ F c ρ σ (q.coins ξ))
       · by_cases hk : q.brk ξ
         · exact Or.inr ⟨ha, Or.inr hk⟩
         · exact Or.inl ⟨q.verdict ξ ha hl hk, fun hw => hh (q.world ξ hw)⟩
@@ -701,7 +709,7 @@ end Idle
 /-- **`CoinsCouple`'s honest lemma**: at the idle deployment, PoUW meets its bound at its component at remote over the
 coins flipped up front, its error being `⊤`. -/
 theorem coins_couple_honest :
-    Idle.unbounded.UpFrontFor (fun o => ComponentAccepts .remote .pouw o.sent) .remote .pouw := by
+    Idle.unbounded.UpFrontFor (fun o => ComponentAccepts Idle.pins .remote .pouw o.sent) .remote .pouw := by
   intro θ F c σ ρ
   rw [Idle.error_unbounded]
   exact le_top
@@ -714,7 +722,7 @@ theorem coins_couple_nontrivial : ¬ Idle.exact.TargetFor (fun _ => True) .remot
 remote couple to the period run that charges nothing and accepts everything (`Idle.coupling`), within `δ = 1`; no check
 reads the device's log, and the coupling has no break, so the rest of the event is empty. -/
 theorem target_of_periods_honest :
-    (Idle.vocab ⊤ 1).PeriodsCouple (fun o => ComponentAccepts .remote .pouw o.sent) .remote .pouw := by
+    (Idle.vocab ⊤ 1).PeriodsCouple (fun o => ComponentAccepts Idle.pins .remote .pouw o.sent) .remote .pouw := by
   intro θ F c σ ρ
   refine ⟨Idle.coupling ⊤ _ .remote θ F c σ ρ, 1, fun _ => Pouw.pr_le_one _, le_top, fun _ => ?_⟩
   refine le_trans (Game.prCoin_mono (q := fun _ => False) ?_) (by rw [Game.prCoin_false]; exact zero_le)

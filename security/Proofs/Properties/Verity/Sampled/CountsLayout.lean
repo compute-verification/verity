@@ -170,11 +170,11 @@ none of the live rounds picks in an opening frame `.opening i s n` that some rou
 such round does; the cuts `q` fixes are at the bytes it answers (`CutsAt`), and every description of `q`'s opening asks
 for its `n` coins (`OpeningAt.n_eq`). -/
 theorem RoundsReach.stop_frame {P : Fin R → List Release → Frame → Prop}
-    {rv : Fin R → Exchange → Option Claims.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
+    {rv : Fin R → Exchange → Option Claims.Msg} {sg : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray}
     {c rq : ByteArray} (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n)
     {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀)
     {pre₀ : List Release} {f : List Release → Game Exchange} {a : Fin R → Prop}
-    (hf : ∀ log, f log = finish sg θ F c rq (pre₀ ++ log)) (hS : StopOf P rv pre₀ f a q)
+    (hf : ∀ log, f log = finish sg Ds θ F c rq (pre₀ ++ log)) (hS : StopOf P rv pre₀ f a q)
     (hK : ¬ ∀ j, q.Ks j = .skip) {φ : CoinTape q.g' q.s' → CoinTape q.g' q.s'} {β : Type}
     {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ}
     {rs : Fin J → Fin 2 → List Flock.Round} {o : β × CoinTape g σ}
@@ -184,7 +184,7 @@ theorem RoundsReach.stop_frame {P : Fin R → List Release → Frame → Prop}
       (∀ j, (q.Ks j).isHere = true → P j (pre₀ ++ L) (.opening i s n)) ∧
       (CoinTape.run g σ o.2).log = (pre₀ ++ L) ++ ⟨.opening i s n, b, bits⟩ :: L' ∧
       CutsAt rv q (pre₀ ++ L) (CoinTape.run g σ o.2).log ∧
-      ∀ o' : OpeningAt (finish sg θ F c rq) q.g', o'.n = n := by
+      ∀ o' : OpeningAt (finish sg Ds θ F c rq) q.g', o'.n = n := by
   obtain ⟨L, hNP, h⟩ := hS
   rcases h with ⟨hK', -⟩ | ⟨k, fs, ts, f', i, s, n, b, hf', hT, ⟨j, haj, hj⟩, s'', Ks, x'', back'', hq, hKs⟩
   · exact absurd hK' hK
@@ -194,7 +194,7 @@ theorem RoundsReach.stop_frame {P : Fin R → List Release → Frame → Prop}
   have hall : ∀ j', (q.Ks j').isHere = true → P j' (pre₀ ++ L) (.opening i s n) := fun j' h' => by
     rw [hq] at h'
     exact ((isHere_openCuts hKs j').1 h').2
-  have hf'' : ∀ log, f' log = finish sg θ F c rq ((pre₀ ++ L) ++ log) := fun log => by
+  have hf'' : ∀ log, f' log = finish sg Ds θ F c rq ((pre₀ ++ L) ++ log) := fun log => by
     rw [hf', hf, List.append_assoc]
   have hSv := hPS j _ i s n hj
   subst hq
@@ -207,7 +207,7 @@ theorem RoundsReach.stop_frame {P : Fin R → List Release → Frame → Prop}
   obtain ⟨L', hL'⟩ := log_of_opening hf'' hc hTi hp s'' z
   rw [← hX] at hL'
   refine ⟨L, i, s, n, b, _, L', hNP, ⟨j, hjK, hj⟩, hall, hL', cutsAt_openCuts rfl hKs hL', fun o' => ?_⟩
-  exact OpeningAt.n_eq (finish_recordsLog sg θ F c rq) o' (OpeningAt.ofNext (k := k) (b := b) hf'' hc hTi hp)
+  exact OpeningAt.n_eq (finish_recordsLog sg Ds θ F c rq) o' (OpeningAt.ofNext (k := k) (b := b) hf'' hc hTi hp)
 
 /-- **The first stop's log opens no round**: where round `j₀`'s reading picks what the link's slot picks, the device
 serves every opening of the log `L ++ L''`, and no round picks in `L` after the empty log, `L` opens no round, since
@@ -415,16 +415,16 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
       _root_.Properties.Spot.bytesOf (coinBytes m 64 (κ ω) 0))
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ)
     {o : A.Out × CoinTape (V.game θ F c) σ}
-    (h : ReachesOff V θ F c A rd σ D M (linkEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1))
-      (roundEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1)) o)
+    (h : ReachesOff V θ F c A rd σ D M (linkEmptyAt fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (roundEmptyAt fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2)) (hn : NoMiss V θ F c rd σ o.2)
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
     (ht : TablesSent (CoinTape.run (V.game θ F c) σ o.2).sent)
     (hN : SampleNamed k (CoinTape.run (V.game θ F c) σ o.2).sent label after)
     (hO : ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text →
       Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log) :
-    ReachesOff V θ F c A rd σ D M (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
-      (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) o := by
+    ReachesOff V θ F c A rd σ D M (linkEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (roundEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) o := by
   subst hrd hD hM
   obtain ⟨ω, pts, hL0, hr⟩ := h
   have hθ := (play_ends V θ F c σ o.2).1
@@ -458,7 +458,7 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
   have hi₀ := (Pos.toStop_spec (Pos.inv_root (roundCuts V θ F c (readingAt A.tables A.layout record recordDigest))
     ((sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout record recordDigest) σ label after κ).start ω))).2.2
   obtain ⟨L₀, i, s, n, b, bits, L', hNP, -, -, hlog, -, hcnt⟩ :=
-    RoundsReach.stop_frame (pre₀ := []) (f := finish (V.signer θ) θ F c σ.1) hPS hi₀ (fun _ => rfl)
+    RoundsReach.stop_frame (pre₀ := []) (f := finish (V.signer θ) (V.devices θ) θ F c σ.1) hPS hi₀ (fun _ => rfl)
       (stopOf_firstStop V θ F c A _ σ _ ω hPk) hK hr
   rw [List.nil_append] at hlog
   have h₀ := firstOpened_noPick A.tables hj₀ (logServed_run V θ F c σ o.2) hlog hNP
@@ -469,7 +469,7 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
     exact hL0 ⟨o', ho', (hcnt o').trans hnL, hne⟩
   refine RoundsReach.weaken (fun q => q.Inv (roundCuts V θ F c (readingAt A.tables A.layout record recordDigest)) ∧
       StopsAt (readingAt A.tables A.layout record recordDigest).round
-        (readingAt A.tables A.layout record recordDigest).reveal (V.signer θ) θ F c σ.1 q.toStop)
+        (readingAt A.tables A.layout record recordDigest).reveal (V.signer θ) (V.devices θ) θ F c σ.1 q.toStop)
     (fun q φ hq => ⟨Pos.inv_consume (Pos.inv_rewrite (Pos.toStop_spec hq.1).2.2 φ), StopsAt.next hPk hq.2 φ⟩)
     ?_ ⟨Pos.inv_consume (Pos.inv_rewrite hi₀ _), StopsAt.next hPk (stopsAt_firstStop V θ F c A _ σ _ ω hPk) _⟩ hr
   intro q sub x N' rs' hq hs hBq ho hE
@@ -546,29 +546,30 @@ theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ :
 
 /-- **The coupling at the deployment, off the empty classes at their counts**: `couplingTarget_assembled_at` at the
 deployed device's history and `movesReachAt`'s readings, decoders, family, digest and coins, with its `hM` by
-`movesReachAt` and the count match (`countsReachAt`, `movesReach_at`). It holds wherever the vocabulary's signer at
-`θ` is the deployment's (`hD`) and `movesReachAt`'s premises hold, with no bound on the stops' term. -/
+`movesReachAt` and the count match (`countsReachAt`, `movesReach_at`). It holds wherever the vocabulary's pins
+designate the deployment's sessions for the challenger (`hW`) and `movesReachAt`'s premises hold, with no bound on the
+stops' term. -/
 theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
     (P : Device.Deployment) {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
-    (hD : V.signer θ = P.signer V.families θ)
+    (hW : V.pins.sessions .challenger = P.sessions)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
-    CouplingTarget V k (K.assembled fieldEnc (Device.dev (P.setupOf V.families)) k
+    CouplingTarget V k (K.assembled fieldEnc (P.dev V.families) k
       (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
       (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ) (afterAt V k)
       (srcCoinsAt _root_.Spot.Challenger.MAX_COINS)) A θ F :=
-  couplingTarget_assembled_at fieldEnc V k K (Device.dev (P.setupOf V.families))
+  couplingTarget_assembled_at fieldEnc V k K (P.dev V.families)
     (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
     (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ)
-    (srcCoinsAt _root_.Spot.Challenger.MAX_COINS) A θ F (fun o _ => Device.printsLog_dev _ o)
-    (fun c => Device.signsPlay_dev V P θ F c hD) (avg_srcCoinsAt hL) hA hDg (writesView_wrZP A rfl)
+    (srcCoinsAt _root_.Spot.Challenger.MAX_COINS) A θ F (P.binds V k V.families θ hW)
+    (avg_srcCoinsAt hL) hA hDg (writesView_wrZP A rfl)
     (fun c σ => movesReach_at (movesReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hO c σ)
       (countsReachAt (reg A) (record A θ F) (recordDigest A θ F) hA hDg hL hO c σ))
 

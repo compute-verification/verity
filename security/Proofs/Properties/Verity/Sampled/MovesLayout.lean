@@ -203,8 +203,8 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
       _root_.Properties.Spot.bytesOf (coinBytes m 64 (κ ω) 0))
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ)
     {o : A.Out × CoinTape (V.game θ F c) σ}
-    (h : ReachesOff V θ F c A rd σ D M (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
-      (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) o)
+    (h : ReachesOff V θ F c A rd σ D M (linkEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (roundEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2)) (hn : NoMiss V θ F c rd σ o.2)
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
     (ht : TablesSent (CoinTape.run (V.game θ F c) σ o.2).sent)
@@ -236,7 +236,7 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
   obtain ⟨L₀, as, ms, ⟨hLA, hc⟩, -, -, -, hgt, -, hcov⟩ := firstStop_order V θ F c A A.layout_injective
     A.tables_nodup (hA.layout_lt _ _) record recordDigest reg rfl rfl σ
     (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout record recordDigest) σ label after κ)
-    (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (B := roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
+    (linkEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (B := roundEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1))
     (linkBits fieldEnc) (fun _ _ => rfl) (fun _ _ h => h) (fun _ x => roundBits fieldEnc x) (fun _ _ _ => rfl)
     (fun _ _ _ h => h) ω pts hK hL0 hr rfl (picksOnce_readingAt A.tables A.layout record recordDigest hnd)
     A.rounds_eq.le
@@ -277,7 +277,7 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
     MovesReach V θ F c k (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧
         SampledDigest k o.sent after) A rd σ D M
-      (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
+      (linkEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) :=
   fun _ h ⟨hv, hn, ⟨hl, ht⟩, hd⟩ => h.movesOf hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl ht
     (hN _ hv hl hd) (hO _ hv hl)
 
