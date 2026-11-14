@@ -1,11 +1,12 @@
-"""Every Lean name the calculator cites is one a lock lists.
+"""Every string of the calculator that is wholly a Lean name, as a literal or as a module's value, is one a lock lists.
 
 A citation is a string of the calculator's Python outside its tests that reads as a Lean declaration (dotted, each part
-capitalized, under a namespace some lock's names are under), as a literal or as a module's value once built (a name its
-module composes, `min_cut.HE_CHARGED`). A lock lists a name where `nci/arguments.py` reads one from a lock (a
-guarantee, an assumption, an open premise or a domain hypothesis) or `rho.lean` does (a guarantee's statement, a
-definition an assumptions module holds), in either lock `rho.lean` reads. A namespace (`min_cut.AREA`) is no
-citation. A name no lock lists is in `ALLOWED`, which only shrinks, with why."""
+but the last capitalized, under a namespace some lock's names are under), as a literal or as a module's value once
+built (a name its module composes, `min_cut.HE_CHARGED`). A name built inside a function, or one inside prose, is not
+seen. A lock lists a name `rho.lean.read` takes from the locks it reads (a guarantee's statement, an assumption, an
+open premise, a domain hypothesis, or a definition an assumptions module holds) or a guarantee those locks key, as
+`nci/arguments.py` reads them. A namespace (`min_cut.AREA`) is no citation. A name no lock lists is in `ALLOWED`,
+which only shrinks, with why."""
 
 import ast
 import inspect
@@ -19,8 +20,8 @@ import rho
 from rho import lean, min_cut
 
 CALCULATOR = Path(rho.__file__).resolve().parents[1]
-#: a dotted name, each part starting with a capital, as a Lean declaration reads
-NAME = re.compile(r"(?:[A-Z][A-Za-z0-9_']*\.)+[A-Z][A-Za-z0-9_']*")
+#: a dotted name, each namespace starting with a capital, as a Lean declaration reads
+NAME = re.compile(r"(?:[A-Z][A-Za-z0-9_']*\.)+[A-Za-z_][A-Za-z0-9_']*")
 #: {a cited Lean name no lock lists: why}
 ALLOWED = {
     min_cut.HE_CHARGED: "stated beside HE and frozen unstated in the lock's shape: no theorem proves it until the count "
@@ -28,16 +29,10 @@ ALLOWED = {
 }
 
 
-def listed() -> set[str]:
-    """Every name the locks `rho.lean` reads list."""
-    out = set()
-    for path in lean.LOCKS:
-        lock = json.loads(path.read_text())
-        out |= set(lock["guarantees"]) | set(lock["assumptions"]) | set(lock.get("open") or {}) | set(
-            lock.get("domain") or {})
-        out |= {s.rsplit(" : ", 1)[-1] for e in lock["guarantees"].values() for s in e.get("signature", ())}
-        out |= {d for m, g in (lock.get("reads") or {}).items() for d in (g.get("definitions") or {})}
-    return out
+def listed(locks: tuple[Path, ...] = lean.LOCKS) -> set[str]:
+    """Every name ``locks`` list: what `rho.lean.read` takes from them, and their guarantees' keys."""
+    proved, assumed = lean.read(locks)
+    return set(proved | assumed).union(*(json.loads(p.read_text())["guarantees"] for p in locks))
 
 
 def _strings(v, depth: int = 0):
@@ -96,13 +91,26 @@ def test_allowed_only_shrinks():
     assert not stale, f"ALLOWED names a lock now lists or the calculator no longer cites; remove them: {stale}"
 
 
-def test_a_name_no_lock_lists_is_found():
-    """The check isn't vacuous: a literal and a composed name no lock lists are found, a listed name, a namespace and
-    a dotted string outside the locks' namespaces are not."""
-    names = {"Area.Part.Guarantees.Stated", "Area.Assumptions.Named"}
-    src = {"rho/x.py": "A = 'Area.Guarantees.Nowhere'\nB = 'Area.Part.Guarantees.Stated'\nC = 'Area.Part'\n"
-                       "D = 'Other.Name'\n"}
-    got = cited(src, {"rho.x.E": ("Area.Part.Guarantees.Composed", "draft:x")}, names)
-    assert got == {"Area.Guarantees.Nowhere": "rho/x.py:1", "Area.Part.Guarantees.Stated": "rho/x.py:2",
-                   "Area.Part.Guarantees.Composed": "rho.x.E"}
-    assert {n for n in got if n not in names} == {"Area.Guarantees.Nowhere", "Area.Part.Guarantees.Composed"}
+def test_a_name_no_lock_lists_is_found(tmp_path):
+    """The check isn't vacuous. Against a toy lock, a literal and a composed name no lock lists are found, and so are
+    a name whose last part is lower case and a definition a module other than an assumptions module reads. A
+    guarantee's statement and key, a premise, an assumptions module's definition, a namespace and a dotted string
+    outside the locks' namespaces are not."""
+    lock = tmp_path / "lean-audit.json"
+    lock.write_text(json.dumps({
+        "guarantees": {"Area.Proofs.stated_lower": {"signature": ["Area.Proofs.stated_lower : Area.Guarantees.Stated"]}},
+        "assumptions": {"Area.Assumptions.Named": {}},
+        "reads": {"Area.Assumptions": {"definitions": {"Area.Assumptions.Held": {}}},
+                  "Area.Part": {"definitions": {"Area.Part.Read": {}}}},
+    }))
+    names = listed((lock,))
+    src = {"rho/x.py": "A = 'Area.Guarantees.Nowhere'\nB = 'Area.Guarantees.Stated'\nC = 'Area.Guarantees'\n"
+                       "D = 'Other.Name'\nF = 'Area.Part.Read'\nG = 'Area.Guarantees.noSuch'\n"
+                       "H = 'Area.Proofs.stated_lower'\nI = 'Area.Assumptions.Named'\nJ = 'Area.Assumptions.Held'\n"}
+    got = cited(src, {"rho.x.E": ("Area.Guarantees.Composed", "draft:x")}, names)
+    assert set(got) == {"Area.Guarantees.Nowhere", "Area.Guarantees.Stated", "Area.Part.Read", "Area.Guarantees.noSuch",
+                        "Area.Proofs.stated_lower", "Area.Assumptions.Named", "Area.Assumptions.Held",
+                        "Area.Guarantees.Composed"}
+    assert got["Area.Guarantees.Composed"] == "rho.x.E" and got["Area.Part.Read"] == "rho/x.py:5"
+    assert {n for n in got if n not in names} == {"Area.Guarantees.Nowhere", "Area.Part.Read", "Area.Guarantees.noSuch",
+                                                  "Area.Guarantees.Composed"}
