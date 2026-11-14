@@ -36,3 +36,7 @@ paths = ["verity"]
 [[tool.verity.tests.reads]]
 tests = ["tests/test_nci_record_difftest.py"]
 paths = ["verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_inference_only_rows_protocol.py"]
+paths = ["verity"]

@@ -1,5 +1,5 @@
 # The NCI policy's check, the verifier's side: given a declaration (a descriptor v1 Program and its baseline θ) and a
-# declared division into isolation units, decide `Nci.CompliesRate Γ α` for that division
+# declared division into inference blocks, decide `Nci.CompliesRate Γ α` for that division
 # (`security/Definitions/Nci.lean`). It reads the Program with the circuit format's decoder (`Circuits.Program`, in
 # `core_circuits`), required by path,
 # and imports nothing else but Lean core and the core interface (`core_protocol`, for `NciCheck.Protocol`): no Mathlib
@@ -7,9 +7,12 @@
 # `nci-check` runs `NciCheck.Desc`, the check at the size of the description, then θ's provenance (`NciCheck.Baseline`),
 # and `nci-check --unrolled` the reference. `inference-only` is the same check as the core protocol
 # `verity/inference-only/v0` (`NciCheck.Protocol`), the inference-only policy's subprotocol of onsite and remote.
+# `inference-only-rows` is the policy's check of an execution phase's circuit record, a block counted in the rows of
+# its templates' circuit files, as the core protocol `verity/inference-only/rows/v1`: it reads each file with the
+# reader SPOT's one-stage check reads it with (`core_spot`, below).
 name = "nci_check"
 defaultTargets = ["NciCheck", "nci-difftest", "nci-desc-difftest", "nci-desc-liveness", "nci-desc-fuzz", "nci-baseline-difftest",
-  "nci-count-difftest", "nci-check", "inference-only"]
+  "nci-count-difftest", "nci-check", "inference-only", "inference-only-rows"]
 
 [leanOptions]
 autoImplicit = false
@@ -24,7 +27,9 @@ path = "../../../../../../circuits/lean"
 name = "core_protocol"
 path = "../../../../../interface"
 
-# SPOT's reader of an execution phase's circuit record (`Spot.Wires`), the one parse the record form reads it through.
+# SPOT's reader of an execution phase's circuit record (`Spot.Wires`), the one parse the record form reads it through,
+# and its one-stage check's reader of a circuit file (`Spot.OneStageZk`, `Spot.FilePart`), which the rows protocol
+# counts a template's rows with.
 [[require]]
 name = "core_spot"
 path = "../../../../../proofs/spot/verifier/lean"
@@ -67,3 +72,7 @@ root = "NciCheck.CheckMain"
 [[lean_exe]]
 name = "inference-only"
 root = "NciCheck.ProtocolMain"
+
+[[lean_exe]]
+name = "inference-only-rows"
+root = "NciCheck.RowsProtocolMain"
