@@ -35,6 +35,10 @@ from verity_vllm.pipeline import commit_plan as CP
 # inside the functions that read them, as `vu_store` is: the driver's import puts the catalog's Definitions into the Definition
 # table, and a process that only imports this module (the Commit before its replay, a deferred Commit) is to hold none of them.
 
+__all__ = ["ProgramSources", "ReplaySources", "arrivals", "cached_prefixes", "linkage_facts", "live_only", "live_only_entry",
+           "live_weights", "live_weights_check", "no_weights", "plan", "programs_of_record", "request_labels", "retention_of",
+           "rss_kb", "run", "sampling_design_of", "seed_of", "serving_rows", "vu_export"]
+
 logger = init_logger(__name__)
 
 
