@@ -5,11 +5,12 @@
 - **Python**: the package `datacenter`, the distribution `verity-datacenter` (this directory's `pyproject.toml`; it
   depends on `verity` alone). It is not a member of the uv workspace, so nothing installs it: an importer puts this
   directory on `sys.path`.
-- **Importers**: `benchmarks/network_sim/workload` alone, and its tests. No code under `verity/` imports it. What they
-  import:
-  - from `datacenter`: `Assumption` and `Cadence`; `workload/accounting.py` imports the package whole;
-  - from `datacenter.examples`: `leaf_spine`; `workload/run.py` imports the module whole;
-  - from `datacenter.logical`: `binding`, `gates` and `layout`.
+- **Importers**: `benchmarks/pouw/tests/test_proved_ticks_placed.py` alone. No code under `verity/` imports it. What
+  it imports:
+  - from `datacenter`: `FLEET_CLOSED`, `Assumption`, `Cadence`, `Computed`, `Credit`, `Datacenter`, `DeviceEntry`,
+    `Interval`, `LinkEntry`, `Plan`, `Zone`, `account`, `ands`, `crossings`, `names`, `place` and `register`;
+  - from `datacenter.logical`: `census_of`;
+  - from `datacenter.models`: `s8_grid`.
 - **Command**: `python -m datacenter.demo`, run from this directory. There is no console script.
 - **Lean**: none. `physical` mirrors the Lean physical model, and no Lake package is here.
 - **Documents**: none. The package writes no file and defines no schema.
@@ -86,8 +87,7 @@ print(account(audit(run(p, {"x": X}, plan), profile), profile))
 
 `python -m datacenter.demo` runs a night on a two-node rack, honestly and then with an adversary, and
 `python tests/test_walkthrough.py` prints the walkthrough ("Accounting for a datacenter, from a circuit up") section by
-section. `benchmarks/network_sim/workload/accounting.py` accounts for the network simulator's MLP and
-verity_vllm's serving Program the same way.
+section.
 
 The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `DeviceEntry` is
 `Accounting.Device` (the node's constants are its one Python mirror's, `verity.protocols.accounting.poub.verifier.timing`),

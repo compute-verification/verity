@@ -339,11 +339,9 @@ def _load(root: Path, directory: str, module: str) -> Any:
     return loaded
 
 
-def _reader(root: Path) -> Any:
-    """The stop verdicts' reader (`READER_MODULE`). It imports the calculator by its bare name, ``leak_bounds``, so that is
-    loaded from ``root``'s `benchmarks/network_traces` first."""
+def _reader() -> Any:
+    """The stop verdicts' reader (`READER_MODULE`)."""
 
-    _load(root, "network_traces", "leak_bounds")
     return importlib.import_module(READER_MODULE)
 
 
@@ -693,7 +691,7 @@ def stop_charge(root: Path, store: Any, labelled: Mapping[str, Sequence[str]]) -
     verdicts' reader's answer (`READER`'s `of_runs`), which `certifier` hands the calculator. The reader is handed
     every run of ``labelled`` and, as superseded, those another run replaces; this reads none of their files itself."""
 
-    return _reader(root).of_runs(store, list(labelled), [run for run, by in labelled.items() if by])
+    return _reader().of_runs(store, list(labelled), [run for run, by in labelled.items() if by])
 
 
 def stop_verdicts(store: Any, labelled: Mapping[str, Sequence[str]]) -> tuple[list[dict], list[str], list[dict]] | None:

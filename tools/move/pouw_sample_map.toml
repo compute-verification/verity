@@ -13,7 +13,8 @@
 # - Pearl-C's tile sample, `Definitions.Pouw.PearlC.TileDraw` and `Proofs.Pouw.PearlC.TileDrawGap`, to `TileSample` and
 #   `TileSampleGap` (whole words: they name these modules alone);
 # - the namespace's short name `Draw` where Pearl+'s own files name it relatively (`Draw.grid`, `open ... Draw`, in
-#   `PearlPlus/Draw.lean` and `PearlPlus/Cap.lean`) or as the module (`PearlPlus.lean`), where every `Draw` has this sense.
+#   `PearlPlus/Draw.lean` and `PearlPlus/Cap.lean`) or as the module (`PearlPlus.lean`), where every `Draw` has this sense;
+#   the glob, not the file, so that a second run on the moved tree finds its files and changes nothing.
 # None of these modules' namespaces holds the word but `Pouw.PearlPlus.Draw`, so no other declaration's name changes.
 # H1's two Python modules are `pouw_sample_h1_map.toml`'s.
 #
@@ -51,8 +52,7 @@ files = ["*"]
 "TileDrawGap" = "TileSampleGap"
 
 [[words_in]]
-files = ["security/Proofs/Pouw/PearlPlus.lean", "security/Proofs/Pouw/PearlPlus/Cap.lean",
-         "security/Proofs/Pouw/PearlPlus/Draw.lean"]
+files = ["security/Proofs/Pouw/PearlPlus.lean", "security/Proofs/Pouw/PearlPlus/*.lean"]
 
 [words_in.words]
 "Draw" = "Sample"
