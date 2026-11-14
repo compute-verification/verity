@@ -23,7 +23,7 @@ def JS(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
     """j10r_so with dither_a, dither_one and h1r stood in: `Refs.receipts` reads only the execution phase, the capture and
     j10r_units (stood in by each test)."""
     monkeypatch.syspath_prepend(str(DITHER))
-    for m in (_module("dither_a"), _module("dither_one", h1v3_itself=None), _module("h1r", H1R=type("H1R", (), {}))):
+    for m in (_module("dither_a"), _module("dither_one", h1v3_itself=None), _module("benchmarks.hash.dither.h1r", H1R=type("H1R", (), {}))):
         monkeypatch.setitem(sys.modules, m.__name__, m)
     monkeypatch.delitem(sys.modules, "j10r_so", raising=False)
     import j10r_so

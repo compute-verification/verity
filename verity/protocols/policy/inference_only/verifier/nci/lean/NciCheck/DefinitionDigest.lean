@@ -54,6 +54,12 @@ def written (ps : Array Json) : Json := match ps with
   | #[p] => p
   | ps => Json.mkObj [("concat", .arr ps)]
 
+/-- Whether the descriptor entry `e` is a composite's: its `form` is the string `composite`. The form is compared as a
+string, by a match a proof reads, never by `Json`'s `==`, which no proof can open. -/
+def isComposite (e : Json) : Bool := match e.getObjValD "form" with
+  | .str s => s == "composite"
+  | _ => false
+
 /-- A Definition's canonical entry (`codec.canonical_entry`, PROTOCOL.md §4.8), from its descriptor entry `e` and the
 descriptor's interning (`callees`, `types`): each node's callee id (`fn`), output type (`out`) and argument types inline,
 every alias replaced by the parts it stands for and every reference sequence flat, so one Definition has one entry in any
@@ -65,7 +71,7 @@ def canonicalEntry (callees types : Array Json) (e : Json) : V Json := do
   let at_ := fun (xs : Array Json) (i : Json) => match i.getNat? with
     | .ok i => xs.getD i .null
     | .error _ => .null
-  unless e.getObjValD "form" == .str "composite" do return e
+  unless isComposite e do return e
   let body := e.getObjValD "body"
   let .arr nodes := body.getObjValD "nodes" | return e
   let mut rows : Array (Array (Array Json)) := #[]
@@ -107,7 +113,7 @@ def closureDigest (j : Json) (key : String) : V String := do
       let e := defs.getObjValD k
       if let .null := e then throw s!"program: {key} reaches {k}, no Definition of its descriptor"
       seen := seen.push (k, .str (← definitionDigest callees types e))
-      if e.getObjValD "form" == .str "composite" then
+      if isComposite e then
         for n in nodesOf e do
           match (n.getObjValD "fn").getNat?.toOption.bind (callees[·]?) with
           | some (.str c) => todo := c :: todo
