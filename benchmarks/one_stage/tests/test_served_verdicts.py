@@ -6237,7 +6237,7 @@ def test_the_serve_steps_python_path_names_the_import_root_of_every_workspace_pa
     """The serve step runs `verity_vllm.pipeline.cli serve-openai` under vLLM's venv, which holds none of the workspace,
     so it imports each workspace package from the PYTHONPATH the script exports: that path names the import root of every
     package serve-openai's imports reach, a function's included (`verity_vllm.engine.spec`'s `verity_config`, which it
-    reaches only once it serves, and H1's drawn proofs' `verity_flock`)."""
+    reaches only once it serves, and the `verity_flock` of H1's sampled proof blocks)."""
     m = re.search(r"^export PYTHONPATH=(\S+)$", (HERE.parent / script).read_text(), re.M)
     assert m, f"{script} exports no PYTHONPATH"
     named = {p.removeprefix("$TREE").lstrip("/") or "." for p in m.group(1).split(":")}
