@@ -1,5 +1,4 @@
-"""SPOT's caller's check (`VStar.Recursive.Caller.check`): what the caller hands SPOT's verifier beside the registration
-record and SPOT's own log, which SPOT's check (`docket.check`) reads none of.
+"""SPOT's caller's check (`VStar.Recursive.Caller.check`): what the caller hands SPOT's verifier beside the docket and SPOT's own log, which SPOT's check (`docket.check`) reads none of.
 
 The record names its day's one declared program (Declared day: `R2-undeclared`, `R2-declared-twice`, `R2-declared`);
 its window names the stream and the prover the verifier is bound to (Binding: `R6-stream`, `R6-prover`), the seed salt
