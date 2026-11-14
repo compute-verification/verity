@@ -143,7 +143,7 @@ theorem plain_mkObj (l : List (String × Json))
     (hk : ∀ k, ((Std.TreeMap.Raw.ofList l).get? k).isSome = true → PlainStr k)
     (h : ∀ k v, (Std.TreeMap.Raw.ofList l).get? k = some v → Plain v) :
     Plain (Json.mkObj l) := by
-  unfold Lean.Json.mkObj
+  show Plain (.obj (Std.TreeMap.Raw.ofList l))
   exact plain_obj Std.TreeMap.Raw.WF.ofList hk h
 
 /-! ## Convenience: printable strings -/
