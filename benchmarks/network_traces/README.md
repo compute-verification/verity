@@ -130,8 +130,10 @@ rehearsal's is. The runner refuses a session without all three, and under any ot
 records cover the connections that crossed the relay; that no other route reaches the endpoint is the placement's.
 Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
-form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted, every
-request of the audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
+form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the network certifier's
+records pass `network-rows check` (each record held to its certified head, then the certifier program's rows audit,
+which refuses cells cut, clocked or ordered otherwise than the schedule), the chain accepted, every request of the
+audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
 `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window), is witness, as every
 case's evidence and params are: it is kept in the serve dir's `private/pieces/certifier` (0700, the file 0600) and is
 never in the piece's directory, which the run publishes. The certificates of its evidence, the link-window's three
