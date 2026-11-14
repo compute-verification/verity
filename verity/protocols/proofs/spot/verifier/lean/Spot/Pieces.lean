@@ -66,6 +66,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   earlier stream's log, the order the challenger's signed log shows, and the earlier stream's audit record, whether it
   accepted and whether it is complete, as the record the caller hands says: nothing holds that record to the one the
   earlier stream's verifier wrote;
+* `across_all`: those verdicts on each read of a list, whether each reaches a class's boundary record through reads of
+  the list, the verdict on the last stream's own audit record, and the list's case (`Record.acrossAll`);
 * `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
@@ -122,7 +124,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 `sampled-proofs-verifier` serves those the verifier runs (`verifier`): `registration`, `matches_public`,
 `select` (the sample of record: `Stream.select` hands it the bytes of the challenger's coins), `select_second` (a
 two-stage rule's second stage, on the coins after the interior registration), `check_draw`,
-`check_proved`, `record`, `across`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its
+`check_proved`, `record`, `across`, `across_all`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its
 outcome to it),
 `hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
@@ -663,6 +665,20 @@ def acrossOf (j : Json) : V Record.Across := do
 /-- One read across streams (`acrossOf`) to `Record.across`'s verdicts on it. -/
 def across (j : Json) : V Json := do Record.across (← acrossOf j)
 
+/-- `{"boundary", "links", "last"}` to `Record.acrossAll`'s verdicts on a list of reads across streams: a class's
+boundary record's digest in lowercase hex, the reads, each as `across` takes one, and the last stream's own audit
+record or null. -/
+def acrossAll (j : Json) : V Json := do
+  if keys? j != some #["boundary", "last", "links"] then throw "exactly {boundary, links, last}"
+  let .str boundary := getD j "boundary" | throw "boundary is not lowercase hex"
+  let .arr given := getD j "links" | throw "links is not a list"
+  let mut links : Array Record.Across := #[]
+  for l in given do
+    match acrossOf l with
+    | .ok a => links := links.push a
+    | .error why => throw s!"link {links.size}: {why}"
+  Record.acrossAll { boundary, links, last := getD j "last" }
+
 /-- `{"record", "scheme", "query", "values": [{"name", "registered"}], "public": [item]}` to the service's public-items
 rule's `{"ok", "codes", "detail"}` (`Service.checkPublic`), the query's digest computed here: a string scheme, the check's query
 an object, each value a string name with a boolean, each declared item a string. -/
@@ -1021,7 +1037,7 @@ def table : List (String × (Json → V Json)) :=
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
-   ("session_registered", sessionRegistered), ("record", record), ("across", across),
+   ("session_registered", sessionRegistered), ("record", record), ("across", across), ("across_all", acrossAll),
    ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits), ("hello", Hello.check),
    ("fits", fits),
@@ -1054,6 +1070,6 @@ def table : List (String × (Json → V Json)) :=
 /-- The verifier's pieces: `table`'s, by name. -/
 def verifier : List (String × (Json → V Json)) :=
   table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
-    "record", "across", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1
+    "record", "across", "across_all", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1
 
 end Spot.Pieces

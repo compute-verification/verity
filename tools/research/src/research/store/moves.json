@@ -2544,6 +2544,14 @@
     },
     {
       "paths": {
+        "verity/circuits/kernels/sha512.cuh": "verity/commitments/cuda/sha512.cuh",
+        "verity/circuits/kernels/row_commit.cuh": "verity/commitments/cuda/row_commit.cuh",
+        "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",
+        "verity/circuits/kernels/pyproject.toml": "verity/commitments/cuda/pyproject.toml"
+      }
+    },
+    {
+      "paths": {
         "security/Definitions/NetworkCertifier.lean": "security/Definitions/Certifier.lean",
         "security/Definitions/NetworkCertifier/": "security/Definitions/Certifier/",
         "security/Proofs/NetworkCertifier.lean": "security/Proofs/Certifier.lean",
