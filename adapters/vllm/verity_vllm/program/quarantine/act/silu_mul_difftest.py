@@ -37,10 +37,10 @@ def production(statics: dict, inputs: list) -> list:
     import vllm._custom_ops  # noqa: F401  (registers torch.ops._C)
 
     (x,) = inputs
-    I = int(statics["I"])
-    out = torch.empty((1, I), dtype=torch.bfloat16, device=x.device)
-    torch.ops._C.silu_and_mul(out, x.view(1, 2 * I))
-    return [out.view(I)]
+    width = int(statics["I"])
+    out = torch.empty((1, width), dtype=torch.bfloat16, device=x.device)
+    torch.ops._C.silu_and_mul(out, x.view(1, 2 * width))
+    return [out.view(width)]
 
 
 def spec(statics: dict):
