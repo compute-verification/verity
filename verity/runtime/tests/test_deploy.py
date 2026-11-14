@@ -13,11 +13,12 @@ import threading
 import deploy_example as X
 import pytest
 
-from verity.configuration.deploy import manifest as M
-from verity.configuration.deploy.channels import Playback, dial
-from verity.configuration.deploy.runtime import ARRIVED, RUNTIME, run
-from verity.configuration.deploy.transcript import PartyLog
-from verity.configuration.wire import PUBLIC, REFUSALS, Message, Refused, handshake
+from verity import protocol as M
+from verity.runtime.channels import Playback, dial
+from verity.runtime.runner import ARRIVED, RUNTIME, run
+from verity.runtime.transcript import PartyLog
+from verity.channel import PUBLIC, REFUSALS, Message, Refused
+from verity.runtime import handshake
 
 SEED = b"deploy-core worked example"
 BOTH = ["challenger", "responder"]
