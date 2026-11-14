@@ -18,7 +18,8 @@ a run that hands them to its setups parses its program once. `TemplateQuery.Desc
 three as one value, and a `ProgramRead`'s are the originals whatever program it holds (`ProgramRead.readers_of`): that is
 what lets one `ProgramRead` serve calls whose programs it was not made from. `ProgramRead.orOf` is the read such a call
 reads its program through, the kept one on the kept bytes and the program's own on any other, so a call parses its
-program once whichever it is; its readers are the originals too (`ProgramRead.readers_orOf`).
+program once whichever it is; its readers are the originals too (`ProgramRead.readers_orOf`). `ProgramRead.kept` is the
+read of a process that never asks its program's digest, whose readers are the originals too (`ProgramRead.readers_kept`).
 -/
 
 @[expose] public section
@@ -186,6 +187,34 @@ theorem ProgramRead.readers_orOf (program b : ByteArray) :
   split
   · exact ProgramRead.readers_of program
   · exact ProgramRead.readers_of b
+
+/-- `program` as `ProgramRead.of` holds it, but with its digest made of its bytes when asked for rather than of the JSON
+its readings share, so that JSON is let go once both readings are made: the read of a process that keeps its program
+and never asks its digest (the ZK server's `Hello.Setup`). -/
+def ProgramRead.kept (program : ByteArray) : ProgramRead :=
+  let json := Thunk.mk fun _ => Program.readJson program
+  ⟨program, Thunk.mk fun _ => ProvedScope.programDigest program,
+    Thunk.mk fun _ => TemplateQuery.Desc.parseOf json.get, Thunk.mk fun _ => Program.decodeOf json.get⟩
+
+/-- **A kept read's readers are the readers anew**, whatever program it keeps. -/
+theorem ProgramRead.readers_kept (program : ByteArray) : (ProgramRead.kept program).readers = ProgramRead.Readers.anew := by
+  unfold ProgramRead.readers ProgramRead.Readers.anew
+  congr 1 <;> funext b
+  · unfold ProgramRead.digestAt
+    split
+    · rename_i h _
+      exact congrArg ProvedScope.programDigest (Eq.symm h)
+    · rfl
+  · unfold ProgramRead.descAt
+    split
+    · rename_i h _
+      exact (TemplateQuery.Desc.parse_eq_of program).symm.trans (congrArg TemplateQuery.Desc.parse (Eq.symm h))
+    · rfl
+  · unfold ProgramRead.progAt
+    split
+    · rename_i h _
+      exact (Program.decode_eq_of program).symm.trans (congrArg Program.decode (Eq.symm h))
+    · rfl
 
 namespace HmRow
 
