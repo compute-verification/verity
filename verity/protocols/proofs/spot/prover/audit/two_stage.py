@@ -1109,6 +1109,15 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     return s, ok, record, got, stmts
 
 
+def complete(audits: list[Mapping[str, Any] | None]) -> bool:
+    """Whether an accepted outcome on the audit records ``audits`` is complete: Lean's (`second_stage.complete`), and
+    False while no entry answers it (it raises its goal), so no outcome here is complete before Lean says so."""
+    try:
+        return SS.complete(SS.FORM, REQUEST_DEFINITION, audits)
+    except NotImplementedError:
+        return False
+
+
 def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequence[dict | None], statements: list[dict],
                proofs: dict) -> dict:
     """The stream's outcome of the second stage's sample: the sessions delivered (`Stream.deliver`), then
@@ -1116,7 +1125,7 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequenc
     sessions, with both stages' coin evidence, the sessions' ``statements`` and the params ``proofs``: accepted, the
     checks each stage's audit record failed (each record taking the sessions' reads of its docket's own ports at
     their own roots, `audit.less_own_reads`), the codes of round 2's check in the interior's (``statements``), and
-    whether the outcome is complete (`second_stage.complete`): the two-stage form allowed, the replay block the
+    whether the outcome is complete (`complete`): the two-stage form allowed, the replay block the
     registered request Definition (`REQUEST_DEFINITION`) and both audit records accepted and complete, so never
     here. A reader that wants a complete audit of the boundary stream reads that, never ``accepted`` alone."""
     sessions = handed["sessions"]
@@ -1132,7 +1141,7 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequenc
     body = stream.records[-1]
     audits = {"interior": body["audit"], "replay_sample": (body.get("replay_sample") or {}).get("audit")}
     return {"accepted": o.accepted, "record": o.record, "symbol": body["symbol"],
-            "complete": o.accepted is True and SS.complete(SS.FORM, REQUEST_DEFINITION, list(audits.values())),
+            "complete": o.accepted is True and complete(list(audits.values())),
             **{k: None if r is None else sorted(x for x, c in r["checks"].items() if not c["ok"]) for k, r in audits.items()},
             "registered": {k: ((r or {}).get("checks") or {}).get("registered") for k, r in audits.items()},
             "statements": ((body["audit"].get("checks") or {}).get("statements") or {}).get("codes")}

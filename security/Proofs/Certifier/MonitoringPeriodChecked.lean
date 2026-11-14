@@ -68,7 +68,7 @@ which `CheckedWitness` at `certifierRun` bounds (`monitoringPeriodChecked_first`
 among the sequences `AccSeqsChecked` counts at its registration (`mem_accSeqsChecked_of_executionPhaseGoodChecked`). A period's
 records whose every window is such a sequence, each window's operator reading the windows before it, are, at the
 incorrect sets they are accepted with, runs over the empty pool that restart at no window, which `encard_carried_le`
-counts with the checked inputs left out; over the windows' possible incorrect sets they number at most `windowsCount`
+counts with the checked inputs left out; over the windows' possible incorrect sets they number at most `executionPhasesCount`
 at `reg ∪ chk` (`encard_monitoringPeriodChecked_le`). The client's view reads back from the records under a registered parameter
 (`RecordFormat.ReadsBy`), so the views, and the secrets they decode to, number at most `#Θ` times that
 (`monitoringPeriodChecked_second`).
@@ -127,7 +127,7 @@ theorem RecordFormat.readsBy_read {κ Cell Ob : Type} (f : RecordFormat κ Cell 
 
 /-- **The count of a period's records, with the checked inputs left out.** The records whose every window is a
 sequence its registered Program accepts with a valid run (`AccSeqsChecked`), window `i`'s operator reading the windows
-before it, number at most `windowsCount` at `reg ∪ chk`. At the incorrect sets `F i` its windows are accepted with,
+before it, number at most `executionPhasesCount` at `reg ∪ chk`. At the incorrect sets `F i` its windows are accepted with,
 such a record is a run over the empty pool that restarts at no window (`leakAtCarried_of_leakAtChecked`), and
 `encard_carried_le` counts those at each family `F`; the families are the product of the windows' possible incorrect
 sets, and the sum over them of the per-family products is the product of the per-window sums
@@ -142,7 +142,7 @@ theorem encard_monitoringPeriodChecked_le {L K S n : ℕ} (lay : AuditStatement 
     {o : Fin n → List (Obs L K S) | ∀ i, o i ∈ AccSeqsChecked (sw i).prog (Pw i) (sw i).design (lay (sw i))
         (k (sw i)) (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) (valid (sw i)) δ
         (op i (runsBefore o i)) Dj}.encard ≤
-      ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) := by
+      ((executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) := by
   classical
   have hcls : ∀ i, CheckedClosing (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
       (valid (sw i)) [] := fun _ => by unfold CheckedClosing; intros; rfl
@@ -184,9 +184,9 @@ theorem encard_monitoringPeriodChecked_le {L K S n : ℕ} (lay : AuditStatement 
         ∏ i, c i * (2 ^ faultyBits (sw i).prog (Pw i) (F i) * Dj ^ k (sw i)) := Finset.prod_univ_sum ..
   have hnat : ∑ F ∈ Fintype.piFinset (fun i => faultySets (sw i).design (Pw i) δ),
         ∏ i, c i * (2 ^ faultyBits (sw i).prog (Pw i) (F i) * Dj ^ k (sw i)) ≤
-      windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β := by
+      executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β := by
     refine hps.symm.le.trans ?_
-    unfold windowsCount
+    unfold executionPhasesCount
     exact Finset.prod_le_prod fun i _ => hi i
   calc _ ≤ (⋃ F ∈ Fintype.piFinset (fun i => faultySets (sw i).design (Pw i) δ), Sq F).encard :=
         Set.encard_le_encard hsub
@@ -239,7 +239,7 @@ theorem monitoringPeriodChecked_second (H : Msg → Msg) (D : Compiled Coin A) (
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
-    (hplaced : WindowsPlaced D.partition δ sw Pw β)
+    (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i)) (valid (sw i)))
     (ρ : Fin n → ℕ → Bool) (op : Fin n → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool)
     {Conn Cell Srv Dev Zt Par : Type} (arr : Srv → Conn → Arrivals Cell)
@@ -263,7 +263,7 @@ theorem monitoringPeriodChecked_second (H : Msg → Msg) (D : Compiled Coin A) (
               (op i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) Dj) ∧
       {z | z ∈ Zs ∧ ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg valid Dj (sw i) (ρ i) tops (x z i) (wit z i)
           ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
-        Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) := by
+        Θ.encard * ((executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) := by
   have hheld : ∀ z ∈ Zs, (∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg valid Dj (sw i) (ρ i) tops (x z i) (wit z i)
         ((run tap (schedOf z, srvOf z)).2 i)) →
       ∃ θ ∈ Θ, (run tap (schedOf z, srvOf z)).1 = rd θ (run tap (schedOf z, srvOf z)).2 ∧
@@ -293,7 +293,7 @@ theorem monitoringPeriodChecked_second (H : Msg → Msg) (D : Compiled Coin A) (
     obtain ⟨θ, hθ, hview, hmem⟩ := hheld z hz.1 hz.2
     exact ⟨(run tap (schedOf z, srvOf z)).1, ⟨(θ, (run tap (schedOf z, srvOf z)).2), ⟨hθ, hmem⟩, hview.symm⟩,
       hch.2 z hz.1⟩
-  have hOs : Os.encard ≤ ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) :=
+  have hOs : Os.encard ≤ ((executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) :=
     encard_monitoringPeriodChecked_le lay k δ reg chk valid Dj sw Pw β hplaced.2 hfits hchk ρ op
   calc G.encard ≤ (dec '' Vs).encard := Set.encard_le_encard hsub
     _ ≤ Vs.encard := Set.encard_image_le _ _

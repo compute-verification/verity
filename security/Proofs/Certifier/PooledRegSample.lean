@@ -2,7 +2,7 @@ module
 
 public import Definitions.Certifier.PooledReg
 public import Proofs.Flock.Claims.Prob
-public import Proofs.Flock.Claims.Sampling.EndToEndDraw
+public import Proofs.Flock.Claims.Sampling.EndToEndSample
 public import Proofs.Flock.Claims.Sampling.KS
 public import Proofs.Flock.Claims.Sampling.Session
 public import Proofs.Flock.Claims.Sampling.Wait
@@ -34,7 +34,7 @@ namespace NetTiming
 
 open Claims Claims.Sampling Finset
 open Claims.SamplingGeneric (Arg Compiled)
-open Claims.Sampling.EndToEndDraw (SubsetDesign blocks_length Pa_subset)
+open Claims.Sampling.EndToEndSample (SubsetDesign blocks_length Pa_subset)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 

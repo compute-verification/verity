@@ -122,12 +122,12 @@ stated one (cuts, registered reads, ingress: `interface.Circuit.declared`) from 
 its members from them and the registered reads and window ingress it declares beside them (`interface.listed_reads`,
 `interface.listed_ingress`), the window figure printed beside the run figure with its premise. A registered read counts as
 registered only at a parameter ``--pin`` or ``--pins`` names (`pins_of`), with the root the verifier fixed before the run,
-and only where the window's docket (``--registration``) records that root for it (`docket_roots`,
+and only where the window's registration (``--registration``) records that root for it (`registration_roots`,
 `interface.held_params`), any other free. A pin names its parameter alone: for vLLM's window circuit, each weight's
 ``weights/<label>@<words>``, at the hiding root the committer registered for it once per model and key before the first
 window's coins (``--pins REGISTRATION``, the ``{program, values}`` the audit's ``--registered`` takes:
 `verity_vllm.program.predict.window_weights.weights_registration`), never a root the verifier computes from a checkpoint,
-and which `verity-vllm advice --weights-of-record` records in each window's docket. Its rotary table has a root
+and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary table has a root
 only where the committer registered the words its engine serves (within the analytic table's bound); else its reads stay
 free.
 
@@ -473,7 +473,7 @@ def window_roots(w: Mapping[str, Any]) -> dict[str, str]:
     return roots
 
 
-def docket_roots(rec: Mapping[str, Any]) -> dict[str, str]:
+def registration_roots(rec: Mapping[str, Any]) -> dict[str, str]:
     """The roots a window's registration records for its parameters (`window_roots`): core's docket's window's, or
     an integration's own window registration's, whose ``window`` is no mapping (vLLM's advice registration names the
     window's index there)."""
@@ -1259,7 +1259,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a "
                    "registration of values {program, values} (vLLM's committer's weights registration, "
                    "window_weights.weights_registration), with --pin's (repeatable)")
-    p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`docket_roots`) are held "
+    p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
                    "to the pins (none: no root is the window's, and every registered read is free)")
     p = sub.add_parser("period", help="a window's audit as one compute audit of the network certifier's period (`period`)")
     p.add_argument("--window", required=True, type=Path, help="the window's directory: circuit.json, registration.json")
@@ -1289,7 +1289,7 @@ def main(argv: list[str] | None = None) -> int:
             pins = pins_of(a.pin, a.pins)
         except ValueError as e:
             ap.error(f"--pin/--pins: {e}")
-        roots = docket_roots(json.loads(Path(a.registration).read_text())) if a.registration else {}
+        roots = registration_roots(json.loads(Path(a.registration).read_text())) if a.registration else {}
         print(json.dumps(declared_count(json.loads(Path(a.circuit).read_text()), a.bits, pins=pins, roots=roots),
                          sort_keys=True))
         return 0

@@ -10,17 +10,16 @@
 # - `optimize.registration_count` and `registration_sample`, the price of a docket in the cost model, whose row key
 #   `registration_sample` `benchmarks/spot_figures/` and its fixtures read;
 # - an integration's registration of registered values, its own window record and a window's committed rows
-#   (`public_registration`, `step_registration`, `RegistrationSize`: `docket_code_back_map.toml`);
+#   (`weights_registration_of_serve`, `registration_roots`, `public_registration`, `step_registration`,
+#   `RegistrationSize`: `docket_code_back_map.toml`);
 # - Lean's names, every Lean file and lock (`docket_lean_map.toml`), data files and fixtures.
 
 [words]
 "one_stage.registration" = "one_stage.docket"
-"weights_registration_of_serve" = "weights_docket_of_serve"
 "_stratified_registration" = "_stratified_docket"
 "_registration_members" = "_docket_members"
 "_registration_verdict" = "_docket_verdict"
 "_registration_token" = "_docket_token"
-"registration_roots" = "docket_roots"
 "ServedRegistration" = "ServedDocket"
 "_work_registration" = "_work_docket"
 "h1_registration" = "h1_docket"

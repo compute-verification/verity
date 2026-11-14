@@ -3,7 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
 public import Proofs.Pouw.PearlC.RowSeedCode
 public import Proofs.Pouw.PearlC.DeviceGap
-public import Proofs.Pouw.PearlC.TileDrawGap
+public import Proofs.Pouw.PearlC.TileSampleGap
 public import Proofs.Pouw.PearlC.Records
 
 /-!

@@ -45,7 +45,7 @@ of record, from whose coins each rank's docket samples once (`spot.coins.Challen
   (`service.Stream`'s ``key`` and ``main``), which hold the evidence to them.
 * **The verifier's own coins** (`a5.py --coins verifier`): no session. Each rank's `service.Stream` samples on `VerifierCoins`, the
   service's default coins (`verifier.coins`: the Lean verifier's `IO.getRandomBytes`, assumption A3), read by its
-  `select` once the stream has received the rank's docket and written its receipt. The stream's coin source is then
+  `select` once the stream has received the rank's docket and written its receipt. The stream's coins then come from
   the verifier, its samples carry no evidence, and the Lean's run takes none (`coin_source` verifier). No auditor's device
   samples them: they show the record path, not an auditor's coins. `verifier_negatives` are the refusals that apply to them.
 """
@@ -438,7 +438,7 @@ _Manager.register("Draws", Draws)
 
 class RankCoins(CC.ChallengerCoins):
     """Rank `rank`'s coins of the step's session (`draws`, the `Draws` proxy) as its `service.Stream` reads them: a
-    `ChallengerCoins`, so the stream's coin source is the challenger, whose commitment and reads go to the one client in
+    `ChallengerCoins`, so the stream's coins come from the challenger, whose commitment and reads go to the one client in
     `Draws`, in the rank's turn until `drawn`. `read` is every byte it read, `need` the coins it planned (`plan`), and
     `label` the rank's family (`family`)."""
 
@@ -488,7 +488,7 @@ class Replay(CC.ChallengerCoins):
 
 class VerifierCoins:
     """The verifier's own live coins as a rank's `service.Stream` reads them (`source`, default `verifier.coins`: the Lean's
-    `IO.getRandomBytes`, the stream's default coins). Not a `ChallengerCoins`, so the stream's coin source is the verifier.
+    `IO.getRandomBytes`, the stream's default coins). Not a `ChallengerCoins`, so the stream's coins come from the verifier.
     `read` is every byte it read."""
 
     def __init__(self, source: Callable[[int], bytes] = V.coins) -> None:
@@ -561,7 +561,7 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
         except (S.Refused, S.Pending, ValueError, Ch.CoinError) as e:
             accepted, side = None, {"refused": _refusal(e)}
         at = ((side or {}).get("step"), (side or {}).get("codes"))
-        row = {"accepted": accepted, "lean": side, "source": s.coin_source}
+        row = {"accepted": accepted, "lean": side, "source": s.coins_from}
         if isinstance(replay, Replay):
             row["python"] = CC.coins_reason(s.key, list(s.main), evidence, window, FAMILY, after, read, lms_verify)
         neg[name] = {"refused": accepted is False and at == SELECT_COINS and row.get("python", "") is not None, **row}
