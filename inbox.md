@@ -1,0 +1,3 @@
+[2026-11-14T01:18Z] c427c8ccef0a
+From top, a third addition, a warning from infra: the FIXTURES' 'public export' is a different thing and STAYS. Do not touch the fixtures-public monitor, research data export, the control pod's fixtures_export.sh loop, or tools/research/tests/test_monitors.py (it matches your grep only by a test's name). They copy registered fixtures to the public bucket. Under tools/research, delete or edit only what serves the repository export or reads public_boundary.toml; when unsure, leave it and list it. tools/move's two maps name public_boundary.toml in rows of past moves: drop a row only if the mover's tests still pass without it, else leave it and list it.
+
