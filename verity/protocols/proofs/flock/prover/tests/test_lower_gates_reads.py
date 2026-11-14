@@ -1,5 +1,5 @@
 """`ir_lower.lower_gates` drops a word once its last reader is lowered, for a caller that names what it reads afterwards
-(``reads``), and the circuit is the one it lowers to with every word kept: every row in order and the laid-out text, for a
+(``reads``), and the circuit is the one it lowers to with every word kept: every row in order and the layout, for a
 whole unit (`ir_lower.lower`, and the unit a stager lays out), a split and a cut (`Units.circuit`), a caller that names
 its outputs (`partition_units.lower_class`), an activation lowered by its builder, and one ``wires`` passed from call to
 call. The words the caller named are in ``wires`` afterwards, and no other."""
@@ -63,10 +63,10 @@ def _form(x) -> tuple:
 
 def _made(C) -> tuple:
     """What a lowering made of C: every row in order, an AND as its operands' bits; its outputs; and C laid out as
-    ``flock-ir-unit/v2`` text."""
+    one ``flock-ir-unit/v2`` block type (every field of its `LoweredUnit`)."""
     rows = [(k, tuple(map(_form, d)) if k == "and" else d) for k, d in zip(C.kind, C.data, strict=True)]
     outs = {name: [_form(b) for b in bits] for name, bits in C.outputs.items()}
-    return rows, outs, IL.netlist(IL.layout(C, list(C.inputs), list(C.outputs)), "unit/test-reads")
+    return rows, outs, vars(IL.layout(C, list(C.inputs), list(C.outputs)))
 
 
 @pytest.fixture
@@ -124,18 +124,18 @@ def test_the_words_named_are_what_wires_holds_afterwards() -> None:
         wires[gates]
 
 
-def test_a_stagers_unit_is_the_same_text(kept) -> None:
-    """`class_statement.unit_lowering`, as a `UnitStager` lowers a unit: its layout's text is the staged circuit."""
+def test_a_stagers_unit_is_the_same_layout(kept) -> None:
+    """`class_statement.unit_lowering`, as a `UnitStager` lowers a unit: its layout is the staged circuit's."""
     d = bind(ROUNDS, N=4)
 
-    def text() -> str:
+    def layout() -> dict:
         low, _out_words = CS.unit_lowering(d, "unit/test-reads", [("s", ["s"]), ("x", ["x"])])
         assert low.layout.counts["ands"] == 4 * (MIX_ANDS + 2 * W)
-        return IL.netlist(low.layout, "unit/test-reads")
+        return vars(low.layout)
 
-    dropped = text()
+    dropped = layout()
     kept()
-    assert text() == dropped
+    assert layout() == dropped
 
 
 def test_a_split_units_circuit_is_the_same(kept) -> None:
