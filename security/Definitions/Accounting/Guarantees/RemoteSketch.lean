@@ -62,9 +62,9 @@ def SketchBoundRun : Prop :=
     SketchBound T (((∑ j, G j : ℕ) : ℝ) * (ε + N / 2 ^ h) + ((∑ j, qtot j : ℕ) : ℝ) / 2 ^ (8 * r) + εro)
 
 /-- **The sketch bound at the deployed receipts.** `SketchBoundRun` at 4096-byte blocks (`m = 128`), 64 sign rows,
-SHA-512 tags and rank `r = 27`, for a prover of `Q` SHA-512 compressions over the session (the node's times the
-outside-compute factor `F`): at most `Q + P` candidate seeds and `Q` receipt-hash queries in all, with SHA-512's keys
-at them within the 512-bit sign keys' birthday `(Q + P)²/2^513` of uniform. -/
+SHA-512 tags and rank `r = 27`, for a prover of `Q` SHA-512 compressions over the session (its budget, `2^80` in
+`audit.QUERIES_LOG2`, on any hardware it reaches): at most `Q + P` candidate seeds and `Q` receipt-hash queries in all,
+with SHA-512's keys at them within the 512-bit sign keys' birthday `(Q + P)²/2^513` of uniform. -/
 def SketchBoundDeployed : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
     (A : Remote.Sketch.Run β Hs P N 128 512 S L q 64 G) (T : Trace (Outcome β Hs N 128)),
