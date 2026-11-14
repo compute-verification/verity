@@ -28,7 +28,7 @@ NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 LIBS=${LIBS:-${RESEARCH_RUN_DIR:-.}/inputs}
 SHA=${RESEARCH_SOURCE_SHA:-$(git -C "$HERE" rev-parse HEAD 2>/dev/null || echo unknown)}
 ROOT=$(pwd -P)
-KERNELS=$(dirname "$ROOT/benchmarks/hash/dither/h1u.cu")    # FILE.cu's directory, named through a kernel so a move map follows it
+KERNELS=$(dirname "$ROOT/verity/protocols/experimental/dither/prover/kernels/h1u.cu")    # FILE.cu's directory, named through a kernel so a move map follows it
 mkdir -p "$OUT/env"
 srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 

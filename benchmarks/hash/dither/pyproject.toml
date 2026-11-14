@@ -18,4 +18,4 @@ paths = ["benchmarks/hash/dither"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_h1u_domain.py"]
-paths = ["benchmarks/hash/dither/h1u.cu"]
+paths = ["verity/protocols/experimental/dither/prover/kernels/h1u.cu"]

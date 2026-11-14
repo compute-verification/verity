@@ -26,7 +26,7 @@
 #include <cstdint>
 #include <cuda_runtime.h>
 
-#include "../../../verity/circuits/kernels/sha512.cuh"
+#include "../../../../../circuits/kernels/sha512.cuh"
 typedef unsigned long long u64;
 typedef unsigned int u32;
 
