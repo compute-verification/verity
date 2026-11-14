@@ -1,6 +1,6 @@
-"""Every demo states its doneness on both axes and carries the evidence for each (`examples/README.md`).
+"""Every demo states its doneness on both axes and carries the evidence for each (`demos/README.md`).
 
-Each `examples/<name>/` has a `demo.toml` that parses, with a known protocol, workload and placement, a `run` (moved, runs,
+Each `demos/<name>/` has a `demo.toml` that parses, with a known protocol, workload and placement, a `run` (moved, runs,
 placed) and a `proof` (none, stated, proved, measured), and the evidence every step up to each needs on its own axis, in the
 form that can be checked offline: run-id format, a guarantee listed in a `lean-audit.json`, lemma and proof names declared in
 the tracked `.lean` files (`verity_cli.examples`). The failure says what to add. The negatives hold the checker to refusing
@@ -23,12 +23,12 @@ LOCAL = {"prover": "local", "verifier": "local"}
 
 
 def test_there_are_demos():
-    assert ALL, "examples/ holds no demo"
+    assert ALL, "demos/ holds no demo"
 
 
 @pytest.mark.parametrize("ex", ALL, ids=lambda e: e.name)
 def test_demo_has_what_it_claims(ex):
-    assert not (p := E.problems(ex, ROOT)), f"examples/{ex.name}/demo.toml:\n  " + "\n  ".join(p)
+    assert not (p := E.problems(ex, ROOT)), f"demos/{ex.name}/demo.toml:\n  " + "\n  ".join(p)
 
 
 def _ex(run: str = "moved", proof: str = "none", /, **evidence) -> E.Demo:
@@ -52,8 +52,25 @@ def test_a_document_fault_is_named():
     _says(old, "level is retired", "add run, one of moved", "add proof, one of none")
 
 
+def test_each_composite_names_a_lake_package_this_tree_has():
+    """A composite's package is named by a path, which a move rewrites. One that names no package would drop the composite
+    from the vocabulary, and every demo whose protocol names it would fail."""
+    for name, package in E.COMPOSITES.items():
+        assert (ROOT / package / "lakefile.toml").is_file(), (
+            f"{name}: {package} holds no lakefile.toml: name the directory of its Lake package in {E.WHERE}'s COMPOSITES")
+    assert set(E.COMPOSITES) <= set(E.vocabulary(ROOT)[0])
+
+
+def test_a_composite_is_known_wherever_its_package_is(tmp_path, monkeypatch):
+    for d in ("verity/protocols/proofs/flock", "adapters", "elsewhere/remote"):
+        (tmp_path / d).mkdir(parents=True)
+    (tmp_path / "elsewhere" / "remote" / "lakefile.toml").write_text("")
+    monkeypatch.setattr(E, "COMPOSITES", {"onsite": "elsewhere/onsite", "remote": "elsewhere/remote"})
+    assert E.vocabulary(tmp_path)[0] == ["flock", "remote"], "remote's package is there, and onsite's is not"
+
+
 def test_a_file_with_the_retired_level_reads_as_its_two_axes(tmp_path):
-    d = tmp_path / "examples" / "toy"
+    d = tmp_path / "demos" / "toy"
     d.mkdir(parents=True)
     (d / "demo.toml").write_text('protocol = "pous"\nworkload = "none"\nlevel = 1\n')
     (ex,) = E.demos(tmp_path)

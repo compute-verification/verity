@@ -19,13 +19,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.spot import challenger as Ch, coins as CC, second_stage as SS, service as S
-from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R, \
+from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
+from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R, \
     verifier as V
-from verity.ml.circuits.codec import canonical_json, descriptor_id
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.program import Program
-from verity.ml.windows import flock_inputs as FI, wiring as WI
+from verity.circuits.codec import canonical_json, descriptor_id
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.program import Program
+from verity.commitments.windows import flock_inputs as FI, wiring as WI
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import toy as T
@@ -202,11 +203,11 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     """Round 2 holds each session's public header to the reference the auditor's params give its template
     (`toy.references`, staged before the run under a run of its own) placed in the run, and its registered reads to the
     reference's but for the run's fields: the honest public files the served path writes (`flock_input_files`, as a5
-    stages the sessions) and the verifier's own reads (`toy.reads`), each session checked by a verifier of record
+    stages the sessions) and the verifier's own reads (`toy.reads`), each session checked by the verifier
     (`second_stage.verified_of`), pass round 2 with the form allowed, the interior record's replay sample in S's order
     and the wires the replay block's Definition makes (`second_stage.replay_wires`: each member's input its writer's
     output, `toy.WRITERS`), while without the params' headers every one fails ``second-header``, without their reads or with
-    a link port's read of another boundary port ``second-values``, without a verifier of record ``second-verified``,
+    a link port's read of another boundary port ``second-values``, without the verifier ``second-verified``,
     without the wires ``second-header`` and ``second-read`` (a wired port is bound and read at its writer's port), with
     none derived ``second-wires``, and against S reversed ``second-interior-order`` fails. Slow (about 15 s): the only
     test that lowers the templates, whose circuit SHA-512s and classes are in both headers."""
@@ -230,6 +231,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
                       "registered": reads[m.key]})
     links = SS.replay_links(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY), brec)
     wires = SS.replay_wires(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY))
+    rows = SS.replay_rows(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY))
     assert wires == tuple(SS.Wire(m.template, T.LAYOUT[t][0][0][0], win.members[w].template, "o0")
                           for t, (m, w) in enumerate(zip(win.members, T.WRITERS)) if w is not None)
     refs = tuple((e["template"], e["header"]) for e in proofs["templates"])
@@ -247,9 +249,9 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
         "session_tables": 1, **({} if s["registered"] is None else {"registered_sha512": sha512(s["registered"])})}
         for k, s in enumerate(stmts)})
 
-    def check(sample, refs, verified=verified, ref_reads=ref_reads, wires=wires) -> dict:
+    def check(sample, refs, verified=verified, ref_reads=ref_reads, wires=wires, rows=rows) -> dict:
         own = SS.Own(tuple(sample), parts, irec, brec, tuple(drawn), links, SS.statement_reads(stmts),
-                     verified=verified, refs=refs, ref_reads=ref_reads, wires=wires)
+                     verified=verified, refs=refs, ref_reads=ref_reads, wires=wires, rows=rows)
         return SS.check(True, own, stmts).to_json()
     assert check(SAMPLE, refs) == {"ok": True, "codes": [], "detail": {}}
     assert check(SAMPLE, ())["codes"] == ["second-header"]
@@ -258,6 +260,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     assert check(SAMPLE, refs, ())["codes"] == ["second-verified"]
     assert check(SAMPLE, refs, wires=())["codes"] == ["second-header", "second-read"]
     assert check(SAMPLE, refs, wires=None)["codes"] == ["second-wires"]
+    assert check(SAMPLE, refs, rows=())["codes"] == ["second-links", "second-wires"]
     assert "second-interior-order" in check(SAMPLE[::-1], refs)["codes"]
 
 

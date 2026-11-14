@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -35,10 +36,28 @@ import sys
 import tempfile
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-import sass_gate as SG  # noqa: E402
+#: what `jobs/pin_target.sh` and the tests read
+__all__ = [
+    "CASES", "FLOAT", "NORMAL", "PINNED", "PinFailed", "SG", "UNITS_CASES", "arch_of", "build_toolkit", "homes",
+    "judge_run", "nvcc_args",
+]
 
+HERE = Path(__file__).resolve().parent
+
+
+def _gate():
+    """The SASS gate under the name every file that loads it gives it, so a process holds one: the tree's, or the copy
+    beside this file where the two were copied out of the tree."""
+    name = "pouw_harness_sass_gate"
+    if name not in sys.modules:
+        tree = HERE.parent.parent.parent / "verity/protocols/accounting/pouw/prover/sass_gate.py"
+        spec = importlib.util.spec_from_file_location(name, tree if tree.is_file() else HERE / "sass_gate.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+SG = _gate()
 SOURCE = HERE / "ieee_pin.cu"
 ARCHS = {"sm_120a": 120, "sm_90a": 90}
 
@@ -54,7 +73,6 @@ def nvcc_args(arch: str) -> list[str]:
     return ["-O3", "-std=c++17", "-gencode", f"arch=compute_{arch[3:]},code={arch}", "--no-compress"]
 
 
-NVCC_ARGS = nvcc_args("sm_120a")
 PINNED = [[], ["-fmad=false"]]
 CONTROLS = [["--use_fast_math"], ["-ftz=true"], ["-prec-div=false", "-prec-sqrt=false"]]
 SEQUENCES = {"rcp-fast-path", "sqrt-fast-path", "div-fast-path", "int-seed"}
@@ -111,7 +129,7 @@ def _covered(rec: dict) -> dict:
 
 
 def build_toolkit(tk: str, home: str, work: Path, pins_path: Path, pending: Path) -> dict:
-    """Stage 1 for one toolkit: versions, builds, the pins entry and the gate."""
+    """The CPU part for one toolkit: versions, builds, the pins entry and the gate."""
     bin_dir = Path(home) / "bin"
     rec = {"home": home, "nvcc_version": _run([str(bin_dir / "nvcc"), "--version"]).strip(),
            "ptxas_version": _run([str(bin_dir / "ptxas"), "--version"]).strip(), "builds": [], "problems": []}
@@ -150,7 +168,7 @@ def build_toolkit(tk: str, home: str, work: Path, pins_path: Path, pending: Path
 
 
 def run_binaries(work: Path) -> None:
-    """Stage 2, inside the lease: every binary of work/builds.json, one at a time, into work/runs.json."""
+    """The GPU part, inside the lease: every binary of work/builds.json, one at a time, into work/runs.json."""
     lease = os.environ.get("GPU_LEASE_UUID", "")
     if not lease:
         raise PinFailed("no GPU_LEASE_UUID: run under gpu-lease")

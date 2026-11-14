@@ -1,6 +1,6 @@
 """A scenario: one choice from every layer, and what overhead it gives.
 
-A scenario names a fleet (with its location and dark share), a regime, the NCI policy, a monitoring period (its
+A scenario names a fleet (with its location and unregistered share), a regime, the NCI policy, a monitoring period (its
 `horizon`), a run (the target and its model), the algorithm families the adversary may use, and the bounds and attacks
 to apply (all of them unless it lists some). Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep
 can vary a choice like any number.
@@ -8,18 +8,20 @@ can vary a choice like any number.
 `evaluate` gives, for each family, the overhead under each bound alone and under every bound it meets at once (`lo`,
 the lower bound: each block gets the least of the caps whose premises aren't refuted at its bits, under the union of
 those bounds' premises), and under each attack (`best_attack`: the best known construction, reported beside the bound,
-not as an end of it). The adversary picks its family, so the scenario's overhead is at least `min_A lo_A`. A bound
-above an attack is a contradiction: one of the bound's premises is false for that algorithm, and `contradictions` names
-it.
+not as an end of it). The lower bound takes only the bounds a lock states (`bounds.lock_only`): a bound one of whose own
+citations is a `draft:` statement sets it at no block size, and is still reported alone, labeled draft. The cuts'
+premises and the structure's are not the bound's own. The adversary picks its family, so the scenario's overhead is at
+least `min_A lo_A`. A bound above an attack is a contradiction: one of the bound's premises is false for that
+algorithm, and `contradictions` names it.
 
 The overhead is the hardware multiple over the reference training algorithm at its MFU, `MFU₀` (the scenario's `mfu`),
 at least 1: Lean's `hardwareMultiple`, and for a remote regime `Nci.Guarantees.DampenerRemote`'s `ρ`
-(`theorem.Overhead`). The padded size ratio `|A| / T_0`, each serving block padded to its capacity, is the intermediate
+(`theorem.Overhead`). The padded size ratio `|A| / T_0`, each server block padded to its capacity, is the intermediate
 the bound gives (`Overhead.padded`), and a contradiction compares it. The time to the target, wall-clock, is reported
 beside the overhead: at least the overhead times `T_0 / (MFU₀ Φ_total)`, the reference's own time (`Scenario.seconds`).
 
 A scenario's `structure` (else `structure.default`, `reference`; `data/exclusion.toml`) is the elementary uncertified
-cap's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or dark
+cap's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or unregistered
 gates at more than one gate an operation cites its straddling premise, and the runs that measured `s_×`.
 """
 
@@ -46,11 +48,12 @@ from rho.classes import (
 from rho.envelopes import ROUTES, Context, Regime
 from rho.families import Family, family
 from rho.instances import Model, Run
-from rho.params import Registry
+from rho.params import PERIODS, Registry
 from rho.profile import Profile
 from rho.theorem import Budget, Cap, Overhead, Partition, least, overhead
 
-YEAR = 365 * 86400.0
+#: core's monitoring period of a year, in seconds
+YEAR = float(PERIODS["year"])
 
 
 @dataclass(frozen=True)
@@ -63,26 +66,28 @@ class Scenario:
     families: tuple[Family, ...]
     bounds: tuple[Argument, ...]
     attacks: tuple[Argument, ...]
-    #: the elementary uncertified cap a bound counts uncertified and dark gates at
+    #: the elementary uncertified cap a bound counts uncertified and unregistered gates at
     structure: Structure
     #: `data/premises.toml` by cited name (`classes.premises`), read from the scenario's registry
     premises: Mapping[str, Mapping] = field(default_factory=dict)
     #: reference efficiency (`task.reference_efficiency`): a bound counts free compute at `MFU₀`, not at peak
     reference_efficiency: bool = True
+    #: `bounds.lock_only`: only a bound whose own citations a lock all states sets the lower bound
+    lock_only: bool = True
 
     def __post_init__(self) -> None:
         self.structure.check(self.context.units)
 
     @property
     def mfu(self) -> float:
-        """The inventory's share of capacity a construction trains with, the monitored fleet's and the dark leaves':
+        """The inventory's share of capacity a construction trains with, the monitored fleet's and the unregistered leaves':
         `MFU₀`, the reference training algorithm's, which the overhead is a multiple against."""
         f = self.context.fleet
-        return f.eps_unreg * f.dark_mfu + (1 - f.eps_unreg) * f.mfu_train
+        return f.eps_unreg * f.unreg_mfu + (1 - f.eps_unreg) * f.mfu_train
 
     @property
     def total_phi(self) -> float:
-        """`Φ_total`: the inventory's gates per second, the monitored fleet's and the dark leaves' (`ε_dark` of it)."""
+        """`Φ_total`: the inventory's gates per second, the monitored fleet's and the unregistered leaves' (`ε_unreg` of it)."""
         f = self.context.fleet
         return f.count * self.context.location.phi / (1 - f.eps_unreg)
 
@@ -111,7 +116,7 @@ def build(registry: Registry, name: str) -> Scenario:
         tuple(CLASSES[n] for n in registry.get(f"{t}.bounds", list(CLASSES))),
         tuple(ATTACKS[n] for n in registry.get(f"{t}.attacks", list(ATTACKS))),
         structure(registry, registry.get(f"{t}.structure", registry["structure.default"])), premises(registry),
-        bool(registry["task.reference_efficiency"]))
+        bool(registry["task.reference_efficiency"]), bool(registry["bounds.lock_only"]))
 
 
 @dataclass(frozen=True)
@@ -131,6 +136,8 @@ class Estimate:
     declared: float = math.nan
     #: every bound at once only: the bounds left out at a block that binds, their premises refuted there
     excluded: tuple[str, ...] = ()
+    #: every bound at once only: the bounds left out at every block, a `draft:` statement among their own citations
+    drafts: tuple[str, ...] = ()
 
     @property
     def rho(self) -> float:
@@ -196,14 +203,14 @@ def _cuts(partition: Partition) -> dict:
 
 
 def _cut_cites(partition: Partition, s: Overhead) -> tuple[str, ...]:
-    """The citations of the cut that set each serving block's share (none where its capacity did)."""
+    """The citations of the cut that set each server block's share (none where its capacity did)."""
     cuts = _cuts(partition)
     return tuple(dict.fromkeys(c for name, share in s.serving.items() if (name, share.cut) in cuts
                                for c in cuts[name, share.cut].cites))
 
 
 def _binding_ks(partition: Partition, s: Overhead) -> tuple[float, ...]:
-    """The novel bits of each block in the cuts that set the serving blocks' shares, least first: where premises must
+    """The novel bits of each block in the cuts that set the server blocks' shares, least first: where premises must
     hold."""
     cuts = _cuts(partition)
     return tuple(sorted({b.budget.inputs for name, share in s.serving.items() if (name, share.cut) in cuts
@@ -211,13 +218,13 @@ def _binding_ks(partition: Partition, s: Overhead) -> tuple[float, ...]:
 
 
 def _binding_k(partition: Partition, s: Overhead) -> float:
-    """The most novel bits of any block in the cuts that set the serving blocks' shares."""
+    """The most novel bits of any block in the cuts that set the server blocks' shares."""
     return max(_binding_ks(partition, s), default=0.0)
 
 
 def _uncertified(s: Overhead) -> bool:
-    """Whether the bound counts any gate at `q_U`: the dark leaves, or a cut's uncertified routes."""
-    return s.dark > 0 or any(t.split(".")[0] in ROUTES and v > 0 for t, v in s.terms.items())
+    """Whether the bound counts any gate at `q_U`: the unregistered leaves, or a cut's uncertified routes."""
+    return s.unregistered > 0 or any(t.split(".")[0] in ROUTES and v > 0 for t, v in s.terms.items())
 
 
 def _rated(name: str, side: str, cites: tuple[str, ...], s: Overhead, partition: Partition, declared: float,
@@ -253,13 +260,22 @@ def _admitted(cap: Cap, cites: tuple[str, ...], table: Mapping[str, Mapping]) ->
     return lambda b: math.inf if _refuted(cites, b.inputs, table) else cap(b)
 
 
+def draft(cites: tuple[str, ...]) -> bool:
+    """Whether a bound's own citations name a statement no lock holds, a `draft:` id."""
+    return any(lean.status(c) == "draft" for c in cites)
+
+
 def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Cap | None]], p: Profile, ctx: Context,
              partition: Partition, block: Budget, table: Mapping[str, Mapping], st: Structure, mfu: float,
-             ref: bool) -> Estimate:
+             ref: bool, lock_only: bool) -> Estimate:
     """Every bound met at once, the lower bound: each block gets the least of the caps whose premises aren't refuted at
     its bits (a bound refuted there doesn't bound it, and is still reported alone, tagged refuted), under the union of
-    the citations of the bounds admitted at a block that binds. `excluded` names the bounds refuted at one."""
+    the citations of the bounds admitted at a block that binds. `excluded` names the bounds refuted at one. Under
+    `lock_only` a bound one of whose own citations is a `draft:` statement bounds no block (it is still reported alone,
+    labeled draft), and `drafts` names those."""
     met = [(a, cap) for a, (_, cap) in zip(args, bounds, strict=True) if cap is not None]
+    drafts = tuple(a.name for a, _ in met if lock_only and draft(a.cites))
+    met = [m for m in met if m[0].name not in drafts]
     cap = least(*(_admitted(c, a.cites, table) for a, c in met))
     w = weight_per_gate(p, ctx.units)
     s = overhead(partition, cap, w, p.efficiency, u=st.weight(w), mfu=mfu, reference_efficiency=ref)
@@ -268,7 +284,7 @@ def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Cap | None
     used = [a for a, _ in met if not all(refuted[a.name])]
     e = _rated("+".join(a.name for a in used) or "none", "bound", tuple(c for a in used for c in a.cites), s,
                partition, _declared(cap, w, block), table, st)
-    return replace(e, excluded=tuple(n for n, r in refuted.items() if any(r)))
+    return replace(e, excluded=tuple(n for n, r in refuted.items() if any(r)), drafts=drafts)
 
 
 def evaluate(s: Scenario) -> Result:
@@ -280,7 +296,7 @@ def evaluate(s: Scenario) -> Result:
         p = fam.profile(s.model, s.run)
         ref = s.reference_efficiency
         bounds = [_estimate(b, p, ctx, partition, block, s.premises, st, s.mfu, ref) for b in s.bounds]
-        combined = _combine(s.bounds, bounds, p, ctx, partition, block, s.premises, st, s.mfu, ref)
+        combined = _combine(s.bounds, bounds, p, ctx, partition, block, s.premises, st, s.mfu, ref, s.lock_only)
         out.append(FamilyResult(fam.name, p, tuple(e for e, _ in bounds), combined,
                                 tuple(_estimate(a, p, ctx, partition, block, s.premises, st, s.mfu, ref)[0]
                                       for a in s.attacks)))

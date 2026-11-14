@@ -3,7 +3,7 @@
 # and one receipt
 set -uo pipefail
 ROOT=$PWD
-cd integrations/vllm
+cd adapters/vllm
 PY=/workspace/jobs/venv312/bin/python3
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1 HF_HOME=/workspace/hf
 echo "research: $(command -v research)"
@@ -13,7 +13,7 @@ import time, os, sys
 t = time.perf_counter()
 import serve, receipts as RC, commit as CM
 from tests.engine import int8_exact_gpu as G
-from verity.core.protocols.pouw.coins import Challenger
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity_vllm import protocols as PO
 from verity_vllm.engine import int8_exact as E, int8_ops
 from verity_vllm.engine.build import build_engine, target_mismatches

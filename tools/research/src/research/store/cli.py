@@ -10,26 +10,39 @@
                                                    --skip-record-less pushes no attempt that names no run record
   research data labels-sync [--push-only|--pull-only|--from-backup ART|--from-dir DIR] [--jobs N] [--json]
                                                    union labels/ with the remote's labels/<target>/<content sha256>.json (nothing overwritten, ever);
-                                                   --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/
+                                                   --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/;
+                                                   a pull of more than 5,000 takes the labels pack first, one request for all it holds
+  research data labels-pack [--every S] [--jobs N] [--json]
+                                                   pull every remote assertion, then rebuild the labels pack (all of them as one tarball,
+                                                   packs/labels/latest.tar.gz beside latest.json) and replace the remote's; --every repeats
   research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
                                                    materialise the payload (file or tree, or just the files matching --path); prints the path;
                                                    --list prints the tree's files (path, bytes, local/remote) and fetches nothing
   research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D] [--verify-remote]] [--min-mb M] [--keep-trees] [--keep-registry FILE]...
-                     [--src-dir D [--src-origin URL]] [--json]
+                     [--src-dir D [--src-origin URL]] [--requests-dir D] [--scratch-dir D] [--locks] [--uv-cache D [--uv-keep-h H]] [--json]
                                                    free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached;
-                                                   --src-dir deletes the shipped source trees on origin that nothing uses, whatever the target
-                                                   --keep-registry keeps every blob of the registry's artifacts (fixtures/artifacts.json)
+                                                   --src-dir deletes the shipped source trees on origin that nothing uses, whatever the target,
+                                                   even when the store pass fails (exit 3; `error` in the JSON)
+                                                   --keep-registry keeps every blob of the registry's artifacts (artifacts.json)
+                                                   what nothing else removes, whatever the target (leftovers.py; each its own report in the JSON):
+                                                   --requests-dir the request directories whose run dir is gone, --scratch-dir the clones of
+                                                   runs that are over or whose run dir is gone, --locks the store's free lock files, --uv-cache
+                                                   the uv cache's editable shards and temporary build directories nothing wrote for H hours
+                                                   (default 48)
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
                                                    the durability gate: exit 0 iff the attempt manifest, every output artifact AND every local
                                                    assertion about them are verifiably on the remote; otherwise names the failing legs (preserved.py);
-                                                   N targets (default 8) checked at once, each printed as it finishes
+                                                   exit 4 (WITHDRAWN) when the only blobs missing were withdrawn on purpose (`withdraw`): delete
+                                                   their local copies, never put them again; N targets (default 8) checked at once, each printed
+                                                   as it finishes
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json|--ids]
                                                    stderr names the source (the index and its as-of time, or the catalog alone);
                                                    exit 1 when there is neither an index nor an artifact in the catalog
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
-  research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
+  research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json [--with-tokens]]
+                                                   a label_auth or label_delegation token prints as its length unless --with-tokens;
                                                    first pulls TARGET's assertions the remote has and this store lacks (unreachable: a warning, the local ones);
                                                    --remote: each assertion marked both / LOCAL ONLY (not durable) / REMOTE ONLY; exit 1 if any local only
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]
@@ -41,13 +54,14 @@
   research data vocab-check [--json] [--strict]    read-only audit of labels/: unknown keys, old spellings, strings in bool/int keys, off-enum values,
                                                    refs written as labels; counts, asserters, example targets
   research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR]
-                                                   re-register every fixtures/artifacts.json entry whose bytes changed; old id kept under `previous`
+                                                   re-register every artifacts.json entry whose bytes changed; old id kept under `previous`
   research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                                    make the registry's fetched entries under PATH (default: all) present and exact, from the
                                                    private remote when reachable, else the public export; every byte checked; exit 1 if any is missing
-  research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+  research data export [--repo DIR] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
   research data export --verify-url URL [--repo DIR] [--no-previous] [--blobs FILE] [--jobs N] [--json]
-                                                   copy every registry entry (and its `previous` ids, and each --id) to the public export bucket; --verify-url
+                                                   copy every registry entry (and its `previous` ids, and each --id) to the public export bucket,
+                                                   each a PUT If-None-Match: * (412 = already there), never reading it; --verify-url
                                                    fetches them all back through a public front end into a scratch store, checking every byte
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
   research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--work DIR] [--jobs N]
@@ -75,6 +89,8 @@
   research data sql "SELECT ..." [--json]          read-only connection
   research data mint-credential [--ttl 6h] [--permission object-read-write] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]
                                                    a short-lived bucket-scoped R2 credential for a pod (JSON, or --env export lines)
+  research data mint-credential --job push|fetch [--ttl 6h] [--env]
+                                                   a cluster job's key: custody's actions (push: no delete or copy; fetch: read only)
   (lookup / pull / attempt are provided by cli_prov when present)
 
 Every command takes `--store ROOT` (default `$RESEARCH_STORE` or `~/.research/store`) and accepts abbreviated artifact ids
@@ -88,8 +104,10 @@ import argparse
 import fnmatch
 import json
 import os
+import shlex
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -198,12 +216,28 @@ def cmd_put(argv: list[str]) -> int:
     ap.add_argument("--ref", action="append", default=[], metavar="name=art:...")
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--file", default=None)
-    g.add_argument("--tree", default=None)
+    g.add_argument("--tree", default=None, help="a directory; with a `run_id` in --meta, refused (exit 1, nothing stored) when it holds "
+                                                "a file a `withdrawn` label of that run's artifacts covers (`research data withdraw --path`)")
     ap.add_argument("--preserve", action="store_true", help="push to the remote and verify (exit 1 unless PRESERVED)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
-    art = st.put_artifact(ns.kind, _meta(ns.meta), _refs(ns.ref), file=Path(ns.file) if ns.file else None, tree=Path(ns.tree) if ns.tree else None)
+    meta = _meta(ns.meta)
+    if ns.tree and ids.is_run_id(run_id := meta.get("run_id")):
+        from . import withdraw  # noqa: PLC0415
+        from .local import _rel_files  # noqa: PLC0415
+
+        tree = Path(ns.tree)
+        rels = [p.relative_to(tree).as_posix() for p in _rel_files(tree)] if tree.is_dir() else []
+        if hits := withdraw.refused(st, run_id, rels, lambda s: print(f"research data put: {s}", file=sys.stderr)):
+            for path, a, w in hits:
+                print(f"research data put: {path}: withdrawn from {a} ({w['reason']!r}, by {w['by']}"
+                      + (f", ref {w['ref']}" if w["ref"] else "") + ")", file=sys.stderr)
+            print(f"research data put: REFUSED, nothing stored: {len(hits)} file(s) under {tree} were withdrawn from run {run_id}'s "
+                  "artifacts on purpose (`research data withdraw`); delete them from the tree and from every other local copy, "
+                  "then put the rest", file=sys.stderr)
+            return 1
+    art = st.put_artifact(ns.kind, meta, _refs(ns.ref), file=Path(ns.file) if ns.file else None, tree=Path(ns.tree) if ns.tree else None)
     rep, why, gone = None, None, ""
     if ns.preserve:
         rep = st.push(art, preserve=True)
@@ -334,8 +368,12 @@ def cmd_evict(argv: list[str]) -> int:
     """Free local disk by evicting copies whose bytes are PRESERVED on the remote (`evict.py`): store blobs held only by artifacts with a
     verified remote replica (largest first) and the `trees/` cache, and with `--runs` the big files of finished run directories whose
     `run_files` artifact is verified (oldest first).  Stops when the free space reaches `--target-free-gb`.  Never touches pending
-    objects, manifests, attempts, labels or the catalog.  `--dry-run` reports without removing anything."""
+    objects, manifests, attempts, labels or the catalog.  `--dry-run` reports without removing anything.  Whatever the target, it
+    also removes what it is pointed at that nothing else removes (`leftovers.py`): request directories whose run dir is gone, the
+    clones of runs that are over or whose run dir is gone, the store's free lock files and a uv cache's idle editable shards and
+    build directories.  One of these passes that fails is its report's `error` and stops no other."""
     from . import evict as EV  # noqa: PLC0415
+    from . import leftovers as LO
 
     ap = _ap("evict")
     ap.add_argument("--target-free-gb", required=True, type=float, metavar="N", help="stop once this much is free on the store's filesystem")
@@ -343,7 +381,7 @@ def cmd_evict(argv: list[str]) -> int:
     ap.add_argument("--min-mb", type=float, default=EV.MIN_BYTES / 2**20, metavar="M", help="only blobs / files of at least this size (default 1)")
     ap.add_argument("--keep-trees", action="store_true", help="leave the trees/ cache alone")
     ap.add_argument("--keep-registry", action="append", default=[], metavar="FILE",
-                    help="keep every blob an artifact of this registry holds (fixtures/artifacts.json's form: its `art:` keys); repeatable")
+                    help="keep every blob an artifact of this registry holds (artifacts.json's form: its `art:` keys); repeatable")
     ap.add_argument("--runs", action="store_true", help="also evict preserved big files from finished run directories (writes run-files.evicted.json)")
     ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root for --runs (default $RESEARCH_RUNS or ~/.research/runs)")
     ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 1440, a day)")
@@ -358,6 +396,22 @@ def cmd_evict(argv: list[str]) -> int:
     ap.add_argument("--src-keep-h", type=float, default=EV.SRC_KEEP_S / 3600, metavar="H",
                     help="--src-dir: keep a tree changed, or named by a run recorded, within H hours (default 2); a node short of "
                          "inodes under many shipped commits takes less")
+    ap.add_argument("--requests-dir", default=None, metavar="DIR",
+                    help="also remove each request directory under DIR (<root>/requests) whose run dir is gone, an hour or its "
+                         "launch's time limit after its last write (leftovers.py `evict_requests`; reads /proc as --src-dir does)")
+    ap.add_argument("--scratch-dir", default=None, metavar="DIR",
+                    help="also remove each clone under DIR (<root>/scratch) whose run is over (its runner and its workload have "
+                         "exited), or whose run dir is in no runs directory beside DIR, with no request left, no process naming its "
+                         "run and no write for 48 hours (leftovers.py `evict_clones`; reads /proc as --src-dir does)")
+    ap.add_argument("--locks", action="store_true",
+                    help="also unlink the store's lock files (locks/*.lock) over an hour old, each while holding its lock "
+                         "(leftovers.py `evict_locks`)")
+    ap.add_argument("--uv-cache", default=None, metavar="DIR",
+                    help="also remove the editable shards and temporary build directories of the uv cache at DIR that nothing wrote "
+                         "for --uv-keep-h hours and no live process names, a shard under its own lock (leftovers.py `evict_uv`; "
+                         "reads /proc as --src-dir does)")
+    ap.add_argument("--uv-keep-h", type=float, default=LO.UV_KEEP_S / 3600, metavar="H",
+                    help="--uv-cache: keep a shard or build directory written within H hours (default 48)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
@@ -365,17 +419,42 @@ def cmd_evict(argv: list[str]) -> int:
     min_bytes = int(ns.min_mb * 2**20)
     say = None if ns.json else (lambda s: print(s, flush=True))
     keep = frozenset(k for f in ns.keep_registry for k in json.loads(Path(f).read_text()) if k.startswith("art:"))
-    rep: dict = {"store": EV.evict_store(st, target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes, keep_trees=ns.keep_trees,
-                                         keep=keep, log=say)}
-    if ns.runs:
-        from ..runs import runs_root  # noqa: PLC0415
+    rep: dict = {"store": {"evicted_bytes": 0, "reached_target": False}}
+    try:
+        rep["store"] = EV.evict_store(st, target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes, keep_trees=ns.keep_trees,
+                                      keep=keep, log=say)
+        if ns.runs:
+            from ..runs import runs_root  # noqa: PLC0415
 
-        rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
-                                    quiet_s=ns.quiet_min * 60, log=say, remote_check=ns.verify_remote)
+            rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
+                                        quiet_s=ns.quiet_min * 60, log=say, remote_check=ns.verify_remote)
+    except Exception as e:  # noqa: BLE001  the source-tree pass reads no store: a store this user can't open must not stop it
+        rep["error"] = f"store pass: {type(e).__name__}: {e}"
+        if not ns.json:
+            print(f"research data evict: {rep['error']}", file=sys.stderr)
+
+    def leftover(key: str, fn: Callable[..., dict], where: Path, **kw: float) -> None:
+        try:
+            rep[key] = fn(where, dry_run=ns.dry_run, log=say, **kw)
+        except Exception as e:  # noqa: BLE001  one pass that fails must not hide what the others did
+            rep[key] = {"error": f"{type(e).__name__}: {e}"}
+            if not ns.json:
+                print(f"research data evict: {key}: {rep[key]['error']}", file=sys.stderr)
+
+    if ns.requests_dir:     # before the source trees: a request without a run dir keeps the tree it names
+        leftover("requests", LO.evict_requests, Path(ns.requests_dir))
+    if ns.scratch_dir:
+        leftover("clones", LO.evict_clones, Path(ns.scratch_dir))
     if ns.src_dir:
         rep["src"] = EV.evict_src(Path(ns.src_dir), origin=ns.src_origin, dry_run=ns.dry_run, keep_s=ns.src_keep_h * 3600, log=say)
+    if ns.locks:
+        leftover("locks", LO.evict_locks, st.root)
+    if ns.uv_cache:
+        leftover("uv", LO.evict_uv, Path(ns.uv_cache), keep_s=ns.uv_keep_h * 3600)
     if ns.json:
         _dump(rep)
+    if rep.get("error"):
+        return 3
     last = rep.get("runs") or rep["store"]
     return 0 if last["reached_target"] else 1
 
@@ -395,14 +474,24 @@ def cmd_verify(argv: list[str]) -> int:
     return 0 if rep["preserved"] else 1
 
 
+EXIT_WITHDRAWN = 4
+PRESERVED_EXITS = ("exit 0: PRESERVED. 1: NOT PRESERVED (something is missing or wrong on the remote, or unchecked). 2: usage. "
+                   f"{EXIT_WITHDRAWN}: WITHDRAWN: everything else is preserved, and every blob missing from the remote was withdrawn on "
+                   "purpose (`research data withdraw`, its `withdrawn` label's reason, by and ref shown): delete those files' local "
+                   "copies, never keep, push or put them again. Neither a pass nor a loss: a caller that deletes local copies on 0 "
+                   "or restores on 1 does neither.")
+
+
 def cmd_preserved(argv: list[str]) -> int:
     """The durability gate (F7, `preserved.py`), three legs: the attempt manifest, every artifact it names (outputs + telemetry),
     and every local assertion about the attempt / its derivation / those artifacts must be verifiably on the remote.  Exit 0 iff so
-    for every target; else 1, the list of what is not, and which legs fail.  Exit 2 on a usage error (no targets).  Targets are checked
+    for every target; else 1, the list of what is not, and which legs fail.  Exit 4 (WITHDRAWN) when the only blobs missing were
+    withdrawn on purpose (`research data withdraw`): neither preserved nor lost, their local copies are to be deleted, never kept
+    or put again.  Exit 2 on a usage error (no targets).  Targets are checked
     `--jobs` at a time and each one's lines are printed as it finishes (completion order); `--json` waits and keeps the given order."""
     from . import preserved as P
 
-    ap = _ap("preserved")
+    ap = _ap("preserved", epilog=PRESERVED_EXITS)
     ap.add_argument("targets", nargs="*", help="run ids and/or art:<hex>")
     ap.add_argument("--mode", choices=list(P.MODES), default="head",
                     help="head: size + MD5 ETag per blob (read-back when unavailable), manifest read back (default); "
@@ -423,7 +512,7 @@ def cmd_preserved(argv: list[str]) -> int:
     else:
         for line in P.format_summary(rep):
             print(line)
-    return 0 if rep["preserved"] else 1
+    return 0 if rep["preserved"] else EXIT_WITHDRAWN if rep["verdict"] == P.WITHDRAWN else 1
 
 
 def cmd_select(argv: list[str]) -> int:
@@ -495,7 +584,7 @@ def cmd_snapshot(argv: list[str]) -> int:
 
 def _hide_tokens(v):
     """``v`` with each JWT (a `label_auth` or `label_delegation` token) replaced by its length: a token read back stays valid for
-    minutes and lands in worker logs and run outputs, so the text views never print one (`--json` keeps the whole value)."""
+    minutes and lands in worker logs, run outputs and agents' transcripts, so `labels` prints one only under `--with-tokens`."""
     if isinstance(v, dict):
         return {k: _hide_tokens(x) for k, x in v.items()}
     if isinstance(v, list):
@@ -522,7 +611,10 @@ def cmd_labels(argv: list[str]) -> int:
     ap.add_argument("--by", default=None, metavar="PATTERN", help="fnmatch on the asserter, e.g. 'red-team-*'")
     ap.add_argument("--remote", action="store_true", help="compare with the remote: both / LOCAL ONLY / REMOTE ONLY per assertion (exit 1 if any is local only)")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--with-tokens", action="store_true", help="with --json: each label_auth or label_delegation token whole "
+                    "(default: its length), for a reader that verifies one")
     ns = ap.parse_args(argv)
+    shown = (lambda v: v) if ns.with_tokens else _hide_tokens
     if ns.remote:
         from . import labels_sync as LS  # noqa: PLC0415
 
@@ -533,7 +625,7 @@ def cmd_labels(argv: list[str]) -> int:
         for x in rows:
             n[x["where"]] += 1
         if ns.json:
-            _dump({"target": ns.target, "remote": st.remote.describe(), "counts": n, "labels": rows})
+            _dump({"target": ns.target, "remote": st.remote.describe(), "counts": n, "labels": shown(rows)})
         else:
             for x in rows:
                 lab = x["label"] or {}
@@ -554,7 +646,7 @@ def cmd_labels(argv: list[str]) -> int:
             latest[(lab.key, lab.by)] = lab
         labs = sorted(latest.values(), key=lambda l: (l.ts, l.key, l.by))
     if ns.json:
-        _dump([lab.to_doc() for lab in labs])
+        _dump(shown([lab.to_doc() for lab in labs]))
         return 0
     for lab in labs:
         print(f"{lab.ts}  {lab.key}={_fmt_label_value(lab.value)}  by {lab.by}" + (f"  ref {lab.ref}" if lab.ref else ""))
@@ -665,9 +757,35 @@ def cmd_labels_sync(argv: list[str]) -> int:
     if ns.json:
         _dump(rep)
     else:
-        print(f"labels: {rep['local']} local, {rep['remote_before']} on {rep['remote']}: {len(rep['pushed'])} pushed, {len(rep['pulled'])} pulled, "
-              f"{rep['already']} already on both" + (f", {len(rep['bad'])} bad remote key(s) skipped" if rep["bad"] else ""))
+        print(f"labels: {rep['local']} local, {rep['remote_before']} on {rep['remote']}: {len(rep['pushed'])} pushed, {len(rep['pulled'])} pulled"
+              + (f" ({rep['pack']} from the labels pack)" if rep["pack"] else "")
+              + f", {rep['already']} already on both" + (f", {len(rep['bad'])} bad remote key(s) skipped" if rep["bad"] else ""))
     return 1 if rep["bad"] else 0
+
+
+def cmd_labels_pack(argv: list[str]) -> int:
+    """Rebuild the labels pack and replace the remote's (`labels_sync.publish_pack`): pull every assertion the remote lists into this
+    store, then upload them as one tarball at a fixed key, which a `labels-sync` that lacks most of them takes in one request before
+    it pulls the rest.  `--every S` repeats, S seconds after each pass; a pass that fails ends the command."""
+    from . import labels_sync as LS
+
+    ap = _ap("labels-pack")
+    ap.add_argument("--every", type=float, metavar="S", help="repeat, S seconds after each pass")
+    ap.add_argument("--jobs", type=int, default=LS.SYNC_JOBS, metavar="N")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    warn = None if ns.json else (lambda s: print(s, file=sys.stderr, flush=True))
+    while True:
+        rep = LS.publish_pack(st, jobs=max(1, ns.jobs), log=warn)
+        if ns.json:
+            print(json.dumps(rep, sort_keys=True), flush=True)
+        else:
+            print(f"labels-pack: {rep['labels']} labels in {rep['bytes']} bytes at {LS.PACK_KEY} (sha256 {rep['sha256']}), {rep['pulled']} pulled first"
+                  + (f", {rep['bad']} bad remote key(s) left out" if rep["bad"] else ""), flush=True)
+        if ns.every is None:
+            return 0
+        time.sleep(ns.every)
 
 
 def cmd_vocab(argv: list[str]) -> int:
@@ -1087,10 +1205,14 @@ def cmd_push(argv: list[str]) -> int:
 def cmd_mint_credential(argv: list[str]) -> int:
     """A short-lived, bucket-scoped R2 credential for a pod (`credentials.py`): signed locally with the parent key from the environment
     (the env vars store.toml names, default AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), or via the Cloudflare API with
-    CLOUDFLARE_API_TOKEN.  Prints JSON, or with `--env` the three `export` lines for a bootstrap; never writes a file."""
+    CLOUDFLARE_API_TOKEN.  Prints JSON, or with `--env` the three `export` lines for a bootstrap; never writes a file.  `--job` mints
+    what a cluster job holds (`custody.job_env`): the key `research run` stages for a run's custody, or its `--store-read` key."""
     from . import credentials as C  # noqa: PLC0415
+    from . import custody as CU
 
     ap = _ap("mint-credential")
+    ap.add_argument("--job", default=None, choices=sorted(CU.JOB_ACCESS),
+                    help="a cluster job's key, with custody's actions: push = write without delete or copy, fetch = read only (takes --ttl and --env alone)")
     ap.add_argument("--ttl", default="1h", help="lifetime: <n>[s|m|h|d], max 7d (default 1h)")
     ap.add_argument("--permission", default="object-read-write", choices=C.SCOPES, help="scope preset (default object-read-write)")
     ap.add_argument("--prefix", action="append", default=[], metavar="P", help="restrict to keys under this prefix (repeatable)")
@@ -1103,6 +1225,17 @@ def cmd_mint_credential(argv: list[str]) -> int:
     ap.add_argument("--env", action="store_true", help="print `export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_SESSION_TOKEN=...`")
     ap.add_argument("--json", action="store_true", help="(default output) the credential with bucket, scope, expiry, how it was minted")
     ns = ap.parse_args(argv)
+    if ns.job:
+        given = {k: v for k, v in vars(ns).items() if k not in ("job", "ttl", "env", "json", "store") and v != ap.get_default(k)}
+        if given:
+            raise C.MintError(f"--job {ns.job} fixes the key's actions and where it is minted: drop --{', --'.join(k.replace('_', '-') for k in sorted(given))}")
+        key = CU.job_env(ns.job, ns.ttl)
+        if ns.env:
+            print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in key.items() if k != "expires_utc"))
+            print(f"# a {ns.job} key until {key['expires_utc']}")
+        else:
+            _dump(key)
+        return 0
     actions = [a for a in (ns.actions or "").split(",") if a] or None
     cred = C.mint(via=ns.via, scope=ns.permission, ttl_s=C.parse_ttl(ns.ttl), prefixes=ns.prefix or None, objects=ns.object or None, actions=actions,
                   endpoint=ns.endpoint, bucket=ns.bucket, account_id=ns.account_id)
@@ -1116,20 +1249,20 @@ def cmd_mint_credential(argv: list[str]) -> int:
 
 
 def cmd_refresh_fixtures(argv: list[str]) -> int:
-    """Re-register every `fixtures/artifacts.json` entry whose bytes changed (`fixtures.refresh`): put under the new id (content-only
+    """Re-register every `artifacts.json` entry whose bytes changed (`fixtures.refresh`): put under the new id (content-only
     identity, as the entries were registered), `--preserve` pushes it, the entry is rewritten and the old id kept under `previous`.
     Prints `old -> new  path` per changed entry.  Exit 1 when an entry's path is missing, conflicts, or was not PRESERVED."""
     from . import fixtures as F  # noqa: PLC0415
 
     ap = _ap("refresh-fixtures")
-    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with fixtures/artifacts.json)")
+    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with artifacts.json)")
     ap.add_argument("--preserve", action="store_true", help="push each re-registered fixture to the remote and verify (as `put --preserve`)")
     ap.add_argument("--dry-run", action="store_true", help="report what would change; put nothing, write nothing")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store, repo=Path(ns.repo).expanduser().resolve() if ns.repo else None)
     repo = st.repo
-    if repo is None or not (repo / F.REPLICA_MAP).is_file():
+    if repo is None or not F.replica_map_file(repo).is_file():
         print(f"research data refresh-fixtures: no {F.REPLICA_MAP} found (give --repo DIR or set RESEARCH_REPO)", file=sys.stderr)
         return 1
     rep = F.refresh(st, repo, preserve=ns.preserve, dry_run=ns.dry_run)
@@ -1156,7 +1289,7 @@ def _fixture_repo(st: LocalStore, cmd: str, repo: str | None) -> Path | None:
     from . import fixtures as F  # noqa: PLC0415
 
     root = Path(repo).expanduser().resolve() if repo else st.repo
-    if root is None or not (root / F.REPLICA_MAP).is_file():
+    if root is None or not F.replica_map_file(root).is_file():
         print(f"research data {cmd}: no {F.REPLICA_MAP} found (give --repo DIR or set RESEARCH_REPO)", file=sys.stderr)
         return None
     return root
@@ -1187,7 +1320,7 @@ def _blob_list(path: str | None) -> list[tuple[str, int]]:
 
 
 def cmd_fetch_fixtures(argv: list[str]) -> int:
-    """Make the fetched entries of `fixtures/artifacts.json` under each PATH present and exactly their ids (`fixtures.fetch_registry`):
+    """Make the fetched entries of `artifacts.json` under each PATH present and exactly their ids (`fixtures.fetch_registry`):
     manifests and blobs come from the local store, else the private remote when this machine can reach it, else the public export
     (`--public-url`, `$RESEARCH_PUBLIC_URL`, else the built-in URL), `--jobs` at a time, every byte checked.  A tracked entry is
     left alone.  `--check` only reports (exit 1 if any is missing or differs).  `--stubs` also restores the history stubs in
@@ -1196,7 +1329,7 @@ def cmd_fetch_fixtures(argv: list[str]) -> int:
 
     ap = _ap("fetch-fixtures")
     ap.add_argument("paths", nargs="*", metavar="PATH", help="only entries under these paths (default: all)")
-    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with fixtures/artifacts.json)")
+    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with artifacts.json)")
     ap.add_argument("--check", action="store_true", help="report what is missing or different; fetch and write nothing")
     ap.add_argument("--stubs", action="store_true", help="also restore history stubs (verity-fixture/v1) in tracked files")
     ap.add_argument("--public-url", default=None, metavar="URL", help=f"the public export (default ${fetchset.PUBLIC_URL_ENV}, else the built-in one; '' for none)")
@@ -1237,7 +1370,7 @@ def cmd_fetch_fixtures(argv: list[str]) -> int:
 
 
 def cmd_export(argv: list[str]) -> int:
-    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block, each `--id` and any `--blobs`, to the
+    """Copy every `artifacts.json` entry, with the ids under its `previous` block, each `--id` and any `--blobs`, to the
     public export (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
     bytes from the repo, the local store or the private remote.  `--verify-url URL` exports nothing: it fetches all of it back
     through URL into a scratch store and checks every byte against its id (the end-to-end test of a public front end)."""
@@ -1245,8 +1378,12 @@ def cmd_export(argv: list[str]) -> int:
     from .remote import load_export  # noqa: PLC0415
 
     ap = _ap("export")
-    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with fixtures/artifacts.json)")
-    ap.add_argument("--dry-run", action="store_true", help="HEAD the export and report what would be uploaded")
+    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with artifacts.json)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="report what the local side would send; reads nothing from the export (its key may write but not read)")
+    ap.add_argument("--write-check", action="store_true",
+                    help="with --dry-run: create the smallest blob (one PUT If-None-Match: *) to check the key may write")
+    ap.add_argument("--fresh", action="store_true", help="send every object again, even those an earlier export saw land")
     ap.add_argument("--no-previous", action="store_true", help="leave out the ids under the map's `previous` block")
     ap.add_argument("--blobs", default=None, metavar="FILE", help="also these blobs: one `<sha256> <bytes>` per line (history stubs)")
     ap.add_argument("--id", action="append", default=[], metavar="ART", help="also this artifact, which the registry doesn't hold; repeatable")
@@ -1277,7 +1414,7 @@ def cmd_export(argv: list[str]) -> int:
         print("research data export: no export configured ([export] in store.toml, RESEARCH_EXPORT_DIR or RESEARCH_EXPORT_BUCKET)", file=sys.stderr)
         return 1
     rep = F.export(st, root, dest, srcs=fetchset.sources(st, public=""), include_previous=not ns.no_previous, blobs=blobs,
-                   arts=ns.id, jobs=ns.jobs, dry_run=ns.dry_run)
+                   arts=ns.id, jobs=ns.jobs, dry_run=ns.dry_run, write_check=ns.write_check, fresh=ns.fresh)
     if ns.json:
         _dump(rep)
     else:
@@ -1285,9 +1422,16 @@ def cmd_export(argv: list[str]) -> int:
             print(f"ERROR  {e}")
         for w in rep["warnings"]:
             print(f"WARN   {w}")
-        verb = "would upload" if ns.dry_run else "uploaded"
-        print(f"export to {rep['dest']}: {rep['ids']} id(s), {rep['blobs']} blob(s); {verb} {rep['uploaded']} object(s) "
-              f"({rep['bytes_uploaded'] / 1e6:.1f} MB), {rep['skipped']} already there; {len(rep['errors'])} error(s)", file=sys.stderr)
+        if ns.dry_run:
+            wc = rep["write_check"]
+            check = (f"; write check: {wc['key']} {wc['action']}" if wc else "; write not checked (--write-check)")
+            print(f"export to {rep['dest']} (dry run): {rep['ids']} id(s), {rep['blobs']} blob(s); would send {rep['uploaded']} object(s) "
+                  f"({rep['bytes_uploaded'] / 1e6:.1f} MB), each a conditional create, and {rep['known']} an earlier export saw land "
+                  f"would not be sent; what the export holds is not read{check}; {len(rep['errors'])} error(s)", file=sys.stderr)
+        else:
+            print(f"export to {rep['dest']}: {rep['ids']} id(s), {rep['blobs']} blob(s); uploaded {rep['uploaded']} object(s) "
+                  f"({rep['bytes_uploaded'] / 1e6:.1f} MB), {rep['skipped']} already there (412), {rep['known']} not sent (an earlier "
+                  f"export saw them land); {len(rep['errors'])} error(s)", file=sys.stderr)
     return 0 if rep["ok"] else 1
 
 
@@ -1417,8 +1561,7 @@ def cmd_withdraw(argv: list[str]) -> int:
             out["applied"] = withdraw.apply(st.remote, p, log=say)
             lost = False
             for art in p.arts:
-                value = f"{ns.reason} (only {', '.join(ns.paths)})" if ns.paths else ns.reason
-                st.add_label(art, vocab.WITHDRAWN, value, ns.by, ref=ns.ref)
+                st.add_label(art, vocab.WITHDRAWN, withdraw.label_value(ns.reason, ns.paths), ns.by, ref=ns.ref)
                 said, bad = _label_write_through(st, art)
                 say(f"{art}: withdrawn label {said}")
                 lost |= bad
@@ -1488,7 +1631,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "index": cmd_index, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
-    "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
+    "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync, "labels-pack": cmd_labels_pack,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
     "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc, "withdraw": cmd_withdraw,
 }

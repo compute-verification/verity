@@ -1,5 +1,5 @@
 """A PoUB session over PoUS's P2 store on the card that serves from it: the prover's side of
-`verity.core.protocols.remote_bandwidth.p2_party`, whose verifier runs on another host.
+`verity.protocols.accounting.poub.verifier.p2_party`, whose verifier runs on another host.
 
     bandwidth.py toy OUT                                  # the toy's C* as an encoded store, and its registration
     bandwidth.py registration --store ENC --node NODE --layout F --out FILE
@@ -74,11 +74,11 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(STAGE))
 
-from verity.core.protocols.pous import verifier as V
-from verity.core.protocols.pous.labels import salt_value, tag
-from verity.core.protocols.pous.schemes.p2 import P2Params
-from verity.core.protocols.remote_bandwidth import coins, p2, p2_case, p2_party, receipts
-from verity.ml.commitments.merkle import merkle_depth
+from verity.protocols.accounting.pous.verifier import verifier as V
+from verity.protocols.accounting.pous.verifier.labels import salt_value, tag
+from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.accounting.poub.verifier import coins, p2, p2_case, p2_party, receipts
+from verity.commitments.merkle import merkle_depth
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS
 SALT = receipts.SALT_BYTES
@@ -480,7 +480,7 @@ class Engine:
             S.gpu.Kernels = RefDecode
         torch.backends.cuda.matmul.allow_tf32 = False
         doc = json.loads((store / "store.json").read_text())
-        self.lay, _ = L.open_store(layout, {}, store, doc["source"], doc["commitment"], None)
+        self.lay, _ = L.open_store(layout, None, store, doc["source"], doc["commitment"], None)
         if self.lay.params.blocks != registration.codec.blocks:
             raise ValueError("the layout's store is not the registration's")
         self.store, self.lib, self.chunk, self.readers = store, lib, chunk, readers

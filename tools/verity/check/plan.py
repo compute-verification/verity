@@ -28,11 +28,11 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
                           passes too where the repository's own suite (tests/), which holds `LINTS`, passed
     lean                  `skipped`, in place of every Lean part, on a tree without the verifier's Lean package (check
                           skips its Lean group there): a skip passes nothing
-    lean-changed          no verdict, never required: it vouches for nothing, the audit decides
     ratchet-gate          no verdict, never required: it judges the merges above the check's base, not COMMIT's tree, and
                           is off the merge gate
 
-A job off the merge gate (drive's policy, policy.toml's `off_gate`: circuit-check, ratchet-gate) is listed, and none of its parts is required.
+A job off the merge gate (drive's policy, policy.toml's `off_gate`: circuit-check, ratchet-gate) is listed, and none of its parts is
+required.
 
 The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict of their own.  Each is
 `implied` when every part that reads what it makes has passed (`implied_by`), and `must-run` when one hasn't.  Why those passes
@@ -42,7 +42,7 @@ answer for each:
                           runs in that commit's tree under `uv run --locked` (`DECLARED`, and `research merge`'s `PLAN`), which
                           refuses a lock that isn't current, so a plan exists only where it would pass; and every suite's key
                           holds the lock's resolution of what the suite imports.  Implied by every suite.
-    preflight-fixtures    fetches each fixture `fixtures/artifacts.json` lists that git doesn't hold.  A suite's key holds the
+    preflight-fixtures    fetches each fixture `artifacts.json` lists that git doesn't hold.  A suite's key holds the
                           art id of each such fixture it reads (`suites.fetched_fixtures`), and a suite whose fixture can't be
                           fetched fails, never passes; a fixture no suite reads decides no verdict.  Implied by every suite.
     flock-circuit-build   `check_build.sh`'s `cargo check` of flock-circuit in each CPU feature set.  flock-rust-tests' key
@@ -60,8 +60,8 @@ answer for each:
                           the suite that runs it.
 
 The passes are looked up in this machine's caches (`local`: $CHECK_CACHE, $VERITY_TEST_CACHE and every check slot's test
-cache; not with --packs-only), in the verdict pack of each recorded check `gather_verdicts` would take (none with
---no-gather), in both packs of each recorded check of COMMIT and of its after-landing runs (`--deferred`, which drive runs on
+cache; not with --packs-only), in the recorded checks' verdict packs a recorded check imports (`check.verdict_packs`; none
+with --no-gather), in both packs of each recorded check of COMMIT and of its after-landing runs (`--deferred`, which drive runs on
 the `main` it landed: none with --no-gather) and of each RUN given with --from (the
 passes it stored, `verdicts.tar.gz`, and those it reused, `verdicts-reused.tar.xz`: `check.Reused`), and in each PACK given
 (which no gate cites).  A pass found in a recorded check's pack names that attempt, the pack's sha256, which `research merge
@@ -454,8 +454,6 @@ def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = 
             parts.append(p)
         elif j == "lean-suites":
             parts += [p for p in suites if p.step == "lean-suites"]
-        elif j == "lean-changed":
-            parts.append(Part(j, j, None, "no-verdict", why="it vouches for nothing: the audit decides", required=False))
         elif j == "ratchet-gate":
             parts.append(Part(j, j, None, "no-verdict", why="it judges the merges above the check's base, not the tree: "
                               "the train's check runs it", required=False))
@@ -541,8 +539,8 @@ def _post_landing(store, rid: str) -> bool:
 
 
 def gather(C, d: Path, a, notes: list[str], commit: str | None = None) -> list[tuple[str | None, Path]]:
-    """The packs to look passes up in: what `gather_verdicts` would take (unless --no-gather); both packs of each recorded check
-    of ``commit`` (unless --no-gather) and of each --from RUN, the passes it stored and those it reused (`REUSED`, a pack too
+    """The packs to look passes up in: those a recorded check imports (`check.verdict_packs`, unless --no-gather); both packs
+    of each recorded check of ``commit`` (unless --no-gather) and of each --from RUN, the passes it stored and those it reused (`REUSED`, a pack too
     big to take from every check); each --verdicts-in PACK."""
     from research.store.local import LocalStore
 
@@ -665,7 +663,7 @@ def inner(a) -> dict:
             rid, _, path = spec.partition("=")
             try:
                 sources.append(unpack(V, Path(path), Path(d) / str(i), rid or None))
-            except (V.BadPack, OSError, EOFError) as e:
+            except V.UNREADABLE as e:
                 notes.append(f"{rid or path}: its pack is refused ({type(e).__name__}: {e})")
         parts = plan_tree(tree, sources, a.agreement, local=not a.packs_only, own=a.own)
         commit = _git("rev-parse", "HEAD", repo=tree)

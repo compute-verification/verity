@@ -20,9 +20,9 @@ records how the tree got here or who is working on it, which the tree can't keep
   ``lane NAME`` with a hyphenated lane name, and a handle (``@vllm``), except where AGENTS.md and the skills name a handle
   as an owner.
 
-Declared data isn't read at all (``*.json``, ``*.csv`` and every other file not named above: ``fixtures/artifacts.json``,
+Declared data isn't read at all (``*.json``, ``*.csv`` and every other file not named above: ``artifacts.json``,
 each ``lean-audit.json``'s records, the handle registry, the manifests), nor what ``SKIP`` names, each with its reason.
-This lint takes over P11's docstring patterns (``integrations/vllm/tests/lint/test_p11_names.py``: board ids, ``[lane ``,
+This lint takes over P11's docstring patterns (``adapters/vllm/tests/lint/test_p11_names.py``: board ids, ``[lane ``,
 rounds and dates), for the whole tree.
 
 Sites are counted per file, the key the ratchet gate counts by too: an entry ``{"file", "count"}`` allows ``count`` sites in
@@ -30,7 +30,7 @@ its file.  A file with more than its entry allows, or with one and no entry, fai
 (AGENTS.md, ARCHITECTURE.md, GLOSSARY.md and the skills) hold none and may have no entry.  An entry that allows more than
 is found doesn't fail: the list can run ahead of a tree, as each area cleans its own, and ``--prune`` deletes and lowers
 what this tree no longer finds.  A file that moves takes its entry with it, in the same change (``--move``).  The ratchet
-gate (``integrations/vllm/tools/ratchet_gate.py``) fails a change that adds a site to a file it touches, or that grows
+gate (``adapters/vllm/tools/ratchet_gate.py``) fails a change that adds a site to a file it touches, or that grows
 this list or leaves a renamed file's entry behind, and judges a change to this module by running it as the change's base
 has it on the change's tree.  So it imports only the standard library, ``test_no_new_lane_text`` takes no fixture, and the
 gate reads ``LEFT_OUT``, ``FIX``, ``holds``, ``sites`` and ``parse`` from the base's copy of this module.
@@ -55,8 +55,8 @@ from pathlib import Path
 NAME = "repo_lane_text"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
-#: the archive isn't developed
-LEFT_OUT = ("archive/",)
+#: path prefixes this lint leaves to others (the ratchet gate reads it): none
+LEFT_OUT = ()
 #: prose that is data, by path prefix (or a whole path), each with its reason
 SKIP = {
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
@@ -339,11 +339,11 @@ def test_what_is_lane_text_and_what_is_not() -> None:
     assert [w for _, w in sites(f"# {named}\n", "a.py")] == ["name: Daniel", "date: 27 Oct", "attribution: (Oct 28 next)"]
     assert [w for _, w in sites(named, ".agents/skills/x/SKILL.md")] == ["date: 27 Oct", "attribution: (Oct 28 next)"]
     assert [w for _, w in sites(f"# {named}\n", "infra/a.py")] == ["date: 27 Oct", "attribution: (Oct 28 next)"]
-    for src in (py, Path(__file__).read_text(encoding="utf-8"), (ROOT / "integrations/vllm/tools/ratchet_gate.py").read_text()):
+    for src in (py, Path(__file__).read_text(encoding="utf-8"), (ROOT / "adapters/vllm/tools/ratchet_gate.py").read_text()):
         assert found_in(python_prose(src)) == found_in(tokenized(src))
     assert sites("#5040 (12 Oct)", "data.json") == []
-    assert not holds("archive/x.md") and not holds("fixtures/a/README.md") and not holds("x/tests/fixtures/y.py")
-    assert holds("x/tests/test_y.py") and holds("Security/A.lean") and not holds("x.csv")
+    assert not holds("fixtures/a/README.md") and not holds("x/tests/fixtures/y.py")
+    assert holds("x/tests/test_y.py") and holds("security/A.lean") and not holds("x.csv")
 
 
 def test_pinned_files_hold_none() -> None:

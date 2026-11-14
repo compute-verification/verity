@@ -22,13 +22,15 @@ import threading
 import time
 import tracemalloc
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 
 from run import BIND
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-VLLM = ROOT / "integrations" / "vllm"
+VLLM = ROOT / "adapters" / "vllm"
 H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
 #: (phase, module attribute it wraps): what `UnitStager` runs for a flat unit, outermost first
 PHASES = (("unit_lowering", "CS.unit_lowering"), ("ir_lower.lower", "IL.lower"), ("ir_lower.standalone", "IL.standalone"),
@@ -38,6 +40,7 @@ PHASES = (("unit_lowering", "CS.unit_lowering"), ("ir_lower.lower", "IL.lower"),
           ("compose.dummy", "FC._dummy"), ("circuit.digests", "FC._file_digests"), ("circuit.meta_of", "FC.meta_of"))
 CENSUS = ("ir_lower.lower_gates", "fast_stage.ands_layout")
 GIB = 1 << 30
+T = TypeVar("T")
 
 
 def status(field: str) -> int:
@@ -64,7 +67,7 @@ class Phases:
     def __init__(self, at_exit):
         self.stack, self.rows, self.at_exit, self.resets, self.entered = [], [], at_exit, True, 0
 
-    def wrap(self, name: str, fn):
+    def wrap(self, name: str, fn: Callable[..., T]) -> Callable[..., T]:
         def wrapped(*a, **k):
             self.enter(name)
             try:
@@ -109,7 +112,7 @@ def census(top: int = 20) -> list[dict]:
     return [{"type": t, "count": n[t], "bytes": b} for t, b in size.most_common(top)]
 
 
-def sites(snapshot, key: str, top: int) -> list[dict]:
+def sites(snapshot: tracemalloc.Snapshot, key: str, top: int) -> list[dict]:
     return [{"bytes": s.size, "count": s.count, "where": [f"{f.filename.replace(str(ROOT) + '/', '')}:{f.lineno}" for f in s.traceback]}
             for s in snapshot.statistics(key)[:top]]
 

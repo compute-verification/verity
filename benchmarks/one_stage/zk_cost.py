@@ -4,7 +4,7 @@ session proving k of them sampled by the verifier's Lean, with `flock-circuit pr
 sessions.
 
     python benchmarks/one_stage/zk_cost.py stage  --lean flock-verify --out DIR [--ks 4096,14336] [--sizes 1,8,64,512]
-    python benchmarks/one_stage/zk_cost.py stage  --out DIR --units "fp8-coord:K=6144 router" [--sizes half,full] [--draws c]
+    python benchmarks/one_stage/zk_cost.py stage  --out DIR --units "fp8-coord:K=6144 router-row" [--sizes half,full] [--draws c]
     python benchmarks/one_stage/zk_cost.py prove  --bin flock-circuit --out DIR [--arms fw,nofw] [--cold 2] [--runs 3] [--cpu]
     python benchmarks/one_stage/zk_cost.py verify --lean flock-verify --out DIR
     python benchmarks/one_stage/zk_cost.py fit    --out DIR [--run RUN_ID]
@@ -15,11 +15,14 @@ sessions.
   Boolean circuit's cost doesn't depend on them). Its stage seconds exclude building the circuit, which a template pays
   once.
 * **Served proof-block types** (`--units`): instead of A6's coordinates, each of `benchmarks/served_units/stage.py`'s types
-  (GLM-5.3's at TP8, synthetic values), staged by that script with no Program: `--sizes` takes counts or `full` (the most
-  instances under the prover's 2^35 witness bits, from a probe staging's k_log, whose 2 instances a size of 2 reuses)
-  and `half`. Their samples are uniform
-  subsets the server reads (`serve --draw-file`), every instance at k = c, and Lean verifies the newest session of each
-  point and arm against the type's own partition and no Program, which it refuses once every other check has passed.
+  (GLM-5.3's at TP8, synthetic values), staged by that script bound to the Program of its instances and that Program's
+  partition, which it writes beside the statement: `--sizes` takes counts or `full` (the most instances under the
+  prover's 2^35 witness bits, from a probe staging's k_log, whose 2 instances a size of 2 reuses) and `half`. Their
+  samples are uniform subsets the server reads (`serve --draw-file`), every instance at k = c, and Lean verifies the
+  newest session of each point and arm against the type's own partition and Program, which it must accept: a refusal,
+  whatever its reason, is a failed check.
+  A type staged as a templated statement (a table read: its stage's ``unit.tmpl``) is proved, served and verified at
+  `TMPL_STATEMENT` on its unit rows, placed once by ``--tmpl-unit-bin`` (`flock-tmpl-unit`).
 * **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
   program and partition, on a development challenger's coins opened after the statement's partition digest and pin
   (`a0.challenger_draw`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
@@ -37,7 +40,7 @@ sessions.
   `fixed + marginal c` over its sizes, with the marginal's standard error, each of the session's parts (`PARTS`: witness,
   proving, the wait on the ZK server, the rest) fitted the same way, and a dot product's proof overhead: its GPU-seconds a
   proof block over the GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format
-  (`verity.hardware.rate`; `--card none` on a CPU node, whose witness and proving run on its CPUs rather than a device).
+  (`verity.device.rate`; `--card none` on a CPU node, whose witness and proving run on its CPUs rather than a device).
   Per statement and arm, its sessions at every k it drew, k = c among them, fitted over k (`drawn`): the statement's
   fixed seconds and a sampled block's, the deployed sample's price; `fw` less `nofw` at the same samples is the send
   check's increment. Its `observations.json` holds each arm's `costfit.Observation`s, prove the median timed session.
@@ -62,7 +65,7 @@ import socket
 import subprocess
 import sys
 import time
-from math import ceil, sqrt
+from math import sqrt
 from pathlib import Path
 
 import numpy as np
@@ -72,24 +75,29 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P  # noqa: E402
-from verity.core.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
+from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS  # noqa: E402
+
+#: a templated statement's id (`verity_flock.circuit.TMPL_STATEMENT`): its prover and server read the placed unit
+TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 
 #: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
 S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): a `full` statement's
 MAX_BITS = 1 << 35
-#: the served types whose proof block is one output coordinate of a dot product, K MACs, and their operands' format
-DOT = {"fp8-coord": "e4m3", "s8-coord": "s8", "moe-w13": "e4m3", "moe-w2": "e4m3", "moe-chunk": "e4m3", "moe-gemmw": "e4m3",
-       "s8-linear": "s8"}
+#: the served types whose proof block is one output coordinate of a dot product, K MACs (their static ``K``), and their
+#: operands' format; a census name's stage.json has no statics
+DOT = {"fp8-coord": "e4m3", "s8-coord": "s8"}
 STAGE_PY = REPO / "benchmarks" / "served_units" / "stage.py"
 
 
 def unit_ands(K: int) -> int:
     """One coordinate's ANDs with its rows' openings, as `costfit` counts them: K/32 s8 steps, the epilogue, two K-byte
-    operand rows and three one-block rows (the scales and the output)."""
-    return K // 32 * S8_STEP + EPILOGUE + 2 * (HM96 + SHA512 * ceil((K + 17) / 128)) + 3 * (HM96 + SHA512)
+    operand rows and three one-block rows (the scales and the output), each at `optimize.row_ands`."""
+    from verity.protocols.proofs.spot.prover.optimize import row_ands
+
+    return K // 32 * S8_STEP + EPILOGUE + 2 * row_ands(K) + 3 * row_ands(1)
 
 
 def draws(c: int, spec: str = "1,8,64,c") -> list[tuple[int, list[str] | None]]:
@@ -263,10 +271,11 @@ def stage_units(a, out: Path) -> list[dict]:
                 units = list(range(c)) if k == c else sorted(int(u) for u in rng.choice(c, size=k, replace=False))
                 (sd / f"draw-k{k}.json").write_text(json.dumps({"law": "subset", "population": c, "k": k, "units": units}))
                 std = sd / "stage"
-                part = std / "partition.json"
+                part, program = std / "partition.json", std / "program.json"
                 plan.append({"unit": spec, "tag": tag, "c": c, "k": k, "arms": arms, "dir": str(sd), "stage_dir": str(std),
                              "pin": (std / "pin.txt").read_text().strip(), "inst": str(std / "inst.bin"),
-                             "pub": str(std / "pub.bin"), "partition": str(part) if part.exists() else None})
+                             "pub": str(std / "pub.bin"), "partition": str(part) if part.exists() else None,
+                             "program": str(program) if program.exists() else None})
             print(f"ZKCOST staged {spec} c={c} (full {full}): {st['ands']} ANDs a unit, k_log {st['k_log']}, "
                   f"{st['definition']}, stage {st['seconds']['total']} s", flush=True)
     return plan
@@ -318,6 +327,23 @@ def stage(a) -> int:
 
 # ---- prove ----------------------------------------------------------------------------------------------------------------
 
+def placed_unit(a, d: Path) -> list[str]:
+    """A templated stage's prover and server arguments: its unit rows placed at their positions (``d/unit.placed``, once,
+    by ``--tmpl-unit-bin`` from the stage's template and layout mode) and its tables; none for a flat stage."""
+    if not (d / "unit.tmpl").exists():
+        return []
+    placed = d / "unit.placed"
+    if not placed.exists():
+        if not a.tmpl_unit_bin:
+            raise SystemExit(f"{d} stages a templated statement, whose prover reads --tmpl-unit-bin's placed unit")
+        p = a0.run([a.tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", (d / "unit.layout").read_text().strip(),
+                    "--out", str(placed)], d / "tmpl-unit.log")
+        if p.returncode:
+            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
+    (d / "tables").mkdir(exist_ok=True)
+    return ["--tmpl-unit", str(placed)]
+
+
 def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     """One prover process against its own `serve --zk`, proving ``warm + runs`` sessions of the point's sample."""
     sd, d, c, k = Path(pt["dir"]), Path(pt["stage_dir"]), pt["c"], pt["k"]
@@ -327,8 +353,11 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     port = free_port()
     if "unit" in pt:
         inst, pub = pt["inst"], pt["pub"]
+        tmpl = placed_unit(a, d)
         tables = ["--tables", str(d / "tables")] if (d / "tables").is_dir() else []
-        fw_files = {"partition_file": pt["partition"]}
+        tables += tmpl
+        fw_files = {"partition_file": pt["partition"], "program_file": pt.get("program"),
+                    **({"statement": TMPL_STATEMENT} if tmpl else {})}
     else:
         inst, pub, tables = str(d / f"inst-{c}.bin"), str(d / f"pub-{c}.bin"), ["--tables", str(d / "tables")]
         fw_files = {"partition_file": sd / "partition.json", "program_file": sd / "program.json"}
@@ -450,36 +479,40 @@ def prove(a) -> int:
 
 # ---- verify ---------------------------------------------------------------------------------------------------------------
 
-#: flock-verify's refusal of a session verified without the verifier's program (`ProvedScope.NO_PROGRAM`), which it reaches
-#: only once every other check has passed: a served type's honest verdict (benchmarks/served_units/summarize.py's)
-NO_PROGRAM = "refused: a session without the verifier's program (--program)"
+def lean_outcome(v: dict) -> str:
+    """A Lean verdict as what happened: `accepted`, or `refused` for any reason."""
+    return "accepted" if v.get("accepted") is True else "refused"
 
 
-def verify_unit(a, r: dict, plan: dict) -> bool:
-    """Lean on the newest session of a served type's warm process: its own partition, no Program."""
+def verify_unit(a, r: dict, plan: dict) -> dict:
+    """Lean on the newest session of a served type's warm process, with the statement's own partition and Program. Its record
+    keeps Lean's `accepted` and `why`."""
     pt = plan[(r["tag"], r["c"], r["k"])]
-    s = r["sessions"][-1]
+    s, d = r["sessions"][-1], Path(pt["stage_dir"])
+    tmpl = (d / "unit.tmpl").exists()
     log = Path(r["dir"]) / f"lean-verify-{Path(s).name}"
     with open(f"{log}.log", "w") as fo, open(f"{log}.err", "w") as fe:
-        rc, usage, lines = timed([a.lean, "verify", "--zk", "--statement", a0.STATEMENT_ID, "--circuit",
-                                  str(Path(pt["stage_dir"]) / "circuit.txt"), "--public", pt["pub"],
-                                  *(["--partition", pt["partition"]] if pt["partition"] else []), "--session", s], fo, fe)
+        rc, usage, lines = timed([a.lean, "verify", "--zk", "--statement", TMPL_STATEMENT if tmpl else a0.STATEMENT_ID,
+                                  "--circuit", str(d / "circuit.txt"), "--public", pt["pub"],
+                                  *(["--tables", str(d / "tables")] if tmpl else []),
+                                  *(["--partition", pt["partition"]] if pt["partition"] else []),
+                                  *(["--program", pt["program"]] if pt.get("program") else []), "--session", s], fo, fe)
     line = next((x for _, x in lines if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {rc})"}
     why = v.get("why") or ""
     rec = {"unit": r["unit"], "tag": r["tag"], "c": r["c"], "k": r["k"], "arm": r["arm"], "mode": r["mode"], "rep": r["rep"],
-           "session": s, "accepted": v.get("accepted") is True, "why": v.get("why"),
-           "passes": v.get("accepted") is True or why.startswith(NO_PROGRAM), **{x: round(y, 3) for x, y in usage.items()}}
+           "session": s, "accepted": v.get("accepted") is True, "why": v.get("why"), **{x: round(y, 3) for x, y in usage.items()}}
     jsonl(Path(a.out) / "records" / "verify.jsonl", rec)
-    print(f"ZKCOST verify {r['unit']} c={r['c']} k={r['k']} {r['arm']}: {'passes' if rec['passes'] else 'FAILS'} "
-          f"({why[:120] or 'accepted'}) {usage['wall_s']:.2f} s wall", flush=True)
-    return rec["passes"]
+    print(f"ZKCOST verify {r['unit']} c={r['c']} k={r['k']} {r['arm']}: {lean_outcome(rec)}"
+          f"{f' ({why[:120]})' if why else ''} {usage['wall_s']:.2f} s wall", flush=True)
+    return rec
 
 
 def verify(a) -> int:
     out = Path(a.out)
     keys: dict[str, dict] = {}
-    ok = True
+    # every session is verified at its statement's Program and must be accepted
+    accepted, verdicts = True, []
     proves = read_jsonl(out / "records" / "prove.jsonl")
     plan = {(p["tag"], p["c"], p["k"]): p for p in json.loads((out / "plan.json").read_text()) if "unit" in p}
     largest: dict[tuple, dict] = {}   # a served type's largest point a warm process of each arm proved
@@ -489,7 +522,8 @@ def verify(a) -> int:
             if key not in largest or (r["c"], r["k"]) >= (largest[key]["c"], largest[key]["k"]):
                 largest[key] = r
     for r in largest.values():
-        ok &= verify_unit(a, r, plan)
+        verdicts.append(verify_unit(a, r, plan))
+        accepted &= verdicts[-1]["accepted"]
     for r in proves:
         if not r["accepted"] or r.get("unit"):
             continue
@@ -512,13 +546,17 @@ def verify(a) -> int:
             line = next((x for _, x in lines if x.startswith("VERDICT ")), None)
             v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {rc})"}
             rec = {"K": r["K"], "c": r["c"], "k": r["k"], "arm": r["arm"], "mode": r["mode"], "rep": r["rep"], "session": s,
-                   "accepted": v.get("accepted") is True, "why": v.get("why"), "partition": v.get("partition"),
-                   **{x: round(y, 3) for x, y in usage.items()}}
+                   "accepted": v.get("accepted") is True, "why": v.get("why"), "partition": v.get("partition"), **{x: round(y, 3) for x, y in usage.items()}}
             jsonl(out / "records" / "verify.jsonl", rec)
-            ok &= rec["accepted"]
-            print(f"ZKCOST verify K={r['K']} c={r['c']} k={r['k']} {r['arm']} {r['mode']}{r['rep']}: {rec['accepted']} "
-                  f"{rec['why'] or ''} {usage['wall_s']:.2f} s wall, {usage['user_s'] + usage['sys_s']:.2f} s CPU", flush=True)
-    return 0 if ok else 1
+            verdicts.append(rec)
+            accepted &= rec["accepted"]
+            print(f"ZKCOST verify K={r['K']} c={r['c']} k={r['k']} {r['arm']} {r['mode']}{r['rep']}: "
+                  f"{'accepted' if rec['accepted'] else 'not accepted'} {rec['why'] or ''} {usage['wall_s']:.2f} s wall, "
+                  f"{usage['user_s'] + usage['sys_s']:.2f} s CPU", flush=True)
+    outcomes = [lean_outcome(v) for v in verdicts]
+    print(f"ZKCOST verify: Lean accepted {outcomes.count('accepted')} of {len(outcomes)} sessions and refused "
+          f"{outcomes.count('refused')}", flush=True)
+    return 0 if accepted else 1
 
 
 # ---- fit ------------------------------------------------------------------------------------------------------------------
@@ -650,10 +688,10 @@ PARTS = {"witness": lambda x: x.get("witness_s") or 0.0, "proving": lambda x: x[
 
 
 def overhead(a) -> int:
-    from verity import hardware
+    from verity.device import load_card, rate
     out = Path(a.out)
     # --card none: a CPU node's sessions, which no GPU's peak divides
-    card = None if a.card == "none" else hardware.load(a.card)
+    card = None if a.card == "none" else load_card(a.card)
     stages = [r for r in read_jsonl(out / "records" / "stage.jsonl") if r.get("unit")]
     proves = [r for r in read_jsonl(out / "records" / "prove.jsonl") if r.get("unit") and r["accepted"]]
     verifies = [r for r in read_jsonl(out / "records" / "verify.jsonl") if r.get("unit")]
@@ -668,7 +706,7 @@ def overhead(a) -> int:
     for tag in dict.fromkeys(r["tag"] for r in stages):
         st = {r["c"]: r for r in stages if r["tag"] == tag}
         s0 = st[max(st)]
-        peak = float(hardware.rate(card, fmt=s0["format"])) if s0["macs"] and card else None
+        peak = float(rate(card, fmt=s0["format"])) if s0["macs"] and card else None
         t = {"unit": s0["unit"], "definition": s0["definition"], "class": s0.get("class"), "ands": s0["ands"],
              "k_log": s0["k_log"], "full": s0["full"], "sizes": sorted(st), "macs": s0["macs"], "format": s0["format"],
              "peak_mac_per_s": peak, "stage_s": {c: r["stage_s"] for c, r in st.items()}, "arms": {}, "drawn": {}}
@@ -693,7 +731,7 @@ def overhead(a) -> int:
                                      "s": {c: float(np.median([f(x) for x in xs])) for c, xs in whole.items()}}
                                  for n, f in PARTS.items()}
                        if all(x.get("wait_e2e_s") is not None for xs in whole.values() for x in xs) else {},
-                       "lean": [{"c": v["c"], "k": v["k"], "passes": v["passes"], "why": v["why"]}
+                       "lean": [{"c": v["c"], "k": v["k"], "accepted": v["accepted"], "why": v["why"]}
                                 for v in verifies if v["tag"] == tag and v["arm"] == arm]}
             cpu = {c: [x["cpu_s"] for x in xs if x.get("cpu_s")] for c, xs in whole.items()}
             if any(cpu.values()):
@@ -744,7 +782,7 @@ def overhead(a) -> int:
                 "|---|---|---:|---:|---:|---:|---:|---:|"]
     for tag, t in types.items():
         for arm, r in t["arms"].items():
-            lean = ",".join("pass" if v["passes"] else "FAIL" for v in r["lean"]) or "-"
+            lean = ",".join(lean_outcome(v) for v in r["lean"]) or "-"
             rows.append(f"| {tag} | {t['definition']} | {arm} | {','.join(map(str, t['sizes']))} | {fmt(r['fixed_s'])} | "
                         f"{pm(r)} | {fmt(r['amortized_s'], 1e3)} | {fmt(r.get('overhead_marginal'))} | "
                         f"{fmt(r.get('overhead_amortized'))} | {lean} |")
@@ -779,11 +817,12 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--bin")
     ap.add_argument("--lean")
+    ap.add_argument("--tmpl-unit-bin", help="prove: flock-tmpl-unit, which places a templated stage's unit rows")
     ap.add_argument("--ks", default="4096,14336")
     ap.add_argument("--units", default="", help="stage: served types (stage.py's TYPE[:S=V,...]), space-separated, instead of --ks")
     ap.add_argument("--sizes", default=None, help="stage: staged units a statement (default 1,8,64,512; with --units half,full)")
     ap.add_argument("--card", default="rtx-pro-6000-server",
-                    help="overhead: the card whose datasheet peak divides (verity.hardware); none: a CPU node's sessions")
+                    help="overhead: the card whose datasheet peak divides (verity.device.load_card); none: a CPU node's sessions")
     ap.add_argument("--draws", default="1,8,64,c", help="stage: the sample sizes a statement is proved at, c meaning all its units")
     ap.add_argument("--points", default=None, help="prove: only these indices of plan.json (one GPU lease a point)")
     ap.add_argument("--arms", default="fw,nofw", help="fw: the ZK server's send check on (the design's path); nofw: off; "

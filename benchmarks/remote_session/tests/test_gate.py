@@ -3,13 +3,17 @@ and ledger and the verifier host's status, and refuses (exit 3, the reason in pr
 period, a period of the lane still open, a host pinned elsewhere or busy, and, before any request, a CIRCUIT that isn't COMMIT's
 and a COMMIT off origin/main's first-parent line (or no line to check it on). A host pinned elsewhere on that line is
 told to rerun at its pin; one pinned off it, to repin. Under DRY=1 nothing reaches ssh. The gates are a stub ssh on
-PATH; COMMIT is the head of a throwaway repository whose bare origin's main holds it and its parent."""
+PATH; COMMIT is the head of a throwaway repository whose bare origin's main holds it and its parent.
+
+`gate.sh host`: the run it asks the verifier host for is PACED's paced sessions, or with SESSIONS that many sessions of
+one coin a window, and never both: every verb refuses both forms at once, and `form` does nothing else."""
 from __future__ import annotations
 
 import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -41,11 +45,11 @@ def git(r: Path, *cmd: str) -> str:
 @pytest.fixture
 def repo(tmp_path: Path) -> tuple[Path, str]:
     r, origin = tmp_path / "repo", tmp_path / "origin.git"
-    (r / "verity/core/protocols/remote_bandwidth").mkdir(parents=True)
+    (r / "verity/protocols/accounting/poub/verifier").mkdir(parents=True)
     git(tmp_path, "init", "-q", "--bare", str(origin))
     git(r, "init", "-q", "-b", "main")
     for x in ("0", "1"):
-        (r / "verity/core/protocols/remote_bandwidth/store.py").write_text(f"x = {x}\n")
+        (r / "verity/protocols/accounting/poub/verifier/store.py").write_text(f"x = {x}\n")
         git(r, "add", ".")
         git(r, "commit", "-q", "-m", f"c{x}")
     git(r, "remote", "add", "origin", str(origin))
@@ -57,14 +61,16 @@ def off_main(repo: tuple[Path, str]) -> tuple[Path, str]:
     """The repository checked out at a commit on top of main that origin/main doesn't hold."""
     r, _ = repo
     git(r, "checkout", "-q", "-b", "side")
-    (r / "verity/core/protocols/remote_bandwidth/store.py").write_text("x = 2\n")
+    (r / "verity/protocols/accounting/poub/verifier/store.py").write_text("x = 2\n")
     git(r, "commit", "-q", "-am", "side")
     return r, git(r, "rev-parse", "HEAD")
 
 
 def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=None, busy=(), public=PUBLIC,
-          period="ma-remote-coins-8", circuit=None, dry=False) -> tuple[subprocess.CompletedProcess, Path, list[str]]:
-    """gate.sh probe against stub gates answering from these records; its result, $OUT and the calls ssh got."""
+          period="ma-remote-coins-8", circuit=None, dry=False, verb="probe",
+          **more: str) -> tuple[subprocess.CompletedProcess, Path, list[str]]:
+    """gate.sh VERB (default probe) against stub gates answering from these records, with MORE set; its result, $OUT
+    and the calls ssh got."""
     r, head = repo
     g, out, bin_ = tmp_path / "gates", tmp_path / "out", tmp_path / "bin"
     for d in (g, out, bin_):
@@ -84,7 +90,8 @@ def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=Non
         env["CIRCUIT"] = circuit
     if dry:
         env["DRY"] = "1"
-    p = subprocess.run(["bash", str(GATE), "probe"], cwd=r, env=env, capture_output=True, text=True)
+    env |= more
+    p = subprocess.run(["bash", str(GATE), verb], cwd=r, env=env, capture_output=True, text=True)
     calls = (g / "calls").read_text().splitlines() if (g / "calls").exists() else []
     return p, out, calls
 
@@ -92,7 +99,7 @@ def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=Non
 def test_the_probe_passes_reading_only(tmp_path, repo):
     p, out, calls = probe(tmp_path, repo)
     assert p.returncode == 0, p.stdout + p.stderr
-    tree = subprocess.run(["git", "rev-parse", f"{repo[1]}:verity/core/protocols/remote_bandwidth"], cwd=repo[0],
+    tree = subprocess.run(["git", "rev-parse", f"{repo[1]}:verity/protocols/accounting/poub/verifier"], cwd=repo[0],
                           capture_output=True, text=True, check=True).stdout.strip()
     doc = json.loads((out / "probe.json").read_text())
     assert doc["refused"] == [] and doc["challenger_pinned_at_commit"]
@@ -140,8 +147,79 @@ def test_a_commit_off_mains_first_parent_line_is_refused_before_any_request(tmp_
 def test_no_main_line_to_check_commit_on_refuses_before_any_request(tmp_path, repo):
     git(repo[0], "remote", "remove", "origin")
     p, out, calls = probe(tmp_path, repo)
-    assert p.returncode == 3 and "can't read origin/main's first-parent history" in p.stdout
+    assert p.returncode == 3 and "can't fetch main's first-parent history from (no origin)" in p.stdout
     assert calls == []
+
+
+def test_a_refused_fetch_prints_no_userinfo_of_origins_url_anywhere(tmp_path, repo, monkeypatch):
+    """On an agent's VM origin's URL carries a credential as its userinfo: neither the refusal nor any file under $OUT
+    holds it, while the refusal still names the URL without it. A git on PATH ahead of the real one answers origin's URL
+    and fails the fetch from it naming the URL whole, as a git that doesn't redact it would: no git config holds the URL
+    (an agent's VM refuses a remote URL with a credential in it)."""
+    url = "https://user:tok@127.0.0.1:9/x.git"
+    stub = tmp_path / "git-stub"
+    stub.mkdir()
+    (stub / "git").write_text(
+        f'#!/bin/sh\n[ "$1 $2 $3" = "remote get-url origin" ] && {{ echo "{url}"; exit 0; }}\n'
+        f'for a; do [ "$a" = "{url}" ] && {{ echo "fatal: unable to access \'{url}/\': refused" >&2; exit 128; }}; done\n'
+        f'exec {shutil.which("git")} "$@"\n')
+    (stub / "git").chmod(0o755)
+    monkeypatch.setenv("PATH", str(stub), prepend=os.pathsep)
+    p, out, calls = probe(tmp_path, repo)
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert "can't fetch main's first-parent history from https://127.0.0.1:9/x.git (fetch.probe.log)" in p.stdout
+    assert (out / "fetch.probe.log").exists() and calls == []
+    for text in (p.stdout, p.stderr, *(f.read_text(errors="replace") for f in out.rglob("*") if f.is_file())):
+        assert "user" not in text and "tok" not in text
+
+
+def test_unauth_takes_out_every_urls_userinfo_and_nothing_else(tmp_path):
+    """The log is stripped too, whatever git writes into it, for any git version that names the URL whole."""
+    lines = "fatal: unable to access 'https://user:tok@h/x.git/': no\nfrom ssh://git@h:22/x and /srv/git/verity.git\n"
+    p = subprocess.run(["bash", "-c", f'source <(sed -n "/^unauth() {{/,/^}}/p" {GATE}); unauth'], input=lines,
+                       capture_output=True, text=True, check=True)
+    assert p.stdout == "fatal: unable to access 'https://h/x.git/': no\nfrom ssh://h:22/x and /srv/git/verity.git\n"
+
+
+def run_clone(tmp_path: Path, repo: tuple[Path, str], *, at: str) -> tuple[Path, Path]:
+    """A run's clone as research makes one on a node: the node's bare repository (the fixture's origin, its HEAD naming
+    no branch, as `git init --bare` leaves it there), a source root cloned from it while its main stood at `at` (`remote.py`'s
+    `_git_ship_script`), and the run's clone of that source root (`clone.py`'s `make`), detached at the fixture's head.
+    The bare's main is the fixture's head again afterwards, as a later launch's push leaves it."""
+    r, head = repo
+    bare, root, clone = tmp_path / "origin.git", tmp_path / "src", tmp_path / "clone"
+    git(bare, "symbolic-ref", "HEAD", "refs/heads/ship")
+    git(bare, "update-ref", "refs/heads/main", at)
+    git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(bare), str(root))
+    git(root, "checkout", "-q", "--detach", head)
+    git(bare, "update-ref", "refs/heads/main", head)
+    git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(root), str(clone))
+    git(clone, "checkout", "-q", "--detach", head)
+    return root, clone
+
+
+def test_a_run_clone_reads_main_from_the_bare_repository_not_its_source_roots_frozen_copy(tmp_path, repo):
+    """The source root's origin/main stood at the head's parent when it was made; the bare's main has the head since."""
+    parent = git(repo[0], "rev-parse", "HEAD~1")
+    root, clone = run_clone(tmp_path, repo, at=parent)
+    assert git(root, "rev-parse", "refs/remotes/origin/main") == parent
+    p, out, calls = probe(tmp_path, (clone, repo[1]))
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert f"main from {tmp_path / 'origin.git'} at {repo[1]}" in p.stdout
+    assert (out / "main.probe.txt").read_text().split() == [repo[1], parent]
+    assert [c.split()[-1] for c in calls] == ["pubkey", "pins", "ledger", "status"]
+
+
+def test_a_run_clone_whose_bare_repository_cant_be_reached_refuses_and_never_reads_the_frozen_copy(tmp_path, repo):
+    """The source root's frozen origin/main holds COMMIT, so a fallback to it would pass: the probe refuses instead."""
+    root, clone = run_clone(tmp_path, repo, at=repo[1])
+    gone = tmp_path / "gone.git"
+    git(root, "remote", "set-url", "origin", str(gone))
+    p, out, calls = probe(tmp_path, (clone, repo[1]))
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert f"can't fetch main's first-parent history from {gone} (fetch.probe.log)" in p.stdout
+    assert "relaunch from a checkout fetched just before (git fetch origin main)" in p.stdout
+    assert calls == [] and not (out / "main.probe.txt").exists()
 
 
 def test_a_dry_probe_sends_nothing(tmp_path, repo):
@@ -194,3 +272,116 @@ def test_fire_goes_on_for_a_lease_begun_by_lease_by(tmp_path):
     p, calls = fire(tmp_path, held("2026-10-24T12:45:02Z"), "2026-10-24T13:15Z")
     assert re.search(r"^\S+Z leased$", p.stdout, re.M) and "nothing opened" not in p.stdout, p.stdout
     assert len(calls) == 1 and "gpu-lease status" in calls[0]
+
+
+FORM = ("PACED", "PACE_PASS_MS", "SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES")
+REQUEST = ("MODEL", "BIND", "ENGINES", "ARENA_BLOCKS", "PORT", "MINUTES", "JITTER_MS", "QUANTILE", "PROVER_NODE", "AUDITOR")
+PACED = ("--paced 1:60000:33273:2 1:60000:33273:2 1:1000:2773:7 1:1000:2773:7 --pace-pass-ms 85 --minutes 30 "
+         "--jitter-ms 50 --quantile max --model QWEN25_32B_BF16 --engines 8 --arena-blocks 16252928")
+
+
+def host(tmp_path: Path, verb: str = "host", **form: str) -> tuple[subprocess.CompletedProcess, list[str] | None]:
+    """gate.sh VERB under DRY=1 with these of FORM's variables and no other: its result, and the requests it would
+    have sent, each without its time and its host (None when it wrote no gate.requests). `form` gets no OUT."""
+    out = tmp_path / "out"
+    out.mkdir()
+    env = {k: v for k, v in os.environ.items() if k not in FORM + REQUEST + ("OUT",)}
+    env |= {"DRY": "1", "PERIOD": "ma-remote-coins-9", "PIN": PIN, "GATE_KEY": str(tmp_path / "key"),
+            "COMMIT": "0" * 40, **form}
+    if verb != "form":
+        env["OUT"] = str(out)
+    p = subprocess.run(["bash", str(GATE), verb], cwd=tmp_path, env=env, capture_output=True, text=True)
+    sent = out / "gate.requests"
+    return p, [line.split(" ", 2)[2] for line in sent.read_text().splitlines()] if sent.exists() else None
+
+
+@pytest.mark.parametrize("form, want", [
+    ({}, PACED),
+    ({"PACED": "64:60000:33273:7", "PACE_PASS_MS": "46"},
+     "--paced 64:60000:33273:7 --pace-pass-ms 46 --minutes 30 --jitter-ms 50 --quantile max --model QWEN25_32B_BF16 "
+     "--engines 8 --arena-blocks 16252928"),
+    ({"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273"},
+     "--sessions 1 --windows 7 --window-ms 60000 --samples 33273 --minutes 30 --jitter-ms 50 --quantile max "
+     "--model QWEN25_32B_BF16 --engines 8 --arena-blocks 16252928"),
+    ({"SESSIONS": "2"},
+     "--sessions 2 --minutes 30 --jitter-ms 50 --quantile max --model QWEN25_32B_BF16 --engines 8 "
+     "--arena-blocks 16252928"),
+    ({"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273", "BIND": "0"},
+     "--sessions 1 --windows 7 --window-ms 60000 --samples 33273 --minutes 30 --jitter-ms 50 --quantile max"),
+    ({"BIND": "0"}, PACED.removesuffix(" --model QWEN25_32B_BF16 --engines 8 --arena-blocks 16252928")),
+    ({"BIND": "1", "MODEL": "TINY"}, PACED.replace("QWEN25_32B_BF16", "TINY")),
+], ids=["default", "paced", "one-coin-a-window", "sessions-alone", "one-coin-a-window-unbound", "paced-unbound",
+        "bound-named"])
+def test_the_hosts_run_is_asked_for_paced_sessions_or_with_sessions_for_one_coin_a_window(tmp_path, form, want):
+    """The request names one form: PACED's words at PACE_PASS_MS, by default the four paced sessions, or SESSIONS
+    sessions with the WINDOWS, WINDOW_MS and SAMPLES that are set and nothing of a pace. With BIND=1, the default, it
+    binds the store to MODEL with its engines' arenas; with BIND=0 it names no model, engines or arenas, so the
+    verifier holds no checkpoint."""
+    p, sent = host(tmp_path, **form)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert sent == [f"run --peer vy-nebius-2 --port 7951 --period ma-remote-coins-9 --pin {PIN} {want}"]
+
+
+@pytest.mark.parametrize("verb", ["host", "probe", "fire", "form"])
+@pytest.mark.parametrize("form, why", [
+    ({"SESSIONS": "1", "PACED": "1:1000:2773:7"}, "the host's run takes one form, so unset SESSIONS or both of the others"),
+    ({"SESSIONS": "1", "PACE_PASS_MS": "85"}, "the host's run takes one form, so unset SESSIONS or both of the others"),
+    ({"WINDOWS": "7"}, "SESSIONS is unset: set it, or unset them for PACED's sessions"),
+    ({"WINDOW_MS": "60000", "SAMPLES": "33273"}, "SESSIONS is unset: set it, or unset them for PACED's sessions"),
+], ids=["sessions-and-paced", "sessions-and-a-pace", "windows-alone", "a-window-alone"])
+def test_both_forms_at_once_or_a_window_without_sessions_is_refused_before_any_request(tmp_path, verb, form, why):
+    p, sent = host(tmp_path, verb, **form)
+    assert p.returncode == 2 and why in p.stdout, p.stdout + p.stderr
+    assert sent is None
+
+
+@pytest.mark.parametrize("bind, model", [({}, " --model QWEN25_32B_BF16"), ({"BIND": "1", "MODEL": "TINY"}, " --model TINY"),
+                                         ({"BIND": "0"}, "")], ids=["default", "bound", "unbound"])
+def test_the_period_signs_the_model_only_when_the_run_binds_the_store_to_it(tmp_path, bind, model):
+    """`open` asks for `period-open` with MODEL where the host's run binds the store to it (BIND=1, the default), and
+    with no model under BIND=0, whose period the auditor's line then finds no model to bind the store to in."""
+    p, sent = host(tmp_path, "open", CIRCUIT="ab" * 64, **bind)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert sent == ["ledger", f"period-open --name ma-remote-coins-9 --cap 4 --circuit {'ab' * 64}{model}", "ledger"]
+
+
+@pytest.mark.parametrize("verb", ["host", "probe", "fire", "form"])
+@pytest.mark.parametrize("bind", ["2", "yes", ""], ids=["two", "a-word", "set-empty"])
+def test_a_bind_other_than_0_or_1_is_refused_before_any_request(tmp_path, verb, bind):
+    """An empty BIND is the default, 1, as every unset variable of gate.sh's is."""
+    p, sent = host(tmp_path, verb, BIND=bind)
+    if bind == "":
+        assert verb != "host" or p.returncode == 0, p.stdout + p.stderr
+        assert verb != "host" or "--model QWEN25_32B_BF16" in sent[0]
+        return
+    assert p.returncode == 2 and f"BIND is {bind}: 1 binds the store to MODEL's pinned checkpoint, 0 to none" in p.stdout
+    assert sent is None
+
+
+def test_a_dry_fire_that_cant_read_the_provers_leases_says_so_once_and_writes_every_request(tmp_path, repo):
+    """A stopped prover node answers no lease status: a dry fire says so, asks once and sends nothing, so the
+    requests it would send in the session are all in gate.requests."""
+    p, out, calls = probe(tmp_path, repo, dry=True, verb="fire", PROVER_SSH="research@192.0.2.9", PROVER_RUN="r1",
+                          ENGINES="8", BIND="0", SESSIONS="1", WINDOWS="7", WINDOW_MS="60000", SAMPLES="33273")
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "DRY: can't read vy-nebius-2's leases; would wait until r1 holds 8" in p.stdout
+    asked = " ".join(calls)
+    assert asked.count("BatchMode") == 1 and "gpu-lease status" in asked, \
+        "one read of the leases, and no request"
+    sent = [line.split(" ", 2)[2] for line in (out / "gate.requests").read_text().splitlines()]
+    assert sent[:4] == ["pubkey", "pins", "ledger", "status"]
+    (run,) = [r for r in sent if r.startswith("run ")]
+    assert run.endswith("--sessions 1 --windows 7 --window-ms 60000 --samples 33273 --minutes 30 --jitter-ms 50 "
+                        "--quantile max")
+    (opened,) = [r for r in sent if r.startswith("period-open --name ma-remote-coins-8 ")]
+    assert "--model" not in opened, "a period of an unbound run signs no model"
+    assert any(r.startswith("period-close") for r in sent)
+
+
+@pytest.mark.parametrize("form", [{}, {"PACED": "1:1000:2773:7", "PACE_PASS_MS": "46"}, {"SESSIONS": "1"},
+                                  {"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273"}],
+                         ids=["default", "paced", "sessions-alone", "one-coin-a-window"])
+def test_form_passes_one_form_and_writes_and_asks_nothing(tmp_path, form):
+    p, sent = host(tmp_path, "form", **form)
+    assert (p.returncode, p.stdout, p.stderr, sent) == (0, "", "", None)
+    assert list((tmp_path / "out").iterdir()) == []

@@ -20,7 +20,7 @@ window closes at its deadline.
 **The fixture** (`fixture`): two chained passes over the toy's `C*` at 16 sign rows under a fixed challenge and fixed
 leaf salts, each with its seed, the 16 sign rows the kernel reads, every block's partial π, every unit's σ and y, and
 the pass's root. A decode kernel's sketch matches it block for block (`PROTOCOL.md` §11 of
-`verity/core/protocols/remote_bandwidth` is the interface). It is regenerated, not tracked: the repository's data
+`verity/protocols/accounting/poub/verifier` is the interface). It is regenerated, not tracked: the repository's data
 budget has no room for it, and `FIXTURE_SHA512` pins its bytes.
 """
 from __future__ import annotations
@@ -41,13 +41,13 @@ if __package__ in (None, ""):
 else:
     from . import store as S
 
-from verity.core.protocols.pous import setup
-from verity.core.protocols.pous.schemes.p2 import expand_prefix
-from verity.core.protocols.remote_bandwidth import audit, coins, p2, receipts
+from verity.protocols.accounting.pous.verifier import setup
+from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
+from verity.protocols.accounting.poub.verifier import audit, coins, p2, receipts
 
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
-FIXTURE_SHA512 = ("658f6d40a5ecdcb252ca2d4b844f41c6b2af0550f291a4d2e33f975d3158fac2"
-                  "b3da2a65666d146f6aabac37167b4d21aaf4d1ef5c02127ac1ad2f8380f88b9a")
+FIXTURE_SHA512 = ("4108408908b13f0b4b7912ce55ecc92c70f37ec71afc8f0b65e9b421831b08f6"
+                  "6b824180d631d850c0190801432c68cdf324f942640f7799a561eff22d1b3840")
 NODE = b"p2-toy-node"
 EMBED = b"verity-pous/p2-serve/toy/embedding/v0\0"
 FIXTURE_CHALLENGE = hashlib.sha512(b"verity-pous/p2-serve/fixture/challenge/v0").digest()[:receipts.CHALLENGE_BYTES]
@@ -78,7 +78,7 @@ class Clock:
         return self.now
 
 
-def toy() -> tuple[S.Store, dict, bytes]:
+def toy() -> tuple[S.StoreLayout, dict, bytes]:
     """The tracked toy: its store, `toy.json` and `C*`."""
     doc = json.loads((S.TOY_DIR / "toy.json").read_text())
     c_star = (S.TOY_DIR / "c-star.bin").read_bytes()
@@ -87,12 +87,12 @@ def toy() -> tuple[S.Store, dict, bytes]:
     return S.toy_store(doc), doc, c_star
 
 
-def blocks_of(store: S.Store, c_star: bytes) -> list[bytes]:
+def blocks_of(store: S.StoreLayout, c_star: bytes) -> list[bytes]:
     nb = store.params.block_bytes
     return [c_star[nb * j:nb * (j + 1)] for j in range(store.params.blocks)]
 
 
-def registration(store: S.Store, doc: dict, c_star: bytes, node: bytes = NODE) -> p2.Registration:
+def registration(store: S.StoreLayout, doc: dict, c_star: bytes, node: bytes = NODE) -> p2.Registration:
     """The verifier's registration of the toy's store: PoUS's setup decoding `C*` to the committed `W` under the salt
     it sampled from its source after the commitment, then `p2.register`."""
     params, n = store.params, store.params.blocks_per_segment
@@ -119,7 +119,7 @@ class Engine:
     highest-scoring cached key, the latest on a tie), a KV cache a layer. With `w` given, it reads that plaintext `W`
     instead of decoding, and sketches nothing: the model the decode must agree with."""
 
-    def __init__(self, store: S.Store, c_star: bytes, salt: bytes, w: bytes | None = None) -> None:
+    def __init__(self, store: S.StoreLayout, c_star: bytes, salt: bytes, w: bytes | None = None) -> None:
         self.store, self.c_star, self.w = store, c_star, w
         self.prefix = expand_prefix(store.params, salt)
         self.audited = p2.UNIT_BLOCKS * (store.params.blocks // p2.UNIT_BLOCKS)
@@ -208,7 +208,8 @@ def serve(engine: Engine, store: p2.Store, *, prompt: int, windows: int, per_win
                           delta=1e-6, window_ns=per_window * step_ns, codec=reg.codec, receipt=reg.receipt,
                           layout=reg.layout, rows=reg.rows)
     entropy = entropy or Entropy(b"verity-pous/p2-serve/entropy/v0")
-    session = p2.Session(params, reg, coins.local(reg.digest, 0, windows, entropy), not_before_ns=0, clock=clock)
+    session = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, windows, entropy), not_before_ns=0,
+                             clock=clock)
     prover = p2.Prover(store, entropy=entropy)
     opener = (open_ or (lambda pr: pr.open))(prover)
     out, token, previous = Served(), prompt, reg.digest
@@ -271,7 +272,7 @@ def fixture(passes: int = 2) -> dict:
         previous = root
     return {
         "schema": FIXTURE_SCHEMA,
-        "interface": "verity/core/protocols/remote_bandwidth/PROTOCOL.md §11",
+        "interface": "verity/protocols/accounting/poub/verifier/PROTOCOL.md §11",
         "store": {"toy": "toy.json", "c_star_sha512": doc["c_star_sha512"], "blocks": store.params.blocks,
                   "units": units, "unaudited": list(range(p2.UNIT_BLOCKS * units, store.params.blocks))},
         "registration": {"node": NODE.hex(), "rows": reg.rows, "digest": reg.digest.hex()},

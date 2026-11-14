@@ -35,13 +35,14 @@ done
 I=${RESEARCH_RUN_DIR:?}/inputs
 values=$(ls "$I"/*.tar.gz | head -1)
 session=$(ls "$I"/*.tar 2> /dev/null | head -1 || true)
-L=$PWD/verity/core/service/flock
+L=$PWD/verity/protocols/proofs/flock/verifier
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
 uv sync -q --all-packages --extra torch-cpu
 (cd "$L" && lake build flock-verify) > "$O/build.log" 2>&1 || { tail -60 "$O/build.log" >&2; exit 1; }
 FV=$L/.lake/build/bin/flock-verify
+. "$PWD/verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh"
 scratch() { # scratch NAME [VERIFIER [DIR]]: NAME's Main.lean in a scratch package DIR (NAME) against VERIFIER (the checkout's)
   local v=${2:-$L} d=$S/${3:-$1}
   mkdir -p "$d"
@@ -69,7 +70,7 @@ if [ -n "$session" ]; then
   mkdir -p "$S/session"
   tar -xf "$session" -C "$S/session"
   sdir=$(dirname "$(find "$S/session" -name session.json | head -1)")
-  cmd=("$FV" verify --statement "$stmt" --archive "$S/archive" --circuit "$(key "$w/circuit.txt")" --public "$(key "$pub")"
+  cmd=($(verifier_env) "$FV" verify --statement "$stmt" --archive "$S/archive" --circuit "$(key "$w/circuit.txt")" --public "$(key "$pub")"
        --partition "$(key "$w/partition.json")" --program "$(key "$w/program.json")" --zk --session "$sdir")
   if command -v perf > /dev/null; then
     /usr/bin/time -v -o "$O/verify.time" perf record -F 49 -o "$S/perf.data" -- "${cmd[@]}" > "$O/verify.log" 2>&1 || true
@@ -83,8 +84,10 @@ fi
 if [ -n "$stmtp" ]; then
   if [ -n "$base" ]; then
     mkdir -p "$S/base"
-    git archive "$base" verity/core/service/flock | tar -x -C "$S/base"
-    scratch flock-tmpl "$S/base/verity/core/service/flock" flock-tmpl-base
+    # the verifier's package at $base and, where $base has them, the base packages it requires by path
+    git archive "$base" verity/protocols/proofs/flock/verifier $(git ls-tree -d --name-only "$base" \
+      verity/circuits/base verity/circuits/lean verity/commitments/lean) | tar -x -C "$S/base"
+    scratch flock-tmpl "$S/base/verity/protocols/proofs/flock/verifier" flock-tmpl-base
     stmt "$S/flock-tmpl-base/.lake/build/bin/flock-tmpl" -base
   fi
   scratch flock-tmpl

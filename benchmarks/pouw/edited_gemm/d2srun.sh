@@ -23,7 +23,7 @@ nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a -Xptxa
 rc=$?
 echo "build rc $rc" | tee -a "$O/rc.txt"
 [ "$rc" = 0 ] || { tail -40 "$O/build.log"; exit 4; }
-$PY benchmarks/pouw/harness/sass_gate.py "$BIN/d2sgemm" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
+$PY verity/protocols/accounting/pouw/prover/sass_gate.py "$BIN/d2sgemm" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
 echo "sass_gate (whole binary) rc $?" | tee -a "$O/sass_gate.txt"
 # The binary holds egemm.cu's kernels and so fgemm.cu's, mgemm.cu's and lpgemm.cu's, some never launched; the gate refuses
 # an integer-division seed in some of those, and passes only if every flagged instruction is in one of them (crun.sh's set)
@@ -120,7 +120,7 @@ for r in "$O"/ncu/*.ncu-rep; do
   ncu -i "$r" --page source --csv --print-source sass > "$b.sass.csv" 2> "$b.sass.err"
 done
 cat "$O/rc.txt"
-$PY $D/eps_profile.py "$O" --mm benchmarks/pouw/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
+$PY $D/eps_profile.py "$O" --mm benchmarks/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
   --toml-arms "${PROFILE_ARMS:-d_l7qs,d_plains,e_l7qs,e_plains,lt_d2s,plain,qk_l7qs,qk_plains,qk_l7qs_m,qk_plains_m}" \
   > "$O/profile.md" 2> "$O/profile.err"
 echo "profile rc $?" | tee -a "$O/rc.txt"

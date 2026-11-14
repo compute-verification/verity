@@ -28,13 +28,13 @@ ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 #: Layout/spec documents left in place by the layout migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
-    "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+    "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
 )
 #: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. Flock
 #: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
-SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
-                       "verity/core/protocols/certifier/protocol/": "verity/core/protocols/certifier/PROTOCOL.md"}
+SPLIT_DOCUMENT_DIRS = {"security/Proofs/Flock/Soundness/assumption-notes/": "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+                       "verity/protocols/accounting/certifier/verifier/protocol/": "verity/protocols/accounting/certifier/verifier/PROTOCOL.md"}
 #: Generated output, by where it sits or what it is: no tracked path has one of these directories, suffixes or stamps.
 GENERATED_DIRS = frozenset({"reports", "results", "renders", "previews", "plots", "evidence", "assets", "outputs"})
 GENERATED_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".pdf", ".html", ".htm"})
@@ -64,25 +64,27 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: manifest (append-only; most of its readers don't read the sibling manifests yet), the retired-terms lint's per-file list
 #: (shrink-only: a rename of a retired term prunes it). Each is capped at its size rounded up
 #: to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
-#: fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
+#: artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
-    "integrations/vllm/manifests/checkpoints.json": 320 * 1024,
+    "adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
+    "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
-    "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
-    "verity/ml/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
+    "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
+    "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
 #: what the spec alert shows when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
-#: executable verifier, `Flock`, took soundness's record past 2 MiB, and `Security`'s holds every package's guarantees).
+#: executable verifier, `Flock`, took soundness's record past 2 MiB, and `security`'s holds every package's guarantees).
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES and audit records) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be. Audit records are left out: they must stay in Git and each has its own
 #: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB:
 #: the E2E demo's fixtures took the tree to 40.1 MiB; register the next large one rather than raising it again.
 DATA_BUDGET = 48 * 1024 * 1024
-REGISTRY = "fixtures/artifacts.json"
+REGISTRY = "artifacts.json"
 
 
 def _tracked() -> list[str]:
@@ -129,7 +131,7 @@ def test_generated_output_patterns() -> None:
     assert generated_output("renders/daily/20260927T0857Z-tables.json") == "under renders/"
     assert generated_output("lanes/x/evidence/run.log") == "under evidence/"
     assert generated_output("benchmarks/numerical/plot_overhead.png") == "a .png render"
-    assert generated_output("integrations/vllm/20260929T0300Z-tables.json") == "a stamped render or note"
+    assert generated_output("adapters/vllm/20260929T0300Z-tables.json") == "a stamped render or note"
     assert generated_output("benchmarks/numerical/python/verity_numerical/bench/contract.py") is None
     assert generated_output("tools/research/tests/fixtures/run_v0.2/out/result.json") is None
 
@@ -172,7 +174,7 @@ def markdown_over_cap(path: str, size: int) -> str | None:
 
 
 def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -> None:
-    soundness = "Security/Proofs/Flock/Soundness/"
+    soundness = "security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
     assert markdown_over_cap("GLOSSARY.md", MD_SIZE_CAP + 1) is None
     assert markdown_over_cap("GLOSSARY.md", GLOSSARY_SIZE_CAP + 3).endswith(", 3 bytes over; move detail to the notes store (cite it by note:<id>)")
@@ -181,7 +183,7 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
         assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
     assert markdown_over_cap(soundness + "README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
-    certifier = "verity/core/protocols/certifier/"
+    certifier = "verity/protocols/accounting/certifier/verifier/"
     assert markdown_over_cap(certifier + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {certifier}protocol/")
     assert markdown_over_cap(certifier + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{certifier}protocol/")
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP) is None
@@ -215,7 +217,7 @@ def test_markdown_size_caps() -> None:
 
 
 #: Test files that need torch, a GPU or cargo, and were never part of `check`.
-UNSUITED_TEST_DIRS = ("verity/ml/kernels/",)
+UNSUITED_TEST_DIRS = ("verity/circuits/kernels/",)
 #: what pytest collects from a module: a function or a class of its own named as a test
 _DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 
@@ -362,6 +364,30 @@ def test_tracked_data_within_budget() -> None:
             continue
     assert total <= DATA_BUDGET, (f"tracked data is {total / 2**20:.1f} MiB, over the {DATA_BUDGET / 2**20:.0f} MiB budget: register large "
                                   f"fixtures in {REGISTRY} rather than tracking them")
+
+
+#: Tracked files an ignore line covers, each added on purpose (`git add -f`): a fixture whose name a pattern for run
+#: outputs or archives matches.
+IGNORED_TRACKED = frozenset({
+    "tools/research/tests/fixtures/run_v0.2/out/proof.bin",
+    "tools/research/tests/fixtures/run_v0.2/out/verify.jsonl",
+})
+
+
+def test_no_ignore_line_covers_a_tracked_file() -> None:
+    """A `.gitignore` merges as a union of both sides' lines (`.gitattributes`), so a merge can bring back a line one branch
+    deleted, or leave a re-include (`!`) above the pattern it re-includes.  Either one that matters shows here: a tracked
+    file an ignore line covers, beside which `git add` skips a new file without a word."""
+    if not (ROOT / ".git").exists():
+        return
+    out = subprocess.run(["git", "ls-files", "-z", "--cached", "--ignored", "--exclude-per-directory=.gitignore"], cwd=ROOT,
+                         check=True, capture_output=True).stdout
+    covered = {p.decode() for p in out.split(b"\0") if p}
+    new, stale = sorted(covered - IGNORED_TRACKED), sorted(IGNORED_TRACKED - covered)
+    assert not new, ("tracked files that a `.gitignore` line covers (`git check-ignore -v --no-index PATH` names the line): "
+                     "delete the line if a merge brought it back, move a `!` re-include below its pattern, or list a file "
+                     "added on purpose in IGNORED_TRACKED:\n" + "\n".join(new))
+    assert not stale, "IGNORED_TRACKED lists files no ignore line covers any more; drop them:\n" + "\n".join(stale)
 
 
 def test_fetched_fixtures_are_gitignored() -> None:

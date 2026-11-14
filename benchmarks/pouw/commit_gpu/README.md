@@ -1,6 +1,6 @@
 # commit_gpu: hm96-sha512 rows in frame-v3-sha512 trees on the GPU
 
-A CUDA committer whose levels, root and openings equal `verity.ml.commitments`' bit for bit: `hm96.SHA512` hiding leaves
+A CUDA committer whose levels, root and openings equal `verity.commitments`' bit for bit: `hm96.SHA512` hiding leaves
 over `sha512/row/v2` or `sha512/row-seg/v1` row digests, framed as `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1` leaves
 of a `CommitmentDomain(..., hash="sha512")` (rank = position), folded by `tree_levels`. The operand it is measured on is
 the e2e slice's o_proj operand A, 8192 x 4096 int8, beside cuBLASLt's int8 GEMM at the same shape. This is a benchmark.
@@ -9,17 +9,19 @@ Files:
 
 - `commit_gpu.cuh`: the committer (device code, constants, `Committer`); its header has the construction. A kernel that
   commits rows it produces includes it (see Tile leaves). The frame's leaf, pad and node, the hm96 leaf's mask, salt
-  digest and value, and the code that builds the constants are the GPU's one row commitment, `verity/ml/kernels/row_commit.cuh`;
+  digest and value, and the code that builds the constants are the GPU's one row commitment, `verity/circuits/kernels/row_commit.cuh`;
   this file keeps the committer's schedule.
 - `commit_gpu.cu`: the command line: `check` (writes every level and every leaf's b || c for `reference.py`), `bench`
   (alone, as a CUDA graph, with the root on the host, and beside the GEMM) and the raw compression rate (`sha`).
-- The SHA-512 compression is `sha::compress` from the GPU's one SHA-512 header, `verity/ml/kernels/sha512.cuh` (build
+- The SHA-512 compression is `sha::compress` from the GPU's one SHA-512 header, `verity/circuits/kernels/sha512.cuh` (build
   flags `SHA_ADD`, `SHA_ROT`, `SHA_ROLL`, kept for the measurements below, and `SHA_SX`).
 - `reference.py`: the parameter file, every check case's inputs and the reference's levels, b || c and leaves, by the
   repository's own functions; `check` compares a build's output with them.
 - `gpu.sh`: the pod job (builds and reference cases outside the lease; selftest, check, rate, e2e, both leaf-size sweeps,
   the tile sweep and an nsys trace under one GPU lease). `summary.py`: one line a measurement, or (`table`) the Results
   table, (`tiles`) the R table, or (`formats`) the leaf-format table.
+- `run.sh`: the directory's runner, which `verity bench pouw commit_gpu` runs. It starts `gpu.sh` as it is, with the
+  caller's arguments and environment.
 
 On an RTX PRO 6000 node (MACHINE):
 
@@ -29,6 +31,16 @@ research run --on MACHINE --project verity --source . --cwd source --env GPU_LEA
 ~~~
 
 `BUILDS` defaults to `a0r0l`, the fastest form; the other tags rebuild the forms the measurements below compare.
+
+The job writes under the run's `$OUT`: `rc.txt` (each step's exit code, the builds that were timed and the fastest of
+them), `commit.txt`, `nproc.txt` and `gpu.txt` (the commit, the host's cores and the leased GPU), `build-TAG.log` a
+build, `prepare.jsonl` (the reference's cases, a line each), `selftest.jsonl` (a line a build) and `check-TAG.jsonl`
+(the bit-for-bit check, a line a case and one for the build), and the measurements, a JSON line each: `sha-TAG.jsonl`
+(the raw compression rate), `bench-e2e-TAG.jsonl`, `bench-sweep-TAG.jsonl` and `bench-seg-TAG.jsonl` (the two
+leaf-size sweeps) and `bench-tile-TAG.jsonl` (the tile sweep). Beside them are `smi.csv` (the SM clock, power and
+temperature every half second), `nsys*` (an nsys trace's report of the kernels' launch shapes) and the steps' standard
+error (`*.err`). It writes no `result.json`. Its builds, cases and parameter files are in a directory under `/dev/shm`,
+which it removes. Its last lines are `summary.py`'s, one a measurement.
 
 ## Two phases
 
@@ -166,7 +178,7 @@ rows; tile leaves make it hash exactly the tile's bytes, with R times fewer leav
   + 128/R - 1 (`reference.tile_leaves`): 128/R adjacent leaves, exactly the tile's 4096 values for R dividing 128, and an
   aligned subtree when 128/R divides ceil(M/R) (M a multiple of 128). At R = 128 the tile is one leaf.
 - **Statement and code.** `reference.permute(A, M, K, R)` is the layout; the reference commits the permuted operand with
-  `verity.ml.commitments`, unchanged. The GPU reads A in place (`TileGeom`, `TileSrc`: a leaf's 16-byte loads gathered
+  `verity.commitments`, unchanged. The GPU reads A in place (`TileGeom`, `TileSrc`: a leaf's 16-byte loads gathered
   from its R rows, zero past M): `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)`, `salts<…>()` before the operand
   exists, `tiles(A, M, K, R, seg, stream)`, `nodes(stream)`. `commit_gpu check|bench PARAMS tile|tileseg M K R …` and
   `gpu.sh`'s tile sweep (`TILE_M`, `TILE_R`, `TILESEG_R`) run it.
@@ -341,9 +353,9 @@ larger share: the same fixed compressions are paid once a 2 KiB leaf instead of 
 
 ## The vLLM integration
 
-`integrations/vllm/`'s GPU committer (`verity_vllm/commit/committer`) commits this construction by default, `rows-sha512`
+`adapters/vllm/`'s GPU committer (`verity_vllm/commit/committer`) commits this construction by default, `rows-sha512`
 (`verity_vllm/commit/step_rows.py`): its `native_rows.cu` is this directory's leaf, pad and node kernels with each step's
-constants as kernel parameters. The record before it, `vllm-v1` (`verity/ml/commitments/vllm_v1`: SHA-256 position leaves and
+constants as kernel parameters. The record before it, `vllm-v1` (`adapters/vllm/verity_vllm/commitments/vllm_v1`: SHA-256 position leaves and
 node / lift trees, with `hm96-sha256/v1` leaves as an option), is by name. Its opt-in serving rows
 (`verity_vllm/commit/serving_rows.py`) already commit `frame-v3-sha512` trees of `hm96-sha512/row/v1` leaves, on the CPU,
 and this committer could take them over: `sha512/row/v1`'s first block is a 128-byte constant like `sha512/row/v2`'s (a

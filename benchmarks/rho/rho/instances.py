@@ -20,12 +20,16 @@ Families read both (`families.Family.profile`).
 The per-layer shape the depth classes and the constructions read is derived the same way (`per_layer`, `layer_weights`,
 `shared_run`, `tile_shape`), each by a `size` per matrix, so that a family training part of each matrix (an adapter,
 a subset) gets its own: a model's layers are its dense layers first (`dense_layers`), then its MoE layers.
+
+`data/models.toml` (with `data/reference.toml`'s DeepSeek-V4-Pro) is the one place a model's shape is stated. The other
+benchmarks read it through `models`, imported by path, and state no shape of their own.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 from rho.params import Registry
 
@@ -74,6 +78,13 @@ class Model:
     #: `head` (the LM head; the embedding is a lookup, `vocab · d_model` more parameters unless tied to the head)
     matrices: Mapping[str, tuple[Matrix, ...]] = field(default_factory=dict)
     tied_embeddings: bool = False
+    #: the attention as the model's configuration states it, where it is one of two kinds: `gqa` (`heads`, `kv_heads`,
+    #: `head_dim`, and `qk_norm` where queries and keys are normalized) or `mla` (`heads`, `q_rank`, `kv_rank`, `nope`,
+    #: `rope`, `v`). The attention matrices are the ones it implies (`attention_matrices`)
+    attention: Mapping[str, Any] = field(default_factory=dict)
+    #: multi-token-prediction modules trained beside the layers (each a projection and one more MoE layer), which the
+    #: sizes and the matrices leave out
+    mtp: int = 0
 
     def group(self, groups: Iterable[str] = ("all",)) -> tuple[Matrix, ...]:
         """The matrices of the named groups that the model has (`all`: every group)."""
@@ -125,6 +136,24 @@ def derived_fanout(m: Model) -> float:
         n = m.matrices["router"][0].active
         reach.append(sum(x.d_out * x.active for x in m.group(("experts", "shared", "router")) if x.d_in == m.d_model) / n)
     return max(reach)
+
+
+def attention_matrices(m: Model) -> tuple[tuple[int, int], ...]:
+    """The `(d_in, d_out)` of one layer's attention matrices, as `attention` implies them: GQA's q, k, v and o; MLA's
+    q_a, q_b, kv_a (the kv latent and the keys' shared RoPE part), kv_b and o."""
+    a, d = m.attention, m.d_model
+    if a["kind"] == "mla":
+        h = a["heads"]
+        return ((d, a["q_rank"]), (a["q_rank"], h * (a["nope"] + a["rope"])), (d, a["kv_rank"] + a["rope"]),
+                (a["kv_rank"], h * (a["nope"] + a["v"])), (h * a["v"], d))
+    q, kv = a["heads"] * a["head_dim"], a["kv_heads"] * a["head_dim"]
+    return ((d, q), (d, kv), (d, kv), (q, d))
+
+
+def width(m: Model, group: str) -> int:
+    """The width of `group` past `d_model`: the widest `d_out` of its matrices reading `d_model` (an MLP's hidden width,
+    the router's experts), 0 without the group."""
+    return int(max((x.d_out for x in m.matrices.get(group, ()) if x.d_in == m.d_model), default=0))
 
 
 Size = Callable[[Matrix], float]
@@ -191,9 +220,17 @@ def tile_shape(m: Model, size: Size = whole) -> tuple[float, float]:
 
 def model(registry: Registry, name: str) -> Model:
     prefix = f"model.{name}"
-    groups = registry.table(f"{prefix}.matrices") if "matrices" in registry.names(prefix) else {}
+    tables = registry.names(prefix)
+    groups = registry.table(f"{prefix}.matrices") if "matrices" in tables else {}
     matrices = {g: tuple(Matrix(*row) for row in rows) for g, rows in groups.items()}
-    return registry.fields(Model, prefix, matrices=matrices)
+    attention = registry.table(f"{prefix}.attention") if "attention" in tables else {}
+    return registry.fields(Model, prefix, matrices=matrices, attention=attention)
+
+
+def models(registry: Registry | None = None) -> dict[str, Model]:
+    """Every model by name, from `registry` (the data files' by default)."""
+    registry = registry or Registry.load()
+    return {name: model(registry, name) for name in registry.names("model")}
 
 
 def run(registry: Registry, name: str) -> Run:

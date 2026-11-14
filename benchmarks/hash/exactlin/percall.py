@@ -6,7 +6,7 @@ sums don't depend on the tile, and the epilogue is the same per element.  The re
 its reduction configs are this process's own: the op changes Inductor's metadata around it (tiling scores, byte estimates,
 a buffer made in place), which keys Inductor's autotune cache, so the arm times its reductions afresh, and the fused add +
 RMSNorm + int8 quant kernel's two configs (R0_BLOCK 4096 and 1024, a near tie) sum in another order.  Its tokens equal
-stock's where both processes pick alike (sbench gates them; `percall_diag.py` pins the picks).
+stock's where both processes pick alike (sbench gates them).
 `CALLS` counts the op's calls by (M, N), so a run shows which M the heuristic saw."""
 from __future__ import annotations
 
@@ -27,11 +27,12 @@ def scaled_mm(x_q: torch.Tensor, w_q: torch.Tensor, scale_a: torch.Tensor, scale
 
 
 @scaled_mm.register_fake
-def _(x_q, w_q, scale_a, scale_b):
+def _(x_q: torch.Tensor, w_q: torch.Tensor, scale_a: torch.Tensor, scale_b: torch.Tensor) -> torch.Tensor:
     return x_q.new_empty((x_q.shape[0], w_q.shape[1]), dtype=torch.bfloat16)
 
 
-def _call(input, weight, scale_a, scale_b, out_dtype, bias=None, **kw):
+def _call(input: torch.Tensor, weight: torch.Tensor, scale_a: torch.Tensor, scale_b: torch.Tensor,
+          out_dtype: torch.dtype, bias: torch.Tensor | None = None, **kw: object) -> torch.Tensor:
     if bias is not None or kw or out_dtype != torch.bfloat16:
         raise NotImplementedError(f"stock-percall: bf16 out, no bias only (bias {bias is not None}, {out_dtype}, {kw})")
     return torch.ops.exactlin_stock.scaled_mm(input, weight, scale_a, scale_b)

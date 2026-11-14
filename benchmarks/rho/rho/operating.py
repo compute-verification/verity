@@ -4,8 +4,8 @@ the registry).
 * **Work** (`work.<name>.flops`, reference-algorithm FLOPs, `T_0` gates through `hardware.Units`): the inventory does it
   in at least the overhead times `T_0 / (MFU₀ Φ_total)` seconds at the overhead's lower bound, and in that at the best
   known attack's (`Scenario.seconds`); the reference itself in `T_0 / (mfu_train Φ_total)` (`unencumbered`), and the
-  dark leaves alone in `T_0 / (mfu_dark ε_dark Φ_total)`.
-* **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the dark leaves only through
+  unregistered leaves alone in `T_0 / (mfu_unreg ε_unreg Φ_total)`.
+* **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the unregistered leaves only through
   the channels no certifier reads (the certifier's `timing` and `side` bit/s per host, times the location's hosts;
   certified egress is the registered circuit's output, fixed by its registered inputs), from one location or from every
   location at once. Remotely nothing bounds it (0 s).
@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from rho.params import Registry
-from rho.scenario import Result, Scenario
+from rho.scenario import YEAR, Result, Scenario
 
 
 @dataclass(frozen=True)
@@ -45,9 +45,9 @@ def work(result: Result, flops: float) -> dict[str, float]:
     s = result.scenario
     f, phi = s.context.fleet, s.total_phi
     gates = s.context.units.gates(flops)
-    dark = f.eps_unreg * f.dark_mfu * phi
+    unregistered = f.eps_unreg * f.unreg_mfu * phi
     return {"unencumbered": gates / (f.mfu_train * phi), "lower bound": result.lo * gates / (s.mfu * phi),
-            "best attack": result.attack * gates / (s.mfu * phi), "dark pool": gates / dark if dark > 0 else math.inf}
+            "best attack": result.attack * gates / (s.mfu * phi), "unregistered pool": gates / unregistered if unregistered > 0 else math.inf}
 
 
 def exfil(scenario: Scenario, bits: float) -> dict[str, float]:
@@ -74,7 +74,12 @@ class Incorrect:
 
     @property
     def capacity(self) -> float:
-        """Bits it carries before the first detection, except with chance `δ`: `J ln(1/δ) (1/q + floor_steps)` steps."""
+        """Bits it carries before the first detection, except with chance `δ`: `J ln(1/δ) (1/q + floor_steps)` steps.
+
+        `Detection.injected`'s expression at this channel's `δ`: a count over any span, with the identities' factor
+        and a floor, where core's `harm_bound` bounds one profile, so it stays its own definition.
+        `tests/test_held_to_core.py` holds both to core's bound where proofs are sampled
+        (`test_the_injected_bits_are_held_to_cores_bound_for_one_bernoulli_level`)."""
         return self.identities * math.log(1 / self.delta) * (1 / self.q + self.floor_steps) * self.step_bits
 
     def detect(self, bits: float) -> float:
@@ -120,7 +125,7 @@ def human(seconds: float) -> str:
     """`seconds` in the largest unit that keeps it at least 1 (s, min, h, days, years)."""
     if math.isinf(seconds):
         return "never"
-    for unit, size in (("years", 365 * 86400.0), ("days", 86400.0), ("h", 3600.0), ("min", 60.0)):
+    for unit, size in (("years", YEAR), ("days", 86400.0), ("h", 3600.0), ("min", 60.0)):
         if seconds >= size:
             return f"{seconds / size:.3g} {unit}"
     return f"{seconds:.3g} s"

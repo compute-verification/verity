@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# `tools/agent-guard/boot.sh [WORKSPACE]`: put the agent guard on this VM whatever branch WORKSPACE (default /workspace) has
-# checked out. The Cloud Agent environment's `start` runs it on every boot, from origin/main, so a branch older than the
-# guard still gets it:
+# `tools/agent-guard/boot.sh [WORKSPACE]`: put the agent guard's files and tools on this VM. The Cloud Agent environment's
+# `start` runs it on every boot, from origin/main:
 #
 #   git -C /workspace fetch -q origin main && git -C /workspace show origin/main:tools/agent-guard/boot.sh | bash -s -- /workspace
 #
-# Cloud agents run project hooks only (`WORKSPACE/.cursor/hooks.json`; `~/.cursor/hooks.json` is not read), so a branch
-# without that file runs no shell hook. When the branch doesn't track `.cursor/hooks.json` it first writes one that runs DEST's hook, fail-closed, and excludes it in
-# `.git/info/exclude` (git overwrites an excluded file when a branch that tracks it is checked out): Cursor reads hooks once,
-# early in the session, so the file comes before the fetch, and until DEST's copy is there every command is refused. Then it
+# It decides nothing about which hooks an agent's session runs. Of this repository's files a cloud agent runs only the
+# tracked `.cursor/hooks.json` of the branch its VM boots on, read once, at boot: `~/.cursor/hooks.json` is not read, nor a
+# hooks.json at a workspace root above the checkout. `start` ends before Cursor checks that branch out, so this script sees
+# the snapshot's checkout and can give no branch a hook: a branch whose hooks.json Cursor can't load runs none until it
+# merges one that loads and a new VM boots from it, and `research` says so on such a VM (`inbox.py guard`).
+#
+# When WORKSPACE's checkout tracks no `.cursor/hooks.json` it first writes one that runs DEST's hook, fail-closed, and
+# excludes it in `.git/info/exclude` (git overwrites an excluded file when a branch that tracks it is checked out): a session
+# that starts from that checkout reads it, and until DEST's copy is there every command is refused. Then it
 # copies the files of origin/main's `tools/agent-guard` (not its tests) to DEST (default /opt/agent-guard), or keeps an
 # earlier copy when origin/main can't be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
-# /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py). It also puts research
+# /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py) and the tmux session
+# the VM keeps (kept_session.py), whose server holds this boot's secrets for a shell that later loses them. It also puts research
 # and the GitHub helper on PATH in ~/.bashrc ($AGENT_GUARD_BASHRC), once, and sets WORKSPACE's merge drivers (`.gitattributes`
 # names them; git keeps them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, as every run clone
 # has them: without them `git merge-tree` here merges a lean-audit.json line by line and calls clean what the queue refuses.
@@ -21,7 +26,7 @@ dest=${AGENT_GUARD_DEST:-/opt/agent-guard}
 sudo=sudo
 mkdir -p "$dest" 2>/dev/null && [ -w "$dest" ] && sudo=
 if git -C "$ws" ls-files --error-unmatch .cursor/hooks.json >/dev/null 2>&1; then
-  echo "agent-guard: $ws tracks .cursor/hooks.json; its hook runs"
+  echo "agent-guard: $ws tracks .cursor/hooks.json, left as it is: a session runs the hooks of the branch it boots on"
 else
   mkdir -p "$ws/.cursor"
   cat > "$ws/.cursor/hooks.json" <<EOF
@@ -35,6 +40,9 @@ else
       {"command": "python3 $dest/task_hook.py", "matcher": "Task", "timeout": 10},
       {"command": "python3 $dest/task_hook.py", "matcher": "CallDynamicTool", "timeout": 10},
       {"command": "python3 $dest/task_hook.py", "matcher": "^MCP:", "timeout": 10}
+    ],
+    "stop": [
+      {"command": "python3 $dest/stop_hook.py", "timeout": 60}
     ]
   }
 }
@@ -91,4 +99,6 @@ if [ -z "${AGENT_GUARD_SKIP_INSTALL:-}" ]; then
   # the VM's OOM recorder: one per VM (it holds its lock; a second exits), so a reboot or a second boot.sh is harmless
   setsid nohup python3 "$dest/oom_watch.py" loop >> /tmp/agent-oom-watch.log 2>&1 < /dev/null &
   echo "agent-guard: OOM recorder started ($dest/oom_watch.py, records in ~/.research/agent-oom.jsonl)"
+  # the tmux session the VM keeps (kept_session.py), started with Cursor's tmux where the VM has it, as an agent's shell would
+  PATH=$([ -x /exec-daemon/tmux ] && echo /exec-daemon:)$PATH python3 "$dest/kept_session.py" start || true
 fi

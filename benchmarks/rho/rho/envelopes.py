@@ -2,7 +2,7 @@
 working draft's §8).
 
 An envelope `𝒜_a` narrows the physical model's class `𝒜_phys` if its verifier accepts, except with probability `δ_a`
-summed over serving blocks. Each one here carries its parameters, the slack it leaves (shares of capacity by route, the
+summed over server blocks. Each one here carries its parameters, the slack it leaves (shares of capacity by route, the
 uncertified gates `U` no inference block constrains) and its `delta`, split into the coins' samples and the
 cryptography's advantage:
 
@@ -21,7 +21,7 @@ cryptography's advantage:
   `residual_bits` and each host `host_residual_bits` (`per = "device"`); a boot disk the wipe doesn't reach keeps
   `boot_disk_bits` more a server (today's wipe, `regime.onsite-today`). Its δ is `2⁻¹²⁸ + Adv_PRF` per game,
   one game per server (or device) per wipe, summed over the monitoring period.
-* `Certifier`: a serving block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
+* `Certifier`: a server block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
   with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the warden form's public parameters
@@ -30,10 +30,10 @@ cryptography's advantage:
   blocks (`Policy`), registered once.
 
 A **regime** is the envelopes that run: `Remote` (PoUW, detection and the NCI check; no wipe or certifier, so its
-serving block is a server over the monitoring period and only the inference cut bounds it) and `Onsite` (with the wipe
-and the certifier, whose serving block between two wipes gets the serving cut too). `Regime.partition` gives the serving
+server block is a server over the monitoring period and only the inference cut bounds it) and `Onsite` (with the wipe
+and the certifier, whose server block between two wipes gets the serving cut too). `Regime.partition` gives the server
 blocks (`theorem`), each with the cuts the envelopes make valid, and `Regime.delta` their δ summed over envelopes and
-serving blocks. Its `layout` is what a protocol-abiding attack gets: the inference blocks and the uncertified gates a
+server blocks. Its `layout` is what a protocol-abiding attack gets: the inference blocks and the uncertified gates a
 strategy that never cheats can use (`ABIDING`), at the training MFU.
 
 A regime's table is flat: each key is a field of one of its envelopes (or the regime's own `form`), and a table may name
@@ -90,7 +90,7 @@ class Context:
 
 @dataclass(frozen=True)
 class Delta:
-    """`Σ_a δ_a`, over envelopes and serving blocks, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the
+    """`Σ_a δ_a`, over envelopes and server blocks, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the
     devices' logged coins (LMS), is named beside it and not bounded here."""
 
     by: Mapping[str, tuple[float, float]]
@@ -186,7 +186,12 @@ class Detection:
         return self.proof_share / (self.overhead + self.replay) if self.sampled else 1.0
 
     def injected(self) -> float:
-        """Bits the accepted incorrect proof blocks inject: `J ln(1/δ) (1/q + floor) · step_bits`."""
+        """Bits the accepted incorrect proof blocks inject: `J ln(1/δ) (1/q + floor) · step_bits`.
+
+        It counts over any span, with the identities' factor and a floor, where core's `harm_bound` bounds one
+        profile, a population under its sampling design, so the two stay two definitions.
+        `tests/test_held_to_core.py` holds its sampled part to core's bound for one `Bernoulli(q)` level, over the
+        registry's ranges (`test_the_injected_bits_are_held_to_cores_bound_for_one_bernoulli_level`)."""
         if not self.sampled:
             return 0.0
         return self.identities * math.log(1 / self.p_evade) * (1 / self.q() + self.floor_steps) * self.step_bits
@@ -224,8 +229,9 @@ class Wipe:
     host_residual_bits: float = 0.0
     #: bits each server's boot disk keeps through a wipe that doesn't reach it (today's), on top of either form
     boot_disk_bits: float = 0.0
-    #: one game's failure: the coins' `2⁻¹²⁸` and the pseudorandom function's advantage (the streamed wipe's retention game)
-    game_delta_coin: float = 2.0**-128
+    #: one game's failure: the coins' and the pseudorandom function's advantage (the streamed wipe's retention game),
+    #: each the registry's (`regime.onsite`)
+    game_delta_coin: float = 0.0
     prf_advantage: float = 0.0
 
     #: the per-server bound against `M_s` is a draft; per device, the streamed wipe
@@ -240,7 +246,7 @@ class Wipe:
         return self.SERVER + self.DEVICE if self.per == "server" else self.DEVICE
 
     def state(self, loc: Location) -> float:
-        """`k_wipe` of a location's serving block: what the wipe leaves of its servers' memory, and their boot disks."""
+        """`k_wipe` of a location's server block: what the wipe leaves of its servers' memory, and their boot disks."""
         disks = loc.hosts * self.boot_disk_bits
         if self.per == "server":
             return loc.hosts * self.k_wipe + disks
@@ -271,7 +277,7 @@ RATIO_BITS = clog2(10 ** 7)
 #: ASCII characters but `"` and `\`, a quote and spaces
 NAME_BITS = clog2(sum(93 ** k for k in range(63)))
 #: the bits of a warden-form id request besides its prompt ids that the ingress scan leaves free, each field's
-#: (`verity/core/protocols/certifier/io_request.py`'s `layout` and checks; `requestBits` of the Lean statement)
+#: (`verity/protocols/accounting/certifier/verifier/io_request.py`'s `layout` and checks; `requestBits` of the Lean statement)
 REQUEST_HEAD = {
     "connection ordinal": 32,     # the cell header's u32, which `ingress_scan.step` checks only above the last
     "content-length": 32,         # a u32, free while the request is unfinished
@@ -300,7 +306,7 @@ class Certifier:
         requestBits = Σ REQUEST_HEAD + (K0 + (C − 1) K) IDB,   K0 = ⌊(B − 9 − 367) / 11⌋,   K = ⌊(B − 9) / 11⌋
 
     bits: the head's fields the ingress scan leaves free (`REQUEST_HEAD`), then `K0` prompt ids in its first cell after
-    the head and `K` in each other cell (the grammar of `verity/core/protocols/certifier/io_request.py`, which
+    the head and `K` in each other cell (the grammar of `verity/protocols/accounting/certifier/verifier/io_request.py`, which
     `ingress_scan.py` scans). A bucket adds `lanes ⌈log₂(r + 2)⌉` bits, each lane's block absent or `d ≤ r` data cells
     then padding. A slot is held `D + 1` buckets from its admission, so a link-window of `T = window_buckets` buckets
     holds at most `lanes ⌈T / (D + 1)⌉` requests, and
@@ -448,19 +454,19 @@ class Regime(Protocol):
     def delta(self, ctx: Context) -> Delta: ...
 
 
-def _dark(ctx: Context) -> dict[str, float]:
-    return {"eps_unreg": ctx.fleet.eps_unreg, "dark_mfu": ctx.fleet.dark_mfu}
+def _unreg(ctx: Context) -> dict[str, float]:
+    return {"eps_unreg": ctx.fleet.eps_unreg, "unreg_mfu": ctx.fleet.unreg_mfu}
 
 
 @dataclass(frozen=True)
 class Unmonitored:
-    """No protocol: every serving block is unconstrained (`g = 1`, overhead `μ`)."""
+    """No protocol: every server block is unconstrained (`g = 1`, overhead `μ`)."""
 
     name: str
 
     def partition(self, ctx: Context) -> Partition:
         f, loc, h = ctx.fleet, ctx.location, ctx.period
-        return Partition((ServerBlock("server", loc.phi * h.seconds, f.count, (), mfu=f.mfu_train),), **_dark(ctx))
+        return Partition((ServerBlock("server", loc.phi * h.seconds, f.count, (), mfu=f.mfu_train),), **_unreg(ctx))
 
     def delta(self, ctx: Context) -> Delta:
         return Delta({})
@@ -469,7 +475,7 @@ class Unmonitored:
 @dataclass(frozen=True)
 class Remote:
     """The remote audit: PoUW, detection, and the NCI check's registration. No certifier sees a server's links, so its
-    serving block is a server over the monitoring period, and the inference cut is the only one."""
+    server block is a server over the monitoring period, and the inference cut is the only one."""
 
     name: str
     pouw: Pouw
@@ -517,7 +523,7 @@ class Remote:
         layout = Cut("layout", (self.blocks(ctx, gates),), self.abiding(ctx, gates), self.CITES)
         block = ServerBlock("server", gates, ctx.fleet.count, (self.inference(ctx, gates),), layout,
                              ctx.fleet.mfu_train)
-        return Partition((block,), **_dark(ctx))
+        return Partition((block,), **_unreg(ctx))
 
 
 FORMS = ("certified", "links")
@@ -525,7 +531,7 @@ FORMS = ("certified", "links")
 
 @dataclass(frozen=True)
 class Onsite(Remote):
-    """The remote audit's envelopes plus the wipe and the certifier: each serving block, one server between two wipes,
+    """The remote audit's envelopes plus the wipe and the certifier: each server block, one server between two wipes,
     gets the serving cut `q_T(c_S, k_S)` as well, and contributes the lesser."""
 
     wipe: Wipe = Wipe()
@@ -535,11 +541,11 @@ class Onsite(Remote):
     form: str = "certified"
 
     #: `Windows` as proved: memory and line rate, on the physical annotation's four constraints
-    LINKS = ("Accounting.Guarantees.Actual.Windows", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
+    LINKS = ("Accounting.Guarantees.Actual.ServerBlocks", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
              "Accounting.Placed.Memory", "Accounting.Placed.Links")
-    #: `WindowsAt` at the wipes, its state term from the wipe and its binding error from the certifier's ingress, which
-    #: bounds information where `WindowsAt` reads width at line rate: the information form is a draft
-    SERVING = ("Accounting.Guarantees.Actual.WindowsAt", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
+    #: `ServerBlocksAt` at the wipes, its state term from the wipe and its binding error from the certifier's ingress, which
+    #: bounds information where `ServerBlocksAt` reads width at line rate: the information form is a draft
+    SERVING = ("Accounting.Guarantees.Actual.ServerBlocksAt", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
                "Accounting.Placed.Links", "draft:windows-information-form")
     PHYSICAL = tuple(dict.fromkeys(LINKS + SERVING + Wipe.SERVER + Wipe.DEVICE + Certifier.CITES + Certifier.INTAKE
                                    + Certifier.DECLARED))
@@ -558,13 +564,13 @@ class Onsite(Remote):
         return tuple(dict.fromkeys(self.SERVING + self.wipe.cites() + self.certifier.cites()))
 
     def state(self, ctx: Context) -> float:
-        """Bits a serving block carries in: all its servers' memory `M_s` (`links`), or what a wipe leaves
+        """Bits a server block carries in: all its servers' memory `M_s` (`links`), or what a wipe leaves
         (`certified`)."""
         loc = ctx.location
         return loc.hosts * loc.server_memory if self.form == "links" else self.wipe.state(loc)
 
     def rate_in(self, ctx: Context) -> float:
-        """Bit/s into a serving block: its line rate (`links`), or `r_in + r_side` (`certified`)."""
+        """Bit/s into a server block: its line rate (`links`), or `r_in + r_side` (`certified`)."""
         return ctx.location.links if self.form == "links" else self.certifier.rate_in(ctx)
 
     def budget(self, ctx: Context) -> Budget:
@@ -575,15 +581,15 @@ class Onsite(Remote):
     def partition(self, ctx: Context) -> Partition:
         budget = self.budget(ctx)
         serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites())
-        # The uncertified block may take the whole serving block's input: generous to the adversary, since the
+        # The uncertified block may take the whole server block's input: generous to the adversary, since the
         # inference blocks' prompts come out of it too.
         uncertified = Budget(math.fsum(self.abiding(ctx, budget.gates).values()), budget.inputs)
         layout = Cut("layout", (self.blocks(ctx, budget.gates), Blocks("uncertified", uncertified, 1.0)), {},
                      self.cites())
         count = ctx.fleet.count * ctx.period.seconds / self.wipe.wipe_s
-        block = ServerBlock("serving-block", budget.gates, count, (self.inference(ctx, budget.gates), serving),
+        block = ServerBlock("server-block", budget.gates, count, (self.inference(ctx, budget.gates), serving),
                              layout, ctx.fleet.mfu_train)
-        return Partition((block,), **_dark(ctx))
+        return Partition((block,), **_unreg(ctx))
 
 
 KINDS: Mapping[str, type] = {"unmonitored": Unmonitored, "remote": Remote, "onsite": Onsite}

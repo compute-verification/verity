@@ -1,11 +1,11 @@
-"""`verity bench rho`: the slowdown for every scenario, how it moves, and where it falls below a target.
+"""`run.py`: the slowdown for every scenario, how it moves, and where it falls below a target.
 
     uv run python benchmarks/rho/run.py [--scenario NAME ...] [--target 10 --target 100] [--set KEY=VALUE ...]
                                         [--out DIR] [--figures DIR]
 
-Each scenario gets one slowdown number, its lower bound (every bound met at once): the hardware multiple over the
-reference training algorithm at its MFU, with its status, where its premises stand and the padded size ratio `|A| / T_0`
-it comes from; the inference overhead beside it (or that it isn't modeled); and its best known attack in a table of its
+Each scenario gets one slowdown number, its lower bound (every bound a lock states met at once, `bounds.lock_only`):
+the hardware multiple over the reference training algorithm at its MFU, with its status, where its premises stand and
+the padded size ratio `|A| / T_0` it comes from; the inference overhead beside it (or that it isn't modeled); and its best known attack in a table of its
 own, a construction beside the bound rather than an end of it.
 
 Prints Markdown; with `--out DIR` (default `$OUT`) also writes `rho.md`, `rho.json` and the figures (in `figures/`)
@@ -41,6 +41,7 @@ def row(e: Estimate) -> dict:
     s = e.overhead
     return {"argument": e.argument, "side": e.side, "status": e.status, "premise": e.premise, "rho": s.rho if s else None,
             "padded": s.padded if s else None, "g": s.g if s else None, "declared_rho": e.declared, "outside": e.outside, "excluded": list(e.excluded),
+            "drafts": list(e.drafts),
             "binding": {k: v.cut for k, v in s.serving.items()} if s else {},
             "terms": dict(s.terms) if s else {}}
 
@@ -69,7 +70,8 @@ def best_attack(r: Result) -> tuple[FamilyResult, Estimate] | None:
 def setter(f: FamilyResult) -> Estimate | None:
     """The bound that sets the lower bound: of those it admits, the one with the most slowdown alone at a standing
     short of refuted."""
-    met = [e for e in f.bounds if e.overhead and e.premise != "refuted" and e.argument not in f.combined.excluded]
+    out = (*f.combined.excluded, *f.combined.drafts)
+    met = [e for e in f.bounds if e.overhead and e.premise != "refuted" and e.argument not in out]
     return max(met, key=lambda e: e.rho, default=None)
 
 
@@ -90,12 +92,12 @@ def straddles(f: FamilyResult | None) -> list[str]:
 
 
 def rests(r: Result, terms: list[analysis.Term]) -> str:
-    """What the lower bound rests on, for the summary: its largest term (the dark leaves, at the dark rate) and the
+    """What the lower bound rests on, for the summary: its largest term (the unregistered leaves, at the unregistered rate) and the
     straddling premise where it cites it."""
     if not terms:
         return ""
     t = terms[0]
-    head = f"the dark rate ({t.share:.0%})" if t.name == "dark" else f"{t.name} ({t.share:.0%})"
+    head = f"the unregistered rate ({t.share:.0%})" if t.name == "unregistered" else f"{t.name} ({t.share:.0%})"
     return ", ".join([head, *straddles(picked(r))])
 
 
@@ -104,12 +106,12 @@ def rests_md(r: Result, terms: list[analysis.Term]) -> str:
     if not terms or f is None:
         return ""
     t, st = terms[0], r.scenario.structure
-    if t.name == "dark" and st.s_times == REFERENCE:
-        what = ("the dark hardware's datasheet product rate (the physical model: `s_×` is the reference's `2G / κ`, so "
-                "`G` cancels and the dark leaves, `ε_dark` of `Φ_total`, count at `κ/2` products a datasheet FLOP), "
+    if t.name == "unregistered" and st.s_times == REFERENCE:
+        what = ("the unregistered hardware's datasheet product rate (the physical model: `s_×` is the reference's `2G / κ`, so "
+                "`G` cancels and the unregistered leaves, `ε_unreg` of `Φ_total`, count at `κ/2` products a datasheet FLOP), "
                 "not a Boolean structural minimum")
-    elif t.name == "dark":
-        what = (f"the dark leaves at `s_×` = {fmt(st.gates(weight_per_gate(f.profile, r.scenario.context.units)))} "
+    elif t.name == "unregistered":
+        what = (f"the unregistered leaves at `s_×` = {fmt(st.gates(weight_per_gate(f.profile, r.scenario.context.units)))} "
                 f"gates a counted operation (`structure.{st.name}`)")
     else:
         what = f"its largest term, `{t.name}`"
@@ -196,6 +198,9 @@ def estimates_md(f: FamilyResult) -> list[str]:
     if c.excluded:
         out += [(f"Left out of the lower bound at the block that binds, their premises refuted there: "
                  f"{', '.join(c.excluded)}."), ""]
+    if c.drafts:
+        out += [(f"Left out of the lower bound at every block, a `draft:` statement among their own citations "
+                 f"(`bounds.lock_only`): {', '.join(c.drafts)}."), ""]
     out += ["| attack | status | slowdown | padded size ratio | g | overhead in one inference block | layout |",
             "|---|---|---|---|---|---|---|"]
     for e in f.attacks:
@@ -216,7 +221,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
     prf = ", the wipe's PRF" if "wipe" in delta.by else ""
     unencumbered = operating.human(s.reference / (c.fleet.mfu_train * s.total_phi))
     setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (Φ = {c.location.phi:.3g} gate/s, "
-               f"ε_dark {c.fleet.eps_unreg:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
+               f"ε_unreg {c.fleet.eps_unreg:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
                f"{c.period.name}, {c.units.gates_per_flop:g} gates a FLOP ({c.units.basis}); target {s.run.name} "
                f"(T_0 = {s.reference:.3g} gates; the reference at the training MFU takes {unencumbered}).")
     st = s.structure
@@ -239,13 +244,13 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
             f"`T_0 / (MFU₀ Φ_total)`, the reference's own time). **Inference overhead:** {inference(s)}."),
            "",
            (f"The slowdown is Lean's `hardwareMultiple`, at least 1, so no protocol gives 1; under a bound it is "
-            f"`max(1, 1/(s + x/MFU₀))` (`theorem.multiple_bound`, Lean's `remoteDampener`), with the dark leaves `s` "
+            f"`max(1, 1/(s + x/MFU₀))` (`theorem.multiple_bound`, Lean's `remoteDampener`), with the unregistered leaves `s` "
             f"training like the reference and the rest `x` counted at capacity. It comes from the padded size ratio "
-            f"`|A| / T_0` = {fmt(padded(r))}, the actual circuit's size over the reference's with each serving block "
-            f"padded to capacity. A bound counts each uncertified or dark gate at `ω_max / s_×` with "
+            f"`|A| / T_0` = {fmt(padded(r))}, the actual circuit's size over the reference's with each server block "
+            f"padded to capacity. A bound counts each uncertified or unregistered gate at `ω_max / s_×` with "
             f"`s_×` {s_times} (`structure.{st.name}`){premise}"),
            "", rests_md(r, terms), "", attack_md, "",
-           (f"The envelopes fail, summed over subprotocols and serving blocks, with probability at most δ_coin = "
+           (f"The envelopes fail, summed over subprotocols and server blocks, with probability at most δ_coin = "
             f"{fmt(delta.coin)} (the coins' draws) plus δ_crypto = {fmt(delta.crypto)} (binding, knowledge soundness"
             f"{prf}), plus Pr[Break] (a forgery of the logged coins, not bounded here); by subprotocol, coin + "
             f"crypto: {by or 'none'}."), "",
@@ -330,8 +335,11 @@ def main() -> None:
                ("The slowdown is the hardware multiple over the reference training algorithm at its MFU, MFU₀: the "
                 "adversary's GPU-hours to the target over the reference's, at least 1 (Lean's `hardwareMultiple`), so "
                 "no protocol gives 1. The claim is its lower bound, every bound met at once; a bound whose premises "
-                "are refuted at a block doesn't bound that block, and is still listed alone, tagged refuted. The "
-                "padded size ratio `|A| / T_0`, the actual circuit's size over the reference's with each serving block "
+                "are refuted at a block doesn't bound that block, and is still listed alone, tagged refuted."
+                + (" Only a bound a lock states bounds a block: a class one of whose own citations is a `draft:` "
+                   "statement bounds none (`bounds.lock_only`), and is still listed alone, labeled draft."
+                   if reg["bounds.lock_only"] else "") + " The "
+                "padded size ratio `|A| / T_0`, the actual circuit's size over the reference's with each server block "
                 "padded to capacity, is the intermediate it comes from. The time to the target, wall-clock, is at "
                 "least the slowdown times `T_0 / (MFU₀ Φ_total)`."), "", head,
                "|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -378,7 +386,8 @@ def main() -> None:
         record["scenarios"][name] = {
             "slowdown": r.lo, "status": best.combined.status if best else None,
             "premise": best.combined.premise if best else None, "set_by": sets.argument if sets else None,
-            "excluded": list(best.combined.excluded) if best else [], "padded": padded(r), "mfu": s.mfu,
+            "excluded": list(best.combined.excluded) if best else [],
+            "drafts": list(best.combined.drafts) if best else [], "padded": padded(r), "mfu": s.mfu,
             "inference_overhead": {"value": policy.inference_overhead,
                                    "source": reg.param(f"policy.{policy.name}.inference_overhead").source
                                    if f"policy.{policy.name}.inference_overhead" in reg else "not modeled"},
@@ -397,6 +406,7 @@ def main() -> None:
             "operating": [{"name": p.name, "kind": p.kind, "seconds": dict(p.seconds)} for p in points],
             "incorrect_outputs": {"capacity_bits": inc.capacity, "detect": dict(inc.detect)},
             "families": {f.family: {"slowdown": f.lo, "attack": f.attack, "excluded": list(f.combined.excluded),
+                                    "drafts": list(f.combined.drafts),
                                     "contradictions": list(f.contradictions),
                                     "bounds": [row(e) for e in f.bounds], "combined": row(f.combined),
                                     "attacks": [row(e) for e in f.attacks]}

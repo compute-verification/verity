@@ -81,8 +81,8 @@ period_s = 660                       # a pass may run to its 600 s timeout, then
 name = "Agent watch"
 started_by = "/data/infra/agent_watch.sh"
 file = "/data/agent-watch/status.json"
-json = "t"                           # each sweep (60 s) rewrites it
-period_s = 480                       # twice this must exceed a sweep whose reads take agent_watch.SWEEP_READS_S (12 min)
+json = "t"                           # each sweep rewrites it when it ends, with the time it started
+period_s = 900                       # twice this must exceed two back-to-back sweeps whose reads take agent_watch.SWEEP_READS_S (12 min)
 also_mention = ["S0C977GL9R7"]       # the top coordinator's group: with the watch down, nobody's held or crashed run is freed
 page_user = "U0BEN96ES8Y"            # the person who runs the project, once it has stayed down this much longer than the alert
 page_after_s = 3600
@@ -187,7 +187,8 @@ instances_command = ["python3.12", "/data/infra/store-index-src/src/research/pod
 machines_d = ["/workspace/steward/research-notes/machines.d", "~/.research/notes/machines.d"]   # each VM's rate_usd_per_hour
 
 [github]
-token_env = "GH_TOKEN"
+# prints the pod's read-only App token, the one every watcher reads GitHub with; run each pass, so its limit is the one watched
+token_command = ["/data/infra/gh_read_token.sh", "--cached"]
 remaining_share = 0.1
 
 [jobs]

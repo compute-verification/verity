@@ -20,11 +20,11 @@ SKIP = {".lake", ".git", ".venv", "node_modules", "__pycache__"}
 FIXTURES = ROOT / "tools/verity/lean/tests/fixtures"
 
 
-def lake_packages() -> list[Path]:
+def lake_packages(fixtures: bool = False) -> list[Path]:
     out = []
     for d, dirs, files in os.walk(ROOT):
         dirs[:] = sorted(x for x in dirs if x not in SKIP)
-        if ("lakefile.toml" in files or "lakefile.lean" in files) and not Path(d).is_relative_to(FIXTURES):
+        if ("lakefile.toml" in files or "lakefile.lean" in files) and (fixtures or not Path(d).is_relative_to(FIXTURES)):
             out.append(Path(d))
     return out
 
@@ -54,6 +54,22 @@ def test_every_package_module_is_a_module():
         "\n  ".join(lakefiles)
 
 
+def test_no_lakefile_names_the_setting_lake_reads_before_the_environment():
+    """`check.py`'s builds (`lake_env`) and the suites' uncached runs (`suites.py`'s `UNCACHED_ENV`) turn Lake's artifact
+    cache off by `LAKE_ARTIFACT_CACHE` alone. That is enough while no lakefile names `enableArtifactCache`, a package's own
+    setting, which Lake reads before the environment. The Lean tools' fixtures are held to it too: their tests build them."""
+    pkgs = lake_packages(fixtures=True)
+    assert any(p.is_relative_to(FIXTURES) for p in pkgs), "the walk reached no fixture's lakefile"
+    named = [str(f.relative_to(ROOT)) for p in pkgs for f in (p / "lakefile.toml", p / "lakefile.lean")
+             if f.exists() and "enableArtifactCache" in f.read_text()]
+    assert not named, (
+        f"{', '.join(named)}: names `enableArtifactCache`, which Lake reads before `LAKE_ARTIFACT_CACHE`: where a package "
+        "turns it on, its build reads and writes a cache whatever the variable says. Two places turn Lake's cache off by "
+        "the variable alone: `lake_env` in tools/verity/lean/check.py and `UNCACHED_ENV` in tools/verity/check/suites.py. "
+        "Leave the setting out, or in the same change give both what `build` in tools/verity/lean/lean_changed.py gives a "
+        "build outside the sandbox: a `LAKE_CACHE_DIR` naming an empty directory of the command's own, removed after it.")
+
+
 def test_one_toolchain():
     """The jobs' base image installs the same one."""
     pins = {str(p.relative_to(ROOT)): (p / "lean-toolchain").read_text().strip() for p in lake_packages()}
@@ -76,9 +92,11 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-# Security's 303: Flock.SecurityProofs.SpotExfilTwo, NetTiming.SecurityProofs.SampledLeakChecked and PooledLeakChecked carry
-# their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
-UNWITNESSED = {"Security": 284, "Security/Properties": 186, "verity/core/service/flock": 7}
+# security's list: Flock.SecurityProofs.SpotExfilTwo and SpotKSTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
+# their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
+# Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
+# restated at the deployed session its domain hypothesis fixes
+UNWITNESSED = {"security": 222, "security/Properties": 184, "verity/protocols/proofs/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -86,7 +104,7 @@ def test_the_unwitnessed_list_only_shrinks():
     changed, carries its witnesses instead; when a guarantee gets them, its entry goes, and its lock's number here comes
     down with it (`_held`)."""
     _held("UNWITNESSED", UNWITNESSED, {_rel(p): len(_lock(p).get("unwitnessed", {})) for p in lake_packages()},
-          "`unwitnessed`", "it only shrinks (LEAN-66); give the guarantee you added its `honest` and `nontrivial` "
+          "`unwitnessed`", "it only shrinks; give the guarantee you added its `honest` and `nontrivial` "
           "witnesses under `witnesses` (check.py's failure names both) instead")
 
 
@@ -95,14 +113,14 @@ def test_the_trust_base_is_one_list():
     with the same trust assumption, so no package's deployed guarantees count a premise as trusted that another's count
     in their gap; a premise one guarantee alone may rest on is its own (`trust.extra`)."""
     bases = {_rel(p): _lock(p)["trust"]["base"] for p in lake_packages() if "trust" in _lock(p)}
-    assert "Security" in bases and len({json.dumps(b, sort_keys=True) for b in bases.values()}) == 1, bases
+    assert "security" in bases and len({json.dumps(b, sort_keys=True) for b in bases.values()}) == 1, bases
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
     """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes` in `Definitions/Assumptions/Flock.lean`)
     cites what the toolchain's runtime reads for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump
     fails here until someone re-reads it and updates the citation."""
-    security = ROOT / "Security"
+    security = ROOT / "security"
     version = (security / "Proofs/lean-toolchain").read_text().strip().rpartition(":")[2]
     for doc in ("Proofs/Flock/Soundness/ASSUMPTIONS.md", "Definitions/Assumptions/Flock.lean"):
         assert f"Lean {version}'s runtime" in (security / doc).read_text(), doc
@@ -148,13 +166,26 @@ def test_lean_module_roots_are_disjoint():
     assert not clashes, clashes
 
 
+def test_every_lock_is_owned():
+    """A lock with no owner, issue or due date in it is unowned, and the Lean check holds it to no owner rule
+    (`check.py`'s `unowned_lock`): the lock of a tree with no lanes.  This tree has lanes, so each of its locks that
+    lists a guarantee or a premise names who answers for it."""
+    merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
+    unowned = [_rel(p) for p in lake_packages() if merge.A.unowned_lock(_lock(p))]
+    assert not unowned, (f"locks that name no owner, so no entry of theirs owes one: {unowned}; run `check.py --update "
+                         f"--owner @lane` on each, which owns its entries")
+    assert any(merge.A.unowned_lock({s: {"X": {}}}) for s in merge.A.LANE_ENTRIES)
+
+
 def test_every_record_merges_with_the_driver():
-    """`.gitattributes` sends every `lean-audit.json` to `tools/verity/lean/merge.py`, and each record's `reads` digests are the ones
-    the driver recomputes from their definitions."""
+    """`.gitattributes` sends every `lean-audit.json` to `tools/verity/lean/merge.py`, and the unread ratchet's caps to its
+    `--caps` driver, and each record's `reads` digests are the ones the driver recomputes from their definitions."""
     spec = importlib.util.spec_from_file_location("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     merge = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(merge)
-    assert f"lean-audit.json merge={merge.NAME}" in (ROOT / ".gitattributes").read_text().splitlines()
+    attributes = (ROOT / ".gitattributes").read_text().splitlines()
+    assert f"lean-audit.json merge={merge.NAME}" in attributes
+    assert f"tools/verity/lean/{merge.UNREAD_CAPS} merge={merge.CAPS}" in attributes
     stale = [f"{p.relative_to(ROOT)}: {m}" for p in lake_packages()
              for m, g in json.loads((p / "lean-audit.json").read_text()).get("reads", {}).items()
              if g["digest"] != merge.A.module_digest(merge.A.definitions(g))]
@@ -226,7 +257,7 @@ def test_an_import_its_bundle_does_not_hold_built_is_named():
     assert unbundled(imports, listed, {"Proofs"}) == ["P/X.lean: ArkLib.B (Arklib)", "P/Z.lean: VCVio.C (VCVio)"]
 
 
-SECURITY = ROOT / "Security"
+SECURITY = ROOT / "security"
 PROOFS = SECURITY / "Proofs"
 
 
@@ -235,7 +266,7 @@ def _requires(pkg: Path) -> list[dict]:
 
 
 def test_security_package_requires_only_mathlib():
-    """The security analysis's trusted text (`Security`: the spec, Definitions) is what every guarantee is stated
+    """The security analysis's trusted text (`security`: the spec, Definitions) is what every guarantee is stated
     in, so it requires nothing of the repository and no ArkLib: a path dependency here would put a component or a proof
     under every guarantee."""
     assert SECURITY in lake_packages()
@@ -243,7 +274,7 @@ def test_security_package_requires_only_mathlib():
 
 
 def test_proofs_require_the_security_package():
-    """The proofs (`Security/Proofs`, srcDir `..`) prove what `security` states, so they require it by path."""
+    """The proofs (`security/Proofs`, srcDir `..`) prove what `security` states, so they require it by path."""
     assert PROOFS in lake_packages()
     paths = {(PROOFS / r["path"]).resolve() for r in _requires(PROOFS) if "path" in r}
     assert SECURITY in paths
@@ -252,9 +283,9 @@ def test_proofs_require_the_security_package():
 
 def test_code_never_requires_the_security_analysis():
     """Code (Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
-    `Security/`: the analysis reads the code, never the reverse."""
+    `security/`: the analysis reads the code, never the reverse."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
-    assert code, "no code packages outside Security"
+    assert code, "no code packages outside security"
     bad = [f"{pkg.relative_to(ROOT)} requires {(pkg / r['path']).resolve().relative_to(ROOT)}"
            for pkg in code for r in _requires(pkg) if "path" in r and (pkg / r["path"]).resolve().is_relative_to(SECURITY)]
     assert not bad, bad
@@ -293,7 +324,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"Security": 915, "Security/Properties": 132, "verity/core/service/flock": 6}
+INLINE = {"security": 888, "security/Properties": 132, "verity/protocols/proofs/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -309,7 +340,7 @@ def test_the_inline_list_only_shrinks():
 #: how far a cap here may stand above its count ({"CAP key": room}): changes queued on `next` when the caps came to equal
 #: their counts moved the counts and not the caps, so each room is the gap between `next`'s count and `main`'s, and each
 #: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
-ROOM = {"INLINE Security": 3, "INLINE Security/Properties": 20, "UNWITNESSED Security": 2, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG Security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT Security": 1, "UNWITNESSED Security/Properties": 3, "OVERLONG verity/core/protocols/pouw/lean/check": 3, "OVERLONG verity/core/service/flock": 4, "IMPORT_ALL_USES Security/Proofs": 1}
+ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/accounting/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proofs/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
 
 
 def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
@@ -343,10 +374,11 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
     fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
     change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
     the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
-    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as the larger of the two sides' caps."""
+    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap three-way: one side's change alone stands, and two
+    changes add, except two lowerings, which take the larger."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
-    assert not over, (f"{what} grew in {over}: {fix} (where two merged changes each added entries, the merge kept the "
-                      f"larger of their caps while the count took both: raise it to the count)")
+    assert not over, (f"{what} grew in {over}: {fix} (where a merged change lowered the cap while the other took room "
+                      f"under it, the merge kept the lowering while the count took both: raise it to the count)")
     loose = {k: got.get(k, 0) + ROOM.get(f"{name} {k}", 0) for k in caps
              if caps[k] > got.get(k, 0) + ROOM.get(f"{name} {k}", 0)}
     for k, n in loose.items():
@@ -355,7 +387,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
 #: all Flock's until its spec is extracted
-TREES_EXCEPT = {"Security": 41}
+TREES_EXCEPT = {"security": 41}
 
 
 def test_the_trees_except_list_only_shrinks():
@@ -367,7 +399,7 @@ def test_the_trees_except_list_only_shrinks():
 
 #: the size of each lock's `four_names_except`: the guarantees under a root `four_names` lists that weren't in the four-name
 #: form, frozen or a witness when the rule came to every root
-FOUR_NAMES_EXCEPT = {"Security": 3}
+FOUR_NAMES_EXCEPT = {"security": 3}
 
 
 def test_the_four_names_exceptions_only_shrink():
@@ -506,9 +538,9 @@ def undocumented(read: dict[str, set[str]], sources: dict[str, tuple[str, str]])
     return sorted(out)
 
 
-#: the definitions of the spec (`Security`) that a lock-listed guarantee's statement reads (a lock's `reads`) and no doc
+#: the definitions of the spec (`security`) that a lock-listed guarantee's statement reads (a lock's `reads`) and no doc
 #: comment heads
-UNDOCUMENTED = {"Security": 61}
+UNDOCUMENTED = {"security": 61}
 
 
 def test_every_definition_a_guarantee_reads_says_what_it_means():
@@ -521,12 +553,12 @@ def test_every_definition_a_guarantee_reads_says_what_it_means():
             read.setdefault(m, set()).update(r.get("definitions", {}))
     sources = {m: (_rel(f), _text(f)) for m in read if (f := _module_file(SECURITY, m)) is not None}
     bad = undocumented(read, sources)
-    _held("UNDOCUMENTED", UNDOCUMENTED, {"Security": len(bad)}, "the read definitions without a doc comment",
+    _held("UNDOCUMENTED", UNDOCUMENTED, {"security": len(bad)}, "the read definitions without a doc comment",
           "add a `/-- … -/` above each new one saying what it means; the landing DM shows it:\n  " + "\n  ".join(bad))
 
 
-#: the theorems the spec (`Security`) states: `theorem` and `lemma` declarations in its files
-SPEC_THEOREMS = {"Security": 156}
+#: the theorems the spec (`security`) states: `theorem` and `lemma` declarations in its files
+SPEC_THEOREMS = {"security": 167}
 
 
 def test_the_spec_states_no_new_lemma():
@@ -534,7 +566,7 @@ def test_the_spec_states_no_new_lemma():
     may change without a statement reviewer, except a theorem a definition's proof field needs."""
     bad = sorted(f"{_rel(f)}:{d.line} {d.name}" for f, pkg in _lean_files().items() if pkg == SECURITY
                  for d in declarations(_text(f)) if d.kind in ("theorem", "lemma"))
-    _held("SPEC_THEOREMS", SPEC_THEOREMS, {"Security": len(bad)}, "the spec's theorems",
+    _held("SPEC_THEOREMS", SPEC_THEOREMS, {"security": len(bad)}, "the spec's theorems",
           "move the new one to `Proofs/<Area>/`; a theorem a definition's proof field needs stays, and raises the cap in "
           "this change:\n  " + "\n  ".join(bad))
 
@@ -542,7 +574,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"Security": 963, "Security/Proofs": 54185, "verity/core/protocols/pouw/lean/check": 281, "verity/core/service/flock": 700}
+OVERLONG = {"security": 963, "security/Proofs": 54185, "verity/protocols/accounting/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 725}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
@@ -568,11 +600,11 @@ RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener
 #: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or on `next` when the rule came; an
 #: entry whose FILE the tree doesn't have waits for the change on `next` that adds it
 IMPORT_ALL: dict[str, str] = {
-    "Security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
+    "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
         "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
 }
 #: the entries of `IMPORT_ALL` whose FILE the tree has, per package
-IMPORT_ALL_USES = {"Security/Proofs": 1}
+IMPORT_ALL_USES = {"security/Proofs": 1}
 
 
 def imports_all(files: dict[str, str], in_tree) -> list[str]:
@@ -615,9 +647,47 @@ def _load(name: str, path: Path):
     return mod
 
 
-def test_every_cap_merges_as_the_larger_of_its_sides():
+def unmatched_first(packages: dict[str, list[dict]], audited) -> list[str]:
+    """The entries of `tools/verity/lean/replay-first.json` (``packages``) that name no module their package audits
+    (``audited``: a package's audited modules, or None where the tree has no such audited package)."""
+    lost = []
+    for p, entries in packages.items():
+        own = audited(p)
+        lost += [f"{p}: no audited package here"] if own is None else \
+            [f"{p}: {e['module']}" for e in entries if e["module"] not in own]
+    return lost
+
+
+def test_every_module_a_replay_checks_first_is_one_its_package_audits():
+    """Each entry of `tools/verity/lean/replay-first.json` names one of its package's own Lean files under its lock's
+    roots, the modules a replay step is planned for (`check.py`'s `replay_plan`). An entry that matches none would leave
+    the module it meant in the one replay with every other, unseen, so a mistyped or moved name fails here."""
+    check = _load("lean_check", ROOT / "tools" / "verity" / "lean" / "check.py")
+    packages = json.loads((ROOT / "tools" / "verity" / "lean" / check.REPLAY_FIRST).read_text())["packages"]
+
+    def audited(p: str) -> set[str] | None:
+        if not (ROOT / p / check.POLICY).is_file():
+            return None
+        roots = json.loads((ROOT / p / check.POLICY).read_text())["roots"]
+        return {m for m in check.lean_modules(ROOT / p) if check.under(roots, m)}
+    assert {p: check.replay_first(ROOT / p) for p in packages} == packages
+    lost = unmatched_first(packages, audited)
+    assert not lost, ("replay-first.json lists modules no audit replays, so their steps never run: name each as its file "
+                      f"under its package's roots has it, or remove the entry: {lost}")
+
+
+def test_an_entry_of_the_replay_list_that_matches_no_audited_module_is_named():
+    """`unmatched_first` on a toy list: a mistyped module and a package the tree does not audit are named, and an entry
+    that names an audited module is not."""
+    entries = [{"module": "P.Heavy", "threads": 2, "why": "w"}, {"module": "P.Haevy", "threads": 2, "why": "w"}]
+    audited = {"a/pkg": {"P.Heavy", "P.A"}}.get
+    assert unmatched_first({"a/pkg": entries[:1]}, audited) == []
+    assert unmatched_first({"a/pkg": entries, "b/gone": entries}, audited) == ["a/pkg: P.Haevy", "b/gone: no audited package here"]
+
+
+def test_every_cap_merges_key_by_key():
     """Each cap here is one line the `lean-caps` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
-    as the larger of the two sides' caps instead of conflicting."""
+    three-way, key by key, instead of conflicting."""
     merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     caps = [s for s in Path(__file__).read_text().splitlines() if re.match(r"[A-Z][A-Z_]* = \{", s)
             and isinstance(v := globals()[s.split(" = ")[0]], dict) and all(isinstance(n, int) for n in v.values())]

@@ -612,6 +612,126 @@ def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_th
         M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps(stopped), "")))))
 
 
+CLEAN_UP = "/usr/local/lib/vy-monitoring/clean-up"
+PLAIN = [{"path": "/a", "state": "stale", "restart": None}, {"path": "/t/b", "state": "stale", "tree": "/t", "restart": None}]
+COPY = [{"path": f"{CLEAN_UP}/research/{f}", "state": "stale", "tree": CLEAN_UP, "whole": True, "restart": None} for f in ("x.py", "y.py", "z.py")]
+
+
+def drift_of(entries: list[dict], strays: tuple[str, ...] = ()) -> Run:
+    return Run((has("drift"), (1, json.dumps({"vy-nebius-cpu-9": {"commit": "c", "strays": list(strays), "entries": entries}}), "")))
+
+
+def test_the_stale_files_of_a_whole_tree_are_a_finding_of_their_own_and_the_nodes_stale_incident_is_as_it_was_without_them():
+    """A copy of main's code (a whole tree) may be behind main, so its stale files are not the node's: beside an ordinary stale
+    file they are a second finding, one per node and tree, an incident only after a week, and the node's own is unchanged."""
+    alone = {f.key: f for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(PLAIN)))}
+    both = {f.key: f for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(PLAIN + COPY)))}
+    assert set(alone) == {"vy-nebius-cpu-9:stale"} and set(both) == {"vy-nebius-cpu-9:stale", f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}"}
+    assert both["vy-nebius-cpu-9:stale"] == alone["vy-nebius-cpu-9:stale"] and alone["vy-nebius-cpu-9:stale"].for_s is None
+    assert alone["vy-nebius-cpu-9:stale"].text == "*Deploy drift on vy-nebius-cpu-9: 2 stale*: `/a`, `/t/b`."
+    copy = both[f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}"]
+    assert copy.for_s == 7 * 86400 and copy.severity is None and not copy.owners
+    assert copy.text == (f"*vy-nebius-cpu-9: the copy of main's code at `{CLEAN_UP}` is behind main* by 3 files: 3 stale "
+                         "(an incident once every reading for a week has found it behind). Install main's: `research deploy "
+                         f"install vy-nebius-cpu-9 --by WHO --apply {CLEAN_UP}`.")
+    assert copy.cleared == f"*Cleared:* vy-nebius-cpu-9's copy at `{CLEAN_UP}` was installed again."
+    two = [*COPY[:1], {"path": "/opt/other/a.py", "state": "stale", "tree": "/opt/other", "whole": True, "restart": None}]
+    got = {f.key: f.text for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(two)))}
+    assert set(got) == {f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}", "vy-nebius-cpu-9:copy-behind:/opt/other"}       # one per tree
+    assert "is behind main* by 1 file: 1 stale (an incident" in got["vy-nebius-cpu-9:copy-behind:/opt/other"]
+
+
+def test_a_node_whose_only_stale_files_are_a_whole_trees_has_no_stale_incident_and_the_trees_other_states_count_as_any_trees(tmp_path):
+    """With nothing stale but the copy, the node has no `stale` finding, and no incident for the six days of hourly readings
+    after the first; the seventh day's opens one. A whole tree's other entries are as any tree's: where no copy is installed
+    a missing file of it is skipped, and a process on a replaced file is the node's `restart`. A file of the copy that a
+    branch has or no commit has is what a copy of main's code never holds: the node's `ahead` or `unknown`, open at the
+    first reading."""
+    assert {f.key for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(COPY)))} == {f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}"}
+    copy = {"tree": CLEAN_UP, "whole": True, "copy": "aaaaaaaaaaaa.20261003T204000Z.x1x1x1x1", "restart": None}
+    rest = [{"path": f"{CLEAN_UP}/research/gone.py", "state": "missing", "tree": CLEAN_UP, "whole": True, "restart": None},
+            {**copy, "path": f"{CLEAN_UP}/research/new.py", "state": "ahead"},
+            {**copy, "path": f"{CLEAN_UP}/research/left.py", "state": "unknown"},
+            {**copy, "path": f"{CLEAN_UP}/research/x.py", "state": "ok", "restart": "a process started before"}]
+    got = {f.key: f.text for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(rest, strays=("/usr/local/bin/vy-old.bak-1",))))}
+    assert set(got) == {"vy-nebius-cpu-9:ahead", "vy-nebius-cpu-9:restart", "vy-nebius-cpu-9:stray", "vy-nebius-cpu-9:unknown"}
+    assert got["vy-nebius-cpu-9:ahead"] == f"*Deploy drift on vy-nebius-cpu-9: 1 ahead*: `{CLEAN_UP}/research/new.py`."
+    assert got["vy-nebius-cpu-9:unknown"] == f"*Deploy drift on vy-nebius-cpu-9: 1 unknown*: `{CLEAN_UP}/research/left.py`."
+
+    drift = next(m for m in M.MONITORS if m.id == "drift")
+    out = M.step(M.new_state(), [drift], lambda memo: M.Ctx(now=T0, run=drift_of(COPY + rest), memo=memo), T0, M.AlertDir(tmp_path),
+                 by="test")
+    assert sorted(e["key"] for e in out if e["event"] == "open") == [
+        "drift|vy-nebius-cpu-9:ahead", "drift|vy-nebius-cpu-9:restart", "drift|vy-nebius-cpu-9:unknown"]     # the copy's waits its week
+    state, hour, opened = M.new_state(), 3600, []
+    for i in range(7 * 24 + 1):
+        t = T0 + i * hour
+        out = M.step(state, [drift], lambda memo, t=t: M.Ctx(now=t, run=drift_of(COPY), memo=memo), t, M.AlertDir(tmp_path), by="test")
+        opened += [(i, e["key"]) for e in out if e["event"] == "open"]
+    assert opened == [(7 * 24, f"drift|vy-nebius-cpu-9:copy-behind:{CLEAN_UP}")]
+    out = M.step(state, [drift], lambda memo: M.Ctx(now=t + hour, run=drift_of(PLAIN), memo=memo), t + hour, M.AlertDir(tmp_path), by="test")
+    assert sorted((e["event"], e["key"]) for e in out) == [("clear", f"drift|vy-nebius-cpu-9:copy-behind:{CLEAN_UP}"),
+                                                          ("open", "drift|vy-nebius-cpu-9:stale")]       # an ordinary one opens at once
+
+
+def test_an_install_starts_the_copys_week_again_though_no_reading_found_the_copy_current(tmp_path):
+    """Main changes the copy's source in most hours, so the first reading after an install may find the new copy behind
+    already. The finding is of the directory the link names, which each install makes anew: its week starts at the install."""
+    drift = next(m for m in M.MONITORS if m.id == "drift")
+    state, hour, opened = M.new_state(), 3600, []
+    names = ("aaaaaaaaaaaa.20261003T204000Z.x1x1x1x1", "bbbbbbbbbbbb.20261006T204000Z.y2y2y2y2")
+    for i in range(10 * 24 + 1):
+        t = T0 + i * hour
+        copy = [{**e, "copy": names[i >= 3 * 24]} for e in COPY]        # installed on the third day, behind again within the hour
+        out = M.step(state, [drift], lambda memo, t=t, copy=copy: M.Ctx(now=t, run=drift_of(copy), memo=memo), t, M.AlertDir(tmp_path),
+                     by="test")
+        opened += [(i, e["key"]) for e in out if e["event"] == "open"]
+    assert opened == [(10 * 24, f"drift|vy-nebius-cpu-9:copy-behind:{CLEAN_UP}@{names[1]}")]
+
+
+INSTALLED = {"tree": CLEAN_UP, "whole": True, "copy": "aaaaaaaaaaaa.20261003T204000Z.x1x1x1x1", "restart": None}
+
+
+def test_a_file_main_dropped_since_the_install_counts_in_the_copys_finding_and_is_no_drift_of_the_nodes():
+    """Between installs the copy holds what main has dropped since. Drift calls such a file `dropped`, an entry of the whole
+    tree: it is the copy being behind main, counted in the copy's one finding, and no finding of the node (as a stray was)."""
+    gone = [{**INSTALLED, "path": f"{CLEAN_UP}/research/{f}", "state": "dropped"} for f in ("drive.py", "old.py")]
+    key = f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}@{INSTALLED['copy']}"
+    got = {f.key: f for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(gone[:1])))}
+    assert set(got) == {key} and got[key].for_s == 7 * 86400
+    assert got[key].text == (f"*vy-nebius-cpu-9: the copy of main's code at `{CLEAN_UP}` is behind main* by 1 file: 1 main has "
+                             "dropped (an incident once every reading for a week has found it behind). Install main's: `research "
+                             f"deploy install vy-nebius-cpu-9 --by WHO --apply {CLEAN_UP}`.")
+    both = {f.key: f.text for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of([{**e, **INSTALLED} for e in COPY] + gone)))}
+    assert set(both) == {key} and "is behind main* by 5 files: 3 stale, 2 main has dropped (an incident" in both[key]
+
+
+def test_a_file_main_added_since_the_install_counts_in_the_copys_finding_once_a_copy_is_installed():
+    """A copy that lacks a module main has added is behind main though none of its own files differs. Where no copy is
+    installed (no link, so no `copy`), and in a plain tree, a missing file of a tree is skipped as it always was."""
+    new = [{**INSTALLED, "path": f"{CLEAN_UP}/research/{f}", "state": "missing"} for f in ("a.py", "b.py")]
+    key = f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}@{INSTALLED['copy']}"
+    got = {f.key: f.text for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(new)))}
+    assert set(got) == {key} and "is behind main* by 2 files: 2 of main's missing (an incident" in got[key]
+    every = [{**e, **INSTALLED} for e in COPY] + new + [{**INSTALLED, "path": f"{CLEAN_UP}/research/drive.py", "state": "dropped"}]
+    got = {f.key: f.text for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(every)))}
+    assert set(got) == {key} and "is behind main* by 6 files: 3 stale, 2 of main's missing, 1 main has dropped (an incident" in got[key]
+    for skipped in ([{k: v for k, v in e.items() if k != "copy"} for e in new], [{k: v for k, v in e.items() if k != "whole"} for e in new]):
+        assert M.deploy_drift(M.Ctx(now=T0, run=drift_of(skipped))) == []
+
+
+def test_drift_pages_on_a_node_whose_null_device_is_broken_with_the_command_that_repairs_it():
+    fault = {"what": "/dev/null has mode 644, not 666: a redirect to it fails for every user but root", "fix": "sudo chmod 666 /dev/null"}
+    rep = {"vy-nebius-cpu-1": {"commit": "c", "strays": [], "entries": [{"path": "/a", "state": "stale", "restart": None}],
+                               "distrusted": [], "null_device": fault},
+           "vy-nebius-cpu-2": {"commit": "c", "strays": [], "entries": [], "distrusted": [], "null_device": None}}
+    null, stale = M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps(rep), "")))))
+    assert (null.key, null.severity) == ("vy-nebius-cpu-1:null-device", "page") and stale.key == "vy-nebius-cpu-1:stale"
+    assert null.text == ("*vy-nebius-cpu-1: /dev/null has mode 644, not 666: a redirect to it fails for every user but root*. "
+                         "Repair it on the node: `sudo chmod 666 /dev/null`.")
+    assert null.cleared.startswith("*Cleared:* vy-nebius-cpu-1's null device")
+
+
 def test_a_retired_monitors_open_incident_is_cleared_once_with_why_it_retired(tmp_path):
     assert "unpreserved" in M.RETIRED and "unpreserved" not in {m.id for m in M.MONITORS}
     state = M.new_state()
@@ -661,8 +781,39 @@ def test_public_missing_heads_each_manifest(monkeypatch):
     from research.store.remote import HttpRemote
 
     a, b = "art:" + "a" * 64, "art:" + "b" * 64
-    monkeypatch.setattr(HttpRemote, "head", lambda self, key: {"bytes": 1} if key == f"manifests/{'a' * 64}.json" else None)
+    asked = []
+    monkeypatch.setattr(M, "redirected_base", lambda url, key: "https://bucket.invalid")
+    monkeypatch.setattr(HttpRemote, "head", lambda self, key: asked.append(self.base) or (
+        {"bytes": 1} if key == f"manifests/{'a' * 64}.json" else None))
     assert M.public_missing([a, b], "https://example.invalid/store") == [b]
+    assert asked == ["https://bucket.invalid"] * 2
+
+
+def test_the_export_s_redirect_is_followed_once_and_a_site_that_does_not_redirect_is_kept(monkeypatch):
+    import io
+    import urllib.error
+    import urllib.request
+    from email.message import Message
+
+    key = f"manifests/{'a' * 64}.json"
+
+    def opener(code, location):
+        class Opener:
+            def open(self, req, timeout):
+                if code == 200:
+                    return io.BytesIO(b"")
+                h = Message()
+                if location:
+                    h["Location"] = location
+                raise urllib.error.HTTPError(req.full_url, code, "", h, None)
+        return lambda *handlers: Opener()
+
+    monkeypatch.setattr(urllib.request, "build_opener", opener(307, f"https://bucket.invalid/{key}"))
+    assert M.redirected_base("https://site.invalid/store", key) == "https://bucket.invalid"
+    monkeypatch.setattr(urllib.request, "build_opener", opener(403, None))
+    assert M.redirected_base("https://site.invalid/store", key) == "https://site.invalid/store"
+    monkeypatch.setattr(urllib.request, "build_opener", opener(200, None))
+    assert M.redirected_base("https://site.invalid/store", key) == "https://site.invalid/store"
 
 
 def test_node_2s_heartbeat_is_stale_after_10_minutes_without_a_pass():
@@ -960,6 +1111,19 @@ LANDER_ID = "bc-8ece7cde-78d8-5ed9-84b0-a0a81b19f628"
 REG = {"handles": [{"handle": "infra", "holder": "the infra coordinator (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)"},
                    {"handle": "circuits", "holder": "the circuits coordinator (bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79)"},
                    {"handle": M.LANDER, "holder": f"the lander: the research coordinator ({LANDER_ID})"}]}
+#: ci.toml's jobs and their owners, as GitHub gives the file (`monitors._jobs`)
+CI_TOML = "".join(f'[[job]]\nname = "{j}"\nowner = "{o}"\n\n' for j, o in (("pytest", "ci"), ("circuit-check", "circuits"),
+                                                                          ("lean-audit", "lean"), ("ratchet-gate", "vllm")))
+
+
+def ci_toml(argv, refs=None) -> subprocess.CompletedProcess | None:
+    """GitHub's answer to `monitors._jobs`' read of ci.toml at a commit (`CI_TOML`, or ``refs``'s answer for that ref: None for
+    a commit GitHub doesn't hold), None for another command."""
+    if argv[:2] != ["gh", "api"] or "/contents/tools/verity/check/ci.toml?ref=" not in argv[-1]:
+        return None
+    text = (refs or {}).get(ref := argv[-1].rpartition("?ref=")[2], CI_TOML)
+    return subprocess.CompletedProcess(argv, *((0, text, "") if text is not None else
+                                                (1, "", f"gh: No commit found for the ref {ref}")))
 
 
 def write_run(root: Path, rid: str, *, command, state="failed", rc=1, steps=(), logs=None, failure=None, by=""):
@@ -1071,6 +1235,48 @@ def test_the_reader_names_a_suites_runs_failed_suite_as_it_happens_from_its_stdo
     assert row["line"] == "FAILED tests/test_keeper.py::test_a - assert False" and row["state"] == "running"
 
 
+#: a ratchet-gate log failing two merges (`ratchet_gate.render`)
+RATCHET_LOG = ("ratchet gate 0123456789ab..cccccccccccc: 3 change(s), 2 failed\n"
+               "  #12 (aaaaaaaaaaaa): failed: grows p01.json 2 -> 3 entries\n      shrink p01.json\n"
+               "  #13 (bbbbbbbbbbbb): passed: grows nothing\n  #14 (cccccccccccc): failed: adds an env read\n")
+RATCHET_LINES = ["  #12 (aaaaaaaaaaaa): failed: grows p01.json 2 -> 3 entries", "  #14 (cccccccccccc): failed: adds an env read"]
+
+
+def test_the_reader_gives_a_failed_ratchet_gates_lines_though_another_step_failed_first(tmp_path, monkeypatch):
+    """Each merge a failed ratchet gate fails is a lane to ring (`failed_check`), and circuit-check, before the gate in ci.toml,
+    can fail first: the gate's lines come with the row whichever step failed first, at most `RATCHET_LINES` of them.  A gate
+    that passed gives none, and one that failed with no log, or none on disk, an empty list; its log is read to its first
+    8 MiB (`log_bytes`), as every log the reader opens."""
+    slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=1,
+              steps=[{"step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"},
+                     {"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}],
+              logs={"circuit-check.log": "FAIL lowering/pin-mismatch X_v1 [x]: and 1 -> 2\n", "ratchet-gate.log": RATCHET_LOG})
+    write_run(tmp_path, "r20261003-200000-bbbb", command=slot, state="failed", rc=1,
+              steps=[{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"},
+                     {"step": "ratchet-gate", "status": "passed", "log": "ratchet-gate.log"}],
+              logs={"pytest.log": "FAILED tests/test_a.py::test_b - x\n", "ratchet-gate.log": RATCHET_LOG})
+    write_run(tmp_path, "r20261003-200000-cccc", command=slot, state="failed", rc=1,
+              steps=[{"step": "ratchet-gate", "status": "failed"}])
+    write_run(tmp_path, "r20261003-200000-dddd", command=slot, state="failed", rc=1,
+              steps=[{"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}])
+    write_run(tmp_path, "r20261003-200000-eeee", command=slot, state="failed", rc=1,
+              steps=[{"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}],
+              logs={"ratchet-gate.log": "." * (8 << 20) + "\n" + RATCHET_LOG})
+
+    def rows():
+        script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(tmp_path / "none"))
+        return {r["run"][-4:]: r for r in json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True,
+                                                                    text=True, check=True).stdout)["rows"]}
+
+    got = rows()
+    assert got["aaaa"]["step"] == "circuit-check" and got["aaaa"]["ratchet"] == RATCHET_LINES
+    assert "ratchet" not in got["bbbb"] and got["cccc"]["step"] == "ratchet-gate" and got["cccc"]["ratchet"] == []
+    assert got["dddd"]["ratchet"] == got["eeee"]["ratchet"] == []
+    monkeypatch.setattr(M, "RATCHET_LINES", 1)
+    assert rows()["aaaa"]["ratchet"] == RATCHET_LINES[:1]
+
+
 def test_a_trains_prs_are_its_merges_from_the_head_and_a_merge_of_main_between_them():
     assert M.train_prs(["Merge main (2546d8362)", "Merge #1497 (7a4b5b0a2)", "Merge #1541 (fbf9d25b2) onto 0928: x",
                         "Merge 0058fab8ec7f (0058fab8)", "Merge #1462 (c3a6dd31)"]) == [1497, 1541]
@@ -1099,6 +1305,8 @@ def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_mer
 
     def answer(argv, input=None, **kw):
         calls.append(argv)
+        if toml := ci_toml(argv):
+            return toml
         out = (255, "", "ssh: connect to host cpu1: Connection timed out") if argv[-2] == "vy-nebius-cpu-1" else \
             (0, rows[argv[-2]] if isinstance(rows[argv[-2]], str) else json.dumps({"rows": rows[argv[-2]], "waiting": []}), "") \
             if argv[0] == "ssh" else \
@@ -1110,6 +1318,7 @@ def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_mer
     memo: dict = {}
     got = {f.key: f for f in M.failed_checks(M.Ctx(now=T0, memo=memo, run=answer))}
     assert set(got) == {"vy-nebius-1:r1", "vy-nebius-2:r4"}
+    assert sum(c[:2] == ["gh", "api"] for c in calls) == 1                 # r1's job's owner; r4 failed no step
     f = got["vy-nebius-1:r1"]
     assert f.owners == ("infra", M.LANDER) and f.thread == M.MERGE_THREAD
     assert f.text == ("*Check `r1` failed step `pytest` on vy-nebius-1* at 20:20Z (the run goes on): its log's first failing line "
@@ -1125,6 +1334,62 @@ def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_mer
         rows[n] = "not json"
     with pytest.raises(RuntimeError, match="vy-nebius-cpu-1: RuntimeError"):
         M.failed_checks(M.Ctx(now=T0 + 120, memo=memo, run=answer))
+
+
+def test_a_ratchet_gate_row_with_no_open_pr_at_its_commit_rings_the_lane_of_each_merge_it_fails_and_its_jobs_owner(monkeypatch):
+    """The after-landing run of `main`'s tip checks no open PR, so its failed step rang the lander alone.  It rings the owner
+    ci.toml gives the failed job too (the ratchet gate's is vllm), read at `main` where GitHub doesn't hold the run's commit,
+    and of a failed ratchet gate, the lane of each merge its log says the gate fails, landed or not, though another step
+    failed first; first who acts, the lanes, then the jobs' owners, then the lander."""
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-2", "vy-n2"),))
+    tip = {"state": "failed", "rc": 1, "step_ended": "2026-10-03T20:20:00Z", "subjects": ["Queue: #14 y", "Queue: #12 x"],
+           "sha": "abc123def456", "by": LANDER_ID}
+    rows = [{**tip, "run": "r1", "step": "ratchet-gate", "line": RATCHET_LINES[0].strip(), "ratchet": RATCHET_LINES},
+            {**tip, "run": "r2", "step": "circuit-check", "line": "FAIL lowering/pin-mismatch X_v1", "ratchet": RATCHET_LINES[1:]},
+            {**tip, "run": "r3", "step": "lean-audit", "line": "error: x"},
+            {**tip, "run": "r4", "step": "suite verity-ops", "suite": True, "line": "FAILED x"}]
+    prs = {"12": ("MERGED", "cursor/x-558b"), "14": ("MERGED", "cursor/y-8c79")}
+    refs: dict = {"abc123def456": None}
+
+    def answer(argv, input=None, **kw):
+        if toml := ci_toml(argv, refs):
+            return toml
+        if argv[0] == "ssh":
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": rows, "waiting": []}), "")
+        if argv[:5] == ["gh", "-R", M.REPO_SLUG, "pr", "view"]:
+            return subprocess.CompletedProcess(argv, 0, json.dumps(dict(zip(("state", "headRefName"), prs[argv[5]]))), "")
+        assert argv[:5] == ["gh", "-R", M.REPO_SLUG, "pr", "list"] and "abc123def456" in argv
+        return subprocess.CompletedProcess(argv, 0, "[]", "")
+
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", "circuits", "vllm", M.LANDER)
+    assert got["r1"].text == ("*Check `r1` failed step `ratchet-gate` on vy-nebius-2* at 20:20Z: its log's first failing line is "
+                              "`#12 (aaaaaaaaaaaa): failed: grows p01.json 2 -> 3 entries`. `ratchet-gate` fails #12 "
+                              "`cursor/x-558b`, #14 `cursor/y-8c79`.")
+    assert got["r2"].owners == ("circuits", "vllm", M.LANDER)
+    assert got["r2"].text.endswith(" `ratchet-gate` fails #14 `cursor/y-8c79`.")
+    assert got["r3"].owners == ("lean", M.LANDER) and got["r4"].owners == (M.LANDER,)
+    refs["main"] = None                   # nor main's: the lanes and the lander still hear of it, and the post says why
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", "circuits", M.LANDER) and got["r1"].text.endswith(
+        "`cursor/y-8c79`. Its jobs' owners are unread (RuntimeError: `gh api -H Accept: application/vnd.github.raw` exited 1: "
+        "gh: No commit found for the ref main).")
+    refs["abc123def456"] = CI_TOML.replace('"vllm"', '"ratchets"')     # the run's commit's own, where GitHub holds it
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", "circuits", "ratchets", M.LANDER)
+    refs["abc123def456"] = ""                                           # one declaring no job
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", "circuits", M.LANDER) and got["r1"].text.endswith("#14 `cursor/y-8c79`.")
+    prs["14"] = ("MERGED", "cursor/z-0000")                             # a branch no lane in the registry holds
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", M.LANDER) and got["r1"].text.endswith(
+        "#12 `cursor/x-558b`, #14 `cursor/z-0000` (no lane in the registry).")
+    refs.clear()
+    prs.clear()                           # GitHub can't say whose the merges are: the job's owner and the lander hear of it
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("vllm", M.LANDER) and got["r1"].text.endswith(
+        "`#12 (aaaaaaaaaaaa): failed: grows p01.json 2 -> 3 entries`. Its PRs are unread (KeyError: '12').")
 
 
 # ---- what node 2 runs ---------------------------------------------------------------------------------------------------------
@@ -1397,6 +1662,8 @@ def test_an_after_landing_run_of_main_runs_on_though_a_ticket_waits_for_its_slot
 
     def answer(argv, input=None, **kw):
         calls.append(argv)
+        if toml := ci_toml(argv):
+            return toml
         if argv[0] == "ssh":
             return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": [row], "waiting": [{"run": "r2", "by": "lander"}]}), "")
         if argv[:2] == ["gh", "-R"]:
@@ -1419,6 +1686,8 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
 
     def answer(argv, input=None, **kw):
         calls.append(argv)
+        if toml := ci_toml(argv):
+            return toml
         if argv[0] == "ssh":
             return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": [row] if argv[-2] == "n1" else [],
                                                                     "waiting": waiting if argv[-2] == "n1" else []}), "")
@@ -1436,7 +1705,7 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
     got = M.failed_checks(M.Ctx(now=T0 + 120, memo=memo, run=answer, act=True))
     assert [g.key for g in got] == ["vy-nebius-1:r1", "vy-nebius-1:r1:cancelled"] and got[0].text == f.text
     assert got[1].text == ("*Check `r1` on vy-nebius-1*: Cancelled at 20:42Z, since r20261003-203000-5415 waited for a check slot "
-                           "on vy-nebius-1.") and got[1].owners == ("infra", M.LANDER)
+                           "on vy-nebius-1.") and got[1].owners == ("infra", "lean", M.LANDER)
     assert [c for c in calls if "cancel" in c][0][-1].startswith("failed-checks: step lean-audit failed while 1 waited")
     n = len(calls)
     assert len(M.failed_checks(M.Ctx(now=T0 + 180, memo=memo, run=answer, act=True))) == 2 and not any("cancel" in c for c in calls[n:])
@@ -1447,42 +1716,80 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
     assert "Cancelled" not in f.text and not any("cancel" in c for c in calls)
 
 
-def test_unverified_main_rings_ci_and_top_each_hour_past_three_until_a_post_landing_run_passes(tmp_path, monkeypatch):
-    """Main must not go days with no passing post-landing check and nobody outside ci hearing. The relay reads
-    drive's last verified commit from its state (not its log, so a stopped drive still rings) and times main's lag from the
-    oldest landing after it: main's first-parent commits (drive's merges), not GitHub's compare, which lists each PR's own
-    commits, dated when their branch made them."""
-    state = tmp_path / M.DRIVE_STATE
-    state.parent.mkdir(parents=True)
-    verified = "595cce6ddaf69e4411d8b11df4e91878c5826e27"
-    state.write_text(json.dumps({"drive": {"postland": {"verified": verified}}}))
-    monkeypatch.setenv("RESEARCH_DEPLOY_REPO", str(tmp_path / "repo"))
-    since = T0 - 3 * 3600 - 60                                              # drive's first landing past it, 3 h 1 min ago
-
-    def git(*landings):
-        log = "".join(f"{i:040x} {int(t)}\n" for i, t in enumerate(landings))
-        return Run((has("fetch"), (0, "", "")), (lambda a, _i: f"{verified}..FETCH_HEAD" in a and "--first-parent" in a,
-                                                  (0, log, "")))
-
-    run = git(T0 - 60, T0 - 1800, since)                                    # git log lists the newest first
-    log = tmp_path / M.DRIVE_LOG
-    log.parent.mkdir(parents=True)
-    log.write_text(f"{M.iso(T0 - 31 * 60)} tick rc=0 1\n{M.iso(T0 - 31 * 60)} other line\n")      # drive's last tick: 31 min ago
-    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run))
-    assert f.key == "595cce6ddaf6:3" and f.owners == ("ci", "top")
-    assert "3 h" in f.text and "`595cce6ddaf6`" in f.text and "3 landing(s)" in f.text
-    assert ["git", "-C", str(tmp_path / "repo"), "fetch", "-q", "origin", "main"] in [c for c, _ in run.calls]
-    assert M.unverified_main(M.Ctx(now=T0 - 120, root=tmp_path, run=run)) == [], "under 3 h behind: quiet"
-    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=git())) == [], "main is its last verified commit"
-    with open(log, "a") as fh:
-        fh.write(f"{M.iso(T0 - 120)} tick rc=1 1\n")
-    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run)) == [], "drive ticks: its own _behind alarm rings"
-    log.unlink()
+def test_unverified_main_rings_ci_and_top_each_hour_past_three_the_verified_queue_decides_nothing(tmp_path):
+    """`main` moves only through the verified queue, so a loop stopped or stuck must not go hours with nobody outside ci
+    hearing: the relay times the queue's silence from its decisions file's last `at`, rings ci and top past 3 h and again each
+    further hour, and a file it can't read is the monitor's own error, not a quiet pass."""
+    decisions = tmp_path / M.VQUEUE_DECISIONS
+    decisions.parent.mkdir(parents=True)
+    decisions.write_text(json.dumps({"action": "ring", "at": M.iso(T0 - 600)}) + "\n")
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path)) == [], "the queue decided 10 min ago"
+    decisions.write_text(json.dumps({"action": "advance", "at": M.iso(T0 - 4 * 3600 - 60)}) + "\n")
+    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path))
+    assert f.key == "vqueue:4" and f.owners == ("ci", "top") and "decided nothing for 4 h" in f.text
 
     m, alerts, st = M.BY_ID["unverified-main"], tmp_path / "alerts", M.new_state()
     for now in (T0, T0 + 600, T0 + 3600):                                  # primed, the same hour again, the next hour
-        M.step(st, [m], lambda memo, now=now: M.Ctx(now=now, memo=memo, root=tmp_path, run=git(T0 - 60, since)), now,
-               M.AlertDir(alerts), by="test", force=True)
+        M.step(st, [m], lambda memo, now=now: M.Ctx(now=now, memo=memo, root=tmp_path), now, M.AlertDir(alerts), by="test",
+               force=True)
     lines = (alerts / "monitors.jsonl").read_text().splitlines()
     assert [(x["event"], x["key"], x["owners"]) for x in map(json.loads, lines)] == [
-        ("event", "unverified-main|595cce6ddaf6:4", ["ci", "top"])]
+        ("event", "unverified-main|vqueue:5", ["ci", "top"])]
+    decisions.unlink()
+    with pytest.raises(FileNotFoundError):
+        M.unverified_main(M.Ctx(now=T0, root=tmp_path))
+
+
+def test_the_nightly_check_rings_infra_once_main_has_had_no_outcome_for_36_hours(tmp_path):
+    """A nightly check that stops starting, or never ends, says nothing by itself. The relay reads the loop's state on the
+    control pod: quiet while its newest outcome (an error is one: the loop posts those itself) is under 36 h old, one incident
+    past that, cleared by the next outcome; a loop that has had none yet is timed from its first pass, and a pod where it
+    never ran is found too."""
+    def ctx(now):
+        return M.Ctx(now=now, root=tmp_path)
+
+    (f,) = M.nightly_check(ctx(T0))
+    assert f.key == "absent" and f"/{M.NIGHTLY_STATE}" in f.text and "isn't running" in f.text
+    state = tmp_path / M.NIGHTLY_STATE
+    state.parent.mkdir(parents=True)
+
+    def write(**doc):
+        state.write_text(json.dumps({"since": M.iso(T0 - 90 * 86400), **doc}))
+
+    hour, limit = 3600, M.NIGHTLY_SILENT_S
+    assert limit == 36 * hour
+    last = {"day": "2026-10-02", "commit": "595cce6ddaf69e4411d8b11df4e91878c5826e27", "run": "r20261002-090007-1a2b",
+            "outcome": "passed", "at": M.iso(T0)}
+    write(last=last, night={"day": "2026-10-02", "phase": "done"})
+    assert M.nightly_check(ctx(T0 + limit - 1)) == [], "an outcome under 36 h old: quiet"
+    (f,) = M.nightly_check(ctx(T0 + limit))
+    assert f.key == "silent" and "no outcome for 36 h" in f.text and "`passed`" in f.text and M.iso(T0) in f.text
+    assert "`595cce6ddaf6`" in f.text and "`r20261002-090007-1a2b`" in f.text and "in progress" not in f.text
+    assert M.nightly_check(ctx(T0 + limit + 7 * hour))[0].key == "silent", "one incident however long it lasts"
+    assert "43 h" in M.nightly_check(ctx(T0 + limit + 7 * hour))[0].text
+
+    write(last=last, night={"day": "2026-10-03", "phase": "running", "run": "r20261003-090011-9f00"})
+    (f,) = M.nightly_check(ctx(T0 + limit))
+    assert "of 2026-10-03, is `running` (run `r20261003-090011-9f00`)" in f.text, "the night that hasn't ended is named"
+    write(last={**last, "outcome": "error", "run": None, "at": M.iso(T0 + limit)})
+    assert M.nightly_check(ctx(T0 + limit + hour)) == [], "an error is an outcome: the loop rang infra for it"
+
+    state.write_text(json.dumps({"since": M.iso(T0)}))
+    assert M.nightly_check(ctx(T0 + limit - 1)) == [], "no outcome yet, and the loop's first pass was under 36 h ago"
+    (f,) = M.nightly_check(ctx(T0 + limit))
+    assert f.key == "silent" and f"has run since {M.iso(T0)} and none has ended" in f.text
+    state.write_text("{}")
+    with pytest.raises(RuntimeError, match="neither a last outcome nor when its loop first ran"):
+        M.nightly_check(ctx(T0))
+
+    m = M.BY_ID["nightly-check"]
+    assert (m.owner, m.where, m.severity) == ("infra", "relay", "warn") and m.for_s == 1800 and not m.events
+    write(last=last)
+    alerts, st = tmp_path / "alerts", M.new_state()
+    for now in (T0 + limit, T0 + limit + 600, T0 + limit + 1800, T0 + limit + 2400):     # found, and still found 30 min on
+        M.step(st, [m], lambda memo, now=now: M.Ctx(now=now, memo=memo, root=tmp_path), now, M.AlertDir(alerts), by="test")
+    write(last={**last, "at": M.iso(T0 + limit + 2700)})
+    M.step(st, [m], lambda memo: M.Ctx(now=T0 + limit + 3000, memo=memo, root=tmp_path), T0 + limit + 3000, M.AlertDir(alerts),
+           by="test")
+    assert [(e["event"], e["key"], e["owners"]) for e in events(alerts)] == [
+        ("open", "nightly-check|silent", ["infra"]), ("clear", "nightly-check|silent", ["infra"])]

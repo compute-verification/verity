@@ -5,10 +5,12 @@ from pathlib import Path
 
 import pytest
 from rho import envelopes, hardware, lean
-from rho.envelopes import Certifier, Context, Detection, Onsite, Remote
+from rho.envelopes import Certifier, Context, Detection, Onsite, Remote, Wipe
 from rho.params import Param, Registry
 from rho.scenario import build, evaluate_named
 from rho.theorem import Budget, multiple_bound, overhead
+
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()
@@ -66,19 +68,28 @@ def test_the_remote_uncertified_share_is_tiers_residual_term():
 
 
 def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
+    """At today's sparse samples the bits the accepted incorrect blocks inject, each the widest public size class of a
+    block's outputs, are worth more than tiers' fleet, and both stop the cheating share at 1; at the proving cost's low
+    end, batched throughput, it is below 1."""
     ctx = tiers_context()
-    p = tiers_params(ctx)
-    sampled = envelopes.regime(REG, "remote-sampled")
-    t5 = T.evaluate(p, T.TIERS["T5"])
-    slack = sampled.slack(ctx)
-    assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
-    assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
-    assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
-    assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
+    cost = REG.param("regime.remote-sampled.overhead")
+    shares = []
+    for proving in (cost.value, cost.low):
+        p = tiers_params(ctx) | {"overhead": proving}
+        sampled = envelopes.regime(REG.override({cost.key: proving}), "remote-sampled")
+        t5 = T.evaluate(p, T.TIERS["T5"])
+        slack = sampled.slack(ctx)
+        assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
+        assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
+        assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
+        assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
+        shares.append(slack["exfil.incorrect"])
+    assert shares[0] == 1 > shares[1] > 0
 
 
-def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remote_at_full_capacity():
-    """Lean's `DampenerRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
+def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remote_at_full_capacity():
+    """Lean's `DampenerRemote` with no declared products (the declared share `ν = 0`) and χ = 0 is
+    `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
     capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
     that `ρ` at the reference's MFU."""
@@ -99,21 +110,21 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remot
     assert pad <= 1 / (s + (1 - s) * u) and pad == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
 
 
-#: `Nci.Dampener.remoteDampener` as Security/Definitions/Nci/Remote.lean defines it, and the conclusion of
-#: `Nci.Guarantees.DampenerRemote` (Security/Definitions/Nci/Guarantees/Remote.lean) that names it `ρ`
-REMOTE_DAMPENER = "noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
+#: `Nci.Dampener.remoteDampener` as security/Definitions/Nci/Remote.lean defines it, and the conclusion of
+#: `Nci.Guarantees.DampenerRemote` (security/Definitions/Nci/Guarantees/Remote.lean) that names it `ρ`
+REMOTE_SLOWDOWN = "noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
 REMOTE_CONCLUSION = "remoteDampener mfu (unregisteredShare C U)"
 
 
-def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
+def test_the_remote_overhead_is_lean_remote_slowdown_at_the_references_mfu():
     """Without reference efficiency the remote slowdown is `DampenerRemote`'s `ρ`, `remoteDampener MFU₀ s x ≤
     hardwareMultiple MFU₀`, at the reference training algorithm's MFU (0.4): free compute counts at peak. Under it free
     compute counts at `MFU₀`, so `ρ = max(1, 1/(s + x))`, the padded size ratio. Hosts carry no compute, so tiers'
     server and the H200 give the same `x = 0.33`, and `ρ = 3.04` (1.22 without reference efficiency), as
     `benchmarks/nci`'s slowdown reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
     has `x = 0.45`, which outruns that developer, so `ρ = 1`; the H200 (2.9%) has 1.12."""
-    lean_dir = ROOT / "Security" / "Definitions" / "Nci"
-    assert REMOTE_DAMPENER in (lean_dir / "Remote.lean").read_text()
+    lean_dir = ROOT / "security" / "Definitions" / "Nci"
+    assert REMOTE_SLOWDOWN in (lean_dir / "Remote.lean").read_text()
     assert REMOTE_CONCLUSION in (lean_dir / "Guarantees" / "Remote.lean").read_text()
     for mfu, s, x in ((0.4, 0.001, 0.45), (1.0, 0.0, 0.2), (0.4, 0.0, 0.0), (0.5, 0.2, 0.01)):
         rate = s + x / mfu
@@ -125,7 +136,7 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
     x = t1["residual"] + t1["declared"] + t1["cheat"]
     assert x / T.DEFAULTS["mfu"] < 1
     peak = REG.override({"task.reference_efficiency": False})
-    # tiers counts no dark share (s = 0) where rho's fleet has 0.1%
+    # tiers counts no unregistered share (s = 0) where rho's fleet has 0.1%
     for reg, ref, want in ((REG, True, 3.040), (peak, False, 1.218)):
         lo = evaluate_named(reg, "remote-tiers-kimi").lo
         assert lo == pytest.approx(multiple_bound(T.DEFAULTS["mfu"], t1["unmonitored"], x, ref), rel=5e-3)
@@ -187,7 +198,7 @@ def test_a_regime_table_with_a_stray_key_or_a_base_loop_is_refused():
         Detection(1, 3600, sampled=True)
 
 
-def test_the_serving_block_is_a_server_between_two_wipes_and_k_wipe_per_server():
+def test_the_server_block_is_a_server_between_two_wipes_and_k_wipe_per_server():
     """`(c_S, k_S) = (⌊Φ_s Δ_wipe⌋, k_wipe + (r_in + r_side) Δ_wipe)`, `k_wipe` of the server's whole memory (ruled)."""
     ctx = context("reference-h200")
     r = envelopes.regime(REG, "onsite")
@@ -204,7 +215,7 @@ def test_the_serving_block_is_a_server_between_two_wipes_and_k_wipe_per_server()
 
 def test_todays_wipe_leaves_about_12_gb_a_server_and_its_boot_disk():
     """`regime.onsite-today`: `k_wipe` of about 12 GB a server plus each server's (or compute tray's) boot disk, which
-    the wipe doesn't reach; without the boot disk an H200 serving block's input is within 2x of the 5 GB reference's."""
+    the wipe doesn't reach; without the boot disk an H200 server block's input is within 2x of the 5 GB reference's."""
     onsite, today = envelopes.regime(REG, "onsite"), envelopes.regime(REG, "onsite-today")
     for fleet in ("reference-h200", "reference-gb200"):
         loc = context(fleet).location
@@ -221,7 +232,7 @@ def test_the_links_form_is_what_windows_proves():
     r = envelopes.regime(REG, "onsite-links")
     loc = ctx.location
     assert r.budget(ctx).inputs == pytest.approx(loc.hosts * loc.server_memory + loc.links * r.wipe.wipe_s)
-    assert "Accounting.Guarantees.Actual.Windows" in r.cites()
+    assert "Accounting.Guarantees.Actual.ServerBlocks" in r.cites()
     assert lean.weakest(r.cites()) == "conditional"
     assert lean.weakest(envelopes.regime(REG, "onsite").cites()) == "draft"
 
@@ -290,17 +301,24 @@ def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_up
 
 def test_onsite_w63_beside_the_reference():
     """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 91.1 kbit/s
-    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits and the
-    lower bound's padded size ratio, which a dark share of 1% caps near 100, rises from 98.7 to 99.8, with the best
-    attack's at 249 and 250; at line rate both fall to remote's (2.99, at the card table's clock). The cadence feeds the
-    serving this package credits only if outputs outnumber prompts more than 20:1, so it isn't the default."""
-    reg = REG.override({"fleet.world-h200.eps_unreg": 0.01})
-    ref, w63 = evaluate_named(reg, "reference-onsite-h200"), evaluate_named(reg, "onsite-w63")
+    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits. No
+    bound a lock states limits a block of either size, so the lower bound's padded size ratio is remote's at both
+    (2.99, at the card table's clock), with the best attack's at 249 and 250. With the draft bounds admitted
+    (`bounds.lock_only` off) it rises from 98.7 to 99.8, which an unregistered share of 1% caps near 100, and at line
+    rate both fall to remote's. The cadence feeds the serving this package credits only if outputs outnumber prompts
+    more than 20:1, so it isn't the default."""
+    def padded(reg, digits):
+        return [(round(r.families[0].combined.padded, digits), round(r.families[0].best_attack.padded))
+                for r in (evaluate_named(reg, n) for n in ("reference-onsite-h200", "onsite-w63"))]
+
+    locked = REG.override({"fleet.world-h200.eps_unreg": 0.01})
+    ref, w63 = evaluate_named(locked, "reference-onsite-h200"), evaluate_named(locked, "onsite-w63")
     inputs = [r.scenario.regime.budget(r.scenario.context).inputs for r in (ref, w63)]
     assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.803e10, rel=1e-3)]
     assert w63.scenario.regime.certifier.intake_of(w63.scenario.context) == pytest.approx(0.02819, rel=1e-3)
-    padded = [(round(r.families[0].combined.padded, 1), round(r.families[0].best_attack.padded)) for r in (ref, w63)]
-    assert padded == [(98.7, 249), (99.8, 250)]
+    assert padded(locked, 2) == [(2.99, 249), (2.99, 250)]
+    reg = locked.override({"bounds.lock_only": False})
+    assert padded(reg, 1) == [(98.7, 249), (99.8, 250)]
     line = reg.override({"regime.onsite.intake": REG.param("regime.onsite.intake").high,
                          "regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
     at_line = [evaluate_named(line, n) for n in ("reference-onsite-h200", "onsite-w63")]
@@ -383,13 +401,16 @@ def test_every_uncertified_term_is_keyed_by_the_route_it_escapes_by():
 
 def test_pouws_delta_splits_into_coins_and_cryptography():
     """`p = δ_s + δ_bind + δ_ks` per window, by Markov at `ε'`: the coins' share and the cryptography's add to the
-    theorem's `δ = p/ε'` (2.7e-8 at `p = 3 · 2⁻⁴⁰`, `ε' = 10⁻⁴`), and sampled proofs add their escape bound's `δ`."""
+    theorem's `δ = p/ε'` (2.7e-8 at `ε' = 10⁻⁴` with the cryptography's two terms assumed at `δ_s` each, so
+    `p = 3 · 2⁻⁴⁰`), and sampled proofs add their escape bound's `δ`."""
     ctx = context("reference-h200")
     remote, sampled = envelopes.regime(REG, "remote"), envelopes.regime(REG, "remote-sampled")
     d = remote.delta(ctx)
-    assert d.coin == pytest.approx(2**-40 / remote.pouw.eps_agg, rel=1e-2)
-    assert d.crypto == pytest.approx(2 * d.coin, rel=1e-2)
-    assert d.coin + d.crypto == pytest.approx(3 * 2**-40 / 1e-4, rel=1e-2)
+    window = float(WINDOW_DELTA)
+    assert d.coin == pytest.approx(window / remote.pouw.eps_agg)
+    assert d.crypto == pytest.approx(2 * d.coin)
+    assert d.coin + d.crypto == pytest.approx(3 * window / 1e-4)
+    assert sampled.detection.p_evade == window
     assert sampled.delta(ctx).coin == pytest.approx(d.coin + sampled.detection.p_evade)
     assert (envelopes.regime(REG, "unmonitored").delta(ctx).coin, envelopes.regime(REG, "unmonitored").delta(ctx).crypto) \
         == (0.0, 0.0)
@@ -406,9 +427,21 @@ def test_delta_sums_every_subprotocol_and_the_wipe_per_server_and_per_wipe(scena
     d = r.delta(ctx)
     assert set(d.by) == {"pouw", "detection", "wipe", "certifier"}
     games = ctx.fleet.count * getattr(ctx.location, per) * ctx.period.seconds / r.wipe.wipe_s
-    assert d.by["wipe"] == pytest.approx((games * 2**-128, games * r.wipe.prf_advantage))
+    assert r.wipe.game_delta_coin == REG["regime.onsite.game_delta_coin"] > 0
+    assert d.by["wipe"] == pytest.approx((games * r.wipe.game_delta_coin, games * r.wipe.prf_advantage))
     assert d.by["pouw"] == pytest.approx(r.pouw.delta(ctx)) and d.by["certifier"] == (0.0, 0.0)
     assert d.coin == pytest.approx(math.fsum(c for c, _ in d.by.values()))
     assert d.crypto == pytest.approx(math.fsum(x for _, x in d.by.values()))
-    assert d.coin == pytest.approx(r.pouw.window_delta_coin / r.pouw.eps_agg + games * 2**-128)
+    assert d.coin == pytest.approx(r.pouw.window_delta_coin / r.pouw.eps_agg + games * r.wipe.game_delta_coin)
     assert d.json()["by"]["wipe"]["coin"] == d.by["wipe"][0]
+
+
+def test_a_wipe_games_failure_is_stated_once_in_the_registry():
+    """The retention game fails with the coins' probability plus `Adv_PRF`. `Wipe` restates neither (a wipe not given
+    them adds nothing), and the registry sets each once, at `regime.onsite`, which every regime with a wipe inherits."""
+    assert (Wipe().game_delta_coin, Wipe().prf_advantage) == (0.0, 0.0)
+    for leaf in ("game_delta_coin", "prf_advantage"):
+        assert [p.key for p in REG.params() if p.key.rpartition(".")[2] == leaf] == [f"regime.onsite.{leaf}"]
+    stated = (REG["regime.onsite.game_delta_coin"], REG["regime.onsite.prf_advantage"])
+    wiped = [r for r in (envelopes.regime(REG, name) for name in REG.names("regime")) if isinstance(r, Onsite)]
+    assert wiped and all((r.wipe.game_delta_coin, r.wipe.prf_advantage) == stated for r in wiped) and min(stated) > 0

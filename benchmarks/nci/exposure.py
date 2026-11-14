@@ -32,7 +32,7 @@ RANGES = {
     "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.323 at the locked clock, 0.213 attested (C7 dossier, its eps left to eps_w); nothing credited today 1"),
     "eps_w": (6e-4, 0.00917, "best plausible design 0.06% (C7 dossier); CircuitCredit's closed 0.744%, 0.681-0.917% over r = 1-4"),
     "host_share": (0.0, 0.14, "without the hosts assumption (hosts carry no compute sets it to 0), against the card table's FP8 peak: two EPYC 9015s without matrix units 0.22%; Xeon 6776P INT8 AMX 12.6%, 14.0% at fused maximum clocks"),
-    "eps_agg": (1e-6, 1e-3, "1e-6 needs per-window failure about 3 x 2^-47 for the same delta; 1e-3 lets delta fall tenfold"),
+    "eps_agg": (1e-6, 1e-3, "delta is p/eps' at PoUW's per-window failure p, which has no value yet: 1e-6 needs p a hundredth as large for the same delta (about 3 x 2^-47 if p were 3 x 2^-40); 1e-3 lets delta fall tenfold"),
     "clock_share": (0.0, 0.2, "0: PoUW credits the card table's 2,430 MHz, the SKU's maximum; 0.2 the C4 dossier's adversarial phi = 1.25, a card whose SKU or firmware reaches past its table (unattested)"),
     "pous_rounds": (20.0, 74000.0, "low a guess; deployed 111; 74,000 with streamed labels (C8 dossier)"),
     "unfilled_gb": (3.05, 150.0, "on-chip alone 3.05; measured gaps 51 plus 7 of DPU, BMC and flash; high a guess"),
@@ -48,7 +48,6 @@ RANGES = {
     "hbm_gb": (640.0, 2304.0, "8 x 80 GB (H100) to 8 x 288 GB (B300); 8 x 96 GB today"),
     "host_gb": (512.0, 4000.0, "guess, around vy-nebius-2's 1.9 TB"),
     "tau": (10.0, 1e4, "about 860 from the network appendix's program format; the ends a guess"),
-    "export": (2.5e6, 4.4e10, "under the export rule 2.5e6; today 4.4e9; high a guess (10x)"),
     "nic": (8e11, 6.4e12, "2 x 400 Gb/s to 8 x 800 Gb/s; 8 x 400 Gb/s today"),
     "share": (1e-3, 0.1, "guess, around the 1% budget"),
     "overhead": (1.6e8, 1e13, "batched throughput 1.6e8; sparse draws today 4.8e12; high a guess"),
@@ -56,7 +55,8 @@ RANGES = {
     "step_flop": (1e3, 1e6, "guess"),
     "p_evade": (1e-15, 2.0 ** -20, "guess, around the planner's 2^-40"),
     "luck": (1.0, 32.0, "no luck; spec sheet 8; high a guess"),
-    "step_bits": (8.0, 32.0, "low a guess; 16; one 32-bit gate"),
+    "step_bits": (float(T.partition_v2.UNIT_CLASSES[0]), float(T.partition_v2.UNIT_CLASS_MAX),
+                  "a proof block's outputs fit its Definition's public size class: the smallest; the widest"),
     "intake_x": (1.0, 1.3e6, "1 once the count check is in the ZK flow; line rate until then"),
     "identities": (1.0, 1e3, "guess"),
     "lag_s": (60.0, 86400.0, "guess: a minute's verdict to a day; one hour assumed"),
@@ -68,16 +68,12 @@ RANGES = {
     "Gamma": (6.4e15, 2.9e17, "low a guess (100k-token sessions); kimi-k2-1m-raw; kimi-k2-11mb-raw"),
     "d": (1.0, 17.0, "a run that trains its embedding; ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 under the "
                      "open conjecture ReferenceLayered; a Dot16 step's 17 legs, no lookup read"),
-    "e": (12288.0, 1.65e5, "low a guess (the chain's fan-out); Kimi K2 4e4; dense-405b"),
+    "e": (12288.0, 1.65e5, "low a guess; Kimi K2 4e4; dense-405b"),
     "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
                           "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),
     "thread_bits": (6.96e6, 2.94e9, "ThreadedOfLayered at 2.5-bit embedding columns for any reference circuit C1 "
                                     "allows; the whole embedding table at 2.5 bits, under a refined layered theorem"),
     "block_mults": (0.3, 1.0, "kappa / 2 if each block's counted share were the recipe's; 1, every gate countable"),
-    "kappa_chain": (0.0, 0.3, "0 while the partial-sum law's support premises are falsified (NCI-FALSIFY); Kimi K2's dense path 7%; 0.3 a guess"),
-    "d_chain": (512.0, 7168.0, "guess; Kimi K2 1536; d_model 7168"),
-    "e_chain": (4096.0, 49152.0, "guess"),
-    "b_p": (8.25, 64.0, "b_a.activation/tp-partial-sums-training central; 32; high a guess"),
     "nodes": (1e4, 1e6, "guess, around 100,000 servers"),
     "node_flops": (4e15, 3.6e16, "low a guess; 8 RTX PRO 6000s; 8 B200s, FP8 dense"),
     "years": (0.25, 3.0, "guess"),
@@ -108,6 +104,9 @@ SERVED_4GB = SCENARIOS["served today, R_wipe 4 GB"]
 WIPE_2GB = {"pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
 #: the threading ReferenceThreaded gives under its conjecture, at which the closed-form memory cap binds
 KEYED = {"d": T.REFERENCE_THREADED[0]}
+#: batched proving's cost, at which the injecting blocks' pool is worth less than the fleet's capacity; at today's sparse
+#: samples it is worth more, and ``evaluate`` stops the cheating share at 1, which the closed form chi does not
+BATCHED = {"overhead": 1.6e8}
 #: points where a closed form is checked against evaluate(): the probe, its overrides, the tier, the term (eta against
 #: the bound, mu against the monitored part when memory caps it, nu against the declared part, chi against the cheating
 #: share) and the regime; a regime that starts with "breaks" is one the closed form doesn't cover
@@ -116,7 +115,7 @@ CHECKS = [
     ("1 GB streamed-label wipes", WIPE_2GB | KEYED | {"unfilled_gb": 0.83}, "T4", "mu",
      "the floor credit's residual is above the cap"),
     ("design", DESIGN, "T4", "eta", "memory caps nothing: mu > r"),
-    ("host CPUs bounded", DESIGN | {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
+    ("host CPUs bounded, batched", DESIGN | BATCHED | {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
     ("unmonitored 0.1", DESIGN | {"unmonitored": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
     ("intake at line rate", {"residual": 0.9, "intake_x": 1.3e6}, "T4", "eta", "no count check: mu >> 1 caps nothing"),
     ("served, R_wipe 4 GB", SERVED_4GB | KEYED, "T3", "mu", "memory caps the residual"),
@@ -125,18 +124,21 @@ CHECKS = [
      "helpers refill R_wipe; sigma joins lambda_in"),
     ("defaults", {}, "T1", "nu", "Lambda(K) = K / (2 d b_w)"),
     ("K 1e6", {"K": 1e6}, "T1", "nu", "Lambda(K) = e"),
-    ("design", DESIGN, "T5", "chi", "(1, 0) above thread_bits: one block is full at S_1"),
-    ("batched proving", DESIGN | {"overhead": 1.6e8}, "T5", "chi", "overhead 1.6e8"),
-    ("1,000 servers", DESIGN | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
-    ("no dark compute", {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_w": 0.0, "eps_agg": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
+    ("512 samples per statement", DESIGN | {"overhead": 1.7e10}, "T5", "chi",
+     "(1, 0) above thread_bits: one block is full at S_1"),
+    ("batched proving", DESIGN | BATCHED, "T5", "chi", "overhead 1.6e8"),
+    ("1,000 servers, batched", DESIGN | BATCHED | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
     ("served 4 GB, daily wipes", SERVED_4GB | {"wipe_s": 86400.0}, "T4", "mu",
      "breaks: wipe period above R_wipe / lambda_in"),
     ("served, R_wipe 22 MB", {"residual": 0.9, "unfilled_gb": 0.01, "pous_rounds": 1e6, "pous_floor": 0.0,
                               "wipe_s": 1.0, "d": 65536.0}, "T3", "mu",
      "breaks: R_wipe < d b_w e, the cap floors at nu"),
-    ("whole embedding table", KEYED | {"thread_bits": 2.94e9}, "T5", "chi",
+    ("design", DESIGN, "T5", "chi",
+     "breaks: at sparse samples the pool is worth more than the fleet's capacity, where the share stops at 1"),
+    ("whole embedding table", KEYED | BATCHED | {"thread_bits": 2.94e9}, "T5", "chi",
      "breaks: threading certified past S_1, the chord ends at thread_bits"),
-    ("proofs nearly free", {"overhead": 1.0, "replay": 1.0}, "T5", "chi", "breaks: the pool can't fill one block"),
+    ("proofs nearly free", {"overhead": 1.0, "replay": 1.0, "share": 0.5}, "T5", "chi",
+     "breaks: the pool can't fill one block"),
 ]
 
 

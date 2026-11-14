@@ -1,14 +1,24 @@
 """Whether two builds of one module are one build but for where its source was: the module's `.olean` parts (`olean`,
 and a `module` file's `olean.server` and `olean.private`) compared as the object graphs Lean's compactor wrote, not as bytes.
 
-Lean 4.34's output is byte-identical for one module's sources built twice at one path, whatever the thread count, but not
-at another path: a module's `olean.server` keeps each message its compile logged (a linter's warning) with the absolute
-path of its source, and its `olean.private` points into that part, so a longer path moves the objects after it. A
+Lean 4.34's output is byte-identical for most modules' sources built twice at one path, whatever the thread count, but
+not for every one's: an equation lemma Lean realizes when a declaration first asks for it can name its binders in that
+declaration's hygiene context, so which declaration asks first changes the bytes (`Spot.SecondStage`'s `check.eq_3`),
+which a records run meets by compiling the module again (`lean_changed.mismatched`). Nor is it at another path: a module's `olean.server` keeps each message its compile logged (a
+linter's warning) with the absolute path of its source, and its `olean.private` points into that part, so a longer path
+moves the objects after it. A
 sampled recompile (`check.py`'s `sampled`) checks a module built in another tree, so for a module whose compile logged a
 message, bytes alone would refuse it. `differs` walks both graphs from each part's root in step: every object must have
 the same kind, fields and scalar bytes, and its fields the same, recursively, across the parts, which point into each
 other. The one difference allowed is a string that, in both, is an absolute path ending in the module's own source path,
 its length its own. Every declaration, extension entry and message is compared, so nothing but that path can differ.
+
+`canonical` is a digest of one build's graph that is the same for two builds of a module at two paths, so the replay cache
+(`check.py`'s `replay_keys`) keys a module by what it declares rather than by where it was compiled. It is narrower than
+`differs`: each part's root is Lean's `ModuleData`, and what its imports and declarations (`MODULE_DATA` before `entries`)
+reach is hashed as it is; only a string reached through the environment extensions' entries alone, where a message keeps
+its file, may be the module's source path in either build, so the kernel replay (`Replay.lean`, which reads the imports
+and the constants) never reads a string the digest left out.
 
 The layout is Lean's (`src/include/lean/lean.h`, `src/runtime/compact.cpp`): a header of `HEADER` bytes, the base address
 the part is mapped at, the root object's address, then the objects, each an 8-byte header (reference count, size, the
@@ -16,6 +26,7 @@ number of object fields, kind) and its body; an address with its low bit set is 
 path."""
 from __future__ import annotations
 
+import hashlib
 import struct
 from pathlib import Path
 
@@ -26,6 +37,8 @@ BASE, ROOT, DATA = 80, 88, 96
 PARTS = ("olean", "olean.server", "olean.private")
 #: object kinds (`lean.h`): constructors are those below `MAX_CTOR`
 MAX_CTOR, ARRAY, SCALAR_ARRAY, STRING, MPZ, THUNK, TASK, REF = 244, 246, 248, 249, 250, 251, 252, 253
+#: the object fields of each part's root, Lean 4.34's `ModuleData` constructor (tag 0), in order
+MODULE_DATA = ("imports", "constNames", "constants", "extraConstNames", "entries")
 _HEAD = struct.Struct("<iHBB")
 _U64 = struct.Struct("<Q")
 
@@ -148,3 +161,87 @@ def differs(restored: dict[str, Path], rebuilt: dict[str, Path], source: str) ->
     except (Malformed, struct.error, OSError) as e:
         return f"malformed: {e}"
     return None
+
+
+def canonical(files: dict[str, Path], source: str) -> str | None:
+    """A digest of one build of a module ({part: its file}, `PARTS`) whose source path is ``source`` (as for `differs`)
+    that two builds share when they are one but for where the source was: each part's name and header, then every object
+    reachable from the parts' roots, each as the number its first reference gave it, its kind, its fields (an object's
+    number, a boxed scalar or null) and its scalar bytes. The walk takes what the roots' imports and declarations
+    (`MODULE_DATA` before `entries`) reach before anything only the entries reach, and a string of the second kind that is
+    an absolute path ending in ``/`` + ``source``, of the length its text has, counts as such a path, whatever it is.
+    None when a part's root isn't a `ModuleData`; `Malformed` when a part isn't a compacted region."""
+    suffix = "/" + source.lstrip("/")
+    names = [p for p in PARTS if p in files]
+    r = _Region({p: files[p].read_bytes() for p in names})
+    spans = [(base + DATA, base + len(data), data) for base, data in r.parts.values()]
+
+    def at(a: int) -> tuple[bytes, int]:
+        for lo, hi, data in spans:
+            if lo <= a < hi:
+                return data, a - lo + DATA
+        raise Malformed(f"address {a:#x} is in no part")
+
+    roots = {r.root(p) for p in names}
+    for a in roots:
+        _, _, n, tag = _HEAD.unpack_from(*at(a))
+        if tag != 0 or n != len(MODULE_DATA):
+            return None
+    number: dict[int, int] = {}
+    exact: set[int] = set()
+    now: list[int] = []
+    later: list[int] = []
+
+    def ref(a: int, entries: bool) -> bytes:
+        if a & 1 or not a:
+            return b"s" + _U64.pack(a)
+        if (i := number.get(a)) is None:
+            i = number[a] = len(number)
+            if entries:
+                later.append(a)
+        if not entries and a not in exact:
+            exact.add(a)
+            now.append(a)
+        return b"o" + _U64.pack(i)
+
+    def record(a: int, entries: bool) -> bytes:
+        d, o = at(a)
+        _, size, n, tag = _HEAD.unpack_from(d, o)
+        if tag < MAX_CTOR:
+            if size < 8 + 8 * n:
+                raise Malformed(f"a constructor of {size} bytes with {n} object fields")
+            fs = struct.unpack_from(f"<{n}Q", d, o + 8)
+            last = len(MODULE_DATA) - 1 if a in roots else n
+            rec = (struct.pack("<BBH", tag, n, size) + b"".join(ref(f, entries or i >= last) for i, f in enumerate(fs))
+                   + _bytes(d, o + 8 + 8 * n, size - 8 - 8 * n))
+        elif tag == ARRAY:
+            k = _u64(d, o + 8)
+            rec = struct.pack("<BQ", tag, k) + b"".join(ref(f, entries) for f in struct.unpack_from(f"<{k}Q", d, o + 24))
+        elif tag == SCALAR_ARRAY:
+            k = _u64(d, o + 8)
+            rec = struct.pack("<BBQ", tag, n, k) + _bytes(d, o + 24, n * k)
+        elif tag == STRING:
+            length, s = _string(d, o)
+            rec = bytes([tag]) + (b"path" if entries and _path_of_source(length, s, suffix)
+                                  else struct.pack("<QQ", length, len(s)) + s)
+        elif tag == MPZ:
+            k = struct.unpack_from("<ii", d, o + 8)[1]
+            rec = struct.pack("<Bi", tag, k) + _bytes(*at(_u64(d, o + 16)), 8 * abs(k))
+        elif tag in (THUNK, TASK, REF):
+            rec = bytes([tag]) + ref(_u64(d, o + 8), entries)
+        else:
+            raise Malformed(f"an object of kind {tag}, which a compacted region doesn't hold")
+        return _U64.pack(number[a]) + rec
+
+    h = hashlib.sha256()
+    for p in names:
+        h.update(p.encode() + b"\0" + r.parts[p][1][:BASE])
+    h.update(b"".join(ref(r.root(p), False) for p in names))
+    for a in now:
+        rec = record(a, False)
+        h.update(_U64.pack(len(rec)) + rec)
+    for a in later:
+        if a not in exact:
+            rec = record(a, True)
+            h.update(_U64.pack(len(rec)) + rec)
+    return h.hexdigest()

@@ -4,7 +4,7 @@ top's VM (asks-relay-v4, admin-hourly-v3) and stopped whenever it was suspended.
 inbox doorbells, and whatever needs judgment rings top instead of being decided.
 
     top_watch.py asks  [--every 900]  [--state PATH] [--once] [--seed] [--dry-run]    $NOTION_API_KEY, $SLACK_BOT_TOKEN
-    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $GH_TOKEN, $CURSOR_API_KEY,
+    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $CURSOR_API_KEY,
                                                                                       $LINEAR_CLIENT_ID, $LINEAR_CLIENT_SECRET
 
 **asks**, every 15 min: the Asks for Daniel pages (the registry's #ask-daniel `pages`) edited since the last pass, and every
@@ -27,7 +27,9 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
 2. An ACTIVE Verity cloud agent (`GET /v1/agents`) that holds no handle: no registry `holder` and no inbox in the routes names it.
    top.
 3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): top.
-4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci.
+4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci. It reads
+   GitHub with the token GH_TOKEN_CMD prints, taken at each pass and never from the loop's environment; a read GitHub
+   refuses, or no token to read with, rings infra once until a read works again, with what to do.
 5. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
    ($FLEET_DIR): top, with the numbers.
 6. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
@@ -37,6 +39,9 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
    LANE_RING_S, naming the issues, until it holds (a slipped ask holds once a `slip:` comment follows its last move); once
    a day after 15:00Z, top with the totals and their change from the line 24 h earlier, and the registry's teams the app
    can't read (`unread`), which the audit skips.
+7. The Goals page as this hour has it, saved as <state dir>/goals/goals-<YYYYMMDDTHHMMZ>.json.gz: the earlier dump `research
+   velocity` compares the page with. The pod holds no Cursor identity, so it reads the page with the site key in <state
+   dir>/goals.key (one line, `events:read`). A dump older than KEEP_S goes. It rings nobody.
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for
@@ -46,6 +51,7 @@ rings nobody and saves no state.
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import importlib.util
 import json
@@ -54,13 +60,14 @@ import re
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from research import linear, slack
+from research import goals, linear, slack
 
 QUOTE_MAX = 600
 KEEP_S = 14 * 86400
@@ -72,8 +79,12 @@ H200_BUSY_PCT = 10
 REPORT_HOUR_UTC = 15
 LANE_RING_S = 12 * 3600
 AUDIT_LOG = "linear-audit.jsonl"
+GOALS_DIR, GOALS_KEY, GOALS_STAMP = "goals", "goals.key", "goals-%Y%m%dT%H%MZ.json.gz"
 DAY_BEFORE_S = 86400 - 1800             # the line 24 h earlier: the newest one at least this old (passes drift within the hour)
 REPO = "compute-verification/verity"
+GH_TOKEN_CMD = ("/data/infra/gh_read_token.sh", "--cached")     # the pod's read-only App token: every reader's one source
+GH_REFUSED = (401, 403)
+GH_REFUSED_ID = "github:refused"
 OPEN = ("Waiting on Daniel", "Revising")
 HANDLE_LEAD = re.compile(r"^\s*@[a-z0-9][a-z0-9._-]*")
 OPTION_LETTER = re.compile(r"^([A-E])\.")
@@ -327,15 +338,38 @@ MAIN_QUERY = """query($owner: String!, $name: String!) { repository(owner: $owne
   ref(qualifiedName: "refs/heads/main") { target { oid ... on Commit { committedDate } } compare(headRef: "next") { aheadBy } } } }"""
 
 
-def gh_main() -> dict:
+class GitHubRefused(Exception):
+    """GitHub refused a read (HTTP 401 or 403), or the token command gave no token to read with."""
+
+
+def gh_token() -> str:
+    """The read-only token of the moment: what GH_TOKEN_CMD prints, run at each read, so a loop that has run for days reads
+    with a token minted within the hour."""
+    cmd = " ".join(GH_TOKEN_CMD)
+    try:
+        r = subprocess.run(GH_TOKEN_CMD, capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise GitHubRefused(f"`{cmd}` didn't run ({type(e).__name__})") from None
+    if r.returncode != 0 or not r.stdout.strip():
+        raise GitHubRefused(f"`{cmd}` gave no token (exit {r.returncode}: {r.stderr.strip()[-300:] or 'nothing on stderr'})")
+    return r.stdout.strip()
+
+
+def gh_main(token: Callable[[], str] | None = None) -> dict:
     """main's head, its commit time and how far `next` is ahead, in one small GraphQL read (REST's compare of main...next
-    carries every commit and patch: megabytes while a few hundred commits are queued)."""
+    carries every commit and patch: megabytes while a few hundred commits are queued), with the token `token` gives now
+    (`gh_token`)."""
     owner, name = REPO.split("/")
     req = urllib.request.Request("https://api.github.com/graphql", method="POST",
                                  data=json.dumps({"query": MAIN_QUERY, "variables": {"owner": owner, "name": name}}).encode(),
-                                 headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        out = json.load(r)
+                                 headers={"Authorization": f"Bearer {(token or gh_token)()}", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            out = json.load(r)
+    except urllib.error.HTTPError as e:
+        if e.code in GH_REFUSED:
+            raise GitHubRefused(f"GitHub answered HTTP {e.code} to the read of main") from None
+        raise
     if out.get("errors"):
         raise ValueError(f"GitHub GraphQL: {out['errors'][0].get('message')}")
     ref = out["data"]["repository"]["ref"]
@@ -344,8 +378,18 @@ def gh_main() -> dict:
 
 def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
     """main's head unchanged for STALL_S. A landed train's commit carries the time drive built it on `next`, not when main moved
-    to it, so the clock starts at the later of that and the first pass that saw the head."""
-    head = read()
+    to it, so the clock starts at the later of that and the first pass that saw the head. A refused read rings infra once,
+    and again only after a read that worked: until it reads, a stalled main rings nobody."""
+    try:
+        head = read()
+    except GitHubRefused as e:
+        once_each(state, GH_REFUSED_ID, ring, "infra",
+                  f"infra: the sweep can't read main from GitHub: {e}. Until it reads, a stalled main rings nobody. On the "
+                  f"control pod, `{GH_TOKEN_CMD[0]} > /dev/null` mints a token and prints GitHub's reason when it can't (the "
+                  f"App's key, its installation or its permissions); if that mints, the cached token is the one GitHub no "
+                  f"longer takes: `rm /dev/shm/verity-read-token`. The next pass reads again.", None, now)
+        raise
+    (state.get("rung") or {}).pop(GH_REFUSED_ID, None)
     committed = datetime.fromisoformat(head["committed"].replace("Z", "+00:00")).timestamp()
     seen = state.get("main_head") or {}
     if seen.get("sha") != head["sha"]:
@@ -444,6 +488,28 @@ def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Call
     once_each(state, f"linear:day:{iso(now)[:10]}", ring, "top", body, None, now)
 
 
+def goals_page(key: Path) -> list[dict]:
+    if not key.is_file():
+        raise RuntimeError(f"no site key at {key}: put one with events:read there (one line, mode 600) and the page is saved each hour")
+    return goals.Route(key=key.read_text().strip()).call()
+
+
+def save_goals(now: float, page: Callable[[], list[dict]], out: Path | None) -> None:
+    """The Goals page as `page` reads it, saved in `out` under its minute (None: a dry run, which saves nothing); the dumps
+    older than KEEP_S go."""
+    dump = gzip.compress(json.dumps(page(), ensure_ascii=False).encode(), mtime=0)
+    if out is None:
+        return
+    out.mkdir(parents=True, exist_ok=True)
+    name = time.strftime(GOALS_STAMP, time.gmtime(now))
+    tmp = out / f"{name}.tmp"
+    tmp.write_bytes(dump)
+    tmp.replace(out / name)
+    for old in out.glob("goals-*.json.gz"):
+        if old.name < time.strftime(GOALS_STAMP, time.gmtime(now - KEEP_S)):
+            old.unlink()
+
+
 def sweep_pass(state: dict, ring: Ringer | None, checks: dict[str, Callable[[], None]]) -> None:
     for name, check in checks.items():
         try:
@@ -469,8 +535,13 @@ def traffic_json() -> dict:
 
 
 def linear_check(state, ring, reg, now, log_path: Path | None) -> None:
+    """The sweep's audit is the one `research msg linear audit` lists: an issue waiting only on landing is no finding in
+    either, so a ring's counts are the ones its command shows."""
+    from research.queue import landing_waiter
+
     lin, owners = linear.Linear(), linear.owners(reg)
-    linear_audit(state, ring, now, lambda: lin.audit(owners, now=now), volume_json, log_path, lambda: lin.unread(sorted(owners)))
+    linear_audit(state, ring, now, lambda: lin.audit(owners, now=now, waiting=landing_waiter()), volume_json, log_path,
+                 lambda: lin.unread(sorted(owners)))
 
 
 def volume_json() -> dict:
@@ -519,7 +590,9 @@ def main(argv: list[str] | None = None) -> int:
                     "rules thread": lambda: rules_thread(state, ring, api, reg, now),
                     "main": lambda: main_stalled(state, ring, now),
                     "h200": lambda: h200s(state, ring, now, fleet_samples),
-                    "linear": lambda: linear_check(state, ring, reg, now, None if ns.dry_run else state_path.parent / AUDIT_LOG)})
+                    "linear": lambda: linear_check(state, ring, reg, now, None if ns.dry_run else state_path.parent / AUDIT_LOG),
+                    "goals": lambda: save_goals(now, lambda: goals_page(state_path.parent / GOALS_KEY),
+                                                None if ns.dry_run else state_path.parent / GOALS_DIR)})
                 prune(state, now)
             if not ns.dry_run:
                 tmp = state_path.with_suffix(".tmp")

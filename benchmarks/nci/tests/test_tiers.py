@@ -10,16 +10,18 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 import kappa  # noqa: E402
-import slowdown as S  # noqa: E402
 import tiers as T  # noqa: E402
 
-ROOT = HERE.parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 #: the defaults at the threading ReferenceThreaded gives under its conjecture, where the closed-form memory cap binds
 KEYED = T.DEFAULTS | {"d": T.REFERENCE_THREADED[0]}
+#: batched proving's cost, at which the injecting blocks' pool is worth less than the fleet's capacity, so the cheating
+#: share is below the 1 it stops at
+BATCHED = {"overhead": 1.6e8}
 #: Kimi K2's MoE capacity factor, routed slots per token over its top-k: no workload declares one, and the circuits' MoE
-#: Definitions (verity/ml/circuits/ops/moe.py) are dropless, one body per token and top-k slot, which is factor 1, the
+#: Definitions (verity/circuits/ops/moe.py) are dropless, one body per token and top-k slot, which is factor 1, the
 #: one ReferenceLayered states
 CAPACITY_FACTOR = 1
 #: the bits of an entry of Kimi K2's embedding table, bf16: no model config or workload declares its dtype (kappa.MODELS
@@ -30,11 +32,11 @@ def test_the_gpus_read_the_accel_models_card_table():
     """`CARD` is `Verity.Accel.Sm120.card`'s tensor rate and clock ceiling (its sheet-form `f_max`), and PoUW credits
     H1's SM120 record's f_max: so the clock term is 0, the server's peak is 8 cards at the table's FP8 rate (7.485e15
     FLOP/s, not NVIDIA's 8e15 headline at about 2,597 MHz) and the Xeons are 12.6% of it."""
-    lean = (ROOT / "Security/Definitions/Core/Accel/Sm120.lean").read_text()
+    lean = (ROOT / "security/Definitions/Core/Accel/Sm120.lean").read_text()
     sms, tensor = map(int, re.search(r"\| \.tensor => (\d+) \* (\d+)", lean).groups())
     mhz = re.search(r"def clock : ℚ≥0 := (\d+) \* 10 \^ 6", lean) or re.search(r"f_max = (\d+) MHz", lean)
     assert T.CARD == {"sms": sms, "tensor": tensor, "clock_hz": int(mhz.group(1)) * 1e6}
-    h1 = (ROOT / "verity/ml/protocols/pouw/circuit/h1device.py").read_text()
+    h1 = (ROOT / "verity/protocols/accounting/pouw/prover/circuit/h1device.py").read_text()
     sm120 = h1[h1.index("SM120 = Device("):h1.index("SM90 = Device(")]
     assert T.CREDITED_CLOCK_HZ == int(re.search(r"fmax_mhz=(\d+)", sm120).group(1)) * 1e6
     assert T.DEFAULTS["clock_share"] == 0.0
@@ -91,40 +93,10 @@ def test_unmonitored_compute_trains_at_full_efficiency():
     assert r["unmonitored"] == pytest.approx(0.3, rel=1e-6)
 
 
-def test_the_residual_voids_the_partial_sum_law():
+def test_the_declared_computation_trains_at_the_thread_bound():
     p = T.DEFAULTS | {"residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     r = T.evaluate(p, T.TIERS["T4"])
     assert r["declared"] == pytest.approx(2 / p["kappa"] / r["rho_T"])
-
-
-def test_without_dark_compute_the_declared_side_is_the_chain_bound():
-    """At zero residual and zero unmonitored compute nothing absorbs partial sums, so efficiency is the inverse of the
-    calculator's chain bound for pretrain-full."""
-    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_w": 0.0, "eps_agg": 0.0,
-                      "unmonitored": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}
-    r = T.evaluate(p, T.TIERS["T4"])
-    alpha = p["K"] / p["Gamma"]
-    chain = p["kappa_chain"] * S.read_factor(p["K"], p["b_w"], p["b_a"], p["d_chain"]) / (2 * alpha)
-    assert r["largest"] == "declared (partial-sum law)"
-    assert 1 / r["efficiency"] == pytest.approx(chain, rel=1e-3)
-
-
-def test_the_adversary_relays_partial_sums_only_when_it_pays():
-    """With width-1 blocks the partial-sum rule never reaches the thread bound, and relaying the whole residual into the
-    declared blocks' sums would buy far less than the residual trains directly: the adversary relays only the few
-    partial sums that pay, and the residual still trains at full efficiency."""
-    p = T.DEFAULTS | {"d": 1.0, "e": 1e6, "lag_s": 0.0, "kappa_chain": 0.0695}
-    r = T.evaluate(p, T.TIERS["T4"])
-    assert r["largest"] == "residual" and 0 < r["declared"] < r["residual"]
-    assert r["residual"] == pytest.approx(T.residual_share(p), rel=1e-6)
-    assert r["crossing_bits"] / (2 * p["b_p"]) < 1e-6 * T.residual_share(p) * p["nodes"] * p["node_flops"] * T.YEAR
-
-
-def test_absorbed_partial_sums_weaken_the_law_as_ps_prime_says():
-    """PS' on Kimi K2's forward chain: G_D b_a / R at zeta = b_a Z / R of 0, 1 and 10 (Tier 1's table)."""
-    rates = T.chain_rates(T.DEFAULTS, 2000)
-    got = [T.chain_products(rates, 1.0, z) * T.DEFAULTS["b_a"] for z in (0.0, 1.0, 10.0)]
-    assert got == pytest.approx([1714, 2482, 6483], rel=1e-3)
 
 
 def test_the_wipe_floor_is_the_closed_form():
@@ -178,23 +150,37 @@ def test_helpers_within_the_read_deadline_refill_what_a_wipe_leaves():
 
 
 def test_the_cheating_pool_does_not_grow_with_the_fleet():
-    small = T.evaluate(T.DEFAULTS | {"nodes": 1e3}, T.TIERS["T5"])
-    large = T.evaluate(T.DEFAULTS, T.TIERS["T5"])
+    p = T.DEFAULTS | BATCHED
+    small = T.evaluate(p | {"nodes": 1e3}, T.TIERS["T5"])
+    large = T.evaluate(p, T.TIERS["T5"])
     assert small["cheat_steps"] == large["cheat_steps"] > 0
-    assert small["cheat"] == pytest.approx(100 * large["cheat"])
-    q = T.DEFAULTS["share"] / (T.DEFAULTS["overhead"] + T.DEFAULTS["replay"])
-    assert large["cheat_steps"] == pytest.approx(T.DEFAULTS["luck"] * math.log(1 / T.DEFAULTS["p_evade"]) / q)
+    assert 1 > small["cheat"] == pytest.approx(100 * large["cheat"])
+    q = p["share"] / (p["overhead"] + p["replay"])
+    assert large["cheat_steps"] == pytest.approx(p["luck"] * math.log(1 / p["p_evade"]) / q)
+
+
+def test_the_cheating_share_stops_at_the_fleets_capacity():
+    """A proof block's outputs fit its Definition's public size class, and an incorrect block injects the widest.
+    At today's sparse samples the pool is then worth more than the fleet's capacity: the share is 1 and SPOT bounds
+    nothing, while at batched proving it is the chord times the injected bits."""
+    assert T.DEFAULTS["step_bits"] == T.partition_v2.UNIT_CLASS_MAX
+    sparse, batched = (T.evaluate(T.DEFAULTS | over, T.TIERS["T5"]) for over in ({}, BATCHED))
+    worth = 2 / T.DEFAULTS["kappa"] * T.chord(T.DEFAULTS, sparse["cheat_bits"]) * sparse["cheat_bits"]
+    capacity = T.DEFAULTS["nodes"] * T.DEFAULTS["node_flops"] * T.DEFAULTS["years"] * T.YEAR
+    assert worth > capacity and sparse["cheat"] == 1.0 and sparse["efficiency"] > 1
+    assert 1 > batched["cheat"] == pytest.approx(
+        2 / T.DEFAULTS["kappa"] * T.chord(T.DEFAULTS, batched["cheat_bits"]) * batched["cheat_bits"] / capacity)
 
 
 def test_luck_multiplies_skipped_work_but_not_injected_bits():
     """A block that injects a chosen output fails whenever it is sampled, so ln(1/delta) (1/q + floor_steps) blocks inject
     step_bits each, whatever the luck factor."""
-    p = T.DEFAULTS | {"floor_steps": 1e9}
+    p = T.DEFAULTS | BATCHED | {"floor_steps": 1e9}
     lucky, unlucky = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"luck": 1.0}, T.TIERS["T5"])
     assert lucky["cheat_steps"] == pytest.approx(8 * unlucky["cheat_steps"])
-    assert lucky["cheat"] == unlucky["cheat"] > 0
+    assert 1 > lucky["cheat"] == unlucky["cheat"] > 0
     q = p["share"] / (p["overhead"] + p["replay"])
-    assert lucky["cheat_bits"] == pytest.approx(math.log(1 / p["p_evade"]) * (1 / q + 1e9) * 16)
+    assert lucky["cheat_bits"] == pytest.approx(math.log(1 / p["p_evade"]) * (1 / q + 1e9) * p["step_bits"])
 
 
 def _block_bound(p: dict, S: float) -> float:
@@ -252,10 +238,10 @@ def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():
     """m scales nu, chi and the memory cap but not the residual or unmonitored compute (C2 dossier)."""
-    p = KEYED | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    p = KEYED | BATCHED | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     base, amped = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"m": 3.0}, T.TIERS["T5"])
     assert amped["declared"] == pytest.approx(3 * base["declared"], rel=1e-6)
-    assert amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)
+    assert 1 > amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)
     assert amped["residual"] == pytest.approx(base["residual"], rel=1e-6)
     assert amped["unmonitored"] == pytest.approx(base["unmonitored"], rel=1e-6)
     capped = p | {"residual": 0.9, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 0.83}
@@ -276,7 +262,7 @@ def test_reference_layered_at_kimi_k2():
     the theorem takes the fewest E with S below E + 1 columns, giving (d0 - E, e + E e_lk) with e_lk = 0, layer 0's
     attention-input projections uncounted. tiers.py counts products, a step's width to a step. It can't find a
     reference circuit that isn't keyed: the class is checked against a transformer block on paper."""
-    gemm = (ROOT / "verity/ml/circuits/ops/boolean/gemm.py").read_text()
+    gemm = (ROOT / "verity/circuits/ops/boolean/gemm.py").read_text()
     dot = re.search(r'^GEMM_HOPPER: dict = \{"DOT": (\w+)\}$', gemm, re.M).group(1)
     operand = re.search(rf'^{dot} = definition\(.*?\(\("acc", F32\), \("a", (\w+)\), \("b", \1\)\)', gemm, re.M | re.S)
     step = int(re.search(rf"^{operand.group(1)} = Array\((\d+), BF16\)$", gemm, re.M).group(1))
@@ -298,11 +284,11 @@ def test_reference_layered_at_kimi_k2():
     assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (17, 2328, 2621440, 7)
     assert T.REFERENCE_THREADED == (d0 - E, step * (e + E * e_lk)) and T.DEFAULTS["e"] == T.REFERENCE_THREADED[1]
     assert T.DEFAULTS["thread_bits"] == pytest.approx(d0 * b, rel=1e-3)
-    nci = ROOT / "Security" / "Definitions" / "Nci"
+    nci = ROOT / "security" / "Definitions" / "Nci"
     layered = (nci / "Assumptions/Layered.lean").read_text()
     assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * {EMBED_BITS}))" in layered
     stated = (nci / "Guarantees/Layered.lean").read_text()
     assert T.DEFAULTS["K"] == 2e7 and f"S ≤ 2 * 10 ^ 7 → T.Threaded Γ S {d0 - E} {e + E * e_lk}" in stated
-    entry = json.loads((ROOT / "Security" / "lean-audit.json").read_text())["shape"]["conjectures"]
+    entry = json.loads((ROOT / "security" / "lean-audit.json").read_text())["shape"]["conjectures"]
     test = f"benchmarks/nci/tests/{Path(__file__).name}::test_reference_layered_at_kimi_k2"
     assert entry["Nci.Assumptions.ReferenceLayered"] | {"why": ""} == {"status": "open", "test": test, "why": ""}

@@ -1,0 +1,32 @@
+# training's jobs on the queue: one job per seed and split of an attack config, queued by
+# `verity bench training-slowdown CONFIG` (benchmarks/training_slowdown/run.py).
+#
+# What the kind needs of a node: an unprivileged process can make a user namespace (kernel.unprivileged_userns_clone=1
+# and kernel.apparmor_restrict_unprivileged_userns=0, each where the kernel has it; user.max_user_namespaces above 0).
+# The job runs its route's code in namespaces of its own, with no network and an empty directory over each final set
+# (training_slowdown/sandbox.py), as a user other than root, who holds no capability to undo them; on a node that
+# refuses the namespaces, or as root, the job fails before it trains, with the reason.
+#
+# A job's time: the kind caps none. What ends a run is its own --max-min, through the lease. A config that states
+# `budget.minutes` asks for its own (from the budget), and where that passes max_wall_min the queue warns and refuses
+# nothing, as for every rule on a kind (infra/cluster/src/cluster/kinds.py); max_wall_min is the time of a job whose
+# config states none.
+#
+# A job told to stop (SIGTERM: evicted, or out of its time) writes $RESEARCH_RUN_DIR/out/run.json saying so and
+# leaves what continuing needs in $RESEARCH_RUN_DIR/out/state; both go to the store with the run's output. The
+# command reads the stop from that record and never from the run's exit status: out of its time a job is ended by
+# the lease's `timeout`, whose status is 124 whatever the job's own. The queue starts nothing again: the command's
+# next run does, and the job continues from that state on whichever machine it gets.
+#
+# A job's disk: the command asks for each job's own (--disk-gb, from its start's size: the copies of a kept state a
+# run holds at once), so the kind states no disk_gb. A job writes nothing into the tree it runs from, which every run
+# of its commit shares: its Python environment is the run's own, in a directory it makes under /tmp
+# (UV_PROJECT_ENVIRONMENT) and removes when it ends, stopped or not. Where /tmp is not on the runs' filesystem, the
+# queue's hold for --disk-gb doesn't measure it.
+
+[kinds.training-attack]
+phase = "gpu1"
+max_wall_min = 60
+question = "How many counted gates does this attack config's route take from its start, and what does each checkpoint score on the job's held-out split?"
+outputs = ["$RESEARCH_RUN_DIR/out/run.json"]
+restart = "requeue"    # a job run again continues from the state its stopped run kept, or from θ when it kept none

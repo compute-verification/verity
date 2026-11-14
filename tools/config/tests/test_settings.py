@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity import settings as verity_settings
+from verity_config import verity_settings as verity_settings
 from verity_config import settings as ST
 from verity_config.settings import DEBUG, SHARED, VALUE, WHERE, Registry, Setting
 
@@ -62,7 +62,7 @@ def test_put_setdefault_and_unset_write_only_declared_variables(monkeypatch) -> 
 
 def test_every_registry_reads_the_shared_settings_and_declares_each_once() -> None:
     r = registry()
-    assert isinstance(r, verity_settings.Registry) and isinstance(SHARED, verity_settings.Registry)
+    assert isinstance(r, verity_settings.EnvSettings) and isinstance(SHARED, verity_settings.EnvSettings)
     assert r.setting("RESEARCH_RUN_ID") is SHARED.setting("RESEARCH_RUN_ID")
     assert r.get("CUDA_VISIBLE_DEVICES", {"CUDA_VISIBLE_DEVICES": ""}) == ""
     with pytest.raises(ValueError, match="RESEARCH_RUN_ID is declared twice"):

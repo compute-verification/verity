@@ -6,7 +6,7 @@ combine statements, costs, and the file it writes.
     run.py --guard [all] --scratch DIR --out DIR [--tree PATH]
     run.py --pin-reference --scratch DIR --out DIR
 
-The tile's lowering is `pouw_h1_circuits --lower K R C BIND PATH` (integrations/vllm), the auditor's lowering whose file a PoUW
+The tile's lowering is `pouw_h1_circuits --lower K R C BIND PATH` (adapters/vllm), the auditor's lowering whose file a PoUW
 period-open commits as ``k<K>``, bound to `BIND`. A lane's or the combine's is h1_lanes' staging of that statement of the R x C
 leaf (`lanes.py`), bound to the Program a served window's verifier derives for it. Each runs in a child process with
 ``HZ_STAGE`` (``fast`` by default) and ``H1_TMPL`` unset for the flat form or ``structural``. Its peak RSS is the child's
@@ -17,7 +17,7 @@ META's ``k_log`` and AND rows (`scan`), and deleted.
 all``: and of `WIDE`) flat, holds its SHA-512 to `REFERENCE`'s and its ``k_log`` to Flock's 2^`K_MAX` block, writing
 OUT/guard.json and exiting 1 naming each shape that fails. ``--pin-reference`` writes OUT/reference.json from this tree's
 lowering at `PINS` and `WIDE`, the guard's reference when this tree is the one pinned. ``--tree`` runs another checkout's
-lowering: its integrations/vllm and h1_lanes, its import roots first on the child's PYTHONPATH
+lowering: its adapters/vllm and h1_lanes, its import roots first on the child's PYTHONPATH
 (`research.pythonpath.tree_pythonpath`), and its .venv's Python where it has one.
 """
 from __future__ import annotations
@@ -34,6 +34,8 @@ from itertools import islice
 from pathlib import Path
 
 from verity_config.settings import SHARED
+
+__all__ = ["BIND", "guard", "scan"]
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -88,7 +90,7 @@ def lower(k: int, r: int, c: int, path: Path, form: str = "flat", tree: Path = R
             python = str(tree / ".venv" / "bin" / "python")
     if unit == "tile":
         argv, cwd = [python, "-m", "tests.protocols.pouw_h1_circuits", "--lower", str(k), str(r), str(c), json.dumps(BIND),
-                     str(path)], tree / "integrations" / "vllm"
+                     str(path)], tree / "adapters" / "vllm"
     else:
         argv, cwd = [python, str(HERE / "lanes.py"), unit, str(k), str(r), str(c), str(path), str(tree), staging], tree
     start = time.monotonic()
@@ -119,7 +121,7 @@ def _is_assert(line: bytes, row: int, const: int) -> bool:
     return t[la + 1:] == [b"1", b"%d" % const] and b"%d" % row in t[1:la + 1]
 
 
-def _netlist(f, lines: int) -> dict:
+def _section(f, lines: int) -> dict:
     """A ``flock-ir-unit/v2`` section's rows and AND rows: the rows between its input groups and its output groups (`ir_lower.layout`:
     the ANDs and table reads, the assertions, then forced-zero rows up to the first output group), less forced-zero rows and
     assertions."""
@@ -133,7 +135,7 @@ def _netlist(f, lines: int) -> dict:
             at += 3 + int(head[at + 2])
         spans.append(cols)
     if lines != useful + 1:
-        raise ValueError(f"a section of {lines} lines holds a netlist of {useful} rows")
+        raise ValueError(f"a section of {lines} lines, whose first line counts {useful} rows")
     lo = (spans[0][-1][0] + spans[0][-1][1]) * WORD if spans[0] else 0
     hi = spans[1][0][0] * WORD if spans[1] else const
     tail, pads, asserts = b" 1 %d\n" % const, 0, 0
@@ -151,7 +153,7 @@ def _netlist(f, lines: int) -> dict:
 
 def scan(path: Path) -> dict:
     """A circuit file's SHA-512, bytes, META's ``k_log`` (an instance's block, 2^k_log bits) and each ``CIRCUIT`` section's rows
-    and AND rows (`_netlist`); ``ands`` the unit section's, None for a templated file, whose unit is its template section
+    and AND rows (`_section`); ``ands`` the unit section's, None for a templated file, whose unit is its template section
     (``TEMPLATE n``, passed over here) and no ``CIRCUIT`` section."""
     with ThreadPoolExecutor(1) as pool:
         digest = pool.submit(_sha512, path)
@@ -170,7 +172,7 @@ def scan(path: Path) -> dict:
                 tag, name, lines = line.split()
                 if tag != b"CIRCUIT":
                     raise ValueError(f"{path}: {line[:80]!r} where a CIRCUIT section starts")
-                sections[name.decode()] = _netlist(f, int(lines))
+                sections[name.decode()] = _section(f, int(lines))
         sha512, size = digest.result()
     unit = sections.get("unit")
     return {"sha512": sha512, "bytes": size, "format": first.split()[0].decode(), "k_log": k_log,
@@ -264,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
         (a.out / "unit_lowering.json").write_text(json.dumps(doc, indent=1) + "\n")
         print(line(doc), flush=True)
         if doc["k_log"] is not None and doc["k_log"] > K_MAX:
-            print(f"unit_lowering: k_log {doc['k_log']} is past C-Flock's 2^{K_MAX} block: no proof of this file", file=sys.stderr)
+            print(f"unit_lowering: k_log {doc['k_log']} is past Flock's 2^{K_MAX} block: no proof of this file", file=sys.stderr)
             rc = 1
     return rc
 

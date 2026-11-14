@@ -4,7 +4,7 @@ frame-v3-sha512 tree (hm96_rows.cu), beside -h2's BLAKE3 frame-b3s rows on GPU 1
 Llama-3.1-8B's four linears with m = 32 (decode_served.py's shapes): a microbenchmark whose step figures are projections.
 
 Gates before any timing, per shape, from outputs poisoned to 0xA5: hm96_rows.cu's x (sha512/row-seg/v1 and sha512/row/v2),
-b ‖ c, the hm96 leaf and the frame-v3-sha512 root equal Python's (verity.ml.commitments: rowleaf, hm96.SHA512,
+b ‖ c, the hm96 leaf and the frame-v3-sha512 root equal Python's (verity.commitments: rowleaf, hm96.SHA512,
 merkle) under salts read from the OS on the host, as Flock's are (zk_hooks::LeafSalts), and handed to the device: 192 bytes a
 row, read and copied once per commitment, outside the timed graphs; each no-write control (the launch left out) leaves them
 unequal.
@@ -54,11 +54,13 @@ import statistics
 import sys
 import time
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments import merkle as MK
-from verity.ml.commitments import rowleaf as RL
-from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.commitments import hm96
+from verity.commitments import merkle as MK
+from verity.commitments import rowleaf as RL
+from verity.commitments.indexed import RangeIndexedDomain
 
 HERE = Path(__file__).resolve().parent
 M_REAL, LAYERS = 32, 32
@@ -71,7 +73,7 @@ HASH_T = ("hash_msg", "hash_leaf", "tree_leaves_t", "tree_t")
 CALL_PHASES = ("commit", "forming", "cleanup", "hashing")
 
 
-def load(name: str, path: Path):
+def load(name: str, path: Path) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
     mod = sys.modules[name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -93,7 +95,7 @@ def node_head(dom: MK.CommitmentDomain, level: int, index: int) -> bytes:
     return MK._message(MK._NODE, dom.domain_id, MK._uint(level), MK._uint(index)) + (64).to_bytes(8, "big")
 
 
-def constants(h) -> dict:
+def constants(h: Any) -> dict:
     """hm96_rows.cu's constants on the device: M_key's byte tables and the midstates of hm96's salt and leaf prefixes."""
     tables = b"".join(v.to_bytes(64, "little") for row in INST.byte_tables(KEY) for v in row)
     pre = h.put(INST.salt_prefix + INST.leaf_prefix(KEY))
@@ -450,6 +452,8 @@ def main() -> int:
     print("per forward (ms, 32 layers):", res["per_forward_ms"], flush=True)
     return 0
 
+
+__all__ = ["Commit", "INST", "KEY", "SEG", "SLOT", "V2", "node_head", "slots"]
 
 if __name__ == "__main__":
     sys.exit(main())

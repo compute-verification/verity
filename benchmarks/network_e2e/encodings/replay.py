@@ -1,30 +1,9 @@
-"""The scheduler replay: the advice as vLLM V1's scheduler, replayed from what the certified I/O already shows.
+"""The scheduler replay's traces, and the timing input coded inside the replay.
 
-The advice (I1) carries every batch row serving chose. vLLM V1's scheduler (`vllm/v1/core/sched/scheduler.py` at the pods'
-pin, d9105ea80) decides those rows deterministically from:
-
-- the registered engine configuration: `max_num_seqs`, `max_num_batched_tokens`, `max_model_len`, `long_prefill_token_threshold`,
-  chunked prefill, the KV block size, `watermark`, `scheduler_reserve_full_isl`, prefix caching, async scheduling, and
-  `num_gpu_blocks` (fixed at startup by memory profiling, and registered before the run: a prover that chose it could
-  buy derived hits with a bigger pool);
-- each request's prompt length and `max_tokens` (the certified request), where it stopped (the committed sampled tokens),
-  and, with prefix caching on, its tokens (their block hashes);
-- the order requests reached the engine (the certified ingress order);
-- hidden state that is a function of the history above: the waiting and running queues, each request's computed tokens,
-  in-flight tokens and output placeholders, and the KV block pool (its free count, and with caching its LRU free queue and
-  hash map);
-- one timing input: the engine step each request is first visible at (the `before_step` of its `arrive` record: the engine
-  core adds every request that arrived before it calls `schedule`).
-
-`replay` is that model: the served subset of `Scheduler.schedule` and `update_from_output`, `AsyncScheduler`,
-`KVCacheManager.allocate_slots`, the full-attention manager and `BlockPool`, line for line, and the engine core's two loops
-(`EngineCore.step`, `step_with_batch_queue`). It refuses what it doesn't model (priority policy, spec decode, KV
-connectors, multimodal, LoRA, structured output, aborts and stop strings) rather than guess.
-
-**The certified tick** (``--admit tick``, `verity_vllm.pipeline.serve_admit.TickGate`) removes the timing input: the engine
-adds a request when a logical clock T has passed the close of its network-certifier release bucket, and T is a function of
-the steps (`Tick`, registered with the engine class). `replay(tick=..., released=...)` runs that rule from the certified
-release buckets alone, so it asks nothing.
+The replay is `verity_vllm.pipeline.advice_code.replay` (`Engine`, `Tick`, `replay`, `compare`, over the KV pool
+`pool.BlockPool`; its docstring states what it models and refuses), re-exported here for the modules and tests that load this
+one by path. This module reads step traces as `Trace`s (`read_step_trace`, a vLLM run's; `read_corpus_trace`, the trace
+corpus's) and codes the replay's timing input.
 
 **The residual advice** is the timing input, coded online inside the replay. A request's visibility matters only at an
 *open* step: one whose waiting loop reached the queue's end with room to admit it. At every other step it would be blocked
@@ -38,6 +17,12 @@ now or a step later and nothing after it, says which of its steps emit its outpu
 each of those steps says which bucket it left in (`_Egress`). `decode` replays from that advice and the certified I/O
 alone, and
 `table` counts the bits per certifier window against I1 v0's (`advice.bits_by_window`, else `v0_widths`).
+
+**With a draft** the replay takes one more input, the drafts each row kept, and `draft_table` reports a trace's two
+classes of advice: the arrivals (the residual advice above) and the kept count (`kept_bits`: charged at the bits of
+advice v1's own code for it, `kept_code`, or 0 where the audited block derives it). The kept counts are advice, so
+neither `encode` nor `decode` hands the replay `RequestIO.kept`: each asks a row's count as the row emits (`replay`'s
+``kept``), and a fork, which asks nothing, keeps none of the drafts its rows carry.
 """
 
 from __future__ import annotations
@@ -46,806 +31,23 @@ import gzip
 import json
 import math
 import re
-import copy
-from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
+
+from verity_vllm.pipeline.advice_code import kept as KP, window_code as CV
+from verity_vllm.pipeline.advice_code.pool import BlockPool as BlockPool
+from verity_vllm.pipeline.advice_code.replay import (
+    compare, drive as drive, Emitted, Kept, Match as Match, Open, Queue as Queue, Replay, replay,
+    Scheduler as Scheduler,
+)
+from verity_vllm.pipeline.advice_code.schedule import (
+    cdiv, DraftEngine as DraftEngine, Engine, BlockHashes as BlockHashes, RequestState as RequestState, RequestIO, Row as Row,
+    RUNNING as RUNNING, speculative, Step, Tick,
+)
 
 STEP_TRACE = "verity-vllm/step-trace/v1"
-
-
-def cdiv(a: int, b: int) -> int:
-    return -(-a // b)
-
-
-@dataclass(frozen=True)
-class Engine:
-    """The configuration vLLM's scheduler reads, as `verity_vllm.engine.step_trace.scheduler_config` records it."""
-
-    max_num_seqs: int
-    max_num_batched_tokens: int
-    max_model_len: int
-    num_gpu_blocks: int
-    block_size: int = 16
-    long_prefill_token_threshold: int = 0
-    enable_chunked_prefill: bool = True
-    enable_prefix_caching: bool = False
-    async_scheduling: bool = False
-    watermark: float = 0.0
-    scheduler_reserve_full_isl: bool = True
-    policy: str = "fcfs"
-
-    def __post_init__(self) -> None:
-        if self.policy != "fcfs":
-            raise ValueError(f"policy {self.policy!r}: the replay models FCFS only")
-
-    @classmethod
-    def from_header(cls, config: dict[str, Any]) -> Engine:
-        asy = config.get("scheduler") == "AsyncScheduler" if config.get("scheduler") else config.get("async_scheduling")
-        return cls(max_num_seqs=int(config["max_num_seqs"]), max_num_batched_tokens=int(config["max_num_batched_tokens"]),
-                   max_model_len=int(config["max_model_len"]), num_gpu_blocks=int(config["num_gpu_blocks"]),
-                   block_size=int(config.get("block_size", 16)),
-                   long_prefill_token_threshold=int(config.get("long_prefill_token_threshold") or 0),
-                   enable_chunked_prefill=bool(config.get("enable_chunked_prefill", True)),
-                   enable_prefix_caching=bool(config.get("enable_prefix_caching", False)), async_scheduling=bool(asy),
-                   watermark=float(config.get("watermark", 0.0) or 0.0),
-                   scheduler_reserve_full_isl=bool(config.get("scheduler_reserve_full_isl", True)),
-                   policy=str(config.get("policy", "fcfs")))
-
-
-@dataclass(frozen=True)
-class Tick:
-    """The certified tick's registered constants, in microseconds: the network certifier's bucket τ_b, and the engine
-    class's step times τ_sat (a step after which the waiting queue is nonempty) and τ_free (one after which it is empty).
-    The serving side's is `verity_vllm.pipeline.serve_admit.Tick`; this stdlib copy keeps the replay loadable alone."""
-
-    bucket_us: int
-    sat_us: int
-    free_us: int
-
-    def __post_init__(self) -> None:
-        for name in ("bucket_us", "sat_us", "free_us"):
-            v = getattr(self, name)
-            if type(v) is not int or v <= 0:
-                raise ValueError(f"tick {name}: a positive integer of microseconds, not {v!r}")
-
-    def close(self, a: int) -> int:
-        """When bucket a closes: (a + 1)·τ_b."""
-        return (a + 1) * self.bucket_us
-
-
-@dataclass(frozen=True)
-class RequestIO:
-    """One request as the certified I/O shows it. `output_len` counts every token the request emitted, its stop token
-    included; `eos` is whether it stopped on a stop token there (else it ran to `max_tokens` or `max_model_len`). `tokens`,
-    the prompt then the output, is read only with prefix caching on."""
-
-    prompt_len: int
-    max_tokens: int
-    output_len: int
-    eos: bool
-    tokens: tuple[int, ...] | None = None
-
-
-Row = tuple[int, int, int]          # (request index, first position, tokens scheduled)
-
-
-@dataclass
-class Step:
-    """One executed step: its rows in the scheduler's order (running, then new and resumed), and the rest of what
-    `SchedulerOutput` says of it."""
-
-    rows: list[Row]
-    new: list[int] = field(default_factory=list)
-    resumed: list[int] = field(default_factory=list)
-    preempted: list[int] = field(default_factory=list)
-    cache_hit: dict[int, int] = field(default_factory=dict)
-    sources: dict[int, list[tuple[int, int]]] = field(default_factory=dict)   # a hit's runs (request, tokens) by owner
-
-    def key(self) -> tuple[Row, ...]:
-        return tuple(sorted(self.rows))
-
-
-# --- the KV cache: one full-attention group (KVCacheManager, FullAttentionManager, BlockPool) -----------------------------
-
-
-class _Hashes:
-    """Block hashes as interned ids: equal ids iff equal chained (parent, tokens), so there are no collisions."""
-
-    def __init__(self) -> None:
-        self._ids: dict[tuple[int, tuple[int, ...]], int] = {}
-
-    def __call__(self, parent: int, block: tuple[int, ...]) -> int:
-        return self._ids.setdefault((parent, block), len(self._ids) + 1)
-
-
-class _Free:
-    """`BlockPool`'s free-block queue: blocks are taken from the front, freed to either end, and a cached one is taken
-    from wherever it is on a hit."""
-
-    def __init__(self, blocks: Iterable[int]) -> None:
-        self.d: OrderedDict[int, None] = OrderedDict((b, None) for b in blocks)
-
-    def __len__(self) -> int:
-        return len(self.d)
-
-    def pop(self) -> int:
-        return self.d.popitem(last=False)[0]
-
-    def take(self, b: int) -> None:
-        del self.d[b]
-
-    def push(self, b: int, *, front: bool) -> None:
-        self.d[b] = None
-        if front:
-            self.d.move_to_end(b, last=False)
-
-
-class _FreeFork:
-    """A fork's free-block queue over its parent's, which stays as it is while the fork runs: the blocks the fork freed to
-    the front, then the parent's it hasn't taken, then those it freed to the back."""
-
-    def __init__(self, base: _Free) -> None:
-        self.base, self.it, self.gone = base.d, iter(base.d), set()
-        self.front: OrderedDict[int, None] = OrderedDict()
-        self.back: OrderedDict[int, None] = OrderedDict()
-        self.n = len(base.d)
-
-    def __len__(self) -> int:
-        return self.n
-
-    def pop(self) -> int:
-        self.n -= 1
-        if self.front:
-            return self.front.popitem(last=False)[0]
-        for b in self.it:
-            if b not in self.gone:
-                return b
-        return self.back.popitem(last=False)[0]
-
-    def take(self, b: int) -> None:
-        self.n -= 1
-        if b in self.front:
-            del self.front[b]
-        elif b in self.back:
-            del self.back[b]
-        else:
-            self.gone.add(b)
-
-    def push(self, b: int, *, front: bool) -> None:
-        self.n += 1
-        if front:
-            self.front[b] = None
-            self.front.move_to_end(b, last=False)
-        else:
-            self.back[b] = None
-
-
-class _KV:
-    def __init__(self, engine: Engine) -> None:
-        self.B = engine.block_size
-        self.L = engine.max_model_len
-        self.caching = engine.enable_prefix_caching
-        self.watermark_blocks = int(engine.watermark * engine.num_gpu_blocks)
-        self.free: _Free | _FreeFork = _Free(range(1, engine.num_gpu_blocks))  # block 0 is the null block
-        self.ref = [0] * engine.num_gpu_blocks
-        self.block_hash: list[int | None] = [None] * engine.num_gpu_blocks
-        self.by_hash: dict[int, OrderedDict[int, None]] = {}
-        self.mine: set[int] | None = None       # a fork's: the hashes whose blocks it has copied from its parent's
-        self.req_blocks: dict[int, list[int]] = {}
-        self.num_cached: dict[int, int] = {}
-        self.owner: list[int | None] = [None] * engine.num_gpu_blocks     # the request that computes a block's KV
-
-    def fork(self) -> _KV:
-        """A copy to run on while this one waits (its free queue and hash map are overlays on this one's)."""
-        assert isinstance(self.free, _Free)
-        k = object.__new__(_KV)
-        k.B, k.L, k.caching, k.watermark_blocks = self.B, self.L, self.caching, self.watermark_blocks
-        k.free, k.ref, k.block_hash, k.owner = _FreeFork(self.free), list(self.ref), list(self.block_hash), list(self.owner)
-        k.by_hash, k.mine = dict(self.by_hash), set()
-        k.req_blocks = {i: list(bs) for i, bs in self.req_blocks.items()}
-        k.num_cached = dict(self.num_cached)
-        return k
-
-    def _blocks(self, h: int) -> OrderedDict[int, None]:
-        """The blocks cached under h, to change (a fork's own copy)."""
-        bs = self.by_hash.get(h)
-        if bs is None or (self.mine is not None and h not in self.mine):
-            bs = self.by_hash[h] = OrderedDict() if bs is None else OrderedDict(bs)
-            if self.mine is not None:
-                self.mine.add(h)
-        return bs
-
-    def _pop_hash(self, b: int) -> None:
-        h = self.block_hash[b]
-        if h is None:
-            return
-        blocks = self._blocks(h)
-        del blocks[b]
-        if not blocks:
-            del self.by_hash[h]
-        self.block_hash[b] = None
-
-    def _new_blocks(self, k: int) -> list[int]:
-        assert k <= len(self.free)
-        out = []
-        for _ in range(k):
-            b = self.free.pop()
-            if self.caching:
-                self._pop_hash(b)
-            self.ref[b] = 1
-            out.append(b)
-        return out
-
-    def _free_blocks(self, ordered: Iterable[int]) -> None:
-        first, last = [], []
-        for b in ordered:
-            self.ref[b] -= 1
-            if self.ref[b] == 0:
-                (first if self.block_hash[b] is None or not self.caching else last).append(b)
-        for b in reversed(first):
-            self.free.push(b, front=True)
-        for b in last:
-            self.free.push(b, front=False)
-
-    def hit(self, r: _R) -> list[int]:
-        """`find_longest_cache_hit` over the request's full-block hashes, at most `num_tokens - 1` tokens."""
-        if not self.caching:
-            return []
-        out = []
-        for h in r.block_hashes[: (r.num_tokens - 1) // self.B]:
-            blocks = self.by_hash.get(h)
-            if not blocks:
-                break
-            out.append(next(iter(blocks)))
-        return out
-
-    def blocks_to_allocate(self, r: _R, num_tokens: int, hit: Sequence[int]) -> int:
-        held = len(self.req_blocks.get(r.i, ()))
-        evictable = sum(1 for b in hit if self.ref[b] == 0)
-        return max(cdiv(num_tokens, self.B) - len(hit) - held, 0) + evictable
-
-    def allocate_slots(self, r: _R, n: int, hit: Sequence[int] = (), *, full_sequence_must_fit: bool = False,
-                       has_scheduled_reqs: bool = True, dry: bool = False) -> bool:
-        num_local = r.num_computed + len(hit) * self.B
-        total = min(num_local, self.L)
-        wm = self.watermark_blocks if has_scheduled_reqs and r.status in (_W, _P) else 0
-        if full_sequence_must_fit and self.blocks_to_allocate(r, min(r.num_tokens, self.L), hit) + wm > len(self.free):
-            return False
-        need_slot = min(total + n, self.L)
-        if self.blocks_to_allocate(r, need_slot, hit) + wm > len(self.free):
-            return False
-        if dry:
-            return True
-        blocks = self.req_blocks.setdefault(r.i, [])
-        if hit:
-            for b in hit:
-                if self.ref[b] == 0:
-                    self.free.take(b)
-                self.ref[b] += 1
-            blocks.extend(hit)
-            self.num_cached[r.i] = len(blocks)
-        k = cdiv(need_slot, self.B) - len(blocks)
-        if k > 0:
-            new = self._new_blocks(k)
-            for b in new:
-                self.owner[b] = r.i
-            blocks.extend(new)
-        if self.caching:
-            self.cache_blocks(r, min(total + n, r.num_tokens))
-        return True
-
-    def cache_blocks(self, r: _R, num_tokens: int) -> None:
-        done = self.num_cached.get(r.i, 0)
-        full = num_tokens // self.B
-        if done >= full:
-            return
-        blocks = self.req_blocks[r.i]
-        for k in range(done, full):
-            b = blocks[k]
-            if self.block_hash[b] is not None:
-                self._pop_hash(b)
-            h = r.block_hashes[k]
-            self._blocks(h)[b] = None
-            self.block_hash[b] = h
-        self.num_cached[r.i] = full
-
-    def free_request(self, r: _R) -> None:
-        blocks = self.req_blocks.pop(r.i, [])
-        self.num_cached.pop(r.i, None)
-        self._free_blocks(reversed(blocks))
-
-
-# --- the scheduler -------------------------------------------------------------------------------------------------------
-
-_W, _RUN, _P, _F = "waiting", "running", "preempted", "finished"
-
-
-class _R:
-    """A request's scheduler state (`vllm.v1.request.Request`, the fields the served subset reads)."""
-
-    def __init__(self, i: int, io: RequestIO, hashes: _Hashes | None, block_size: int) -> None:
-        self.i = i
-        self.io = io
-        self.P = io.prompt_len
-        self.n_out = 0
-        self.num_computed = 0
-        self.placeholders = 0
-        self.status = _W
-        self.is_prefill_chunk = False
-        self.in_flight = 0
-        self.stale = 0
-        self.drop_stale = False
-        self.preemptions = 0
-        self.finish: str | None = None
-        self._hashes = hashes
-        self._B = block_size
-        self.block_hashes: list[int] = []
-        if hashes is not None:
-            if io.tokens is None or len(io.tokens) < io.prompt_len + io.output_len:
-                raise ValueError(f"request {i}: prefix caching is on, so the replay needs its tokens (prompt then output)")
-            self._extend_hashes()
-
-    @property
-    def num_tokens(self) -> int:
-        return self.P + self.n_out
-
-    def _extend_hashes(self) -> None:
-        toks = self.io.tokens
-        assert toks is not None and self._hashes is not None
-        while (len(self.block_hashes) + 1) * self._B <= self.num_tokens:
-            k = len(self.block_hashes)
-            parent = self.block_hashes[-1] if self.block_hashes else 0
-            self.block_hashes.append(self._hashes(parent, tuple(toks[k * self._B:(k + 1) * self._B])))
-
-    def append_output(self) -> None:
-        self.n_out += 1
-        if self._hashes is not None:
-            self._extend_hashes()
-
-    def fork(self) -> _R:
-        r = copy.copy(self)
-        r.block_hashes = list(self.block_hashes)
-        return r
-
-
-@dataclass
-class _Pass:
-    """One `schedule()` in progress: its budgets left, its step so far, its rows (request -> tokens, first position) and
-    the requests its waiting loop set aside."""
-
-    token_budget: int
-    input_budget: int
-    step: Step
-    sched: dict[int, int]
-    starts: dict[int, int]
-    skipped_now: deque[_R]
-
-    def fork(self, reqs: Sequence[_R]) -> _Pass:
-        st = self.step
-        return _Pass(self.token_budget, self.input_budget,
-                     Step(rows=list(st.rows), new=list(st.new), resumed=list(st.resumed), preempted=list(st.preempted),
-                          cache_hit=dict(st.cache_hit), sources={k: list(v) for k, v in st.sources.items()}),
-                     dict(self.sched), dict(self.starts), deque(reqs[r.i] for r in self.skipped_now))
-
-
-class _Sched:
-    def __init__(self, engine: Engine, requests: Sequence[RequestIO]) -> None:
-        self.e = engine
-        self.kv = _KV(engine)
-        hashes = _Hashes() if engine.enable_prefix_caching else None
-        self.reqs = [_R(i, io, hashes, engine.block_size) for i, io in enumerate(requests)]
-        self.waiting: deque[_R] = deque()
-        self.skipped: deque[_R] = deque()
-        self.running: list[_R] = []
-        self.finished_ids: set[int] = set()
-
-    def fork(self, touched: Iterable[int] = ()) -> _Sched:
-        """A copy to run on while this one waits, which may change only the requests in the engine and `touched` (the
-        rest, and the block-hash interning, which only names contents, are shared)."""
-        c = object.__new__(_Sched)
-        c.e, c.kv = self.e, self.kv.fork()
-        c.reqs = list(self.reqs)
-        for i in {*touched, *(r.i for r in (*self.running, *self.waiting, *self.skipped))}:
-            c.reqs[i] = self.reqs[i].fork()
-        c.waiting = deque(c.reqs[r.i] for r in self.waiting)
-        c.skipped = deque(c.reqs[r.i] for r in self.skipped)
-        c.running = [c.reqs[r.i] for r in self.running]
-        c.finished_ids = set(self.finished_ids)
-        return c
-
-    def add(self, i: int) -> None:
-        self.waiting.append(self.reqs[i])
-
-    def has_requests(self) -> bool:
-        return bool(self.waiting or self.skipped or self.running or self.finished_ids)
-
-    def quiet(self) -> bool:
-        """Nothing running or waiting: the next arrival is what starts the next executed step."""
-        return not (self.waiting or self.skipped or self.running)
-
-    def _preempt(self, r: _R) -> None:
-        assert r.status == _RUN
-        self.kv.free_request(r)
-        r.status = _P
-        r.num_computed = 0
-        r.drop_stale = r.drop_stale and r.stale > 0
-        r.stale = r.in_flight
-        r.placeholders = 0
-        r.preemptions += 1
-        self.waiting.appendleft(r)
-
-    def would_admit(self, i: int, token_budget: int, input_budget: int) -> bool:
-        """Whether request i, appended to the waiting queue, would be scheduled where the waiting loop stands (changes
-        nothing)."""
-        e = self.e
-        if token_budget <= 0 or input_budget <= 0 or len(self.running) >= e.max_num_seqs:
-            return False
-        r = self.reqs[i]
-        assert r.status == _W and r.num_computed == 0
-        hit = self.kv.hit(r)
-        budget = min(token_budget, input_budget)
-        n = r.num_tokens - len(hit) * e.block_size
-        if 0 < e.long_prefill_token_threshold < n:
-            n = e.long_prefill_token_threshold
-        if not e.enable_chunked_prefill and n > budget:
-            return False
-        n = min(n, budget)
-        return self.kv.allocate_slots(r, n, hit, full_sequence_must_fit=e.scheduler_reserve_full_isl,
-                                      has_scheduled_reqs=bool(self.running), dry=True)
-
-    def schedule(self, on_open: Callable[[_Pass], bool] | None = None) -> tuple[Step, dict[int, bool]]:
-        """One `schedule()`. When the waiting loop reaches the queue's end with budget left, `on_open(pass)` may append one
-        more request to the waiting queue (returning True), and the loop goes on."""
-        p = self._running()
-        if not p.step.preempted:
-            self._waiting(p, on_open)
-        return self._close(p)
-
-    def _running(self) -> _Pass:
-        e = self.e
-        thr = e.long_prefill_token_threshold
-        L = e.max_model_len
-        p = _Pass(e.max_num_batched_tokens, e.max_num_batched_tokens, Step(rows=[]), {}, {}, deque())
-        step, sched, starts = p.step, p.sched, p.starts
-
-        idx = 0
-        while idx < len(self.running) and p.token_budget > 0:
-            r = self.running[idx]
-            if p.input_budget <= 0:
-                break
-            if r.placeholders > 0 and r.num_computed + 2 - r.placeholders >= r.P + r.io.max_tokens:
-                idx += 1
-                continue
-            n = r.num_tokens + r.placeholders - r.num_computed
-            if 0 < thr < n:
-                n = thr
-            n = min(n, p.token_budget, p.input_budget)
-            n = min(n, L - r.num_computed - 1)
-            if n == 0:
-                idx += 1
-                continue
-            ok = False
-            while True:
-                ok = self.kv.allocate_slots(r, n)
-                if ok:
-                    break
-                victim = self.running.pop()
-                self._preempt(victim)
-                step.preempted.append(victim.i)
-                if victim is r:
-                    break
-            if not ok:
-                break
-            sched[r.i] = n
-            starts[r.i] = r.num_computed
-            p.token_budget -= n
-            p.input_budget -= n
-            idx += 1
-        return p
-
-    def _waiting(self, p: _Pass, on_open: Callable[[_Pass], bool] | None) -> None:
-        e = self.e
-        thr = e.long_prefill_token_threshold
-        step, sched, starts = p.step, p.sched, p.starts
-        while p.token_budget > 0:
-            if not (self.waiting or self.skipped):
-                if on_open is None or not on_open(p):
-                    break
-            if p.input_budget <= 0:
-                break
-            if len(self.running) >= e.max_num_seqs:
-                break
-            q = self.skipped if self.skipped else self.waiting
-            r = q[0]
-            if r.stale > 0 and not r.drop_stale:
-                q.popleft()
-                p.skipped_now.appendleft(r)
-                continue
-            hit = self.kv.hit(r) if r.num_computed == 0 else []
-            num_computed = r.num_computed if r.num_computed else len(hit) * e.block_size
-            budget = min(p.token_budget, p.input_budget)
-            n = r.num_tokens - num_computed
-            if 0 < thr < n:
-                n = thr
-            if not e.enable_chunked_prefill and n > budget:
-                break
-            n = min(n, budget)
-            assert n > 0
-            if not self.kv.allocate_slots(r, n, hit, full_sequence_must_fit=e.scheduler_reserve_full_isl,
-                                          has_scheduled_reqs=bool(self.running)):
-                break
-            q.popleft()
-            self.running.append(r)
-            (step.new if r.status == _W else step.resumed).append(r.i)
-            if hit:
-                step.cache_hit[r.i] = len(hit) * e.block_size
-                runs: list[tuple[int, int]] = []
-                for b in hit:
-                    o = self.kv.owner[b]
-                    assert o is not None
-                    if runs and runs[-1][0] == o:
-                        runs[-1] = (o, runs[-1][1] + e.block_size)
-                    else:
-                        runs.append((o, e.block_size))
-                step.sources[r.i] = runs
-            sched[r.i] = n
-            starts[r.i] = num_computed
-            p.token_budget -= n
-            p.input_budget -= n
-            r.status = _RUN
-            r.num_computed = num_computed
-        if p.skipped_now:
-            self.skipped.extendleft(p.skipped_now)
-            p.skipped_now = deque()
-
-    def _close(self, p: _Pass) -> tuple[Step, dict[int, bool]]:
-        e, step, sched, starts = self.e, p.step, p.sched, p.starts
-        samples: dict[int, bool] = {}
-        for i, n in sched.items():
-            r = self.reqs[i]
-            r.num_computed += n
-            r.in_flight += n
-            r.is_prefill_chunk = r.num_computed < r.num_tokens + r.placeholders
-            samples[i] = not r.is_prefill_chunk
-        if e.async_scheduling:
-            for i in sched:
-                r = self.reqs[i]
-                if not r.is_prefill_chunk:
-                    r.placeholders += 1
-        self.finished_ids = set()
-        step.rows = [(i, starts[i], n) for i, n in sched.items()]
-        return step, samples
-
-    def _stop(self, r: _R) -> bool:
-        if r.io.eos and r.n_out == r.io.output_len:
-            r.finish = "stop"
-            return True
-        if r.num_tokens >= self.e.max_model_len or r.n_out >= r.io.max_tokens:
-            r.finish = "length"
-            return True
-        return False
-
-    def update(self, step: Step, samples: dict[int, bool]) -> list[int]:
-        """`update_from_output` for one executed step, its executor a fake whose row samples iff it ends at the request's
-        frontier. Returns the requests that finished."""
-        stopped_running: set[int] = set()
-        stopped_preempted: set[int] = set()
-        done = []
-        for i, _, n in step.rows:
-            r = self.reqs[i]
-            r.in_flight -= n
-            stale = False
-            if r.stale > 0:
-                stale = True
-                r.stale -= n
-                assert r.stale >= 0
-            if r.status == _F or (stale and r.drop_stale) or not samples[i]:
-                continue
-            before = r.status
-            r.append_output()
-            stopped = self._stop(r)
-            if self.e.async_scheduling:
-                if not stale:
-                    r.placeholders -= 1
-                    assert r.placeholders >= 0
-                if before == _RUN and self.kv.caching:
-                    self.kv.cache_blocks(r, r.num_computed - r.placeholders)
-            if stopped:
-                r.status = _F
-                self.finished_ids.add(i)
-                self.kv.free_request(r)
-                (stopped_running if before == _RUN else stopped_preempted).add(i)
-                done.append(i)
-        if stopped_running:
-            self.running = [r for r in self.running if r.i not in stopped_running]
-        if stopped_preempted:
-            self.waiting = deque(r for r in self.waiting if r.i not in stopped_preempted)
-            self.skipped = deque(r for r in self.skipped if r.i not in stopped_preempted)
-        return done
-
-
-# --- the engine core's loop -------------------------------------------------------------------------------------------------
-
-
-@dataclass
-class Replay:
-    steps: list[Step]
-    finish: list[str | None]
-    admitted: list[int | None]      # the executed step each request was first visible at
-    forced: list[bool]              # it arrived into a quiet engine
-    asked: list[list[int]]          # the open steps it was asked about, its admission last
-
-
-Emitted = list[dict[int, int]]     # per executed step, in order: request -> the index of the output it emitted there
-
-
-@dataclass(frozen=True)
-class Open:
-    """The scheduler where an open step's waiting loop stands: its state, the step's token budget left and its rows so
-    far (request -> tokens), all read only; and `whatif(now, want)`, the engine run on from here on a copy, the request
-    asked about arriving now (or before the next step) and nothing after it, until it has emitted `want` outputs (or
-    finished, or `_WHATIF_STEPS` steps): what each executed step emitted."""
-
-    sched: _Sched
-    budget: int
-    scheduled: dict[int, int]
-    whatif: Callable[[bool, int], Emitted]
-
-
-Decide = Callable[[int, int, Open], bool]
-Queue = deque[tuple[Step, dict[int, bool]]]
-_WHATIF_STEPS = 256
-
-
-def _drive(s: _Sched, queue: Queue, *, top: Callable[[], bool], schedule: Callable[[], tuple[Step, dict[int, bool]]],
-           executed: Callable[[Step, dict[int, bool]], None], resume: tuple[Step, dict[int, bool]] | None = None) -> None:
-    """The engine core's loop (`EngineCore.step`; `step_with_batch_queue` under async scheduling, two steps in flight):
-    `top()` before each schedule (False ends it), `executed` after each step's update; `resume`, a step this iteration
-    has already scheduled."""
-    while True:
-        if resume is None and not top():
-            return
-        if not s.e.async_scheduling:
-            step, samples = resume or schedule()
-            resume = None
-            executed(step, samples)
-            continue
-        if resume is not None or s.has_requests():
-            step, samples = resume or schedule()
-            resume = None
-            queue.appendleft((step, samples))
-            if len(queue) < 2 and (step.rows or s.has_requests()):
-                continue
-        elif not queue:
-            continue
-        step, samples = queue.pop()
-        executed(step, samples)
-
-
-def _whatif(s: _Sched, queue: Queue, p: _Pass, i: int, now: bool, want: int) -> Emitted:
-    c, q = s.fork({i, *(r.i for r in p.skipped_now), *(j for st, _ in queue for j, _, _ in st.rows)}), deque(queue)
-    p, r, later = p.fork(c.reqs), c.reqs[i], not now
-    if now:
-        c.add(i)
-    c._waiting(p, None)
-    out: Emitted = []
-    count = 0
-
-    def top() -> bool:
-        nonlocal later
-        if later:
-            c.add(i)
-            later = False
-        return (c.has_requests() or bool(q)) and r.n_out < want and r.status != _F and count < _WHATIF_STEPS
-
-    def schedule() -> tuple[Step, dict[int, bool]]:
-        nonlocal count
-        count += 1
-        return c.schedule(None)
-
-    def executed(step: Step, samples: dict[int, bool]) -> None:
-        before = {j: c.reqs[j].n_out for j, _, _ in step.rows}
-        c.update(step, samples)
-        if step.rows:
-            out.append({j: m for j, m in before.items() if c.reqs[j].n_out > m})
-
-    _drive(c, q, top=top, schedule=schedule, executed=executed, resume=c._close(p))
-    return out
-
-
-def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int] | None = None,
-           decide: Decide | None = None, tick: Tick | None = None, released: Sequence[int] | None = None,
-           max_steps: int | None = None) -> Replay:
-    """Run the scheduler over `requests` (in the order they reached the engine) and return the executed steps.
-
-    Exactly one of: `admit`, each request's `before_step` (it is added before the first `schedule` after `admit[i]`
-    executed steps, as the engine core adds it); `decide(i, k, open)`, asked at each open step k whether the next
-    request i has arrived (an arrival into a quiet engine is added without asking); or `tick` with `released`, each
-    request's certified release bucket (the requests in release order, so nondecreasing), added by the certified tick.
-    Under the tick, T starts at 0; before each iteration of the engine core's loop, when nothing is running or waiting T
-    jumps to the next request's bucket close, and every request whose bucket has closed by T ((a + 1)·τ_b ≤ T) is added,
-    except at an iteration that only frees finished requests (nothing running or waiting), which adds none; after each
-    step that schedules a token, T advances by τ_sat if the waiting queue is nonempty and by τ_free if it is empty."""
-    n = len(requests)
-    if (admit is not None) + (decide is not None) + (tick is not None) != 1:
-        raise ValueError("give exactly one of admit, decide and tick")
-    if (tick is None) != (released is None):
-        raise ValueError("give the release buckets with the tick, and only with it")
-    if admit is not None:
-        if len(admit) != n:
-            raise ValueError(f"{len(admit)} admission steps for {n} requests")
-        if any(admit[k] > admit[k + 1] for k in range(n - 1)):
-            raise ValueError("admission steps must be nondecreasing in arrival order (FCFS)")
-    if released is not None:
-        if len(released) != n:
-            raise ValueError(f"{len(released)} release buckets for {n} requests")
-        if any(type(a) is not int or a < 0 for a in released) or any(released[k] > released[k + 1] for k in range(n - 1)):
-            raise ValueError("release buckets are ints ≥ 0, nondecreasing in release order")
-    s = _Sched(engine, requests)
-    out = Replay(steps=[], finish=[None] * n, admitted=[None] * n, forced=[False] * n, asked=[[] for _ in range(n)])
-    nxt = 0
-    T = 0
-    queue: Queue = deque()
-    limit = max_steps if max_steps is not None else 4 * (sum(r.prompt_len + r.output_len for r in requests) + n) + 64
-
-    def add(forced: bool) -> None:
-        nonlocal nxt
-        s.add(nxt)
-        out.admitted[nxt] = len(out.steps)
-        out.forced[nxt] = forced
-        nxt += 1
-
-    def on_open(p: _Pass) -> bool:
-        if decide is None or nxt >= n or not s.would_admit(nxt, p.token_budget, p.input_budget):
-            return False
-        out.asked[nxt].append(len(out.steps))
-        i = nxt
-        o = Open(s, min(p.token_budget, p.input_budget), p.sched, lambda now, want: _whatif(s, queue, p, i, now, want))
-        if not decide(i, len(out.steps), o):
-            return False
-        add(False)
-        return True
-
-    def top() -> bool:
-        nonlocal T
-        if admit is not None:
-            while nxt < n and admit[nxt] <= len(out.steps):
-                add(s.quiet())
-        elif tick is not None and released is not None:
-            if not (s.quiet() and s.finished_ids):
-                if s.quiet() and nxt < n:
-                    T = max(T, tick.close(released[nxt]))
-                while nxt < n and tick.close(released[nxt]) <= T:
-                    add(s.quiet())
-        elif nxt < n and s.quiet():
-            add(True)
-        if not s.has_requests() and not queue:
-            if nxt >= n:
-                return False
-            raise ValueError(f"request {nxt}: admitted at step {admit[nxt] if admit else None} but the engine is idle before "
-                             f"step {len(out.steps)}, which only its arrival starts")
-        if len(out.steps) > limit:
-            raise RuntimeError(f"no progress after {limit} steps")
-        return True
-
-    def schedule() -> tuple[Step, dict[int, bool]]:
-        nonlocal T
-        step, samples = s.schedule(on_open if decide is not None else None)
-        if step.rows:
-            out.steps.append(step)
-            if tick is not None:
-                T += tick.sat_us if (s.waiting or s.skipped) else tick.free_us
-        return step, samples
-
-    def executed(step: Step, samples: dict[int, bool]) -> None:
-        for i in s.update(step, samples):
-            out.finish[i] = s.reqs[i].finish
-
-    _drive(s, queue, top=top, schedule=schedule, executed=executed)
-    return out
 
 
 # --- traces ------------------------------------------------------------------------------------------------------------------
@@ -881,6 +83,8 @@ class Trace:
     header: dict[str, Any] = field(default_factory=dict)
     output_t: list[list[float]] | None = None
     releases: Releases | None = None
+    passed: list[int] | None = None  # the empty schedules each request arrived after at its step (`replay`'s `passed`)
+    emitted: list[dict[int, int]] | None = None  # the tokens each step's requests emitted, where the trace records them
 
     def first_scheduled(self) -> list[int]:
         first = [-1] * len(self.requests)
@@ -895,8 +99,18 @@ class Trace:
 
     def kept_steps(self) -> list[list[int]]:
         """Each request's kept outputs as the steps that emitted them: a row emits when it reaches the request's frontier
-        (its prompt and the outputs kept so far), up to its output length."""
+        (its prompt and the outputs kept so far), up to its output length. With a draft a row emits its token and the
+        drafts it kept, at positions that depend on the rows before it, so the steps are read from the trace's own
+        count of what each emitted."""
         kept: list[list[int]] = [[] for _ in self.requests]
+        if self.engine.num_speculative_tokens:
+            if self.emitted is None:
+                raise ValueError("with a draft, the steps a request's outputs left in are the trace's `emitted`, which "
+                                 "this trace does not record")
+            for s, em in enumerate(self.emitted):
+                for i, k in em.items():
+                    kept[i].extend([s] * k)
+            return kept
         for s, st in enumerate(self.steps):
             for i, start, n in st.rows:
                 if start + n == self.requests[i].prompt_len + len(kept[i]) and len(kept[i]) < self.requests[i].output_len:
@@ -915,11 +129,13 @@ class Trace:
         return min(bucket(t, bucket_s) for t in self.ingress_t) if self.clocked() else 0  # type: ignore[arg-type]
 
     def certified(self, bucket_s: float = 0.1) -> Certified:
-        """What the verifier holds of this run without advice (`Certified`)."""
+        """What the verifier holds of this run without advice (`Certified`): with a draft, its requests without the
+        drafts their rows kept, which are advice."""
+        requests = _asked(self.engine, self.requests)[0]
         if not self.clocked():
-            return Certified(self.engine, list(self.requests), bucket_s, None, None)
+            return Certified(self.engine, requests, bucket_s, None, None)
         o = self.origin(bucket_s)
-        return Certified(self.engine, list(self.requests), bucket_s,
+        return Certified(self.engine, requests, bucket_s,
                          [bucket(t, bucket_s) - o for t in self.ingress_t],                              # type: ignore[arg-type]
                          [[bucket(t, bucket_s) - o for t in ts] for ts in self.output_times()])
 
@@ -928,7 +144,8 @@ class Trace:
 class Certified:
     """What the verifier holds without advice: the registered engine, each request's certified I/O in the order it reached
     the engine, and, with a clock, each request's ingress bucket and the bucket each of its kept outputs left in, counted
-    from the session's first (`Trace.origin`). The decoder reads nothing else."""
+    from the session's first (`Trace.origin`). The decoder reads nothing else. The drafts a request's rows kept
+    (`RequestIO.kept`) are advice and not of it: `decode` refuses a record that carries them."""
 
     engine: Engine
     requests: list[RequestIO]
@@ -941,10 +158,31 @@ class Certified:
         return [0] * len(self.requests) if self.ingress is None else [b // window_buckets for b in self.ingress]
 
 
+def _asked(engine: Engine, requests: Sequence[RequestIO]) -> tuple[list[RequestIO], Kept | None]:
+    """The requests and `replay`'s ``kept`` for a replay that is asked each emitting row's kept count as the row emits,
+    the way a decoder that reads the counts off a string has them. With a draft: the requests without `RequestIO.kept`,
+    and their lists' entries as the answers, each given only to the row that emits it. A fork (`Open.whatif`) asks
+    nothing and finds no list, so it keeps none. Without a draft: the requests as they are, and nothing to ask. A row
+    the lists have no count for is refused by name (ValueError) when it emits."""
+    if not engine.num_speculative_tokens:
+        return list(requests), None
+    lists = [q.kept for q in requests]
+
+    def kept(i: int, row: int) -> int:
+        ks = lists[i]
+        if ks is None or row >= len(ks):
+            raise ValueError(f"request {i}: the engine drafts {engine.num_speculative_tokens} tokens a row, and the "
+                             f"request has no kept count for its emitting row {row}")
+        return ks[row]
+
+    return [replace(q, kept=None) for q in requests], kept
+
+
 def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequence[int]] | None = None,
                     ingress_lag_s: float = 0.0, release_lag_s: float = 0.0) -> Trace:
     """A `Trace` from `verity_vllm.engine.step_trace` records. Output lengths and stops come from the trace's `emitted` and
-    `finished` (in a served run the committed sampled tokens and the certified egress say the same). An `arrive` or
+    `finished` (in a served run the committed sampled tokens and the certified egress say the same); with a draft (the
+    header's `speculative`), so do the drafts each row kept, its `emitted` less its own token. An `arrive` or
     `step` record's `t` is the engine's clock; a record's `ingress_t` / `release_t`, where the recorder has the
     certifier's, wins, and otherwise the engine's clock less `ingress_lag_s` (plus `release_lag_s`) stands in for it."""
     recs = list(records)
@@ -960,14 +198,17 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
     if [r["step"] for r in steps_recs] != list(range(len(steps_recs))):
         raise ValueError("the trace's steps are not 0..S-1 each once")
     emitted = [0] * len(ids)
+    kept: list[list[int]] = [[] for _ in ids]
     finish: list[str | None] = [None] * len(ids)
     steps = []
     for r in steps_recs:
         steps.append(Step(rows=[(index[a], int(b), int(c)) for a, b, c in r["rows"]], new=[index[a] for a in r.get("new", ())],
                           resumed=[index[a] for a in r.get("resumed", ())], preempted=[index[a] for a in r.get("preempted", ())],
-                          cache_hit={index[a]: int(k) for a, k in (r.get("cache_hit") or {}).items()}))
+                          cache_hit={index[a]: int(k) for a, k in (r.get("cache_hit") or {}).items()},
+                          drafts={index[a]: int(k) for a, k in (r.get("drafts") or {}).items()}))
         for a, k in (r.get("emitted") or {}).items():
             emitted[index[a]] += int(k)
+            kept[index[a]].append(int(k) - 1)
         for a, f in (r.get("finished") or {}).items():
             finish[index[a]] = f["reason"]
     for r in recs:
@@ -984,7 +225,8 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
         toks = tuple(tokens[ids[k]]) if tokens is not None and ids[k] in tokens else None
         requests.append(RequestIO(prompt_len=int(a["prompt_len"]), max_tokens=int(max_tokens) if max_tokens is not None
                                   else engine.max_model_len - int(a["prompt_len"]), output_len=emitted[k],
-                                  eos=finish[k] == "stop", tokens=toks))
+                                  eos=finish[k] == "stop", tokens=toks,
+                                  kept=tuple(kept[k]) if engine.num_speculative_tokens else None))
 
     def at(r: dict[str, Any], key: str, lag: float) -> float | None:
         if r.get(key) is not None:
@@ -992,6 +234,8 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
         return None if r.get("t") is None else float(r["t"]) + lag
 
     return Trace(engine=engine, ids=ids, requests=requests, before_step=[int(a["before_step"]) for a in arrivals], steps=steps,
+                 passed=[int(a.get("after_empty") or 0) for a in arrivals],
+                 emitted=[{index[a]: int(k) for a, k in (r.get("emitted") or {}).items()} for r in steps_recs],
                  emits=[bool(r.get("emitted")) for r in steps_recs],
                  ingress_t=[at(a, "ingress_t", -ingress_lag_s) for a in arrivals],
                  release_t=[at(r, "release_t", release_lag_s) for r in steps_recs], header=recs[0])
@@ -1008,9 +252,97 @@ def read_step_trace(path: str | Path, **kw: Any) -> Trace:
     return load_step_trace(records(path), **kw)
 
 
+def span(records: Iterable[dict[str, Any]], mine: Callable[[str], bool]) -> list[dict[str, Any]]:
+    """The records of the requests `mine` picks out of a longer serve's step trace, as a trace of their own from step 0:
+    for a span the engine began with nothing running or in flight and an empty prefix cache, the state the replay starts
+    from. The empty schedules the engine made before the span's first arrival are the serve's before it, so the arrivals
+    before the span's first step count theirs from the first arrival's. Refuses a span whose steps are not consecutive or
+    hold another request's rows: such a span is not a serve of its own."""
+    recs = list(records)
+    arrive = [r for r in recs[1:] if r["kind"] == "arrive" and mine(r["request"])]
+    if not arrive:
+        raise ValueError("none of the trace's arrivals is the span's")
+    first, empty = int(arrive[0]["before_step"]), int(arrive[0].get("after_empty") or 0)
+    steps = [r for r in recs[1:] if r["kind"] == "step" and any(mine(row[0]) for row in r["rows"])]
+    if [r["step"] for r in steps] != list(range(first, first + len(steps))):
+        raise ValueError(f"the span's steps are not {first}..{first + len(steps) - 1} each once")
+    for r in steps:
+        named = [row[0] for row in r["rows"]] + [i for k in ("emitted", "finished", "preempted") for i in r.get(k) or ()]
+        if not all(map(mine, named)):
+            raise ValueError(f"step {r['step']} holds requests outside the span")
+    out = recs[:1]
+    for r in arrive:
+        b = int(r["before_step"]) - first
+        out.append({**r, "before_step": b, "after_empty": int(r.get("after_empty") or 0) - (0 if b else empty)})
+    out += [{**r, "step": r["step"] - first} for r in steps]
+    out += [{**r, "after_step": r["after_step"] - first} for r in recs[1:] if r["kind"] == "finish" and mine(r["request"])]
+    return out
+
+
 def _jsonl(path: Path) -> list[dict[str, Any]]:
     lines = path.read_text(encoding="utf-8").split("\n")
     return [json.loads(line) for line in lines[:-1] if line.strip()]
+
+
+def _draft(argv: Sequence[str]) -> int:
+    """K, the drafts a decode row carries, from a server's arguments: its ``--speculative-config``, given as JSON or
+    as dotted settings (``--speculative-config.method mtp``), read as a step trace's header's are
+    (`schedule.speculative`: one MTP module's, everything else refused by name); 0 for a server with no argument that
+    begins ``--speculative``. Any other such argument is refused: the reader doesn't know what it sets. The directory
+    has none of the scheduler's own draft settings, which a step trace's header has, so the arguments alone don't tell
+    a draft of several MTP modules from one's: what shows one is the replay differing from the steps the engine ran."""
+    spec: dict[str, Any] = {}
+    named = [k for k, a in enumerate(argv) if a.startswith("--speculative")]
+    for k in named:
+        flag, given, value = argv[k].partition("=")
+        head, _, name = flag.partition(".")
+        if head.replace("_", "-") != "--speculative-config":
+            raise ValueError(f"the server's argument {flag}: the reader takes a draft from --speculative-config only")
+        if not given:
+            if k + 1 == len(argv):
+                raise ValueError(f"the server's argument {flag} has no value")
+            value = argv[k + 1]
+        if name:
+            # a dotted setting's value, as vLLM's argument parser converts one: a boolean, an integer, else the text
+            word = value.lower()
+            spec[name] = word == "true" if word in ("true", "false") else int(value) if re.fullmatch(r"[+-]?\d+", value) else value
+            continue
+        try:
+            read = json.loads(value)
+        except ValueError as e:
+            raise ValueError(f"the server's argument {flag}: its value isn't a JSON object of draft settings") from e
+        if not isinstance(read, dict):
+            raise ValueError(f"the server's argument {flag}: its value isn't a JSON object of draft settings")
+        spec.update(read)
+    return speculative({"speculative": spec or {"method": None}}) if named else 0
+
+
+def _sampled(raw: Sequence[dict[str, Any]], steps: Sequence[Step], ids: Sequence[str],
+             outputs: Sequence[Sequence[int]]) -> list[dict[int, int]]:
+    """With a draft, the tokens each step's rows emitted (`Trace.emitted`), read off what the corpus hook records of
+    the model runner's output: the tokens it sampled for each row of its batch (``batch``, ``sampled``), a row's own
+    token and then the drafts it kept. The request takes them up to its last output: the scheduler cuts a row's tokens
+    where the request stops, and a row run after that, as async scheduling runs one, gives it none. Refuses a trace
+    whose rows' tokens aren't its requests' outputs, in order and all of them."""
+    done = [0] * len(ids)
+    out = []
+    for k, (s, st) in enumerate(zip(raw, steps)):
+        tokens = dict(zip(s.get("batch") or (), s.get("sampled") or ()))
+        emitted = {}
+        for i, _, _ in st.rows:
+            got = tuple(int(x) for x in tokens.get(ids[i]) or ())[:len(outputs[i]) - done[i]]
+            if not got:
+                continue
+            if got != tuple(outputs[i][done[i]:done[i] + len(got)]):
+                raise ValueError(f"request {ids[i]}: step {k} sampled {list(got)}, which aren't its outputs from "
+                                 f"{done[i]} on")
+            emitted[i] = len(got)
+            done[i] += len(got)
+        out.append(emitted)
+    for i, n in enumerate(done):
+        if n != len(outputs[i]):
+            raise ValueError(f"request {ids[i]}: its rows sampled {n} of its {len(outputs[i])} outputs")
+    return out
 
 
 def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int | None = None,
@@ -1023,6 +355,10 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     new requests in arrival order), and a step's release is the time its output was back. With `egress="client"` each
     kept output left when the client got the streamed chunk that carried it (its `chunks`), which is what an egress
     certifier on the link sees.
+
+    A server with a draft (`_draft`: its ``--speculative-config``) is read as a `DraftEngine`. The replay then needs
+    the drafts each row kept, which the hook doesn't name: they are read off the tokens the model runner sampled for
+    the row (`_sampled`), as each request's `RequestIO.kept` and the trace's `emitted`.
 
     A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on the link),
     or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
@@ -1054,12 +390,14 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
         L = int(opt("--max-model-len") or 0)
         # vLLM logs int(num_blocks / cdiv(L, block_size) * L) (`get_kv_cache_capacity`), which this inverts exactly
         num_gpu_blocks = cdiv(int(m.group(1).replace(",", "")) * cdiv(L, block_size), L)
-    engine = Engine(max_num_seqs=int(opt("--max-num-seqs") or 0), max_num_batched_tokens=int(opt("--max-num-batched-tokens") or 0),
-                    max_model_len=int(opt("--max-model-len") or 0), num_gpu_blocks=num_gpu_blocks, block_size=block_size,
-                    enable_chunked_prefill="--no-enable-chunked-prefill" not in argv,
-                    enable_prefix_caching="--enable-prefix-caching" in argv,
-                    async_scheduling="--no-async-scheduling" not in argv,
-                    long_prefill_token_threshold=int(opt("--long-prefill-token-threshold") or 0))
+    config: dict[str, Any] = dict(
+        max_num_seqs=int(opt("--max-num-seqs") or 0), max_num_batched_tokens=int(opt("--max-num-batched-tokens") or 0),
+        max_model_len=int(opt("--max-model-len") or 0), num_gpu_blocks=num_gpu_blocks, block_size=block_size,
+        enable_chunked_prefill="--no-enable-chunked-prefill" not in argv,
+        enable_prefix_caching="--enable-prefix-caching" in argv, async_scheduling="--no-async-scheduling" not in argv,
+        long_prefill_token_threshold=int(opt("--long-prefill-token-threshold") or 0))
+    K = _draft(argv)
+    engine = DraftEngine(**config, num_speculative_tokens=K) if K else Engine(**config)
     raw = [s for s in _jsonl(d / "steps.jsonl") if s["total_num_scheduled_tokens"]]
     reqs = {r["id"]: r for r in _jsonl(d / "requests.jsonl")}
     order, seen = [], set()
@@ -1092,6 +430,11 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
                                      if not r.get("resumed") and r["num_computed_tokens"]}))
         emits.append(any(s.get("sampled") or ()))
         release.append(s.get("t_output"))
+    emitted = None
+    if K:
+        emitted = _sampled(raw, steps, order, [q.tokens[q.prompt_len:q.prompt_len + q.output_len] for q in requests])
+        emits = [bool(e) for e in emitted]
+        requests = [replace(q, kept=tuple(e[i] - 1 for e in emitted if i in e)) for i, q in enumerate(requests)]
     first = [-1] * len(order)
     for k, st in enumerate(steps):
         for i, _, _ in st.rows:
@@ -1122,7 +465,7 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
         releases = Releases(Tick(int(tk["bucket_us"]), int(tk["sat_us"]), int(tk["free_us"])), float(tk["origin_unix"]),
                             tuple(int(reqs[rid]["release"]) for rid in order), tuple(int(reqs[rid]["bucket"]) for rid in order))
     return Trace(engine=engine, ids=order, requests=requests, before_step=first, steps=steps, emits=emits,
-                 ingress_t=ingress_t, release_t=release, output_t=output_t, releases=releases,
+                 ingress_t=ingress_t, release_t=release, output_t=output_t, releases=releases, emitted=emitted,
                  header={"kind": "header", "schema": "vllm-trace-corpus/v1", "config": dict(engine.__dict__), "source": str(d),
                          "egress": egress, "ingress": ingress})
 
@@ -1147,26 +490,6 @@ def order_bits(trace: Trace) -> float:
 
 
 # --- the residual advice ----------------------------------------------------------------------------------------------------
-
-
-@dataclass
-class Match:
-    steps: int                      # steps compared (the longer of the two)
-    matched: int                    # steps whose rows agree (as a set of (request, start, n))
-    first_mismatch: int | None
-    ordered: int                    # steps whose rows also agree in order
-
-
-def compare(a: Sequence[Step], b: Sequence[Step]) -> Match:
-    matched = ordered = 0
-    first = None
-    for k in range(max(len(a), len(b))):
-        if k < len(a) and k < len(b) and a[k].key() == b[k].key():
-            matched += 1
-            ordered += a[k].rows == b[k].rows
-        elif first is None:
-            first = k
-    return Match(steps=max(len(a), len(b)), matched=matched, first_mismatch=first, ordered=ordered)
 
 
 def bucket(t: float, bucket_s: float) -> int:
@@ -1246,7 +569,10 @@ class _Egress:
     them. So under the true hypothesis each of i's outputs leaves in the bucket of an earlier request's output from the
     same step, which the certified egress shows; of any of them, since a frontend streams one step's outputs over some
     milliseconds. They are compared up to i's first change of bucket, where some earlier request's must change too (2: no
-    earlier request's output to compare with)."""
+    earlier request's output to compare with). With a draft the fork keeps none of the drafts its rows carry (`_asked`),
+    so each of its rows emits one token, and it is the served run only up to the first of its rows that kept a draft
+    in the serve: from there its outputs fall behind the served ones, and their buckets need not line up under either
+    hypothesis."""
 
     def __init__(self, cert: Certified) -> None:
         _, self.out = _clocked(cert)
@@ -1421,12 +747,14 @@ def _coder(cert: Certified, contexts: str) -> Callable[[int, int, Open], tuple[i
 
 
 def encode(trace: Trace, *, contexts: str = "egress", bucket_s: float = 0.1, window_buckets: int = 600) -> Code:
-    """Code each decision, as the replay asks it, with the adaptive binary code in `contexts`. Refuses a trace the replay
-    doesn't reproduce."""
+    """Code each decision, as the replay asks it, with the adaptive binary code in `contexts`. With a draft the replay
+    is asked each row's kept count as the row emits (`_asked`), as `decode`'s is. Refuses a trace the replay doesn't
+    reproduce."""
     first = trace.first_scheduled()
     if any(f < 0 for f in first):
         raise ValueError(f"requests never scheduled: {[trace.ids[i] for i, f in enumerate(first) if f < 0][:8]}")
     cert = trace.certified(bucket_s)
+    requests, kept = _asked(trace.engine, trace.requests)
     context = _coder(cert, contexts)
     rw = cert.windows(window_buckets)
     model, enc, ideal = _model(contexts), {}, {}
@@ -1443,16 +771,26 @@ def encode(trace: Trace, *, contexts: str = "egress", bucket_s: float = 0.1, win
         passed[i] += 1
         return bit
 
-    m = compare(replay(trace.engine, trace.requests, decide=decide).steps, trace.steps)
+    m = compare(replay(trace.engine, requests, decide=decide, kept=kept).steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
     return Code(contexts, bucket_s, window_buckets, {w: e.finish() for w, e in enc.items()}, ideal)
 
 
-def decode(cert: Certified, code: Code) -> Replay:
-    """Replay from the residual advice and what the verifier holds without it (`Certified`, at the code's bucket)."""
+def decode(cert: Certified, code: Code, kept: Kept | None = None) -> Replay:
+    """Replay from the residual advice and what the verifier holds without it (`Certified`, at the code's bucket). With
+    a draft the drafts each row kept are advice too: `kept` answers each emitting row's count as the replay asks for
+    it (`replay`'s ``kept``; `kept_read` hands it advice v1's reader). A record that carries the counts
+    (`RequestIO.kept`) is refused (ValueError): a fork would read from them what rows that have not emitted kept, which
+    no decoder holds, so the contexts would not be the ones `encode` coded under."""
     if cert.bucket_s != code.bucket_s:
         raise ValueError(f"the code is in {code.bucket_s} s buckets, the certified record in {cert.bucket_s} s")
+    if cert.engine.num_speculative_tokens:
+        held = [i for i, q in enumerate(cert.requests) if q.kept is not None]
+        if held:
+            raise ValueError(f"the engine drafts {cert.engine.num_speculative_tokens} tokens a row, and the certified "
+                             f"record carries what {len(held)} requests' rows kept (`RequestIO.kept`; request {held[0]} "
+                             f"the first): a kept count is advice, asked as its row emits (`kept`)")
     context = _coder(cert, code.contexts)
     rw = cert.windows(code.window_buckets)
     model, dec = _model(code.contexts), {}
@@ -1469,7 +807,7 @@ def decode(cert: Certified, code: Code) -> Replay:
         passed[i] += 1
         return bit
 
-    return replay(cert.engine, cert.requests, decide=decide)
+    return replay(cert.engine, cert.requests, decide=decide, kept=kept)
 
 
 # --- bits per certifier window ----------------------------------------------------------------------------------------
@@ -1493,10 +831,10 @@ def v0_widths(trace: Trace, *, window_buckets: int) -> dict[str, int]:
 
 
 def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
-    """The trace as advice v0, built with its module `v0` (`verity.core.protocols.certifier.advice`): the
+    """The trace as advice v0, built with its module `v0` (`verity.protocols.accounting.certifier.verifier.advice`): the
     trace's rows in its batch order, each hit's sources from the replay's block map, and each kept output released in its
     step's release bucket. v0 validates it as it builds it."""
-    rp = replay(trace.engine, trace.requests, admit=trace.before_step)
+    rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
     m = compare(rp.steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch}, so it has no sources to give")
@@ -1545,7 +883,7 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
     """Per certifier window: I1 v0's bits (`advice.bits_by_window` when the module is given as `v0`, else
     `v0_widths`), the steps the replay matched, and the residual advice's bits under each code (Elias gamma; the adaptive
     code, unclocked and clocked), each code checked by decoding it back to the trace's steps."""
-    truth = replay(trace.engine, trace.requests, admit=trace.before_step)
+    truth = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
     adv = v0_advice(trace, v0, bucket_s=bucket_s) if v0 is not None else None
     charge = v0.bits_by_window(adv, window_buckets) if adv is not None else None
     ds, rp = decisions(trace)
@@ -1579,8 +917,120 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
             "passed": [x for x in g if x is not None]}
 
 
-#: advice v0's module (`verity.core.protocols.certifier.advice`)
-V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "certifier" / "advice.py"
+class _Ideal:
+    """`window_code.Encoder`'s `bit`, which also adds up what an ideal coder would spend on the estimates it codes
+    under (`bits`)."""
+
+    def __init__(self, e: CV.Encoder) -> None:
+        self.e, self.bits = e, 0.0
+
+    def bit(self, name: str, b: bool, ctx: Any = 0) -> bool:
+        f0, f1 = self.e.kt.freqs(CV.context_key(name, ctx))
+        self.bits -= math.log2((f1 if b else f0) / (f0 + f1))
+        return self.e.bit(name, b, ctx)
+
+
+def kept_code(K: int, kept: KP.Terms) -> tuple[CV.Encoded, float]:
+    """The kept terms `kept` (each window's emitting rows' counts, in the order the replay reads them) under advice
+    v1's own code for them (`verity_vllm.pipeline.advice_code.kept`): each window's counts as its second segment of
+    `window_code`'s coder, after first segments that code nothing, under a book with no prior. Returns the string,
+    whose `lens` are each window's kept bits, its segment's 2 bits of termination among them, and what an ideal coder
+    would spend on the same estimates. Refuses (ValueError) a count no row can have, and counts that with their rows
+    don't add up to a request's outputs."""
+    e = CV.Encoder(CV.Book.uniform())
+    for _ in kept.windows:
+        e.window()
+    ideal, coded = _Ideal(e), KP.coder(K, kept)
+    for w in range(len(kept.windows)):
+        e.segment(w)
+        coded(ideal, w)
+    return e.finish(), ideal.bits
+
+
+class _Outputs(NamedTuple):
+    """A request as `kept.Reader` reads it, its outputs all released in the one window."""
+
+    output: range
+    release: tuple[int, ...]
+
+
+def kept_read(trace: Trace, code: CV.Encoded, arrivals: Code | None = None) -> KP.Terms:
+    """`kept_code`'s string of one window, read as advice v1 reads it (`kept.Reader`): the replay asks each emitting
+    row's count off the string in place of `RequestIO.kept`. The replay is of the trace's requests added as the trace
+    has them, or, given the trace's residual advice `arrivals` (`encode`), the one that advice decodes to (`decode`),
+    so that the steps come from the two strings and the certified record alone. Beside the string it reads K and each
+    request's output count. Returns the terms read. Refuses (ValueError) a string that isn't the code's own, a count
+    no row can have, and a replay that isn't the trace's steps."""
+    K, outputs = trace.engine.num_speculative_tokens, [q.output_len for q in trace.requests]
+    d = CV.Decoder(code.bits, code.nbits, CV.Book.uniform())
+    d.window()
+    with KP.emitting() as emitted:
+        reader = KP.Reader(d, K, [_Outputs(range(n), (0,) * n) for n in outputs], 1, 1, emitted)
+        if arrivals is None:
+            rp = replay(trace.engine, [replace(q, kept=None) for q in trace.requests], admit=trace.before_step,
+                        passed=trace.passed, kept=reader)
+        else:
+            rp = decode(trace.certified(arrivals.bucket_s), arrivals, reader)
+    m = compare(rp.steps, trace.steps)
+    if m.first_mismatch is not None:
+        raise ValueError(f"the replay on the counts read diverges from the trace at step {m.first_mismatch} "
+                         f"({m.matched}/{m.steps} steps match)")
+    return reader.end()
+
+
+def kept_bits(trace: Trace, arrivals: Iterable[Code] = ()) -> dict[str, Any]:
+    """With a draft, what the drafts each row kept (`RequestIO.kept`) cost as advice, both ways. `charged`: the bits of
+    advice v1's code for them (`kept_code`; `ideal`, what an ideal coder would spend), each emitting row's count in
+    the order the replay reads them, as one window's kept segment; the replay, asked each count off that string
+    (`kept_read`), gives the trace's steps and counts back, and so does the replay each of `arrivals` decodes to (the
+    trace's residual advice, `encode`). Advice v1's string over several windows ends each
+    window's kept segment apart, each with its own 2 bits of termination, so its kept bits are a few more than this.
+    `derived`: 0, where the audited block computes the count from committed values and nothing is sent.
+    Beside them, and not sent: `counts[k]`, the rows that verified drafts, emitted and kept k; `entropy`, theirs in bits
+    a row (at most `max`, log2(K + 1)); and `alone`, that entropy over those rows, what the counts would come to taken
+    each alone. `alone` bounds `charged` from neither side: the code reads each request's count before. The rows and
+    the drafts each carried are the replay's, so it refuses a trace the replay doesn't reproduce."""
+    K = trace.engine.num_speculative_tokens
+    if not K:
+        raise ValueError("the trace's engine serves with no draft, so no row keeps one")
+    if trace.emitted is None:
+        raise ValueError("the drafts a row kept are the trace's `emitted` less one, which this trace does not record")
+    with KP.emitting() as emitted:
+        rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
+    m = compare(rp.steps, trace.steps)
+    if m.first_mismatch is not None:
+        raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
+    counts = [0] * (K + 1)
+    for st, em in zip(rp.steps, trace.emitted):
+        for i, d in st.drafts.items():
+            if d and em.get(i):
+                counts[em[i] - 1] += 1
+    rows = sum(counts)
+    entropy = -sum(c / rows * math.log2(c / rows) for c in counts if c) if rows else 0.0
+    kept = KP.terms(emitted, [q.output_len for q in trace.requests], [0] * len(emitted), 1)
+    code, ideal = kept_code(K, kept)
+    if any(kept_read(trace, code, a) != kept for a in (None, *arrivals)):
+        raise ValueError("the kept count's code decodes to other counts than the trace's")
+    return {"K": K, "rows": rows, "counts": counts, "entropy": entropy, "max": math.log2(K + 1), "alone": rows * entropy,
+            "charged": code.nbits, "ideal": ideal, "derived": 0}
+
+
+def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s: float = 0.1,
+                window_buckets: int = 600) -> dict[str, Any]:
+    """A trace served with a draft, as the two classes of advice its replay takes, in bits over the trace: `arrivals`,
+    the residual advice under each of `contexts` (`encode`, the replay asked each row's kept count as the row emits),
+    which a serve under the certified tick does not send; and `kept_count` (`kept_bits`). Each context's arrivals and
+    the kept count's string, with the certified record and nothing else, decode back to the trace's steps and counts.
+    `output_tokens` is what the requests emitted, for the bits a token. Refuses a trace the replay doesn't reproduce."""
+    codes = {c: encode(trace, contexts=c, bucket_s=bucket_s, window_buckets=window_buckets) for c in contexts}
+    return {"requests": len(trace.requests), "steps": len(trace.steps), "tick": trace.releases is not None,
+            "output_tokens": sum(q.output_len for q in trace.requests),
+            "arrivals": {c: sum(len(b) for b in code.bits.values()) for c, code in codes.items()},
+            "kept_count": kept_bits(trace, codes.values())}
+
+
+#: advice v0's module (`verity.protocols.accounting.certifier.verifier.advice`)
+V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "advice.py"
 
 
 def load_v0(spec: str | Path | None) -> Any:
@@ -1599,13 +1049,19 @@ def load_v0(spec: str | Path | None) -> Any:
     return mod
 
 
-def read_any(p: Path, *, egress: str = "engine", ingress: str = "client") -> Trace:
+def read_any(p: Path, *, egress: str = "engine", ingress: str = "client", within: str | None = None) -> Trace:
+    """The trace at `p`: a trace-corpus directory, or a step trace, of which `within` takes only the span (`span`) of the
+    requests whose id holds it."""
     if p.is_dir():
+        if within is not None:
+            raise ValueError(f"{p}: a span is cut from a step trace, not from a trace-corpus directory")
         return read_corpus_trace(p, egress=egress, ingress=ingress)
     if egress != "engine" or ingress != "client":
         raise ValueError(f"{p}: a step trace has only its steps' release times (egress engine) and its own ingress")
     tok = p.with_suffix(".tokens.json")
-    return read_step_trace(p, tokens=json.loads(tok.read_text()) if tok.exists() else None)
+    recs = records(p)
+    return load_step_trace(recs if within is None else span(recs, lambda i: within in i),
+                           tokens=json.loads(tok.read_text()) if tok.exists() else None)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -1624,21 +1080,40 @@ def main(argv: Sequence[str] | None = None) -> None:
                     help="a trace-corpus request's certified ingress: the client's send time (client) or the engine's "
                          "arrival stamp (warden: the floor a server admitting in the warden's release order would "
                          "give; the warden certifies the release order, which a trace's .released view carries)")
+    ap.add_argument("--span", help="of each step trace, only the requests whose id holds this, as a trace of their own: "
+                                   "one load of a serve that ran others, begun with the engine drained and its prefix "
+                                   "cache reset")
     ap.add_argument("--out", type=Path, help="write {trace: table} as JSON")
     a = ap.parse_args(argv)
     v0 = load_v0(a.v0)
     out: dict[str, Any] = {}
     per_window = []
+    drafted = []
     print("| trace | requests | steps | replay matched | I1 v0 bits | v0 step records | gamma | adaptive | adaptive clocked "
           "| adaptive egress | best bits/request | order bits |\n|---|---|---|---|---|---|---|---|---|---|---|---|")
     for p in a.traces:
         name = p.stem if p.is_file() else f"{p.resolve().parent.name}/{p.name}"
-        tr = read_any(p, egress=a.egress, ingress=a.ingress)
+        tr = read_any(p, egress=a.egress, ingress=a.ingress, within=a.span)
+        if tr.engine.num_speculative_tokens:
+            # I1 v0 has no row for a draft's, so a trace served with one has its own table
+            try:
+                d = out[name] = draft_table(tr, contexts=[c for c in CONTEXTS if c == "plain" or tr.clocked()],
+                                            bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets)
+            except (ValueError, RuntimeError) as e:
+                out[name] = {"error": str(e), "requests": len(tr.requests), "steps": len(tr.steps)}
+                drafted.append(f"| {name} | {len(tr.requests)} | {len(tr.steps)} | {e} |" + " |" * 8)
+                continue
+            k, n = d["kept_count"], max(d["requests"], 1)
+            drafted.append(f"| {name} | {d['requests']} | {d['steps']} | {k['K']} | "
+                           f"{' / '.join(str(d['arrivals'].get(c, '-')) for c in CONTEXTS)} | {k['rows']} | "
+                           f"{k['entropy']:.3f} | {k['max']:.3f} | {k['charged']} | {k['charged'] / n:.2f} | "
+                           f"{k['charged'] / max(d['output_tokens'], 1):.4f} | {k['derived']} |")
+            continue
         try:
             tb = out[name] = table(tr, bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets, v0=v0)
         except (ValueError, RuntimeError) as e:
             try:
-                m = compare(replay(tr.engine, tr.requests, admit=tr.before_step).steps, tr.steps)
+                m = compare(replay(tr.engine, tr.requests, admit=tr.before_step, passed=tr.passed).steps, tr.steps)
                 where = f"{m.matched}/{m.steps} (first mismatch {m.first_mismatch})"
                 match: dict[str, Any] = m.__dict__
             except (ValueError, RuntimeError) as e2:
@@ -1660,6 +1135,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     print("\n| trace | window | requests | steps | replay matched | decisions | forced | I1 v0 bits | residual bits "
           "| residual framed |\n|---|---|---|---|---|---|---|---|---|---|")
     print("\n".join(per_window))
+    if drafted:
+        print("\n| trace, served with a draft | requests | steps | K "
+              "| arrivals, each kept count asked as its row emits: bits (" + " / ".join(CONTEXTS) + ") "
+              "| rows that verified drafts | kept count: each alone, bits a row (not sent) | at most "
+              "| charged (advice v1's code), bits | a request | an output token | derived, bits |\n"
+              "|---|---|---|---|---|---|---|---|---|---|---|---|")
+        print("\n".join(drafted))
     if a.out:
         a.out.write_text(json.dumps(out, indent=1))
 

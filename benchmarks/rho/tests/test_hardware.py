@@ -3,12 +3,12 @@ import math
 from pathlib import Path
 
 import pytest
-from rho import hardware
+from rho import hardware, params
 from rho.hardware import Fleet, Location
 from rho.params import Registry
 
 REG = Registry.load()
-CENSUS_DIR = Path(__file__).resolve().parents[3] / "benchmarks" / "census"
+CENSUS_DIR = Path(__file__).resolve().parents[2] / "census"
 CENSUS = {d["id"]: d for d in json.loads((CENSUS_DIR / "hardware.json").read_text())}
 
 
@@ -28,12 +28,19 @@ def test_every_fleet_is_on_a_location(name):
     assert hardware.location(REG, f.location).phi > 0 and f.count > 0 and 0 <= f.eps_unreg < 1
 
 
-@pytest.mark.parametrize(("name", "gpus"), [("reference-h100", 1e5), ("reference-h200", 1e5), ("reference-b200", 1e5),
-                                            ("reference-gb200", 1e5), ("reference-h200-rack4", 1e5),
-                                            ("reference-gb200-400k", 4e5)])
-def test_the_reference_fleets_are_100k_or_400k_gpus(name, gpus):
+@pytest.mark.parametrize(("name", "datacenters"), [("reference-h100", 1), ("reference-h200", 1), ("reference-b200", 1),
+                                                   ("reference-gb200", 1), ("reference-h200-rack4", 1),
+                                                   ("reference-gb200-400k", 4)])
+def test_the_reference_fleets_are_the_census_datacenters_gpus_or_four_of_it(name, datacenters):
+    """The census's reference datacenter (`deployments.json`): a fleet of its machines is it exactly, a machine a
+    location, and a fleet of racks is its GPUs to a rack."""
+    dc = next(d for d in json.loads((CENSUS_DIR / "deployments.json").read_text()) if d["id"] == params.DATACENTER)
     f = hardware.fleet(REG, name)
-    assert math.isclose(f.count * hardware.location(REG, f.location).devices, gpus, rel_tol=1e-3)
+    devices = hardware.location(REG, f.location).devices
+    assert math.isclose(f.count * devices, datacenters * dc["machines"] * dc["gpus_per_machine"], rel_tol=1e-3)
+    assert (name in params.DATACENTER_FLEETS) == (devices == dc["gpus_per_machine"])
+    if name in params.DATACENTER_FLEETS:
+        assert f.count == dc["machines"]
 
 
 @pytest.mark.parametrize("name", ["world-h200", "world-nvl72"])
@@ -59,9 +66,9 @@ def test_a_location_without_hosts_is_one_host_with_nothing_counted():
     assert loc.server_memory == 1e12
 
 
-def test_a_construction_gets_the_dark_leaves_at_their_own_mfu():
-    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4).dark_mfu == 0.4
-    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4, 0.55).dark_mfu == 0.55
+def test_a_construction_gets_the_unregistered_leaves_at_their_own_mfu():
+    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4).unreg_mfu == 0.4
+    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4, 0.55).unreg_mfu == 0.55
 
 
 def test_units_is_the_one_conversion_from_flops_to_gates():

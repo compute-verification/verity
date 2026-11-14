@@ -1,6 +1,7 @@
-"""The sharded plan unit (`PlanShard_v1`, `verity.ml.circuits.requirement_units`) on a recorded remote session: each pass's
+"""The sharded plan unit (`PlanShard_v1`, `verity.circuits.requirement_units`) on a recorded remote session: each pass's
 plan cut into the store's shards, one instance a shard a pass, every instance held to the unit's reference, each distinct one
-to the circuit, and one staged by Flock's `UnitStager` for its fit in M0's block.
+to the circuit, and one staged by Flock's `UnitStager` for its fit in M0's block. The session is vllm's
+``remote_session.json`` and the record the remote verifier's ``verifier.json``. A CPU job; it builds nothing.
 
     uv run python benchmarks/one_stage/plan_shards.py --session remote_session.json --record verifier.json --out DIR \\
         [--S 32768] [--gaps 0] [--no-circuit] [--no-stage]
@@ -31,9 +32,9 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from verity.ml.circuits import requirement_units as RU
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits import requirement_units as RU
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 
 
 def passes(record: dict) -> tuple[int, list[dict]]:
@@ -88,7 +89,7 @@ def circuit_oks(defn, batch: list[dict]) -> list[int]:
 def stage(defn, S, a: dict, scratch: Path) -> dict:
     """One instance staged: the statement's META (its block ``k_log``, at most 2^27, and a row compressing before its last
     block, both `compose`'s refusals) and its ok."""
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_flock import class_statement as CS
 
     t0 = time.time()

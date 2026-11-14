@@ -1,4 +1,4 @@
-"""Repo replicas (README §7) and `research data refresh-fixtures`: keeping `fixtures/artifacts.json` honest when a fixture's bytes change.
+"""Repo replicas (README §7) and `research data refresh-fixtures`: keeping `artifacts.json` honest when a fixture's bytes change.
 
 A repo-registered fixture has *content-only identity*: kind `fixture/v1`, `meta {}`, `refs {}`, payload = the file (bare name) or
 the directory as a tree, so its id is a function of the bytes alone and `tools/research/tests/test_repo_replicas.py` recomputes it
@@ -33,9 +33,9 @@ from pathlib import Path
 from typing import Any
 
 from . import fetchset, ids
-from .local import REPLICA_MAP, LocalStore, _rel_files, manifest_key, object_key, sha256_file
+from .local import REPLICA_MAP as REPLICA_MAP, LocalStore, _rel_files, manifest_key, object_key, replica_map_file, sha256_file
 from .model import ArtifactManifest, Payload, TreeFile
-from .remote import HttpRemote, Remote, RemoteConflict
+from .remote import HttpRemote, Remote
 
 FIXTURE_KIND = "fixture/v1"
 PREVIOUS = "previous"
@@ -66,7 +66,7 @@ def fixture_id(path: Path) -> str:
 
 
 def load_map(repo: Path) -> dict[str, Any]:
-    p = Path(repo) / REPLICA_MAP
+    p = replica_map_file(Path(repo))
     doc = json.loads(p.read_text(encoding="utf-8"))
     if not isinstance(doc, dict):
         raise ValueError(f"{p}: the replica map must be a JSON object")
@@ -106,7 +106,7 @@ def refresh(store: LocalStore, repo: Path, *, preserve: bool = False, dry_run: b
     repo = Path(repo)
     doc = load_map(repo)
     prev = previous(doc)
-    rep: dict[str, Any] = {"repo": str(repo), "map": str(repo / REPLICA_MAP), "dry_run": dry_run, "preserve": preserve, "entries": [],
+    rep: dict[str, Any] = {"repo": str(repo), "map": str(replica_map_file(repo)), "dry_run": dry_run, "preserve": preserve, "entries": [],
                            "changed": 0, "missing": 0, "unchanged": 0, "written": False}
     new_doc: dict[str, Any] = {}
     new_prev: dict[str, list[str]] = dict(prev)
@@ -156,7 +156,7 @@ def refresh(store: LocalStore, repo: Path, *, preserve: bool = False, dry_run: b
     if new_prev:
         new_doc[PREVIOUS] = new_prev
     if rep["changed"] and not dry_run:
-        (repo / REPLICA_MAP).write_text(dump_map(new_doc), encoding="utf-8")
+        replica_map_file(repo).write_text(dump_map(new_doc), encoding="utf-8")
         rep["written"] = True
     return rep
 
@@ -370,13 +370,21 @@ def _split_missing(fr: dict[str, Any], doc: dict[str, Any]) -> tuple[list[str], 
     return [n for n in names if n in old], [n for n in names if n not in old]
 
 
+def landed_path(store: LocalStore, dest: Remote) -> Path:
+    """The keys earlier exports saw land on `dest` (created, or already there), one a line, under the store's root."""
+    return store.root / "export" / f"{hashlib.sha256(dest.describe().encode()).hexdigest()[:16]}.keys"
+
+
 def export(store: LocalStore, repo: Path, dest: Remote, *, srcs: Sequence[Remote], include_previous: bool = True,
            blobs: Sequence[tuple[str, int]] = (), arts: Sequence[str] = (), jobs: int = fetchset.JOBS,
-           dry_run: bool = False) -> dict[str, Any]:
+           dry_run: bool = False, write_check: bool = False, fresh: bool = False) -> dict[str, Any]:
     """Copy every registry entry's manifest and blobs (and `arts`, artifacts published that the registry doesn't hold, and `blobs`,
     the history stubs' bytes) to `dest`, blobs first and manifests last, as `push` does: a manifest the export holds is never
-    missing a blob.  Objects already there are skipped (conditional create; a key holding different bytes is a RemoteConflict,
-    reported).  `dry_run` HEADs and reports what would be uploaded."""
+    missing a blob.  The export's key may write but not read, so nothing here HEADs, GETs or lists `dest`: each object goes up
+    with `dest.create` (one `PUT If-None-Match: *`), and a 412 counts it as already there.  A 412 comes only after the body was
+    sent, so a key an earlier pass saw land (`landed_path`) is not sent again (`known`) unless `fresh`.  `dry_run` reports what
+    the local side would send, since what the export holds can't be read; with `write_check` it also creates the smallest blob
+    (one conditional PUT, which a 412 or a 2xx both answer: the key may write)."""
     repo = Path(repo)
     doc = load_map(repo)
     want = list(dict.fromkeys([*export_ids(doc, include_previous=include_previous), *arts]))
@@ -385,35 +393,56 @@ def export(store: LocalStore, repo: Path, dest: Remote, *, srcs: Sequence[Remote
     fetchset.fetch_blobs(store, blobs, srcs, jobs=jobs, report=fr)
     objs = list(dict.fromkeys([b for m in ms.values() for b in m.blobs()] + [(h, int(n)) for h, n in blobs]))
     rep: dict[str, Any] = {"dest": dest.describe(), "ids": len(want), "manifests": len(ms), "blobs": len(objs), "dry_run": dry_run,
-                           "uploaded": 0, "skipped": 0, "bytes_uploaded": 0, "errors": [], "warnings": [], "fetch": fr}
+                           "uploaded": 0, "skipped": 0, "known": 0, "bytes_uploaded": 0, "write_check": None, "errors": [], "warnings": [],
+                           "fetch": fr}
     lost, current = _split_missing(fr, doc)
     rep["errors"] += [f"not local and not on any source: {x}" for x in current]
     rep["warnings"] += [f"superseded id in neither the store nor git history (no commit can name it): {x}" for x in lost]
     items = [(object_key(h), store.object_path(h), n) for h, n in objs if store.object_path(h).exists()]
     mans = [(manifest_key(ids.hex_of(a)), store.manifest_path(ids.hex_of(a)), store.manifest_path(ids.hex_of(a)).stat().st_size) for a in ms]
+    ledger = landed_path(store, dest)
+    landed = set(ledger.read_text().split()) if ledger.is_file() else set()
+    if not fresh:
+        rep["known"] = sum(1 for it in items + mans if it[0] in landed)
+        items, mans = [it for it in items if it[0] not in landed], [it for it in mans if it[0] not in landed]
 
     def one(item: tuple[str, Path, int]) -> tuple[str, str, int]:
         key, path, n = item
-        if dry_run:
-            hd = dest.head(key)
-            return key, "skipped" if hd is not None and hd.get("bytes") in (n, None) else "would upload", n
         try:
-            return key, dest.put(key, path)["action"], n
-        except RemoteConflict as e:
-            return key, f"conflict: {e}", n
+            return key, dest.create(key, path)["action"], n
         except Exception as e:  # noqa: BLE001  (one object's failure is reported; the rest still go up)
             return key, f"error: {type(e).__name__}: {e}", n
 
-    for batch in (items, mans):
-        with ThreadPoolExecutor(max_workers=max(1, min(jobs, len(batch) or 1))) as ex:
-            for key, action, n in ex.map(one, batch):
-                if action in ("created", "would upload"):
-                    rep["uploaded"] += 1
-                    rep["bytes_uploaded"] += n
-                elif action in ("skipped", "exists"):
-                    rep["skipped"] += 1
-                else:
-                    rep["errors"].append(f"{key}: {action}")
+    if dry_run:
+        if write_check and items:
+            key, action, _ = one(min(items, key=lambda it: (it[2], it[0])))
+            rep["write_check"] = {"key": key, "action": action}
+            if action not in ("created", "exists"):
+                rep["errors"].append(f"write check {key}: {action}")
+        rep["uploaded"] = len(items) + len(mans)
+        rep["bytes_uploaded"] = sum(n for *_, n in items + mans)
+        rep["ok"] = not rep["errors"]
+        return rep
+    new: set[str] = set()
+    try:
+        for batch in (items, mans):
+            with ThreadPoolExecutor(max_workers=max(1, min(jobs, len(batch) or 1))) as ex:
+                for key, action, n in ex.map(one, batch):
+                    if action == "created":
+                        rep["uploaded"] += 1
+                        rep["bytes_uploaded"] += n
+                    elif action == "exists":
+                        rep["skipped"] += 1
+                    else:
+                        rep["errors"].append(f"{key}: {action}")
+                        continue
+                    new.add(key)
+    finally:
+        if new - landed:
+            ledger.parent.mkdir(parents=True, exist_ok=True)
+            tmp = ledger.with_name(f".{ledger.name}.{os.getpid()}")
+            tmp.write_text("".join(f"{k}\n" for k in sorted(landed | new)))
+            os.replace(tmp, ledger)
     rep["ok"] = not rep["errors"]
     return rep
 

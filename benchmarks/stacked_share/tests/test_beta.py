@@ -9,23 +9,19 @@ from __future__ import annotations
 import itertools
 import json
 import random
-import sys
 from fractions import Fraction
 from pathlib import Path
 
+import beta as B
 import pytest
 
-from verity.ml.circuits import stacking as P
-from verity.ml.circuits.census import census
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
-from verity.ml.circuits.ops import prims
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of, coll_concat
-from verity.ml.circuits.types import Array, Value
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-import beta as B  # noqa: E402
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
+from verity.circuits.program import Program
+from verity.circuits.refs import array_of, coll_concat
+from verity.circuits.types import Array, Value
+from verity.circuits import stacking as P
+from verity.circuits.census import census
+from verity.circuits.ops import prims
 
 S32, S8, BIT = Value(32), Value(8), Value(1)
 E40 = B.E_WORD["2^-40"]

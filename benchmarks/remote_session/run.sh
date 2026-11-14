@@ -30,7 +30,7 @@
 # connections to its own 127.0.0.1:PORT cross the network; then ROLE=prover on PEER, which connects there, and which
 # takes its lease only once that tunnel listens (up to TUNNEL_WAIT_S, default 7200).
 #
-# Against the auditor's verifier host (`benchmarks/live_verifier/host.py`), the lane starts the run there with its
+# Against the auditor's verifier host (`verity/protocols/accounting/poub/device/live_verifier/host.py`), the lane starts the run there with its
 # gate key (its gate's `run --port PORT ...`) and ROLE=prover gets VERIFIER_SSH, ssh's `-i KEY prover@HOST`: the
 # prover opens `ssh -L PORT` to the host's tunnel account, which forwards only to the run ports, and takes its lease once
 # that account says the run's verifier listens.
@@ -47,7 +47,7 @@
 # the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as shell
 # words (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs), under ROLE=both too: with `--challenger serve
 # --challenger-key DIR` each session's coins come from the challenger's own process,
-# `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+# `verity/protocols/compose/device/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
 # --challenger-period P --challenger-main FILE` (FILE: `git rev-list --first-parent origin/main`, the auditor's own),
 # from the auditor host's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
@@ -64,8 +64,9 @@
 # /workspace/jobs/venv312/bin/python, its `verity-vllm` launcher beside it), this tree's verity_vllm first on its path,
 # against ROLE=verifier with SESSIONS=1 (one session a store). SERVE=tiny runs `serve.py --connect` (the vLLM tests'
 # tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
-# the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
-# tunnel; its Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
+# the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit), REMOTE_VERIFIER at the
+# tunnel and EXTRA_COMMIT_ARGS (such as --remote-node HOST, the session's node, default verity-vllm/<hostname>); its
+# Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
 # run, a pass an engine step (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`: one GPU, synchronous scheduling declared in the
 # row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). Serving int8
 # Llama-3.1-8B:
@@ -112,7 +113,7 @@ if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
   if [ -n "${CLOSE:-}" ]; then
-    "$PY" benchmarks/remote_session/verifier_process.py --registry "$REGISTRY" --close "$CLOSE" \
+    "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --registry "$REGISTRY" --close "$CLOSE" \
       > "$O/verifier.log" 2>&1; W=$?
     cat "$O/verifier.log"
     cp "$REGISTRY" "$O/registry.json"
@@ -124,12 +125,12 @@ if [ "$ROLE" = verifier ]; then
     "$(hostname)" "$PORT" "$PEER" "$PORT" | tee "$O/address.json"
   # A tty makes the session interactive, so ssh and sshd set TCP_NODELAY (under -N roots were held ~30 ms every few
   # seconds, enough to make a boundary pass's root late); and with keystroke-timing obfuscation off, since it sends an
-  # interactive session's packets on a 20 ms clock (tunnel_rtt.py measures each).
+  # interactive session's packets on a 20 ms clock.
   ssh -tt -o ObscureKeystrokeTiming=no -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
   eval "VA=(${VERIFIER_ARGS:-})"
   # shellcheck disable=SC2086
-  "$PY" benchmarks/remote_session/verifier_process.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
+  "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
     > "$O/verifier.log" 2>&1 & V=$!
   while kill -0 $V 2> /dev/null; do
     kill -0 $T 2> /dev/null || { echo "the tunnel to $PEER ended"; cat "$O/tunnel.log"; kill $V; break; }
@@ -170,7 +171,7 @@ export CPU=${CPU:-} CODEC=${CODEC:-p512/k2}
 if [ -n "${SERVE:-}" ]; then
   VPY=${VLLM_PY:-/workspace/jobs/venv312/bin/python}
   export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=${HF_HOME:-/workspace/hf} PATH=$(dirname "$VPY"):$PATH
-  export PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
+  export PYTHONPATH=$PWD/adapters/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
   case $SERVE in
     tiny) RUN=("$VPY" $RS/serve.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" --codec "$CODEC") ;;
     row)
@@ -206,7 +207,7 @@ fi
   if [ "$ROLE" = both ]; then
     eval "VA=(${VERIFIER_ARGS:-})"
     # shellcheck disable=SC2086
-    taskset -c "$VERIFIER_CPUS" "$PY" benchmarks/remote_session/verifier_process.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
+    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
   fi
   PIN=(taskset -c "$PROVER_CPUS")
   if [ -n "${PROVER_SLICE:-}" ]; then

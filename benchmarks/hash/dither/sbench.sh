@@ -6,7 +6,7 @@
 # kernel level).  DITHER_NSYS=1 runs it under nsys, recording the kernels inside the gate's CUDA profiler range (each graph's
 # kernels as nodes), then the dither worker's kernels inside the gate's NVTX range (kernels.py over the SQLite export).
 # DITHER_NSYS=prof captures the prof op's range instead (the gate unprofiled): steps.py's and stepprof.py's step by part.
-# An exact-fused or -xl arm runs only after exactlin's kgate.py passes in the same lease (SBENCH_KGATE=0|1 overrides).
+# An exact-fused arm runs only after exactlin's kgate.py passes in the same lease (SBENCH_KGATE=0|1 overrides).
 # DITHER_NCU=REGEX runs it under ncu instead (--clock-control none): the first DITHER_NCU_COUNT (16) launches of kernels
 # matching REGEX, their throughput, occupancy, scheduler, warp-state and instruction sections, as ncu.ncu-rep and ncu.csv.
 # Inside the lease everything runs on the leased GPU's NUMA node (numabind.py: that node's CPUs among the run's, and its
@@ -40,17 +40,17 @@ echo "sbench: sm_$ARCH" | tee "$OUT/arch.txt"
 # SBENCH_SHIP_OUT=1 builds the libraries below and the coins' Lean verifier, writes them to out/sbench-ship.tar and exits;
 # SBENCH_SHIP=TAR (such a tar, copied to the host) takes them in place of building, so a host that may not build builds
 # nothing.  A ship is refused (exit 17) unless its key is this run's (what the builds read: the CUDA
-# sources here, verity/ml/kernels/sha512.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
+# sources here, verity/circuits/kernels/sha512.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
 # MANIFEST.sha256 holds and lake build --no-build then finds the coins' verifier built, so one ship serves every commit
 # that leaves those alone.  Neither covers --bw-passes.
-COINS_PKG=verity/core/protocols/pouw/lean/check
+COINS_PKG=verity/protocols/accounting/pouw/verifier/lean/check
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC HB_H1U_KC_B DITHER_H1C_KC"
 # the coins' package and every path package its manifest lists (the inherited ones too), from the tree's root
 COINS_PKGS=$(python3 -c 'import json, os, sys; p = sys.argv[1]; print(p, *(os.path.normpath(os.path.join(p, x["dir"]))
   for x in json.load(open(os.path.join(p, "lake-manifest.json")))["packages"] if x["type"] == "path"))' "$COINS_PKG")
 ship_key() {
-  git ls-tree -r HEAD -- benchmarks/hash/dither verity/ml/kernels/sha512.cuh | grep -E '\.(cu|cuh)$'
+  git ls-tree -r HEAD -- benchmarks/hash/dither verity/circuits/kernels/sha512.cuh | grep -E '\.(cu|cuh)$'
   for p in $COINS_PKGS; do echo "lean $p $(git rev-parse "HEAD:$p")"; done
   echo "arms $(for t in dither-a-kh dither-a-hbk dither-a-hbr dither-a-hbc; do case " $* " in *$t*) printf '%s ' $t ;; esac; done)"
   echo "CUDA=$CUDA ARCH=$ARCH HB_KC_FLAGS=${HB_KC_FLAGS:-} HB_KC_H1C_FLAGS=${HB_KC_H1C_FLAGS:-}${HB_KC_FLAGS_B:+ HB_KC_FLAGS_B=$HB_KC_FLAGS_B}"
@@ -164,16 +164,16 @@ fi
 # the dither execution phases' coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it,
 # under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-(cd verity/core/protocols/pouw/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
+(cd verity/protocols/accounting/pouw/verifier/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
 # and with --bw-passes PoUB's verifier, under the lock lean_verifier.build takes (BW_LEAN_EXE);
 # BW_PY runs the audit's side (verifier and prover), by default remote_session/run.sh's torch venv
 if [ -n "${BW_LIB:-}" ]; then
-  (mkdir -p verity/core/difftest/lean/.lake && cd verity/core/protocols/remote_bandwidth/lean \
-    && flock "$ROOT/verity/core/difftest/lean/.lake/harness-build.lock" lake build remote-audit-verifier) \
+  (mkdir -p verity/circuits/difftest/.lake && cd verity/protocols/accounting/poub/verifier/lean \
+    && flock "$ROOT/verity/circuits/difftest/.lake/harness-build.lock" lake build remote-audit-verifier) \
     > "$OUT/lean-bw-build.log" 2>&1 || { echo "sbench: LEAN_BUILD_FAIL bw"; tail -20 "$OUT/lean-bw-build.log"; exit 13; }
-  export BW_LEAN_EXE=$ROOT/verity/core/protocols/remote_bandwidth/lean/.lake/build/bin/remote-audit-verifier
+  export BW_LEAN_EXE=$ROOT/verity/protocols/accounting/poub/verifier/lean/.lake/build/bin/remote-audit-verifier
   export BW_PY=${BW_PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
   [ -x "$BW_PY" ] || { echo "sbench: no BW_PY at $BW_PY"; exit 3; }
 fi
@@ -199,14 +199,37 @@ export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so V
 # SBENCH_PICK pins Inductor's autotune picks (picks.py); the node's shared Inductor cache would hand back another run's
 # timed .best_config, so a pinned run compiles into its own
 [ -n "${SBENCH_PICK:-}" ] && export TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
-# the credit gate at its pinned head, for the dither-1s-credit arm
+# the credit gate at its pinned head, for the dither-1s-credit arm, which runs under no other: a variable the caller set
+# is dropped.  A pinned commit keeps its own layout, so the path is the one that commit holds (CREDIT_GATE_PATH: another
+# commit's), joined here from its parts, which nothing that renames this tree's paths reads as one of them
 CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
-git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
-  && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
+CREDIT_GATE_PATH=${CREDIT_GATE_PATH:-$(printf '%s/' integrations vllm verity_vllm protocol_options)credit_gate.py}
+unset DITHER_CREDIT_GATE
+if git show "$CREDIT_GATE_SHA:$CREDIT_GATE_PATH" > "$S/credit_gate.py" 2>/dev/null; then
+  export DITHER_CREDIT_GATE=$S/credit_gate.py
+else
+  rm -f "$S/credit_gate.py"
+  case " $* " in *dither-1s-credit*)
+    echo "sbench: NO_CREDIT_GATE: commit $CREDIT_GATE_SHA has no $CREDIT_GATE_PATH here, and dither-1s-credit runs only" \
+      "under that file: fetch the commit (git fetch origin $CREDIT_GATE_SHA), or set CREDIT_GATE_SHA and CREDIT_GATE_PATH" \
+      "to a commit and the path it holds credit_gate.py at"
+    exit 18 ;;
+  esac
+fi
 # H1V3 (with the wrap correction and the peel, z = A B^T): dither_one's gate runs its h1tile.reference.  By default
 # this source's own (PouwH1Tile_v4, ungated); H1V3_SHA names another commit, from this repository, else (the node's lacks
 # the commit) the archive `git archive --format=tar.gz $H1V3_SHA verity > h1v3-$H1V3_SHA.tar.gz` makes, in
 # $RESEARCH_RUN_DIR/inputs
+# whether the tree extracted under $1 has h1tile.py where this tree does or where a tree of one of the two layouts before
+# it does (h1v3_ref.py's OLDER); a pinned tree keeps its own layout, so the older two are joined from their parts
+has_h1tile() {
+  local d
+  for d in verity/protocols/accounting/pouw/prover/circuit "$(printf '%s/' verity ml protocols pouw)circuit" \
+           "$(printf '%s/' verity core protocols pouw)circuit"; do
+    [ -f "$1/$d/h1tile.py" ] && return 0
+  done
+  return 1
+}
 if [ -n "${H1V3_SHA:-}" ]; then
   mkdir -p "$S/h1v3"
   if git cat-file -e "$H1V3_SHA^{commit}" 2>/dev/null; then
@@ -214,7 +237,7 @@ if [ -n "${H1V3_SHA:-}" ]; then
   elif [ -f "$D/inputs/h1v3-$H1V3_SHA.tar.gz" ]; then
     tar -xzf "$D/inputs/h1v3-$H1V3_SHA.tar.gz" -C "$S/h1v3"
   fi
-  [ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] || { echo "sbench: H1V3_NO_TREE at $H1V3_SHA"; exit 14; }
+  has_h1tile "$S/h1v3" || { echo "sbench: H1V3_NO_TREE at $H1V3_SHA"; exit 14; }
   export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA
 else
   export DITHER_H1V3_TREE=$ROOT DITHER_H1V3_SHA=${RESEARCH_SOURCE_SHA:-source}
@@ -228,12 +251,12 @@ if [ -n "${J10R_SHA:-}" ]; then
   elif [ -f "$D/inputs/j10r-$J10R_SHA.tar.gz" ]; then
     tar -xzf "$D/inputs/j10r-$J10R_SHA.tar.gz" -C "$S/j10r"
   fi
-  [ -f "$S/j10r/verity/core/protocols/pouw/circuit/h1tile.py" ] || { echo "sbench: J10R_NO_TREE at $J10R_SHA"; exit 14; }
+  has_h1tile "$S/j10r" || { echo "sbench: J10R_NO_TREE at $J10R_SHA"; exit 14; }
   export DITHER_J10R_TREE=$S/j10r DITHER_J10R_SHA=$J10R_SHA
 fi
 # the per-call challenger round's measured round trips (paced samples in percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
 [ -f "$D/inputs/percall-wait-ns.txt" ] && export DITHER_PERCALL_WAITS=$D/inputs/percall-wait-ns.txt
-cd integrations/vllm
+cd adapters/vllm
 PY=${PY:-$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python3")} || exit 2
 export PATH=$(dirname "$PY"):$PATH
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
@@ -250,8 +273,8 @@ elif [ -n "${DITHER_NCU:-}" ]; then
         --section SpeedOfLight --section Occupancy --section LaunchStats --section SchedulerStats --section WarpStateStats
         --section ComputeWorkloadAnalysis --section InstructionStats -o "$OUT/ncu" -f)
 fi
-# an exact-fused or -xl arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
-case " $* " in *exact-fused*|*-xl[\ ,-]*) KGATE=1 ;; *) KGATE=0 ;; esac
+# an exact-fused arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
+case " $* " in *exact-fused*) KGATE=1 ;; *) KGATE=0 ;; esac
 export KGATE=${SBENCH_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 # SBENCH_LEASE_AT (a UTC time) holds the lease request until then, the builds done, so a timed lease (GPU_LEASE_TIMED=1)
 # starts inside its clean window; SBENCH_ON (e.g. 4,5,6,7) is the GPUs it may take

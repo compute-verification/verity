@@ -184,7 +184,7 @@ def test_a_job_off_the_merge_gate_is_planned_and_required_of_no_check(P, tmp_pat
     by = {p["part"]: p for p in doc["parts"]}
     assert by["circuit-check:t"]["state"] == "must-run" and by["circuit-check:t"]["required"] is False
     assert by["ratchet-gate"]["required"] is False
-    off = ("circuit-check:t", "ratchet-gate", "lean-changed", "lean-agreement")
+    off = ("circuit-check:t", "ratchet-gate", "lean-agreement")
     assert all(p.get("required", True) for n, p in by.items() if n not in off)
     _cited, why = _judged(doc, {})
     assert why and "circuit-check" not in why and "ratchet-gate" not in why
@@ -194,14 +194,14 @@ def test_lean_agreement_is_required_for_a_change_its_merge_requires_covers_in_th
     root = tmp_path / "repo"
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     (root / "tools" / "verity" / "check" / "ci.toml").write_text(
-        '[[job]]\nname = "lean-agreement"\nmerge_requires = ["verity/ml/flock/", "!README.md"]\n')
+        '[[job]]\nname = "lean-agreement"\nmerge_requires = ["verity/protocols/proofs/flock/prover/", "!README.md"]\n')
     _git(root, "init", "-q")
     base = _commit(root, "rule")
-    (root / "verity" / "ml" / "flock").mkdir(parents=True)
-    (root / "verity" / "ml" / "flock" / "README.md").write_text("x\n")
+    (root / "verity" / "protocols" / "proofs" / "flock" / "prover").mkdir(parents=True)
+    (root / "verity" / "protocols" / "proofs" / "flock" / "prover" / "README.md").write_text("x\n")
     prose = _commit(root, "prose")
     assert not P.required_agreement(prose, base, root)
-    (root / "verity" / "ml" / "flock" / "x.py").write_text("x = 1\n")
+    (root / "verity" / "protocols" / "proofs" / "flock" / "prover" / "x.py").write_text("x = 1\n")
     code = _commit(root, "code")
     assert P.required_agreement(code, base, root) and P.required_agreement(code, prose, root)
     assert not P.required_agreement(code, None, root)
@@ -341,3 +341,19 @@ def test_a_plan_on_a_machine_ships_the_commit_with_this_plan_and_the_packs_and_r
                                            "--base", "B", f"--pack=r1={i}/pack-0.tar.gz", f"--pack=={i}/pack-1.tar.xz"]
     assert notes == ["planned on m in run r20261019-000000-abcd, on the 2 packs gathered where it was asked"]
     assert len(_git(repo, "worktree", "list").splitlines()) == 1
+
+
+def test_a_pack_cut_short_or_corrupt_is_a_note_of_the_plan_and_the_rest_planned(P, tmp_path, monkeypatch):
+    """`--tree` plans from the packs `--pack` names: one whose compressed stream turns corrupt, where `tarfile` leaves lzma's
+    error as it is, is noted refused like one holding anything but verdict entries, and planned without."""
+    V = P._load("plan_verdicts", HERE / "verdicts.py")
+    V._write(pack := tmp_path / "cut.tar.xz", [(f"tests/k{i}.json", b"{}" * (1 << 16)) for i in range(8)], xz=True)
+    raw = bytearray(pack.read_bytes())
+    raw[len(raw) * 3 // 4] ^= 0xFF
+    pack.write_bytes(bytes(raw))
+    seen = {}
+    monkeypatch.setattr(P, "plan_tree", lambda tree, sources, agreement, local, own: seen.update(sources=sources) or [])
+    monkeypatch.setattr(P, "_git", lambda *args, repo: "")
+    monkeypatch.setattr(P, "document", lambda parts, commit, tree, base, sources, notes: notes)
+    notes = P.inner(P.parser().parse_args(["--tree", str(tmp_path), "--pack", f"r-cut={pack}"]))
+    assert notes == ["r-cut: its pack is refused (LZMAError: Corrupt input data)"] and seen["sources"] == []

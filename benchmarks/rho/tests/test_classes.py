@@ -36,7 +36,7 @@ KIMI = Profile(
     name="full", kappa=0.602, state_bits=1.04e12 * 16, b=2.5, b_w=2.5, c_w=2.5, c_a=4, b_a=4, beta_x=0.87,
     fanout=37248, thread_d=10, thread_e=37248, thread_c=2, kappa_forward=0.294, kappa_wgrad=0.294, layers=61,
     layer_weights=4e8, layer_bits=1.04e12 * 2.5 / 61, thread_k=2e7, price=2.8, price_max=8, gamma=1, beta_v=0.63,
-    map_width=7168, map_width_min=7168, h_eff=17, b_ps=1, step_tokens=6.7e7)
+    map_width=7168, map_width_min=7168, h_eff=17, b_ps=1, step_tokens=6.7e7, outputs_per_product=3.1e-4)
 DECLARED = FlopBudget(6.4e16, K)
 WINDOW = FlopBudget(5.5e20, 7.3e11)
 
@@ -121,7 +121,7 @@ def test_a_count_on_another_set_is_converted_to_the_profiles_counted_products_an
         assert arg.counts in Profile.__dataclass_fields__
 
 
-def test_at_the_serving_block_only_the_linear_counts_cap():
+def test_at_the_server_block_only_the_linear_counts_cap():
     finite = {n for n, arg in CLASSES.items() if arg.allowance(KIMI)(WINDOW) < KIMI.kappa * WINDOW.compute / 2}
     assert finite == {"fanout-priced", "fanout-split"}
 

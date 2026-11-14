@@ -5,16 +5,13 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
-import sys
-from pathlib import Path
 
-from verity.ml.commitments import merkle as MK
-from verity.ml.commitments import rowleaf as RL
-from verity.ml.commitments.indexed import RangeIndexedDomain
+import rows_bench as RB
+import statement as ST
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
-import rows_bench as RB  # noqa: E402
-import statement as ST  # noqa: E402
+from verity.commitments import merkle as MK
+from verity.commitments import rowleaf as RL
+from verity.commitments.indexed import RangeIndexedDomain
 
 
 class _Host:

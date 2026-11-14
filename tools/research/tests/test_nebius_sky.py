@@ -6,9 +6,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 from pathlib import Path
 
+import pytest
 from research.pods import registry
 
 SKY = Path(registry.__file__).resolve().parent / "nebius" / "sky"
@@ -108,7 +110,7 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     assert build.count("kueue.x-k8s.io/queue-name: deployments-cpu") == gpu.count("kueue.x-k8s.io/queue-name: deployments-gpu") == 1
     assert 'ov.noisy: "true"' in gpu and "--out" in build and "--out" in gpu                          # bootstrap writes outside the tree
     for part in (build, gpu):
-        assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part and "HOT_ROOT: /workspace/jobs/hot" in part
+        assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part
     sub = (SKY / "submit.sh").read_text()
     (tmp_path / "cls.py").write_text(sub[sub.index("<<'PY'\n") + 7:sub.index("\nPY\n")])
     def render(*args):
@@ -426,7 +428,7 @@ def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
                                  ("m__bi-compiled", True, "|/workspace/jobs/cache/jit/hidden_gpu"),
                                  ("m__bi-eager", False, "/workspace/jobs/cache/triton/T|")):
             tree = tmp_path / ("fixed" if fixed else "old") / "T"
-            jit = tree / "integrations/vllm/verity_vllm/commit/committer/native_jit.py"
+            jit = tree / "adapters/vllm/verity_vllm/commit/committer/native_jit.py"
             jit.parent.mkdir(parents=True, exist_ok=True)
             jit.write_text("def staged_sources(): ...\n" if fixed else "def jit_load(): ...\n")
             out = subprocess.run(["bash", "-c", block + '\necho "${TRITON_CACHE_DIR:-}|${HIDDEN_GPU_BUILD:-}"'], capture_output=True,
@@ -597,7 +599,7 @@ def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_loc
     sky.mkdir(parents=True)
     for s in ("job_tree.sh", "vllm_bootstrap.sh"):
         shutil.copy(SKY / s, sky / s)
-    ops = synced / "integrations/vllm/verity_vllm/ops"
+    ops = synced / "adapters/vllm/verity_vllm/ops"
     ops.mkdir(parents=True)
     (ops / "pod_bootstrap.sh").write_text('echo run >> "$WORK/count"; echo BOOTSTRAP-OK\n')
     jobs, trees = tmp_path / "jobs", tmp_path / "jobs" / "src"
@@ -611,7 +613,7 @@ def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_loc
     a, b = tree(synced), tree(synced)
     assert a == b and Path(a, ".copied").exists() and Path(a).parent == trees
     assert subprocess.run(["bash", str(sky / "job_tree.sh"), "--mine"], env=env, capture_output=True, text=True, check=True).stdout.strip() == a
-    (synced / "integrations/vllm/new.py").write_text("x = 1\n")
+    (synced / "adapters/vllm/new.py").write_text("x = 1\n")
     assert tree(synced) != a
 
     boot = Path(a) / "tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh"
@@ -637,7 +639,7 @@ def test_a_leased_bootstrap_takes_its_gpu_before_the_host_lock_so_others_bootstr
     sky = tree / "tools/research/src/research/pods/nebius/sky"
     sky.mkdir(parents=True)
     shutil.copy(SKY / "vllm_bootstrap.sh", sky / "vllm_bootstrap.sh")
-    ops = tree / "integrations/vllm/verity_vllm/ops"
+    ops = tree / "adapters/vllm/verity_vllm/ops"
     ops.mkdir(parents=True)
     (ops / "pod_bootstrap.sh").write_text('echo "$2 cvd=${CUDA_VISIBLE_DEVICES-unset}" >> "$WORK/seen"; echo BOOTSTRAP-OK\n')
     jobs = tmp_path / "jobs"
@@ -730,6 +732,214 @@ def test_submit_refuses_templates_that_differ_from_infra_nebius(tmp_path):
     git(other, "push", "-q", "origin", "infra/nebius")
     r = submit()
     assert r.returncode == 3 and "a newer template" in r.stderr and "git merge origin/infra/nebius" in r.stderr
+
+
+STORE_PAIR = {"AWS_ACCESS_KEY_ID": "parent-id", "AWS_SECRET_ACCESS_KEY": "parent-secret"}      # dummies for the store's own key pair
+CANNOT_REMOVE = {"DeleteObject", "DeleteObjects", "CopyObject", "UploadPartCopy"}
+READS = {"HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "ListObjectsV2"}
+
+
+def _submit(tmp_path, template, **shell):
+    """submit.sh for `template` from this checkout, in a shell that holds the store's own key pair, with stand-ins on PATH for what
+    reaches a network: `sky` records each call's arguments and the store's variables in its environment (where the SkyPilot client
+    reads a `--secret NAME` from, and what it sends an API server on this port), `python3` records `research pods ...` and runs
+    anything else, and `curl` says the API server answers.  The shell holds RESEARCH_AT_CHECKOUT, as the tests' own environment
+    does (conftest.py), and `python3` runs no `research` without it: the one submit.sh starts is then this checkout's, where a
+    checkout behind origin/main would run origin/main's from a worktree it registers in this repository and leaves registered.  `shell`
+    adds to the environment; None takes a variable out.  Returns the finished process, the `sky` calls and the `research pods`
+    calls."""
+    import os
+    import shutil
+    import subprocess
+    import sys
+
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    bin_dir, calls = tmp_path / "bin", tmp_path / "sky-calls"
+    bin_dir.mkdir()
+    calls.mkdir()
+    for tool in ("bash", "git", "dirname", "sed", "cat", "tr", "head", "awk", "grep", "mktemp", "rm", "ls"):
+        os.symlink(shutil.which(tool), bin_dir / tool)
+    (tmp_path / "sky.py").write_text(
+        "import json, os, sys\n"
+        "calls = os.environ['SKY_CALLS']\n"
+        "store = {k: v for k, v in os.environ.items() if k.startswith(('AWS_', 'R2_'))}\n"
+        "with open(os.path.join(calls, f'{len(os.listdir(calls)):02d}.json'), 'w') as f:\n"
+        "    json.dump({'argv': sys.argv[1:], 'env': store}, f)\n"
+        "if sys.argv[1:3] == ['api', 'info']:\n"
+        "    print('http://127.0.0.1:46580')\n")
+    stand_ins = {"sky": f'exec "{sys.executable}" "{tmp_path / "sky.py"}" "$@"',
+                 "python3": 'if [ "$1 $2 $3" = "-m research pods" ]; then shift 2; echo "$*" >> "$PODS_CALLS"; exit 0; fi\n'
+                            'if [ "$1 $2" = "-m research" ] && [ -z "$RESEARCH_AT_CHECKOUT" ]; then\n'
+                            '  echo "python3 stand-in: RESEARCH_AT_CHECKOUT is unset, so this could run origin/main\'s research: '
+                            'set it in _submit\'s env" >&2; exit 97; fi\n'
+                            f'exec "{sys.executable}" "$@"',
+                 "curl": "exit 0", "ssh": "exit 0", "rsync": "exit 0", "uv": "exit 0"}
+    for name, body in stand_ins.items():
+        (bin_dir / name).write_text(f"#!/bin/bash\n{body}\n")
+        (bin_dir / name).chmod(0o755)
+    env = {"PATH": str(bin_dir), "HOME": str(tmp_path), "TMPDIR": str(tmp_path), "VY_INFRA_REMOTE": str(tmp_path / "no-remote"),
+           "RESEARCH_AT_CHECKOUT": "1",
+           "SKY_CALLS": str(calls), "PODS_CALLS": str(tmp_path / "pods-calls"), "RESEARCH_STORE_CONFIG": str(tmp_path / "absent.toml"),
+           "R2_ENDPOINT": "https://" + "0" * 32 + ".r2.cloudflarestorage.com", "R2_BUCKET": "bkt", **STORE_PAIR, **shell}
+    r = subprocess.run(["bash", str(SKY / "submit.sh"), template, "job-1", "--allow-stale", "--env", "NAME=n"], capture_output=True, text=True,
+                       env={k: v for k, v in env.items() if v is not None})
+    pods = (tmp_path / "pods-calls").read_text().splitlines() if (tmp_path / "pods-calls").exists() else []
+    return r, [json.loads(p.read_text()) for p in sorted(calls.iterdir())], pods
+
+
+def _signed_claims(token: str) -> dict | None:
+    """The claims of a temporary key's session token, or None with no token or one the store's own secret did not sign. A token that
+    is no JWT at all raises."""
+    import base64
+
+    from research.store import credentials as C
+
+    if not token:
+        return None
+    jwt = base64.b64decode(token).decode()[len("jwt/"):]
+    claims = C.decode_jwt(jwt)[1]
+    return claims if C.sign_jwt_hs256(claims, STORE_PAIR["AWS_SECRET_ACCESS_KEY"]) == jwt else None
+
+
+def test_submit_hands_a_job_a_key_minted_for_it_and_no_sky_call_the_stores_own(tmp_path):
+    """What submit.sh gives SkyPilot. The launch names five secrets and carries no value; the three AWS_* values it reads from its
+    environment are a temporary key signed with the store's own secret, with custody's actions for a template that pushes and the
+    reader's for store-fetch, none of which deletes or copies, for 24 hours or VY_STORE_TTL. No `sky` call has the store's own
+    secret in its environment, the launch included: the SkyPilot client sends an API server on this port what it finds there."""
+    import base64
+    import hashlib
+
+    from research.store import credentials as C
+    from research.store import custody as CU
+
+    for template, access, actions, ttl in (("store-push", "push", CU.ACTIONS, None), ("prover-dev", "push", CU.ACTIONS, "7d"),
+                                           ("store-fetch", "fetch", CU.READ_ACTIONS, "90m")):
+        r, sky, pods = _submit(tmp_path / template, template, VY_STORE_TTL=ttl)
+        assert r.returncode == 0, r.stderr
+        assert [c["argv"][:2] for c in sky] == [["api", "info"], ["jobs", "launch"], ["jobs", "queue"]], sky
+        info, launch, queue = sky
+        assert [launch["argv"][i + 1] for i, a in enumerate(launch["argv"]) if a == "--secret"] == \
+            ["R2_ENDPOINT", "R2_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"], launch["argv"]
+        key = launch["env"]
+        assert sorted(key) == ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "R2_BUCKET", "R2_ENDPOINT"]
+        claims = _signed_claims(key["AWS_SESSION_TOKEN"])
+        assert claims and claims["actions"] == list(actions) and "scope" not in claims and claims["bucket"] == "bkt", (template, claims)
+        assert not CANNOT_REMOVE & set(claims["actions"]) and (access == "push" or set(claims["actions"]) <= READS), (template, claims)
+        assert claims["exp"] - claims["iat"] == C.parse_ttl(ttl or "24h")
+        jwt = base64.b64decode(key["AWS_SESSION_TOKEN"])[len("jwt/"):]                # R2 derives the temporary secret from the token
+        assert key["AWS_SECRET_ACCESS_KEY"] == hashlib.sha256(jwt).hexdigest() and key["AWS_ACCESS_KEY_ID"] == claims["iss"]
+        assert not any(key[k] in a for k in ("AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") for a in launch["argv"])
+        for call in (info, queue):
+            assert sorted(call["env"]) == ["R2_BUCKET", "R2_ENDPOINT"], call
+        assert STORE_PAIR["AWS_SECRET_ACCESS_KEY"] not in json.dumps(sky) + r.stdout + r.stderr
+        assert f"job-1 gets a {access} key until " in r.stderr and key["AWS_SESSION_TOKEN"] not in r.stdout + r.stderr
+        assert pods[0].startswith("pods sync vy-nebius-1 "), pods
+
+
+def test_submit_refuses_when_it_cannot_mint_the_jobs_key(tmp_path):
+    """Never what the shell holds in the key's place. Without the store's own pair, with a temporary key (which cannot mint another,
+    and which a job would otherwise get whole) or with a lifetime R2 won't sign, the script exits 5 before any `sky` call or sync."""
+    cases = {"no-pair": dict.fromkeys(STORE_PAIR), "temporary": {"AWS_SESSION_TOKEN": "dummy"}, "a-week-and-a-day": {"VY_STORE_TTL": "8d"}}
+    for case, shell in cases.items():
+        r, sky, pods = _submit(tmp_path / case, "prover-dev", **shell)
+        assert r.returncode == 5 and "submit.sh: no store key for the job" in r.stderr, (case, r.stderr)
+        assert sky == [] and pods == [], (case, sky, pods)
+
+
+def test_a_jobs_key_pushes_or_fetches_and_a_delete_is_refused(tmp_path, monkeypatch):
+    """What a job can do with the key submit.sh gave it, on a bucket that holds each request to the actions in its session token, as
+    R2 does (FakeS3's `authorize`; a request without a token the store's own secret signed is refused too). store-push's run step
+    preserves the job store's pending artifact and store-fetch's run step lays it out with the read-only key, no request of either
+    denied. Through the environment's remote, which is how a job reads its key, the push key also uploads in parts; a DELETE
+    with either key answers 403 and the object stays, where a key that names DeleteObject removes it; and the fetch key cannot
+    write. The run steps name the bucket in a store.toml here: the environment's remote takes the store's real bucket alone."""
+    import hashlib
+    import os
+    import subprocess
+    import sys
+    import textwrap
+    import tomllib
+    import urllib.error
+
+    import pytest
+
+    from research.store import credentials as C
+    from research.store import remote, remote_s3
+    from research.store.local import LocalStore
+    from test_store import FakeS3
+
+    s3 = FakeS3(authorize=lambda action, headers: action in (_signed_claims(headers.get("x-amz-security-token") or "") or {}).get("actions", ()))
+    try:
+        keys = {}
+        for template in ("store-push", "store-fetch"):
+            r, sky, _ = _submit(tmp_path / template, template, R2_ENDPOINT=s3.endpoint, R2_ACCOUNT_ID="0" * 32)
+            assert r.returncode == 0, r.stderr
+            keys[template] = sky[1]["env"]
+
+        toml, jobs, out = tmp_path / "store.toml", tmp_path / "jobs", tmp_path / "out"
+        toml.write_text(f'[remote]\ntype = "s3"\nbucket = "bkt"\nendpoint = "{s3.endpoint}"\n'
+                        'access_key_id_env = "AWS_ACCESS_KEY_ID"\nsecret_access_key_env = "AWS_SECRET_ACCESS_KEY"\n')
+        (tmp_path / "repo").mkdir()
+        (tmp_path / "t").mkdir()
+        (tmp_path / "t" / "a.json").write_text("{}\n")
+        art = LocalStore(jobs / "store", config_path=tmp_path / "absent.toml", repo=tmp_path / "repo").put_artifact(
+            "run-files/v1", {"n": 1}, tree=tmp_path / "t")
+        tools = {"bin/uv": f'shift 5\nexec "{sys.executable}" "$@"',                 # `uv run --no-project --python 3.12 python`
+                 "venv312/bin/nice": 'shift 2\nexec "$@"', "venv312/bin/ionice": 'shift 2\nexec "$@"'}
+        for name, body in tools.items():
+            (jobs / name).parent.mkdir(parents=True, exist_ok=True)
+            (jobs / name).write_text(f"#!/bin/sh\n{body}\n")
+            (jobs / name).chmod(0o755)
+
+        def step(template: str, **envs: str) -> subprocess.CompletedProcess:
+            text = (SKY / "jobs" / f"{template}.yaml").read_text()
+            run = textwrap.dedent(text.split("\nrun: |\n", 1)[1].split("\n\nconfig:", 1)[0]).replace("/workspace/jobs", str(jobs))
+            env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_"))}
+            env.update({k: v for k, v in keys[template].items() if k.startswith("AWS_")})
+            env.update(SRC=str(SKY.parents[6]), RESEARCH_STORE_CONFIG=str(toml), RESEARCH_REPO=str(tmp_path / "repo"),
+                       RESEARCH_STORE=str(jobs / "store"), **envs)
+            return subprocess.run(["bash", "-c", run], capture_output=True, text=True, env=env, cwd=tmp_path)
+
+        manifest = f"manifests/{art[4:]}.json"
+        r = step("store-push", MODE="push", PUSH_JOBS="2", OUT=str(out / "push"))
+        assert r.returncode == 0 and manifest in s3.objects, r.stdout + r.stderr
+        r = step("store-fetch", ARTS=art, PATHS="", NAME="n", KEEP_DAYS="2", OUT=str(out / "fetch"))
+        assert r.returncode == 0 and (out / "fetch" / "n" / art[4:] / "a.json").read_text() == "{}\n", r.stdout + r.stderr
+        assert not [entry for entry in s3.log if entry[0] == "DENIED"], s3.log
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+        monkeypatch.delenv("RESEARCH_STORE_CONFIG")
+        pod = tmp_path / "store.pod.toml"                              # pins this bucket's digest, as the tracked file pins the store's
+        pod.write_text(remote.POD_CONFIG.read_text().replace(tomllib.loads(remote.POD_CONFIG.read_text())["remote"]["bucket_sha256"],
+                                                             hashlib.sha256(b"bkt").hexdigest()))
+        monkeypatch.setattr(remote, "POD_CONFIG", pod)
+        monkeypatch.setattr(remote_s3.S3Remote, "multipart_min", 8192)
+        monkeypatch.setattr(remote_s3.S3Remote, "part_size", 4096)
+
+        def job_remote(template: str) -> remote_s3.S3Remote:
+            for k, v in keys[template].items():
+                monkeypatch.setenv(k, v)
+            r = remote.load_remote()
+            assert r.session_token == keys[template]["AWS_SESSION_TOKEN"]
+            return r
+
+        big = tmp_path / "big.bin"
+        big.write_bytes(bytes(range(256)) * 36)
+        assert job_remote("store-push").put("objects/big", big)["action"] == "created" and s3.etags["objects/big"].endswith("-3")
+        assert not [entry for entry in s3.log if entry[0] == "DENIED"], s3.log
+        for template in ("store-push", "store-fetch"):
+            with pytest.raises(urllib.error.HTTPError) as refused:
+                job_remote(template).delete(manifest)
+            assert refused.value.code == 403 and manifest in s3.objects
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            job_remote("store-fetch").put("objects/new", tmp_path / "t" / "a.json")
+        assert refused.value.code == 403 and "objects/new" not in s3.objects
+        assert [entry[1] for entry in s3.log if entry[0] == "DENIED"] == ["DeleteObject", "DeleteObject", "PutObject"], s3.log
+        own = C.mint_local(s3.endpoint, "0" * 32, *STORE_PAIR.values(), "bkt", "object-read-write", actions=["DeleteObject"], ttl_s=60)
+        deleter = remote_s3.S3Remote(s3.endpoint, "bkt", own["accessKeyId"], own["secretAccessKey"], session_token=own["sessionToken"])
+        assert deleter.delete(manifest) and manifest not in s3.objects, "the bucket deletes for a key that names the action"
+    finally:
+        s3.close()
 
 
 def test_every_task_has_the_venvs_tools_on_path_and_captures_skip_the_flashinfer_sampler():
@@ -891,7 +1101,8 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
         "kept = json.loads(os.environ.get('FAKE_KEPT') or json.dumps([{'tree': 'c'}] * 3))\n"
         "src = {'deleted': [{'tree': 'a'}, {'tree': 'b'}], 'deleted_bytes': 31e9, 'deleted_inodes': 812345, 'kept': kept,\n"
         "       'kept_by': {'1': 1, '2': 2}, 'error': os.environ.get('FAKE_ERROR')}\n"
-        "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src}))\n"
+        "err = {'error': os.environ['FAKE_STORE_ERROR']} if os.environ.get('FAKE_STORE_ERROR') else {}\n"
+        "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src, **err}))\n"
         "sys.exit(1)\n")
     (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 1443"\n')
     (bin_dir / "df").chmod(0o755)
@@ -916,6 +1127,10 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_ERROR": "another pass holds /workspace/research/src/.evict.lock"},
                        capture_output=True, text=True)
     assert r.returncode == 0 and "nothing more deleted: another pass holds" in r.stdout, "an overlapping pass is not a fault"
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_STORE_ERROR": "store pass: OperationalError: readonly"},
+                       capture_output=True, text=True)
+    assert "src trees: deleted 2 (31.0 GB, 812345 inodes)" in r.stdout and "; FAILED store pass: OperationalError: readonly" in r.stdout
+    assert r.returncode == 1 and "the source-tree pass ran without it" in r.stderr, "a store it can't open fails the unit, after the trees"
     assert (tmp_path / "argv.json.cwd").read_text() == "/", "python -m puts its cwd first on sys.path: never a writable one"
     (tool / "research" / "store" / "cli.py").unlink()
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env=env, capture_output=True, text=True)
@@ -953,14 +1168,88 @@ def test_researchs_store_eviction_prunes_the_pycache_of_sources_that_are_gone(tm
     assert not mirror(src / "gone").exists() and mirror(src / "live").is_dir()
 
 
+def test_researchs_store_eviction_also_removes_what_nothing_else_does_and_says_what_stayed(tmp_path):
+    """Request directories without a run dir, the clones of runs that are over, the store's lock files and uv's editable shards
+    took a node's inodes by the million with nothing removing them. Research's unit points a pass at each (its drop-in, beside the
+    capabilities their /proc scan needs), the journal line counts what each removed and why the rest stayed, naming the first path
+    in use and the runs whose request or clone went (no lock file or shard: they hold nothing), and one that could not run fails
+    the unit. A variable left empty switches its removal off."""
+    import subprocess
+    conf = (SKY / "store_evict_src.conf").read_text()
+    assert "Environment=VY_EVICT_REQUESTS=/workspace/research/requests VY_EVICT_SCRATCH=/workspace/research/scratch\n" in conf
+    assert "Environment=VY_EVICT_LOCKS=1 VY_EVICT_UV=/workspace/cache/uv\n" in conf and "AmbientCapabilities=" in conf
+    assert " UV_CACHE_DIR=/workspace/cache/uv " in (SKY.parent / "vm_setup.sh").read_text(), "the cache the nodes' uv writes is the one the pass reads"
+    tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
+    (tool / "research" / "store").mkdir(parents=True)
+    bin_dir.mkdir()
+    (tool / "research" / "__init__.py").write_text("")
+    flags = ("--requests-dir", "--scratch-dir", "--locks", "--uv-cache", "--uv-keep-h")
+    (tool / "research" / "store" / "cli.py").write_text("".join(f'ap.add_argument("{f}")\n' for f in flags))
+    (tool / "research" / "__main__.py").write_text(
+        "import json, os, sys\n"
+        "open(os.environ['FAKE_ARGV'], 'w').write(json.dumps(sys.argv[1:]))\n"
+        "left = json.loads(os.environ['FAKE_LEFT'])\n"
+        "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0},\n"
+        "                  **{k: v for k, v in left.items() if '--' + {'requests': 'requests-dir', 'clones': 'scratch-dir', 'locks': 'locks',\n"
+        "                                                           'uv': 'uv-cache'}[k] in sys.argv}}))\n"
+        "sys.exit(1)\n")
+    (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 1443"\n')
+    (bin_dir / "df").chmod(0o755)
+    shard = "/workspace/cache/uv/sdists-v9/editable/0123456789abcdef"
+    a, b = "r20330518-033300-0a1b", "r20330518-033301-0a1b"
+    left = {"requests": {"deleted": 2, "deleted_bytes": 3e6, "deleted_inodes": 12, "kept": 3, "kept_by": {"recent": 2, "run": 1}, "kept_first": [],
+                         "deleted_first": [f"/workspace/research/requests/{a}", f"/workspace/research/requests/{b}"], "error": None},
+            "clones": {"deleted": 21, "deleted_bytes": 4.5e9, "deleted_inodes": 189264, "kept": 0, "kept_by": {}, "kept_first": [],
+                       "deleted_first": [f"/workspace/research/scratch/{a}"], "error": None},
+            "locks": {"deleted": 316915, "deleted_bytes": 0, "deleted_inodes": 316915, "kept": 4, "kept_by": {"recent": 4}, "kept_first": [],
+                      "deleted_first": ["/workspace/research/store/locks/blob-" + "0" * 64 + ".lock"], "error": None},
+            "uv": {"deleted": 5, "deleted_bytes": 2e8, "deleted_inodes": 51, "kept": 9, "kept_by": {"2": 1, "recent": 6, "retired": 2},
+                   "kept_first": [{"path": shard, "why": "2: its lock is held (.lock)"}], "error": None}}
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(tool), "FAKE_ARGV": str(tmp_path / "argv.json"),
+           "VY_EVICT_STORE": "/workspace/research/store", "VY_EVICT_RUNS": "/workspace/research/runs", "VY_EVICT_GIT": str(tmp_path / "no-git"),
+           "VY_EVICT_REQUESTS": "/workspace/research/requests", "VY_EVICT_SCRATCH": "/workspace/research/scratch", "VY_EVICT_LOCKS": "1",
+           "VY_EVICT_UV": "/workspace/cache/uv", "FAKE_LEFT": json.dumps(left)}
+
+    def run(**extra):
+        r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, **extra}, capture_output=True, text=True)
+        return r, json.loads((tmp_path / "argv.json").read_text())
+
+    r, argv = run()
+    assert r.returncode == 0, r.stderr
+    assert argv == ["data", "evict", "--target-free-gb", "2500", "--runs", "--runs-dir", "/workspace/research/runs",
+                    "--requests-dir", "/workspace/research/requests", "--scratch-dir", "/workspace/research/scratch", "--locks",
+                    "--uv-cache", "/workspace/cache/uv", "--min-mb", "1e12", "--json"]
+    assert (f"target reached: False; requests: deleted 2 (0.0 GB, 12 inodes), kept 3 (recent:2 run:1), gone: {a} {b}"
+            f"; clones: deleted 21 (4.5 GB, 189264 inodes), kept 0 (none), gone: {a} ...; store locks: deleted 316915 (0.0 GB, 316915 inodes), kept 4 (recent:4)"
+            f"; uv cache: deleted 5 (0.2 GB, 51 inodes), kept 9 (2:1 recent:6 retired:2), e.g. {shard}: 2: its lock is held (.lock)"
+            "; no store blob") in r.stdout, r.stdout
+    r, argv = run(VY_EVICT_UV="", VY_EVICT_LOCKS="0", VY_EVICT_UV_KEEP_H="72")
+    assert r.returncode == 0 and "--uv-cache" not in argv and "--uv-keep-h" not in argv and "--locks" not in argv, "left empty: switched off"
+    assert argv[7:11] == ["--requests-dir", "/workspace/research/requests", "--scratch-dir", "/workspace/research/scratch"]
+    assert "uv cache" not in r.stdout and "store locks" not in r.stdout and "; clones: deleted 21 " in r.stdout
+    r, argv = run(VY_EVICT_UV_KEEP_H="72")
+    assert argv[12:16] == ["--uv-cache", "/workspace/cache/uv", "--uv-keep-h", "72"]
+    failed = {**left, "uv": {**left["uv"], "deleted": 0, "error": "2: /proc/1 is unreadable"}}
+    r, argv = run(FAKE_LEFT=json.dumps(failed))
+    assert "kept 9 (2:1 recent:6 retired:2), e.g. " in r.stdout and ", nothing more deleted: 2: /proc/1 is unreadable; no store blob" in r.stdout
+    assert r.returncode == 1 and "could not run" in r.stderr and "; clones: deleted 21 " in r.stdout, "the unit fails, after the line"
+    (tool / "research" / "store" / "cli.py").write_text('ap.add_argument("--requests-dir")\n')
+    r, argv = run()
+    assert r.returncode == 0 and argv[7:9] == ["--requests-dir", "/workspace/research/requests"] and "--locks" not in argv
+    assert (f"; requests: deleted 2 (0.0 GB, 12 inodes), kept 3 (recent:2 run:1), gone: {a} {b}; clones: not removed, tool has no --scratch-dir"
+            "; store locks: not removed, tool has no --locks; uv cache: not removed, tool has no --uv-cache; no store blob") in r.stdout
+
+
 def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_trees_and_else_evicts_no_blob(tmp_path):
     """Node 1's runs have no private remote and the public export can lack a fixture, so the evictor passes the union of
-    `fixtures/artifacts.json` at the newest `refs/research/src/*` commits as `--keep-registry`; with no registry to read, or a tool
-    without the flag, it evicts no store blob or run file (`--min-mb 1e12`) and says why."""
+    `artifacts.json` at the newest `refs/research/src/*` commits as `--keep-registry`; with no registry to read, or a tool
+    without the flag, it evicts no store blob or run file (`--min-mb 1e12`) and says why.  A commit from before the registry
+    moved to the root holds it under `fixtures/` (the older commit here), and its fixtures are kept like a newer one's."""
     import subprocess
     git_dir = tmp_path / "verity.git"
     work = tmp_path / "work"
     (work / "fixtures").mkdir(parents=True)
+    root, before = Path("artifacts.json"), Path("fixtures", "artifacts.json")
 
     def git(*a, date=0):
         subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a], cwd=work, check=True, capture_output=True,
@@ -968,9 +1257,10 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
 
     subprocess.run(["git", "init", "-q", "--bare", str(git_dir)], check=True)
     git("init", "-q")
-    for n, reg in enumerate(({"art:old": "a"}, {"art:new": "b", "previous": {"art:new": ["art:gone"]}})):
-        (work / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
-        git("add", ".")
+    for n, (place, reg) in enumerate(((before, {"art:old": "a"}), (root, {"art:new": "b", "previous": {"art:new": ["art:gone"]}}))):
+        (work / before).unlink(missing_ok=True)
+        (work / place).write_text(json.dumps(reg))
+        git("add", "-A", ".")
         git("commit", "-q", "-m", str(n), date=n)
         git("push", "-q", str(git_dir), f"HEAD:refs/research/src/c{n}")
     tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
@@ -1009,16 +1299,23 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
 def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
     """The retention policy is applied on a schedule, so a node never sits at 80% with terabytes collectable while the fill
     runner holds every queued run (the merge gates among them) for a `research retention gc` by hand. It reads the node's
-    store, whose catalog records what custody verified on the remote: without it gc keeps every preserved path."""
+    store, whose catalog records what custody verified on the remote: without it gc keeps every preserved path. It is installed
+    wherever research runs are: the nodes whose runs the store eviction trims, and those `--on auto` places runs on."""
     import subprocess
+    import tomllib
+
+    from research import auto
     unit, timer = (SKY / "retention_gc.service").read_text(), (SKY / "retention_gc.timer").read_text()
-    assert "User=research\n" in unit and "python3 -m research retention gc --apply'" in unit and "OnUnitActiveSec=1h\n" in timer
+    assert "User=research\n" in unit and "python3 -m research retention gc --apply $F'" in unit and "OnUnitActiveSec=1h\n" in timer
     assert "Environment=RESEARCH_STORE=/workspace/research/store\n" in unit
     deploy = (SKY.parent / "deploy.toml").read_text()
-    nodes = '["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]'
+    doc = tomllib.loads(deploy)
+    files = {f["path"]: f for f in doc["file"]}
+    holds_runs = set(files["/etc/systemd/system/vy-store-evict-research.timer"]["nodes"]) | {m for m in doc["nodes"] if auto.CPU_NODE.fullmatch(m)}
     for u, path in (("retention_gc.service", "vy-retention-gc.service"), ("retention_gc.timer", "vy-retention-gc.timer")):
-        assert (f'path = "/etc/systemd/system/{path}"\nsrc = "tools/research/src/research/pods/nebius/sky/{u}"\n'
-                f'nodes = {nodes}\nrun = ["systemd:vy-retention-gc.timer"]') in deploy
+        f = files[f"/etc/systemd/system/{path}"]
+        assert f["src"] == f"tools/research/src/research/pods/nebius/sky/{u}" and f["run"] == ["systemd:vy-retention-gc.timer"]
+        assert set(f["nodes"]) == holds_runs, "the collector runs on every node of deploy.toml that holds research runs"
     cond = re.search(r"^ExecCondition=/bin/sh -c '(.*)'$", unit, re.M)[1]
     status = tmp_path / "status.txt"
     gate = lambda: subprocess.run(["sh", "-c", cond.replace("/workspace/pouw/fill/status.txt", str(status))]).returncode
@@ -1027,3 +1324,243 @@ def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
     assert gate() != 0, "node 2 inside a timed window: skipped"
     status.write_text("2026-10-19T06:40:00Z free GPUs 0/8, timed False, window waiting False\n")
     assert gate() == 0
+
+
+CLEAN_UP_UNITS = ("store_evict.service", "store_evict_research.service", "retention_gc.service", "launcher_copies_gc.service")
+
+
+def _copies(tmp_path: Path) -> dict[str, Path]:
+    """Two commits' directories of main's copy with the link on the first (as `research deploy install` leaves a whole tree),
+    a newer snapshot shipped from a branch, and an `ls` that offers that snapshot to whatever lists the snapshots.
+
+    Each `research` writes $FAKE_OUT: where it ran from, its PYTHONPATH, its working directory, its arguments, and the
+    version of a module it imports only at its end; with $FAKE_GATE it first says it has started and waits for its stdin
+    to close."""
+    main = ("import json, os, sys\n"
+            "if os.environ.get('FAKE_GATE'):\n"
+            "    open(os.environ['FAKE_GATE'], 'w').write('started')\n"
+            "    sys.stdin.read()\n"
+            "from research import late\n"
+            "here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\n"
+            "json.dump({'from': here, 'pythonpath': os.environ.get('PYTHONPATH'), 'cwd': os.getcwd(), 'argv': sys.argv[1:], 'late': late.V},\n"
+            "          open(os.environ['FAKE_OUT'], 'w'))\n"
+            "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': True}, 'runs': {'evicted_bytes': 0}}))\n")
+    dirs = {"v1": tmp_path / "copy" / ".deploy-tree" / "clean-up" / "v1", "v2": tmp_path / "copy" / ".deploy-tree" / "clean-up" / "v2",
+            "branch": tmp_path / "snapshots" / "branch"}
+    for name, d in dirs.items():
+        (d / "research").mkdir(parents=True)
+        (d / "research" / "__init__.py").write_text("")
+        (d / "research" / "__main__.py").write_text(main)
+        (d / "research" / "late.py").write_text(f"V = {name!r}\n")
+    link = tmp_path / "copy" / "clean-up"
+    link.symlink_to(dirs["v1"])
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, text in (("df", 'echo " Avail"\necho " 2161"\n'), ("ls", f'echo listed >> "{tmp_path}/ls.calls"\necho "{dirs["branch"]}/"\n'),
+                       ("timeout", 'shift\nexec "$@"\n')):
+        (bin_dir / name).write_text("#!/bin/sh\n" + text)
+        (bin_dir / name).chmod(0o755)
+    return {**dirs, "link": link, "bin": bin_dir, "out": tmp_path / "ran.json", "ls": tmp_path / "ls.calls"}
+
+
+def _swap(link: Path, to: Path) -> None:
+    """Point the link at `to` by one rename, as the install of a whole tree does."""
+    link.with_name(link.name + ".new").symlink_to(to)
+    os.replace(link.with_name(link.name + ".new"), link)
+
+
+def test_a_clean_up_pass_runs_mains_copy_and_never_a_snapshot_a_run_shipped(tmp_path):
+    """The eviction and the collector delete, so what they run is main's code, which only `research deploy install` places:
+    each unit names the manifest's whole tree, a pass resolves that link and runs the directory it names, and no pass lists
+    the snapshots `research run` ships, where the newest is whatever branch launched last. Without the copy a pass refuses
+    and runs nothing, though a snapshot is there to be found."""
+    import shlex
+    import subprocess
+    import tomllib
+    doc = tomllib.loads((SKY.parent / "deploy.toml").read_text())
+    trees = [t for t in doc["tree"] if t["src"] == "tools/research/src"]
+    assert len(trees) == 1 and trees[0].get("whole") is True and trees[0].get("required") is True, "main's copy: one tree, whole"
+    assert trees[0]["path"].startswith("/usr/local/lib/"), "root's: a run, which writes /workspace/research as research, can't replace it"
+    for u in CLEAN_UP_UNITS:
+        unit = (SKY / u).read_text()
+        assert f"\nEnvironment=VY_RESEARCH_TOOL={trees[0]['path']}\n" in unit, f"{u} names the tree deploy.toml installs"
+        on = {n for f in doc["file"] if f.get("src", "").endswith(f"/sky/{u}") for n in f["nodes"]}
+        assert on and not on - set(trees[0]["nodes"]), f"{sorted(on - set(trees[0]['nodes']))} get {u} without the code it runs"
+    picks = [p.name for p in SKY.parent.rglob("*") if p.is_file() and p.suffix in (".sh", ".service", ".conf", ".timer")
+             and "research/tool/*" in p.read_text(errors="replace")]
+    assert not picks, f"{picks} list the tool snapshots: what a unit runs is a tree deploy.toml installs"
+
+    w = _copies(tmp_path)
+    env = {"PATH": f"{w['bin']}:/usr/bin:/bin", "FAKE_OUT": str(w["out"]), "VY_EVICT_GIT": str(tmp_path / "no-git")}
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "VY_RESEARCH_TOOL": str(w["link"])}, capture_output=True, text=True)
+    ran = json.loads(w["out"].read_text())
+    assert r.returncode == 0 and r.stdout.rstrip().endswith("(v1)"), r.stderr
+    assert (ran["from"], ran["pythonpath"], ran["late"], ran["cwd"]) == (str(w["v1"]), str(w["v1"]), "v1", "/")
+    assert not w["ls"].exists(), "the snapshots were listed"
+    w["out"].unlink()
+    for missing in ({}, {"VY_RESEARCH_TOOL": ""}, {"VY_RESEARCH_TOOL": str(tmp_path / "copy" / "absent")}, {"VY_RESEARCH_TOOL": str(tmp_path / "copy")}):
+        r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, **missing}, capture_output=True, text=True)
+        assert r.returncode == 1 and "no research package at VY_RESEARCH_TOOL" in r.stderr and "research deploy install" in r.stderr
+        assert not w["out"].exists() and not w["ls"].exists(), "nothing ran, and no snapshot was looked for"
+
+    line = re.search(r"^ExecStart=(.*)$", (SKY / "retention_gc.service").read_text(), re.M)[1]
+    assert "${" not in line and "%" not in line, "systemd would expand it before the shell reads it"
+    argv = shlex.split(line)
+    assert argv[:2] == ["/bin/sh", "-c"] and len(argv) == 3
+
+    def gc(**extra):
+        return subprocess.run(["sh", "-c", argv[2]], env={**env, **extra}, capture_output=True, text=True)
+
+    r = gc(VY_RESEARCH_TOOL=str(w["link"]))
+    ran = json.loads(w["out"].read_text())
+    assert r.returncode == 0 and f"vy-retention-gc: research from {w['v1']}\n" in r.stderr
+    assert (ran["from"], ran["pythonpath"], ran["cwd"], ran["argv"]) == (str(w["v1"]), str(w["v1"]), str(w["v1"]), ["retention", "gc", "--apply"])
+    assert not w["ls"].exists(), "the snapshots were listed"
+    w["out"].unlink()
+    for missing in ({}, {"VY_RESEARCH_TOOL": ""}, {"VY_RESEARCH_TOOL": str(tmp_path / "copy" / "absent")}, {"VY_RESEARCH_TOOL": str(tmp_path / "copy")}):
+        r = gc(**missing)
+        assert r.returncode == 1 and "no research package at VY_RESEARCH_TOOL" in r.stderr and "research deploy install" in r.stderr
+        assert not w["out"].exists() and not w["ls"].exists(), "nothing ran, and no snapshot was looked for"
+
+
+def test_the_collector_takes_unpreserved_runs_on_node_2_alone(tmp_path):
+    """`--unpreserved-runs` deletes a run's only copy, so the unit passes it only where a tracked drop-in says so, which
+    deploy.toml installs on vy-nebius-2 and nowhere else."""
+    import shlex
+    import subprocess
+    import tomllib
+    conf = "tools/research/src/research/pods/nebius/sky/retention_gc_unpreserved.conf"
+    got = [(f["path"], f["nodes"]) for f in tomllib.loads((SKY.parent / "deploy.toml").read_text())["file"] if f.get("src") == conf]
+    assert got == [("/etc/systemd/system/vy-retention-gc.service.d/20-unpreserved-runs.conf", ["vy-nebius-2"])]
+    sets = [ln for ln in (SKY / "retention_gc_unpreserved.conf").read_text().splitlines() if ln and not ln.startswith("#")]
+    assert sets == ["[Service]", "Environment=VY_GC_UNPRESERVED_RUNS=1"], "it sets the switch and replaces nothing of the unit"
+    assert "unpreserved" not in "".join((SKY / u).read_text() for u in CLEAN_UP_UNITS if u != "retention_gc.service")
+    w = _copies(tmp_path)
+    script = shlex.split(re.search(r"^ExecStart=(.*)$", (SKY / "retention_gc.service").read_text(), re.M)[1])[2]
+    env = {"PATH": f"{w['bin']}:/usr/bin:/bin", "FAKE_OUT": str(w["out"]), "VY_RESEARCH_TOOL": str(w["link"])}
+    for extra, flags in (({}, []), ({"VY_GC_UNPRESERVED_RUNS": "1"}, ["--unpreserved-runs"]), ({"VY_GC_UNPRESERVED_RUNS": "0"}, []),
+                         ({"VY_GC_UNPRESERVED_RUNS": ""}, []), ({"VY_GC_UNPRESERVED_RUNS": "--force"}, [])):
+        r = subprocess.run(["sh", "-c", script], env={**env, **extra}, capture_output=True, text=True)
+        assert r.returncode == 0 and json.loads(w["out"].read_text())["argv"] == ["retention", "gc", "--apply", *flags], (extra, r.stderr)
+
+
+def test_the_checkers_copies_of_its_runs_are_collected_hourly_on_cpu_7_alone_and_only_while_it_says_which_it_needs(tmp_path):
+    """Root's runs root on vy-nebius-cpu-7 holds the checker's copy of every run it launches, which the node's collector can't
+    read and gives no record. Its own unit runs there alone, as root, with --launcher-copies over that directory: the flag that
+    gives the copies their record is the one that holds the forced pass to them, so the unit deletes nothing else there. A pass deletes
+    by what the remote says and keeps the copies the checker lists, so it refuses, running nothing, without a list written in
+    the last 15 minutes (a checker that is down or doesn't write one would have every copy look unneeded), without the store
+    key to ask the remote with, and without main's copy of the code."""
+    import shlex
+    import subprocess
+    import tomllib
+    unit, timer = (SKY / "launcher_copies_gc.service").read_text(), (SKY / "launcher_copies_gc.timer").read_text()
+    files = {f["path"]: f for f in tomllib.loads((SKY.parent / "deploy.toml").read_text())["file"]}
+    for u, path in (("launcher_copies_gc.service", "vy-launcher-copies-gc.service"), ("launcher_copies_gc.timer", "vy-launcher-copies-gc.timer")):
+        f = files[f"/etc/systemd/system/{path}"]
+        assert f["src"] == f"tools/research/src/research/pods/nebius/sky/{u}" and f["run"] == ["systemd:vy-launcher-copies-gc.timer"]
+        assert f["nodes"] == ["vy-nebius-cpu-7"] and f["owner"] == "infra"
+    assert "User=" not in unit, "root's: the directory is root's, and so is the store key"
+    assert "OnUnitActiveSec=1h\n" in timer and "Environment=VY_LAUNCHER_RUNS=/workspace/research/root-runs\n" in unit
+    line = re.search(r"^ExecStart=(.*)$", unit, re.M)[1]
+    assert "${" not in line and "%" not in line, "systemd would expand it before the shell reads it"
+    argv = shlex.split(line)
+    assert argv[:2] == ["/bin/sh", "-c"] and len(argv) == 3
+
+    w = _copies(tmp_path)
+    runs, named, key = tmp_path / "root-runs", tmp_path / "named-runs", tmp_path / "r2.env"
+    named.mkdir()
+    (named / "runs").write_text("r20261001-000000-aaaa\n")
+    key.write_text(f"FAKE_OUT={w['out']}\n")
+    env = {"PATH": f"{w['bin']}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(w["link"]), "VY_LAUNCHER_RUNS": str(runs),
+           "VY_LAUNCHER_NAMED": str(named), "VY_LAUNCHER_STORE_ENV": str(key)}
+
+    def gc(**extra):
+        return subprocess.run(["sh", "-c", argv[2]], env={**env, **extra}, capture_output=True, text=True)
+
+    r = gc()
+    assert r.returncode == 0 and f"vy-launcher-copies-gc: research from {w['v1']}\n" in r.stderr, r.stderr
+    ran = json.loads(w["out"].read_text())                # written where the key file's variable says: the pass exported it
+    assert (ran["from"], ran["pythonpath"], ran["cwd"]) == (str(w["v1"]), str(w["v1"]), str(w["v1"]))
+    assert ran["argv"] == ["retention", "gc", "--root", str(runs), "--launcher-copies", "--force", "--low-pct", "0", "--max-paths", "100",
+                           "--jobs-dir", str(named), "--apply"]
+    assert "--launcher-copies" in ran["argv"] and "--unpreserved-runs" not in ran["argv"], (
+        "forced over a whole runs root, the pass takes every expired record there unless --launcher-copies holds it to the copies")
+    w["out"].unlink()
+
+    def refused(why: str, **extra) -> None:
+        r = gc(**extra)
+        assert r.returncode == 1 and why in r.stderr and r.stderr.rstrip().endswith("nothing was deleted"), r.stderr
+        assert not w["out"].exists(), "nothing ran"
+
+    os.utime(named / "runs", (0, 0))
+    refused("is missing or was written over 15 min ago")
+    (named / "runs").unlink()
+    refused("is missing or was written over 15 min ago")
+    (named / "runs").mkdir()
+    refused("is missing or was written over 15 min ago")
+    (named / "runs").rmdir()
+    (named / "runs").write_text("")
+    refused("no store key at VY_LAUNCHER_STORE_ENV", VY_LAUNCHER_STORE_ENV=str(tmp_path / "absent.env"))
+    refused("no research package at VY_RESEARCH_TOOL", VY_RESEARCH_TOOL=str(tmp_path / "copy" / "absent"))
+    assert gc().returncode == 0 and w["out"].exists(), "an empty list written just now is a list: the checker needs none"
+
+
+@pytest.mark.parametrize("unit", ["the eviction", "the collector"])
+def test_a_pass_that_started_before_an_install_finishes_on_the_directory_it_started_on(tmp_path, unit):
+    """An install of main's copy renames the link onto a new directory. A pass resolved the link once, when it started, so
+    what it imports after the rename still comes from the directory it started on, and a pass that starts after the rename
+    runs the new directory's code and nothing of the old."""
+    import select
+    import shlex
+    import subprocess
+    w = _copies(tmp_path)
+    gate = tmp_path / "started"
+    os.mkfifo(gate)
+    reads = os.open(gate, os.O_RDWR)        # so the pass's open of it never waits, and this test waits on what the pass writes
+    env = {"PATH": f"{w['bin']}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(w["link"]), "VY_EVICT_GIT": str(tmp_path / "no-git")}
+    argv = (["bash", str(SKY / "store_evict.sh")] if unit == "the eviction" else
+            ["sh", "-c", shlex.split(re.search(r"^ExecStart=(.*)$", (SKY / "retention_gc.service").read_text(), re.M)[1])[2]])
+    first = subprocess.Popen(argv, env={**env, "FAKE_OUT": str(tmp_path / "first.json"), "FAKE_GATE": str(gate)}, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        ready, _, _ = select.select([reads, first.stdout], [], [])      # it started, or it ended without starting
+        assert reads in ready and os.read(reads, 16) == b"started"      # it runs v1's code, and has not yet imported all of it
+        assert os.readlink(f"/proc/{first.pid}/cwd") == str(w["v1"]), "the pass's process names its directory, so an install keeps it"
+        _swap(w["link"], w["v2"])
+        r = subprocess.run(argv, env={**env, "FAKE_OUT": str(tmp_path / "second.json")}, stdin=subprocess.DEVNULL, capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+    finally:
+        out, err = first.communicate("")
+        os.close(reads)
+    assert first.returncode == 0, err
+    ran = {n: json.loads((tmp_path / f"{n}.json").read_text()) for n in ("first", "second")}
+    assert (ran["first"]["from"], ran["first"]["late"]) == (str(w["v1"]), "v1"), "the first pass read a file installed after it started"
+    assert (ran["second"]["from"], ran["second"]["late"]) == (str(w["v2"]), "v2")
+    if unit == "the eviction":
+        assert out.rstrip().endswith("(v1)") and r.stdout.rstrip().endswith("(v2)"), "each pass's line names its directory"
+    else:
+        assert f"research from {w['v1']}\n" in err and f"research from {w['v2']}\n" in r.stderr, "each pass's line names its directory"
+
+
+def test_every_cpu_node_the_retention_collector_runs_on_gets_researchs_store_eviction_whole():
+    """A node that holds research runs gets a source tree for each commit `research run` ships there, and only research's
+    store eviction with src.conf deletes them: under the retention collector alone the node fills. So every CPU node the
+    collector is on gets the eviction, and none gets its service without the script it runs, its timer and src.conf."""
+    import tomllib
+
+    from research import auto
+    files = tomllib.loads((SKY.parent / "deploy.toml").read_text())["file"]
+
+    def on(path):
+        return {n for f in files if f["path"] == path for n in f["nodes"]}
+
+    unit = "/etc/systemd/system/vy-store-evict-research"
+    service, script = on(f"{unit}.service"), on("/usr/local/bin/vy-store-evict")
+    holds_runs = {n for n in on("/etc/systemd/system/vy-retention-gc.timer") if auto.CPU_NODE.fullmatch(n)}
+    assert len(holds_runs) > 2, "the retention collector's CPU nodes"
+    assert not holds_runs - service, (f"{sorted(holds_runs - service)} hold research runs without research's store eviction: add them "
+                                      f"to the `nodes` of its script, {unit}.service, .timer and .service.d/src.conf")
+    assert not service - script, f"{sorted(service - script)} get the service without the script it runs: add them to its `nodes`"
+    for part in (f"{unit}.timer", f"{unit}.service.d/src.conf"):
+        assert on(part) == service, f"{part} and the service it belongs to are on different nodes: {sorted(on(part) ^ service)}"

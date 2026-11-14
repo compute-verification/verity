@@ -1,4 +1,4 @@
-"""`challengers.ChallengerGate` against the auditor host's own gate (`benchmarks/live_challenger/auditor.py`), in this process: its
+"""`challengers.ChallengerGate` against the auditor host's own gate (`verity/protocols/compose/device/live_challenger/auditor.py`), in this process: its
 requests go to `auditor.gate` as the lane key's forced command would pass them, and each opened session is served by
 `auditor.run` through `serve.py` (the Lean's coins stubbed, `stub_serve.py`) on a thread, with the gate's root steps
 (chown, systemctl) and the clock injected. An honest session whose coins the gate's session released is accepted and
@@ -27,25 +27,25 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-LIVE = ROOT / "benchmarks" / "live_challenger"
+LIVE = ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(LIVE))
-sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests"))
+sys.path.insert(0, str(ROOT / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "tests"))
 
 import auditor as A  # noqa: E402
 import auditor_line as al  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import challengers  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import verifier  # noqa: E402
-from benchmarks.remote_session import verifier_process as VP  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import challengers  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
-from verity.core.protocols.certifier import certificate as cert  # noqa: E402
-from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
-from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
-from verity.core.protocols.spot.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
-from verity.ml.crypto import lms  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import certificate as cert  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, GridParams, BlockGrid, fill  # noqa: E402
+from verity.protocols.accounting.poub.verifier import coins  # noqa: E402
+from verity.protocols.proofs.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
+from verity.commitments.crypto import lms  # noqa: E402
 
 P = lms.Params(64, 4, 4)
 T0 = datetime(2026, 10, 21, 1, 0, 0, tzinfo=timezone.utc)
@@ -451,11 +451,11 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
             lg["delta"][n] for n in al.ledger.DELTA_PARTS]
         assert honest["error"]["delta_rejection"] > 0 and honest["error"]["named_terms"] == al.NAMED_TERMS
         assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
-        assert next(x for x in al.table(doc).splitlines() if x.startswith(f"line {t}:")).endswith(
+        printed = next(x for x in al.table(doc).splitlines() if x.startswith(f"line {t}:"))
+        assert ", error δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), δ = " in printed
+        assert printed.endswith(
             "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the "
-            "credited "
-            "sessions, "
-            "beside Σ_t Adv(prf t) (claim prf/sha-512), named and in no total")
+            "credited sessions; Σ_t adv_t (claim prf/sha-512) is named, with no value and in no total")
         assert doc["conditional_on"] == al.CONDITIONAL_ON
         assert list(doc["conditional_on"]) == ["NoOutsideCompute", "binding-split"]
         assert doc["boundary"] == {"checked": False, "reason": "off by default (--boundary)"}
@@ -505,6 +505,28 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     with pytest.raises(SystemExit, match="--commit"):
         al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
 
+
+
+def test_an_unbound_sessions_line_credits_nothing_and_exits_0_with_no_model_to_bind_the_store_to(host, tmp_path,
+                                                                                               monkeypatch, capsys):
+    """A gate run under `BIND=0` (`gate.sh`): its period signs no model (`period-open` without `--model`) and its
+    verifier bound the store to none. `auditor_line.py` prints a line that credits the session nothing, its *bound*
+    check failing with the reason that no model is there to bind the store to, and exits 0, so the fire run that ran
+    it ends as a run that ran."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, _ = gate_run(host, out, "honest", True)
+    assert sessions[0]["accepted"]
+    (out / "verifier.json").write_text(json.dumps({"registration": reg, "sessions": sessions}))
+    monkeypatch.setattr(al, "verifier_tree", lambda commit, repo: (commit, "ab" * 20))
+    rc = al.main([str(out), "--host-bytes", str(1 << 30), "--pin", host.pin, "--period", "p-1", "--ledger",
+                  str(host.host.ledger), "--commit", VERIFIER, "--line-by", "python"])
+    printed, err = capsys.readouterr()
+    doc = json.loads(printed)
+    why = "no model to bind the store to: the audit's period signs none and no --model-pin names one"
+    assert rc == 0 and f"auditor_line: bound: no: {why}" in err
+    assert doc["bound"]["reason"] == why and doc["sessions"][0]["credit"]["bound"]["reason"] == why
+    assert doc["credit"]["credited_sessions"] == [] and doc["credit"]["summary"].startswith("the line credits zero")
 
 def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
         host, tmp_path, monkeypatch):
@@ -698,8 +720,9 @@ def boundary(d: Path, let_in: dict[str, list[bytes]], *, links: tuple[str, ...] 
     key = certifier_key()
     issuer = cert.Issuer(cert.LmsSigner.create(key, d / "signer.json"), CERTIFIER_SESSION, coins=lambda n: b"\x07" * n)
     T, r = BOUNDARY_GRID.buckets, BOUNDARY_GRID.allocation
-    records = [issuer.certify(Record(link, 0, fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
-                                     COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
+    records = [issuer.certify(BlockGrid(link, 0,
+                                        fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
+                                        COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
                               cert.parameters_digest(BOUNDARY_GRID)) for link, frames in let_in.items()]
     public = lms.public_key(key)
     (d / "boundary.json").write_text(json.dumps({
@@ -880,7 +903,8 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     assert e["total"] == float(total) and e["log2_total"] == al.timing.log2(total)
     assert sum(parts.values()) - total == parts["delta_hiding"] and e["delta_slack"] > 300 * e["delta_profile"]
     assert e["named_terms"] == al.NAMED_TERMS == {"prf_advantage": {
-        "claim": "prf/sha-512", "term": "Σ_t Adv(prf t)", "value": None, "in_total": False}}
+        "claim": "prf/sha-512", "term": "Σ_t adv_t", "value": None, "in_total": False,
+        "status": "SHA-512 stream as PRF: not priced, not assumed"}}
     uncharged = session(2.0 ** -40, 700, 2.0 ** -60, charged=False)
     assert Fraction(uncharged["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"]) == total - Fraction(
         48 * 700, 2 ** 64) and al.session_error(uncharged) == e
@@ -908,6 +932,36 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     assert out["T=1s"]["error"] == credit["error"] == {"sessions": [0, 1], "total": float(both), "exact": str(both),
                                                        "log2": al.timing.log2(both), "named_terms": al.NAMED_TERMS}
     assert out["T=60s"]["error"] == {"sessions": [], "total": 0.0, "exact": "0", "log2": None, "named_terms": {}}
+
+
+def test_no_error_the_auditors_line_renders_comes_without_the_prf_term_it_leaves_out():
+    """The line's error is never printed as a bare δ. In the Markdown table it reads δ + Σ_t adv_t (SHA-512 stream as
+    PRF: not priced, not assumed), the ledger's words (`ledger.DELTA_FORM`), with δ's number after it, and every error
+    of the document that has a session (a session's, a T's, the line of record's) names the term beside its total,
+    as the ledger's own records do (`ledger.NAMED_TERMS`). A T that credits no session prints no error."""
+    assert al.NAMED_TERMS is al.ledger.NAMED_TERMS
+    d = {"profile": 2.0 ** -40, "slack": 96 * 2.0 ** -67, "hiding": al.ledger.hiding_over(96), "binding": 0.0,
+         "sketch": 0.0, "rejection": 48 * 96 * 2.0 ** -64}
+    total = 0.0
+    for x in d.values():
+        total += x
+    memory = {f: {"delta": total, "named": al.ledger.NAMED_TERMS} for f in al.ledger.FORMS}
+    e = al.session_error({"k": 0, "samples": 48,
+                          "ledger": {"delta": d, "inputs": {"passes": 96}, "declared": {"memory": memory}}})
+    held = {f: {**dict.fromkeys(al.SHARES, 0.5), "exact": dict.fromkeys(al.SHARES, "1/2")} for f in al.line.FORMS}
+    rows = [{"k": 0, "T": "T=1s", "shares_auditor_clock": held, "error": e, "credit": {"ok": True, "zero": []}},
+            {"k": 1, "T": "T=60s", "shares_auditor_clock": held, "error": e,
+             "credit": {"ok": False, "zero": ["not accepted: the Lean refused it (receipt)"]}}]
+    out, credit = al.credited_line(rows)
+    text = al.table({"sessions": [], "line": out, "credit": credit, "line_by": "python", "conditional_on": {},
+                     "boundary": {"checked": False, "reason": "off by default (--boundary)"}}).splitlines()
+    credited, zero = (next(x for x in text if x.startswith(f"line {t}:")) for t in ("T=1s", "T=60s"))
+    assert al.ledger.DELTA_FORM == "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
+    assert f", error {al.ledger.DELTA_FORM}, δ = {e['total']:.3g} (2^{e['log2_total']:.2f}): " in credited
+    assert "error" not in zero and [x for x in text if "error" in x] == [credited]
+    for error in (e, out["T=1s"]["error"], credit["error"]):
+        assert error["total"] > 0 and error["named_terms"] == al.ledger.NAMED_TERMS
+    assert out["T=60s"]["error"]["sessions"] == [] and out["T=60s"]["error"]["total"] == 0.0
 
 
 # Gate runs 8 and 9's accepted sessions (their verifier.json): (passes, the memory line's δ every form records, the

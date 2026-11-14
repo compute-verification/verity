@@ -2,31 +2,17 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from fractions import Fraction
 from pathlib import Path
 
+import lean_headline as H
+import loads
 from verity_machine_model.model import census, model, vector
 
-POUW = Path(__file__).resolve().parents[1]
 PROGRAMS = Path(__file__).resolve().parent / "fixtures" / "census_programs.json"
 FOLD_BULK = Path(__file__).resolve().parent / "fixtures" / "fold_bulk_loops.json"
 
-
-def _load(name: str, path: Path):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-H = _load("pouw_lean_headline", POUW / "lean_headline.py")
-loads = _load("facet_break_loads", POUW / "facet_break" / "loads.py")
 
 #: Bit-exact ways to compute fx1's word step (d' = w·m1, u = y ⊕ d' ⊕ k_x, y' = u·a + z, z' = rotl(u, r) + y'), lane
 #: instructions a word by census class. rotl(u, r) is u·2^r mod 2^32 plus ⌊u·2^r/2^32⌋, whose bits don't overlap.
@@ -48,7 +34,8 @@ def lanes(fold: dict[str, int]) -> dict[str, Fraction]:
 
 def beaten(name: str) -> list[tuple[float, str, str, str]]:
     """Each (load, row, run, probe) with a census program (fixtures/census_programs.json) above 1 on a row of the named
-    vector, heaviest first. The load is loads.py's over the classes of the program's x alone, so it is a lower bound."""
+    vector, heaviest first. The load is facet_break/loads.py's over the classes of the program's x alone, so it is a
+    lower bound."""
     m, v = model(), vector(name)
     c = census(m, v.epoch)
     out = []
@@ -58,7 +45,7 @@ def beaten(name: str) -> list[tuple[float, str, str, str]]:
 
 
 def test_the_committed_instances_are_the_exporters():
-    """Security/Definitions/Accounting/Headline/Sm120.lean and Sm120Measured.lean are what lean_headline.py writes from
+    """security/Definitions/Accounting/Headline/Sm120.lean and Sm120Measured.lean are what lean_headline.py writes from
     the data, π* included."""
     assert H.main(["--check"]) == 0
 
@@ -120,7 +107,7 @@ def test_no_census_program_beats_the_measured_vector():
 
 
 def test_bit_exact_folds_meet_fold_opt_at_pi_star():
-    """FOLD-OPT at the headline's certificate (`FoldOptFoldedAt`, an open conjecture under Security/lean-audit.json's
+    """FOLD-OPT at the headline's certificate (`FoldOptFoldedAt`, an open conjecture under security/lean-audit.json's
     `shape.conjectures`), which a bit-exact fold priced below φ* at π* falsifies: each of `FOLDS` costs at least the
     menu's cheapest route at both headlines' π*, DS-120's issue and DS_smem mix and JI3t_0 on VF3s-16. The menu is not
     cheapest at every certificate, which is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked: the IMAD

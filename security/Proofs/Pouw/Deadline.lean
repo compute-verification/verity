@@ -1,0 +1,121 @@
+module
+
+public import Definitions.Pouw.Guarantees.Deadline
+public import Proofs.Pouw.Game
+public import Proofs.Pouw.Break
+public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
+public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
+public import Proofs.Pouw.PearlC.TTOutW1
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceCapRev1Gap
+import Proofs.Pouw.Prob
+
+/-!
+# Proofs of the deadline's guarantees
+
+The honest clock names a program that outputs the adversary's transcript wherever it is received by the deadline, after
+the same preprocessing, at a cost within the run's spending between the salt and the deadline. That program is within
+the budget `EndToEnd` (or `GGapSampled`) reads, and its accepted transcripts include every one the verifier accepts by the
+deadline.
+
+The sm_120 instances are stated at W1: each is `PearlCSampledByDeadline` at `CM := W1.w1Priced dv salt`, with its
+sampled g from the old reduction at that cost model (`Proofs.Pouw.PearlC.TTOutW1`).
+
+The honest clock is stated once over `Adversaries`; at each game's `CostModel.adversaries` it unfolds to that game's own
+reading (`CostModel.honestClock_iff`, by `Iff.rfl`; `PearlC.CostModel.honestClock_iff`, whose adversaries hash nothing).
+-/
+
+@[expose] public section
+
+namespace Pouw
+
+variable {Q R S : Type}
+
+/-- The honest clock at the integer game's adversaries of `CM` on `U`, unfolded. -/
+theorem CostModel.honestClock_iff {CM : CostModel Q R S} {U : Workload} {A : Adversary CM} {run : TimedRun Q R S}
+    {td : ℝ} :
+    Assumptions.HonestClock (CM.adversaries U) A run td ↔
+      ∃ A' : Adversary CM, A'.pre = A.pre ∧ ∀ (H : Q → R) (s : S),
+        (run.tr H s ≤ td → A'.transcript U H s = A.transcript U H s ∧ ∀ m ∈ A'.hashed U H s, m ∈ A.hashed U H s) ∧
+        CM.cost A'.online H U A'.act (A'.pre.eval H) s ≤ run.spentIn H s run.ts td ∧
+        CM.calls A'.online H U A'.act (A'.pre.eval H) s ≤ CM.calls A.online H U A.act (A.pre.eval H) s :=
+  Iff.rfl
+
+/-- The honest clock at Pearl-C's adversaries of `CM` on `U`, unfolded. -/
+theorem PearlC.CostModel.honestClock_iff {CM : PearlC.CostModel Q R S} {U : PearlC.Workload} {A : PearlC.Adversary CM}
+    {run : TimedRun Q R S} {td : ℝ} :
+    Assumptions.HonestClock (CM.adversaries U) A run td ↔
+      ∃ A' : PearlC.Adversary CM, A'.pre = A.pre ∧ ∀ (H : Q → R) (s : S),
+        (run.tr H s ≤ td → A'.transcript U H s = A.transcript U H s) ∧
+        CM.cost A'.online H U A'.act (A'.pre.eval H) s ≤ run.spentIn H s run.ts td ∧
+        CM.calls A'.online H U A'.act (A'.pre.eval H) s ≤ CM.calls A.online H U A.act (A.pre.eval H) s :=
+  ⟨fun ⟨A', hpre, h⟩ => ⟨A', hpre, fun H s => ⟨fun ht => ((h H s).1 ht).1, (h H s).2⟩⟩,
+    fun ⟨A', hpre, h⟩ => ⟨A', hpre, fun H s => ⟨fun ht => ⟨(h H s).1 ht, fun _ hm => hm⟩, (h H s).2⟩⟩⟩
+
+end Pouw
+
+namespace Pouw.SecurityProofs
+
+theorem WorkBetweenSaltAndDeadline : Pouw.Guarantees.WorkBetweenSaltAndDeadline := by
+  intro Q R S _ _ _ _ CM P D g₀ Ωmax ε hg₀ hΩ hW hTT U hU A run td hclock T hT q hq hB t εs hεs
+  obtain ⟨A', hpre, hA'⟩ := CostModel.honestClock_iff.1 hclock
+  have hb : A'.Bounded U T q := by
+    intro H s
+    refine ⟨(hA' H s).2.1.trans (hB H s).1, ?_⟩
+    have h1 := (hA' H s).2.2
+    have h2 := (hB H s).2
+    rw [hpre] at h1 ⊢
+    omega
+  refine le_trans (pr_mono fun x hx => ?_) (EndToEnd Q R S CM P D g₀ Ωmax ε hg₀ hΩ hW hTT U hU T hT q hq A' hb t εs hεs)
+  obtain ⟨⟨htr, hacc⟩, hlt, hbr⟩ := hx
+  obtain ⟨heq, hsub⟩ := (hA' x.1 x.2.1).1 htr
+  rw [heq]
+  exact ⟨hacc, hlt, fun h => hbr (Pouw.Proofs.collisionIn_mono hsub h)⟩
+
+theorem SpareCapacityAtDeadline : Pouw.Guarantees.SpareCapacityAtDeadline := by
+  intro Q R S _ _ _ _ CM P D g₀ Ωmax ε hg₀ hΩ hW hTT U hU A run td hclock C Y hY q hq hB t εs hεs
+  have hb : A.BoundedBy U run td (C * (td - run.ts) - Y) q := by
+    intro H s
+    exact ⟨by linarith [(hB H s).1], (hB H s).2⟩
+  refine le_trans (pr_mono fun x hx => ⟨hx.1, by linarith [hx.2.1], hx.2.2⟩)
+    (WorkBetweenSaltAndDeadline Q R S CM P D g₀ Ωmax ε hg₀ hΩ hW hTT U hU A run td hclock (C * (td - run.ts) - Y)
+      (by linarith) q hq hb t εs hεs)
+
+theorem PearlCSampledByDeadline : Pouw.Guarantees.PearlCSampledByDeadline := by
+  intro Q R S _ _ _ _ CM P TR D g δ hG U hU A run td hclock T hT q hq hB w κ hκ hw t εs hεs
+  obtain ⟨A', hpre, hA'⟩ := PearlC.CostModel.honestClock_iff.1 hclock
+  have hb : A'.Bounded U T q := by
+    intro H s
+    refine ⟨(hA' H s).2.1.trans (hB H s).1, ?_⟩
+    have h1 := (hA' H s).2.2
+    have h2 := (hB H s).2
+    rw [hpre] at h1 ⊢
+    omega
+  refine le_trans (pr_mono fun x hx => ?_) (hG U hU T hT q hq A' hb w κ hκ hw t εs hεs)
+  obtain ⟨⟨htr, hacc⟩, hlt⟩ := hx
+  rw [(hA' x.1 x.2.1).1 htr]
+  exact ⟨hacc, hlt⟩
+
+theorem PearlCSm120Rev1Cap1000ByDeadline_8192 : Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192 :=
+  fun Q R S _ _ _ _ sha fetch salt sem hTT =>
+    PearlCSampledByDeadline Q R S (PearlC.W1.w1Priced (PearlC.W1.W1Device.sm120Loop sha fetch) salt) _ _ _ _ _
+      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192 _ sem (PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT))
+
+theorem PearlCSm120Rev1Cap1000ByDeadline_16384 : Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384 :=
+  fun Q R S _ _ _ _ sha fetch salt sem hTT =>
+    PearlCSampledByDeadline Q R S (PearlC.W1.w1Priced (PearlC.W1.W1Device.sm120Loop sha fetch) salt) _ _ _ _ _
+      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_16384 _ sem (PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT))
+
+theorem PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b : Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b :=
+  fun Q R S _ _ _ _ sha fetch salt sem hTT =>
+    PearlCSampledByDeadline Q R S (PearlC.W1.w1Priced (PearlC.W1.W1Device.sm120Loop sha fetch) salt) _ _ _ _ _
+      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b _ sem
+        (PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT))
+
+theorem PearlCSm120Rev1Cap1000ByDeadline_llama31_8b : Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b :=
+  fun Q R S _ _ _ _ sha fetch salt sem hTT =>
+    PearlCSampledByDeadline Q R S (PearlC.W1.w1Priced (PearlC.W1.W1Device.sm120Loop sha fetch) salt) _ _ _ _ _
+      (PearlC.pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b _ sem
+        (PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT))
+
+end Pouw.SecurityProofs

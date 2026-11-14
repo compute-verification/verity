@@ -55,12 +55,12 @@ from typing import Any, Callable, Iterator
 
 import verity_difftest as DT
 from verity_difftest import protocol as PR
-from verity.core.protocols.spot.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
-from verity.ml.circuits import codec, partition_object as PO
-from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.definitions.registry import catalog
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
+from verity.circuits import codec, partition_object as PO
+from verity.commitments.identity import identity_digest, identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.definitions.registry import catalog
 
 import r2_population as R2
 
@@ -119,15 +119,15 @@ def population_version(program) -> int:
 
 
 def decode(desc: dict):
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     return codec.decode_program(desc, REGISTRY)
 
 
 def decode_opaque(desc: dict) -> tuple[Any, list[str]]:
     """`decode`, each primitive the descriptor names that the current registry lacks standing in by the descriptor's own
     signature, never evaluated (the registration's checks and the sample read the program's shape only); and their ids."""
-    from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
-    from verity.ml.circuits.types import type_from_json
+    from verity.circuits.defs import REGISTRY, PrimitiveDefinition
+    from verity.circuits.types import type_from_json
 
     def opaque(*_: Any) -> int:
         raise RuntimeError("an opaque stand-in is never evaluated")
@@ -507,11 +507,15 @@ def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None,
            registered: dict | None = None, scheme: str = SCHEME, outputs: dict | None = None,
            schemas: dict | None = None) -> dict:
     """``outputs`` and ``schemas`` (a registration reusing an earlier record's values, `registration.check`'s) appear only
-    when given."""
+    when given, ``schemas`` under the Lean's name ``row_schemas``; with ``registered``, ``parameters`` (the program
+    function's, which the descriptor doesn't carry), which `OneStage.paramsOfJson` requires of a verifier expecting values
+    registered."""
     return {"anchors": list(anchors or []), "delta": delta, "law": law, "leaf_layer": leaf_layer, "log": list(log or []),
             "partition": partition, "ports": ports, "program": descriptor(program), "query": query,
             "registered": registered, "scheme": scheme, "work_table": work_table,
-            **({"outputs": outputs} if outputs is not None else {}), **({"schemas": schemas} if schemas is not None else {})}
+            **({"parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]]} if registered is not None else {}),
+            **({"outputs": outputs} if outputs is not None else {}),
+            **({"row_schemas": schemas} if schemas is not None else {})}
 
 
 def evidence(a: dict, *, instances: int, sessions: list[str], session_roots: dict | None, served: list[int] | None) -> dict:
@@ -578,7 +582,7 @@ def python(c: Case) -> dict:
         R.PROTOCOL, verdict, reason, digest, public, profile)
     codes = R.check(rec, program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                     p["partition"], p["work_table"], p["registered"], outputs=p.get("outputs"),
-                    schemas=p.get("schemas")).codes
+                    schemas=p.get("row_schemas")).codes
     if codes:
         return out("reject", f"registration: {', '.join(codes)}")
     try:
@@ -1458,10 +1462,10 @@ def registered_gemm(run: Run) -> Iterator[Case]:
     the roots the Lean verdict opened registered reads against; `audit_negatives` re-decided it with the record's roots as
     the sessions'."""
     from verity_flock.input_sets import InputSet
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.program import Program
-    from verity.ml.circuits.refs import coll_concat
-    from verity.ml.circuits.types import Array
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.program import Program
+    from verity.circuits.refs import coll_concat
+    from verity.circuits.types import Array
     base = "run"
     summary = run.json(f"{base}/summary.json")
     n, cols = summary["n"], summary["cols"]
@@ -1623,9 +1627,9 @@ def served_window(run: Run) -> Iterator[Case]:
     scheme is `served_commit.SCHEME` and the audit took no sessions; in it (`verity/proof-service/outcome/v0`) the scheme
     is the service's and the audit took the delivered sessions. Neither took the served sample or the sessions' roots, and
     no verdict of record reports registered reads."""
-    from verity.core.protocols.pouw import window as Wd
-    from verity.ml.protocols.pouw.circuit import leaves as L, pc8
-    from verity.ml.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
+    from verity.protocols.accounting.pouw.verifier import window as Wd
+    from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc8
+    from verity.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
     pv = run.json("out/request/params.json")
     rec = run.json("out/request/registration.json")
     commit = run.commit()
@@ -1771,8 +1775,8 @@ def served_audit(run: Run) -> Iterator[Case]:
     no sessions and none of the later checks' inputs. Before `served_commit.run_of` the verifier took the run its served
     domains bind from the record's own window, not the request's binding, so the other request's registration passed R3
     (`receive-foreign` RECEIVED, the run's failed check)."""
-    from verity.ml.protocols.pouw.circuit import leaves as L, pc8
-    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
+    from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc8
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
     src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/pouw/served_zk/served_commit.py"],
                          capture_output=True, text=True) if commit else None
@@ -1992,9 +1996,9 @@ def a6(run: Run) -> Iterator[Case]:
     Definition, else the templates the run's `program.json` defines), the sampling design `stratified:k`, each member port's set-bound
     domain over its member's set (A6's row layout: x row-seg, w and o0 row-v2), and the leaf layer the SHA-512 of the
     map from member to its public file's SHA-512."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import gemm as OG
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as OG
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     base = "out/a6"
     a = run.json(f"{base}/audit.json")
     summary = run.json(f"{base}/summary.json")
@@ -2122,9 +2126,9 @@ def a7(run: Run) -> Iterator[Case]:
     (`check3/`) is outside (`A7_CHECK3`)."""
     from types import SimpleNamespace
 
-    from verity.ml.circuits import requirement_units as RU
-    from verity.ml.circuits.defs import bind
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.circuits import requirement_units as RU
+    from verity.circuits.defs import bind
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     base, tag = "out/a7", "verity/flock-circuit/binding/v2"
     a = run.json(f"{base}/audit.json")
     summary = run.json(f"{base}/summary.json")
