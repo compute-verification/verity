@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import _Arena
+from verity_torch.pouw.pearl_c.host import _Arena
 
 
 @pytest.fixture

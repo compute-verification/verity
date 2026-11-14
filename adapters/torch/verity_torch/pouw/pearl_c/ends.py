@@ -24,8 +24,8 @@ from verity.protocols.accounting.pouw.verifier.core_check import MANIFEST_SCHEMA
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul
 from verity.protocols.accounting.pouw.verifier.serving import Schedule, SchemeId
 
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y_device as SY
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import (
+from verity_torch.pouw.pearl_c import served_y_device as SY
+from verity_torch.pouw.pearl_c.host import (
     _bytes,
     _Driver,
     _Keys,
@@ -39,10 +39,10 @@ from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import (
     write_behind,
     write_manifest,
 )
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import behind as host_behind
+from verity_torch.pouw.pearl_c.host import behind as host_behind
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.kernel import Kernel
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.manifest import session_head
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.screen import excluded, excluded_host
+from verity_torch.pouw.pearl_c.screen import excluded, excluded_host
 
 #: a retained whole capture's stages (`whole_calls.WholeCalls._stages`): each (weight, m₁₆)'s A words, A tree and y
 _Stages = dict[tuple[int, int], tuple[Any, Any, Any]]

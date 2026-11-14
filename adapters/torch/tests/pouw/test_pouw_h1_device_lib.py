@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-import verity.protocols.accounting.pouw.prover.serving.h1.tables_device as TD
+import verity_torch.pouw.h1.tables_device as TD
 
 _vp = ctypes.c_void_p
 

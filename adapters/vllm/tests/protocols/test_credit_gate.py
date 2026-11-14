@@ -47,7 +47,7 @@ from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
 from verity_vllm.protocols import pouw
 from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
-from verity.protocols.accounting.pouw.prover.serving import credit_gate_device as CGD
+from verity_torch.pouw import credit_gate_device as CGD
 from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT

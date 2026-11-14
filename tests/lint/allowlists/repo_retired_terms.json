@@ -3814,7 +3814,6 @@
     {"file": "verity/protocols/accounting/pouw/prover/serving/h1/window.py", "count": 41},
     {"file": "verity/protocols/accounting/pouw/prover/serving/lead/__init__.py", "count": 3},
     {"file": "verity/protocols/accounting/pouw/prover/serving/lead/feed.py", "count": 1},
-    {"file": "verity/protocols/accounting/pouw/prover/serving/pearl_c/host.py", "count": 2},
     {"file": "verity/protocols/accounting/pouw/prover/serving/pearl_c/manifest.py", "count": 1},
     {"file": "verity/commitments/cuda/tests/cuda_build.py", "count": 3},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/pearl_c_sm90.cu", "count": 3},
@@ -5085,6 +5084,7 @@
     {"file": "benchmarks/one_stage/tests/test_prove_subprotocol_served.py", "count": 4},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_transfer_blocks_lean.py", "count": 58},
     {"file": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean", "count": 81},
-    {"file": "adapters/vllm/tests/commit/test_serving_vectors.py", "count": 2}
+    {"file": "adapters/vllm/tests/commit/test_serving_vectors.py", "count": 2},
+    {"file": "adapters/torch/verity_torch/pouw/pearl_c/host.py", "count": 2}
   ]
 }

@@ -51,10 +51,10 @@ import numpy as np
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import CALL_CAPACITY
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import _Driver, _event, _put, _zeros
+from verity_torch.pouw.pearl_c.host import _Driver, _event, _put, _zeros
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.kernel import _load
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.passes import call_index
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.screen import scatter_into, screen_into
+from verity_torch.pouw.pearl_c.passes import call_index
+from verity_torch.pouw.pearl_c.screen import scatter_into, screen_into
 
 __all__ = ["ROTATED", "gemm_grouped", "group", "module"]
 
