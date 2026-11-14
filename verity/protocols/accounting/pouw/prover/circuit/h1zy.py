@@ -566,7 +566,7 @@ def _leaf(tile: Any) -> int:
     if k < 1:
         raise ValueError(f"K = {k}: a leaf's lanes and combine are staged only at a positive K")
     if r % 16:
-        raise ValueError(f"R = {r}: a lane reads the leaf's R admit bits as one row, and C-Flock takes only a row of whole "
+        raise ValueError(f"R = {r}: a lane reads the leaf's R admit bits as one row, and Flock takes only a row of whole "
                          f"16-bit words (class_statement.unit_lowering): a leaf's lanes and combine are staged only at an R "
                          f"that is a multiple of 16, as the served 32 × 32 leaf's is")
     return k
@@ -588,7 +588,7 @@ def combine(tile: Any) -> Any:
     k = _leaf(tile)
     n = 8 * H.Layout(4, 8, k).sets
     if n + 17 <= 128:
-        raise ValueError(f"K = {k}: the combine reads only a lane's partials and the receipt, {n}-byte rows, but C-Flock "
+        raise ValueError(f"K = {k}: the combine reads only a lane's partials and the receipt, {n}-byte rows, but Flock "
                          f"proves a statement only with a row that compresses before its last block, at least 112 bytes: "
                          f"K = {LEAST_K} is the least K the combine is proved at")
     return bind(PouwH1Combine2 if tile.defn.id in J10R_TILES else PouwH1Combine, TILE=tile)

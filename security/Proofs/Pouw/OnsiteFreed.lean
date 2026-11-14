@@ -13,7 +13,7 @@ public import Proofs.Pouw.Lemmas.Dither
   the remote floor's bad event that one spent at least `F`, so the prover spent at least `F − β · ext`, and the
   certifier, which counts every exchanged bit and refuses counts past `K`, makes `ext ≤ K`. `FreedOfFloor` turns the
   floor `F − β K` into freed compute, but with the floor's `κ`.
-* `outsourcePeriod_of_perProgram`: the per-program `OutsourceWithinEgress` implies its period form, so
+* `outsourceMonitoringPeriod_of_perProgram`: the per-program `OutsourceWithinEgress` implies its period form, so
   `OutsourceWithinEgressPeriod` asks no more of the model. Each program is replaced by its exchange-free one; the state
   path, and so the transcript, is unchanged, and the answers' exchanged bits are nonnegative (G2).
 * `OnsiteFreed_honest`, `OnsiteFreed_nontrivial`: at `Definitions.Pouw.Witness`'s machine `tw`, round `twRound`
@@ -141,7 +141,7 @@ commit phase, work and answer replaced by its exchange-free one, the prover send
 work costs at most `β` a bit its commit phases and work exchanged more, which is at most `β` a bit its programs
 exchanged (an answer's bits are a count, G2). So `OutsourceWithinEgressPeriod` asks no more of the model than
 `OutsourceWithinEgress`. -/
-theorem outsourcePeriod_of_perProgram (G : Accel) (P : RoundProto) (k : ℕ) (μ : G.Res → ℝ) (β : ℝ) (hβ : 0 ≤ β) :
+theorem outsourceMonitoringPeriod_of_perProgram (G : Accel) (P : RoundProto) (k : ℕ) (μ : G.Res → ℝ) (β : ℝ) (hβ : 0 ≤ β) :
     OutsourceWithinEgress G μ β → OutsourceWithinEgressPeriod G P k μ β := by
   intro h hG1 hG2 hP1 hP2 A
   choose fc hfc using fun b => h hG1 hG2 hP1 hP2 (A.commit b)
@@ -408,7 +408,7 @@ theorem OnsiteFreed_honest :
       honest.ExchangeFree ∧
       ∀ o x, honest.Passes (onsiteVerdict twWork (CountedWithin twNet (fun _ => 0) (fun _ => 0) 0)) twDev o x :=
   ⟨twDual, by rw [twC]; norm_num, le_rfl, tw_G1, tw_G2, trivial, trivial, twFloor,
-    outsourcePeriod_of_perProgram tw twRound 2 twμ 0 le_rfl twOutsource, twSees,
+    outsourceMonitoringPeriod_of_perProgram tw twRound 2 twμ 0 le_rfl twOutsource, twSees,
     by rw [twEps]; exact twε_lt honest, by norm_num, fun _ _ _ _ => ⟨rfl, rfl, rfl⟩,
     fun o x => ⟨fun w => (honest_accepted o x w).2, trivial, (add_zero (0 : ℝ)).le⟩⟩
 
@@ -438,7 +438,7 @@ theorem OnsiteFreed_nontrivial :
     have h2 := quiet_timedUse ox.1 ox.2 2
     linarith [twF_pos]
   refine ⟨twDual, by rw [twC]; norm_num, le_rfl, tw_G1, tw_G2, trivial, trivial, fun h => ?_,
-    outsourcePeriod_of_perProgram tw twRound 2 twμ 0 le_rfl twOutsource, twSees, fun h => ?_⟩
+    outsourceMonitoringPeriod_of_perProgram tw twRound 2 twμ 0 le_rfl twOutsource, twSees, fun h => ?_⟩
   · have h1 := h tw_G1 tw_G2 trivial trivial quiet fun _ _ _ _ => ⟨rfl, rfl, rfl⟩
     rw [prob_eq_one] at h1
     · norm_num at h1

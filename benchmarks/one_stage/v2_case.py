@@ -84,7 +84,7 @@ def rebuild(c: dict, scratch: Path) -> tuple[Path | None, str]:
     try:
         subprocess.run([py, "-m", "verity_numerical.bench.generate", "--subcircuit", c["subcircuit"], "--n", "4",
                         "--seed", "1", "--out", str(sets)], check=True, capture_output=True, cwd=TREE)
-        argv = [py, "benchmarks/one_stage/compose_circuit.py", "--input-set", str(sets / "sets" / c["set"]), "--out", str(f)]
+        argv = [py, "verity/protocols/proofs/spot/verifier/one_stage/compose_circuit.py", "--input-set", str(sets / "sets" / c["set"]), "--out", str(f)]
         argv += [x for k in ("partition", "program") if c[k] for x in (f"--{k}", c[k])]
         subprocess.run(argv, check=True, capture_output=True, cwd=TREE)
     except subprocess.CalledProcessError as x:

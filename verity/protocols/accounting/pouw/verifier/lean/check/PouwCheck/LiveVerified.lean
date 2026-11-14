@@ -168,7 +168,7 @@ def judge (files statements : Json) (got : Live) (roots : List (String × String
       for fj in fs do
         let f ← finding fj
         unless f.accepted do
-          throw (LIVE, s!"round {s}'s live@{s} session {f.session} was rejected by the verifier of record " ++
+          throw (LIVE, s!"round {s}'s live@{s} session {f.session} was rejected by the verifier " ++
             s!"({f.why}): its served rows m_s = {ms.getD s 0} are not proved (no retry)")
         unless f.units == [s] do
           throw (LIVE, s!"round {s}'s live@{s} session {f.session} proved units {f.units}, not unit {s}: round s's " ++
