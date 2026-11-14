@@ -37,11 +37,12 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     """The stream holds the registration's R1-R7 against its own copy of the round's Program, the generator form the
     round registers (`scan_root`, `stream_of`), so it registers and samples the round: a stratified sample of 4 with
     each template's stratum sampled, a session for each member holding a sampled proof block and only for those, a
-    registration of the generator form's digest and partition, and coins whose evidence holds against the group's root
-    and the registration's digest. A stream that rebuilt the templates' mixed population instead refused it at R2
+    registration of the generator form's digest and partition, its start registered at the empty state's root with no
+    earlier record (the spec declares the start and the stream holds the verifier's log, `spec_of`, `stream_of`), and
+    coins whose evidence holds against the execution phase's root and the registration's digest. A stream that rebuilt the templates' mixed population instead refused it at R2
     (``R2-program``, ``R2-partition``) and drew nothing. Each member's registered reads, the verifier's file and its
     statement's header (the prover's and the verifier's alike, or their statement digests differ), name every port of
-    its circuit, its o0 at the registration's root for it, as Lean's `Registered.checkComplete` requires. The round
+    its circuit, its o0 at the registration's root for it (the start's, the scan's state's leaf 0), as Lean's `Registered.checkComplete` requires. The round
     names each lane's ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each read, tied, so R8 lets
     them through and both verifiers' registration verdict publishes them (``rests_on_period_check``): this round's
     acceptance rests on a period check (`NetworkCheck.Period`'s `wired`), which refuses its stand-in block
@@ -115,4 +116,8 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
         inst = json.loads((m["dir"] / f"inst-{m['n']}.bin").read_bytes().split(b"\n", 1)[0])
         assert sorted(ports) == sorted(head["registered"]) == sorted(p.name for p in m["ports"]), m["name"]
         assert inst["registered"] == head["registered"], m["name"]
-        assert ports["o0"]["root"] == roots[f"{m['at']}/o0"] and ports["o0"]["reads"] == list(range(m["n"]))
+        o0 = (roots["scan/state"], [0]) if m["name"] == "start" else (roots[f"{m['at']}/o0"], list(range(m["n"])))
+        assert (ports["o0"]["root"], ports["o0"]["reads"]) == o0, m["name"]
+    assert {**rec["registered"][0], "root": None} == {"value": sz.CARRY, "root": None, "leaves": 1,
+                                                      "words": rec["registered"][0]["words"], "domain": carry.domain}
+    assert rec["registered"][0]["root"] == carry.root and rec["previous"] is None

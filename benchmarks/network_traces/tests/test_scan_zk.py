@@ -1281,7 +1281,8 @@ def test_the_window_root_is_the_wardens_signed_execution_phase(tmp_path):
 def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_its_stream_takes():
     """`spec_of` on a round of two stand-in templates split a member an execution phase (the scan's own take a minute to
     build; `spec_of` reads only the round's program, query, templates and members), its ports a member's and the scan's
-    trees as `audit` names them, its counts each template's over its members."""
+    trees as `audit` names them, its counts each template's over its members; with a start unit (``started``) the
+    registered start `scan_zk.CARRY` too, which a spec without one refuses at ``roots``."""
     T, k, root = 32, 16, "dd" * 64
     defs = {"ingress": ING, "egress": EG}
     templates = ("ingress", "egress")
@@ -1308,6 +1309,12 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     assert sz.S.check_public(spec, record(want)).ok
     v = sz.S.check_public(spec, record({**want, "scan/other": {"leaves": 1, "domain": "ff" * 64}}))
     assert not v.ok and "roots" in v.codes
+    started, _units, _counts = sz.spec_of(pg, members, want, schemas, k, root, started=True)
+    start = {**record(want), "registered": [{"value": sz.CARRY, "root": "ab" * 64, "leaves": 1, "words": 4,
+                                             "domain": "cd" * 64}]}
+    assert sz.S.check_public(started, start).ok and sz.S.check_public(started, record(want)).ok
+    v = sz.S.check_public(spec, start)
+    assert not v.ok and v.to_json()["detail"]["roots"] == [sz.CARRY]
     with pytest.raises(ValueError, match="no coins of its own"):
         sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER, coins=lambda n: bytes(n))
     assert sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER, coins=sz.CC.ChallengerCoins(None)).digest

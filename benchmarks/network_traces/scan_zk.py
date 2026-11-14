@@ -1592,13 +1592,14 @@ def rule_of(k: int, n: int) -> str:
 
 
 def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[str, str], k: int,
-            root: str) -> tuple[S.Spec, list, dict[str, int]]:
+            root: str, started: bool = False) -> tuple[S.Spec, list, dict[str, int]]:
     """The honest round's `service.Spec` (prove_path's `a5.stream_of`): its unit the round's templates in order, its
-    values the round's ports (each member's frame ports and the scan's trees, under their hiding ``schemas``), its
-    public items what the registration shows (N, each template's stratum, the group, the leaf layer and each port's
-    layout), its selection the stratified rate of ``k`` in N (`rule_of`), its proof deadline `MEMBER_DEADLINE_S` a member
-    and its context the group's root. -> (the spec, its proof blocks, `Stream.register`'s counts: each template's proof
-    blocks, over its members)."""
+    values the round's ports (each member's frame ports and the scan's trees, under their hiding ``schemas``) and, for
+    a round with a start unit (``started``), the registered start `CARRY`, its public items what the registration
+    shows (N, each template's stratum, the execution phase, the leaf layer, each port's layout and the start's), its
+    selection the stratified rate of ``k`` in N (`rule_of`), its proof deadline `MEMBER_DEADLINE_S` a member and its
+    context the execution phase's root. -> (the spec, its proof blocks, `Stream.register`'s counts: each template's
+    proof blocks, over its members)."""
     units = [pg.stagers[tp].defn for tp in pg.templates]
     n = sum(m["n"] for m in members)
     law = S.Law(rule_of(k, n))
@@ -1608,10 +1609,13 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     public = [("population", "N, the round's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
               ("window", "the round's provenance: its link-window of the warden's run"),
               ("leaf_layer", "the leaf layer over the members' public files"),
-              *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain"))]
+              *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain")),
+              *((f"{x}:{CARRY}", "the start's layout") for x in ("leaves", "words", "domain") if started)]
     check = S.Check(tuple(PA.program_digest(Program(u)) for u in units), pg.query,
                     proof_deadline=float(MEMBER_DEADLINE_S * len(members)), tied=pg.tied)
-    spec = S.Spec(tuple(S.Value(p, schemas[p], "serve") for p in sorted(want)), law, check,
+    values = (*(S.Value(p, schemas[p], "serve") for p in sorted(want)),
+              *((S.Value(CARRY, None, "serve", registered=True),) if started else ()))
+    spec = S.Spec(values, law, check,
                   tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(root))
     counts: dict[str, int] = {}
     for m in members:
@@ -1620,18 +1624,21 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     return spec, units, counts
 
 
-def stream_of(a, spec: S.Spec, units: list, pg: SimpleNamespace, coins, held: dict | None = None) -> S.Stream:
+def stream_of(a, spec: S.Spec, units: list, pg: SimpleNamespace, coins, held: dict | None = None,
+              log: list[dict] = ()) -> S.Stream:
     """The honest round's `service.Stream` on ``coins``: the challenger's own copy of the round's Program is the
     generator form the round registers (`scan_root`, ``Stream(program=)``), not its templates' mixed population.
     ``held``: the challenger's key and the verifier's copy of main's history the stream is made with
-    (`a5_coins.held`), which it reads every outcome's coin evidence under."""
+    (`a5_coins.held`), which it reads every outcome's coin evidence under. ``log``: the verifier's log of the run's
+    earlier records (`carry_of`), which the start's registration reads."""
     return S.Stream(spec, units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins, program=pg.program,
-                    **(held or {}))
+                    log=log, **(held or {}))
 
 
 def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.Stream, draw: S.Draw,
                   rec: dict, want: dict, leaf_layer: str, read: bytes, segment: dict | None, sessions: list[str],
-                  verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
+                  verdicts: dict, statement: dict, given: dict,
+                  started: dict | None = None) -> tuple[dict | None, dict, dict]:
     """The honest sample's outcome of record once the challenger's session has ended (prove_path's `a5.coins_outcome`):
     its proof delivered and its outcome with the coins' evidence (`a5_coins.evidence`), the Lean's whole run (`Run.run`,
     its window `window_root`) held to the Python's, the audit failing ``coins`` where
@@ -1669,7 +1676,8 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
         window = "00" * 64 if name == "coins-for-another-window" else root
         s = stream_on(AC.Replay(read, family), held)
         try:
-            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts))
+            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts,
+                                    **(started or {})))
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
             got, audit = outcome(s, d, evidence)
@@ -1803,13 +1811,14 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             raise SystemExit(f"{name}: flock-verify draw gave no draw (rc {p.returncode}): {p.stderr[-400:]}")
         lean_draw = json.loads(line.split(" ", 1)[1])
     else:
-        spec, units, counts = spec_of(pg, members, want, schemas, k, coins.root)
+        spec, units, counts = spec_of(pg, members, want, schemas, k, coins.root, carry is not None)
+        log_, started = (carry.check["log"], {x: y for x, y in carry.check.items() if x != "log"}) if carry else ([], {})
         rank = coins.AC.RankCoins(coins.turns, 0)
         draw = refused = None
         try:
-            stream = stream_of(a, spec, units, pg, rank, coins.AC.held(coins.turns))
+            stream = stream_of(a, spec, units, pg, rank, coins.AC.held(coins.turns), log_)
             rank.plan(coins.AC.need(rule, pg.program, pg.query, rec["population"]))
-            reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=coins.root, counts=counts)
+            reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=coins.root, counts=counts, **started)
             rank.commit(bytes.fromhex(reg.digest))
             draw = stream.select(reg)
         except S.Refused as e:
@@ -1868,9 +1877,9 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": n_inst, "served": sorted(served),
                  "session_roots": session_roots}
-        result, neg, told = coins_outcome(a, coins, lambda c, held: stream_of(a, spec, units, pg, c, held), counts,
-                                          stream, draw, rec, want, leaf_layer, read, segment, sessions, verdicts,
-                                          statement, given)
+        result, neg, told = coins_outcome(a, coins, lambda c, held: stream_of(a, spec, units, pg, c, held, log_),
+                                          counts, stream, draw, rec, want, leaf_layer, read, segment, sessions,
+                                          verdicts, statement, given, started)
         (out / "coins.json").write_text(json.dumps({**told, "negatives": neg}, indent=1, sort_keys=True, default=str))
         log(f"{name}: the challenger's coins ({coins.challenger}): outcome {told['outcome']}, coins_reason "
             f"{told['coins_reason']}, run {told['run']}, negatives refused "
