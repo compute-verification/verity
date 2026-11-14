@@ -16,7 +16,7 @@ the gates once, at its first count, and the rest at each:
                under the pass's root (`receipts.verify_leaf`)
     whole      with --whole-store, at its first count: one pass over the store itself, into poisoned buffers, against
                a reference that runs none of the kernels' code (`whole_store`): every block's receipt, and the
-               pass's root
+               pass's root; under --leaf-ctas the leaf pass is asked for its receipts for that one pass
     calibrate  the plain read, --calibration-passes chained passes queued as a session queues them, the chained pass
                against the plain pass at the same seed over the whole store, the device's signs against the
                reference's and a window's openings (`GpuBackend.calibrate`): tau is the pass over the read
@@ -83,14 +83,20 @@ def reference(torch, seed: bytes, rows: int):
 def whole_store(backend: device.GpuBackend, rows: int, rng: np.random.Generator, step: int = 1 << 15) -> dict:
     """One pass over the backend's store, every buffer it writes poisoned first, against `reference` at `rows`: every
     block's receipt as the devices hold it after the pass, and the pass's root against `receipts.tree` over the
-    reference's receipts. The reference reads the store's bytes where they are and shares no code with the pass."""
+    reference's receipts. The reference reads the store's bytes where they are and shares no code with the pass. A
+    leaf pass stores no receipt unless asked, so in leaf mode that one pass asks for them, and the mode is put back."""
     s = backend.store
     seed = rb.seed(rng.bytes(rb.CHALLENGE_BYTES), 0, bytes(rb.DIGEST_BYTES))
+    leaf, kept = s.leaf_ctas, s.leaf_receipts
+    if leaf:
+        s.pass_mode(leaf, receipts=True)
     s.poison = True
     try:
         root, _ = s.run_pass(seed)
     finally:
         s.poison = False
+        if leaf:
+            s.pass_mode(leaf, receipts=kept)
     s.sync()
     t0 = time.perf_counter()
     receipts, want, wrong, differ = reference(s.torch, seed, rows), [], [], 0
