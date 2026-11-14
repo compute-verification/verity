@@ -89,7 +89,8 @@ path = "../../verity/protocols/proofs/flock/verifier"
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
-  "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R", "Properties.Pouw.PeriodJ10RStrata",
+  "Properties.Pouw.Period", "Properties.Pouw.Period.Witnesses", "Properties.Pouw.PeriodJ10R",
+  "Properties.Pouw.PeriodJ10RStrata",
   "Properties.Pouw.ServedFreed", "Properties.Pouw.ServedWork", "Properties.Pouw.ServedValues", "Properties.Pouw.Strata",
   "Properties.Pouw.Credit", "Properties.Pouw.PearlPlus", "Properties.Pouw.PearlPlusDraw",
   "Properties.Pouw.PearlPlus.Witnesses", "Properties.Pouw.PearlPlusTie", "Properties.Nci", "Properties.Nci.Threads",
