@@ -52,7 +52,8 @@ record. With one, a block type the Lean verifier was run on takes its record's f
 from them (`prove`'s rules: its Definition's measured types at its size, else the rate fitted over every measured
 statement), and both totals print as `modeled`, each line naming what was measured (the block type, its share of the
 proving time, its statement, the run and its host) and the share of the figure its own records, its family's and the
-fitted rate price, with the basis. A run
+fitted rate price, with the basis. A table of its own gives each block type's Lean verifier seconds a block with its
+mark (`P.LEAN_MARKS`: measured, modeled or assumed) and the run, statement and circuit file it rests on. A run
 whose record the Lean verifier refused, that holds no record or whose block type the census doesn't hold measures
 nothing and is listed under "Refused".
 
@@ -491,10 +492,11 @@ def lean_verify(doc: Any, run: str) -> P.LeanVerify | str:
             and all(isinstance(x, (int, float)) and not isinstance(x, bool) and x > 0 for x in seconds)):
         return (f"its `block` ({ {k: block[k] for k in ('k_log', 'blocks', 'full')} }), `proof.bytes` "
                 f"({doc['proof']['bytes']}) and runs' `wall_s` ({seconds}) aren't a statement's blocks, bytes and seconds")
-    host = doc["host"]
+    host, form = doc["host"], _field(doc, "statement.id")
     return P.LeanVerify(P.definition_id(word) if isinstance(word, str) else definition, block["k_log"], block["blocks"],
                         block["full"], tuple(seconds), doc["proof"]["bytes"], run,
-                        f"{host['node']} ({host['cores']} cores, {host['cpu_model']})", doc["label"])
+                        f"{host['node']} ({host['cores']} cores, {host['cpu_model']})", doc["label"],
+                        form if isinstance(form, str) else None)
 
 
 def lean_run(store: Any, run: str) -> P.LeanVerify | str:
@@ -914,6 +916,43 @@ def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
                  "a witness bit", "2^k_log witness bits")]
 
 
+#: what each mark of a block type's Lean verifier row rests on (`P.LEAN_MARKS`), as its table's heading words it
+LEAN_ROWS = ("The Lean verifier's seconds, a row a block type (measured: the median of its own statement's runs over its "
+             "blocks; modeled: its Definition's measured statement's seconds an AND gate times its own AND gates; "
+             "assumed: the rate fitted over every measured statement times its AND gates, which no measurement of its "
+             "Definition backs; none: no AND gates to price it by)")
+
+
+def _lean_rows(doc: Mapping[str, Any], rows: int | None) -> list[str]:
+    """The Lean verifier's table: each block type's seconds a block, its mark, the run that measured the statement it
+    rests on and that statement, in the main table's order; with `rows`, the rest in one row counting their marks."""
+
+    shown = doc["rows"] if rows is None else doc["rows"][:rows]
+    lines = ["", LEAN_ROWS + ":", "", "| block type | Lean verifier ms per block | mark | record | rests on |",
+             "| --- | --- | --- | --- | --- |"]
+    for r in shown:
+        ms = "—" if r["lean_verifier_seconds"] is None else _n(1e3 * r["lean_verifier_seconds"])
+        lines.append(f"| `{_short(r['block'])}` | {ms} | {r['lean_mark'] or 'none'} | {r['lean_record'] or '—'} | "
+                     f"{_lean_basis(r)} |")
+    if rest := doc["rows"][len(shown):]:
+        marks = [r["lean_mark"] or "none" for r in rest]
+        counts = ", ".join(f"{mark} {marks.count(mark)}" for mark in (*P.LEAN_MARKS.values(), "none") if mark in marks)
+        lines.append(f"| {len(rest)} more block types | | {counts} | | |")
+    return lines
+
+
+def _lean_basis(r: Mapping[str, Any]) -> str:
+    if r["lean_record"] is None:
+        return "the fitted rate" if r["lean_mark"] else "—"
+    blocks, full = r["lean_statement_blocks"]
+    whose = "its own statement" if r["lean_mark"] == "measured" else f"`{_short(r['lean_definition'])}`'s statement"
+    size = "a full statement" if blocks == full else f"{blocks}/{full} of a full statement"
+    form = r["lean_form"]
+    read = ("its record names no statement id" if form is None else
+            f"measured from {P.LEAN_FORMS.get(form, f'statement `{form}`')}")
+    return f"{whose} of {blocks} blocks ({size}), {read}"
+
+
 def _record(target: str | None) -> str:
     return "—" if target is None else target[:16] if target.startswith("art:") else target
 
@@ -984,6 +1023,7 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
     lines += [f"| {P.SOURCES[x['source']]} | {x['block_types']} | {_n(x['per_token'])} | "
               f"{'—' if x['block_share'] is None else format(x['block_share'], '.2%')} | {_n(x['gpu_seconds_per_token'])} | "
               f"{'—' if x['time_share'] is None else format(x['time_share'], '.2%')} |" for x in doc["sources"]]
+    lines += _lean_rows(doc, rows)
     p = doc["periods"]
     lines += ["", (f"Per monitoring period, over all compute ({p['gates_basis']}); every total is the table's ratio scaled, "
               f"not measured at that size{', and partial as that ratio is' if t['missing'] else ''}:"), "",

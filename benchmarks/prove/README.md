@@ -75,6 +75,11 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
   share of total compute at an audit budget β, so a serving GPU holds that share / (1 − β) prover GPUs, modeled.
   Where the record can't be read, its line says why and the table stands.
 - **The share of the proving time each source covers.**
+- **The Lean verifier's seconds a block on every block type,** a row each in the main table's order, marked by what
+  it rests on: measured on a statement of its own Definition, modeled on its Definition's measured statement at its
+  AND gates, assumed at the rate fitted over every measured statement, none with no AND gates. A measured or modeled
+  row names the run that measured its statement, that statement's blocks, and the circuit file the Lean verifier read
+  it from (the unrolled file, or its templates), as the record's statement id says.
 - **The steady-state rows it didn't read,** under "Unread": a labelled row whose staged Definition is no block type
   of the census under its cut, at any prover count. Each is named with what holds it, the type and Definition it
   staged, and its own ms per block where it is a steady-state measurement, else why it isn't one. It is on no row and
