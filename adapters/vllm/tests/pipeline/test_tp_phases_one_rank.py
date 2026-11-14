@@ -6,11 +6,12 @@ the target check (`tp.target`) reads that rank's engine.  CPU-only: the worker i
 from __future__ import annotations
 
 import json
-import sys
-from types import ModuleType
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 
+from tests import fake_vllm
 from tests.pipeline.test_tp2_warmup_learn_only import _Com, _Rank
 from verity_vllm.pipeline import timeline as T
 from verity_vllm.pipeline.tp import phases as PH
@@ -25,7 +26,8 @@ class _InProcess:
     a name as the worker's method, and answers a list of one."""
 
     def __init__(self, worker) -> None:
-        self.worker, self.rpcs = worker, []
+        self.worker = worker
+        self.rpcs: list[str] = []
 
     def collective_rpc(self, method, timeout=None, args=(), kwargs=None):
         self.rpcs.append(getattr(method, "__name__", method))
@@ -34,6 +36,10 @@ class _InProcess:
 
 
 class _Worker(_Rank):
+    #: what the target check reads of a rank's worker; a test of it sets both
+    vllm_config: object
+    get_model: Callable[[], object]
+
     def tp2_probe(self) -> dict:
         return {"rank": 0, "world": 1}
 
@@ -91,13 +97,16 @@ def test_the_target_check_at_one_rank_reads_that_ranks_engine_and_names_it_when_
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.tp import target as TT
 
-    distributed = ModuleType("vllm.distributed")
-    distributed.get_tensor_model_parallel_rank = lambda: 0
-    monkeypatch.setitem(sys.modules, "vllm.distributed", distributed)
+    fake_vllm.install(monkeypatch).set("vllm.distributed:get_tensor_model_parallel_rank", lambda: 0)
     worker, target, model = _Worker(0, _Com()), object(), object()
     worker.vllm_config, worker.get_model = object(), lambda: model
-    seen = []
-    monkeypatch.setattr(va, "target_mismatches", lambda eng: seen.append(eng) or [])
+    seen: list[Any] = []
+
+    def none_differs(eng: Any) -> list[str]:
+        seen.append(eng)
+        return []
+
+    monkeypatch.setattr(va, "target_mismatches", none_differs)
     assert TT.require_ranks(_InProcess(worker), target, 60.0) == [{"rank": 0, "mismatches": []}]
     (eng,) = seen
     assert eng.target is target and eng.model is model and eng.llm.llm_engine.vllm_config is worker.vllm_config

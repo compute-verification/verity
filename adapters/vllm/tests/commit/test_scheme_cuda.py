@@ -18,7 +18,7 @@ torch = pytest.importorskip("torch")
 if not torch.cuda.is_available():
     pytest.skip("the CUDA copies need a GPU", allow_module_level=True)
 
-from verity_vllm.commitments.vllm_v1 import vectors as VEC  # noqa: E402
+from tests.commitments import vectors as VEC  # noqa: E402
 from verity_vllm.commit import scheme  # noqa: E402
 
 V = VEC.load()

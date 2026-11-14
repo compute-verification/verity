@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from verity_vllm.pipeline.telemetry import admission as adm
+from verity_vllm.records import schema_ids
 
 MiB = adm.MiB
 
@@ -37,6 +38,12 @@ def _cfg(**kw):
     base = {"model": "llama32-1b", "requests": 8, "prompt_tokens": 3819, "decode_rows": 494, "steps": 129, "max_context": 1152, "pairs": 3, "host_limit_bytes": 119_209 * MiB}
     base.update(kw)
     return adm.RowScale(**base)
+
+
+def test_a_plan_carries_the_id_the_records_package_holds() -> None:
+    """The plan's id is written once, in `records.schema_ids`: its writer here and a reader elsewhere cannot hold two."""
+    assert adm.SCHEMA is schema_ids.ADMISSION_PLAN_SCHEMA
+    assert adm.predict(_cfg())["schema"] is schema_ids.ADMISSION_PLAN_SCHEMA
 
 
 def test_predict_names_every_term_and_has_no_multiplier():
