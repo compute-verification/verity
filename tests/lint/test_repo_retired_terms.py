@@ -94,8 +94,8 @@ OTHER_SENSES = re.compile(r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|
                           r"|grid_cap|cap ℓ)(?!\w)")
 #: the files whose "cap" is their protocol's own, by path prefix, with each reason; Pearl's spellings still count there
 OWN_CAPS = {
-    "verity/protocols/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
-    "verity/protocols/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
+    "verity/protocols/accounting/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
+    "verity/protocols/accounting/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
 }
 #: Pearl's `CAP`, which the table spells as a word, so no longer term holds it ("over-cap", "cap check", `capOK` and
 #: `Device.cap` are terms of their own)
@@ -496,7 +496,7 @@ def test_a_draw_in_a_comment_or_string_of_a_composite_body_is_still_the_sample()
             '    """Each unit we draw, one by one."""\n'
             '    k = draw(st.integers(0, 3))  # draw the count, then the units\n'
             '    return [draw(st.just(i)) for i in range(k)]  # draw\n')
-    assert said(text, "verity/protocols/spot/tests/test_units.py") == [(6, "draw"), (7, "draw"), (8, "draw")]
+    assert said(text, "verity/protocols/proofs/spot/tests/test_units.py") == [(6, "draw"), (7, "draw"), (8, "draw")]
 
 
 def test_a_composite_shown_in_markdown_keeps_every_bare_draw_of_its_body() -> None:
@@ -506,11 +506,11 @@ def test_a_composite_shown_in_markdown_keeps_every_bare_draw_of_its_body() -> No
     text = ("# Units\n\n```python\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef units(draw):\n"
             "    k = draw(st.integers(0, 3))  # draw the count\n    return [draw(st.just(i)) for i in range(k)]\n```\n\n"
             "It's the sample that counts past the example: one draw.\n")
-    assert said(text, "verity/protocols/spot/README.md") == [(13, "draw")]
+    assert said(text, "verity/protocols/proofs/spot/README.md") == [(13, "draw")]
 
 
 def test_a_python_file_that_doesn_t_tokenize_stops_the_scan_naming_itself() -> None:
-    path = "verity/protocols/spot/tests/test_broken.py"
+    path = "verity/protocols/proofs/spot/tests/test_broken.py"
     text = 'from hypothesis import given, strategies as st\n\n\n@given(st.data())\ndef test_it(data):\n    data.draw(st.just("x))\n'
     try:
         said(text, path)
@@ -571,10 +571,10 @@ def test_a_cap_of_pous_or_poub_is_another_sense_and_pearl_s_beside_it_is_not() -
     theirs = "the cap: `Params.schedule_cap`, SCHEDULE_CAP, `RTT_ALLOWANCE_CAP_NS`, cap_ns, `AUDIT_CAP`, `auditCap`; v.cap, caps"
     pearls = "\nPearl's: capOK, Device.cap, CAP, an over-cap tile, the cap check"
     pearl = [(2, "capOK"), (2, "Device.cap"), (2, "CAP"), (2, "over-cap"), (2, "cap check")]
-    for path in ("verity/protocols/pous/verifier/audit.py", "verity/protocols/poub/verifier/audit.py"):
+    for path in ("verity/protocols/accounting/pous/verifier/audit.py", "verity/protocols/accounting/poub/verifier/audit.py"):
         assert said(theirs + pearls, path) == pearl
-    assert said(theirs + pearls, "verity/protocols/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
-    assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/poub/verifier/audit.py")] == [o for _, o in pearl]
+    assert said(theirs + pearls, "verity/protocols/accounting/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
+    assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/accounting/poub/verifier/audit.py")] == [o for _, o in pearl]
 
 
 def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:
