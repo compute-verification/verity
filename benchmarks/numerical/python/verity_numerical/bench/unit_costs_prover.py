@@ -104,6 +104,7 @@ __all__ = [
     "staging",
     "staging_fit",
     "template_class",
+    "workload",
 ]
 
 #: vy-nebius-1 and vy-nebius-2: ``free -g`` total (GiB)
