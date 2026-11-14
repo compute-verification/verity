@@ -25,6 +25,7 @@ from test_remote_bandwidth import (  # noqa: F401
 )
 
 from verity import claims
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, ledger, line, receipts, timing
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, Pace
 
@@ -53,7 +54,7 @@ def paced(store, p: audit.Params, plan=None):
     root's arrival."""
     clock = Clock()
     s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
-    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(store, None, entropy=Entropy(b"receipt salts"))
     challenges, coin_at, closed_at = {0: s.start()}, {0: DOWN_NS}, None
     passes, arrivals, previous = {}, {}, store.registration.digest
     t = i = ready = step = 0
@@ -118,7 +119,7 @@ def test_next_boundary_is_the_stated_window_unpaced_and_the_pace_when_paced(stor
     s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     coin = s.start()
     assert s.next_boundary_ns() == A, "not due before its first root: at the latest one allowance after its coin"
-    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(store, None, entropy=Entropy(b"receipt salts"))
     clock.now = 100
     ps = prover.run(coin, 0, store.registration.digest, None)
     assert s.receive(0, 0, ps.root, step=0) is None
@@ -438,6 +439,23 @@ def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> 
                       ({"chip_bytes": 1.0}, "chip_bytes")):
         with pytest.raises(ValueError, match=what):
             dataclasses.replace(n.tiers["hbm"], **bad)
+
+
+def test_a_nodes_capacities_are_handed_in_as_the_ledger_publishes_them() -> None:
+    """`Node.of_json` reads back what `to_json` publishes, through JSON, with no tiers; the stated node's is `timing`'s.
+    Any other key set, a squaring ceiling that isn't a map and a value `Node` refuses are refused."""
+    for n in (ledger.Node.stated(), ledger.Node.stated(disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10), node()):
+        assert ledger.Node.of_json(json.loads(json.dumps(n.to_json()))) == dataclasses.replace(n, tiers={})
+    j = ledger.Node.stated().to_json()
+    assert (j["read_bytes_per_s"], j["chip_bytes"], j["sha512_per_s"]) == (
+        timing.READ_BYTES_PER_S, timing.CHIP_BYTES, timing.SHA512_PER_S)
+    for bad in ({**j, "tiers": {}}, {k: v for k, v in j.items() if k != "chip_bytes"}, [j]):
+        with pytest.raises(ValueError, match="exactly"):
+            ledger.Node.of_json(bad)
+    with pytest.raises(ValueError, match="squarings_per_s"):
+        ledger.Node.of_json({**j, "squarings_per_s": [1.0]})
+    with pytest.raises(ValueError, match="read_bytes_per_s"):
+        ledger.Node.of_json({**j, "read_bytes_per_s": -1.0})
 
 
 def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:

@@ -39,7 +39,7 @@ def RECURSIVE : String := "recursive"
 
 /-- The refusal of a one-stage statement naming no `proofs`, one-stage v1's. -/
 def V1_REFUSED : String :=
-  s!"one-stage v1 ({Registration.PROTOCOL}) is refused: SPOT's one-stage form is v2 " ++
+  s!"one-stage v1 ({Docket.PROTOCOL}) is refused: SPOT's one-stage form is v2 " ++
     s!"({OneStageZk.PROTOCOL}), whose verdicts are its own run of the verifier on the proofs"
 
 /-- The refusal of the recursive form: SPOT's soundness covers the one-stage form only, and the verifier refuses
