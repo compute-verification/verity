@@ -288,5 +288,6 @@ How long the team's own changes take to reach `main`: measured on the verified q
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
+| `dashboard/` | the top goals of the console's Metrics dashboard whose own number has a target, a value younger than its `every` and a mark, out of the top goals it lists (`run.py`) | maintained |
 | `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`) | maintained |
 | `proof_status/` | the proofs' status as the Lean locks record it (`verity lean deployed`): the deployed guarantees, those at a trust gap of zero, each one's gap, and each lead's open premises and guarantees with no honest witness (`run.py`) | maintained |
