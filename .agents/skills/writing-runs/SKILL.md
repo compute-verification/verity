@@ -65,7 +65,8 @@ research run --on auto --cwd source -- \
 ~~~
 
 Try a long run's command on its machine for a minute first (`--timeout 2m --wait`), never on an agent VM (AGENTS.md
-"Tests"), and check that the run dir holds only your output directory beside the harness's files. A run `--on auto`
-sent to a pool that waits there on memory moves by itself to a pool that would start it now only while the VM that
-launched it is up and holds its asker, one of at most eight alive there: its launch and `research status RUN` say
-whether it has one.
+"Tests"), and check that the run dir holds only your output directory beside the harness's files. A run waiting in a
+pool's line, `--on auto` or sent by name with `--pool research` (no GPUs, no `--stay`), moves by itself to another
+machine's research pool where a place has stood 2 minutes, whatever it waits on, only while the VM that launched it is up
+and holds its asker, one of at most eight alive there: its launch and `research status RUN` say whether it has one. Say
+`--stay` for a run that fills or reads its machine's own caches, or whose output you read there by its run id.
