@@ -1033,8 +1033,8 @@ def test_the_stated_reading_in_every_window_and_for_the_horizons_sampling_term()
     GPU's HBM and host DRAM's share, at the node's R, S_chip and squaring ceiling.  At the stated T = 60 s and 33,273
     openings a window (555 a second) at δ = 2^-101, a 10 min session's worst window has its whole γ_t at 1.07–1.10%,
     over 1%, its μ_sample 0.21%; over the horizon the pooled μ_sample is under 0.03% and the whole γ about 0.73%, over
-    0.15%, which μ_chip and λ (0.164%) each exceed alone.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 6.0%: R
-    cancels in what is certified.  The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.74–5.77%.
+    0.15%, which μ_chip and λ (0.164%) each exceed alone.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 6.0–6.1%:
+    R cancels in what is certified.  The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.74–5.77%.
     The 20 s option at 28,004 openings has μ_sample under 0.25% and a whole γ_t over 1%, and the 1 s option's
     μ_sample alone is under 1%, at 7,001."""
     s, store = audit.SAMPLES, timing.spanning(94 * 10 ** 9, FIGURES)

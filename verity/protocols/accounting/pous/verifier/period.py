@@ -25,8 +25,10 @@ served store where `case` carries the table and `C*`. It certifies nothing, and 
 setup's acceptance is the open premise `SETUP_ACCEPTED`, among its certificate's hypotheses.
 
 `trusted-device`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
-when the challenger host isn't the node, and the leg says which (`challenger_session.placement`, under `deployment`).
-The setup's salt is still sampled on the node.
+under a committed configuration, for a session signed under a key its `[[pin]]` entries give the memory challenger
+(`period.json`'s `deployment`), whatever the host names say; the leg says which (`challenger_session.placement`).
+The setup's salt is still sampled on the node, and its check runs there too: every verdict rests on setup checked by
+the developer, not the auditor, which the leg says beside the premise.
 """
 
 from __future__ import annotations
@@ -256,12 +258,14 @@ def setup_inputs(setup_of: Mapping[str, Any]) -> SetupInputs:
 @dataclass(frozen=True)
 class Run:
     """A subprotocol's run over one monitoring period, PoUS's or the bandwidth audit's: its answer in the core
-    interface's canonical form, the core case its Lean replays to that answer, and, for a run on a setup (PoUS's), the
-    setup protocol's case that published its commitment."""
+    interface's canonical form, the core case its Lean replays to that answer, for a run on a setup (PoUS's), the
+    setup protocol's case that published its commitment, and for PoUS's, the SHA-512 of the key its memory challenger
+    signed the session under (`challenger_session.placement`'s ``key_sha512``)."""
 
     answer: dict[str, Any]
     case: dict[str, Any]
     setup_case: dict[str, Any] | None = None
+    key_sha512: str | None = None
 
     @property
     def verdict(self) -> str:
@@ -295,6 +299,18 @@ def decided_by(exe: str | os.PathLike | None) -> dict[str, str]:
     return {"program": "python" if exe is None else Path(exe).name, "host": socket.gethostname()}
 
 
+#: why a PoUS answer no `pous-run-protocol` gave is undecided where the Python accepted (`unjudged`)
+NO_JUDGE = "no pous-run-protocol answered the case: the Lean decides PoUS, and the Python's accept decides nothing alone"
+
+
+def unjudged(answer_: Mapping[str, Any], reason: str = NO_JUDGE) -> dict[str, Any]:
+    """A Python answer with no Lean to ask: its reject or undecided, which the Python may give alone, and undecided for
+    its accept (`reason`), with no public outputs and no profile."""
+    if answer_["verdict"] != "accept":
+        return dict(answer_)
+    return dict(answer_) | {"profile": None, "public": None, "reason": reason, "verdict": "undecided"}
+
+
 DEPLOYMENT = ("configuration", "pins")
 PIN_FIELDS = ("key-sha512", "party", "protocol", "scheme")
 
@@ -321,7 +337,7 @@ SETUP_WORKERS = 32
 CPUs each may run on (`period_prover.setup_store`; `onsite.device_key`, from `challenger_party.main`)."""
 
 
-__all__ = ["DEPLOYMENT", "PIN_FIELDS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS", "SIGNED_PROTOCOL",
+__all__ = ["DEPLOYMENT", "NO_JUDGE", "PIN_FIELDS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS", "SIGNED_PROTOCOL",
            "Period", "Run", "SetupInputs", "answer", "answer_signed", "case", "case_signed", "certificate", "certify",
            "deployment", "gaps", "openings_of", "point_for", "point_of", "profile", "profile_signed",
-           "serve", "setup_case", "setup_inputs", "tie"]
+           "serve", "setup_case", "setup_inputs", "tie", "unjudged"]
