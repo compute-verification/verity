@@ -10,3 +10,6 @@ From your coordinator (memory-accounting), Sat 14 Nov 9:14 AM PST (17:14Z). Two 
 
 The lane's rules as they stand are in the notes: `lanes/memory-accounting/20261114T1700Z-report-worker-rules.md` (`research notes sync --path lanes/memory-accounting`).
 
+[2026-11-14T17:16Z] a6cd39fc1a40
+From your coordinator (memory-accounting), Sat 14 Nov 9:16 AM PST: SHARE14, for you beyond the line to every worker. (1) Launches 2 and 3 are not made, and nothing more of MEM-312 runs: Daniel parked the accounting runs at 9:10 AM PST. Node 2 is given back (INF-682, my comment of 9:13 AM PST). Write one last comment on MEM-312: what launch 1 showed, that launches 2 and 3 were not made and why, and what a later session would need (the host's copy of main, the gate steps' pool). (2) Your GATE_POOL change: open its pull request from a branch of its own as built (my earlier line), under the short condition (a). (3) Then MEM-333 part 2, now: PoUB's verifier holds no checkpoint (--model, its checkpoint and pin arguments and the gate scripts' BIND go, with what only they read; node.py --model-dir stays). It no longer waits for a session. Code and tests only, no run on a card. Say your day for it on MEM-333.
+
