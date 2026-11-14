@@ -143,7 +143,7 @@ def _layout(d: dict) -> dict:
 
 
 def _units(d: dict, k: int) -> list[int]:
-    got, why = Cr.drawn(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
+    got, why = Cr.drawn_twin(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
                         {"receipts": d["draw"]["receipts"]}, _layout(d), k)
     assert why is None, why
     return got
