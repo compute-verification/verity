@@ -28,7 +28,7 @@
 #   rows and every kept run that a later step reads;
 # - the gate's verb `warden-rehearse`, which the deployed gate serves, so it changes with the gate's own deployment;
 # - `warden-fails`, the link name of a window's fails certificate (`<link>-fails`), which signed certificates hold;
-# - five public items' reasons (`service.py`'s `PUBLIC_WARDEN`, three of `tie_service.py`'s, one of `scan_zk.spec_of`'s),
+# - six public items' reasons (`service.py`'s `PUBLIC_WARDEN`, four of `tie_service.py`'s, one of `scan_zk.spec_of`'s),
 #   which a spec's digest takes in and the verifier holds a registered stream's spec to: a new format version, and every
 #   registration made under it;
 # - the trace corpus's labels `warden-heavy` and `warden-smallkv`: the corpus artifact and the fixture cut from it.
@@ -112,7 +112,8 @@ strings = [
     "the warden's domain (`warden_rows.domain`), which binds the session, the ",
     "the warden's salted root over the window's bucket rows, its signed head's",
     "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a ",
-    "the round's provenance: the group's link-windows of the warden's run",
+    "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public ",
+    "the round's provenance: its link-window of the warden's run",
 ]
 
 [rewrite]

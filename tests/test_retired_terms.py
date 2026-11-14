@@ -582,7 +582,8 @@ CERTIFIER_SPEC_REASONS = (
     "the warden's domain (`warden_rows.domain`), which binds the session, the ",
     "the warden's salted root over the window's bucket rows, its signed head's",
     "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a ",
-    "the round's provenance: the group's link-windows of the warden's run",
+    "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public ",
+    "the round's provenance: its link-window of the warden's run",
 )
 #: What keeps it, as the Glossary's row says: each kind's spellings and what ends it. A site is the first kind's that
 #: spells it: the row's own line first, and the quoted word alone after every spelling that holds it but the trace
