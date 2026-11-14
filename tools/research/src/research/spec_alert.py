@@ -155,10 +155,10 @@ def _trust(doc: dict) -> tuple[list[str], dict[str, str], dict[str, dict[str, st
     t = doc.get("trust") if isinstance(doc.get("trust"), dict) else {}
     base = t.get("base") if isinstance(t.get("base"), dict) else {}
     extra = t.get("extra") if isinstance(t.get("extra"), dict) else {}
-    gap = doc.get("trust_gap") if isinstance(doc.get("trust_gap"), dict) else {}
+    trust_gap = doc.get("trust_gap") if isinstance(doc.get("trust_gap"), dict) else {}
     return ([x for x in doc.get("deployed") or [] if isinstance(x, str)], {p: str(w) for p, w in base.items()},
             {g: {p: str(w) for p, w in ps.items()} for g, ps in extra.items() if isinstance(ps, dict)},
-            {g: sorted(x for x in ps if isinstance(x, str)) for g, ps in gap.items() if isinstance(ps, list)})
+            {g: sorted(x for x in ps if isinstance(x, str)) for g, ps in trust_gap.items() if isinstance(ps, list)})
 
 
 def _renames(olds: dict[str, dict], news: dict[str, dict], guarantees: dict[str, str]) -> dict[str, str]:
