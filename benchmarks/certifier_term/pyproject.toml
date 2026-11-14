@@ -39,7 +39,6 @@ inputs = [
     "verity/circuits/census.py",
     "verity/definitions/registry/boolean_fp8_moe.circuit-check.json",
     "verity/hardware/__init__.py",
-    "verity/hardware/record.py",
     "verity/protocols/accounting/registration/__init__.py",
     "verity/protocols/accounting/registration/verifier/__init__.py",
     "verity/protocols/accounting/registration/verifier/registration.py",

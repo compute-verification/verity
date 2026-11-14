@@ -26,6 +26,7 @@ from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import request_manifest
 from verity_vllm.query.units import ValueRef
+from verity_vllm.query import program_view as PV
 
 W = "model.model"
 H, E, K = 8, 4, 2
@@ -137,10 +138,10 @@ def test_the_plan_anchors_the_tap_on_the_moe_module():
 def test_word_check_sees_the_tapped_softmax_as_committed():
     groups = [{"family": fam, "statics": {"E": 64, "TOPK": 8, "VPT": 8}, "definition": f"{fam}{{E=64,TOPK=8,VPT=8}}", "calls": 3,
                "where": "model.layers.0.mlp.experts"} for fam in RS.ROUTERS]
-    tapped = W_.check_calls(groups, acquired=RS.TAP_WORDS)
+    tapped = W_.check_calls(groups, acquired=RS.TAP_WORDS, specialize=PV.specialization)
     assert tapped["ok"] and [g["acquired_interior_words"] for g in tapped["groups"]] == [3 * 130, 3 * 139]
     with pytest.raises(W_.QueryRuleViolation, match="interior-not-acquired"):
-        W_.check_calls(groups[:1], acquired={"MoeRouterTopKOrdered_v1": 129})
+        W_.check_calls(groups[:1], acquired={"MoeRouterTopKOrdered_v1": 129}, specialize=PV.specialization)
 
 
 def test_the_manifest_cli_and_verify_carry_the_policy(monkeypatch):

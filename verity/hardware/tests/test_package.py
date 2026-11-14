@@ -1,4 +1,4 @@
-"""The package file holds nothing: importing the record or the Site runs no card-loading code."""
+"""The package file holds nothing: importing the wire, which holds the record entry, or the Site reads no sheet."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ READS = """
 import os, sys
 seen = []
 sys.addaudithook(lambda event, args: seen.append(args[0]) if event in ("open", "os.scandir", "os.listdir") else None)
-import verity.hardware.record, verity.device as S
+import verity.channel, verity.device as S
 sheets = {os.fspath(S.CARDS), os.fspath(S.NODES)}
 read = sorted({os.fspath(p) for p in seen if isinstance(p, (str, os.PathLike))
                and (os.fspath(p) in sheets or os.path.dirname(os.fspath(p)) in sheets)})
@@ -36,5 +36,5 @@ def test_the_record_and_the_site_read_no_sheet_on_import() -> None:
     file or node file and lists neither directory, so the Site's readers of them run only when called."""
     done = subprocess.run([sys.executable, "-c", READS], capture_output=True, text=True)
     assert done.returncode == 0 and not done.stderr, (
-        "importing verity.hardware.record and verity.device read these sheets (or failed): read a card or a node file "
-        f"only where a reader is called, never at import\n{done.stderr}")
+        "importing verity.channel and verity.device read these sheets (or failed): read a card or a node file only "
+        f"where a reader is called, never at import\n{done.stderr}")
