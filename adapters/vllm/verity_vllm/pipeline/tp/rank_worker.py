@@ -41,6 +41,7 @@ from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm import settings
+from verity_vllm.log import init_logger
 from verity_vllm.records.schema_ids import (
     CENSUS_RANK_SCHEMA,
     ENGINE_PROFILE_SCHEMA,
@@ -49,6 +50,8 @@ from verity_vllm.records.schema_ids import (
 )
 
 __all__ = ["EXTENSION"]
+
+logger = init_logger(__name__)
 
 
 def repo_modules_loaded() -> dict[str, Any]:
@@ -95,7 +98,8 @@ def _moe_collective_modules() -> list[Any]:
     for name in MOE_COLLECTIVE_MODULES:
         try:
             m = importlib.import_module(name)
-        except Exception:  # noqa: BLE001 -- older/newer vLLM without this module
+        except Exception as e:  # noqa: BLE001 -- older/newer vLLM without this module
+            logger.info("tp collective recorder: %s does not import here (%r): its all-reduce is not wrapped", name, e)
             continue
         if hasattr(m, "tensor_model_parallel_all_reduce"):
             mods.append(m)
