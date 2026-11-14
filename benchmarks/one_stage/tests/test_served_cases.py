@@ -490,7 +490,7 @@ def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path,
 
 
 @lean
-def test_sampled_proofs_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, capsys, sampled_exe):
+def test_spot_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, capsys, sampled_exe):
     """`vstar-recursive sampled check` reads the toy's v2 case in the form ``one-stage`` through its commitment and names
     the record's digest; it rejects it, as v2's Lean does, and that rejection is the case's verdict. v1's case in the
     same form is refused by name at its params, the reason remote's composite would give for a v1 case."""

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+#: the Boolean gathers this module makes only inside other bodies, which no id names alone
+#: (`circuit_check.sidecars.body_family`)
+BODY_FAMILIES = (r"Gather(?:E2m1Pair|E8m0)x\d+_v2",)
+
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions at small statics on the H200's k16 step: the steps and their halves cut at x's words, the
