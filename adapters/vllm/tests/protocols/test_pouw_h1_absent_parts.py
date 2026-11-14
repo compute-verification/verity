@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.protocols.spot.device.challenger import OPENING_FORM, LiveCommitment
+from verity.protocols.proofs.spot.device.challenger import OPENING_FORM, LiveCommitment
 
 from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.protocols.pouw.h1 import CHALLENGER, H1Run

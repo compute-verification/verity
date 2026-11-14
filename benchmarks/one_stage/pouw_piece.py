@@ -55,10 +55,10 @@ from typing import Any
 
 from composite import line, outcome, write_private
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as Cr
-from verity.protocols.pouw.verifier import period_check as PC
-from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as Cr
+from verity.protocols.accounting.pouw.verifier import period_check as PC
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity_vllm.protocols.pouw.h1 import answers as A
 
 V1, PERIOD = CC.ID, PC.ID
