@@ -16,7 +16,7 @@ from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.device import challenger as C, coins as T
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 
 import fake_challenger as FC
 

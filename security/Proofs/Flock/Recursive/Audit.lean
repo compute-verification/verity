@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Recursive.Property
 public import Proofs.Flock.Recursive.Private
-public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.ZkServerZK
 public import Proofs.Flock.Recursive.Loads
 public import Proofs.Flock.Recursive.ForkInnerC
 
@@ -11,8 +11,8 @@ public import Proofs.Flock.Recursive.ForkInnerC
 
 `Flock.SecurityProofs.RecursiveAudit : Flock.Guarantees.RecursiveAudit`, from `zk_sessions_recursive_fork_innerC` at
 the compiled table (which, as its pick, ignores the last round's coin), the description's binding of the hidden
-statement to the registered rows (`Recursion.ofRows_eq_or_collides`), and `RecursiveFirewallPrivate`
-(`Proofs.Flock.Recursive.FirewallZK`). Its premises are `Proofs.Flock.Recursive.Premises`'.
+statement to the registered rows (`Recursion.ofRows_eq_or_collides`), and `RecursiveZkServerPrivate`
+(`Proofs.Flock.Recursive.ZkServerZK`). Its premises are `Proofs.Flock.Recursive.Premises`'.
 
 In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`, `Proofs.Flock.Recursive.Loads`):
 * where some index has no session that types, the event is empty: a session that verifies as V*'s statement of its
@@ -29,7 +29,7 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`,
 
 (i) is at the sampling design of the registration's samples (`drawLaw`), nonempty by the element its space comes with. Still taken by
 the property, each to become a lemma at the executable or a refusal of the verifier: in (ii) the honest witnesses
-(`honest`) and the obligations on the ZK server's code and V*'s staging (`FirewallSends`, `SessionsPublic`,
+(`honest`) and the obligations on the ZK server's code and V*'s staging (`ZkServerSends`, `SessionsPublic`,
 `SessionsCoined`, `SessionsHonest`, `OuterZK.Sessions`' `hz`, `hR`, `hS`); in (i) the obligation that V*'s statements'
 files parse to `Vs` (`VStarParses`, until gap 4), and the obligation on our code that every session's inputs carry the
 tags their name names (`TagsFound`, `_hF`), which with refusal (5)'s name equation makes them V*'s (`find?_circuit`).
@@ -53,7 +53,7 @@ theorem readsBelow_stmtAt {Ω H : Type} (rt : Flock.Registered.Port) (stmt : (Fi
 theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   refine And.intro ?_ ?_
   swap
-  · exact RecursiveFirewallPrivate
+  · exact RecursiveZkServerPrivate
   intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ st Vs zr hCust ish bind rows hob hF dg N σ wmsg Sk cmt msg rt
     stmt _hA3 p path₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
   replace hob := vstarParsesScoped_of hob

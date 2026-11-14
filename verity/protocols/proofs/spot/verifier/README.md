@@ -149,9 +149,9 @@ params are; round 2 runs no template check.
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
 
-Serving's record is not yet the scheme the audit proves: the benchmark's first run (`benchmarks/one_stage/a0.py`)
+Serving's record is not yet the scheme the audit proves: the benchmark's first run (`verity/protocols/proofs/spot/prover/audit/template_audit.py`)
 registers a stand-in, a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). Its
-served run (`benchmarks/one_stage/a5.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
+served run (`verity/protocols/proofs/spot/prover/audit/window_audit.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any sample are
 `served`: serving's own commitment, with no claim that they hold the values under the Commit's roots. A deferred run's serving becomes
@@ -173,7 +173,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back). The service's `Stream` and
   `benchmarks/one_stage` call it. Python is held to the Lean by
-  `verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py`. The same package ports the challenger's sample from the
+  `verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py`. The executable answers the challenger's ledger
+  and session checks too (`challenger_ledger`, `challenger_head`, `challenger_session`, `challenger_credited` and
+  `challenger_pinned`, `Spot/ChallengerSession.lean`), for a caller that asks the verifier for them;
+  `lean/tests/test_challenger_difftest.py` holds its answers to the challenger's Python. The same package ports the challenger's sample from the
   selection rule on (`Spot/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
   partitions. It is the `Stream`'s sample of record.
@@ -272,13 +275,33 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   Commit or from a deferred Commit's bundle by `verity_vllm.pipeline.deferred_rows`); its replay challenge is its own
   (`verity_vllm.commit.challenge`).
 
-Tests: `uv run tools/verity/check/suites.py protocols/spot`.
+Tests: `uv run tools/check/suites.py protocols/spot`.
+
+### Verdicts of record
+
+No function here returns a verdict of its own. Each verdict SPOT acts on is the Lean's: `one_stage.verifier` asks
+`sampled-proofs-verifier` and computes the Python twin beside it, and a disagreement, or no answer from the Lean, is a
+refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
+`NotImplementedError("proofs/spot-two-stage-sound")` (`verifier.not_written`), and its twin answers the difftest only.
+
+| Verdict | Entry | Lean of record | Twin |
+| --- | --- | --- | --- |
+| R1-R8 on a registration | `verifier.check` | `registration` (`OneStage`) | `registration.check` |
+| The audit record | `verifier.audit_record` | `Record.record` | `audit.audit_record` |
+| A registration's whole run | `verifier.run` | `Run.run` | the stream's own outcome |
+| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it refuses every two-stage run while `SecondStage.FORM` is off | the two records' join |
+| Round 2's statements | `second_stage.check` | `SecondStage.checkAny`, which only `Run.run` reaches | `check_twin` |
+| A two-stage outcome's completeness | `second_stage.complete` | none yet | `complete_twin` |
+
+A two-stage run whose stages read no coin bytes gives `Run.run` nothing to read, so `_audit_two` raises rather than
+join its records. `parties`' `_held` and `one_stage.proofs`' `ks_form_why`, `template_why` and `population_why` are
+guards: they only turn an accept into a refusal, never accept.
 
 ## Core API
 
 ~~~python
 from verity.protocols.proofs.spot.verifier import service
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw, partition, registration
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw, partition, docket as registration
 from verity.protocols.proofs.spot.device.coins import OwnRandomness, closure_of, draw_first
 from verity.protocols.proofs.spot.verifier.consumers import compute_bound, exfiltration_bound, infiltration_bound, location_bits
 from verity.protocols.proofs.spot.prover.optimize import Candidate, CostModel, Objective, frontier, for_budget
@@ -328,7 +351,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `parties`: SPOT[Flock]'s `InferenceServer`, `ProofServer` and `SpotVerifier` (`SPOT_MANIFEST`, `SPOT_PROTOCOL`,
   `spot_params_of`), in two stages with `TwoStageProofServer` and `TwoStageVerifier` (`SPOT_TWO_MANIFEST`,
-  `SPOT_TWO_PROTOCOL`), the core deployment's `Firewall`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
+  `SPOT_TWO_PROTOCOL`), the core deployment's `ZkServer`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
   the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `window_place`: `of`, `family` and `run`, the place a registration record's window names in its window's session, the
@@ -399,6 +422,7 @@ A program's weights, constants and tables are values: committed once, under hidi
   its run's seed salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
   recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
   (`verity/protocols/accounting/pouw/verifier/tests/test_pouw_supplied_inputs.py`).
+- **Certified values.** R7 holds a registered value no parameter reads to the verifier's `certified` entry of it.
 - **Reads.** Every port of a statement is either a registered port of the `--registered` file
   (`Registered.checkComplete`) or bound to the window's committed values: the file's `bound` names its rows' root and
   domain as the registration holds them, and the public header's must be the same (`bind_ports`; `Flock.RegBound`). No
@@ -506,8 +530,11 @@ is the record's own: whether every verdict ran. An accept waits on the verdicts 
 accept can say `complete` is false, and then a verdict that is not of record did not run. A reader that wants a
 complete audit reads `audit.answer_complete`, never the verdict alone: it is true only of an accept whose `complete`
 is true, so an answer without the field (one written before it, a reject, an undecided) is not complete. A two-stage
-outcome says it only under `second_stage.complete`: the two-stage form allowed, the replay block the registered
-request Definition, and each audit record accepted and complete.
+outcome says it only under `second_stage.complete`, which raises until its Lean is written (`verifier.not_written`,
+goal `proofs/spot-two-stage-sound`); its twin `complete_twin` holds when the two-stage form is allowed, the replay block
+is the registered request Definition, and each audit record accepted and is complete. A two-stage outcome's accept is
+`Run.run`'s symbol alone: round 2's check (`second_stage.check`) raises the same way, and its twin `check_twin` is the
+Python side the run is held to.
 
 Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
 sampling design).

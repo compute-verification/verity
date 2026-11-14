@@ -24,7 +24,7 @@ from verity.commitments.windows import rows as CS
 from verity.commitments.windows import tables as TB
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from verity_vllm.commit import index as IX
 from verity_vllm.commit import row_tables as RTB

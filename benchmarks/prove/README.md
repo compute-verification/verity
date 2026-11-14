@@ -200,7 +200,7 @@ VERIFIER is the Lean verifier's executable, as `lake build` leaves it under `ver
 holds one session directory (`session.json` and its proof files, `<table>.rep0.bin` and `<table>.rep1.bin`) and the
 statement it was proved on (`circuit.txt`, the public file, and the verifier's program (`program*.json`),
 `partition.json` and `registered.json` where the statement has them), each found by its name. A run is one process of the verifier's `verify` on the session,
-as `benchmarks/one_stage/a0.py` runs the verifier, so its seconds hold the verifier reading the statement, setting it
+as `verity/protocols/proofs/spot/prover/audit/template_audit.py` runs the verifier, so its seconds hold the verifier reading the statement, setting it
 up and verifying the session. The command runs it `--repeat` times and records each run's seconds, the proof files'
 bytes, the block type, the host (node, cores, CPU model) and the label of an accept. A run the verifier refuses ends the command: the record
 says refused, with the verifier's reason, and nothing is run again.

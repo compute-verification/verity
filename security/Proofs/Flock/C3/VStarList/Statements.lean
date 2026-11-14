@@ -23,7 +23,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 
 `vstarParsesScoped_of_list`: at the inner shape `ish`, a family of V*'s statements indexed by the verifier's own list
 (`RecVStar.statements`, `vstarCount`) whose files, where the verifier parses them into scope, parse to its circuits
-(`VStarParsesScoped`, the guarantee's `_hob`), at any outer law. It discharges `_hob`. At candidate 3's inner shape the
+(`VStarParsesScoped`, the guarantee's `_hob`), at any outer sampling design. It discharges `_hob`. At candidate 3's inner shape the
 list is circuits' gap 2's eleven statements, in the writer's order: four `rec-open`, two `rec-residuals`, one
 `rec-sparse`, R's three levels (`rec-open-stacked`) and one `rec-opening`. Statement `j`'s circuit is the parse of V*'s
 file for it where the verifier lists it, the file is written and its parse is in `Layout.scopeOk` (a built unit,
@@ -51,7 +51,7 @@ theorem vstarCount_eq {ish : Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
   rw [h]
 
 /-- **(h) V*'s statements over the verifier's list**: at every binding of each, a family whose files, where the
-verifier parses them into scope, parse to its circuits, at the outer law's points, rounds and samples. -/
+verifier parses them into scope, parse to its circuits, at the outer sampling design's points, rounds and samples. -/
 theorem vstarParsesScoped_of_list (ish : Flock.RecVStar.Inner) (bind : Fin (vstarCount ish) → VStar.Bindings)
     (mPts J : ℕ) (law : (nv : ℕ) → VLaw nv) :
     ∃ Vs : Fin (vstarCount ish) → VStmt, VStarParsesScoped Flock.Tags.circuit ish bind Vs ∧

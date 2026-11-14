@@ -11,7 +11,7 @@ The counting oracle (`Hashes.counted h`) runs a `With` function and counts its S
 bound on it (`FlockComplete.Cost`): from any count, a run adds at most `n` calls. Each function the setup calls a
 bounded number of times is bounded here, for every `h`: the digests (`partitionDigestWith`, `publicDigestWith`), the
 decoders (`Program.decodeWith`, `Desc.parseWith`, `HmRow.parseWith`), the loads and samples of a public file, the
-partition's checks and laws, and the links check. Each proof walks the definition with `countC`'s rules: the walk
+partition's checks and sampling designs, and the links check. Each proof walks the definition with `countC`'s rules: the walk
 assigns each bound, and `omega` closes what it leaves. The walk is spelled out in each proof rather than kept as a
 macro, which only a `compile_time` module may hold.
 -/
@@ -1727,7 +1727,7 @@ theorem outParseCommit_flat (tags : Tags) (bytes : ByteArray) (tables : List (St
 -- leaf
 set_option maxHeartbeats 8000000 in
 /-- **`Stmt.setupHiddenWith`'s calls**, at a sampled statement of an untyped, flat circuit: ten for its parse, partition,
-load, sample, law, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and sample return. -/
+load, sample, sampling design, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and sample return. -/
 theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (d : Json) (partition : Option Json) (program publicInputs : Option ByteArray) (PC : Circuit → Prop) (NP K : Nat)
     (ht : tags.typed = false) (hi : tags.isTmpl = false) (hPC : ∀ c, PC c → c.ports.size ≤ NP)

@@ -23,13 +23,13 @@ import pytest
 from verity.circuits.codec import canonical_json
 from verity.commitments.windows import flock_inputs as FI, links as LK, rows as CS
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
-TS = importlib.import_module("two_stage")
+TS = importlib.import_module("verity.protocols.proofs.spot.device.two_stage")
 SM = importlib.import_module("two_stage_small")
 FC = importlib.import_module("fake_challenger")
 
@@ -242,21 +242,21 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_f
     assert TS.pins(proofs, stmts) == {TID: True}
     layout = again.layout
     assert r.tie.get("supplied") is None and "pinned" not in r.tie and "outputs" not in r.tie
-    got = TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
+    got = TS.round_two_twin(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
                        r.tie)
     inputs = {"value": "logits", "why": SS.INPUTS_WHY}
     assert got == {"ok": False, "codes": [TS.INPUTS_REFUSED], "detail": {TS.INPUTS_REFUSED: inputs}}
     assert [(x.port, x.value) for x in SS.replay_links(layout.program, d.key, brec)] == [("logits", "logits"), ("o0", "o0")]
     assert parts[0].n == O
     filled = {**r.tie, "supplied": {"logits": [[{"bytes": "00000000"}]]}}
-    got = TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
+    got = TS.round_two_twin(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
                        filled)
     assert got == {"ok": True, "codes": [], "detail": {}}
 
     own = TS.verifier_reads(replace(d, returns=()), mine, r.record, brec, sample)
     assert own[key]["ports"]["o0"]["value"] == f"{TID}/o0" and own[key]["ports"]["o0"]["reads"] == list(range(Q * O))
     stmts, verdicts = _handed(tmp / "interior", tmp / "served-own", mine, own, drawn)
-    got = TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
+    got = TS.round_two_twin(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
                        r.tie)
     assert (got["ok"], got["codes"]) == (False, [TS.INPUTS_REFUSED, "second-read", "second-values"])
     assert got["detail"]["second-read"] == {"statement": 0, "template": TID}
@@ -341,7 +341,7 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     S.template_circuits(proofs, again.stream.spec.check.query)
     stmts, verdicts = _handed(tmp_path / "interior", tmp_path / "served", mine, reads, drawn)
     assert all(TS.pins(proofs, stmts).values())
-    r2 = TS.round_two(c.layout.program, d.key, sample, mine, r.record, again.record, drawn, stmts, {"verdicts": verdicts}, proofs)
+    r2 = TS.round_two_twin(c.layout.program, d.key, sample, mine, r.record, again.record, drawn, stmts, {"verdicts": verdicts}, proofs)
     assert (r2["ok"], r2["codes"]) == (False, ["second-wires"])
 
 
@@ -397,14 +397,14 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     stmts, verdicts = _handed(tmp_path / "interior", tmp_path / "served", mine, reads, drawn)
     assert len(stmts) == k and all(TS.pins(proofs, stmts).values())
     args = (c.layout.program, d.key, sample, mine, r.record, brec, drawn)
-    got = TS.round_two(*args, stmts, {"verdicts": verdicts}, proofs, r.tie)
+    got = TS.round_two_twin(*args, stmts, {"verdicts": verdicts}, proofs, r.tie)
     assert got == {"ok": False, "codes": [TS.INPUTS_REFUSED],
                    "detail": {TS.INPUTS_REFUSED: {"value": f"{block}logits", "why": SS.INPUTS_WHY}}}
 
     own = TS.verifier_reads(replace(d, returns=()), mine, r.record, brec, sample)
     assert own[last.key]["ports"]["o0"]["value"] == f"{combine}/o0"
     stmts, verdicts = _handed(tmp_path / "interior", tmp_path / "served-own", mine, own, drawn)
-    got = TS.round_two(*args, stmts, {"verdicts": verdicts}, proofs, r.tie)
+    got = TS.round_two_twin(*args, stmts, {"verdicts": verdicts}, proofs, r.tie)
     assert (got["ok"], got["codes"][:2]) == (False, [TS.INPUTS_REFUSED, "second-read"])
     assert got["detail"]["second-read"] == {"statement": k - 1, "template": combine}
 
@@ -468,12 +468,12 @@ def test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_
     stmts, verdicts = _handed(tmp_path / "interior", tmp_path / "served", mine, reads, drawn)
     assert len(stmts) == k and all(TS.pins(proofs, stmts).values())
     args = (L.program, d.key, sample, mine, r.record, brec, drawn)
-    assert TS.round_two(*args, stmts, {"verdicts": verdicts}, proofs, r.tie) == {"ok": True, "codes": [], "detail": {}}
+    assert TS.round_two_twin(*args, stmts, {"verdicts": verdicts}, proofs, r.tie) == {"ok": True, "codes": [], "detail": {}}
 
     own = TS.verifier_reads(replace(d, inputs=()), mine, r.record, brec, sample)
     assert own[mine.members[0].key]["ports"]["logits"]["value"] == f"{d.members[0].template}/logits"
     stmts, verdicts = _handed(tmp_path / "interior", tmp_path / "served-own", mine, own, drawn)
-    got = TS.round_two(*args, stmts, {"verdicts": verdicts}, proofs, r.tie)
+    got = TS.round_two_twin(*args, stmts, {"verdicts": verdicts}, proofs, r.tie)
     assert (got["ok"], got["codes"][0]) == (False, "second-read")
     assert got["detail"]["second-read"] == {"statement": 0, "template": d.members[0].template}
 

@@ -18,7 +18,7 @@ indices of the instances its session sampled (`unit_draw`), read only off a sess
 
 `ks_form_why` mirrors `verify --zk`'s refusal of a circuit outside the unit's form the sampled audit's knowledge
 soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file) covers, on the circuit file's head
-(`Flock.KsScope.filesWhy`, which `verity-verify-proof ks-form` runs alone). A session Lean accepts whose files it refuses is a
+(`Flock.KsScope.filesWhy`, which `verity-verify-proof ks-form` runs first). A session Lean accepts whose files it refuses is a
 ``form`` refusal, so the mirror can only refuse more.
 
 `fits_why` and `draw_fits_why` mirror v2's refusal of a length a session's statement can't hold, since it writes each in
@@ -68,7 +68,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from verity.circuits.library import TABLES
 
 from verity.protocols.proofs.spot.device.challenger import SAMPLE_LINK_FIRST, sample_link_first
-from .registration import digest as registration_digest
+from verity.protocols.proofs.spot.verifier.one_stage.docket import digest as registration_digest
 from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
 
@@ -100,6 +100,16 @@ MUFU_SHA512 = {t.name: t.sha512 for t in TABLES if t.name in ("rsq", "sqrt", "rc
 #: `OneStageZk.NO_TABLES`, the head of the v2 audit's refusal of blobs whose pinned MUFU tables are not the registered
 #: circuit's lookups (`tables_why`)
 NO_TABLES = "tables: the blobs' pinned MUFU tables are not the ones the registered circuit looks up (its META's lookups)"
+#: `OneStageZk.TABLES_KEY`: the parameter naming how many tables one session sets up
+SESSION_TABLES_KEY = "session_tables"
+
+
+def session_tables_of(params: Mapping[str, Any]) -> int:
+    """`OneStageZk.tablesOfJson`: one table a session where the parameters name no `session_tables`. A session of J
+    tables is not written, so parameters naming it raise."""
+    if SESSION_TABLES_KEY not in params:
+        return 1
+    raise NotImplementedError("proofs/zero-knowledge: one-stage v2 at J tables in one session (session_tables)")
 
 
 class LeanError(RuntimeError):
@@ -193,7 +203,8 @@ def ks_form_why(circuit: Path, public: Path) -> str | None:
     unit); None when it applies or the circuit file's head is not in that form. A shared-row public file (header
     ``shared_rows``) is Lean's alone to refuse (`KsScope.sharedWhy`, outside the form `SampledKSLiveV5` covers), since
     its check loads the whole file and computes every port's root. `verify` refuses a session Lean accepts that it
-    refuses, so it can only refuse more; `verity-verify-proof ks-form` is the Lean it mirrors."""
+    refuses, so it can only refuse more; `verity-verify-proof ks-form`'s form check is the Lean it mirrors, and that
+    command's check of the public file's header and rows after it (`Flock.PortRoots.headerOf`) has no mirror here."""
     del public
     head = _unit_head(circuit)
     if head is not None:

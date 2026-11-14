@@ -37,7 +37,7 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
 * `ZkOuter.Good`: a layer with no incorrect proof block whose every unit reads, at each of its registered reads, the registrant's
   value (`RegAgree`). `rd` records those values, the hidden circuit's rows as registered and the values the verifier
   registers itself (its coins, the comb `coef`).
-* `execOS_subset_full_mem`, `execOS_subset_full_escape`: V*'s live law, the full sample, samples every unit at every value
+* `execOS_subset_full_mem`, `execOS_subset_full_escape`: V*'s live sampling design, the full sample, samples every unit at every value
   of the source's bytes, so it escapes no nonempty set of units, with no assumption on those bytes (A3).
 * `ZkOuter.accepts_le`: an accepted session whose layer is not `Good` is at most `bound` likely: the sample misses every
   bad unit (`miss 1`, which the full sample never does); or a sampled proof block computes wrongly or reads a registered value
@@ -323,7 +323,7 @@ def CR (k Rw : ℕ) (qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : Prop :=
     (StrictCR.oneRun (zo.game dg N) τ fun o =>
       (zo.rd.restrict (rowIn o.2.1)).pick o.1 (regPathsHJ zo.I c zo.pub o.2.2 zo.rd.port)).CR H512 qR
 
-/-- **The outer bound at the strategy `τ`**: the model's miss at one bad unit (`Lm` the model's law), the sampled proof blocks'
+/-- **The outer bound at the strategy `τ`**: the model's miss at one bad unit (`Lm` the model's sampling design), the sampled proof blocks'
 `ksAvgStrictZ + linkBoundZC + regTermZC`, and the registered paths' `qR²/2^513`. -/
 noncomputable def bound (Lm : Law nv) (k Rw M : ℕ) (ρ t' qF qS qW qR : ℝ) (τ : Strategy (zo.game dg N)) : ℝ≥0∞ :=
   Lm.miss 1 +

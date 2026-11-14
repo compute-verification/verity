@@ -1,13 +1,9 @@
-"""verity_vllm/properties/kernel_allowlist.py — PROTECTED (gate G1, census half).  The kernel-census allowlist: device kernels that a step may
-launch without any pattern claiming them, because they compute no modeled value (copies, fills, the model runner's integer
+"""verity_vllm/properties/kernel_allowlist.py — PROTECTED.  The kernel allowlist: device kernels that a step may launch
+without any pattern claiming them, because they compute no modeled value (copies, fills, the model runner's integer
 metadata kernels).  Every entry needs a D71-style justification: what the kernel computes and why it is non-semantic under κ.
 
-`census.py` reads THIS tuple; a profile's own `kernel_allowlist` is reported but never used for acceptance (editing a
-profile allowlists no kernel).  New entries only through an approved decision in `out/capture/decisions.md`
-(the sealed verifier counts a modified allowlist as `NEW ALLOWLIST ENTRIES` on the card).
-
-`LAUNCH_COUNT_ALLOWLIST` is the launch-count gate's: declared kernels whose device launch count in a step may differ from
-the number of the step's events that declare them, each with its reason.
+The fold profiles reference THIS tuple as their `kernel_allowlist`; editing a profile allowlists no kernel.  New entries
+only through an approved decision in `out/capture/decisions.md`.
 """
 from __future__ import annotations
 
@@ -29,7 +25,3 @@ KERNEL_ALLOWLIST = (
     # `sample()` returns (outside the observer's step window; its effect is the next StepStart's recorded rows) [L5 census]
     "_post_update_kernel",
 )
-
-#: Declared name -> why its launch count may differ from its declaring events.  An entry lets an untraced launch of that
-#: kernel overwrite a Call's output unseen, so its reason must hold for every launch on every workload of record.
-LAUNCH_COUNT_ALLOWLIST: dict[str, str] = {}

@@ -487,7 +487,7 @@ class WorkerPeakOption(Protocol):
 
 
 def worker_peak(o: WorkerPeakOption) -> int:
-    from verity_vllm.pipeline.telemetry.admission import CALIBRATION
+    from verity_vllm.engine.profiles.admission_calibration import CALIBRATION
 
     return int(o.worker_peak_gb * 2**30) if o.worker_peak_gb else int(CALIBRATION["commit.c2.replay_workers.small_vu"]["value"])
 
@@ -613,10 +613,10 @@ def kept_sample(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
     want = slim["picks"]
     if got == want:
         return
-    draw = getattr(s.args, "replay_draw", None)
+    design = getattr(s.args, "replay_draw", None)
     seen = (f"reads what the keep does not hold ({why})" if why else
-            f"shares {len({tuple(p) for p in want} & {tuple(p) for p in got or ()})} of the keep's {len(want)} picks ({len(got or ())} drawn)")
-    raise Refused(f"this code's draw from the keep {seen}" + (f"; the record draws by {draw!r}" if draw else ""))
+            f"shares {len({tuple(p) for p in want} & {tuple(p) for p in got or ()})} of the keep's {len(want)} picks ({len(got or ())} sampled)")
+    raise Refused(f"this code's sample from the keep {seen}" + (f"; the record samples by {design!r}" if design else ""))
 
 
 def replay(o: Options) -> bool | None:

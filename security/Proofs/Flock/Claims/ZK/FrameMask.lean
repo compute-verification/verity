@@ -56,7 +56,7 @@ namespace Claims.ZKServer
 
 open _root_.Flock (V F128)
 open _root_.Flock.Transcript (header padded)
-open _root_.Flock.Firewall.Frame
+open _root_.Flock.ZkServer.Frame
   (Cfg Masker absorbed nLig isLabel labelFrame bytesFrame roundFree LABEL_PCS LABEL_ZC SKIP)
 open FlockSoundness.Refine (Frame encs colBytes)
 
@@ -200,17 +200,17 @@ theorem absorbed_lt_len (l : _root_.Flock.Zk.PadLayout) {p : ℕ} (hp : p < (abs
 
 /-- The samples' pads are the layout's `len`. -/
 theorem ofBytes_h_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
-    (_root_.Flock.Firewall.Frame.Draws.ofBytes l b).h.size = l.len := by
-  simp [_root_.Flock.Firewall.Frame.Draws.ofBytes, _root_.Flock.Firewall.Frame.words]
+    (_root_.Flock.ZkServer.Frame.Draws.ofBytes l b).h.size = l.len := by
+  simp [_root_.Flock.ZkServer.Frame.Draws.ofBytes, _root_.Flock.ZkServer.Frame.words]
 
 /-- **A rep's configuration masks under its samples' pads**: each pad of its order is among its samples'. -/
 theorem ofDraws_order (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
-    (m : Option _root_.Flock.Firewall.Frame.MaskSlot) :
-    ∀ p, p < (Cfg.ofDraws l (_root_.Flock.Firewall.Frame.Draws.ofBytes l b) m).order.size →
-      (Cfg.ofDraws l (_root_.Flock.Firewall.Frame.Draws.ofBytes l b) m).order[p]! <
-        (Cfg.ofDraws l (_root_.Flock.Firewall.Frame.Draws.ofBytes l b) m).h.size := by
+    (m : Option _root_.Flock.ZkServer.Frame.MaskSlot) :
+    ∀ p, p < (Cfg.ofDraws l (_root_.Flock.ZkServer.Frame.Draws.ofBytes l b) m).order.size →
+      (Cfg.ofDraws l (_root_.Flock.ZkServer.Frame.Draws.ofBytes l b) m).order[p]! <
+        (Cfg.ofDraws l (_root_.Flock.ZkServer.Frame.Draws.ofBytes l b) m).h.size := by
   intro p hp
-  show (absorbed l)[p]! < (_root_.Flock.Firewall.Frame.Draws.ofBytes l b).h.size
+  show (absorbed l)[p]! < (_root_.Flock.ZkServer.Frame.Draws.ofBytes l b).h.size
   rw [ofBytes_h_size]
   exact absorbed_lt_len l hp
 
@@ -224,8 +224,8 @@ phase. -/
 def maskVal (c : Cfg) (st : Bool) (p : ℕ) (v : F128) : F128 :=
   (if (st && decide (p < c.nPiop)) = true then 0 else v) + padAt c p
 
-theorem padAt_ofDraws (l : _root_.Flock.Zk.PadLayout) (d : _root_.Flock.Firewall.Frame.Draws)
-    (m : Option _root_.Flock.Firewall.Frame.MaskSlot) {p : ℕ} (hp : p < (absorbed l).size) :
+theorem padAt_ofDraws (l : _root_.Flock.Zk.PadLayout) (d : _root_.Flock.ZkServer.Frame.Draws)
+    (m : Option _root_.Flock.ZkServer.Frame.MaskSlot) {p : ℕ} (hp : p < (absorbed l).size) :
     padAt (Cfg.ofDraws l d m) p = d.h[if p < l.fa + 2 then p else p + 1]! := by
   show d.h[(absorbed l)[p]!]! = _
   rw [absorbed_getElem! l hp]
@@ -841,8 +841,8 @@ def absPos (l : _root_.Flock.Zk.PadLayout) (j : ℕ) : ℕ := if j < l.fa + 2 th
 /-- **The frame's pad at pad `j`'s absorbed position is the samples' pad `j`**, for each pad the frame absorbs under:
 any below `h_ab` but `final_c`'s. So the pad the masked prover adds to a sent value at its layout index (`h[lay.r1ab
 i]`, `h[lay.lc j t]`, …) is the one the frame adds at that value's place in the absorbed order. -/
-theorem padAt_ofDraws_absPos (l : _root_.Flock.Zk.PadLayout) (d : _root_.Flock.Firewall.Frame.Draws)
-    (m : Option _root_.Flock.Firewall.Frame.MaskSlot) {j : ℕ} (hj : j ≠ l.fc)
+theorem padAt_ofDraws_absPos (l : _root_.Flock.Zk.PadLayout) (d : _root_.Flock.ZkServer.Frame.Draws)
+    (m : Option _root_.Flock.ZkServer.Frame.MaskSlot) {j : ℕ} (hj : j ≠ l.fc)
     (hlt : j < l.fa + 3 + (2 * l.nLc + 64 + nLig l)) :
     absPos l j < (absorbed l).size ∧ padAt (Cfg.ofDraws l d m) (absPos l j) = d.h[j]! := by
   have hfc : l.fc = l.fa + 2 := rfl

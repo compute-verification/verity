@@ -40,7 +40,7 @@ end Loop
 
 namespace LeanRelease
 
-open _root_.Flock.Firewall.Frame (K_SKIP)
+open _root_.Flock.ZkServer.Frame (K_SKIP)
 open Loop Ranked
 
 variable {wideLeaf : Bool}
@@ -57,7 +57,7 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (hx : Masked.Live x) (hSv : Serves x)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
@@ -178,7 +178,7 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
   have hk6t : 6 ≤ t.st.fold.kLog := by rw [htk, hstj]; exact y.wf.1.hk6
   have hAA : alg.size = A := by rw [(alg_cnt hm14t hk6t hmb hal).1, htm, htk, hAd]
   obtain ⟨hsz, -⟩ := Sched.rounds_piop hm14t hmb hal
-  have hb : (piopV t.st.m t.st.fold.kLog t.st.digest (_root_.Flock.Firewall.Finish.flat t.cm0.cap) Sched.root0
+  have hb : (piopV t.st.m t.st.fold.kLog t.st.digest (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) Sched.root0
       (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (fun _ => 0) alg.size).length ≤ c'.order.size := by
     rw [hc', Loop.ofDraws_order, absorbed_size]
     exact le_trans (piopV_length_le lay hm14t hk6t hnM hnL hsz.le) (by omega)
@@ -196,7 +196,7 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
   have hrf' : rankFails c' m = false := (rankFails_congr m hCA.lay hCA.nPiop hCA.mask).symm.trans hrf
   have hpN : m.pos = c'.nPiop := by
     rw [hpos, hsz, piopV_length_congr t.st.m t.st.fold.kLog (digest' := t.st.digest)
-        (cap' := _root_.Flock.Firewall.Finish.flat t.cm0.cap) (root' := Sched.root0) (lay' := lay) (fun _ => 0)
+        (cap' := _root_.Flock.ZkServer.Finish.flat t.cm0.cap) (root' := Sched.root0) (lay' := lay) (fun _ => 0)
         (fun _ => 0), piopV_length _ _ _ _ _ _ _ hm14t hk6t hnM hnL, hc', Loop.ofDraws_nPiop, absorbed_size]
     omega
   have hm14' : 14 ≤ (Masked.stsOf x)[j]!.m := by rw [hstj]; exact hm14

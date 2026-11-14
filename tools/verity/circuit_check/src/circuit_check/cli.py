@@ -1189,7 +1189,7 @@ HEAVY_GB = 4
 PEAKS_REPORTED = 50
 
 
-#: tools/verity/check/slot.py's SLOT_MEM_ENV: the GiB the check slot this process runs in may take
+#: tools/check/slot.py's SLOT_MEM_ENV: the GiB the check slot this process runs in may take
 SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 
 
@@ -1396,7 +1396,7 @@ def default_jobs(everything: bool) -> int:
 
 
 def default_cache() -> Path:
-    """The cache named targets use unless ``--cache`` or ``--no-cache`` says otherwise: check's own (tools/verity/check's
+    """The cache named targets use unless ``--cache`` or ``--no-cache`` says otherwise: check's own (tools/check's
     ``cache_dir() / "circuit-check"``), so a target `check` or an earlier run checked is reused while its inputs are unchanged."""
     return Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check") / "circuit-check"
 

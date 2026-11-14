@@ -321,7 +321,7 @@ def main() -> None:
     ap.add_argument("--out", default=str(Path(__file__).resolve().parents[7] / "security"))
     args = ap.parse_args()
     sys.path.insert(0, args.h1_dir)
-    import h1_tagged as h1t  # noqa: E402
+    import h1_tagged as h1t
 
     rng = random.Random(SEED)
     out = Path(args.out)

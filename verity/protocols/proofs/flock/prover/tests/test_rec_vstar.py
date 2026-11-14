@@ -111,7 +111,7 @@ def test_a_top_that_does_not_open_its_commitment_is_refused(forge):
         private["rounds"][0]["tops"] = []
     else:
         op["salts"] = []
-    with pytest.raises(ValueError, match="FIREWALL-REFUSED: tree top"):
+    with pytest.raises(ValueError, match="ZK-SERVER-REFUSED: tree top"):
         V.tops(public, private, "circuit/rep0")
 
 
@@ -126,7 +126,7 @@ def test_a_record_whose_tops_are_named_otherwise_is_refused_by_name(side, name):
         del rec["tops"]
     else:
         rec["tops"] = name
-    with pytest.raises(ValueError, match=r"^FIREWALL-REFUSED: tree top: the record's tops are not salted \(rec_live\.TOPS\)$"):
+    with pytest.raises(ValueError, match=r"^ZK-SERVER-REFUSED: tree top: the record's tops are not salted \(rec_live\.TOPS\)$"):
         V.tops(public, private, "circuit/rep0")
 
 
@@ -136,7 +136,7 @@ def test_a_session_without_each_reps_stream_and_proof_is_refused(have, streams, 
     otherwise accept zero queries), as it does a proof of an undeclared rep and a declared rep with no stream."""
     public, private, _, _ = _session()
     public |= {"hello": {"reps": 2}, "streams": {f"circuit/rep{r}": {} for r in range(streams)}}
-    with pytest.raises(ValueError, match="FIREWALL-REFUSED: proofs"):
+    with pytest.raises(ValueError, match="ZK-SERVER-REFUSED: proofs"):
         V.check(public, private, {r: b"" for r in have})
     (tmp_path / "session").mkdir()
     (tmp_path / "public.json").write_text(json.dumps(public))
@@ -144,7 +144,7 @@ def test_a_session_without_each_reps_stream_and_proof_is_refused(have, streams, 
     for r in have:
         (tmp_path / "session" / f"circuit.rep{r}.bin").write_bytes(b"")
     assert V.main([str(tmp_path)]) == 1
-    assert json.loads(capsys.readouterr().out)["refused"].startswith("FIREWALL-REFUSED: proofs")
+    assert json.loads(capsys.readouterr().out)["refused"].startswith("ZK-SERVER-REFUSED: proofs")
 
 
 def test_query_rounds_follow_the_levels_in_order():

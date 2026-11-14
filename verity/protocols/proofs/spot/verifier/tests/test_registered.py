@@ -3,6 +3,7 @@ R7, the verifier's read map from its own program, the read check, and the audit 
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 import re
 import tracemalloc
@@ -14,15 +15,21 @@ from verity.commitments import CommitmentDomain, RangeIndexedDomain, hm96
 from verity.commitments import history as HT
 from verity.commitments.merkle import merkle_depth, tree_levels
 from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
-from verity.circuits.codec import canonical_json
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.codec import canonical_json, decode_program, encode_program
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
 from verity.circuits.types import Array, Value
 from verity.protocols.accounting.pouw.verifier import audit as PA
 from verity.protocols.accounting.pouw.verifier.protocol import tagged
-from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as D, partition as P, registered as G, registration as R,
-                                                 verifier as V)
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as D,
+    partition as P,
+    registered as G,
+    docket as R,
+    verifier as V,
+)
 
 XOR8 = PrimitiveDefinition("RegisteredTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)
@@ -33,6 +40,8 @@ POS = (3, 3, 0, 2, 1, 3)
 TABLE = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LAW = {"law": "subset", "k": 2}
+#: the sample the audit record's tests hand it: units 1 and 4 of six
+SAMPLE = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
 SERVED = {"kind": "served", "row": 7, "run": "r-registered"}
 #: a 16-bit registration's root: three 64-word rows, salts 01.., 02.., 03..
 ROOT_16 = ("511a71aa555f05f2b992997f7d6fe2af8e225c2a378ace51d54c18642f73193e"
@@ -399,6 +408,59 @@ def test_two_reads_under_one_port_name_are_refused():
         G.reads_file(_program(), Q, {"W": 2, "x": 2}, {"W": "ab" * 64, "x": "cd" * 64}, ports={"x": "w"})
     assert G.reads_file(tiles, QT, {"A": K // 2}, roots, ports={"a[0]": "a0", "a[1]": "a1"},
                         schemas={"A": G.SCHEMA_V2})["ports"].keys() == {"a0", "a1"}
+
+
+#: the SHA-512 of each `_two_params(second)` program's descriptor, `canonical_json(encode_program(...))` (for `w`, which
+#: no longer encodes, the `v` descriptor with `v` renamed): the bytes
+#: `verity/protocols/proofs/flock/verifier/Flock/Test/RegTwoParams.lean` holds (`desc`) and pins alike
+TWO_PARAMS = {
+    "w": "802171939d9baed267cc2b5516306111e61a937c6a5ad3892c0c032d44c287b2"
+         "78b2456e0f6e79f31d9797c9da6d86d1c67817396fa1f12ad1bb48055021b6fb",
+    "v": "352f7f13f7e80ef597b363b4fee73e5b2cd0a6c44cd4aae4a39337dbb87be66d"
+         "cd137737f06e3319226a2faee21a86c9a0921e027960d737e16164fbe5baa000",
+}
+
+
+def _two_params(second: str):
+    """A program of the registered values A and B (two rows of two bytes each) whose proof block u is an instance of a
+    template of the parameters `w` and `second`, reading row u of A at `w` and row u of B at `second`; and the template."""
+    row = Array(2, Value(8))
+    t = bind(CompositeDefinition("RegisteredTestTwoParams", 0, (), lambda S: ((("w", row), (second, row)), Value(8)),
+                                 lambda B, S, w, v: B.call(XOR8, B.call(XOR8, w[0], v[0]), B.call(XOR8, w[1], v[1])),
+                                 register=False))
+
+    def sig(S):
+        return (("A", Array(2, row)), ("B", Array(2, row))), Array(2, Value(8))
+
+    prog = Program(bind(CompositeDefinition("RegisteredTestTwoParamsProgram", 0, (), sig,
+                                            lambda B_, S, A, B: coll_concat(sig(S)[1], [B_.call(t, A[u], B[u])
+                                                                                        for u in range(2)]),
+                                            register=False)), registered=("A", "B"))
+    return prog, t
+
+
+def test_two_parameters_of_one_name_are_refused():
+    """A template whose two parameters are both named `w`, the first reading A and the second B: its body is refused
+    when it is built, and its descriptor when it is decoded, so no registered file keys two values by one parameter
+    name. Flock's decoder refuses the same bytes (`Flock/Test/RegTwoParams.lean`). Named `w` and `v`, the two get a
+    port each, of their own values."""
+    want = re.escape("definition 'RegisteredTestTwoParams_v0': parameters: a name twice")
+    with pytest.raises(ValueError, match=want):
+        _two_params("w")
+    distinct, t = _two_params("v")
+    desc = canonical_json(encode_program(distinct))
+    assert hashlib.sha512(desc).hexdigest() == TWO_PARAMS["v"]
+    assert desc.count(b'"v"') == 1
+    dup = desc.replace(b'"v"', b'"w"')
+    assert hashlib.sha512(dup).hexdigest() == TWO_PARAMS["w"]
+    reg = DefinitionTable()
+    reg.add(XOR8)
+    with pytest.raises(ValueError, match=want):
+        decode_program(json.loads(dup), reg)
+    q = P.template_instance_query(t.id)
+    doc = G.reads_file(distinct, q, {"A": 2, "B": 2}, {"A": "ab" * 64, "B": "cd" * 64})
+    assert {p: (e["value"], e["root"], e["reads"]) for p, e in doc["ports"].items()} == {
+        "w": ("A", "ab" * 64, [0, 1]), "v": ("B", "cd" * 64, [0, 1])}
 
 
 def test_a_parameter_of_several_rows_that_are_not_whole_rows_of_one_value_is_refused():
@@ -769,15 +831,20 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
-    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    d = SAMPLE
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
     args = (rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {}, {"lean": lean}, 0.25)
     ok = audit.audit_record(*args, session_registered={"W": reg.root.hex()})
     assert ok["accepted"] and "registered" not in ok["checks"]
     assert ok["integrity_profile"]["inputs"]["registered"] == [{k: reg.entry()[k] for k in ("value", "root", "leaves", "domain")}]
-    for opened in (None, {}, {"W": "cd" * 64}, {"W": reg.root.hex(), "V": "cd" * 64}):
+    for opened in (None, {}):
+        unread = audit.audit_record(*args, session_registered=opened)
+        assert unread["accepted"] and "registered" not in unread["checks"], "a registered value needs no reported read"
+        assert unread["integrity_profile"] == ok["integrity_profile"]
+    for opened, wrong in (({"W": "cd" * 64}, ["W"]), ({"W": reg.root.hex(), "V": "cd" * 64}, ["V"]), ({"W": None}, ["W"])):
         r = audit.audit_record(*args, session_registered=opened)
         assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"] and r["integrity_profile"] is None
+        assert r["checks"]["registered"]["detail"] == {"registered": ["W"], "opened": sorted(opened), "wrong": wrong}
     v1 = R.record(prog, Q, LAW, SCHEME, rec["roots"], SERVED)
     plain = audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:])
     assert plain["accepted"] and "registered" not in plain["integrity_profile"]["inputs"]
@@ -786,11 +853,12 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
 
 def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     """`session_registered` reads the Lean verdict's `registered` finding, only on an accepted verdict of record: a v2 audit
-    passes on what the verifier opened, and fails closed on anything else."""
+    passes on what the verifier opened and on a verdict that reports no read, and fails on a read reported at another
+    root, by one verdict or by one of two."""
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
-    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    d = SAMPLE
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64, "registered": {"w": {"value": "W", "root": reg.root.hex()}}}
     assert audit.session_registered({"lean": lean}) == {"W": reg.root.hex()}
     for v in ({**lean, "accepted": False}, {**lean, "accepted": None}, {**lean, "of_record": False}, {**lean, "registered": None},
@@ -805,9 +873,11 @@ def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
                                   0.25, session_registered=audit.session_registered(verdicts))
 
     assert decide({"lean": lean})["accepted"]
-    for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}, {"lean": {k: x for k, x in lean.items() if k != "registered"}}):
+    assert decide({"lean": {k: x for k, x in lean.items() if k != "registered"}})["accepted"]
+    for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}):
         r = decide(verdicts)
         assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"], verdicts
+        assert r["checks"]["registered"]["detail"]["wrong"] == ["W"], verdicts
 
 
 # -- supplied values ---------------------------------------------------------------------------------------------------------
@@ -857,6 +927,12 @@ def test_a_supplied_value_is_the_records_roots_as_its_leaves():
     for bad in ((b"\0" * 3, 32), (b"\0" * 4, 3), (b"\0" * 4, 64)):
         with pytest.raises(ValueError):
             G.bytes_leaves(*bad)
+    assert G.half_leaves(bytes.fromhex("0001"), 16) == [1] == G.leaves_of(bytes.fromhex("0001"), 16)
+    assert G.half_leaves(bytes.fromhex("1234"), 8) == [0x34, 0x12]
+    assert G.leaves_of(bytes.fromhex("00000001"), 16) == [1, 0]
+    for bad in ((b"\0" * 4, 16), (b"\0" * 2, 32), (b"\0" * 2, 3)):
+        with pytest.raises(ValueError):
+            G.half_leaves(*bad)
     salts = G.supplied_salts("ab" * 64, "pouw.roots", 2)
     assert salts[1][:32].hex() == SUPPLIED_SALT_1
     head = b"verity/one-stage/supplied-salt/v1\0" + b"ab" * 64 + b"\0pouw.roots\0" + (1).to_bytes(4, "little")
@@ -1007,7 +1083,7 @@ def test_a_history_source_is_the_root_the_verifier_computes():
         assert "refused" in lean(**change), change
         got = V.check(rec, **args)
         assert not got.ok and got.codes == (R.HISTORY,), (change, got)
-        assert got.verifiers["lean"].keys() == {"refused"} and got.verifiers["python"].keys() == {"refused"}
+        assert got.verifiers["lean"] == got.verifiers["python"] == {"ok": False, "codes": [R.HISTORY]}, (change, got)
 
 
 def test_the_run_of_record_takes_each_registrations_history_tables(monkeypatch):
@@ -1229,6 +1305,127 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     reads = G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64}, domains={"W": dom})["ports"]
     assert {e["domain"] for e in reads.values()} == {dom}
     assert {e["domain"] for e in G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64})["ports"].values()} == {reg.entry()["domain"]}
+
+
+#: The entry and root a verifier built from a registration it read under the deployment's key: a link's certified rows,
+#: a value that is none of the program's parameters
+CERTIFIED = {"link-0/in/7": {"root": "cd" * 64, "leaves": 3, "words": 64, "domain": "ef" * 64}}
+
+
+def test_r7_takes_the_verifiers_certified_entries():
+    """A value the verifier holds a certified entry for (`certified`) is one of the record's registered values beside
+    the ones it expects registered: the record names it once, its entry is the verifier's on every key, its root
+    included (`R7-certified`), and a verifier that holds no entry for it refuses the record (`R7-values`). With an entry
+    and no parameter registered the verifier expects a v2 record, whose registered values are then the certified ones
+    alone, and without the entry it refuses that record by its keys. A certified value that is one the verifier
+    expects a parameter registered under or fills, pins, holds or takes from an earlier run, or an entry in another
+    form, is refused before the record is read."""
+    prog = _program()
+    reg = _registered(prog)
+    rec, ports = _record(prog, reg)
+    seeded, check, _, _ = _seeded_case()
+    design = {k: x for k, x in check.items() if k not in ("program", "query", "ports", "registered", "supplied")}
+    kw = {**design, "ports": ports, "registered": {"W": 2}}
+    (value, mine), = CERTIFIED.items()
+    e = {"value": value, **mine}
+    both = {**rec, "registered": [reg.entry(), e]}
+    assert R.check(both, prog, Q, **kw, certified=CERTIFIED).ok
+    assert R.check({**both, "registered": [e, reg.entry()]}, prog, Q, **kw, certified=CERTIFIED).ok
+    assert R.check(both, prog, Q, **kw, certified={value: {**mine, "word_bits": 16}}).ok
+    assert R.check(both, prog, Q, **kw).codes == ("R7-values",)
+    assert R.check(both, prog, Q, **kw, certified={}).codes == ("R7-values",)
+    assert R.check(rec, prog, Q, **kw, certified=CERTIFIED).codes == ("R7-values", "R7-certified")
+    assert R.check({**rec, "registered": [reg.entry(), e, e]}, prog, Q, **kw, certified=CERTIFIED).codes == ("R7-values",)
+    cases = [({"root": "ab" * 64}, ("R7-certified",)), ({"root": "xy"}, ("R7-root", "R7-certified")),
+             ({"leaves": 4}, ("R7-leaves",)), ({"leaves": 3.0}, ("R7-leaves",)), ({"words": 32}, ("R7-words",)),
+             ({"domain": "00" * 64}, ("R7-domain",)), ({"word_bits": 32}, ("R7-word_bits",)),
+             ({"word_bits": 16}, ("R7-word_bits",)), ({"extra": 1}, ("R7-registered",))]
+    for change, codes in cases:
+        got = R.check({**rec, "registered": [reg.entry(), {**e, **change}]}, prog, Q, **kw, certified=CERTIFIED)
+        assert got.codes == codes, change
+    # the verifier's own value is held as it was, the certified one beside it
+    own = {**both, "registered": [{**reg.entry(), "leaves": 4}, e]}
+    assert R.check(own, prog, Q, **kw, certified=CERTIFIED).codes == ("R7-leaves",)
+    assert R.check(both, prog, Q, **{**kw, "registered": {"W": 3}}, certified=CERTIFIED).codes == ("R7-registered",)
+    assert R.check({**both, "registered": [reg.entry(), {**e, "root": "ab" * 64}]}, prog, Q,
+                   **{**kw, "registered": {"W": 3}}, certified=CERTIFIED).codes == ("R7-registered", "R7-certified")
+    # leaves of 32 bits name their width in the verifier's entry and in the record's
+    wide = {value: {**mine, "word_bits": 32}}
+    rec32 = {**rec, "registered": [reg.entry(), {**e, "word_bits": 32}]}
+    assert R.check(rec32, prog, Q, **kw, certified=wide).ok
+    assert R.check(rec32, prog, Q, **kw, certified=CERTIFIED).codes == ("R7-word_bits",)
+    assert R.check(both, prog, Q, **kw, certified=wide).codes == ("R7-word_bits",)
+    # a program none of whose parameters is registered: the record's registered values are the certified ones alone
+    lone = _program(w=16)
+    served, ports1 = _record(lone, reg)
+    kw1 = {**design, "ports": ports1}
+    v1 = {**{k: x for k, x in served.items() if k != "registered"}, "format": R.FORMAT}
+    only = {**served, "registered": [e]}
+    assert only["format"] == R.FORMAT_V2
+    assert R.check(only, lone, Q, **kw1, certified=CERTIFIED).ok
+    assert R.check(only, lone, Q, **kw1, registered={}, certified=CERTIFIED).ok
+    assert R.check(only, lone, Q, **kw1).codes == ("keys",)
+    assert R.check(v1, lone, Q, **kw1).ok and R.check(v1, lone, Q, **kw1, certified=CERTIFIED).codes == ("keys",)
+    assert R.check({**only, "registered": []}, lone, Q, **kw1, certified=CERTIFIED).codes == ("R7-values", "R7-certified")
+    assert R.check({**only, "registered": [{**e, "root": "ab" * 64}]}, lone, Q, **kw1,
+                   certified=CERTIFIED).codes == ("R7-certified",)
+    assert R.check({**only, "registered": [e, reg.entry()]}, lone, Q, **kw1, certified=CERTIFIED).codes == ("R7-values",)
+    for bad in ({"W": mine}, {value: {**mine, "root": "CD" * 64}}, {value: {**mine, "root": "cd"}},
+                {value: {**mine, "leaves": True}}, {value: {**mine, "words": -1}}, {value: {**mine, "words": 64.0}},
+                {value: {**mine, "domain": 5}}, {value: {**mine, "word_bits": 8}}, {value: {**mine, "word_bits": True}},
+                {value: {**mine, "extra": 1}}, {value: {k: x for k, x in mine.items() if k != "root"}}, {value: None},
+                {value: [mine]}, [value], {7: mine}, "x"):
+        with pytest.raises(ValueError):
+            R.check(both, prog, Q, **kw, certified=bad)
+    # a certified value is the verifier's by its entry alone: it names it nowhere else
+    with pytest.raises(ValueError):
+        R.check(seeded, **check, certified={"pouw.roots": mine})
+    for named in ({"supplied": {value: [[{"port": "x"}]]}}, {"pinned": {value: "cd" * 64}}, {"held": [value]},
+                  {"schemas": {value: G.SCHEMA_V2}}, {"outputs": {value: {"record": "ee" * 64, "port": "x"}}}):
+        with pytest.raises(ValueError):
+            R.check(both, prog, Q, **kw, **named, certified=CERTIFIED)
+
+
+def test_the_audit_record_holds_a_certified_value_to_a_reported_read():
+    """A value the verifier holds a certified entry for needs a read the accepting verdicts of record report. The record
+    accepts when they report one at the registered root. It fails `certified`, naming the value, when they report none:
+    no read at all, or the value's port named under a value the record does not list and at another root, which is
+    none of the record's own values, so the registered roots' check never sees it. A read at another root fails
+    `registered` as any registered value's does. Without the certified names the record asks no read of the value, and
+    each of the unread records is accepted."""
+    _, check, _, _ = _seeded_case()
+    design = {k: x for k, x in check.items() if k not in ("program", "query", "ports", "registered", "supplied")}
+    lone = _program(w=16)
+    served, ports = _record(lone, _registered(_program()))
+    (value, mine), = CERTIFIED.items()
+    rec = {**served, "registered": [{"value": value, **mine}]}
+    assert R.check(rec, lone, Q, **design, ports=ports, certified=CERTIFIED).ok
+    d = SAMPLE
+    base = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+    read = {**base, "registered": {"rows.0": {"value": value, "root": mine["root"]}}}
+    renamed = {**base, "registered": {"rows.0": {"value": "unlisted", "root": "ab" * 64}}}
+
+    def decide(verdicts, certified=CERTIFIED):
+        return audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {},
+                                  verdicts, 0.25, session_registered=audit.session_registered(verdicts, rec),
+                                  certified=sorted(certified))
+
+    ok = decide({"lean": read})
+    assert ok["accepted"] and "certified" not in ok["checks"] and "registered" not in ok["checks"]
+    assert audit.session_registered({"lean": renamed}, rec) == {}, "the record lists no such value: the read is dropped"
+    for verdicts in ({"lean": base}, {"lean": {**base, "registered": {}}}, {"lean": renamed}):
+        r = decide(verdicts)
+        assert not r["accepted"] and r["integrity_profile"] is None and "registered" not in r["checks"], verdicts
+        assert r["checks"]["certified"] == {"ok": False, "codes": ["certified"],
+                                            "detail": {"certified": [value], "unread": [value]}}, verdicts
+        assert decide(verdicts, certified={})["accepted"], "without the certified names nothing asks the read"
+    assert decide({"lean": read, "lean-2": renamed})["accepted"], "another session's read of the value itself"
+    moved = decide({"lean": {**base, "registered": {"rows.0": {"value": value, "root": "ab" * 64}}}})
+    assert not moved["accepted"] and moved["checks"]["registered"]["detail"]["wrong"] == [value]
+    assert "certified" not in moved["checks"]
+    two = decide({"lean": renamed}, certified=[value, "other", value])
+    names = sorted([value, "other", value])
+    assert two["checks"]["certified"]["detail"] == {"certified": names, "unread": names}
 
 
 def test_r7_holds_a_windows_history_to_the_previous_records_port():
