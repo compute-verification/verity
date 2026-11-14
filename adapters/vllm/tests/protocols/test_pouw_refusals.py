@@ -3,7 +3,8 @@ a transcript directory that is no string; `refusals`' of a tensor-parallel world
 that counts its own, and of a schedule Pearl-C's path can't run; `_layers`' of a model with no linear layer and of two
 layers that share a quant method; and H1's install's of a layout without its rows or its steps.  Under the option,
 `circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's, the
-quantizer's of a value that is not finite, and the native prover's of a unit outside a call's population.  Pearl-C's of
+quantizer's of a value that is not finite, the native prover's of a unit outside a call's population, and the native
+builds' of a compiler neither the toolchain nor the path gives.  Pearl-C's of
 a scheme its path doesn't run or that a test instance names otherwise, of a kernel directory without one cubin, of a
 pass whose coins don't parse or are no object, of a live salt over other weights than its workload's, of a group of
 experts that repeat, are another group's, differ in shape or whose bytes are not the kernel's size for them, of a
@@ -43,6 +44,7 @@ from verity.protocols.proofs.spot.device import challenger as LC
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.interface import Context
 from verity_vllm.protocols.pouw import circuit as PC
+from verity_vllm.protocols.pouw import device as PD
 from verity_vllm.protocols.pouw import native as PN
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.lead import feed as PF
@@ -262,6 +264,41 @@ def test_a_unit_outside_a_calls_population_or_its_weight_sides_is_refused():
         with pytest.raises(IndexError, match=f"^Y unit {u} outside 0..2$"):
             nat.side.outputs(u)
     assert [nat.side.outputs(u).shape for u in (0, 2)] == [(3088,), (3088,)]
+
+
+def test_a_library_is_refused_before_its_build_where_no_toolchain_and_no_path_gives_its_compiler(monkeypatch):
+    """The host build takes a C++ compiler and the two CUDA builds nvcc, each the toolchain's or else the path's: with
+    neither, each refuses naming the one it lacks, as the sources' digest does, and nothing is built.  The loaders'
+    caches are passed by, so a library another test built stays loaded."""
+    class Built(Exception):
+        pass
+
+    built: list[str] = []
+
+    def build(tool, sources, flags, name):
+        built.append(tool)
+        raise Built
+
+    path: dict[str, str] = {}
+    monkeypatch.setattr(PD.shutil, "which", path.get)
+    monkeypatch.setattr(PD, "TOOLCHAIN", PD.Toolchain())
+    monkeypatch.setattr(PD, "_build", build)
+    loads = ((PD.host, "C++ compiler"), (PD.device, "nvcc"), (PD.fused, "nvcc"))
+    for load, what in loads:
+        with pytest.raises(RuntimeError, match=f"^no {re.escape(what)} \\(on the path, or `configure`\\)$"):
+            load.__wrapped__()
+    with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler \(on the path, or `configure`\)$"):
+        PD.source_digest()
+    assert built == []
+    path.update({"clang++": "/p/clang++", "nvcc": "/p/nvcc"})
+    for load, _ in loads:
+        with pytest.raises(Built):
+            load.__wrapped__()
+    monkeypatch.setattr(PD, "TOOLCHAIN", PD.Toolchain(cxx="/t/g++", nvcc="/t/nvcc"))
+    for load, _ in loads:
+        with pytest.raises(Built):
+            load.__wrapped__()
+    assert built == ["clang++", "/p/nvcc", "/p/nvcc", "/t/g++", "/t/nvcc", "/t/nvcc"]
 
 
 def test_a_kernel_directory_without_one_cubin_is_refused_and_its_one_cubin_is_taken(tmp_path):
