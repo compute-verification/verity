@@ -163,7 +163,7 @@ theorem checkBlobsAt_popHeld {p : _root_.Spot.OneStageZk.Params}
 
 /-- **`popHeld` passes only where the record names a population `n` that the program's proof blocks under the
 query are, in order** (`Slots.popOk`). -/
-theorem popHeld_ok {v : _root_.Spot.Registration.Verifier} {record : Json}
+theorem popHeld_ok {v : _root_.Spot.Docket.Verifier} {record : Json}
     (h : _root_.Spot.OneStageZk.popHeld v record = .ok ()) :
     ∃ n, _root_.Spot.nat? (_root_.Spot.getD record "population") = some n ∧
       _root_.Spot.Slots.popOk v.program v.query n = true := by
@@ -198,7 +198,7 @@ population `n`: `verify --zk` accepts the transcript (`AcceptsZK`) at a statemen
 templated; the files' ports and roots (`PortRoots.checkOf`) and their form at the record's sample (`KsScope.checkOf`)
 pass on the circuit `verify` reads (`ProvedScope.circuitOf`); the program's proof blocks under the verifier's query are
 `n` units in order (`Slots.popOk`); and every public file the session's file loads to has `n` proof blocks. -/
-structure Accepted (I : Exec.Inputs) (t : Exec.Transcript) (v : _root_.Spot.Registration.Verifier) (n : ℕ) :
+structure Accepted (I : Exec.Inputs) (t : Exec.Transcript) (v : _root_.Spot.Docket.Verifier) (n : ℕ) :
     Prop where
   accepts : ZkExec.AcceptsZK I t
   flat : (ZkExec.zkTags I).hiddenOutputs = true ∧ (ZkExec.zkTags I).isTmpl = false
@@ -262,7 +262,7 @@ theorem checkBlobs_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.On
 
 /-! ## The events -/
 
-variable {I : Exec.Inputs} {t : Exec.Transcript} {v : _root_.Spot.Registration.Verifier} {n : ℕ}
+variable {I : Exec.Inputs} {t : Exec.Transcript} {v : _root_.Spot.Docket.Verifier} {n : ℕ}
 
 /-- **`Accepted` is in V5's acceptance event without public inputs** at every outcome whose transcript is the
 session's. -/

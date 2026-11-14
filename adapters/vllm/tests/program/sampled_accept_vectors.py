@@ -30,9 +30,9 @@ any lane of the row, so positions are accepted and refused in every mix.
 from __future__ import annotations
 
 import numpy as np
-from verity.definitions.registry import sampled_accept as A
-from verity.definitions.registry import sampling as SA
-from verity.definitions.registry.sampling_rows import gumbel_select_row
+from verity_vllm.definitions.registry import sampled_accept as A
+from verity_vllm.definitions.registry import sampling as SA
+from verity_vllm.definitions.registry.sampling_rows import gumbel_select_row
 
 F = np.float32
 #: `sampling.stream_key(FLOOR_SEED, FLOOR_POS)` is 0: the uniform `includes_zero=False` lifts to the floor

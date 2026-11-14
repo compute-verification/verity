@@ -28,7 +28,7 @@ from typing import Any
 
 import numpy as np
 import pytest
-from verity.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
 from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.pipeline.tp.c2 import c2_and_pin_gates, replay_gates
