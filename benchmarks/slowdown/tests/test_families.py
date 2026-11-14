@@ -109,7 +109,7 @@ def test_seeds_are_their_description():
     assert p.b is None and p.b_w is None and p.thread_d is None
 
 
-def test_a_precision_sets_beta_x_caps_activation_bits_and_prices_the_format():
+def test_a_precision_sets_beta_x_clips_activation_bits_and_prices_the_format():
     p = family(REG, "full-nvfp4").profile(MODELS["kimi-k2"], RUN)
     assert p.beta_x == REG["precision.nvfp4.beta_x"] and p.b_a <= REG["precision.nvfp4.bits"]
     assert p.efficiency == REG["precision.nvfp4.efficiency.pretrain"]
@@ -133,7 +133,7 @@ def test_every_library_algorithm_gives_a_profile():
         assert p.kappa > 0 and p.state_bits > 0
     assert math.isclose(family(REG, "nci:diloco").profile(MODELS["kimi-k2"], RUN).efficiency, 1 / 0.94)
     # weight-sparsity publishes 96 bits a parameter on a quarter of the weights: the state is carried at Full's 16, the
-    # rate a block pays is the library's attacker cap
+    # rate a block pays is the library's attacker ceiling
     p = family(REG, "nci:weight-sparsity").profile(MODELS["kimi-k2"], RUN)
     assert math.isclose(p.state_bits, REG["nci.state_bits_cap"] * 0.25 * MODELS["kimi-k2"].n_total)
     assert p.b == p.b_w == REG["nci.rate_cap"]

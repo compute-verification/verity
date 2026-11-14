@@ -19,7 +19,7 @@ The kinds:
 * `nci`: any algorithm of the `benchmarks/nci` library (`benchmarks/nci/algorithms.json`) from its traits; `nci:<id>` names one with no
   table.
 
-A family may name a **precision** (`precision.<name>`, such as NVFP4): the format sets `β_x`, caps every per-activation
+A family may name a **precision** (`precision.<name>`, such as NVFP4): the format sets `β_x`, clips every per-activation
 bit count and the tile's weight width at its width, and multiplies the compute a target needs. A family's
 `premises = "<family>"` takes the premise numbers it doesn't give from that family (`family`).
 
@@ -75,7 +75,7 @@ class Family(Protocol):
 @dataclass(frozen=True)
 class Precision:
     """A number format the whole computation runs in: the activation rate `β_x` a block pays in it, its width in bits per
-    activation entry (which caps `b_a` and the tile's weight width), and the compute a target needs in it, per run kind, in multiples of the
+    activation entry (which clips `b_a` and the tile's weight width), and the compute a target needs in it, per run kind, in multiples of the
     family's own (`inf` where unknown)."""
 
     name: str
@@ -185,8 +185,8 @@ class Premises:
         values = {f.name: getattr(self, f.name) for f in fields(Profile) if hasattr(self, f.name)}
         values |= {"thread_e": self.thread_e or fan, "step_tokens": run.step_tokens or self.step_tokens}
         if p:
-            values |= {"beta_x": p.beta_x, "b_a": _cap(self.b_a, p.bits),
-                       "tile_weight_bits": _cap(self.tile_weight_bits, p.bits)}
+            values |= {"beta_x": p.beta_x, "b_a": _clip(self.b_a, p.bits),
+                       "tile_weight_bits": _clip(self.tile_weight_bits, p.bits)}
         values |= {"name": self.name, "kappa": kappa, "state_bits": state_bits, "efficiency": self.m(run, efficiency),
                    "fanout": fan} | given
         if trained is not None and model.matrices:
@@ -215,8 +215,8 @@ def _shaped(model: Model, v: Mapping[str, Any], t: Trained, grad_bits: float | N
         "state_splits": t.splits, "tile_inputs": rows, "tile_outputs": cols}
 
 
-def _cap(x: float | None, cap: float) -> float | None:
-    return None if x is None else min(x, cap)
+def _clip(x: float | None, ceiling: float) -> float | None:
+    return None if x is None else min(x, ceiling)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -426,8 +426,8 @@ def algorithms() -> Mapping[str, dict]:
 @dataclass(frozen=True, kw_only=True)
 class Nci(Premises):
     """An algorithm of the `benchmarks/nci` library (`benchmarks/nci/algorithms.json`), from its traits under `library.py`'s attacker
-    convention (the rate a block pays per weight and per boundary entry capped at the literature's central rates,
-    `nci.rate_cap` and `nci.boundary_bits_cap`), with the carried state capped as `Full`'s (`nci.state_bits_cap`):
+    convention (the rate a block pays per weight and per boundary entry clipped at the literature's central rates,
+    `nci.rate_cap` and `nci.boundary_bits_cap`), with the carried state clipped as `Full`'s (`nci.state_bits_cap`):
 
     * the state is `state_bits_per_param · updated_fraction · n_total`, or `description_bits` when it doesn't split;
     * `κ`, `c` (`uses_per_thread`), threads' `d` (`entry_fee_override`), fan-out and threads' `e`
@@ -522,8 +522,8 @@ def _checked(cls: type, prefix: str, values: Mapping[str, Any]) -> Mapping[str, 
 
 
 def _nci(registry: Registry, name: str, values: Mapping[str, Any]) -> Nci:
-    caps = {k: registry[f"nci.{k}"] for k in ("state_bits_cap", "rate_cap", "boundary_bits_cap")}
-    values = caps | {"algorithm": name.removeprefix("nci:")} | dict(values)
+    ceilings = {k: registry[f"nci.{k}"] for k in ("state_bits_cap", "rate_cap", "boundary_bits_cap")}
+    values = ceilings | {"algorithm": name.removeprefix("nci:")} | dict(values)
     if values["algorithm"] not in algorithms():
         raise KeyError(f"{name}: no algorithm {values['algorithm']!r} in {ALGORITHMS}")
     return Nci(**_checked(Nci, f"family.{name}", values) | {"name": name})
