@@ -58,3 +58,31 @@ Handoff note, synced: `lanes/network-accounting/20261114T0814Z-net436-step2-hand
 
 I end the turn here and start nothing.
 
+[2026-11-14T08:15Z] ac6ef2db2f1a
+ROWSPROTO to network-accounting (lead), Sat 14 Nov 12:15 AM PST. **Step A is pushed, and the two numbers are in: today's reader takes 3 of the 7 flat fixture files (2 of the 5 units), and one parse costs about a second.**
+
+Branch `cursor/na-rows-protocol-f641`, cut at #9855's head `5ae976faab7d8f84817a172e0dc63b6f8af939df`. Step A is `af6c684d9bf3221b646ae5563757c37294b60a84`. The head is `d33e8c276dc675cc5940cbcdeedf0e770e3723e9`: two wip commits above A, the program (B) and the executable (C), written before your 12:05 AM PST line reached me. Both numbers are from run `r20261114-080926-5192` at that head, on one core of a project machine's CPU slot [ran].
+
+**1. Which fixtures the reader takes.** The reader is the one function: `Flock.ProvedScope.circuitOf` under `verity/flock-circuit`'s tags with one session's hooks, then `Spot.FilePart.ofCircuit … .m`.
+- **Taken, 3 files, 2 units:** `zk-sessions` and `plain-tree` (unit `rope-head/neox-bf16/pair`, `units_per_vu` 32): m = 192,544 rows. `forged-proofs` (`unit/forged-proofs`, `units_per_vu` 1): m = 275,329 rows.
+- **Refused, 4 flat files:** `hidden-outputs/flat/rope-head`, `hidden-outputs/flat/gemm-coordinate`, `public-inputs`, `public-inputs-blocks`, each with "META: leaf_scheme is not the pinned leaf-commitment scheme". Their META's `leaf_scheme.salt_source` is the earlier one, and the reader pins the whole object [read]. So no fixture gives a taken unit with `units_per_vu` 4 or 8, or one whose outputs a second net returns.
+- **Refused, the 2 typed files:** "circuit: not a flock-circuit file".
+- The six refused files are ready `circuit-file` negatives. The taken ones give the test two values of m.
+
+**2. What one parse costs** (the reader and the count alone; three passes agree):
+- A 56.3 MB file: 0.79 to 0.91 s. The first file a process parses: 1.56 to 1.80 s, so about 0.8 s once a process.
+- The largest, 97.4 MB: 1.38 to 1.54 s after others; alone in a fresh process 2.41 s, 2.50 s wall for the whole process, 541 MB peak resident.
+- A refusal on `leaf_scheme` costs a whole parse (0.78 to 1.0 s). A typed file is refused in 0.38 to 0.49 s.
+- About 15 ms a MB. By your rule that is not far too much, so no benchmark and no header reader.
+- **Not in these figures:** the blob's SHA-512, which `Core.Blobs.ofArray` computes for every blob before the check, and reading the file. Not measured.
+
+**Also from the same run [ran]:** `NciCheck.RowsProtocol` and `NciCheck.RowsProtocolMain` build, `inference-only-rows` links, and `inference-only-rows id` prints `verity/inference-only/rows/v1`. Nothing else has run on B and C: no difftest, no Lean check, no suite, no ratchet gate. `tools/verity/check/import_order.py --check` at the head says the listing is the same [ran], so the new Lean imports open no edge.
+
+**One correction to my design note:** in m = `units_per_vu` × (constPos − nIn + 1), nIn = min(inWords × 128, constPos): `Flock.WORD` is 128 columns. Both taken units agree with it (32 × 6,017 and 279,424 − 4,096 + 1).
+
+**The line of the reader's issue that is now wrong:** that the reader must itself refuse `units_per_vu = 0`. Under the parse `HmRow.check` refuses it before any count, and m ≥ 1 for every file the reader takes; the protocol still refuses m = 0 by name, which cannot arise.
+
+Two runs: the step A try `r20261114-074107-ce03` (at A's tree, still waiting for a slot; it decides only that A elaborates alone, which the build above already shows inside B). I cancelled `r20261114-081008-150d`, a twin of the probe that never started.
+
+The handoff note follows, then I end. TIMER: none.
+
