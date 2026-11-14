@@ -9,8 +9,9 @@ import Proofs.Properties.Pouw.Grid
 # Proofs of PoUW's check properties (`Properties.Pouw.Check`)
 
 By unfolding the check: `registered_ok` and `outcome_accept` say what each of its two rules accepts, and `acceptMeans`
-composes them; the rest follow. `acceptedInRange_of_grid` proves `AcceptedInRange` from the window's grid properties
-`PointEnumerates` and `floorPoint_greatest`, which `Proofs.Properties.Pouw.Grid` proves. `acceptMeans_complete` is the
+composes them; the rest follow. `outcome_accept_subset` reads off `outcome_accept` that an accepted profile is of one
+level sampled `subset:K′`, so none holds a work design. `acceptedInRange_of_grid` proves `AcceptedInRange` from the
+window's grid properties `PointEnumerates` and `floorPoint_greatest`, which `Proofs.Properties.Pouw.Grid` proves. `acceptMeans_complete` is the
 converse of `AcceptMeans`, and `serviceReject_rejects` what `AcceptedIsTheService's` and `UndecidedOnlyFromService`
 leave: the service's reject is the check's.
 -/
@@ -187,6 +188,15 @@ theorem outcome_accept (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e 
   · rintro ⟨d, ⟨_, _, ⟨rfl, rfl⟩, _⟩, _, rfl⟩
     exact ⟨rfl, rfl⟩
 
+/-- A profile `outcome` accepts with is of one level sampled `subset:K′`: it refuses every other, among them one whose
+level records a work design. So PoUW's check reads no work design's `k_s`, and what it accepts rests on no rule that
+sizes them. -/
+theorem outcome_accept_subset {p : Params} {c : WindowCommitmentRecord} {f : Fixed} {e : Evidence} {pub : Public}
+    {prof : Core.Integrity} (h : outcome p c f e = .accept pub prof) :
+    ∃ l, prof.levels = #[l] ∧ l.draw = some (.subset f.sampling.k) := by
+  obtain ⟨_, ⟨-, -, -, -, hl, -⟩, -⟩ := (outcome_accept p c f e pub prof).mp h
+  exact ⟨_, hl, rfl⟩
+
 /-- The check accepts exactly when the registration keeps PoUW's rule and the service accepted it as the rule fixes, with
 the window's salt. -/
 theorem acceptMeans_iff (p : Params) (c : WindowCommitmentRecord) (e : Evidence) (pub : Public)
@@ -213,7 +223,7 @@ theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c 
 with the window's salt, is accepted, publishing the rule's items and the service's sample. -/
 theorem acceptMeans_complete (p : Params) (c : WindowCommitmentRecord) (e : Evidence) (f : Fixed)
     (prof : Core.Integrity)
-    (draw : Flock.Draw.UnitDraw) (hk : RecordKeeps p c f) (hs : ServiceAccepted p c f e prof draw)
+    (draw : Flock.Draw.UnitSample) (hk : RecordKeeps p c f) (hs : ServiceAccepted p c f e prof draw)
     (hw : SaltKept p c e) :
     protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof :=
   (acceptMeans_iff p c e _ prof).2 ⟨f, draw, hk, hs, hw, rfl⟩

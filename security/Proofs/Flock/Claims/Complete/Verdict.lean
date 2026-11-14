@@ -218,7 +218,7 @@ session, and the record's canonical text (S0). -/
 theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} {lv : Live}
     (hS : (f.stmt == x) = true)
-    (hD : drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw = true)
+    (hD : sampleEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw = true)
     (hL : liveOf spec f.record = .ok lv) (hC : custody spec lv link c₁ mids = .ok ())
     (hQ : s.read.check = .ok ()) (hN : s.read.draw.isNone = false)
     (hT : Flock.RecordText.check f.record = .ok ()) :

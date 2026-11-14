@@ -11,7 +11,7 @@ under a bursty trace with it.
 the top-up), and `benchmarks/harness` builds `topup.cu`. Decided by `rg kv_filler` over `verity/`, `benchmarks/`,
 `demos/`, `tests/` and `adapters/`.
 
-**Run:** `uv run tools/verity/check/suites.py benchmarks/kv_filler` runs what needs no GPU: the fill's reference, the
+**Run:** `uv run tools/check/suites.py benchmarks/kv_filler` runs what needs no GPU: the fill's reference, the
 lag's replay, the analysis, and the serving script's pure parts. `bench.py` and `serve.py` run on one GPU with a build
 of `topup.cu` and one of `benchmarks/word_codec/kv.cu` at p512 (`--topup-lib`, `--kv-lib`); no script here builds the
 two.

@@ -7,7 +7,7 @@
 # cases (honest, late, the honest run's tampered and chain rounds, and its forged certificate) through the period's
 # mirror and network-period, both from the tree when it has them, else from SC_PERIOD_REF (a ref on origin whose tree
 # has them) in a worktree. From a clone, in one of the network slots, as a job of at most 180 minutes:
-#   env SC_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/verity/check/slot.py \
+#   env SC_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/scan_period.sh
 # env: SC_MEM_GB (scan_zk.sh's)  SC_LATE_MS (default 800)  SC_PERIOD_REF (needed when the tree has no period)
 #      SC_CLASS (default test; w63k4 with SC_PROMPT_MAX=32, SC_MAX_TOKENS=4 and SC_LATE_MS past its 2.7 s delay)

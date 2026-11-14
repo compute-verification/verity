@@ -19,7 +19,7 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   is its own registered value, and request q's units read request q's.
 * **The partials** (`partials`): rank r's partial of collective k for request q is the registered value `value_name`
   (r, q, k), one row a token of H bf16 words, committed under hiding salts (`registered.Registered.commit`, row schema v2),
-  its domain binding the TP run root (`ROOT`) and the TP step (`PROGRAM`). Rank r's registration names each of its partials'
+  its domain binding the TP run root (`ROOT`) and the TP step (`PROGRAM`). Rank r's docket names each of its partials'
   entries (``of.partials``) and each peer partial's it reads (``of.peers``), by value, before any rank's coin. Synthetic:
   each rank's f32 activations, rounded to bf16.
 * **The window** (`window`), one a rank under ``<ROOT>/rank<r>`` and the sampling design ``work-rate:1/8``: Q·K·T units of the transfer-gate
@@ -32,18 +32,18 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   is the registered value's, and its header names the value, the rows' positions and their paths
   (`registered.Registered.statement`); its ``o0``, the reduced row, is committed afresh. Both ranks prove the same sums:
   AllReduce2's add is commutative.
-* **The verifier's reads** (`reads`): every rank's registration read before any rank's coin, and from them each chunk's own
+* **The verifier's reads** (`reads`): every rank's docket read before any rank's coin, and from them each chunk's own
   ``--registered`` file: ``part<j>`` at the root rank j registered for request q's partial of collective k, unit i reading
   row i, which a5 hands Lean's verify of each chunk (`a5.audit`'s ``registered``). So both ends of a transfer open the one
   value the sender registered: a received row other than the sender's opens no root ("does not open"), another token's row
   is read at a position the Program doesn't read ("reads position"), and another collective's partial, another request's,
   or the receiving rank's own read as the sender's, is another value ("not another value").
-* **Provenance** (`source_of`): rank r's registration is a stand-in of its rank's run, of this step at the TP run root, its
+* **Provenance** (`source_of`): rank r's docket is a stand-in of its rank's run, of this step at the TP run root, its
   partials each the verifier's own shape and domain, and its peers exactly the partials rank 1 − r registered.
 * **Negatives**, beside a5's (its registered reads' three, the transfer-gate negatives, R1 to R4 and the sample's): rank r's
-  registration naming its peer's partial under another root, naming its own partial as its peer's, naming another
-  request's partial as its peer's, naming a partial under another TP run's domain, and the other rank's registration as its
-  own, each refused by `source`; rank r's ports built before the peer's registration is read, refused by `reads`; and the
+  docket naming its peer's partial under another root, naming its own partial as its peer's, naming another
+  request's partial as its peer's, naming a partial under another TP run's domain, and the other rank's docket as its
+  own, each refused by `source`; rank r's ports built before the peer's docket is read, refused by `reads`; and the
   receiving port of request 0's c0 opened by the statement of each `TRANSFERS` kind, each refused by the host's read of
   Lean's registered reads (`warden_rows.refusal`) by name.
 * **Refused runs**, each to pass every check before the sample on both ranks, accept rank 0, sample rank 1's q0c0 and be refused
@@ -88,7 +88,7 @@ from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # 
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, docket as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
-from verity.commitments.windows import rows as CS  # noqa: E402
+from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 from verity.definitions.registry.b1_tp2 import AllReduce2  # noqa: E402
@@ -235,7 +235,7 @@ def step(r: int, hidden: int, tokens: int, requests: int) -> dict:
 
 
 def provenance(parts: dict, r: int) -> dict:
-    """What rank r's registration names: the step, its own partials' entries and the peer partials' it reads, by value."""
+    """What rank r's docket names: the step, its own partials' entries and the peer partials' it reads, by value."""
     tree, requests = parts[r][0][0], len(parts[r])
     return {**step(r, tree.words, tree.leaves, requests),
             "partials": {value_name(r, q, k): parts[r][q][k].entry() for q, k in sites(requests)},
@@ -279,14 +279,14 @@ def commit(out: Path, mine: CS.Binding, parts: dict, r: int, altered: bool = Fal
 # --- the verifier ----------------------------------------------------------------------------------------------------------
 
 def registrations(windows: Path) -> dict[int, dict]:
-    """Every rank's registration, as the verifier reads it before any rank's coin."""
+    """Every rank's docket, as the verifier reads it before any rank's coin."""
     return {r: json.loads((windows / f"rank{r}" / "registration.json").read_text()) for r in RANKS}
 
 
 def reads(mine: CS.Binding, r: int, regs: dict[int, dict]) -> dict[str, dict]:
-    """The verifier's own ``--registered`` file of each of rank r's chunks: ``part<j>`` at the root rank j's registration names
+    """The verifier's own ``--registered`` file of each of rank r's chunks: ``part<j>`` at the root rank j's docket names
     for its partial of collective k for request q, unit i (from the chunk's first) reading row i. Refused while any rank's
-    registration is unread: a rank's ports read every rank's registered partials, so every registration comes before any
+    docket is unread: a rank's ports read every rank's registered partials, so every docket comes before any
     rank's coin."""
     if missing := [j for j in RANKS if j not in regs]:
         raise ValueError(f"rank {r}'s ports read the registered partials of ranks {missing}, whose registrations the verifier "
@@ -303,7 +303,7 @@ def reads(mine: CS.Binding, r: int, regs: dict[int, dict]) -> dict[str, dict]:
 
 
 def source_of(mine: CS.Binding, r: int, regs: dict[int, dict]):
-    """The verifier's check of rank r's registration's window: a stand-in of rank r's run, of this step at the TP run root, its
+    """The verifier's check of rank r's docket's window: a stand-in of rank r's run, of this step at the TP run root, its
     partials each the verifier's own shape and domain (any root), and its peers exactly the partials rank 1 − r registered."""
     gates = chunks(mine)
     hidden, tokens, requests = dict(gates[0][2].rows)["part0"], gates[0][2].n, len(gates) // len(COLLECTIVES)
@@ -350,9 +350,9 @@ def transfer_refusals(mine: CS.Binding, parts: dict, r: int, regs: dict[int, dic
 
 
 def negatives(mine: CS.Binding, parts: dict, r: int, regs: dict[int, dict]) -> dict[str, dict]:
-    """Rank r's registration naming its peer's partial under another root, its own partial as its peer's, another request's
-    partial as its peer's, a partial under another TP run's domain, and the other rank's registration as its own, each
-    refused by `source`; its ports built before the peer's registration is read, refused by `reads`; and the receiving port's
+    """Rank r's docket naming its peer's partial under another root, its own partial as its peer's, another request's
+    partial as its peer's, a partial under another TP run's domain, and the other rank's docket as its own, each
+    refused by `source`; its ports built before the peer's docket is read, refused by `reads`; and the receiving port's
     statements of `TRANSFERS`."""
     source, w = source_of(mine, r, regs), regs[r]["window"]
     of, own, peer = w["of"], value_name(r, 0, 0), value_name(1 - r, 0, 0)

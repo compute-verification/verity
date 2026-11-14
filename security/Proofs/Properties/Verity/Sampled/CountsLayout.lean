@@ -20,7 +20,7 @@ fact beyond those `MovesReach` reads: v2 reads each opening frame's count off th
   of a stream's round `k`, not the session stream's, the `n` `Record.decode` decodes there.
 * **The link's count** (`link_count`, `SetsUp.mPts_eq`): the session stream's round 0 gives a coin a 16 bytes of the
   two link points of `spec.mPts` coordinates each (`link_coins`, `decode_points`), and the session `--zk` sets up at
-  the record's sample has `A.mP` of them (`drawOkZKHJP_of_size`).
+  the record's sample has `A.mP` of them (`sampleOkZKHJP_of_size`).
 * **A stop's frame** (`RoundsReach.stop_frame`, `firstOpened_noPick`): a stop where `StopOf` says and not every cut is
   past releases, on the tape a trace from it ends on, at an opening frame its fixed rounds pick, after a log none of its
   live rounds picks in, its cuts at the bytes that frame answers, and every description of its opening asks for that
@@ -139,13 +139,13 @@ theorem link_count {spec : Flock.SessionSpec} {record : String} {sess : Flock.Ru
 
 /-- **The session `--zk` sets up at the record's sample has `A.mP` points' coordinates**: at one table, its one
 statement is set up at the record's sample, the session's sample file at a sample, where every statement has
-`mPtsOf A.D.unroll.g (A.kd / nTab A.I)` of them (`drawOkZKHJP_of_size`). -/
+`mPtsOf A.D.unroll.g (A.kd / nTab A.I)` of them (`sampleOkZKHJP_of_size`). -/
 theorem SetsUp.mPts_eq {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {record : String} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hs : Exec.setupOfP (ZkExec.zkInputs A.I) A.own record = .ok (spec, sts)) {S : Finset (Fin A.n)}
     (hdr : Exec.recordDraw record = some (A.dj S)) : spec.mPts = A.mP := by
-  have hpin := ZkHidden.drawOkZKHJP_of_size A.I A.own A.ht A.hcS (.subset A.kd) A.kd A.n A.hdiv A.dj
-    (drawFileZK_printedDraw A.kd) S (A.hsz S)
+  have hpin := ZkHidden.sampleOkZKHJP_of_size A.I A.own A.ht A.hcS (.subset A.kd) A.kd A.n A.hdiv A.dj
+    (sampleFileZK_printedSample A.kd) S (A.hsz S)
   have h1 : A.I.count ≤ 1 := hA.count.le
   unfold Exec.setupOfP at hs
   rw [hdr] at hs
@@ -401,7 +401,7 @@ empty classes at their counts, beside a play that the sampled verdict accepts, t
 check read is the device's and whose blobs sent hold each pinned table at its registered file (`TablesSent`), is off the
 empty classes, under `ReachesOff.movesOf`'s premises. The first stop's frame is
 the log's first opening (`RoundsReach.stop_frame`, `firstOpened_noPick`), of the session stream (`linkFirst_verdict`),
-which asks for `A.mP + A.mP` coins (`link_frameCount`, at the record's sample, `recordDraw_firstStop`); each answered
+which asks for `A.mP + A.mP` coins (`link_frameCount`, at the record's sample, `recordSample_firstStop`); each answered
 stop's frame is round `k` of the first table's rep stream at its fixed round's slot (`stop_slot`), which asks for its
 message's count (`stop_count`). So no stop off the first events is in the second (`RoundsReach.weaken`). -/
 theorem ReachesOff.counts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
@@ -444,7 +444,7 @@ theorem ReachesOff.counts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {
     exact Nat.one_pos
   have hPk := readingAt_picks A.tables A.layout record recordDigest
   have hPS := readingAt_served A.tables A.layout record recordDigest
-  have hdr := recordDraw_firstStop fieldEnc hA hA.popTied (drawReadAll_coinsRead k) (drawHeld k) hPk hm hsrc ω
+  have hdr := recordSample_firstStop fieldEnc hA hA.popTied (sampleReadAll_coinsRead k) (sampleHeld k) hPk hm hsrc ω
     (firstStop_playReaches V θ F c A _ σ _ ω hr) hv hl hN hP hrec₀
   have hjl := A.layout_link h0r
   have hj₀ : ∀ pre fr, slotRound A.tables .link pre fr →

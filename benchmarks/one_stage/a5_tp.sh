@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, over a TP Commit's windows, one per rank (a5.py --tp-commit), on a CPU machine: each rank's served
-# window through registration, the verifier's Lean sample, M0's prover and the Lean verifier. M0's flock-circuit and
+# window through docket, the verifier's Lean sample, M0's prover and the Lean verifier. M0's flock-circuit and
 # Lean's verity-verify-proof are built from this tree, in scratch. A5 takes a TP window as served only under a SHA-512 TP run root
 # (tp.serving_rows.source: sha512): a TP Commit's ranks, the stand-in's too, commit under rows-sha512 under the SHA-512 TP run
 # root (tp.run_root, verity/tp-run-root/v2); an old record's SHA-256 v1 root is refused before the sample.
@@ -71,7 +71,7 @@
 # A5_ADVICE=workload (with A5_WINDOWS=bundles, the stand-in or A5_TP): advice windows. The advice A (I1, the schedule of the
 #   fixed-length workload the Commit served, `advice_windows.advice_of_workload`) and A' (A less its last request) are written
 #   in scratch, each rank's window is committed from its bundle over the stand-in compiler's Programs for A, and for A', its
-#   registration binding the advice's hiding root (`verity-vllm advice-windows`), and a5 derives its own from the record, the
+#   docket binding the advice's hiding root (`verity-vllm advice-windows`), and a5 derives its own from the record, the
 #   advice's opening and the compiler, never the workload (a5.py --advice-opening; --other-advice-opening and --other-windows
 #   its negatives). The advice and its openings are the prover's: never kept.
 #   Another TP Commit than GLM-5.3's: A5_ROW its row (the workload adapters/vllm/workloads/$A5_ROW.json), A5_NAME the

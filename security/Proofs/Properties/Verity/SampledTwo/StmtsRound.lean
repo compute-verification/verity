@@ -21,7 +21,7 @@ round leave no choice in.
   (`SpotFlock.stmtOk`) passes two statements' messages at one round-0 coin and one second stage's coins, template by
   template the two statements decode, agree in every field but the sample, the registered reads and the public file
   (`pinOk`), and state samples of one canonical text: each is held to the verifier's own sample (`second-sample`,
-  `Spot.SecondStage.ownDraw`), which reads only the held copies and the stage coins.
+  `Spot.SecondStage.ownSample`), which reads only the held copies and the stage coins.
 * **The round shows the parameters** (`showsAt_form_stmts`): `Messages.ShowsAt` at round `stage + 1` of the form's
   reading, with the string the play's parameters and the digest the SHA-512 of the parameters `θ` every good play
   has. A play of a frame at `θ` has them (`Verity.Sampled.Binding.play_reaches`), so the plays kept may be those.
@@ -39,7 +39,7 @@ public files the parameters name, the blobs' lookup tables and the session's rec
 the one the `t`-th session's statement names (`SessionMsgs.memberAt`). `FormStmts.lean` gives `StmtAtFixed` from the
 member each statement names and the sample each record prints (`stmtAtFixed_of`): the files and the tables are one
 or two blobs with one SHA-512. What is left is those two. A sample of one canonical text prints to the same bytes
-(`FormDraw.lean`, `drawAtFixed_of_coins`). That the two plays' stage coins are one where their logs before the round
+(`FormDraw.lean`, `sampleAtFixed_of_coins`). That the two plays' stage coins are one where their logs before the round
 are one, and that the statements name the same members in the same order where the sample is one, are not shown.
 -/
 
@@ -60,7 +60,7 @@ theorem getD_map_true {α : Type} {o : Option α} {f : α → Bool} (hf : (o.map
 /-- **Round 2's statement check holds a statement's sample to the verifier's own** (`second-sample`). -/
 theorem sample_of_codesOk {own : Spot.SecondStage.Own} {t : ℕ} {S : Spot.SecondStage.Stmt}
     (hc : codesOk h own t S = true) :
-    Spot.jeq S.draw (Spot.SecondStage.ownDraw own.sample.size (partAt h own.sample.size t) own.drawn) = true := by
+    Spot.jeq S.draw (Spot.SecondStage.ownSample own.sample.size (partAt h own.sample.size t) own.drawn) = true := by
   unfold codesOk at hc
   obtain ⟨-, -, -, -, -, hs, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
   exact hs
@@ -111,16 +111,16 @@ theorem reads_of_stmtOk {x m₁ m₂ : Claims.Msg} {c₀ : FlockDeploy.Coin} {c�
 
 /-- **Round `stage + 1`'s check holds template `t`'s statement's sample to the verifier's own**: where it passes, the
 second stage samples at the stage coins, and the statement's sample, read as JSON, has the canonical text of the
-verifier's own sample for the template's part (`Spot.SecondStage.ownDraw`): the second sample's units among the part's
+verifier's own sample for the template's part (`Spot.SecondStage.ownSample`): the second sample's units among the part's
 slots in the replay sample round 0's coin gives. -/
 theorem sample_of_stmtOk {x m₁ m₂ : Claims.Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ draw w b d, secondDraw h c₀ c₁ = some draw ∧ FlockDeploy.decode (stmtAt h m₂ t) = some w ∧
       pinOk h t w = true ∧ w.draw = some b ∧ FlockDeploy.jsonOf "draw" b = .ok d ∧
-      Spot.jeq d (Spot.SecondStage.ownDraw (h.reg.sample (src c₀)).size
+      Spot.jeq d (Spot.SecondStage.ownSample (h.reg.sample (src c₀)).size
         (partAt h (h.reg.sample (src c₀)).size t) ((Spot.Draw.proved draw).map Int.toNat)) = true := by
   obtain ⟨st, rec, draw, w, S, -, -, hd, hw, hS, hc, hpin⟩ := reads_of_stmtOk hok ht
-  obtain ⟨b, hb, hj⟩ := AddressRow.stmtJsonOf_draw hS
+  obtain ⟨b, hb, hj⟩ := AddressRow.stmtJsonOf_sample hS
   exact ⟨draw, w, b, S.draw, hd, hw, hpin, hb, hj, sample_of_codesOk hc⟩
 
 /-- **Two statements' messages that pass round `stage + 1`'s check at one pair of stage coins state one sample,

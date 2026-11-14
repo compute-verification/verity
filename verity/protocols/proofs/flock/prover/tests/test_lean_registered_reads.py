@@ -451,7 +451,7 @@ def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
 
 
 @pytest.mark.parametrize("value", ["rec-top-L0", "rec-top-stacked-L0"])
-def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(staged, value):
+def test_a_sampled_session_samples_every_unit_reading_a_rounds_commitment_in_full(staged, value):
     """U4 (`Flock.HmRow`, `Registered.checkFull`): a statement whose registered output row is a round's commitment (level 0's
     committed tops `rec-top-L0`, or R's `rec-top-stacked-L0`; a `rec-c<k>` meets `checkPubRows` first) is refused at setup
     when the record's sample does not sample every unit reading it in full, with one table and with two (`buildSession`'s call:

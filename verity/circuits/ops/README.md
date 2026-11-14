@@ -31,7 +31,7 @@ Beside the modules are each Definition module's binding file and pins (`<module>
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/circuits/ops`), which tests
+`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits/ops`), which tests
 `verity.circuits.silicon` too. [`tests/fixtures/`](tests/fixtures/README.md) holds the hardware captures the semantics
 are replayed against.
 
@@ -39,7 +39,7 @@ are replayed against.
 
 - **Provides:** the primitive circuits' Definitions, one family a module, their Boolean versions (`ops.boolean`), and each
   module's sidecar and pins, which `circuit-check` reads.
-- **Loaded by:** the served workloads' Definitions (`verity.definitions`); `verity.commitments.windows`, whose
+- **Loaded by:** the served workloads' Definitions (`verity.definitions`); `verity.commitments.periods`, whose
   `interface` imports every module; PoUW's prover (`verity.protocols.accounting.pouw.prover`); Flock's prover (`verity_flock`), pod
   scripts and agreement with upstream's verifier (`verity/protocols/proofs/flock`); the script that writes the difftest
   vectors of the inference-only policy's check

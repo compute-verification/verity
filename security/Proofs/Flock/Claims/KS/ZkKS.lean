@@ -58,7 +58,7 @@ relation, from two premises:
 
 Everything else is proved here at a statement some run accepts with one table, which parses in scope and sets up:
 table 0's layout and link layout (`zk_table0`), `Zk.schedule`'s schedule and `t_pad` at its `m` (`zk_schedule_ok`), the
-padded table `zkTab` at them with the executable's padding constant, pads layout and inner code (`DrawSetupZK.tabAt`'s
+padded table `zkTab` at them with the executable's padding constant, pads layout and inner code (`SampleSetupZK.tabAt`'s
 fields, without a sample), that `zkTab` is at Flock ZK's parameters (`zkTab_m1`), and that a table that does not extract
 is not committed to it (`zk_not_committed`, `zkTab_committed`). `zk_tableBoundθ_live` is the bound at full-width
 columns, the form the trimmed record reads (`zk_KS_trim`).
@@ -91,7 +91,7 @@ theorem zkSched_of {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedu
   unfold Claims.Flock.zkSched
   rw [hz]
 
-/-- `codeAt`'s points at `N` columns, distinct below `2^64` (`DrawSetupZK.innerDom`). -/
+/-- `codeAt`'s points at `N` columns, distinct below `2^64` (`SampleSetupZK.innerDom`). -/
 def innerDomOf (N : ℕ) (hN : N < 2 ^ 64) : Fin N ↪ 𝔽 :=
   ⟨fun j => innerPt j.val, fun a b h => by
     have hlt : ∀ j : Fin N, j.val + 1 < 2 ^ 64 := fun j => by
@@ -125,7 +125,7 @@ theorem innerN_dvd_zk {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.s
   rw [hb]
   exact Nat.pow_dvd_pow 2 (by omega)
 
-/-- **Flock ZK's padded table at a statement**, the fields of `DrawSetupZK.tabAt` at layout `L`'s model statement
+/-- **Flock ZK's padded table at a statement**, the fields of `SampleSetupZK.tabAt` at layout `L`'s model statement
 at its regions: `Zk.schedule`'s schedule and `t_pad` at its `m`, the padding constant `PAD_C`, two extra lanes, link
 layout `PT_LOCAL`, the pads at `PadLayout.new m kLog k0`'s positions, and the inner code `verifyInner` reads (`innerN`
 columns, column `j` at `j + 1`, `K_PAD` padding symbols, `Q` queries at `w.lo mod innerN`, the unique-decoding

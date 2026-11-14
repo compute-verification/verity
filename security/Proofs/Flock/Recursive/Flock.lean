@@ -21,7 +21,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Exec.LawSample
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Game
 
@@ -41,7 +41,7 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
   of the source's bytes, so it escapes no nonempty set of units, with no assumption on those bytes (A3).
 * `ZkOuter.accepts_le`: an accepted session whose layer is not `Good` is at most `bound` likely: the sample misses every
   bad unit (`miss 1`, which the full sample never does); or a sampled proof block computes wrongly or reads a registered value
-  other than the registrant's at a leaf that is the registrant's (`zk_session_regDrawnR`:
+  other than the registrant's at a leaf that is the registrant's (`zk_session_regSampledR`:
   `ksAvgStrictZ + linkBoundZC + regTermZC`); or a sampled row's
   registered leaf is not the registrant's while the verifier's registered check passes (`ReadsX.prob_offOn_le`:
   `qR²/2^513`). The units are bad at the strategy alone, so one sampling step covers all three.
@@ -70,7 +70,7 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg
-open ZkHidden (planZHJ tabZHJ planZHJ_length DrawSetupZHJ TagsOkZHJ DrawOkZKHJ layShHJ)
+open ZkHidden (planZHJ tabZHJ planZHJ_length SampleSetupZHJ TagsOkZHJ SampleOkZKHJ layShHJ)
 open FlockSoundness.Discharge.Tables (LiveOutJ liveSession)
 open scoped ENNReal
 
@@ -92,7 +92,7 @@ structure ZkOuterD (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Bui
   dj : Finset (Fin nv) → Lean.Json
   S₀ : Finset (Fin nv)
   d₀ : Lean.Json
-  y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀
+  y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀
   wr : (S : Finset (Fin nv)) → (R : Reg') → LiveOutJ (planZHJ (Reg := Reg') dj y₀ S R).length mPts → Exec.Transcript
   hcH : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c
   pub : Public
@@ -179,10 +179,10 @@ theorem outcome_auditLive_liveOfZJ {n : ℕ} {L : Law n} {Reg : Type} {mPts : �
   exact ⟨ω, x, rfl⟩
 
 /-- **A live subset sample that succeeds is `Flock.Draw.subset` on the source's one stream.** -/
-theorem runOS_subset {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) (k n : ℕ) {d : Flock.Draw.UnitDraw}
+theorem runOS_subset {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) (k n : ℕ) {d : Flock.Draw.UnitSample}
     (hd : Law.runOS f (.subset k) n = some d) : Flock.Draw.subset k n (Law.streamOf (f 0)) = some d.units := by
   unfold Law.runOS at hd
-  rw [Law.drawWith_subset_run] at hd
+  rw [Law.sampleWith_subset_run] at hd
   cases ho : (Flock.Draw.onWith (Law.tapeGet (Law.tapesOf f) 0) (2 * k * Flock.Draw.width n + 64)
       (Flock.Draw.subset k n)).run (fun _ => 0) with
   | none => rw [ho] at hd; exact absurd hd (by simp)
@@ -470,7 +470,7 @@ theorem off_le {qR : ℝ} (τ : Strategy (zo.game dg N))
 /-- **V*'s session at one history, at one strategy**: an accepted outcome at which V*'s value layer is not `Good` is at
 most `bound` likely. The bad units are fixed by the strategy: the sample misses them all, which the full sample never does
 (`execOS_subset_full_escape`, no assumption on the source's bytes), or meets an incorrect proof block or a registered-value
-disagreement at the registrant's leaf (`zk_session_regDrawnR`), or an off-leaf registered read (`off_le`). -/
+disagreement at the registrant's leaf (`zk_session_regSampledR`), or an off-leaf registered read (`off_le`). -/
 theorem accepts_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     (zo : ZkOuter mPts nv J Reg' c hU hscope (Law.execOS (n := nv) src (.subset nv) nv))
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -484,9 +484,9 @@ theorem accepts_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (
   · exact (prob_mono (fun o h => h.2 hG) _ _).trans ((prob_false _ _).le.trans zero_le)
   have h1 : prob (fun o => Disjoint o.2.1 (zo.badUnits dg N k Rw τ)) (zo.game dg N) τ ≤
       (Law.subset nv nv le_rfl).miss 1 :=
-    (prob_auditLive_draw _ τ fun S => Disjoint S (zo.badUnits dg N k Rw τ)).trans_le
+    (prob_auditLive_sample _ τ fun S => Disjoint S (zo.badUnits dg N k Rw τ)).trans_le
       ((execOS_subset_full_escape src (zo.badUnits_nonempty dg N k Rw τ hG)).trans_le zero_le)
-  have h2 := zk_session_regDrawnR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hcH hU zo.hpub
+  have h2 := zk_session_regSampledR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hcH hU zo.hpub
     (Layout.scopeOkH_of_scopeOk hscope) _ zo.hDraw zo.hTags zo.hRec hk hRw hM hρ hr ht' zo.rd τ hCR.1 hCR.2.1
   have h3 := zo.off_le dg N τ hCR.2.2
   refine (prob_mono (fun o h => ?_) _ _).trans

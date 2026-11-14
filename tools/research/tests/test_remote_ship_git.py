@@ -222,10 +222,10 @@ def test_two_launches_of_one_commit_leave_one_checkout_whichever_wins(repo, tmp_
 
 
 def test_needs_git_names_the_known_programs_wherever_the_command_carries_them():
-    slot = ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by", "infra", "--"]
-    assert remote.needs_git(["bash", "-lc", "uv sync -q && uv run tools/verity/check/suites.py --changed abc --quick"]) == \
-        "tools/verity/check/suites.py"
-    assert remote.needs_git([*slot, "nice", "-n", "19", "uv", "run", "python", "tools/verity/check/check.py"]) == "tools/verity/check/check.py"
+    slot = ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/check/slot.py", "--by", "infra", "--"]
+    assert remote.needs_git(["bash", "-lc", "uv sync -q && uv run tools/check/suites.py --changed abc --quick"]) == \
+        "tools/check/suites.py"
+    assert remote.needs_git([*slot, "nice", "-n", "19", "uv", "run", "python", "tools/check/check.py"]) == "tools/check/check.py"
     assert remote.needs_git(["python3", "tools/verity/lean/lean_changed.py", "--records"]) == "tools/verity/lean/lean_changed.py"
     assert remote.needs_git(["uv", "run", "--extra", "torch-cpu", "verity", "check"]) == "verity check"
     assert remote.needs_git([*slot, "bash", "-lc", "uv run pytest tools/research/tests/test_x.py"]) is None

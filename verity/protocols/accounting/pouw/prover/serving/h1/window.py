@@ -140,7 +140,7 @@ def open_period(lines: Iterable[str], lane: str) -> dict[str, Any] | None:
 def after_close(lines: Iterable[str], lane: str, period: str) -> tuple[bool, dict[str, Any] | None]:
     """Whether the auditor's ledger `lines` closes period `period`, and the first ``reserve`` entry after that close
     whose prover (``for``, else ``by``) is lane `lane`, None while there is none: the one reserve a Pearl-C run's sample
-    session may be, so a sample is taken once (`bench_arm.LiveDraw`, `served_verdicts.pearlplus_live_draw`)."""
+    session may be, so a sample is taken once (`bench_arm.LiveDraw`, `served_verdicts.pearlplus_live_sample`)."""
     closed = False
     for e in map(json.loads, lines):
         if not closed:

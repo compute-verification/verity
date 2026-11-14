@@ -11,11 +11,9 @@ that consumes another's answer.
 module
 
 public import Base.Canon
-public import Commitments.Draw
 public import CoreProtocol.Ratio
 meta import Lean.Data.Json
 meta import Base.Canon
-meta import Commitments.Draw
 meta import CoreProtocol.Ratio
 
 @[expose] public section
@@ -42,8 +40,10 @@ structure WorkStratum extends Stratum where
 
 /-- How a level is sampled, its sampling design: each member independently with probability `p`, exactly `k` members
 uniformly, uniform samples inside disjoint strata of the checked level, or the work design `work:k`, uniform samples inside
-strata whose `k_s` its rule sizes by work above each stratum's floor (`Flock.Draw.workK`) (`profile.Bernoulli`,
-`Subset`, `Stratified`, `Work`). The sample of a work design is a stratified one at its `k_s`. -/
+strata each recorded with its `k_s`, its members' work and its floor (`profile.Bernoulli`, `Subset`, `Stratified`,
+`Work`). The sample of a work design is a stratified one at its `k_s`. The profile records each `k_s` and does not hold
+it to the rule that sizes it by work: the draw's own check does, and a reader that relies on the rule checks it
+there. -/
 inductive SamplingDesign where
   | bernoulli (p : Ratio)
   | subset (k : Nat)
@@ -55,8 +55,8 @@ inductive SamplingDesign where
 def WorkStratum.total (strata : Array WorkStratum) : Nat := strata.foldl (fun acc s => acc + s.work * s.size) 0
 
 /-- Why `strata` are not the work design `work:k`'s, else none (`profile.Work`'s refusals): `1 ≤ k ≤ population`,
-distinct names, a floor of at least one in every stratum, a population that does some work, and each stratum's `k` the
-rule's, `Flock.Draw.workK` above its floor. -/
+distinct names, a floor of at least one in every stratum, and a population that does some work. A stratum's `k` is read
+as recorded and compared with no rule. -/
 def WorkStratum.problem (k : Nat) (strata : Array WorkStratum) : Option String := Id.run do
   let population := strata.foldl (fun acc s => acc + s.size) 0
   if strata.isEmpty || k < 1 || k > population then return some "a work design needs strata and 1 <= k <= population"
@@ -67,18 +67,7 @@ def WorkStratum.problem (k : Nat) (strata : Array WorkStratum) : Option String :
     if seen.contains s.name then return some s!"stratum '{s.name}' twice"
     seen := seen.push s.name
     if s.floor < 1 then return some s!"stratum '{s.name}': a floor is at least one"
-    if s.k != Flock.Draw.workK k s.work s.size total s.floor then
-      return some s!"stratum '{s.name}': k is not the work rule's"
   return none
-
-/-- The sampling design of Flock's law (`Flock.Draw.Law`) at its sizes: each stratum named by its template, its size
-its ranges' total. `none` for a Bernoulli law of denominator 0. -/
-def SamplingDesign.ofFlock : Flock.Draw.Law → Option SamplingDesign
-  | .subset k => some (.subset k)
-  | .bernoulli a b => (Ratio.mk' a b).map .bernoulli
-  | .stratified _ strata => some (.stratified (strata.map fun s => { name := s.template, size := s.size, k := s.k }))
-  | .work k strata => some (.work k (strata.map fun s =>
-      { name := s.template, size := s.size, k := s.k, work := s.work, floor := s.floor }))
 
 structure Level where
   name : String
@@ -186,7 +175,8 @@ private def workExample : SamplingDesign :=
 #guard (SamplingDesign.ofJson workExample.toJson "draw").toOption == some workExample
 #guard (SamplingDesign.ofJson (SamplingDesign.stratified #[{ name := "a", size := 4, k := 2 }]).toJson "draw").toOption ==
   some (.stratified #[{ name := "a", size := 4, k := 2 }])
-#guard (SamplingDesign.ofJson (SamplingDesign.work 3 #[{ name := "a", size := 4, k := 1, work := 3, floor := 1 }]).toJson "draw").isOk == false
+-- A stratum's `k` is read as recorded: stratum `a`'s is 1 here, where sizing it by its work gives 3, and it reads.
+#guard (SamplingDesign.ofJson (SamplingDesign.work 3 #[{ name := "a", size := 4, k := 1, work := 3, floor := 1 }]).toJson "draw").isOk
 #guard (SamplingDesign.ofJson (SamplingDesign.work 3 #[{ name := "a", size := 4, k := 3, work := 0, floor := 3 }]).toJson "draw").isOk == false
 
 end Core

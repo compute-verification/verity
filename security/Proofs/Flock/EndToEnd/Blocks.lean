@@ -24,8 +24,8 @@ import Proofs.Flock.Soundness.Game
 * `Flock.SecurityProofs.integrity_on`: `IntegrityHorizon` on a set `I` of the period's sampling blocks. The probability
   that every sampling block of `I` is accepted and `I`'s incorrect proof blocks total at least `M` is at most
   `(1 − q)^M + Σ_{t ∈ I} (ε_ks,t + δ_link,t)`. It is `IntegrityHorizon`'s proof with every sampling block outside `I`
-  weighing nothing: `period_union` over the sampling blocks of `I` accepted with a sampled proof block wrong, and
-  `period_horizon` with weight `|W_t|` at a sampling block of `I` and `0` elsewhere, where the sampling block's miss
+  weighing nothing: `monitoringPeriod_union` over the sampling blocks of `I` accepted with a sampled proof block wrong, and
+  `monitoringPeriod_horizon` with weight `|W_t|` at a sampling block of `I` and `0` elsewhere, where the sampling block's miss
   probability `≤ 1 = (1 − q)^0`.
 * `IntegrityBlock`: `integrity_on` at block `b`'s sessions, with `M = ⌈ln(1/δ)/q⌉`.
 * `IntegrityBlocks`: the union bound over the blocks (`value_exists_finset_le`), each block's by `IntegrityBlock`.
@@ -62,8 +62,8 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
   set x : ℝ≥0∞ := ENNReal.ofReal (1 - q)
   have hx : x ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
   -- some sampling block of `I` accepted with a sampled proof block wrong
-  have hA := period_union (fun t => (W t).game) (fun t => (W t).record t)
-    (fun r => r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) (fun t τ => (W t).CR τ)
+  have hA := monitoringPeriod_union (fun t => (W t).game) (fun t => (W t).record t)
+    (fun r => r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) (fun t τ => (W t).CR τ)
     (fun t => if t ∈ I then (W t).ks + (W t).link else 0)
     (fun t τ hτ => by
       by_cases ht : t ∈ I
@@ -72,29 +72,29 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
       · rw [ite_eq_right_of_eq_false _ _ (eq_false ht)]
         exact (prob_mono (q := fun _ => False) (fun o ho => ht ho.1) _ _).trans_eq (prob_false _ _)) T 0 s hs
   -- every sample of `I` misses, with at least `M` incorrect proof blocks in `I`
-  have hB := period_horizon (fun t => (W t).game) (fun t => (W t).record t)
-    (fun r => r.idx ∈ I → ¬ r.drawnWrong) (fun r => if r.idx ∈ I then r.wrong else 0)
+  have hB := monitoringPeriod_horizon (fun t => (W t).game) (fun t => (W t).record t)
+    (fun r => r.idx ∈ I → ¬ r.sampledWrong) (fun r => if r.idx ∈ I then r.wrong else 0)
     (fun t τ => (W t).CR τ) x hx
     (fun t τ _ => by
       by_cases ht : t ∈ I
       · refine ⟨((W t).wrongSet τ).card, fun _ => ite_eq_left_of_eq_true _ _ (eq_true ht), ?_⟩
         refine (prob_mono (q := fun o => ¬ ∃ u ∈ o.2.1, u ∈ (W t).wrongSet τ) (fun o ho => ho ht) _ _).trans ?_
-        exact ((W t).drawMiss_le (hA3 t ht) _ τ).trans
+        exact ((W t).sampleMiss_le (hA3 t ht) _ τ).trans
           (pow_le_pow_left₀ zero_le ((W t).one_sub_le hq (hqt t ht)) _)
       · exact ⟨0, fun _ => ite_eq_right_of_eq_false _ _ (eq_false ht), (prob_le_one _ _ _).trans_eq (pow_zero x).symm⟩) T 0 s M hs
   calc value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
         M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.wrong).sum) (Period.run W T s)
-      ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) ∨
-          ((∀ r ∈ l, r.idx ∈ I → ¬ r.drawnWrong) ∧
+      ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) ∨
+          ((∀ r ∈ l, r.idx ∈ I → ¬ r.sampledWrong) ∧
             M ≤ (l.map fun r => if r.idx ∈ I then r.wrong else 0).sum)) (Period.run W T s) := by
         refine value_mono (fun l hl => ?_) _
-        by_cases hd : ∃ r ∈ l, r.idx ∈ I ∧ r.drawnWrong
+        by_cases hd : ∃ r ∈ l, r.idx ∈ I ∧ r.sampledWrong
         · obtain ⟨r, hr, hrI, hdr⟩ := hd
           exact Or.inl ⟨r, hr, hrI, hl.1 r hr hrI, hdr⟩
         · push Not at hd
           exact Or.inr ⟨hd, (sum_filter_wrong I l) ▸ hl.2⟩
-    _ ≤ value (fun l => ∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) (Period.run W T s) +
-          value (fun l => (∀ r ∈ l, r.idx ∈ I → ¬ r.drawnWrong) ∧
+    _ ≤ value (fun l => ∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) (Period.run W T s) +
+          value (fun l => (∀ r ∈ l, r.idx ∈ I → ¬ r.sampledWrong) ∧
             M ≤ (l.map fun r => if r.idx ∈ I then r.wrong else 0).sum) (Period.run W T s) :=
         value_or_le _ _ _
     _ ≤ (∑ t ∈ Finset.range T, if t ∈ I then (W t).ks + (W t).link else 0) + x ^ M := by
@@ -117,7 +117,7 @@ theorem sum_range_start (S : ServerBlocks) (f : ℕ → ℝ≥0∞) :
 theorem IntegrityBlock : Flock.Guarantees.IntegrityBlock := by
   intro S b q δ hq hδ hqt hA3 s hT hL
   have hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
-    periodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
+    monitoringPeriodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
   refine (value_mono (fun l hl => ⟨hl.1, Nat.ceil_le.2 hl.2⟩) _).trans
     ((integrity_on S.W S.T (S.sessions b) hq hqt hA3 s hs ⌈Real.log (1 / δ) / q⌉₊).trans ?_)
   exact add_le_add (one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)) le_rfl

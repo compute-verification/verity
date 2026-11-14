@@ -62,7 +62,7 @@ LEFT_OUT = ()
 SKIP = {
     GLOSSARY: "the term source: its table of older names says where each old name stays",
     "tools/move/": "the word maps name the words they retire",
-    "tools/verity/check/tests/test_move_check.py": "its toy moves rename the words the maps retire",
+    "tools/check/tests/test_move_check.py": "its toy moves rename the words the maps retire",
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
     "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the terms it refuses",
@@ -704,8 +704,8 @@ def test_vendor_kernel_and_isa_names_are_other_senses_and_pearl_s_cap_in_their_s
             ["CAP", "capOK", "cap check"]),
     }
     for sense, (theirs, pearls, pearl) in cases.items():
-        assert said(theirs, "verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu") == [], sense
-        assert said(f"{theirs}\n{pearls}\n", "verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu") == [(2, o) for o in pearl], sense
+        assert said(theirs, "benchmarks/pouw/harness/native/lt.cu") == [], sense
+        assert said(f"{theirs}\n{pearls}\n", "benchmarks/pouw/harness/native/lt.cu") == [(2, o) for o in pearl], sense
 
 
 def test_the_live_block_s_caps_are_its_own_in_capitals_too_and_pearl_s_other_spellings_there_are_not() -> None:

@@ -334,7 +334,7 @@ theorem finalCOf_inner (v : F128) {t : _root_.Flock.Transcript} (hp : t.pending 
 /-- **The value a rep's frame took at `final_c`'s pad** (`valsOf`): `final_c'` plus its pad. -/
 theorem valsOf_fc (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.ZkServer.Frame.MaskSlot)
     (M : Array F128) (fc : F128) :
-    (Loop.valsOf (_root_.Flock.ZkServer.Frame.Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms) M fc)[lay.fc]! =
+    (Loop.valsOf (_root_.Flock.ZkServer.Frame.Cfg.ofSamples lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms) M fc)[lay.fc]! =
       fc + (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h[lay.fc]! := by
   have hlt : lay.fc < lay.zp 64 := by
     unfold _root_.Flock.Zk.PadLayout.zp _root_.Flock.Zk.PadLayout.lc
@@ -344,8 +344,8 @@ theorem valsOf_fc (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option
     unfold _root_.Flock.Zk.PadLayout.len _root_.Flock.Zk.PadLayout.tw _root_.Flock.Zk.PadLayout.hab
       _root_.Flock.Zk.PadLayout.zp _root_.Flock.Zk.PadLayout.lc
     omega
-  have hcl : (_root_.Flock.ZkServer.Frame.Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).lay = lay := rfl
-  have hch : (_root_.Flock.ZkServer.Frame.Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).h =
+  have hcl : (_root_.Flock.ZkServer.Frame.Cfg.ofSamples lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).lay = lay := rfl
+  have hch : (_root_.Flock.ZkServer.Frame.Cfg.ofSamples lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).h =
       (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h := rfl
   unfold Loop.valsOf
   simp only [hcl, hch]

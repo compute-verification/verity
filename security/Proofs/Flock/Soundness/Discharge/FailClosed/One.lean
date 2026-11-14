@@ -95,7 +95,7 @@ distinct claims: the six soundness bounds (each its own game: the sampling desig
 stratified or the live subset sample, and the outputs, public or hidden) and the two zero-knowledge views. The registered
 headlines make two more: `SoundZHJR` (`FailClosed.ZkRegistered`) and `SoundExecHR` (`FailClosed.PlainRegistered`), and
 `ViewZHJR` is `ViewZHJ`'s view at the statements only its check passes. `SoundExecH` and `SoundExecHR` take their sampling design as
-a parameter (`DrawDesign`), the one the inputs make live (`LiveDesign`), so each is one claim at the stratified sampling design
+a parameter (`SampleDesign`), the one the inputs make live (`LiveDesign`), so each is one claim at the stratified sampling design
 and the live subset sample. The other eight
 are corollaries of these: `flock_headline_exec` and `flock_headline_exec_hidden` state the `_dec` bounds at any decoder
 given its `DecodesOn` (`hdec`), which the `_dec` forms prove for the verifier's decoder; the soundness halves of
@@ -183,7 +183,7 @@ theorem exists_k_rateZ {F : Type} [Field F] [Fintype F] [DecidableEq F] {n mPts 
 /-! ## The stratified sampling design
 
 The claims at the stratified sampling design (`SoundExec`, `SoundZ`, `SoundZH`, and their `205` and per-test forms, and
-`SoundExecH`, `SoundExecHR` at a stratified `DrawDesign` through `LiveDesign`) take the live sampling design from the inputs, as the
+`SoundExecH`, `SoundExecHR` at a stratified `SampleDesign` through `LiveDesign`) take the live sampling design from the inputs, as the
 verifier does: `liveLaw I`, `HmRow.stratifiedLaw` at the verifier's own `--partition`, `--program` and `--stratified K`,
 to which `setupTables` holds a stratified sample file's sampling design (U2). Their miss term is the stratified sampling design's at every assignment `σs` of the population's units to the strata that the strata
 describe (`ExecStrata`), the bound the infimum over them. At an accepted sample file's sampling design that infimum ranges over a
@@ -204,8 +204,8 @@ def liveLaw (I : Inputs) : Option (Flock.Draw.Law × ℕ) :=
 
 /-- **The strata of an accepted sample file describe an assignment**, at the strata's indices `Fin m`: an assignment `σs`
 of the population's units to the strata over which the stratified claims' infimum ranges (`Law.execStrata_of_ofJson`). -/
-theorem liveStrata_of_ofJson {j : Lean.Json} {D : Flock.Draw.UnitDraw} {Kd m : ℕ} {St : Fin m → Flock.Draw.Stratum}
-    (h : Flock.Draw.UnitDraw.ofJson j = .ok D) (hl : D.law = .stratified Kd (Array.ofFn St)) :
+theorem liveStrata_of_ofJson {j : Lean.Json} {D : Flock.Draw.UnitSample} {Kd m : ℕ} {St : Fin m → Flock.Draw.Stratum}
+    (h : Flock.Draw.UnitSample.ofJson j = .ok D) (hl : D.law = .stratified Kd (Array.ofFn St)) :
     ∃ σs : Fin D.population → Fin m, Audit.Law.ExecStrata σs (fun s => (St s).k) St ∧
       ∀ s, (St s).k ≤ (Audit.Law.stratum σs s).card := by
   obtain ⟨σ, hS, hk⟩ := Audit.Law.execStrata_of_ofJson h hl
@@ -228,7 +228,7 @@ theorem liveStrata_of_ofJson {j : Lean.Json} {D : Flock.Draw.UnitDraw} {Kd m : �
 /-- **A sample design is the live sample's** at the inputs: at the stratified sample, its strata, `Kd` and population are the
 stratified sampling design the verifier derives (`liveLaw`), as at `SoundExec`; the subset sample's sampling design is the sample file's, which
 `ProvedScope.lawWhy` admits at hidden outputs. -/
-def LiveDesign (I : Inputs) {n : ℕ} : DrawDesign n → Prop
+def LiveDesign (I : Inputs) {n : ℕ} : SampleDesign n → Prop
   | .stratified St Kd pop => liveLaw I = some (.stratified Kd (Array.ofFn St), pop)
   | .subset _ _ => True
 
@@ -237,7 +237,7 @@ set_option linter.unusedVariables false in
 def SoundExec (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
+    {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀))
     {Reg : Type}
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
     (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
@@ -301,7 +301,7 @@ exactly, and `η` added to the miss term. -/
 def SoundExecPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
+    {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀))
     {Reg : Type}
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
     (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
@@ -366,7 +366,7 @@ theorem soundExec (I : Inputs) (hh : I.tags.hiddenOutputs = false) : SoundExec I
 
 /-- `SoundExec`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_exec (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (x₀ : DrawSetup I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
+    (x₀ : SampleSetup I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ hs : Scope I, ∀ S R j, rateB (Integrate.planAt (Reg := Reg) hs.typed dj x₀ S R) j k ≤ ρ := by
   by_cases hs : Scope I
   · obtain ⟨k, hk, h⟩ := exists_k_rateB (Integrate.planAt (Reg := Reg) hs.typed dj x₀) (fun _ _ _ => rfl) hρ
@@ -375,13 +375,13 @@ theorem hr_exec (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) 
 
 /-- **`SoundExec`'s setup exists at every accepted sample.** Where verity-verify-proof accepts a session whose record's sample is
 `d`, setupH set up at `d` (`st`), `d` decodes (`D`), and when `D` proves `S` and `st`'s link points are `mPts`, an
-`x₀ : DrawSetup I mPts S d` has statement `st`. -/
+`x₀ : SampleSetup I mPts S d` has statement `st`. -/
 theorem setup_of_verifies (I : Inputs) (hh : I.tags.hiddenOutputs = false) {n mPts : ℕ} {S : Finset (Fin n)}
     {d : Lean.Json} {t : Exec.Transcript} (h : Verifies I t) (hd : recordDraw t.record = some d) :
     ∃ st D, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program = .ok st ∧
-      Draw.UnitDraw.ofJson d = .ok D ∧
-      ((∀ u ∈ S, u.val ∈ D.proved) → st.mPts = mPts → ∃ x : DrawSetup I mPts S d, x.st = st) :=
-  drawSetup_of_accepts h.2.typed (h.2.parse hh) (h.2.outNet hh) hh h.2.count h.1 hd
+      Draw.UnitSample.ofJson d = .ok D ∧
+      ((∀ u ∈ S, u.val ∈ D.proved) → st.mPts = mPts → ∃ x : SampleSetup I mPts S d, x.st = st) :=
+  sampleSetup_of_accepts h.2.typed (h.2.parse hh) (h.2.outNet hh) hh h.2.count h.1 hd
 
 end
 
@@ -397,21 +397,21 @@ open FlockSoundness.Discharge.Composed (nTab nTab_pos drawJ partS)
 set_option linter.unusedVariables false in
 /-- The claim under `--plain-tables` (no `--zk`, public outputs, any number of tables up to `Tags.MAX_TABLES`), the sampling design
 the live subset sample: `plain_session_soundJ`'s. Its reference setup is table 0 of an untyped statement (`ht`, `x₀`),
-which every session `--plain-tables` accepts at a sample `DrawOkPJ` admits has (`setupPJ_of_verifiesP`). Its first
+which every session `--plain-tables` accepts at a sample `SampleOkPJ` admits has (`setupPJ_of_verifiesP`). Its first
 conjunct is what the statement is about: every session `--plain-tables` accepts is over a circuit whose META binds the
 verifier's own program (`ProgramOfCircuit`), and the bound is at that circuit's unit's key program (`keyProg`). -/
 def SoundExecJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   (∀ t, VerifiesP I t → ProgramOfCircuit I) ∧
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type} (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
+    (x₀ : SampleSetup (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPJ (Reg := Reg) ht dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkPJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkPJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPJ (Reg := Reg) ht dj x₀ S R).length) wr)
     -- the count curve's parameters
@@ -468,7 +468,7 @@ def SoundExecJPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   (∀ t, VerifiesP I t → ProgramOfCircuit I) ∧
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type} (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
+    (x₀ : SampleSetup (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPJ (Reg := Reg) ht dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -476,7 +476,7 @@ def SoundExecJPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkPJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkPJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPJ (Reg := Reg) ht dj x₀ S R).length) wr)
     -- the count curve's parameters
@@ -535,19 +535,19 @@ theorem soundExecJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : SoundExecJ
 
 /-- `SoundExecJ`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_execJ (I : Inputs) {n mPts : ℕ} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ}
+    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (x₀ : SampleSetup (inputsPJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ}
     (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateB (planPJ (Reg := Reg) ht dj x₀ S R) j k ≤ ρ :=
   exists_k_rateB (planPJ ht dj x₀) (fun _ _ _ => rfl) hρ
 
 /-- **`SoundExecJ`'s reference setup exists at every accepted sample, at every number of tables**: where verity-verify-proof
 `--plain-tables` accepts a session whose record's sample is `dj S`, at a sample whose parts the challenger's live-coin part's file proves
-with the session's link points (`DrawOkPJ`), the statement is untyped and table 0 sets up, so there are `ht` and
-`x₀ : DrawSetup (inputsPJ I 0) mPts _ _`. -/
+with the session's link points (`SampleOkPJ`), the statement is untyped and table 0 sets up, so there are `ht` and
+`x₀ : SampleSetup (inputsPJ I 0) mPts _ _`. -/
 theorem setupPJ_of_verifiesP (I : Inputs) (hh : I.tags.hiddenOutputs = false) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)}
-    {t : Exec.Transcript} (h : VerifiesP I t) (hd : recordDraw t.record = some (dj S)) (hok : DrawOkPJ I dj mPts S) :
+    {t : Exec.Transcript} (h : VerifiesP I t) (hd : recordDraw t.record = some (dj S)) (hok : SampleOkPJ I dj mPts S) :
     I.tags.typed = false ∧
-      Nonempty (DrawSetup (inputsPJ I 0) mPts (partS I (dj S) S ⟨0, nTab_pos I⟩) (drawJ I (dj S) 0)) := by
+      Nonempty (SampleSetup (inputsPJ I 0) mPts (partS I (dj S) S ⟨0, nTab_pos I⟩) (drawJ I (dj S) 0)) := by
   refine ⟨h.2.typed, ?_⟩
   obtain ⟨-, hrr, hl⟩ := h.2.tagsOk hh
   obtain ⟨spec, sts, sess, hsu, -, hk⟩ := accepts_reps_at hh hrr hl h.1
@@ -555,9 +555,9 @@ theorem setupPJ_of_verifiesP (I : Inputs) (hh : I.tags.hiddenOutputs = false) {n
   have hj : 0 < sts.size := hsz ▸ nTab_pos I
   have hst := hstJ 0 hj
   obtain ⟨sch, hf, -⟩ := hk 0 hj
-  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
-  obtain ⟨x, -⟩ := ZkLink.drawSetup_of_setupH_g (I := inputsPJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩)
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec hdr
+  obtain ⟨x, -⟩ := ZkLink.sampleSetup_of_setupH_g (I := inputsPJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩)
     (mPts := mPts) (typedPJ h.2.typed 0) hst hf hD ((hok ⟨0, nTab_pos I⟩).1 D hD) ((hok ⟨0, nTab_pos I⟩).2 _ hst)
   exact ⟨x⟩
 
@@ -583,21 +583,21 @@ set_option linter.unusedVariables false in
 /-- The claim under `--plain-tables` at hidden outputs (no `--zk`, any number of tables up to `Tags.MAX_TABLES`, `hm96`
 leaves), the sampling design the live subset sample, where the wires feed neither the unit nor the outputs: `plain_session_soundHJ`'s,
 at the unit's key program. Its reference setup is table 0 (`x₀`), which every session `--plain-tables` accepts at a sample
-`DrawOkPHJ` admits has (`setupPHJ_of_verifiesP`). Its first conjunct is `SoundExecJ`'s: the circuit's META binds the
+`SampleOkPHJ` admits has (`setupPHJ_of_verifiesP`). Its first conjunct is `SoundExecJ`'s: the circuit's META binds the
 verifier's own program (`ProgramOfCircuit`). -/
 def SoundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) :
     Prop :=
   (∀ t, VerifiesP I t → ProgramOfCircuit I) ∧
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
+    (x₀ : SampleSetupH (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters
@@ -653,7 +653,7 @@ def SoundExecHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
   (∀ t, VerifiesP I t → ProgramOfCircuit I) ∧
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
+    (x₀ : SampleSetupH (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -661,7 +661,7 @@ def SoundExecHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters
@@ -725,14 +725,14 @@ def SoundExecHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
   (∀ t, VerifiesP I t → ProgramOfCircuit I) ∧
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
+    (x₀ : SampleSetupH (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters
@@ -800,7 +800,7 @@ def SoundExecHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
   (∀ t, VerifiesP I t → ProgramOfCircuit I) ∧
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
+    (x₀ : SampleSetupH (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -808,7 +808,7 @@ def SoundExecHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
       Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters
@@ -893,27 +893,27 @@ theorem soundExecHJ (I : Inputs) (hh : I.tags.hiddenOutputs = true) : SoundExecH
 
 /-- `SoundExecHJ`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_execHJ (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
+    (x₀ : SampleSetupH (inputsPJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateB (planPHJ (Reg := Reg) dj x₀ S R) j k ≤ ρ :=
   exists_k_rateB (planPHJ dj x₀) (fun _ _ _ => rfl) hρ
 
 /-- **`SoundExecHJ`'s reference setup exists at every accepted sample, at every number of tables**
 (`setupPJ_of_verifiesP` at hidden outputs): where verity-verify-proof `--plain-tables` accepts a session of a hidden-output
 statement whose record's sample is `dj S`, at a sample whose parts the challenger's live-coin part's file proves with the session's link
-points (`DrawOkPHJ`), table 0 sets up with setupHidden, so there is an `x₀ : DrawSetupH (inputsPJ I 0) mPts _ _`. -/
+points (`SampleOkPHJ`), table 0 sets up with setupHidden, so there is an `x₀ : SampleSetupH (inputsPJ I 0) mPts _ _`. -/
 theorem setupPHJ_of_verifiesP (I : Inputs) (hh : I.tags.hiddenOutputs = true) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesP I t)
-    (hd : recordDraw t.record = some (dj S)) (hok : DrawOkPHJ I dj mPts S) :
-    Nonempty (DrawSetupH (inputsPJ I 0) mPts (partS I (dj S) S ⟨0, nTab_pos I⟩) (drawJ I (dj S) 0)) := by
+    (hd : recordDraw t.record = some (dj S)) (hok : SampleOkPHJ I dj mPts S) :
+    Nonempty (SampleSetupH (inputsPJ I 0) mPts (partS I (dj S) S ⟨0, nTab_pos I⟩) (drawJ I (dj S) 0)) := by
   obtain ⟨-, hrr, hl⟩ := h.2.tagsOkH hh
   obtain ⟨spec, sts, sess, hsu, -, hk⟩ := accepts_reps_atH hrr hl h.1
   obtain ⟨hsz, hstJ⟩ := setupOf_tablePHJ hh hd hsu
   have hj : 0 < sts.size := hsz ▸ nTab_pos I
   have hst := hstJ 0 hj
   obtain ⟨sch, hf, -⟩ := hk 0 hj
-  obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[0].c with outPorts := #[] }) hdr
-  obtain ⟨x, -⟩ := drawSetupH_of_setupHiddenI (I := inputsPJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩)
+  obtain ⟨pop, -, hdr⟩ := setupHidden_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec (c := { sts[0].c with outPorts := #[] }) hdr
+  obtain ⟨x, -⟩ := sampleSetupH_of_setupHiddenI (I := inputsPJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩)
     (mPts := mPts) (typedPJ h.2.typed 0) ((parseH_tagsAt h.2.typed I.count 0 I.circuitFile I.tables).trans (h.2.parseH hh))
     hst hf hD ((hok ⟨0, nTab_pos I⟩).1 D hD) ((hok ⟨0, nTab_pos I⟩).2 _ hst)
   exact ⟨x⟩
@@ -938,9 +938,9 @@ def SoundExecHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScop
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
@@ -999,9 +999,9 @@ def SoundExecHUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pro
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
@@ -1065,9 +1065,9 @@ def SoundExecHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScop
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
@@ -1128,9 +1128,9 @@ def SoundExecHGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pro
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
@@ -1190,7 +1190,7 @@ theorem soundExecHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
     flock_headline_exec_hiddenG_design hh hf dj x₀ D Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hCust.1 hCust.2 τ hCR hKS
 
 /-- The claim at a hidden-output statement without `--zk`: `SoundExecHU` where the wires feed neither the unit nor
-the outputs, `SoundExecHG` where they feed either, each at every sample design (`DrawDesign`: the stratified sample, and the
+the outputs, `SoundExecHG` where they feed either, each at every sample design (`SampleDesign`: the stratified sample, and the
 subset sample that `ProvedScope.lawWhy` admits at hidden outputs without `--zk`). -/
 def SoundExecH (I : Inputs) (hh : I.tags.hiddenOutputs = true) : Prop :=
   (∀ hf : ProvedScope.wiresFeed (circS I) = false, SoundExecHU I hh hf) ∧
@@ -1212,9 +1212,9 @@ def SoundExecHRU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
@@ -1279,9 +1279,9 @@ def SoundExecHRUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
@@ -1353,9 +1353,9 @@ def SoundExecHRG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
@@ -1423,9 +1423,9 @@ def SoundExecHRGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
@@ -1508,7 +1508,7 @@ theorem soundExecHR (I : Inputs) (hh : I.tags.hiddenOutputs = true) : SoundExecH
 
 /-- `SoundExecH`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_execH (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
+    (x₀ : SampleSetupH I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ :=
   exists_k_rateB (planAtH dj x₀) (fun _ _ _ => rfl) hρ
 
@@ -1516,9 +1516,9 @@ theorem hr_execH (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
 theorem setupH_of_verifies (I : Inputs) (hh : I.tags.hiddenOutputs = true) {n mPts : ℕ} {S : Finset (Fin n)}
     {d : Lean.Json} {t : Exec.Transcript} (h : Verifies I t) (hd : recordDraw t.record = some d) :
     ∃ st D, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program =
-        .ok st ∧ Draw.UnitDraw.ofJson d = .ok D ∧
-      ((∀ u ∈ S, u.val ∈ D.proved) → st.mPts = mPts → ∃ x : DrawSetupH I mPts S d, x.st = st) :=
-  drawSetupH_of_accepts h.2.typed (h.2.parseH hh) hh h.2.count h.1 hd
+        .ok st ∧ Draw.UnitSample.ofJson d = .ok D ∧
+      ((∀ u ∈ S, u.val ∈ D.proved) → st.mPts = mPts → ∃ x : SampleSetupH I mPts S d, x.st = st) :=
+  sampleSetupH_of_accepts h.2.typed (h.2.parseH hh) hh h.2.count h.1 hd
 
 end
 
@@ -1534,7 +1534,7 @@ set_option linter.unusedVariables false in
 /-- The claim at a public-output statement of one table under `--zk`, the sampling design stratified: `zk_session_sound`'s. -/
 def SoundZ (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZK I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design and A3
@@ -1578,7 +1578,7 @@ set_option linter.unusedVariables false in
 exactly, and `η` added to the miss term. -/
 def SoundZPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZK I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design and A3
@@ -1627,7 +1627,7 @@ set_option linter.unusedVariables false in
 def SoundZJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -1673,7 +1673,7 @@ exactly, and `η` added to the miss term. -/
 def SoundZJPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -1719,23 +1719,23 @@ theorem soundZJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : SoundZJ I hh 
 
 /-- `SoundZ`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_z (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
+    (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateZ (planZAt (Reg := Reg) dj y₀ S R) j k ≤ ρ :=
   exists_k_rateZ (planZAt dj y₀) (fun _ _ _ => rfl) hρ
 
 /-- `SoundZJ`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_zj (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
+    {d₀ : Lean.Json} (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ :=
   exists_k_rateZ (planZJ dj y₀) (fun _ _ _ => rfl) hρ
 
 /-- **`SoundZ`'s setup exists at every accepted sample**: where verity-verify-proof `--zk` accepts a one-table session whose
-record's sample is `dj S`, at a sample the challenger's live-coin part's file proves with the session's link points (`DrawOkZK`), there is a
-`y₀ : DrawSetupZK I mPts S (dj S)`. -/
+record's sample is `dj S`, at a sample the challenger's live-coin part's file proves with the session's link points (`SampleOkZK`), there is a
+`y₀ : SampleSetupZK I mPts S (dj S)`. -/
 theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
-    (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZK I dj mPts S) :
-    Nonempty (DrawSetupZK I mPts S (dj S)) := by
+    (hd : recordDraw t.record = some (dj S)) (hok : SampleOkZK I dj mPts S) :
+    Nonempty (SampleSetupZK I mPts S (dj S)) := by
   obtain ⟨st, hst, hsh, hv⟩ := acceptsZK_one I _ hh hn h.1
   rw [hd] at hst
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
@@ -1745,19 +1745,19 @@ theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (h
   generalize schs[0].2 = tPad at hz'
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
   have ht' : (zkInputs I).tags.typed = false := (zkTags_typed I).trans h.2.typed
-  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
-  obtain ⟨x, rfl⟩ := drawSetup_of_setupH_g (I := zkInputs I) (S := S) ht' hst hf hD (hok.1 D hD) (hok.2 _ hst)
-  obtain ⟨y, -, -, -⟩ := drawSetupZK_of h.2.typed x hsh hz'
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec hdr
+  obtain ⟨x, rfl⟩ := sampleSetup_of_setupH_g (I := zkInputs I) (S := S) ht' hst hf hD (hok.1 D hD) (hok.2 _ hst)
+  obtain ⟨y, -, -, -⟩ := sampleSetupZK_of h.2.typed x hsh hz'
   exact ⟨y⟩
 
 /-- **`SoundZJ`'s setup exists at every accepted sample, at every number of tables**: where verity-verify-proof `--zk` accepts a
 session whose record's sample is `dj S`, at a sample whose parts the challenger's live-coin part's file proves with the session's link
-points (`DrawOkZKJ`), table 0 sets up, so there is a `y₀ : DrawSetupZJ (inputsJ I 0) mPts _ _`. -/
+points (`SampleOkZKJ`), table 0 sets up, so there is a `y₀ : SampleSetupZJ (inputsJ I 0) mPts _ _`. -/
 theorem setupZJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
-    (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKJ I dj mPts S) :
-    Nonempty (DrawSetupZJ (inputsJ I 0) mPts (partS I (dj S) S ⟨0, nTab_pos I⟩) (drawJ I (dj S) 0)) := by
+    (hd : recordDraw t.record = some (dj S)) (hok : SampleOkZKJ I dj mPts S) :
+    Nonempty (SampleSetupZJ (inputsJ I 0) mPts (partS I (dj S) S ⟨0, nTab_pos I⟩) (drawJ I (dj S) 0)) := by
   obtain ⟨spec, sts, hs, -, hv⟩ := h.1
   obtain ⟨hsz, hstJ⟩ := setupOf_tableJ hh hd hs
   have hj : 0 < sts.size := hsz ▸ nTab_pos I
@@ -1768,11 +1768,11 @@ theorem setupZJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) {
   have hz' : Zk.schedule sts[0].wideLeaf sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
   have ht' : (inputsJ I 0).tags.typed = false := typedJ h.2.typed 0
-  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
-  obtain ⟨x, hx⟩ := drawSetup_of_setupH_g (I := inputsJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩) (mPts := mPts)
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec hdr
+  obtain ⟨x, hx⟩ := sampleSetup_of_setupH_g (I := inputsJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩) (mPts := mPts)
     ht' hst hf hD ((hok ⟨0, nTab_pos I⟩).1 D hD) ((hok ⟨0, nTab_pos I⟩).2 _ hst)
-  obtain ⟨y, -, -, -⟩ := drawSetupZJ_of ht' x (sch := schs[0].1) (tPad := schs[0].2) (by rw [hx]; exact hz')
+  obtain ⟨y, -, -, -⟩ := sampleSetupZJ_of ht' x (sch := schs[0].1) (tPad := schs[0].2) (by rw [hx]; exact hz')
   exact ⟨y⟩
 
 /-- Zero knowledge at a public-output statement of one table under `--zk`, at every statement the check passes:
@@ -1784,13 +1784,13 @@ for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_
 others is unproved. -/
 def ViewZ (I : Inputs) : Prop :=
   ∀ (P : LigProver) {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)),
-    ScopeZ I → ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
+    (y₀ : SampleSetupZK I mPts S₀ (dj S₀)),
+    ScopeZ I → ∀ (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZK I mPts S (dj S)),
       ZkViewAt (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))
 
 theorem viewZ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : ViewZ I :=
   @fun P _ _ _ dj _ y₀ hs => Composed.zk_session_view P I dj y₀ hs.typed (hs.parseRow hh) (hs.outNet hh)
-    (fun _ y => DrawSetupZK.avoidsMask y) (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
+    (fun _ y => SampleSetupZK.avoidsMask y) (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
 
 end
 
@@ -1810,7 +1810,7 @@ unit nor the outputs: `zk_session_soundH`'s. -/
 def SoundZHU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
     (hf : ProvedScope.wiresFeed (circZ I) = false) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design and A3
@@ -1855,7 +1855,7 @@ exactly, and `η` added to the miss term. -/
 def SoundZHUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
     (hf : ProvedScope.wiresFeed (circZ I) = false) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design and A3
@@ -1906,7 +1906,7 @@ the outputs: `zk_session_soundHG`'s, at the template instance's program. -/
 def SoundZHG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
     (hf : ProvedScope.wiresFeed (circZ I) = true) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design and A3
@@ -1959,7 +1959,7 @@ exactly, and `η` added to the miss term. -/
 def SoundZHGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
     (hf : ProvedScope.wiresFeed (circZ I) = true) : Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design and A3
@@ -2033,7 +2033,7 @@ def SoundZHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.
     Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -2083,7 +2083,7 @@ def SoundZHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Prove
     Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -2138,7 +2138,7 @@ def SoundZHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.
     Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -2193,7 +2193,7 @@ def SoundZHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Prove
     Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -2262,29 +2262,29 @@ theorem soundZHJ (I : Inputs) (hh : I.tags.hiddenOutputs = true) : SoundZHJ I hh
 
 /-- `SoundZH`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_zh (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
+    (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ :=
   exists_k_rateZ (planAtZKH dj y₀) (fun _ _ _ => rfl) hρ
 
 /-- `SoundZHJ`'s `hr` holds for some rerun count at every statement, sample file and setup. -/
 theorem hr_zhj (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (Reg : Type) {ρ : ℝ} (hρ : 0 < ρ) :
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ :=
   exists_k_rateZ (planZHJ dj y₀) (fun _ _ _ => rfl) hρ
 
 /-- **`SoundZH`'s setup exists at every accepted sample** (`setupZ_of_verifiesZK` under hidden outputs). -/
 theorem setupZH_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
-    (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKH I dj mPts S) :
-    Nonempty (DrawSetupZKH I mPts S (dj S)) :=
-  ZkHidden.drawSetupZKH_of_acceptsISt ZkHidden.zk_schedOK h.2.typed (h.2.parseH hh) hh hn h.1 hd hok
+    (hd : recordDraw t.record = some (dj S)) (hok : SampleOkZKH I dj mPts S) :
+    Nonempty (SampleSetupZKH I mPts S (dj S)) :=
+  ZkHidden.sampleSetupZKH_of_acceptsISt ZkHidden.zk_schedOK h.2.typed (h.2.parseH hh) hh hn h.1 hd hok
 
 /-- **`SoundZHJ`'s setup exists at every accepted sample, at every number of tables** (`setupZJ_of_verifiesZK` under
 hidden outputs). -/
 theorem setupZHJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) {n mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : VerifiesZK I t)
-    (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKHJ I dj mPts S) :
-    Nonempty (DrawSetupZHJ (inputsJ I 0) mPts (partS I (dj S) S ⟨0, nTab_pos I⟩) (drawJ I (dj S) 0)) := by
+    (hd : recordDraw t.record = some (dj S)) (hok : SampleOkZKHJ I dj mPts S) :
+    Nonempty (SampleSetupZHJ (inputsJ I 0) mPts (partS I (dj S) S ⟨0, nTab_pos I⟩) (drawJ I (dj S) 0)) := by
   obtain ⟨spec, sts, hs, hshape, hv⟩ := h.1
   obtain ⟨hsz, hstJ⟩ := setupOf_tableJH hh hd hs
   have hj : 0 < sts.size := hsz ▸ nTab_pos I
@@ -2295,11 +2295,11 @@ theorem setupZHJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) {
   have hz' : Zk.schedule sts[0].wideLeaf sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
   obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
   have ht' : (inputsJ I 0).tags.typed = false := typedJ h.2.typed 0
-  obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[0].c with outPorts := #[] }) hdr
-  obtain ⟨x, hx⟩ := HiddenExec.drawSetupH_of_setupHiddenU (I := inputsJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩)
+  obtain ⟨pop, -, hdr⟩ := setupHidden_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec (c := { sts[0].c with outPorts := #[] }) hdr
+  obtain ⟨x, hx⟩ := HiddenExec.sampleSetupH_of_setupHiddenU (I := inputsJ I 0) (S := partS I (dj S) S ⟨0, nTab_pos I⟩)
     (mPts := mPts) ht' hst hf hD ((hok ⟨0, nTab_pos I⟩).1 D hD) ((hok ⟨0, nTab_pos I⟩).2 _ hst)
-  obtain ⟨y, -, -, -⟩ := drawSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape 0 hj)
+  obtain ⟨y, -, -, -⟩ := sampleSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape 0 hj)
     (sch := schs[0].1) (tPad := schs[0].2) (by rw [hx]; exact hz')
   exact ⟨y⟩
 
@@ -2312,15 +2312,15 @@ for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_
 others is unproved. -/
 def ViewZHJ (I : Inputs) : Prop :=
   ∀ (P : LigProver) {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀),
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀),
     ScopeZ I → ∀ (S : Finset (Fin n)) (R : Reg)
-      (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
+      (ys : ∀ j : Fin (nTab I), SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
         (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))
 
 theorem viewZHJ (I : Inputs) : ViewZHJ I :=
   @fun P _ _ _ dj _ _ y₀ hs =>
-    ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => DrawSetupZHJ.avoidsMask y)
+    ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => SampleSetupZHJ.avoidsMask y)
       (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
 
 open FlockSoundness.Discharge.ZkReg (OwnReadsHJ regPathsHJ)
@@ -2333,7 +2333,7 @@ def SoundZHJRU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope
     Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type} (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -2389,7 +2389,7 @@ def SoundZHJRUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Prov
     Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type} (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -2452,7 +2452,7 @@ def SoundZHJRG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope
     Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type} (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -2513,7 +2513,7 @@ def SoundZHJRGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Prov
     Prop :=
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type} (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design (the live subset sample) and A3
@@ -2591,15 +2591,15 @@ the check passes with the verifier's registered reads: `ViewZHJ` at `ScopeZR`, a
 statement's tags, not its public file, so a shared-row one changes nothing in it. -/
 def ViewZHJR (I : Inputs) : Prop :=
   ∀ (P : LigProver) {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀),
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀),
     ScopeZR I → ∀ (S : Finset (Fin n)) (R : Reg)
-      (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
+      (ys : ∀ j : Fin (nTab I), SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
         (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))
 
 theorem viewZHJR (I : Inputs) : ViewZHJR I :=
   @fun P _ _ _ dj _ _ y₀ hs =>
-    ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => DrawSetupZHJ.avoidsMask y)
+    ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => SampleSetupZHJ.avoidsMask y)
       (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
 
 end
