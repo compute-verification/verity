@@ -11,9 +11,17 @@ A route module states:
 - optionally `EITHER`, groups of dials that say one thing in two ways, of which the route reads one. A config that
   writes two dials of a group is refused, whatever their values;
 - `build(shape, dials)`, the model θ loads into (a start's `shape`, `training_slowdown.model`) and its optimizers;
+- optionally `origin(shape, dials)`, where the model `build` returns doesn't start as θ (a deeper one, `grow`): each
+  tensor of it that doesn't start as θ's tensor of its own name, mapped to θ's tensor it starts as, or to None for
+  zeros, from the dials alone. The harness builds that start θ′ from θ (`run.start_state`, which refuses a map that
+  doesn't cover the model or θ, or that starts a tensor as one of another shape) and loads it, and θ′ stands where θ
+  does in the job: in the counter, so a product with a copied tensor not yet written is θ's kind and one with a
+  zeroed tensor a constant's, and as E's base. θ stays the registered start, whose digest the record states, and the
+  record states the map, θ′'s digest and the output's blocks (`origin`). No route reads θ;
 - `step(model, rows, optimizers, dials, t, n)`, training step `t` of `n` on `rows`, a batch of windows of the start's
   data, (batch, ctx + 1) token ids;
-- `plan(dials)`, the `training_slowdown.codecs.Plan` the output model's E is encoded with against θ; it raises
+- `plan(dials)`, the `training_slowdown.codecs.Plan` the output model's E is encoded with against θ (θ′ where the
+  route states an `origin`); it raises
   `ValueError` on a dial value the route has no meaning for, which a config's load turns into its refusal;
 - optionally `output(model, dials)`, the output model's state dict under θ's names, where it isn't the trained
   model's own (an average of the weights, adapters merged into theirs). The harness calls it at each checkpoint. It is

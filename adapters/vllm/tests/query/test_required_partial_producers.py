@@ -4,12 +4,14 @@
   under the linear's module) has its partial and every other port of the producer required, the partial spelt `part_rank<r>` and the
   others by their ports (`required.member_name`);
 * UNRETURNED: a Call no Call reads, the Program does not return and no policy requires (the indexer's projection on its short path)
-  is dead, so the word check skips it, while a dead Call the Build recorded a return slot for stays required."""
+  is dead, so the word check skips it, while a dead Call the Build recorded a return slot for stays required;
+* the rank policy is a rank Program's: without `tp` the same Calls have no collective among them, and on a rank a collective's
+  output is required with the return slots off."""
 from __future__ import annotations
 
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
-from verity_vllm.query.required import Q_WORD_ID, Population
+from verity_vllm.query.required import Q_WORD_ID, QUERIES, Population
 from verity_vllm.query.units import ValueRef as R
 
 N, K = 4, 4
@@ -59,3 +61,16 @@ def test_a_dead_call_is_unreturned_unless_a_policy_requires_it():
     assert ids["dead"] in pop.unreturned and R(ids["dead"], "out") not in pop.required.values
     assert ids["recorded"] not in pop.unreturned and R(ids["recorded"], "out") in pop.required.values
     assert not pop.unreturned & {ids["linear"], ids["all_reduce"], ids["logits"], ids["argmax"]}
+
+
+def test_the_rank_policy_needs_a_rank_and_requires_a_collectives_output_with_the_return_slots_off():
+    """Without `tp` the Program has no collective, no partial and no peer input, whatever its Calls' families.  On a rank, with the
+    return slots off, the protocol requires the collective's output, every port of its partial's producer and the sampling
+    event's output, and no other Value."""
+    P, ids = _program()
+    for query in QUERIES:
+        alone = Population(P, Correspondence(P), query=query)
+        assert (alone.world, alone.collectives, alone.operand, alone.partial_of, alone.peer_inputs, alone.tp_faults) == (1, {}, {}, {}, frozenset(), [])
+        on_rank = Population(P, Correspondence(P), tp={"world": 2, "rank": 0}, query=query, return_slots=False)
+        assert on_rank.collectives == {ids["all_reduce"]: "all_reduce"} and on_rank.peer_inputs == {R(-3, "peers_0")}
+        assert on_rank.policy.protocol_required == {R(ids["all_reduce"], "out"), R(ids["argmax"], "out"), *(R(ids["linear"], port) for port in ("0", "1", "2"))}

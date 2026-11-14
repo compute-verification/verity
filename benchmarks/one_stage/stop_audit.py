@@ -3,6 +3,7 @@
 verified by Lean (`verify --zk --registered`), and the stop stream's outcome with its audit record.
 
     python benchmarks/one_stage/stop_audit.py --handoff F --boundary DIR --stop JSON --design rate:NUM/DEN \\
+      --main MAIN (--challenger-key RECORD | --challenger-host DIR) \\
       --bin flock-circuit --lean LEAN --out DIR [--boundary-outcome F] [--zk-server ZK] [--forge I,J]
 
 * **The statement** (`member`, `bound`, `circuit`, from public items: the stop block and the stop population's
@@ -23,7 +24,10 @@ verified by Lean (`verify --zk --registered`), and the stop stream's outcome wit
   from ``commit.json``. The stop stream is built again on it, registers the stop record (R1 to R7) and samples it
   again on the bytes its sample read; each is held to the hand-off. The ``--registered`` file is the verifier's
   own: the two parameters' ports as `boundary_stop.stop_registration` gives them, and ``o0`` at the stop record's
-  root.
+  root. The hand-off's coin evidence names no key: both streams read it under the challenger's key this command
+  holds (``--challenger-key``, the deployment's key record, or ``--challenger-host``, the development challenger the
+  first stage kept: `a5_coins.verifier_key`) and its own copy of main's history (``--main``, the file the first stage
+  was given), so evidence another challenger signed is refused at ``coins``, whatever the hand-off says.
 * **The audit record** is the stop stream's (`Stream.outcome`: ``verity/one-stage/audit/v0``, Lean's `Record.record`).
   Beside Lean's verdict of record on the session it holds the entries below, none of record. An entry whose
   ``accepted`` is null did not run: the record can accept, and says ``"complete": false``.
@@ -261,12 +265,14 @@ class Resumed:
 
 
 def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Stop, design: str, *, delta: float = 0.5,
-           proof_deadline: float = TS.PROOF_DEADLINE_S) -> Resumed:
+           proof_deadline: float = TS.PROOF_DEADLINE_S, key: Any = None, main: Sequence[str] = ()) -> Resumed:
     """The class's stop stream again from its hand-off, under the verifier's own check template, stop rule and
     sampling design: the boundary stream's record registered again (`two_stage.resume`), the stop stream built on the
     record of that stream's log (`Stream.log`) whose digest is the stop record's ``previous``, the stop record
     registered (R1 to R7) and sampled again on the bytes its sample read, as coins of the challenger's family the
-    first stage read them from (the hand-off's, as `two_stage.resume` takes a class's own). `Unlogged` when that
+    first stage read them from (the hand-off's, as `two_stage.resume` takes a class's own). Both streams are made with
+    the verifier's challenger key ``key`` and its copy of main's history ``main``, which every coin evidence of the
+    hand-off is read under (none: every evidence is refused). `Unlogged` when that
     log holds no such record; ValueError when the first stage sampled no stop block, or
     the Spec, the record, its registration or the sample isn't the hand-off's; `service.Refused` as the streams
     refuse."""
@@ -274,7 +280,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     if not isinstance(s, Mapping) or "units" not in s:
         raise ValueError(f"the class's first stage registered or sampled no stop block: {(s or {}).get('error') or handoff.get('error')}")
     root = handoff.get("window_root")
-    first = TS.resume(handoff, check, delta=delta, window_root=root, stop=stop)
+    first = TS.resume(handoff, check, delta=delta, window_root=root, stop=stop, key=key, main=main)
     layout, logged = first.layout, {R.digest(rec): (i, rec) for i, rec in enumerate(first.stream.log)}
     if s["record"].get("previous") not in logged:
         raise Unlogged(f"the stop record's previous, {str(s['record'].get('previous'))[:16]}, is no record of the class's "
@@ -283,7 +289,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     coins = TS.Staged(bytes.fromhex(s["read"]))
     coins.family = s.get("family")
     stream = S.Stream(TS.stop_spec(layout, design, proof_deadline), layout.stop.template, budget=1, delta=delta,
-                      challenger=TS.CHALLENGER, coins=coins, log=[boundary])
+                      challenger=TS.CHALLENGER, coins=coins, log=[boundary], key=key, main=main)
     if stream.spec.digest() != s["spec"]:
         raise ValueError("the stop population's Spec isn't the one its first stage ran under")
     held = BS.stop_registration(handoff["commit"], check, stop, boundary)
@@ -319,11 +325,13 @@ def link(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any]
     """The stop record's read across the class's two streams, as the Lean verifier's piece ``across`` takes it: the
     window's root, the boundary stream's own log (``first``'s `Stream.log`), the boundary stream's audit record
     (``outcome``'s, none when no outcome is handed), the stop record, and the stop sample's coin evidence, the
-    challenger's family it read those coins from and the bytes it read (``handoff``'s ``stop``)."""
-    s = handoff["stop"]
+    challenger's family it read those coins from and the bytes it read (``handoff``'s ``stop``), with the challenger's
+    key and the copy of main's history ``first``'s stream was made with, which Lean reads that evidence under."""
+    s, held = handoff["stop"], first.stream
     return {"window": handoff.get("window_root") or first.layout.run, "log": [dict(x) for x in first.stream.log],
             "audit": outcome.get("audit") if isinstance(outcome, Mapping) else None,
-            "later": dict(s["record"]), "coins": s.get("evidence"), "family": s.get("family"), "read": s["read"]}
+            "later": dict(s["record"]), "coins": s.get("evidence"), "family": s.get("family"), "read": s["read"],
+            "key": None if held.key is None else held.key.to_json(), "main": list(held.main)}
 
 
 def across(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -486,6 +494,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                     "two_stage.py first's --stop-design, else its --replay")
     ap.add_argument("--boundary-outcome", help="the boundary stream's outcome record on the class's boundary record (an "
                                                "entry of its Stream.records); without it the boundary-audit entry is null")
+    ap.add_argument("--main", required=True, help="the verifier's copy of main's first-parent history (`git rev-list "
+                    "--first-parent origin/main`), the file the first stage was given: the hand-off's coin evidence is "
+                    "held to it")
+    held = ap.add_mutually_exclusive_group(required=True)
+    held.add_argument("--challenger-key", help="the deployment's key record of the challenger the first stage's coins "
+                                               "came from; the hand-off's evidence is read under its key")
+    held.add_argument("--challenger-host", help="the directory two_stage.py first --challenger local kept its "
+                                                "development challenger in; the evidence is read under that one's key")
     ap.add_argument("--bin", required=True, help="flock-circuit")
     ap.add_argument("--lean", required=True, help="the Flock verifier's Lean binary")
     ap.add_argument("--zk-server", help="Lean's ZK server binary: the session runs behind it; without it the prover "
@@ -513,8 +529,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         check, stop = TS.template_fn(handoff["commit"]["check"]), TS._stop(a.stop)
         if stop is None:
             raise ValueError("a stop population is audited under the verifier's own stop rule: --stop")
+        import a5_coins as AC
         # the verifier's half, from the hand-off and its own copies
-        r = resume(handoff, check, stop, a.design, delta=a.delta, proof_deadline=a.proof_deadline)
+        r = resume(handoff, check, stop, a.design, delta=a.delta, proof_deadline=a.proof_deadline,
+                   key=AC.verifier_key(a.challenger_key, a.challenger_host), main=AC.lines(Path(a.main)))
         file = reads(r)
         (out / "registered.json").write_bytes(canonical_json(file))
         mine = {**files(r.layout, out / "verifier"), "registered_file": out / "registered.json"}
