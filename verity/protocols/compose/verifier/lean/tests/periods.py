@@ -146,7 +146,7 @@ def build(tmp: Path) -> None:
     log = json.loads(bytes.fromhex(accepted[0]["evidence"]))["log"]
     last = max(k for k, x in enumerate(log) if x["op"] == "p2_openings")
     cut, session = log[:last], bytes.fromhex(accepted[0]["params"]["session"])
-    close = p2_case.close_of(T.signer(), session, cut)
+    close = p2_case.close_of(T.signer(), session, p2_case.head_of(accepted[0]), cut)
     unverified = accepted[0] | {"evidence": canonical_json_bytes({"close": close, "log": cut}).hex()}
     R.BANDWIDTH.cases.update({R.ACCEPT: accepted, R.REJECT: rejected,
                               R.UNDECIDED: (unverified, p2_case.answer(unverified, {}))}

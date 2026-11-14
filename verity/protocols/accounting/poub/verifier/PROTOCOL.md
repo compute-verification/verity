@@ -1645,10 +1645,12 @@ differ the session is rejected `disagreement`. The session's parameters (W, the 
 values, by name, before the first coin, and so does the Lean, naming each in `p2_party.params_of`'s words
 (`P2Session.heldTo`). The process holds its pinned `P2Session.SESSION` unless the auditor's party names a toy's
 (`p2_hold`'s `session`), and the session's core case (`p2_case.py`), whose request no digest binds, is replayed under
-`SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there. The case's log is signed: the memory
-challenger's key closes it (`p2_party.Closer`, its line count and chain, `RemoteAudit.P2Close`) under the session id the
-auditor gave it, which its session log records before the first coin, and the check refuses a close that doesn't sign
-the log under a key and a session the case's params name before it replays any entry (`P2Protocol.closeRefusal`).
+`SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there. The case is signed: the memory
+challenger's key closes it (`p2_party.Closer`, its line count and its chain, `RemoteAudit.P2Close`) under the session id
+the auditor gave it, which its session log records before the first coin. The chain runs over the case's head (the
+commitment's digest and the clock floor, `P2Protocol.headOf`) and then every entry of its log, and it is the one
+SHA-512 the verifier's device keeps of the case (`p2_party.case_digest`). The check refuses a close that doesn't sign
+the case under a key and a session its params name before it replays any entry (`P2Protocol.closeRefusal`).
 
 **What it rests on, and what is open.**
 

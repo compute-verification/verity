@@ -4,7 +4,8 @@ its answer the core form of the session's own (`p2_case.answer`), and every fiel
 with its credited reads, one whose receipts skip a unit's reads and one whose openings are out of form rejected, and
 one stopped before its last window is verified undecided. A toy party's case, and a case whose request is edited off
 `SESSION` in any value, are refused naming each one. The memory challenger's close is checked before the log is
-replayed, each refusal by name: a key the params don't trust, a line count or a chain that isn't the log's, a
+replayed, each refusal by name: a key the params don't trust, a line count or a chain that isn't the case's (its
+head, the commitment's digest and the clock floor, then its log), a
 signature that doesn't verify, a close replayed under another session, a coin that isn't the challenger's whole coin,
 and a PoUS session record or a wipe record the same key signed for the same session put as the close. Edits of a root,
 a coin or the plan are rejected, and the plan is bound by the commitment's digest. A session the books veto has no
@@ -41,7 +42,7 @@ SIGNER = Path(__file__).resolve().parents[7] / "verity/protocols/accounting/pous
 COINS = hashlib.sha512(b"the period's live coins").digest()
 OTHER_SESSION = hashlib.sha512(b"p2-case-test/another session").digest()[:32]
 UNTRUSTED = "the close is signed by a key that is not a trusted memory challenger's"
-UNCHAINED = "the close's chain is not the log's"
+UNCHAINED = "the close's chain is not the case's"
 UNSIGNED = "the close's signature does not verify on the params' session"
 
 
@@ -95,7 +96,7 @@ def _with(case, **edit) -> dict:
 
 def _with_log(case, log, by=None) -> dict:
     """`case` with `log`, its close signed again over it (by `signer()`, or `by`) on the params' session."""
-    close = p2_case.close_of(by or signer(), bytes.fromhex(case["params"]["session"]), log)
+    close = p2_case.close_of(by or signer(), bytes.fromhex(case["params"]["session"]), p2_case.head_of(case), log)
     return _with(case, log=log, close=close)
 
 
@@ -118,7 +119,8 @@ def test_an_honest_sessions_case_is_accepted_with_its_credited_reads(exe, lean, 
     assert sorted(evidence) == ["close", "log"] and sorted(evidence["close"]) == ["chain", "lines", "public_key",
                                                                                   "signature"]
     assert evidence["close"]["lines"] == len(evidence["log"])
-    assert evidence["close"]["chain"] == p2_case.chain(evidence["log"]).hex()
+    assert evidence["close"]["chain"] == p2_case.chain(p2_case.head_of(case), evidence["log"]).hex()
+    assert p2_party.case_digest(case) == evidence["close"]["chain"]
     coins = [x["coin"] for x in evidence["log"] if x["op"] == "p2_event" and x["coin"] is not None]
     assert coins and all(len(bytes.fromhex(c)) == p2_case.COIN_BYTES == 64 for c in coins)
     assert case["store_root"] == store.registration.root.hex() == p2_case.store_root(case).hex()
@@ -206,23 +208,25 @@ def _close_edits(case) -> dict:
     other = signer(b"p2-case-test/another memory challenger")
     params = case["params"]
     return {
-        "untrusted": (_with(case, close=p2_case.close_of(other, SESSION_ID, log)), UNTRUSTED),
+        "untrusted": (_with(case, close=p2_case.close_of(other, SESSION_ID, p2_case.head_of(case), log)), UNTRUSTED),
         "trusted-list": (case | {"params": params | {"trusted": [other.public_key.hex()]}}, UNTRUSTED),
         "lines": (_with(case, close=close | {"lines": n + 1}), f"the close counts {n + 1} lines, not the log's {n}"),
         "log-longer": (_with(case, log=log + log[-1:]), f"the close counts {n} lines, not the log's {n + 1}"),
         "chain": (_with(case, close=close | {"chain": _flip(close["chain"])}), UNCHAINED),
         "signature": (_with(case, close=close | {"signature": _flip(close["signature"])}), UNSIGNED),
         "params-session": (case | {"params": params | {"session": OTHER_SESSION.hex()}}, UNSIGNED),
-        "signed-on-another-session": (_with(case, close=p2_case.close_of(signer(), OTHER_SESSION, log)), UNSIGNED),
+        "signed-on-another-session": (
+            _with(case, close=p2_case.close_of(signer(), OTHER_SESSION, p2_case.head_of(case), log)), UNSIGNED),
+        "not-before": (case | {"params": params | {"not_before_ns": params["not_before_ns"] + 1}}, UNCHAINED),
     }
 
 
 @pytest.mark.parametrize("edit", ["untrusted", "trusted-list", "lines", "log-longer", "chain", "signature",
-                                  "params-session", "signed-on-another-session"])
+                                  "params-session", "signed-on-another-session", "not-before"])
 def test_a_close_that_does_not_sign_the_log_is_refused_by_name_before_the_replay(lean, honest, edit) -> None:
     """The honest case's close by another key (or a params' list that doesn't trust the key), a line count or a chain
-    that isn't the log's, a signature edited, and a close replayed under another session, on either side: each refused,
-    naming why, before any entry of the log is replayed."""
+    that isn't the case's, a signature edited, a close replayed under another session, on either side, and a clock
+    floor edited after the close: each refused, naming why, before any entry of the log is replayed."""
     case, why = _close_edits(honest)[edit]
     got = replayed(lean, case)
     assert got["verdict"] == "reject" and got["reason"] == why, got
@@ -284,12 +288,16 @@ def test_the_close_bytes() -> None:
         (34).to_bytes(8, "big") + b"verity/memory-challenger-record/v1" + key.I
         + (40).to_bytes(8, "big") + (32).to_bytes(8, "big") + SESSION_ID
         + (108).to_bytes(8, "big") + record).digest()
-    assert p2_case.chain([]) == hashlib.sha512((36).to_bytes(8, "big") + tag).digest()
+    head = p2_case.head(b"{}", 7)
+    assert head == hashlib.sha512(b"verity/remote-bandwidth/p2/commitment/v0\0{}").digest() + b"7" and len(head) == 65
+    c0 = hashlib.sha512((36).to_bytes(8, "big") + tag).digest()
+    assert p2_case.chain(head, []) == hashlib.sha512(c0 + (65).to_bytes(8, "big") + head).digest()
 
 
 def test_the_commitment_binds_the_plan(exe, lean, store) -> None:
     """A session under a plan of fewer units is accepted with those units' reads alone, and its digest is not the
-    whole store's: the same log under the whole store's registration file is another commitment, and rejected."""
+    whole store's: the same log under the whole store's registration file is another commitment, which the close
+    refuses, since the case's chain begins with the commitment's digest."""
     units = store.registration.blocks
     answer, case = session(exe, store, plan=receipts.Plan(((1, units - 1),), units))
     got = replayed(lean, case)
@@ -297,7 +305,8 @@ def test_the_commitment_binds_the_plan(exe, lean, store) -> None:
     whole = p2_party.registration_json(store.registration, receipts.Plan.whole(units))
     swapped = case | {"commitment": json.dumps(whole, sort_keys=True, separators=(",", ":")).encode().hex()}
     assert p2_case.digest(swapped) != p2_case.digest(case)
-    assert replayed(lean, swapped)["verdict"] == "reject"
+    got = replayed(lean, swapped)
+    assert got["verdict"] == "reject" and got["reason"] == UNCHAINED, got
 
 
 def test_a_session_the_books_veto_has_no_case(exe, store) -> None:

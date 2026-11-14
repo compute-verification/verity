@@ -16,8 +16,10 @@ in hex:
   line's bytes as the prover sent them in hex: ``{"op": "p2_event", "event", "coin"}`` (the challenger's whole coin,
   `COIN_BYTES`, of which the process read the first `coins.COIN_BYTES`), ``{"op": "p2_root", "t", "i", "now",
   "line"}``, ``{"op": "p2_openings", "t", "line"}`` and ``{"op": "p2_fail"}``. The close (`close_of`) is the memory
-  challenger's signature over the whole log: its key, the log's length, its chain (`chain`) and the signature on the
-  role's message (`lms.memory_challenger_message`) of the session and `close_record`, `RemoteAudit.P2Close`'s bytes;
+  challenger's signature over the whole case: its key, the log's length, the chain (`chain`) of the case's head
+  (`head`: the commitment's digest and the params' clock floor) and then its log, and the signature on the role's
+  message (`lms.memory_challenger_message`) of the session and `close_record`, `RemoteAudit.P2Close`'s bytes. That
+  chain is the one SHA-512 the verifier's device keeps of the case (`p2_party.case_digest`);
 * ``store_root``: the store the session audits, its registration's root, 128 lowercase hex characters. That root is the
   root of `C*` PoUS's setup published (`pous.run.Setup.root`), so `same_store` holds it to PoUS's run case. No digest
   binds the field itself: it counts only as the root the commitment registers (`store_root`).
@@ -65,13 +67,25 @@ def _field(b: bytes) -> bytes:
     return len(b).to_bytes(8, "big") + b
 
 
-def chain(log: Sequence[Mapping[str, Any]]) -> bytes:
-    """`P2Close.chainOf`: SPOT's release-log chain (`challenger.log_chain`) under `CLOSE_TAG` over each entry's
-    canonical JSON, `c_0 = SHA-512([CLOSE_TAG])`, `c_(k+1) = SHA-512(c_k ‖ [entry_k])`, `[x]` a u64 big-endian length
-    then the bytes."""
+def head(commitment: bytes, not_before_ns: int) -> bytes:
+    """`P2Protocol.headOf`, the case's head and its chain's first entry: the digest of the commitment's bytes
+    `commitment` (`digest`), then the clock floor `not_before_ns` in decimal ASCII."""
+    return hashlib.sha512(DIGEST_DOMAIN + commitment).digest() + str(int(not_before_ns)).encode()
+
+
+def head_of(case: Mapping[str, Any]) -> bytes:
+    """The head (`head`) of `case`, from its commitment and its params' clock floor."""
+    return head(bytes.fromhex(case["commitment"]), case["params"]["not_before_ns"])
+
+
+def chain(head_: bytes, log: Sequence[Mapping[str, Any]]) -> bytes:
+    """`P2Close.chainOf` of the case's head `head_` and then its log: SPOT's release-log chain (`challenger.log_chain`)
+    under `CLOSE_TAG` over the head and each entry's canonical JSON, `c_0 = SHA-512([CLOSE_TAG])`,
+    `c_1 = SHA-512(c_0 ‖ [head])`, `c_(k+2) = SHA-512(c_(k+1) ‖ [entry_k])`, `[x]` a u64 big-endian length then the
+    bytes."""
     h = hashlib.sha512(_field(CLOSE_TAG)).digest()
-    for entry in log:
-        h = hashlib.sha512(h + _field(canonical_json_bytes(dict(entry)))).digest()
+    for entry in [head_, *(canonical_json_bytes(dict(x)) for x in log)]:
+        h = hashlib.sha512(h + _field(entry)).digest()
     return h
 
 
@@ -80,9 +94,10 @@ def close_record(lines: int, chain_: bytes) -> bytes:
     return CLOSE_TAG + lines.to_bytes(8, "big") + chain_
 
 
-def close_of(signer: Any, session: bytes, log: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """The close of `log` that `signer` (a `memory_challenger.Signer`) signs on `session`."""
-    c = chain(log)
+def close_of(signer: Any, session: bytes, head_: bytes, log: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """The close of the case whose head is `head_` (`head`) and whose log is `log`, which `signer` (a
+    `memory_challenger.Signer`) signs on `session`."""
+    c = chain(head_, log)
     return {"chain": c.hex(), "lines": len(log), "public_key": signer.public_key.hex(),
             "signature": signer.sign(session, close_record(len(log), c)).hex()}
 
@@ -192,5 +207,6 @@ def write(private: Path, case: Mapping[str, Any], answer_: Mapping[str, Any]) ->
 
 
 __all__ = ["ANSWER", "CASE", "CLOSE_TAG", "COIN_BYTES", "DIGEST_DOMAIN", "EPS_TERMS", "EXE", "PROTOCOL", "STORE_ROOT",
-           "answer", "case_of", "chain", "close_of", "close_record", "digest", "judged", "same_store", "serve",
+           "answer", "case_of", "chain", "close_of", "close_record", "digest", "head", "head_of", "judged",
+           "same_store", "serve",
            "store_root", "write"]

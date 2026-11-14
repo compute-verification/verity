@@ -9,7 +9,8 @@ The memory challenger signs P2's close with the key it signs PoUS's sessions and
 (`MemoryChallenger.memoryChallengerMessage`): `SHA-512(rolePreimage I session record)`, the pre-image
 `[verity/memory-challenger-record/v1] ‖ I ‖ [[session]] ‖ [record]`, each `[·]` a u64 big-endian length then the bytes
 (`MemoryChallenger.field`). P2's record (`closeRecord`) is raw bytes, never a digest: `CLOSE_TAG` (NUL-ended), the log's
-line count as a u64 big-endian, and the log's 64-byte chain (`chainOf`), so it is `CLOSE_TAG.size + 72` bytes long.
+line count as a u64 big-endian, and the case's 64-byte chain (`chainOf` over the case's head, then the log's entries:
+`P2Protocol.headOf`), so it is `CLOSE_TAG.size + 72` bytes long.
 PoUS's session record (`MemoryChallenger.message`) and the wipe's (`MemoryChallenger.StreamedWipe.message`) are SHA-512
 digests, 64 bytes long, so no close record is either (`closeRecord_ne_pous`, `closeRecord_ne_wipe`), and the role's
 pre-image determines its key identifier, session and record (`rolePreimage_inj`): a close's pre-image is never a PoUS
@@ -23,11 +24,11 @@ namespace RemoteAudit.P2Close
 
 open Flock
 
-/-- P2's tag, NUL-ended: the log's chain starts from it (`chainOf`) and the close's record opens with it
+/-- P2's tag, NUL-ended: the case's chain starts from it (`chainOf`) and the close's record opens with it
 (`closeRecord`). -/
 def CLOSE_TAG : ByteArray := "verity/remote-bandwidth/p2/close/v0".toUTF8.push 0
 
-/-- The chain over the log's entries' bytes, SPOT's release-log chain (`Spot.ChallengerSession.logChain`) under
+/-- The chain over `entries`' bytes (a case's head, then its log's entries), SPOT's release-log chain (`Spot.ChallengerSession.logChain`) under
 `CLOSE_TAG`: `c_0 = SHA-512([CLOSE_TAG])`, `c_(k+1) = SHA-512(c_k ‖ [entry_k])`. -/
 def chainOf (entries : Array ByteArray) : ByteArray :=
   entries.foldl (fun h l => Sha512.hash (h ++ MemoryChallenger.field l))

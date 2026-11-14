@@ -35,11 +35,12 @@ store it audits is the one PoUS's setup published. Its bytes are canonical JSON 
   start, a boundary or a close with the coin the challenger released for it, `Verifier.eventOn 2 1`, whole: its
   `COIN_BYTES`, of which the process read the first `Codec.COIN_BYTES`), `{"op": "p2_root", "t", "i", "now", "line"}`
   (`P2Session.receive`), `{"op": "p2_openings", "t", "line"}` (`P2Session.verify`) and `{"op": "p2_fail"}`
-  (`P2Session.fail`). The close is the memory challenger's signature over the whole log (`P2Close`): its key, the
-  log's length, the log's chain (`P2Close.chainOf`, over each entry's canonical JSON) and its LMS signature on
-  `P2Close.closeMessage`, the memory challenger role's message of the params' session and P2's raw record. The log
-  is the verifier's own: its clock's readings and its coins never come from the prover;
-* the check, in order: the close (`closeRefusal`) is under a trusted key, counts the log's lines, holds the log's
+  (`P2Session.fail`). The close is the memory challenger's signature over the whole case (`P2Close`): its key, the
+  log's length, the case's chain (`P2Close.chainOf` over the case's head `headOf`, the commitment's digest and the
+  params' clock floor, then each entry's canonical JSON) and its LMS signature on `P2Close.closeMessage`, the memory
+  challenger role's message of the params' session and P2's raw record. The log is the verifier's own: its clock's
+  readings and its coins never come from the prover;
+* the check, in order: the close (`closeRefusal`) is under a trusted key, counts the log's lines, holds the case's
   chain and verifies under S1's LMS at its deployed parameters (`Lms.deployed`, `MemoryChallenger.LMS`) on the params'
   session; every coin is the challenger's `COIN_BYTES` (`coinRefusal`); then the log replayed from the session's first
   state (`P2Session.init`), each coin read at its first `Codec.COIN_BYTES`. Each refusal is named. The replay rejects
@@ -173,25 +174,31 @@ def decodeEvidence (b : ByteArray) : V Evidence := do
   pure ⟨← (← J.arr j "log" "evidence").mapM lineOf, ← closeOf (← J.get j "close" "evidence")⟩
 
 def UNTRUSTED : String := "the close is signed by a key that is not a trusted memory challenger's"
-def UNCHAINED : String := "the close's chain is not the log's"
+def UNCHAINED : String := "the close's chain is not the case's"
 def UNSIGNED : String := "the close's signature does not verify on the params' session"
 
-/-- Why the close doesn't sign the log under `lp`, none when it does: its key isn't trusted, it counts other lines than
-the log's, its chain isn't the log's (`P2Close.chainOf`), or its signature doesn't verify on `P2Close.closeMessage` of
-the params' session
+/-- The case's head, the chain's first entry: the commitment's digest (`Commitment.digest`), then the params' clock
+floor in decimal ASCII. So the close binds the registration, its plan and the clock floor with the log, and its chain
+is the one SHA-512 a verifier's device keeps of the case (`p2_party.case_digest`). -/
+def headOf (p : Params) (c : Commitment) : ByteArray := c.digest ++ (toString p.notBeforeNs).toUTF8
+
+/-- Why the close doesn't sign the case whose head is `head` (`headOf`) under `lp`, none when it does: its key isn't
+trusted, it counts other lines than the log's, its chain isn't the case's (`P2Close.chainOf` of the head and then the
+log's entries), or its signature doesn't verify on `P2Close.closeMessage` of the params' session
 (`MemoryChallenger.lmsVerify`, the check PoUS's sessions and the wipe run). -/
-def closeRefusal (lp : Lms.Params) (p : Params) (e : Evidence) : Option String :=
+def closeRefusal (lp : Lms.Params) (p : Params) (head : ByteArray) (e : Evidence) : Option String :=
   let c := e.close
   if !p.trusted.contains c.publicKey then some UNTRUSTED
   else if c.lines != e.log.size then some s!"the close counts {c.lines} lines, not the log's {e.log.size}"
-  else if c.chain != P2Close.chainOf (e.log.map (·.bytes)) then some UNCHAINED
+  else if c.chain != P2Close.chainOf (#[head] ++ e.log.map (·.bytes)) then some UNCHAINED
   else match MemoryChallenger.lmsVerify lp c.publicKey p.session (P2Close.closeRecord e.log.size c.chain)
       c.signature with
     | .ok true => none
     | _ => some UNSIGNED
 
-/-- The close signs the log under `lp` (`closeRefusal`). -/
-def signedOk (lp : Lms.Params) (p : Params) (e : Evidence) : Bool := (closeRefusal lp p e).isNone
+/-- The close signs the case whose head is `head` under `lp` (`closeRefusal`). -/
+def signedOk (lp : Lms.Params) (p : Params) (head : ByteArray) (e : Evidence) : Bool :=
+  (closeRefusal lp p head e).isNone
 
 /-- Why a coin of the log isn't the challenger's whole coin, none when every coin is. -/
 def coinRefusal (e : Evidence) : Option String := Id.run do
@@ -248,7 +255,7 @@ def certify (held : P2Session.Held) (sm : Session.Summary) : Public × Json :=
 
 /-- The check under the LMS parameters `lp` (module docstring); `check` is it under S1's. -/
 def checkAt (lp : Lms.Params) (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Json :=
-  match closeRefusal lp p e <|> coinRefusal e with
+  match closeRefusal lp p (headOf p c) e <|> coinRefusal e with
   | some why => .reject why
   | none =>
     match replay p c e with
@@ -290,18 +297,21 @@ private def toy : Lms.Params := ⟨8, 1, 1⟩
 private def toySession : ByteArray := ByteArray.mk (Array.replicate 32 1)
 private def otherSession : ByteArray := ByteArray.mk (Array.replicate 32 2)
 private def toyLog : Array Line := #[⟨"{\"op\":\"p2_fail\"}".toUTF8, .fail⟩]
+private def toyHead : ByteArray := ByteArray.mk (Array.replicate 64 5) ++ "0".toUTF8
 
-/-- `closeRefusal` at `toy` on `log` and a close of `toyLog` whose signature is the toy key's on `signedOn` over
-`record` (P2's close record when none), edited by `edit`, its key trusted when `trust`. -/
+/-- `closeRefusal` at `toy` on `log` under the case head `head` and a close of `toyLog` under `toyHead` whose signature
+is the toy key's on `signedOn` over `record` (P2's close record when none), edited by `edit`, its key trusted when
+`trust`. -/
 private def refusal (signedOn : ByteArray) (trust : Bool) (edit : SignedClose → SignedClose := id)
-    (log : Array Line := toyLog) (record : Option ByteArray := none) : Option (Option String) := do
+    (log : Array Line := toyLog) (record : Option ByteArray := none) (head : ByteArray := toyHead) :
+    Option (Option String) := do
   let k ← (Lms.keygen toy (ByteArray.mk (Array.replicate 8 7))).toOption
-  let chain := P2Close.chainOf (toyLog.map (·.bytes))
+  let chain := P2Close.chainOf (#[toyHead] ++ toyLog.map (·.bytes))
   let m ← (MemoryChallenger.memoryChallengerMessage k.I signedOn
     (record.getD (P2Close.closeRecord toyLog.size chain))).toOption
   let s ← (Lms.signAt k 0 m).toOption
   let close := edit ⟨k.publicKey, toyLog.size, chain, s.encode⟩
-  pure (closeRefusal toy ⟨0, .null, toySession, if trust then #[close.publicKey] else #[]⟩ ⟨log, close⟩)
+  pure (closeRefusal toy ⟨0, .null, toySession, if trust then #[close.publicKey] else #[]⟩ head ⟨log, close⟩)
 
 /-- A PoUS session record and a wipe record of the toy session, each a digest. -/
 private def pousRecord : Option ByteArray :=
@@ -321,6 +331,8 @@ private def flipLast (b : ByteArray) : ByteArray := b.set! (b.size - 1) (b[b.siz
 #guard refusal toySession true (log := toyLog.push toyLog[0]!) ==
   some (some "the close counts 1 lines, not the log's 2")
 #guard refusal toySession true (fun c => { c with chain := flipLast c.chain }) == some (some UNCHAINED)
+#guard refusal toySession true (head := flipLast toyHead) == some (some UNCHAINED)
+#guard refusal toySession true (head := ByteArray.empty) == some (some UNCHAINED)
 #guard refusal otherSession true == some (some UNSIGNED)
 #guard refusal toySession true (fun c => { c with signature := flipLast c.signature }) == some (some UNSIGNED)
 #guard pousRecord.map (·.size) == some 64 && wipeRecord.map (·.size) == some 64

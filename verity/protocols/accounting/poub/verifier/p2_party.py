@@ -27,8 +27,9 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   released coin's opening (`audit.AuditRun.disclose`), against which the prover checks each challenge it was sent
   (`audit.Prover.end`). The commitment is a function of every coin, so the prover gets it only after its last root.
 - `{"case": {...}}`: the session's core case (`p2_case`), the log of every request the Lean answered with the
-  registration, the request, the verifier's clock floor, the session id and the memory challenger's close of the log,
-  signed with its key (`Closer`), which `RemoteAudit.P2Protocol` checks and replays; it is witness, which the prover
+  registration, the request, the verifier's clock floor, the session id and the memory challenger's close of the case
+  (its registration's digest, its clock floor and its log), signed with its key (`Closer`), which
+  `RemoteAudit.P2Protocol` checks and replays; it is witness, which the prover
   keeps private. A session the books vetoed, or one with no memory challenger to sign it, has none.
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
@@ -53,8 +54,8 @@ Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-ex
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
 (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s party verbs), where it keeps each session's case's
-digest too, a line of `private/case-digests.txt` (`CASE_DIGESTS`, `case_digest`; 0700, the file 0600), and none of the
-case's values. `prove(reader, writer, prover)` is the prover's: it answers each
+digest too, the chain its signed close signs, a line of `private/case-digests.txt` (`CASE_DIGESTS`, `case_digest`;
+0700, the file 0600), and none of the case's values. `prove(reader, writer, prover)` is the prover's: it answers each
 message with `prover`'s `hold`, `run`, `open` and `end` until the answer, which it returns, and hands the case to its
 `case`, if it has one. It also reads a verifier that
 sends each challenge as the coin's whole opening and discloses no coins at the end, the form before `Released`: the
@@ -64,7 +65,6 @@ challenge is read as its released part, and `end` never comes.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -690,10 +690,14 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
     out = twin.answer(reason) | {"host": host}
     case = None
     if twin.disagreement is None and closer is not None:
+        from verity.commitments.identity import canonical_json_bytes
+
         from . import p2_case
 
-        close = p2_case.close_of(closer.signer, closer.session, twin.log)
-        case = p2_case.case_of(registration_json(registration, plan), twin.request, twin.not_before_ns, twin.log,
+        held = registration_json(registration, plan)
+        head = p2_case.head(canonical_json_bytes(held), twin.not_before_ns)
+        close = p2_case.close_of(closer.signer, closer.session, head, twin.log)
+        case = p2_case.case_of(held, twin.request, twin.not_before_ns, twin.log,
                                session=closer.session, trusted=[closer.signer.public_key], close=close)
         if keep is not None:
             keep(case)
@@ -769,13 +773,15 @@ def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Prover, request: Mapping[str,
 
 
 def case_digest(case: Mapping[str, Any]) -> str:
-    """The SHA-512, as 128 lowercase hex digits, of `case`'s JSON line: its keys sorted, then a newline."""
-    return hashlib.sha512((json.dumps(dict(case), sort_keys=True) + "\n").encode()).hexdigest()
+    """The one SHA-512 a verifier's device keeps of `case` (`p2_case`), as 128 lowercase hex digits: its close's
+    chain, which the memory challenger's signed close signs, over the case's head (its registration's digest and its
+    clock floor) and every entry of its log (`p2_case.chain`)."""
+    return str(json.loads(bytes.fromhex(case["evidence"]))["close"]["chain"])
 
 
 def _keep(path: Path, case: Mapping[str, Any]) -> None:
     """`case_digest(case)` appended to `path` as one line, its directory 0700 and the file 0600: the verifier's own
-    record of the case, which holds none of its values."""
+    record of the case, the digest its signed close signs, which holds none of its values."""
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(path.parent, 0o700)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
