@@ -88,10 +88,13 @@ from verity_vllm.commit.committer.window_views import WindowViews, _StepJob
 from verity_vllm.commit.native_ranges import DROPPED, NativeRangeOpenings, open_levels
 from verity_vllm.engine import hooks
 from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline.spans import Spans
 
 __all__ = ["GPU_CHUNK_BYTES", "NativeHostCommitter", "bounded_host_bound", "hazard_of_record", "schedule_stream_bound",
            "value_family"]
+
+logger = init_logger(__name__)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -275,8 +278,8 @@ def memtrace(where: str, step: int | None = None) -> None:
 
     a, r = torch.cuda.memory_allocated(), torch.cuda.memory_reserved()
     free, total = torch.cuda.mem_get_info()
-    print(f"[memtrace] {time.strftime('%H:%M:%S')} step {step if step is not None else '-':>4} {where:<28} alloc {a / 2**30:6.2f} reserved {r / 2**30:6.2f} "
-          f"device-used {(total - free) / 2**30:6.2f} GiB", flush=True)
+    logger.info("[memtrace] step %4s %-28s alloc %6.2f reserved %6.2f device-used %6.2f GiB", step if step is not None else "-", where,
+                a / 2**30, r / 2**30, (total - free) / 2**30)
 
 
 class NativeHostCommitter(WindowViews, NativeRangeOpenings):
@@ -1127,7 +1130,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         try:
             os.sched_setaffinity(0, cores)
         except OSError:
-            pass
+            logger.warning("thread group %d: pinning to cores %s was refused; it runs unpinned", group, sorted(cores), exc_info=True)
 
     def _start_worker(self) -> None:
         if self._worker is not None and self._worker.is_alive():
