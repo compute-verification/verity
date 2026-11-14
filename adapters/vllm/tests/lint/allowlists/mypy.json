@@ -113,7 +113,6 @@
     {"file": "verity_vllm/check/replay/fork.py", "kind": "attr-defined", "symbol": "dead_worker", "detail": ""},
     {"file": "verity_vllm/check/replay/fork.py", "kind": "attr-defined", "symbol": "fork_pool", "detail": ""},
     {"file": "verity_vllm/check/replay/replay_dump.py", "kind": "arg-type", "symbol": "dump_row_words", "detail": ""},
-    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "attr-defined", "symbol": "NativeCollectCommitter._commit_step_windowed", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "index", "symbol": "NativeHostCommitter._move_step_to_host", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "union-attr", "symbol": "NativeHostCommitter._absorb_step", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "union-attr", "symbol": "NativeHostCommitter._acquire_by_cudart", "detail": "", "count": 2},
