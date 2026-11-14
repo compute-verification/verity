@@ -294,12 +294,6 @@ owner = "top"
 day = "2026-11-15"
 
 [[not_yet]]
-path = "verity/hardware/lean.py"
-to = "deleted, once the Lean takes a card as a parameter"
-owner = "compute-research"
-day = "2026-11-24"
-
-[[not_yet]]
 path = "verity/definitions/"
 to = "its protocol part to verity/circuits/, its served part to the vLLM adapter"
 owner = "top"
