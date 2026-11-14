@@ -321,7 +321,7 @@ def test_a_plan_on_a_machine_ships_the_commit_with_this_plan_and_the_packs_and_r
             return sp.CompletedProcess(argv, 0, json.dumps({"runs": [{"dir": str(run_dir)}]}), "")
         src = Path(argv[argv.index("--source") + 1])
         seen.update(head=_git(src, "rev-parse", "HEAD"), on=argv[argv.index("--on") + 1], wait="--wait" in argv,
-                    pool=argv[argv.index("--pool") + 1], shell=argv[-3:-1])
+                    stay="--stay" in argv[:argv.index("--")], pool=argv[argv.index("--pool") + 1], shell=argv[-3:-1])
         (run_dir / "inputs").mkdir(parents=True)
         for i, x in enumerate(argv):
             if x == "--send":
@@ -334,7 +334,7 @@ def test_a_plan_on_a_machine_ships_the_commit_with_this_plan_and_the_packs_and_r
     out, notes = tmp_path / "plan.json", []
     assert P.on_machine("auto", first, tmp_path, packs, [], out, notes, run=run) == 2
     assert P.on_machine("m", first, tmp_path, packs, ["--packs-only", "--base", "B"], out, notes, run=run) == 1
-    assert seen == {"head": first, "on": "m", "wait": True, "pool": "research", "shell": ["bash", "-c"],
+    assert seen == {"head": first, "on": "m", "wait": True, "stay": True, "pool": "research", "shell": ["bash", "-c"],
                     "sent": ["pack-0.tar.gz", "pack-1.tar.xz", "plan.py", "settings.py", "verdicts.py"]}
     i = f"{run_dir}/inputs"
     assert json.loads(out.read_text()) == [f"{i}/plan.py", "--tree", ".", "--out", f"{run_dir}/out/plan.json", "--packs-only",

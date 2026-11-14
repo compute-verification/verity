@@ -2376,6 +2376,12 @@ def proving_of(handle: Session | None) -> dict[str, Any]:
             "prove_seconds_source": "busy"}
 
 
+def device_env(env: dict, devices: list | None) -> dict:
+    """``env``, a session's prover environment behind the ZK server, for provers on ``devices``: the ZK server refuses a
+    session whose witness the device would build (live PROTOCOL.md §10.4), so on a device the host builds it."""
+    return {**env, "FC_HOST_WITNESS": "1"} if devices and any(d is not None for d in devices) else env
+
+
 def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | None) -> str | None:
     """Why a plain audit (``a.plain``) of ``mine`` is outside `PLAIN_SCOPE`, refused before the sample; None inside it (and for
     a `--zk` audit)."""

@@ -304,7 +304,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The circuit checker is handed the served circuits and names none | It names them |
 | The compiler cuts a period's circuit into pieces wired to each other | For the demo's model the pieces are wired only where the eight GPUs combine results, so the audit's second round runs over a stand-in |
 | Every kernel the serving settings run has a circuit held to the kernel on an H200 | Three of five on `main` (the cache's write and both its reads) |
-| Every kind of piece in a request has a statement the Lean verifier accepts | 241 of the plan's 271 kinds (44 on Boolean versions only) by a stored record; 30 whole rows have none; `cover_count.py --card` checks its kinds |
+| Every kind of piece in a request has a statement the Lean verifier accepts | 111 of the plan's 1,272 kinds (5 on Boolean versions only) by a stored record; 1,161 split units have none; `cover_count.py --card` checks its kinds |
 | One form of the network certifier | Two: the remote demo runs an older one, a proxy in front of the server; the onsite demo runs the device on the link |
 | Every benchmark on the dashboard | 5 of 69 wired; 3 of the 5 show a value no older than their schedule allows |
 | The proofs' status on the dashboard: guarantees fully proved, open premises per lead | Printed by the Lean check only |

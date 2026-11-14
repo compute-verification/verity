@@ -305,7 +305,8 @@ def test_the_door_is_made_again_after_a_reset_and_deploy_installs_its_two_files(
     assert node.admin, "root there is the admin key's: the relays' drift, which holds the agents' key, passes it by"
     assert {e.path: e.src or e.by for e in node.entries} == {
         "/data/infra/vy-control-gate": "infra/control/vy-control-gate", "/data/infra/vy-control-setup": "infra/control/door_setup.sh",
-        "/usr/local/sbin/vy-control-gate": "infra/control/door_setup.sh"}
+        "/usr/local/sbin/vy-control-gate": "infra/control/door_setup.sh",
+        "/data/watchers/ssh_config": "infra/control/watchers_ssh_config"}       # the watchers' loops' ssh, not the door's
     assert all(os.access(CONTROL / f, os.X_OK) for f in ("vy-control-gate", "door_setup.sh")), "installed with the repository's mode"
 
 
