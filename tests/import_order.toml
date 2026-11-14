@@ -731,6 +731,7 @@ loads = [
     "verity/channel.py",
     "verity/circuits",
     "verity/commitments",
+    "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
