@@ -2506,6 +2506,7 @@ class Stream:
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
                      wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
                      rows=SS.replay_rows(e.program, descriptor_id(self.replay)),
+                     widths=SS.replay_widths(e.program, descriptor_id(self.replay)),
                      returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record),
                      supplied=SS.supplied_of(R.resolved(e.interior_copies[5], e.interior_history)),
                      fixed=(*(e.interior_copies[6] or ()), *(e.interior_copies[10] or ())),
