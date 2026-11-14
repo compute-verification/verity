@@ -80,10 +80,10 @@ def step (chunk g : Nat) (p : Proc) : Req → Except String (Reply × Option Ses
     if p.checks.any (·.id == id) then throw s!"check {id} is already running"
     match p.session.awaiting t with
     | none => pure (.refused, none, p)
-    | some (w, drawn) =>
+    | some (w, sampled) =>
       pure (.spawned, none,
         { p with checks := p.checks ++
-          [{ id, t, frames, verdict := (Verifier.windowCheck chunk p.session w drawn frames).1 }] })
+          [{ id, t, frames, verdict := (Verifier.windowCheck chunk p.session w sampled frames).1 }] })
   | .settle id => do
     let some c := p.checks.find? (·.id == id) | throw s!"no check {id}"
     let (r, s) := Session.verifyBy p.session c.t fun _ => c.verdict

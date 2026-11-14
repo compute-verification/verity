@@ -621,14 +621,14 @@ theorem checkWindow_grow {s s' : State} (hI : Inv s) (hI' : Inv s') (hin : Sampl
 
 /-! ## A share's samples -/
 
-theorem shareOf_spec {drawn : Array (Nat × Nat)} {base n : Nat} {x : Nat × Nat} (hx : x ∈ shareOf drawn base n) :
-    ∃ k, ∃ hk : k < drawn.size, base ≤ drawn[k].1 ∧ drawn[k].1 < base + n ∧ x = (drawn[k].1 - base, drawn[k].2) := by
+theorem shareOf_spec {sampled : Array (Nat × Nat)} {base n : Nat} {x : Nat × Nat} (hx : x ∈ shareOf sampled base n) :
+    ∃ k, ∃ hk : k < sampled.size, base ≤ sampled[k].1 ∧ sampled[k].1 < base + n ∧ x = (sampled[k].1 - base, sampled[k].2) := by
   unfold shareOf at hx
   rw [Array.mem_filterMap] at hx
   obtain ⟨y, hy, hf⟩ := hx
   obtain ⟨k, hk, rfl⟩ := Array.mem_iff_getElem.1 hy
   refine ⟨k, hk, ?_⟩
-  generalize drawn[k] = q at hf ⊢
+  generalize sampled[k] = q at hf ⊢
   obtain ⟨a, b⟩ := q
   simp only at hf ⊢
   split at hf
@@ -669,22 +669,22 @@ theorem sampleLengths_mid {g : Nat} {s : State} (hs : ∀ u : Nat, s.windows[u]!
 /-- Each sample taken is `draws` over its windows' plans, on the session's digest and coin `W + c`, and each window of
 it holds its share. -/
 def SampleLink (g : Nat) (s : State) : Prop :=
-  ∀ c, (dr s.windows (c * g)).isSome → ∃ drawn,
-    receiptSample s.digest c s.coins[s.params.windows + c]! s.params.samples (sampleLengths g s c) = some drawn ∧
+  ∀ c, (dr s.windows (c * g)).isSome → ∃ sampled,
+    receiptSample s.digest c s.coins[s.params.windows + c]! s.params.samples (sampleLengths g s c) = some sampled ∧
     ∀ u ∈ sampleWindows g s.params.windows c,
-      dr s.windows u = some (shareOf drawn (passesBefore s (c * g) u) s.windows[u]!.plans.size)
+      dr s.windows u = some (shareOf sampled (passesBefore s (c * g) u) s.windows[u]!.plans.size)
 
 theorem sampleLink_step {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {s' : State}
     (hL : SampleLink g s) (hf : Frz s s') (hp : s'.params = s.params) (hc : s'.coins = s.coins)
     (hdig : s'.digest = s.digest) (he : Shared.step g s e = .ok (r, s')) : SampleLink g s' := by
   intro c hc'
   by_cases h0 : (dr s.windows (c * g)).isSome
-  · obtain ⟨drawn, hdraws, hsh⟩ := hL c h0
+  · obtain ⟨sampled, hdraws, hsh⟩ := hL c h0
     have hall : ∀ u ∈ sampleWindows g s.params.windows c, (dr s.windows u).isSome := fun u hu => by
       rw [hsh u hu]; rfl
     have hpl : ∀ u ∈ sampleWindows g s.params.windows c, s'.windows[u]!.plans = s.windows[u]!.plans :=
       fun u hu => (plans_frz hf (hall u hu)).1
-    refine ⟨drawn, ?_, fun u hu => ?_⟩
+    refine ⟨sampled, ?_, fun u hu => ?_⟩
     · rw [sampleLengths_congr s s' hp c hpl, hdig, hc, hp]; exact hdraws
     · rw [hp] at hu
       obtain ⟨j0, hj0, rfl⟩ := List.mem_map.1 hu
@@ -741,7 +741,7 @@ theorem samplesIn_of_link {g : Nat} (hg : 1 ≤ g) {s : State} (hI : Inv s) (hpr
     rcases Nat.eq_or_lt_of_le hlo with h | h
     · rw [h]; exact hdu
     · exact hpre u _ h hdu
-  obtain ⟨drawn, hdraws, hsh⟩ := hL (u / g) hfirst
+  obtain ⟨sampled, hdraws, hsh⟩ := hL (u / g) hfirst
   have hmem : u ∈ sampleWindows g s.params.windows (u / g) :=
     List.mem_map.2 ⟨u - u / g * g, List.mem_range.2 (by omega), by show u / g * g + (u - u / g * g) = u; omega⟩
   have hshu := hsh u hmem
@@ -755,10 +755,10 @@ theorem samplesIn_of_link {g : Nat} (hg : 1 ≤ g) {s : State} (hI : Inv s) (hpr
   refine ⟨by omega, ?_⟩
   have hu : u / g * g + (u - u / g * g) = u := by omega
   have hk' : u - u / g * g < (sampleRecords g s (u / g)).length := by rw [length_sampleRecords]; omega
-  have hj : drawn[m].1 - passesBefore s (u / g * g) u < s.windows[u / g * g + (u - u / g * g)]!.plans.size := by
+  have hj : sampled[m].1 - passesBefore s (u / g * g) u < s.windows[u / g * g + (u - u / g * g)]!.plans.size := by
     rw [hu]; omega
   have e := sampleLengths_mid hs (u / g) (u - u / g * g) hk' _ hj
-  rw [hu, show passesBefore s (u / g * g) u + (drawn[m].1 - passesBefore s (u / g * g) u) = drawn[m].1 by omega]
+  rw [hu, show passesBefore s (u / g * g) u + (sampled[m].1 - passesBefore s (u / g * g) u) = sampled[m].1 by omega]
     at e
   rw [← e]
   exact hp
@@ -949,22 +949,22 @@ theorem link1_init (params : Params) (reg : Registration) (coins appendCoins : A
 /-- A sample linked at a state the run reached gives `RunSamplesRecords`' conclusion. -/
 theorem link_out {g : Nat} {params : Params} {reg : Registration} {coins : Array ByteArray} {s : State}
     (hI : Inv s) (hp : s.params = params) (hr : s.reg = reg) (hco : s.coins = coins) (hdig : s.digest = reg.digest)
-    (hA : AcceptNow s) (c : Nat) (drawn : Array (Nat × Nat))
-    (hdraws : receiptSample s.digest c s.coins[s.params.windows + c]! s.params.samples (sampleLengths g s c) = some drawn)
+    (hA : AcceptNow s) (c : Nat) (sampled : Array (Nat × Nat))
+    (hdraws : receiptSample s.digest c s.coins[s.params.windows + c]! s.params.samples (sampleLengths g s c) = some sampled)
     (hsh : ∀ u ∈ sampleWindows g s.params.windows c,
-      dr s.windows u = some (shareOf drawn (passesBefore s (c * g) u) s.windows[u]!.plans.size)) :
-    ∃ drawn, receiptSample reg.digest c coins[params.windows + c]! params.samples (lengthsOf (sampleRecords g s c)) =
-        some drawn ∧
+      dr s.windows u = some (shareOf sampled (passesBefore s (c * g) u) s.windows[u]!.plans.size)) :
+    ∃ sampled, receiptSample reg.digest c coins[params.windows + c]! params.samples (lengthsOf (sampleRecords g s c)) =
+        some sampled ∧
       ∀ k (hk : k < (sampleRecords g s c).length),
         sampledOf s (c * g + k) =
-          some (shareOf drawn (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size) ∧
+          some (shareOf sampled (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size) ∧
         (s.windows[c * g + k]!.verdict = some .accept →
-          shareOf drawn (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size = #[] ∨
+          shareOf sampled (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size = #[] ∨
           ∃ openings : Array Opening, checkWindow reg reg.digest s.appends (sampleRecords g s c)[k]
-            (shareOf drawn (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size)
+            (shareOf sampled (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size)
             openings = .accept) := by
   have hs : ∀ u : Nat, s.windows[u]!.plans.size = s.windows[u]!.roots.size := sizes_all hI
-  refine ⟨drawn, by rw [lengthsOf_sample hs, ← hdig, ← hco, ← hp]; exact hdraws, fun k hk => ?_⟩
+  refine ⟨sampled, by rw [lengthsOf_sample hs, ← hdig, ← hco, ← hp]; exact hdraws, fun k hk => ?_⟩
   have hlen := length_sampleRecords (g := g) s c
   have hmem : c * g + k ∈ sampleWindows g s.params.windows c :=
     List.mem_map.2 ⟨k, List.mem_range.2 (by omega), rfl⟩
@@ -1008,22 +1008,22 @@ theorem runSamplesRecords : RunSamplesRecords := by
   · obtain ⟨⟨⟨hInv, -, -⟩, -⟩, -, hp, hr, hco, hdig, hL, hA⟩ :=
       srun_inv g (LinkInv g params reg coins) (fun _ _ _ _ hx he => linkInv_step hg2 hx he) _ events rs s
         (linkInv_init g params reg coins appendCoins notBeforeNs hm) h
-    obtain ⟨drawn, hdraws, hsh⟩ := hL c hc
-    exact link_out hInv hp hr hco hdig hA c drawn hdraws hsh
+    obtain ⟨sampled, hdraws, hsh⟩ := hL c hc
+    exact link_out hInv hp hr hco hdig hA c sampled hdraws hsh
 
 /-- **A sample's accepted windows open its values**: the session link, and `acceptSamplesOpenable` on the openings each
 window passed with. -/
 theorem acceptedSamplesOpenable : AcceptedSamplesOpenable := by
   intro g params reg coins appendCoins notBeforeNs events rs s h c hg hm hcW hc hall
-  obtain ⟨drawn, hdraws, hk⟩ :=
+  obtain ⟨sampled, hdraws, hk⟩ :=
     runSamplesRecords g params reg coins appendCoins notBeforeNs events rs s h c hg hm hcW hc
   obtain ⟨L, us, hs, hus⟩ := acceptSamplesOpenable reg s.appends c coins[params.windows + c]! params.samples
-    (sampleRecords g s c) drawn hdraws
+    (sampleRecords g s c) sampled hdraws
   refine ⟨L, us, hs, ?_⟩
   have hex : ∀ k (hk' : k < (sampleRecords g s c).length), ∃ o : Array Opening,
-      shareOf drawn (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size = #[] ∨
+      shareOf sampled (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size = #[] ∨
       checkWindow reg reg.digest s.appends (sampleRecords g s c)[k]
-        (shareOf drawn (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size) o = .accept := by
+        (shareOf sampled (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size) o = .accept := by
     intro k hk'
     rcases (hk k hk').2 (hall k hk') with h0 | ⟨o, ho⟩
     · exact ⟨#[], Or.inl h0⟩

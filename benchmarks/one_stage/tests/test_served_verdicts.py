@@ -1133,12 +1133,12 @@ GATE = "ssh -i KEY -o BatchMode=yes research@gate"
 CHALLENGER_HOST = "192.0.2.21"
 
 
-def _h1_serve_dir(tmp_path: Path, coin_source: str = "challenger", tied: bool = True) -> Path:
+def _h1_serve_dir(tmp_path: Path, coins_from: str = "challenger", tied: bool = True) -> Path:
     """A serve dir whose window 1 served H1 (its line's ``pouw_h1`` and its record) on a gate session."""
     d = tmp_path / "serve"
     (d / "h1" / "w1").mkdir(parents=True)
     _write(d, "windows.jsonl", [{"window": 1, "passed": True, "pouw_h1": {
-        "window": 1, "tied": tied, "steps_served": 4, "coin_source": coin_source, "roots1": {"reason": None},
+        "window": 1, "tied": tied, "steps_served": 4, "coin_source": coins_from, "roots1": {"reason": None},
         "gate": {"gate_passed": {"rows": 80}}, "session": {"session": SID, "end": {"closed": True, "complete": True}}}}])
     (d / S.H1_CALLS.format(k=1)).write_text(json.dumps({"commitment": {"session": {"session": SID}}}))
     return d
@@ -3243,7 +3243,7 @@ def _live(tmp_path: Path, ledger: list[str], hosts: bool = False) -> dict[str, s
 
 
 def test_v3cs_audit_samples_on_the_live_challenger_once_the_gate_holds_no_session_on_its_run_root(tmp_path):
-    """V3c's audit is the sampled-proofs audit of record: with PP_CHALLENGER the live challenger it takes its coins
+    """V3c's audit is the SPOT audit of record: with PP_CHALLENGER the live challenger it takes its coins
     there (records_audit's --challenger, --peer PP_PEER, --challenger-key and --gate-key), as its COINS line says, once
     `served_verdicts.py gate --root`, through the same ssh and key, finds no session on the window's run root and no
     period of the lane open, which its V3C-GATE line says, and when, before the audit reserves anything."""
@@ -3297,7 +3297,7 @@ def _not_development(challenger: str) -> str:
 ])
 def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_development_run_or_a_live_one_it_cannot_hold(
         tmp_path, extra, line):
-    """V3c's audit is the sampled-proofs audit of record, so its coins are the live challenger's: a local or loopback
+    """V3c's audit is the SPOT audit of record, so its coins are the live challenger's: a local or loopback
     session is refused unless the run is a development run (DEVELOPMENT=1, which is otherwise unset), and a live one with
     no peer for its session to listen on or no key record to hold it to; each before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
@@ -3306,7 +3306,7 @@ def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_developmen
 
 @pytest.mark.parametrize("challenger", [None, "loopback:127.0.0.1:7000"])
 def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a_development_run(tmp_path, challenger):
-    """With V3c off step 3's audit is the sampled-proofs audit of record, whose SPOT the compose gate's Lean
+    """With V3c off step 3's audit is the SPOT audit of record, whose SPOT the compose gate's Lean
     holds to a challenger, so its local or loopback session is refused unless the run is a development run, before
     anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), HOST="vy-dc-h200", DEVELOPMENT=None, PP_CHALLENGER=challenger,
@@ -4168,7 +4168,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     """The follow-on of a deferral made under COMPOSE_OFF_NODE=0, at the settings the deferral recorded: the copy held to
     the served node's sums, then no window circuit or commit of its own (the served node's record at the class, its
     tree's, and the commit H1 bound, held as there), V3c's audit and period, the final record about the served node from
-    the pieces it read and V3c's audit, the sampled-proofs audit of record, and the composite, told the served node, so
+    the pieces it read and V3c's audit, the SPOT audit of record, and the composite, told the served node, so
     each says it composed elsewhere. Another tree runs only under FOLLOW_ANY_TREE, which its line names. $OUT names no
     window."""
     assert _deferred(tmp_path, COMPOSE_OFF_NODE="0").returncode == 0
@@ -4573,7 +4573,7 @@ def test_a_hand_off_of_a_record_with_no_inference_only_verdict_lists_the_rest(tm
 
 def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its_files_not_step_3s(tmp_path):
     """Where V3c audited the window before the hand-off (its summary there), the hand-off names V3c's audit, the
-    sampled-proofs audit of record, as the record's (SAMPLED_AUDIT) and carries its summary, audit record, docket
+    SPOT audit of record, as the record's (SAMPLED_AUDIT) and carries its summary, audit record, docket
     and runs; of step 3's, on local coins while V3c's are live, only the cases the composite reads. The compose's record
     then reads V3c's audit, its Lean check on that audit's coins."""
     v3c = f"v3c-w7-{VTAG}/audit"
@@ -4751,7 +4751,7 @@ def test_a_compose_follow_on_refuses_the_served_node_a_witness_a_changed_copy_an
 def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_nothing(tmp_path):
     """Under COMPOSE_OFF_NODE=1 the deferral's follow-on is prover-side (it holds the copy's value files), so after V3c's
     audit it composes neither the record nor the composite: it writes the compose hand-off, naming itself as where V3c's
-    audit ran and that audit, the sampled-proofs audit of record, as the record's (step 3's, on local coins while V3c's
+    audit ran and that audit, the SPOT audit of record, as the record's (step 3's, on local coins while V3c's
     are live, isn't carried), with the deferral's pieces and inference-only verdict. A compose follow-on on a third node
     then composes both from that hand-off alone, the record from V3c's audit, and refuses the follow-on's serve dir, which
     holds the value files."""
@@ -4992,7 +4992,7 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
     """`_handed`'s serve dir with `_lean_handed`'s SPOT cases (v2's naming a5's ``BLOBS``), sent by
     `served_verdicts.sh gate-compose` to `GATE_DRIVER`, pinned at GATE_PIN on remote, where the compose runs this tree's
     `served_verdicts.sh compose` and record on vy-auditor-2 with a `FAKE_SAMPLED_LEAN`, no composite and no git (as the
-    pinned archive has none). ``edit`` replaces the served node's sampled-proofs files before the hand-off (None deletes);
+    pinned archive has none). ``edit`` replaces the served node's SPOT files before the hand-off (None deletes);
     ``extra`` adds to the sender's environment. The sender's run and $OUT."""
     from verity.circuits import codec
 

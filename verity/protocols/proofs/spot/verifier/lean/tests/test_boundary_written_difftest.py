@@ -19,7 +19,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 
 PACKAGE = Path(__file__).resolve().parents[1]
-PIECES = "sampled-proofs-difftest"
+PIECES = "spot-difftest"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 

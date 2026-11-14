@@ -34,17 +34,17 @@ namespace Properties.Poub
 
 theorem acceptSamplesOpenable : AcceptSamplesOpenable := by
   intro reg appends w coin samples openings h
-  obtain ⟨drawn, hd, hsz, hk⟩ := acceptChecksOpenings reg appends w coin samples openings h
+  obtain ⟨sampled, hd, hsz, hk⟩ := acceptChecksOpenings reg appends w coin samples openings h
   obtain ⟨L, us, hs, hsz', -, hrange, -⟩ := sampleIsSubset _ _ _ _ _ _ hd
   refine ⟨L, us, hs, fun u hu => ?_⟩
   obtain ⟨k, hk', rfl⟩ := Array.mem_iff_getElem.1 hu
-  have hkd : k < drawn.size := by omega
+  have hkd : k < sampled.size := by omega
   obtain ⟨hi, hp, hidx⟩ := hrange k hkd
   rw [Array.size_map] at hi
-  refine ⟨drawn[k].1, drawn[k].2, openings[k]!, hi, ?_, ?_, hk k hkd⟩
-  · have e : (w.passes.map (·.plan.length))[drawn[k].1]! = w.passes[drawn[k].1]!.plan.length := by
-      rw [getElem!_pos (w.passes.map (·.plan.length)) drawn[k].1 (by simpa using hi),
-        getElem!_pos w.passes drawn[k].1 hi, Array.getElem_map]
+  refine ⟨sampled[k].1, sampled[k].2, openings[k]!, hi, ?_, ?_, hk k hkd⟩
+  · have e : (w.passes.map (·.plan.length))[sampled[k].1]! = w.passes[sampled[k].1]!.plan.length := by
+      rw [getElem!_pos (w.passes.map (·.plan.length)) sampled[k].1 (by simpa using hi),
+        getElem!_pos w.passes sampled[k].1 hi, Array.getElem_map]
     rw [e] at hp
     exact hp
   · rw [hidx, getElem!_pos us k hk']

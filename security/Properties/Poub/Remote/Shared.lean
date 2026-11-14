@@ -62,9 +62,9 @@ sample's. -/
 def passesBefore (s : Session.State) (first u : Nat) : Nat :=
   ((List.range (u - first)).map fun j => s.windows[first + j]!.plans.size).sum
 
-/-- The samples of `drawn` in passes `base … base + n − 1`, renumbered from `base`: a window's share of its sample. -/
-def shareOf (drawn : Array (Nat × Nat)) (base n : Nat) : Array (Nat × Nat) :=
-  drawn.filterMap fun (i, p) => if base ≤ i && i < base + n then some (i - base, p) else none
+/-- The samples of `sampled` in passes `base … base + n − 1`, renumbered from `base`: a window's share of its sample. -/
+def shareOf (sampled : Array (Nat × Nat)) (base n : Nat) : Array (Nat × Nat) :=
+  sampled.filterMap fun (i, p) => if base ≤ i && i < base + n then some (i - base, p) else none
 
 /-- The pass lengths of window records `ws`, window by window in order: a sample's numbering of its receipts. -/
 def lengthsOf (ws : List WindowRecord) : Array Nat :=
@@ -81,19 +81,19 @@ on the openings key of `c` and the coin `coins[W + c]`, `U` the sample's receipt
 the receipt `(i, p)` of the sample's passes with that number, so they are distinct receipts of the sample, one for each
 value; and each window `u` of the sample holds its share of them (`shareOf`), renumbered to its own passes. -/
 def SampleIsSubset : Prop :=
-  ∀ (g : Nat) (s : Session.State) (t : Int) (now : Nat) (drawn : Array (Nat × Nat)) (s' : Session.State),
-    Shared.close g s t now = .ok (.drew drawn, s') →
+  ∀ (g : Nat) (s : Session.State) (t : Int) (now : Nat) (sampled : Array (Nat × Nat)) (s' : Session.State),
+    Shared.close g s t now = .ok (.drew sampled, s') →
       ∃ L us, FlockSoundness.Randomness.subset
           (openingsKey s.digest (t.toNat / g) s.coins[s.params.windows + t.toNat / g]!)
           (min s.params.samples (sampleLengths g s (t.toNat / g)).toList.sum) (sampleLengths g s (t.toNat / g)).toList.sum
           [.str "openings"] L = some us ∧
-        drawn.size = us.size ∧ us.size = min s.params.samples (sampleLengths g s (t.toNat / g)).toList.sum ∧
-        (∀ k (hk : k < drawn.size), drawn[k].1 < (sampleLengths g s (t.toNat / g)).size ∧
-          drawn[k].2 < (sampleLengths g s (t.toNat / g))[drawn[k].1]! ∧
-          receiptIndex (sampleLengths g s (t.toNat / g)) drawn[k].1 drawn[k].2 = us[k]!) ∧
-        (∀ k₁ k₂ (h₁ : k₁ < drawn.size) (h₂ : k₂ < drawn.size), drawn[k₁] = drawn[k₂] → k₁ = k₂) ∧
+        sampled.size = us.size ∧ us.size = min s.params.samples (sampleLengths g s (t.toNat / g)).toList.sum ∧
+        (∀ k (hk : k < sampled.size), sampled[k].1 < (sampleLengths g s (t.toNat / g)).size ∧
+          sampled[k].2 < (sampleLengths g s (t.toNat / g))[sampled[k].1]! ∧
+          receiptIndex (sampleLengths g s (t.toNat / g)) sampled[k].1 sampled[k].2 = us[k]!) ∧
+        (∀ k₁ k₂ (h₁ : k₁ < sampled.size) (h₂ : k₂ < sampled.size), sampled[k₁] = sampled[k₂] → k₁ = k₂) ∧
         ∀ u ∈ sampleWindows g s.params.windows (t.toNat / g),
-          sampledOf s' u = some (shareOf drawn (passesBefore s (t.toNat / g * g) u) s.windows[u]!.plans.size)
+          sampledOf s' u = some (shareOf sampled (passesBefore s (t.toNat / g * g) u) s.windows[u]!.plans.size)
 
 /-- Sample `c` over the records `ws` of its windows, in order, on the coin `coin`: its values `us` are the sampler's on
 its openings key, `U` the windows' receipts (`lengthsOf`). Once window `k`'s check of its share (`shareOf`, from its
@@ -101,13 +101,13 @@ passes' start, `passCount`) accepts its openings, for each `k`, or the share is 
 value `v` is an openable receipt of the window `k` it falls in, its number there `v − receiptCount (ws.take k)`. -/
 def AcceptSamplesOpenable : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (c : Nat) (coin : ByteArray) (samples : Nat)
-    (ws : List WindowRecord) (drawn : Array (Nat × Nat)),
-    receiptSample reg.digest c coin samples (lengthsOf ws) = some drawn →
+    (ws : List WindowRecord) (sampled : Array (Nat × Nat)),
+    receiptSample reg.digest c coin samples (lengthsOf ws) = some sampled →
       ∃ L us, FlockSoundness.Randomness.subset (openingsKey reg.digest c coin)
           (min samples (lengthsOf ws).toList.sum) (lengthsOf ws).toList.sum [.str "openings"] L = some us ∧
         ∀ openings : Nat → Array Opening,
-          (∀ k (hk : k < ws.length), shareOf drawn (passCount (ws.take k)) ws[k].passes.size = #[] ∨
-            checkWindow reg reg.digest appends ws[k] (shareOf drawn (passCount (ws.take k)) ws[k].passes.size)
+          (∀ k (hk : k < ws.length), shareOf sampled (passCount (ws.take k)) ws[k].passes.size = #[] ∨
+            checkWindow reg reg.digest appends ws[k] (shareOf sampled (passCount (ws.take k)) ws[k].passes.size)
               (openings k) = .accept) →
           ∀ v ∈ us, ∃ k, ∃ hk : k < ws.length, receiptCount (ws.take k) ≤ v ∧
             Openable reg appends ws[k] (v - receiptCount (ws.take k))
@@ -126,15 +126,15 @@ def RunSamplesRecords : Prop :=
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
     Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
     ∀ c, 1 ≤ g → 1 ≤ params.minPasses → c * g < params.windows → (sampledOf s (c * g)).isSome →
-      ∃ drawn, receiptSample reg.digest c coins[params.windows + c]! params.samples (lengthsOf (sampleRecords g s c)) =
-          some drawn ∧
+      ∃ sampled, receiptSample reg.digest c coins[params.windows + c]! params.samples (lengthsOf (sampleRecords g s c)) =
+          some sampled ∧
         ∀ k (hk : k < (sampleRecords g s c).length),
           sampledOf s (c * g + k) =
-            some (shareOf drawn (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size) ∧
+            some (shareOf sampled (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size) ∧
           (s.windows[c * g + k]!.verdict = some .accept →
-            shareOf drawn (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size = #[] ∨
+            shareOf sampled (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size = #[] ∨
             ∃ openings : Array Opening, checkWindow reg reg.digest s.appends (sampleRecords g s c)[k]
-              (shareOf drawn (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size)
+              (shareOf sampled (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size)
               openings = .accept)
 
 /-- **A sample's accepted windows open its values** (`RunSamplesRecords` and `AcceptSamplesOpenable` joined): in a run

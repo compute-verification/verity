@@ -571,7 +571,7 @@ def retained(tmp_path_factory):
     import clear_work as CW
     from clear_audit import Prover
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     from verity.protocols.accounting.pouw.verifier import core_check as CC
     from verity.protocols.accounting.pouw.verifier.audit import (

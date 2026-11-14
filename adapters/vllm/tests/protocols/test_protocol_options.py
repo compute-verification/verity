@@ -2,7 +2,7 @@
 installs innermost first, uninstalls to exactly what the model held, and records what each option committed to.
 
 CPU only.  The PoUW and POUS adapters are stand-ins (`_fake_adapter`) over a toy linear layer whose ``quant_method.apply`` is
-the hook site both real adapters wrap; the sampled-proofs adapter is the real one.
+the hook site both real adapters wrap; the SPOT adapter is the real one.
 """
 from __future__ import annotations
 
@@ -679,7 +679,7 @@ PEARL_SETTINGS = {"device": "cuda", "kernel": "/k", "cubin": "/c"}
 
 def _cut_window(cut=None, **more):
     """serve-openai's Commit window under Pearl+ (`serve_pearl.context`): Pearl-C beside SPOT, ``cut`` the
-    sampled-proofs setting naming the executor whose sites the window's circuit is cut at."""
+    SPOT setting naming the executor whose sites the window's circuit is cut at."""
     own = {**({} if cut is None else {PO.CUT: cut}), **more}
     return PO.Context(stage="commit", enabled=config.parse_protocols(f"{PEARL},sampled-proofs:rows-sha512"),
                       settings={"pouw": PEARL_SETTINGS, "sampled-proofs": own})
@@ -687,7 +687,7 @@ def _cut_window(cut=None, **more):
 
 def test_beside_spot_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
     """Pearl-C has no circuit (its y is noise-dependent), so SPOT takes it only where the window's circuit is cut at
-    its linears and reads the tables its calls commit (`window_class.PearlTables`), which the sampled-proofs setting
+    its linears and reads the tables its calls commit (`window_class.PearlTables`), which the SPOT setting
     ``cut`` names. Without it, or naming another entry, or under ncp-v2 (which has a circuit and commits no tables), the
     composition refuses by name; a row's Commit refuses any cut, since its request Programs are never cut."""
     from verity_vllm.protocols import pouw

@@ -31,8 +31,7 @@ untraced = ["tests/test_lean_deployed.py", "tests/test_lean_try.py", "tests/test
 # (`verity.config`), what step 0's declarations read (`WardenParams`, the sampling design's parser) and the core parties
 # the test's table (`tests/step0.py`) runs. The served window's onsite configuration and its table
 # (`tests/test_onsite_served.py`): `verity_cli/served_table.py`, and the piece scripts whose existence its dry run checks.
-# The lifecycle workload (`tests/lifecycle/test_lifecycle.py`): the deployment runtime, circuits, commitments, LMS, sampled
-# proofs' draw, PoUW's grid and the composition's reference (verity/protocols/compose/verifier/lean/tests/reference.py),
+# The lifecycle workload (`tests/lifecycle/test_lifecycle.py`): the deployment runtime, circuits, commitments, LMS, SPOT's draw, PoUW's grid and the composition's reference (verity/protocols/compose/verifier/lean/tests/reference.py),
 # under `verity`, and `verity_difftest`, through which the verifiers it runs speak to their Lean executables; the served
 # circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in.
 # `verity lean try` (`tests/test_lean_try.py`): the axiom probe it loads, and `siblings.py` (with the `headers.py` it

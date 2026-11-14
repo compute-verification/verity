@@ -155,7 +155,7 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     "verity/protocols/accounting/certifier/verifier/certificate.py::Certificate":
         ("verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate", "network-check",
          "the network check's protocol port decodes the certificates the Python issues"),
-    "verity/protocols/proofs/spot/verifier/service.py::SamplingDesign": (f"{COMMITMENTS}Draw.lean::Flock.Draw.SamplingDesign", "sampled-proofs-difftest",
+    "verity/protocols/proofs/spot/verifier/service.py::SamplingDesign": (f"{COMMITMENTS}Draw.lean::Flock.Draw.SamplingDesign", "spot-difftest",
                                                              "the service's port parses the Python's laws"),
     "verity/commitments/crypto/lms.py::Signature": ("verity/commitments/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
                                            "the LMS port verifies the Python's signatures"),
@@ -754,7 +754,7 @@ KNOWN: dict[str, str] = {
         "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (vllm)",
     "adapters/torch/verity_torch/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
-    "verity/protocols/accounting/pouw/prover/serving/credit_gate_device.py::Trace":
+    "adapters/torch/verity_torch/pouw/credit_gate_device.py::Trace":
         "homonym, one linear call's recorded ops and their writers: rename (vllm)",
     "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py::Ledger":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes it (deleted) (vllm)",

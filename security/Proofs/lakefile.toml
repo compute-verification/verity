@@ -40,7 +40,7 @@ path = "../../verity/protocols/proofs/recursion/verifier/vstar_cli"
 name = "core_vstar_recursive"
 path = "../../verity/protocols/proofs/spot_flock/verifier/lean"
 
-# Sampled proofs' recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
+# SPOT's recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
 # `RecursiveKSAt`'s event
 [[require]]
 name = "spot_flock_recursion"
@@ -78,7 +78,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Pouw.LiveSalt.Canon", "Proofs.Properties.Pouw.LiveSalt.Coin", "Proofs.Properties.Pouw.Strata",
   "Proofs.Properties.Pouw.PearlPlus", "Proofs.Properties.Pouw.PearlPlus.Open",
   "Proofs.Properties.Pouw.PearlPlus.Verdict", "Proofs.Properties.Pouw.PearlPlus.Witnesses",
-  "Proofs.Properties.Pouw.PearlPlus.Draw", "Proofs.Properties.Pouw.PearlPlus.Tie", "Proofs.Pouw.PearlPlus.Numerics",
+  "Proofs.Properties.Pouw.PearlPlus.Sample", "Proofs.Properties.Pouw.PearlPlus.Tie", "Proofs.Pouw.PearlPlus.Numerics",
   "Proofs.Properties.InferenceOnly", "Proofs.Properties.Pous", "Proofs.Properties.Pous.TimedAudit", "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.MemoryChallenger.Session",
   "Proofs.Properties.Pous.Run", "Proofs.Properties.Pous.Setup", "Proofs.Properties.Pous.RunAt",
@@ -95,6 +95,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Spot.FactorUpper", "Proofs.Properties.Spot.TwoStageCheck", "Proofs.Properties.Spot.Bits",
   "Proofs.Properties.Spot.Wires", "Proofs.Properties.Spot.Tables", "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.Certifier.Records", "Proofs.Properties.Spot.PlanCheck", "Proofs.Properties.Spot.Units",
+  "Proofs.Properties.Certifier.Registered",
   "Proofs.Properties.Spot.Credited", "Proofs.Properties.Spot.HistoryTable", "Proofs.Properties.Core.Period",
   "Proofs.Properties.Spot.Rate", "Proofs.Flock.Bridge.RatePeriod", "Proofs.Properties.Spot.MonitoringPeriod",
   "Proofs.Properties.Spot.MonitoringPeriodLedger", "Proofs.Properties.Spot.MonitoringPeriodSigned",

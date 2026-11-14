@@ -157,7 +157,7 @@ BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-firewall
 PLAINS=(); if [ "${A5_PLAIN:-0}" = 1 ]; then PLAINS=(--plain); fi
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 if [ "${A5_MEMBER_SECONDS:-0}" = 1 ]; then
   STAMPED=$($PY benchmarks/one_stage/member_seconds.py wrap $W/stamped $BIN $LEAN $FWL) || exit 9

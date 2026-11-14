@@ -326,7 +326,7 @@ def inner_points(inner, rounds: Sequence[Sequence[int]]) -> dict:
     points the comb is folded at and the inner claim on z has."""
     from . import rec_algebra as A
 
-    info = A.run(inner, A.CoinSource(rounds), A.symbolic(inner), [], fold_only=True)[1]
+    info = A.run(inner, A.RoundCoins(rounds), A.symbolic(inner), [], fold_only=True)[1]
     return {"alpha": info["fold"]["alpha"], "z": info["z"], "x_rest": tuple(info["fold"]["rho_in"]), "y_rest": tuple(info["r_in"])}
 
 

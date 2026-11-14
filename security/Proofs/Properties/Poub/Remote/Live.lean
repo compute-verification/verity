@@ -310,7 +310,7 @@ theorem sclose_W {g : Nat} {s : State} {c a : Array ByteArray} {t : Int} {now : 
     · rename_i h; rw [ite_eq_left h] at hres; cases h₁; cases hres; rfl
     rename_i h; rw [ite_eq_right h] at hres
     split at h₁
-    · rename_i drawn hd
+    · rename_i sampled hd
       cases h₁
       rw [hc ⟨_, rfl⟩, hd] at hres
       cases hres

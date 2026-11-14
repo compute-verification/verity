@@ -52,7 +52,7 @@ public import Proofs.Properties.Poub.Remote.Run
 At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`) and
 the certifiers observed nothing but the verifier's messages entering the node, the receipts' sketch holds and the
 trace's wrong receipts are at most the session's pooled bound at the line's `δ` (`holdsAnd` of the sketch bound, from
-`SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Draw.pooledSample` at the records read
+`SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Sample.pooledSample` at the records read
 through the coin commitment, `recordCommitted`, so at most the W the line reads: `LineCoversRun` at the record's
 samples, whose receipts on an accepted record are `recordSample`'s sizes, `receipts_of_line`, and the line's check of their
 samples, `incorrect_le_line`), and the line read off the record credits no more bits read than its groups' passes read
@@ -576,7 +576,7 @@ theorem lineHeld : LineHeld := by
   intro node κ X Cm _ prf rest recs correct com T R δs δnet r F O I hp hcov hk hC hI hL hR hCnt
   have hN : (ofRecord T node r).blocks = node.blocks := rfl
   have hH := holdsAnd (sketchBound_of_covered hk hC hI)
-    (Draw.pooledSample prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hCnt)
+    (Sample.pooledSample prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hCnt)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 fun hq => ?_⟩) hH
   exact readAt_of hp hcov hN hω.1 hω.1 (h.1 hq) (incorrect_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
 

@@ -51,7 +51,7 @@ W: `G` is `fill` over the reals (`fill_cast`). Over windows by `U/s` falling, `G
 every ratio is at most `r` (`G_lip`), so a share vector that spends `b` on windows in that order wins at most what the
 greedy wins with `b` (`G_ge`): the head's share is at most the greedy's, and the budget the greedy spends beyond it on
 the head buys, on the rest, no more than the head's ratio. `order` permutes the windows (`List.mergeSort_perm`) and
-sorts them (`List.pairwise_mergeSort`), so every share vector `Draw.pooled` ranges over is one `G_ge` bounds.
+sorts them (`List.pairwise_mergeSort`), so every share vector `Sample.pooled` ranges over is one `G_ge` bounds.
 -/
 
 @[expose] public section

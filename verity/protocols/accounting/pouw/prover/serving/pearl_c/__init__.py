@@ -1,11 +1,11 @@
-"""Pearl-C on the RTX PRO 6000 (sm_120) and the H100/H200 (sm_90a) at the linears' ``quant_method.apply``: the schemes this
+"""Pearl-C on the RTX PRO 6000 (sm_120) and the H100/H200 (sm_90a) at a served linear: the schemes this
 device path runs (`SCHEMES`, `scheme_of`), the linears outside them (`refusals`), the kernels' buffers and steps by name, the
 prover's hm96 salt key (`new_salt_key`), and the readers a verifier and the option need: the kernel's directory (`Kernel`),
 the schedule (`schedule_of`, `pearl_c.lanes`), the manifest (`manifest_epoch`, `epoch_of`), a call's served y
 (`served_y`) and a window (`window`).
 
 The run itself, every call computed and committed on the device by GPU 1's kernel pipeline (``PearlCDeviceRun``, its
-weights' roots ``weight_roots``), is the workload's: the PyTorch adapter's, which hands it to the serving option.
+weights' roots ``weight_roots``), is the workload's, which hands it to the serving option.
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ __all__ = ["CALL_CAPACITY", "CALL_STEPS", "EPOCH_STEPS", "FLAG_ROWS", "JOB_STEPS
 #: the Pearl-C schemes this device path runs, by name (`verity.protocols.accounting.pouw.verifier.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
 #: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it); ``h100`` (G = 4,
-#: GLM-5.3's FP8 form on the H200) is pearl_c_sm90's.  The format is -h3, SHA-512 throughout (its seeds, lines,
+#: a served model's FP8 form on the H200) is pearl_c_sm90's.  The format is -h3, SHA-512 throughout (its seeds, lines,
 #: tile leaves and HM96 trees: the one hash), each row's E_A line from its own seed (the work sampling design capping each
 #: credited row too); its tree hash comes from `verity.protocols.accounting.pouw.verifier.serving.HASH_FORMATS` through the scheme.
 SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED, H100))

@@ -27,7 +27,7 @@ TEMPLATE = "RoPEHead_v1{D=64}"
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
 
-def _sampling_design(why: str) -> str:
+def _design(why: str) -> str:
     return f"refused: {why}: no soundness claim draws by this law"
 
 
@@ -80,7 +80,7 @@ def test_no_claim_samples_by_these_sampling_designs_in_either_mode(verdicts, zk,
     """At the verifier's own K, work table, program, partition and closure map the work samples set up, and are refused for
     their sampling design; so is a bernoulli sample."""
     v = verdicts[zk][name]
-    assert not v["accepted"] and v["why"] == _sampling_design(why), v["why"]
+    assert not v["accepted"] and v["why"] == _design(why), v["why"]
 
 
 def test_a_subset_sample_at_hidden_outputs_passes_the_sampling_design_in_either_mode(verdicts):

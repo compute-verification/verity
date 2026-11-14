@@ -79,24 +79,24 @@ seed. -/
 def receipterOf (reg : Registration) (w : WindowRecord) (i : Nat) : Receipter :=
   receipter reg.receipt (w.seedOf i) reg.rows
 
-/-- An accepted window drew `drawn` from its openings coin over its passes' plans, has exactly one opening a sample, and
+/-- An accepted window drew `sampled` from its openings coin over its passes' plans, has exactly one opening a sample, and
 each sampled receipt's opening passes `checkOpening` under the receipter of its pass's seed. -/
 def AcceptChecksOpenings : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
     (openings : Array Opening),
     verifyWindow reg appends w coin samples openings = some .accept →
-      ∃ drawn, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some drawn ∧
-        openings.size = drawn.size ∧
-        ∀ k (hk : k < drawn.size),
-          checkOpening reg reg.digest appends w (receipterOf reg w drawn[k].1) drawn[k].1 drawn[k].2 openings[k]! = none
+      ∃ sampled, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some sampled ∧
+        openings.size = sampled.size ∧
+        ∀ k (hk : k < sampled.size),
+          checkOpening reg reg.digest appends w (receipterOf reg w sampled[k].1) sampled[k].1 sampled[k].2 openings[k]! = none
 
 /-- The verifier's process (`Verifier.spawnCheck`) checks a window's openings in chunks of `size` samples, each on a
 thread of its own (`checkWindowChunked`): its verdict is `checkWindow`'s on the whole window, which `Session.verify`
 sets in `Session.run`, for every chunk size and every input, a rejection naming the same failure and sample. -/
 def ChunkedIsWhole : Prop :=
   ∀ (size : Nat) (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
-    (drawn : Array (Nat × Nat)) (openings : Array Opening),
-    checkWindowChunked size reg digest appends w drawn openings = checkWindow reg digest appends w drawn openings
+    (sampled : Array (Nat × Nat)) (openings : Array Opening),
+    checkWindowChunked size reg digest appends w sampled openings = checkWindow reg digest appends w sampled openings
 
 /-- Sample `(i, p)`'s opening `o` passes checks 1–5 (`checkOpening`), with `j` the block at position `p` of pass `i`'s
 plan:
@@ -129,15 +129,15 @@ def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecor
             j (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)) ∧
       (receipterOf reg w i).receipt j o.block = y
 
-/-- An accepted window drew `drawn` from its openings coin, has exactly one opening a sample, and each sampled receipt's
+/-- An accepted window drew `sampled` from its openings coin, has exactly one opening a sample, and each sampled receipt's
 opening passes checks 1–5 (`OpeningPasses`). -/
 def AcceptOpensSamples : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
     (openings : Array Opening),
     verifyWindow reg appends w coin samples openings = some .accept →
-      ∃ drawn, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some drawn ∧
-        openings.size = drawn.size ∧
-        ∀ k (hk : k < drawn.size), OpeningPasses reg appends w drawn[k].1 drawn[k].2 openings[k]!
+      ∃ sampled, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some sampled ∧
+        openings.size = sampled.size ∧
+        ∀ k (hk : k < sampled.size), OpeningPasses reg appends w sampled[k].1 sampled[k].2 openings[k]!
 
 /-! ## The sample -/
 
@@ -155,14 +155,14 @@ receipt `(i, p)` with `receiptIndex = u`: so they are `min(s, U)` distinct recei
 `p < L_i`), one for each of the sampler's values. -/
 def SampleIsSubset : Prop :=
   ∀ (registration : ByteArray) (t : Nat) (coin : ByteArray) (samples : Nat) (lengths : Array Nat)
-    (drawn : Array (Nat × Nat)),
-    receiptSample registration t coin samples lengths = some drawn →
+    (sampled : Array (Nat × Nat)),
+    receiptSample registration t coin samples lengths = some sampled →
       ∃ L us, FlockSoundness.Randomness.subset (openingsKey registration t coin) (min samples lengths.toList.sum)
           lengths.toList.sum [.str "openings"] L = some us ∧
-        drawn.size = us.size ∧ us.size = min samples lengths.toList.sum ∧
-        (∀ k (hk : k < drawn.size), drawn[k].1 < lengths.size ∧ drawn[k].2 < lengths[drawn[k].1]! ∧
-          receiptIndex lengths drawn[k].1 drawn[k].2 = us[k]!) ∧
-        (∀ k₁ k₂ (h₁ : k₁ < drawn.size) (h₂ : k₂ < drawn.size), drawn[k₁] = drawn[k₂] → k₁ = k₂)
+        sampled.size = us.size ∧ us.size = min samples lengths.toList.sum ∧
+        (∀ k (hk : k < sampled.size), sampled[k].1 < lengths.size ∧ sampled[k].2 < lengths[sampled[k].1]! ∧
+          receiptIndex lengths sampled[k].1 sampled[k].2 = us[k]!) ∧
+        (∀ k₁ k₂ (h₁ : k₁ < sampled.size) (h₂ : k₂ < sampled.size), sampled[k₁] = sampled[k₂] → k₁ = k₂)
 
 /-! ## A pass's plan -/
 

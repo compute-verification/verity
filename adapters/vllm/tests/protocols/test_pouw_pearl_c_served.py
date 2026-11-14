@@ -53,11 +53,11 @@ from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import manifest as PPM
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
+from verity_torch.pouw.pearl_c import passes as PP
 
 SCHEME = "pearl-c-sm120-v1-h3"
 ENTRY = f"pouw:{SCHEME}"

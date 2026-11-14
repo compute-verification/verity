@@ -241,7 +241,7 @@ theorem subsetExact_some (key : ByteArray) (k n : Nat) (index : List FlockSoundn
 /-! ## The samples -/
 
 theorem sampleIsSubset : SampleIsSubset := by
-  intro registration t coin samples lengths drawn h
+  intro registration t coin samples lengths sampled h
   unfold receiptSample at h
   dsimp only at h
   have hP := prefixSums_fold (fun n => n) lengths
@@ -259,19 +259,19 @@ theorem sampleIsSubset : SampleIsSubset := by
   | some us =>
     simp only [openingsKey] at hu
     rw [hu] at h
-    change some _ = some drawn at h
+    change some _ = some sampled at h
     replace h := (Option.some.inj h).symm
     obtain ⟨L, hL⟩ := subsetExact_some _ _ _ _ _ hu
     obtain ⟨hsize, hlt, hnodup⟩ := subsetOn_spec _ _ _ (Nat.min_le_right _ _) us hL
-    have hdsize : drawn.size = us.size := by rw [h]; simp
-    have hk : ∀ k (hk : k < drawn.size), drawn[k].1 < lengths.size ∧ drawn[k].2 < lengths[drawn[k].1]! ∧
-        receiptIndex lengths drawn[k].1 drawn[k].2 = us[k]! := by
+    have hdsize : sampled.size = us.size := by rw [h]; simp
+    have hk : ∀ k (hk : k < sampled.size), sampled[k].1 < lengths.size ∧ sampled[k].2 < lengths[sampled[k].1]! ∧
+        receiptIndex lengths sampled[k].1 sampled[k].2 = us[k]! := by
       intro k hk
       have huk : us[k]! < lengths.toList.sum := by
         rw [getElem!_pos us k (by omega)]
         exact hlt _ (Array.getElem_mem_toList _)
       obtain ⟨hi, hlo, hhi, hoff⟩ := locate hP _ huk
-      have hd : drawn[k] = (bisectRight ends us[k]!,
+      have hd : sampled[k] = (bisectRight ends us[k]!,
           us[k]! - (if bisectRight ends us[k]! = 0 then 0 else ends[bisectRight ends us[k]! - 1]!)) := by
         subst h
         simp [getElem!_pos us k (by simpa using hk)]

@@ -47,7 +47,7 @@ The compiled sampled extractor's strict reruns and own calls (`SamplingGeneric.C
   own, at most the list's length times each one's bound; checking what a witness reveals reruns nothing
   (`checkRevealed_runs`) and makes the opening checks' calls (`ownLog_checkRevealed_length`).
 * `OpenCallsLe`: checking the openings one checked unit's Flock witness reveals, each under its roots, makes at most
-  `openCalls` SHA-512 calls, at a statement that parses. It is the deployed opening check's count, the sampled-proofs
+  `openCalls` SHA-512 calls, at a statement that parses. It is the deployed opening check's count, the SPOT
   verifier's.
 -/
 

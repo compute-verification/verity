@@ -158,7 +158,7 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
     assert doc["verdict"]["line"] == ("every sampled proof block's proof accepted by the Lean verifier (2 of 2 sessions); the final accept "
                                       "withheld, reason `two-stage-form` (the two-round form's soundness is not proved)")
     assert "final accept given" not in out and "| withheld (`two-stage-form`) |" in out
-    assert "  - the final accept is withheld by `sampled-proofs-verifier`: `two-stage-form`, the two-round form's " \
+    assert "  - the final accept is withheld by `spot-verifier`: `two-stage-form`, the two-round form's " \
            "soundness is not proved" in out
     # who decided each verdict is the table's, and a verdict no Lean verifier decided is listed
     assert {k["kind"]: k["decided_by"] for k in doc["verdicts"]} == {"lean-draw": "lean", "lean-verify": "lean",
@@ -167,7 +167,7 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
     # its record is the command's word for an accept the verifier withheld, and one the command's own reader takes
     assert reads(doc["verdict_record"]) and doc["verdict_record"] == {
         "piece": "second_stage", "control": None, "run": record["run"],
-        "verifier": {"module": "sampled-proofs-verifier", "commit": record["commit"]}, "verdict": "withheld",
+        "verifier": {"module": "spot-verifier", "commit": record["commit"]}, "verdict": "withheld",
         "proved_by": None,
         "open": "the two-round form's soundness is not proved; the replay block's inputs are committed after the sample",
         **NAMED}

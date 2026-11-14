@@ -404,20 +404,20 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
-    "verity/protocols/accounting/certifier/prover/advice_check.py",
-    "verity/protocols/accounting/certifier/prover/cache_step_v3.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v4.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v5.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v6.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v7.circuit-check.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v7.py",
+    "adapters/vllm/verity_vllm/compiler/advice_check.py",
+    "adapters/vllm/verity_vllm/compiler/cache_step_v3.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v4.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v5.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v6.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v7.circuit-check.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v7.py",
     "verity/protocols/accounting/certifier/prover/egress.py",
     "verity/protocols/accounting/certifier/prover/ingress_scan.py",
     "verity/protocols/accounting/certifier/prover/io_ids.py",
     "verity/protocols/accounting/certifier/prover/lengths_row.py",
     "verity/protocols/accounting/certifier/prover/response_tie.py",
-    "verity/protocols/accounting/certifier/prover/served_statics.py",
-    "verity/protocols/accounting/certifier/prover/served_tie.py",
+    "adapters/vllm/verity_vllm/compiler/served_statics.py",
+    "adapters/vllm/verity_vllm/compiler/served_tie.py",
     "verity/protocols/accounting/certifier/prover/window_charge.py",
 ]
 
@@ -514,6 +514,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/periods",
     "verity/protocols/accounting/pous/verifier",
+    "verity/protocols/proofs/spot/verifier",
     "verity/runtime",
 ]
 
@@ -720,6 +721,8 @@ paths = [
     "verity/protocols/proofs/spot/prover/costfit.py",
     "verity/protocols/proofs/spot/device/challenger.py",
     "verity/protocols/proofs/spot/device/challenger_gate.py",
+    "verity/protocols/proofs/spot/device/challenger_party.py",
+    "verity/protocols/proofs/spot/device/challenger_session.py",
     "verity/protocols/proofs/spot/device/coins.py",
     "verity/protocols/proofs/spot/device/remote.py",
     "verity/protocols/proofs/spot/prover/optimize.py",
@@ -729,6 +732,7 @@ loads = [
     "verity/channel.py",
     "verity/circuits",
     "verity/commitments",
+    "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
@@ -744,6 +748,7 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/accounting/certifier/prover/window_charge.py",
+    "verity/protocols/accounting/pous/prover/served_weights.py",
     "verity/protocols/accounting/pouw/prover/circuit/h1window.py",
     "verity/protocols/proofs/flock/prover/pod/rec_inner.py",
     "verity/protocols/proofs/flock/prover/pod/rec_reprice.py",
@@ -836,6 +841,7 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/session_prover.py",
     "verity/protocols/accounting/pous/prover/challenger_prover.py",
+    "verity/protocols/accounting/pous/prover/wipe_on_node.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
     "verity/protocols/accounting/pous/prover/workload.py",
     "verity/protocols/accounting/pouw/prover/workload.py",

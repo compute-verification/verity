@@ -47,4 +47,4 @@ inputs = ["tools/config/verity_config",
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_p2_stage.py"]
-paths = ["benchmarks/torch_gpu/p2_stage/served_weights.py"]
+paths = ["verity/protocols/accounting/pous/prover/served_weights.py"]
