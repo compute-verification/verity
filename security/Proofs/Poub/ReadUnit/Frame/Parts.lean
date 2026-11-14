@@ -5,7 +5,7 @@ the swap, a node, and the climb up the path against `Hash.Tree.climb`.
 -/
 module
 
-public import Proofs.Accounting.ReadUnit.Frame.Sha
+public import Proofs.Poub.ReadUnit.Frame.Sha
 
 @[expose] public section
 
