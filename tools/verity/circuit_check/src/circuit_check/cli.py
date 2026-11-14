@@ -404,8 +404,9 @@ def _record_units(cache: Path, opts: CK.Options, tasks: list[tuple], keys: list[
 
 def _calls(specs: list[str]) -> None:
     """Whether each Definition target is a Call (`targets.is_call`), resolved once in the process the targets' processes fork
-    from, so each takes the answer rather than working it out again.  A target that doesn't resolve, or that `is_call` can't
-    decide without the catalog (`targets.Undecided`), is left to its own check, which fails on it by name."""
+    from, so each takes the answer rather than working it out again.  A target that `is_call` can't decide without the catalog
+    (`targets.call_answer` None) is left to its own check, which fails on it by name (`targets.Undecided`), as is one that
+    doesn't resolve, said here too."""
     from verity.circuits.evaluation.reference import resolve
 
     for s in specs:
@@ -413,9 +414,10 @@ def _calls(specs: list[str]) -> None:
         for make in ([lambda s=s: TG.definition(s)] if kind == "definition" else
                      [lambda fn=fn: fn for fn in TG.sidecar_targets(s)[0].values()] if kind == "sidecar" else []):
             try:
-                TG.is_call(TG.family(resolve(make())))
-            except Exception:  # noqa: BLE001  (its check raises it again, by name)
-                continue
+                TG.call_answer(TG.family(resolve(make())))
+            except Exception as e:  # noqa: BLE001  (its check raises it again, by name)
+                print(f"circuit-check: {s}: whether it is a Call is not worked out ahead ({type(e).__name__}: {str(e)[:200]})",
+                      file=sys.stderr)
 
 
 def _init(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, tracing: bool) -> None:
@@ -432,12 +434,13 @@ def _rss_gb() -> float | None:
 
 
 def _vmrss_gb(pid: int | str) -> float | None:
-    try:
-        for ln in Path(f"/proc/{pid}/status").read_text().splitlines():
-            if ln.startswith("VmRSS:"):
-                return round(int(ln.split()[1]) / (1 << 20), 2)
-    except OSError:
-        pass
+    """``pid``'s resident set, in GiB: None without /proc, or for a process without one (a zombie)."""
+    status = Path(f"/proc/{pid}/status")
+    if not status.exists():
+        return None
+    for ln in status.read_text().splitlines():
+        if ln.startswith("VmRSS:"):
+            return round(int(ln.split()[1]) / (1 << 20), 2)
     return None
 
 
@@ -466,6 +469,13 @@ def _child(w: int, fn: Callable, item: Any) -> None:
     os._exit(0)
 
 
+def _end(kids: dict[int, tuple[int, int, bytearray]]) -> None:
+    """A zygote's end: its children killed and reaped."""
+    for pid, _, _ in kids.values():
+        os.kill(pid, 9)
+        os.waitpid(pid, 0)
+
+
 def _zygote(conn, fn: Callable, initializer: Callable | None, initargs: tuple, prepare: Callable | None = None) -> None:
     """`parallel`'s one worker: ``initializer`` once, then a forked child per item ``conn`` sends, each running that item alone and
     exiting, ``prepare(item)`` run here first.  Each child is reaped with ``wait4``, whose ``ru_maxrss`` is that child's own peak
@@ -487,13 +497,10 @@ def _zygote(conn, fn: Callable, initializer: Callable | None, initargs: tuple, p
             if key.fileobj is conn:
                 try:
                     msg = conn.recv()
-                except EOFError:
-                    msg = None
+                except EOFError:                                       # the parent ended without saying so
+                    return _end(kids)
                 if msg is None:
-                    for pid, _, _ in kids.values():
-                        os.kill(pid, 9)
-                        os.waitpid(pid, 0)
-                    return
+                    return _end(kids)
                 ticket, item = msg
                 if prepare is not None:
                     prepare(item)
@@ -619,8 +626,9 @@ class Zygote:
         self._closed = True
         try:
             self.conn.send(None)
-        except OSError:
-            pass
+        except OSError as e:
+            print(f"circuit-check: a zygote ended before it was told to ({type(e).__name__}), with exit code {self.exitcode()}",
+                  file=sys.stderr)
         if self.conn in _FORKED:
             _FORKED.remove(self.conn)
         self.conn.close()
@@ -1223,10 +1231,9 @@ def granted_gb(path: Path | None) -> int | None:
     if path is None:
         return None
     with CC.internal():
-        try:
-            v = path.read_text().strip()
-        except OSError:
+        if not path.exists():
             return None
+        v = path.read_text().strip()
     return int(v) if v.isdigit() else None
 
 
@@ -1376,11 +1383,10 @@ def auto_jobs(root: Path = Path("/")) -> int:
 def cores(root: Path = Path("/")) -> int:
     """The CPUs this process may use: its affinity, bounded by its cgroup's cpu.max quota (a pod's `nproc` can exceed it)."""
     n = len(os.sched_getaffinity(0))
-    try:
-        q, p = (root / "sys/fs/cgroup/cpu.max").read_text().split()
-        return n if q == "max" else min(n, max(1, int(q) // int(p)))
-    except (OSError, ValueError):
+    if not (quota := root / "sys/fs/cgroup/cpu.max").exists():
         return n
+    q, p = quota.read_text().split()
+    return n if q == "max" else min(n, max(1, int(q) // int(p)))
 
 
 def default_jobs(everything: bool) -> int:

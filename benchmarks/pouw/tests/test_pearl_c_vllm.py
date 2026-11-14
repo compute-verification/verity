@@ -2855,19 +2855,20 @@ def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
     assert HS._calls(d)["calls"][1]["ea_rows_wrong"] == [0]
     (d / "call1.rowdig_a").write_bytes(bytes(64) + (d / "call1.rowdig_a").read_bytes()[64:])
     assert not HS._calls(d)["calls"][1]["row_digests"]
-def test_verify_run_reads_a_v1_manifest_only_as_a_recorded_replay(honest_pass):
-    """A v1 manifest (a pass recorded before the execution phase's coins) is refused unless ``--recorded``; read as a recorded pass it needs
-    a beacon its salt is from; a manifest of another schema is refused either way."""
+def test_verify_run_refuses_a_v1_manifest(honest_pass):
+    """A v1 manifest (a pass recorded before the execution phase's coins) is refused, as the Lean `PouwCheck.PearlPlus`
+    refuses it, and so is a manifest of another schema; there is no ``--recorded`` reading of one."""
     path, *_ = honest_pass
     man = json.loads(path.read_text())
     v1 = path.parent / "manifest-v1.json"
-    for schema, recorded, why in ((CC.MANIFEST_RECORDED, False, "recorded before epoch coins"),
-                                  (CC.MANIFEST_RECORDED, True, "recorded pass has no beacon"),
-                                  ("verity-vllm/pouw-pearl-c-run/v0", True, f"not {CC.MANIFEST_SCHEMA}")):
+    for schema, why in ((CC.MANIFEST_RECORDED, "recorded before epoch coins"),
+                        ("verity-vllm/pouw-pearl-c-run/v0", f"not {CC.MANIFEST_SCHEMA}")):
         v1.write_text(json.dumps({**man, "schema": schema}))
-        r = VR.verify(v1, 3, 1, "test", b"verifier" * 4, coins=published(path), recorded=recorded)
-        assert not r["accepted"] and r["line"].startswith("REJECT") and why in r["line"], (schema, recorded, r["line"])
+        r = VR.verify(v1, 3, 1, "test", b"verifier" * 4, coins=published(path))
+        assert not r["accepted"] and r["line"].startswith("REJECT") and why in r["line"], (schema, r["line"])
     v1.unlink()
+    with pytest.raises(SystemExit):
+        VR.main([str(path), *coins_args(path), "--recorded"])
 
 
 def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refused():

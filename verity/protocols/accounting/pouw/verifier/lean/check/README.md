@@ -21,12 +21,12 @@ execution phase of the credit period's close is credited.
 
 | field | here |
 | --- | --- |
-| `Params` | the verifier's own `{key, main, name}`: the challenger key it pins, its copy of main's first-parent history, the credit period's name |
+| `Params` | the verifier's own `{key, main, name, sessions}`: the challenger key it pins, its copy of main's first-parent history, the credit period's name, and the ordered ids of the sessions the challenger's ledger opened for its execution phases; without `sessions` (`{key, main, name}`) the credit period's close is checked against no session list. They name no device |
 | `Commitment` | the auditor's ledger, the lines the challenger signed, as canonical JSON: its credit period's open commits the circuit, K, T, the weights and the fixed length before any coins are flipped |
 | `digest` | SHA-512(`verity/pouw/period/ledger/v1` ‖ 0 ‖ the ledger's bytes) |
 | `Evidence` | `{pins, windows}`: the challenger host's pins log, and each execution phase's evidence in the close's order (`Credit.PERIOD_KEYS`, each sampled proof block's and each round's proof outcome the verifier's verdict) |
-| `check` | `Credit.periodCredit`; a refusal is `code: why`, and it never leaves a credit period undecided |
-| `Public` | `Credit.PeriodCredit.toJson`: each execution phase's credited calls and credited served work, K, δ and each execution phase's ε |
+| `check` | `Credit.periodCredit`, then a session of the close the parameters don't list or that repeats one (`sessions`); a refusal is `code: why`, and it never leaves a credit period undecided |
+| `Public` | `Published.toJson`, what `PouwCheck.Period.account` (a `Core.Account`) reads: `Credit.PeriodCredit.toJson` (each execution phase's credited calls and credited served work, K, δ and each execution phase's ε) with the parameters' challenger `key`, the close's open `roots`, and the period's span in ledger entries (`start`, the period-open's seq, and `length` to its close); it names no device, as the accounting layer binds `key` to a registered device |
 | `Profile` | `{period, windows}`: the credit period's name and its number of execution phases |
 
 | module | `core_check.py` |
