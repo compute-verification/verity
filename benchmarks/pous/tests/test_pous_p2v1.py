@@ -17,6 +17,7 @@ import pytest
 torch = pytest.importorskip("torch")
 pytest.importorskip("verity")
 
+import timed_audit_judge  # noqa: E402
 from test_pous_harness import PyResponder  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -99,9 +100,13 @@ def _backend(flip: bool = False, says: int = 4):
 
 
 def _args(tmp_path, **kw):
+    """The harness's arguments, `V3`'s verdict of record the Python reference standing in for `pous-timed-audit`
+    (`timed_audit_judge`), which no CPU test builds."""
     base = {"max_segments": 0, "p2_lib": str(tmp_path / "lib"), "build_dir": str(tmp_path / "build"), "p2_encode_blocks": 0,
             "tokens": "1,8", "reps": 1, "load_tokens": 0, "audits": 2, "pings": 20, "allowance": "max", "k": 0, "deadline_ns": 0,
             "clock": "logical", "verifier_cpu": None, "responder_cpu": None, "nvme_dir": "", "nvme_samples": 8, "impl_commit": None}
+    if "pous_timed_audit" not in kw:
+        base["pous_timed_audit"] = str(timed_audit_judge.exe(tmp_path))
     return types.SimpleNamespace(**{**base, **kw})
 
 
@@ -400,6 +405,52 @@ def test_the_v3_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fa
     assert body["implementation"]["memory_challenger_args"] == ["--strict"]
     assert "has no certificate" in honest["refused"] and honest["audits"] == 0 and honest["responder"]["answered"] == 0
     assert not gates["timed_audit"]["passed"] and not gates["certificate"]["passed"] and body["profile"] is None
+
+
+@pytest.mark.parametrize("lean", ["missing", "rejecting"])
+def test_the_v3_arms_audit_is_the_leans_and_without_it_nothing_is_accepted(tmp_path, lean):
+    """The research audit the Python accepts (`test_the_v3_arm_serves_...`) is accepted only by the Lean's verdict: with no
+    `pous-timed-audit` to run, every audit is undecided, and with one that rejects them, they are rejected for the
+    disagreement; either way no audit is accepted, the gate fails and no profile is issued."""
+    exe = tmp_path / "missing" if lean == "missing" else timed_audit_judge.exe(tmp_path, reject=True)
+    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105, seed=SEED, pous_timed_audit=str(exe)), WS, tmp_path,
+                                  backend=_backend(), params=_small(), research=True)
+    honest = body["metrics"]["audit"]
+    assert honest["verdicts"]["python"]["accepted"] and honest["audits_accepted"] == 0 and honest["profile"] is None
+    assert honest["verdict"]["by"] == "lean" and {"missing": "undecided", "rejecting": "rejected"}[lean] in honest["verdict"]
+    assert not body["gates"]["timed_audit"]["passed"] and body["gates"]["timed_audit"]["rc"] == 1 and body["profile"] is None
+
+
+def test_bench_judges_an_in_process_p2_audit_before_a_profile_and_no_other(tmp_path):
+    """`bench.py`'s in-process audits (`Reference`): a P2 v4 record is accepted only by the Lean's verdict (its stand-in
+    here), not where none runs; a scheme no Lean judges keeps no record and is never accepted."""
+    from verity.protocols.accounting.pous.device import timed_audit as live
+    from verity.protocols.accounting.pous.verifier import protocol, schemes
+    from verity.protocols.accounting.pous.verifier.verifier import VerifierKey, leaf_hash
+
+    bench = _bench()
+    params = schemes.P2Params(128, 173, 64, 1)
+    scheme = schemes.P2(params)
+    blocks = [hashlib.shake_256(i.to_bytes(4, "big")).digest(params.block_bytes) for i in range(params.blocks)]
+    vk = VerifierKey.from_leaves(params, bench.SALT, [leaf_hash(params, bench.SALT, i, b) for i, b in enumerate(blocks)])
+    ticks = iter(range(10**6))
+    records = []
+    for j in range(2):
+        source = f"bench-audit/{j}".encode()
+        v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(source, vk), k=4, clock=lambda: next(ticks), research=True,
+                                experimental=True)
+        res = v.run(lambda i: (blocks[i], {"index": i, "block": blocks[i]}))
+        records.append({"source": source.hex(), "answers": [{"index": x.report["index"], "elapsed_ns": x.elapsed_ns,
+                                                             "block": x.report["block"].hex()} for x in res.answers]})
+    record = {"root": vk.root.hex(), "clock": "logical", "deadline_ns": v.limit_ns, "rtt_allowance_ns": 0,
+              "limit_ns": v.limit_ns, "k": 4, "strict": False, "records": records}
+    assert bench.judging(scheme) and not bench.judging(schemes.get("band-chain/d12/v1"))
+    judged = bench.judge_audits(scheme, vk, record, str(timed_audit_judge.exe(tmp_path)))
+    assert judged["accepted"] and judged["verdict"]["by"] == "lean" and judged["verdict"]["audits_accepted"] == 2, judged
+    missing = bench.judge_audits(scheme, vk, record, str(tmp_path / "missing"))
+    assert not missing["accepted"] and "undecided" in missing["verdict"]
+    assert bench.judge_audits(scheme, vk, None, None) == {"accepted": False,
+                                                          "verdict": {"by": None, "unjudged": live.NO_LEAN}}
 
 
 def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):

@@ -4,8 +4,9 @@
 stand-in on a host of its own, in place of the side `--challenger-command` starts on `--challenger`, its key trusted
 only when it is the one `--trusted-sha512` pins (period.json's `wipe.trusted_sha512`), as demo.sh has it. The
 challenger period.json names is `wipe_party.side_of`'s, written to `$OUT/party.json` before the stand-in replaces it;
-the arguments and the lease it ran under go to `$OUT/demo-argv.json`. The Python judges alone: a `--wipe-protocol` is
-only recorded.
+the arguments and the lease it ran under go to `$OUT/demo-argv.json`. A `--wipe-protocol` (without `--no-lean`) is the
+period's Lean judge, stood in by one that answers each case as the Python answered it; without one the leg has no judge,
+as demo.sh's period has none under `--no-lean`.
 `python served_wipe_demo.py OUT LEASE [DEMO_OPTIONS]`: the test's shim passes `$OUT` and `$GPU_LEASE_UUID`."""
 
 from __future__ import annotations
@@ -35,7 +36,8 @@ def main(argv: list[str]) -> int:
     a = ap.parse_args(argv)
     out = Path(out)
     (out / "demo-argv.json").write_text(json.dumps({"argv": argv, "lease": lease or None}))
-    doc = {"tools": {}, "challenger_host": a.challenger,
+    judge = None if a.no_lean else a.wipe_protocol
+    doc = {"tools": {} if judge is None else {"wipe-protocol": judge}, "challenger_host": a.challenger,
            "challenger": {"wipe": {"command": shlex.split(a.challenger_command), "address": a.challenger_address}},
            "wipe": {"store": "host", "reads": int(a.reads), "trusted_sha512": a.trusted_sha512}}
     of = WP.side_of
@@ -46,7 +48,17 @@ def main(argv: list[str]) -> int:
                                                     "address": named.address}))
         return Side(named.host, (sys.executable, str(SIDE), str(device)))
 
-    WP.side_of = stand_in
+    wipes, run = [], W.run
+
+    def ran(*args, **kw):
+        wipes.append(run(*args, **kw))
+        return wipes[-1]
+
+    def judged(exe, cases):
+        assert exe == judge and list(cases) == [wipes[-1].case]
+        return [wipes[-1].answer]
+
+    WP.side_of, W.run, W.serve = stand_in, ran, judged
     with tempfile.TemporaryDirectory() as t:
         period = Path(t) / "periods" / "p0"
         period.mkdir(parents=True)

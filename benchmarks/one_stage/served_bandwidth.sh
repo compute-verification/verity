@@ -21,8 +21,9 @@
 # is not interleaved with the engine's reads, since serving is not hooked: the answer says so (an accept in its profile,
 # which has no reason), and DIR/served.json names the window, the session's times and its card. The session's core case
 # (PoUB-P2's, `p2_case`), the composite's bandwidth piece, and its answer go to SERVE_DIR/private/bandwidth (0700, its
-# files 0600, never DIR: the case holds the store's opened blocks and the verifier's coins), the answer the Lean's when
-# BW_CASE_EXE names `remote-audit-p2-protocol`, else `p2_case.answer`'s; DIR/session/session.json says where it went.
+# files 0600, never DIR: the case holds the store's opened blocks and the verifier's coins), the answer the Lean's:
+# BW_CASE_EXE's, else `remote-audit-p2-protocol` built here in a scratch copy of the tree (as `served_piece.sh` builds
+# it; lake-build.log in DIR), and one that doesn't build runs no session. DIR/session/session.json says where it went.
 #
 # The layout is the store's (`p2_v1/store.py layout`), held to the store's setup.json; the lib is kernels' build
 # (`benchmarks/torch_gpu/p2_stage/build.sh` at this commit, its source.txt and MANIFEST.sha256 kept in DIR), or BW_LIB, a
@@ -69,13 +70,22 @@ if [ "$DEVICE" != cpu ] && [ -z "${BW_LIB:-}" ]; then
   cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/MANIFEST.sha256" "$O/" 2>/dev/null
   LIB=$S/lib/lib
 fi
-grep -qE " rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt"; tail -20 "$O/layout.log" "$O/build.log" 2>/dev/null; }
+CASE_EXE=${BW_CASE_EXE:-}
+if [ -z "$CASE_EXE" ]; then
+  LEAN=verity/protocols/accounting/poub/verifier/lean
+  tar -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
+  export PATH="$HOME/.elan/bin:$PATH"
+  command -v lake > /dev/null 2>&1 || bash tools/verity/lean/setup.sh "$S/$LEAN" > "$O/lake-setup.log" 2>&1
+  (cd "$S/$LEAN" && lake build remote-audit-p2-protocol) > "$O/lake-build.log" 2>&1
+  step case-exe $?
+  CASE_EXE=$S/$LEAN/.lake/build/bin/remote-audit-p2-protocol
+fi
+grep -qE " rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt"; tail -20 "$O/layout.log" "$O/build.log" "$O/lake-build.log" 2>/dev/null; }
 
 args=(session --store "$STORE" --layout "$LAYOUT" --lib "$LIB" --node "$NODE" --registration "$REG"
       --party "$PARTY" --party-host "$PARTY_HOST" --windows "$WINDOWS" --passes "$PASSES" --samples "$SAMPLES"
       --window-s "$WINDOW_S" --deadline-s "$DEADLINE_S" --device "$DEVICE" --out "$O/session" --expect accept
-      --case-dir "$SERVE/private/bandwidth")
-[ -n "${BW_CASE_EXE:-}" ] && args+=(--case-exe "$BW_CASE_EXE")
+      --case-dir "$SERVE/private/bandwidth" --case-exe "$CASE_EXE")
 [ "${BW_REF_DECODE:-0}" = 1 ] && args+=(--ref-decode)
 [ -n "${BW_WORKERS:-}" ] && args+=(--workers "$BW_WORKERS")
 [ "${BW_CHEAT:-}" = cache ] && args+=(--cache)

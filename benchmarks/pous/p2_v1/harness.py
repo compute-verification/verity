@@ -5,8 +5,10 @@ The kernels take a setup's key prefix, so one arm runs either framing, both on v
 - `V1` (`p2-v1-gpu`): the v4 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
 - `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
   the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `verity/protocols/accounting/pous/device/timed_audit.py --strict`, which
-  refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
-  with the scheme's own codec back to `W`'s, when that segment is wholly encoded.
+  refuses any `k` or `Δ + RTT` the certificate does not cover, and judged by `pous-timed-audit` (`--pous-timed-audit`,
+  else `pous_check`'s, built once a run: `timed_audit_exe`), whose verdict is the record's: where it can't run, every
+  audit is undecided.  Its extra gate (`codec`) decodes segment 0 of the device's `C` with the scheme's own codec back
+  to `W`'s, when that segment is wholly encoded.
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
   cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
   of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
@@ -45,6 +47,7 @@ import hashlib
 import json
 import os
 import statistics
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -186,6 +189,22 @@ class MC(V3):
 FRAMINGS = {f.impl: f for f in (V1, V3, MC)}
 TAMPER_EVERY = 10
 """The tampered control flips the top bit of the last byte of one block in this many."""
+TIMED_AUDIT_CHECK = H.ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "check"
+
+
+def timed_audit_exe(out: Path) -> Path:
+    """`pous_check`'s `pous-timed-audit`, the verdict of record on `V3`'s audits, built once a run with `lake` as `pod.sh
+    PREPARE=1` builds it (a no-op after that), its log in `lake-build.log`.  Where it doesn't build, the path of an
+    executable that isn't there, so every audit is undecided."""
+    with (out / "lake-build.log").open("w") as log:
+        try:
+            rc = subprocess.run(["lake", "build", "pous-timed-audit"], cwd=TIMED_AUDIT_CHECK, stdout=log,
+                                stderr=subprocess.STDOUT).returncode
+        except OSError as e:
+            log.write(f"lake can't run here: {e}\n")
+            rc = None
+    built = TIMED_AUDIT_CHECK / ".lake" / "build" / "bin" / "pous-timed-audit"
+    return built if rc == 0 else out / "pous-timed-audit (not built: lake-build.log)"
 
 
 @dataclass
@@ -498,6 +517,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     leaves = out / "leaves-p2.bin"
     leaves.write_bytes(b"".join(fr.leaf(i, c_host[i * nb:(i + 1) * nb]) for i in range(blocks)))
     fields, live, extra = fr.ready(), fr.live, list(fr.memory_challenger_args)
+    if live == H.MEMORY_CHALLENGER:
+        extra += ["--lean-exe", str(getattr(a, "pous_timed_audit", None) or timed_audit_exe(out))]
     H.leave_reserved(a)
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None
@@ -533,7 +554,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     k = int(honest.get("k") or 0)
     acc = fr.accepted
     gates["timed_audit"] = {"passed": honest.get("audits") == honest.get(acc) and bool(honest.get("audits")),
-                            "rc": honest["rc"], "accepted_by": acc}
+                            "rc": honest["rc"], "accepted_by": acc, "verdict": honest.get("verdict")}
     gates["value_control"] = {"passed": value.get(acc) == 0 and value.get("wrong", 0) > 0,
                               "accepted": value.get(acc), "wrong": value.get("wrong")}
     gates["late_control"] = {"passed": late.get(acc) == 0 and late.get("late", 0) > 0 and late.get("wrong", 1) == 0,
