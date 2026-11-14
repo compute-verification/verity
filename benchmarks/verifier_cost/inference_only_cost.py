@@ -38,7 +38,7 @@ sys.path.insert(0, str(HERE))
 import inference_only_glm  # noqa: E402
 import run  # noqa: E402
 
-NCI = run.NCI
+INFERENCE_ONLY_PACKAGE = run.INFERENCE_ONLY_PACKAGE
 
 
 def launch(argv: list[str], log: Path | None = None) -> dict:
@@ -100,8 +100,8 @@ def check(args, name: str, path: Path, row: dict) -> dict:
 
 
 def suite(args) -> int:
-    lock = json.loads((NCI / "lean-audit.json").read_text())
-    exes = {e["root"]: e["name"] for e in tomllib.loads((NCI / "lakefile.toml").read_text())["lean_exe"]}
+    lock = json.loads((INFERENCE_ONLY_PACKAGE / "lean-audit.json").read_text())
+    exes = {e["root"]: e["name"] for e in tomllib.loads((INFERENCE_ONLY_PACKAGE / "lakefile.toml").read_text())["lean_exe"]}
     data = Path(args.scratch) / "suite"
     data.mkdir(parents=True, exist_ok=True)
     bad = 0
@@ -113,9 +113,9 @@ def suite(args) -> int:
     for main, spec in sorted(lock["runs"].items()):
         t = time.perf_counter()
         gen = [sys.executable if a == "python3" else sub(a) for a in spec["generate"]]
-        subprocess.run(gen, cwd=NCI, check=True, capture_output=True)
+        subprocess.run(gen, cwd=INFERENCE_ONLY_PACKAGE, check=True, capture_output=True)
         gen_s = time.perf_counter() - t
-        argv = [str(NCI / ".lake/build/bin" / exes[main])] + [str(data / a[1:-1]) if a.startswith("{") else a for a in spec["args"]]
+        argv = [str(INFERENCE_ONLY_PACKAGE / ".lake/build/bin" / exes[main])] + [str(data / a[1:-1]) if a.startswith("{") else a for a in spec["args"]]
         r = launch(argv)
         tail = r.pop("lines")[-3:]
         files = {a[1:-1]: (data / a[1:-1]).stat().st_size for a in spec["args"] if a.startswith("{")}
