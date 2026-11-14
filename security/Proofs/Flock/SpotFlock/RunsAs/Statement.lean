@@ -194,11 +194,11 @@ def RunCoinsFromDevice : Prop :=
       (∃ sample ns ks draw, Spot.Select.selectSecond sample ns ks it.source = .ok (draw, read₂)) ∧
       (0 < (i.source.extract 0 read₁).size → ∃ key w label d, i.key = some key ∧
         i.params.verifier.windowRoot = some w ∧ i.family = some label ∧
-        Spot.Registration.digest i.record = .ok d ∧
+        Spot.Docket.digest i.record = .ok d ∧
         FromDevice dev key w label d i.coins (i.source.extract 0 read₁)) ∧
       (0 < (it.source.extract 0 read₂).size → ∃ key w label d, i.key = some key ∧
         it.params.verifier.windowRoot = some w ∧ it.family = some label ∧
-        Spot.Registration.digest it.record = .ok d ∧
+        Spot.Docket.digest it.record = .ok d ∧
         FromDevice dev key w label d it.coins (it.source.extract 0 read₂))
 
 /-! ## The top statement -/
