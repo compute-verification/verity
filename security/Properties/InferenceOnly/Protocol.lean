@@ -3,7 +3,7 @@ module
 public import InferenceOnlyCheck.Protocol
 
 /-!
-# What NCI's core protocol's acceptance means
+# What the inference-only policy's core protocol's acceptance means
 
 `InferenceOnlyCheck.Protocol.check` (`verity/core/protocols/network/inference_only/lean/InferenceOnlyCheck/Protocol.lean`, package `inference_only_check`) is the
 inference-only policy as a core protocol, `verity/inference-only/v0`, a subprotocol of both composites
@@ -30,7 +30,7 @@ namespace InferenceOnlyCheck.Properties
 open Lean (Json)
 open InferenceOnlyCheck.Protocol (Params Commitment Evidence instanceOf trustedOf reportOf)
 
-/-- **NCI's protocol accepts only a complying verdict of the check of record.** On every case `InferenceOnlyCheck.Protocol.check`
+/-- **The inference-only policy's protocol accepts only a complying verdict of the check of record.** On every case `InferenceOnlyCheck.Protocol.check`
 accepts, `InferenceOnlyCheck.Theta.evaluate` accepts the instance and trusted input the case gives with a verdict `out` that
 the policy check gives on the instance too, whose `complies` is `true` and whose report is the profile. -/
 def ProtocolAccepts : Prop :=
