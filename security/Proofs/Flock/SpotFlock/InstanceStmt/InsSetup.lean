@@ -70,7 +70,7 @@ pinned outputs' (`HmOut.pinPairs`), whose loops the kernel reads over their list
 (`Std.Legacy.Range.forIn_eq_forIn_range'`). `setup_X` walks `Ins.setup` to `setX` at the reading's tags and setup
 (`tags_rX`, `setup_rX`): the registered reads (`Registered.check`, on the units the setup derived from the program), the
 full-draw check, the statement checks without an inner shape, the zero-knowledge shape (`shapeOk_stX`), the recursion's
-coins and public rows (none at unit `copy16`) and the draw's law. `setupOf_x` is `FlockDeploy.setupOf true` at the
+coins and public rows (none at unit `copy16`) and the sample's law. `setupOf_x` is `FlockDeploy.setupOf true` at the
 statement `x r`: its inputs `ins r` and its setup `tabAt r`, where the verifier's two fixed nets build.
 -/
 

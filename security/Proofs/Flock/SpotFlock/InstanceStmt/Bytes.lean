@@ -16,7 +16,7 @@ table, of
   zero, with the run's input set and its ports' bindings to the run;
 * the program (`progText`): its root a batch of two members of the primitive `T_v1`, partitioned by
   `Q_template_instance` v0 at `T_v1` (`partObj`);
-* the draw (`drawJ`): unit 0 of the two, and the header the verifier writes for the drawn statement (`hdrD`);
+* the sample (`drawJ`): unit 0 of the two, and the header the verifier writes for the sampled statement (`hdrD`);
 * the registered reads (`regJ`): `i0` and `o0` at one leaf each, which both units read.
 
 Every registered root is its one leaf: the zero row's `b ‖ c` under its value's domain (`regRoot`). The circuit file's
@@ -185,12 +185,12 @@ def bodyB : ByteArray := bcI ++ bcO ++ bcO ++ u32 0 ++ u32 0 ++ u32 0 ++ u32 1
 def tailB : ByteArray := "\n".toUTF8 ++ bodyB
 def pubOf (r : Run) (circ cls : String) : ByteArray := (printJson (hdrJ r circ cls)).toUTF8 ++ tailB
 
-/-! ## The draw and the registered reads -/
+/-! ## The sample and the registered reads -/
 
 def drawJ : Json := Json.mkObj [("k", jn 1), ("law", js "subset"), ("population", jn 2), ("units", ja [jn 0])]
 
-/-- The drawn statement's header, as `HmRow.drawn` writes it at `drawJ`: the population's, with the sample, one instance
-of the two, and the drawn instance's units. -/
+/-- The sampled statement's header, as `HmRow.drawn` writes it at `drawJ`: the population's, with the sample, one instance
+of the two, and the sampled instance's units. -/
 def hdrD (r : Run) (c : Circuit) (circ cls : String) : Json :=
   ((((hdrJ r circ cls).setObjVal! "unit_draw" drawJ).setObjVal! "instances" (Lean.toJson (1 : Nat))).setObjVal!
     "population" (Lean.toJson (2 : Nat))).setObjVal! "units" (HmRow.unitsEntry { c with outPorts := #[] } #[0])

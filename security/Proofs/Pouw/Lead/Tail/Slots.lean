@@ -12,7 +12,7 @@ block's slots (step, coin tile) hold two equal tiles on at most a `λ_b^x / x!` 
 
 A slot's own coordinates are 64 fresh bits, one a row of its coin tile (`setBits`): digit 0 of the step-0 bits `a₁` at
 step 0, the tag bits `b` of its step at a later step. With whole coin tiles the coins are the rest (`b` at step 0,
-`a₁`'s digits 1 to 3, `G`, the coin lanes), drawn first, and a product over the slots in slot order (step, then coin
+`a₁`'s digits 1 to 3, `G`, the coin lanes), sampled first, and a product over the slots in slot order (step, then coin
 tile; `bitsEquiv`). `count_tail_equiv` then needs:
 
 * **Reads**: a slot's tiles are prefix sums over steps up to its own, of its own coin tile's rows: the bits of slots

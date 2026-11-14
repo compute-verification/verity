@@ -165,9 +165,9 @@ def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_r
 def test_under_pearlplus_tie_and_the_gate_the_piece_draws_only_after_a_period_whose_reserves_held(tmp_path, case):
     """Under the gate the window serve closed its Pearl-C period (served_verdicts.sh's serve()), its period.json saying
     whether the lane's reserves since the open were the window's salt sessions alone (``reserves``) and holding the gate's
-    close (``close``): the piece draws only after one that closed and held, and once the coin is drawn its RULE line reads
+    close (``close``): the piece samples only after one that closed and held, and once the coin is flipped its RULE line reads
     the ledger (``pearlplus-period rule`` on the serve dir's pearlplus/, the lane and the coin record). Otherwise, the
-    gate's close refused too, it says why, draws nothing and still writes its piece."""
+    gate's close refused too, it says why, samples nothing and still writes its piece."""
     reserves = {"held": {"ok": True}, "unclosed": {"ok": True}, "refused": {"ok": False}, "unread": None}[case]
     period = {"name": "pp-r1", **({} if reserves is None else {"reserves": reserves}),
               **({} if case == "unclosed" else {"close": {"kind": "period-close"}})}
@@ -290,8 +290,8 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
 
 def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_draw(tmp_path):
     """Under the gate the untied piece opens the lane's Pearl-C period right before its retained serve and closes it only
-    right before verify draws, after the give-up and retain: while it is open its cap of 1, which the serve's salt session
-    fills, refuses every other reserve of the lane, so none comes between its close and the draw, which a compose takes
+    right before verify samples, after the give-up and retain: while it is open its cap of 1, which the serve's salt session
+    fills, refuses every other reserve of the lane, so none comes between its close and the sample, which a compose takes
     only as the lane's first reserve after the close."""
     rc, said, got = _untied(tmp_path, "yes reject")(PEARLC_CHALLENGER_GATE="ssh gate")
     names = [" ".join(c["argv"][:2]) if c["argv"][:1] == ["pearlplus-period"] else
