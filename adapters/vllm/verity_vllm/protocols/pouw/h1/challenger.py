@@ -1,7 +1,7 @@
-"""H1's coins from the proof system's challenger on its auditor host (`verity.protocols.proofs.spot.device.remote`), and the
+"""H1's coins from the proof system's challenger on its auditor device (`verity.protocols.proofs.spot.device.remote`), and the
 verifier's check that a served window's coins are that challenger's.
 
-* **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor host's
+* **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor device's
   challenger, H1's opened on the window's open root and ncp-v2's after the weights' root.
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
   (its ``out/``, fetched whole), never from the prover's bundle, under its own challenger key (`pinned_key`),

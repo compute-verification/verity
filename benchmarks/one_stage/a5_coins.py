@@ -2,7 +2,7 @@
 of record, from whose coins each rank's registration samples once (`spot.coins.ChallengerCoins` over a
 `remote.RemoteChallenger`), and the evidence its verifier checks every sample's coins against once the session has ended.
 
-* **The session.** ``local``: a development session on this machine, run by the auditor host's own service
+* **The session.** ``local``: a development session on this machine, run by the auditor device's own service
   (`verity/protocols/compose/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
   writes, and its key is this run's alone (or, where its caller keeps the host's root, `start`'s ``host``, that of every
@@ -612,7 +612,7 @@ def opened_reason(got: dict, withhold: bool) -> str | None:
 
 
 class Local:
-    """A development session on this machine (module docstring), its auditor host's root in scratch `root`, pinned on the
+    """A development session on this machine (module docstring), its auditor device's root in scratch `root`, pinned on the
     verifier's copy of main's first-parent line `main`, its key at `params` (W, H), made in `workers` processes. A
     `root` that holds a host already is reopened: its key, with the leaves it has signed at, its ledger and its pins
     log are kept, so a session opened on it is the same challenger's as the ones before it, under the same key (`key`)."""

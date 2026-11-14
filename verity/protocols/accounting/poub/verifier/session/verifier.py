@@ -87,7 +87,7 @@ keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill):
 A session's coins are an epoch of the proof system's one challenger (`coins.SessionCoins`): from a challenger in this process
 (`--challenger local`, the default), from `verity/protocols/compose/device/live_challenger/serve.py`, started for the session on this
 machine and reached through `spot.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
-auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
+auditor device's challenger through its gate, a session reserved in the audit's period and opened at the session's
 window root (`--challenger gate`, `challengers.ChallengerGate`). Each coin is asked for after the root it follows, the
 Lean takes it with the event that released it, and once the session ends what the challenger signed holds the session's
 coins (`AuditRun.released_reason`, and under the gate the auditor's ledger, `AuditRun.trusted_reason`, which also holds

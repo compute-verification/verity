@@ -1,6 +1,6 @@
 """The memory line on the auditor's clock, the analysis of record for a gate run: each accepted paced session's line
 (time-held and link-charged, each read held over time and at the passes, exact) with its groups' times read from what
-the auditor's host signed rather than from the verifier's stamps.
+the auditor's device signed rather than from the verifier's stamps.
 
 **Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
 `RemoteAudit.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `RemoteAudit.Pooled` over the
@@ -31,7 +31,7 @@ Beside the times the line reads the Lean verifier's record of the session (`veri
 is its wrong receipts, and its registered blocks, the registration's; and the verifier's verdict, and each group's
 held bytes by kind (`ledger.memory`), which the record doesn't hold (they need each pass's plan and the store's
 regions). The verifier runs on the audit's machine, not
-the auditor's host, so these rest on its verdict, which the session's transcript (`verifier.py --transcript`) lets the
+the auditor's device, so these rest on its verdict, which the session's transcript (`verifier.py --transcript`) lets the
 auditor replay offline (PoUB's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
 cross-check the challenger's: each coin interval on both clocks, their rates, and each group's L on both.
 

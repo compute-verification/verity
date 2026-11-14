@@ -22,8 +22,8 @@ its own, which it never reads; `warden.json` keeps its last line, the lost relea
 (`watermark`).
 
 **What it can't enforce here.**
-- Run directly, the network certifier runs on the server's host (`trusted-host` stands for the auditor's host). The
-  gate's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
+- Run directly, the network certifier runs on the server's host (`trusted-host` stands for the auditor's device). The
+  gate's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs it on the auditor's device instead, the server
   reached through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other
   route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.

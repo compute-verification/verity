@@ -55,7 +55,7 @@ served int8 linear call as its own Program on bits, which `verity.protocols.acco
   hiding tables of the call (``tables`` in its manifest row), so round s's root commits them, z at its cut, before round s's
   coin (``details.requests.a_roots``: `pouw_h1_requests.tables_reason` at `close`); round s's receipt roots (`H1Run.receipt`, after its coin) go under round s + 1's root, and the window's sampling coin
   (``draw``) opens at `H1Run.finish`, after the manifest, the last round's receipts and every round's root and coin.
-* **Coins.** Credit needs the window's coins from the auditor host's challenger (``coin_source`` ``challenger``,
+* **Coins.** Credit needs the window's coins from the auditor device's challenger (``coin_source`` ``challenger``,
   `pouw_h1_challenger`); a window whose coins were held in the serving process credits nothing (`IN_PROCESS`).
 * **Salt.** `pouw.salt` is a SHA-512 digest and the epoch's salt (`audit.salt_of` over the weights' root, `weight_root`,
   from the challenger's salt coin) is 32 bytes, so the Program's salt is the epoch's under `SALT_TAG` (`program_salt`)
@@ -310,7 +310,7 @@ class H1Run:
     given. ``prover`` (else ``served``'s) is the prover's private directory (`pouw_h1_prover`): it keeps the key and each
     served call's A rows, scales and z/y records, so a sampled proof block opens after the close (DRAWN1); without it their leaves
     open only while the run is held (`open_request`, `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
-    `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing. With ``served``
+    `CHALLENGER` only for coins from the auditor device's challenger, and any other credits nothing. With ``served``
     (`pouw_h1_served.Served`) each call's z/y table, its step's A table of K, and the weights' B, are also registered values
     as the calls are recorded, their roots in its tables (``registered``) under its round's root; the commitment carries them.
 

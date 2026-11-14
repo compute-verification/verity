@@ -1423,7 +1423,7 @@ def test_a_record_leaf_outside_its_session_or_at_another_entry_is_refused(tmp_pa
 
 
 def test_a_ledger_whose_key_changes_without_a_signed_move_is_refused(tmp_path, signer):
-    """A ledger handed to a new key (an auditor host moved to another project, its key rotated) with no move entry signed
+    """A ledger handed to a new key (an auditor device moved to another project, its key rotated) with no move entry signed
     under the old key: whichever key the verifier pins, the entries under the other one are refused, so neither key's
     windows pass on that ledger."""
     host = Host(tmp_path, signer)
@@ -1845,7 +1845,7 @@ def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_l
 
 
 def test_the_ledger_is_the_longest_of_the_operators_heads_when_each_extends_the_others(tmp_path, signer):
-    """Labels aren't authenticated, so the verifier checks every head the auditor host's operator published under the
+    """Labels aren't authenticated, so the verifier checks every head the auditor device's operator published under the
     pin and takes the
     longest only when any two extend one another: a head forked, cut and re-extended, or malformed is refused."""
     first = Host(tmp_path, signer, "s-1", "one")
@@ -1882,7 +1882,7 @@ def test_an_end_whose_reason_is_past_ascii_is_read_escaped(tmp_path, signer):
 
 
 def test_the_pin_is_read_from_the_operators_key_record():
-    """`key_of_record` reads a ``challenger-key/v1`` record (the store artifact the auditor host's operator labels
+    """`key_of_record` reads a ``challenger-key/v1`` record (the store artifact the auditor device's operator labels
     ``challenger-key current``)
     and refuses one whose public key isn't the one its SHA-512 names, or of another form."""
     public = lms.public_key(PINNED)

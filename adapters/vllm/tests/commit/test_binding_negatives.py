@@ -27,7 +27,7 @@ CHUNK = step_rows.ROW_BYTES
 PD = hashlib.sha512(b"program").hexdigest()
 LAYERS = 2
 STEPS = 3
-#: the run's identities coin, as the auditor host's challenger would open it after the run's root
+#: the run's identities coin, as the auditor device's challenger would open it after the run's root
 COIN = b"identities coin"
 
 

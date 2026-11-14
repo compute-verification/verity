@@ -7,7 +7,7 @@ With `--renice N` (vy-nebius-1's vy-direct-nice.timer, marker /etc/vy/direct-run
 run's processes to N, so the train checks' slots win the cores over lanes' direct runs, and logs each run once, when it is first
 reniced.
 
-With `--auditor` (an auditor host's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
+With `--auditor` (an auditor device's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
 marker's lines (`auditor_allows`): the host runs the auditor's own service and nothing else (AGENTS.md's auditor-trusted devices;
 vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through verity/protocols/compose/device/live_challenger/auditor.py).
 
@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 MARKER = Path("/etc/vy/runs-via-slot")
-#: an auditor host's marker: each line but a comment is a command a `research run` there may be, as shlex splits it
+#: an auditor device's marker: each line but a comment is a command a `research run` there may be, as shlex splits it
 AUDITOR = Path("/etc/vy/auditor")
 RUNS = Path("/workspace/research/runs")
 LOG = Path("/workspace/monitoring/slot-only.jsonl")
@@ -130,7 +130,7 @@ def refusal(machine_marker: Path = MARKER, pools: dict[str, str] | None = None) 
 
 
 def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:
-    """The commands an auditor host runs, one a line of its marker; none when the marker can't be read, so nothing runs."""
+    """The commands an auditor device runs, one a line of its marker; none when the marker can't be read, so nothing runs."""
     try:
         lines = marker.read_text().splitlines()
     except (OSError, UnicodeDecodeError):
@@ -139,7 +139,7 @@ def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:
 
 
 def auditor_allows(command: object, marker: Path = AUDITOR) -> bool:
-    """Whether a workload command is exactly one of the auditor host's commands: no wrapper, pool or extra argument."""
+    """Whether a workload command is exactly one of the auditor device's commands: no wrapper, pool or extra argument."""
     return isinstance(command, list) and command in auditor_commands(marker)
 
 

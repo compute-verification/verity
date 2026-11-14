@@ -1059,7 +1059,7 @@ def main(args: Options) -> None:
     # (a control-only process has no committer at all: nothing installed, nothing compiled in)
     kinds = [] if args.only_arm == "control" else [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
     multi = bool(args.arms)
-    coins = CC.of_options(args, args.pairs * len(kinds))       # the auditor host's session, reserved before any root (or None: a measurement)
+    coins = CC.of_options(args, args.pairs * len(kinds))       # the auditor device's session, reserved before any root (or None: a measurement)
     coms: dict[str, Any] = {}
     # the Programs' producer facts for a v2-query manifest (which carries none), derived on the CPU before the engine (and a leased Commit's
     # GPU) and the committer: the members the producer module's body hands down are marked promoted here, so the acquisition observes them
@@ -1568,7 +1568,7 @@ def main(args: Options) -> None:
                 if fault.startswith("retained_flip"):
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
-                # the run's coins, flipped once its root of record is fixed (the auditor host's session; without one, this process's own)
+                # the run's coins, flipped once its root of record is fixed (the auditor device's session; without one, this process's own)
                 from verity_vllm.commit.challenge import (
                     challenge_positions,
                     run_root_of,

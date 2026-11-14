@@ -128,7 +128,7 @@ def test_a_cancel_asks_every_machine_and_refuses_a_run_two_hold(machines):
 
 
 def test_a_search_without_on_never_logs_in_to_an_auditor_host_and_says_so(machines, monkeypatch, capsys):
-    """The auditor hosts refuse lanes' keys by design, so `status|inspect|fetch|cancel RUN` without --on left a refused login in
+    """The auditor devices refuse lanes' keys by design, so `status|inspect|fetch|cancel RUN` without --on left a refused login in
     each one's auth log. Both marks leave one out before any ssh: deploy.toml's `admin = true` (vy-auditor-1, the real manifest's)
     and an entry naming its gate (`auditor`). The search says which it didn't ask, and --on still asks one."""
     tmp, here, held = machines["tmp"], machines["local"], "r20261002-091500-a0d1"
