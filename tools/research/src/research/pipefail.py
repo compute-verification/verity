@@ -7,7 +7,8 @@ the first word named bash, sh, dash or zsh (by any path). Only one given a scrip
 tokenized as a shell does (`shlex` with punctuation, quotes kept whole), so `||`, `>|` and a `|` inside quotes, a word, a
 `case` pattern, `[[ ]]`, `(( ))` or a here-document's body are no pipe, and `|&` is one. The script is safe when the shell is
 started with `-o pipefail`, or a `set` command turns it on (`set -o pipefail`, `set -euo pipefail`) before the first pipe.
-A script shlex can't parse is refused only if it holds a bare `|`. Stdlib only.
+A script shlex can't parse (bash nests quotes inside `"$( )"`, shlex doesn't) is refused only if it holds a bare `|` with
+no `set ... -o pipefail` before it. Stdlib only.
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ _SEPARATORS = frozenset({";", "&", "&&", "||", "\n", "(", ")", "((", "))", "|", 
 _COMMAND_START = frozenset({"then", "do", "else", "elif", "{", "}", "!", "if", "while", "until", "time"})
 _HEREDOC = re.compile(r"(?<!<)<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n]*)\"|\\?([A-Za-z_0-9][\w.-]*))")
 _BARE_PIPE = re.compile(r"(?<!\|)\|(?!\|)")
+_SET_PIPEFAIL = re.compile(r"\bset\b[^\n;|&]*?\s-[a-zA-Z]*o[a-zA-Z]*\s+pipefail\b")
 
 CURE = ("start the script with `set -o pipefail;` (or invoke the shell with `-o pipefail`), or drop the `| tee FILE` (the run "
         "already keeps the workload's stdout in its log), or pass --allow-pipe when the pipe's own exit code is meant")
@@ -81,7 +83,8 @@ def unsafe_pipe(script: str) -> bool:
     try:
         tokens = _tokens(_without_heredoc_bodies(script))
     except ValueError:
-        return bool(_BARE_PIPE.search(script))
+        pipe = _BARE_PIPE.search(script)
+        return bool(pipe) and not _SET_PIPEFAIL.search(script, 0, pipe.start())
     prev: str | None = None
     case: list[str] = []          # per open `case`: "word" (before its `in`), "pattern" or "body"
     test = arith = 0
