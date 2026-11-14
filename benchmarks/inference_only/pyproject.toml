@@ -5,7 +5,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The benchmark prices a policy with the slowdown calculator's bound, fleets and periods
-# (`benchmarks/rho`: `rho.min_cut`, `periods.py`, its registry and what that reads of the census,
+# (`benchmarks/slowdown`: `rho.min_cut`, `periods.py`, its registry and what that reads of the census,
 # the inference-only policy's calibrations and the reporting grid, `verity.protocol`), and each proved or
 # assumed name's standing from the locks (`rho.lean`). A block's work is priced as a served step is
 # (`benchmarks/one_stage`'s `served_shares`, which reads θ from the H200's card in `hardware/cards`, and
@@ -19,7 +19,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test builds with `lake` where it is (`check` runs the suite after its Lean steps). The script reads the difftest
 # harness (`tools/difftest`: `verity_difftest`). The class's card and the calculator's H200 servers are read from the
 # card files (`verity.device`).
-inputs = ["benchmarks/rho",
+inputs = ["benchmarks/slowdown",
           "benchmarks/one_stage/served_shares.py", "benchmarks/one_stage/served_verdicts.py",
           "benchmarks/one_stage/served_overhead.py",
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",

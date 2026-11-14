@@ -55,7 +55,7 @@ node's host card has it and the H200 nodes' has no entry rather than an invented
 allowances, and `chip`, the host's on-chip bytes in S_chip). A server card's is `link`: the line rates of the
 server's network ports by its guide's classes (`cluster`, `storage`, `management`), each port in one class, and `rate`,
 all of them together, which a boundary link of a host of that model carries at most each way. The DGX H200 is the
-machine the inference-only policy's `h200-hgx` location is, whose `links` `benchmarks/rho` reads from the card: its
+machine the inference-only policy's `h200-hgx` location is, whose `links` `benchmarks/slowdown` reads from the card: its
 `link.rate`, and its `link.cluster` as the low. A time base's card's is `drift`:
 `max`, the most the clock's rate may differ from the SI second's (`s/s`), and `read`, the largest reading of it on
 record, a `measurement`, which `max` is never below.
