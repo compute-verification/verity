@@ -1,6 +1,10 @@
 {
  "schema": "lean-unread-caps/v1",
  "areas": {
+  "Definitions/Flock": {
+   "modules": 1,
+   "declarations": 3
+  },
   "Definitions/Pouw": {
    "modules": 18,
    "declarations": 81
@@ -14,8 +18,8 @@
    "declarations": 60
   },
   "Proofs/Flock": {
-   "modules": 273,
-   "declarations": 2309
+   "modules": 274,
+   "declarations": 2312
   },
   "Proofs/Nci": {
    "modules": 1,
