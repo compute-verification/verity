@@ -7,7 +7,8 @@ cut port's rows are each wired from their own writer, a registered read's ports 
 the value's salts, every other input row is
 declared registered, ingress or free and counted from the description, the verifier's window (and its registered
 reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads, and a history table's
-writer commits each row as the table's leaf, whose root the verifier pins from the public bodies. A window written under
+writer commits each row as the table's leaf, whose root the verifier pins from the public bodies, and a commit into a
+window directory is the whole commit, made a run of rows at a time. A window written under
 core's registration, and `of_records` against it, are the records audit's tests
 (`benchmarks/prove_path/tests/test_records_audit.py`), since these may not import core."""
 from __future__ import annotations
@@ -1744,10 +1745,11 @@ def _long_chain(layers: int, d: Path) -> None:
 def test_a_windows_commit_is_linear_in_its_members(tmp_path):
     """A window's commit and the verifier's rebuild of it from its record (`_long_chain`) run loops whose turns grow with
     its members, wires and reads, not with their products: from 32 layers to 64 the turns grow at most about twice what
-    they grow from 16 to 32 (the difference drops what a window does once, such as its hiding tables). The 4,32,4 window
-    class's commit (58,719 members, 166,038 wired member ports, 6,727 reads) ran each port's hashes past every port's, each
-    member past every read and each wired port past every member, hours on one core; a timing can't say which, a count
-    can."""
+    they grow from 16 to 32 (the difference drops what a window does once, and a first window, uncounted, makes what a
+    process makes once, such as its hiding tables, whichever tests ran before it). The 4,32,4 window class's commit
+    (58,719 members, 166,038 wired member ports, 6,727 reads) ran each port's hashes past every port's, each member past
+    every read and each wired port past every member, hours on one core; a timing can't say which, a count can."""
+    _long_chain(16, tmp_path / "first")
     a, b, c = (_loop_turns(lambda n=n: _long_chain(n, tmp_path / str(n))) for n in (16, 32, 64))
     assert c - b <= 2.2 * (b - a), (a, b, c)
 
@@ -1964,18 +1966,196 @@ def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(
         mixed.close(salt_key=bytes(32))
 
 
+def _cut(circuit: I.Circuit, units: int = 2, registered: dict | None = None) -> I.Window:
+    """``circuit``'s window under the tests' run, in members of at most ``units`` units."""
+    return I.Window(circuit, RUN, LAW, units, registered=registered)
+
+
+def _handed(win: I.Window) -> tuple[CS.Binding, list[dict], dict]:
+    """What `Window.close` hands `rows.commit` under the tests' salt key: the window, each member's rows and its keywords."""
+    got = []
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(CS, "commit", lambda window, data, **kw: got.append((window, data, kw)))
+        win.close(salt_key=bytes(32))
+    ((window, data, kw),) = got
+    return window, data, {k: v for k, v in kw.items() if v}
+
+
+class _Runs:
+    """A port's rows as a producer: a shape, and the rows a slice asks for, each ask noted as (member, first row, rows)."""
+
+    def __init__(self, k: int, rows: np.ndarray, asked: list) -> None:
+        self.k, self.rows, self.shape, self.asked = k, rows, rows.shape, asked
+
+    def __getitem__(self, at: slice) -> np.ndarray:
+        self.asked.append((self.k, at.start, len(self.rows[at])))
+        return self.rows[at]
+
+
+def _produced(data: list[dict], asked: list):
+    """``data`` a member at a time, each port's rows a producer (`_Runs`); a member's turn is noted as (member, -1, 0)."""
+    for k, d in enumerate(data):
+        asked.append((k, -1, 0))
+        yield {**d, **{kind: {p: _Runs(k, a, asked) if isinstance(a, np.ndarray) else a for p, a in d[kind].items()}
+                       for kind in ("rows", "outs")}}
+
+
+def _by_reference_windows() -> dict[str, tuple[I.Window, CS.Binding, list[dict], dict]]:
+    """The fixtures a commit into a directory takes, each with what `Window.close` hands `rows.commit`: `window`'s plain
+    members; `fed_chain` and `sliced` recorded by reference, their wired ports with trees of their own, a reader ahead
+    of its writer among them, and ``w`` a registered value's rows; and `fed_chain` as an interior commits it, its
+    shared-row members' wired ports with no tree (``wired_trees`` false)."""
+    plain = window()[0]
+    circuit, w, feed_ins, feed, _ins, outs = fed_chain()
+    fed = _cut(circuit, registered={"w": w})
+    fed.record(SRC, feed_ins, feed)
+    fed.record(GEMM, [None, None], outs)
+    ins8, outs8, ins, outs = sliced_values()
+    cut = _cut(sliced())
+    cut.record(G8, ins8, outs8)
+    cut.record(GEMM, [None, ins[1]], outs)
+    got = {name: (win, *_handed(win)) for name, win in (("plain", plain), ("fed", fed), ("cut", cut))}
+    win, held, data, kw = got["fed"]
+    got["held"] = (win, replace(held, members=tuple(replace(m, wired_trees=False) for m in held.members)), data, kw)
+    return got
+
+
+@pytest.mark.parametrize("name", ["plain", "fed", "cut", "held"])
+@pytest.mark.parametrize("chunk,run", [(1, 1), (2, 1), (CS.CHUNK, CS.VALUE_CHUNK)])
+def test_a_commit_into_a_directory_is_the_whole_commit_a_run_at_a_time(monkeypatch, tmp_path, name, chunk, run):
+    """`rows.commit` into a window directory (``into``) makes the commitment the whole commit makes of the same rows under
+    the same salts: every root in the registration's order, every domain, string, salt, row and body, the leaf layer and
+    the registration, and, written, every file byte for byte (``window.json`` but its timings). It asks for a member
+    after the one before, and every port of a member for a run before the next run, of at most the run's rows
+    (`_Runs`: a chunk here, `rows.VALUE_CHUNK` a byte), and merges a value's reads as they come (`rows._Reads`); on two
+    workers too."""
+    win, w, data, kw = _by_reference_windows()[name]
+    whole = CS.commit(w, data, **kw)
+    monkeypatch.setattr(CS, "VALUE_CHUNK", run)
+    asked: list = []
+    c = CS.commit(w, _produced(data, asked), into=tmp_path / "into", chunk=chunk, **{**kw, "workers": min(chunk, 2)})
+    turns = [k for k, lo, _n in asked if lo < 0]
+    assert turns == list(range(len(w.members))) and [k for k, _lo, _n in asked] == sorted(k for k, _lo, _n in asked)
+    for k in turns:
+        first = [lo for j, lo, _n in asked if j == k and lo >= 0]
+        assert first == sorted(first) and (run > 1 or all(n <= chunk for j, _lo, n in asked if j == k))
+    assert any(lo > 0 for _k, lo, _n in asked) == (run == 1 and chunk < max(m.n for m in w.members))
+    assert list(c.roots.items()) == list(whole.roots.items()) and list(c.domains.items()) == list(whole.domains.items())
+    assert dict(c.bc) == whole.bc and dict(c.salts) == whole.salts and c.given == whole.given
+    assert list(c.rows) == list(whole.rows) and all(np.array_equal(c.rows[p], whole.rows[p]) for p in whole.rows)
+    ks = range(len(w.members))
+    assert all(c.public_body(k) == whole.public_body(k) and c.private_body(k) == whole.private_body(k) for k in ks)
+    assert all(np.array_equal(c.refs[k], whole.refs[k]) for k in whole.refs) and set(c.refs) == set(whole.refs)
+    assert c.leaf_layer == whole.leaf_layer == CS.leaf_layer({m.key: whole.public_body(k) for k, m in enumerate(w.members)})
+
+    def record(_program, *x, **k):
+        return {"x": json.dumps(x, sort_keys=True), **k}
+
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
+    assert CS.registration(c, {"by": "test"}, registrar=reg) == CS.registration(whole, {"by": "test"}, registrar=reg)
+    files = []
+    for x, d in ((whole, tmp_path / "whole"), (c, tmp_path / "into")):
+        CS.write(x, d, {"by": "test"}, {"index": 1}, registered=win._entries, registrar=reg, index_salt=bytes(CS.SALT_BYTES))
+        doc = json.loads((d / "window.json").read_text())
+        got = {f.name: f.read_bytes() for f in d.iterdir() if f.name != "window.json"}
+        files.append((got, {k: v for k, v in doc.items() if k != "seconds"},
+                      [CS.read_private(d, doc, k) for k in ks]))
+    assert files[0] == files[1] and files[1][2] == [whole.private_body(k) for k in ks]
+    assert any(f.startswith("v") for f in files[1][0]) == (name in ("fed", "held"))
+
+
+def test_a_commit_into_a_directory_refuses_what_it_would_hold_whole(monkeypatch, tmp_path):
+    """A commit into a directory is refused, by name, for a window with row tables, for strings or carried strings of a
+    whole port, for a wired port's rows given in full (its writers' files hold them), for other members than the
+    window's, for a run of another shape than its port's and for salts of no port given in full; and its window is
+    written where its bodies are, each registered value's rows it left out of a member's file named by that member's
+    header."""
+    win, w, data, kw = _by_reference_windows()["held"]
+    feed = _first(w, SID)
+    for more, why in (({"strings_of": {"p": b""}}, "strings_of"), ({"carried": {"p": b""}}, "strings_of or carried"),
+                      ({"salts_of": {"no/port": bytes(CS.SALT_BYTES)}}, "salts_of"),
+                      ({"salts_of": {w.members[feed].port("x"): bytes(CS.SALT_BYTES)}}, "salts_of")):
+        with pytest.raises(ValueError, match=why):
+            CS.commit(w, data, into=tmp_path / "bad", **{**kw, **more})
+    for bad, why in ((data[:-1], "members' rows"), ([*data, data[-1]], "more than the window's")):
+        with pytest.raises(ValueError, match=why):
+            CS.commit(w, iter(bad), into=tmp_path / "bad", **kw)
+    full = _by_reference_windows()["fed"]
+    k = _first(full[1], GID)
+    given = [dict(d) for d in full[2]]
+    given[k]["rows"] = {**given[k]["rows"], "x": np.zeros((2, 16), dtype=np.uint16)}
+    with pytest.raises(ValueError, match="takes a wired port's rows as"):
+        CS.commit(full[1], given, into=tmp_path / "bad", **full[3])
+
+    class Short(_Runs):
+        def __getitem__(self, at: slice) -> np.ndarray:
+            return self.rows[at][:-1]
+
+    short = [dict(d) for d in data]
+    short[feed]["outs"] = {p: Short(feed, a, []) for p, a in short[feed]["outs"].items()}
+    with pytest.raises(ValueError, match=r"its rows \[0, 2\) are"):
+        CS.commit(w, short, into=tmp_path / "bad", **kw)
+    tabled, rows = _beside_a_row_table(*given_by_reference(monkeypatch)[:2]), given_by_reference(monkeypatch)[1]
+    with pytest.raises(ValueError, match="takes no row tables"):
+        CS.commit(tabled, rows, into=tmp_path / "bad", salt_key=bytes(32))
+    c = CS.commit(w, data, into=tmp_path / "into", **kw)
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(lambda *x, **k: {"leaf_layer": "l"}),
+                         "digest": staticmethod(lambda rec: "d")})
+    with pytest.raises(ValueError, match="wrote its bodies there"):
+        CS.write(c, tmp_path / "other", {}, {}, registered=win._entries, registrar=reg)
+    with pytest.raises(ValueError, match="doesn't name"):
+        CS.write(c, tmp_path / "into", {}, {}, registrar=reg)
+
+
+def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch, tmp_path):
+    """The peak, pinned: committing 2,048 coordinates' rows into a directory, a run of 64 units at a time from a producer
+    that makes each run when it is asked, allocates at its peak under a quarter of the bytes the window commits (its
+    rows, salts and ``b || c``, `rows.window_bytes`), where the whole commit of the same rows, given as arrays, holds
+    more than all of them; the roots are the same."""
+    import tracemalloc
+
+    n, chunk = 2048, 64
+    monkeypatch.setattr(CS, "VALUE_CHUNK", 1)
+    w = _cut(I.Circuit("test", ((COORD, n),)), n).window
+    size = CS.window_bytes(w.members)
+    total = size["public"] + size["private"]
+
+    class Made:
+        def __init__(self, words: int) -> None:
+            self.shape = (n, words)
+
+        def __getitem__(self, at: slice) -> np.ndarray:
+            rows = np.arange(*at.indices(n), dtype=np.uint32)[:, None]
+            return ((rows * 31 + np.arange(self.shape[1], dtype=np.uint32)) % 65521).astype(np.uint16)
+
+    def made():
+        yield from ({"rows": {p: Made(words) for p, words in m.rows}, "outs": {p: Made(words) for p, words in m.outs}}
+                    for m in w.members)
+
+    def peak(commit) -> tuple[CS.Committed, int]:
+        tracemalloc.start()
+        try:
+            c = commit()
+            return c, tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+
+    CS.commit(replace(w), [{k: {p: a[:] for p, a in d[k].items()} for k in d} for d in made()], chunk=chunk)
+    c, streamed = peak(lambda: CS.commit(w, made(), into=tmp_path, chunk=chunk, salt_key=bytes(32)))
+    whole, held = peak(lambda: CS.commit(w, [{k: {p: a[:] for p, a in d[k].items()} for k in d} for d in made()],
+                                         chunk=chunk, salt_key=bytes(32)))
+    assert c.roots == whole.roots and len(w.members) == 1
+    assert 4 * streamed < total < held, (streamed, total, held)
+
+
 def given_by_reference(monkeypatch) -> tuple[CS.Binding, list[dict], Bound]:
     """`fed_chain` with every chain input recorded by reference: the window and each member's rows as `Window.close` hands
     them to `rows.commit` (each wired ``x`` `rows.WIRED`, each ``w`` a `rows.ValueRows` of the registered value)."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
-    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win = _cut(circuit, registered={"w": w})
     win.record(SRC, feed_ins, feed)
     win.record(GEMM, [None, None], outs)
-    given = []
-    with monkeypatch.context() as mp:
-        mp.setattr(CS, "commit", lambda window, data, **_: given.append((window, data)))
-        win.close(salt_key=bytes(32))
-    ((window, data),) = given
+    window, data, _kw = _handed(win)
     return window, data, w
 
 
