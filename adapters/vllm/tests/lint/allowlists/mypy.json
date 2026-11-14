@@ -404,8 +404,6 @@
     {"file": "verity_vllm/protocols/pous.py", "kind": "union-attr", "symbol": "PousOption.leg", "detail": "", "count": 2},
     {"file": "verity_vllm/protocols/pous.py", "kind": "union-attr", "symbol": "_package", "detail": "", "count": 2},
     {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "arg-type", "symbol": "_install_h1", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "arg-type", "symbol": "commit_weights", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "arg-type", "symbol": "install", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "assignment", "symbol": "install", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "misc", "symbol": "install", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/h1/prover.py", "kind": "index", "symbol": "Writer.keep", "detail": ""},

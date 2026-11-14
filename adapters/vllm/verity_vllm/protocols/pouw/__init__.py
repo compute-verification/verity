@@ -627,8 +627,8 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
         key = _SALT_KEYS[entry] = PPD.new_salt_key(scheme)
-        device_roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)},
-                                        scheme, salt_key=key)
+        device_roots = PPD.weight_roots(PPD.Kernel.load(cast(str, settings.kernel), settings.cubin),
+                                        {w: m.weight for w, m in enumerate(layers)}, scheme, salt_key=key)
         return {"weight_roots": {str(w): r.hex() for w, r in device_roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
     key, roots = _SALT_KEYS.setdefault(entry, os.urandom(32)), {}
     for w, layer in enumerate(layers):
@@ -687,7 +687,7 @@ def install(scheme: str, target: Target) -> Option:
         salt = Epoch.start(declared, roots, commitment, opening).salt
     with PHW.closed_on_error(session):
         if device:
-            run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
+            run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(cast(str, settings.kernel), settings.cubin),
                                       {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
                                       schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry), pass_index=k)
             run.commits["registration"], end_pass = weights_claim(s), run.end_pass
