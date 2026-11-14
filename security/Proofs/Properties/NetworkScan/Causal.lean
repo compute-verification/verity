@@ -48,7 +48,7 @@ end Properties.NetworkScan
 namespace Properties.NetworkScan.CausalProof
 
 open Flock.Program
-open NciCheck.Properties.SecurityProofs
+open InferenceOnlyCheck.Properties.SecurityProofs
 open NetworkCheck.Period
 open Properties.NetworkScan.WalkProof
 
@@ -60,7 +60,7 @@ theorem seq_get_one {s : Seq} {q : Part} (h : s.parts = #[q]) (k : ℕ) : s.get 
 /-- An argument `inputArg` reads is one affine run over an input node's leaves from its first. -/
 theorem inputArg_some {P : Prog} {a : Arg} {q : ℕ} (h : inputArg P a = some q) :
     (∃ c, a.seq.parts = #[Part.affine false q 0 c]) ∧ q < (P.defs[P.root]!).body.nodes.size ∧
-      NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true := by
+      InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true := by
   unfold inputArg at h
   split at h
   · rename_i k c hparts
@@ -114,13 +114,13 @@ include hroot hB hL
 
 /-- **A leaf of an input node resolves to one of its gates.** -/
 theorem input_lands {q j : ℕ} (hq : q < (P.defs[P.root]!).body.nodes.size)
-    (hin : NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true)
+    (hin : InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true)
     (hj : j < ((P.defs[P.root]!).body.nodes[q]!).out.leaves) :
     ∀ n a, Flock.Steps.run "scope resolution" (resolveStep P) n (P.rootScope, ⟨false, q, j⟩) = .ok a →
       (P.defs[P.root]!).body.offsets[q]! ≤ a ∧ a < (P.defs[P.root]!).body.offsets[q + 1]! := by
   intro n a h
   have hprim : (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).prim = true := by
-    simp only [NciCheck.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
+    simp only [InferenceOnlyCheck.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
   have hBr : Resolve.BodyOk P P.root := hB P.rootScope (good_root P)
   obtain ⟨-, -, -, hdown, -⟩ := hBr.1 q hq
   have hdn := hdown j hj
@@ -171,11 +171,11 @@ theorem arg_lands {k i t q : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
 
 /-- **An egress leaf resolves into `InS`**: a leaf of root node `ke`, a batch of a composite whose every argument is
 one input node's leaves, resolves, to a gate of one of its members or of an input node an argument reads. -/
-theorem batch_lands (hc : NciCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!).body.params.size = 0)
+theorem batch_lands (hc : InferenceOnlyCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!).body.params.size = 0)
     (hz : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).form = .scan →
         ((P.defs[d]!).body.nodes[k]!).n = 0 → ((P.defs[d]!).body.nodes[k]!).out.leaves = 0)
-    (hfuel : 4 * (NciCheck.Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL)
+    (hfuel : 4 * (InferenceOnlyCheck.Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL)
     {ke j : ℕ} (hk : ke < (P.defs[P.root]!).body.nodes.size)
     (hcomp : (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).prim = false)
     (hbatch : ((P.defs[P.root]!).body.nodes[ke]!).form = .batch)
@@ -230,11 +230,11 @@ theorem batch_lands (hc : NciCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.
 /-- **A later bucket's ingress gate is a gate of its row's input node**: parameter 0 of a member of root node `kl`, a
 batch whose argument 0 is the input node `q`'s leaves, resolves, to a gate of `q`. -/
 theorem param_lands (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!)
-    (hc : NciCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!).body.params.size = 0)
+    (hc : InferenceOnlyCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!).body.params.size = 0)
     (hz : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).form = .scan →
         ((P.defs[d]!).body.nodes[k]!).n = 0 → ((P.defs[d]!).body.nodes[k]!).out.leaves = 0)
-    (hfuel : 4 * (NciCheck.Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL)
+    (hfuel : 4 * (InferenceOnlyCheck.Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL)
     {kl m j q : ℕ} (hk : kl < (P.defs[P.root]!).body.nodes.size)
     (hcomp : (P.defs[((P.defs[P.root]!).body.nodes[kl]!).fn]!).prim = false)
     (hbatch : ((P.defs[P.root]!).body.nodes[kl]!).form = .batch)
@@ -316,7 +316,7 @@ theorem gateStep_input {q x : ℕ} {r : (ℕ × Array ℕ × Scope) ⊕ Scope} (
 omit hB in
 /-- **A gate of an input node reads nothing.** -/
 theorem gate_input {q x p : ℕ} {ops : Array ℕ} {sc : Scope} (hq : q < (P.defs[P.root]!).body.nodes.size)
-    (hin : NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true)
+    (hin : InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true)
     (hx1 : (P.defs[P.root]!).body.offsets[q]! ≤ x) (hx2 : x < (P.defs[P.root]!).body.offsets[q + 1]!)
     (hargs : ((P.defs[P.root]!).body.nodes[q]!).args = #[]) (h : P.gate x = .ok (p, ops, sc)) : ops = #[] := by
   obtain ⟨-, hK, -⟩ := hL P.root hroot.1 hroot.2
@@ -325,7 +325,7 @@ theorem gate_input {q x p : ℕ} {ops : Array ℕ} {sc : Scope} (hq : q < (P.def
     have := hmono (q + 1) _ (by omega) (le_refl _)
     omega
   have hprim : (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).prim = true := by
-    simp only [NciCheck.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
+    simp only [InferenceOnlyCheck.Desc.isInputNode, Bool.and_eq_true] at hin; exact hin.1
   unfold Prog.gate at h
   have hng : ¬ (x ≥ (P.defs[P.root]!).gates) := by omega
   simp only [hng, ite_false, bind, Except.bind] at h
@@ -339,13 +339,13 @@ theorem gate_input {q x p : ℕ} {ops : Array ℕ} {sc : Scope} (hq : q < (P.def
 /-- **`InS` holds what each of its gates reads**, in a flattening of a Program Flock decodes, topological and laid
 out, at a root node `ke` batching a composite whose every argument is one input node's leaves. -/
 theorem closure {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.orderViolation = none)
-    (hbl : NciCheck.Desc.bodiesLaidOut P = true) (C : Claims.Sampling.Prog) (hF : Flattens P C)
+    (hbl : InferenceOnlyCheck.Desc.bodiesLaidOut P = true) (C : Claims.Sampling.Prog) (hF : Flattens P C)
     {ke : ℕ} (hk : ke < (P.defs[P.root]!).body.nodes.size)
     (hcomp : (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).prim = false)
     (hbatch : ((P.defs[P.root]!).body.nodes[ke]!).form = .batch)
     (hargs : ∀ b ∈ ((P.defs[P.root]!).body.nodes[ke]!).args, (inputArg P b).isSome = true)
     (hinp : ∀ k < (P.defs[P.root]!).body.nodes.size,
-      NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = true →
+      InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = true →
         ((P.defs[P.root]!).body.nodes[k]!).args = #[])
     (x y : ℕ) (hy : y ∈ (C.gates[x]?.map Claims.Sampling.BGate.reads).getD []) (hx : InS P ke x) :
     InS P ke y := by
@@ -406,7 +406,7 @@ structure Facts (P : Prog) (s : Schedule) (kl ke q' : ℕ) : Prop where
   l_p0 : 0 < (P.defs[((P.defs[P.root]!).body.nodes[kl]!).fn]!).params.size
   l_row : ((P.defs[((P.defs[P.root]!).body.nodes[kl]!).fn]!).params[0]!).2 =
     .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
-  walk : NciCheck.Desc.walkable P = true
+  walk : InferenceOnlyCheck.Desc.walkable P = true
   row_in : inputArg P (((P.defs[P.root]!).body.nodes[kl]!).args[0]!) = some q'
   e_args : ∀ b ∈ ((P.defs[P.root]!).body.nodes[ke]!).args, (inputArg P b).isSome = true ∧ inputArg P b ≠ some q'
 
@@ -425,19 +425,19 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
     exact BodiesOk.body_ok P hok sc.d (hS sc.d hSd hpd).1
   have hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false := ⟨hr, hrprim⟩
   have hwk := F.walk
-  unfold NciCheck.Desc.walkable at hwk
+  unfold InferenceOnlyCheck.Desc.walkable at hwk
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hwk
   obtain ⟨⟨hc, hbl⟩, hres, hwb⟩ := hwk
   obtain ⟨-, hL, -, hinp⟩ := Walk.bodiesLaidOut_spec P hbl
   obtain ⟨hpar, hz⟩ := OperandsResolve.resolvable_spec P hres
-  have hfuel : 4 * (NciCheck.Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL := by
-    unfold NciCheck.Desc.walkBound at hwb
-    have : ((NciCheck.Desc.activations P)[P.root]! + 1) * 2 ≤
-        ((NciCheck.Desc.activations P)[P.root]! + 1) * ((NciCheck.Desc.depths P)[P.root]! + 2) :=
+  have hfuel : 4 * (InferenceOnlyCheck.Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL := by
+    unfold InferenceOnlyCheck.Desc.walkBound at hwb
+    have : ((InferenceOnlyCheck.Desc.activations P)[P.root]! + 1) * 2 ≤
+        ((InferenceOnlyCheck.Desc.activations P)[P.root]! + 1) * ((InferenceOnlyCheck.Desc.depths P)[P.root]! + 2) :=
       Nat.mul_le_mul_left _ (by omega)
     omega
   have hinp' : ∀ k < (P.defs[P.root]!).body.nodes.size,
-      NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = true →
+      InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = true →
         ((P.defs[P.root]!).body.nodes[k]!).args = #[] := hinp P.root hr hrprim
   have hBr : Resolve.BodyOk P P.root := hB P.rootScope (good_root P)
   -- the egress node's leaves: `T` members of a u16 and the row
@@ -503,7 +503,7 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
   rcases hiS with ⟨h3, h4⟩ | ⟨b, hb, q, hq, h3, h4⟩
   · have hkq := DescAgree.node_unique _ _ hmono' F.ke_lt hq'K ⟨h3, h4⟩ ⟨h1, h2⟩
     subst hkq
-    simp only [NciCheck.Desc.isInputNode, Bool.and_eq_true, F.e_comp, Bool.false_eq_true, false_and] at hq'in
+    simp only [InferenceOnlyCheck.Desc.isInputNode, Bool.and_eq_true, F.e_comp, Bool.false_eq_true, false_and] at hq'in
   · obtain ⟨-, hqK, -⟩ := inputArg_some hq
     have hqq := DescAgree.node_unique _ _ hmono' hqK hq'K ⟨h3, h4⟩ ⟨h1, h2⟩
     subst hqq

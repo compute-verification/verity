@@ -32,5 +32,5 @@ untraced = [
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/protocols",
           "verity/protocols/proofs/flock/verifier",
           "verity/circuits", "verity/claims", "verity/commitments", "adapters/vllm/verity_vllm/definitions",
-          "tools/difftest", "verity/hardware/__init__.py", "verity/channel.py",
+          "tools/difftest", "verity/channel.py",
           "verity"]

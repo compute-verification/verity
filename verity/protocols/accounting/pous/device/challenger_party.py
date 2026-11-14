@@ -254,7 +254,8 @@ class Challenger:
             return [_read_clock()]
         self.session = R.ChallengePhaseRecord(self.c.close(), self.c.commitment, self.c.openings())
         return [Send(PROVER, Message("End")),
-                Finish({"session": self.session.to_json(), "session_id": self.sid.hex()}, kind="private")]
+                Finish({"public_key": self.signer.public_key.hex(), "session": self.session.to_json(),
+                        "session_id": self.sid.hex()}, kind="private")]
 
 
 def _challenger() -> Challenger:

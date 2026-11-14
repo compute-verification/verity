@@ -1,4 +1,4 @@
-# The NVIDIA B200 SXM 180 GB (HGX B200, 1000 W): the one source of its numbers (verity/hardware/README.md).
+# The NVIDIA B200 SXM 180 GB (HGX B200, 1000 W): the one source of its numbers (hardware/README.md).
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU exceeds it, whatever firmware it
 # runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
 # "placeholder" (neither, open). Per-SM rates are a SM-clock's. The B200's numbers in Lean are
