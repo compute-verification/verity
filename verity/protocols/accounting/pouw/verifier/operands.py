@@ -22,9 +22,6 @@ from typing import Any
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-#: the root X of an execution phase's operands (`root`, `core_check.values_root`): SHA-512 over this tag, the program, and each
-#: value's name, domain and root in name order
-TAG = CC.VALUES_TAG
 KEY = "activations"
 #: what an execution phase's operands don't establish yet, named wherever a record reports them (`stated`)
 GAPS = (("the A rows are not proved to be the served activations x (an x row is one token's codes, an A row R tokens' "
@@ -46,8 +43,9 @@ def block(program: str, values: Mapping[str, G.Registered]) -> dict[str, Any]:
 
 
 def root(b: Mapping[str, Any]) -> bytes:
-    """X: the operands' root, which the execution phase's salt is released against: SHA-512(`TAG` ‖ u64be(len program) ‖ program ‖
-    for each value in name order: u64be(len name) ‖ name ‖ domain ‖ root), strings as UTF-8, domain and root as bytes."""
+    """X: the operands' root, which the execution phase's salt is released against: SHA-512(`core_check.VALUES_TAG` ‖
+    u64be(len program) ‖ program ‖ for each value in name order: u64be(len name) ‖ name ‖ domain ‖ root), strings as
+    UTF-8, domain and root as bytes."""
     x = CC.values_root(b)
     if x is None:
         raise ValueError("the operands are not {program, values} with entries naming their value, domain and root")
@@ -86,4 +84,4 @@ def stated(window: Mapping[str, Any]) -> dict[str, Any] | None:
             "gaps": list(GAPS)}
 
 
-__all__ = ["GAPS", "KEY", "TAG", "block", "commit", "held", "root", "stated"]
+__all__ = ["GAPS", "KEY", "block", "commit", "held", "root", "stated"]

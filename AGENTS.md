@@ -29,7 +29,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     manifest alone (`inference_only/verifier/parties.py`: the verifier, no channel). `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
     keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
-    own): `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
+    own): `pouw/prover/clear/`, `pouw/verifier/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -41,8 +41,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `registration` (the registration log), `record` (a record entry) and
-    `lean` (the Lean card tables' writer); its types, and the readers of the data sheets, which are in the top-level
+  - `verity/hardware/`: the registered hardware: `registration` (the registration log) and `lean` (the Lean card
+    tables' writer); its types, and the readers of the data sheets, which are in the top-level
     `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
   - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
     channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
@@ -66,9 +66,9 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
   layout set aside went with the directory; `git checkout 61f13c2275 -- archive` restores it as it last stood.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
-  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
-  exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
-  (its `infra/`) and its `.cursor`, nothing else.
+  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here, and this
+  repository is public whole; new infra goes here too. The `platform` repository (compute-verification/infra) is where
+  the team's development, coordination and CI harness live: the website, the executor (its `infra/`) and its `.cursor`.
 
 Dependencies point inward, and which folder may import which is one listing, `tests/import_order.toml`, which
 `tests/test_boundaries.py` holds the tree to. Its order, its distributions and each place's paths are kept by hand; its
@@ -323,6 +323,9 @@ Landing.
 - Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
   deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
   machinery rather than accumulating them.
+- **Add only what was asked for.** A design, a page, a schema, a goal or a message holds what solves the stated problem
+  and nothing else. A field, count, label, option or caveat goes in only when it answers a question someone has asked:
+  that the information is at hand, or might be useful later, is no reason. Offer an extra in one line, and don't build it in.
 - **Something broken becomes a benchmark.** A step that fails or costs far too much (an OOM, hours where minutes would
   do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
   baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
