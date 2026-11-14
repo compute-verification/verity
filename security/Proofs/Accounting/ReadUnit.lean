@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Poub.ReadUnit
+public import Definitions.Accounting.ReadUnit
 public import Proofs.Core.Circuit
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Hash.EmbeddingRead
@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # Read units bind to their tables' rows
 
-The binding of table reads at a picked index (`Definitions.Poub.ReadUnit`), each read's gate refinement
+The binding of table reads at a picked index (`Definitions.Accounting.ReadUnit`), each read's gate refinement
 (`Accounting.ReadUnit.GatesRefine`) a hypothesis:
 
 * `readUnitBinds`: at a transcript where a read unit is correct and its registered rows hold, it returns its table's

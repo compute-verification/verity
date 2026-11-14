@@ -1,8 +1,8 @@
 module
 
 public import Properties.Flock.ReadNet
-public import Proofs.Poub.ReadUnit.Digests
-public import Proofs.Poub.ReadUnit.Guarantees
+public import Proofs.Accounting.ReadUnit.Digests
+public import Proofs.Accounting.ReadUnit.Guarantees
 public import Proofs.Flock.Soundness.Refine.Walk
 import Proofs.Core.Circuit
 import Proofs.Flock.Soundness.Discharge.Placed.Keyed

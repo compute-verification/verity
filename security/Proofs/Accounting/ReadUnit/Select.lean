@@ -6,7 +6,7 @@ outside, its verdict `opened` inside and 1 outside (`select_spec`, `Gates.Select
 module
 
 public import Flock.ReadNet.Select
-public import Proofs.Poub.ReadUnit.Gates
+public import Proofs.Accounting.ReadUnit.Gates
 public import Proofs.Flock.Soundness.Discharge.Hm.Word
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
