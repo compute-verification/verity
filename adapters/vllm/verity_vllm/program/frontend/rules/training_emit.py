@@ -19,7 +19,7 @@ import numpy as np
 import torch
 from verity.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.circuits.types import Array, Value
-from verity.definitions.ops import scalar as SC
+from verity.circuits.ops import scalar as SC
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as R
 from verity.definitions.registry import torch_words as W

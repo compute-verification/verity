@@ -14,7 +14,7 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import mufu as BM
 from verity.definitions.registry import boolean_dsa_norm as BD
 from verity.definitions.registry import boolean_norms as BN
 from verity.definitions.registry import boolean_norms_split as BS
