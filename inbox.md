@@ -88,3 +88,38 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 6:08 PM PST. **The chain recor
 
 Running: `r20261113-231315-f4ad`. TIMER: none.
 
+[2026-11-14T02:13Z] 34ee86968647
+STAMPS to network-accounting (lead), Fri 13 Nov 6:13 PM PST. **The eight suites all passed and #9869's body says so; the second step's four mends are drafted and pass, head and sizes below, ahead of Mon 16 Nov noon PST; NET-436's third way is on the issue. Nothing to rule.** The timer `stamps-net434-eight-suites` is gone and I hold none [ran: the list of my subscriptions is empty].
+
+**The eight suites**, `r20261113-232157-c2b5`, on `1069a740eb021a8698ba5b48170bdfbea659b90f` [ran; each verdict line read by me from the run's own log]:
+- `verity-vllm` 17868 passed, 565 skipped. `verity-flock` 2102 passed, 69 skipped. `research` 5086 passed, 3 skipped. `verity/circuits` 1125 passed. `verity/circuits/ops` 985 passed, 2 skipped. `verity-numerical` 662 passed, 7 skipped. `verity/commitments/windows` 103 passed, 1 skipped. `verity-core-evaluate` 67 passed, 1 skipped.
+- No test failed, so there is none to compare with the base. With the first run each of the 62 suites the change touches has a pass on this tree: 58 ran on it, 4 are passes kept from an earlier run.
+- #9869's body is set [ran: read back, the row and the run's bullet]. Its head is unchanged, and it is open and unmarked.
+- Not run on #9869: the whole check, circuit-check, the Lean check.
+
+**The draft.** Branch `cursor/na-relay-second-step-04bd` on #9869's head `1069a740eb02`, head `cda834990f22d7e371c903dcf04047b842d04f8f` [ran: `rev-parse`, local and remote equal], no pull request. 9 files, +180 −27.
+- [ran] `r20261114-015129-265d` on that head: `repository` 362 passed, `verity-network-traces` 729 passed (721 at #9869's head, and 8 new). No failure, no skip.
+
+| Mend | Commit | Size | Its test and control [ran] | Allowlist row |
+|---|---|---|---|---|
+| 1. `id_request`'s docstring without the retired word | `19781cc83926` | 2 files, +2 −2 | the lint's count | retired terms 10 → 9 |
+| 2. `_call` speaks HTTP alone | `9b0d47334316` | 3 files, +116 −5 | 6 new tests; before the mend 4 of them fail | ruff S310 6 → 4 |
+| 3. the endpoint's key read in one place (`bearer`) | `ca755be4dc37` | 3 files, +42 −17 | 1 new test; before the mend it fails with `KeyError` | env reads 6 → 4 |
+| 4. `pack_record`'s dead handler | `cda834990f22` | 3 files, +23 −6 | 1 new test; passes before and after, and 200,000 random slots never reached the handler | silent handlers 4 → 3 |
+
+**What mend 2 changes for a caller** [read]: a URL that is not `http(s)://HOST[:PORT][/PREFIX]` is refused by name (a `file:` URL was read before); a redirect raises; no proxy is read from the environment; a status outside 2xx raises a plain `OSError`. `await_model` already catches it. No test reads the old error's text [ran: the two suites].
+
+**After the cut, by content** [argued from the cut's table at `32e7c6136eff`; not applied to its tree]:
+- Mend 1: applies at `active.py` as it is.
+- Mend 2: `_call` is in `runner_parts.py`, which needs `import http.client` and `import urllib.parse`. The test file loads `runner_parts.py`, one line.
+- Mend 3: splits. `_call` and `served_model` in `runner_parts.py` take the key; `bearer` and its five callers stay in `certifier_serve.py`, since no row of the cut takes them. The cut's env-reads row for `runner_parts.py` then goes.
+- Mend 4: `pack_record` is in `verifier/record_files.py`. The cut's silent-handlers row for it then goes.
+- None needs anything only the cut's new files have. Neither list the cut holds as text is touched: `tests/test_warden_serve.py` is not among the nine files [ran: the diff's names].
+
+**NET-436** [read and argued; `span` ran on four schedules]: commented, and the note is `lanes/network-accounting/20261114T0204Z-report-stamps-net-436-third-way-the-drain-sized.md`. The drain is an admission rule and cuts no response, but only the demo's class can drain as it stands: the scan's 64-output class has a span of 43 buckets against a link-window of 32, and the runner's default 2,077 against 600. Step 1 shrinks to one item with a caller.
+
+**The carry's two choices** are made as the recipe makes them. Nothing of mine differs in the four.
+
+Holding: nothing running. Both runs have ended and their records are kept.
+TIMER: none
+
