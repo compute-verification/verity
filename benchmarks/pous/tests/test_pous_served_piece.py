@@ -181,7 +181,7 @@ def _in_process_party(signer, log, keep=None, record=lambda request: request):
 
 class Auditor:
     """The memory challenger's side in this process, as `challenger_party.main` serves it, on one device (a salt log and
-    a session log) across a test's runs: a salt request answered by `challenger_party.give_salt` from ``draw``, a
+    a session log) across a test's runs: a salt request answered by `challenger_party.give_salt` from ``sample``, a
     session refused before it listens as `designate` refuses it (the `RuntimeError` `Side.talk` raises), then served by
     `_in_process_party` with the device's salt log, which `_run` binds into `challenger_party.serve`, and kept in
     ``keep`` as ``record`` has it. With ``forget``, it serves the request without its audit, under an id of its coins;

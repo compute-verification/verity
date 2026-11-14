@@ -7,7 +7,7 @@ public import Spot.OneStageZk
 # A window decided from accepted proofs: the span in place of the opened blocks
 
 `checkSpan` decides window t from the proof system's accepted runs of PoUB's opening unit (`BlockOpeningCheck_v2`,
-`block_check.py`), one unit a draw, in place of the openings `checkWindow` reads; it never reads a block, a payload, a
+`block_check.py`), one unit a sample, in place of the openings `checkWindow` reads; it never reads a block, a payload, a
 receipt leaf or a path. A span is one or more statements of the sampled proof system's one-stage audit
 (`Spot.OneStageZk`, every unit proved), each its docket, its evidence and its public file, with each
 instance's verdict word and the salts of its three opened rows; the blobs hold the files the evidence names.
@@ -16,12 +16,12 @@ The auditor's side (`Auditor`) is its own: the one-stage audit's parameters (its
 and the registered opening circuit's SHA-512) and that circuit's ports in order, each with its row's bits (`Layout`). Of
 a statement only its public file's SHA-512 is the prover's, which the audit holds to the docket.
 
-The window rejects `malformed`, at no draw, unless every statement's audit accepts (`accepted`) with every instance of
-its public file proved and the statements' instances, in order, are the window's draws, one each. Then each draw
+The window rejects `malformed`, at no sample, unless every statement's audit accepts (`accepted`) with every instance of
+its public file proved and the statements' instances, in order, are the window's samples, one each. Then each sample
 (i, p), in order, is held (`unitFails`): its pass's plan the identity and its block j = p registered (v2 has no plan
 row and this check no appended block); its `pub` and `signs` rows the verifier's own (`publicWords`, `signWords`:
 `block_check.opening_public_v2`'s) opening under their salts to its instance's `b ‖ c` in the public file; and its `o0`
-row the verdict word under its salt. Else the window rejects `malformed` at (i, p). The word then fails the draw as
+row the verdict word under its salt. Else the window rejects `malformed` at (i, p). The word then fails the sample as
 `block_check.verdict` names it (`verdictFailure`), and the first draw that fails rejects the window there, as
 `checkWindow` does.
 
@@ -74,7 +74,7 @@ def u16s (b : ByteArray) : Array Nat :=
 /-- `x`'s low `16 n` bits as `n` u16 words, low first. -/
 def u16sOf (x n : Nat) : Array Nat := (Array.range n).map fun i => (x >>> (16 * i)) % 65536
 
-/-- `block_check.opening_public_v2`'s `pub` row for draw (i, p) of window `w`, a registered block j = p: block j's codec
+/-- `block_check.opening_public_v2`'s `pub` row for sample (i, p) of window `w`, a registered block j = p: block j's codec
 key under the registration's seed (unbound: `bound` 0, `coin` zero), `t0 = τ W j mod p`, the pass's sketch prefix's
 chaining value (`mid`), `pos` = j, the pass's receipt root, its tree's domain id and depth, the registration's payload
 root, its domain id, rank j and depth, and the value tree's fields zero. -/
@@ -144,7 +144,7 @@ structure Held where
   inst : Instance
 deriving Inhabited
 
-/-- Draw (i, p)'s unit: `none` if it opens to the verifier's own rows and its word says accepted, else its failure. -/
+/-- Sample (i, p)'s unit: `none` if it opens to the verifier's own rows and its word says accepted, else its failure. -/
 def unitFails (l : Layout) (reg : Registration) (w : WindowRecord) (i p : Nat) (u : Held) : Option Failure := Id.run do
   let some (_, pubBits) := l.port? "pub" | return some .malformed
   let some (_, signsBits) := l.port? "signs" | return some .malformed
@@ -160,9 +160,9 @@ def unitFails (l : Layout) (reg : Registration) (w : WindowRecord) (i p : Nat) (
     return some .malformed
   return verdictFailure u.inst.verdict
 
-/-- The accepted public files' units, in order, held to the window's draws: `malformed` at no draw for a file that
+/-- The accepted public files' units, in order, held to the window's samples: `malformed` at no sample for a file that
 isn't one `b ‖ c` a port an instance, another count of instances than its statement sends, or another count of units
-than draws; else the first draw whose unit fails (`unitFails`), there, or accept. -/
+than samples; else the first draw whose unit fails (`unitFails`), there, or accept. -/
 def spanHeld (l : Layout) (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat))
     (held : Array (ByteArray × Array Instance)) : Verdict := Id.run do
   let (some (qp, _), some (qs, _), some (qo, _)) := (l.port? "pub", l.port? "signs", l.port? "o0")
@@ -196,7 +196,7 @@ def accepted (a : Auditor) (st : Statement) (bs : Core.Blobs) : V ByteArray := d
   | .reject why => throw why
   | .undecided why => throw why
 
-/-- **Window `w`'s verdict from the span**: `malformed` at no draw unless every statement is `accepted`, else
+/-- **Window `w`'s verdict from the span**: `malformed` at no sample unless every statement is `accepted`, else
 `spanHeld` on their public files. -/
 def checkSpan (a : Auditor) (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) (sp : Span) :
     Verdict := Id.run do

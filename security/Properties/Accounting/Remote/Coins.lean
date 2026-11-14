@@ -5,26 +5,26 @@ public import Properties.Accounting.Remote
 /-!
 # When the verifier reads a window's openings coin (`RemoteAudit`)
 
-The code's half of the opening draw's premises (`Accounting.Remote.Draw.Assumptions`): what `verifyWindow` and the
+The code's half of the opening sample's premises (`Accounting.Remote.Draw.Assumptions`): what `verifyWindow` and the
 session give of `Refused` and of `Live`, stated against the verifier's functions, for every input of their types.
 
 A session's coins are `coins[0 … W − 1]`, window `t`'s challenge at `t` (`releaseCoin`), and `coins[W + t]`, window
-`t`'s openings coin, which only `close t` reads, to draw the window's receipts (`draws`).
+`t`'s openings coin, which only `close t` reads, to sample the window's receipts (`draws`).
 
-* `AcceptSamplesOpenable` (`Refused`, per window): an accepted window's draws are the sampler's values on its openings
+* `AcceptSamplesOpenable` (`Refused`, per window): an accepted window's samples are the sampler's values on its openings
   key, and each is a receipt of the window with an opening that passes `checkOpening` (`Openable`). So the receipts a
   window opens are among its openable ones, the model's correct receipts.
 * `OpeningsUnreadUntilSampled` (`Live`, the coin order): a run, on the same events, gives the same results and the same
   state, whatever the coins at `W + t` and above, as long as window `t` is not sampled by its end. Every challenge and
   the earlier windows' openings coins may be read; window `t`'s openings coin and the later ones are not.
-* `RecordKeptAfterSample` (`Live`, the receipts fixed at the draw): once window `t` is sampled, the rest of the session
-  keeps its draws, its record (what `verify` checks the openings against: its challenge, the previous window's last
+* `RecordKeptAfterSample` (`Live`, the receipts fixed at the sample): once window `t` is sampled, the rest of the session
+  keeps its samples, its record (what `verify` checks the openings against: its challenge, the previous window's last
   root and its passes' roots, plans and heads, so its size `U_t`) and which of its receipts are openable, whatever
   events follow. A later append doesn't move the append a sampled receipt's block is in.
 
-So the code gives `Live` once the events up to window `t`'s draw are fixed by the coins below `W + t`, and that is
+So the code gives `Live` once the events up to window `t`'s sample are fixed by the coins below `W + t`, and that is
 what it cannot give: the order the deployment releases coins in, the challenger releasing `coins[W + t]` only to
-`close t`'s draw and the prover seeing nothing of it before (the coin commitment's root comes only with the outcome,
+`close t`'s sample and the prover seeing nothing of it before (the coin commitment's root comes only with the outcome,
 `audit.Session.disclose`, so the guarantees take `Live` of the session the prover plays). `ReleaseOrder` names it, a
 premise of the deployment's,
 which no property here takes. `LiveUnder` is `Live` as the code states it, on the events a session sees on its
@@ -53,7 +53,7 @@ def Openable (reg : Registration) (appends : Array Append) (w : WindowRecord) (u
     receiptIndex (w.passes.map (·.plan.length)) i p = u ∧
     checkOpening reg reg.digest appends w (receipterOf reg w i) i p o = none
 
-/-- An accepted window's draws are the sampler's values `us` on its openings key, and each value is an openable
+/-- An accepted window's samples are the sampler's values `us` on its openings key, and each value is an openable
 receipt of the window. -/
 def AcceptSamplesOpenable : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
@@ -64,7 +64,7 @@ def AcceptSamplesOpenable : Prop :=
           [.str "openings"] L = some us ∧
         ∀ u ∈ us, Openable reg appends w u
 
-/-- Window `t`'s draws in a session, `none` until `close t` draws them. -/
+/-- Window `t`'s samples in a session, `none` until `close t` samples them. -/
 def sampledOf (s : Session.State) (t : Nat) : Option (Array (Nat × Nat)) := (s.windows[t]?).bind (·.drawn)
 
 /-- A run from `State.init` that leaves window `t` unsampled reads no coin at `W + t` or above: on coins `coins'` that
@@ -78,7 +78,7 @@ def OpeningsUnreadUntilSampled : Prop :=
       Session.run (Session.State.init params reg coins' appendCoins notBeforeNs) events =
         .ok (rs, { s with coins := coins' })
 
-/-- Once a run from `State.init` has sampled window `t` (at `s`), any events after it keep the window's draws, its record
+/-- Once a run from `State.init` has sampled window `t` (at `s`), any events after it keep the window's samples, its record
 and its openable receipts: at `s'` they are those at `s`. -/
 def RecordKeptAfterSample : Prop :=
   ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
@@ -91,8 +91,8 @@ def RecordKeptAfterSample : Prop :=
 
 /-- **The release order** (the deployment's, which the code cannot give): `D` gives the events a session sees on its
 coins (the prover's and the world's choices fixed, the coin commitment among them), and window `t`'s openings coin
-reaches none of them before the one that draws the window. While the first `k` events leave window `t` unsampled, the
-next is the same on coins that agree below `W + t`. It is what `Live` needs beyond `OpeningsUnreadUntilSampled`, up to the draw, and
+reaches none of them before the one that samples the window. While the first `k` events leave window `t` unsampled, the
+next is the same on coins that agree below `W + t`. It is what `Live` needs beyond `OpeningsUnreadUntilSampled`, up to the sample, and
 `RecordKeptAfterSample`, after it. -/
 def ReleaseOrder (params : Session.Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (D : Array ByteArray → Array Session.Event) : Prop :=

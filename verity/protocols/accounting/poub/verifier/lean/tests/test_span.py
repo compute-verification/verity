@@ -1,12 +1,12 @@
 """PoUB's window decided from a span (`RemoteAudit.Span`, `Session.verifySpan`), at 16 sketch rows on a p512 store whose
 passes read it whole (the identity plan), against `remote-audit-difftest`.
 
-The verifier's own copy of each draw's two public rows (`span_public`) is held to the Python the prover commits them
+The verifier's own copy of each sample's two public rows (`span_public`) is held to the Python the prover commits them
 by (`span.public_rows`, `block_check.opening_public_v2`'s), at an unmasked and a masked codec. The rest is the Lean's
 alone, which the Python never decides: a window decided on public files taken as accepted (`span_held`), each built
 here with the honest unit's rows committed as the proof system commits them (`opening.commit`), is accepted on the
-honest span; is rejected at the draw whose unit says it failed; and is rejected `malformed` on a span of another window's
-draws, of another store, of a unit missing, with a verdict word or a salt changed, or of a pass whose plan is not the
+honest span; is rejected at the sample whose unit says it failed; and is rejected `malformed` on a span of another window's
+samples, of another store, of a unit missing, with a verdict word or a salt changed, or of a pass whose plan is not the
 identity. The whole check (`span`) rejects `malformed` a span of those same files when the proof system's audit doesn't
 accept its statements: here, statements that are no audit's at all. No staged statement of the opening unit exists for
 an audit to accept, so no test here reaches `span`'s acceptance."""
@@ -44,7 +44,7 @@ def statics(reg: audit.Registration, d: audit.PositionSample):
 
 
 def span_public(v: Any) -> dict:
-    """`spanPublicFn`: the case's session through `audit.AuditRun`, then window t's draws and each one's rows."""
+    """`spanPublicFn`: the case's session through `audit.AuditRun`, then window t's samples and each one's rows."""
     with M.decoding():
         reg = M.registration_of(M._get(v, "registration"))
         kw, committed, appends, not_before = M.session_of(v)
@@ -69,7 +69,7 @@ server = D.server_fixture(PUBLIC)
 
 
 def drawn(world: M.World, plans: tuple = (None, None)) -> M.Run:
-    """One window of two passes over the world's store, each its plan (None: the whole store), closed and drawn, every
+    """One window of two passes over the world's store, each its plan (None: the whole store), closed and sampled, every
     receipt sampled."""
     r = M.Run(world, windows=1)
     r.start()
@@ -96,7 +96,7 @@ def public_file(rows: list[dict], words: list[int], ss: list[dict], ports: list[
 
 
 class Span:
-    """A drawn window, its honest units' rows (`span.public_rows`) and words, and what the prover sends of them."""
+    """A sampled window, its honest units' rows (`span.public_rows`) and words, and what the prover sends of them."""
 
     def __init__(self, r: M.Run) -> None:
         self.r, reg = r, r.store.registration
@@ -197,7 +197,7 @@ def test_a_span_of_other_draws_is_malformed(server) -> None:
 
 
 def test_a_span_of_another_store_is_malformed(server) -> None:
-    """The same window's draws, their rows derived under another registration's codec seed, or payload root."""
+    """The same window's samples, their rows derived under another registration's codec seed, or payload root."""
     s = Span(drawn(WORLD))
     seed = hashlib.sha256(b"another codec seed").digest()
     rows = [span.public_rows(d, seed, s.S) for d in s.ds]
@@ -218,7 +218,7 @@ def test_a_missing_unit_or_statement_is_malformed_at_no_draw(server) -> None:
 
 
 def test_a_pass_whose_plan_is_not_the_identity_is_malformed(server) -> None:
-    """v2's unit has no plan row: a draw of a pass that reads the store in another order is no unit's, whatever its rows
+    """v2's unit has no plan row: a sample of a pass that reads the store in another order is no unit's, whatever its rows
     (here zeros of their widths)."""
     s = Span(drawn(WORLD, plans=(None, Plan(((1, 3), (0, 1)), 6))))
     k = next(k for k, d in enumerate(s.ds) if d.index == 1)
@@ -227,7 +227,7 @@ def test_a_pass_whose_plan_is_not_the_identity_is_malformed(server) -> None:
 
 def test_the_whole_check_rejects_a_span_whose_statements_no_audit_accepted(server) -> None:
     """`span_held` accepts these public files; `span` reads the same files from blobs and first asks the proof system's
-    audit of each statement, which accepts none of these: the window is `malformed` at no draw."""
+    audit of each statement, which accepts none of these: the window is `malformed` at no sample."""
     s = Span(drawn(WORLD))
     h = s.held()
     assert held(server, s.case(h)) == ACCEPTED

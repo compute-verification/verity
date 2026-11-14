@@ -32,7 +32,7 @@ Known limits, each a premise a real node may fail rather than a gap in the bound
 * A fixed `W`. `LiveCoins` takes `W` fixed before the coins, while the openings' pooled bound (`audit.pooled`) is a
   function of the record: the prover sizes each window after the earlier windows' coins. `HeldSampled` and its
   time-held forms (`Definitions.Accounting.Guarantees.RemoteDraw`) state these lines at the record's own pooled bound, with
-  `LiveCoins` derived from the deployed opening draw.
+  `LiveCoins` derived from the deployed opening sample.
 -/
 
 @[expose] public section

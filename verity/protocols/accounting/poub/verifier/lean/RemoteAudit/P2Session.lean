@@ -22,7 +22,7 @@ it), read from the bytes it holds and the prover sends, and decided here:
 * the answer (`answer`, `p2_parties.answer`'s): the credited reads under the pooled bound at δ = 2^-40
   (`Pooled.pooled`).
 
-The bookkeeping (seeds, plans, steps, deadlines, order, draws) is `Session`'s over the store's units: the registration
+The bookkeeping (seeds, plans, steps, deadlines, order, samples) is `Session`'s over the store's units: the registration
 stands in as one of U blocks (`standIn`) and the session's digest is the P2 registration's (`init`), so only an
 opening's check is P2's. A P2 store is fixed at setup and its sessions take no appends or releases: the verifier's
 process (`Verifier`) takes a start, a boundary or a close through `Session.step`, a root or an openings line here. A
@@ -192,9 +192,9 @@ challenger's to set as it releases them), before its first event. -/
 def init (held : Held) (params : Session.Params) (coins : Array ByteArray) (notBeforeNs : Nat) : Session.State :=
   { Session.State.init params (standIn held.reg) coins #[] notBeforeNs with digest := held.reg.digest }
 
-/-- `p2.Session.verify` on window `w`'s draws: each opening checked on PoUS's vk root in the order sampled
-(`P2.checkOpeningWith`, each pass's seed and sign rows derived once), the first that fails with its draw, or accept;
-`malformed` for another number of openings than draws. -/
+/-- `p2.Session.verify` on window `w`'s samples: each opening checked on PoUS's vk root in the order sampled
+(`P2.checkOpeningWith`, each pass's seed and sign rows derived once), the first that fails with its sample, or accept;
+`malformed` for another number of openings than samples. -/
 def checkOpenings (reg : P2.Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) (openings : Array P2.Opening) :
     Verdict := Id.run do
   if openings.size ≠ drawn.size then return .reject .malformed none
@@ -210,8 +210,8 @@ def checkOpenings (reg : P2.Registration) (w : WindowRecord) (drawn : Array (Nat
       return .reject f (some (i, p))
   return .accept
 
-/-- `checkOpenings` over contiguous chunks of `size` draws, each chunk on a thread of its own: the first chunk's
-rejection in draw order, which is `checkOpenings`'s on the whole window, or accept. -/
+/-- `checkOpenings` over contiguous chunks of `size` samples, each chunk on a thread of its own: the first chunk's
+rejection in sample order, which is `checkOpenings`'s on the whole window, or accept. -/
 def checkOpeningsChunked (size : Nat) (reg : P2.Registration) (w : WindowRecord) (drawn : Array (Nat × Nat))
     (openings : Array P2.Opening) : Verdict := Id.run do
   if openings.size ≠ drawn.size then return .reject .malformed none
@@ -260,13 +260,13 @@ def openingOf (j : Json) : Option P2.Opening := do
          paths := ← paths.mapM hexesOf, leaf := ← hex "leaf", leafSalt := ← hex "leaf_salt",
          receiptPath := ← (get "receipt_path").bind hexesOf }
 
-/-- A window's openings from its line's value: none (so `malformed`, another number than its draws) unless it is a
+/-- A window's openings from its line's value: none (so `malformed`, another number than its samples) unless it is a
 list of openings each in form. -/
 def openingsOf : Json → Array P2.Opening
   | .arr xs => (xs.mapM openingOf).getD #[]
   | _ => #[]
 
-/-- Window t's openings from their line, `{"openings": [...]}`, checked `size` draws a thread
+/-- Window t's openings from their line, `{"openings": [...]}`, checked `size` samples a thread
 (`checkOpeningsChunked`), and the window's verdict applied (`Session.verifyBy`); a line out of form is `fail`'s. -/
 def verify (size : Nat) (held : Held) (s : Session.State) (t : Int) (line : ByteArray) :
     Session.Result × Session.State :=
@@ -285,7 +285,7 @@ private def atJ : Option (Nat × Nat) → Json
   | none => .null
 
 /-- What an accepted session credits: its receipts, the wrong ones the pooled bound at δ leaves (`Pooled.pooled`,
-rounded up; all of them where it has none) and that bound, each window's draws, the credited reads `q_bytes`, the
+rounded up; all of them where it has none) and that bound, each window's samples, the credited reads `q_bytes`, the
 receipts less the wrong ones at 8,224 bytes each, and the span they are over, from the first challenge's release to
 the last window's deadline. -/
 structure Credit where
@@ -308,7 +308,7 @@ def credit (sm : Session.Summary) : Credit :=
     spanNs := ((sm.windows.back?.map (·.deadlineNs)).getD 0) - ((sm.windows[0]?.map (·.releasedNs)).getD 0) }
 
 /-- `p2_parties.answer` less its `reason`: `accept` with the credited reads (`credit`), `reject` with the failure, its
-window and the draw it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass reads. -/
+window and the sample it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass reads. -/
 def answer (held : Held) (s : Session.State) : Json :=
   let windows := s.windows.map fun w => Json.mkObj [("passes", toJson w.roots.size),
     ("draws", match w.drawn with | some d => toJson d.size | none => .null),

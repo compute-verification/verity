@@ -15,7 +15,7 @@ public import RemoteAudit.Wire
 The functions `tests/` holds `audit.py`, `receipts.py` and `codec.py` to through `verity_difftest.Port`, over JSON (byte
 strings lowercase hex, indices integers): a whole session's events (`session`: every event's result, the outcome and
 the record), and the pieces a mismatch there would point to (the codec's decode, a plan, a receipt, a frame-v3-sha512
-opening, a leaf's receipt, a window's draws and a registration's digest), the registration `audit.register` makes
+opening, a leaf's receipt, a window's samples and a registration's digest), the registration `audit.register` makes
 with its codec seed, the verifier's registry (`registry`: registrations, sessions over them and their events,
 closes, and `registry/v0` both ways), `line.py`'s memory line (`line` of groups and windows given, `line_record` read
 off an accepted session's record, `RemoteAudit.Line`: rationals as strings `n` or `n/d`) and `pooled.py`'s pooled
@@ -25,7 +25,7 @@ so their reasons are compared, as are those of `schedule.py`'s schedule check (`
 `p2.py`'s P2 store (`RemoteAudit.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
 and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); and a whole P2 session as
 `p2_parties.py` runs it (`p2_session`, `RemoteAudit.P2Session`), on the registration file's bytes and the prover's lines.
-The span's check (`RemoteAudit.Span`): on a session run to its draws, the rows the verifier derives for each draw
+The span's check (`RemoteAudit.Span`): on a session run to its samples, the rows the verifier derives for each sample
 (`span_public`), the window decided on public files taken as accepted (`span_held`), and decided from the statements
 the proof system's audit must accept (`span`).
 `remote-audit-difftest` serves them.
@@ -170,7 +170,7 @@ def flightOf (j : Json) : V Nat := do
 an appended block's residency to its encode (`deferred`), which `audit.Params` refuses at a lifetime of one window: a
 block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1; its pace (`null`, or
 `{"k", "window_ns"}`, with `"in_flight"` if it names it, `flightOf`), which `audit.Params` takes only with at least
-two windows; and, if they name it, the windows a draw's openings coin covers (`groups_per_coin`, `perCoinOf`,
+two windows; and, if they name it, the windows a sample's openings coin covers (`groups_per_coin`, `perCoinOf`,
 `Shared.run`). The coins are W challenges and ⌈W/g⌉ openings coins. -/
 def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArray × Nat) := do
   let p ← J.get j "params" "input"
@@ -483,7 +483,7 @@ private def seenOf (j : Json) : V Line.Seen := do
 /-- `line.record_run_json`: the line of an accepted session's record, `{"record", "registration", "samples", "seen",
 "per", "block_bytes", "chip_bytes", "node_bytes", "delta", "rates"}` (`record` as the verifier's `outcome` request gives
 it, `recordJ`'s; `registration` as `registrationOf` reads one), read off the record (`Line.lineOfRecordOn` at the
-record's `groups_per_coin` g, 1 when it doesn't name it: above 1 its pooled bound reads its draws, `Line.ofSummaryAt`),
+record's `groups_per_coin` g, 1 when it doesn't name it: above 1 its pooled bound reads its samples, `Line.ofSummaryAt`),
 or why it has none: none for a record sampled more than one window a coin at one window in flight, which no property
 covers (`Line.SHARED`), and none for a record not of `registration`, its digest or its registered blocks another
 registration's (`Line.lineOfRegistered`). `clock`, if given, says
@@ -493,7 +493,7 @@ hold.
 
 With `session`, the session's transcript (`sessionFn`'s input: its registration, parameters, `not_before_ns`, events
 and coins), the line is of the record `Shared.run g` makes of it at its parameters' g (`Line.lineOfRun`, `LineHeld`'s
-`lineOf` at a node of g windows a draw, `Session.run` at g = 1, its run shared with the record's check), at its
+`lineOf` at a node of g windows a sample, `Session.run` at g = 1, its run shared with the record's check), at its
 parameters' `samples`, refused for a transcript run on another registration than `registration`. Refused unless the
 transcript has two windows in flight, `samples` is its parameters', and `record`, if given, is the run's (`recordJ`'s
 form). -/
@@ -646,7 +646,7 @@ def p2OpeningFn (j : Json) : V Json := do
 /-- A P2 session of record (`P2Session`) on the bytes the verifier reads: `{"registration", "request", "session",
 "not_before_ns", "coins", "chunk", "events"}`, the registration file's bytes and the prover's request line (lowercase
 hex), the auditor's session parameters (`P2Session.Auditor.ofJson`, or `P2Session.SESSION` for null), the session's
-2W coins, the draws a thread checks, and its events: `start` and `boundary` `{"now"}`, `close` `{"t", "now"}`, `root`
+2W coins, the samples a thread checks, and its events: `start` and `boundary` `{"now"}`, `close` `{"t", "now"}`, `root`
 `{"t", "i", "now", "line"}` and `openings` `{"t", "line"}` (each line lowercase hex, as the prover sent it), and `fail`.
 The held store (`Held.json`), every event's result (`resultJ`) and the answer (`P2Session.answer`); a registration
 or a request refused is `{"refused": "registration"}` or `{"refused": "request"}`, and a request off the auditor's
@@ -702,8 +702,8 @@ private def instancesOf (j : Json) : V (Array Span.Instance) := do (← J.arr j 
 private def spanResultJ (x : Session.Result × Session.State) : Json :=
   Json.mkObj [("result", resultJ x.1), ("outcome", match x.2.outcome with | some o => .str o | none => .null)]
 
-/-- `{session…, "t"}`: window t's draws and, for each, the `pub` and `signs` rows the verifier derives
-(`Span.publicWords`, `Span.signWords`); refused for a window with no draws awaiting their check. -/
+/-- `{session…, "t"}`: window t's samples and, for each, the `pub` and `signs` rows the verifier derives
+(`Span.publicWords`, `Span.signWords`); refused for a window with no samples awaiting their check. -/
 def spanPublicFn (j : Json) : V Json := do
   let (s, t) ← drawnRun j
   let some (w, drawn) := s.awaiting t | throw "the window has no draws awaiting their check"

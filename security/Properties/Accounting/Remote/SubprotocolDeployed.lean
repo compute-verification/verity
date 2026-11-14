@@ -37,7 +37,7 @@ open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote
 
 /-- **The component's check accepts only what `Shared.run g` accepts.** Whenever `RemoteAudit.Protocol.check` accepts
 parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session
-(`sessionOf`: its parameters, its windows a draw g, coins, append coins, clock floor and events), `Shared.run g` from
+(`sessionOf`: its parameters, its windows a sample g, coins, append coins, clock floor and events), `Shared.run g` from
 `State.init` at those and `reg` runs every event to a state that ended accepted with a record `sm`, and `pub` is what
 `certify` publishes of `sm` at the session's parameters and g. -/
 def AcceptIsVerified : Prop :=
@@ -52,13 +52,13 @@ def AcceptIsVerified : Prop :=
         .ok (rs, s) ∧
       s.outcome = some "accepted" ∧ s.summary = some sm ∧ pub = (RemoteAudit.Protocol.certify params g sm).1
 
-/-- **The component publishes at least the draw term of `LineHeldAtSubprotocol`'s bound.** Whenever
+/-- **The component publishes at least the sample term of `LineHeldAtSubprotocol`'s bound.** Whenever
 `RemoteAudit.Protocol.check` accepts parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p`
-and `e` decode to a session (`sessionOf`: its parameters, its windows a draw g, coins, append coins, clock floor and
+and `e` decode to a session (`sessionOf`: its parameters, its windows a sample g, coins, append coins, clock floor and
 events), and either the public outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows),
 or at every node of those parameters and g whose δ is the component's `RemoteAudit.Protocol.DELTA` the published `eps`
-is `δ + Σ_c s/2^64` over the node's `⌈W/g⌉` draws (`Node.samples`) at its `samples` s, at least
-`LineHeldAtSubprotocol`'s draw term `δ + Σ_c s/2^256`. It is a constant of the session's parameters, not of the draws
+is `δ + Σ_c s/2^64` over the node's `⌈W/g⌉` samples (`Node.samples`) at its `samples` s, at least
+`LineHeldAtSubprotocol`'s sample term `δ + Σ_c s/2^256`. It is a constant of the session's parameters, not of the samples
 the session made. -/
 def PublishedEps : Prop :=
   ∀ (p : RemoteAudit.Protocol.Params) (reg : RemoteAudit.Registration) (e : RemoteAudit.Protocol.Evidence)
@@ -138,7 +138,7 @@ def QBytesAtSubprotocol : Prop :=
         (∑ t, F.hide com prf (RemoteAudit.Protocol.DELTA : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal
 
 /-- **The memory line of record, in bits read, at the bandwidth component.** `LineHeld`'s node, trace, records and
-premises verbatim, one coin for each of the session's draws (`Node.samples`), and the bytes the component is given at
+premises verbatim, one coin for each of the session's samples (`Node.samples`), and the bytes the component is given at
 each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): the probability that the component
 accepts bytes that play the record of `ω` on the node (`Plays`) while the network certifiers sign nothing but the
 verifier's messages entering the node over the credited passes and the record's line credits more bits read than the

@@ -158,7 +158,7 @@ def answer(case: Mapping[str, Any], session: Mapping[str, Any]) -> dict[str, Any
     """The case's answer in the core interface's form from the session's own answer `session` (`p2_parties.answer`'s,
     `P2Session.answer`), as `RemoteAudit.P2Protocol` answers a case of `p2_parties.SESSION`'s session: accepted,
     `{"eps", "q_bytes", "span_ns"}` and the rest of the answer as its profile; rejected with the failure, its window and
-    its draw; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
+    its sample; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
     which the replay refuses, is answered here as its session was."""
     out: dict[str, Any] = {"commitment": digest(case).hex(), "profile": None, "protocol": PROTOCOL, "public": None,
                            "reason": None}

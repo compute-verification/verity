@@ -18,7 +18,7 @@ No composite lists it: onsite's bandwidth component is `RemoteAudit.P2Protocol.p
 (`Difftest.sessionFn`):
 
 * params `{"not_before_ns": n, "params": {...}}`: the session's parameters (`Difftest.sessionOf`'s, its windows a
-  draw's openings coin `groups_per_coin` g among them) and the verifier's clock floor. The check refuses what no
+  sample's openings coin `groups_per_coin` g among them) and the verifier's clock floor. The check refuses what no
   property of the code covers (`sessionOf`): a session at one window in flight (the pace's `in_flight` 1, `Flight`), so
   what it replays is `Shared.run g` (`Session.run` at g = 1), which `Properties.RemoteAudit.Shared` and the memory line
   are stated on;
@@ -88,7 +88,7 @@ def decodeEvidence (b : ByteArray) : V Evidence := do
   keys j ["append_coins", "coins", "events"] "evidence"
   pure ⟨← J.get j "append_coins" "evidence", ← J.get j "coins" "evidence", ← J.arr j "events" "evidence"⟩
 
-/-- The session the log replays: its parameters, its windows a draw's openings coin (`groups_per_coin` g,
+/-- The session the log replays: its parameters, its windows a sample's openings coin (`groups_per_coin` g,
 `Difftest.perCoinOf`), its coins, append coins and clock floor as `Difftest.sessionOf` reads them, and its events as
 `Difftest.eventOf` reads them. It refuses the one form no property of the code covers, one window in flight (the pace's
 `in_flight` 1, `Flight`), the one where `Flight.run f g` is not `Shared.run g` (`Flight.run_two`). -/
@@ -103,13 +103,13 @@ def sessionOf (p : Params) (e : Evidence) :
   pure (params, g, coins, appendCoins, notBeforeNs, events)
 
 /-- The session after the log's events through the Lean verifier (`Shared.run g` from `State.init`, `Session.run` at
-g = 1), its parameters and its windows a draw. -/
+g = 1), its parameters and its windows a sample. -/
 def replay (p : Params) (reg : Registration) (e : Evidence) : V (Session.State × Session.Params × Nat) := do
   let (params, g, coins, appendCoins, notBeforeNs, events) ← sessionOf p e
   let (_, s) ← Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events
   pure (s, params, g)
 
-/-- Each draw's receipts and draws, a draw being `g` consecutive windows (`audit.pooled_windows`). -/
+/-- Each sample's receipts and samples, a sample being `g` consecutive windows (`audit.pooled_windows`). -/
 def windowsOf (sm : Session.Summary) (g : Nat) : Array (Nat × Nat) :=
   let ws := sm.windows
   (Array.range ((ws.size + g - 1) / g)).map fun a =>
@@ -131,7 +131,7 @@ def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
   if g ≤ 1 then params.windows else (params.windows + g - 1) / g
 
 /-- The error an accepted session's `q_bytes` holds at: `DELTA + ⌈W/g⌉·s/2^64`, the pooled bound's δ and at least the
-draws' rejection at the session's `samples` s a draw. -/
+samples' rejection at the session's `samples` s a sample. -/
 def eps (params : Session.Params) (g : Nat) : Rat :=
   DELTA + ((openingsCoins params g * params.samples : Nat) : Rat) / (2 ^ 64 : Nat)
 

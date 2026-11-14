@@ -57,7 +57,7 @@ RECORD = {**{k: INPUTS[k] for k in ("per", "block_bytes", "chip_bytes", "node_by
                      "blocks": 1000, "appended": 0, "released": 0, "lifetime": 2, "pace": {"k": 2, "window_ns": 10 ** 9},
                      "appends": None, "registration": REGISTRATION.digest.hex()}}
 """`INPUTS`' session read off its record of `REGISTRATION`: window t group t, two passes over the 1000 chunks, 1500 of
-its 2000 receipts drawn (`line.record_inputs_json`'s form)."""
+its 2000 receipts sampled (`line.record_inputs_json`'s form)."""
 
 
 @pytest.fixture(scope="module")

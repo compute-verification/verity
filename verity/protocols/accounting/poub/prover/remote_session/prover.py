@@ -622,7 +622,7 @@ class ProverSide:
             try:
                 # Opening work rereads the store and reconstructs receipt subtrees.  Keep it off the timed pass phase:
                 # the verifier may check after all roots are final, and this also makes the measured pass span contain
-                # passes alone rather than a prover-local choice of when to prepare the already-drawn openings.
+                # passes alone rather than a prover-local choice of when to prepare the already-sampled openings.
                 if self.defer_openings:
                     self.open_enabled.wait()
                 self._open_window(t, draws)

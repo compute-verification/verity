@@ -14,8 +14,8 @@ at its index, and its opening passes `checkOpening`.
 
 `OpeningsUnreadUntilSampled`: every event commutes with replacing the session's coins (`C c s`), as long as the coins it
 reads agree: `start` reads `coins[0]`, `boundary` window `t + 1`'s challenge (`t + 1 < W`), and `close t` the openings
-coin `coins[W + t]`, only when it draws window `t` (`*_coins`, `step_coins`); the rest read none. No event changes
-the coins (`step_coins_eq`). Each event keeps every window's draw, and only `close t` draws one, window `t`, with
+coin `coins[W + t]`, only when it samples window `t` (`*_coins`, `step_coins`); the rest read none. No event changes
+the coins (`step_coins_eq`). Each event keeps every window's sample, and only `close t` samples one, window `t`, with
 every window before it sampled (`Adv`, `adv_step`): so the windows sampled are a prefix (`Prefix`), and a run that ends
 with window `t` unsampled never drew a window from `t` on, so it read only coins below `W + t` (`fold_coins`).
 -/
@@ -177,12 +177,12 @@ theorem close_coins {s : State} {c : Array ByteArray} {t : Int} {now : Nat} {r :
     cases hres
     rfl
 
-/-! ## Each window's draw -/
+/-! ## Each window's sample -/
 
-/-- Window `t`'s draws in `ws`. -/
+/-- Window `t`'s samples in `ws`. -/
 def dr (ws : Array Win) (t : Nat) : Option (Array (Nat × Nat)) := ws[t]?.bind (·.drawn)
 
-/-- Each window of `ws'` has the draw it had in `ws`, or is new and unsampled. -/
+/-- Each window of `ws'` has the sample it had in `ws`, or is new and unsampled. -/
 
 def Keep (ws ws' : Array Win) : Prop := ws.size ≤ ws'.size ∧ ∀ t, dr ws' t = dr ws t ∨ (ws.size ≤ t ∧ dr ws' t = none)
 
@@ -323,7 +323,7 @@ theorem keep_receive {s : State} {t i : Int} {root : ByteArray} {runs : Option (
     · cases he; exact keep_fail _ _ _ _
     · exact key s₀ (keep_refl _) he
 
-/-- Each window sampled in `ws` keeps its draw in `ws'`, and a window sampled in `ws'` but not in `ws` has every window
+/-- Each window sampled in `ws` keeps its sample in `ws'`, and a window sampled in `ws'` but not in `ws` has every window
 before it sampled in `ws`. -/
 def Adv (ws ws' : Array Win) : Prop :=
   ws.size ≤ ws'.size ∧ (∀ t d, dr ws t = some d → dr ws' t = some d) ∧

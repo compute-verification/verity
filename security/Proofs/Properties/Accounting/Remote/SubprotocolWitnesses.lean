@@ -18,18 +18,18 @@ Each of `Properties.RemoteAudit.Subprotocol`'s three properties, and the memory 
 `publishedEps_iff`, `lineHeldAtSubprotocol_iff`, `lineHeld_iff`), and each form has its witnesses:
 
 * **AcceptIsVerified** (`AcceptIsVerifiedFor`). Honest: the deployed period's parameters and log decode to its session
-  at one window a draw, which the check leaves undecided until its windows verify (`acceptIsVerified_honest`), and the
+  at one window a sample, which the check leaves undecided until its windows verify (`acceptIsVerified_honest`), and the
   check accepts, publishing `certify`'s outputs, wherever `Shared.run g` accepts the session it decodes
   (`acceptIsVerified_complete`). Nontrivial: a check that accepts everything accepts a log that decodes to no session
   (`acceptIsVerified_nontrivial`).
 * **PublishedEps** (`PublishedEpsFor`), whose antecedent is the same acceptance, so its honest witnesses are
   `AcceptIsVerified`'s. Nontrivial: a check that accepts every log, certifying a byte read at eps 0, accepts the
-  deployed period's log, and 0 is below the draw term at every node of positive δ (`drawTerm_pos`,
+  deployed period's log, and 0 is below the sample term at every node of positive δ (`drawTerm_pos`,
   `publishedEps_nontrivial`).
 * **LineHeld** (`LineHeldBy`) and **LineHeldAtSubprotocol** (`LineHeldAtSubprotocolBy`), which take the same premises.
   Honest: every premise holds at a node that holds its whole store in memory throughout, every receipt correct, no
   outside device, nothing but the verifier's messages entering it as its certifiers count, and the sampler's fallbacks
-  0, on a schedule that runs each pass inside its window with each draw's receipts fixed (`HonestSchedule`), and at its
+  0, on a schedule that runs each pass inside its window with each sample's receipts fixed (`HonestSchedule`), and at its
   correct receipts the distinguishers' advantage and the hiding terms are 0 (`lineHeldAtSubprotocol_honest`); and there
   the event is empty: the certifiers count nothing else entering and every line credits no more bits read than the
   passes read (`lineHeld_honest`). Nontrivial: at a verifier that accepts everything and records one summary for every
@@ -51,8 +51,8 @@ alone gives `Verified` (`verified_of_not_readBy`) and the bound holds at any acc
 (`lineHeldAtSubprotocolBy_record`). The nontrivial witnesses therefore replace the verdict and the record with an
 accept-all's as well.
 
-The toy instance (`Toy`) is a node whose parameters have no window (`Node.windows` 0) at four windows a draw, so no
-draw (`Node.samples` 0), one block of one byte, whose recorded summary has four windows of one block each, one pass a
+The toy instance (`Toy`) is a node whose parameters have no window (`Node.windows` 0) at four windows a sample, so no
+sample (`Node.samples` 0), one block of one byte, whose recorded summary has four windows of one block each, one pass a
 group, and a line that reads no wrong receipt, so it credits `8 · 1 · (4 · 1 − 0) = 32` bits read.
 -/
 
@@ -140,7 +140,7 @@ theorem offsets_zero_lt {m U k : ℕ} (b : Blocks m) (hk : k ≤ U) (hkm : k ≤
   show l + offset (U - l) 0 (b ⟨l, h⟩) < U
   omega
 
-/-- With the sampler's fallbacks 0, every receipt a draw opens is among its receipts, so at correct receipts that
+/-- With the sampler's fallbacks 0, every receipt a sample opens is among its receipts, so at correct receipts that
 hold all of them nothing is refused. -/
 theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
     (D : Accounting.Remote.Draw.Run n m s κ X)
@@ -160,9 +160,9 @@ theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fi
 the prover's whose schedule is honest (`HonestSchedule`), the honest trace (`honestTrace`: the whole store in node
 memory at every tick, nothing on a chip, rebuilt or read in, every receipt correct), no outside device (`noOutside`),
 nothing but the verifier's messages entering it as its certifiers count (`quietIngress`), correct receipts holding
-every receipt a draw can have and the sampler's fallbacks 0, every premise holds: `Paced` at the record's groups,
-`Covers`, `SketchBoundAt` at 0, `Covered`, `IngressCounted` at 0, the draw's `Live` at every commitment, `Refused`
-and `Counted`; and the bound's terms the prover could raise are 0: each draw's distinguisher has no advantage on its
+every receipt a sample can have and the sampler's fallbacks 0, every premise holds: `Paced` at the record's groups,
+`Covers`, `SketchBoundAt` at 0, `Covered`, `IngressCounted` at 0, the sample's `Live` at every commitment, `Refused`
+and `Counted`; and the bound's terms the prover could raise are 0: each sample's distinguisher has no advantage on its
 coin function and each hiding term is 0. -/
 theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
     (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → DrawCoins node.samples κ X → Record)
@@ -626,7 +626,7 @@ theorem toy_delta : (Toy.node.delta : ℝ) = 1 / 2 := by
   norm_num
 
 /-- **`LineHeld` fails at a verifier that accepts everything.** With a verdict that holds of every record and one
-summary recorded for every record, the toy node (no draw, one block, held in node memory until tick 10 only, its four
+summary recorded for every record, the toy node (no sample, one block, held in node memory until tick 10 only, its four
 passes reading it once) meets every premise at `δs = δnet = 0`, while its line credits `4 · 1` blocks read at every
 outcome where the certifiers count nothing else entering, which is every outcome: the event has probability 1 and the
 bound is `δ = 1/2`. -/
@@ -746,7 +746,7 @@ theorem honest_decodes : (match RemoteAudit.Protocol.sessionOf honestParams hone
     | .error _ => false) = true := by decide +kernel
 
 /-- **The deployed check at the honest period's log**: the deployed period's parameters and its log before the first
-event decode to a session of two windows at one window a draw, with no append coin, clock floor 0 and no event, which
+event decode to a session of two windows at one window a sample, with no append coin, clock floor 0 and no event, which
 the check leaves undecided: no window has verified yet. -/
 theorem acceptIsVerified_honest (reg : RemoteAudit.Registration) :
     (∃ (params : RemoteAudit.Session.Params) (coins : Array ByteArray),
@@ -790,13 +790,13 @@ theorem acceptIsVerified_complete {p : RemoteAudit.Protocol.Params} {reg : Remot
 
 /-! ## `PublishedEps` at a check that publishes reads at eps 0 -/
 
-/-- A node's draw term is positive at a positive δ. -/
+/-- A node's sample term is positive at a positive δ. -/
 theorem drawTerm_pos (node : Node) (hδ : 0 < (node.delta : ℚ)) :
     0 < (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 64 :=
   add_pos_of_pos_of_nonneg hδ (by positivity)
 
 /-- **`PublishedEps` fails at a check that certifies reads at eps 0**: a check that accepts every log, publishing one
-byte read at eps 0, accepts the deployed period's log, and 0 is below the draw term at every node of positive δ. -/
+byte read at eps 0, accepts the deployed period's log, and 0 is below the sample term at every node of positive δ. -/
 theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun _ _ _ => .accept ⟨⟨0, 1⟩, 1⟩ Lean.Json.null) := by
   intro h
   obtain ⟨params, g, _, _, _, _, -, hd⟩ := h honestParams Toy.reg honestEvidence ⟨⟨0, 1⟩, 1⟩ .null rfl

@@ -5,7 +5,7 @@ public import RemoteAudit.Basic
 /-!
 # Running ends and `bisectRight`
 
-A window's draws and a plan's blocks both locate a position among running ends: `ends[r]` is the sum of the first
+A window's samples and a plan's blocks both locate a position among running ends: `ends[r]` is the sum of the first
 `r + 1` lengths (`prefix_fold`), and `bisectRight ends u` the first `r` with `u < ends[r]` (`bisectRight_spec`, by the
 loop's invariant: everything below `lo` is at most `u`, everything from `hi` on above it, and `hi − lo` at most the
 iterations left). So a position `u` below the total falls in exactly one length, `r = bisectRight ends u`, at offset

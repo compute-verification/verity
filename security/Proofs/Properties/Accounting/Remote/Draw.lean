@@ -6,7 +6,7 @@ import Proofs.Properties.Accounting.Remote.Sort
 import Std.Data.HashMap.Lemmas
 
 /-!
-# The window's draws (`SampleIsSubset`)
+# The window's samples (`SampleIsSubset`)
 
 `Key.subset`'s loop is a partial Fisher–Yates over a `HashMap` of swaps: read through `t ↦ sw.getD t t` it is a
 function that keeps `[0, n)` and is injective there, and swap `i` composes it with the transposition of `i` and
@@ -238,7 +238,7 @@ theorem subsetExact_some (key : ByteArray) (k n : Nat) (index : List FlockSoundn
   · intro s r hs; simp only [hs]
   · intro s hs; simp only [hs]
 
-/-! ## The draws -/
+/-! ## The samples -/
 
 theorem sampleIsSubset : SampleIsSubset := by
   intro registration t coin samples lengths drawn h

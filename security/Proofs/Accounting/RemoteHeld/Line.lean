@@ -54,10 +54,10 @@ the certifiers observed nothing but the verifier's messages entering the node, t
 trace's wrong receipts are at most the session's pooled bound at the line's `δ` (`holdsAnd` of the sketch bound, from
 `SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Draw.pooledSample` at the records read
 through the coin commitment, `recordCommitted`, so at most the W the line reads: `LineCoversRun` at the record's
-draws, whose receipts on an accepted record are `recordSample`'s sizes, `receipts_of_line`, and the line's check of their
-draws, `incorrect_le_line`), and the line read off the record credits no more bits read than its groups' passes read
+samples, whose receipts on an accepted record are `recordSample`'s sizes, `receipts_of_line`, and the line's check of their
+samples, `incorrect_le_line`), and the line read off the record credits no more bits read than its groups' passes read
 (`readAt_of`): each pass reads every registered block but its wrong receipts (`read_card`), and the groups are one for
-each of the session's windows with the node's registered blocks (`record_summary`: `Shared.run` at any windows a draw
+each of the session's windows with the node's registered blocks (`record_summary`: `Shared.run` at any windows a sample
 keeps the parameters and registration, `frame_run`, and an accepted state has its parameters' windows,
 `windows_of_accepted`), their passes among the credited ones.
 
@@ -81,7 +81,7 @@ namespace Properties.RemoteAudit.Line.SecurityProofs
 open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
   Accounting.Remote.Draw.Assumptions _root_.RemoteAudit.Line Accounting.SecurityProofs.Remote Properties.RemoteAudit.Line
 
-/-- What `ofSummary` reads of a record it accepts: one group a window, and each window's receipts and draws, its draws
+/-- What `ofSummary` reads of a record it accepts: one group a window, and each window's receipts and samples, its samples
 `min(s, U_t)`. -/
 theorem ofSummary_ok {sm : RemoteAudit.Session.Summary} {samples : ℕ} {seen : Array Seen} {gs : Array Group}
     {ws : Array (ℕ × ℕ)} (h : ofSummary sm samples seen = .ok (gs, ws)) :
@@ -98,8 +98,8 @@ theorem ofSummary_ok {sm : RemoteAudit.Session.Summary} {samples : ℕ} {seen : 
       simp only [bne_eq_false_iff_eq] at hd
       simp only [hd]
 
-/-- What `ofSummaryAt` reads of a record it accepts: one group a window, and each draw's receipts and draws
-(`sampleReceipts`, a window's at one window a coin), its draws `min(s, U_c)`, and above one window a coin each draw's
+/-- What `ofSummaryAt` reads of a record it accepts: one group a window, and each sample's receipts and samples
+(`sampleReceipts`, a window's at one window a coin), its samples `min(s, U_c)`, and above one window a coin each sample's
 receipts below `RECEIPT_LIMIT`. -/
 theorem ofSummaryAt_ok {g : ℕ} {sm : RemoteAudit.Session.Summary} {samples : ℕ} {seen : Array Seen}
     {gs : Array Group} {ws : Array (ℕ × ℕ)} (h : ofSummaryAt g sm samples seen = .ok (gs, ws)) :
@@ -136,7 +136,7 @@ theorem ofSummaryAt_ok {g : ℕ} {sm : RemoteAudit.Session.Summary} {samples : �
             have hd := Array.findIdx?_eq_none_iff.1 hl (u', d) hp
             simpa using hd
 
-/-- A line `lineOfRecordAt` computes is `line` at the record's groups, draws and registered blocks. -/
+/-- A line `lineOfRecordAt` computes is `line` at the record's groups, samples and registered blocks. -/
 theorem lineOfRecordAt_ok {g : ℕ} {sm : RemoteAudit.Session.Summary} {samples : ℕ} {seen : Array Seen}
     {per blockBytes chipBytes nodeBytes : ℕ} {δ : ℚ} {rates : Rates} {l : Line}
     (h : lineOfRecordAt g sm samples seen per blockBytes chipBytes nodeBytes δ rates = .ok l) :
@@ -148,7 +148,7 @@ theorem lineOfRecordAt_ok {g : ℕ} {sm : RemoteAudit.Session.Summary} {samples 
     exact ⟨gs, ws, hs, h⟩
   · cases h
 
-/-- A line the record gives is `line` at the groups and draws `ofSummaryAt` reads off the Lean verifier's record of the
+/-- A line the record gives is `line` at the groups and samples `ofSummaryAt` reads off the Lean verifier's record of the
 session, its registered blocks the record's, and those groups are the record's (`Record.groups`). -/
 theorem lineOf_ok {node : Node} {r : Record} {l : Line} (h : lineOf node r = .ok l) :
     ∃ sm gs ws, r.summary node = some sm ∧
@@ -205,7 +205,7 @@ theorem windows_of_accepted {s : RemoteAudit.Session.State} (hout : s.outcome = 
       exact hc.1
     · cases hout
 
-/-- An accepted run, at any windows a draw, ends with the node's `windows` windows. -/
+/-- An accepted run, at any windows a sample, ends with the node's `windows` windows. -/
 theorem windows_of_verified {node : Node} {r : Record} {rs : Array RemoteAudit.Session.Result}
     {s : RemoteAudit.Session.State} (hrun : r.run node = .ok (rs, s)) (hout : s.outcome = some "accepted") :
     s.windows.size = node.windows ∧ s.reg = node.reg := by
@@ -214,7 +214,7 @@ theorem windows_of_verified {node : Node} {r : Record} {rs : Array RemoteAudit.S
     from hrun)
   exact ⟨(windows_of_accepted hout).trans (congrArg RemoteAudit.Session.Params.windows hp), hr⟩
 
-/-- **One group a window**: the Lean verifier's record of a session it accepts, at any windows a draw, has the node's
+/-- **One group a window**: the Lean verifier's record of a session it accepts, at any windows a sample, has the node's
 `windows` windows, and the node's registered blocks. -/
 theorem record_summary {node : Node} {r : Record} {sm : RemoteAudit.Session.Summary} (hv : Verified node r)
     (hsm : r.summary node = some sm) : sm.windows.size = node.windows ∧ sm.blocks = node.blocks := by
@@ -365,7 +365,7 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
     linarith
   exact ⟨hspan, hheld, fun R hR => weights_le hwts hR hheld hspan⟩
 
-/-- A run at `g` windows a draw that runs every event reaches its last state one event at a time. -/
+/-- A run at `g` windows a sample that runs every event reaches its last state one event at a time. -/
 theorem reach_of_fold (g : ℕ) (l : List RemoteAudit.Session.Event) :
     ∀ (acc : Array RemoteAudit.Session.Result × RemoteAudit.Session.State) out,
       List.foldlM (fun (acc : Array RemoteAudit.Session.Result × RemoteAudit.Session.State) e => do
@@ -431,10 +431,10 @@ theorem foldl_extract_congr {α β : Type} (f : α → ℕ) (g : β → ℕ) {as
   rw [← Array.foldl_map (f := f) (g := fun x y => x + y), ← Array.foldl_map (f := g) (g := fun x y => x + y),
     Array.map_extract, Array.map_extract, h]
 
-/-- **The record's draws are the draw's**: on an accepted record whose draws the line reads, each draw's receipts in the
+/-- **The record's samples are the sample's**: on an accepted record whose samples the line reads, each sample's receipts in the
 Lean verifier's record are those its windows have in the state the record's session reaches, and below
 `RECEIPT_LIMIT`, so `recordSample`'s sizes: at one window a coin each window's is below it (`ReceiptsBelowLimit`), and
-above it the line refuses a draw that isn't (`ofSummaryAt_ok`). -/
+above it the line refuses a sample that isn't (`ofSummaryAt_ok`). -/
 theorem receipts_of_line {node : Node} {r : Record} {sm : RemoteAudit.Session.Summary} (hv : Verified node r)
     (hsm : r.summary node = some sm)
     (hlim : 1 < node.groupsPerCoin → ∀ u ∈ sampleReceipts node.groupsPerCoin sm.windows,
@@ -489,15 +489,15 @@ theorem receipts_of_line {node : Node} {r : Record} {sm : RemoteAudit.Session.Su
       rw [← hat]
       exact (min_eq_left hle).symm
 
-/-- `m < 2^64`: the first SHA-512 block of each draw's stream holds at least four of its sampler words. -/
+/-- `m < 2^64`: the first SHA-512 block of each sample's stream holds at least four of its sampler words. -/
 theorem receiptMax_lt : receiptMax < 2 ^ 64 := by
   unfold receiptMax RemoteAudit.Session.RECEIPT_LIMIT
   exact Nat.sub_lt (Nat.two_pow_pos 64) Nat.one_pos
 
-/-- On an accepted record, the trace's wrong receipts below the record's draw's pooled bound at the line's `δ` are
-below the W every line of the record reads (`LineCoversRun`): the line reads each draw's receipts and draws off
-the record and refuses any draws but `min(s, U_c)`, the draw's at the session's `samples`, and the receipts are the
-draw's sizes (`receipts_of_line`). -/
+/-- On an accepted record, the trace's wrong receipts below the record's sample's pooled bound at the line's `δ` are
+below the W every line of the record reads (`LineCoversRun`): the line reads each sample's receipts and samples off
+the record and refuses any samples but `min(s, U_c)`, the sample's at the session's `samples`, and the receipts are the
+sample's sizes (`receipts_of_line`). -/
 theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (DrawCoins node.samples κ X)}
     {rec : DrawCoins node.samples κ X → Record} {correct : Fin node.samples → DrawCoins node.samples κ X → Finset ℕ}
     {ω : DrawCoins node.samples κ X} (hv : Verified node (rec ω))

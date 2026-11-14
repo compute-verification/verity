@@ -6,7 +6,7 @@ import all Init.Data.Array.QSort.Basic
 /-!
 # `Array.qsort` permutes its input
 
-The draws' sampler sorts its values and a plan's check sorts its runs, both with `Array.qsort`. Every step of `qsort`
+The samples' sampler sorts its values and a plan's check sorts its runs, both with `Array.qsort`. Every step of `qsort`
 is a swap of two elements of a vector (`qpartition`'s three pivot swaps and its loop's, `sort`'s recursion on two
 parts), and a swap permutes, so the result is a permutation of the input (`qsort_perm`): it holds the same elements,
 each as often.

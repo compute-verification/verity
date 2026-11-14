@@ -4,7 +4,7 @@ module
 # The openings' pooled bound
 
 `audit.pooled`'s horizon reading of a session's openings, in exact rationals: the most wrong receipts
-W = Σ_t f_t·U_t its windows' draws leave except with δ, each window's share at most min(1 − s_t/U_t, B/s_t) (`floors`),
+W = Σ_t f_t·U_t its windows' samples leave except with δ, each window's share at most min(1 − s_t/U_t, B/s_t) (`floors`),
 and the largest of those (`floor`). Window t has U_t receipts and drew s_t of them.
 
 The budget B stands for d̄·S = S·(1 − δ^(1/S)), S = Σ_t s_t, from above: B = S·(1 − q) for q = m/2^`ROOT_BITS`
@@ -61,7 +61,7 @@ def root (S : Nat) (δ : Rat) : Nat :=
 /-- B = S·(1 − m/2^`ROOT_BITS`), at least S·(1 − δ^(1/S)). -/
 def budget (S : Nat) (δ : Rat) : Rat := (S : Rat) * (1 - (root S δ : Rat) / ((2 ^ ROOT_BITS : Nat) : Rat))
 
-/-- A window's receipts per draw, U/s. -/
+/-- A window's receipts per sample, U/s. -/
 def ratio (w : Nat × Nat) : Rat := (w.1 : Rat) / (w.2 : Rat)
 
 /-- The windows' indices by U_t/s_t falling, ties in window order. -/
@@ -80,7 +80,7 @@ def fill (ws : Array (Nat × Nat)) : List Nat → Rat → Rat
     let f := share ws[i]! b
     f * (ws[i]!.1 : Rat) + fill ws rest (max 0 (b - f * (ws[i]!.2 : Rat)))
 
-/-- Why windows have no pooled bound: the first that draws no receipt, or more than it has. -/
+/-- Why windows have no pooled bound: the first that samples no receipt, or more than it has. -/
 def refusal (ws : Array (Nat × Nat)) : Option String :=
   (List.range ws.size).findSome? fun t =>
     if ws[t]!.2 = 0 then some s!"window {t} draws no receipt"
@@ -95,7 +95,7 @@ structure Bound where
   wrong : Rat
   floor : Rat
 
-/-- The pooled bound of windows `ws`, window t's receipts U_t and draws s_t, at δ; or why there is none. -/
+/-- The pooled bound of windows `ws`, window t's receipts U_t and samples s_t, at δ; or why there is none. -/
 def pooled (ws : Array (Nat × Nat)) (δ : Rat) : Except String Bound := do
   if ws.size = 0 then throw "a session has one or more windows"
   if δ ≤ 0 ∨ 1 ≤ δ then throw "δ is above 0 and below 1"
