@@ -28,7 +28,9 @@ import all Std.Data.DTreeMap.Internal.Def
 
 `tablesHeld` reads the circuit file, its lookups and the blobs' tables, and throws where the two lists of names differ,
 so its acceptance is their equality (`tablesHeld_ok`). `run` binds it first (`run_tables`), and `checkBlobsAt` accepts
-only where its chain of refusals ends in `run`'s acceptance (`checkBlobsAt_run`).
+only where its chain of refusals ends in `run`'s acceptance (`checkBlobsAt_run`). A member's statement binds its own
+tables first and holds them to its circuit's lookups, which the verifier's Lean proves beside it
+(`Spot.OneStageZk.Member.statement_tables`).
 
 `tablesRegistered_honest` is its honest lemma: blobs holding a circuit file that looks up `rcp` and `rcp`'s table, as
 the served path hands v2 (`honestBlobs`), pass the refusal. `tablesRegistered_nontrivial` is its nontrivial lemma: blobs
@@ -91,7 +93,8 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
     exact ⟨r, h7⟩
 
 theorem tablesRegistered : TablesRegistered :=
-  ⟨fun _ _ => tablesHeld_ok, fun _ _ _ _ _ _ _ h => (checkBlobsAt_run h).elim fun _ hr => run_tables hr⟩
+  ⟨fun _ _ => tablesHeld_ok, fun _ _ _ _ _ _ _ h => (checkBlobsAt_run h).elim fun _ hr => run_tables hr,
+    fun _ _ _ _ h => OneStageZk.Member.statement_tables h⟩
 
 private theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
   cases x with

@@ -295,7 +295,7 @@ theorem tables_registered {V : Vocab d α} {k : Verity.Registration.Composite} {
     Properties.Spot.HoldsRegisteredTables p₀.own (_root_.Core.Blobs.ofArray o.sent.blobs) := by
   obtain ⟨_, _, _, p, _, _, _, _, hcase, hp, -, -, -, -, pub, prof, hck⟩ := case_drew hv.2.1 hθ (verdict_case hv)
   cases params_of_case hv.2.1 hcase hp hθ
-  exact Properties.Spot.SecurityProofs.tablesRegistered.2 _ _ _ _ _ _ _ hck
+  exact Properties.Spot.SecurityProofs.tablesRegistered.2.1 _ _ _ _ _ _ _ hck
 
 /-- **The tables the blobs sent hold extend the ones a circuit file registers**, where the circuit file looks up
 exactly the pinned tables the blobs hold (`Spot.OneStageZk.lookupsOf`) and each the blobs hold is its
