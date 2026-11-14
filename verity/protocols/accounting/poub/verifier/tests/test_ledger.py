@@ -402,10 +402,10 @@ def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
 
 def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
     """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link burst
-    `timing.LINK_WINDOW_BYTES` when the links are charged; each may be stated instead."""
+    `timing.LINK_BURST_BYTES` when the links are charged; each may be stated instead."""
     n = ledger.Node.stated(FIGURES, disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
     assert (n.rebuild_burst_bytes, n.disk_burst_bytes, n.link_burst_bytes) == (
-        timing.CHIP_BYTES, 4.32e9, timing.LINK_WINDOW_BYTES)
+        timing.CHIP_BYTES, 4.32e9, timing.LINK_BURST_BYTES)
     assert (ledger.Node.stated(FIGURES).disk_burst_bytes, ledger.Node.stated(FIGURES).link_burst_bytes) == (0, 0)
     m = ledger.Node.stated(FIGURES, disk_bytes_per_s=4.32e9, disk_burst_bytes=4 << 20, link_burst_bytes=0)
     assert (m.disk_burst_bytes, m.link_burst_bytes) == (4 << 20, 0) and m.to_json()["disk_burst_bytes"] == 4 << 20

@@ -103,7 +103,7 @@ threads' architectural state with AMX tiles (about 11 KiB each), the physical re
 fill buffers; and the memory controllers', UPI's and PCIe's queues."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
 """S_chip, the node's: every GPU's on-chip storage and the host's caches."""
-LINK_WINDOW_BYTES = 6_291_456
+LINK_BURST_BYTES = 6_291_456
 """One link burst, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
 receive buffer at most, `net.ipv4.tcp_rmem`'s max on the measured node (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
 holds less)."""
@@ -183,7 +183,7 @@ class Figures:
     @classmethod
     def of_sheets(cls, node: Mapping, gpu: Mapping, host: Mapping, *, gpu_chip_bytes: int = GPU_CHIP_BYTES,
                   gpu_sha512_per_s: float = GPU_SHA512_PER_S, gpu_squarings_per_s: Mapping[str, float] | None = None,
-                  phase_bytes: int = LINK_WINDOW_BYTES) -> Figures:
+                  phase_bytes: int = LINK_BURST_BYTES) -> Figures:
         """A node's figures from its registration's data sheets, each as parsed TOML (`verity.device`'s `load_node`
         and `load_card`): the node's `device.count`; its GPU card's `memory.read`, `memory.bandwidth` and
         `store.dram`; its host card's `memory.read`, `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no
@@ -207,7 +207,7 @@ class Figures:
 
 RTX_PRO_6000_NODE = Figures(GPUS, GPU_READ_BYTES_PER_S, GPU_SPEC_BYTES_PER_S, GPU_CHIP_BYTES, GPU_HBM_BYTES,
                             GPU_SHA512_PER_S, GPU_SQUARINGS_PER_S, HOST_READ_BYTES_PER_S, HOST_SPEC_BYTES_PER_S,
-                            HOST_CHIP_BYTES, DISK_BYTES_PER_S, LINK_WINDOW_BYTES)
+                            HOST_CHIP_BYTES, DISK_BYTES_PER_S, LINK_BURST_BYTES)
 """The measured node's figures, the constants above: 8 RTX PRO 6000s on a host of two Xeon 6776P sockets.  Each one a
 sheet states is the sheet's value (`Figures.of_sheets` on `rtx-pro-6000-server-x8`)."""
 
@@ -677,7 +677,7 @@ def _grid(fig: Figures) -> None:
 
 __all__ = ["CHIP_BYTES", "DISK_BYTES_PER_S", "GPUS", "GPU_CHIP_BYTES", "GPU_HBM_BYTES", "GPU_READ_BYTES_PER_S",
            "GPU_SHA512_PER_S", "GPU_SPEC_BYTES_PER_S", "GPU_SQUARINGS_PER_S", "GPU_WRITE_BYTES_PER_S", "HOST_CHIP_BYTES",
-           "HOST_READ_BYTES_PER_S", "HOST_SPEC_BYTES_PER_S", "HOST_WRITE_BYTES_PER_S", "LINK_WINDOW_BYTES",
+           "HOST_READ_BYTES_PER_S", "HOST_SPEC_BYTES_PER_S", "HOST_WRITE_BYTES_PER_S", "LINK_BURST_BYTES",
            "READ_BYTES_PER_S", "RTX_PRO_6000_NODE", "SPEC_BYTES_PER_S", "SQUARINGS_PER_S", "Figures", "log2"]
 
 if __name__ == "__main__":
