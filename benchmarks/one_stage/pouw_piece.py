@@ -283,12 +283,10 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
 
 def close_sessions(ledger: list[str], name: str) -> list[Any]:
     """The sessions the auditor's ledger `ledger` lists in period `name`'s close, in its order, read past any line that
-    isn't an entry (the check refuses that ledger); the empty list when it closes no period `name`."""
+    isn't an entry object (the check refuses that ledger); the empty list when it closes no period `name`. A line that
+    isn't JSON raises: the ledger is the auditor's own, so a broken one is a failed run, not a period to ask about."""
     for x in ledger:
-        try:
-            e = json.loads(x)
-        except (TypeError, ValueError):
-            continue
+        e = json.loads(x)
         body = e.get("body") if isinstance(e, dict) else None
         if isinstance(body, dict) and e.get("kind") == "period-close" and body.get("period") == name:
             return [w.get("session") if isinstance(w, dict) else None for w in body.get("windows") or ()]
