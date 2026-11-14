@@ -136,7 +136,7 @@ open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge
 
 /-- **The decodes read the committed leaf, from acceptance**: where each session has a unit, its served roots
 registered, whose units read their one-row ports at their rows (`ReadsOwnRow`), whose registrants' rows agree at one
-tree and position (`RowsAgree`) and whose known rows hold, at every proof whose sessions pass flock-verify's complete
+tree and position (`RowsAgree`) and whose known rows hold, at every proof whose sessions pass verity-verify-proof's complete
 and known-read checks at the known content of the public inputs `pub` (`knownOf`) and the ports read in full
 (`readFull`), and the leaf verifier's check of their files at `ownOf` (`roots`, the unit's placement `place`,
 `checkOwn`), each lane's decode agrees

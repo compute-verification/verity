@@ -305,7 +305,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 #: `ci.py`, the agreement job of the Lean verifier against upstream's Rust verifier, and its other scripts
 FLOCK_VERIFIER = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
-#: the Lean verifier, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
+#: the Lean verifier, the Lake package `verity-verify-proof` is built from (a join of its own, so a layout move that takes
 #: the Lean package away from the scripts rewrites it)
 FLOCK_LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 #: the recording run's custody dir, for `store_io` (not VERITY_-prefixed: the suites' cache keys on those, and the path is per run)
@@ -1003,7 +1003,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
         if FLOCK_VERIFIER.is_dir():
             return [("lean", f"the verifier is on this tree but its Lean package is not at {lean}", ROOT)]
         return [("lean", "skipped: verity/protocols/proofs/flock/verifier is not on this tree", ROOT)]
-    verify = lean / ".lake" / "build" / "bin" / "flock-verify"
+    verify = lean / ".lake" / "build" / "bin" / "verity-verify-proof"
     agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/protocols/proofs/flock/ or "
                                   "a Lean package the verifier requires by path (but sigma/, a README.md or PROTOCOL.md) requires this step: "
                                   "`check.py --record` sends its URLs)")
@@ -1164,7 +1164,7 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
 
 def lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None = None) -> int:
     """Unpack the pinned upstream build and inputs, check every binary against the pin and that this machine can run them, and
-    run `ci.py` on every replayable set with ``verify`` (default: this tree's build of flock-verify)."""
+    run `ci.py` on every replayable set with ``verify`` (default: this tree's build of verity-verify-proof)."""
     import tarfile
 
     pin = json.loads(UPSTREAM_PIN.read_text())
@@ -1190,7 +1190,7 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None 
         return 1
     ci = pin.get("ci", {})
     sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
-    argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(verify or FLOCK_LEAN / ".lake" / "build" / "bin" / "flock-verify"),
+    argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(verify or FLOCK_LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"),
             *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
             "--session-jobs", str(session_jobs()),
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
@@ -2683,7 +2683,7 @@ def _env_key(e: dict[str, str]) -> dict[str, str]:
 def agreement_key(e: dict[str, str]) -> str | None:
     """What the agreement job reads: the tracked files `agreement_closure` names (verity/protocols/proofs/flock/prover/agreement/: `ci.py` and the scripts
     it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
-    the inputs and the job's settings; and the Lean packages `flock-verify` is built from, verity/protocols/proofs/flock/verifier/ and
+    the inputs and the job's settings; and the Lean packages `verity-verify-proof` is built from, verity/protocols/proofs/flock/verifier/ and
     the packages of the tree it requires by path, their sources and toolchain pins), the interpreter and the platform.  None
     when the tree's files cannot be listed."""
     files = tracked_files()

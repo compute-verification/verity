@@ -48,12 +48,14 @@ request's Program is built at its launch context, which the advice fixes, and th
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable, Mapping
 from functools import cache
-from typing import Any, Callable, Mapping
+from typing import Any
 
 from verity_vllm.check.batch import BATCH, SHARED, Fields, Template, own, separable
 from verity_vllm.pipeline import window_advice as WA
-from verity_vllm.program.frontend.seed_rule import PARAMS as SEED_PARAMS, rid_of_ids
+from verity_vllm.program.frontend.seed_rule import PARAMS as SEED_PARAMS
+from verity_vllm.program.frontend.seed_rule import rid_of_ids
 
 from .build import Unexpressible, _Specs, build_program, model_shape
 from .common import _ptypes, kind
@@ -247,11 +249,13 @@ def _solo(advice: Any, ingress: Mapping[str, Any], r: int, chunks: tuple[int, ..
     k = int(any(src.request != r for src in rows[0][1].sources))
     own = sum(o.request == r for o in (WA if hasattr(advice, "carried") else sys.modules[type(advice).__module__]).outputs(advice))
     steps = [WA.StepAdvice((_row(row, k, tuple(WA.Source(k, src.n) for src in row.sources)),)) for _, row in rows]
+    requests: tuple[WA.RequestAdvice, ...]
     requests, bodies = (WA.RequestAdvice(q.id, q.prompt_len, q.output_len, q.finish),), {q.id: ingress[q.id]}
     if k:
         C, stand = rows[0][1].cache_hit, f"{q.id} (prefix)"
         requests, own = (WA.RequestAdvice(stand, C, 1, "length"), *requests), own + 1
-        bodies[stand] = {"prompt": list(_prompt(ingress[q.id])[:C]), "max_tokens": 1, "temperature": 0}
+        ids: Any = _prompt(ingress[q.id])   # as given: a body that carries no token ids is None's TypeError
+        bodies[stand] = {"prompt": list(ids[:C]), "max_tokens": 1, "temperature": 0}
         first = _row(rows[0][1], 1, (WA.Source(0, C),))
         if sum(chunks) not in (0, C):
             raise BatchDependent(f"request {r}: its hit's chunks {list(chunks)} don't sum to its hit of {C} tokens")
@@ -295,8 +299,8 @@ def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], com
         if _unit(a) != _unit(u):
             raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id, C, recomputed, chunks, carried out, edge) = {_unit(a)}, "
                                  f"in its batch {_unit(u)}")
-        mine = [(rr.start, rr.n, rr.samples) for rows in compiled.steps for rr in rows if rr.request == r]
-        theirs = [(start, n, m) for rows in alone.steps for req, start, n, m in rows if req == k]
+        mine: list[tuple[Any, ...]] = [(rr.start, rr.n, rr.samples) for rows in compiled.steps for rr in rows if rr.request == r]
+        theirs: list[tuple[Any, ...]] = [(start, n, m) for rows in alone.steps for req, start, n, m in rows if req == k]
         if mine != theirs:
             raise BatchDependent(f"request {r}: its rows (start, n, samples) are {theirs} alone, {mine} in its batch")
         mine = [(start, n) for _, req, start, n in compiled.discarded if req == r]

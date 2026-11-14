@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.DeviceKernelWref
-public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Proofs.Pouw.PearlC.Records
 public import Definitions.Pouw.PearlC.Instance
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.PearlC.FlockTile.Audit
@@ -29,7 +29,7 @@ open Pouw.PearlC Pouw.PearlC.Assumptions Pouw.PearlC.FlockTile
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³, under Flock's hidden audit**, FP32 at 8.376, the honest
 cast at 8.72: `g = 1648180439/446072750000` (0.36949%), at `t·δzk(q)` more error than the sampled audit, for Flock's
 hidden audit over a TileRead session `F` (`F.audit`: the window root, each sampled tile's TileRead `--zk` session
-relabelled to flock-verify's verdict, and the class of batch provers whose every induced strategy meets the session's `Cls`).
+relabelled to verity-verify-proof's verdict, and the class of batch provers whose every induced strategy meets the session's `Cls`).
 
 Its hypotheses, at the cost model `W1.w1Priced` on `W1Device.sm120Loop sha fetch`:
 * `TTOutTilePearlCDevRev1W1` (the device's timing at the cap at W1, a named assumption, as in the sampled audit);

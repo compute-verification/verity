@@ -9,7 +9,7 @@ an instance of (its stratum's name under the check's query), its public file's h
 ``unit_draw``, and the registered reads it was verified against (``--registered``), None for none. Round 2 takes it only
 where an accepted verdict of record names its header, its registered reads and its sample (``second-verified``,
 `verified_of`): ``public_header_sha512`` and ``registered_sha512``, the SHA-512 of the header's and the
-``--registered`` file's canonical JSON, and ``unit_draw``, which `flock-verify verify` writes of the session it checked;
+``--registered`` file's canonical JSON, and ``unit_draw``, which `verity-verify-proof verify` writes of the session it checked;
 and only where every one that does checked its session as one table (``session_tables``, ``second-tables``): a session
 split across Flock tables is refused, as one split across statements is (``second-template``).
 
@@ -88,7 +88,8 @@ table has another leaf count than the read's rows, is refused here. The code is 
 branch of `check`, so a run that has it still reaches its other stops.
 
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
-(``two-stage-form``), and the Python flipped alone disagrees with the run of record."""
+(``two-stage-form``), and the Python flipped alone disagrees with the run of record. `complete` is what a two-stage
+outcome may say of itself: nothing while `FORM` is off or its replay block is a stand-in for the request Definition."""
 
 from __future__ import annotations
 
@@ -151,6 +152,9 @@ OWN_SOURCES = ("bytes",)
 #: The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1
 #: (`SecondStage.VERDICT_ONE`).
 VERDICT_ONE = (("bytes", "00000001"),)
+#: `VERDICT_ONE` as one 16-bit leaf, the width of the verdict value's row: the bytes of 1 as one 16-bit half
+#: (`registered.half_leaves`; `SecondStage.VERDICT_ONE_LEAF`). `_opened_row` doesn't read it until `half_leaves` is written.
+VERDICT_ONE_LEAF = (("bytes", "0001"),)
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
 MAX_LEAVES = 2 ** 64
@@ -164,6 +168,17 @@ MAX_LEAVES = 2 ** 64
 #: blocks.
 RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"),
               ("registered",))
+
+
+def complete(form: bool, request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
+    """Whether a two-stage outcome is complete, in the sense one-stage's accept publishes (`one_stage.audit.COMPLETE`:
+    every verdict ran). It is only when all three hold. The two-stage form is allowed (`form`: `FORM` in a run of
+    record, on only once the soundness proof covers the form). The replay block is the registered request Definition
+    (`request_definition`): a sample of a stand-in audits the stand-in, never the request. Each stage's audit record
+    (`records`, at least one, none missing) accepted and is itself complete. So it is false of every two-stage outcome
+    while `FORM` is off, and of every one whose replay block is a stand-in, whatever its audit records say."""
+    return (form is True and request_definition is True and len(records) > 0
+            and all(r is not None and r.get("accepted") is True and r.get("complete") is True for r in records))
 
 
 @dataclass(frozen=True)
@@ -984,6 +999,73 @@ def own_draw(q: int, p: Part, drawn: Sequence[int]) -> dict[str, Any]:
     return {"law": "subset", "population": q * p.n, "k": len(units), "units": units}
 
 
+def sampled_slots(q: int, p: Part, us: Sequence[int]) -> list[int]:
+    """`SecondStage.sampledSlots`: part `p`'s slots among the second sample's units `us`, in its order."""
+    return [u for u in us if p.holds(q, u)]
+
+
+def _sampled_ok(q: int, p: Part, us: Sequence[int], h: Any) -> bool:
+    """`SecondStage.sampledOk`: the header's ``units.indices`` are part `p`'s slots the second stage samples and no
+    other, at least one, and its ``instances`` their count: the header of a statement of only its part's sampled proof
+    blocks."""
+    slots, indices, m = sampled_slots(q, p, us), _get(_get(h, "units"), "indices"), _get(h, "instances")
+    return (isinstance(indices, list) and _nat(m) and 0 < m == len(slots) and len(indices) == len(slots)
+            and all(_nat(x) and x == u for x, u in zip(indices, slots)))
+
+
+def sampled_only(q: int, p: Part, us: Sequence[int], h: Any) -> bool:
+    """`SecondStage.sampledOnly`: header `h` is of only part `p`'s sampled proof blocks (`_sampled_ok`), and not of
+    every slot of the part (`_population_ok`): where the second stage samples every slot the two are one header, held
+    as the part's whole."""
+    return _sampled_ok(q, p, us, h) and not _population_ok(q, p, h)
+
+
+def _rows_read(e: Any, slots: Sequence[int]) -> int:
+    """`SecondStage.rowsRead`: the rows registered-reads entry `e` gives slots `slots`, each once."""
+    f, rs = _get(e, "reads_from"), _get(e, "reads")
+    f = f if _nat(f) else 0
+    if not isinstance(rs, list):
+        return 0
+    return len({rs[u - f] for u in slots if f <= u < f + len(rs) and _nat(rs[u - f])})
+
+
+def at_sampled(r: Any, slots: Sequence[int], reads: Sequence[tuple[str, Any]]) -> Any:
+    """`SecondStage.atSampled`: reference header `r`, placed in the run, at the slots a statement of only its part's
+    sampled proof blocks holds: its ``range`` those ``len(slots)`` instances', its ``units.classes`` its first
+    ``len(slots)``, and each port of its ``shared_rows`` the rows the statement's registered reads `reads` give those
+    slots (`_rows_read`), a port they don't read left as it is; a field the reference lacks stays absent."""
+    k = len(slots)
+    if isinstance(r, dict) and "range" in r:
+        r = _put_at([0, k], r, ("range",))
+    classes = _get(_get(r, "units"), "classes")
+    if isinstance(classes, list):
+        r = _put_at(classes[:k], r, ("units", "classes"))
+    shared = _get(r, "shared_rows")
+    if isinstance(shared, dict):
+        by: dict[str, Any] = {}
+        for port, e in reads:
+            by.setdefault(port, e)
+        r = _put_at({port: _rows_read(by[port], slots) if port in by else n for port, n in shared.items()}, r,
+                    ("shared_rows",))
+    return r
+
+
+def _sampled_header_ok(own: Own, named: bool, k: int, t: str, h: Any, slots: Sequence[int],
+                       reads: Sequence[tuple[str, Any]]) -> bool:
+    """`SecondStage.sampledHeaderOk`: `_header_ok` for a statement of only its part's sampled proof blocks `slots`,
+    reading `reads` registered: its header is its template's reference header placed in the run (`at_run`) and at those
+    slots (`at_sampled`), but for the run's fields."""
+    ref = next(((r,) for x, r in own.refs if x == t), None)
+    placed = None if ref is None else at_run(own, named, k, t, ref[0])
+    return placed is not None and _jeq(blank_run(h), blank_run(at_sampled(placed, slots, reads)))
+
+
+def whole_sample(m: int) -> dict[str, Any]:
+    """`SecondStage.wholeSample`: the sample of every unit of a population of `m`, as ``unit_draw`` writes a subset of
+    it: the session's sample of a statement of only its part's sampled proof blocks."""
+    return {"law": "subset", "population": m, "k": m, "units": list(range(m))}
+
+
 def _registered_entry(rec: Any, v: str) -> Any:
     es = _get(rec, "registered")
     return next((e for e in (es if isinstance(es, list) else ()) if _get(e, "value") == v
@@ -1178,6 +1260,26 @@ def _stmt_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
               ("second-population", _population_ok(q, p, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
+              ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
+               and _linked_read(own, p.template, reads) and _wired_read(own, p.template, reads)),
+              ("second-refs", _refs_ok(s)),
+              ("second-values", _values_ok(own, s)))
+    return [code for code, ok in checks if not ok]
+
+
+def _sampled_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
+    """`SecondStage.sampledCodes`: `_stmt_codes` for a statement of only its part `p`'s sampled proof blocks
+    (`sampled_only`): its population is the part's slots the second stage samples (`_sampled_ok`), its header its
+    template's reference's placed at them (`_sampled_header_ok`), and its session's sample every unit of it
+    (`whole_sample`); every other check is `_stmt_codes`'s."""
+    q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
+    slots = sampled_slots(q, p, own.drawn)
+    checks = (("second-verified", _verified_ok(own, s)),
+              ("second-tables", _tables_ok(own, s)),
+              ("second-header", _sampled_header_ok(own, named, k, s.template, s.header, slots, reads)),
+              ("second-population", _sampled_ok(q, p, own.drawn, s.header)),
+              ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
+              ("second-sample", _jeq(s.draw, whole_sample(len(slots)))),
               ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
                and _linked_read(own, p.template, reads) and _wired_read(own, p.template, reads)),
               ("second-refs", _refs_ok(s)),
@@ -1407,7 +1509,8 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
         if p is None or s.template in _templates(ss[:i]):
             found.append(("second-template", detail))
         else:
-            found += [(c, detail) for c in _stmt_codes(own, named, _pos_of(ps, s.template), p, s)]
+            codes = _sampled_codes if sampled_only(len(own.sample), p, own.drawn, s.header) else _stmt_codes
+            found += [(c, detail) for c in codes(own, named, _pos_of(ps, s.template), p, s)]
     found += _order_failures(ps, ss)
     covered = _templates(ss)
     found += [("second-cover", {"template": p.template}) for p in ps if p.template not in covered]
@@ -1418,7 +1521,9 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
 
 def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     """Round 2's statement check of `statements`, the two-stage form allowed when `allow` (`FORM` in a run): each code
-    once, with the detail it first failed with (`SecondStage.check`), the interior record's order first."""
+    once, with the detail it first failed with, the interior record's order first (`SecondStage.checkAny`:
+    `SecondStage.check` where every statement is of every slot of its part, and a statement of only its part's sampled
+    proof blocks held to `_sampled_codes`)."""
     if own.parts is None:
         found = [*_interior_failures(own), ("second-cells", CELLS_WHY)]
     elif not (_links_ok(own.parts, own) and _wires_ok(own.parts, own)):
@@ -1446,7 +1551,7 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
 
 __all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "Checked", "Link", "Own", "Part", "Rows", "Run",
            "Wire",
-           "at_run", "attach", "blank_reads", "blank_run", "check", "inputs_failure", "interior_order_ok",
+           "at_run", "attach", "blank_reads", "blank_run", "check", "complete", "inputs_failure", "interior_order_ok",
            "interior_reads", "interior_root", "link_runs", "links_of",
            "own_draw", "parts", "port_binding", "replay_links", "replay_returns", "replay_rows", "replay_wires",
            "returns_ok", "row_at", "rows_of",

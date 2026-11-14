@@ -5,7 +5,7 @@ is a template, its units staged from the step's own values, sampled by the strat
 
     PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a11.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
-      --lean flock-verify --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
+      --lean verity-verify-proof --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
 
 ``--save-values DIR`` stops after the values, writing each kind's rows and its unit Definitions (a few MB); ``--load-values
 DIR`` stages from them without the fold, which is most of a run's time on a shared CPU node.
@@ -982,7 +982,7 @@ def main() -> int:
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
         with slot("lean"):
             lean_v = a0.lean_verify(a.lean, m["st"], m["n"], sdir, zk=True)
-        verdicts[f"lean-verify/{m['name']}"] = {**lean_v, "tool": "flock-verify verify --zk --archive --partition --program"}
+        verdicts[f"lean-verify/{m['name']}"] = {**lean_v, "tool": "verity-verify-proof verify --zk --archive --partition --program"}
         statement[m["name"]] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                                 "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
                                 "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),

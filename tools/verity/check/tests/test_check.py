@@ -152,7 +152,7 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     (build, lake, _), (unit, cut, _), (audit, lean_audit, _), (agree, argv, _) = CHECK.lean_steps(out, agreement_urls=urls)
     assert (build, unit, audit, agree) == ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement")
     assert lake[-1].endswith("lake build")
-    assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/flock-verify")
+    assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/verity-verify-proof")
     assert lean_audit[1].endswith("tools/verity/check/check.py") and lean_audit[2] == "--lean-slot"
     assert lean_audit[4].endswith("tools/verity/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
@@ -287,7 +287,7 @@ def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch
     assert argv[argv.index("--upstream") + 1] == f"abc={out / 'flock-agreement' / 'upstream' / 'upstream-abc'}"
     assert argv[argv.index("--inputs") + 1].endswith("flock-agreement/inputs") and argv[argv.index("--fuzz") + 1] == "2"
     assert int(argv[argv.index("--session-jobs") + 1]) == CHECK.session_jobs() >= 1
-    assert argv[argv.index("--lean") + 1] == str(CHECK.FLOCK_LEAN / ".lake" / "build" / "bin" / "flock-verify")
+    assert argv[argv.index("--lean") + 1] == str(CHECK.FLOCK_LEAN / ".lake" / "build" / "bin" / "verity-verify-proof")
     out, sent = _pinned(tmp_path / "given", monkeypatch)
     assert CHECK.main(["--lean-agreement", str(out), str(sent / "a.tar.gz"), str(sent / "b.tar.gz"), str(tmp_path / "fv")]) == 0
     argv = json.loads((out / "flock-agreement" / "argv.json").read_text())
@@ -1067,7 +1067,7 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / ".gitignore").write_text("__pycache__/\n.lake/\n")
     (tmp_path / "a.txt").write_text("a")
-    for built in ("__pycache__/x.pyc", ".lake/build/bin/flock-verify"):
+    for built in ("__pycache__/x.pyc", ".lake/build/bin/verity-verify-proof"):
         (tmp_path / built).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / built).write_bytes(b"x")
     assert CHECK.tracked_files(tmp_path) == [".gitignore", "a.txt"]
@@ -1174,7 +1174,7 @@ def test_the_agreement_scripts_import_only_the_standard_library_and_each_other()
 
 
 def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_in_it(tmp_path, monkeypatch):
-    """`flock-verify` is built from the Lean package alone: its proofs (`security/Proofs/Flock/`) and any Lake package
+    """`verity-verify-proof` is built from the Lean package alone: its proofs (`security/Proofs/Flock/`) and any Lake package
     nested in it are no input, unless the package's lakefile requires something, which keeps everything in.  Nor is the
     package's `lean-audit.json`, which only the audit reads: that one path, not every file of the name."""
     files = CHECK.tracked_files()
@@ -1980,7 +1980,7 @@ def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agre
 
 def test_every_file_the_agreement_reads_needs_the_agreement_to_merge():
     """The rule `check.py --record` sends the upstream build by, and the gate refuses by, covers each tracked file the agreement
-    reads (`agreement_closure`: its scripts and the Lean package `flock-verify` is built from) but the docs, so a change to any
+    reads (`agreement_closure`: its scripts and the Lean package `verity-verify-proof` is built from) but the docs, so a change to any
     of them can't land on a check that skipped it, not only those under verity/protocols/proofs/flock/prover/."""
     from research.merge import rule_touches
 

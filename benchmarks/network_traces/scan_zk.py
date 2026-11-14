@@ -6,7 +6,7 @@ registration, every row of every unit, input or output, a registered read, prove
 Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
 challenger's coins (``--challenger``), a `service.Stream`'s.
 
-    python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
+    python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean verity-verify-proof --out DIR [--dry]
         [--class w63|w63k4|test] [--group G] [--warden-run RUN] [--v3c WINDOW] [--draw K [--challenger
         local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
     python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test]    # as warden_serve.py's flags
@@ -94,7 +94,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **Every port registered**: the verifier's registered reads name every port of every member's circuit, inputs and
-  output rows (`Flock.Registered.checkComplete`, which `flock-verify` runs whenever ``--registered`` is given), so no
+  output rows (`Flock.Registered.checkComplete`, which `verity-verify-proof` runs whenever ``--registered`` is given), so no
   output reads a row the statement commits afresh. A port no scan tree or network certifier row registration holds
   (each proof block's public o0, the last ingress proof block's o1, a block member's ``x``) is the member's own rows of
   it (`Frame`, value ``frame``), committed under its statement's frame binding (`frame_binding`, over the member's
@@ -1502,7 +1502,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
-            raise SystemExit(f"{name}: flock-verify draw gave no draw (rc {p.returncode}): {p.stderr[-400:]}")
+            raise SystemExit(f"{name}: verity-verify-proof draw gave no draw (rc {p.returncode}): {p.stderr[-400:]}")
         lean_draw = json.loads(line.split(" ", 1)[1])
     else:
         spec, units, counts = spec_of(pg, members, want, schemas, k, coins.root)
@@ -1549,7 +1549,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
             "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         lv = a0.lean_verify(a.lean, m, m["n"], sdir, zk=True)
-        verdicts[f"lean-verify/{m['name']}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition "
+        verdicts[f"lean-verify/{m['name']}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition "
                                                               "--program --registered"}
         proved += a0.proved_units(m["header"], live or {})
         served += [m["base"] + u for u in draw_t.get("units", [])]
@@ -1608,7 +1608,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                 os.link(f, vdir / f"{m['name']}-session-{f.parent.name}-{f.name}")
     got = [w for col in opened.values() for w in col if w is not None]
     window_ok = bool(result.get("accepted")) and len(got) == len(held & public) and all(w == 1 for w in got)
-    source = "a development challenger's (flock-verify draw, a0.challenger_draw)" if stream is None else \
+    source = "a development challenger's (verity-verify-proof draw, a0.challenger_draw)" if stream is None else \
         f"the auditor's challenger's ({coins.challenger}: a5_coins, the round's service.Stream)"
     return {**res, "accepted": bool(result.get("accepted")), "window_accepted": window_ok, "opened": opened,
             "draw": {"law": rule, "coins": source, "units": lean_draw["units"], "of": rec["population"]},
@@ -1655,8 +1655,8 @@ def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
 def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, rests: Sequence[str] = ()) -> dict:
     """One-stage's answer for the group's registration ``reg`` as a period check reads an execution phase's scan answer
     (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
-    `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on incorrect proof
-    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit sampled, the bound 0), and the tied values
+    `audit`'s ``audit.json``), one-stage's answer of it at ``delta`` (`audit.answer`: its sample and proved units,
+    every unit sampled, the bound 0, and whether every verdict ran), and the tied values
     its registration's R8 let through when there are any (``rests``, the registration verdict's
     ``rests_on_period_check``), on whose period check the acceptance rests; else a reject naming ``reason``."""
     commitment = RG.digest(reg)
@@ -1665,15 +1665,10 @@ def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, 
                 "verdict": "reject"}
     if record.get("accepted") is not True or RG.digest(record["registration"]) != commitment:
         raise SystemExit("an accepted scan's audit record is for another registration, or not accepted")
-    draw = record["draw"]
-    profile = AU.profile(reg, draw, delta).to_json()
-    profile["delta"] = str(delta)
-    wrong = AU.wrong_units(reg, draw, delta)
-    return {"commitment": commitment, "profile": profile, "protocol": RG.PROTOCOL,
-            "public": {"bound": wrong["bound"], "drawn": sorted(draw["units"]),
-                       "per_template": wrong.get("per_template"), "proved": sorted(record["proved_units"]),
-                       **({"rests_on_period_check": list(rests)} if rests else {})},
-            "reason": None, "verdict": "accept"}
+    answer = AU.answer(record, delta)
+    if rests:
+        answer["public"]["rests_on_period_check"] = list(rests)
+    return answer
 
 
 def _answer(out: Path, name: str, res: dict, delta: Fraction, what: str) -> tuple[dict, dict]:

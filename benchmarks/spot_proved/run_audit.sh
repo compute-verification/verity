@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A11's one-stage audit (a11.py --load-values) of stage.py's saved directory, on a fresh pod, from a clone of the tree
 # (`research run --cwd clone`): the Rust, Lean and uv toolchains if missing, then hidden_zk's builds (flock-circuit,
-# flock-verify, the venv, kept under SP_CACHE), the sampled-proofs verifier, and the audit.
+# verity-verify-proof, the venv, kept under SP_CACHE), the sampled-proofs verifier, and the audit.
 #   SP_MODE=build bash benchmarks/spot_proved/run_audit.sh                       # the builds only
 #   SP_MODE=audit SP_VALUES=DIR SP_ARGS="--per-kind 2 --tamper none" bash benchmarks/spot_proved/run_audit.sh
 #   (SP_VALUES may be a .tar.gz of one such directory, e.g. sent with --send: "$RESEARCH_RUN_DIR/inputs/values.tar.gz")

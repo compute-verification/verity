@@ -6,7 +6,8 @@
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
-  `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once.
+  `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once, and
+  `writer(out, kind)` writes a result of that `kind`, the artifact kind `research` stores it as.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
   `research` keeps; the first of them writes all three of its keys, so a result that uses none holds none.
 
@@ -86,6 +87,8 @@ PERIODS = ("phase", "week", "month", "year")
 OVER = ("world", "datacenter")
 #: the first word of an input, which the console's Metrics tab reads a mark from (as `markOf` does)
 LEADING_WORD = re.compile(r"^([a-z]+)\b")
+#: a result's `kind`, as `research` stores an artifact's: a name and a version
+KIND = re.compile(r"[a-z0-9][a-z0-9-]*/v[0-9]+")
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
@@ -263,11 +266,14 @@ def _locked(directory: Path) -> Iterator[None]:
 @dataclass(frozen=True)
 class Writer:
     """`writer(out)`: the one writer of `out/result.json`, for the run `run` under the host stamp `stamp`. `out` is the
-    directory the result is in: under a research run the run's own, whatever `writer` was given."""
+    directory the result is in: under a research run the run's own, whatever `writer` was given. `kind`, where given,
+    is the result's `kind`, the artifact kind `research` stores it as (`bench-result/v1` where it has none): the
+    writer writes it into the result and refuses a result of another kind."""
 
     out: Path
     run: str
     stamp: Mapping
+    kind: str | None = None
 
     def measurement(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
@@ -465,8 +471,11 @@ class Writer:
     def _read(self, path: Path) -> dict:
         """The result at `path` to append to: this run's, or a new one where there is none."""
 
+        if self.kind is not None and not KIND.fullmatch(self.kind):
+            raise ValueError(f"a result's kind is NAME/vN, as research stores it, not {self.kind!r}")
         if not path.exists():
-            return {"schema": RESULT_SCHEMA, "run_id": self.run, "measurements": []}
+            return {"schema": RESULT_SCHEMA, **({"kind": self.kind} if self.kind else {}), "run_id": self.run,
+                    "measurements": []}
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
         except ValueError as ex:
@@ -478,14 +487,18 @@ class Writer:
                              "its own directory")
         if not isinstance(doc.setdefault("measurements", []), list):
             raise ValueError(f"{path}'s measurements aren't a list: the writer appends only to a {RESULT_SCHEMA} result")
+        if self.kind is not None:
+            if doc.setdefault("kind", self.kind) != self.kind:
+                raise ValueError(f"{path} is a {doc['kind']} result, and this writer writes a {self.kind} one: a run "
+                                 "writes one kind of result")
         return doc
 
 
-def writer(out: str | os.PathLike) -> Writer:
-    """The writer of this run's result (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now. Under a
-    research run (`RESEARCH_RUN_DIR` set) the result is `$RESEARCH_RUN_DIR/result.json`, the one file `research` reads a
-    run's result from, whatever `out` is, so its evidence paths are relative to the run's directory; outside one it is
-    `out/result.json`."""
+def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
+    """The writer of this run's result (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now, of `kind`
+    where given (`Writer.kind`). Under a research run (`RESEARCH_RUN_DIR` set) the result is
+    `$RESEARCH_RUN_DIR/result.json`, the one file `research` reads a run's result from, whatever `out` is, so its evidence
+    paths are relative to the run's directory; outside one it is `out/result.json`."""
 
     where = settings.RESEARCH_RUN_DIR if settings.is_set("RESEARCH_RUN_DIR") else out
-    return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp())
+    return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp(), kind)

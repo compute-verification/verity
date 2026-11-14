@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, over a TP Commit's windows, one per rank (a5.py --tp-commit), on a CPU machine: each rank's served
 # window through registration, the verifier's Lean sample, M0's prover and the Lean verifier. M0's flock-circuit and
-# Lean's flock-verify are built from this tree, in scratch. A5 takes a TP window as served only under a SHA-512 TP run root
+# Lean's verity-verify-proof are built from this tree, in scratch. A5 takes a TP window as served only under a SHA-512 TP run root
 # (tp.serving_rows.source: sha512): a TP Commit's ranks, the stand-in's too, commit under rows-sha512 under the SHA-512 TP run
 # root (tp.run_root, verity/tp-run-root/v2); an old record's SHA-256 v1 root is refused before the sample.
 #   GLM-5.3 TP8: A5_TP=DIR holds the TP Commit's record (commit/runs.jsonl, commit/versions.json) and its windows (serving-rows/
@@ -147,7 +147,7 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 
-(cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
+(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}   # a kept build dir: 20-gpu-link.sh re-applies this tree's patches and cargo rebuilds what changed
@@ -155,7 +155,7 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protoco
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-firewall
 PLAINS=(); if [ "${A5_PLAIN:-0}" = 1 ]; then PLAINS=(--plain); fi
 (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256

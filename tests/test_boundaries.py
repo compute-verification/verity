@@ -89,11 +89,10 @@ NO_DATE_OR_REASON = ("verity/protocols/compose/device/live_challenger", "verity/
                      "verity/protocols/accounting/pouw/prover/clear", "verity/protocols/accounting/pouw/verifier/receipts")
 #: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own by the rules on a
 #: file's text: it reads no other distribution at run time and names no path of the census, and each of its
-#: directories is a package.  The code that came from ``benchmarks/``, and the Lean check of σ beside Flock's prover.
+#: directories is a package.  The code that came from ``benchmarks/``.
 #: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
-HELD_AS_VERITY = ("verity/protocols/compose/device/live_challenger", "verity/protocols/proofs/flock/sigma",
-                  "verity/protocols/accounting/poub/device/live_verifier", "verity/protocols/accounting/pouw/prover/clear",
-                  "verity/protocols/accounting/pouw/verifier/receipts")
+HELD_AS_VERITY = ("verity/protocols/compose/device/live_challenger", "verity/protocols/accounting/poub/device/live_verifier",
+                  "verity/protocols/accounting/pouw/prover/clear", "verity/protocols/accounting/pouw/verifier/receipts")
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
 #: certified input and imports none of the certifier, and the two compose only above both.  SPOT's row of the
 #: listing and the certifier's, the trees each of whose Python files (tests included) is checked, SPOT's Lean packages
@@ -160,7 +159,7 @@ BENCHMARKS_IMPORTERS = {
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
     **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py"),
-                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`)"),
+                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `verity/protocols/accounting/pouw/prover/kernels/edited_gemm`)"),
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
     "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
