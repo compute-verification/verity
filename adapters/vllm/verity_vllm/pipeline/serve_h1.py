@@ -90,12 +90,7 @@ from verity.protocols.accounting.pouw.prover.serving import (
     drawn_units,
     GateSessions,
     H1_PROGRAM as PROGRAM,
-    H1_PROGRAM_META as PROGRAM_META,
     H1_SCHEME as SCHEME,
-    LISTEN_S,
-    listening,
-    MARGIN,
-    POLLS,
     window_units as units,
 )
 from verity_vllm.config import option
@@ -706,6 +701,5 @@ def arm_of(opts: Any, llm: Any, com: Any, out: Path, flush: Callable[[], Any] | 
     return arm
 
 
-__all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "LISTEN_S", "MARGIN", "OWN", "POLLS", "PROGRAM",
-           "PROGRAM_META", "SCHEME", "SESSIONED", "arm_of", "config_of", "listening", "model_key_of", "refusal", "sessions_of",
-           "units", "worker"]
+__all__ = ["AT", "ENTRY", "GateOptions", "H1Windows", "OWN", "SESSIONED", "arm_of", "config_of", "model_key_of", "refusal",
+           "sessions_of", "worker"]
