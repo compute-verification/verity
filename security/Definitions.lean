@@ -105,6 +105,8 @@ public import Definitions.Accounting.Assumptions.TS.Fixed
 public import Definitions.Accounting.Guarantees
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees
+public import Definitions.Certifier.Guarantees.MonitoringPeriodFails
+public import Definitions.Certifier.Guarantees.PooledReg
 public import Definitions.Certifier.Guarantees.MonitoringPeriod
 public import Definitions.Certifier.Guarantees.PooledLeak
 public import Definitions.Certifier.Guarantees.Checked
