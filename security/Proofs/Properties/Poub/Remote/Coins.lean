@@ -1,6 +1,7 @@
 module
 
 public import Batteries.Tactic.OpenPrivate
+public import Proofs.Properties.Compose.Remote.Sample
 public import Proofs.Properties.Poub.Remote.Draw
 public import Proofs.Properties.Poub.Remote.Run
 public import Proofs.Properties.Poub.Remote.Window

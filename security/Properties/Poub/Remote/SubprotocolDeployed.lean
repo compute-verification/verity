@@ -32,8 +32,8 @@ witnesses. `LineHeld` stands the same way: closed in `Properties.Poub.Remote.Lin
 
 namespace Properties.Poub.Subprotocol
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Properties.Poub.Line
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions Properties.Poub.Line
 
 /-- **The component's check accepts only what `Shared.run g` accepts.** Whenever `Poub.Protocol.check` accepts
 parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session
@@ -76,7 +76,7 @@ def PublishedEps : Prop :=
 /-- **What the subprotocol's check gives of the `q_bytes` it publishes.** Whenever bytes that play record `rec` on the
 node are accepted publishing `pub` (`Publishes`, spelled out: the bytes decode to parameters `p`, the registration and a
 log `ev` whose session is the record's, and the check accepts them with `pub`), `q_bytes` and `BLOCK_BYTES` times the pooled bound at
-`Poub.Protocol.DELTA` of the record's samples (`Accounting.Remote.Draw.pooled`) are together at most
+`Poub.Protocol.DELTA` of the record's samples (`Accounting.Remote.Sample.pooled`) are together at most
 `BLOCK_BYTES · U`, over the reals. The samples' sizes and counts are `recordSample`'s: sample `c` holds the receipts its
 windows have in the state the record's run reaches (`Record.sampleReceiptsAt`), capped at `receiptMax`, and opens
 `min(s, U_c)` of them at the run's `samples` s; `U` is the receipts of the Lean verifier's record of the run
@@ -92,7 +92,7 @@ def PublishedQBytes : Prop :=
       .ok (node.params, node.groupsPerCoin, rec.coins, rec.appendCoins, rec.notBeforeNs, rec.events) →
     Poub.Protocol.check p node.reg ev = .accept pub prof →
     (pub.qBytes : ℝ) + (Poub.Codec.BLOCK_BYTES : ℝ) *
-        Accounting.Remote.Draw.pooled node.samples (fun c => min (rec.sampleReceiptsAt node c) receiptMax)
+        Accounting.Remote.Sample.pooled node.samples (fun c => min (rec.sampleReceiptsAt node c) receiptMax)
           (fun c => min node.params.samples (min (rec.sampleReceiptsAt node c) receiptMax))
           (Poub.Protocol.DELTA : ℝ) ≤
       (Poub.Codec.BLOCK_BYTES : ℝ) * ((rec.receipts node).toList.sum : ℕ)

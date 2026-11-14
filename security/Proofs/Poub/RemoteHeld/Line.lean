@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Compose.RemoteHeld.Sample
 public import Proofs.Poub.RemoteHeld.Draw
 public import Proofs.Poub.RemoteHeld.Outside
 public import Proofs.Poub.RemoteHeld.Window
@@ -78,8 +79,8 @@ to the line's W, and on it every stretch of the line credits what the trace held
 
 namespace Properties.Poub.Line.SecurityProofs
 
-open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions _root_.Poub.Line Accounting.SecurityProofs.Remote Properties.Poub.Line
+open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions _root_.Poub.Line Accounting.SecurityProofs.Remote Properties.Poub.Line
 
 /-- What `ofSummary` reads of a record it accepts: one group a window, and each window's receipts and samples, its
 samples `min(s, U_t)`. -/

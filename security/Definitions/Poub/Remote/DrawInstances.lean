@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Compose.Remote.Sample
 public import Definitions.Poub.Remote.Held
 public import Definitions.Poub.Remote.Draw
 
@@ -24,7 +25,7 @@ stated at these instances.
 
 namespace Accounting.Remote.Instances
 
-open Finset Accounting.Remote.Held Accounting.Remote.Draw
+open Finset Accounting.Remote.Held Accounting.Remote.Sample
 
 /-! ## A node that uses every route -/
 

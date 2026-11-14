@@ -406,19 +406,19 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Draw.Assumptions.Counted": {
+  "Accounting.Remote.Sample.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "7a8c819fae43610cbc75553dce53068663b261f469c9c15658421a40cbeb18e8",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Draw.Assumptions.Live": {
+  "Accounting.Remote.Sample.Assumptions.Live": {
    "owner": "@memory-accounting",
    "digest": "a8f18ca134c7c35043aacd9f71b0f2679da98d3cd7894f71707fc8d2438c0241",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Draw.Assumptions.Refused": {
+  "Accounting.Remote.Sample.Assumptions.Refused": {
    "owner": "@memory-accounting",
    "digest": "56944d0dddbb3a9e4d270e9e0e39a5c350c516cbb49a2525f7a2f68193e6408d",
    "issue": "LEAN-186",
@@ -965,9 +965,9 @@
   "Pous.Period.SecurityProofs.periodHeld": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
   "Pous.Period.SecurityProofs.periodHeldDeployed": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
   "Properties.Poub.Line.SecurityProofs.lineHeld": [
-   "Accounting.Remote.Draw.Assumptions.Counted",
-   "Accounting.Remote.Draw.Assumptions.Live",
-   "Accounting.Remote.Draw.Assumptions.Refused",
+   "Accounting.Remote.Sample.Assumptions.Counted",
+   "Accounting.Remote.Sample.Assumptions.Live",
+   "Accounting.Remote.Sample.Assumptions.Refused",
    "Accounting.Remote.Held.Assumptions.Covered",
    "Accounting.Remote.Held.Assumptions.Covers",
    "Accounting.Remote.Held.Assumptions.IngressCounted",
@@ -2699,6 +2699,11 @@
    "except": [],
    "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Compose.JointPeriod`), its realization (`Definitions.Certifier.JointBridge.CreditedWords`) and its named premises (`Definitions.Pouw.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
+  "Properties.Poub.Remote.Pooled": {
+   "imports": ["Definitions.Accounting", "Poub"],
+   "except": [],
+   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Poub.Remote.Sample`), never a proof"
+  },
   "Properties.Poub.Remote": {
    "imports": ["Poub", "Properties.Poub.Remote"],
    "except": [
@@ -2712,11 +2717,6 @@
    ],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
-  },
-  "Properties.Poub.Remote.Pooled": {
-   "imports": ["Definitions.Accounting", "Poub"],
-   "except": [],
-   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Poub.Remote.Draw`), never a proof"
   },
   "Properties.Poub.Remote.Line": {
    "imports": [

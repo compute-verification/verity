@@ -1,5 +1,6 @@
 module
 
+import Proofs.Properties.Compose.Remote.Sample
 public import Proofs.Properties.Poub.Remote.Shared
 import Proofs.Properties.Poub.Remote.Draw
 import Proofs.Properties.Poub.Remote.Window

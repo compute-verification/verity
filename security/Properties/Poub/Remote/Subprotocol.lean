@@ -61,8 +61,8 @@ messages entering it, as its certifiers count (`quietIngress`), on a schedule th
 
 namespace Properties.Poub.Subprotocol
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Properties.Poub.Line
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions Properties.Poub.Line
 
 /-- **The component accepts bytes that play the record on the node.** The parameters `a` (canonical JSON), the
 commitment `b` and the evidence `e` decode under the component's decoders, its check accepts them

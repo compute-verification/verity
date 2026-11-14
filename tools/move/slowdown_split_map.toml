@@ -14,6 +14,17 @@ files = ["*"]
 "InferenceOnly.SecurityProofs.Inference" = "Slowdown.SecurityProofs.Inference"
 "InferenceOnly.SecurityProofs.threaded_reads_by" = "Slowdown.SecurityProofs.threaded_reads_by"
 "InferenceOnly.slowdown" = "Slowdown.slowdown"
+"InferenceOnly.SecurityProofs.piece" = "Slowdown.SecurityProofs.piece"
+"InferenceOnly.SecurityProofs.mem_dark" = "Slowdown.SecurityProofs.mem_dark"
+"InferenceOnly.SecurityProofs.card_le_dark_add_inter" = "Slowdown.SecurityProofs.card_le_dark_add_inter"
+"InferenceOnly.SecurityProofs.mem_piece" = "Slowdown.SecurityProofs.mem_piece"
+"InferenceOnly.SecurityProofs.piece_subset" = "Slowdown.SecurityProofs.piece_subset"
+"InferenceOnly.SecurityProofs.piece_subset_computed" = "Slowdown.SecurityProofs.piece_subset_computed"
+"InferenceOnly.SecurityProofs.into_piece_subset" = "Slowdown.SecurityProofs.into_piece_subset"
+"InferenceOnly.SecurityProofs.card_piece_le" = "Slowdown.SecurityProofs.card_piece_le"
+"InferenceOnly.SecurityProofs.freshInput_piece" = "Slowdown.SecurityProofs.freshInput_piece"
+"InferenceOnly.SecurityProofs.sum_card_filter_piece" = "Slowdown.SecurityProofs.sum_card_filter_piece"
+"InferenceOnly.SecurityProofs.ofContainment_S" = "Slowdown.SecurityProofs.ofContainment_S"
 
 [rewrite]
 exclude = ["tools/move/**", "**/lean-audit.json"]

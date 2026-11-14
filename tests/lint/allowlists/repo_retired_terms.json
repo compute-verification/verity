@@ -2121,7 +2121,7 @@
     {"file": "benchmarks/remote_session/tests/test_gate_whatif.py", "count": 3},
     {"file": "benchmarks/remote_session/tests/test_plan_change.py", "count": 1},
     {"file": "benchmarks/remote_session/tests/test_sampling_inputs.py", "count": 6},
-    {"file": "benchmarks/remote_session/tests/test_session.py", "count": 53},
+    {"file": "benchmarks/remote_session/tests/test_session.py", "count": 52},
     {"file": "benchmarks/remote_session/tests/test_store_layout.py", "count": 18},
     {"file": "benchmarks/remote_session/tests/test_vllm_serve.py", "count": 3},
     {"file": "benchmarks/replay_ladder/README.md", "count": 3},
@@ -2282,7 +2282,6 @@
     {"file": "adapters/vllm/tests/commit/test_native_host_security.py", "count": 1},
     {"file": "adapters/vllm/tests/commit/test_openings_after_release.py", "count": 5},
     {"file": "adapters/vllm/tests/commit/test_pinned_pool_exact.py", "count": 1},
-    {"file": "adapters/vllm/tests/commit/test_production_vectors.py", "count": 2},
     {"file": "adapters/vllm/tests/commit/test_rows_cuda.py", "count": 7},
     {"file": "adapters/vllm/tests/commit/test_served_record.py", "count": 2},
     {"file": "adapters/vllm/tests/commit/test_serving_rows.py", "count": 16},
@@ -3128,7 +3127,7 @@
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_appends.py", "count": 3},
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_in_flight.py", "count": 2},
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_key_binding.py", "count": 1},
-    {"file": "verity/protocols/accounting/poub/verifier/tests/test_ledger.py", "count": 17},
+    {"file": "verity/protocols/accounting/poub/verifier/tests/test_ledger.py", "count": 15},
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_line.py", "count": 2},
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_monitoring.py", "count": 12},
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_opening.py", "count": 7},
@@ -3143,7 +3142,7 @@
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_shared_coin.py", "count": 14},
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_store.py", "count": 1},
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_verifier_party.py", "count": 2},
-    {"file": "verity/protocols/accounting/poub/verifier/timing.py", "count": 6},
+    {"file": "verity/protocols/accounting/poub/verifier/timing.py", "count": 3},
     {"file": "verity/protocols/accounting/poub/verifier/verifier_party.py", "count": 5},
     {"file": "verity/protocols/proofs/spot/verifier/README.md", "count": 71},
     {"file": "verity/protocols/proofs/spot/verifier/__init__.py", "count": 1},
@@ -3817,7 +3816,6 @@
     {"file": "verity/protocols/accounting/pouw/prover/serving/lead/feed.py", "count": 1},
     {"file": "verity/protocols/accounting/pouw/prover/serving/pearl_c/host.py", "count": 2},
     {"file": "verity/protocols/accounting/pouw/prover/serving/pearl_c/manifest.py", "count": 1},
-    {"file": "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/receipt_folds_r9.py", "count": 1},
     {"file": "verity/commitments/cuda/tests/cuda_build.py", "count": 3},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/pearl_c_sm90.cu", "count": 3},
     {"file": "adapters/vllm/tests/commit/hidden_stream.py", "count": 3},
@@ -5086,6 +5084,7 @@
     {"file": "benchmarks/one_stage/prove_subprotocol.sh", "count": 82},
     {"file": "benchmarks/one_stage/tests/test_prove_subprotocol_served.py", "count": 4},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_transfer_blocks_lean.py", "count": 58},
-    {"file": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean", "count": 81}
+    {"file": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean", "count": 81},
+    {"file": "adapters/vllm/tests/commit/test_serving_vectors.py", "count": 2}
   ]
 }

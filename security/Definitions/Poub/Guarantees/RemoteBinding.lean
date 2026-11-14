@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The receipts' binding bound (trusted)
 
-The bound on the receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`), the probability that some window
+The bound on the receipts' binding term (`Accounting.Remote.Sample.Receipts.binding`), the probability that some window
 opens a receipt presented with an accepted row other than the one its root holds, which `PooledSample` and the memory
 line's sampled guarantees charge. It is the forking argument: the held row is by definition the plurality of the rows the
 receipt shows over the window's continuations (`Receipts.held`), so a receipt moves with probability at most the
@@ -64,14 +64,14 @@ charge. The deployed challenger sends the prover no commitment to window `t`'s c
 
 namespace Accounting.Guarantees.Remote
 
-open Accounting.Remote.Draw
+open Accounting.Remote.Sample
 
 /-- **The receipts' binding term under `cr/sha-512`.** `ReceiptsBindingOfFork` with each window's fork finder
 (`Receipts.finder`, at `q_t` SHA-512 calls) meeting `Claims.StrictBirthday`: the binding term is at most
 `Σ_t √(|L_t|·s_t·(q_t²/2^513 + split_t))`. -/
 def ReceiptsBindingOfCR : Prop :=
   ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] [Nonempty X]
-    (D : Remote.Draw.Run n m s κ X)
+    (D : Remote.Sample.Run n m s κ X)
     (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ)
     (L : Fin n → Finset ℕ) (q : Fin n → ℕ),
     (∀ t ω, D.opened prf rest t ω ⊆ L t) →

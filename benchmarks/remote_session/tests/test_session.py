@@ -1234,7 +1234,7 @@ def test_a_paced_lines_ingress_charge_brings_the_bursts_the_ledger_states_for_it
     assert FIGURES.disk_bytes_per_s == 4.311e9
     assert verifier.ingress_bursts(0.0, FIGURES) == timing.CHIP_BYTES
     assert verifier.ingress_bursts(4.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9
-    assert verifier.ingress_bursts(54.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9 + timing.LINK_WINDOW_BYTES
+    assert verifier.ingress_bursts(54.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9 + timing.LINK_BURST_BYTES
 
 
 def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registered_block_out():

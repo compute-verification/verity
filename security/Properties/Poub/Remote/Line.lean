@@ -70,7 +70,7 @@ g = 1 is `Session.run`):
   committing zeros (`Committed.junk`), `hide_c` sample `c`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191`
   over the session's `n` samples in all), and `bind` the receipts' binding term over the session's samples
   (`Receipts.binding`: some opened receipt presented with an accepted row other than the one its root holds). The
-  openings are the deployed sample's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf c` gives sample
+  openings are the deployed sample's (`Accounting.Remote.Sample`: `Key.subset` on the first blocks `prf c` gives sample
   `c`'s coin, at most `receiptMax = 2^64 − 1 < 2^64` receipts a sample, the verifier's `RECEIPT_LIMIT` less one, the
   sampler's fallbacks `rest` free), at the error `Accounting.Guarantees.Remote.PooledSample` states.
 
@@ -116,8 +116,8 @@ holds from any start in `[s_0, e_0]`, which the held lemma uses.
 
 namespace Properties.Poub.Line
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions _root_.Poub.Line
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions _root_.Poub.Line
 
 /-- **LineChecked**: a line the code computes had a block of one or more bytes, a block's encode of one or more
 squarings, nonnegative rates and bursts, and read a nonnegative wrong receipts' bound. -/

@@ -119,10 +119,10 @@ namespace Accounting.SecurityProofs.Remote
 open Finset Accounting.Rate Accounting.Rate.Pooled
 open Pous (pr)
 open scoped ENNReal
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions
 
-namespace Draw
+namespace Sample
 
 /-! ## Adaptive rounds -/
 
@@ -1045,7 +1045,7 @@ theorem gap_nonneg : (0 : ℝ) ≤ 1 / 2 ^ 256 - 1 / 2 ^ 512 :=
 
 section Run
 
-variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Remote.Draw.Run n m s κ X)
+variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Remote.Sample.Run n m s κ X)
 
 theorem samples_le (t : Fin n) (ω : SampleCoins n κ X) : D.samples t ω ≤ m :=
   (min_le_right _ _).trans (Nat.lt_succ_iff.1 (D.size t ω).isLt)
@@ -1358,7 +1358,7 @@ theorem error_toReal {n : ℕ} (s : Fin n → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) (
 /-- An opened receipt that `Refused` lets through on an accepting outcome off the binding event is correct: a moved one
 is in the event. -/
 theorem opened_sub {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
-    {D : Remote.Draw.Run n m s κ X}
+    {D : Remote.Sample.Run n m s κ X}
     {prf : Fin n → Pous.Bits κ → Blocks m} {rest : SampleCoins n κ X → Fin n → ℕ → ℕ} {T : Trace (SampleCoins n κ X)}
     {R : Receipts n κ X} (hR : Refused D prf rest T R) {ω : SampleCoins n κ X} (ha : T.accepts ω)
     (hb : ¬ ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) (t : Fin n) :
@@ -1413,7 +1413,7 @@ theorem pooledSample {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [F
 
 /-- A session that reads no commitment has no hiding term. -/
 theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X]
-    (D : Remote.Draw.Run n m s κ X)
+    (D : Remote.Sample.Run n m s κ X)
     (com : SampleCoins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
     (⟨fun _ => D⟩ : Committed n m s κ X Cm).hide com prf δ t = 0 := by
   change (pr (D.potential prf δ ((t : ℕ) + 1)) - pr (D.potential prf δ ((t : ℕ) + 1))) +
@@ -1424,7 +1424,7 @@ theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
 (`hide_const`). -/
 theorem pooledSampleLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ)
-    (D : Remote.Draw.Run n m s κ X)
+    (D : Remote.Sample.Run n m s κ X)
     (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 64) (hL : Live D)
     (hR : Refused D prf rest T R) (hC : Counted D T) :
     T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 256 +
@@ -1437,25 +1437,25 @@ theorem pooledSampleLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [
   rw [h0, ENNReal.toReal_zero, add_zero] at h
   exact h
 
-end Draw
+end Sample
 
 /-- **The openings' pooled bound** (`Accounting.Guarantees.Remote.PooledSample`). -/
 theorem PooledSample : Accounting.Guarantees.Remote.PooledSample := by
   intro n m k κ X _ prf rest D T R δ hδ hm hL hR hC
   replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
-  exact Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC
+  exact Sample.pooledSampleLive prf rest D T R hδ hm hL hR hC
 
 /-- **Live coins, derived** (`Accounting.Guarantees.Remote.LiveCoinsSampled`). -/
 theorem LiveCoinsSampled : Accounting.Guarantees.Remote.LiveCoinsSampled := by
   intro n m k κ X _ prf rest D T R W δ hδ hm hL hR hC hW
   replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
-  exact holdsMono (fun ω ha h => h.trans (hW ω ha)) (Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC)
+  exact holdsMono (fun ω ha h => h.trans (hW ω ha)) (Sample.pooledSampleLive prf rest D T R hδ hm hL hR hC)
 
 /-- **The snapshot held at the record's pooled bound** (`Accounting.Guarantees.Remote.HeldSampled`). -/
 theorem HeldSampled : Accounting.Guarantees.Remote.HeldSampled := by
   intro n m k κ X _ prf rest D T R S s₀ e s E β Br Bd δs δc hE hs hβ hδ hm hI hsq hd hS hr hc hk hL hR hC
   replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
-  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC))
+  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Sample.pooledSampleLive prf rest D T R hδ hm hL hR hC))
   obtain ⟨hm', h0, hP⟩ := hc ω ha
   exact held_of ω hE hs hβ hI hsq hd hS hr hm' h0 hP h.1 h.2
 
@@ -1464,7 +1464,7 @@ theorem HeldSampled : Accounting.Guarantees.Remote.HeldSampled := by
 theorem HeldOverTimeLinksSampled : Accounting.Guarantees.Remote.HeldOverTimeLinksSampled := by
   intro n m k κ X _ prf rest D T R K S s E β βl Br Bd Bl δs δc hE hs hβ hβl hδ hm hl hsq hd hS hr hp hcov hk hL hR hC
   replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
-  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC))
+  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Sample.pooledSampleLive prf rest D T R hδ hm hL hR hC))
   exact heldOverLinks_of K ω hE hs hβ hβl hl hsq hd hS hr hp hcov ha h.1 h.2
 
 /-- **Held over time at the record's pooled bound, under Identity** (`Accounting.Guarantees.Remote.HeldOverTimeSampled`):
