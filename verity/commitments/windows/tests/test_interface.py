@@ -26,7 +26,7 @@ import numpy as np
 import pytest
 
 from verity.circuits import partition_object as PO
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
@@ -830,6 +830,18 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
             sliced(wires=(replace(c.wires[0], **edit),))
     with pytest.raises(ValueError, match="both fill rows"):
         sliced(wires=(*c.wires, I.Wire(GID, "x", G8ID, "o0", at=2, radix=(1,), base=0, step=(0,), cut=(1, 1))))
+
+
+def test_cap_is_a_run_field_the_registration_binds_and_the_circuits_digest_does_not():
+    """A stated record's members are derived from its ``cap`` (`window_of_record`), so ``cap`` stays a key of the record and
+    under its registration's ``window.circuit`` (the whole record's SHA-512, before any coin); it is a run field, out of the
+    circuit's digest ``H`` (`circuit_of`), so a Definition that names ``H`` before the serve holds whatever cap it commits at."""
+    a, b = (window(cap=cap)[0].circuit_record() for cap in (4, 3))
+    assert (a["cap"], b["cap"]) == (4, 3) and {k for k in a.keys() | b.keys() if a.get(k) != b.get(k)} == {"cap"}
+    assert hashlib.sha512(I.circuit_bytes(a)).digest() != hashlib.sha512(I.circuit_bytes(b)).digest()
+    assert canonical_json(I.circuit_of(a)) == canonical_json(I.circuit_of(b)) and "cap" not in I.circuit_of(a)
+    c = sliced()
+    assert I.descriptor_record(c, 2)["cap"] == 2 and I.circuit_of(I.descriptor_record(c, 2)) == I.circuit_of(I.descriptor_record(c, 3))
 
 
 def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
