@@ -9485,7 +9485,7 @@
     "reads": []
    },
    "type_hash": "2d8170bf6c6627424710a8c3e095295f580bdfa1b7934c90a76e0356caa3c517",
-   "unfolded_hash": "2e1c208115b1dce031c88ae7a5f05a90cc5b22e5084d4d7320f380154a89ddf5"
+   "unfolded_hash": "0f0ec88ec9db88612e8110436b8014592a198368c58f7b1115766c6d009f0e98"
   },
   "Properties.Site.checks_honest": {
    "owner": "@lean",
@@ -9496,9 +9496,13 @@
     "      (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
     "        Core.Site.Registration.Composite.remote Properties.Site.honestLog)",
     "      (Except.ok (Core.Site.ofLog Properties.Site.honestLog)))",
-    "    (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
-    "      (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
-    "      (Properties.Site.log Properties.Site.honestLog))"
+    "    (And",
+    "      (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
+    "        (Properties.Site.log Properties.Site.honestLog))",
+    "      (Verity.Registration.Complete (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Verity.Site.ofLog (Properties.Site.log Properties.Site.honestLog))))"
    ],
    "assumptions": [],
    "premises": {
@@ -9507,7 +9511,7 @@
     "open": ["Verity.Site.Boundary"],
     "reads": []
    },
-   "type_hash": "f9b405002b2182617b22e4a86c56d116434c34079d82b009594984c21e332000"
+   "type_hash": "49a8cc76faf71cd479d8b77e0b28fa9488cf7562c2f5606a6f4fe9dfbd146b81"
   },
   "Properties.Site.checks_nontrivial": {
    "owner": "@lean",
@@ -9516,9 +9520,13 @@
     "  Not",
     "    (Eq (Option.map Properties.Site.site (Properties.Site.acceptAllCheck Properties.Site.staleLog).toOption)",
     "      (ite",
-    "        (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
-    "          (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
-    "          (Properties.Site.log Properties.Site.staleLog))",
+    "        (And",
+    "          (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "            (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
+    "            (Properties.Site.log Properties.Site.staleLog))",
+    "          (Verity.Registration.Complete (Properties.Site.digests Properties.Site.witnessDigests)",
+    "            (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "            (Verity.Site.ofLog (Properties.Site.log Properties.Site.staleLog))))",
     "        (Option.some (Verity.Site.ofLog (Properties.Site.log Properties.Site.staleLog))) Option.none))"
    ],
    "assumptions": [],
@@ -9528,7 +9536,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "a832e88c427e726f7c9b0ab3b4af3834a4248b2b1ccac1eb5bd094bc229b7e7c"
+   "type_hash": "250b87acc2c9fc34241f4164c90d29396cea3f0cd9d1ff03eb0aca583923982e"
   },
   "Properties.Site.entryValid": {
    "owner": "@lean",
@@ -9609,7 +9617,7 @@
     "reads": []
    },
    "type_hash": "bded101a69bef766ebdd41f5169a68b8093d468663cfbc1fe206581d58ac002c",
-   "unfolded_hash": "3837f6dcf039646ac1617f41e4be3e28170500958dae812e39ae2b6fac6dd3bb"
+   "unfolded_hash": "c1bb08d718bd317b083b972e7526e61504f8ecca70796cb0d6b3129c5d74226e"
   },
   "Properties.Site.refusedAt_honest": {
    "owner": "@lean",
@@ -9637,16 +9645,28 @@
   "Properties.Site.refusedAt_nontrivial": {
    "owner": "@lean",
    "signature": [
-    "Properties.Site.refusedAt_nontrivial (i : Fin (List.length Properties.Site.honestLog)) :",
+    "Properties.Site.refusedAt_nontrivial :",
     "  Not",
-    "    (Eq",
-    "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
+    "    (And",
+    "      (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
     "        (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
-    "        (Verity.Site.ofLog (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
-    "        (Verity.Registration.head (Properties.Site.digests Properties.Site.witnessDigests)",
-    "          Core.Site.Registration.Composite.remote (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
-    "        (Properties.Site.regEntry (Fin.instGetElemFinVal.getElem Properties.Site.honestLog i ⋯)))",
-    "      (Option.some (Properties.Site.refusal Core.Site.Registration.Refusal.previous)))"
+    "        (Properties.Site.log (List.take 0 Properties.Site.honestLog)))",
+    "      (Or",
+    "        (Exists fun hi =>",
+    "          Eq",
+    "            (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
+    "              (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
+    "              (Verity.Site.ofLog (Properties.Site.log (List.take 0 Properties.Site.honestLog)))",
+    "              (Verity.Registration.head (Properties.Site.digests Properties.Site.witnessDigests)",
+    "                Core.Site.Registration.Composite.remote (Properties.Site.log (List.take 0 Properties.Site.honestLog)))",
+    "              (Properties.Site.regEntry (List.instGetElemNatLtLength.getElem Properties.Site.honestLog 0 hi)))",
+    "            (Option.some (Properties.Site.refusal Core.Site.Registration.Refusal.previous)))",
+    "        (And (Eq 0 (List.length Properties.Site.honestLog))",
+    "          (And (Eq Core.Site.Registration.Refusal.previous Core.Site.Registration.Refusal.inventory)",
+    "            (Not",
+    "              (Verity.Registration.Complete (Properties.Site.digests Properties.Site.witnessDigests)",
+    "                (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "                (Verity.Site.ofLog (Properties.Site.log Properties.Site.honestLog))))))))"
    ],
    "assumptions": [],
    "premises": {
@@ -9655,7 +9675,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "18e9833595a8f60150b756dc0074e3dc2b587bdc66522ba3b8e93a0d92bcd62b"
+   "type_hash": "b523920aecfa40a4d7a32c2815f7a58f399925e7a659aa2de36fd0e7fc85a12e"
   },
   "Properties.Site.refuses": {
    "owner": "@lean",
@@ -14809,7 +14829,7 @@
    }
   },
   "CoreProtocol.Site": {
-   "digest": "73a594c05004be397bb3558f91e17722f21c2155920b1edbf8501be5f4532e37",
+   "digest": "59a71d4e06bba1e7d6f63f2aa8d62dac5e2e29b50840c3956f04231ad7edfbf8",
    "definitions": {
     "Core.Site": "2a3c07003f1e6c7bd6fe76f03f4d6653cbc9d1e2ebcb824862bc03b22c4e61e9",
     "Core.Site.Boundary": "469c58ecf7869a988ee7461c486b8bba89fc9d20e455e84c47b9165cdde685f5",
@@ -14838,7 +14858,7 @@
     "Core.Site.Entry.Timed": "9f65d777c64ec2e50b37ce2cb49e2a5218683981c2a11263e15164b7d9f63071",
     "Core.Site.Entry.instDecidableCapacity": "9f4a3c621e0e242b60e7dc872ce8718ce2ab2fa339e1a50f7de9ce11ba84707e",
     "Core.Site.Entry.instDecidableChips": "641fd94646aa220652b13b1e07549e4704a07c2bcbdb5d64388fec9d4331fa0d",
-    "Core.Site.Entry.instDecidableCovered": "8f24b3f29fb731d060fc4dc7dbf47dfd8c67757951941e3d53619d472003c8d3",
+    "Core.Site.Entry.instDecidableCovered": "d88bfc6d506081da4f524994efb65160ffdf2ce76f4f6acfefe26cd359821d98",
     "Core.Site.Entry.instDecidableFigures": "802895297500e0b72e0e151370441d3c430fffc0f647d853f03ecdb469bf7af3",
     "Core.Site.Entry.instDecidableFresh": "e22f58bf3ca4486ee0a904700b0230714bd35ade7b686133346d9f5e794df86f",
     "Core.Site.Entry.instDecidableKinds": "a8d8e67ce49c07981936045e8a9dc245f5d4907e3d8b7772f421b91075901922",
@@ -16503,7 +16523,7 @@
    }
   },
   "Definitions.Core.Site": {
-   "digest": "3c9e54df89ee6e6aff690b33011c572d4f8f5d6abde9d6276469bcd153849bde",
+   "digest": "3e5e8c3cf6a9f0679491d74d7bec9673b032fa7d9a78d44c913d5087e4af7cab",
    "definitions": {
     "Verity.Registration": "19abeebc07b97795968bf46f58273cd0f421c08a96fa7f67c8af825c0732d9c1",
     "Verity.Registration.Auditor": "0eccdb25cfcd9d9873be71f46a46039096838de39fd1507e6ee31fe8bcc0fbc3",
@@ -16599,7 +16619,7 @@
     "Verity.Site.Entry.Valid": "4d446350f2feb8dadc52711c16a7f3226272c30f7a8bb3ca8f8ba1804e8f8ae2",
     "Verity.Site.Entry.instDecidableCapacity": "bb97cce9f80d77bafdfb6543c3826d7c4499ff572f69ced1af1413d528d28a94",
     "Verity.Site.Entry.instDecidableChips": "aef516e91ce51bbbb894b0727ba1ac88c7af0c87e432587321457006ff641844",
-    "Verity.Site.Entry.instDecidableCovered": "f3155a5095ab17adacb7566dc3eed1d8e87ed50b9a6478da02d9132d0944b84a",
+    "Verity.Site.Entry.instDecidableCovered": "fcf9e1d60e9a5bba8c6a2b58b4aa84ac3a8a1eaa71e585e0595633daecbe6dee",
     "Verity.Site.Entry.instDecidableFigures": "72d28af9f71c1f45e25691828d879c15de2402bde0a698a8d752dd097fd845ab",
     "Verity.Site.Entry.instDecidableFresh": "6fca035105cb95df7602c71f8597a0e0b4cb42c9629e84f00d3e0283108d3fa5",
     "Verity.Site.Entry.instDecidableKinds": "d06e992d89a4e1ef0a500830e6b5b457761d65111f2e0393707de5b75f4d67ac",
@@ -24114,12 +24134,12 @@
    }
   },
   "Properties.Core.Site": {
-   "digest": "78f539ad151646bc066edadb82bd1158ca96f01baba3d0156e960aed8ff41f97",
+   "digest": "37ae7ba1da1e62609c170a351bda8b400915b17d69fb6dbff25848172a0c6726",
    "definitions": {
-    "Properties.Site.Checks": "865d94c499b9ca97f43fc9681d83a59f761a0a610384c4ae03fa5b87d313b474",
+    "Properties.Site.Checks": "70c4b55829d492ce690537ac6b40d146e705885e2c5ffef633859838e68027e8",
     "Properties.Site.EntryValid": "0e3ef25549ae8d8a9f3d6d42b0e78346b10859b4d3c36ba18934865f013dc50a",
     "Properties.Site.Fold": "3ce6342cf94c0c55b7b67d3a692e2bf1e35bcd4c113d4cd95d23ed34a55ad72a",
-    "Properties.Site.RefusedAt": "90508573cb11d6d4cf7ab923ed8297c3638be890605949901fabe89a91ec7438",
+    "Properties.Site.RefusedAt": "14aa012479dd6dd88dd17e9de8c0c52c154da3534d5f5287641bc98fe992c78a",
     "Properties.Site.Refuses": "521da3a70bf02758b487c8f700d5f57dc54ac013b18192fbd93c85000a47755a",
     "Properties.Site.acceptAllCheck": "1d1da3316b1a8b84008be81f29230714002a8e6b9d2c5c5fcfb0dfba06b321c9",
     "Properties.Site.acceptAllRefusal": "375be3f8729607be48170c4dd925d03df18e1222c7f4ee60c6bd981ba431bb9f",
