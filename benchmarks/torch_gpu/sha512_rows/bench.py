@@ -29,13 +29,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import engine as E
 from verity.commitments.identity import identity_digest_sha512
 
-CAP = 32768
+UNIT_BYTES = 32768
 LAYERS = 52
 KEY = bytes(range(64, 96))
 
 
 def _cut(src: int, n: int) -> list[list[tuple[int, int, int]]]:
-    return [[(src, off, min(CAP, n - off))] for off in range(0, n, CAP)]
+    return [[(src, off, min(UNIT_BYTES, n - off))] for off in range(0, n, UNIT_BYTES)]
 
 
 def h200_rows(d: int = 16384, heads: int = 256, head_dim: int = 64, kv_heads: int = 1, mlp: int = 65536,
@@ -53,7 +53,7 @@ def h200_rows(d: int = 16384, heads: int = 256, head_dim: int = 64, kv_heads: in
         src = len(sources)
         if kind == "quant":
             sources += [n, 4]
-            rows += [[(src, 0, n), (src + 1, 0, 4)]] if n + 4 <= CAP else _cut(src, n) + [[(src + 1, 0, 4)]]
+            rows += [[(src, 0, n), (src + 1, 0, 4)]] if n + 4 <= UNIT_BYTES else _cut(src, n) + [[(src + 1, 0, 4)]]
         else:
             sources.append(n)
             rows += _cut(src, n)
