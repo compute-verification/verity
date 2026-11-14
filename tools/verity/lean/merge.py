@@ -36,7 +36,8 @@ the other's change to its record, and only a change to its owner keeps it. What 
 premise's `issue` or `due`, a domain hypothesis's `why` or `cites`, a `shape`, `frozen` or `except` entry, a dependency's
 revision, a policy entry such as a layer's field or a `compile_time` digest) merges as the union of both sides' entries:
 one both sides changed differently is theirs', and one a side removed while the other changed it is the changed one
-(`one`). A `shape.inline` entry is one premise of a guarantee, so two sides that each add or drop premises of one
+(`one`). A `choosing` entry both sides changed merges field by field, and a `due` both changed differently is the
+earlier (`choosing`): a due date only moves earlier. A `shape.inline` entry is one premise of a guarantee, so two sides that each add or drop premises of one
 guarantee merge premise by premise (`DEEPER`). A `shape.inline` premise one side dropped while the other has it as the
 base had it goes, as in any three-way merge, unless that other side restated its guarantee, otherwise than the dropping
 side, and the merged record lists it (`held`): a side whose `--update` ran on an older tree drops a text the other
@@ -156,8 +157,8 @@ WIDTH = 120
 #: the others keep ours' order, with theirs' new entries after it, unless ours kept the base's order and theirs moved
 #: entries (`reordered`): then theirs' order, with ours' new entries after it.  `--update` writes `shape.inline`'s inner maps
 #: in their statement's order and `trust`, `claims`, `trees`, `upstream` and `deployed` as the lock has them
-SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time", "trust_gap", "unwitnessed",
-          "shape[inline]"}
+SORTED = {"assumptions", "domain", "open", "choosing", "guarantees", "reads", "dependencies", "compile_time", "trust_gap",
+          "unwitnessed", "shape[inline]"}
 SORTED_NAMES = {"trust_gap"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`, `trust`'s `base` and `extra`), or lists of names merged as lists
@@ -503,6 +504,29 @@ def layers(o: dict, a: dict, b: dict, why: list[str]) -> dict:
     return out
 
 
+def choosing(o: dict, a: dict, b: dict, why: list[str]) -> dict:
+    """The `choosing` section entry by entry as `one` merges it; an entry both sides changed (or added) differently merges
+    field by field, and a `due` both sides wrote differently is the earlier, named in ``why``: a due date only moves
+    earlier (`finder_gate.py`), so neither side's earlier promise is lost."""
+    out = {}
+    for k in keys("choosing", a, b, o):
+        x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
+        if y == z or x in (y, z) or not all(isinstance(r, dict) for r in (y, z)) or not (x is MISSING or isinstance(x, dict)):
+            v = one(f"choosing[{k}]", x, y, z, why)
+        else:
+            v, x = {}, {} if x is MISSING else x
+            for f in keys("", y, z, x):
+                p, q, r = x.get(f, MISSING), y.get(f, MISSING), z.get(f, MISSING)
+                if f == "due" and isinstance(q, str) and isinstance(r, str) and q != r and p not in (q, r):
+                    v[f] = min(q, r)
+                    why.append(f"choosing[{k}].due: changed on both sides, differently: took the earlier, {v[f]}")
+                elif (w := one(f"choosing[{k}].{f}", p, q, r, why)) is not MISSING:
+                    v[f] = w
+        if v is not MISSING:
+            out[k] = v
+    return out
+
+
 def exclusive(base: dict, ours: dict, theirs: dict, why: list[str]) -> tuple[dict, dict]:
     """Ours and theirs with each entry of an `EXCLUSIVE` group where the side that moved it put it: an entry one side moved
     between the group's sections from the base leaves the sections the other side still has it in, whatever that side
@@ -567,6 +591,8 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
             v = judged(k, {} if o is MISSING else o, a, b, candidate, records)
         elif k == "layers" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = layers({} if o is MISSING else o, a, b, why)
+        elif k == "choosing" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
+            v = choosing({} if o is MISSING else o, a, b, why)
         elif names(o, a, b):
             v = ordered([] if o is MISSING else o, a, b)
         elif isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):

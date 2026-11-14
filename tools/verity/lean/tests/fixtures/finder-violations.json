@@ -1,0 +1,442 @@
+{
+ "finder_chosen": {
+  "why": "a finder whose output is `Classical.choose h`: the walk refuses it, naming the definition and the constant it reaches choice through",
+  "write": {
+   "Finders/Bad.lean": "import Finders.Defs\n\nnamespace Finders\n\ntheorem picked (H : Nat → Nat) (h : ∃ p : Nat × Nat, p.1 ≠ p.2) (_ : Claims.ExpectedCR H (chosen h)) : True := trivial\n\nend Finders\n",
+   "Finders.lean": "import Finders.Assumptions\nimport Finders.Bad\nimport Finders.Defs\nimport Finders.Runs\nimport Finders.Thms\n"
+  },
+  "policy": {
+   "guarantees": {
+    "Finders.anyFinder": {
+     "owner": "@lean"
+    },
+    "Finders.chosenInProof": {
+     "owner": "@lean"
+    },
+    "Finders.costOnly": {
+     "owner": "@lean"
+    },
+    "Finders.decided": {
+     "owner": "@lean"
+    },
+    "Finders.overList": {
+     "owner": "@lean"
+    },
+    "Finders.picked": {
+     "owner": "@lean"
+    },
+    "Finders.searched": {
+     "owner": "@lean"
+    },
+    "Finders.toNatParse": {
+     "owner": "@lean"
+    },
+    "Finders.whileLoop": {
+     "owner": "@lean"
+    }
+   },
+   "shape": {
+    "frozen": {
+     "Finders.anyFinder": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.chosenInProof": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.costOnly": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.decided": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.overList": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.picked": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.searched": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.toNatParse": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.whileLoop": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property"
+    }
+   }
+  },
+  "fails": "choosing: Finders.chosen picks by choice: it names Classical.choose, which reaches Classical.choice",
+  "not": [
+   "choosing: the finder walk did not finish"
+  ]
+ },
+ "finder_unique": {
+  "why": "a finder whose chosen value is proved unique: the walk refuses it, naming the definition and the constant it reaches choice through",
+  "write": {
+   "Finders/Bad.lean": "import Finders.Defs\n\nnamespace Finders\n\ntheorem picked (H : Nat → Nat) (_ : Claims.ExpectedCR H uniqueChosen) : True := trivial\n\nend Finders\n",
+   "Finders.lean": "import Finders.Assumptions\nimport Finders.Bad\nimport Finders.Defs\nimport Finders.Runs\nimport Finders.Thms\n"
+  },
+  "policy": {
+   "guarantees": {
+    "Finders.anyFinder": {
+     "owner": "@lean"
+    },
+    "Finders.chosenInProof": {
+     "owner": "@lean"
+    },
+    "Finders.costOnly": {
+     "owner": "@lean"
+    },
+    "Finders.decided": {
+     "owner": "@lean"
+    },
+    "Finders.overList": {
+     "owner": "@lean"
+    },
+    "Finders.picked": {
+     "owner": "@lean"
+    },
+    "Finders.searched": {
+     "owner": "@lean"
+    },
+    "Finders.toNatParse": {
+     "owner": "@lean"
+    },
+    "Finders.whileLoop": {
+     "owner": "@lean"
+    }
+   },
+   "shape": {
+    "frozen": {
+     "Finders.anyFinder": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.chosenInProof": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.costOnly": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.decided": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.overList": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.picked": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.searched": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.toNatParse": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.whileLoop": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property"
+    }
+   }
+  },
+  "fails": "choosing: Finders.uniqueChosen picks by choice: it names Classical.choose, which reaches Classical.choice",
+  "not": [
+   "choosing: the finder walk did not finish"
+  ]
+ },
+ "finder_nat_find": {
+  "why": "a finder over `Nat.find`: the walk refuses it, naming the definition and the constant it reaches choice through",
+  "write": {
+   "Finders/Bad.lean": "import Finders.Defs\n\nnamespace Finders\n\ntheorem picked (H : Nat → Nat) (n : Nat) (h : ∃ k : Nat, k > n) (_ : Claims.ExpectedCR H (found h)) : True := trivial\n\nend Finders\n",
+   "Finders.lean": "import Finders.Assumptions\nimport Finders.Bad\nimport Finders.Defs\nimport Finders.Runs\nimport Finders.Thms\n"
+  },
+  "policy": {
+   "guarantees": {
+    "Finders.anyFinder": {
+     "owner": "@lean"
+    },
+    "Finders.chosenInProof": {
+     "owner": "@lean"
+    },
+    "Finders.costOnly": {
+     "owner": "@lean"
+    },
+    "Finders.decided": {
+     "owner": "@lean"
+    },
+    "Finders.overList": {
+     "owner": "@lean"
+    },
+    "Finders.picked": {
+     "owner": "@lean"
+    },
+    "Finders.searched": {
+     "owner": "@lean"
+    },
+    "Finders.toNatParse": {
+     "owner": "@lean"
+    },
+    "Finders.whileLoop": {
+     "owner": "@lean"
+    }
+   },
+   "shape": {
+    "frozen": {
+     "Finders.anyFinder": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.chosenInProof": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.costOnly": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.decided": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.overList": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.picked": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.searched": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.toNatParse": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.whileLoop": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property"
+    }
+   }
+  },
+  "fails": "choosing: Finders.found picks by choice: it names Nat.find, which reaches Nat.find",
+  "not": [
+   "choosing: the finder walk did not finish"
+  ]
+ },
+ "finder_encodable_choose": {
+  "why": "a finder over `Encodable.choose`: the walk refuses it, naming the definition and the constant it reaches choice through",
+  "write": {
+   "Finders/Bad.lean": "import Finders.Defs\n\nnamespace Finders\n\ntheorem picked (H : Nat → Nat) (n : Nat) (h : ∃ k : Nat, k > n) (_ : Claims.ExpectedCR H (encoded h)) : True := trivial\n\nend Finders\n",
+   "Finders.lean": "import Finders.Assumptions\nimport Finders.Bad\nimport Finders.Defs\nimport Finders.Runs\nimport Finders.Thms\n"
+  },
+  "policy": {
+   "guarantees": {
+    "Finders.anyFinder": {
+     "owner": "@lean"
+    },
+    "Finders.chosenInProof": {
+     "owner": "@lean"
+    },
+    "Finders.costOnly": {
+     "owner": "@lean"
+    },
+    "Finders.decided": {
+     "owner": "@lean"
+    },
+    "Finders.overList": {
+     "owner": "@lean"
+    },
+    "Finders.picked": {
+     "owner": "@lean"
+    },
+    "Finders.searched": {
+     "owner": "@lean"
+    },
+    "Finders.toNatParse": {
+     "owner": "@lean"
+    },
+    "Finders.whileLoop": {
+     "owner": "@lean"
+    }
+   },
+   "shape": {
+    "frozen": {
+     "Finders.anyFinder": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.chosenInProof": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.costOnly": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.decided": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.overList": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.picked": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.searched": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.toNatParse": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.whileLoop": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property"
+    }
+   }
+  },
+  "fails": "choosing: Finders.encoded picks by choice: it names Encodable.choose, which reaches Encodable.choose",
+  "not": [
+   "choosing: the finder walk did not finish"
+  ]
+ },
+ "finder_quot_out": {
+  "why": "a finder over `Quot.out`, which reaches choice in its own value: the walk refuses it, naming the definition and the constant it reaches choice through",
+  "write": {
+   "Finders/Bad.lean": "import Finders.Defs\n\nnamespace Finders\n\ntheorem picked (H : Nat → Nat) (q : Quot (fun a b : Nat => a % 2 = b % 2)) (_ : Claims.ExpectedCR H (represented q)) : True := trivial\n\nend Finders\n",
+   "Finders.lean": "import Finders.Assumptions\nimport Finders.Bad\nimport Finders.Defs\nimport Finders.Runs\nimport Finders.Thms\n"
+  },
+  "policy": {
+   "guarantees": {
+    "Finders.anyFinder": {
+     "owner": "@lean"
+    },
+    "Finders.chosenInProof": {
+     "owner": "@lean"
+    },
+    "Finders.costOnly": {
+     "owner": "@lean"
+    },
+    "Finders.decided": {
+     "owner": "@lean"
+    },
+    "Finders.overList": {
+     "owner": "@lean"
+    },
+    "Finders.picked": {
+     "owner": "@lean"
+    },
+    "Finders.searched": {
+     "owner": "@lean"
+    },
+    "Finders.toNatParse": {
+     "owner": "@lean"
+    },
+    "Finders.whileLoop": {
+     "owner": "@lean"
+    }
+   },
+   "shape": {
+    "frozen": {
+     "Finders.anyFinder": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.chosenInProof": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.costOnly": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.decided": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.overList": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.picked": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.searched": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.toNatParse": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.whileLoop": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property"
+    }
+   }
+  },
+  "fails": "choosing: Quot.out picks by choice: it names Classical.choose, which reaches Classical.choice",
+  "not": [
+   "choosing: the finder walk did not finish"
+  ]
+ },
+ "finder_carrier": {
+  "why": "a chosen finder handed to the premise through a carrier's parameter: the walk refuses it, naming the definition and the constant it reaches choice through",
+  "write": {
+   "Finders/Bad.lean": "import Finders.Defs\n\nnamespace Finders\n\ntheorem picked (H : Nat → Nat) (h : ∃ p : Nat × Nat, p.1 ≠ p.2) (_ : CR H (chosen h)) : True := trivial\n\nend Finders\n",
+   "Finders.lean": "import Finders.Assumptions\nimport Finders.Bad\nimport Finders.Defs\nimport Finders.Runs\nimport Finders.Thms\n"
+  },
+  "policy": {
+   "guarantees": {
+    "Finders.anyFinder": {
+     "owner": "@lean"
+    },
+    "Finders.chosenInProof": {
+     "owner": "@lean"
+    },
+    "Finders.costOnly": {
+     "owner": "@lean"
+    },
+    "Finders.decided": {
+     "owner": "@lean"
+    },
+    "Finders.overList": {
+     "owner": "@lean"
+    },
+    "Finders.picked": {
+     "owner": "@lean"
+    },
+    "Finders.searched": {
+     "owner": "@lean"
+    },
+    "Finders.toNatParse": {
+     "owner": "@lean"
+    },
+    "Finders.whileLoop": {
+     "owner": "@lean"
+    }
+   },
+   "shape": {
+    "frozen": {
+     "Finders.anyFinder": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.chosenInProof": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.costOnly": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.decided": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.overList": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.picked": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.searched": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.toNatParse": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.whileLoop": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property"
+    }
+   }
+  },
+  "fails": "choosing: Finders.chosen picks by choice: it names Classical.choose",
+  "not": [
+   "choosing: the finder walk did not finish"
+  ]
+ },
+ "finder_field": {
+  "why": "a chosen finder handed to the premise through a structure's field: the walk refuses it, naming the definition and the constant it reaches choice through",
+  "write": {
+   "Finders/Bad.lean": "import Finders.Defs\n\nnamespace Finders\n\ntheorem picked (H : Nat → Nat) (h : ∃ p : Nat × Nat, p.1 ≠ p.2) (_ : Prem H (chosen h)) : True := trivial\n\nend Finders\n",
+   "Finders.lean": "import Finders.Assumptions\nimport Finders.Bad\nimport Finders.Defs\nimport Finders.Runs\nimport Finders.Thms\n"
+  },
+  "policy": {
+   "guarantees": {
+    "Finders.anyFinder": {
+     "owner": "@lean"
+    },
+    "Finders.chosenInProof": {
+     "owner": "@lean"
+    },
+    "Finders.costOnly": {
+     "owner": "@lean"
+    },
+    "Finders.decided": {
+     "owner": "@lean"
+    },
+    "Finders.overList": {
+     "owner": "@lean"
+    },
+    "Finders.picked": {
+     "owner": "@lean"
+    },
+    "Finders.searched": {
+     "owner": "@lean"
+    },
+    "Finders.toNatParse": {
+     "owner": "@lean"
+    },
+    "Finders.whileLoop": {
+     "owner": "@lean"
+    }
+   },
+   "shape": {
+    "frozen": {
+     "Finders.anyFinder": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.chosenInProof": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.costOnly": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.decided": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.overList": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.picked": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.searched": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.toNatParse": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.whileLoop": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property"
+    }
+   }
+  },
+  "fails": "choosing: Finders.chosen picks by choice: it names Classical.choose",
+  "not": [
+   "choosing: the finder walk did not finish"
+  ]
+ },
+ "finder_inline": {
+  "why": "a finder that picks by choice in the statement itself: the guarantee is the site: the walk refuses it, naming the definition and the constant it reaches choice through",
+  "write": {
+   "Finders/Bad.lean": "import Finders.Defs\n\nnamespace Finders\n\ntheorem picked (H : Nat → Nat) (h : ∃ p : Nat × Nat, p.1 ≠ p.2) (_ : Claims.ExpectedCR H (ofOut fun _ => some (Classical.choose h))) : True := trivial\n\nend Finders\n",
+   "Finders.lean": "import Finders.Assumptions\nimport Finders.Bad\nimport Finders.Defs\nimport Finders.Runs\nimport Finders.Thms\n"
+  },
+  "policy": {
+   "guarantees": {
+    "Finders.anyFinder": {
+     "owner": "@lean"
+    },
+    "Finders.chosenInProof": {
+     "owner": "@lean"
+    },
+    "Finders.costOnly": {
+     "owner": "@lean"
+    },
+    "Finders.decided": {
+     "owner": "@lean"
+    },
+    "Finders.overList": {
+     "owner": "@lean"
+    },
+    "Finders.picked": {
+     "owner": "@lean"
+    },
+    "Finders.searched": {
+     "owner": "@lean"
+    },
+    "Finders.toNatParse": {
+     "owner": "@lean"
+    },
+    "Finders.whileLoop": {
+     "owner": "@lean"
+    }
+   },
+   "shape": {
+    "frozen": {
+     "Finders.anyFinder": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.chosenInProof": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.costOnly": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.decided": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.overList": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.picked": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.searched": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.toNatParse": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+     "Finders.whileLoop": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property"
+    }
+   }
+  },
+  "fails": "choosing: Finders.picked picks by choice: it names Classical.choose, which reaches Classical.choice",
+  "not": [
+   "choosing: the finder walk did not finish"
+  ]
+ }
+}

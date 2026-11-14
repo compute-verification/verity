@@ -256,6 +256,8 @@ NOT_READ = {
     "reserve.json": "the figures a run reserves and plans its jobs by (`reserve.py`'s), never what it checks",
     "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
+    "finder_dates.py": "the `choosing` entries' due dates on a given day, a step of its own beside the audit",
+    "finder_gate.py": "the landing gate on the finder walk's table and the `choosing` entries, from git alone",
     "lean_changed.py": "the Lean fast path, which runs beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
     "modules.py": "the codemod onto Lean's module system, which the ratchet and the merge driver load",

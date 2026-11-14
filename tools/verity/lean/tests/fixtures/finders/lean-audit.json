@@ -1,0 +1,67 @@
+{
+ "roots": [
+  "Finders"
+ ],
+ "assumptions_module": "Finders.Assumptions",
+ "assumptions": {
+  "Claims.ExpectedCR": {
+   "owner": "@lean"
+  }
+ },
+ "compile_time": {
+  "Finders.Runs": {
+   "why": "`#guard` evaluates the two core rows' finders on a concrete input",
+   "digest": "b714095e47faf9415097ae108b3b0d07fec788dd95926c9c055914fe5b3b4f42"
+  }
+ },
+ "layers": {
+  "Finders.Assumptions": {
+   "imports": [],
+   "why": "the collision premise imports nothing of the package"
+  },
+  "Finders.Defs": {
+   "imports": [
+    "Finders.Assumptions"
+   ],
+   "why": "the finders read the premise's finder"
+  }
+ },
+ "guarantees": {
+  "Finders.anyFinder": {
+   "owner": "@lean"
+  },
+  "Finders.chosenInProof": {
+   "owner": "@lean"
+  },
+  "Finders.costOnly": {
+   "owner": "@lean"
+  },
+  "Finders.decided": {
+   "owner": "@lean"
+  },
+  "Finders.overList": {
+   "owner": "@lean"
+  },
+  "Finders.searched": {
+   "owner": "@lean"
+  },
+  "Finders.toNatParse": {
+   "owner": "@lean"
+  },
+  "Finders.whileLoop": {
+   "owner": "@lean"
+  }
+ },
+ "shape": {
+  "frozen": {
+   "Finders.anyFinder": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+   "Finders.chosenInProof": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+   "Finders.costOnly": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+   "Finders.decided": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+   "Finders.overList": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+   "Finders.searched": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+   "Finders.toNatParse": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property",
+   "Finders.whileLoop": "frozen: a control of the finder walk, which hands a collision premise a finder and states no property"
+  }
+ }
+}

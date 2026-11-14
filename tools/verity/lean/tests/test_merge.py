@@ -1947,3 +1947,25 @@ def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installe
     refused = git(repo, "merge", "--no-edit", "v2", check=False)
     assert refused.returncode and f"CONFLICT (content): Merge conflict in {UNREAD}" in refused.stdout
     assert "theirs is schema 'lean-unread-caps/v2'" in refused.stderr + refused.stdout
+
+
+def test_the_choosing_section_merges_entry_by_entry_and_a_due_only_moves_earlier():
+    """`choosing` merges as `open` does: an entry one side dropped and the other left goes, one a side dropped while the
+    other changed it stays, and both sides' added entries stay.  A `due` both sides wrote differently is the earlier, ours
+    or theirs, named; a field only one side changed is that side's, and an owner both changed is theirs', as before."""
+    def e(due: str, owner: str = "@proofs") -> dict:
+        return {"owner": owner, "issue": "ISSUE-1", "due": due}
+    base = {"choosing": {"D.left": e("2030-03-10"), "D.kept": e("2030-03-10"), "D.both": e("2030-03-10")}}
+    ours = {"choosing": {"D.kept": e("2030-03-12"), "D.both": e("2030-03-20", "@lean"), "D.ours": e("2030-03-01")}}
+    theirs = {"choosing": {"D.left": e("2030-03-10"), "D.both": e("2030-03-15", "@soundness"), "D.theirs": e("2030-03-02")}}
+    for a, b in ((ours, theirs), (theirs, ours)):
+        merged, why = M.merge(base, a, b)
+        assert merged["choosing"]["D.both"]["due"] == "2030-03-15"
+        assert set(merged["choosing"]) == {"D.both", "D.kept", "D.ours", "D.theirs"}
+        assert merged["choosing"]["D.kept"] == e("2030-03-12") and list(merged["choosing"]) == sorted(merged["choosing"])
+        assert "choosing[D.both].due: changed on both sides, differently: took the earlier, 2030-03-15" in why
+        assert merged["choosing"]["D.both"]["owner"] == b["choosing"]["D.both"]["owner"]
+    merged, why = M.merge({}, {"choosing": {"D.n": e("2030-04-02")}}, {"choosing": {"D.n": e("2030-04-01")}})
+    assert merged["choosing"] == {"D.n": e("2030-04-01")}
+    merged, why = M.merge(base, base | {"choosing": base["choosing"] | {"D.left": e("2030-02-01")}}, base)
+    assert why == [] and merged["choosing"]["D.left"] == e("2030-02-01")

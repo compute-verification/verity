@@ -1,0 +1,16 @@
+{
+  "what": "The finder walk's table (Facts.lean's finderFacts, check.py's choosing): each collision premise or event with the positions of its finder arguments (heads); the constructors of which the walk reads only the finder's output fields (fields); the constants it refuses by name, a finding at each (refuse); and those it passes by name, going on into their arguments (pass). finder_gate.py holds it to only refusing more.",
+  "heads": {
+    "Claims.ExpectedCR": [1],
+    "Claims.Finder.Pr": [1],
+    "Claims.StrictBirthday": [1],
+    "FlockSoundness.Assumptions.SHA512CRExpected": [3, 4, 5],
+    "FlockSoundness.Assumptions.SHA512CRStrict": [3, 4, 5],
+    "FlockSoundness.StrictCR.FindsColl": [3, 4, 5]
+  },
+  "fields": {
+    "Claims.Finder.mk": ["out"]
+  },
+  "refuse": ["Classical.choice", "Encodable.choose", "Nat.find"],
+  "pass": ["Classical.propDecidable", "Lean.Loop.forIn", "Multiset.toList", "WellFounded.extrinsicFix"]
+}
