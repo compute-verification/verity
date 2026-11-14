@@ -1969,7 +1969,7 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     without the key, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
     window-circuit, which holds no key (not ``key``), reads the same tables."""
     from verity_vllm.program.predict.window_circuit import Tables
-    from verity_vllm.protocols.pouw import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
     serve, cls = tmp_path / "serve", SimpleNamespace(outputs=2)
     (serve / "h1").mkdir(parents=True)
     layout = {"calls": [["a", 0], ["b", 0]] * 2, "linears": [["a", 64, 8], ["b", 64, 8]], "m": 8}

@@ -34,12 +34,12 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_pearl as SPL
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.h1 import window as PHW
-from verity_vllm.protocols.pouw.pearl_c import passes as PP
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
-from verity_vllm.protocols.pouw.pearl_c import window as PWR
-from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds, _Pass
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+from verity.protocols.accounting.pouw.prover.serving.pearl_c.ends import PassEnds, _Pass
 
 from tests.pipeline import predicted
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Runner, Serving, records

@@ -21,14 +21,14 @@ from verity_vllm.acquire.sources.int8_source import Int8Source
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw.h1.commit import (
+from verity.protocols.accounting.pouw.prover.serving.h1.commit import (
     SCHEME,
     CommitTap,
     Sites,
     site,
 )
-from verity_vllm.protocols.pouw.h1.hooks import expert_names
-from verity_vllm.protocols.pouw.h1.ranks import RankExtension, RankRun, RankTap
+from verity_vllm.protocols.pouw.h1_hooks import expert_names
+from verity_vllm.protocols.pouw.h1_ranks import RankExtension, RankRun, RankTap
 
 
 class _EveryStep(dict):

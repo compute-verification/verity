@@ -334,7 +334,7 @@ def test_the_largest_admitted_bindings_bind(shape):
 # -- the window ---------------------------------------------------------------------------------------------------------------
 
 SALT = hashlib.sha512(b"lead test salt").digest()
-#: the served committer's (`verity_vllm.commit.lead_rows`, at c0cf0bdec76) instance domains' ids and its leaf at rank 1 mod
+#: the served committer's (`verity.protocols.accounting.pouw.prover.serving.lead.rows`, at c0cf0bdec76) instance domains' ids and its leaf at rank 1 mod
 #: count of b"\x01\x02\x03" under the words schema, at salt SALT
 COMMITTER_DOMAINS = {
     (5, 3): ("5e67997b97e08262931bfaf3a58681ba00be1f7f58fecfee134fef4bd054a2fa432802e7ebfebf35c4099f6344c842a8c3ada4b55d8d77ba08256589075a9778",
