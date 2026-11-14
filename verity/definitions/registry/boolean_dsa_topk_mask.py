@@ -57,7 +57,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ZERO, add, compress_columns, mux, or_reduce, sub
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.refs import Coll, broadcast, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import dsa_topk_mask as M
