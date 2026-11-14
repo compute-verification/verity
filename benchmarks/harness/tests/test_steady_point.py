@@ -1672,6 +1672,24 @@ def test_the_timed_step_refuses_a_card_or_versions_that_are_not_the_specs(tmp_pa
     assert not (node.run_dir / S.RATES).exists() and not (node.run_dir / START).exists()
 
 
+def test_the_timed_step_refuses_a_toolkit_that_is_not_the_specs_though_the_point_read_it_before_the_lease(tmp_path,
+                                                                                                         monkeypatch):
+    """The point refuses a wrong toolkit before the lease, so no run of the point reaches the timed step's own read
+    with one: an nvcc that differs inside the lease (another setup, another path) is refused there too."""
+
+    node = Node(tmp_path, monkeypatch, answers={"nvcc --version": NVCC.replace(CUDA, "12.9.41")})
+    spec = SP.load_spec(node.root / node.spec, root=node.root)
+    (node.run_dir / "out").mkdir()
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3")
+    assert N.timed(spec, SP.point(spec, POINT), node.scratch_root, node.run_dir, run=node.run, ask=node.ask,
+                   now=lambda: 1_700_000_000.0, stamp=lambda: dict(node.host)) == N.REFUSED
+    assert node.ran == [], "nothing timed"
+    assert node.read(N.TIMED_FILE)["refused"].startswith(
+        f"the node's driver and CUDA toolkit are {{'driver': '{DRIVER}', 'cuda_toolkit': '12.9.41'}}, and spec 'steady' "
+        f"says {{'driver': '{DRIVER}', 'cuda_toolkit': '{CUDA}'}}")
+    assert not (node.run_dir / START).exists()
+
+
 #: the toolkit's version refused before any statement or card: what the node's nvcc answers, and what the refusal says
 TOOLKIT_BEFORE_THE_STATEMENT = [
     ({"nvcc --version": NVCC.replace(CUDA, "12.9.41")},
