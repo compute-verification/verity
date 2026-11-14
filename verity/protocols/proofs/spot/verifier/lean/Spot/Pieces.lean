@@ -76,6 +76,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `template_circuits`: a two-stage run's params naming each template's circuit file by SHA-512 and its statements'
   reference header and registered reads, in the check's order (`Run.templateCircuits`), and the tables they pin
   (`Run.pinnedTables`);
+* `tables_served`: whether each history table an interior reads is a port of the boundary registration's record at its
+  root and domain (`Run.tablesServed`);
 * `stream`: the proof system stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
 * `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
@@ -1061,6 +1063,15 @@ def templateCircuits (j : Json) : V Json := do
     ("reads", Json.arr (reads.map fun (t, v) => Json.arr #[Json.str t, Lean.toJson v])),
     ("tables", Json.arr (tables.map fun (p, e) => Json.arr #[Json.str p, e]))]
 
+/-- `{"record", "tables": [[name, root, domain], ...]}` (root and domain lowercase hex) to `{"served": bool}`: whether
+each history table the interior reads is one the boundary registration's record served (`Run.tablesServed`). -/
+def tablesServed (j : Json) : V Json := do
+  let .arr ts := getD j "tables" | throw "tables is not a list"
+  let tables ← ts.mapM fun
+    | .arr #[.str n, .str r, .str d] => return (n, ← Flock.unhex r, ← Flock.unhex d)
+    | _ => throw "a table is [name, root, domain], its root and domain hex strings"
+  return Json.mkObj [("served", Json.bool (Run.tablesServed (getD j "record") tables))]
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
    ("fanout", fanout), ("registration", registration),
@@ -1081,7 +1092,8 @@ def table : List (String × (Json → V Json)) :=
    ("public_ports", publicPorts), ("session_registered", sessionRegistered), ("record", record), ("across", across),
    ("across_all", acrossAll),
    ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits), ("hello", Hello.check),
+   ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits),
+   ("tables_served", tablesServed), ("hello", Hello.check),
    ("fits", fits),
    ("pop_order", popOrder),
    ("challenger_commitment", Challenger.commitmentPiece),
