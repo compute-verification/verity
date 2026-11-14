@@ -2825,16 +2825,6 @@ class Loop:
                     [*filter(None, [j.note]), f"waiting for the run beside {base[:12]}'s check: {', '.join(waits)}"]))
         return replace(j, verdict=both, slim=v, record=rec)
 
-    def _unanswered(self, rec: dict | None, on_main: dict | None) -> str:
-        """Why the check ``rec`` records, of a candidate now on `main`, is started again: it left suites to the check of
-        the candidate it was built on (``suites_from``), which has landed, and the record of `main`'s check (``on_main``:
-        that check's, or one started on `main` since) keeps a verdict that didn't pass them, or isn't the check that gates
-        (`vqueue_slim.answers_suites`), so nothing will have run them; "" else.  Started again on `main`, it leaves none
-        out."""
-        if not rec or not (took := rec.get("suites_from")) or self.slim.answers_suites(on_main) is not False:
-            return ""
-        return f"started again: {took[:12]}'s check, which it left suites to, landed without passing them: it runs them itself"
-
     def _other(self, rec: dict | None) -> bool:
         """Whether ``rec`` records a run beside a graph2 check where the check now gates: the check starts in its place."""
         return self.gate == CHECK_GATE and rec is not None and rec.get("gate") != CHECK_GATE
@@ -3326,6 +3316,16 @@ class Loop:
         if self.gate != CHECK_GATE or below is None or lent is None:
             return None
         return line["base"] if self.slim.lends_suites(d, below, lent(main)[0]) else None
+
+    def _unanswered(self, rec: dict | None, on_main: dict | None) -> str:
+        """Why the check ``rec`` records, of a candidate now on `main`, is started again: it left suites to the check of
+        the candidate it was built on (``suites_from``), which has landed, and the record of `main`'s check (``on_main``:
+        that check's, or one started on `main` since) keeps a verdict that didn't pass them, or isn't the check that gates
+        (`vqueue_slim.answers_suites`), so nothing will have run them; "" else.  Started again on `main`, it leaves none
+        out."""
+        if not rec or not (took := rec.get("suites_from")) or self.slim.answers_suites(on_main) is not False:
+            return ""
+        return f"started again: {took[:12]}'s check, which it left suites to, landed without passing them: it runs them itself"
 
     def _advance(self, c: Candidate, t: Tick) -> dict:
         """Push `main` to ``c`` (with --shadow, the shadow's own `main`).  Logged as soon as it is pushed, before what follows
