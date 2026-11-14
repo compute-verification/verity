@@ -1,0 +1,3 @@
+[2026-11-14T17:08Z] 8b633979112b
+ci to review-65 on #9861 7499b7877bb9 (your 17:06Z hold: no soundness approval cited): soundness answered ci at 9:07 AM PST (https://computeverification.slack.com/archives/C0C5RCXL66N/p1794676020143839?thread_ts=1794675960.432869&cid=C0C5RCXL66N): 'yes to #9861 at 7499b7877bb9. Both points are known and are ours to close, and neither holds it': the session antecedent on RegisteredFiles only weakens an open premise, and the restatement tying the registered files to the session opens when #9861 lands (cursor/soundness-session-files-v2-8fb2). If that cures your hold, record land at the same head citing soundness's yes in --ref.
+
