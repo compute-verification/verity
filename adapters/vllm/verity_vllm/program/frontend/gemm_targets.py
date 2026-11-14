@@ -235,13 +235,13 @@ REGISTERED: dict[str, GemmTarget] = {
                   ("the NVFP4 linear: both checkpoint formats run CutlassNvFp4LinearKernel, whose only MMA is OMMA.SF.16864.F32.E2M1.E2M1."
                   "UE4M3.4X, the pinned block-scaled step (art:3bc1b2c4)"),
                   ("the blockwise FP8 linear: property blackwell_fp8_capture on "
-                  "an RTX PRO 6000 (cc 12.0, 188 SMs, driver 580.173.02), record 0d346c79c642a0a1: its cutlass/* cases, CutlassFp8BlockScaledMMKernel's _C.cutlass_scaled_mm at G 128 on one TP8 rank of the "
+                  "an RTX PRO 6000 (cc 12.0, 188 SMs, driver 580.173.02), run r20261003-220018-3f6a, record 0d346c79c642a0a1: its cutlass/* cases, CutlassFp8BlockScaledMMKernel's _C.cutlass_scaled_mm at G 128 on one TP8 rank of the "
                   "235B-A22B FP8 checkpoint, qkv_proj (K 4096, N 1280) and o_proj (K 1024, N 4096) x M in {1, 2, 64, 65, 256, 257, 300} (cc 12.0's "
                   "swap-AB, pingpong and cooperative dispatch, three kernels): 5,080,320 words, every one equal to K/128 tiles of 4 chained "
                   "BlackwellE4m3QmmaDot32_v1 steps from +0, acc = fma(d, s_x * s_w, acc), RN to bf16 (ScaledMmFp8Block_v3{DOT="
                   "BlackwellE4m3QmmaDot32_v1}); Hopper's step misses 30,354 words, the Triton scale orders 13,159 and 13,278, an unfused mul + "
                   "add 13,222; the activation quant it reads, quant/K4096/G128 and quant/K1024/G128, exact against Fp8GroupQuant_v1"),
-                  ("the block-FP8 fused-MoE experts: property blackwell_fp8_capture (record 0d346c79c642a0a1), "
+                  ("the block-FP8 fused-MoE experts: property blackwell_fp8_capture's run r20261003-220018-3f6a (record 0d346c79c642a0a1), "
                   "its moe/* cases, fused_experts (E 128, top 8, hidden 4096, I 192) under TritonExperts at block [64, 64], every "
                   "fused_moe_kernel launch at 64x64x32 without swap-AB: moe/decode, moe/small, "
                   "moe/block and moe/prefill (1, 8, 64 and 256 tokens) 35,840 + 286,720 + 2,293,760 + 9,175,040 = 11,791,360 words of w13 "
