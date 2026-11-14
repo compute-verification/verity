@@ -93,7 +93,8 @@
   "Properties.Pous.WipeSigned",
   "Properties.Challenger",
   "Properties.Firewall",
-  "Properties.Core.Site"
+  "Properties.Core.Site",
+  "Properties.Nci.Opening"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
@@ -2538,6 +2539,17 @@
    ],
    "except": [],
    "why": "the circuit record's properties are stated over the code they are about (the record's text as NciCheck.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
+   "sealed": true
+  },
+  "Properties.Nci.Opening": {
+   "imports": [
+    "Properties.Nci.Record",
+    "Properties.Flock.Circuit.CircuitOf",
+    "Definitions.Accounting.ReadUnit",
+    "Spot.Bits"
+   ],
+   "except": [],
+   "why": "a reader's ports as gates are stated over the record's roles (Properties.Nci.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), a read unit's gates (Definitions.Accounting.ReadUnit) and SPOT's map from a Definition's parameters to a file's gates (Spot.Bits), never over a proof",
    "sealed": true
   }
  },
