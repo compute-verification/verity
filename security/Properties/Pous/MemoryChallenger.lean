@@ -130,25 +130,17 @@ def sessionMessage (s : SignedSession) : Option ByteArray :=
 
 /-! ### The strings a run hashes -/
 
-/-- What SHA-512 hashes for the records tree over `values` under the domain `d`: each leaf, and each node of each
-level below the root. -/
-def treeStrings (d : Flock.FV3.Sha512.Domain) (values : Array ByteArray) : List ByteArray :=
-  let levels := d.levels ((Array.range values.size).map fun r => d.leaf r r RECORD_SCHEMA values[r]!)
-  (List.range values.size).map (fun r =>
-      Flock.FV3.input "leaf" [d.id, Flock.FV3.uint r, Flock.FV3.uint r, RECORD_SCHEMA.toUTF8, values[r]!]) ++
-    (List.range (levels.size - 1)).flatMap fun l => (List.range (levels[l]!.size / 2)).map fun i =>
-      Flock.FV3.input "node" [d.id, Flock.FV3.uint l, Flock.FV3.uint i, levels[l]![2 * i]!, levels[l]![2 * i + 1]!]
-
 /-- What SHA-512 hashes for a session `(c, ended, rounds)` signed under the key `pk`: the coin key (the header holds
-its digest), the records tree, the input of the session's `message`, and that of `memoryChallengerMessage`. -/
+its digest), the records stream under its `sha512/row/v2` prefix, the input of the session's `message`, and that of
+`memoryChallengerMessage`. -/
 def sessionStrings (pk : ByteArray) (c : SessionCommitment) (ended : String) (rounds : Array Round) : List ByteArray :=
   let head := (header c ended rounds.size).toUTF8
   [c.coinKey] ++
-    (match rounds.mapM Round.value with
-      | .ok values => treeStrings (domain RECORD_BINDING c.session rounds.size) values
+    (match recordsStream rounds with
+      | .ok s => [Flock.HmRow.rowPrefixV2 (8 * s.size) ++ s]
       | .error _ => []) ++
-    (match recordsRoot c.session rounds with
-      | .ok root => [SESSION_TAG ++ Flock.be64 head.size.toUInt64 ++ head ++ root]
+    (match recordsDigest rounds with
+      | .ok d => [SESSION_TAG ++ Flock.be64 head.size.toUInt64 ++ head ++ d]
       | .error _ => []) ++
     match message c ended rounds with
     | .ok rec =>

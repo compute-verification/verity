@@ -194,7 +194,7 @@ theorem SetupRecord.value_size {r : SetupRecord} {b : ByteArray} (h : r.value = 
 theorem pous_record_size {c : SessionCommitment} {ended : String} {rounds : Array Round} {r : ByteArray}
     (h : message c ended rounds = .ok r) : r.size = 64 := by
   unfold message at h
-  cases hr : recordsRoot c.session rounds <;> simp [hr, bind, Except.bind, pure, Except.pure] at h
+  cases hr : recordsDigest rounds <;> simp [hr, bind, Except.bind, pure, Except.pure] at h
   subst h
   exact hash_size _
 

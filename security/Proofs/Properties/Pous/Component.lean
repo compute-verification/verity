@@ -925,8 +925,14 @@ private theorem checkAt_toy (pk sig : ByteArray)
     table_toy rfl rfl rfl rfl (beq_self_eq_true _) (beq_self_eq_true _) hv
 
 private theorem message_toy : ∃ m, MemoryChallenger.message toySessionCommitment COMPLETE #[toyRound] = .ok m := by
-  unfold MemoryChallenger.message MemoryChallenger.recordsRoot
+  obtain ⟨v, hv⟩ : ∃ v, toyRound.value = .ok v := by
+    have hd : toyRound.digest.size = 64 := Properties.NetworkCertifier.Bytes.hash_size _
+    unfold MemoryChallenger.Round.value
+    rw [ite_cond_eq_false _ _ (by simp [hd])]
+    exact ⟨_, rfl⟩
+  unfold MemoryChallenger.message MemoryChallenger.recordsDigest MemoryChallenger.recordsStream
   rw [Array.mapM_eq_mapM_toList]
+  simp only [List.toList_toArray, List.mapM_cons, List.mapM_nil, hv, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
 
 /-- **An honest run is accepted** (the instance of `RunAccepts`' honest lemma): for every key `Lms.key` derives at
