@@ -438,12 +438,16 @@ def test_keys_only_has_every_node_take_the_key_and_writes_no_list_whatever_a_lis
 
     assert _main(fleet, *roll, "--keys-only") == 0
     out = capsys.readouterr().out
-    assert out.count("its key is taken from 4 more address(es), 4 in all") == 3 and "names 5 machines" not in out
+    assert out.count("  would take  its key is taken from 4 more address(es), 4 in all") == 3 and "names 5 machines" not in out
     assert out.endswith("nothing changed: --apply has each node take the key\n") and all(_keys(fleet, n) == [OTHER] for n in "abc")
 
     calls.clear()
     assert _main(fleet, *roll, "--keys-only", "--apply") == 0
+    out = capsys.readouterr().out
+    assert [out.count(f"  {w}  its key is taken from 4 more address(es), 4 in all") for w in ("would take", "taken")] == [3, 3]
     assert {k for _, k in calls} == {"probe", "accept?", "accept"}
+    assert _main(fleet, *roll, "--keys-only", "--apply") == 0
+    assert capsys.readouterr().out.count("  unchanged  its key is taken from each of them already (4 address(es))") == 6
     for n in "abc":
         assert len(_keys(fleet, n)) == 2 and "192.0.2.20" in _keys(fleet, n)[1] and (tmp / n / "etc" / "peers").read_text() == hand
 

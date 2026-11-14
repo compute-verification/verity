@@ -1231,6 +1231,11 @@ def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, appl
     def line(f: dict) -> str:
         return "; ".join(told({"accept": f.get("accept")} if keys_only else f))
 
+    def key(f: dict, done: bool) -> str:
+        """A --keys-only line: what the node's key line gains, before and after."""
+        a = f.get("accept") or {}
+        return f"{'unchanged' if not a.get('added') and 'unread' not in a else 'taken' if done else 'would take'}  {line(f)}"
+
     reg, none, away, refused, todo = register(), {}, {}, {}, []
     for node in picked:
         if node.name in reg.gone or (node.staged and node.name not in reg.live):
@@ -1248,13 +1253,14 @@ def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, appl
             refused[node.name] = str(e)
             continue
         todo.append(node)
-        say(f"{node.name}  {'' if keys_only else 'unchanged  ' if f['changed'] is False else 'would install  '}{line(f)}")
+        say(f"{node.name}  " + (key(f, False) if keys_only else f"{'unchanged' if f['changed'] is False else 'would install'}  {line(f)}"))
     later = f"`research deploy roll {path} --by {by} --on NODE --keys-only --apply`" if keys_only else \
         f"`research deploy install NODE {path} --by {by} --apply`"
     for name, why in {**none, **away}.items():
         say(f"{name}  passed by: {why}")
     if refused:
-        raise Refused("; ".join(refused.values()) + f". Nothing changed on any node ({len(refused)} of {len(picked)} refuse)")
+        raise Refused("\n  ".join(["a node's install would refuse:", *refused.values()])
+                      + f"\nNothing changed on any node ({len(refused)} of {len(picked)} refuse)")
     if not apply:
         return 1 if away else 0
     done: list[str] = []
@@ -1275,7 +1281,7 @@ def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, appl
             raise stop(node, f"its key was not taken ({e})") from None
         if keys_only:
             done.append(node.name)
-            say(f"{node.name}  {line(f)}")
+            say(f"{node.name}  {key(f, True)}")
     for node in [] if keys_only else [n for n in todo if n.name not in away]:
         try:
             f = install(node, ref, by, [path], run, True, repo, allow_shrink, part="list")["files"][0]
