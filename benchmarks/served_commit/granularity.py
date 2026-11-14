@@ -49,7 +49,7 @@ def load(build_dir: str):
     from verity.circuits.codec import decode_program
     from verity.circuits.program import is_input
     from verity.circuits.refs import runs
-    from verity.definitions.registry.catalog import load as load_registry
+    from verity_vllm.definitions.registry.catalog import load as load_registry
     from verity_vllm.correspondence.reader_for_query import call_name_of, parse_call_name
     from verity_vllm.correspondence.runtime import RuntimeCorrespondence
 

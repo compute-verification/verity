@@ -36,7 +36,7 @@ import pytest
 import torch
 from torch import nn
 from verity.circuits.types import Array, RecordType, Value
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 
 from verity_vllm.program.frontend.derive import (
     DERIVE_VERSION,

@@ -57,7 +57,7 @@ from verity.circuits.parts import n_members
 from verity.circuits.population import mixed_population_program
 from verity.circuits.program import is_input
 from verity.commitments.windows import interface as IF
-from verity.definitions.boolean import gate_table
+from verity_vllm.definitions.boolean import gate_table
 
 from verity_vllm.config import option
 from verity_vllm.records import block_counts as RBC
@@ -82,7 +82,7 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
 def resolve(tid: str) -> Any:
     """`interface.resolve` over the whole registry (`catalog.load`), a refusal naming any registry module that failed to
     import."""
-    from verity.definitions.registry.catalog import load  # no registry load at import
+    from verity_vllm.definitions.registry.catalog import load  # no registry load at import
 
     _, errors = load()
     try:
