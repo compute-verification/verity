@@ -126,7 +126,7 @@ def CallerCheckMeans : Prop :=
 which is all `StageHeld` reads. On every record and every verifier, where `VStar.Recursive.Caller.check` returns no
 code, the record keeps `Properties.Spot.CallerHeld` against that verifier. -/
 def CallerCheckSound : Prop :=
-  ∀ (rec : Json) (v : Spot.Registration.Verifier),
+  ∀ (rec : Json) (v : Spot.Docket.Verifier),
     VStar.Recursive.Caller.check rec v = #[] → Properties.Spot.CallerHeld rec v
 
 /-- SPOT's case `k` decodes under SPOT's own decoders (`VStar.Recursive.Sampled`, whose params name
