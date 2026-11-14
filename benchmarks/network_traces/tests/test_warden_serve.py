@@ -15,6 +15,7 @@ import io
 import json
 import math
 import os
+import socket
 import sys
 import types
 from pathlib import Path
@@ -940,6 +941,64 @@ def test_a_session_serves_its_length_to_clients_not_its_own_and_its_check_accept
     theirs = ws.check(out)
     assert theirs["accepted"] and (theirs["summary"]["requests"], theirs["summary"]["ended"]) == (8, 8)
     assert theirs["summary"]["cells_in_their_bucket"][0] == theirs["summary"]["cells_in_their_bucket"][1] > 0
+
+
+def test_a_session_given_its_callers_listener_hands_it_to_serve_which_serves_on_it_and_leaves_it_listening(
+        tmp_path, monkeypatch):
+    """The gate's unit holds a session's listener and gives the runner its descriptor (`--listen-fd`). `session`
+    passes that descriptor on to `serve`'s process and names it there, and without one passes none. The relay's
+    server on a caller's socket binds nothing: a connection made to the caller's listener before the server starts
+    is the one its handler gets, and once the server has closed the caller's socket still listens, so a later
+    connection arrives there with nothing accepting it."""
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    req = {"device": "warden", "client_port": 8012, "windows": 1, "height": 5, "scan": True, "scan_class": "w63k4"}
+
+    class Started(Exception):
+        pass
+
+    def popen(argv, **kw):
+        raise Started(argv, kw)
+
+    monkeypatch.setattr(ws, "subprocess", types.SimpleNamespace(Popen=popen, PIPE=None))
+    for fd in (None, 9):
+        argv = A.warden_command(req, tmp_path / f"run-{fd}", "http://127.0.0.1:40001", listen=40002, listen_fd=fd)
+        with pytest.raises(Started) as started:
+            ws.rehearse(ws.parser().parse_args(argv[2:]))
+        serve, kw = started.value.args
+        a = ws.parser().parse_args(serve[2:])
+        assert (a.command, a.listen, a.listen_fd) == ("serve", ("127.0.0.1", 40002), fd)
+        assert kw["pass_fds"] == (() if fd is None else (fd,))
+
+    held = A.held_listener()
+    early = socket.create_connection(held.getsockname())
+    early.sendall(b"early")
+
+    async def relay() -> list[bytes]:
+        got, done = [], asyncio.Event()
+
+        async def handle(reader, writer):
+            got.append(await reader.readexactly(5))
+            writer.write(b"served")
+            await writer.drain()
+            writer.close()
+            done.set()
+
+        server = await ws.listening(handle, held.getsockname(), socket.socket(fileno=os.dup(held.fileno())))
+        assert [s.getsockname() for s in server.sockets] == [held.getsockname()]
+        await done.wait()
+        server.close()
+        await server.wait_closed()
+        return got
+
+    assert asyncio.run(relay()) == [b"early"] and early.recv(6) == b"served"
+    with socket.create_connection(held.getsockname()) as late:
+        late.sendall(b"late")
+        conn, _ = held.accept()
+        assert conn.recv(4) == b"late"
+        conn.close()
+    early.close()
+    held.close()
 
 
 def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_which(tmp_path):
