@@ -126,7 +126,7 @@ def weight_value(program: str, param: str, words: Any, key: bytes, nonce: int, k
     key, a verifier holding a candidate checkpoint included. ``keep_rows``: hold the rows (a window's committer, which
     opens them)."""
     if not isinstance(key, bytes) or len(key) != 32:
-        raise ValueError("a weight's salts are drawn under the committer's 32-byte key")
+        raise ValueError("a weight's salts are derived under the committer's 32-byte key")
     return H1R.commit(program, param, _rows(param, words), key, int(nonce), keep_rows=keep_rows,
                       schema=G.SCHEMA_SEG if _param(param)[2] else G.SCHEMA_V2)
 

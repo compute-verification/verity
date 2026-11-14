@@ -38,7 +38,7 @@ def batch():
                                  prefill_len_np=np.array([5, 12]))
 
 
-def test_binds_the_draws_seed_and_position_and_keeps_the_rows():
+def test_binds_the_samples_seed_and_position_and_keeps_the_rows():
     com, src, got = committer([11, 0, 33])
     src.on_sample(batch(), 2, types.SimpleNamespace(step=3))
     assert got == {SAMPLER_INPUTS[0]: [33, 11], SAMPLER_INPUTS[1]: [9, 6]}

@@ -224,12 +224,12 @@ def _special_cases(rng) -> list[np.ndarray]:
             rows.append([acc, a, b])
     n = 25_600
     rate = np.repeat([0.0, 0.02, 0.1, 0.3], n // 4)
-    drawn = []
+    sampled = []
     for shape, bits, sp in (((n,), 32, SPECIAL_F32), ((n, 16), 16, SPECIAL_BF16), ((n, 16), 16, SPECIAL_BF16)):
         uniform = rng.integers(0, 1 << bits, shape, dtype=np.uint64).astype(sp.dtype)
         w = np.where(rng.random(shape) < 0.5, uniform, _finite_words(rng, shape, bits))
-        drawn.append(np.where(rng.random(shape) < rate.reshape(-1, *([1] * (len(shape) - 1))), rng.choice(sp, shape), w))
-    rows.append(drawn)
+        sampled.append(np.where(rng.random(shape) < rate.reshape(-1, *([1] * (len(shape) - 1))), rng.choice(sp, shape), w))
+    rows.append(sampled)
     return [np.concatenate([r[k] for r in rows]) for k in range(3)]
 
 
