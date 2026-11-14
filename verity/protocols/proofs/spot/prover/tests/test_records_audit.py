@@ -407,7 +407,7 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     one whose every input is registered): it writes the circuit's record from its description (members stated at its cap,
     no run) or, ``--description``, the description, prints the length the docket charges with the count, and exits
     `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the record finds the
-    charge. Each count holds the pin to the window's root its advice docket records: where it records another root,
+    charge. Each count holds the pin to the window's root its advice registration records: where it records another root,
     or none, every registered read is free."""
     from verity.protocols.proofs.spot.prover.audit import prove_path as PP
     from test_prove_path import _served
@@ -585,7 +585,7 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
 
 
 def test_an_expert_tables_registration_is_a_pin_as_written():
-    """A TP rank's docket of the per-expert cut's tables (``verity-vllm tp-register-tables``) is ``--registered`` as written,
+    """A TP rank's registration of the per-expert cut's tables (``verity-vllm tp-register-tables``) is ``--registered`` as written,
     each table under its rank's program: moved to another rank's program it refuses, and two ranks' dockets name each table
     twice, so a rank's window pins its own rank's."""
     from verity_vllm.pipeline import expert_tables as ET

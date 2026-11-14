@@ -65,7 +65,7 @@ def cmd (args : List String) : IO UInt32 := do
     | .error e => IO.eprintln s!"flock-rows: {e}"; return 1
     | .ok d =>
       if args.contains "--logical" then IO.print (Derive.logicalText d)
-      else IO.print (Derive.netlist name d (← readLine? (argOf args "--leaves")) (← readLine? (argOf args "--cut")))
+      else IO.print (Derive.circuitDescription name d (← readLine? (argOf args "--leaves")) (← readLine? (argOf args "--cut")))
       return 0
 
 end Flock.Rows
