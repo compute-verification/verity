@@ -6,7 +6,7 @@ import random
 from types import SimpleNamespace
 
 import pytest
-from verity.definitions import word as W
+from verity.circuits import word as W
 
 from verity_vllm.query.module_body import literal_calls
 from verity_vllm.query.program_view import CallView, ProgramView, from_instances
