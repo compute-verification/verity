@@ -133,8 +133,8 @@ theorem rowsProgWired : RowsProgWired := by
   · cases h
   · rename_i hF
     have h0 := firstFinding_none hF _
-      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
-        (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))))
+      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+        (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))))))
     unfold wiredCheck at h0
     split at h0
     · assumption
@@ -219,14 +219,12 @@ theorem stateChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : 
   simp [stateChecks, hform, Array.getElem?_zipIdx, hreg]
 
 /-- The state finding of an execution phase's transfer blocks is none only when their scan's state is tied
-(`stateTied`) and its row 0 opened to the empty state (`stateEmpty`). -/
+(`stateTied`). -/
 theorem stateCheck_none {p : Params} {s : Schedule} {audits : Array Lean.Json} {w : ℕ} {reg : Lean.Json}
-    (h : stateCheck p s audits w reg = none) : stateTied p.audits s audits reg = true ∧ stateEmpty s reg = true := by
+    (h : stateCheck p s audits w reg = none) : stateTied p.audits s audits reg = true := by
   unfold stateCheck at h
   split at h
-  · split at h
-    · exact ⟨by assumption, by assumption⟩
-    · cases h
+  · assumption
   · cases h
 
 /-- The transfer blocks of an accepted rows-form period's execution phase have no state finding. -/
@@ -249,16 +247,54 @@ theorem stateCheck_of_accept {p : Params} {c : Commitment} {e : Evidence} {pub :
   · cases h
   · cases h
   · rename_i hF
-    exact firstFinding_none hF _
-      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))))
+    exact firstFinding_none hF _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+      (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))))
 
 theorem rowsStateTied : RowsStateTied := by
   intro p c e pub prof h s sd scan hform i reg hreg
-  exact (stateCheck_none (stateCheck_of_accept h hform hreg)).1
+  exact stateCheck_none (stateCheck_of_accept h hform hreg)
+
+theorem startChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
+    (startChecks p c)[i]? = some (startCheck (p.first + i) reg) := by
+  simp [startChecks, hform, Array.getElem?_zipIdx, hreg]
+
+/-- The start finding of an execution phase's transfer blocks is none only when their scan starts from the empty
+state (`startEmpty`). -/
+theorem startCheck_none {w : ℕ} {reg : Lean.Json} (h : startCheck w reg = none) : startEmpty reg = true := by
+  unfold startCheck at h
+  split at h
+  · cases h
+  split at h
+  · assumption
+  · cases h
+
+/-- The transfer blocks of an accepted rows-form period's execution phase have no start finding. -/
+theorem startCheck_of_accept {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
+    (h : check p c e = .accept pub prof) {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
+    startCheck (p.first + i) reg = none := by
+  have hmem := Array.mem_of_getElem? (startChecks_getElem? hform hreg)
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    exact firstFinding_none hF _
+      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))))
 
 theorem rowsStateEmpty : RowsStateEmpty := by
   intro p c e pub prof h s sd scan hform i reg hreg
-  exact (stateCheck_none (stateCheck_of_accept h hform hreg)).2
+  exact startCheck_none (startCheck_of_accept h hform hreg)
 
 /-- The slot audit's registration with its `SCAN_STATE` registered at the root `root` and the domain `e`, beside its
 entries port at `r` and `d`. -/
@@ -361,19 +397,20 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   rw [stateExecutionPhase_skipped] at hs
   cases hs
 
-/-- The registration of the honest execution phase's transfer blocks opens no row 0: it states no `window.empty`. -/
-theorem stateExecutionPhase_unopened : stateEmpty slotSchedule stateExecutionPhase = false := by
+/-- The registration of the honest execution phase's transfer blocks registers no start: it has no `startName`
+entry and states no `window.empty`. -/
+theorem stateExecutionPhase_unopened : startEmpty stateExecutionPhase = false := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsStateEmpty`'s property** (its nontrivial lemma): such a check
 accepts a rows-form period of one execution phase's transfer blocks whose scan's state is the slot audit's
-`SCAN_STATE`, read as the chain, and whose registration opens no row 0, so the Programs anchored at bucket 0 read a row
-the prover chose. -/
+`SCAN_STATE`, read as the chain, and whose registration registers no start, so the Programs anchored at bucket 0 read
+a row the prover chose. -/
 theorem rowsStateEmpty_nontrivial : ¬ RowsStateEmptyOf acceptAllRows := by
   intro h
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
-  have hs : stateEmpty slotSchedule stateExecutionPhase = true :=
+  have hs : startEmpty stateExecutionPhase = true :=
     h p ⟨#[stateReg "s"], #[stateExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
       stateExecutionPhase rfl
   rw [stateExecutionPhase_unopened] at hs
@@ -519,10 +556,11 @@ theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {
     refine ⟨by omega, by omega, by omega, ?_, ?_, ?_⟩
     · intro y hy
       exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
-        (List.mem_append_left _ (List.mem_append_left _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))))))
+        (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+          (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))))))
     · intro y hy
       exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
-        (List.mem_append_right _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))))
+        (List.mem_append_left _ (List.mem_append_right _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))))))
     · injection h with hp
       rw [hform]
       exact hp.symm

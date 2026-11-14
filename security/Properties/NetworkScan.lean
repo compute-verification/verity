@@ -46,9 +46,9 @@ The network check reads the second off the scan's Program (`scanOf`, the generat
 **The layout** (`scanLayout`) is the generator form's, at the schedule's `S = lanes · slots` slots of `B` bytes and
 `T` buckets, over one egress link: at step `t`, slot `σ`'s presence gate is bit 0 of egress member `t`'s verdict (its
 return's leaf 0), and its frame's bits are the return's leaves `16 + 8σB … 16 + 8(σ + 1)B − 1` (the row after the u16,
-row bit `8k + i` bit `i` of byte `k`); step `t`'s ingress is bucket `t`'s `row` parameter, in bit order: bucket 0's
-first-template member, bucket `t ≥ 1`'s later-template member `t − 1`, the templates being the root's nodes that call a
-composite (`NetworkCheck.Period.templateNodes`, as `scanOf` reads them). Gates are `Flock.Program.resolve`'s (§6), the
+row bit `8k + i` bit `i` of byte `k`); step `t`'s ingress is bucket `t`'s `row` parameter, in bit order: member `t` of
+the ingress template, the second of the root's nodes that call a composite (`NetworkCheck.Period.templateNodes`, as
+`scanOf` reads them), after the start unit's. Gates are `Flock.Program.resolve`'s (§6), the
 canonical layout's. A statement's layout is its descriptor's (`layOf`), at horizon `T`.
 
 **The flattening** (`Flattens`, in `Properties.NetworkScan.Flattens`): the sampling statement's gates
@@ -87,8 +87,7 @@ def scanLayout (P : Flock.Program.Prog) (s : Schedule) : NetTiming.BoundaryGates
       let leaf := fun j => gateAt P P.rootScope ⟨false, ke, t * le + j⟩
       (leaf 0, (List.range bits).map fun b => leaf (outBits + σ.val * bits + b))
     ingress := fun t =>
-      let km := if t = 0 then (ts.headD 0, 0) else (ts.getD 1 0, t - 1)
-      (List.range (s.allocation * bits)).map fun j => gateAt P (P.child P.rootScope km.1 km.2) ⟨true, 0, j⟩ }
+      (List.range (s.allocation * bits)).map fun j => gateAt P (P.child P.rootScope (ts.getD 1 0) t) ⟨true, 0, j⟩ }
 
 /-- A statement's layout at the schedule `s`: its descriptor's scan layout, none where the descriptor doesn't decode. -/
 def layOf (s : Schedule) (x : Claims.Sampling.AuditStatement) : NetTiming.BoundaryGates 1 s.allocation :=

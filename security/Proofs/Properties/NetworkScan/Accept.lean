@@ -69,8 +69,7 @@ abbrev callee (P : Prog) (k : ℕ) : Defn := P.defs[(node P k).fn]!
 abbrev egressNode (P : Prog) : ℕ := (templateNodes P).getLast?.getD 0
 
 /-- Step `t`'s ingress bucket, as `scanLayout` reads it: the root node and member whose `row` is step `t`'s ingress. -/
-abbrev bucket (P : Prog) (t : ℕ) : ℕ × ℕ :=
-  if t = 0 then ((templateNodes P).headD 0, 0) else ((templateNodes P).getD 1 0, t - 1)
+abbrev bucket (P : Prog) (t : ℕ) : ℕ × ℕ := ((templateNodes P).getD 1 0, t)
 
 /-- The schedule's row: `S · B` bytes of 8 bits. -/
 abbrev rowTy (s : Schedule) : Ty := .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
@@ -110,24 +109,16 @@ theorem needSome_ok {α : Type} {o : Option α} {why : String} {a : α} (h : nee
   | none => cases h
   | some x => cases h; rfl
 
-theorem ingressTemplates_ok {l : List (Node × Defn)} {x : (Node × Defn) × Option (Node × Defn)}
-    (h : ingressTemplates l = .ok x) : (∃ f, l = [f] ∧ x = (f, none)) ∨ ∃ f b, l = [f, b] ∧ x = (f, some b) := by
+theorem beforeEgress_ok {l : List (Node × Defn)} {x : (Node × Defn) × (Node × Defn)}
+    (h : beforeEgress l = .ok x) : ∃ f b, l = [f, b] ∧ x = (f, b) := by
   match l, h with
-  | [f], h => exact Or.inl ⟨f, rfl, (Except.ok.inj h).symm⟩
-  | [f, b], h => exact Or.inr ⟨f, b, rfl, (Except.ok.inj h).symm⟩
+  | [f, b], h => exact ⟨f, b, rfl, (Except.ok.inj h).symm⟩
   | [], h => cases h
+  | [_], h => cases h
   | _ :: _ :: _ :: _, h => cases h
 
 theorem form_batch {f : Flock.Program.Form} (h : (f == .batch) = true) : f = .batch := by
   cases f <;> first | rfl | exact absurd h (by decide)
-
-theorem split_two {β : Type} {g : ℕ → β} {l : List ℕ} {f : β} (h : (l.map g).dropLast = [f]) :
-    ∃ a e, l = [a, e] ∧ g a = f := by
-  match l, h with
-  | [], h => simp at h
-  | [_], h => simp at h
-  | [a, e], h => exact ⟨a, e, rfl, by simpa using h⟩
-  | _ :: _ :: _ :: _, h => simp at h
 
 theorem split_three {β : Type} {g : ℕ → β} {l : List ℕ} {f b : β} (h : (l.map g).dropLast = [f, b]) :
     ∃ a a' e, l = [a, a', e] ∧ g a = f ∧ g a' = b := by
@@ -160,7 +151,7 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain ⟨⟨xe, de⟩, hback, h⟩ := bind_ok h
   replace hback := needSome_ok hback
   obtain ⟨_, h2, h⟩ := bind_ok h
-  obtain ⟨⟨⟨xf, df⟩, later⟩, hm, h⟩ := bind_ok h
+  obtain ⟨⟨⟨xs, ds⟩, ⟨xi, di⟩⟩, hm, h⟩ := bind_ok h
   obtain ⟨_, h3, h⟩ := bind_ok h
   obtain ⟨_, h4, h⟩ := bind_ok h
   obtain ⟨_, h5, h⟩ := bind_ok h
@@ -198,21 +189,13 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
     simp only [Prod.mk.injEq] at hge
     exact ⟨hge.1.symm, hge.2.symm, List.mem_of_getLast? he⟩
   obtain ⟨rfl, rfl, hemem⟩ := hxe
-  have hpick : (∃ a e, templateNodes P = [a, e] ∧ (xf, df) = (node P a, callee P a) ∧ later = none) ∨
-      ∃ a b e, templateNodes P = [a, b, e] ∧ (xf, df) = (node P a, callee P a) ∧
-        later = some (node P b, callee P b) := by
-    rcases ingressTemplates_ok hm with ⟨f, hf, hx⟩ | ⟨f, b, hf, hx⟩
-    · simp only [Array.toList_pop, Array.toList_map] at hf
-      obtain ⟨a, e, hts, hga⟩ := split_two hf
-      simp only [Prod.mk.injEq] at hx
-      refine Or.inl ⟨a, e, hts, ?_, hx.2⟩
-      rw [hx.1, ← hga]
-    · simp only [Array.toList_pop, Array.toList_map] at hf
-      obtain ⟨a, a', e, hts, hga, hgb⟩ := split_three hf
-      simp only [Prod.mk.injEq] at hx
-      refine Or.inr ⟨a, a', e, hts, ?_, ?_⟩
-      · rw [hx.1, ← hga]
-      · rw [hx.2, ← hgb]
+  have hpick : ∃ a b e, templateNodes P = [a, b, e] ∧ (xi, di) = (node P b, callee P b) := by
+    obtain ⟨f, b, hf, hx⟩ := beforeEgress_ok hm
+    simp only [Array.toList_pop, Array.toList_map] at hf
+    obtain ⟨a, a', e, hts, -, hgb⟩ := split_three hf
+    simp only [Prod.mk.injEq] at hx
+    refine ⟨a, a', e, hts, ?_⟩
+    rw [hx.2, ← hgb]
   have hret : ∃ q ∈ (P.defs[P.root]!).body.ret.parts, ∃ c, q = .affine false (egressNode P) 0 c ∧
       s.window * (callee P (egressNode P)).outLeaves ≤ c := by
     rw [Array.any_eq_true] at h10
@@ -224,54 +207,21 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
       refine ⟨_, ?_, hq.2⟩
       rw [hq.1]
     · cases hq
-  have hrows : ∀ x ∈ #[xf] ++ (later.map (#[·.1])).getD #[], (x.args[0]?.bind (inputArg P)).isSome = true := by
-    intro x hx
-    rw [Array.all_eq_true_iff_forall_mem] at h12
-    exact h12 _ (Array.mem_map.2 ⟨x, hx, rfl⟩)
-  simp only [Bool.and_eq_true, beq_iff_eq] at h3 h4 h5 h9
-  obtain ⟨⟨hn1, hnl⟩, -⟩ := h3
-  obtain ⟨⟨⟨⟨hxf, hxn⟩, hln⟩, hxeb⟩, hxen⟩ := h4
-  obtain ⟨hr0, hrl⟩ := h5
-  have hdf : 0 < df.params.size := by
-    have := congrArg Array.size hn1
+  simp only [Bool.and_eq_true, beq_iff_eq] at h3 h4 h9
+  obtain ⟨⟨-, hni⟩, -⟩ := h3
+  obtain ⟨⟨⟨⟨⟨-, -⟩, hxib⟩, hxin⟩, hxeb⟩, hxen⟩ := h4
+  have hdi : 0 < di.params.size := by
+    have := congrArg Array.size hni
     rw [Array.size_map] at this
-    rw [this]; simp [firstParams]
+    rw [this]; simp [ingressParams]
   refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_, h15⟩
-  rcases hpick with ⟨a, e, hts, hfa, rfl⟩ | ⟨a, b, e, hts, hfa, rfl⟩
-  · simp only [Prod.mk.injEq] at hfa
-    obtain ⟨rfl, rfl⟩ := hfa
-    try dsimp only at hln
-    simp only [Option.some.injEq] at hln
-    intro t ht
-    have t0 : t = 0 := by omega
-    subst t0
-    have hb0 : bucket P 0 = (a, 0) := by simp [bucket, hts]
-    obtain ⟨kr, hkr⟩ := Option.isSome_iff_exists.1 (hrows (node P a) (by simp))
-    rw [hb0]; unfold Ingress; try dsimp only
-    exact ⟨by simp [hts], form_batch hxf, by omega, by omega, BodiesOk.ty_beq hr0, kr, hkr⟩
-  · simp only [Prod.mk.injEq] at hfa
-    obtain ⟨rfl, rfl⟩ := hfa
-    simp only [Option.all_some] at hnl hrl
-    have hbs : 0 < (callee P b).params.size := by
-      have := congrArg Array.size (beq_iff_eq.1 hnl)
-      rw [Array.size_map] at this
-      rw [this]; simp [ingressParams]
-    try dsimp only at hln
-    split at hln
-    · rename_i hcond
-      simp only [Option.some.injEq] at hln
-      simp only [decide_eq_true_eq] at hcond
-      intro t ht
-      by_cases t0 : t = 0
-      · subst t0
-        have hb0 : bucket P 0 = (a, 0) := by simp [bucket, hts]
-        obtain ⟨kr, hkr⟩ := Option.isSome_iff_exists.1 (hrows (node P a) (by simp))
-        rw [hb0]; unfold Ingress; try dsimp only
-        exact ⟨by simp [hts], form_batch hxf, by omega, by omega, BodiesOk.ty_beq hr0, kr, hkr⟩
-      · have hbt : bucket P t = (b, t - 1) := by simp [bucket, t0, hts]
-        obtain ⟨kr, hkr⟩ := Option.isSome_iff_exists.1 (hrows (node P b) (by simp))
-        rw [hbt]; unfold Ingress; try dsimp only
-        exact ⟨by simp [hts], form_batch hcond.1, by omega, by omega, BodiesOk.ty_beq hrl, kr, hkr⟩
-    · cases hln
+  obtain ⟨a, b, e, hts, hb⟩ := hpick
+  simp only [Prod.mk.injEq] at hb
+  obtain ⟨rfl, rfl⟩ := hb
+  obtain ⟨kr, hkr⟩ := Option.isSome_iff_exists.1 h12
+  intro t ht
+  have hbt : bucket P t = (b, t) := by simp [bucket, hts]
+  rw [hbt]; unfold Ingress; try dsimp only
+  exact ⟨by simp [hts], form_batch hxib, by omega, hdi, BodiesOk.ty_beq h5, kr, hkr⟩
 
 end Properties.NetworkScan.Fits
