@@ -83,7 +83,7 @@ uv run python benchmarks/slowdown/periods.py --bounds min-cut --scenario referen
   citation's status.
 - `benchmarks/census` (devices, the reference datacenter and the world) and `benchmarks/nci` (the remote regime's
   terms in `tiers.py`, its algorithms and their traits), which the tests hold the data to;
-  `security/Definitions/InferenceOnly/Remote.lean`, whose
+  `security/Definitions/Slowdown/Remote.lean`, whose
   `remoteSlowdown` `tests/test_envelopes.py` holds `theorem.multiple_bound` to; and the Lean files that define the
   min-cut bound's `alphaHE`, `shareF` and `workHEOn` and state its `HE`, `HEShared` and `HECharged`, found through
   the lock, which `tests/test_min_cut.py` holds `min_cut.py` to.
@@ -102,7 +102,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
   inference-only policy's check is the registration (`Policy`). A regime is the envelopes that run, and builds the server blocks with their
   cuts.
 - **The slowdown lower bound** (`classes.py`, `attacks.py`, `theorem.py`): the pricing arguments as inference-block yields
-  `q_T(c, k)`, the attacks as constructions, and the server-block bound: each server block's least cut
+  `q(c, k)`, the attacks as constructions, and the server-block bound: each server block's least cut
   (`theorem.local`), summed over blocks (`theorem.slowdown`), with the minimum of global bounds beside it
   (`theorem.aggregate`).
 
@@ -112,7 +112,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | `ε_unreg`, `L_unreg` | `fleet.<name>.eps_unreg`, `Partition.eps_unreg` |
 | inference block `(c, k)` | `Blocks("inference")`, `Policy`, `Budget(gates, inputs)` |
 | server block `S`, `(c_S, k_S)`, `n_S` | `ServerBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
-| `q_T(c, k)` | `Cap`, from a class's `Allowance` by `classes.per_block` |
+| `q(c, k)` | `Yield`, from a class's `Allowance` by `classes.per_block` |
 | `q_U(U) = ω_max U / s_×` | `Structure.weight` (`data/exclusion.toml`) |
 | the serving cut's boundary term `ω_max μ k_S` | `Structure.per_bit` times `Cut.boundary` (`ServingBlockBound`) |
 | `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect` (`Cut.uncertified`) |
@@ -120,7 +120,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe`, `Certifier.rate_in`, `Certifier.timing` and `side` |
 | the padded size ratio `\|A\| / T_0`, the slowdown, the time to the target | `Slowdown.padded`, `Slowdown.value`, `Scenario.seconds` |
 
-**The uncertified cap.** A bound counts an uncertified or unregistered gate at `ω_max / s_×`, `s_×` the fewest gates in any
+**The free-compute yield.** A bound counts an uncertified or unregistered gate at `ω_max / s_×`, `s_×` the fewest gates in any
 counted operation's subcircuit. `structure.reference` takes `s_×` at the reference's gates per counted product, which
 is valid only under the named assumption `draft:no-straddle` (no counted operation straddles verified and free
 compute), so every bound counting such gates cites it. A structure states its `basis`, and `Structure.check` refuses one
@@ -206,7 +206,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 
 | module | interface |
 |---|---|
-| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
+| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Yield`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
 | `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `clique`, `slowdown_of(c, k, n, size, work) → Chosen`; `bound_charged(c, k, n, blocks, untied, untied_macs, w, N, O, size, rows) → Charged`, `best_w`, `capped` |
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout; `held_layers`, the forward products of a block that holds whole layers, against E1's Proposition 3 |

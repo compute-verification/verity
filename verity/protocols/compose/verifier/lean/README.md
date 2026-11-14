@@ -73,7 +73,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | SPOT (the audit on the proofs themselves, one-stage v2's, which it reads as blobs; one-stage v1 and the recursive audit, which its soundness doesn't cover, refused, and the two-stage audit read, checked and refused last while its switch is off) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../../proofs/spot_flock/verifier/lean`) | `verity/sampled-proofs/v1` |
 | the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `InferenceOnlyCheck.Protocol.protocol` (`inference_only_check`, `../../../policy/inference_only/verifier/lean`) | `verity/inference-only/v0` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../../../accounting/pous/verifier/check`) | `verity/pous/p2/v4/run` |
-| PoUB-P2 (its session over PoUS's store) | yes | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../../../accounting/poub/verifier/lean`) | `verity/remote-bandwidth/p2/v0` |
+| PoUB-P2 (its session over PoUS's store) | yes | | `Poub.P2Protocol.protocol` (`poub`, `../../../accounting/poub/verifier/lean`) | `verity/remote-bandwidth/p2/v0` |
 | the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../../accounting/pous/device/lean`) | `verity/wipe/v0` |
 
 Every subprotocol of both products is ported to its own `Core.Protocol`.
@@ -126,7 +126,8 @@ when each window's record names the registration log's head (`Core.Registration`
 every subprotocol names.
 
 A tie (`Tie`, `Tie.lean`) is the values each named subprotocol reads off its own case (its commitment's bytes, or its
-evidence's) with its own decoder, which must all be one value (`Tie.strays`: `what: s committed D, t committed D'`). `tiedSame id ss ties components`
+evidence's) with its own decoder, which must all be one value (`Tie.strays`: `what: s and t named different values`,
+neither value, which can be witness). `tiedSame id ss ties components`
 (`tiedSameB` over blobs) is `same` with its ties held (`holdTies`): a verdict of `same` that isn't a reject becomes a
 reject when a tie strays, and a reject stays itself. Onsite's ties are remote's `Core.Remote.windows` (below), read
 from `core_remote` rather than restated, then `Core.Onsite.store`, which puts PoUS and PoUB-P2 on one store: the root

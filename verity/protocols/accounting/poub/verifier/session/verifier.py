@@ -51,7 +51,7 @@ The payload's salts are the verifier's: its first message (`payload-key`) carrie
 payload tree's leaves under it (`store.store_salt`). The verifier holds no checkpoint: what the store holds is the
 developer's choice, and a hello's layout is the regions it declares (`regions_of`).
 
-The verdicts are the Lean verifier's, the process `remote-audit-verifier` (`lean_verifier.py`): it holds
+The verdicts are the Lean verifier's, the process `poub-verifier` (`lean_verifier.py`): it holds
 the registry and every session, and each registration, session, event and window goes to it and to `audit.AuditRun`
 at one reading of the clock (`Pair`). An accepted session's record is the Lean's (`Pair.record`), and its ledger
 reads that record. `audit.AuditRun` keeps the driver's books (its coins, its plans, when the next boundary leaves) and
@@ -96,7 +96,7 @@ serve` starts.
 
     python verifier_process.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
                                [--registry REGISTRY.json] [--lean-exe PATH]
-                               [--paced K:T_MS:DRAWS:WINDOWS[:F] ...] [--transcript DIR]
+                               [--paced K:T_MS:SAMPLES:WINDOWS[:F] ...] [--transcript DIR]
                                [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
                                [--groups-per-coin G]
                                [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
@@ -1571,7 +1571,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
     ap.add_argument("--lean-exe", type=Path,
-                    help="a built remote-audit-verifier (default: `lake build` it in its package)")
+                    help="a built poub-verifier (default: `lake build` it in its package)")
     ap.add_argument("--transcript", type=Path, metavar="DIR",
                     help="write each session's difftest case to DIR (`lean_verifier.Transcript`: about 0.6 GB a "
                          "window at 33,273 openings), its path, bytes and sha256 in verifier.json")

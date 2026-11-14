@@ -17,7 +17,7 @@ import pytest
 
 import signers
 from verity.protocols.accounting.certifier.verifier import warden_rows as W
-from verity.protocols.accounting.certifier.verifier.active import DATA
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, certificate_digest
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid, Status
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import PARAMS

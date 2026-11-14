@@ -123,7 +123,7 @@ theorem correct_iff {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) (u : Fin n
 
 /-- **The bridge**: the population's incorrect proof blocks are the partition's. -/
 theorem incorrect_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Trace) :
-    P.toDataflow.incorrect (P.fns W) (P.encode W X) = P.wrong X := by
+    P.toDataflow.incorrect (P.fns W) (P.encode W X) = P.incorrect X := by
   ext u
   simp only [Population.Dataflow.incorrect, mem_filter, mem_univ, true_and, P.mem_incorrect, P.correct_iff hW X u]
 

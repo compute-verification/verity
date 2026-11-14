@@ -19,7 +19,9 @@ with the ones they build on.
   - `verity/protocols/accounting/certifier/verifier`: its tests, every module, and they alone `advice_check`, `io_ids` and
     `compile_slice_v5`. No module of that package imports this one.
 - **Commands**: none. No console script, no `__main__`, no Lean.
-- **Circuit-check**: every module has a sidecar, `<module>.circuit-check.py`, with its pins in
+- **Period evidence**: `period.verified_answer`, each answer the period check reads with its one-stage inputs; an
+  interface, its body not written.
+- **Circuit-check**: every module but `period` has a sidecar, `<module>.circuit-check.py`, with its pins in
   `<module>.circuit-check.json`, which `circuit-check` (`tools/verity/circuit_check`) reads.
 - **Documents**: none. No module writes a file or defines a schema.
 - **Loads from**: `verity.protocols.accounting.certifier.verifier` (the schedule and records the Definitions are stated over, and

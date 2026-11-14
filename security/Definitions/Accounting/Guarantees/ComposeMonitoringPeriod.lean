@@ -191,7 +191,7 @@ for, and a period picked from `N` execution phases after the fact would pay `ln 
 `δ_ks` has a value here. `Pouw.Guarantees.MonitoringPeriodBindingPerProver` bounds `δ_bind` by `|L|·√(q/2^256 + κ)` under
 `ecr/sha-512` at the prover's fork finder: `L` is the period's positions, `n` times a verification phase's, `q` is
 that finder's SHA-512 calls, its two runs from a position's cut and the checks of their openings, and `κ` is its
-unverified-opening and split terms, which no statement bounds. `δ_ks` is `Pouw.Guarantees.Window.WindowDelta`'s
+unverified-opening and split terms, which no statement bounds. `δ_ks` is `Pouw.Guarantees.Window.ExecutionPhaseDelta`'s
 `max_c κ_c + coll`, stated and not proved.
 
 What it doesn't say: no window's own `ε` (an accepted prefix may hold windows skipped whole, `Λ·ln(1/δ_s)` of

@@ -37,7 +37,7 @@ two-stage contract; it takes no premise on `H`.
 namespace Claims.SamplingGeneric
 
 open Claims
-open Claims.Sampling (AuditStatement Partition InScopeTwo footprintAt wrongAllAt)
+open Claims.Sampling (AuditStatement Partition InScopeTwo footprintAt incorrectAllAt)
 
 namespace CompiledTwo
 

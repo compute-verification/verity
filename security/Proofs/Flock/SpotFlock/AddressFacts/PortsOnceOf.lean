@@ -72,7 +72,7 @@ theorem checkRows_names {c : _root_.Flock.Circuit} (h : _root_.Flock.HmOut.check
     omega
   subst hk'
   exact ⟨by omega, fun j hj => (hrow j hj).1,
-    nodup_of_sort (Properties.RemoteAudit.qsort_toList_perm _ _)
+    nodup_of_sort (Properties.Poub.qsort_toList_perm _ _)
       (Properties.Pouw.Period.SecurityProofs.Sort.qsort_sorted _) String.le_refl (fun _ _ => String.le_antisymm) hnm⟩
 
 /-- **The rows' names are the input rows' then the output ports'**, where each output row holds one output port. -/

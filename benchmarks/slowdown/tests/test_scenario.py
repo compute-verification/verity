@@ -120,7 +120,7 @@ def test_the_draft_bounds_set_these_scenarios_and_no_other(monkeypatch):
 def test_a_bound_refuted_at_a_block_does_not_bound_it_and_is_still_reported_alone():
     """With the draft bounds admitted and E1's activation rate refuted past its credible 1.1·10⁹ bits, fanout-priced on
     its own binds onsite H200's serving cut (`k_S` past that) at a standing of refuted, its padded size ratio about 290
-    times the lower bound's. Every bound at once takes no cap from it at that block, its standing doesn't reach the
+    times the lower bound's. Every bound at once takes no yield from it at that block, its standing doesn't reach the
     lower bound's, and the lower bound is still at least every bound alone whose premises aren't refuted."""
     premise = "premise.e1-activation-rate"
     f = evaluate_named(DRAFTS_TOO.override({f"{premise}.beyond": "refuted"}), "reference-onsite-h200").families[0]
@@ -173,11 +173,11 @@ def test_s_times_and_gates_per_flop_come_from_one_source():
     assert build(REG.override({"units.basis": design}), "reference-onsite-h200-elementary").structure.s_times == 1
 
 
-def test_unmonitored_is_the_algorithm_alone():
+def test_unregistered_is_the_algorithm_alone():
     """The bound counts every gate at capacity, so its padded size ratio is `μ`; a construction trains at its MFU on a
     circuit padded to capacity, so the best attack's is `μ / MFU`. The overhead is against the reference at that MFU, so
     no protocol gives `max(1, μ)` for the attack, 1 for the reference's own family, and the reference's time."""
-    r = evaluate_named(REG, "unmonitored-h200-kimi")
+    r = evaluate_named(REG, "unregistered-h200-kimi")
     f0 = r.scenario.context.fleet
     mfu = f0.eps_unreg * f0.unreg_mfu + (1 - f0.eps_unreg) * f0.mfu_train
     assert r.scenario.mfu == pytest.approx(mfu)
@@ -252,7 +252,7 @@ def test_the_slowdown_and_the_time_to_the_target_do_not_depend_on_gates_per_flop
 def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise():
     """`structure.reference` is `s_×` at the reference's gates per counted product (`2G/κ`, so `u = w` and the overhead
     is what it was), and every bound that counts uncertified or unregistered gates there cites `draft:no-straddle`. The
-    elementary cap (one operation a gate) needs no such premise; it leaves the attacks as they are, takes remote's lower
+    elementary yield (one operation a gate) needs no such premise; it leaves the attacks as they are, takes remote's lower
     bound down by `2G/κ` (inference is 0.0% of it), and is what `upto("conditional")` falls back to."""
     r, e = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-remote-h200-elementary")
     st, f = r.scenario.structure, r.families[0]
@@ -274,7 +274,7 @@ def test_no_protocol_gives_1_and_the_overhead_is_against_the_reference_at_its_mf
     compute counts at `MFU₀`, so each is its padded size ratio (3.04); without it the monitored terms shrink by 2.5
     and the unregistered leaves don't (1.22). With the draft bounds admitted onsite is far above, and still above 10
     without reference efficiency."""
-    u = evaluate_named(REG, "unmonitored-h200-kimi")
+    u = evaluate_named(REG, "unregistered-h200-kimi")
     assert u.lo == u.attack == 1.0
     remote, onsite = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-onsite-h200")
     deployed = evaluate_named(REG, "reference-remote-h200-pouw")

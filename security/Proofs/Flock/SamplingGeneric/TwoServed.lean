@@ -203,19 +203,19 @@ committed values, serve request `r` the same outputs. -/
 theorem served_eq_on (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement} {Pt Pρ : Partition}
     (hC : s.prog.Topological) (hP : Pt.Partitions s.prog) {R : Type} (req : Fin s.prog.outs.length → R) (r : R)
     {w w' : Wit} {ι ι' : ℕ → ℕ → Bool} {S : Finset ℕ}
-    (hw : wrongOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) ⊆ S)
-    (hw' : wrongOf s.prog Pt (glue s.prog Pρ (w'.val H Cm s) ι') ⊆ S)
+    (hw : incorrectOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) ⊆ S)
+    (hw' : incorrectOf s.prog Pt (glue s.prog Pρ (w'.val H Cm s) ι') ⊆ S)
     (ha : inputsOf H Cm s w = inputsOf H Cm s w')
     (hT : ∀ g ∈ exits s.prog Pt (blocksTo s.prog Pt req S r),
       (glue s.prog Pρ (w.val H Cm s) ι g).getD false = (glue s.prog Pρ (w'.val H Cm s) ι' g).getD false) :
     ∀ i, req i = r → served H Cm s w i = served H Cm s w' i := by
   classical
-  have hcor : ∀ Z : ℕ → Option Bool, wrongOf s.prog Pt Z ⊆ S →
+  have hcor : ∀ Z : ℕ → Option Bool, incorrectOf s.prog Pt Z ⊆ S →
       ∀ v < Pt.blocks.length, v ∉ S → s.prog.Correct Z (Pt.blocks.getD v []) := by
     intro Z hZ v hv hvS
     by_contra hc
     refine hvS (hZ ?_)
-    unfold wrongOf
+    unfold incorrectOf
     exact mem_filter.2 ⟨mem_range.2 hv, hc⟩
   have hin : ∀ g, s.prog.gates[g]? = some .input →
       glue s.prog Pρ (w.val H Cm s) ι g = glue s.prog Pρ (w'.val H Cm s) ι' g := by
@@ -250,14 +250,14 @@ theorem served_eq_on_of_mem (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : 
     (hC : s.prog.Topological) (hP : Pt.Partitions s.prog) {R : Type} (req : Fin s.prog.outs.length → R) (r : R)
     {𝒯 : Finset (Finset ℕ)} {U : Finset ℕ} (hU : ∀ T ∈ 𝒯, blocksTo s.prog Pt req T r = U)
     {w w' : Wit} {ι ι' : ℕ → ℕ → Bool}
-    (hw : wrongOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) ∈ 𝒯)
-    (hw' : wrongOf s.prog Pt (glue s.prog Pρ (w'.val H Cm s) ι') ∈ 𝒯)
+    (hw : incorrectOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) ∈ 𝒯)
+    (hw' : incorrectOf s.prog Pt (glue s.prog Pρ (w'.val H Cm s) ι') ∈ 𝒯)
     (ha : inputsOf H Cm s w = inputsOf H Cm s w')
     (hT : ∀ g ∈ exits s.prog Pt U,
       (glue s.prog Pρ (w.val H Cm s) ι g).getD false = (glue s.prog Pρ (w'.val H Cm s) ι' g).getD false) :
     ∀ i, req i = r → served H Cm s w i = served H Cm s w' i := by
-  have hS := blocksTo_union s.prog Pt req (wrongOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι))
-    (wrongOf s.prog Pt (glue s.prog Pρ (w'.val H Cm s) ι')) r
+  have hS := blocksTo_union s.prog Pt req (incorrectOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι))
+    (incorrectOf s.prog Pt (glue s.prog Pρ (w'.val H Cm s) ι')) r
   rw [hU _ hw, hU _ hw', union_self] at hS
   refine served_eq_on H Cm hC hP req r subset_union_left subset_union_right ha fun g hg => hT g ?_
   rwa [hS] at hg
@@ -290,14 +290,14 @@ theorem card_image_onReq_le (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : 
     ((𝒯.biUnion (servedAt H Cm s Pt Pρ a)).image (onReq req r)).card ≤ 2 ^ bitsOf s Pt U := by
   classical
   have hspec : ∀ y ∈ 𝒯.biUnion (servedAt H Cm s Pt Pρ a), ∃ (w : Wit) (ι : ℕ → ℕ → Bool), inputsOf H Cm s w = a ∧
-      wrongOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) ∈ 𝒯 ∧ served H Cm s w = y := by
+      incorrectOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) ∈ 𝒯 ∧ served H Cm s w = y := by
     intro y hy
     obtain ⟨T, hT, hyT⟩ := mem_biUnion.1 hy
     obtain ⟨w, ι, ha, hw, hwy⟩ := (mem_filter.1 hyT).2
     exact ⟨w, ι, ha, hw ▸ hT, hwy⟩
   let f : (Fin s.prog.outs.length → Bool) → (exits s.prog Pt U → Bool) := fun y =>
     if h : ∃ (w : Wit) (ι : ℕ → ℕ → Bool), inputsOf H Cm s w = a ∧
-        wrongOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) ∈ 𝒯 ∧ served H Cm s w = y then
+        incorrectOf s.prog Pt (glue s.prog Pρ (w.val H Cm s) ι) ∈ 𝒯 ∧ served H Cm s w = y then
       fun g => (glue s.prog Pρ ((Classical.choose h).val H Cm s) (Classical.choose (Classical.choose_spec h)) g).getD
         false
     else fun _ => false
@@ -384,7 +384,7 @@ theorem card_influenceTwo_le_served (H : Msg → Msg) (Cm : CommitmentScheme Boo
     intro y hy
     unfold influenceTwo at hy
     obtain ⟨w, ha, ⟨ι, hM⟩, hwy⟩ := (mem_filter.1 hy).2
-    refine mem_biUnion.2 ⟨_, wrongOf_mem_admissible H Cm hs.2.1 hs.2.2.1 hM, ?_⟩
+    refine mem_biUnion.2 ⟨_, incorrectOf_mem_admissible H Cm hs.2.1 hs.2.2.1 hM, ?_⟩
     unfold servedAt
     exact mem_filter.2 ⟨mem_univ _, w, ι, ha, rfl, hwy⟩
   calc (influenceTwo H Cm s Pt d δ a).card ≤ ∑ T ∈ admissibleTwo Pt d δ, (servedAt H Cm s Pt d.part a T).card :=
@@ -407,7 +407,7 @@ theorem card_influenceTwo_le_served_min (H : Msg → Msg) (Cm : CommitmentScheme
     intro y hy
     unfold influenceTwo at hy
     obtain ⟨w, ha, ⟨ι, hM⟩, hwy⟩ := (mem_filter.1 hy).2
-    refine mem_biUnion.2 ⟨_, wrongOf_mem_admissible H Cm hs.2.1 hs.2.2.1 hM, ?_⟩
+    refine mem_biUnion.2 ⟨_, incorrectOf_mem_admissible H Cm hs.2.1 hs.2.2.1 hM, ?_⟩
     unfold servedAt
     exact mem_filter.2 ⟨mem_univ _, w, ι, ha, rfl, hwy⟩
   calc (influenceTwo H Cm s Pt d δ a).card ≤ ∑ T ∈ admissibleTwo Pt d δ, (servedAt H Cm s Pt d.part a T).card :=
@@ -472,7 +472,7 @@ theorem card_influenceTwo_le_classes (H : Msg → Msg) (Cm : CommitmentScheme Bo
     intro y hy
     unfold influenceTwo at hy
     obtain ⟨w, ha, ⟨ι, hM⟩, hwy⟩ := (mem_filter.1 hy).2
-    have hT := wrongOf_mem_admissible H Cm hs.2.1 hs.2.2.1 hM
+    have hT := incorrectOf_mem_admissible H Cm hs.2.1 hs.2.2.1 hM
     refine mem_biUnion.2 ⟨_, mem_image_of_mem _ hT, mem_biUnion.2 ⟨_, mem_filter.2 ⟨hT, rfl⟩, ?_⟩⟩
     unfold servedAt
     exact mem_filter.2 ⟨mem_univ _, w, ι, ha, rfl, hwy⟩
