@@ -18,8 +18,9 @@ check at one pair of stage coins (`StageCoinsOne`), which they do where one pair
 both plays' samples read (`PlayCoinsOne`).
 
 * **The statement holds the record's printed sample** (`stmtAt_record`): on an accepted play, template `t`'s
-  statement in the statements' message decodes to a statement whose sample is the bytes its session's record's
-  sample prints to (`SessionMsgs.drawBytes`), and that sample is printable (`SessionCoins.draw_good`).
+  statement in the statements' message decodes to its member's statement at the files the check read
+  (`stmtAt_raw`), whose sample is the bytes its session's record's sample prints to (`SessionMsgs.drawBytes`), and
+  that sample is printable (`SessionCoins.draw_good`).
 * **The printed sample reads back with the record's sample's canonical text** (`canon_of_printed`): the parser
   reads a printable value's text back alike it (`Flock.PartCong.printed_readsBack`), and alike values have one
   canonical text.
@@ -83,21 +84,26 @@ theorem canon_of_printed {record : String}
     · rw [Option.some.inj hc, ← FlockComplete.JsonRT.canon_same a c hac, ← Option.some.inj (hPd.symm.trans ha)]
       exact hs
 
-/-- **Template `t`'s statement holds its session's record's printed sample**: on a play the form accepts whose log
-the check read is the device's, the reading has a statements' message whose `t`-th statement decodes to a statement
-whose sample is the bytes the record of the `t`-th of the statements' sessions prints its sample to
-(`SessionMsgs.drawBytes`), and that sample is printable. The statement is the member's at the record's sample
-(`SessionCoins.verified_at`, `SessionCoins.stmtAtCase_of_member`), which decodes from its bytes
-(`SessionCoins.stmtRaw_decode`), and the form set the session up at that sample (`SessionCoins.draw_good`). -/
-theorem stmtAt_record {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
+/-- **Template `t`'s statement is its member's, at the files the check read**: on a play the form accepts whose log
+the check read is the device's, the reading has a statements' message whose `t`-th statement decodes to the statement
+(`SessionMsgs.stmtRaw`) of the member the `t`-th of the statements' sessions' statement names
+(`SessionMsgs.memberAt`), at the member's circuit and public files on the blobs, the blobs' lookup tables, the bytes
+the session's record prints its sample to (`SessionMsgs.drawBytes`) and the member's registered reads; and that
+sample is printable. The statement is the member's at the record's sample (`SessionCoins.verified_at`,
+`SessionCoins.stmtAtCase_of_member`), which decodes from its bytes (`SessionCoins.stmtRaw_decode`), and the form set
+the session up at that sample (`SessionCoins.draw_good`). -/
+theorem stmtAt_raw {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg) (hst : StmtsRead A C S)
     (hcount : StmtsCount A C Good) (hfit : SessionCoins.StmtsFit C Good) {o : Verity.Exchange} {k : Case}
     {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence} (hacc : FormAccepts C o)
     (hgood : Good o) (hk : C o = some k) (hf : SessionMsgs.formOf k = some (p, e)) {t : ℕ}
     (ht : t < A.h.ms.length) {fs : Spot.OneStageZk.RunFiles} {record : String}
     (hfs : SessionMsgs.filesAt e t = some fs) (hrec : SessionMsgs.recordAt k.blobs fs = some record) :
-    ∃ m₂ w, S.stmts o = some m₂ ∧ FlockDeploy.decode (SpotFlock.stmtAt A.h m₂ t) = some w ∧
-      w.draw = SessionMsgs.drawBytes record ∧
+    ∃ m₂ m circuitB pubB, S.stmts o = some m₂ ∧ SessionMsgs.memberAt p e t = some m ∧
+      k.blobs.get m.own.pub "public file" = .ok pubB ∧
+      FlockDeploy.decode (SpotFlock.stmtAt A.h m₂ t) =
+        some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.drawBytes record)
+          (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)) ∧
       ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj := by
   have hacc₀ := hacc
   obtain ⟨k', hk', hon⟩ := hacc₀
@@ -129,7 +135,24 @@ theorem stmtAt_record {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Ve
     Option.some.inj (hx.symm.trans (SessionCoins.stmtAtCase_of_member hf hm hfs hrec hc hp))
   have hdec := SessionCoins.stmtRaw_decode hfw hfd
   rw [← hxe] at hdec
-  exact ⟨m₂, _, hm₂, hdec, rfl, fun dj hdj => SessionCoins.draw_good hdj hsetup⟩
+  exact ⟨m₂, m, circuitB, pubB, hm₂, hm, hp, hdec, fun dj hdj => SessionCoins.draw_good hdj hsetup⟩
+
+/-- **Template `t`'s statement holds its session's record's printed sample** (`stmtAt_raw`, its sample alone): the
+`t`-th statement of the statements' message decodes to a statement whose sample is the bytes the record of the
+`t`-th of the statements' sessions prints its sample to (`SessionMsgs.drawBytes`), and that sample is printable. -/
+theorem stmtAt_record {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
+    (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg) (hst : StmtsRead A C S)
+    (hcount : StmtsCount A C Good) (hfit : SessionCoins.StmtsFit C Good) {o : Verity.Exchange} {k : Case}
+    {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence} (hacc : FormAccepts C o)
+    (hgood : Good o) (hk : C o = some k) (hf : SessionMsgs.formOf k = some (p, e)) {t : ℕ}
+    (ht : t < A.h.ms.length) {fs : Spot.OneStageZk.RunFiles} {record : String}
+    (hfs : SessionMsgs.filesAt e t = some fs) (hrec : SessionMsgs.recordAt k.blobs fs = some record) :
+    ∃ m₂ w, S.stmts o = some m₂ ∧ FlockDeploy.decode (SpotFlock.stmtAt A.h m₂ t) = some w ∧
+      w.draw = SessionMsgs.drawBytes record ∧
+      ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj := by
+  obtain ⟨m₂, m, circuitB, pubB, hm₂, -, -, hdec, hg⟩ :=
+    stmtAt_raw hS hst hcount hfit hacc hgood hk hf ht hfs hrec
+  exact ⟨m₂, _, hm₂, hdec, rfl, hg⟩
 
 /-- **The two plays' stage coins are one**: at two plays the check accepts whose logs are the device's, with one
 parameters and one log before round `stage + 1`, the statements' messages the reading reads pass the model's check
