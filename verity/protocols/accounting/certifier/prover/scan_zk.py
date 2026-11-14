@@ -6,10 +6,10 @@ registration, every row of every unit, input or output, a registered read, prove
 Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
 challenger's coins (``--challenger``), a `service.Stream`'s.
 
-    python verity/protocols/accounting/certifier/prover/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
+    python benchmarks/network_traces/zk_drivers.py scan_zk prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
         [--class w63|w63k4|test] [--group G] [--warden-run RUN] [--v3c WINDOW] [--draw K [--challenger
         local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
-    python verity/protocols/accounting/certifier/prover/scan_zk.py schedule [--class w63|w63k4|test]    # as warden_serve.py's flags
+    python benchmarks/network_traces/zk_drivers.py scan_zk schedule [--class w63|w63k4|test]    # as warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a slot stride, 8 an execution phase) with the
@@ -186,43 +186,38 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Mapping, NamedTuple, Sequence
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
-sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
-
-import leak_scan as LS  # noqa: E402
-import warden_zk as WZ  # noqa: E402
-from verity.circuits import boolean as BL  # noqa: E402
-from verity.circuits.boolean import trace as TR  # noqa: E402
-from verity.circuits.codec import canonical_json  # noqa: E402
-from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.circuits.program import Program  # noqa: E402
-from verity.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
-from verity.circuits.types import Array, Tuple  # noqa: E402
-from verity.commitments import advice as ADV, domains  # noqa: E402
-from verity.commitments.frame_v3 import BitRowLeaf, FrameV3, Port  # noqa: E402
-from verity.commitments.identity import identity_digest_sha512  # noqa: E402
-from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
-from verity.commitments.merkle import CommitmentDomain  # noqa: E402
-from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf,  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, warden_zk as WZ
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.codec import canonical_json
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, array_of, coll_concat
+from verity.circuits.types import Array, Tuple
+from verity.commitments import advice as ADV, domains
+from verity.commitments.frame_v3 import BitRowLeaf, FrameV3, Port
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf,
                                            sha512_row_seg_digest)
-from verity.commitments.crypto import lms  # noqa: E402
-from verity.protocols.accounting.certifier.prover import egress as EG, ingress_scan as IS  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import io_tie as IT, scan_ok, warden as W  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
+from verity.commitments.crypto import lms
+from verity.protocols.accounting.certifier.prover import egress as EG, ingress_scan as IS
+from verity.protocols.accounting.certifier.verifier import io_tie as IT, scan_ok, warden as W
+from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
+from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE
+from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsSigner
 from verity.protocols.proofs.spot.device import coins as CC
-from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.scan_answer import _found, window_answer  # noqa: E402
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
+from verity.protocols.accounting.certifier.verifier.scan_answer import _found, window_answer
 
-_TRAFFIC = HERE.parents[1] / "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py"
+_TRAFFIC = Path(__file__).resolve().parents[1] / "verifier/tests/scan_traffic.py"
 _spec = importlib.util.spec_from_file_location("scan_traffic", _TRAFFIC)
 traffic = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)
@@ -659,8 +654,7 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     ``failed`` the reasons its ``fails`` record has in the execution phases, ``fail_buckets`` the buckets they're in,
     and ``failed_why`` the run's ``check.json`` problems that name a connection failed closed). The tampered round's
     re-signed execution phase is signed by a key of the driver's own (``out``), under which the verifier reads it."""
-    from verity.protocols.accounting.certifier.device import warden_serve as WS
-    from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
+    from verity.protocols.accounting.certifier.verifier import blob_files as bf, record_files as RF, relay_check as RC
 
     dep = json.loads(_found(run, "deployment.json").read_text())
     params = W.WardenParams(**dep["params"])
@@ -672,10 +666,10 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
         raise SystemExit(f"--warden-run {run}: {e} (warden_serve.py rehearse at scan_zk's schedule, PARAMS, or the "
                          "gate's warden-rehearse --scan)")
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    records = {name: [RF.unpack_record(b, params.cell_bytes) for b in WS.bf.read_blobs(_found(run, f"{name}.records"))]
+    records = {name: [RF.unpack_record(b, params.cell_bytes) for b in bf.read_blobs(_found(run, f"{name}.records"))]
                for name in RC.CERTIFIED}
     lines = [json.loads(x) for x in _found(run, "cells.jsonl").read_text().splitlines()]
-    salts = WS.bf.read_blobs(_found(run, "cells.salts"))
+    salts = bf.read_blobs(_found(run, "cells.salts"))
     if len(salts) != len(lines):
         raise SystemExit(f"--warden-run {run}: cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
     sides = {}
@@ -1503,9 +1497,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     charge terms (`charge_terms`) and each member's cost per sampled proof block; on the challenger's coins, the outcome
     of record is the stream's (`coins_outcome`). Every outcome carries the tied values R8 let through
     (``rests_on_period_check``, the registration verdict's), on whose period check its acceptance rests."""
-    from prove_leg import frame_ports  # one-stage's (`WZ._one_stage` puts it on the path)
-
-    a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
+    a0, a7, P, R, V, frame_ports = M.a0, M.a7, M.P, M.R, M.V, M.prove_leg.frame_ports
     out.mkdir(parents=True, exist_ok=True)
     want, roots, publics, schemas = {}, [], {}, {}
     for m in members:

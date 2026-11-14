@@ -76,10 +76,9 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "network_traces"))
 
 from a5_warden import composer as row_composer, free_ports, refusal  # noqa: E402
-from warden_zk import WardenRowIdentity  # noqa: E402
+from verity.protocols.accounting.certifier.prover.warden_zk import WardenRowIdentity  # noqa: E402
 from verity.circuits import evaluation as E  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.ops import fp32 as W  # noqa: E402

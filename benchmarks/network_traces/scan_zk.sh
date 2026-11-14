@@ -84,7 +84,7 @@ if [ -n "${SC_REHEARSE:-}" ]; then
     --requests "${SC_REQUESTS:-12}" --rate "${SC_RATE:-2}" --tail "${SC_TAIL:-6}" --start-in 2 \
     ${SC_FIRST_MS:+--first-ms "$SC_FIRST_MS"} ${SC_PROMPT_MAX:+--prompt-max "$SC_PROMPT_MAX"} \
     ${SC_MAX_TOKENS:+--max-tokens "$SC_MAX_TOKENS"} \
-    $("$PY" verity/protocols/accounting/certifier/prover/scan_zk.py schedule ${SC_CLASS:+--class "$SC_CLASS"}) 2>&1 \
+    $("$PY" benchmarks/network_traces/zk_drivers.py scan_zk schedule ${SC_CLASS:+--class "$SC_CLASS"}) 2>&1 \
     | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
   mkdir -p "$OUT/warden"
@@ -108,7 +108,7 @@ if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-pa
 fi
 SC_PORT=${SC_PORT:-$("$PY" -c 'import os; print(7811 + 16 * min(os.sched_getaffinity(0)))')}
 log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}, sessions from port $SC_PORT"
-"$PY" verity/protocols/accounting/certifier/prover/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
+"$PY" benchmarks/network_traces/zk_drivers.py scan_zk prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
   ${SC_CLASS:+--class "$SC_CLASS"} ${SC_GROUP:+--group "$SC_GROUP"} \
   ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} "${CH[@]}" 2>&1 \
   | tee -a "$OUT/sczk.log" | cut -c1-4000
