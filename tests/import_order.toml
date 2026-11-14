@@ -339,6 +339,7 @@ loaded_by = [
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
     "verity/hardware/tests/test_policy.py",
+    "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py",
 ]
 
 [[place]]
