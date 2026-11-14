@@ -26,3 +26,7 @@ READY #10019 90917ec7584ff23fac47662f62ec2c93a1a04e60 marked
 #9835: repository passed at 3579b2f1c85b50bad170b7fbf9b93dbba6f3128b (r20261114-075726-c774, read on its node: 369 passed). Its --changed and ratchet run r20261114-080031-8e5d is still running; I mark it when that is read.
 Item 0 posted on CIR-278.
 Change 5 is pushed: cursor/circuits-cir278-mypy-cures-6f04 at e06f2a98e1f49d829014ed302724e97054bb030e, with five files and 8 mypy.json lines. Its --changed and ratchet run is r20261114-092046-2753, waiting. Change 4's run r20261114-081858-03cd is waiting too.
+
+## 2026-11-14T15:49:05Z
+
+Back after the stop. r20261114-080031-8e5d at 3579b2f1c85b was cancelled by its slot's limit. Ten suites passed: repository took 706 s, research 1165 s, verity-graph 1172 s, and seven others under 150 s each. verity-vllm, verity-numerical and verity-flock were still going when it was cut. Why so long: #9835 touches adapters/vllm, which is an input of 13 suites, verity-flock among them, and verity-flock alone took 11,390 s at 7bc0 (r20261114-060151-8531). Relaunched at 3579b2f1c85b50bad170b7fbf9b93dbba6f3128b, split by suite: verity-vllm and verity-numerical in r20261114-154809-8a4b, and verity-flock in three parts by --files: r20261114-154810-d405, r20261114-154809-c616 and r20261114-154809-ebb4.
