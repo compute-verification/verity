@@ -9,7 +9,7 @@ import re
 
 import pytest
 
-from verity_vllm.correspondence import runtime as RC
+from verity_torch.correspondence import runtime as RC
 
 
 def descriptor(n_nodes: int = 60) -> dict:

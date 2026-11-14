@@ -52,9 +52,9 @@ from verity.circuits.refs import Coll
 from verity.circuits.types import Array
 
 from verity_vllm.log import init_logger
-from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.derive import Alloc
+from verity_torch.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
+from verity_torch.frontend.rules.common import (
     dtype_is,
     from_rows,
     known,
@@ -768,7 +768,7 @@ class PaddedViewRule(ViewRule):
                     evidence_domain="structural (no gates): a marker's alias is the marker")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.views import _RESHAPE
+        from verity_torch.frontend.rules.views import _RESHAPE
         return _RESHAPE
 
     def applies(self, node, ctx):

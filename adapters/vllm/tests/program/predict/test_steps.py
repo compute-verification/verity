@@ -44,7 +44,7 @@ from verity_vllm.program.predict.steps import (
     trace_commands,
     trace_dir,
 )
-from verity_vllm.program.prune import dead_free_versions
+from verity_torch.prune import dead_free_versions
 from verity.definitions.registry import io_shell as IO
 from verity.definitions.registry import stop_check as SC
 from verity.definitions.registry.topp_geometry import registered_splits
@@ -685,7 +685,7 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
     16 keys, where `Attention_v5` has 2 dead gates a head."""
     from verity.circuits.liveness import dead_gates
 
-    from verity_vllm.program.prune import dead_units
+    from verity_torch.prune import dead_units
     sixteen = _session([(16, 2, {**GREEDY, "max_tokens": 2})], [[(0, 0, 16)], [(0, 16, 1)]])
     for advice, ingress in (_mixed(), sixteen):
         c = compile_steps(_registered(), advice, ingress)
@@ -714,7 +714,7 @@ def test_a_tensor_parallel_rank_compiles_to_its_dead_free_rank_programs(tmp_path
     in the registered compiler's form, which the TP2 Build of record isn't: there the last layer's rows before the prefill's last end
     in units no output reads, its reduces among them. The rows are the one-rank compilation's, and the traces are the rank's
     `--dead-free` Builds."""
-    from verity_vllm.program.prune import dead_units
+    from verity_torch.prune import dead_units
     advice, ingress = _mixed()
     one = compile_steps(_registered(), advice, ingress)
     digests = []

@@ -20,7 +20,7 @@ from verity_vllm.observe.fold.resolver import StepContext, Unsupported, resolve_
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import targets as T
-from verity_vllm.program.frontend.derive import derive_report
+from verity_torch.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import (
     clear_observations,
     observe_target_profile,

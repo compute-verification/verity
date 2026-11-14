@@ -12,7 +12,7 @@ The rule modules import `..derive` (for `Ctx`, `refuse`, ...), and `derive` impo
 rule sets are therefore resolved lazily (PEP 562) to keep the package import acyclic.
 
 PROTOCOL SUMMARY (Build phase: the lowering rules that turn vLLM's exported ATen graph into a Program over registered primitives)
-  Purpose: `DEFAULT_RULES` is the versioned rule set `verity_vllm.program.frontend.derive` applies node by node to the `torch.export(strict=False)`
+  Purpose: `DEFAULT_RULES` is the versioned rule set `verity_torch.frontend.derive` applies node by node to the `torch.export(strict=False)`
     graph of the vLLM model class: ViewRules (reference rearrangements, no gates), reference-mode and profile-mode OpRules / InPlaceRules /
     StateRules (each emits a Call of a REGISTERED Definition, e.g. rules/vllm_bindings/ for the Triton / unified-attention custom ops),
     PaddingRules, and FamilyRules that may claim a registered program identity after a verified isomorphism.
@@ -26,7 +26,7 @@ PROTOCOL SUMMARY (Build phase: the lowering rules that turn vLLM's exported ATen
 
 from __future__ import annotations
 
-from verity_vllm.program.frontend.rules.base import (
+from verity_torch.frontend.rules.base import (
     ANY,
     FamilyRule,
     InPlaceRule,
@@ -63,8 +63,8 @@ def _load() -> None:
         PROFILE_TORCH_RULES,
         PROFILE_VLLM_RULES,
     )
-    from verity_vllm.program.frontend.rules.reference import REFERENCE_RULES
-    from verity_vllm.program.frontend.rules.views import VIEW_RULES
+    from verity_torch.frontend.rules.reference import REFERENCE_RULES
+    from verity_torch.frontend.rules.views import VIEW_RULES
     _cache.update(VIEW_RULES=VIEW_RULES, REFERENCE_RULES=REFERENCE_RULES, PROFILE_RULES=PROFILE_RULES, PADDING_RULES=PADDING_RULES,
                   DEFAULT_FAMILIES=DEFAULT_FAMILIES,
                   TORCH_RULES=list(VIEW_RULES) + list(REFERENCE_RULES) + PROFILE_TORCH_RULES + PADDING_TORCH_RULES,

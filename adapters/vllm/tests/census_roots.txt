@@ -30,7 +30,7 @@ verity_vllm/ops/pod_gate.sh
 # --- Python entry points
 verity_vllm.pipeline.research_tools
 verity_vllm.pipeline.cli
-verity_vllm.program.frontend.train_step      # a training step as a Program: a library entry point (`step_program`, `step_report`, `primitives`), called by benchmarks/training_slowdown/grader
+verity_torch.frontend.train_step      # a training step as a Program: a library entry point (`step_program`, `step_report`, `primitives`), called by benchmarks/training_slowdown/grader
 # the node window's family sets: library entry points (each module's `FAMILIES`), which a caller joins in `node_window.node_window(fn, families=...)`
 verity_vllm.program.predict.node_window_dense
 verity_vllm.program.predict.node_window_sparse

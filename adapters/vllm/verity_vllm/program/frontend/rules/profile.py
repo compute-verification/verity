@@ -13,14 +13,14 @@ import torch
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
 
-from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
-from verity_vllm.program.frontend.rules.base import (
+from verity_torch.frontend.derive import Alloc, StaticIndex, refuse
+from verity_torch.frontend.rules.base import (
     InPlaceRule,
     OpRule,
     RuleInfo,
     StateRule,
 )
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.rules.common import (
     and_mul_operands,
     attention_scale,
     dtype_is,
@@ -33,11 +33,11 @@ from verity_vllm.program.frontend.rules.common import (
     rows_of,
     shape,
 )
-from verity_vllm.program.frontend.rules.reference import LinearRule
+from verity_torch.frontend.rules.reference import LinearRule
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_torch.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.targets import UnregisteredTarget
-from verity_vllm.program.frontend.value_types import shape_of
+from verity_torch.frontend.value_types import shape_of
 
 aten = torch.ops.aten
 BF16 = torch.bfloat16
