@@ -251,10 +251,7 @@ def cmd_plan(a) -> int:
 
 def cmd_run(a) -> int:
     a = preset(a)
-    if a.here:
-        cmd = [*a.job, *job_env(a)]
-    else:
-        cmd = job_command(a, root())
+    cmd = [*a.job, *job_env(a)] if a.here else job_command(a, root())
     print(" ".join(cmd), flush=True)
     return 0 if a.dry_run else subprocess.run(cmd, cwd=root(), check=False).returncode
 
