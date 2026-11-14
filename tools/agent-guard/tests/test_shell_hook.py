@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -899,12 +900,12 @@ AGENT, PEER = "bc-56565656-5656-4565-8565-565656565656", "bc-67676767-6767-4676-
 TURNS = [f"{n * 8}-1111-4111-8111-111111111111" for n in "123456789"]
 
 
-def on_model(command: str, agent: str, turn: str | None, model: str | None, inbox: Path) -> dict:
+def on_model(command: str, agent: str, turn: str | None, model: str | None, inbox: Path, **env: str) -> dict:
     """The hook's verdict on `command` in the turn `turn` of `agent` on `model`; a None leaves that key out of the payload."""
     event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": agent,
              **({"generation_id": turn} if turn is not None else {}), **({"model": model} if model is not None else {})}
     out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
-                         env={**os.environ, "AGENT_INBOX": str(inbox), "AGENT_GUARD_MIN_AVAIL": "0"}).stdout
+                         env={**os.environ, "AGENT_INBOX": str(inbox), "AGENT_GUARD_MIN_AVAIL": "0", **env}).stdout
     return json.loads(out)
 
 
@@ -955,20 +956,20 @@ def test_an_agent_whose_turns_all_run_on_its_launch_model_is_never_refused(tmp_p
     assert settled(event_log) == []
 
 
-def test_models_are_compared_by_family_never_by_effort(tmp_path, event_log):
+def test_models_are_compared_by_family_never_by_effort(tmp_path, event_log, registry):
     """A lead moved from Extra High to Medium runs the model it was launched on: a launch on Fable 5.2 Extra High and a
     turn on Fable 5.2 Medium pass, and so does Opus at another effort; a turn on another family is told, whatever its
     effort, and its refusal names no Fable child."""
     one, two, three, four = TURNS[:4]
-    assert on_model("ls", AGENT, one, "claude-fable-5-2-xhigh", tmp_path) == ALLOW
-    assert on_model("ls", AGENT, two, "claude-fable-5-2-medium", tmp_path) == ALLOW
-    assert on_model("ls", AGENT, three, "claude-fable-5-2", tmp_path) == ALLOW
-    told = on_model("ls", AGENT, four, "claude-opus-5-5-medium", tmp_path)
+    assert on_model("ls", HOLDER, one, "claude-fable-5-2-xhigh", tmp_path, **registry) == ALLOW
+    assert on_model("ls", HOLDER, two, "claude-fable-5-2-medium", tmp_path, **registry) == ALLOW
+    assert on_model("ls", HOLDER, three, "claude-fable-5-2", tmp_path, **registry) == ALLOW
+    told = on_model("ls", HOLDER, four, "claude-opus-5-5-medium", tmp_path, **registry)
     assert told["permission"] == "deny" and "you were launched on `claude-fable-5-2-xhigh`" in told["user_message"]
     assert "model: claude-fable" not in told["user_message"]
-    assert on_model("ls", PEER, one, "claude-opus-5-5-high", tmp_path) == ALLOW
-    assert on_model("ls", PEER, two, "claude-opus-5-5-medium", tmp_path) == ALLOW
-    assert [e["conversation_id"] for e in settled(event_log)] == [AGENT]
+    assert on_model("ls", PEER, one, "claude-opus-5-5-high", tmp_path, **registry) == ALLOW
+    assert on_model("ls", PEER, two, "claude-opus-5-5-medium", tmp_path, **registry) == ALLOW
+    assert [e["conversation_id"] for e in settled(event_log)] == [HOLDER]
 
 
 def test_no_launch_model_on_record_refuses_nothing(tmp_path, event_log):
@@ -1063,6 +1064,85 @@ def test_a_log_the_rule_cannot_write_refuses_nothing_and_says_so(tmp_path, event
                              env={**os.environ, "AGENT_INBOX": str(tmp_path / "inbox"), "AGENT_GUARD_MIN_AVAIL": "0"})
         assert json.loads(run.stdout) == ALLOW
         assert "the model rule refuses nothing, since it can't record a turn as told in" in run.stderr
+
+
+FABLE, OPUS, SONNET = "claude-fable-5-2-xhigh", "claude-opus-5-5-high", "claude-sonnet-5-5-high"
+HOLDER = "bc-12121212-1212-4121-8121-121212121212"
+
+
+def coordinator(handle: str, generation: int) -> str:
+    """The id `infra/cursor/launch_coordinator.py` gives `handle`'s coordinator at `generation`."""
+    namespace = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")
+    return f"bc-{uuid.uuid5(namespace, f'{handle}/{generation}')}"
+
+
+@pytest.fixture
+def registry(tmp_path) -> dict[str, str]:
+    """A Slack registry with two handles, `infra` held by HOLDER and `vllm` held by no one, as the hook's environment."""
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps({"handles": [{"handle": "infra", "holder": HOLDER}, {"handle": "vllm"}]}))
+    return {"AGENT_GUARD_REGISTRY": str(path)}
+
+
+def test_every_command_of_a_workers_turn_on_fable_is_refused_each_time_with_the_way_on(tmp_path, event_log, registry):
+    """No worker runs Fable 5.2: every command of its turn on it, at any effort, is refused, not only the first, with the
+    way on; its turns on Opus or Sonnet pass, and so does a turn on Opus after a launch on Fable, which the model rule
+    would otherwise tell to go back to Fable."""
+    for turn, model in ((TURNS[0], FABLE), (TURNS[1], "claude-fable-5-2-medium"), (TURNS[2], "claude-fable-5-2")):
+        for command in ("ls", "echo pushed", "AGENT_GUARD_MODEL_OK=1 ls"):
+            refused = on_model(command, AGENT, turn, model, tmp_path, **registry)
+            text = refused["user_message"]
+            assert refused["permission"] == "deny" and text == refused["agent_message"], (model, command)
+            assert f"this turn runs on `{model}`, and no worker runs Fable 5.2" in text
+            assert "`claude-opus-5-5-high`, or `claude-sonnet-5-5-high` for a fully specified task" in text
+            assert "End this turn now" in text and "what started it" in text and "naming `claude-opus-5-5-high`" in text
+    for turn, model in ((TURNS[3], OPUS), (TURNS[4], SONNET), (TURNS[5], OPUS)):
+        assert on_model("ls", AGENT, turn, model, tmp_path, **registry) == ALLOW, model
+        assert on_model("pwd", AGENT, turn, model, tmp_path, **registry) == ALLOW, model
+    assert settled(event_log) == [] and settled(event_log, "model_ok") == []
+
+
+def test_a_leads_turn_on_fable_passes_and_so_does_a_later_generation_of_a_registered_handle(tmp_path, event_log, registry):
+    """A lead is a registry holder, or launch_coordinator's id for a registered handle, held or not, at a generation from 1
+    to 50; it runs Fable at any effort. A generation past 50, an unregistered handle's coordinator and a lead's child are
+    workers."""
+    for agent in (HOLDER, coordinator("infra", 1), coordinator("vllm", 7), coordinator("infra", 50)):
+        for turn, model in ((TURNS[0], FABLE), (TURNS[1], "claude-fable-5-2-medium")):
+            for command in ("ls", "pwd"):
+                assert on_model(command, agent, turn, model, tmp_path, **registry) == ALLOW, (agent, model)
+    for agent in (coordinator("infra", 51), coordinator("infra", 0), coordinator("comms", 1), PEER):
+        assert on_model("ls", agent, TURNS[0], FABLE, tmp_path, **registry)["permission"] == "deny", agent
+
+
+def test_a_turn_whose_model_the_hook_cannot_read_and_a_registry_it_cannot_read_refuse_nothing(tmp_path, event_log, registry):
+    """The rule must never lock an agent out: a payload with no model, or one that isn't a string, passes; so does a local
+    session on Fable; and while the registry can't be read, a lead can't be told from a worker, so a turn on Fable passes
+    and the hook says why on stderr."""
+    assert on_model("ls", AGENT, TURNS[0], None, tmp_path, **registry) == ALLOW
+    event = {"hook_event_name": "beforeShellExecution", "command": "ls", "conversation_id": AGENT,
+             "generation_id": TURNS[1], "model": ["claude-fable-5-2-xhigh"]}
+    run = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                         env={**os.environ, "AGENT_INBOX": str(tmp_path), "AGENT_GUARD_MIN_AVAIL": "0", **registry})
+    assert json.loads(run.stdout) == ALLOW
+    assert on_model("ls", "56565656-5656-4565-8565-565656565656", TURNS[2], FABLE, tmp_path, **registry) == ALLOW
+    for missing in (tmp_path / "no-registry.json", tmp_path):
+        event = {**event, "generation_id": TURNS[3], "model": FABLE}
+        for _ in range(2):
+            run = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True,
+                                 check=True, env={**os.environ, "AGENT_INBOX": str(tmp_path / "inbox"),
+                                                  "AGENT_GUARD_MIN_AVAIL": "0", "AGENT_GUARD_REGISTRY": str(missing)})
+            assert json.loads(run.stdout) == ALLOW, missing
+            assert "the Fable rule refuses nothing, since it can't read the registry" in run.stderr
+
+
+def test_the_guards_lead_ids_are_launch_coordinators(monkeypatch):
+    """The guard can't import `infra/`, so it keeps launch_coordinator's namespace and id form itself: they agree."""
+    source = (ROOT / "infra/cursor/launch_coordinator.py").read_text()
+    (url,) = re.findall(r'^NAMESPACE = uuid\.uuid5\(uuid\.NAMESPACE_URL, "([^"]+)"\)$', source, re.M)
+    assert "    return f\"bc-{uuid.uuid5(NAMESPACE, f'{handle}/{generation}')}\"\n" in source
+    task_hook = guard_module("task_hook", monkeypatch)
+    assert task_hook.COORDINATORS == uuid.uuid5(uuid.NAMESPACE_URL, url)
+    assert coordinator("infra", 3) == f"bc-{uuid.uuid5(task_hook.COORDINATORS, 'infra/3')}"
 
 
 def test_send_refuses_an_id_the_hook_would_never_deliver_to(tmp_path):

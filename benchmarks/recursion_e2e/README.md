@@ -31,7 +31,9 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   CPU node (`CPU_NODE` in `run.py`): `job.sh` with `GPU=0 FLOCK_WORK=/workspace/cache/rec-bench`, pinned to `--cores`
   (`taskset -c 0-31`), under `--mem-gb` and a timeout of `--max-min`; `run --dry-run` prints the launch. `--on` picks
   another of the CPU nodes that take plain runs (`PLAIN_CPU_NODES`), and `--cores` its cores. The nodes that take runs
-  only through their slots (`SLOT_ONLY`) refuse a CPU run. A GPU run (`--oprove-gpu 1`, or modes without the ZK server)
+  only through their slots (`SLOT_ONLY`) refuse a CPU run. `--on auto` hands the run to `research run`'s queue, which
+  places it itself: the queue's options without `--queue`, and for a CPU run no `--gpu-host` and the CPU node's
+  `GPU=0 FLOCK_WORK=...`, since it may land on one. A GPU run (`--oprove-gpu 1`, or modes without the ZK server)
   is a GPU host job on a GPU node's queue (`NODE`), and `--preemptible` queues it as a guest on a node that admits guests
   only so.
 
