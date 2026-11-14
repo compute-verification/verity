@@ -5,7 +5,7 @@
 # above 1.
 name = "a100-l64"
 status = "measured"
-source = "AMPERE r2's egemm80 e64 (benchmarks/pouw/edited_gemm/egemm80.cu, `egemm80.py summary`), bit-exact against derive.py's receipts by egemm80_ref.py"
+source = "AMPERE r2's egemm80 e64 (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/egemm80.cu, `egemm80.py summary`), bit-exact against derive.py's receipts by egemm80_ref.py"
 L = 64
 
 [mma]

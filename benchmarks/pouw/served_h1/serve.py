@@ -3,7 +3,7 @@ int8-exact row, one process on one GPU, in the static form: the window's tiles, 
 fixed function of public parameters alone.
 
 The receipts bind extra work beside cuBLASLt's served y, not the served kernel's.  vllm's PoUW option
-(``pouw:eps1-sm120-h1fx1``, `verity_vllm.protocols.pouw.h1`) hands over each int8-exact linear call's s8 rows and scales
+(``pouw:eps1-sm120-h1fx1``, `verity.protocols.accounting.pouw.prover.serving.h1`) hands over each int8-exact linear call's s8 rows and scales
 and its layer, and holds its own stand-in root(B) per layer (`pouw_h1.weight_root`), their weights' root and the epoch's
 64-byte salt from the challenger's salt coin (`pouw_h1.program_salt`).  Its own per-call positions, padding and stand-in
 roots follow the step's real rows, so this window doesn't use them (the seeded mode keeps the option's salt).  Instead:
@@ -44,7 +44,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the sampling coin, opened after the window's receipts root (`receipts_root`).
   This window has no gated session of its own: the gated served window of record is vllm's
-  H1 path, `adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds the salt, round-0 request
+  H1 path, `verity/protocols/accounting/pouw/prover/serving/h1/__init__.py`, which holds the salt, round-0 request
   table, open root R, session S and requests_root rules, so ``--gate USER@HOST`` (or
   ``$POUW_CHALLENGER_GATE``) is refused.  ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and
   ``$POUW_CHALLENGER_SESSION``, with ``$POUW_CHALLENGER_SECRET_FILE`` for a session that has a secret) take a session
@@ -115,7 +115,7 @@ if TYPE_CHECKING:
     import torch
 
     from verity.protocols.proofs.spot.device.challenger import LiveCommitment
-    from verity_vllm.protocols.pouw.h1.receipts import Cubin
+    from verity.protocols.accounting.pouw.prover.serving.h1.receipts import Cubin
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -155,7 +155,7 @@ class Record:
 def timing(cubin: Cubin, reps: int = 10) -> dict:
     """Per-unit noise on the GPU against the int8 GEMM of the same M x N x K call, both from CUDA events."""
     import torch
-    from verity_vllm.protocols.pouw.h1 import receipts as RC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
 
     def clock(fn, n: int) -> float:
         fn()
@@ -420,7 +420,7 @@ def run(a: argparse.Namespace) -> dict:
     rec = Record(out)
     if a.gate:
         raise ValueError(f"--gate {a.gate}: served_h1's own gated window is superseded; the gated served window of "
-                         "record is vllm's H1 path, adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py, "
+                         "record is vllm's H1 path, verity/protocols/accounting/pouw/prover/serving/h1/__init__.py, "
                          "which holds the salt, round-0 request table, R, S and requests_root rules; "
                          "here a window's coins are in-process, or a development session's (--challenger, --session)")
     at = CO.session(a.challenger, a.session)
@@ -435,7 +435,7 @@ def run(a: argparse.Namespace) -> dict:
                              **({"commitment": cs.commitment.to_json()} if live else {})})
     workers = a.workers or max(2, min(48, len(os.sched_getaffinity(0)) - 2))
     pool = mp.get_context("spawn").Pool(workers)
-    from verity_vllm.protocols.pouw.h1 import receipts as RC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
 
     cubin = RC.Cubin(a.cubin) if a.cubin else None
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -455,7 +455,7 @@ def run(a: argparse.Namespace) -> dict:
     from verity_vllm.engine.build import build_engine, target_mismatches
     from verity_vllm import TargetProfile
     from verity_vllm.protocols import pouw
-    from verity_vllm.protocols.pouw import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 
     t_max, s_max = a.rows, a.steps or a.max_tokens + 2
     target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
@@ -876,7 +876,7 @@ def gate(a: argparse.Namespace, calls: list[dict], data: list[dict], levels: lis
     """Units picked on `rng` (`gate_rng`'s, from the sampling coin, when live) against the gated `h1tile.reference`, and the
     controls: per site a live and a dead unit of real steps' calls, then units of empty steps (dead)."""
     import torch
-    from verity_vllm.protocols.pouw.h1 import receipts as RC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
 
     picks = []
     for site in SITES:
@@ -1090,7 +1090,7 @@ def main(argv: list[str] | None = None) -> int:
                          "development only, since its salt coin opens after the registration root, not a window's root")
     ap.add_argument("--gate", default=settings.get(CO.GATE_ENV), metavar="USER@HOST",
                     help=f"refused (default ${CO.GATE_ENV}): the gated served window of record is vllm's H1 path, "
-                         "adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py")
+                         "verity/protocols/accounting/pouw/prover/serving/h1/__init__.py")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 
