@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The ladder on a production-like window (prod_plan.py), under research run, with the C4 shard sent (--send):
+# The ladder on a serving-like window (prod_plan.py), under research run, with the C4 shard sent (--send):
 #   prod.sh MODEL     takes vLLM's benchmark_serving ShareGPT file at its pin (the serve tax's chat load's file: the node's
 #                     copy, downloaded where there is none, its SHA-512 checked), builds the plan over it, the C4 shard and
 #                     the model's chat template, serves and replays it with run.sh (PLAN, MAX_MODEL_LEN), and breaks each

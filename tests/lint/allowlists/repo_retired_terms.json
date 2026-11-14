@@ -2296,7 +2296,7 @@
     {"file": "adapters/vllm/tests/commit/test_native_host_security.py", "count": 1},
     {"file": "adapters/vllm/tests/commit/test_openings_after_release.py", "count": 5},
     {"file": "adapters/vllm/tests/commit/test_pinned_pool_exact.py", "count": 1},
-    {"file": "adapters/vllm/tests/commit/test_production_vectors.py", "count": 2},
+    {"file": "adapters/vllm/tests/commit/test_serving_vectors.py", "count": 2},
     {"file": "adapters/vllm/tests/commit/test_rows_cuda.py", "count": 7},
     {"file": "adapters/vllm/tests/commit/test_served_record.py", "count": 2},
     {"file": "adapters/vllm/tests/commit/test_serving_rows.py", "count": 16},

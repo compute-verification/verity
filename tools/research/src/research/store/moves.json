@@ -4156,6 +4156,11 @@
         "security/Proofs/Properties/Verity/Sampled/Window/Leg.lean": "security/Proofs/Properties/Verity/Sampled/Window/Subprotocol.lean",
         "security/Proofs/Properties/Verity/SampledTwo/Leg.lean": "security/Proofs/Properties/Verity/SampledTwo/Subprotocol.lean"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/commit/test_production_vectors.py": "adapters/vllm/tests/commit/test_serving_vectors.py"
+      }
     }
   ]
 }
