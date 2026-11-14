@@ -12,7 +12,7 @@ import all Init.Data.Ord.String
 /-!
 # The record's coin tree is the session's: each stream opens at most `2^roundsLog` rounds
 
-`flock-verify --zk` sets the session up on its keyed coin tree (`Live.coinSpec`, `roundsLog` 9), and `Record.decode`'s
+`verity-verify-proof --zk` sets the session up on its keyed coin tree (`Live.coinSpec`, `roundsLog` 9), and `Record.decode`'s
 S2 holds the record's `coin_tree.spec` to it (`CoinTree.checkRecord`, by canonical text). v2's
 `Spot.Challenger.sessionTreeReason` holds the record's `coin_tree` to the tree the release log shows sampled
 under its root (`jeq`, by canonical text), and v2's read gives that tree's `Hello` the spec its line shows. So the
@@ -45,7 +45,7 @@ open FlockDeploy (JsonEquiv)
 open FlockSoundness.Discharge
 open FlockSoundness.Refine (ebind_ok throw_ne_ok throw_bind')
 open Properties.Challenger.CanonLine (nat?_equiv)
-open Properties.Challenger.CanonRead (sorted_getD getD_equiv)
+open Properties.Challenger.CanonRead (sorted_getD getD_equiv sortedKeys_of_wf)
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 

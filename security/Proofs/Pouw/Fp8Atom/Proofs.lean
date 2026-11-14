@@ -9,7 +9,7 @@ public import Definitions.Pouw.Fp8Atom.Pinned
 public import Proofs.Pouw.Fp8Atom.Checks
 
 /-!
-# Proofs of `Pouw.Fp8Atom`'s pinned statements
+# Proofs of `Pouw.Fp8Atom`'s guarantees
 
 `Conformance` and `AdaCaptures` assemble the kernel-evaluated chunks of `Pouw.Fp8Atom.Checks`. `CodeClasses` and the
 integer form of `DecodeInjective` are decided over the 256 codes. `ProductExact` and `AlignedMono` are proved.

@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # `Deploy.V false`'s custody checks, as the old theorems' `RecordsLiveJ`
 
-`Custody` without `--zk`. The old plain theorems bound flock-verify's acceptance of the transcript a writer `wr` makes
+`Custody` without `--zk`. The old plain theorems bound verity-verify-proof's acceptance of the transcript a writer `wr` makes
 of the live session's outcome, under `RecordsLiveJ I dj Jf wr` (`DecodeZLJ`): the record `verify` accepts carries the
 sample, the outcome's proof files, link points, roots and rounds. `Deploy.V false` takes the record in its last message
 and checks its custody with the same checks as `--zk` (`checks`, `custody`).

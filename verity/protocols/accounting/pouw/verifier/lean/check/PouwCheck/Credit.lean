@@ -725,7 +725,7 @@ def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array 
   let some units ← port (workUnits coin st reg kvs (← law ss k)) | throw ("sampler", "the draw's stream ran out")
   pure units
 
-/-- `credit._finding`: a session's registered finding (flock-verify's `registered`, `{port: {value, root}}`: each
+/-- `credit._finding`: a session's registered finding (verity-verify-proof's `registered`, `{port: {value, root}}`: each
 registered port's value and the root its reads were opened against) as `(port, value, root)` in port order. -/
 def finding? (x : Json) : Option (List (String × String × String)) :=
   if isObj x then (fields x).mapM fun (port, e) =>
@@ -2278,5 +2278,17 @@ example : COMMIT_FORMAT = Domains.REGISTRATION := rfl
 example : SCHEMA = Domains.IR_DESCRIPTOR := rfl
 example : REQUESTS_IDS_TAG = Domains.POUW_H1_REQUEST_IDS := rfl
 example : WEIGHTS_TAG = Domains.POUW_H1_WEIGHTS := rfl
+
+/-- Why a check below refuses: its Lean is not yet written (`compute-accounting/pouw-verdict-from-main`). -/
+def NOT_WRITTEN : String :=
+  "this check of record is not yet written in Lean, so it refuses everything (compute-accounting/pouw-verdict-from-main)"
+
+/-- A credit period's presented roots, exactly the sessions its close lists (`credit.period_twin`'s rule): refuses every
+period until its check is written. -/
+def periodRoots (_key _ledger _name _roots : Json) : R Unit := throw ("period", NOT_WRITTEN)
+
+/-- A Pearl-C credit period's credit over its passes (`credit.pearl_c_period_credit_twin`'s rule): refuses every period
+until its check is written. -/
+def pearlCPeriodCredit (_key _ledger _pins _main _name _passes _earlier : Json) : R Json := throw ("period", NOT_WRITTEN)
 
 end PouwCheck.Credit

@@ -59,6 +59,7 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.circuits.ops import fp32, prims
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics.derived_rows import (
     add_rn,
@@ -66,7 +67,6 @@ from verity.definitions.numerics.derived_rows import (
     fma_rn,
     mul_rn,
 )
-from verity.circuits.ops import fp32, prims
 from verity.definitions.registry import fp8 as F
 
 from tests.properties import fa2_target_capture_gpu as C

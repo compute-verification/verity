@@ -139,7 +139,7 @@ def test_a_search_without_on_never_logs_in_to_an_auditor_host_and_says_so(machin
     _run_on(tmp / "aud1", held, "done")
     hosts: list[str] = []
     monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **kw: hosts.append(host) or ["sh", "-c"])
-    note = "not asked: the auditor hosts gate-c, vy-auditor-1, which refuse lanes' keys (--on NAME asks one)"
+    note = "not asked: the auditor devices gate-c, vy-auditor-1, which refuse lanes' keys (--on NAME asks one)"
 
     assert cli.main(["inspect", RUN, "--runs-dir", str(here)]) == 0
     assert f"research: looking for {RUN} on 2 machines (--on NAME skips this); {note}" in capsys.readouterr().err
@@ -147,7 +147,7 @@ def test_a_search_without_on_never_logs_in_to_an_auditor_host_and_says_so(machin
         assert cli.main([*argv, "--runs-dir", str(here)]) != 0, argv
         err = capsys.readouterr().err
         assert f"no machine holds run {held}" in err and note in err, argv
-    assert set(machines["probed"]) == set(hosts) == {"a", "b"}, "no ssh to an auditor host without --on"
+    assert set(machines["probed"]) == set(hosts) == {"a", "b"}, "no ssh to an auditor device without --on"
 
     assert cli.main(["status", held, "--on", "vy-auditor-1", "--runs-dir", str(here), "--json"]) == 0
     (s,) = json.loads(capsys.readouterr().out)["runs"]

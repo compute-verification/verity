@@ -18,7 +18,7 @@ from verity_flock.record_text import session_text
 
 FLOCK = Path(__file__).resolve().parents[1]
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: RoPE d64 (4 instances) with a seeded loopback session of a proving build (`seed`); the circuit is the session tables' fixture's
 FIXTURE = "art:12f95e2a"
 CIRCUIT = "art:425f6860/stage/circuit.txt"

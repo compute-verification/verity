@@ -64,7 +64,7 @@ class WholeStep:
             raise ValueError(f"vLLM's graphs of {bad} tokens: a forward is captured whole only when its calls run as graphs "
                              f"(at most {GRAPH_ROWS} rows, filler rows to a multiple of {ROW_ALIGN} included)")
         self.run, self.stack, self.runner, self.mgr = run, stack, runner, mgr
-        self.sets: dict[tuple, dict] = {VLLM: mgr.graphs}
+        self.sets: dict[tuple | None, dict] = {VLLM: mgr.graphs}     # by key; a dispatch with no key asks it for None
         self.calls: dict[tuple, tuple] = {}
         self.counts = {"replayed": 0, "staged": 0, "eager": 0, "captured": 0}
         self.preparing = False
@@ -87,7 +87,7 @@ class WholeStep:
 
         def dispatch(*a: Any, **kw: Any) -> Any:
             key = self.key()
-            graphs = None if key is None else self.sets.get(key)
+            graphs = self.sets.get(key)
             if graphs:
                 mgr.graphs = graphs
                 desc = original(*a, **kw)

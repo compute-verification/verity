@@ -148,37 +148,40 @@ open Flock
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-! ## `k ≤ weight` -/
 
-/-- The weight's schedule at `m`: `fast100`'s, under `--zk` M1's (`tableWeight`). -/
-def wSched (zk : Bool) (m : ℕ) : FlockSoundness.Accounting.Schedule :=
-  if zk then FlockSoundness.Accounting.m1Schedule m else (FlockSoundness.Accounting.fast100 m).getD default
+/-- The weight's schedule at `m`: `fast100`'s, under `--zk` M1's at the statement version (`tableWeight`). -/
+def wSched (zk : Bool) (wideLeaf : Bool) (m : ℕ) : FlockSoundness.Accounting.Schedule :=
+  if zk then FlockSoundness.Accounting.m1Schedule wideLeaf m else (FlockSoundness.Accounting.fast100 m).getD default
 
 /-- The verifier's level 0 at `m` (`N₀`'s). -/
-def level0 (zk : Bool) (m : ℕ) : Flock.Level :=
-  if zk then Claims.Flock.zkLevel0 m else Claims.Flock.plainLevel0 m
+def level0 (zk : Bool) (wideLeaf : Bool) (m : ℕ) : Flock.Level :=
+  if zk then Claims.Flock.zkLevel0 wideLeaf m else Claims.Flock.plainLevel0 m
 
 /-- Level 0's codeword is no longer than the weight schedule's level 0. -/
-def kFits (zk : Bool) (m : ℕ) : Bool :=
-  decide ((level0 zk m).d ≤ ((wSched zk m).levels.headD default).logLen)
+def kFits (zk : Bool) (wideLeaf : Bool) (m : ℕ) : Bool :=
+  decide ((level0 zk wideLeaf m).d ≤ ((wSched zk wideLeaf m).levels.headD default).logLen)
 
-theorem kFits_lt40 : ∀ m : Fin 40, kFits false m.val = true ∧ kFits true m.val = true := by
+theorem kFits_lt40 : ∀ (w : Bool) (m : Fin 40), kFits false w m.val = true ∧ kFits true w m.val = true := by
   decide +kernel
 
-theorem level0_d_of_gt {zk : Bool} {m : ℕ} (hm : 35 < m) : (level0 zk m).d = 0 := by
+theorem level0_d_of_gt {zk : Bool} {m : ℕ} (hm : 35 < m) : (level0 zk wideLeaf m).d = 0 := by
   cases zk
   · simp only [level0, Bool.false_eq_true, ↓reduceIte, Claims.Flock.plainLevel0, Claims.Flock.plainSched,
       FlockSoundness.Refine.exec_fast100_none m hm, Option.getD_none]
     rfl
-  · cases h : Zk.schedule m with
+  · cases h : Zk.schedule wideLeaf m with
     | ok p => have := schedule_range h; omega
     | error e =>
       simp only [level0, ↓reduceIte, Claims.Flock.zkLevel0, Claims.Flock.zkSched, h]
       rfl
 
-theorem kFits_all (zk : Bool) (m : ℕ) : (level0 zk m).d ≤ ((wSched zk m).levels.headD default).logLen := by
+theorem kFits_all (zk : Bool) (m : ℕ) :
+    (level0 zk wideLeaf m).d ≤ ((wSched zk wideLeaf m).levels.headD default).logLen := by
   by_cases hm : m < 40
-  · have := kFits_lt40 ⟨m, hm⟩
+  · have := kFits_lt40 wideLeaf ⟨m, hm⟩
     cases zk
     · exact of_decide_eq_true this.1
     · exact of_decide_eq_true this.2
@@ -186,7 +189,7 @@ theorem kFits_all (zk : Bool) (m : ℕ) : (level0 zk m).d ≤ ((wSched zk m).lev
     exact Nat.zero_le _
 
 theorem tableWeight_ge (zk : Bool) (st : Stmt) :
-    2 + 4 * 2 ^ ((wSched zk st.m).levels.headD default).logLen / Real.exp 1 ≤ tableWeight zk st := by
+    2 + 4 * 2 ^ ((wSched zk st.wideLeaf st.m).levels.headD default).logLen / Real.exp 1 ≤ tableWeight zk st := by
   have h2 : ∀ sch N, (2 : ℝ) ≤ Claims.Flock.Numbers.weightNat sch N := fun sch N => by
     unfold Claims.Flock.Numbers.weightNat
     exact_mod_cast Nat.le_add_left 2 _
@@ -194,8 +197,8 @@ theorem tableWeight_ge (zk : Bool) (st : Stmt) :
   · simp only [tableWeight, wSched, Bool.false_eq_true, ↓reduceIte, Claims.Flock.Numbers.weightOf]
     linarith [h2 ((FlockSoundness.Accounting.fast100 st.m).getD default) 0]
   · simp only [tableWeight, wSched, ↓reduceIte, Claims.Flock.Numbers.weightOf]
-    linarith [h2 (FlockSoundness.Accounting.m1Schedule st.m)
-      (Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))]
+    linarith [h2 (FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m)
+      (Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0))]
 
 theorem tableWeight_nonneg (zk : Bool) (st : Stmt) : 0 ≤ tableWeight zk st := by
   unfold tableWeight
@@ -220,9 +223,9 @@ theorem weight_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ weight zk x :=
 verifier's (`kFits_all`). -/
 theorem tableLen_le_weight (zk : Bool) (st : Stmt) : 4 * tableLen zk st / Real.exp 1 + 2 ≤ tableWeight zk st := by
   have hw := tableWeight_ge zk st
-  have hpow : tableLen zk st ≤ 2 ^ ((wSched zk st.m).levels.headD default).logLen :=
-    pow_le_pow_right₀ (by norm_num) (kFits_all zk st.m)
-  have hdiv : 4 * tableLen zk st / Real.exp 1 ≤ 4 * 2 ^ ((wSched zk st.m).levels.headD default).logLen /
+  have hpow : tableLen zk st ≤ 2 ^ ((wSched zk st.wideLeaf st.m).levels.headD default).logLen :=
+    pow_le_pow_right₀ (by norm_num) (kFits_all (wideLeaf := st.wideLeaf) zk st.m)
+  have hdiv : 4 * tableLen zk st / Real.exp 1 ≤ 4 * 2 ^ ((wSched zk st.wideLeaf st.m).levels.headD default).logLen /
       Real.exp 1 := by
     gcongr
   linarith
@@ -683,19 +686,17 @@ theorem zk_not_committed {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hw : ∀ q, wide true x (C q)) (hg : ¬ Claims.Flock.GoodTable (deployZk Readable.relation) (wordLen true) x C) :
     ¬ FlockSoundness.CommittedPad FlockSoundness.execArith
       (L.model (FlockSoundness.Refine.regionsOf (sts[0]'(by omega))))
-      (FlockSoundness.Refine.schedOf (Claims.Flock.zkSched (sts[0]'(by omega)).m).1)
-      (Claims.Flock.zkSched (sts[0]'(by omega)).m).2 padC (Claims.Flock.oracleOf C) := by
+      (FlockSoundness.Refine.schedOf (Claims.Flock.zkSched (sts[0]'(by omega)).wideLeaf (sts[0]'(by omega)).m).1)
+      (Claims.Flock.zkSched (sts[0]'(by omega)).wideLeaf (sts[0]'(by omega)).m).2 padC (Claims.Flock.oracleOf C) := by
   have h0 : 0 < sts.size := by omega
   have hm := parse_m hs hset h0
   have h25 : 25 ≤ sts[0].m := by have := hin.1; simp only [↓reduceIte] at this; omega
   have h35 : sts[0].m ≤ 35 := by have := hin.2.1; omega
-  have hi : Claims.Flock.ZkIdx.m ⟨sts[0].m - 25, by omega⟩ = sts[0].m := by
-    simp only [Claims.Flock.ZkIdx.m]
-    omega
+  have hi := Claims.Flock.ZkIdx.of_at sts[0].wideLeaf h25 h35
   have := not_committed_zk Readable.relation x s (table_zero_of_setup hs hset hone)
-    (tables_head hset (Array.getElem?_eq_getElem h0)) ⟨sts[0].m - 25, by omega⟩ hi C hw
-    (L.model (FlockSoundness.Refine.regionsOf sts[0])) (zk_hwit hs hin hset hone L _ hi) hg
+    (tables_head hset (Array.getElem?_eq_getElem h0)) (Claims.Flock.ZkIdx.of sts[0].wideLeaf sts[0].m) hi C hw
+    (L.model (FlockSoundness.Refine.regionsOf sts[0])) (zk_hwit hs hin hset hone L _ hi.eq_m) hg
   unfold Claims.Flock.zkPad at this
-  rwa [hi] at this
+  rwa [hi.sched] at this
 
 end FlockDeploy.KS

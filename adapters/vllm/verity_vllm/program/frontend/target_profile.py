@@ -75,8 +75,8 @@ class TargetProfile:
                            declaration).  `emulate_precision_casts` (Inductor's own switch) makes every fused Triton kernel perform the bf16
                            roundings the Program specifies at each op boundary; default Inductor carries fp32 through a fused region, so the
                            Program's intermediate values do not exist in that execution and any observation of them changes it
-                           (instrumented != production).  With the emulation the collection boundary is invisible by
-                           construction (measured: production vs instrumented top-8 logprobs bit-identical over 32 steps).
+                           (instrumented != served).  With the emulation the collection boundary is invisible by
+                           construction (measured: served vs instrumented top-8 logprobs bit-identical over 32 steps).
                            The Program itself is DERIVED eagerly by construction (`engine_args(execution=False)` omits the compile knobs);
                            what the declaration claims for the compiled execution is stated in `modelled_engine()` (boundary-level
                            conformance on committed bytes; fused region == composed relations NOT established).
@@ -145,8 +145,8 @@ class TargetProfile:
                            `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.  Omitted
                            from `to_json()` when None.
     protocols           -> the protocol set the run executes (`verity_vllm.protocols`; grammar `config.parse_protocols`).  None =
-                           sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
-                           whole set in its one spelling, sampled proofs included (a profile is the target of SPOT's Program);
+                           SPOT alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
+                           whole set in its one spelling, SPOT included (a profile is the target of SPOT's Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
                            committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
@@ -194,7 +194,7 @@ class TargetProfile:
 
     #: the blockwise FP8 GEMM's scale-product construction (None = "shared-per-block"; see the doc); never attested
     fp8_scale_construction: str | None = None
-    #: the protocol set the run executes (None = sampled proofs alone; see the doc); declared, never attested
+    #: the protocol set the run executes (None = SPOT alone; see the doc); declared, never attested
     protocols: tuple[str, ...] | None = None
     #: the circuit profile the Program is written in (None = word; see the doc); declared, never attested
     ir: str | None = None
@@ -490,7 +490,7 @@ class TargetProfile:
         if d.get("fp8_scale_construction") is None:
             d.pop("fp8_scale_construction", None)  # absent = shared-per-block; every earlier profile digest unchanged
         if d.get("protocols") is None:
-            d.pop("protocols", None)               # absent = sampled proofs alone; every earlier profile digest unchanged
+            d.pop("protocols", None)               # absent = SPOT alone; every earlier profile digest unchanged
         else:
             d["protocols"] = list(d["protocols"])
         if d.get("ir") is None:

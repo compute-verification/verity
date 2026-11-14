@@ -44,7 +44,7 @@ import VCVio.Prelude.Core
 /-!
 # Flock's deployed verifier in public-coin form (`Deploy.V`)
 
-The shipped verifier (`flock-verify verify`, plain or `--zk`) as a `Claims.Verifier`: the prover's messages are the
+The shipped verifier (`verity-verify-proof verify`, plain or `--zk`) as a `Claims.Verifier`: the prover's messages are the
 live session's, each answered by that round's live coin, and the last is decided by the shipped verdict, with every
 SHA-512 call an oracle query.
 
@@ -294,7 +294,7 @@ def repRounds (zk : Bool) (spec : SessionSpec) (st : Stmt) : ℕ :=
   let claims := 2 + spec.points * st.regions.size
   let kLog := st.c.kLog
   if zk then
-    match Zk.schedule st.m with
+    match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => (st.m + (kLog - 6)) + (claims + 1) + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 4
     | .error _ => 0
   else

@@ -31,7 +31,7 @@ not this unit's, and no Program states it yet.
 
 **The Program** (`program`) is the one unit: `TemplateInstances_v1{template, N = 1}` over `template(P, S)`, its partition
 `Q_template_instances` (`query`). It is proved for the execution phase, never sampled. No verifier requires its proof yet:
-`core_check.opening` checks one opened entry for each sampled tile, and nothing there reads this Program.
+`core_check.opening_twin` checks one opened entry for each sampled tile, and nothing there reads this Program.
 """
 from __future__ import annotations
 

@@ -1120,6 +1120,24 @@ def match_int_seed(fn: Function, k0: int) -> Match | str:
 _CLASS = re.compile(r"(?<![\w.$])(UR|R|UP|P|B)\d+(?!\w)")
 
 
+def _relative_targets(text: str, fn: Function, ins: Insn, basic_block_of: dict[int, int], bi: int) -> str:
+    """`text`, of the instruction `ins` in basic block `bi`, with each branch target as `signature` writes it: a
+    subroutine by its name, a RET's as the caller, a label of the body as its basic block's number less `bi`, and any
+    other label as END."""
+
+    def target(m: re.Match) -> str:
+        lab = m.group(1)
+        sub = _SUBROUTINE.fullmatch(lab)
+        if sub:
+            return f"`({sub.group(1)})"
+        i = fn.labels.get(lab)
+        if ins.op[0] == "RET":
+            return "`(caller)"
+        return f"`(B{basic_block_of[i] - bi:+d})" if i in basic_block_of else "`(END)"
+
+    return _TARGET.sub(target, text)
+
+
 def signature(fn: Function, start: int, end: int) -> list[list[str]]:
     """A subroutine body's shape: each basic block's instructions, sorted, with registers as their class, moves between
     registers dropped (register allocation adds and removes them), each load of an immediate written as ``MOV R, 0x...``
@@ -1145,18 +1163,7 @@ def signature(fn: Function, start: int, end: int) -> list[list[str]]:
             v = _immediate(ins)
             t = (("@" + ins.guard + " ") if ins.guard else "") + (
                 ins.body() if v is None else f"MOV {ins.args[0]}, 0x{v:08x}")
-
-            def tgt(m, k=k):
-                lab = m.group(1)
-                sub = _SUBROUTINE.fullmatch(lab)
-                if sub:
-                    return f"`({sub.group(1)})"
-                i = fn.labels.get(lab)
-                if ins.op[0] == "RET":
-                    return "`(caller)"
-                return f"`(B{basic_block_of[i] - bi:+d})" if i in basic_block_of else "`(END)"
-
-            items.append(_CLASS.sub(lambda m: m.group(1), _TARGET.sub(tgt, t)))
+            items.append(_CLASS.sub(lambda m: m.group(1), _relative_targets(t, fn, ins, basic_block_of, bi)))
         out.append(sorted(items))
     return out
 
@@ -1166,6 +1173,12 @@ def signature_id(blocks: list[list[str]]) -> str:
 
 
 # ---- tool notes and pins ------------------------------------------------------------------------------------------------
+
+
+def _c_string(data: bytes, start: int) -> str:
+    """The string at `start` up to its NUL, or to the end of `data` where none follows."""
+    end = data.find(b"\0", start)
+    return data[start:end if end >= 0 else len(data)].decode("utf-8", "replace")
 
 
 def tool_notes(cubin: bytes) -> list[dict]:
@@ -1182,12 +1195,7 @@ def tool_notes(cubin: bytes) -> list[dict]:
             if len(desc) < 24:
                 raise SassGateFailed(f"a .note.nv.tkinfo record of {len(desc)} bytes")
             strs = desc[24:]
-
-            def at(o):
-                end = strs.find(b"\0", o)
-                return strs[o:end if end >= 0 else len(strs)].decode("utf-8", "replace")
-
-            tool, version, branch, args = (at(o) for o in struct.unpack_from("<4I", desc, 8))
+            tool, version, branch, args = (_c_string(strs, o) for o in struct.unpack_from("<4I", desc, 8))
             out.append({"tool": tool, "version": version, "branch": branch, "args": " ".join(args.split())})
             p = q + ((descsz + 3) & ~3)
     return out

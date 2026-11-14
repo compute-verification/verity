@@ -296,7 +296,7 @@ theorem ligeritoCoins_le {sch : _root_.Flock.Schedule} (hn : sch.n + 1 ≤ 65536
 /-- **Each round of a rep's plan counts at most `COIN_MAX` coins**, at a `--zk` schedule of `m ≤ 35` whose `n` and
 levels' `q` are below `65,536`, with at most `65,536` claims. -/
 theorem repPlan_le {spec : SessionSpec} {st : Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
-    (hz : _root_.Flock.Zk.schedule st.m = .ok (sch, tp)) (h35 : st.m ≤ 35) (hn : sch.n + 1 ≤ 65536)
+    (hz : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) (h35 : st.m ≤ 35) (hn : sch.n + 1 ≤ 65536)
     (hq : ∀ i, (sch.levels.getD i default).q + 1 ≤ 65536) (hc : 2 + spec.points * st.regions.size ≤ 65536) (i : ℕ) :
     (_root_.Flock.Firewall.Session.repPlan spec st).getD i 0 ≤ _root_.Flock.Firewall.Frames.COIN_MAX := by
   have hall : ∀ c ∈ _root_.Flock.Firewall.Session.replayCoins st.m st.c.kLog ++
@@ -330,7 +330,7 @@ theorem repPlan_le {spec : SessionSpec} {st : Stmt} {sch : _root_.Flock.Schedule
 /-- **A rep's plan is `repCons`'s rounds, then the inner proof's four**, at the statement's setup and `--zk`
 schedule. -/
 theorem repPlan_cons {spec : SessionSpec} {st : Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
-    (hz : _root_.Flock.Zk.schedule st.m = .ok (sch, tp)) :
+    (hz : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) :
     (_root_.Flock.Firewall.Session.repPlan spec st).toList =
       Count.consCounts (_root_.Flock.Setup.ofCircuit st) sch (spec.points * st.regions.size) ++
         [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q] := by
@@ -362,7 +362,7 @@ theorem finInner_ok_at {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
       ts.size = t.st.fold.kLog - 6 → ∃ w, t.st.fold.folded a b lw ρ ts = .ok w ∧ w.size = 64)
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = t.st.fold.kLog - 6 →
       ∃ v, t.st.fold.fold a lw ρ = .ok v)
-    (hz : _root_.Flock.Zk.schedule t.st.m = .ok (t.sch, tp))
+    (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp))
     (hes : (_root_.Flock.Firewall.Finish.claimsOf q.xs).size + 2 < 2 ^ 64)
     (hC : Count.consCounts t.st t.sch (_root_.Flock.Firewall.Finish.claimsOf q.xs).size <+:
       q.coins.toList.map Array.size)

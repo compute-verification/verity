@@ -197,9 +197,24 @@ def test_onsite_adds_a_cut_so_its_lower_bound_is_never_below_remotes():
 def test_every_lean_citation_is_in_a_lock():
     cites = [c for a in (*CLASSES.values(), *ATTACKS.values()) for c in a.cites]
     cites += [c for kind in (*KINDS.values(), *PARTS.values())
-              for c in getattr(kind, "CITES", ()) + getattr(kind, "PHYSICAL", ())]
+              for c in getattr(kind, "CITES", ()) + getattr(kind, "PHYSICAL", ()) + getattr(kind, "BOUND", ())]
     absent = sorted({c for c in cites if lean.status(c) == "absent"})
     assert not absent, f"no lock lists {absent}"
+
+
+@pytest.mark.parametrize("name", REG.names("scenario"))
+def test_a_lower_bound_cites_its_server_block_bound_and_a_serving_cut_rests_on_mu(name):
+    """Each cut cites the server-block bound it is an argument of (`ServingBlockBoundRemote` remote, `ServingBlockBound`
+    onsite), and a lower bound a serving cut sets rests on its structure's `ω_max` and `μ`, its boundary term's."""
+    s, r = build(REG, name), evaluate_named(REG, name)
+    keys = reads(REG, name)
+    for f in r.families:
+        cuts = {share.cut for share in f.combined.overhead.serving.values()}
+        if cuts & {"inference", "serving"}:
+            assert lean.status(s.regime.BOUND[0]) == "proved" and s.regime.BOUND[0] in f.combined.cites
+        if "serving" in cuts:
+            assert s.regime.BOUND == ("Accounting.Guarantees.ServingBlocks.ServingBlockBound",)
+            assert {f"structure.{s.structure.name}.{k}" for k in ("omega_max", "mu")} <= keys
 
 
 @pytest.mark.parametrize("name", REG.names("scenario"))

@@ -77,7 +77,9 @@ def test_setdefault_keeps_what_the_environment_holds_and_environ_is_a_copy(monke
     assert S.setdefault("MAX_JOBS", "8") == "" and S.MAX_JOBS is None
     env = S.environ()
     env["MAX_JOBS"] = "4"
-    assert S.raw("MAX_JOBS") == "" and env == {**os.environ, "MAX_JOBS": "4"}
+    want = {**os.environ, "MAX_JOBS": "4"}
+    differ = sorted(k for k in env.keys() | want.keys() if env.get(k) != want.get(k))
+    assert S.raw("MAX_JOBS") == "" and differ == []
     with pytest.raises(AttributeError):
         S.setdefault("VERITY_NOT_A_SETTING", "1")
 
@@ -139,7 +141,8 @@ def test_verity_vllm_refuses_an_unknown_setting_at_startup(monkeypatch: pytest.M
 def _library_names() -> tuple[dict[str, set[str]], dict[str, set[str]], dict[str, set[str]]]:
     """The ``VERITY_*`` names the library spells out whole, by file: Python strings and C ``getenv``s (which only `SETTINGS` and
     `NOT_SETTINGS` may name), shell tokens (also `ELSEWHERE`: a script sets what another tool reads), and the names
-    ``settings.NAME`` and ``settings.get("NAME")`` read (`SETTINGS` only)."""
+    ``settings.NAME`` and ``settings.get("NAME")`` read (`SETTINGS` only).  The strings of `ELSEWHERE`'s own declaration are
+    not among them: a name it holds is declared there, not read."""
     strings: dict[str, set[str]] = {}
     shell: dict[str, set[str]] = {}
     reads: dict[str, set[str]] = {}
@@ -157,7 +160,11 @@ def _library_names() -> tuple[dict[str, set[str]], dict[str, set[str]], dict[str
             nodes = list(ast.walk(ast.parse(src)))
             registry = any(isinstance(n, ast.ImportFrom) and n.module == "verity_vllm"
                            and any(a.name == "settings" and a.asname is None for a in n.names) for n in nodes)
+            declared = {id(c) for n in nodes if rel == "verity_vllm/settings.py" and isinstance(n, ast.Assign)
+                        and any(isinstance(t, ast.Name) and t.id == "ELSEWHERE" for t in n.targets) for c in ast.walk(n.value)}
             for node in nodes:
+                if id(node) in declared:
+                    continue
                 if isinstance(node, ast.Constant) and isinstance(node.value, str) and NAME.match(node.value):
                     strings.setdefault(node.value, set()).add(rel)
                 elif not registry:

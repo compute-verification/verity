@@ -28,7 +28,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama31-8b-fp8-1gpu-compiled-full`: stock FP8 as vLLM serves it (compiled) against the batch-invariant eager stock
   every eager ratio is over, on the full sweep: the factor that restates an eager ratio as a served one.
 
-## The Commit (sampled proofs)
+## The Commit (SPOT)
 
 - `llama31-8b-fp8-1gpu-commit-served`: the Commit (`rows-sha512`) against stock FP8, eager and compiled, each against its
   own stock.

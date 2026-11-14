@@ -2,7 +2,7 @@
 # One-stage audit, run A0, on a CPU pod (a job run from a clone of the tree, with m0.tar, lean.tar and set.tar sent:
 # bash benchmarks/one_stage/pod.sh). The inputs are `git archive`s of M0's tree and the Lean
 # verifier's tree at pinned commits, and one captured input set. Builds M0's `flock-circuit` (CPU, M0's own
-# 60-circuit.sh MODE=build) and Lean's `flock-verify` (lake build, nothing fetched) once per pod, then runs a0.py.
+# 60-circuit.sh MODE=build) and Lean's `verity-verify-proof` (lake build, nothing fetched) once per pod, then runs a0.py.
 # env: K=16 DELTA=0.01 BIND=1 (run A1's M0 half: the statement binds the partition, program and unit indices)
 #      RUN=a3 (one audit over every template set in set.tar, layer LAYER=0, K=128; DRAW_FILE=1 serves the verifier's Lean sample)
 #      RUN=a2 (served.tar from vllm-serving-commit: registration.json, pub-N.bin, inst-N.bin, index.json; K=256;
@@ -19,12 +19,12 @@ tar -xf $I/m0.tar -C $W/m0 && tar -xf $I/lean.tar -C $W/lean && tar -xf $I/set.t
 SET=$(dirname $(find $W/set -name manifest.json | head -1))
 sha256sum $I/*.tar | tee $O/inputs.sha256
 
-# Lean's flock-verify, in the background while M0 builds
+# Lean's verity-verify-proof, in the background while M0 builds
 (
   command -v lake >/dev/null || [ -x $HOME/.elan/bin/lake ] || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   export PATH=$HOME/.elan/bin:$PATH
   if [ "$(cat $W/bin/lean.sha 2>/dev/null)" != "$LEANSHA" ]; then
-    cd $W/lean/backends/flock/verifier/lean && lake build flock-verify && cp .lake/build/bin/flock-verify $W/bin/ && echo $LEANSHA > $W/bin/lean.sha
+    cd $W/lean/backends/flock/verifier/lean && lake build verity-verify-proof && cp .lake/build/bin/verity-verify-proof $W/bin/ && echo $LEANSHA > $W/bin/lean.sha
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!
@@ -35,10 +35,10 @@ if [ "$(cat $W/bin/m0.sha 2>/dev/null)" != "$M0SHA" ]; then
   cp /workspace/flock-gpu-link/flock/target/release/flock-circuit $W/bin/ && echo $M0SHA > $W/bin/m0.sha
 fi
 wait $LP || { tail -40 $O/build-lean.log; exit 1; }
-[ -x $W/bin/flock-verify ] || { tail -40 $O/build-lean.log; exit 1; }
+[ -x $W/bin/verity-verify-proof ] || { tail -40 $O/build-lean.log; exit 1; }
 # the drivers' verifier (one_stage.verifier) builds the sampled-proofs Lean in this tree on its first check
 export PATH=$HOME/.elan/bin:$PATH
-sha256sum $W/bin/flock-circuit $W/bin/flock-verify | tee $O/binaries.sha256
+sha256sum $W/bin/flock-circuit $W/bin/verity-verify-proof | tee $O/binaries.sha256
 
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
@@ -57,14 +57,14 @@ if [ "${RUN:-a0}" = a2 ]; then
     BOUND=$(m0path $W/m0b)
   fi
   $W/py/bin/python benchmarks/one_stage/a2.py --served $SERVED --template-set $SET --m0-pythonpath $BOUND --bin $W/bin/flock-circuit \
-    --lean $W/bin/flock-verify --out $O/a2 --k ${K:-256} ${DELTA:+--delta $DELTA} ${UNBIND:+--unbind --unbound-m0-pythonpath $M0PATH} ${LEGACY_PARTITION:+--legacy-partition} \
+    --lean $W/bin/verity-verify-proof --out $O/a2 --k ${K:-256} ${DELTA:+--delta $DELTA} ${UNBIND:+--unbind --unbound-m0-pythonpath $M0PATH} ${LEGACY_PARTITION:+--legacy-partition} \
     ${STATEMENT:+--statement $STATEMENT} 2>&1 | tee $O/a2.log | cut -c1-4000
 elif [ "${RUN:-a0}" = a3 ]; then
   $W/py/bin/python benchmarks/one_stage/a3.py --sets $W/set --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \
-    --lean $W/bin/flock-verify --out $O/a3 --layer ${LAYER:-0} --k ${K:-128} ${DELTA:+--delta $DELTA} ${DRAW_FILE:+--draw-file} \
+    --lean $W/bin/verity-verify-proof --out $O/a3 --layer ${LAYER:-0} --k ${K:-128} ${DELTA:+--delta $DELTA} ${DRAW_FILE:+--draw-file} \
     ${STATEMENT:+--statement $STATEMENT} 2>&1 | tee $O/a3.log | cut -c1-4000
 else
   $W/py/bin/python benchmarks/one_stage/a0.py --set $SET --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \
-    --lean $W/bin/flock-verify --out $O/a0 --k ${K:-16} --delta ${DELTA:-0.01} ${BIND:+--bind} ${STATEMENT:+--statement $STATEMENT} 2>&1 | tee $O/a0.log | cut -c1-4000
+    --lean $W/bin/verity-verify-proof --out $O/a0 --k ${K:-16} --delta ${DELTA:-0.01} ${BIND:+--bind} ${STATEMENT:+--statement $STATEMENT} 2>&1 | tee $O/a0.log | cut -c1-4000
 fi
 exit ${PIPESTATUS[0]}

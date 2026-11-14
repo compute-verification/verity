@@ -468,12 +468,8 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
 # ---------------------------------------------------------------------------------------------------------------------------- CLI
 
 def _default_manifest() -> str | None:
-    """The tree's checkpoint pins (`config.CHECKPOINTS`), else the working directory's `manifests/checkpoints.json`; None where
-    neither exists."""
-    for p in (config.CHECKPOINTS, Path.cwd() / "manifests" / "checkpoints.json"):
-        if p.exists():
-            return os.path.abspath(p)
-    return None
+    """The tree's checkpoint pins (`config.CHECKPOINTS`); None on a tree that holds none."""
+    return str(config.CHECKPOINTS) if config.CHECKPOINTS.exists() else None
 
 
 def record_shard_pin(checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,

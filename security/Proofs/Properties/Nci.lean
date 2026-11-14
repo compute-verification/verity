@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Nci.Lemmas
 public import Proofs.Properties.Nci.Desc
 public import Proofs.Properties.Nci.Count
+public import Proofs.Properties.Nci.DecodeEmpty
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Init.Data.Ord.String

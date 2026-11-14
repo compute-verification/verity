@@ -101,7 +101,7 @@ def test_direct_environment_uses_only_shrink() -> None:
             found[rel] = len(uses)
     grown = {f: n for f, n in found.items() if n > BASELINE.get(f, 0)}
     assert not grown, (f"read and write the environment through {REGISTRY_FILE} (declare the variable there; a vLLM variable "
-                       f"through verity_vllm.engine.env), not os.environ: {grown}")
+                       f"through verity_bench.adapter's apply_target), not os.environ: {grown}")
     shrunk = {f: found.get(f, 0) for f, n in BASELINE.items() if found.get(f, 0) < n}
     assert not shrunk, f"fewer direct uses than BASELINE allows: lower it in tests/test_settings.py to {shrunk}"
 

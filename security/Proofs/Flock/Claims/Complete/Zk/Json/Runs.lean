@@ -102,7 +102,7 @@ tape's pads committed, rep `0` returns from the link's send and rep `1` from whe
 at rep `0`'s claim points too. The reps' coins are the case's at the session's rounds, where the masked prover's coin
 checks (level 0's pair, the inner `β`, the rank checks) pass by `¬ BadZk`. -/
 def ProverRunsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ c : CaseZk H rel, ∀ st v, c.sts = #[st] → Zk.schedule (Setup.ofCircuit st).m = .ok v →
+  ∀ c : CaseZk H rel, ∀ st v, c.sts = #[st] → Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v →
     ∀ cm e, commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
       (v.1.levels.getD 0 default) v.2 (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) (c.ω.extra 0)
       (c.ω.lanePad 0) (c.ω.salt 0 0 0) = .ok cm →

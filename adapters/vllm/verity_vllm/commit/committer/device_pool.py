@@ -8,11 +8,11 @@ owned by window (the committer view the step committed into): a take that doesn'
 and that wait is the worker's, so the serving thread's next slot wait (in its step) carries it; a take that the open window's own
 bytes leave no room for is refused by name, since no release can come before that window closes.
 
-`gather` is the release's: given the sampled leaves of a step it copies exactly their bytes to host as a `DrawnRanges` and the
-step's device views are dropped; a read of any other leaf of the step is refused by name (`DrawnRanges.dropped`), never answered
+`gather` is the release's: given the sampled leaves of a step it copies exactly their bytes to host as a `SampledRanges` and the
+step's device views are dropped; a read of any other leaf of the step is refused by name (`SampledRanges.dropped`), never answered
 from a recomputation. The step's tree levels and salt key stay, so a sampled leaf's opening path is whole.
 
-A failed run ends every take waiting on the pool by name (`DevicePool.fail`, from `serve_release.Draws.fail`): the step fails
+A failed run ends every take waiting on the pool by name (`DevicePool.fail`, which `serve_release` calls): the step fails
 uncommitted rather than wait on a release that won't come. A window that reaches no release (its samples or its close failed) is
 `discard`ed: every byte it retained dropped, its pieces freed, any read of it refused by name.
 """
@@ -119,7 +119,7 @@ class DevicePool:
                 "waits": self.waits, "waited_s": round(self.waited_s, 6)}
 
 
-class DrawnRanges(_HostRanges):
+class SampledRanges(_HostRanges):
     """A released step's retained bytes: exactly its sampled leaves' (``drawn``, leaf indices), on host. Any other byte was dropped at
     the release, and a read of it is refused by name (`DROPPED`), never routed to a replay."""
 
@@ -155,6 +155,13 @@ def pool_key(com: Any) -> Any:
     return com.__dict__.setdefault("_device_pool_key", object())
 
 
+def _record(com: Any, leaves: int, kept: int, held: int, freed: int) -> dict[str, Any]:
+    """What a release and a discard both record of a window: its steps, the leaves and bytes kept of the ``held`` bytes, and
+    the pool bytes freed."""
+    return {"steps": len(com._gpu_blocks), "drawn_leaves": leaves, "kept_bytes": kept, "dropped_bytes": held - kept,
+            "device_freed_bytes": freed}
+
+
 def release(com: Any, drawn: Mapping[int, Iterable[int]]) -> dict[str, Any]:
     """`NativeCollectCommitter.release_drawn` over ``com`` (a window view, or a committer whose steps are one window): by step, its
     sampled leaves `gather`ed, the rest dropped, its pool pieces freed; the record of what was kept and dropped."""
@@ -176,8 +183,8 @@ def release(com: Any, drawn: Mapping[int, Iterable[int]]) -> dict[str, Any]:
         kept, n_leaves = kept + out.retained_bytes, n_leaves + len(leaves)
     pool = getattr(com, "device_pool", None)
     freed = pool.free(pool_key(com)) if pool is not None else 0
-    com.released = {"steps": len(com._gpu_blocks), "drawn_leaves": n_leaves, "kept_bytes": kept, "dropped_bytes": held - kept,
-                    "device_freed_bytes": freed, "absorb_wait_s": round(waited, 6), "gather_s": round(time.perf_counter() - t0, 6)}
+    com.released = _record(com, n_leaves, kept, held, freed) | {"absorb_wait_s": round(waited, 6),
+                                                                "gather_s": round(time.perf_counter() - t0, 6)}
     return com.released
 
 
@@ -196,15 +203,14 @@ def discard(com: Any, why: str) -> dict[str, Any] | None:
     held = 0
     for s, (blk, used) in list(com._gpu_blocks.items()):
         held += 0 if blk is None else int(blk.retained_bytes if hasattr(blk, "retained_bytes") else blk.numel())
-        com._gpu_blocks[s] = (DrawnRanges([], used, (), int(com.chunk)), used)
+        com._gpu_blocks[s] = (SampledRanges([], used, (), int(com.chunk)), used)
     pool = getattr(com, "device_pool", None)
     freed = pool.free(pool_key(com)) if pool is not None else 0
-    com.released = {"steps": len(com._gpu_blocks), "drawn_leaves": 0, "kept_bytes": 0, "dropped_bytes": held,
-                    "device_freed_bytes": freed, "discarded": why, "absorb_error": absorb_error}
+    com.released = _record(com, 0, 0, held, freed) | {"discarded": why, "absorb_error": absorb_error}
     return com.released
 
 
-def gather(blk: Any, used: int, leaves: Iterable[int], chunk: int) -> DrawnRanges:
+def gather(blk: Any, used: int, leaves: Iterable[int], chunk: int) -> SampledRanges:
     """The sampled ``leaves`` of a step whose retained block is ``blk`` (any of the committer's retainers), copied to host."""
     leaves = list(leaves)
     padded = -(-int(used) // chunk) * chunk
@@ -217,4 +223,4 @@ def gather(blk: Any, used: int, leaves: Iterable[int], chunk: int) -> DrawnRange
         hv = torch.empty(hi - lo, dtype=torch.uint8, pin_memory=pin)
         hv.copy_(blk[lo:hi])
         ranges.append((lo, hi, hv))
-    return DrawnRanges(ranges, used, leaves, chunk)
+    return SampledRanges(ranges, used, leaves, chunk)

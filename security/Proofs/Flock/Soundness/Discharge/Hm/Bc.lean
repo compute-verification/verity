@@ -1,9 +1,3 @@
-/-
-A row's `b ‖ c` in a satisfying witness of the untyped statement `Stmt.setupH` accepted (`row_bc_setupH`): the commit
-string of the row and salt its slots read. Δ's one copy at each `cv` and `pad` input bit (`inBit_copyL`) gives
-`port_commit_rows` its four facts (`row_copies_flat`); the constant bits read the pin (`pin_bit`) and the unit range's
-forced-zero row (`zero_bit`).
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
@@ -25,6 +19,13 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
+
+/-!
+A row's `b ‖ c` in a satisfying witness of the untyped statement `Stmt.setupH` accepted (`row_bc_setupH`): the commit
+string of the row and salt its slots read. Δ's one copy at each `cv` and `pad` input bit (`inBit_copyL`) gives
+`port_commit_rows` its four facts (`row_copies_flat`); the constant bits read the pin (`pin_bit`) and the unit range's
+forced-zero row (`zero_bit`).
+-/
 
 @[expose] public section
 

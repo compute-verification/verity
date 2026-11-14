@@ -5,7 +5,7 @@ replay of a deferred Commit's bundle (`pipeline.replay_bundle`, `row stage repla
 `ReplaySources`: the committed store to read (the committer, or the bundle's `commit.store_dump`), the weights provider (the live model, or the
 checkpoint opened against the committed weights root), the weights check and the VU export hook.  In both places it's the prover's
 pre-flight check: it reads committed values in the clear, so it's no verifier's check.  A verifier checks the sampled proof
-blocks' proofs (`verity.protocols.spot.verifier.one_stage`).
+blocks' proofs (`verity.protocols.proofs.spot.verifier.one_stage`).
 
 For a seeded stratified sample of Program instance rows (spec x request x phase), read
 the COMMITTED bytes of the row's inputs (the Program's dataflow -> the manifest's member rule -> the binding map), evaluate the registered
@@ -570,7 +570,7 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
     openings-after-release replay pool and the next pair's run.  The RSS drop is the evidence that the premise
     `c2_freed_before_replay` holds: 70 GB of small objects die into pymalloc arenas and glibc's heap, which keep pages the OS never sees
     back until trimmed -- ask glibc to return them (madvise/brk) so the drop measures the objects, not the allocators' retention."""
-    # the three readings are typed Any: a host that gives none (`rss_kb`'s None) raises TypeError at the record below, as on main
+    # the three readings are typed Any: a host that gives none (`rss_kb`'s None) raises TypeError at the record below
     _rss_c2a: Any = rss_kb()[0]
     held.clear()
     gc.collect()

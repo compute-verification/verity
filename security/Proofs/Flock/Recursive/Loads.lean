@@ -25,7 +25,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # Recursion: where V*'s statement enters a session (gap 8)
 
-A session of V*'s statement `Q` is a `flock-verify verify --zk --registered` session of the verifier's own inputs `I`,
+A session of V*'s statement `Q` is a `verity-verify-proof verify --zk --registered` session of the verifier's own inputs `I`,
 as the prover supplies them (`ZkOuterR`). What ties a session to `Q` is the verifier's check that the session is V*'s
 statement of its index (`AcceptsZKV`, `RecVStar.checkStmt`), the one place the recursive audit's proof takes the
 equation:

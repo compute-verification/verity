@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A cell's commitment time: the serving hook (``verity.commitments.windows.rows.commit``, M0's ``frame-v3-sha512`` +
 ``hm96-sha512/v1`` row leaves) committing the first ``--n`` instances of an input set afresh, as a Table 1 cell's
-``commit.seconds``.
+commitment seconds, written under the metric's id ``proofs/serving-commit.seconds``.
 
     research run --tool serving_commit_cost --campaign C -- python benchmarks/commitments/serving_commit_cost.py \\
         --input-set DIR --input-set-art art:... --n 1024 [--reps 5] [--workers N]
@@ -10,8 +10,8 @@ Per call: fresh salts (a new OS salt key), every row's ``sha512/row/v1`` digest,
 output port a row too, its words zero-padded to whole SHA-512 blocks), and one tree per port (``serving_rows.commit``).  The rows
 are the set's own row ports, one row per instance and port as M0's per-instance statement reads them (no shared rows);
 consecutive instances with the same row widths are one member (an attention class set spans key counts, so it is one member per
-T).  The first call is ``commit.cold_seconds``; ``commit.seconds``
-is the median of the next ``--reps`` (the renderer's ``views.COMMIT``).  The window's binding fields name the input set, not a
+T).  The first call is ``commit.cold_seconds``; ``proofs/serving-commit.seconds``
+is the median of the next ``--reps``.  The window's binding fields name the input set, not a
 served run: they enter each port's domain id once, so they do not move the time.  Validation recomputes two rows' ``b || c`` with
 core (``hm96.SHA512.commit_string`` over ``sha512_row_layout``) and compares them with what the hook committed.
 """
@@ -133,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
                            "checker": "two rows per port: b || c recomputed by core (hm96.SHA512.commit_string over sha512_row_layout)",
                            "detail": "ok" if not bad else ", ".join(bad), "evidence": []},
             "measurements": [
-                {"name": "commit.seconds", "value": med["total_s"], "unit": "s"},
+                {"name": "proofs/serving-commit.seconds", "value": med["total_s"], "unit": "s"},
                 {"name": "commit.cold_seconds", "value": calls[0]["total_s"], "unit": "s"},
                 {"name": "commit.reps", "value": ns.reps, "unit": "count"},
                 {"name": "commit.salts_seconds", "value": med["salts_s"], "unit": "s"},

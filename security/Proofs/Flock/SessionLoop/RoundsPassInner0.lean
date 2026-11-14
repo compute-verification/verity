@@ -251,7 +251,7 @@ theorem repState_end_from {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) (hk : 1 ≤ t.sch.k0)
     (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63) (hn0 : t.sch.n ≠ 0)
     (htp : 2 * t.tPad < 2 ^ 64) (hd : ∀ i, 64 * 2 ^ (t.sch.levels.getD i default).d < 2 ^ 64) {tp : ℕ}
-    (hz : _root_.Flock.Zk.schedule t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout}
+    (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout}
     {d : _root_.Flock.Firewall.Frame.Draws} {mk : Option _root_.Flock.Firewall.Frame.MaskSlot}
     (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (hcd : c = Cfg.ofDraws lay d mk) :
     ∀ (e : ℕ) {cr : Array (Array F128)} {N : ℕ} {c'' : Cfg} {cs : Array F128} {m : Masker}, cr.size = N →
@@ -289,7 +289,7 @@ theorem repState_end {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c
     (hm14 : 14 ≤ t.st.m) (hdg : t.st.digest.size < 2 ^ 64)
     (hcap : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) {tp : ℕ}
-    (hz : _root_.Flock.Zk.schedule t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout}
+    (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout}
     {d : _root_.Flock.Firewall.Frame.Draws} {mk : Option _root_.Flock.Firewall.Frame.MaskSlot}
     (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (hcd : c = Cfg.ofDraws lay d mk)
     (htp : 2 * t.tPad < 2 ^ 64) (hd : ∀ i, 64 * 2 ^ (t.sch.levels.getD i default).d < 2 ^ 64)
@@ -411,7 +411,7 @@ theorem ofLoop_answered_end (T : CoinLayer.TableData)
     show sts[k / 2]!.merkle = _
     rw [hst]
     exact (htabs (k / 2) hj2).2.2
-  have hz : _root_.Flock.Zk.schedule t.st.m = .ok (t.sch, tp) := by rw [htm]; exact htp
+  have hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp) := by rw [hts']; exact htp
   obtain ⟨sch3, tp3, hs3, hl3⟩ := start_lay hds
   rw [htp, Except.ok.injEq, Prod.mk.injEq] at hs3
   have hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0 := by

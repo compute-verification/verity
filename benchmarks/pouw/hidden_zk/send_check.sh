@@ -3,7 +3,7 @@
 # witness bit. Per SC_PLAN entry ROLE:K:N (job.sh's staging, N instances, all sampled), SC_REPS rounds of one loopback --zk CPU
 # session per arm, the arms' order rotated each round:
 #   nofw  FC_HOST_WITNESS=1
-#   fw    + FC_FIREWALL=1 through this tree's flock-firewall (beside job.sh's flock-verify, built if missing)
+#   fw    + FC_FIREWALL=1 through this tree's flock-firewall (beside job.sh's verity-verify-proof, built if missing)
 #   fw-b  the same through SC_FIREWALL_B, another build of flock-firewall, when it is set
 # Each ZK server process runs under bash's `time` in a subshell that outlives the prover's kill of its child, so its own CPU
 # seconds and wall are recorded. Run from the source tree's root (`research run --cwd source`, 16 CPUs, 48 GB):
@@ -20,7 +20,7 @@ export HZ_CONFIGS=x HZ_MEM_GB=${HZ_MEM_GB:-48} HZ_CACHE=${HZ_CACHE:-/workspace/r
 # shellcheck source=job.sh
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 setup
-FW=${LEAN%/flock-verify}/flock-firewall
+FW=${LEAN%/verity-verify-proof}/flock-firewall
 if [ ! -x "$FW" ]; then
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   (flock 8; [ -x "$FW" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) 8> "${LEAN%/.lake/*}.firewall.lock" \

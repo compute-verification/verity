@@ -6,6 +6,7 @@ import pytest
 from rho import hardware, params
 from rho.hardware import Fleet, Location
 from rho.params import Registry
+from verity.device import load_card, number
 
 REG = Registry.load()
 CENSUS_DIR = Path(__file__).resolve().parents[2] / "census"
@@ -51,6 +52,25 @@ def test_the_world_fleets_serve_the_census_adversary_in_its_monitoring_period(na
     flops = REG[f"location.{f['location']}.flops"]
     assert math.isclose(f["count"], world["total_flop"] / (flops * world["monitoring_period_s"] * f["mfu_serve"]),
                         rel_tol=1e-3)
+
+
+def test_the_h200_servers_memory_and_links_are_their_cards():
+    """Each device holds the H200 card's `store.dram`; each host's boundary carries the DGX H200 card's `link.rate`,
+    every network port, at most, and its eight cluster ports alone (`link.cluster`) at least. No data file states
+    either (`Registry.load` refuses one that does)."""
+    dram, link = load_card("h200-sxm-141gb")["store"]["dram"], load_card("dgx-h200")["link"]
+    for name in params.CARDED:
+        loc, links = hardware.location(REG, name), REG.param(f"location.{name}.links")
+        assert loc.memory == loc.devices * number(dram) * 8
+        assert (links.low, links.value, links.high) == (number(link["cluster"]), loc.hosts * number(link["rate"]),
+                                                        loc.hosts * number(link["rate"]))
+
+
+def test_a_data_file_restating_a_cards_figure_is_refused(tmp_path):
+    (tmp_path / "hardware.toml").write_text(params.DATA.joinpath("hardware.toml").read_text()
+                                            + '\n[location.h200-hgx.memory]\nvalue = 9.024e12\n')
+    with pytest.raises(ValueError, match="read from its cards"):
+        Registry.load([tmp_path / "hardware.toml"])
 
 
 def test_a_rack_of_four_servers_is_four_servers():

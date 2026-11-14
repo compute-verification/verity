@@ -79,10 +79,10 @@ from typing import Any
 import numpy as np
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.circuits.types import Array
-from verity.circuits.ops.boolean import gemm as BG
 from verity.protocols.accounting.pouw.prover.circuit import compile as C
 from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
 from verity.protocols.accounting.pouw.verifier import credit as CR
@@ -122,7 +122,7 @@ PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
 CHALLENGER = "challenger"
 #: the credit refusal of every call of a window whose coins the auditor's challenger didn't sample
 IN_PROCESS = ("credit: coins-not-the-auditors: the window's coins were held in the serving process, not drawn by the "
-              "auditor host's challenger (the pouw setting 'challenger'), so it credits nothing")
+              "auditor device's challenger (the pouw setting 'challenger'), so it credits nothing")
 
 
 def coordinate(k: int) -> Any:

@@ -29,7 +29,7 @@ from verity.circuits.partition import Hierarchy, Level
 MARGIN = 2.0 ** -30
 
 #: the per-window δ, the one failure probability a window's ε is reported at: PoUW's credit and its grind premium, and
-#: the remote bandwidth audit's pooled bound
+#: PoUB's pooled bound
 WINDOW_DELTA = Fraction(1, 2 ** 40)
 
 
@@ -99,7 +99,7 @@ class IntegrityProfile:
     members of level i inside each member of level i - 1.  The finest level is the checked one; each member of it
     is one statement.  `draws` names the sampled levels: at most one `Bernoulli`, and a `Subset` only at the checked
     level; unsampled levels only group.  A `Stratified` or `Work` sample is the only sample, of the checked level, with
-    its strata tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through
+    its strata tiling that level's members; `accept`, `rho` and `worst_case` are the other sampling designs', and it reads through
     `strata`.
     `drawn` counts the members actually sampled at each level, all passed.
 
@@ -114,7 +114,7 @@ class IntegrityProfile:
     with p = 1).  The k-subset is uniform over all n of them, so unsampled levels in between don't change the sampling design: a
     strategy leaving m_i incorrect checked members in Bernoulli member i is accepted with probability
     prod_i exp(-rho(m_i)), and except with probability `delta` an accepted transcript satisfies
-    sum_i rho(m_i) < ln(1/delta).  A Bernoulli law over single statements is one level sampled `Bernoulli(p)`.
+    sum_i rho(m_i) < ln(1/delta).  A Bernoulli sampling design over single statements is one level sampled `Bernoulli(p)`.
 
     Checked exhaustively:
         `programs`    digests of the evaluated Programs, in commit order;
@@ -423,8 +423,8 @@ def _key_lt(a: Stratum, ma: int, b: Stratum, mb: int) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class Stratified:
-    """The verifier's law as independent uniform samples inside disjoint strata of the partition's units (the `stratified`
-    law): the uniform k-subset is one stratum, and a template floor is a stratum with
+    """The verifier's sampling design as independent uniform samples inside disjoint strata of the partition's units (the
+    `stratified` sampling design): the uniform k-subset is one stratum, and a template floor is a stratum with
     k >= 1.  The strata are fixed by the agreement before registration, like every sampling design.
 
     An incorrect set with m_s units in stratum s escapes the sample with prod_s C(n_s - m_s, k_s) / C(n_s, k_s), which

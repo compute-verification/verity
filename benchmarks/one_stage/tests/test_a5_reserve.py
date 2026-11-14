@@ -221,6 +221,37 @@ def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_
     assert reason(AC.family(0), other) is not None
 
 
+def test_a_second_stage_session_samples_under_its_tagged_family_and_stays_open_while_held(tmp_path, monkeypatch):
+    """A session started with the second stage's tag (`a5_coins.SECOND`, two_stage's ``--interior-trees``) reserves and
+    releases its rank's coins under the tagged family, apart from the first stage's untagged one, and its coins'
+    evidence holds there alone; a rank's hold keeps it open past the sample until its release."""
+    rule, design, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
+    tagged = AC.family(0, AC.SECOND)
+    assert tagged != AC.family(0)
+    manager, turns, opener = local(tmp_path, monkeypatch, [0], stage=AC.SECOND)
+    try:
+        coins = AC.RankCoins(turns, 0)
+        turns.hold(0)
+        coins.plan(need_of(rule, ALL_FAMILIES))
+        coins.commit(AFTER)
+        S.select_draw(S.Law(rule), design, n, coins)
+        segment = coins.drawn()
+        assert turns.layout(), "the held session closed with the sample"
+        turns.release(0)
+        opener.join()
+        published, ours = turns.evidence(), AC.held(turns)
+    finally:
+        manager.shutdown()
+    assert "error" not in published, published.get("error")
+    assert published["plan"]["families"] == [[AC.WINDOW_FAMILY, 1], [tagged, 25]]
+    assert published["trusted"]["released"] == {AC.WINDOW_FAMILY: 1, tagged: 24}
+    assert coins.label == segment["label"] == tagged
+    evidence = AC.evidence(published, segment)
+    for label, ok in ((tagged, True), (AC.family(0), False)):
+        why = CC.coins_reason(ours["key"], ours["main"], evidence, ROOT, label, AFTER, bytes(coins.read), AC.lms_verify)
+        assert (why is None) is ok, why
+
+
 def test_a_kept_local_challenger_serves_a_later_session_under_the_same_key(tmp_path, monkeypatch):
     """A ``local`` challenger kept in a directory (`start`'s ``host``) is reopened by a later `start` there: the later
     session, on another root, is the same challenger's, signed under the same key (`held`, and `local_key` of the

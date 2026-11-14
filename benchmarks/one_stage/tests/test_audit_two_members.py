@@ -116,7 +116,7 @@ def _window(d: Path, flipped: bool = False) -> Path:
 @pytest.fixture(scope="module")
 def binaries(tmp_path_factory) -> dict[str, Path]:
     """The prover, the Lean verifier and the ZK server's Lean (module docstring)."""
-    lean = {"lean": LEAN / "flock-verify", "firewall": LEAN / "flock-firewall"}
+    lean = {"lean": LEAN / "verity-verify-proof", "firewall": LEAN / "flock-firewall"}
     if not all(p.is_file() for p in lean.values()):
         pytest.skip(f"no {' or '.join(p.name for p in lean.values())} under {LEAN}: check's lean-build step builds them")
     prover = tmp_path_factory.mktemp("flock-circuit") / "flock-circuit"

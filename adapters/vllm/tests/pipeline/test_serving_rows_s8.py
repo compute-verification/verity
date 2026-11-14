@@ -7,8 +7,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from verity.circuits.defs import bind
-from verity.commitments.windows import rows as CS
 from verity.circuits.ops import gemm as OG
+from verity.commitments.windows import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from verity_vllm.pipeline import serving_rows as SRW

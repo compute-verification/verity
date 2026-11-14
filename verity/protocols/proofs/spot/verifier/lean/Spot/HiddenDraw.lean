@@ -1,4 +1,6 @@
-/-
+module
+
+/-!
 A sample over hidden positions (`one_stage.hidden_draw`): a stratum's population is `M` positions whose layout is private.
 The prover commits a calls table before the sampling coin, call `c` an `offset` and its live `rows`, each row `width` units
 (column tiles) wide, and positions `r < M` are sampled from the challenger's coins. A sampled position is proved by a witness
@@ -11,8 +13,6 @@ positions a table's witnesses prove inject into its (call, row, tile) triples, e
 whose calls overlap or leave gaps only gives up positions. `locate` is the honest prover's witness, the first call that
 covers the position (`locate_witness`).
 -/
-
-module
 
 @[expose] public section
 

@@ -8,11 +8,11 @@ public import Flock.JsonParse
 # A sampled H1 leaf's sessions sample every unit
 
 A sampled leaf's 33 statements are each proved and checked in full: the verifier's sample policy for a leaf statement's
-session is `subset` of every unit of its partition, a non-empty population. flock-verify takes the record's sample as
+session is `subset` of every unit of its partition, a non-empty population. verity-verify-proof takes the record's sample as
 it is (any sampling design it decodes, `Flock.Draw.UnitDraw.ofJson`), so the leaf verifier holds each session record to the
 policy itself (`checkFull`, which `pouw-leaf-own` runs on every session of a statement):
 
-* `recordDraw`: the record's `unit_draw`, rebuilt (`Flock.norm`), as flock-verify reads it (`Main.recordDraw`, through
+* `recordDraw`: the record's `unit_draw`, rebuilt (`Flock.norm`), as verity-verify-proof reads it (`Main.recordDraw`, through
   Flock's total parser `Flock.JsonParse.parse`);
 * `checkFull`: that sample decodes, its sampling design is `subset k` with `k` its population, `0 < k`, and its units are every unit
   `[0, k)`; `checkFull_ok` states what its `.ok` gives.

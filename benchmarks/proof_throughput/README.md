@@ -35,7 +35,7 @@ stratified sampling design the Lean verifier's soundness covers:
    the public file and every session in the evidence store as one bundle (`out/bundle.json`) and writes the contract
    result with the live verdicts only.
 2. **Verifier run** (`verify.sh`, a `research run --on vy-nebius-cpu-3` or `-cpu-2` job, tool `proof_throughput_verifier`):
-   builds the compiled Lean verifier (`flock-verify`, `verity/protocols/proofs/flock/verifier/`), runs `flock-verify verify --coins tree
+   builds the compiled Lean verifier (`verity-verify-proof`, `verity/protocols/proofs/flock/verifier/`), runs `verity-verify-proof verify --coins tree
    --program P --stratified B --partition F` on every session of the bundle one at a time under `/usr/bin/time`, with its
    own copies of the population's program and of the `verity/partition/v1` object the circuit binds (derived from the
    workload, checked against the circuit's META, not taken from the bundle). The verifier derives the stratified sampling design for B

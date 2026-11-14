@@ -119,8 +119,8 @@ def test_the_gate_refuses_a_name_no_line_covers_and_says_how_to_add_one():
 
 def test_the_gate_refuses_an_expired_or_spent_line_and_a_lease_past_its_max_age():
     assert "expired at 2026-09-24T20:00:00Z" in B.gate("vy-a-1", 1, {**guard_state(), "last_ok_poll": T0 + 86400}, T0 + 86400)
-    assert "at its cap ($3.00 of $3)" in B.gate("vy-a-1", 1, guard_state(vy_a={"spent": 3.0}), T0)
-    assert "at its cap" in B.gate("vy-a-1", 1, guard_state(vy_a={"spent": 1.0, "tripped": {"at": "t"}}), T0)
+    assert "at its limit ($3.00 of $3)" in B.gate("vy-a-1", 1, guard_state(vy_a={"spent": 3.0}), T0)
+    assert "at its limit" in B.gate("vy-a-1", 1, guard_state(vy_a={"spent": 1.0, "tripped": {"at": "t"}}), T0)
     assert "--max-hours 5 is over the line 'vy-a-''s max_pod_hours 4" in B.gate("vy-a-1", 5, guard_state(), T0)
     assert B.gate("vy-a-big-1", 5, guard_state(vy_a={"spent": 3.0}), T0) is None, "the longest prefix is the one judged"
 

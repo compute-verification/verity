@@ -54,7 +54,7 @@ session's end, beside the ledger, and it reads main's first-parent history from 
 
 ~~~sh
 git fetch origin main && git rev-list --first-parent origin/main > main-first-parent.txt
-install -m 0644 -o root -g root main-first-parent.txt /opt/vy-verifier/main-first-parent.txt   # on the auditor host
+install -m 0644 -o root -g root main-first-parent.txt /opt/vy-verifier/main-first-parent.txt   # on the auditor device
 ~~~
 
 The gate refuses a run before starting anything while the file is missing. A challenger pinned after the file was
@@ -98,7 +98,7 @@ tar --create --files-from=private/compose/inputs.txt --file=- | $COMPOSE_GATE co
 `COMPOSE_GATE` is the sender's setting: `ssh` with the lane's gate key, as `research` on that address.
 
 At pin time, as `auditor`, infra builds the tree's venv (`uv sync --all-packages --extra torch-cpu`) and the Lean
-packages the compose runs (`verity/protocols/proofs/recursion/verifier/recursive`, whose `vstar-recursive` the record runs, and the
+packages the compose runs (`verity/protocols/proofs/spot_flock/verifier/lean`, whose `vstar-recursive` the record runs, and the
 composite's), and records the pin with the branch it is on (`host.py pinned COMMIT BRANCH`). The compose runs as
 `auditor` with `HOME=/var/lib/vy-compose`, so `lake` and `elan` resolve from `/usr/local/bin` or that home's
 `.elan/bin`. The docstring says what the gate refuses and what it answers.

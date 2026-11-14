@@ -9,7 +9,7 @@ import all Init.Data.String.Defs
 
 /-! # A statement the deployed `--zk` setup parses
 
-`Loop.not_zkOut_leakL` and the session loop's honest witness take a statement `x` with
+`Loop.not_zkOut_link` and the session loop's honest witness take a statement `x` with
 `FlockDeploy.setupOf true x = some _`. This file holds what such a statement needs.
 
 * `FlockDeploy.decode_encode_of_fits`: `decode` reads back every `Raw` whose lengths fit their 8-byte words, so a

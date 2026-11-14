@@ -21,10 +21,10 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
-from verity.circuits.types import Array
 from verity.circuits.ops.boolean import attention as BA
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.types import Array
 from verity.definitions.registry import boolean_softcap as BSC
 from verity.definitions.registry import fa2_softcap as FS
 from verity.definitions.registry import prims as P

@@ -26,7 +26,7 @@ import Proofs.Flock.Soundness.Refine.Walk
 
 `zk_session_soundJ` takes `RecordsLiveZKJ` (`hRec`) and `DrawOkZKJ` at every sample of the live subset sampling design (`hDraw`). As
 at one table (`ZkLink/DrawOk.lean`), the record and its sample file are custody, and the rest of `DrawOkZKJ` is
-flock-verify's own arithmetic. This file splits them:
+verity-verify-proof's own arithmetic. This file splits them:
 
 * `drawOkZKJ_of_size`: from `DrawFileZK dj law pop` at any sampling design, at a sample `S` whose file decodes only to `q` units, with
   `nTab I` dividing `q`, `DrawOkZKJ` holds at `mPtsOf c.g (q / nTab I)` link points. The stratified sampling design meets it at
@@ -37,7 +37,7 @@ flock-verify's own arithmetic. This file splits them:
   units, which are the units `partOf` sends to table `j`. No fact about the sampling design's runs is needed: the run that reads
   past the source's bytes samples every unit, whose sample file decodes only at `kd = n`.
 * `zk_session_soundJ_custody`: `zk_session_soundJ` with `RecordCustodyZKJ` (`live-verifier`) for `hRec` and `hDraw`,
-  at `mPtsOf c.g (kd / nTab I)` link points, and `nTab I ∣ kd` (flock-verify accepts a session of `count > 1` tables
+  at `mPtsOf c.g (kd / nTab I)` link points, and `nTab I ∣ kd` (verity-verify-proof accepts a session of `count > 1` tables
   only at a sample that splits into `count` equal parts, `accepts_tables`).
 -/
 

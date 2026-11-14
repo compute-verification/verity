@@ -269,22 +269,22 @@ def test_what_the_lean_verifier_builds_keys_the_suite_by_its_sources(tmp_path, m
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
                                                      '[tool.verity.tests]\nartifacts = ["verity/core/service/flock/.lake/build/bin/'
-                                                     'flock-verify", "pkg/.lake/build/bin/tool"]\n')
+                                                     'verity-verify-proof", "pkg/.lake/build/bin/tool"]\n')
     _git(tmp_path, "init", "-q")
     S = _suites(monkeypatch, tmp_path)
     [suite] = S.discover()
     absent = S.artifact_ids(suite)
-    assert absent["verity/core/service/flock/.lake/build/bin/flock-verify"].startswith("built from ")
+    assert absent["verity/core/service/flock/.lake/build/bin/verity-verify-proof"].startswith("built from ")
     assert absent["pkg/.lake/build/bin/tool"] == "absent"
     (lean / ".lake" / "build" / "bin").mkdir(parents=True)
-    (lean / ".lake" / "build" / "bin" / "flock-verify").write_bytes(b"a build")
+    (lean / ".lake" / "build" / "bin" / "verity-verify-proof").write_bytes(b"a build")
     assert S.artifact_ids(suite) == absent, "built or not, the same sources"
     (lean / "Flock" / "A.lean").write_text("def a := 2\n")
     S._SOURCES.clear()
     assert S.artifact_ids(suite) != absent, "other sources"
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "mathlib"\n')
     S._SOURCES.clear()
-    assert S.artifact_ids(suite)["verity/core/service/flock/.lake/build/bin/flock-verify"] == hashlib.sha256(b"a build").hexdigest()
+    assert S.artifact_ids(suite)["verity/core/service/flock/.lake/build/bin/verity-verify-proof"] == hashlib.sha256(b"a build").hexdigest()
 
 
 def test_jobs_default_to_the_cpus_this_process_may_use(tmp_path, monkeypatch):
@@ -1171,7 +1171,7 @@ def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp
 
 def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp_path):
     """check's verity-flock and verity-lean-audit run after its lean-build step, with `lake` on the PATH; run on their own they
-    skipped the Lean tests or found no `flock-verify`. So suites.py builds the verifier first, only for those suites, not when
+    skipped the Lean tests or found no `verity-verify-proof`. So suites.py builds the verifier first, only for those suites, not when
     check says it's built (`--lean-built`), and a failed build fails them unrun."""
     root, log = tmp_path / "tree", tmp_path / "lake.log"
     _env_workspace(root, {"verity-flock": "import shutil\n\ndef test_lake():\n    assert shutil.which('lake')\n",

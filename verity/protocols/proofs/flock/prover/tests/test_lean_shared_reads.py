@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "public-inputs"
 STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
 N, BC = 4, 128

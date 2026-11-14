@@ -1,4 +1,11 @@
-/-
+module
+
+public import Flock.ProvedScope
+public import Flock.RegKnown
+public import Flock.Registered
+public import Flock.TmplReads
+
+/-!
 `Flock.HmRow` (registered reads), a value the verifier registers at known content (`Registered.KNOWN_KEY`): the known
 content binds a statement's row only where the circuit reads or returns it. `check` refuses a circuit one of whose ports
 the `--registered` file names at known content is not a `sha512/row/v2` row of the known rows' words, or has a row bit
@@ -16,12 +23,6 @@ A port the file marks `read_in_full` (`READ_KEY`) is checked the same way, as on
 (`fullRows`): its every bit is read, at the registered width, so two statements that read one registered row in full
 depend on the same bits of it.
 -/
-module
-
-public import Flock.ProvedScope
-public import Flock.RegKnown
-public import Flock.Registered
-public import Flock.TmplReads
 
 @[expose] public section
 

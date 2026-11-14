@@ -362,7 +362,7 @@ def shared_rows(algebra, stacked=(), tops=()) -> dict:
 
 def staged_shared_rows(v: Path) -> dict:
     """The one shared rows file (`--rec-rows`) that every V* part of the statements staged under ``v`` is verified against,
-    and whose SHA-512 `flock-verify rec-compose` holds every part's verdict to: `shared_rows` of the algebra's parts, R's
+    and whose SHA-512 `verity-verify-proof rec-compose` holds every part's verdict to: `shared_rows` of the algebra's parts, R's
     levels, and the levels and caps that read the tops; without the algebra, the first level's ``acc`` as ``acc0``, the one
     `rec-acc` registration every part's chain must be (`RecVStar.checkAcc`)."""
     v = Path(v)

@@ -169,7 +169,7 @@ theorem piopCut_lig {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape
     simp [hpts]
   have hesz : extras.size = spec.points * (stAt x j).regions.size := by
     rw [FlockDeploy.extraClaims_size heS, hpsz, hpts, Nat.mul_comm]
-  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]
     exact (zkTab x j).hz

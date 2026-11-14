@@ -23,7 +23,7 @@ decoded from the play's output on the tape.
 * **The two premises** the logged coupling takes at it, off events at the stops that the joint law is held off
   (`LinkHold` at the first stop's link points, `RoundHold` at each later stop's round coins): the joint law's tape off
   them is, at every event, within the hiding term of the uniform tape (`Couples`, the coin map's), and on the joint
-  law's support off them an accepted play `P` holds of that misses nowhere has an outcome flock-verify `--zk` accepts
+  law's support off them an accepted play `P` holds of that misses nowhere has an outcome verity-verify-proof `--zk` accepts
   (`Decodes`, the decoders'). Off them the logged coupling holds at the projection (`loggedCoupling_withProject`), so
   `CouplingTarget` holds at the constructions with the projection and the messages' finders wherever the binding's
   bound does (`couplingTarget_withProject`). Where the held-off events are rare, `Couples` carries their probability
@@ -676,7 +676,7 @@ theorem ofReal_pr_eq_prCoin {C : Type} [Fintype C] [Nonempty C] (Q : C → Prop)
 
 /-- **The decoders' premise**, at the composite `k` and the property `P` of the play: on the joint law's support off
 `BL` and `B`, a tape whose play's sampled verdict accepts, that misses at no round and not at the record, and whose play
-`P` holds of, is beside an outcome flock-verify `--zk` accepts at `own`. -/
+`P` holds of, is beside an outcome verity-verify-proof `--zk` accepts at `own`. -/
 def Decodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (A : Live) (rd : Reading A.rounds)
     (σ : Strategy (V.game θ F c)) (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
     (BL : LinkHold A.mP) (B : RoundHold) : Prop :=

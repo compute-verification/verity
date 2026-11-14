@@ -75,7 +75,7 @@ structure Params where
   query : String
   lo : Nat
   hi : Nat
-  /-- Each slot's max_tokens, which a row of record serves whatever it samples (stop mode `fixed`, `ignore_eos`). -/
+  /-- Each slot's max_tokens, which a workload of record serves whatever it samples (stop mode `fixed`, `ignore_eos`). -/
   maxTokens : List Nat
   /-- A live execution phase's salt session's inputs as its verifier holds them (`liveKeys`); `none` for any other execution phase. -/
   live : Option Json := none

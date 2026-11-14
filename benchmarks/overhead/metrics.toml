@@ -5,9 +5,10 @@
 # changes only when a new run of record is labelled (`verity bench overhead run --record RUN`)
 [[metric]]
 id = "benchmarks/pearl-plus-gamma-c-h200"
-title = "Pearl+'s overhead γ over stock FP8 on the H200 at its compute-bound point C, in busy SM-time, from the run of record, without the output's commitment (each layer's output hash not counted)"
+title = "Pearl+ overhead, compute-bound point"
 owner = "benchmarks"
-unit = "busy SM-seconds over stock's, less one"
+unit = "fraction over stock"
+axis = "Pearl+'s busy SM-time over stock FP8's, less one, on the H200 at its compute-bound point, from the run of record and without each layer's output hash."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/overhead/run.py table"
 every = "7d"
@@ -16,9 +17,10 @@ goal = "kernels/overhead-counts-output-commitment"
 
 [[metric]]
 id = "benchmarks/pearl-plus-gamma-l-h200"
-title = "Pearl+'s overhead γ over stock FP8 on the H200 at its memory-bound point L, in busy SM-time, from the run of record, without the output's commitment (each layer's output hash not counted)"
+title = "Pearl+ overhead, memory-bound point"
 owner = "benchmarks"
-unit = "busy SM-seconds over stock's, less one"
+unit = "fraction over stock"
+axis = "Pearl+'s busy SM-time over stock FP8's, less one, on the H200 at its memory-bound point, from the run of record and without each layer's output hash."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/overhead/run.py table"
 every = "7d"

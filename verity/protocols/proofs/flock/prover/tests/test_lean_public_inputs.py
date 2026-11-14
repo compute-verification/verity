@@ -24,7 +24,7 @@ import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: `stage/`: `circuit.stage(IL.lowering(rope_head.definition(sub), rope_head.UNIT + "/x4", group=4), set, 0, 4, out,
 #: public_inputs=PUBLIC)` on `generate(rope-head/d64/neox-bf16, 4, 20260926)`; `records-cpu/`: `flock-circuit selftest
 #: --instances inst-4.bin --circuit circuit.txt --record-dir` (CPU, non-zk) at 54146af61

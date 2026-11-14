@@ -1,10 +1,3 @@
-/-
-The `#guard`s that pin the composition's verdict rule on a product of two stubs, `a` and `b` (`Core.Example.protocol`,
-k = 2): every pair of the subprotocols' verdicts, any rejection rejecting the whole; a commitment that doesn't bind their digests; and
-every way the cases can fail to fit the composition. Then three stubs `a`, `b` and `c` of which `a` and `c` must commit
-to one record (`same`): a pair that didn't refused whatever the subprotocols answer. Then the same three with `a` and `b`
-also on one store (`tiedSame`): two stores refused unless `same` rejects already.
--/
 module
 
 public import CoreComposition.Cases
@@ -15,6 +8,14 @@ meta import CoreComposition.Cases
 meta import CoreComposition.Same
 meta import CoreComposition.Stubs
 meta import CoreComposition.Tie
+
+/-!
+The `#guard`s that pin the composition's verdict rule on a product of two stubs, `a` and `b` (`Core.Example.protocol`,
+k = 2): every pair of the subprotocols' verdicts, any rejection rejecting the whole; a commitment that doesn't bind their digests; and
+every way the cases can fail to fit the composition. Then three stubs `a`, `b` and `c` of which `a` and `c` must commit
+to one record (`same`): a pair that didn't refused whatever the subprotocols answer. Then the same three with `a` and `b`
+also on one store (`tiedSame`): two stores refused unless `same` rejects already.
+-/
 
 @[expose] public section
 

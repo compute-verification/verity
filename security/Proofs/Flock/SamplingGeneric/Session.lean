@@ -31,9 +31,9 @@ rounds (`Arg.wf`) and the contract's `runs` and `fixed` (`RunsFixed`, which `Com
   compiled round through `emb`, and `P'`'s SHA-512 calls are among the compiled verifier's. So
   `Pr[B_sess] ≤ (k_V/k_A)·Pr[B]` at the coins off the session, `Pr[B]` there the compiled verifier's `B` at its round
   guess (`forkCollAt`), which averages to `PrB` (`Ex_forkCollAt`).
-* `fiber_bound`: the two at the largest of the proof blocks' error bounds, `κ_s + √(k_V·γ_s·Pr[B])`, since `A`'s
-  errors at the session are within the block's bounds (`runs`), so `κ_A ≤ κ_s` and `γ_A/k_A ≤ γ_s`, `k_A` the rounds
-  of the block's shape (`Arg.wf`).
+* `session_gamma_le`, `fiber_bound`: the two at the largest of the proof blocks' error bounds,
+  `κ_s + √(k_V·γ_s·Pr[B])`, since `A`'s errors at the session are within the block's bounds (`runs`), so `κ_A ≤ κ_s`
+  and `γ_A/k_A ≤ γ_s`, `k_A` the rounds of the block's shape (`Arg.wf`).
 * `sessionKS_of`, `sessionKSOf`: **`SessionKS`**, at the slot a selection picks among the sample's, over the second
   stage, `κ_s + √(k_V·γ_s·β(ω, r))` with `β` averaging at most `Pr[B]`: the coins the picked slot gives its block are
   one coordinate of the slots' and then of the blocks' (`Pr_pi_eval_dep`), and resampling the block's session's rounds
@@ -307,10 +307,53 @@ theorem session_fork_div (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω :
     exact (show PrB H A.V P' xS = 0 from dite_eq_right hk).trans_le
       (le_of_eq (by rw [h0, div_zero, zero_mul]))
 
+/-- **`A`'s `γ·Pr[B_sess]` at a sampled proof block's session is within the sessions' bound**:
+`γ_A·Pr[B_sess] ≤ γ_s·k_A·Pr[B_sess] ≤ k_V·γ_s·Pr[B]`, `A`'s `γ` at the session within the block's bound (`runs`),
+`k_A` the rounds of the block's shape (`Arg.wf`), and the session's fork (`session_fork`). -/
+theorem session_gamma_le (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
+    (R0 : Fin (L.V.k x) → Coin) (u : Fin (L.nPU x)) (xS : Msg) (P' : Prover Unit)
+    (hshape : A.shape xS = L.sh x u) (hγb : A.γ xS ≤ L.γb x u) (hcard : A.V.k xS = (L.rounds x u).card)
+    (hlog : ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ t' ∈ L.rounds x u, t < t') → r' t = R0 t) →
+      ∀ q ∈ (run H P' A.V xS () (L.coinsOf x u xS r')).vLog, q ∈ (run H P L.V x ω r').vLog) :
+    A.γ xS * PrB H A.V P' xS ≤
+      (L.V.k x : ℝ) * L.γs x * Ex fun σ => forkCollAt H L.V P x ω (forkOn (L.rounds x u) R0 σ) := by
+  have hF := L.session_fork H x P ω R0 u xS P' hcard hlog
+  have hkS : A.V.k xS = A.rounds (L.sh x u) := (A.wf xS).trans (congrArg A.rounds hshape)
+  have hkle : A.V.k xS ≤ L.V.k x := by
+    simpa using Fintype.card_le_of_injective _ (L.emb x u xS hcard).injective
+  have hγs0 := L.γs_nonneg x
+  have hY : 0 ≤ Ex fun σ => ∑ j, Pr fun R2 => forkColl H L.V P x ω j (forkOn (L.rounds x u) R0 σ) R2 :=
+    Ex_nonneg fun _ => sum_nonneg fun _ _ => Pr_nonneg _
+  have hEx : (Ex fun σ => forkCollAt H L.V P x ω (forkOn (L.rounds x u) R0 σ)) =
+      (Ex fun σ => ∑ j, Pr fun R2 => forkColl H L.V P x ω j (forkOn (L.rounds x u) R0 σ) R2) / L.V.k x := by
+    simp only [forkCollAt, Ex_div]
+  rw [hEx]
+  by_cases hk : 0 < A.V.k xS
+  · have hkS0 : (A.V.k xS : ℝ) ≠ 0 := by positivity
+    have hkV0 : (L.V.k x : ℝ) ≠ 0 := by
+      have := lt_of_lt_of_le hk hkle
+      positivity
+    have hg : A.γ xS / A.V.k xS ≤ L.γs x := by
+      refine (div_le_div_of_nonneg_right hγb (Nat.cast_nonneg _)).trans ?_
+      rw [hkS]
+      exact L.γ_le_γs x u.isLt
+    have hP := PrB_nonneg H A.V P' xS
+    calc A.γ xS * PrB H A.V P' xS
+        = A.γ xS / A.V.k xS * (A.V.k xS * PrB H A.V P' xS) := by
+          rw [← mul_assoc, div_mul_cancel₀ _ hkS0]
+      _ ≤ L.γs x * (A.V.k xS * PrB H A.V P' xS) :=
+          mul_le_mul_of_nonneg_right hg (mul_nonneg (Nat.cast_nonneg _) hP)
+      _ ≤ L.γs x * Ex fun σ => ∑ j, Pr fun R2 => forkColl H L.V P x ω j (forkOn (L.rounds x u) R0 σ) R2 :=
+          mul_le_mul_of_nonneg_left hF hγs0
+      _ = (L.V.k x : ℝ) * L.γs x * ((Ex fun σ => ∑ j, Pr fun R2 =>
+            forkColl H L.V P x ω j (forkOn (L.rounds x u) R0 σ) R2) / L.V.k x) := by
+          rw [mul_comm (L.V.k x : ℝ), mul_assoc, mul_div_cancel₀ _ hkV0]
+  · rw [show PrB H A.V P' xS = 0 from dite_eq_right hk, mul_zero]
+    exact mul_nonneg (mul_nonneg (Nat.cast_nonneg _) hγs0) (div_nonneg hY (Nat.cast_nonneg _))
+
 /-- **At one sampled proof block's session, the others' coins fixed**: the session transfer and the session's fork at
 `runs`'s session, with `A`'s errors there within the block's bounds (`runs`), so at most the largest of the proof
-blocks' bounds: `κ_A ≤ κb ≤ κ_s`, and `γ_A·Pr[B_sess] ≤ γ_s·k_A·Pr[B_sess] ≤ k_V·γ_s·Pr[B]`, `k_A` the rounds of the
-block's shape (`Arg.wf`). -/
+blocks' bounds: `κ_A ≤ κb ≤ κ_s`, and `γ_A·Pr[B_sess] ≤ k_V·γ_s·Pr[B]` (`session_gamma_le`). -/
 theorem fiber_bound {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS : L.RunsFixed H) (x : Msg)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (R0 : Fin (L.V.k x) → Coin) (u : Fin (L.nPU x))
     (hu : u.val ∈ L.checked x R0) :
@@ -321,42 +364,8 @@ theorem fiber_bound {H : Msg → Msg} (hKS : A.KS H) {L : Compiled Coin A} (hS :
         Ex fun σ => forkCollAt H L.V P x ω (forkOn (L.rounds x u) R0 σ)) := by
   obtain ⟨xS, P', hshape, hκb, hγb, hcard, hacc, hview⟩ := hS.runs x Ω P ω R0 u hu
   have hT := L.session_transfer hKS x P ω R0 u xS P' hshape hcard hacc fun r' h => (hview r' h).1
-  have hF := L.session_fork H x P ω R0 u xS P' hcard fun r' h => (hview r' h).2
   have hκ := hκb.trans (L.κ_le_κs x u.isLt)
-  have hkS : A.V.k xS = A.rounds (L.sh x u) := (A.wf xS).trans (congrArg A.rounds hshape)
-  have hkle : A.V.k xS ≤ L.V.k x := by
-    simpa using Fintype.card_le_of_injective _ (L.emb x u xS hcard).injective
-  have hγs0 := L.γs_nonneg x
-  have hY : 0 ≤ Ex fun σ => ∑ j, Pr fun R2 => forkColl H L.V P x ω j (forkOn (L.rounds x u) R0 σ) R2 :=
-    Ex_nonneg fun _ => sum_nonneg fun _ _ => Pr_nonneg _
-  have hEx : (Ex fun σ => forkCollAt H L.V P x ω (forkOn (L.rounds x u) R0 σ)) =
-      (Ex fun σ => ∑ j, Pr fun R2 => forkColl H L.V P x ω j (forkOn (L.rounds x u) R0 σ) R2) / L.V.k x := by
-    simp only [forkCollAt, Ex_div]
-  have hγ : A.γ xS * PrB H A.V P' xS ≤
-      (L.V.k x : ℝ) * L.γs x * Ex fun σ => forkCollAt H L.V P x ω (forkOn (L.rounds x u) R0 σ) := by
-    rw [hEx]
-    by_cases hk : 0 < A.V.k xS
-    · have hkS0 : (A.V.k xS : ℝ) ≠ 0 := by positivity
-      have hkV0 : (L.V.k x : ℝ) ≠ 0 := by
-        have := lt_of_lt_of_le hk hkle
-        positivity
-      have hg : A.γ xS / A.V.k xS ≤ L.γs x := by
-        refine (div_le_div_of_nonneg_right hγb (Nat.cast_nonneg _)).trans ?_
-        rw [hkS]
-        exact L.γ_le_γs x u.isLt
-      have hP := PrB_nonneg H A.V P' xS
-      calc A.γ xS * PrB H A.V P' xS
-          = A.γ xS / A.V.k xS * (A.V.k xS * PrB H A.V P' xS) := by
-            rw [← mul_assoc, div_mul_cancel₀ _ hkS0]
-        _ ≤ L.γs x * (A.V.k xS * PrB H A.V P' xS) :=
-            mul_le_mul_of_nonneg_right hg (mul_nonneg (Nat.cast_nonneg _) hP)
-        _ ≤ L.γs x * Ex fun σ => ∑ j, Pr fun R2 => forkColl H L.V P x ω j (forkOn (L.rounds x u) R0 σ) R2 :=
-            mul_le_mul_of_nonneg_left hF hγs0
-        _ = (L.V.k x : ℝ) * L.γs x * ((Ex fun σ => ∑ j, Pr fun R2 =>
-              forkColl H L.V P x ω j (forkOn (L.rounds x u) R0 σ) R2) / L.V.k x) := by
-            rw [mul_comm (L.V.k x : ℝ), mul_assoc, mul_div_cancel₀ _ hkV0]
-    · rw [show PrB H A.V P' xS = 0 from dite_eq_right hk, mul_zero]
-      exact mul_nonneg (mul_nonneg (Nat.cast_nonneg _) hγs0) (div_nonneg hY (Nat.cast_nonneg _))
+  have hγ := L.session_gamma_le H x P ω R0 u xS P' hshape hγb hcard fun r' h => (hview r' h).2
   exact hT.trans (add_le_add hκ (Real.sqrt_le_sqrt hγ))
 
 /-! ## The selected slot's session, resampled -/

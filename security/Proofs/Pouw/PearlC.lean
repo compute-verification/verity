@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
 public import Proofs.Pouw.PearlC.DeviceFp4Gap
 public import Proofs.Pouw.PearlC.Fp4IssueGap
@@ -14,6 +14,7 @@ public import Proofs.Pouw.PearlC.TTOutW1Item1
 public import Proofs.Pouw.Lemmas.PearlC
 public import Proofs.Pouw.QTree
 public import Proofs.Pouw.PearlC.RowSeedSkip
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Proofs of Pearl-C's guarantees

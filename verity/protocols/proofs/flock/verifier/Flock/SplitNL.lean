@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.Net
+import all Init.Data.String.Legacy
+
+/-!
 `String.splitOn s "\n"` (the legacy split every circuit parse starts from) as `List.splitOn '\n'` on `s.toList`
 (`splitOn_nl`), with the byte positions it walks: the model a parse that splits a file's lines elsewhere (in tasks, from
 byte offsets) is held to. `splitTasks` splits them so, reading each row's numbers in the same task (`Net.Row`), and
 compiled code splits an ASCII string's lines off its bytes (`splitOn_eq_fast`).
 -/
-module
-
-public import Flock.Net
-import all Init.Data.String.Legacy
 
 @[expose] public section
 

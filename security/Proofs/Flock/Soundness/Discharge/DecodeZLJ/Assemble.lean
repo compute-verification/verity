@@ -29,7 +29,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 /-!
 # The decoder is right at `J` tables
 
-`decodesOnJ_exec`: `DecodesOnJ` at `planJ`, table by table. At an outcome flock-verify accepts, at table `j`:
+`decodesOnJ_exec`: `DecodesOnJ` at `planJ`, table by table. At an outcome verity-verify-proof accepts, at table `j`:
 
 * `RecordsLiveJ` gives the record's sample `dj S`, the proof files, the link points, and table `j`'s root and streams.
 * `accepts_tables` sets table `j` up with setupH under `tagsAt` at `partDraw` of part `j`, which is `partJson (dj S)`;

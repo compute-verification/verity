@@ -108,6 +108,7 @@ def test_a_request_that_pins_a_variant_the_manifest_does_not_hold_is_not_read(tm
 
 def test_the_cpu_quota_is_the_cgroups_where_it_states_one_and_the_machines_count_otherwise(tmp_path, monkeypatch):
     """A cgroup file that is not `<quota> <period>` in integers, or cannot be read, states no quota."""
+    assert SR.CGROUP_CPU_MAX == "/sys/fs/cgroup/cpu.max"                             # cgroup v2's, of the process's own group
     f = tmp_path / "cpu.max"
     monkeypatch.setattr(SR, "CGROUP_CPU_MAX", str(f))
     machine = os.cpu_count() or 1

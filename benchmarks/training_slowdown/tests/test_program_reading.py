@@ -38,7 +38,8 @@ Where the readings differ, the Program's is below, each for one cause:
 from __future__ import annotations
 
 import dataclasses
-import importlib.util
+import functools
+import json
 import math
 import sys
 from collections import Counter
@@ -50,22 +51,22 @@ import torch
 from training_slowdown import calculator
 from training_slowdown import work as TW
 from training_slowdown import gates as G
+from training_slowdown import program_reading as PR
 from training_slowdown.capture import capture_step, products
+from training_slowdown.program_reading import loop
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(ROOT / "benchmarks" / "circuit_properties"))
+from circuit_properties import points as PT  # noqa: E402
 from circuit_properties import work as WK  # noqa: E402
 
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
+from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.evaluation.bits import compile as compile_bits  # noqa: E402
 from verity.circuits.program import Program, is_input  # noqa: E402
-from verity.circuits.refs import Coll, concat, tuple_of  # noqa: E402
-from verity.circuits.types import Array, Tuple  # noqa: E402
 from verity.definitions.boolean import boolean_version  # noqa: E402
 from verity.definitions.registry import prims as PRIMS  # noqa: E402
 from verity_vllm.program.frontend.train_step import AdamW, step_program  # noqa: E402
 
-LF_PATH = ROOT / "adapters" / "vllm" / "tests" / "program" / "train_step_lf.py"
 #: the step's batch as rows of tokens, and the model's context (the rope tables' rows)
 BATCH, CTX = (2, 17), 34
 #: the policy's c in gates, and the k |C| is read at
@@ -73,45 +74,15 @@ C, K0 = 1e13, 65536.0
 MC = WK.min_cut()
 #: the k of the dial at which (H) states β(k)
 KS = tuple(float(k) for k in products.DIAL_K if MC.beta(k) is not None)
+#: the tiny step's whole `Work` at `K0` over two iterations, written by running this file
+TINY_WORK = Path(__file__).with_name("tiny_work.json")
 #: the primitives no MAC of the trace's prices: every counted op is a multiply, a division, a fused multiply-add, a
 #: scaled add or a gather
 UNCOUNTED = ("F32ExpRn", "F32Sqrt", "F32Add", "F32Sub", "SelectF32", "F32MaxRef", "F32Eq", "I32Eq", "I32Add",
              "F32Neg", "I64ToI32", "BitAnd")
 
 
-def _lf():
-    spec = importlib.util.spec_from_file_location("training_slowdown_tests_program_lf", LF_PATH)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-LF = _lf()
-
-
-def loop(step: Program, n: int) -> Program:
-    """``step`` (`step_program`'s: θ, the two moments, three scalars, the buffers, the batch) as the body of a scan of
-    ``n`` iterations."""
-    params, ret = step.fn.signature()
-    P = len(step.theta)
-    state, xs, shared = params[:3 * P], params[3 * P:3 * P + 3] + params[-1:], params[3 * P + 3:-1]
-    carry_t, loss_t = Tuple(*(t for _, t in state)), ret.fields[0]
-
-    def body(B, S, carry, *rest):
-        x, sh = rest[:len(xs)], rest[len(xs):]
-        out = B.call(step.fn, *(carry[i] for i in range(len(state))), *x[:3], *sh, x[3])
-        return tuple_of(Coll(carry_t, concat([out[1 + i].refs for i in range(len(state))])), out[0])
-
-    it = CompositeDefinition("Iteration", 1, (), lambda S: ((("carry", carry_t), *xs, *shared), Tuple(carry_t, loss_t)),
-                             body, register=False)
-    sig = ((*state, *((name, Array(n, t)) for name, t in xs), *shared), Tuple(carry_t, Array(n, loss_t)))
-
-    def run(B, S, *a):
-        init = Coll(carry_t, concat([c.refs for c in a[:len(state)]]))
-        return B.scan(bind(it), init, xs=list(a[len(state):len(state) + len(xs)]), shared=list(a[len(state) + len(xs):]))
-
-    return Program(bind(CompositeDefinition("Loop", 1, (), lambda S: sig, run, register=False)), theta=step.theta)
+LF = PR.lf()
 
 
 def _key(g: WK.Group) -> tuple:
@@ -273,9 +244,12 @@ def trace_blocks(got: dict) -> float:
     return got["bound"]["blocks"] if got["bound"]["available"] else 0.0
 
 
-def blocks(work: WK.Work, F_: float | None = None) -> float:
-    b = WK.bound(work, C, F=F_)
-    return b.bound.blocks if b else 0.0
+def blocks(work: WK.Work, F_: float) -> float:
+    """The blocks of the calculator's choice on ``work``'s products at F = ``F_`` on every sub-work; 0 where the
+    reading gives no bound."""
+    if WK.bound(work, C) is None:
+        return 0.0
+    return MC.slowdown_of(C, work.k, size=work.gates, work=WK.products(work), F=F_).bound.blocks
 
 
 def trace_work(r: Reading, k: float) -> WK.Work:
@@ -374,6 +348,44 @@ def test_both_sizes_are_boolean_gates_and_differ_by_what_each_prices(readings):
     assert mine_rest - uncounted <= theirs_rest <= mine_rest
 
 
+def test_the_point_evaluates_each_iteration_it_runs_once(readings):
+    """The reading's test at a point (`points.check`) passes the step's loop, its charged claims among them, and
+    costs about one evaluation of the step: the two iterations the reader reads as distinct contexts, of two and of
+    three, each the step's primitive words once, at one point, none by the reference a word at a time. Its 23
+    specific-alone claims are tested at the word-by-word point, its lanes beside the one-word point's, and its 23
+    distinct ones at the one-word point."""
+    memo: dict = {}
+
+    def words(fn) -> int:
+        if fn.id not in memo:
+            memo[fn.id] = sum((nd.out.leaves if isinstance(nd.fn, PrimitiveDefinition) else
+                               (nd.n if nd.form in ("batch", "scan") else 1) * words(nd.fn))
+                              for nd in fn.body.nodes if not is_input(nd.fn))
+        return memo[fn.id]
+
+    for n in (2, 3):
+        p = loop(readings.step, n)
+        _w, R, root, reasons = WK._read(p, K0, WK.PRODUCTS, WK.LOOKUPS)
+        t = PT.check(p, R, root, reasons)
+        cl = PT.claims(R, root, reasons)
+        alone = Counter(wb for nodes in cl.values() for cs in nodes.values() for *_c, wb in cs)
+        assert (t.words, t.points, t.word_points, t.claims, dict(t.reference)) == \
+            (2 * words(readings.step.root), 1, 1, 46, {})
+        assert alone == {False: 23, True: 23}
+
+
+@pytest.mark.slow
+def test_the_program_reading_command_reads_its_small_case(tmp_path, capsys):
+    """`python -m training_slowdown.program_reading` at its small case, the tiny step at batch 2, ctx 16 and vocab 64
+    looped twice: passed, its N, its points and claims at both, and the object it prints and writes."""
+    out = tmp_path / "reading.json"
+    assert PR.main(["--size", "tiny", "--ctx", "16", "--vocab", "64", "--out", str(out)]) == 0
+    got = json.loads(out.read_text())
+    assert capsys.readouterr().out == "program_reading " + json.dumps(got) + "\n"
+    assert (got["refused"], got["N"], got["points"], got["word_points"], got["claims"]) == (None, 6029312, 1, 1, 44)
+    assert {"build_s", "read_before_pass_s", "pass_s", "read_s", "pass_peak_gib", "peak_gib", "gates"} <= got.keys()
+
+
 def test_the_readings_constants_are_the_benchmarks():
     assert WK.ACC_BITS == products.ACC_BITS and WK.SHARED_PREFIX == TW.SHARED_PREFIX and WK.HEAD_K == TW.HEAD_K
     assert TW.P_BATCH in " ".join(WK.__doc__.split())
@@ -385,3 +397,58 @@ def test_the_readings_constants_are_the_benchmarks():
         for w, rank in ((32.0, 4.0), (16.0, 64.0)):
             assert WK.k_star(k, w) == pytest.approx(TW.k_star(k, w))
             assert WK.beta_eff(w, rank, k) == pytest.approx(TW.beta_eff(w, rank, k))
+
+
+@functools.cache
+def tiny_loop() -> Program:
+    """The lf model's tiny step, as `readings` builds it, over two iterations."""
+    with torch.device("meta"):
+        model = LF.LM(LF.SIZES["tiny"], ctx=CTX, vocab=64)
+    return loop(step_program(model, LF.square_loss, AdamW(**LF.ADAMW),
+                             torch.empty(*BATCH, dtype=torch.long, device="meta")), 2)
+
+
+def tiny_work(structure: bool = True) -> dict:
+    """`tiny_loop` read at `K0`: its whole `Work`, every set as a sorted list, as JSON reads it back."""
+
+    def plain(o):
+        if dataclasses.is_dataclass(o):
+            return {f.name: plain(getattr(o, f.name)) for f in dataclasses.fields(o)}
+        if isinstance(o, (set, frozenset)):
+            return sorted((plain(x) for x in o), key=repr)
+        if isinstance(o, (list, tuple)):
+            return [plain(x) for x in o]
+        return o
+
+    return json.loads(json.dumps(plain(WK.read(tiny_loop(), K0, structure=structure))))
+
+
+def test_the_tiny_steps_work_keeps_its_reading():
+    """The tiny step's whole `Work` is the one in `TINY_WORK`, field for field, so a change to the reader that moves any
+    product, rate, β, edge or count shows."""
+    assert tiny_work() == json.loads(TINY_WORK.read_text())
+
+
+def test_the_tiny_steps_work_word_by_word_keeps_its_reading():
+    """Read with every softmax row and select valued word by word (`WK.Reader`'s ``structure``), the tiny step's `Work`
+    is `TINY_WORK` too."""
+    assert tiny_work(structure=False) == json.loads(TINY_WORK.read_text())
+
+
+#: the products of the tiny step whose operand `WK.Reader` reads as a softmax's columns, word by word by design
+TINY_COLUMNS = 16
+
+
+def test_the_tiny_step_reads_every_softmax_and_select_from_its_runs():
+    """Each softmax and each select over one in the lf step is in the form `WK.Reader` reads from runs, so a builder
+    change that leaves the form fails here rather than reading word by word at every size; only the columns are read
+    word by word, `TINY_COLUMNS` products of them."""
+    R = WK.Reader(tiny_loop(), K0)
+    R.root()
+    assert {key for key in R.read_by if key[1] == "words"} == {("columns", "words")}
+    assert {n for (n, how) in R.read_by if how == "runs"} == {"softmax", "select"}
+    assert R.read_by["columns", "words"] == TINY_COLUMNS
+
+
+if __name__ == "__main__":
+    TINY_WORK.write_text(json.dumps(tiny_work(), indent=1) + "\n")

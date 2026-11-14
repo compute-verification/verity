@@ -12,7 +12,8 @@
 #   3. `served_verdicts.py pouw` writes the piece in PIECE_DIR with those --statements and --live-evidence (the window's
 #      gate sessions, ledger and pins among it);
 #   4. `pouw_piece.py period` writes the period's case and its Lean answer (pouw-period, built here) in period/, from the
-#      records step 3 fetched, where served_composite.sh finds it for remote's Lean.
+#      records step 3 fetched, where served_composite.sh finds it for remote's Lean; where pouw-period doesn't build,
+#      the piece is missing (pouw_piece.py exits 2), never answered by the Python reference.
 # Steps 3 and 4 share one set of the verifier's answers (`answers.Answers`, --lean-answers): each run's answer
 # is kept, as credit asks for it, under the SHA-512 of all its inputs in the verifier's own scratch (a 0700 directory
 # under VERIFIER_TMP, never the serve dir, removed on exit), so each statement is verified once, step 4 takes step 3's
@@ -33,7 +34,7 @@ TREE=$PWD TPY=$PWD/.venv/bin/python
 Q=$SD/private/pouw ST=$SD/private/pouw/drawn/statements.json LE=$SD/private/pouw/live/out/live/live-evidence.json
 (umask 077; mkdir -p "$Q") || exit 1
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
-LEAN=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
+LEAN=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
 [ -n "${FLOCK_VERIFY:-}" ] || { [ -x "$LEAN" ] && export FLOCK_VERIFY=$LEAN; }
 say() { echo "POUW $*"; }
 took() { echo "$(( ($(date +%s) - $1) / 60 )) min"; }
@@ -70,7 +71,7 @@ say "piece: served_verdicts.py pouw exit $rc after $(took "$t")$(taken "$P/check
 t=$(date +%s)
 EXE=$TREE/verity/protocols/accounting/pouw/verifier/lean/check/.lake/build/bin/pouw-period
 (cd verity/protocols/accounting/pouw/verifier/lean/check && lake build pouw-period) > "$Q/pouw-period-build.log" 2>&1 \
-  || say "period: pouw-period doesn't build (its log in the serve dir's private/pouw), so its case is answered by the Python reference"
+  || say "period: pouw-period doesn't build (its log in the serve dir's private/pouw), so the period's piece is missing"
 [ -x "$EXE" ] || EXE=
 rm -rf "$Q/period"
 "$TPY" benchmarks/one_stage/pouw_piece.py period --out "$Q/period" ${EXE:+--exe "$EXE"} --serve-run "$SD" --window "$WIN" \

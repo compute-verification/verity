@@ -51,7 +51,7 @@ A field's decode (`Accounting.TS.Lanes.decLane`, `decComb`) reads its bits throu
 * `ofNat_bitsN`: a u32 word's bits decode to it (partials and receipt words).
 
 So the decodes give a leaf back from rows that hold its words' encodings; that the known ports' rows hold their
-content is flock-verify's known-read check (`Lanes.KnownRead`). The leaf `LeafLanesSound` opens is the one the data
+content is verity-verify-proof's known-read check (`Lanes.KnownRead`). The leaf `LeafLanesSound` opens is the one the data
 ports' rows decode to (`Lanes.Committed`), so nothing is asked of those rows.
 -/
 

@@ -33,7 +33,7 @@ namespace Properties.Site
 def kind : Core.Site.Kind → Verity.Site.Kind
   | .site => .site
   | .host => .host
-  | .device => .device
+  | .accelerator => .accelerator
   | .memory => .memory
   | .certifier => .certifier
   | .challenger => .challenger
@@ -43,7 +43,7 @@ def kind : Core.Site.Kind → Verity.Site.Kind
 def ofKind : Verity.Site.Kind → Core.Site.Kind
   | .site => .site
   | .host => .host
-  | .device => .device
+  | .accelerator => .accelerator
   | .memory => .memory
   | .certifier => .certifier
   | .challenger => .challenger

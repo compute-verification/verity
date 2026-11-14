@@ -2,6 +2,7 @@ module
 
 public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 public import Proofs.Pouw.PearlC.Rev1Witness
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # rev1 on the H100 record at Llama 3.2 1B's linears: the served point's gap (compute accounting's file)

@@ -84,7 +84,7 @@ verity/protocols/accounting/certifier/verifier/tests/fixtures/cache_step_vectors
 verity/protocols/accounting/certifier/verifier/tests/fixtures/replay_step_vectors.json
 fixtures/lean-vectors
 verity/circuits/silicon/captures/autoproof-probe-vectors.json
-fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
+benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
 adapters/vllm/data/logs/m1.jsonl.gz
 adapters/vllm/data/logs/m6/log.jsonl.gz
 adapters/vllm/tests/regression/files.toml

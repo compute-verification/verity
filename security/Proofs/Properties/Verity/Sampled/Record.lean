@@ -15,12 +15,12 @@ The claims' sampling record (`Claims.Sampling.Deploy`) of the session one-stage 
 (`Verity.Sampled.Live`, `A`), with the verifier's own partition object and registered file `o` (`Own`): v2's audit in
 public-coin form (`V`), with what the sampling claims read of it (`code`, `record`).
 
-* **The verifier** (`V`), at the statement `xOf A o` (flock-verify's statement before the sample): `DRAW_ROUNDS` rounds
+* **The verifier** (`V`), at the statement `xOf A o` (verity-verify-proof's statement before the sample): `DRAW_ROUNDS` rounds
   of sampling coins, whose bytes (`drawBytes`) are the challenger's `MAX_COINS · COIN_BYTES` bytes v2's sample may read; one
   round in which the prover sends the session's sample file `d`, which the verifier keeps only when its units are the ones
   the coins sample (`drawOk`: `provedOf`, as v2 credits a session's units, against `drawn`, as v2's challenger sample reads
   the coins), its session has the statement's numbers (`numsOk`) and its statement fits its length words (`Fits`, as v2
-  refuses a length a session's statement can't hold); then the one session, flock-verify `--zk` in
+  refuses a length a session's statement can't hold); then the one session, verity-verify-proof `--zk` in
   public-coin form (`FlockDeploy.V true`) at the session's statement `sessStmt A o d`. Every other statement is refused.
 * **The session's numbers are the statement's**: the sampling record fixes each checked unit's session rounds by the
   statement, so the verifier holds the session's round count and `N₀` to those at a reference sample file (`d₀`, one
@@ -47,7 +47,7 @@ namespace Verity.Sampled.Record
 open Claims Claims.Sampling
 open Lean (Json)
 
-/-- **The verifier's own inputs flock-verify's statement holds**: its partition object and registered file, as bytes. -/
+/-- **The verifier's own inputs verity-verify-proof's statement holds**: its partition object and registered file, as bytes. -/
 structure Own where
   partition : ByteArray
   registered : Option ByteArray
@@ -115,7 +115,7 @@ noncomputable def d₀ (A : Live) (o : Own) : Msg := Classical.epsilon (RefOk A 
 /-- The session's statement at the reference sample file. -/
 noncomputable def xS₀ (A : Live) (o : Own) : Msg := sessStmt A o (d₀ A o)
 
-/-- **A session statement's numbers**: flock-verify's rounds and `N₀` there. -/
+/-- **A session statement's numbers**: verity-verify-proof's rounds and `N₀` there. -/
 noncomputable def Nums (xS : Msg) : ℕ × ℝ := ((FlockDeploy.V true).k xS, FlockDeploy.N₀ true xS)
 
 /-- **The session has the statement's numbers** at the sample file `d`. -/
@@ -140,7 +140,7 @@ theorem fits_of_drawOk {A : Live} {o : Own} {d : Msg} {cs : List FlockDeploy.Coi
 
 open Classical in
 /-- **The verifier's step at the record's statement**: a sample round answers its coin; the sample file round answers `[]`
-when `drawOk` holds, else refuses; the session's rounds are flock-verify's at the session's statement. -/
+when `drawOk` holds, else refuses; the session's rounds are verity-verify-proof's at the session's statement. -/
 noncomputable def nextAt (A : Live) (o : Own) (as : List Msg) (cs : List FlockDeploy.Coin) : OC Out :=
   if as.length ≤ DRAW_ROUNDS then .ret (.msg (cs.getLast?.getD default).bytes)
   else if as.length = DRAW_ROUNDS + 1 then
@@ -157,7 +157,7 @@ noncomputable def V (A : Live) (o : Own) : Verifier FlockDeploy.Coin where
 /-- **The session's rounds**: those after the sample file round. -/
 def after (k : ℕ) : Finset (Fin k) := Finset.univ.filter fun t => DRAW_ROUNDS + 1 ≤ t.val
 
-/-- A refused sample file's session: the reference statement, and a prover that sends `[2]`, which flock-verify refuses
+/-- A refused sample file's session: the reference statement, and a prover that sends `[2]`, which verity-verify-proof refuses
 at once. -/
 noncomputable def refused (A : Live) (o : Own) : Msg × Seen := (xS₀ A o, ⟨[([2], .rej)], .rej⟩)
 

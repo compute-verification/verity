@@ -1,7 +1,8 @@
-/- The `flock-rec-opening` executable: `Flock.RecOpeningCmd.cmd`. -/
 module
 
 public import Flock.RecOpeningCmd
+
+/-! The `flock-rec-opening` executable: `Flock.RecOpeningCmd.cmd`. -/
 
 @[expose] public section
 

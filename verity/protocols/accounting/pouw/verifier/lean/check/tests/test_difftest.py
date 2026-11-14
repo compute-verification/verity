@@ -7,12 +7,12 @@ The harness compares an outcome's verdict, commitment, public outputs and profil
 reasons too, `Core.Protocol.case`'s framing included, so this port compares the whole outcome: the reason names the rule
 that refused, and agreeing on it holds which rule refused, not only that one did.
 
-`pouw-check-difftest`'s `opening` against `core_check.opening`: one `Port`, over the openings `pouw_opening_cases`
+`pouw-check-difftest`'s `opening` against `core_check.opening_twin`: one `Port`, over the openings `pouw_opening_cases`
 generates (honest openings of a call's tile or the filler's, unsalted or a salted unit's in a certified window, and one
 mutation each aimed at every refusal or at a reading both sides share), compared output for output: null, or the same
 reason.
 
-Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
+Its `pass` and `draw` against `core_check.pass_epoch_twin` and `core_check.draw_twin`: one `Port` each, over the cases
 `pouw_pass_cases` generates (honest passes of each coin version, a recorded beacon's, a certified window's and a live
 Pearl-C pass's, and honest samples, then one mutation each aimed at every refusal), compared output for output: how the
 salt was had, or the same refusal.
@@ -24,18 +24,18 @@ J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit
 one `Port` each, over the cases
 `pouw_credit_cases` generates (a served window whose sampling coin opened after its sample root over the manifest's credit bits,
 the units a sampling coin selects from a window's layout and each of them proved, a served window whole with its layout read
-from its circuit's descriptor (`credit.layout_of`) and its round log held to the challenger's (`core_check.rounds`) and
+from its circuit's descriptor (`credit.layout_of`) and its round log held to the challenger's (`core_check.rounds_twin`) and
 to its A trees, a period of the
 auditor's ledger and its windows, a window's A trees under its round roots, a window's registered weights under its
 open root, then one mutation each aimed at every refusal), compared output for output: the credited calls, the sampled
 proof blocks, the weights' root or null, or the same refusal.
 
-Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
+Its `rounds` against `core_check.rounds_twin`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
 round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
 ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
-Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates, read through
+Its `salt` against `core_check.salt_of_record` likewise, over the live windows' salt coins the same module generates, read through
 the same session, reserved before it opened (opened after the session's open root, `salt.window_open_root`). Its
-`live-salt` against `core_check.live_salt` likewise, over the live Pearl-C passes `pouw_pass_cases` generates (a
+`live-salt` against `core_check.live_salt_twin` likewise, over the live Pearl-C passes `pouw_pass_cases` generates (a
 salt-only session the auditor's ledger reserves, opens on the pass's salt epoch's root and ends complete, its commitment
 read from the session's own files, a sampled `pass_index` and call indices offset within the epoch), compared output for
 output: the salt, or the same refusal.
@@ -46,11 +46,6 @@ multiple of 32 below 2^17, then sampled integers and non-integers, compared outp
 Its `ratio` against `core_check.ratio`: sampled strings, then numbers of more decimal digits than `int` reads by default,
 compared output for output: the ratio's numerator and denominator in hex, the text it is written back as
 (`window.ratio_str`) and that text read again, or the same refusal.
-
-Its `lead-record`, `lead-instance`, `lead-unit`, `lead-egress` and `lead-window` against `circuit.lead`'s `lead_record`,
-`instance_domain` (with its leaves and root), `unit_opening`, `egress_refused` with `forward_count`, and `window_refusal`:
-one `Port` each, over the cases `pouw_lead_cases` generates (honest inputs, then one mutation each aimed at every refusal
-and at a malformed input), compared output for output: the value, or the same refusal.
 """
 from __future__ import annotations
 
@@ -68,7 +63,6 @@ from hypothesis import strategies as st
 
 import pouw_check_cases as cases
 import pouw_credit_cases as credit_cases
-import pouw_lead_cases as lead_cases
 import pouw_opening_cases as openings
 import pouw_pass_cases as passes
 import pouw_rounds_cases as rounds_cases
@@ -77,8 +71,6 @@ from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import verifier as V
 from verity.protocols.accounting.pouw.verifier import weights as W
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.commitments.merkle import tree_levels
-from verity.protocols.accounting.pouw.prover.circuit import lead as L
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -100,7 +92,7 @@ RULES: Counter[str] = Counter()
 
 
 def reference(case) -> dict:
-    a = CC.case(case)
+    a = CC.case_twin(case)
     RULES[f"{a['verdict']} {a['reason'].split(':')[0]}" if a["reason"] else a["verdict"]] += 1
     return a
 
@@ -127,7 +119,7 @@ def _template(why: str) -> str:
     return re.sub(r"-?\d+", "#", why.replace("SHA-512", "SHA512"))
 
 
-#: `core_check.opening`'s reasons
+#: `core_check.opening_twin`'s reasons
 REASONS = {_template(r) for r in (
     "unit # is not drawn", "the registered window domain is not the window's served domain",
     "the registered window root is not a SHA-512 digest", "the opening names no entry",
@@ -154,7 +146,7 @@ OPENED: Counter[str] = Counter()
 
 
 def opening(case: dict) -> str | None:
-    why = CC.opening(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
+    why = CC.opening_twin(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
                      case["unit"], bytes.fromhex(case["pub"]), case["opening"],
                      None if case.get("salt") is None else bytes.fromhex(case["salt"]))
     OPENED[_template(why) if why else "accept"] += 1
@@ -190,7 +182,7 @@ def registered_input(case) -> dict:
 def registered(x: dict) -> dict:
     if not ("params" in x and isinstance(x.get("commitment"), str)):
         raise CC.Refused("the input's params or commitment is malformed")
-    why = CC.registered(CC.params(x["params"]), CC.commitment(bytes.fromhex(x["commitment"])))
+    why = CC.registered_twin(CC.params(x["params"]), CC.commitment(bytes.fromhex(x["commitment"])))
     RULED[why.split(":")[0] if why else "holds"] += 1
     return {"reason": why}
 
@@ -219,13 +211,13 @@ PASSED: Counter[str] = Counter()
 
 
 def pass_epoch(case: dict) -> dict:
-    how, refused = CC.pass_epoch(*passes.pass_args(case))
+    how, refused = CC.pass_epoch_twin(*passes.pass_args(case))
     PASSED[how or f"{refused[0]}: {_template(refused[1])}"] += 1
     return {"how": how} if refused is None else {"refused": list(refused)}
 
 
 def draw(case: dict) -> dict | None:
-    refused = CC.draw(*passes.draw_args(case))
+    refused = CC.draw_twin(*passes.draw_args(case))
     PASSED["draw " + (f"{refused[0]}: {_template(refused[1])}" if refused else "accept")] += 1
     return None if refused is None else {"refused": list(refused)}
 
@@ -278,7 +270,7 @@ def credit(case: dict) -> dict:
 
 
 def drawn(case: dict) -> dict:
-    got, refused = Cr.drawn(*(case[k] for k in credit_cases.DRAWN_KEYS))
+    got, refused = Cr.drawn_twin(*(case[k] for k in credit_cases.DRAWN_KEYS))
     _counted(refused, "drawn")
     return {"drawn": got} if refused is None else {"refused": list(refused)}
 
@@ -606,150 +598,6 @@ def test_ratio(pass_server):
     print(f"pouw-check-difftest ratio: {stats}, and {len(read) + 5} long numbers")
 
 
-LEAD: Counter[str] = Counter()
-
-
-def _int(x: dict, k: str, least: int | None = None) -> int:
-    v = x.get(k)
-    if type(v) is not int or least is not None and v < least:
-        raise D.Reject(f"the input's {k} is malformed")
-    return v
-
-
-def _hex(x: dict, k: str) -> bytes:
-    if type(x.get(k)) is not str:
-        raise D.Reject(f"the input's {k} is not a string")
-    return bytes.fromhex(x[k])
-
-
-def _shapes(x: dict) -> list[L.Shape]:
-    s = x.get("shapes")
-    if type(s) is not list or not all(type(v) is list and len(v) == 4 and all(type(i) is int for i in v) for v in s):
-        raise D.Reject("the input's shapes is malformed")
-    return [L.Shape(*v) for v in s]
-
-
-def _refused(fn, *args):
-    """``fn(*args)`` and None, or None and the refusal it raises."""
-    try:
-        return fn(*args), None
-    except ValueError as e:
-        return None, str(e)
-
-
-def _tally(fn: str, out: dict) -> dict:
-    """Count ``fn``'s outcome by its refusal's template, the certifier's verdict cut off."""
-    why = out.get("reason" if fn == "window" else "refused")
-    LEAD[f"{fn}: " + (_template(why).split("'s egress: ")[0] if isinstance(why, str) else
-                      "refused" if why is True else "ok")] += 1
-    return out
-
-
-def lead_record(x: dict) -> dict:
-    record, why = _refused(L.lead_record, *(_hex(x, k) for k in ("weights_root", "stream", "prover", "key_leaf")),
-                           _int(x, "calls"))
-    return _tally("record", {"record": record.hex()} if why is None else {"refused": why})
-
-
-def lead_instance(x: dict) -> dict:
-    salt, position, schema, values = _hex(x, "salt"), _int(x, "position"), x.get("schema"), x.get("values")
-    if type(schema) is not str or type(values) is not list or not all(type(v) is str for v in values):
-        raise D.Reject("the input's schema or values is malformed")
-    values = [bytes.fromhex(v) for v in values]
-    dom, why = _refused(L.instance_domain, salt, position, len(values))
-    if why is not None:
-        return _tally("instance", {"refused": why})
-    leaves = [dom.leaf(r, r, schema, v) for r, v in enumerate(values)]
-    levels = tree_levels(dom, leaves)
-    return _tally("instance", {"domain": dom.domain_id.hex(), "leaves": [leaf.hex() for leaf in leaves],
-                               "root": (levels[-1][0] if levels else dom.empty_root()).hex()})
-
-
-def lead_unit(x: dict) -> dict:
-    op, why = _refused(L.unit_opening, _shapes(x), *(_int(x, k) for k in ("call", "R0", "C0", "BLK")))
-    if why is not None:
-        return _tally("unit", {"refused": why})
-    return _tally("unit", {"words": [list(w) for w in op["words"]], "a": [list(a) for a in op["a"]],
-                           "segments": op["segments"]})
-
-
-def lead_egress(x: dict) -> dict:
-    shapes, buckets = _shapes(x), x.get("buckets")
-    if any(s.refuse() for s in shapes):
-        raise D.Reject("a forward's shapes are the verifier's")
-
-    def nat(v) -> bool:
-        return type(v) is int and v >= 0
-
-    if type(buckets) is not list or not all(type(b) is list and len(b) == 2 and nat(b[0]) and type(b[1]) is list
-                                            and all(map(nat, b[1])) for b in buckets):
-        raise D.Reject("the input's buckets is malformed")
-    count, cap, fwd, release = (_int(x, k, 0) for k in ("count", "cap", "fwd_macs", "release"))
-    return _tally("egress", {"refused": L.egress_refused(count, shapes, cap, fwd),
-                             "count": L.forward_count([(r, frames) for r, frames in buckets], release)})
-
-
-def lead_window(x: dict) -> dict:
-    digests = [_hex(x, k) for k in ("record", "weights_root", "stream", "prover", "key_leaf")]
-    calls = _int(x, "calls")
-    if type(x.get("events")) is not list:
-        raise D.Reject("the input's events is not a list")
-    return _tally("window", {"reason": L.window_refusal(*digests, calls, x["events"])})
-
-
-#: each lead function's reference, its cases and their mutations' names
-LEADS = {"record": (lead_record, lead_cases.record_instance, lead_cases.RECORD_NAMES),
-         "instance": (lead_instance, lead_cases.instance_instance, lead_cases.INSTANCE_NAMES),
-         "unit": (lead_unit, lead_cases.unit_instance, lead_cases.UNIT_NAMES),
-         "egress": (lead_egress, lead_cases.egress_instance, lead_cases.EGRESS_NAMES),
-         "window": (lead_window, lead_cases.window_instance, lead_cases.WINDOW_NAMES)}
-#: the outcomes each one's run and sweep reach: every refusal, written as `_template` writes it
-LEAD_OUTCOMES = {
-    "record": {"ok", "a record binds a #-byte weights root, stream, prover and keyLeaf and # .. #^# - # calls a forward"},
-    "instance": {"ok", "a #-byte salt_w and a u# position"},
-    "unit": {"ok", "call #: K = # is outside [#, #], the inner dimensions the verifier admits",
-             "call #: a call of # rows and # columns is outside the [#, #] rows and [#, #] columns the verifier admits",
-             "call #: the kernel runs a call at a column tile of # or #, not #", "call # is not one of the forward's #",
-             "the tile at row #, column # is not on the # × # grid",
-             "the tile at row #, column # passes the # rows and # columns the verifier admits",
-             "a tile holds # .. # of the call's rows and # .. # of its columns, not # and #",
-             "block # starts past the call's # steps"},
-    "egress": {"ok", "refused"},
-    "window": {"ok", "a window of # calls a forward",
-               "the record, the weights' root, the stream, the prover and keyLeaf are # bytes each",
-               "the window's record does not open to its weights' root, stream, prover, keyLeaf and call count",
-               "event #: not a salt, an A root or a words root", "event #: the a_root event's fields are malformed",
-               "event #: the words_root event's fields are malformed", "event #: a second salt_w",
-               "event #: forward #'s call # has an A root recorded before salt_w",
-               "event #: call # of forward # has no A position in a window of # calls a forward",
-               "event #: K = # is outside [#, #], the inner dimensions the verifier admits",
-               "event #: a call of # rows and # columns is outside the [#, #] rows and [#, #] columns the verifier admits",
-               "event #: the kernel runs a call at a column tile of # or #, not #",
-               "event #: forward #'s A root while forward # is open: the forwards overlap", "event #: forward # is closed",
-               "event #: call # of forward # has an A root already",
-               "event #: a words root of forward #, which is not open", "event #: the certifier refused forward #",
-               "forward # is open when the record ends"},
-}
-
-
-@pytest.mark.parametrize("fn", list(LEADS))
-def test_lead(pass_server, fn):
-    """`PouwCheck.Lead` is `circuit.lead`'s window, function by function: generated honest inputs, then each mutation
-    over a few seeds (`replay`), so every refusal is reached whatever the sample, each one's message included."""
-    reference, instance, names = LEADS[fn]
-    port = D.Port("pouw-check-difftest", f"lead-{fn}", reference, package=LEAN, rejects=(D.Reject, ValueError),
-                  of_record=V.RECORD_VERDICT, inputs=st.builds(instance, st.randoms(use_true_random=False),
-                                                               st.sampled_from(["honest"] * max(1, len(names) // 3) + names)))
-    LEAD.clear()
-    stats = D.run(port, examples=400, server=pass_server)
-    swept = Counter(D.replay(port, instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
-                    for name in ["honest", *names] for seed in range(3))
-    print(f"pouw-check-difftest lead-{fn}: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
-          f"{dict(sorted(LEAD.items()))}")
-    got = {k.split(": ", 1)[1] for k in LEAD}
-    assert got == LEAD_OUTCOMES[fn], got ^ LEAD_OUTCOMES[fn]
-
-
 ROUNDED: Counter[str] = Counter()
 #: the refusals of the session's pin, `rounds`' and `salt`'s alike
 PIN_PARTS = ("which the host's pins log doesn't record as a commit of main's history",
@@ -760,7 +608,7 @@ PIN_PARTS = ("which the host's pins log doesn't record as a commit of main's his
 
 
 def rounds(case: dict) -> dict | None:
-    refused = CC.rounds(*rounds_cases.rounds_args(case))
+    refused = CC.rounds_twin(*rounds_cases.rounds_args(case))
     ROUNDED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
     return None if refused is None else {"refused": list(refused)}
 
@@ -773,7 +621,7 @@ ROUNDS = D.Port("pouw-check-difftest", "rounds", rounds, package=LEAN, need_reje
 
 def test_rounds(pass_server):
     """Generated live windows' round coins, then each mutation over a few seeds (`replay`): a coin opened twice, one opened
-    before its round's root was recorded, a foreign epoch's, and every other refusal of `core_check.rounds`."""
+    before its round's root was recorded, a foreign epoch's, and every other refusal of `core_check.rounds_twin`."""
     ROUNDED.clear()
     stats = D.run(ROUNDS, examples=600, server=pass_server)
     swept = Counter(D.replay(ROUNDS, rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
@@ -801,7 +649,7 @@ SALTED: Counter[str] = Counter()
 
 
 def salt(case: dict) -> dict | None:
-    refused = CC.salt(*rounds_cases.salt_args(case))
+    refused = CC.salt_twin(*rounds_cases.salt_args(case))
     SALTED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
     return None if refused is None else {"refused": list(refused)}
 
@@ -815,7 +663,7 @@ def test_salt(pass_server):
     """Generated live windows' salt coins, read through the challenger's signed session the auditor's signed ledger
     reserves, opens and ends for the window, then each mutation over a few seeds (`replay`): a session opened without a
     reserve, the open root under another session's id or of another window's weights or requests, H1's salt opened
-    after the weights' root, a log showing another root, and every other refusal of `core_check.salt`."""
+    after the weights' root, a log showing another root, and every other refusal of `core_check.salt_of_record`."""
     SALTED.clear()
     stats = D.run(SALT, examples=400, server=pass_server)
     swept = Counter(D.replay(SALT, rounds_cases.salt_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
@@ -836,7 +684,7 @@ LIVE_SALTED: Counter[str] = Counter()
 
 
 def live_salt(case: dict) -> dict:
-    salt, refused = CC.live_salt(*passes.live_salt_args(case))
+    salt, refused = CC.live_salt_twin(*passes.live_salt_args(case))
     LIVE_SALTED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
     return {"salt": salt.hex()} if refused is None else {"refused": list(refused)}
 
@@ -854,7 +702,7 @@ def test_live_salt(pass_server):
     seeds (`replay`): a `pass_index` that isn't an integer in [0, 2^64), a call index of 2^32 or more, a session opened
     on another root (W itself, another epoch's, or one the manifest doesn't name), H1's layout, a session reserved for another layout or ended
     incomplete, a log showing another root, coins other than the session's, a session the manifest misnames, and every
-    other refusal of `core_check.live_salt`."""
+    other refusal of `core_check.live_salt_twin`."""
     LIVE_SALTED.clear()
     stats = D.run(LIVE_SALT, examples=300, server=pass_server)
     swept = Counter(D.replay(LIVE_SALT, passes.live_salt_instance(random.Random(f"{name}/{seed}"), name),

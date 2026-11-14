@@ -12,7 +12,7 @@ gives it (`TYPE: why`, the exception Python raises):
    (`passes_distinct`), its scheme (Pearl-C v1 -h3 on the H100's record) and its matmuls' shapes;
 2. its epoch (`manifest_epoch`, `Epoch.start`, `host.epoch_of`): the pass's coin commitment must be the verifier's (an
    in-process challenger's, or a live session's when the pass's coins are `window.LIVE_SCHEME`'s), its salt coin must open
-   against it after the weights' root (a live session's after the salt epoch's open root, `Coins.liveSalt`), and the salt
+   against it after the fixed operands' root (a live session's after the salt epoch's open root, `Coins.liveSalt`), and the salt
    must be the manifest's;
 3. its records (`records_of`, `UnitRecord`): real rows, |K|, excluded and voluntary rows, held to V-EX's caps
    (`checkRecords`) and to the records root the pass published;
@@ -40,12 +40,23 @@ def CALL_RANGE : Nat := 2 ^ 32
 def hex (b : ByteArray) : String :=
   String.ofList (b.toList.flatMap fun x => [Nat.digitChar (x.toNat / 16), Nat.digitChar (x.toNat % 16)])
 
-/-- `verify_run.tie`'s answer: the window record's digest (hex), the number of tables it ties (`Tie.tieOf`) and, for a
-version-1 W, `Tie.WEIGHTS_UNTIED`. -/
+/-- A window class's public caps (`window_class.WindowClass`'s, `verify_passes`' ``window_class``): its slots, each of at most
+`prompt` prompt ids and `outputs` outputs. Its fixed load is every slot's prompt at round 0 and a row a slot at each
+later round of its `outputs` (`Tie.heldToLoad`). -/
+structure LoadClass where
+  slots : Nat
+  prompt : Nat
+  outputs : Nat
+  deriving Repr, DecidableEq
+
+/-- `verify_run.tie`'s answer: the window record's digest (hex), the number of tables it ties (`Tie.tieOf`), for a
+version-1 W, `Tie.WEIGHTS_UNTIED`, and the class whose fixed load the passes were held to where the verdict was given
+one (`Tie.tieAt`). -/
 structure Tied where
   record : String
   tables : Nat
   weights : Option String := none
+  load : Option LoadClass := none
   deriving Repr
 
 /-- A refusal: Python's (code, why) where it has one (`passes_distinct`'s and `AFTER_COIN`), the reason it rejects with,

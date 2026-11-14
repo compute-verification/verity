@@ -6,9 +6,10 @@
 # prompts, read from the store's runs.
 [[metric]]
 id = "benchmarks/served-overhead-commit"
-title = "What the Commit (every value of every served step committed) adds to served vLLM's time per output token on the H200, over stock FP8, at batch 32"
+title = "Served overhead of committing values"
 owner = "benchmarks"
-unit = "% over stock FP8's time per output token"
+unit = "percent"
+axis = "Percent that committing every value of every served step adds to vLLM's time per output token serving Llama 3.1 8B, over stock FP8 on the H200 at batch 32."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/harness/served_overhead.py"
 every = "7d"
@@ -16,9 +17,10 @@ goal = "benchmarks/six-directories-wired"
 
 [[metric]]
 id = "benchmarks/served-overhead-pous-bandwidth-audit"
-title = "What PoUS's bandwidth audit adds to served vLLM's time per output token on the RTX PRO 6000, over stock FP8, at batch 32"
+title = "Served overhead of the bandwidth audit"
 owner = "benchmarks"
-unit = "% over stock FP8's time per output token"
+unit = "percent"
+axis = "Percent that PoUS's bandwidth audit adds to vLLM's time per output token serving Llama 3.1 8B, over stock FP8 on the RTX PRO 6000 at batch 32."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/harness/served_overhead.py"
 every = "7d"

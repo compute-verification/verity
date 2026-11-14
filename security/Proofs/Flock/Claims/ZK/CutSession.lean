@@ -442,7 +442,7 @@ their leaves, the link, the link's points, then the rep streams, each with its p
 record and the proof files. -/
 def sessionCut (io : Asks M) (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (words : Array (List Nat))
     (src : Nat → TabSrc) : M (String × Array ByteArray) := do
-  let schs ← tabs.mapM fun st => (monadLift (Zk.schedule st.m) : M (Schedule × Nat))
+  let schs ← tabs.mapM fun st => (monadLift (Zk.schedule st.wideLeaf st.m) : M (Schedule × Nat))
   let cms ← (Array.range tabs.size).mapM fun i =>
     commit0Cut hs tabs[i]!.merkle (schs[i]!.1.levels.getD 0 default) (src i)
   let rootB := cms.map fun c => flat c.cap

@@ -7,7 +7,7 @@ reference on a small binding before it is used). A unit's inputs come from the c
 words), its registered reads (the parameter's words at the read's source), its table reads (the committed table's root and
 domain id, `interface.digest_words`), its openings (the committed table's row, salt and path at the unit's key) and, for a
 port the circuit leaves free, the Program's own words where the frame's ``stand_ins`` window (`NodeWindow.stood`) says it
-reads them (a peer's row, an unlowered node's row), or the free port's Definition read (`FREE`). A row no source names is
+reads them (a peer's row, an unlowered node's row, the prompt the request's ingress reads). A row no source names is
 undeclared: zeros, counted, and the unit's mismatch counted apart. A unit's expected words are the Program's at the frame's
 pieces (`NodeWindow.outs`), a gather's the concatenation of the rows it holds (`NodeWindow.wholes`, ``chunks``), an
 opening's verdict 1; a writer row with none is recomputed from its own inputs. Tables are committed by
@@ -31,11 +31,12 @@ import numpy as np
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.batch import evaluate_batch
-from verity.circuits.refs import runs
+from verity.circuits.refs import Strided, runs
 from verity.commitments import randomness as RND
 from verity.commitments.windows import interface as IF
 
 from .node_window import PEERS, STAND_IN, WEIGHTS, NodeWindow, _family
+from .node_window_join import Joined
 
 PROMPT = "prompt"
 SAMPLE = 1024
@@ -174,6 +175,9 @@ class Values:
         L = len(refs) // node.n
         return refs.slice(t * L, (t + 1) * L)
 
+    def _end(self, lo: int) -> int:
+        return self._fields[bisect.bisect_right(self._firsts, lo)][0]
+
     def _weight(self, lo: int, hi: int) -> np.ndarray:
         k = bisect.bisect_right(self._firsts, lo) - 1
         first, word, bits = self._fields[k]
@@ -185,6 +189,12 @@ class Values:
 
     def leaves(self, refs: Any) -> np.ndarray:
         """``refs``' leaves (refs, or ``(space, idx, lo, hi)`` runs), each in its own width, widened to the widest."""
+        if isinstance(refs, Strided) and refs.count > 1 and refs.inner > 1 and refs.inner_stride != 1:
+            j = np.arange(refs.count)
+            at = refs.base + j // refs.inner * refs.outer_stride + j % refs.inner * refs.inner_stride
+            lo, hi = int(at.min()), int(at.max()) + 1
+            if refs.space == "n" or self.names[refs.idx] != WEIGHTS or hi <= self._end(lo):
+                return self.leaves([(refs.space, refs.idx, lo, hi)])[at - lo]
         parts = []
         for space, idx, lo, hi in (refs if isinstance(refs, list) else runs(refs)):
             if space == "n":
@@ -199,14 +209,21 @@ class Values:
         return np.concatenate([p.astype(dt) for p in parts])
 
     def evaluate(self) -> Values:
-        for j, node in enumerate(self.fn.body.nodes):
-            t0 = time.perf_counter()
-            self.nodes.append(np.ascontiguousarray(self._node(node)).reshape(-1))
-            fam = _family(node)
-            self.times[fam] = self.times.get(fam, 0.0) + time.perf_counter() - t0
-            if node.out_leaves != self.nodes[-1].size:
-                raise ValueError(f"node {j} ({node.fn.id}): {self.nodes[-1].size} leaves, not {node.out_leaves}")
+        for j in range(len(self.fn.body.nodes)):
+            self.step(j)
         return self
+
+    def step(self, j: int) -> None:
+        """Node ``j``, the next one, evaluated."""
+        node = self.fn.body.nodes[j]
+        if j != len(self.nodes):
+            raise ValueError(f"node {j}: the next node is {len(self.nodes)}")
+        t0 = time.perf_counter()
+        self.nodes.append(np.ascontiguousarray(self._node(node)).reshape(-1))
+        fam = _family(node)
+        self.times[fam] = self.times.get(fam, 0.0) + time.perf_counter() - t0
+        if node.out_leaves != self.nodes[-1].size:
+            raise ValueError(f"node {j} ({node.fn.id}): {self.nodes[-1].size} leaves, not {node.out_leaves}")
 
     def _node(self, node: Any) -> np.ndarray:
         fam = _family(node)
@@ -319,25 +336,6 @@ def _be_words(b: bytes) -> np.ndarray:
     return np.frombuffer(bytes(b), ">u8").astype("<u8").view("<u2")
 
 
-#: a free port's Definition read the frame leaves free with no stand-in (an explicit `_Free`), by family: the Program's words of
-#: each unit's row, from the unit's node (`NodeWindow.node_of`), its first unit and its offset
-FREE: dict[tuple[str, str], Callable[["Check", Any, int, int, int], np.ndarray]] = {}
-
-
-def _batched_gemm_w(ck: "Check", node: Any, a: int, u: int, words: int) -> np.ndarray:
-    """`BatchedGemm` (`node_window_sparse`): unit (b, n) of member t, at a + (b N + n) M + t, reads w[b, n, :] of K words."""
-    K = int(node.fn.bindings["K"])
-    M = node.n if node.form == "batch" else 1
-    i = u - a
-    t, bn = i % M, i // M
-    w = ck.values.leaves(ck.values.arg(node, 1, t).slice(bn * K, (bn + 1) * K))
-    if words != K:
-        raise ValueError(f"BatchedGemm w: a row of {words} words, not K = {K}")
-    return w.astype(np.uint16)
-
-
-FREE[("BatchedGemm", "w")] = _batched_gemm_w
-
 
 class Check:
     """The value check of ``circuit`` (the frame ``w`` built it with ``stand_ins``) against ``values``."""
@@ -382,7 +380,8 @@ class Check:
         self.unknown: dict[tuple[str, int], list[str]] = {}
 
     def _params(self) -> dict[str, np.ndarray]:
-        """Each registered parameter a read names, as its u16 words: a weight's (`window_builder.weight_param`) or an input's."""
+        """Each registered parameter a read names, as its u16 words: an entry's (`NodeWindow.entries`), a weight's
+        (`window_builder.weight_param`) or an input's."""
         from .window_builder import weight_param
 
         out: dict[str, np.ndarray] = {}
@@ -391,7 +390,9 @@ class Check:
             if x.param in out:
                 continue
             base = x.param.rsplit("@", 1)[0]
-            if base in by:
+            if x.param in self.w.entries:
+                out[x.param] = self.values.leaves(self.w.entries[x.param]).astype(np.uint16)
+            elif base in by:
                 first, words = by[base]
                 out[x.param] = self.values.inputs[WEIGHTS][first:first + words]
             elif x.param in self.values.inputs:
@@ -551,15 +552,6 @@ class Check:
                     got[idx[free], first + r] = True
                 fams = sorted({s[1] for g in grid for s in self.w._sources(g)})
                 fed[f"{port} rows {first}..{first + rows - 1} of {k}: {', '.join(fams)}"] += int(sel.sum())
-            fam = _family_of(self.fns[tid])
-            if (fam, port) in FREE and not got.all():
-                for i in np.nonzero(~got.all(axis=1))[0]:
-                    u = int(units[i])
-                    a = self._alloc(tid, u)
-                    node = self.values.fn.body.nodes[self.w.node_of[(tid, a)]]
-                    arr[i] = FREE[(fam, port)](self, node, a, u, words)
-                    got[i] = True
-                fed[f"{port}: its Definition's read ({fam})"] += len(units)
             if not got.all():
                 src[f"{port}: undeclared rows"] += int((~got).sum())
                 for i in np.nonzero(~got.all(axis=1))[0]:
@@ -567,10 +559,6 @@ class Check:
             ports[port] = arr
             done[port] = arr
         return [ports[p] for p, _w in lay.rows]
-
-    def _alloc(self, tid: str, u: int) -> int:
-        allocs = self.w.allocs[tid]
-        return allocs[bisect.bisect_right([a[0] for a in allocs], u) - 1][0]
 
     def evaluate(self, tid: str, rows: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
         fn, lay = self.fns[tid], self.lay[tid]
@@ -697,6 +685,68 @@ def run(ck: Check, seed: int, log: Callable[[str], None] = print, most: int = SA
     return out
 
 
+# ---- the ranks together
+
+def joint(values: Sequence[Values]) -> list[Values]:
+    """The W ranks' Programs (``values[r]`` rank r's, its ``peers_*`` inputs made up) evaluated together, node by node:
+    before node j, each ``peers_*`` run that rank r's node j reads takes, at the same places of the same argument, the
+    leaves of its writer rank's node j (input ``peers_<k(W-1)+j'>`` is rank j's partial, j' its place among the others),
+    so every rank's peers are the other ranks' partials. Refused where the Programs' nodes differ in number or the writer
+    rank's leaves there aren't its nodes'."""
+    W = len(values)
+    if len({len(v.fn.body.nodes) for v in values}) != 1 or any(v.nodes for v in values):
+        raise ValueError(f"{W} ranks' Programs of {sorted({len(v.fn.body.nodes) for v in values})} nodes, none evaluated")
+    for j in range(len(values[0].fn.body.nodes)):
+        for r, v in enumerate(values):
+            for k, arg in enumerate(v.fn.body.nodes[j].args):
+                pos = 0
+                for space, idx, lo, hi in runs(arg.refs):
+                    name = v.names[idx] if space == "p" else ""
+                    if name.startswith(PEERS):
+                        q = int(name[len(PEERS):]) % (W - 1)
+                        src = values[q + (q >= r)]
+                        refs = src.fn.body.nodes[j].args[k].refs.slice(pos, pos + hi - lo)
+                        if any(s != "n" for s, *_ in runs(refs)):
+                            raise ValueError(f"rank {r} node {j} argument {k}: {name}'s writer rank {q + (q >= r)} holds "
+                                             f"{list(runs(refs))[:3]} there, not its own partial")
+                        v.inputs[name][lo:hi] = src.leaves(refs).astype(np.uint16)
+                    pos += hi - lo
+        for v in values:
+            v.step(j)
+    return list(values)
+
+
+def check_join(joined: Joined, checks: Sequence[Check], seed: int, most: int = SAMPLE) -> dict[str, Any]:
+    """Each peer input `node_window_join.join` wired (``joined.wired``), up to ``most`` of its units sampled under ``seed``: each
+    of its rows as the joined circuit's wire reads it, the writer rank's row (its Check's `Check.row`, the rank's own
+    units), against the reader rank's Program's words there (its stood peer rows, `joint`'s). ``checks[r]`` is rank r's
+    Check, its frame built with ``stand_ins``. Counts by template and port, and the first mismatch."""
+    c, first = joined.circuit, joined.first
+    by: dict[tuple[str, str], list[IF.Wire]] = {}
+    for x in c.wires:
+        by.setdefault((x.reader, x.port), []).append(x)
+    key = sample_key(seed)
+    out: dict[str, Any] = {}
+    for r, tid, port, at, count, (i, n, k) in dict.fromkeys((r, f.tid, f.port, f.at, f.count, f.rows) for r, f in joined.wired):
+        ck = checks[r]
+        rw = dict(ck.lay[tid].rows)[port] // k
+        (grid,) = [s[5] for s in ck.stood.get((tid, port), ()) if s[2:5] == (at, count, (i, n, k))]
+        rec = out.setdefault(f"{tid.split('{')[0]} {port}", {"checked": 0, "mismatches": 0, "first": None})
+        for u in (at + s for s in sample(count, key, f"{r}/{tid}/{port}/{at}/{i}", most)):
+            have = np.concatenate([ck._stand(x) for x in grid[u - at]])
+            U = first[r][tid] + u
+            for row in range(i, i + n):
+                (x,) = [x for x in by[(tid, port)] if x.at <= U < x.at + x.reader_units and x.cut[0] <= row < x.cut[0] + x.cut[1]]
+                s = int(x.source(np.asarray([(U - x.at) * x.cut[1] + row - x.cut[0]]))[0])
+                jr = max(q for q in first if first[q][x.writer] <= s)
+                got = checks[jr].row(x.writer, x.out, s - first[jr][x.writer])
+                rec["checked"] += 1
+                if not np.array_equal(got, have[(row - i) * rw:(row - i + 1) * rw]):
+                    rec["mismatches"] += 1
+                    rec["first"] = rec["first"] or {"rank": r, "unit": u, "row": row, "writer": [jr, x.writer, x.out, s]}
+    return out
+
+
 # ---- planted errors
 
 def plant_wire_row(c: IF.Circuit, family: str, port: str, row: int, keep: bool = False) -> tuple[IF.Circuit, str, dict[str, Any]]:
@@ -731,5 +781,5 @@ def plant_read_shift(c: IF.Circuit, family: str, port: str | None = None) -> tup
     raise ValueError(f"no registered read into {family} {port}")
 
 
-__all__ = ["Check", "FREE", "NATIVE", "SAMPLE", "Tables", "Values", "made_up", "native_selftest", "plant_read_shift",
-           "plant_wire_row", "run", "sample", "sample_key"]
+__all__ = ["Check", "NATIVE", "SAMPLE", "Tables", "Values", "check_join", "joint", "made_up", "native_selftest",
+           "plant_read_shift", "plant_wire_row", "run", "sample", "sample_key"]

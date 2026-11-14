@@ -1,4 +1,19 @@
-/-
+module
+
+public import Flock.Circuit
+public import Flock.RecResiduals
+public import Flock.KnownRead
+public import Flock.JsonParse
+public import Flock.Norm
+public import Spot.Partition
+meta import Flock.Circuit
+meta import Flock.RecResiduals
+meta import Flock.KnownRead
+meta import Flock.JsonParse
+meta import Flock.Norm
+meta import Spot.Partition
+
+/-!
 The claims' partition of a Flock circuit file, and the check that the registration's population is the file's units in
 order (`Flock.Bridge.partOf` at the file's key program, `Placed.keyProg`):
 
@@ -19,20 +34,6 @@ order (`Flock.Bridge.partOf` at the file's key program, `Placed.keyProg`):
   of the sizes `sizes` gives, the `ns` of `partOf`. O(the strata's ranges + the public file's units), which the setup
   reads already.
 -/
-module
-
-public import Flock.Circuit
-public import Flock.RecResiduals
-public import Flock.KnownRead
-public import Flock.JsonParse
-public import Flock.Norm
-public import Spot.Partition
-meta import Flock.Circuit
-meta import Flock.RecResiduals
-meta import Flock.KnownRead
-meta import Flock.JsonParse
-meta import Flock.Norm
-meta import Spot.Partition
 
 @[expose] public section
 set_option backward.privateInPublic true

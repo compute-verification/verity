@@ -274,7 +274,7 @@ return, at outer coins that are not `1` and extra claims at points of the table'
 the inner proof (the replay's, the two ring-switch rows and the lanes') vanishes at the rep's pads (`replay_holdsM`,
 `lanes_hold`). -/
 theorem innerPre_holds (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) {st : Flock.Stmt} {tr : Trace}
-    (hT : TableM st tr) {v : Schedule × ℕ} (hv : Zk.schedule st.m = .ok v) (rep : ℕ) (dom : ByteArray)
+    (hT : TableM st tr) {v : Schedule × ℕ} (hv : Zk.schedule st.wideLeaf st.m = .ok v) (rep : ℕ) (dom : ByteArray)
     (cm0 : Commit) (pts : Array (Array F128)) (hpts : ∀ a ∈ pts, a.size = st.mPts) (e : Array Claim)
     (he : st.extraClaims pts = .ok e) (tape : TapeZk) (i : ℕ) (ic : InnerCommit) (prior : Array (List F128))
     (words : List ℕ) (l : Array Claims.Msg) (hc1 : ∀ k < st.m - 13, coinOf (resp (l.size + 1)) k ≠ 1)
@@ -305,7 +305,7 @@ theorem innerPre_holds (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArra
       (rsCoinsR resp (Setup.ofCircuit st) l.size e)) ((Setup.ofCircuit st).m - 7)).size = 2 ^ v.1.n := by
     simp [basisVals, hn]; rfl
   rw [hmerk] at hlig
-  have hLF := L0.lanes resp hsh _ v _ cm0 _ _ lay pads.h rep (tape.extra i) (tape.lanePad i) (tape.salt i rep)
+  have hLF := L0.lanes _ resp hsh _ v _ cm0 _ _ lay pads.h rep (tape.extra i) (tape.lanePad i) (tape.salt i rep)
     (tape.nonce i rep) _ tI lL lI lg zl rec h25 h35 hv htb hb hlig
   have hx : ∀ c ∈ claimsR resp (Setup.ofCircuit st) tr l.size e, c.x.size = st.m - 6 :=
     claims_xsize' st hkm (by omega) tr (Zc.coinsAt resp l.size) (lcCoinsR resp (Setup.ofCircuit st) l.size) pts e he
@@ -390,7 +390,7 @@ theorem outer_ne_one {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin} {n : ℕ}
   have hhalf : (stsOf x)[(2 * j.val + r.val) / 2]! = stAt x j := by
     rw [show (2 * j.val + r.val) / 2 = j.val by omega, getElem!_pos (stsOf x) j.val hj]
     rfl
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [hhalf]
     exact (zkTab x j).hz

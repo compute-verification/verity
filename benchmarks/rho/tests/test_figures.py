@@ -1,11 +1,15 @@
 import json
+import math
 
 import pytest
 
 pytest.importorskip("matplotlib")
 
 from rho import figures
+from rho.classes import per_block, weight_per_gate
 from rho.params import Registry
+from rho.scenario import build
+from rho.theorem import Budget
 
 REG = Registry.load()
 PNG = b"\x89PNG\r\n\x1a\n"
@@ -36,6 +40,31 @@ def test_class_vs_k_marks_where_each_class_turns_vacuous(tmp_path):
                 assert min(ys) > 1, name
             else:
                 assert any(y <= 1 for y in ys), name
+
+
+def test_the_server_block_panel_adds_the_boundary_term_to_a_bound_and_not_to_an_attack(tmp_path):
+    figures.class_vs_k(REG, tmp_path, grid=4)
+    data = json.loads((tmp_path / "class-vs-k.json").read_text())
+    s = build(REG, data["scenario"])
+    p = s.families[0].profile(s.model, s.run)
+    units, win, per_bit = s.context.units, s.regime.budget(s.context), s.structure.per_bit
+    panel = data["panels"][-1]
+    assert panel["gates"] == win.gates and per_bit > 0
+    full = weight_per_gate(p, units) * win.gates
+    bounds = [a for a in s.bounds if a.name in panel["classes"]]
+    attacks = [a for a in s.attacks if a.name in panel["attacks"]]
+    assert bounds and attacks
+    moved = []
+    for arg in bounds:
+        q = per_block(arg.allowance(p), units)(Budget(win.gates, win.inputs))
+        assert panel["classes"][arg.name]["at_window_k"] == full / (q + per_bit * win.inputs), arg.name
+        moved += [arg.name] if full / (q + per_bit * win.inputs) != full / q else []
+    assert moved, "no bound's value at k_S shows the boundary term"
+    for arg in attacks:
+        cap = per_block(arg.allowance(p), units)
+        for k, y in zip(data["k"], panel["attacks"][arg.name]["overhead"], strict=True):
+            q = cap(Budget(win.gates, k))
+            assert float(y) == (full / q if q > 0 else math.inf), (arg.name, k)
 
 
 def test_jsonable_spells_out_what_json_cannot_hold():

@@ -4,7 +4,7 @@
 # Gemm_v2{K, N=4096}, its GemmCoordinate_v2 shape at N instances). One step per job (research run --queue --cwd source);
 # binaries and statements stay under $FLOCK_WORK for the next step, out/ gets the records:
 #   STEP=build  (CPU) this tree's GPU prover (60-circuit.sh's build, keyed by its sources as 85-rec-reprice.sh keys it) and the
-#               same build with the selftests' seed-injection beside it, Lean's flock-verify (keyed by its sources), and each
+#               same build with the selftests' seed-injection beside it, Lean's verity-verify-proof (keyed by its sources), and each
 #               of STATEMENTS staged into data/k<K>/stage (class_statement --stage-only, BATCH=fixed N) with its partition object
 #   STEP=prove  (GPU) for each build of BUILDS (the keys build steps printed; default this tree's), in order, on statement K:
 #               loopback M0 (M0=1, on the coin tree: FC_COINS=tree) and --zk, WARM + RUNS sessions each, every session's
@@ -12,7 +12,7 @@
 #               the challenger's release log, upstream's replay --zk of the last --zk session, and
 #               the seed-injection build's prover_is_deterministic --zk --gpu, every later build's transcript digest checked
 #               against the first's (equal: byte-identical proofs and transcripts)
-#   STEP=lean   (CPU) Lean's flock-verify verify --zk on each build's last --zk session of statement K; the job fails
+#   STEP=lean   (CPU) Lean's verity-verify-proof verify --zk on each build's last --zk session of statement K; the job fails
 #               unless every build's exited 0 with its VERDICT accepted (lean_verdicts.py), a build without one too
 # The prover runs on the job's first PCPUS cores, the verifier (serve, replay) on the rest. Every step writes out/summary-$STEP.json.
 # env: FLOCK_WORK=/workspace/jobs/zk-cpu-steps  STATEMENTS="4096:2048 14336:512" (build: K:N each)  K=4096 N=2048 (prove, lean)
@@ -20,7 +20,7 @@
 #      RESOLVER=MODULE:FUNC (build: binds the statements' Gemm_v2 ids, class_statement --resolver; refused without)
 #      CUDA_TK=/workspace/jobs/rec-reprice/cuda-13.3.1 (node 1's host CUDA 13.0 ptxas doesn't know the kernels' clmad)
 #      WARM_FROM=/workspace/jobs/rec-reprice/flock-gpu-link (a checkout whose cargo target starts the first build warm)
-#      LEAN_FROM=/workspace/jobs/rec-reprice/cache (read only: its flock-verify of the same sources is used, not rebuilt)
+#      LEAN_FROM=/workspace/jobs/rec-reprice/cache (read only: its verity-verify-proof of the same sources is used, not rebuilt)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|prove|lean}
@@ -48,7 +48,7 @@ bin() { echo $W/bin-$1-g1-sm$SM/flock-circuit; }
 F=$FW/flock-gpu-link/flock
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
 LEAN_FROM=${LEAN_FROM:-/workspace/jobs/rec-reprice/cache}
-LEAN_BIN=$L/lean-$LSHA/flock-verify; [ -x $LEAN_FROM/lean-$LSHA/flock-verify ] && LEAN_BIN=$LEAN_FROM/lean-$LSHA/flock-verify
+LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; [ -x $LEAN_FROM/lean-$LSHA/verity-verify-proof ] && LEAN_BIN=$LEAN_FROM/lean-$LSHA/verity-verify-proof
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
@@ -216,7 +216,7 @@ build)
     exec 9>$L/lean.lock; flock 9
     if [ ! -x $LEAN_BIN ]; then
       rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-        && (cd $LEAN_SRC && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN
+        && (cd $LEAN_SRC && lake build verity-verify-proof) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN
     fi
   ) > $O/build-lean.log 2>&1 &
   LP=$!

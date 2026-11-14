@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 
 /-!
 # Pearl-C's guarantees: lemmas
 
-The statements of `Definitions.Pouw.Guarantees.PearlC` that are steps of its guarantees' proofs rather than guarantees.
+Pearl-C's statements that are steps of its guarantees' proofs rather than guarantees.
 Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same name, and
 audited with the proofs: no record pins it.
 -/

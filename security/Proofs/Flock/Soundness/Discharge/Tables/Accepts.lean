@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
-# flock-verify's tables at `count > 1`
+# verity-verify-proof's tables at `count > 1`
 
 `Stmt.setupTables` at `count > 1`, under a tag without hidden outputs (`setupTables_parts`): the tag allows several
 tables and `count ≤ Tags.MAX_TABLES`; the sample, when there is one, is a subset or stratified sample (`Draw.tablesWhy`), and

@@ -1,12 +1,13 @@
-/-
+module
+
+public import Lean.Data.Json
+
+/-!
 A JSON value's canonical form (`rec_live.canonical`): its tokens as `Json.compress` writes them. `compress` and `Json`'s `==`
 are `partial def`s, which no proof can unfold; `canonForm` is total. It is a module of its own so that `Tags.plainLeaves`
 reads it without importing `Flock.Firewall`, whose `Schedule` would shadow `Flock.Schedule` in every `Flock.Firewall.*`
 namespace that imports `Tags`.
 -/
-module
-
-public import Lean.Data.Json
 
 @[expose] public section
 

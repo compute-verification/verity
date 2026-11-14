@@ -21,13 +21,13 @@ import numpy as np
 import pytest
 from verity.circuits import boolean as BL
 from verity.circuits import codec
+from verity.circuits import operations as O
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.program import Program
-from verity.circuits import operations as O
 from verity.definitions.registry import boolean_tanh as BT
 from verity.definitions.registry import dense as D
 from verity.definitions.registry import prims as P

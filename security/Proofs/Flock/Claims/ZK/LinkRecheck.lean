@@ -64,7 +64,7 @@ theorem cap_eq (lv : Level) (tPad : Nat) (i : In) (lf : Nat → ByteArray)
   exact layerOf_congr _ _ (fun q hq => (leaves_getElem! lv tPad i hq).trans (hl q hq).symm) _
 
 /-- **The recheck's root** at a table whose `--zk` schedule is `s`: the flat cap at its level 0. -/
-theorem root_eq (i : In) {s : _root_.Flock.Schedule} {tPad : Nat} (hz : Zk.schedule i.m = .ok (s, tPad)) :
+theorem root_eq (i : In) {s : _root_.Flock.Schedule} {tPad : Nat} (hz : Zk.schedule i.wideLeaf i.m = .ok (s, tPad)) :
     root i = flat (cap (s.levels.getD 0 default) tPad i) := by
   unfold root
   rw [hz]
@@ -146,6 +146,7 @@ the `2^lanes + 4` lanes' first `t_pad` padding coefficients and the salts of the
 past them, as `Level0.toIn` reads a level 0 sampled at those sizes. -/
 noncomputable def linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (j : Fin (jOf x)) :
     _root_.Flock.Firewall.Link.In where
+  wideLeaf := (stAt x j).wideLeaf
   m := (stAt x j).m
   g := (FlockComplete.tablesP (FlockDeploy.tabsOf (stsOf x)) (FlockComplete.ZkTables.traces (stsOf x)
     (FlockComplete.ZkTables.maskWOf x w (UE.tapeZk t).mask)))[j.val]!

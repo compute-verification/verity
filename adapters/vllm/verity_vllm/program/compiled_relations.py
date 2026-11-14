@@ -1,4 +1,4 @@
-"""The argument roles of every Inductor-generated kernel of the production compiled Llama execution, and the one-thread warm-up of
+"""The argument roles of every Inductor-generated kernel of the served compiled Llama execution, and the one-thread warm-up of
 MKL's VML.
 
 Argument roles per kernel (`ROLES`: hook arg index -> role; `WEIGHT_ARGS`: registered inputs, committed by reference only) are read off

@@ -60,7 +60,7 @@
         },
         "fidelity_notes": [
           {
-            "note": "H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma (sm90.wgmma.m64n8k16.bf16). On the H100 the two write the same words on every captured input, NaN and infinities included, so the gap is in the name only; gemm-coordinate/k1536/sm90-wgmma-bf16 names the instruction production runs",
+            "note": "H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma (sm90.wgmma.m64n8k16.bf16). On the H100 the two write the same words on every captured input, NaN and infinities included, so the gap is in the name only; gemm-coordinate/k1536/sm90-wgmma-bf16 names the instruction serving runs",
             "sources": [
               {
                 "label": "docs ontology, Presentation rules (fidelity notes); verity.circuits.targets.target BF16_HOPPER"

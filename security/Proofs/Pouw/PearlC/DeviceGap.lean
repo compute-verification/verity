@@ -4,6 +4,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOut
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 public import Proofs.Pouw.PearlC.TileGap
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # TT_OUT and g at a device record

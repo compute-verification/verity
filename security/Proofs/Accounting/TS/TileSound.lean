@@ -40,7 +40,7 @@ import Proofs.Pouw.RelativeSecurity
 # A tile unit's proof layer with its Definition's checks is sound through its Flock sessions (the proof)
 
 `Accounting.SecurityProofs.TS.TileSessionSound`, as `Accounting.SecurityProofs.TS.HeldSessionSound` is proved. The tile
-layer accepts where the checked layer does and flock-verify's known-content and complete checks pass, and opens the
+layer accepts where the checked layer does and verity-verify-proof's known-content and complete checks pass, and opens the
 same rows, so `AcceptedLive` is its acceptance's first conjunct. Its unsound event is inside the checked layer's
 (`Pouw.RelativeSecurity.prob_mono`), because on every path an accepted proof whose rows meet `CheckedRel` meets
 `TileRel` (`tile_of_checked`): each `ok` wire is at the `ok` row unless the `ok` tie collides

@@ -370,7 +370,7 @@ def work_table(lay: Layout, law: WorkLaw = _NO_FLOORS) -> dict[str, dict[str, in
 
 
 def design_object(lay: Layout, law: WorkLaw) -> dict:
-    """The sampling design `flock-verify draw --program P --partition Q --work K --work-table F` derives for this call
+    """The sampling design `verity-verify-proof draw --program P --partition Q --work K --work-table F` derives for this call
     (`Draw.deriveWork`, as `Law.toJson` writes it): each stratum `{template, units, work, floor, k}`, at the call's K
     (`WorkLaw.budget`)."""
     sizes, table, k = law.sizes(lay.strata), work_table(lay, law), law.budget(lay.strata)

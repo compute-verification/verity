@@ -16,11 +16,6 @@ import json
 from functools import lru_cache
 
 import pytest
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.program import Program, is_input
-from verity.definitions.boolean import boolean_version, lift
 from verity.circuits.census import (
     PRODUCTS,
     SILICON,
@@ -29,14 +24,19 @@ from verity.circuits.census import (
     family,
     step_ends,
 )
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.program import Program, is_input
 from verity.circuits.requirement import (
     census_gates,
     census_schedule,
     from_census,
     upper_bound,
 )
-from verity.circuits.ops import prims as P
-from verity.circuits.ops.boolean import gemm as BG
+from verity.definitions.boolean import boolean_version, lift
 from verity.definitions.registry import b1, b1_tp2
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import tp_allreduce as TA

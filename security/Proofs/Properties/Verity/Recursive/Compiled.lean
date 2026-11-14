@@ -13,7 +13,7 @@ import Proofs.Properties.Challenger
 * the inner session held off the blobs (`innerHeld`) and V\*'s statements at its shape (`RecVStar.statements`);
 * the shape dense (`dense`: public inner circuits, no RecSparse phase and no R);
 * the verifier's parts and the evidence's part sessions, one per statement;
-* every part's `flock-verify verify --zk` verdict (`partVerdict`) set up and accepted, `.ok (.ok ())`;
+* every part's `verity-verify-proof verify --zk` verdict (`partVerdict`) set up and accepted, `.ok (.ok ())`;
 * one-stage v1's live check accepted the evidence with the one verdict of record `verdicts` computed, so its check at no
   coins did (`Properties.Challenger.oneStage_check_of_accept`).
 

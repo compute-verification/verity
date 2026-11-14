@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.Firewall.Frames
+meta import Flock.Firewall.Frames
+
+/-!
 A rep's inner rounds in the loop's frames (`Frames.roundPlace`, `Frames.roundStep`), at table 0's rep 0 past its
 opening: the inner proof's round `j` has a place, the frame's own round on the loop's finish's (`Frame.innerSched`),
 only once the finish computed it (`Sessions.innerRound`). A host that relays round `j` before then, whatever it relays,
 is refused for it, and the rep's frame is not put back, so the session stops on the refusal (`Session`'s `Round`).
 -/
-module
-
-public import Flock.Firewall.Frames
-meta import Flock.Firewall.Frames
 
 @[expose] public section
 

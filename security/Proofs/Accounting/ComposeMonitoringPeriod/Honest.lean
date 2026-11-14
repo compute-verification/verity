@@ -3,6 +3,7 @@ module
 public import Proofs.Accounting.ComposeMonitoringPeriod
 public import Proofs.Accounting.Compose.SplitRateClosed
 public import Proofs.Accounting.Lemmas.Compose
+public import Properties.Pouw.Period.Witnesses
 
 /-!
 # An honest period meets `CircuitWorkMonitoringPeriod`'s premises
@@ -35,18 +36,7 @@ theorem prob_none {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p �
   rw [hp]
   exact Accounting.SecurityProofs.TS.Rounds.prob_false
 
-/-! ## The circuit, its scheme and the honest period -/
-
-/-- The word: step `0` of an `S8Dot_v1` body of `K = L = 32` (its `T_1`, a served step), committed. -/
-def word : Accounting.Gates.IntGate Unit where
-  op := .const 0
-  args := []
-  lo := 0
-  hi := 0
-  step := 0
-  prim := "S8Dot_v1"
-  place := .dot 32 32 [] 0
-  commit := true
+/-! ## The circuit and the honest period -/
 
 /-- One gate, one call site, one live round, one unit, every value committed before the round's coin. -/
 def circuit : Declared Unit where
@@ -60,18 +50,6 @@ def circuit : Declared Unit where
   seedNames := fun _ _ => false
   units := 1
   unit := fun _ => 0
-
-/-- Every kind credited, its operand luck pinned (`0`), its receipt luck and guess bound `½`. -/
-noncomputable def scheme : Scheme Unit where
-  floor := fun _ => ⟨fun _ => 0, fun _ => 0, fun _ => 0, fun _ => 0⟩
-  credited := fun _ => true
-  span := fun _ => 0
-  form := fun _ => .pinned
-  mu := fun _ => 0
-  rB := fun _ => 1 / 2
-  guess := fun _ => 1 / 2
-  seedRate := fun _ => 0
-  wholeRate := fun _ => 0
 
 /-- A window's honest stages: its tile paid, its words right and its checked values honest. -/
 def stages : SplitStages Bool (Fin 1) 1 :=
@@ -93,15 +71,6 @@ def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit wher
 /-- The period's proofs, `Declared.monitoringPeriodLayer` at the honest run. -/
 def layer (n : ℕ) : SampledLayer Bool (Equiv.Perm (Fin 1) × Unit) n 1 1 (Fin 1) ℕ (Fin n × ℕ) Unit :=
   circuit.monitoringPeriodLayer (Nat.one_pos : 0 < circuit.rounds) (le_rfl : 1 ≤ 1) (run n)
-
-/-- The honest run's anatomy: one fixed word a window. -/
-noncomputable def anatomy : Anatomy Unit Unit Unit Unit where
-  run := ⟨fun _ => 0, 0, 0⟩
-  nword := fun _ _ => 0
-  nfold := fun _ => 0
-  nfill := fun _ => 0
-  words := fun _ => 0
-  fixed := 1
 
 /-- The play: the period's ideal game at `liveCone`, accepted on every path. -/
 noncomputable def play (n : ℕ) : Play (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) n Unit Unit Unit Unit where

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.PearlC.Completeness
-public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Proofs.Pouw.PearlC.Records
 public import Definitions.Pouw.Assumptions.PearlC.HonestCap
 public import Proofs.Pouw.PearlC.HonestWords
 public import Proofs.Pouw.Copy

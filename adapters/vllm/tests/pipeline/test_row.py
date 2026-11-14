@@ -200,7 +200,7 @@ def test_a_tree_without_the_run_stores_tool_beside_it_is_refused_by_name(tmp_pat
     """A row's stages run with the run store's tool on their path, so a tree without `tools/research/src` beside it, as the public
     tree is, refuses the row at setup before any stage."""
     r = _row(tmp_path)
-    r.tree = str(tmp_path / "tree" / "integrations" / "vllm")
+    r.tree = str(tmp_path / "tree" / "adapters" / "vllm")
     os.makedirs(r.tree)
     with pytest.raises(Stop) as e:
         r.setup({})
@@ -854,6 +854,31 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     dense = _tp_row(tmp_path, TP_DENSE)
     cmd = dense.commit_cmd(R.applicable_taps(_tap_manifest(tmp_path / "dense.json", "norm_scales", "vocab_range"), dense.ck_))
     assert "--norm-tap-so" in cmd and "--vocab-range" in cmd and "--router-tap-so" not in cmd
+
+
+def test_a_tp_rows_commit_names_the_trees_checkpoint_pins_as_its_replay_does(tmp_path, monkeypatch):
+    """`tp-commit` with no ``--checkpoints-manifest`` takes the package's own; the row names the tree's file to it, the one it
+    names to `tp-commit-replay`, so the Commit's record says which pins its shards were held to.  A config run's Commit, one
+    instrumented arm with no Match to compare against, names it as a full run's does."""
+    tp = _tp_row(tmp_path, TP_DENSE)
+    pins = os.path.join(tp.tree, "manifests/checkpoints.json")
+    for row, config_run in ((tp, False), (_tp_row(tmp_path, TP_DENSE, "--config-run", "1"), True)):
+        cmd = row.commit_cmd([])
+        assert cmd[cmd.index("--checkpoints-manifest") + 1] == pins and cmd.count("--checkpoints-manifest") == 1, config_run
+        assert ("--only-arm" in cmd, "--match-dir" in cmd) == (config_run, not config_run)
+    seen: list[list[str]] = []
+
+    def run_tl(stage: str, to: int, log: str, argv: list[str]) -> int:
+        seen.append(argv)
+        return 0
+
+    monkeypatch.setattr(tp, "run_tl", run_tl)
+    isdir = os.path.isdir
+    monkeypatch.setattr(os.path, "isdir", lambda p: p == "/ck" or isdir(p))
+    os.makedirs(f"{tp.d}/commit")
+    Path(f"{tp.d}/commit/replay_deferred.json").write_text("{}")
+    tp.replay()
+    assert [c[c.index("--checkpoints-manifest") + 1] for c in seen] == [pins]
 
 
 def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):

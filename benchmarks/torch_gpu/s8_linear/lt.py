@@ -1,5 +1,5 @@
 """cuBLASLt's plain int8 GEMM through the cuBLASLt torch already loaded, by ctypes: TN (W [N, K] and X [M, K] both K-major),
-s8 x s8 -> s32 out, alpha 1, beta 0, the harness's int8 family (benchmarks/pouw/harness/native/lt.cu) without its separate
+s8 x s8 -> s32 out, alpha 1, beta 0, the harness's int8 family (verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu) without its separate
 library. `Plan(m, n, k).candidates()` is cuBLASLt's top `want` heuristic algorithms; bench.py gates each (z equal to
 torch._int_mm's) and times them, and keeps the fastest. Graph-capturable: one 32 MiB workspace, the stream torch's current."""
 from __future__ import annotations

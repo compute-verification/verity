@@ -22,7 +22,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 file at every sample of the live law proves the sampled proof blocks and sets the statement up with the outcome's link points.
 `RecordCustodyZKLaw` at one public-output table, `RecordCustodyZKHLaw` at one hidden-output table, `RecordCustodyZKJLaw`
 and `RecordCustodyZKHJLaw` at `J`. `RecordCustodyZK` and `RecordCustodyZKJ` (`Assumptions.Zk`) state the sample fact as
-the sample file being `flock-verify draw`'s instead.
+the sample file being `verity-verify-proof draw`'s instead.
 -/
 
 @[expose] public section
@@ -33,7 +33,7 @@ open FlockSoundness
 
 /-- **The record is the live session's, at the live law's samples** (`live-verifier`, with A6,
 `uniform/flock-coin-server`, for the coins in it). Nothing in a session record authenticates its writer, and
-`flock-verify verify --zk` reads the sample and the proofs only from the record, so no check of the record establishes
+`verity-verify-proof verify --zk` reads the sample and the proofs only from the record, so no check of the record establishes
 either fact:
 
 * `RecordsLiveZK I dj wr`: the record `verify --zk` reads is the one the challenger wrote for the live session. At every
@@ -42,7 +42,7 @@ either fact:
 * `DrawOkZK I dj mPts` at every sample of the live law `L`: the record's sample file `dj S` proves every unit of `S`, and
   the statement sets up at it under the `--zk` tags with the outcome's `mPts` link points.
 
-Both are stated at what flock-verify parses, so the record's serialization is outside them. -/
+Both are stated at what verity-verify-proof parses, so the record's serialization is outside them. -/
 def RecordCustodyZKLaw {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
     (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (L : Audit.Law n) : Prop :=
   Discharge.ZkLink.RecordsLiveZK I dj wr ∧ ∀ ω, Discharge.ZkLink.DrawOkZK I dj mPts (L.draw ω)

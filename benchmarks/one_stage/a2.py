@@ -4,7 +4,7 @@ the prover's file and the unit index; nothing else changes.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a2.py --served DIR --template-set DIR --m0-pythonpath PATH --bin flock-circuit \\
-      --lean flock-verify --out DIR [--k 256] [--delta 2^-20]
+      --lean verity-verify-proof --out DIR [--k 256] [--delta 2^-20]
 
 * **`--served DIR`** holds `registration.json`, `pub-N.bin`, `inst-N.bin` (rows and salts: the prover's only) and
   `index.json`. `--template-set` is any input set of the template, for the verifier's own lowering.

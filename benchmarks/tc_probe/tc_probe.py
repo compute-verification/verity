@@ -1966,7 +1966,7 @@ def main() -> int:
             evidence["total_mismatches_by_model"] = sw["total_mismatches_by_model"]
             measurements.append({"name": "elements", "value": sw["total_elements"], "unit": "elements"})
             for mname, count in sw["total_mismatches_by_model"].items():
-                measurements.append({"name": f"mismatches[{mname}]", "value": count, "unit": "elements"})
+                measurements.append({"name": f"circuits/tc-probe.mismatches[{mname}]", "value": count, "unit": "elements"})
             for name, f in sw["families"].items():
                 measurements.append({"name": f"{name}.elements", "value": f["elements"], "unit": "elements"})
                 for m, v in f["models"].items():

@@ -1,15 +1,16 @@
-/-
-`ProvedScope.circuitRules` on a templated circuit (`Circuit.tmpl`), on its description (`scopeOkT`): `Flock.Test.Tmpl`'s
-unit at one `--zk` table with hidden outputs passes with or without the verifier's own registered reads, and with them a
-shared-row public file (`sharedRowsOk`); without them a shared-row file is refused, and so are two tables, a session
-without `--zk`, public outputs and outputs a tail stage computes (META `out_net`).
--/
 module
 
 public import Flock.ProvedScope
 public import Flock.Test.Tmpl
 meta import Flock.ProvedScope
 meta import Flock.Test.Tmpl
+
+/-!
+`ProvedScope.circuitRules` on a templated circuit (`Circuit.tmpl`), on its description (`scopeOkT`): `Flock.Test.Tmpl`'s
+unit at one `--zk` table with hidden outputs passes with or without the verifier's own registered reads, and with them a
+shared-row public file (`sharedRowsOk`); without them a shared-row file is refused, and so are two tables, a session
+without `--zk`, public outputs and outputs a tail stage computes (META `out_net`).
+-/
 
 @[expose] public section
 

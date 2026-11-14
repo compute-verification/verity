@@ -8,7 +8,8 @@ from typing import Any
 
 import torch
 
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, value_family
+from verity_vllm.commit.committer.acquired import GPU_CHUNK_BYTES
+from verity_vllm.commit.committer.footprint import value_family
 from verity_vllm.commit.committer.plan_cache import PlanMetas
 
 __all__ = ["GPU_CHUNK_BYTES", "HIDDEN_M1_FAMILIES", "retain_exclude_families"]
@@ -144,7 +145,7 @@ RETAIN_EXCLUDE_ALIASES = {"hidden_m1": HIDDEN_M1_FAMILIES, "hidden": HIDDEN_M1_F
 
 
 def retain_exclude_families(spec: str | None) -> set[str]:
-    """`VERITY_RETAIN_EXCLUDE` / `--retain-exclude` -> the set of value families (native_host.FAMILY_RULES names) whose chunk-aligned
+    """`VERITY_RETAIN_EXCLUDE` / `--retain-exclude` -> the set of value families (`footprint.FAMILY_RULES` names) whose chunk-aligned
     interior is not copied to host: comma-separated family names (`_stream` suffix tolerated) and the aliases `hidden_m1` / `hidden`."""
     out: set[str] = set()
     for f in (spec or "").split(","):

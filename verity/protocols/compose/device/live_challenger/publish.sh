@@ -21,7 +21,7 @@
 # the last put one extended refused, exit 4), so no published open seals lines the store lacks; `pinned_session` reads it.
 # The model registry (the gate's `models`) follows it the same way (`--kind challenger-models/v1`, `challenger-models head`).
 set -euo pipefail
-need="the auditor host's address, or DEST as an argument"
+need="the auditor device's address, or DEST as an argument"
 if [ "${1:-}" = --every ]; then
   every=$2
   shift 2

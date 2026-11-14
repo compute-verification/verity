@@ -1,7 +1,7 @@
 """V*'s circuits in Lean (`VStar`, served by `vstar-difftest`) against `verity_flock`'s builders, part by part on sampled
-parameters: the SHA-512 gadget, the climb and the GF(2^128) residuals as laid-out netlists, the algebra's structure and its
-parts (`rec_algebra.structure`, `rec_residuals.spec`, `rec_residuals.parts`), V*'s statements over an inner session's shape
-(`rec_vstage.stage`'s), each statement's unit (`rec_outer.lowering`, `rec_residuals.lowering`) as its lowering text, and its
+parameters: the SHA-512 gadget, the climb and the GF(2^128) residuals as laid-out circuit descriptions, the algebra's structure
+and its parts (`rec_algebra.structure`, `rec_residuals.spec`, `rec_residuals.parts`), V*'s statements over an inner session's
+shape (`rec_vstage.stage`'s), each statement's unit (`rec_outer.lowering`, `rec_residuals.lowering`) as its lowering text, and its
 whole `flock-circuit` file (`circuit.compose`) under sampled bindings, and the prover's reading of an inner session's sample
 (`rec_live.inner_draw`) against the verifier's (`RecSetup.innerDrawn`). Big outputs are compared as digest and size;
 `test_*_file_is_byte_equal` compares whole files.

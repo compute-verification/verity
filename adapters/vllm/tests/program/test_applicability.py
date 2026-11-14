@@ -100,11 +100,11 @@ def builds(tmp_path_factory):
     res = {}
     for name, (out, p) in procs.items():
         rc = p.wait()
-        r = json.load(open(out / "result.json"))
+        r = json.loads((out / "result.json").read_text())
         assert "traceback_tail" not in r, f"{name} crashed: {r.get('exception')}: {r.get('message')}\n{r.get('traceback_tail')}"
-        m = json.load(open(out / "construction_manifest.json"))
+        m = json.loads((out / "construction_manifest.json").read_text())
         res[name] = {"rc": rc, "out": out, "result": r, "manifest": m,
-                     "artifact": json.load(open(out / "artifact.json")) if (out / "artifact.json").exists() else None}
+                     "artifact": json.loads((out / "artifact.json").read_text()) if (out / "artifact.json").exists() else None}
     return res
 
 
@@ -283,6 +283,7 @@ def test_dead_env_var_is_recorded_as_ignored_not_declared(builds):
 def test_no_target_literal_remains_in_the_builder_sources():
     bindings = sorted(os.path.relpath(p, REPO) for p in glob.glob(os.path.join(REPO, "verity_vllm/program/frontend/rules/vllm_bindings/*.py")))
     for rel in ("verity_vllm/program/frontend/export_compat.py", *bindings, "verity_vllm/program/frontend/vllm_meta.py"):
-        src = open(os.path.join(REPO, rel)).read()
+        with open(os.path.join(REPO, rel)) as f:
+            src = f.read()
         assert "DeviceCapability(major=8" not in src and "8.9 (sm_89, Ada)" not in src, rel
         assert 'os.environ.get("VLLM_ATTENTION_BACKEND")' not in src, rel

@@ -19,7 +19,7 @@ reuses the rehearsal and `n2_zk.py`'s driver and re-implements neither. `encodin
 ## The one command
 
 `verity bench network_e2e ARGS` runs `run.sh`, ARGS being `e2e.py`'s. Proving runs as a job on a CPU node, whose command
-and resources are in `run.sh`'s header: it builds Flock's `flock-circuit`, the Lean `flock-verify`, the Lean ZK server
+and resources are in `run.sh`'s header: it builds Flock's `flock-circuit`, the Lean `verity-verify-proof`, the Lean ZK server
 and network-records (`benchmarks/pouw/hidden_zk/job.sh`'s `setup`, cached on the node), then runs `e2e.py` with the
 report in `$OUT`. `E2E_MEM_GB` is the proving runs' memory cap. Exit 0 means the report says OK. The job publishes the
 report with the run's outputs in the evidence store, where results are read.

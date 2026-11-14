@@ -41,10 +41,6 @@ def _rotr64(x: int, c: int) -> int:
     return ((x >> c) | (x << (64 - c))) & M64 if c else x
 
 
-def _halves(x: int) -> tuple[int, int]:
-    return x >> 32, x & M32
-
-
 # ---- 32-bit words ------------------------------------------------------------------------------------------------------
 
 @primitive("PouwXor32", 1, [("a", U32), ("b", U32)], U32, conformance="protocol-defined")

@@ -47,7 +47,7 @@ alike:
 * `plainRepColsOf_erase`: rounds equal up to `Round.erase` give one rep's columns.
 * `txNoOffAtJK_of_records`: two accepted parsed sessions that record one outcome have the same `TxNoOffAtJK`.
 * `txNoOffAtK_iff_JK`, `txNoOffAtK_wrPDK_iff_J`: an accepted record text of an outcome and an accepted parsed session
-  of it have the same reader's premise (through `acceptsAtDK_iff_exists_J`, `txNoOffAtK_iff_J`), so where flock-verify
+  of it have the same reader's premise (through `acceptsAtDK_iff_exists_J`, `txNoOffAtK_iff_J`), so where verity-verify-proof
   accepts what `wrPDK` writes, which then records the outcome (`recordsLiveAtDK_wrPDK_of`), `TxNoOffAtK` there is
   `TxNoOffAtJK` at what `wrPDJK` writes.
 * `plainVerdictAtJK_of_K`: `plainVerdictAtK` gives `plainVerdictAtJK` at the same outcome and root.
@@ -117,7 +117,7 @@ theorem txNoOffAtK_iff_JK {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} {N
   exact (txNoOffAtK_iff_J t.proofs hj).trans
     ⟨txNoOffAtJK_of_records hAj hRj hA' hR', txNoOffAtJK_of_records hA' hR' hAj hRj⟩
 
-/-- **What `wrPDK` writes records the outcome wherever flock-verify accepts it**: otherwise it is a record without
+/-- **What `wrPDK` writes records the outcome wherever verity-verify-proof accepts it**: otherwise it is a record without
 proof files, whose parsed value no verdict accepts (`not_acceptsAtDJK_nil`). -/
 theorem recordsLiveAtDK_wrPDK_of {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} {J mPts : ℕ}
     {o : Tables.LiveOutJ J mPts} (hA : AcceptsAtDK keep I (some d) (wrPDK keep I d o)) :
@@ -131,7 +131,7 @@ theorem recordsLiveAtDK_wrPDK_of {keep : Bool → Bool} {I : Exec.Inputs} {d : J
     obtain ⟨j, -, hAj⟩ := (acceptsAtDK_iff_exists_J _).1 hA
     exact absurd hAj (not_acceptsAtDJK_nil _ _ _ _)
 
-/-- **The reader's premise moves from `wrPDK` to `wrPDJK`**: where flock-verify accepts what `wrPDK` writes for the
+/-- **The reader's premise moves from `wrPDK` to `wrPDJK`**: where verity-verify-proof accepts what `wrPDK` writes for the
 outcome at the setup at `d`, that record records the outcome (`recordsLiveAtDK_wrPDK_of`), so `wrPDJK` accepts a parsed
 session of it (`acceptsAtDJK_wrPDJK_of_K`), and the two writers' sessions have the same `TxNoOff`
 (`txNoOffAtK_iff_JK`). -/

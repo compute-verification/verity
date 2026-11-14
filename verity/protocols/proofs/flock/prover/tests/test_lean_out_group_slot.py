@@ -30,12 +30,12 @@ def _class(b: bytes) -> str:
 
 
 def _statement(d: Path, good: str, text: str) -> subprocess.CompletedProcess:
-    """`flock-verify statement` on ``text``, with the public file staged for ``good`` rebound to it (its digest and class)."""
+    """`verity-verify-proof statement` on ``text``, with the public file staged for ``good`` rebound to it (its digest and class)."""
     g, b = good.encode(), text.encode()
     pub = (d / "pub.bin").read_bytes().replace(hashlib.sha512(g).hexdigest().encode(), hashlib.sha512(b).hexdigest().encode())
     (d / "c.txt").write_bytes(b)
     (d / "p.bin").write_bytes(pub.replace(_class(g).encode(), _class(b).encode()))
-    return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
+    return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", "verity/flock-circuit",
                            "--circuit", str(d / "c.txt"), "--public", str(d / "p.bin")], capture_output=True, text=True)
 
 

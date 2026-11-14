@@ -374,14 +374,20 @@ def test_a_commit_whose_checks_after_its_last_run_read_host_memory_only_may_rele
 
 
 def test_the_commit_releases_its_lease_after_its_last_run_and_before_the_checks_that_follow():
-    """In `commit.main`, read with `write_verdict`'s text where `main` calls it: the release follows the last run's records that read
-    the device (the run, its openings, the replay bundle's device-resident tensors in `RB.start`) and precedes every check that
-    reads host memory; nothing after it calls CUDA."""
+    """In `commit.main`, read with the text of each function that holds a part of it (`parts`) where `main` calls it: the release
+    follows the last run's records that read the device (the run, its openings, the replay bundle's device-resident tensors in
+    `RB.start`) and precedes every check that reads host memory; nothing after it calls CUDA."""
     src = Path(GL.__file__).with_name("commit.py").read_text()
     fns = {n.name: ast.get_source_segment(src, n) or "" for n in ast.parse(src).body if isinstance(n, ast.FunctionDef)}
-    head, verdict, tail = fns["main"].partition("\n    write_verdict(")
-    assert fns["main"].count("write_verdict(") == (1 if verdict else 0), "read at one call of write_verdict, a statement of main's body"
-    main = head + (fns["write_verdict"] if verdict else "") + verdict + tail
+    parts = ("write_verdict", "challenged_openings", "binding_coverage", "manifest_coverage", "value_correspondence", "match_record_compare",
+             "weights_pin", "record_openings_after_release")
+    main = fns["main"]
+    for part in parts:                                    # a part may be called by one named before it
+        calls = re.findall(rf"\n +(?:\w+(?:, \w+)* = )?{part}\(", main)
+        assert main.count(f"{part}(") == len(calls) <= 1, f"read at one call of {part}, a statement of main's or of a part's"
+        if calls:
+            head, call, tail = main.partition(calls[0])
+            main = head + "\n" + fns[part] + call + tail
     marks = ["GL.acquire(TL)", "TL.end(_wstage", '"gpu_mem"', 'TL.start("validate.openings"', "RB.start(out, pair", "GL.release(TL",
              'TL.start("validate.binding_coverage"', 'TL.start("validate.manifest_coverage"', "RB.defer(", "TL.start(\"validate.weights_pin\"",
              "openings_after_release(com", "for c in coms.values():\n        c.close()", 'TL.start("closure.summary")']

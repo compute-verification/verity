@@ -58,13 +58,7 @@ from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
-
-# Imported from here by a test an open PR edits (tests/pipeline/test_global_program_regress.py); it moves to dag_form after that lands.
-from verity_vllm.check.match.dag_form import (
-    dag_hashes,
-    dag_multiset,  # noqa: F401
-    live_cone,
-)
+from verity_vllm.check.match.dag_form import dag_hashes, live_cone
 from verity_vllm.check.match.decomp_profile import (
     FORCE_DAG_ENV,
     PROFILE_ENV,
@@ -76,7 +70,7 @@ from verity_vllm.check.match.decomp_profile import (
     _profile_on,
 )
 from verity_vllm.check.match.derived_index import derived_shape
-from verity_vllm.check.match.input_layout import request_inputs, weights_input_nodes  # noqa: F401  (weights_input_nodes re-exported: tests)
+from verity_vllm.check.match.input_layout import request_inputs
 from verity_vllm.check.match.occurrence import SHARED, attribute, shared_legs
 from verity_vllm.check.match.projection import Projection, engine_steps_of
 from verity_vllm.check.program_ops import Ops
@@ -163,8 +157,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     header, steps = read_steps(log_path)
     reqs, param_of, parent_of = request_params(header)
     # the caller (global_match.check) may pass the fold it has already decoded: the fold RootView is read-only
-    # after load_oracle and at B16 1024/128 it is ~40 GB of Python objects -- decoding it a second time in the same process doubled
-    # GM-01's peak RSS (87 GB on cp-dev1) for nothing
+    # after load_oracle, and a second decode in the same process would hold the fold's objects twice for nothing
     with _Phase(run_prof, "fold_load") if profiling else _NoPhase():
         B = oracle if oracle is not None else ops.load_oracle(oracle_dir, "oracle")
         if oracle is None:

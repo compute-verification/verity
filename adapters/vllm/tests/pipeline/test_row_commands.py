@@ -245,9 +245,11 @@ def test_a_rows_result_reads_the_builds_program_digest_and_each_stages_wall_from
     digest = "0123456789abcdef" * 2
     doc = _result(tmp_path, [f"build PASS t digest={digest} wall=12s", "match PASS t wall=7s tokens equal", "commit PASS t no wall stated"])
     assert doc["workload_fingerprint"]["program_digest"] == digest
-    assert doc["measurements"] == [{"name": "build_wall", "value": 12, "unit": "s"}, {"name": "match_wall", "value": 7, "unit": "s"}]
+    assert doc["measurements"] == [{"name": "proofs/one-stage.build-wall", "value": 12, "unit": "s"},
+                                 {"name": "proofs/one-stage.match-wall", "value": 7, "unit": "s"}]
     doc = _result(tmp_path, [f"build PASS t step digest {digest[:16]} of 3 wall=3s", f"match PASS t digest={digest} wall=7s"], "match")
-    assert doc["workload_fingerprint"]["program_digest"] == digest[:16] and doc["measurements"] == [{"name": "match_wall", "value": 7, "unit": "s"}]
+    assert doc["workload_fingerprint"]["program_digest"] == digest[:16] and doc["measurements"] == [
+        {"name": "proofs/one-stage.match-wall", "value": 7, "unit": "s"}]
     for line in ("build PASS t digest=0123456789abcde", "build PASS t wall=12", f"match PASS t digest={digest}"):
         doc = _result(tmp_path, [line])
         assert "program_digest" not in doc["workload_fingerprint"] and doc["measurements"] == [], line

@@ -122,7 +122,7 @@ theorem slotsBelow_refK {x : Msg} (hx : Live x) : SlotsBelow x (refK x) := by
   obtain ⟨y⟩ := hx.2 j hj
   have hst : (stsOf x)[(2 * j + r) / 2]! = (stsOf x)[j]! := by
     rw [show (2 * j + r) / 2 = j by omega]
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j + r) / 2]!.wideLeaf (stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst, getElem!_pos (stsOf x) j hj]
     exact y.hz
   have hk6 : 6 ≤ (stsOf x)[(2 * j + r) / 2]!.c.kLog := by

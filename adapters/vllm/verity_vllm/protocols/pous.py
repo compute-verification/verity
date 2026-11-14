@@ -331,12 +331,14 @@ def _encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: by
             lib: str | None) -> _Store:
     """``C*`` of ``W`` under ``salt`` on the weights' device, each segment's encode checked (module docstring)."""
     import torch
-
     from verity.protocols.accounting.pous.device import memory_challenger as mc
     from verity.protocols.accounting.pous.verifier import period
     from verity.protocols.accounting.pous.verifier import run as R
     from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
-    from verity.protocols.accounting.pous.verifier.verifier import DIGEST_BYTES, VerifierKey
+    from verity.protocols.accounting.pous.verifier.verifier import (
+        DIGEST_BYTES,
+        VerifierKey,
+    )
 
     S = _p2("store")
     q = layout.params
@@ -507,7 +509,6 @@ def _wrapper(names: Mapping[int, str], decoded: Callable[[str], Any]) -> Callabl
 
 def install(scheme: str, target: Target) -> PousOption:
     import torch
-
     from verity.protocols.accounting.pous.verifier import period, setup
     from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
 

@@ -938,7 +938,7 @@ the branch that reads it, which here is the last. -/
 /-- `parse` with the file's lines split in tasks (`SplitNL.splitTasks`), each net's rows read in the same tasks
 (`Net.parseWith`) and the file hashed in a task beside them,
 `parse_eq_fast`: the ZK server's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
-`flock-verify` compiles `parse` too, and runs no task. -/
+`verity-verify-proof` compiles `parse` too, and runs no task. -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
     (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit :=
   parseFastFrom (Task.spawn fun _ => Sha512.hash bytes) tags bytes tables tmpl pre

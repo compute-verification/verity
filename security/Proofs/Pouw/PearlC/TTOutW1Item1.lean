@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Proofs.Pouw.PearlC.HonestWords
 public import Proofs.Pouw.Copy
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Guessing a `1 × 1 × k` unit's two output words at W1

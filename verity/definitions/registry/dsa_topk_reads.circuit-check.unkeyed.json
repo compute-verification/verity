@@ -1,7 +1,4 @@
 {
- "binding_peaks": {
-  "_model_roots:DsaPositionsMerge_v1-served": 30.96
- },
  "peaks": {
   "DsaPositionsMerge_v1{M=8,K=2048}": 10.96,
   "DsaTopKReadRows_v1{N=131072,TOPK=2048,BLOCK=16384,READ=EmbeddingRead_v1{V=131072,H=576}}": 35.98,

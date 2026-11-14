@@ -16,7 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# The widened statements, with flock-verify's own count of units
+# The widened statements, with verity-verify-proof's own count of units
 
 `Wide/Defs.lean`'s six statements take `0 < st.c.upv` as a hypothesis: the unit range's `g · upv` slots are a power of
 two only when the unit returns the outputs, so nothing else refuses a tail with no unit in a template instance.

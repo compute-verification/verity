@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Proofs.Pouw.PearlC.Records
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset

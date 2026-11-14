@@ -10,7 +10,7 @@
 themselves: `mla.TritonMlaDecodeHead` on the one-split decode rows, `mla.MlaBmm` and `mla.MoeSharedCombine` on every case.
 
 The inputs are counter-based (`words`: splitmix64 of the case seed and the word index), so the check rebuilds them from the
-manifest and only the kernel's outputs are stored: `o` (bf16 words `[B, H, 512]`), `lse` (bf16 `[B, H]`) and the stage-1
+manifest and only the kernel's outputs are stored: `o` (bf16 words `[B, H, 512]`), `lse` (bf16 `[B, H]`) and the split pass's
 scratch `attn_logits` (f32 words `[B, H, SPLITS, 513]`: each split's `acc / e_sum` and `e_max + log(e_sum)`). `produce` calls
 `decode_attention_fwd` exactly as forward_mqa does: q `[B, H, 576]`, the paged cache `[pages, PAGE, 1, 576]` and its first 512
 columns as the value buffer, a shuffled block table, `k_scale = v_scale = 1.0`. With `TRITON_CACHE_DIR` set the compiled

@@ -1,4 +1,4 @@
-"""The RUNTIME's module tree -- `RuntimeTree` (the record, `verity_vllm.records.runtime_tree`, whose names this module hands on):
+"""The RUNTIME's module tree -- `RuntimeTree` (the record, `verity_vllm.records.runtime_tree`):
 the built model's module paths with their class MRO names + buffers + the runner's facts,
 taken from a live engine (`runtime_tree_of`) or from a model instantiated on the META device as Build does (`meta_runtime_tree`, pod
 only: needs vLLM).  Module-tree facts are NOT correspondence: they say which modules the runtime HAS, not which module a Program Call was
@@ -19,9 +19,9 @@ from dataclasses import dataclass
 
 from verity_vllm.config import option
 from verity_vllm.engine.profiles import layer_classes as LC
-from verity_vllm.records.runtime_tree import RUNNER_PATH, RuntimeTree, runtime_tree_of
+from verity_vllm.records.runtime_tree import RuntimeTree, runtime_tree_of
 
-__all__ = ["RUNNER_PATH", "Options", "RuntimeTree", "main", "meta_runtime_tree", "runtime_tree_of"]
+__all__ = ["Options", "main", "meta_runtime_tree"]
 
 
 def meta_runtime_tree(model: str, revision: str, *, dtype: str = "bfloat16", max_model_len: int = 2048, tensor_parallel_size: int = 1,

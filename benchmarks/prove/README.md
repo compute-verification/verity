@@ -1,9 +1,9 @@
 # prove
 
 `verity bench prove` is the one command for what a proof system's prover costs on a workload. Its code is
-`verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_records.py` the store side and
-the table); this directory holds its runner. It reads the store's labelled records and runs on any machine that reaches
-the store, with no GPU and no node.
+`verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_flock.py` Flock's prover,
+`prove_records.py` the store side and the table); this directory holds its runner. It reads the store's labelled
+records and runs on any machine that reaches the store, with no GPU and no node.
 
 ```text
 verity bench prove --system flock --workload glm53                  every block proved

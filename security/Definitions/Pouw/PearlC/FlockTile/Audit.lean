@@ -8,7 +8,7 @@ public import Definitions.Core.Game
 
 The hidden audit (`HiddenAudit`) plays, for each sampled tile, a proof game on the window's commitment. For Flock that
 game is the live `--zk` session of the TileRead statement at the tile's public `t_s`, which reads the window's committed
-rows at `tile_at(t_s)`, relabelled to flock-verify's verdict.
+rows at `tile_at(t_s)`, relabelled to verity-verify-proof's verdict.
 
 TileRead's Definition and its Flock soundness (the restack plan's T1 and T3) are not in Lean yet, so the session is a
 parameter (`TileReadSession`): its window root, its live game per tile, its verdict, the class of strategies its
@@ -36,7 +36,7 @@ Definition and its Flock soundness land.
 * `game H s U r g` is the live `--zk` session of the TileRead statement at the public `t_s` with `tile_at(t_s) = g`, on
   the window root `r`, with the anchors the verifier recomputes from the oracle `H` and the salt `s`: a game of core's
   (`Verity.Game`, the one Flock's soundness is stated over), ending in the live audit's output (for Flock's `auditLive`, the registration, the sample and
-  the session's transcript). `verdict` is flock-verify's verdict on that output.
+  the session's transcript). `verdict` is verity-verify-proof's verdict on that output.
 * `Cls U τ o H s g σ q` is the class Flock's soundness speaks of, for a strategy `σ` of tile `g`'s session, at budget
   `q`: T3's CR hypotheses, `cr/sha-512` for each table's knowledge finders (`TableCRZ`) and `ecr/sha-512` for the link
   finders (`LinkCRZC`), of the finders built from `σ`. It is stated without reading which of `τ`'s tiles are good.
@@ -58,7 +58,7 @@ namespace TileReadSession
 
 variable (F : TileReadSession Q R S)
 
-/-- Tile `g`'s proof game as the hidden audit plays it: the session's live game, relabelled to flock-verify's
+/-- Tile `g`'s proof game as the hidden audit plays it: the session's live game, relabelled to verity-verify-proof's
 verdict. -/
 def proofGame (H : Q → R) (s : S) (U : Workload) (r : F.Root) (g : ℕ) : Verity.Game Bool :=
   (F.game H s U r g).map F.verdict
@@ -89,7 +89,7 @@ end TileReadSession
 
 /-- **T3 at the TileRead session (open obligation, to be discharged by Flock's soundness).** For every in-domain
 workload, transcript `τ`, opening `o`, oracle, salt and tile `g`, and every strategy `σ` of tile `g`'s session in the
-session's class at `q`: flock-verify accepts on a run in the event `Bad` with probability at most `δzk q`. To be met by
+session's class at `q`: verity-verify-proof accepts on a run in the event `Bad` with probability at most `δzk q`. To be met by
 the restack plan's T3 (`Flock.Guarantees.EndToEndCanonicalP` at the sampled proof blocks, with its CR hypotheses as `Cls` and
 its event as `Bad`), at the TileRead statement. -/
 def TileReadSound (P : Protocol Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) (δzk : ℕ → ℝ) : Prop :=
@@ -99,7 +99,7 @@ def TileReadSound (P : Protocol Q R S) (D : Layout → Prop) (F : TileReadSessio
       ENNReal.ofReal (δzk q)
 
 /-- **The binding (open obligation, to be proved).** For every in-domain workload, transcript `τ`, opening `o`, oracle,
-salt and tile `g`: an output of tile `g`'s session that flock-verify accepts outside `Bad` happens only when tile `g` is
+salt and tile `g`: an output of tile `g`'s session that verity-verify-proof accepts outside `Bad` happens only when tile `g` is
 good or blank in `τ`. To be met by TileRead's gates (an accepted instance at the public `t_s` read the window's committed
 rows at `tile_at(t_s)` and the tile's leaf matches), the registered reads binding those rows to the window root (L4),
 hm96-sha512's binding to `τ`'s rows under `o`, the tile check computing the good-tile predicate (L3) and the pinned

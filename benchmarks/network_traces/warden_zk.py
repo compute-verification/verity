@@ -1,9 +1,9 @@
 """warden-zk: the network certifier's bucket rows read by the proof system. A toy proof block over one row's bits, its
 port registered against the network certifier's signed egress root (`warden_rows`), proved by Flock `prove --zk` behind
-the Lean ZK server and held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through
+the Lean ZK server and held by the Lean verifier's registered reads (`verity-verify-proof verify --zk --registered`), through
 the one-stage audit as `n2_zk.py` proves N2's head checks.
 
-    python benchmarks/network_traces/warden_zk.py prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/network_traces/warden_zk.py prove --run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
       [--units 16] [--dry]
 
 * **The run.** A warden-serve run's directory (`warden_serve.py rehearse`'s): `deployment.json`, the records, and the
@@ -41,7 +41,7 @@ the one-stage audit as `n2_zk.py` proves N2's head checks.
   - ``pad-named``: ``pad``'s rows under the Program's value, which is public: proof block 0's row isn't the Program's;
   - ``swapped``: made for proof blocks 0 and 1 reading each other's cells, in one row when r > 1, so its rows are the
     Program's: the header names the swapped proof blocks' wiring.
-  Each is registered, every proof block sampled by the verifier's Lean (`flock-verify draw --stratified n`), proved
+  Each is registered, every proof block sampled by the verifier's Lean (`verity-verify-proof draw --stratified n`), proved
   `--zk` behind the ZK server (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean `verify --zk --partition
   --program --registered`. ``sender`` and ``receiver`` are to be accepted, the others refused by Lean's registered
   reads.
@@ -321,7 +321,7 @@ TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_
 def firewall(M, m: dict) -> dict:
     """A firewalled prover's environment (`FC_FIREWALL=1`, its Lean frame named by ``FC_FIREWALL_LEAN``)."""
     if not os.environ.get("FC_FIREWALL_LEAN"):
-        raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (flock-verify's flock-firewall)")
+        raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (verity-verify-proof's flock-firewall)")
     return {"FC_FIREWALL": "1", **M.a0.firewall_env(m)}
 
 
@@ -386,7 +386,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
                                         and (live or {}).get("roots") == fv["roots"] and v.ok,
                                         "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}}
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
-    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program --registered"}
+    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program --registered"}
     proved = a0.proved_units(m["header"], live or {})
     timing = {x: (live or {}).get(x) for x in TIMING}
     statement = {name: {"session_s": proc["wall_s"], **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest",
