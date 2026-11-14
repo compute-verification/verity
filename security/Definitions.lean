@@ -39,6 +39,7 @@ public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 public import Definitions.NetworkCertifier.WindowCharge
 public import Definitions.NetworkCertifier.Warden
 public import Definitions.NetworkCertifier.ResponseCap
+public import Definitions.NetworkCertifier.Marks
 public import Definitions.NetworkCertifier.Tap
 public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.MonitoringPeriod
@@ -108,6 +109,7 @@ public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriod
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.ResponseCap
+public import Definitions.NetworkCertifier.Guarantees.Marks
 public import Definitions.NetworkCertifier.Guarantees.Carried
 public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
 public import Definitions.WeightSecurity.Assumptions
