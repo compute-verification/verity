@@ -1031,7 +1031,7 @@ def test_a_read_whose_key_is_wired_lists_no_table_rows():
 
 def test_nothing_of_record_turns_the_wired_key_on():
     """No file under `verity/` sets the wired key's switch but round 2's own code and the development executable
-    `sampled-proofs-wired-key-dev` (`Spot.WiredKeyDevMain`), and none but that executable's lakefile entry and its
+    `spot-wired-key-dev` (`Spot.WiredKeyDevMain`), and none but that executable's lakefile entry and its
     difftest names it: the service's run, the verifier of record and every script take the switch as the code holds it,
     off."""
     root = next(p for p in Path(__file__).resolve().parents if (p / "verity" / "__init__.py").is_file())
@@ -1053,7 +1053,7 @@ def test_nothing_of_record_turns_the_wired_key_on():
             text = path.read_text(errors="replace")
             if any(s in text for s in ("wired_key=", "wired_key = ", "wiredKey :=")) and path not in allowed_set:
                 sets.append(path)
-            if "sampled-proofs-wired-key-dev" in text and path not in allowed_name:
+            if "spot-wired-key-dev" in text and path not in allowed_name:
                 names.append(path)
     assert sets == [] and names == [], (sets, names)
 
@@ -1188,7 +1188,7 @@ def test_the_rule_and_the_spec_state_one_form():
 def test_the_verifier_of_record_samples_both_stages():
     """The verifier's executable (`Pieces.verifier`, `verifier.EXE`) samples a two-stage rule's first stage, `Q`
     of the `N` replay blocks, and its second, `k` of each sampled replay block's proof blocks, as the service does."""
-    assert V.EXE == "sampled-proofs-verifier" and _spec().selection == RULE
+    assert V.EXE == "spot-verifier" and _spec().selection == RULE
     source = random.Random(1).randbytes(4096)
     first = {"rule": RULE.to_json(), "program": codec.encode_program(P.population_program(BLOCK, N)), "query": GRAIN,
              "work_table": None, "closure": None, "source": source.hex()}

@@ -24,7 +24,7 @@ a deployment premise carries the class to a deployed device (`rate-sketch-verbat
 * `RateAuditTensorSketchRank`: the same priced by the signs' rank, `q/2^(8·r) + Pr_σ[∃ u, rank < r]`.
 
 The honest device (`RateSketchHonest`) and the table outside the verbatim class (`RateSketchTable`,
-`RateTensorSketchTable`) are lemmas: `Security/Proofs/Accounting/Lemmas/RateAuditSketch.lean`.
+`RateTensorSketchTable`) are lemmas: `Security/Proofs/Poub/Lemmas/RateAuditSketch.lean`.
 -/
 
 @[expose] public section

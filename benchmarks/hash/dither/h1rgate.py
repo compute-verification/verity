@@ -35,7 +35,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 
-from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC  # noqa: E402
+from verity_torch.pouw.h1 import receipts as RC  # noqa: E402
 
 from h1r_torch import H1R  # noqa: E402
 from verity.protocols.experimental.dither.prover.h1r import Call, words  # noqa: E402

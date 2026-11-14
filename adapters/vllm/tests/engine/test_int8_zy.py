@@ -13,7 +13,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops as OPS
 from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
-from verity.protocols.accounting.pouw.prover.serving import credit_gate_device as CGD
+from verity_torch.pouw import credit_gate_device as CGD
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 UR, UC = E.UNIT

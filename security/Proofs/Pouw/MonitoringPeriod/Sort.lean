@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Compose.Remote.Sort
+public import Proofs.Properties.Poub.Remote.Sort
 import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
 

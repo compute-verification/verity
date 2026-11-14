@@ -30,7 +30,7 @@ else   # a machine's clone has only the shipped commits, so a run there ships a 
   REF=${SC_PERIOD_REF:?this tree has no period: set SC_PERIOD_REF to a ref on origin whose tree has it}
   P=$W/period; log "period: network-period and the mirror from $REF"
 fi
-# before the scans, not beside them: scan_zk.sh's sampled-proofs build writes the same path dependencies' .lake
+# before the scans, not beside them: scan_zk.sh's SPOT build writes the same path dependencies' .lake
 { { [ "$P" = "$SRC" ] || { git fetch -q origin "$REF" && git worktree add -q --detach "$P" FETCH_HEAD; }; } \
   && (cd "$P/verity/protocols/accounting/certifier/verifier/lean" && lake build network-period); } > "$OUT/build-period.log" 2>&1 \
   || { tail -30 "$OUT/build-period.log"; log "period: no network-period"; exit 7; }

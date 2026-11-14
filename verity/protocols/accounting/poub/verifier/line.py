@@ -1,6 +1,6 @@
 """The memory line a paced session shows held over time, the line of record a gate run publishes: the conclusions of
 `Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
-`security/Definitions/Compose/Guarantees/RemoteHeld.lean`, read over each stretch of a session's groups, in exact
+`security/Definitions/Poub/Guarantees/RemoteHeld.lean`, read over each stretch of a session's groups, in exact
 rationals.  It is computed here and in its Lean, `lean/Poub/Line.lean`, held to this by the difftest
 (`lean/tests/test_line.py`, every refusal compared word for word): `verity/protocols/accounting/poub/verifier/session/verifier.py`'s
 `paced_line` (its diagnostic, on the verifier's clock) and `auditor_line.py` (the line of record, on the challenger's
