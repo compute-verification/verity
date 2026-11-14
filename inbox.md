@@ -11,3 +11,6 @@ ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 7:55 AM PST. #10108 Lean che
 [2026-11-14T15:51Z] 1eb5d9bb2f31
 ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 7:55 AM PST. #10108 lean try: r20261114-084423-209f done, exit 0, at 2f8b1b9c3682e5386b8ce5e6d70cd965abf0c6b5 (same Lean as head eba54ef543a850c19c1e948b2a3d7a0b61e99ca3). RowsProtocol.lean: lean exit 0 in 84 s; the axiom probe says it has no theorems. Siblings: none of the 10 built modules that do not import it declares a name it does. 8 were left unchecked because no build of them was at hand: the 6 difftest/fuzz/liveness executables, Difftest and RecordCount.
 
+[2026-11-14T15:51Z] 4c4f17c6c74b
+ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 7:55 AM PST. #10108 cost and the network suite on a project machine: r20261114-085720-b853 done, exit 0, at eba54ef543a850c19c1e948b2a3d7a0b61e99ca3. The network suite: the rows test file whole, slow tests included, 15 passed in 74 s. The accept that parses both files takes 3.65 to 3.75 s over 4 passes, at a peak of 0.74 GB. Reading and hashing both blobs adds 0.36 s (0.07 s without blobs, 0.43 s with both). This matches the body (3.4 to 3.8 s), so no figure in the body changes.
+
