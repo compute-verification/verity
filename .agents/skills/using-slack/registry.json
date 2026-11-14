@@ -720,7 +720,7 @@
         "S0C5LSDENA1"
       ],
       "owns": [
-        "benchmarks/dashboard/"
+        "infra/dashboard/"
       ]
     },
     {
