@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.HonestSession.Data.Inputs
 public import Proofs.Properties.Verity.Sampled.HonestSession.Hex
+public import Proofs.Flock.Recursive.FirewallJson
 
 /-!
 # The circuit file parses

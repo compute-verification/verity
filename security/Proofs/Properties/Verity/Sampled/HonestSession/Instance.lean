@@ -139,7 +139,7 @@ theorem sets_up (hd : Distinct) : SetsUp base θ₀ (base.registered θ₀) live
     rw [hI, public_at hd] <;> rfl
   refine
     { params := ⟨p, hp, by rw [hI, hpart] <;> rfl, by rw [hI, hprog] <;> rfl, ?_, ?_, ?_, key₀, label₀,
-          _root_.Spot.Challenger.MAX_COINS, hch, by simp [base, families], by rw [live_lb]⟩
+          _root_.Spot.Challenger.MAX_COINS, hch, by show (label₀, _) ∈ families θ₀; simp [families], by rw [live_lb] <;> rfl⟩
       tags := by rw [hI]; exact tags_find
       count := by rw [hI] <;> rfl
       work := by rw [hI] <;> rfl

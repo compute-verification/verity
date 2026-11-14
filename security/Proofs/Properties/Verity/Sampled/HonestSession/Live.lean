@@ -28,7 +28,7 @@ def D : Flock.Desc := .single cH
 theorem desc_ok : Flock.Desc.parse (ZkExec.zkTags inputs) inputs.circuitFile inputs.tables = .ok D := by
   show Flock.Desc.parse tagsZ circuitFile [] = .ok (.single cH)
   unfold Flock.Desc.parse
-  rw [CircuitFile.parse_ok]
+  rw [CircuitFile.parse_ok] <;> rfl
 
 theorem nTab_inputs : Composed.nTab inputs = 1 := rfl
 
@@ -36,8 +36,7 @@ theorem proved_size (D' : Flock.Draw.UnitDraw) (h : Flock.Draw.UnitDraw.ofJson d
     D'.proved.size = Flock.Bridge.lawK (Flock.Bridge.designAt desc query law none nUnits) := by
   rw [Setup.draw_ofJson] at h
   cases h
-  rw [Program.design_eq]
-  rfl
+  rw [Program.design_eq] <;> rfl
 
 /-- The honest session supplies every field of a `Live`. -/
 theorem exists_live : ∃ A : Live,
@@ -76,7 +75,7 @@ theorem exists_live : ∃ A : Live,
       hpop := Program.popMatches
       lj := law
       tb := none
-      hsub := by rw [Program.design_eq]; rfl
+      hsub := by rw [Program.design_eq] <;> rfl
       hdiv := by rw [nTab_inputs]; exact Nat.mod_one _
       S₀
       d₀

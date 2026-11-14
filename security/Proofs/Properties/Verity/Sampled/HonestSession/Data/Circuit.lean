@@ -58,7 +58,7 @@ def metaPairs : List (String × Json) := [
     Json.mkObj [("count", jn 1), ("pos0", jn 64), ("slot_log", jn 14), ("type", .str "mask")]]),
   ("row_key_sha512", .str (hexOf (Sha512.hash Hm96.Default512.key))),
   ("row_schemas", Json.mkObj [("y", .str HmRow.ROW_SCHEMA_V2)]),
-  ("rows", .arr #[Json.mkObj [("midstate", .arr ((HmRow.midstateOf yPort).map (.str ∘ HmRow.hex16))),
+  ("rows", .arr #[Json.mkObj [("midstate", .arr ((HmRow.midstateOf yPort).map fun w => Json.str (HmRow.hex16 w))),
     ("pad", .str (hexOf (HmRow.tailOf yPort))), ("prefix", .str (hexOf (HmRow.prefixOf yPort)))]]),
   ("scheme", .str "frame-v3-sha512/hm96-sha512"),
   ("statement", .str Flock.Tags.circuit.name),

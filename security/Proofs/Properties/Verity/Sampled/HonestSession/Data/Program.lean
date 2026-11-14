@@ -21,10 +21,10 @@ namespace Verity.Sampled.Instance.HonestSession
 open Lean (Json)
 
 /-- A natural number as a JSON number. -/
-def jn (n : ℕ) : Json := .num ⟨n, 0⟩
+def jn (n : Nat) : Json := .num ⟨n, 0⟩
 
 /-- The population: the public file's proof blocks. -/
-def nUnits : ℕ := 1
+def nUnits : Nat := 1
 
 /-- The template the query names: the composite each proof block lowers. -/
 def templateId : String := "Unit_v1"

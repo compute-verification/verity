@@ -63,9 +63,6 @@ theorem tags_find : Flock.Tags.find? Spot.OneStageZk.STATEMENT = some inputs.tag
 
 theorem typed_false : inputs.tags.typed = false := rfl
 
-theorem tagsJ_eq : (Composed.inputsJ inputs 0).tags = tagsZ := by
-  show Exec.tagsAt _ inputs.count 0 = _
-  unfold Exec.tagsAt
-  exact ite_eq_left (by decide)
+theorem tagsJ_eq : (Composed.inputsJ inputs 0).tags = tagsZ := rfl
 
 end Verity.Sampled.Instance.HonestSession
