@@ -15,6 +15,8 @@ from verity.protocols.accounting.certifier.verifier.grid import BlockGrid
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 
 ROWS, SALTS = "rows.jsonl", "rows.salts"
+#: in a schedule with content rows, the releases each execution phase's hand filed in each class, a line each
+FILED = "filed.jsonl"
 #: a line's key for the word that its execution phase has no head, where a head's line has `registration`
 NO_HEAD = "no_head"
 #: the ``format`` of the registrations' file's first line, the line that says what the file was checked under
@@ -167,6 +169,17 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     except ValueError as e:
         held = {}
         problems.append(f"connection rows: the records don't read as releases: {e}")
+    listed: dict[int, dict] = {}
+    if (run / FILED).exists():
+        try:
+            listed = {doc["window"]: doc for doc in map(json.loads, (run / FILED).read_text().splitlines())}
+        except (ValueError, KeyError, TypeError) as e:
+            problems.append(f"connection rows: {FILED} doesn't read: {e}")
+
+    def filing(w: int, record: Mapping) -> None:
+        """A problem where the run kept a line of `filed.jsonl` for execution phase `w` that is not `record`."""
+        if w in listed and listed[w] != record:
+            problems.append(f"execution phase {w}'s line of {FILED} is not its records' filing under its head")
     costs, registered, worded, passed = [], 0, 0, []
     for w in sorted(set(want) | set(kept) | set(without)):
         doc, salts = kept.get(w, (None, None))
@@ -185,6 +198,7 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
                 try:
                     CR.check_no_head(doc[NO_HEAD], key, session, params, link, w)
                     worded += 1
+                    filing(w, CR.not_filed(link, w))
                 except ValueError as e:
                     problems.append(f"execution phase {w}'s word that it has no head: {e}")
             continue
@@ -198,6 +212,8 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
                     CR.Rows.commit(link, w, mine, params, session, salts).head == head
                 if not ok:
                     problems.append(f"execution phase {w}'s connection rows aren't its records' releases")
+                else:
+                    filing(w, CR.filed_record(head, params, held[w]))
             except ValueError as e:
                 problems.append(f"execution phase {w}'s connection rows: {e}")
         registered += ok

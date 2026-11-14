@@ -13,12 +13,12 @@ import sys
 import time
 import urllib.request
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from verity.protocols.accounting.certifier.verifier import blob_files as bf, connection_rows as CR
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
-from verity.protocols.accounting.certifier.verifier.connection_rows_check import NO_HEAD, ROWS, SALTS
+from verity.protocols.accounting.certifier.verifier.connection_rows_check import FILED, NO_HEAD, ROWS, SALTS
 from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Released, WardenParams
 
 #: the publisher queue's name for a hand's items, where a record's rows have their link's
@@ -106,6 +106,7 @@ class Keeper:
             bf.write_blobs(self.out / SALTS, b"")
             with open(self.out / ROWS, "a") as fh:
                 fh.write(json.dumps(line | {"cost": {"sign_ms": round((time.perf_counter() - t0) * 1000, 3)}}) + "\n")
+            self._filed(CR.not_filed(self.link, window))
             return
         t0 = time.perf_counter()
         tables = CR.tables(self.params, strides)
@@ -124,6 +125,14 @@ class Keeper:
         bf.write_blobs(self.out / SALTS, rows.witness)
         with open(self.out / ROWS, "a") as fh:
             fh.write(json.dumps(line | {"cost": cost}) + "\n")
+        self._filed(CR.not_filed(self.link, window) if cert is None else CR.filed_record(head, self.params, strides))
+
+    def _filed(self, record: Mapping) -> None:
+        """An execution phase's line of `filed.jsonl`, in a schedule with content rows: written once its head is
+        signed, or its word that it has none, so the list is final where it is written."""
+        if self.params.content is not None:
+            with open(self.out / FILED, "a") as fh:
+                fh.write(json.dumps(record) + "\n")
 
 
 def peak_rss_mb() -> float:

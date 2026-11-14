@@ -307,7 +307,7 @@ def cappedSchedule : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 2, some 4⟩
 /-- The rows-form period of no link-window and no audit under `cappedSchedule`, at the deployed LMS parameters: the
 period `RowsCapPublished`'s witnesses are stated at. -/
 def cappedPeriod : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩
 
 /-- The `roots` entry `e` is the ok bits' constant of the scan's member `m` (its name, template and proof blocks'
 count, `ScanOk.members`): its port is `<name>/o0`, its leaves are the member's proof blocks' count, and its domain and
@@ -357,12 +357,12 @@ def pairSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 2, none⟩
 /-- The rows-form period of `n` execution phases and no audit under `pairSchedule`, at the deployed LMS parameters:
 the periods `RowsOkHeld`'s witnesses are stated at. -/
 def pairParams (n : ℕ) : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n, none⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n, none⟩
 
 /-- The rows-form period of no execution phase and no audit under `pairSchedule` whose parameters name the class
 circuit `c`, at the deployed LMS parameters: the period `RowsCircuitHeld`'s honest witness is stated at. -/
 def heldMonitoringPeriod : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, some "c"⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, some "c"⟩
 
 /-- A commitment of one execution phase whose scan's registration names no root, so no member's ok bits. -/
 def unnamedCommitment : Commitment := ⟨#[], #[Lean.Json.mkObj []], .empty⟩
@@ -396,13 +396,13 @@ def RatioReadsBack : Prop :=
 `prescribed`, a ratio not in lowest terms), so a witness states it at its own audits' profiles. -/
 def ProfileReadsBackAt (i : Core.Integrity) : Prop := Core.Integrity.ofJson i.toJson = .ok i
 
-/-- `check` accepts a rows-form period that has an execution phase and a compute audit, under the public key of a key at
-the deployed LMS parameters. -/
+/-- `check` accepts a rows-form period that has an execution phase and a compute audit, under parameters one of whose
+entries' keys is the public key of a key at the deployed LMS parameters. -/
 def RowsExecutionPhaseAccepted : Prop :=
   ∃ (I seed : ByteArray) (k : Lms.PrivateKey) (p : Params) (c : Commitment) (e : Evidence) (pub : Public)
     (prof : Profile) (s : Schedule) (sd : ByteArray) (scan : Scan),
-    Lms.key Lms.deployed I seed = .ok k ∧ p.lms = Lms.deployed ∧ p.key = k.publicKey ∧ p.form = .rows s sd scan ∧
-      0 < c.windows.size ∧ 0 < c.audits.size ∧ check p c e = .accept pub prof
+    Lms.key Lms.deployed I seed = .ok k ∧ p.lms = Lms.deployed ∧ (∃ x ∈ p.entries, x.key = k.publicKey) ∧
+      p.form = .rows s sd scan ∧ 0 < c.windows.size ∧ 0 < c.audits.size ∧ check p c e = .accept pub prof
 
 /-- The one-stage answers the period check reads: each compute audit's, then each link-window's. -/
 def answersRead (e : Evidence) : Array Core.Answer := e.audits ++ e.windows.map (·.answer)

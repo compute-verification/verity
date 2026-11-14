@@ -20,7 +20,11 @@ process, which alone holds the key, lays the tables (`connection_rows.tables`), 
 head: a line of `rows.jsonl` (the registration, or the execution phase under `refused`, and the cost: the tables,
 their rows and bytes, and the build's, the commit's and the signature's ms) and the rows' salts in `rows.salts`
 (witness, table by table). It keeps no row: the prover, who holds the records, lays the tables again from them
-(`connection_rows.of_records`). The head takes one more leaf of the key an execution phase. A hand the tables refuse
+(`connection_rows.of_records`). The head takes one more leaf of the key an execution phase. In a schedule with
+content rows the process also writes a line of `filed.jsonl` an execution phase, after its line of `rows.jsonl`:
+the releases the hand filed in each class, under the digest of the head it signed, or the record with no list for
+an execution phase whose head it did not sign (`connection_rows`' "The filed releases"). It is witness, for the
+prover's serve: which class a release is in turns on how the network certifier ended it. A hand the tables refuse
 has no line and no salts: under form 2 one that files more than R = `WardenParams.phase_releases` releases in a
 class is no execution phase's of the schedule, the keep raises naming the release, the class and R, and `serve`'s
 publisher process ends on it, which fails the run at its next record's close.
@@ -204,7 +208,7 @@ def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
         out, key = Path(scratch) / "run", Path(scratch) / "key"
         out.mkdir()
         ck.load_key(key, height)
-        publish = ws.PublisherProcess(out, key, bytes(32), params)
+        publish = ws.PublisherProcess(out, key, bytes(32), params, base_ms=0)  # a scratch key's first session
         try:
             for phase in range(phases):
                 handed: list = []

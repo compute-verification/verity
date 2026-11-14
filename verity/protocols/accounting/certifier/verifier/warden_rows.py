@@ -37,7 +37,7 @@ samples from the operating system for each row, never for another. The opening (
 wiring with its salt) is witness, which the network certifier hands to the prover alone (`Cells.witness`: the salts,
 since the rows and the wiring are the record's).
 
-**The signed head** (`CellsHead`) is public, as a hiding root is:
+**The signed head** (`CellsHead`):
 
     H = u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ parameters (64 bytes) ‖ u32be B ‖ u32be S ‖ u32be T
       ‖ wiring (64 bytes) ‖ domain (64 bytes) ‖ root (64 bytes)
@@ -47,7 +47,8 @@ and its certificate is `Issuer.sign`'s of the cells digest: the certifier's mess
 session (`certificate.certificate_message`). The wire record's certificate of the same execution phase signs its salted
 record digest instead, so neither verifies as the other (each would need a SHA-512 preimage).
 
-**The registration** (`registration`) is the head and its certificate as one public JSON object:
+**The registration** (`registration`) is the head and its certificate as one JSON object, kept on a run's private
+side (the auditor's gate publishes its certificate alone, and `wiring` is private):
 
     {"format": REGISTRATION, "value", "link", "direction", "window", "parameters", "cell_bytes", "rows", "words",
      "word_bits", "row_schema", "domain", "wiring", "root",
@@ -288,8 +289,8 @@ def opens(dom: CommitmentDomain, root: bytes, position: int, bc_: bytes, path: b
 
 @dataclass(frozen=True, slots=True)
 class CellsHead:
-    """What the network certifier signs for an execution phase's rows: public, since its root and wiring digest are
-    hiding."""
+    """What the network certifier signs for an execution phase's rows. A run keeps it on its private side, in the
+    registration: `wiring` is private."""
 
     link: str
     direction: Direction
@@ -434,8 +435,8 @@ def _layout(params: WardenParams, window: int) -> dict[str, int]:
 
 
 def registration(head: CellsHead, certificate: Certificate, params: WardenParams) -> dict[str, Any]:
-    """The public record a proof block's registered port reads: the head, the rows' format and order, and the
-    certificate."""
+    """The record a proof block's registered port reads: the head, the rows' format and order, and the
+    certificate. A run keeps it on its private side; the auditor's gate publishes the certificate alone."""
     return {"format": REGISTRATION, "value": head.value, "link": head.link, "direction": head.direction.value,
             "window": head.window, "parameters": head.parameters.hex(), "cell_bytes": head.cell_bytes,
             "rows": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,

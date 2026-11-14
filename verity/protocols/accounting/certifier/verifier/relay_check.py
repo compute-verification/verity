@@ -7,7 +7,8 @@ import json
 from pathlib import Path
 from verity.protocols.accounting.certifier.verifier import (blob_files as bf, connection_rows_check as CRC,
     load_check as LK, record_files as RF, warden_rows as WR)
-from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction, LmsKey, record_head
+from verity.protocols.accounting.certifier.verifier.certificate import (CertifiedRecord, CertifiedStart, Direction, LmsKey,
+    record_head)
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
 from verity.protocols.accounting.certifier.verifier.record_files import certified_from_json, unpack_record
@@ -123,6 +124,23 @@ def egress_cells(records: list[BlockGrid], params: WardenParams) -> dict[int, li
     return out
 
 
+def start_from_json(doc: dict) -> CertifiedStart:
+    return CertifiedStart(doc["base_ms"], bytes.fromhex(doc["schedule"]), RF.certificate_from_json(doc["certificate"]))
+
+
+def check_start(dep: dict, key: LmsKey, session: bytes, params: WardenParams) -> tuple[dict, list[str]]:
+    """The deployment's start's certificate read as a verifier reads it: under the deployment's key and session, for
+    its link and its schedule's parameters digest (`CertifiedStart.refusal`). A deployment without one, or with one
+    that doesn't hold, has no certified start."""
+    try:
+        start = start_from_json(dep["start"])
+    except (KeyError, TypeError, ValueError):
+        return {"base_ms": None, "certified": False}, ["the session's start isn't certified (no start's certificate)"]
+    why = start.refusal(key, session, LINK, params.digest)
+    return ({"base_ms": start.base_ms, "certified": why is None},
+            [] if why is None else [f"the session's start isn't certified ({why})"])
+
+
 def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict | None, list[str]]:
     """A run's load read as the verifier reads it, None when it carried none: ``load.json`` signed under the
     deployment's own key and session, every value's registration accepted (`load_check.check_load`), each at the root
@@ -169,6 +187,8 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
         problems.append("the deployment's digest isn't its parameters'")
     problems += [f"the deployment holds {k}, an address: it goes in {ENDPOINTS}, which is never published"
                  for k in ADDRESSES if k in dep]
+    start, start_problems = check_start(dep, key, session, params)
+    problems += start_problems
     load, load_problems = check_load(run, dep, key, session)
     problems += load_problems
     windows = []
@@ -225,7 +245,7 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
         "requests": len(rows), "ended": sum(r["outcome"] == "end" for r in rows),
         "refused": sum(r["outcome"] == "refused" for r in rows),
         "failed": sorted({r["outcome"] for r in rows} - {"end", "refused"}),
-        "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
+        "start": start, "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
         "certificates": len(certified), "signer_refused": refused,
         "withheld_windows": warden_log.get("refused_windows", []), "cell_rows": cells_summary,
         "cell_timing": cell_timing(run),
@@ -234,6 +254,7 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
                        "egress": sum(c["egress_bytes"] for c in verdict["connections"])},
         "cells_in_their_bucket": [sum(r["in_bucket"] for r in served), sum(r["cells"] for r in served)],
         "arrival_lag_ms": _quantiles(lags), "tick_lateness_ms": warden_log.get("lateness_ms"),
+        "clocks": warden_log.get("clocks"),
         "ticker_stalls": None if not warden_log.get("stalls") else
         warden_log["stalls"]["by_label"].get("ticker", {"episodes": 0, "max_ms": 0.0, "wchan": {}}),
         "completion_tokens": sum(r.get("completion_tokens") or 0 for r in served),
