@@ -56,7 +56,7 @@ NS_STEPS = 5
 SEED = 10
 
 #: each model's pretraining recipe, from its report: the optimizer, the tokens per batch and the schedule (tokens,
-#: sequence length), for the rho model ``model`` (``models.toml``)
+#: sequence length), for the slowdown calculator's model ``model`` (``models.toml``)
 RECIPES = {
     "kimi-k2": {
         "model": "kimi-k2",
@@ -101,7 +101,7 @@ RECIPES = {
 
 
 def shape(model: instances.Model) -> dict:
-    """A rho model's shape in the keys this module reads: the widths, the attention as its config states it, and the
+    """The shape of one of the slowdown calculator's models in the keys this module reads: the widths, the attention as its config states it, and the
     experts in one MoE layer (routed, active per token, shared)."""
     dense = instances.dense_layers(model)
     moe = model.layers - dense
