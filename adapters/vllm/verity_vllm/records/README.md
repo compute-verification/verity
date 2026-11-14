@@ -12,7 +12,7 @@ citation names its problems. The package's docstring lists the record kinds.
 - **Provides:** a module a record kind, the field readers they share (`fields`) and the schema ids of the records
   that have no type yet (`schema_ids`).
 - **Loaded by:** the integration's `check`, `pipeline`, `program`, `commit`, `engine`, `query`, `observe`,
-  `correspondence`, `acquire`, `properties` and `protocols` packages, and its `config` and `target_family` modules.
+  `correspondence`, `acquire` and `protocols` packages, and its `config` and `target_family` modules.
 - **Loads:** nothing else of the integration, so every stage may import it; of core, `verity.circuits.codec` in
   `property_record` alone; torch inside one function.
 

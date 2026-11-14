@@ -2,7 +2,7 @@
 
 What TP adds to a Commit is the all-reduce / all-gather OUTPUT every layer consumes; at TP2 the per-rank sampled replay evaluates the rank
 partial (`Gemm_v1{K/W}` on the shard) but the collective output itself had no registered evaluator (`AllReduce2_v1`, `AllGather2_v1`,
-`EmbeddingShard_v1` = 30 % of the VU population at B1) -- in Commit it was checked only by the same-process hook-time clone and by
+`EmbeddingShard_v1`) -- in Commit it was checked only by the same-process hook-time clone and by
 tp2_match on Match's stored steps.  This pass evaluates it bit-exactly from what the RANKS COMMITTED (bound + opened members, the bytes
 under the run roots):
 
@@ -12,7 +12,7 @@ under the run roots):
 
 Picks are STRATIFIED per (site, kind, phase), plus one stratum per routed family a site's calls take that its phase strata missed, and
 sampled from a seed fixed AFTER commitment (the pair's combined root), identically on every
-rank (the rank suffix is stripped from the stratum key), with a row subset per pick so a prefill tensor costs a few rows, not 32 MB.  Each
+rank (the rank suffix is stripped from the stratum key), with a row subset per pick so a prefill tensor costs a few rows, not the whole tensor.  Each
 rank dumps its picks (partial rows + received rows, from the committed bytes) to `xrank_rank<r>.pt`; the driver pairs them.  Any pick whose
 received member is not committed on a rank, or whose partial is not committed, is a named FAIL (the population of record requires both).
 Negative: `--flip-partial <rank>:<site suffix>` makes that rank commit a partial that is not the collective's input -> this pass fails by name.

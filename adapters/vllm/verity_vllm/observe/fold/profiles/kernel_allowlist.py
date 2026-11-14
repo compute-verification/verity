@@ -1,4 +1,4 @@
-"""verity_vllm/properties/kernel_allowlist.py — PROTECTED.  The kernel allowlist: device kernels that a step may launch
+"""verity_vllm/observe/fold/profiles/kernel_allowlist.py — PROTECTED.  The kernel allowlist: device kernels that a step may launch
 without any pattern claiming them, because they compute no modeled value (copies, fills, the model runner's integer
 metadata kernels).  Every entry needs a D71-style justification: what the kernel computes and why it is non-semantic under κ.
 

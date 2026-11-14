@@ -30,7 +30,6 @@ ON_DISK = {
     "CONSTRUCTION_VERSION_SCHEMA": "cb-a/aot-artifact/v1",
     "COVERAGE_DECLARATION_SCHEMA": "verity/commit-integ/coverage-declaration/v1",
     "DERIVE_STEP_SCHEMA": "cb-a/derive_step/v3",
-    "DIFFTEST_PRODUCE_SCHEMA": "verity-gen/difftest-produce/v1",
     "EFFECTIVE_CONFIG_SCHEMA": "verity-vllm/effective-config/v1",
     "ENGINE_PROFILE_SCHEMA": "verity-vllm/profile/v1",
     "ENGINE_SPEC_SCHEMA": "verity-vllm/engine-spec/v0",
