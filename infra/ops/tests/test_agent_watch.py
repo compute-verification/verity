@@ -4580,7 +4580,8 @@ def test_an_inbox_holder_is_held_unread_only_once_a_doorbell_waited_an_hour(tmp_
     stream_worker(w, clock, "run-v", W.UNREAD_S // 60 + 30)
     assert api.posts == [], "no doorbell and no timer: nothing sits unread"
     rang = clock.t
-    bells = lambda: {"t": W.iso(clock.t), "inboxes": {"vllm": {"agent": NEW, "last": f"{rang:.6f}"}}}
+    def bells():
+        return {"t": W.iso(clock.t), "inboxes": {"vllm": {"agent": NEW, "last": f"{rang:.6f}"}}}
     (tmp_path / "doorbells.json").write_text(json.dumps(bells()))
     for _ in range(W.UNREAD_S // 60 - 1):
         stream_worker(w, clock, "run-v", 1)
