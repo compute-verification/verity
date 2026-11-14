@@ -137,8 +137,8 @@ theorem prev_of_text {line line' : Json} {e e' : LedgerEntry} (he : ledgerEntry?
     entry_fields_equiv sO sE objO objE hs hs' (by decide)
   obtain ⟨r, hr, hrs⟩ := ledgerEntry_prev he
   obtain ⟨r', hr', hrs'⟩ := ledgerEntry_prev he'
-  rw [recordOfJson_prev (Properties.Challenger.Session.toOption_some hr),
-    recordOfJson_prev (Properties.Challenger.Session.toOption_some hr')] at hq
+  rw [recordOfJson_prev (Properties.Challenger.ChallengePhase.toOption_some hr),
+    recordOfJson_prev (Properties.Challenger.ChallengePhase.toOption_some hr')] at hq
   rw [← hrs, ← hrs']
   exact Json.str.inj (equiv_str hq)
 
