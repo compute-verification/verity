@@ -1,4 +1,4 @@
-"""The Boolean-first fill (`verity_vllm.definitions.boolean`): the Boolean versions of the word Definitions the served rows reached
+"""The Boolean-first fill (`verity.circuits.ops.boolean.versions`): the Boolean versions of the word Definitions the served rows reached
 with none.
 
 * each new Boolean leaf (`ops.boolean.scalar`'s I32/bit/f32 scalars, `ops.boolean.attention`'s GPU-NaN FTZ arithmetic,
@@ -24,7 +24,7 @@ from verity.circuits.ops import fp32 as W
 from verity.circuits.ops import prims as MP
 from verity.circuits.ops import scalar as S
 from verity.circuits.types import Array, Value
-from verity_vllm.definitions import boolean as BB
+from verity.circuits.ops.boolean import versions as BB
 from verity_vllm.definitions.registry import b1, b1_tp2, hopper, moe
 from verity_vllm.definitions.registry import dsv4_decode_indices as DI
 from verity_vllm.definitions.registry import inductor as I

@@ -1,5 +1,5 @@
 """`int8_exact`'s linear and LUT attention on bits: the Boolean version of each of its word Definitions, so a served int8-exact
-row builds Boolean-first (`verity_vllm.definitions.boolean`).
+row builds Boolean-first (`verity.circuits.ops.boolean.versions`).
 
     F32Rint_v2, F32ToS8Rzi_v2, S8ToF32_v2, F32MulWide_v2, F64Mul_v2, F64ToU32RniSat_v2, LutIndex_v2
                         traced from `verity.circuits.ops.boolean.int8`'s builders; word views: their _v1
@@ -33,7 +33,7 @@ from verity.circuits.boolean.forms import const_bits
 from verity.circuits.boolean.trace import definition
 from verity.circuits.ops.boolean import int8 as BI
 from verity.circuits.types import Array
-from verity_vllm.definitions.boolean import sigma_lift
+from verity.circuits.ops.boolean.versions import sigma_lift
 from verity_vllm.definitions.registry import int8_exact as IE
 
 BIT = BL.BIT

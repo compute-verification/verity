@@ -22,7 +22,7 @@ kernel grades it, and ``bits``, the Boolean Definition the Program Calls, the on
 `refusal` holds ``bits`` to the descriptor's entry, and to the row's ``spec`` by the word Definition this tree's ``bits``
 names, the link the Build wrote the row through.  `kernel_refusal` then holds the row kernel to the gates, by the self-check's
 own sample: at each of the kernel's check specialisations, the Boolean Definition of the row's ``bits`` family that names it as
-its word (`verity_vllm.definitions.boolean.boolean_version`, refused where this tree has none) gives the kernel's rows on the
+its word (`verity.circuits.ops.boolean.versions.boolean_version`, refused where this tree has none) gives the kernel's rows on the
 self-check's inputs, bit-sliced (`_gates_differ`).  At those small statics the Boolean Definition's function-valued statics are
 this tree's newest Boolean versions, refused where the Build binds that function at another version and otherwise left to this
 tree, and its body may reach Definitions the served one does not.  Nothing holds the kernel to the gates at a served binding,
@@ -152,7 +152,7 @@ def _gates_differ(family: str, bits: str) -> tuple[list[str], set[str]]:
     from verity.circuits.evaluation import evaluate_words, sample_uniform
     from verity.circuits.evaluation.batch import type_dtype, type_shape
     from verity.circuits.evaluation.reference import resolve, signature_of, statics_of
-    from verity_vllm.definitions.boolean import NoBooleanVersion, boolean_version
+    from verity.circuits.ops.boolean.versions import NoBooleanVersion, boolean_version
     from verity_vllm.definitions.numerics import kernel_registry as KR
     from verity_vllm.definitions.numerics.rows import KERNEL
 

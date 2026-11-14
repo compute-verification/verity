@@ -126,7 +126,7 @@ def zk_refusal(tp: Any) -> str | None:
     if statement(tp).get("reads") != "slots" or not (tables := slot_tables(tp.fn)):
         return None
     from verity.circuits.codec import descriptor_id
-    from verity_vllm.definitions import boolean as BB
+    from verity.circuits.ops.boolean import versions as BB
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     try:

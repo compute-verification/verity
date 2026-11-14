@@ -38,10 +38,10 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition, bind, composite
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity_vllm.definitions.boolean import sigma_lift
-from verity_vllm.definitions.registry.pearl_c_forming import (LINE, SLICE, PearlCChain, PearlCForm, PearlCPeel, PearlCPeelA,
+from verity.circuits.ops.boolean.versions import sigma_lift
+from verity.protocols.accounting.pouw.prover.circuit.pearl_c_forming import (LINE, SLICE, PearlCChain, PearlCForm, PearlCPeel, PearlCPeelA,
                                                             PearlCPeelB)
-from verity_vllm.definitions.registry.pearl_c_noise import BYTES32, BYTES64, PearlCRowLine
+from verity.protocols.accounting.pouw.prover.circuit.pearl_c_noise import BYTES32, BYTES64, PearlCRowLine
 
 __all__ = ["LOWERED_WHOLE", "PearlCCell", "PearlCCellV2", "PearlCRowA", "PearlCRowAV2", "PearlCRowB", "PearlCRowBV2", "ands",
            "bindings", "units"]
@@ -164,7 +164,7 @@ def bindings() -> list:
     """The bindings circuit-check takes (the sidecar), on words and on bits, on the H100's atom at G = 4: each row over one
     atom of the row at rank 1, the least a row is, and a cell over one promotion window at rank 8, which is lowered whole."""
     from verity.circuits.ops.prims import HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
-    from verity_vllm.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
 
     out = []
     for rows, cell, lift in (((PearlCRowA, PearlCRowB), PearlCCell, lambda d: d),

@@ -66,7 +66,7 @@ from verity.circuits.silicon import fp
 from verity.circuits.types import Array, Value
 from verity.commitments import rowleaf
 from verity.commitments.gates.sha512 import IV, compress_gadget, midstate, pad_tail
-from verity_vllm.definitions.boolean import sigma_lift
+from verity.circuits.ops.boolean.versions import sigma_lift
 
 __all__ = ["BLOCK", "BYTES32", "BYTES64", "NORM_E", "NORM_F", "ROLES", "ROW_WORDS", "PearlCLineCode", "PearlCLineCodeV2", "PearlCLineCodes",
            "PearlCLineCodesV2", "PearlCLineInt", "PearlCLineIntV2", "PearlCLineKey", "PearlCLineKeyByte", "PearlCLineKeyV2",
