@@ -98,7 +98,8 @@
   "Properties.Pous.WipeSigned",
   "Properties.Challenger",
   "Properties.Firewall",
-  "Properties.Core.Site"
+  "Properties.Core.Site",
+  "Properties.Nci.Opening"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
@@ -494,6 +495,16 @@
    "owner": "@network-accounting",
    "digest": "f6fe84b4bff51d558f3006c5d20538d2a713b6945e6058074230053dc34a8018",
    "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Accounting.ReadUnit.GatesRefine": {
+   "owner": "@network-accounting",
+   "issue": "NET-430",
+   "due": "2026-11-30"
+  },
+  "NciCheck.Properties.Record.OpeningTie": {
+   "owner": "@network-accounting",
+   "issue": "NET-430",
    "due": "2026-11-30"
   },
   "NciCheck.Properties.Record.Counts": {
@@ -2602,6 +2613,18 @@
    "except": [],
    "why": "the circuit record's properties are stated over the code they are about (the record's text as NciCheck.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
    "sealed": true
+  },
+  "Properties.Nci.Opening": {
+   "imports": [
+    "Properties.Nci.Record",
+    "Properties.Flock.Circuit.CircuitOf",
+    "Properties.Verity.Sha512",
+    "Definitions.Accounting.ReadUnit",
+    "Flock.Hm96"
+   ],
+   "except": [],
+   "why": "what a pinned reader's unit returns is stated over the record's form (Properties.Nci.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), the read's reference and its gates' premise (Definitions.Accounting.ReadUnit), SHA-512 as the verifier computes it (Properties.Verity.Sha512) and the served hm96 key (Flock.Hm96), never over a proof",
+   "sealed": true
   }
  },
  "reads_exempt": {
@@ -3518,6 +3541,9 @@
    },
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29",
    "unfolded_hash": "789029c92ae51811219cc41abd1420df24aafe57b2a34c546264be9a91c23f07"
+  },
+  "NciCheck.SecurityProofs.PinnedReadBinds": {
+   "owner": "@network-accounting"
   },
   "NciCheck.SecurityProofs.ServedComplies": {
    "owner": "@lean",
@@ -13183,6 +13209,10 @@
    },
    "Properties.NetworkPeriod.rowsCapPublished": {
     "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "NciCheck.SecurityProofs.PinnedReadBinds": {
+    "function": "NciCheck.Properties.Record.Form.read",
     "outcome": "accept"
    },
    "NciCheck.SecurityProofs.ServedComplies": {
