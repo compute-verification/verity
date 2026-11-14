@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from verity.channel import Schema
 from verity.protocol import Channel
-from verity.protocols.proofs.spot.verifier.workload import BODY, PARTIES, PROVER, WORKLOAD
+from verity.protocols.proofs.spot.prover.workload import BODY, PARTIES, PROVER, WORKLOAD
 
 __all__ = ["CHANNELS", "MESSAGES", "PARTIES"]
 
