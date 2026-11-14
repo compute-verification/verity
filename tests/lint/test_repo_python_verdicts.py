@@ -75,13 +75,9 @@ def digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
-def functions(source: str) -> list[tuple[int, int, str]] | None:
-    """(first line, last line, dotted name) of each ``def`` in ``source``; None when it doesn't parse."""
-    try:
-        tree = ast.parse(source)
-    except (SyntaxError, ValueError):
-        return None
-    spans, todo = [], [(tree, ())]
+def functions(source: str) -> list[tuple[int, int, str]]:
+    """(first line, last line, dotted name) of each ``def`` in ``source``."""
+    spans, todo = [], [(ast.parse(source), ())]
     while todo:
         node, outer = todo.pop()
         for child in ast.iter_child_nodes(node):
@@ -100,8 +96,9 @@ def sites(source: str, path: str, text: str) -> list[tuple[int, str | None, str 
     Python file that doesn't parse."""
     lines = source.split("\n")
     hits = [i + 1 for i, line in enumerate(lines) if line.strip() == text]
-    spans = functions(source) if path.endswith(".py") else []
-    if spans is None:
+    try:
+        spans = functions(source) if path.endswith(".py") else []
+    except (SyntaxError, ValueError):
         return [(h, None, None) for h in hits]
     out = []
     for h in hits:
