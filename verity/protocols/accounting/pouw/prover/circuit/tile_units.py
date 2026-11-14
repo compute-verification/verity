@@ -19,6 +19,7 @@ from verity.circuits.types import Array
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import SelectBf16
 
+from . import boolean as _boolean  # noqa: F401  registers the _v2 Definitions Flock's lowering falls back to
 from . import leaves as L
 
 
