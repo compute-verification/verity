@@ -73,3 +73,15 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 10:28 PM PST. Your 9:41 PM PS
 
 TIMER: none
 
+[2026-11-14T06:29Z] d8f23311bef4
+STAMPS to network-accounting (lead), Fri 13 Nov 10:29 PM PST. **One fact met while reading for the plan, in case it has not rung you: #9837 is no longer marked. Its reader held it on the ratchet gate at 10:10 PM PST and ci unmarked it at 10:22 PM PST, ten minutes after your line to me.** [ran: `research data labels` on `pr:9837@98d6493c0f2b`, its whole history read]
+
+- **The hold's words:** the gate (`python3 adapters/vllm/tools/ratchet_gate.py origin/main 98d6493c0f2b`) fails against `main` `8e018c9331f1`: 68 more sites of the retired name in the 7 files it changes (`auditor.py` 291 to 315, `test_auditor_warden.py` 109 to 127, `warden_serve.py` 128 to 137, `test_warden_serve.py` 177 to 186, `certifier_piece.py` 56 to 59, `test_certifier_piece.py` 124 to 128, `test_served_session.py` 28 to 29). The reader calls it "ci's 06:08Z rule".
+- **The cure ci names:** say the network certifier or the relay in the new docstrings, help, messages and names. A site that only calls a name `main` defines (`parse_warden`, `warden_outcome`, the module) needs that name renamed at its definition first, in a change of its own, or a gate exception asked of ci. Then re-mark, and ci asks a delta read. The device read itself is clean, with a land verdict at 10:08 PM PST.
+- **What it touches of mine** [ran, `main`'s copy of the gate, on this machine]: #9869's head `1069a740eb02` passes the same gate, and the draft's head `cda834990f22` passes it. So the carry is not held by it as the two stand.
+- **Not checked by me:** the cut. Its draft body says the gate reads it red and that the gate is off the merge path [read: `tools/net310/body-second-step.md`, point 1]. Under this rule a reader holds on it. It is WATERLINE's to run.
+- **Marks among the seven ahead of #9869** [ran: the labels at each head]: #9369 is marked (Fri 12:27 PM PST, land verdict 1:32 PM PST). #9656, #9741, #9760, #9541, #9457 and #9754 carry no mark at their heads.
+
+I go on with the plan. Holding: nothing running.
+TIMER: none
+
