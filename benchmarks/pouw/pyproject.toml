@@ -161,7 +161,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "security/Proofs/Pouw/Lemmas/PearlCRecords.lean", "security/lean-audit.json",
           "security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean",
           "security/Proofs/Accounting/Gates/Rows.lean",
-          "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/accounting/pouw/verifier/receipts", "benchmarks/pouw/filler",
+          "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/accounting/pouw/verifier/receipts", "benchmarks/pouw/filler", "verity/protocols/accounting/pouw/prover/kernels/filler",
           "benchmarks/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "verity/protocols/experimental/dither/prover/j10r_ws.py",
@@ -253,7 +253,7 @@ paths = ["benchmarks/pouw/pearl_c_sm120", "verity/protocols/accounting/pouw/prov
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_receipts_adopters.py"]
-paths = ["benchmarks/pouw/filler"]
+paths = ["benchmarks/pouw/filler", "verity/protocols/accounting/pouw/prover/kernels/filler"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_salt_bind.py"]

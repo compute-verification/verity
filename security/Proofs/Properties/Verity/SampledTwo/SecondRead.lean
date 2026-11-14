@@ -32,7 +32,7 @@ private theorem ite_ite_none {c₁ c₂ : Bool} {s₁ s₂ : String}
 
 /-- **A sample the check finds no fault in reads every coin opened**: it read `read` bytes of `src`, and `src` holds as
 many whole challenger coins as those bytes reach. -/
-theorem coinsReason_read {v : Registration.Verifier} {samplingDesign rec_ draw : Json} {src : ByteArray}
+theorem coinsReason_read {v : Docket.Verifier} {samplingDesign rec_ draw : Json} {src : ByteArray}
     (h : OneStage.coinsReason v samplingDesign rec_ draw src = none) :
     ∃ n units read, nat? (getD rec_ "population") = some n ∧ OneStage.sampledFrom v samplingDesign n src = .ok (units, read) ∧
       (read + Challenger.COIN_BYTES - 1) / Challenger.COIN_BYTES = src.size / Challenger.COIN_BYTES := by
@@ -49,7 +49,7 @@ theorem coinsReason_read {v : Registration.Verifier} {samplingDesign rec_ draw :
 
 /-- **The form's last step at the coins `ξ` accepts only where its sample read every coin of `ξ`**, under the second
 stage's sampling design `samplingDesign` at the verifier whose sampling design is a subset of all the record's population. -/
-theorem secondCheck_read {v : Registration.Verifier} {delta : Core.Ratio} {c : OneStage.Commitment} {samplingDesign : Json}
+theorem secondCheck_read {v : Docket.Verifier} {delta : Core.Ratio} {c : OneStage.Commitment} {samplingDesign : Json}
     {ξ : ByteArray} {e : OneStage.Evidence} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : secondCheck v delta c samplingDesign ξ e = .accept pub prof) :
     ∃ n units read, nat? (getD c.record "population") = some n ∧

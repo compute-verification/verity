@@ -73,7 +73,7 @@ theorem firstTreeless_of_lines {p : Params} {e : Evidence} {ls : List String} (h
   · rfl
 
 /-- **`digestIs` passes where the record's digest is the one named** (the converse of `digestIs_ok`). -/
-theorem digestIs_of {j : Json} {d : ByteArray} (h : Registration.digest j = .ok d) : digestIs j d = .ok () := by
+theorem digestIs_of {j : Json} {d : ByteArray} (h : Docket.digest j = .ok d) : digestIs j d = .ok () := by
   unfold digestIs
   rw [ok_bind _ h]
   first
@@ -85,8 +85,8 @@ theorem digestIs_of {j : Json} {d : ByteArray} (h : Registration.digest j = .ok 
 
 /-- **`interiorDigestIs` passes where both records' digests are the one named** (the converse of
 `interiorDigestIs_ok`). -/
-theorem interiorDigestIs_of {record j : Json} {d : ByteArray} (h : Registration.digest record = .ok d)
-    (h' : Registration.digest j = .ok d) : interiorDigestIs record j d = .ok () := by
+theorem interiorDigestIs_of {record j : Json} {d : ByteArray} (h : Docket.digest record = .ok d)
+    (h' : Docket.digest j = .ok d) : interiorDigestIs record j d = .ok () := by
   unfold interiorDigestIs
   rw [ok_bind _ h, ok_bind _ h']
   first
@@ -115,8 +115,8 @@ theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     (h6 : stamped p e bs r.out = .ok vs)
     (h7 : Spot.getD e.interior.base.receipt "received" = Json.str received₂)
     (h8 : readBack c.record = .ok j₁) (h9 : readBack e.record = .ok j₂)
-    (h10 : Registration.digest j₁ = .ok c.digest) (h11 : Registration.digest e.record = .ok c₂.digest)
-    (h12 : Registration.digest j₂ = .ok c₂.digest) :
+    (h10 : Docket.digest j₁ = .ok c.digest) (h11 : Docket.digest e.record = .ok c₂.digest)
+    (h12 : Docket.digest j₂ = .ok c₂.digest) :
     inputAt p c ξ e bs =
       .ok (c₂, ξ₂, r,
         inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂, stmts := stmtsOwn p e bs } received₂ vs) := by

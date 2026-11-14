@@ -1,4 +1,4 @@
-"""vLLM serving under the remote bandwidth audit: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
+"""vLLM serving under PoUB: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
 with `verity_vllm.protocols.remote_bandwidth.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
 `verity_vllm.protocols.remote_bandwidth.remote.StoreBackend` proves that store to a verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass
@@ -160,11 +160,14 @@ def backend_class(remote):
 def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) -> None:
     from verity.protocols.accounting.poub.verifier.session import verifier
 
+    import sheets
+
     sock, _ = lsock.accept()
     lsock.close()
     v = None
     try:
-        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=a.windows,
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=sheets.figures(),
+                              source=os.urandom(32), windows=a.windows,
                               window_ns=a.window_ns, samples=a.samples, delta=2.0 ** -40, jitter_ns=10 ** 9,
                               clock=clock, log=lambda m: None, lifetime=a.lifetime)
         v.register()

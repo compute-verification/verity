@@ -313,7 +313,7 @@ def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit())
     body = gzip.decompress((tmp_path / "h1" / SH.PROGRAM).read_bytes())
-    meta = json.loads((tmp_path / "h1" / SH.PROGRAM_META).read_text())
+    meta = json.loads((tmp_path / "h1" / PH.PROGRAM_META).read_text())
     assert hashlib.sha512(body).hexdigest() == arm.digest == program_digest(arm.program) == meta["program_digest"]
     assert body == SV.descriptor(arm.program) and meta["bytes"] == len(body)
     assert (meta["rows"], meta["steps"]) == (ROWS, STEPS) and arm.describe()["program_file"] == f"h1/{SH.PROGRAM}"

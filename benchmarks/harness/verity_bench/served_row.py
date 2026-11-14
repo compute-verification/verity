@@ -6,7 +6,7 @@ outcome and its codes, the layout the serve committed. The audit's verdict is th
 top-level ``accepted``, which is the one-stage record of the sessions alone. This module decides nothing about the
 run; it reads from the tree who decided each of those and what proves it, and prints (`account`, `render`):
 
-* **The verdict line**, in the verifier's own words (`verdict_line`): how many of the sampled proofs the Lean
+* **The verdict line**, in the verifier's own words (`verdict_line`): how many of the sampled proof blocks' proofs the Lean
   verifier accepted, then the final accept as the stream's outcome gave it: given, refused with its codes, or
   withheld, where every check of the second stage held and the outcome is refused by one code the table names a
   reason for (`TABLE`'s ``withheld``). An accept the verifier withheld or refused is never printed as given, and
@@ -51,7 +51,8 @@ STAND_IN = ("check", "per_prompt", "per_output")
 #: the kind of verdict that is the Lean verifier's on a session's proof
 PROOFS = "lean-verify"
 #: what a verdict's record names beside its verdict, so that a reader can hold four verdicts to one class of one serve
-#: under one registration: the class, the served run it came from and the digest of the registration it was decided
+#: under one registration: the class as the serve files it (`served_record.served_class`, the name
+#: `exfiltration.CLASS_NAME` reads), the served run it came from and the digest of the registration it was decided
 #: under
 NAMES = ("class", "serve", "registration")
 #: the piece of the stop class's verdicts of record this audit's verdict is (`exfiltration.PIECES`), and the command's
@@ -182,16 +183,16 @@ def outcome(shown: Mapping, kinds: Mapping, theorem: Mapping) -> dict:
 
 
 def verdict_line(kinds: Sequence[Mapping], final: Mapping) -> str:
-    """The verdict in the verifier's own words: the sampled proofs the Lean verifier accepted, then the final accept
+    """The verdict in the verifier's own words: the sampled proof blocks' proofs the Lean verifier accepted, then the final accept
     as the outcome gave it. No accept the verifier withheld or refused is said to be given."""
 
     proofs = next((k for k in kinds if k["kind"] == PROOFS), None)
     if proofs is None or not proofs["of"]:
-        said = "no sampled proof was put to the Lean verifier"
+        said = "no sampled proof block's proof was put to the Lean verifier"
     elif proofs["accepted"] == proofs["of"]:
-        said = f"every sampled proof accepted by the Lean verifier ({proofs['of']} of {proofs['of']} sessions)"
+        said = f"every sampled proof block's proof accepted by the Lean verifier ({proofs['of']} of {proofs['of']} sessions)"
     else:
-        said = f"{proofs['accepted']} of {proofs['of']} sampled proofs accepted by the Lean verifier"
+        said = f"{proofs['accepted']} of {proofs['of']} sampled proof blocks' proofs accepted by the Lean verifier"
     if final["final"] == "given":
         return (f"{said}; the final accept given by `{final['verifier']}`"
                 + ("" if final["complete"] else f", and {GIVEN_NOT_COMPLETE}"))
@@ -308,7 +309,7 @@ def account(record: Mapping[str, Any], root: Path | None = None, *, kinds: Mappi
     proved = (not items and final["final"] == "given" and final[PROVED]
               and all(holes.get(h) == spot_status.CLOSED for h in spot_status.HOLES))
     doc = {"schema": SCHEMA, "run": record.get("run"), "commit": record.get("commit"), "runs": record.get("runs"),
-           "named": {"class": shown.get("class"), "serve": ((record.get("runs") or {}).get("serve") or {}).get("run"),
+           "named": {"class": shown.get("served_class"), "serve": ((record.get("runs") or {}).get("serve") or {}).get("run"),
                      "registration": shown.get("registration")},
            "ties": shown.get("ties") or [], "first_stage": shown.get("first_stage"), "covered": cover,
            "verdicts": by_kind, "checks": audit_checks, "outcome": final,

@@ -78,7 +78,7 @@ theorem readBack_ok {record j : Json} (h : readBack record = .ok j) :
     exact ⟨s, hs, hj, hs'⟩
 
 /-- **What `digestIs` passed**: the record's digest is the one named. -/
-theorem digestIs_ok {j : Json} {d : ByteArray} (h : digestIs j d = .ok ()) : Registration.digest j = .ok d := by
+theorem digestIs_ok {j : Json} {d : ByteArray} (h : digestIs j d = .ok ()) : Docket.digest j = .ok d := by
   unfold digestIs at h
   obtain ⟨d', hd, h⟩ := bind_ok h
   split at h
@@ -92,7 +92,7 @@ theorem digestIs_ok {j : Json} {d : ByteArray} (h : digestIs j d = .ok ()) : Reg
 
 /-- **What `interiorDigestIs` passed**: both records' digests are the one named. -/
 theorem interiorDigestIs_ok {record j : Json} {d : ByteArray} (h : interiorDigestIs record j d = .ok ()) :
-    Registration.digest record = .ok d ∧ Registration.digest j = .ok d := by
+    Docket.digest record = .ok d ∧ Docket.digest j = .ok d := by
   unfold interiorDigestIs at h
   obtain ⟨d₁, hd₁, h⟩ := bind_ok h
   obtain ⟨d₂, hd₂, h⟩ := bind_ok h
@@ -116,7 +116,7 @@ theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : 
       OneStageZk.membersRun p.audit p.members c₂ e.interior e.statements bs = .ok r ∧ r.all = true ∧
       ∃ vs received₂ j₁ j₂, stamped p e bs r.out = .ok vs ∧
         i = inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂, stmts := stmtsOwn p e bs } received₂ vs ∧
-        readBack c.record = .ok j₁ ∧ readBack e.record = .ok j₂ ∧ Registration.digest j₁ = .ok c.digest := by
+        readBack c.record = .ok j₁ ∧ readBack e.record = .ok j₂ ∧ Docket.digest j₁ = .ok c.digest := by
   unfold inputAt at h
   obtain ⟨s, h1, h⟩ := bind_ok h
   obtain ⟨c₂', h2, h⟩ := bind_ok h
@@ -145,8 +145,8 @@ record is given. -/
 theorem inputAt_interior {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input}
     (h : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) :
-    Registration.digest e.record = .ok c₂.digest ∧
-      ∃ j₂, readBack e.record = .ok j₂ ∧ Registration.digest j₂ = .ok c₂.digest := by
+    Docket.digest e.record = .ok c₂.digest ∧
+      ∃ j₂, readBack e.record = .ok j₂ ∧ Docket.digest j₂ = .ok c₂.digest := by
   unfold inputAt at h
   obtain ⟨s, -, h⟩ := bind_ok h
   obtain ⟨c₂', -, h⟩ := bind_ok h
@@ -445,7 +445,7 @@ theorem interiorUnshown_roots {p : Params} {e : Evidence} (h : interiorUnshown p
     {roots : Spot.Challenger.Roots} (hk : p.audit.base.challenger = some (k, label))
     (hw : p.boundary.verifier.windowRoot = some w)
     (hne : some w ≠ p.audit.base.verifier.windowRoot)
-    (ha : Spot.Registration.digest e.record = .ok after)
+    (ha : Spot.Docket.digest e.record = .ok after)
     (ht : Spot.Challenger.trustedChallengePhaseOf (Spot.getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
       (Spot.getD e.coins "pins") (Spot.getD e.coins "main") (Spot.getD e.coins "session") = .ok (c, roots)) :
     interiorShown roots label after = false := by

@@ -32,7 +32,7 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
       "the steps the job runs, in rec_profile.ORDER's order"),
     S("REPEAT", int, 3, VALUE, "each CPU step's invocations"),
     *(S(f"REPEAT_{s.upper()}", int, None, VALUE, f"the {s} step's invocations; unset, REPEAT") for s in REPEATED),
-    S("MODES", csv, ("firewall",), VALUE, "oprove's prover sides; the last one's releases are the ones oreplay and lean read"),
+    S("MODES", csv, ("zk_server",), VALUE, "oprove's prover sides; the last one's releases are the ones oreplay and lean read"),
     S("OPROVE_WARM", int, 0, VALUE, "warm releases per V* statement, untimed"),
     S("OPROVE_RUNS", int, 1, VALUE, "timed releases per V* statement"),
     S("OPROVE_GPU", str, None, VALUE, "V*'s prover: 0 85's CPU prover, 1 the GPU one under a lease; unset, 0 under the ZK server, "

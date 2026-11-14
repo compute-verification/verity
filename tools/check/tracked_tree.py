@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
+ROOT = HERE.parents[1]
 
 
 def _load(name: str, path: Path):

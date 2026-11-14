@@ -1,4 +1,4 @@
-"""`one_stage`'s Python held to sampled proofs' one-stage audit in Lean (`core_spot`), its definition and verifier (`one_stage.verifier.RECORD_VERDICT`): the whole protocol through its own `serve` (`sampled-proofs-one-stage`, a
+"""`one_stage`'s Python held to SPOT's one-stage audit in Lean (`core_spot`), its definition and verifier (`one_stage.verifier.RECORD_VERDICT`): the whole protocol through its own `serve` (`sampled-proofs-one-stage`, a
 `ProtocolPort`), and its pieces through `sampled-proofs-difftest` (`Port`s), on sampled programs, sampling designs, records, samples and
 verdicts, valid ones and one or two changes to each. A disagreement is the Python's to fix, unless it finds the Lean wrong.
 
@@ -539,7 +539,7 @@ def decode_params(j) -> dict:
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
     keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler",
-                               "certified")
+                               "certified", "verdicts")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -581,6 +581,11 @@ def decode_params(j) -> dict:
     if tied and not (j["tied"] is None or isinstance(j["tied"], list) and all(isinstance(t, str) for t in j["tied"])):
         raise D.Reject("tied values are a list of the program's parameters")
     raw = j
+    if "verdicts" in j:
+        try:
+            R._verdicts(j["verdicts"])
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
     if "pool" in j:
         try:
             pool = R._pool(j["pool"], j["registered"] or {}, j.get("supplied"), j.get("pinned"), j.get("outputs"),
@@ -700,7 +705,7 @@ def _docket_verdict(p: dict, rec) -> Verdict:
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
-                   compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"))
+                   compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"), verdicts=p.get("verdicts"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -712,7 +717,8 @@ def _caller_verdict(p: dict, rec) -> Verdict:
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    day=p.get("day"), declarations=p.get("declarations"), seed_salt=p.get("seed_salt"),
-                   pool=p.get("pool"), compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"))
+                   pool=p.get("pool"), compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"),
+                   verdicts=p.get("verdicts"))
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
@@ -4117,7 +4123,7 @@ def public_ports(j):
 
 
 def _roots(ports: list[str], x: int) -> list[dict]:
-    """A registration's roots at `ports`, every fifth with no domain or leaves."""
+    """A docket's roots at `ports`, every fifth with no domain or leaves."""
     return [{"domain": f"d{i}", "leaves": i + x % 3, "port": p, "root": f"r{i}"} if (x + i) % 5 else
             {"port": p, "root": f"r{i}"} for i, p in enumerate(ports)]
 
@@ -6463,7 +6469,7 @@ def test_the_callers_check_agrees(callers):
 
 def test_link_points_holds_the_per_member_forms_members_as_the_python_does(pieces):
     """The docket's `link-points` on the per-member form's members, Lean's answers the Python's (the piece's
-    ``members``, which `Registration.check` reads as it reads the ones `OneStageZk.membersParamsOfJson` hands it from a
+    ``members``, which `Docket.check` reads as it reads the ones `OneStageZk.membersParamsOfJson` hands it from a
     case's parameters; `registration.check`'s ``members``). Two windows of two members at one unit a proof block:
     PAIR's two proof blocks and TRIPLE's eighteen, a template each, and one template's twenty-four cut in half. A row
     is a sampling design with each member's fewest and most sampled proof blocks over the samples that end, the members
@@ -7341,6 +7347,40 @@ def test_a_window_opens_the_pool_its_chain_left(pieces, callers):
         assert codes({**then, **extra}, record(WINDOW, pout1, carried, [first])) == "reject", extra
 
 
+def test_a_start_is_carried_only_past_a_record_the_verdict_log_accepted(pieces, callers):
+    """Lean and Python agreeing on the caller's verdicts: with the verifier's verdict log (`verdicts`, the pool's form),
+    `W` read from an earlier record's port carries where the log names that record accepted or doesn't name it, and is
+    `R7-output-refused` where it names it refused, in the history form and the explicit one alike, after SPOT's R7
+    codes; `W` reusing that record's registered value is not held to it, and a log in another form refuses the
+    verifier's inputs."""
+    s, values, law = REGISTERED_SETUPS[0], {"D": 1, "W": 3}, {"k": 1, "law": "subset"}
+    output = {"root": "c1" * 64, "domain": EARLIER_OUT_DOMAIN}
+    w = s.committed["W", 3].entry()
+    roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+    log = [R.record(s.program, s.query, law, SCHEME, [*roots, {"port": EARLIER_OUT, "leaves": w["leaves"], **output}],
+                    EARLIER, leaf_layer=LEAF, registered=[{**w, "value": EARLIER_VALUE, **output}])]
+    d = R.digest(log[0])
+    rec = _record_of(s, values, law, WINDOW, log, output=output, fixed=["W"], leaf_layer=LEAF, previous=d)
+    params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": log, "parameters": s.signature,
+              "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
+              "scheme": SCHEME, "work_table": None}
+
+    def codes(outputs, verdicts=(), r=rec):
+        """The codes with `outputs` and the verdict log `verdicts`, or none where it is `()`."""
+        p = {**params, "outputs": outputs, **({} if verdicts == () else {"verdicts": verdicts})}
+        return _codes_of(_json({"params": p, "record": r}), pieces, callers)
+
+    moved = {**rec, "registered": [{**e, "root": "ef" * 64} if e["value"] == "W" else e for e in rec["registered"]]}
+    for out in ({"W": {"port": EARLIER_OUT}}, {"W": {"record": d, "port": EARLIER_OUT}}):
+        for verdicts in ((), {}, {d: True}, {"ee" * 64: False}):
+            assert codes(out, verdicts) == [], (out, verdicts)
+        assert codes(out, {d: False}) == ["R7-output-refused"], out
+        assert codes(out, {d: False}, moved) == ["R7-held", "R7-output-refused"], out
+    assert codes({"W": {"record": d, "value": EARLIER_VALUE}}, {d: False}) == []
+    for bad in ([], {d: 0}, {d.upper(): False}, {d[:-2]: False}, None, "x"):
+        assert codes({"W": {"port": EARLIER_OUT}}, bad) == "reject", bad
+
+
 def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces, callers):
     """Lean and Python agreeing on cut and continue over three windows. Each window's certified arrivals are the root the
     network certifier signed for it, which the verifier pins (`ing`: the arrivals open at the last window's edge first,
@@ -7435,7 +7475,7 @@ def _many_ports(a: dict, n: int, seed: int = 0) -> dict:
 
 
 def test_a_many_port_registration_agrees(pieces):
-    """R3 over a window of 4096 ports, the shape whose quadratic walk `Registration.portIndex` replaced, Lean and Python
+    """R3 over a window of 4096 ports, the shape whose quadratic walk `Docket.portIndex` replaced, Lean and Python
     agreeing: accepted as registered, and each change to one port reaches its code and no other."""
     a = _many_ports(_REGISTRATION_OF(_v1_audit("subset")), 4096)
 
