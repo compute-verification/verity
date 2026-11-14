@@ -401,14 +401,14 @@ def ExecutionPhaseBoundOfService : Prop :=
       (tx : (H : Q → R) → (s : S) → (An H s).Tr → Pouw.Trace) (Ccom : (Q → R) → S → Reg → Pouw.Trace),
     (∀ H s R' τ, tx H s ((An H s).committed R' τ) = Ccom H s R') →
     (∀ H s, Realizes P U H s σ w (fun _ => ∅) (An H s).incorrect (tx H s)) →
-    ∀ εks δlink : (H : Q → R) → (s : S) → (R' : Reg) → Cont (SamplingDesign.subset N K hK) Reg (session H s) R' → ℝ≥0∞,
-    (∀ H s, (An H s).KnowledgeSound (εks H s)) → (∀ H s, (An H s).BindSound (δlink H s)) →
+    ∀ εks εbind : (H : Q → R) → (s : S) → (R' : Reg) → Cont (SamplingDesign.subset N K hK) Reg (session H s) R' → ℝ≥0∞,
+    (∀ H s, (An H s).KnowledgeSound (εks H s)) → (∀ H s, (An H s).BindSound (εbind H s)) →
     ∀ σ' : (H : Q → R) → (s : S) →
       FlockSoundness.Game.Strategy (auditReg (fun _ : Reg => SamplingDesign.subset N K hK) (session H s)),
       ExecutionPhaseBound P U ε Ccom σ' fun H s =>
         (SamplingDesign.subset N K hK).miss ⌈ε * totalWref P U.layout / (wmax : ℝ)⌉₊ +
           εks H s (reg (atReg (σ' H s))) (cont (atReg (σ' H s))) +
-          δlink H s (reg (atReg (σ' H s))) (cont (atReg (σ' H s)))
+          εbind H s (reg (atReg (σ' H s))) (cont (atReg (σ' H s)))
 
 end Pouw.WindowWork
 

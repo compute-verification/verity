@@ -35,7 +35,7 @@ def _drawn():
 
 
 def _args(reg, draw, **change) -> dict:
-    return {"registration": reg.record, "receipt": reg.receipt, "draw": draw.draw, "law": draw.law,
+    return {"registration": reg.record, "receipt": reg.receipt, "draw": draw.draw, "sampling_design": draw.law,
             "proved_units": list(draw.units), "instances": len(draw.units), "statement": {"statement": "stub"},
             "verdicts": _lean(), "delta": DELTA, "sessions": [SESSION], **change}
 

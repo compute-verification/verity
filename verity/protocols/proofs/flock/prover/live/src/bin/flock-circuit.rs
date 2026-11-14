@@ -1016,7 +1016,7 @@ fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) 
         s.cfg.sample_given = Some(draw.clone());
         return s;
     }
-    match &sv.law {
+    match &sv.sampling_design {
         Some(l) => with_sample(s, st, inst, l.clone(), count),
         None => s,
     }

@@ -60,7 +60,7 @@ def period():
 def _case(period, v3c: dict = V3C_WINDOW) -> tuple[dict, dict]:
     """The rows-form accept, its audits' registrations' provenance V3c's (``v3c``), and its answer as the piece writes
     it."""
-    case = period.case("accept", 1, "rows")
+    case = period.case("accept", 1)
     answer = period.reference(case)
     assert answer["verdict"] == "accept"
     com = json.loads(bytes.fromhex(case["commitment"]))

@@ -9,9 +9,9 @@ its bound (TT_OUT does not range over it), or the class's cheapest program stays
 the census's known skip classes (`pearlc_census.py`) or a reviewer's planted class, builds the tile at the H100's atom
 and the cheapest program the class gives, checks that its words are the honest ones, and asserts one of the two.
 
-The inert work replayed here is rev1's (`DeviceRev1.tileDebitRev1`, `pearl_c_debit.tile_debit`): flagged atom-words,
+The inert work replayed here is rev1's (`DeviceRev1.tileInertWorkRev1`, `pearl_c_inert_work.tile_inert_work`): flagged atom-words,
 later promotions into +0, the forming of salt-dead and unread elements, and the words' mends (`Mend.wordMend`,
-`pearl_c_debit.word_mend`): one MAC for each position where A's row and B's row are both salt-dead (a dead pair), and
+`pearl_c_inert_work.word_mend`): one MAC for each position where A's row and B's row are both salt-dead (a dead pair), and
 one for each other product whose contribution after the accumulator's alignment is zero at both ends of the noise
 support (a forced zero).
 
@@ -78,7 +78,7 @@ def _tile(fam: str, k: int, rows: int = 4, cols: int = 4, run: int = 1, line_nor
 
 
 def _mends(XA: np.ndarray, XB: np.ndarray) -> int:
-    """The debit's mends over the tile of rows `XA` by `XB` (`pearl_c_debit.word_mend` summed over its words, one MAC
+    """The debit's mends over the tile of rows `XA` by `XB` (`pearl_c_inert_work.word_mend` summed over its words, one MAC
     each), each row's support ends from its own (α, β) as the scheme forms them (`pearl_c.s5_stats`)."""
     ends = []
     for X in (XA, XB):
@@ -301,7 +301,7 @@ def _dead_pair_cost(s: Shape, groups: int, atoms: int, units: int) -> Fraction:
     return Fraction(units * (chain + fused + peel + forming + rows) + job)
 
 
-def _tile_debit(A: np.ndarray, B: np.ndarray, XA: np.ndarray, XB: np.ndarray, groups: int, n: int) -> dict:
+def _tile_inert_work(A: np.ndarray, B: np.ndarray, XA: np.ndarray, XB: np.ndarray, groups: int, n: int) -> dict:
     """The tile's replayed rev1 debit and its terms: flagged atom-words at 32 + fadd/G each, later promotions into +0 at
     fadd, the forming of every element that could be salt-dead and of every unread element at its share of B's columns,
     and the mends (`_mends`) at one MAC each."""
@@ -339,7 +339,7 @@ def _dead_pair_case(k: int, n: int, groups: int, units: int, m: int = 8192, run:
     P = A.shape[0]
     honest = C.group_sums(A, B, G)[1]
     words, atoms = _dead_pair_program(A, B, groups)
-    d = _tile_debit(A, B, XA, XB, groups, n)
+    d = _tile_inert_work(A, B, XA, XB, groups, n)
     per_word = Fraction(sch.credit_of(s), s.m * s.n)
     cost, credit = _dead_pair_cost(s, groups, atoms, units), units * Fraction(sch.credit_of(s))
     return {"shape": (m, k, n), "groups": groups, "units": units, "run": run, "rules": bool(ok),
@@ -482,7 +482,7 @@ def _raised_case(k: int, n: int, groups: int, units: int, m: int = 8192, run: in
     P = A.shape[0]
     honest = C.group_sums(A, B, G)[1]
     words, atoms = (_raised_program if program == "one-atom" else _raised_skip_program)(A, B, groups)
-    d = _tile_debit(A, B, XA, XB, groups, n)
+    d = _tile_inert_work(A, B, XA, XB, groups, n)
     per_word = Fraction(sch.credit_of(s), s.m * s.n)
     cost, credit = _raised_cost(s, atoms, units), units * Fraction(sch.credit_of(s))
     return {"class": "raised-adder", "program": program, "fill": fill, "shape": (m, k, n), "groups": groups, "units": units, "run": run,
@@ -562,7 +562,7 @@ def _live_raiser_case(k: int, groups: int, raisers: int, at: float, n: int = 819
     b, _, _, floor_b, live_b = C.form_s5(XB, FcB, 1.0, 16.0, C._rng(1, "raised-live", k, "unit-B"))
     ok = floor_a and live_a and floor_b and live_b and _scheme_rules(XA) and _scheme_rules(XB)
     ii, jj = np.meshgrid(np.arange(64), np.arange(64), indexing="ij")
-    d = _tile_debit(a[ii.ravel()], b[jj.ravel()], XA, XB, groups, n)
+    d = _tile_inert_work(a[ii.ravel()], b[jj.ravel()], XA, XB, groups, n)
     per_word = Fraction(sch.credit_of(s), s.m * s.n)
     return {"shape": (m, k, n), "groups": groups, "raisers": raisers, "at": at, "rules": bool(ok),
             "flagged": d["flagged"], "later_zero": d["later_zero"], "dead": d["dead"], "unread": d["unread"],

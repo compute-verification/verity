@@ -139,15 +139,15 @@ def output (ans : RunAnswer) (pub : Option Published := ans.work.map fun w => { 
     ("commitment", jopt (ans.plan.map (hex ·.root))),
     ("source", jopt (ans.plan.map (hex ·.source))),
     ("drawn", match ans.plan with | some pl => (pl.drawn : Nat) | none => .null),
-    ("over_cap", jstr ans.overCap.name),
+    ("over_cap", jstr ans.overInertBound.name),
     ("verdicts", .arr (ans.verdicts.map fun v => Json.mkObj [("pass", (v.pass : Nat)), ("tile", (v.tile : Nat)),
-      ("ok", .bool (v.ok ans.overCap)), ("reason", jopt v.reason)]).toArray),
+      ("ok", .bool (v.ok ans.overInertBound)), ("reason", jopt v.reason)]).toArray),
     ("work", match pub with
       | some p =>
         let c := p.work
         Json.mkObj (([("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
           ("macs", (c.macs : Nat)), ("rho", jstr (toString c.rho)), ("epsilon", jstr (toString c.epsilon)),
-          ("over_cap_draws", (c.overCapDraws : Nat))] : List (String × Json)) ++
+          ("over_cap_draws", (c.overInertBoundDraws : Nat))] : List (String × Json)) ++
           (p.giveUp.map fun g => [("give_up", Json.num ⟨g, 0⟩)]).getD [])
       | none => .null),
     ("exact_work", match pub.bind (·.exact) with
