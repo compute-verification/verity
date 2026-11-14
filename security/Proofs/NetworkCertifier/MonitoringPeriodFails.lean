@@ -48,16 +48,16 @@ charged form, on the weights' sum.
 reads them as its own operator and registered values. It gives the held clause at that pattern and the count
 `#Θ · windowsCount` of the pattern's secrets.
 
-**Over the patterns.** The fail patterns of exactly `j` connections, each below its cap, are among
-`failPatterns cap j` patterns (`exists_failPatterns`), so a count that holds at each pattern holds, times that
+**Over the patterns.** The fail patterns of exactly `j` connections, each below its bound, are among
+`failPatterns bound j` patterns (`exists_failPatterns`), so a count that holds at each pattern holds, times that
 number, over them (`encard_failsExactly_le`, by `encard_biUnion_le`): `monitoringPeriodLeakFails`. Summed over `0 … j` it is
 `monitoringPeriodLeakFailsAtMost`, whose held clause is `checked_at_pattern`'s at each run's own pattern. Under weights that sum
 to at most one, sets of at most `c j` secrets with `c j ≤ w j · T` wherever one is inhabited hold at most `T` secrets
 together (`encard_weighted_le`): `monitoringPeriodLeakCharged`.
 
-**The factor.** `failPatterns cap 0 = 1` (`failPatterns_zero`), at one cap `c` it is `C(N, j) · c^j`
-(`failPatterns_const`), and over every number of failures it sums to `∏ (cap + 1)` (`failPatterns_sum`). A fail cell
-is one of its lane's cells, so every pattern is below a cap on the schedule's cells (`failsBelow_of_cells_le`).
+**The factor.** `failPatterns bound 0 = 1` (`failPatterns_zero`), at one bound `c` it is `C(N, j) · c^j`
+(`failPatterns_const`), and over every number of failures it sums to `∏ (bound + 1)` (`failPatterns_sum`). A fail cell
+is one of its lane's cells, so every pattern is below a bound on the schedule's cells (`failsBelow_of_cells_le`).
 -/
 
 @[expose] public section
@@ -67,10 +67,10 @@ namespace NetTiming
 open Claims Claims.Sampling Finset
 open scoped NNRat
 
-theorem failPatterns_zero {κ : Type} [Fintype κ] (cap : κ → ℕ) : failPatterns cap 0 = 1 := by
+theorem failPatterns_zero {κ : Type} [Fintype κ] (bound : κ → ℕ) : failPatterns bound 0 = 1 := by
   rw [failPatterns, Finset.powersetCard_zero, Finset.sum_singleton, Finset.prod_empty]
 
-/-- At one cap `c`: `C(N, j) · c^j`. -/
+/-- At one bound `c`: `C(N, j) · c^j`. -/
 theorem failPatterns_const {κ : Type} [Fintype κ] (c j : ℕ) :
     failPatterns (fun _ : κ => c) j = (Fintype.card κ).choose j * c ^ j := by
   have h : ∀ J ∈ (Finset.univ : Finset κ).powersetCard j, ∏ _c ∈ J, c = c ^ j := fun J hJ => by
@@ -79,33 +79,34 @@ theorem failPatterns_const {κ : Type} [Fintype κ] (c j : ℕ) :
   rw [Finset.sum_congr rfl h, Finset.sum_const, Finset.card_powersetCard, Finset.card_univ, smul_eq_mul]
 
 /-- Every number of failures: `MonitoringPeriodLeakAccepted`'s factor for the cells. -/
-theorem failPatterns_sum {κ : Type} [Fintype κ] (cap : κ → ℕ) :
-    ∑ j ∈ Finset.range (Fintype.card κ + 1), failPatterns cap j = ∏ c, (cap c + 1) := by
+theorem failPatterns_sum {κ : Type} [Fintype κ] (bound : κ → ℕ) :
+    ∑ j ∈ Finset.range (Fintype.card κ + 1), failPatterns bound j = ∏ c, (bound c + 1) := by
   unfold failPatterns
   rw [Finset.prod_add_one, Finset.sum_powerset, Finset.card_univ]
 
 /-- The fail cells a pattern whose failed connections are `J` may hold at connection `c`. -/
-def failSlots {κ : Type} [DecidableEq κ] (cap : κ → ℕ) (J : Finset κ) (c : κ) : Finset (Option ℕ) :=
-  if c ∈ J then (Finset.range (cap c)).image some else {none}
+def failSlots {κ : Type} [DecidableEq κ] (bound : κ → ℕ) (J : Finset κ) (c : κ) : Finset (Option ℕ) :=
+  if c ∈ J then (Finset.range (bound c)).image some else {none}
 
-/-- **The fail patterns of exactly `j` connections, each below its cap, are among `failPatterns cap j` patterns.** -/
-theorem exists_failPatterns {κ : Type} [Fintype κ] (cap : κ → ℕ) (j : ℕ) :
-    ∃ U : Finset (κ → Option ℕ), U.card ≤ failPatterns cap j ∧
-      ∀ φ, failCount φ = j → FailsBelow cap φ → φ ∈ U := by
+/-- **The fail patterns of exactly `j` connections, each below its bound, are among `failPatterns bound j`
+patterns.** -/
+theorem exists_failPatterns {κ : Type} [Fintype κ] (bound : κ → ℕ) (j : ℕ) :
+    ∃ U : Finset (κ → Option ℕ), U.card ≤ failPatterns bound j ∧
+      ∀ φ, failCount φ = j → FailsBelow bound φ → φ ∈ U := by
   classical
-  refine ⟨(Finset.univ.powersetCard j).biUnion fun J => Fintype.piFinset (failSlots cap J), ?_,
+  refine ⟨(Finset.univ.powersetCard j).biUnion fun J => Fintype.piFinset (failSlots bound J), ?_,
     fun φ hj hb => ?_⟩
   · refine Finset.card_biUnion_le.trans (le_of_eq ?_)
     unfold failPatterns
     refine Finset.sum_congr rfl fun J _ => ?_
-    have hcard : ∀ c, (failSlots cap J c).card = if c ∈ J then cap c else 1 := by
+    have hcard : ∀ c, (failSlots bound J c).card = if c ∈ J then bound c else 1 := by
       intro c
       by_cases hc : c ∈ J
       · simp only [failSlots, hc, ↓reduceIte]
         rw [Finset.card_image_of_injective _ (Option.some_injective ℕ), Finset.card_range]
       · simp only [failSlots, hc, ↓reduceIte, Finset.card_singleton]
     rw [Fintype.card_piFinset]
-    exact (Finset.prod_congr rfl fun c _ => hcard c).trans (Fintype.prod_ite_mem J cap)
+    exact (Finset.prod_congr rfl fun c _ => hcard c).trans (Fintype.prod_ite_mem J bound)
   · refine Finset.mem_biUnion.2 ⟨Finset.univ.filter fun c => (φ c).isSome, ?_, ?_⟩
     · exact Finset.mem_powersetCard.2 ⟨Finset.subset_univ _, hj⟩
     · refine Fintype.mem_piFinset.2 fun c => ?_
@@ -120,13 +121,13 @@ theorem exists_failPatterns {κ : Type} [Fintype κ] (cap : κ → ℕ) (j : ℕ
 
 /-- **A count that holds at each fail pattern, summed over the patterns of exactly `j` failures.** `pat z` is `z`'s
 pattern and `G φ` the secrets counted at the pattern `φ`. -/
-theorem encard_failsExactly_le {Z κ : Type} [Fintype κ] (cap : κ → ℕ) (j : ℕ) (pat : Z → κ → Option ℕ)
+theorem encard_failsExactly_le {Z κ : Type} [Fintype κ] (bound : κ → ℕ) (j : ℕ) (pat : Z → κ → Option ℕ)
     (G : (κ → Option ℕ) → Set Z) (B : ℕ∞) (h : ∀ φ, {z | pat z = φ ∧ z ∈ G φ}.encard ≤ B) :
-    {z | failCount (pat z) = j ∧ FailsBelow cap (pat z) ∧ z ∈ G (pat z)}.encard ≤
-      ((failPatterns cap j : ℕ) : ℕ∞) * B := by
+    {z | failCount (pat z) = j ∧ FailsBelow bound (pat z) ∧ z ∈ G (pat z)}.encard ≤
+      ((failPatterns bound j : ℕ) : ℕ∞) * B := by
   classical
-  obtain ⟨U, hU, hmem⟩ := exists_failPatterns cap j
-  have hsub : {z | failCount (pat z) = j ∧ FailsBelow cap (pat z) ∧ z ∈ G (pat z)} ⊆
+  obtain ⟨U, hU, hmem⟩ := exists_failPatterns bound j
+  have hsub : {z | failCount (pat z) = j ∧ FailsBelow bound (pat z) ∧ z ∈ G (pat z)} ⊆
       ⋃ φ ∈ U, {z | pat z = φ ∧ z ∈ G φ} := by
     rintro z ⟨hj, hb, hg⟩
     exact Set.mem_iUnion₂.2 ⟨pat z, hmem _ hj hb, rfl, hg⟩
@@ -134,11 +135,11 @@ theorem encard_failsExactly_le {Z κ : Type} [Fintype κ] (cap : κ → ℕ) (j 
     _ ≤ ∑ φ ∈ U, ({z | pat z = φ ∧ z ∈ G φ} : Set Z).encard := encard_biUnion_le _ _
     _ ≤ ∑ _φ ∈ U, B := Finset.sum_le_sum fun φ _ => h φ
     _ = (U.card : ℕ∞) * B := by rw [Finset.sum_const, nsmul_eq_mul]
-    _ ≤ ((failPatterns cap j : ℕ) : ℕ∞) * B := mul_le_mul' (by exact_mod_cast hU) le_rfl
+    _ ≤ ((failPatterns bound j : ℕ) : ℕ∞) * B := mul_le_mul' (by exact_mod_cast hU) le_rfl
 
-/-- **Every fail cell is below a cap on the schedule's cells**: the fail cell is one of the lane's cells. -/
-theorem failsBelow_of_cells_le {κ Cell : Type} (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) (cap : κ → ℕ)
-    (h : ∀ c, s.cells c ≤ cap c) : FailsBelow cap (failCell s arr) := fun c _ hi =>
+/-- **Every fail cell is below a bound on the schedule's cells**: the fail cell is one of the lane's cells. -/
+theorem failsBelow_of_cells_le {κ Cell : Type} (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) (bound : κ → ℕ)
+    (h : ∀ c, s.cells c ≤ bound c) : FailsBelow bound (failCell s arr) := fun c _ hi =>
   (List.mem_range.1 (List.mem_of_find?_eq_some hi)).trans_le (h c)
 
 /-- **Weights that sum to at most one**: sets `S j`, each of at most `c j` elements, and `c j ≤ w j · T` wherever
@@ -233,12 +234,12 @@ theorem checked_at_pattern
 the patterns of exactly `j` failures (`encard_failsExactly_le`). Its first clause is `monitoringPeriodLeakChecked`'s. -/
 theorem monitoringPeriodLeakFails : Guarantees.MonitoringPeriodLeakFails := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk Conn _ ρ op
-    Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb cap j
+    Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb bound j
   refine ⟨(monitoringPeriodLeakChecked H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
     (ρ fun _ => none) (op fun _ => none) arr f tap run htrust rd allows hread Θ Zs
     schedOf srvOf dec hch x wit tops hb).1, fun htap => ?_⟩
   refine (Set.encard_le_encard ?_).trans
-    (encard_failsExactly_le cap j (fun z => failCell (schedOf z) (arr (srvOf z)))
+    (encard_failsExactly_le bound j (fun z => failCell (schedOf z) (arr (srvOf z)))
       (fun φ => {z | z ∈ Zs ∧ ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj
         (sw i) (ρ φ i) tops (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)}) _ fun φ =>
       (checked_at_pattern H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
@@ -251,11 +252,11 @@ theorem monitoringPeriodLeakFails : Guarantees.MonitoringPeriodLeakFails := by
 `monitoringPeriodLeakFails` summed over `0 … j`. -/
 theorem monitoringPeriodLeakFailsAtMost : Guarantees.MonitoringPeriodLeakFailsAtMost := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk Conn _ ρ op
-    Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb cap j
+    Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb bound j
   have hi := fun i => monitoringPeriodLeakFails
     H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
     ρ op arr f tap run htrust rd allows hread Θ Zs
-    schedOf srvOf dec hch x wit tops hb cap i
+    schedOf srvOf dec hch x wit tops hb bound i
   refine ⟨(hi 0).1, fun htap => ⟨fun z hz hg =>
     (checked_at_pattern H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
       ρ op arr f tap run htrust rd allows hread Θ Zs
@@ -263,7 +264,7 @@ theorem monitoringPeriodLeakFailsAtMost : Guarantees.MonitoringPeriodLeakFailsAt
   classical
   refine (Set.encard_le_encard (t := ⋃ i ∈ Finset.range (j + 1),
     {z | z ∈ Zs ∧ failCount (failCell (schedOf z) (arr (srvOf z))) = i ∧
-      FailsBelow cap (failCell (schedOf z) (arr (srvOf z))) ∧
+      FailsBelow bound (failCell (schedOf z) (arr (srvOf z))) ∧
       ∀ w, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw w)
         (ρ (failCell (schedOf z) (arr (srvOf z))) w)
         tops (x z w) (wit z w) ((run tap (schedOf z, srvOf z)).2 w)}) ?_).trans ?_
@@ -277,16 +278,16 @@ theorem monitoringPeriodLeakFailsAtMost : Guarantees.MonitoringPeriodLeakFailsAt
 (`encard_weighted_le`). -/
 theorem monitoringPeriodLeakCharged : Guarantees.MonitoringPeriodLeakCharged := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk Conn _ ρ op
-    Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb cap w hw T htap
+    Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb bound w hw T htap
   refine (Set.encard_le_encard ?_).trans
     (encard_weighted_le (Fintype.card Conn) T w hw
       (fun j => {z | z ∈ Zs ∧ failCount (failCell (schedOf z) (arr (srvOf z))) = j ∧
-        FailsBelow cap (failCell (schedOf z) (arr (srvOf z))) ∧
-        ((failPatterns cap j * (Θ.card * windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β) : ℕ) : ℚ≥0) ≤
+        FailsBelow bound (failCell (schedOf z) (arr (srvOf z))) ∧
+        ((failPatterns bound j * (Θ.card * windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β) : ℕ) : ℚ≥0) ≤
           w j * (T : ℚ≥0) ∧
         ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
           (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)})
-      (fun j => failPatterns cap j * (Θ.card * windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β))
+      (fun j => failPatterns bound j * (Θ.card * windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β))
       (fun j => ?_) fun j hne => ?_)
   · rintro z ⟨hz, hb', hle, hg⟩
     exact Set.mem_iUnion₂.2 ⟨failCount (failCell (schedOf z) (arr (srvOf z))),
@@ -294,7 +295,7 @@ theorem monitoringPeriodLeakCharged : Guarantees.MonitoringPeriodLeakCharged := 
   · refine (Set.encard_le_encard ?_).trans (((monitoringPeriodLeakFails
       H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
       ρ op arr f tap run htrust rd allows hread (Θ : Set Par) Zs
-      schedOf srvOf dec hch x wit tops hb cap j).2 htap).trans (le_of_eq ?_))
+      schedOf srvOf dec hch x wit tops hb bound j).2 htap).trans (le_of_eq ?_))
     · rintro z ⟨hz, hj, hb', -, hg⟩
       exact ⟨hz, hj, hb', hg⟩
     · rw [Set.encard_coe_eq_coe_finsetCard, Nat.cast_mul, Nat.cast_mul]

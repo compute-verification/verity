@@ -41,8 +41,8 @@ A connection the network certifier fails (`failCell`) is the server's move, neit
 statements let both follow the run's fail pattern, each connection's fail cell or none, and pay for it by counting the
 patterns:
 
-* `failCount`, `FailsBelow`, `failPatterns`: the failed connections of a pattern, a cap on each fail cell, and the
-  number of patterns of exactly `j` failures below their caps;
+* `failCount`, `FailsBelow`, `failPatterns`: the failed connections of a pattern, a bound on each fail cell, and the
+  number of patterns of exactly `j` failures below their bounds;
 * `MonitoringPeriodLeakFails`: exactly `j` failures; `MonitoringPeriodLeakFailsAtMost`: at most `j`, with the held conclusion on every run;
   `MonitoringPeriodLeakCharged`: a charge that adds over periods, under weights on the number of failures (`KraftWeights`).
 
@@ -64,14 +64,14 @@ open scoped NNRat
 def failCount {κ : Type} [Fintype κ] (φ : κ → Option ℕ) : ℕ :=
   (Finset.univ.filter fun c => (φ c).isSome).card
 
-/-- Every fail cell of the pattern is below its connection's cap. -/
-def FailsBelow {κ : Type} (cap : κ → ℕ) (φ : κ → Option ℕ) : Prop :=
-  ∀ c i, φ c = some i → i < cap c
+/-- Every fail cell of the pattern is below its connection's bound. -/
+def FailsBelow {κ : Type} (bound : κ → ℕ) (φ : κ → Option ℕ) : Prop :=
+  ∀ c i, φ c = some i → i < bound c
 
 /-- **The fail patterns of exactly `j` connections**: the choices of `j` connections and, for each, a fail cell below
-its cap, `Σ_{J, #J = j} ∏_{c ∈ J} cap c`; `C(N, j) · cap^j` at one cap. -/
-def failPatterns {κ : Type} [Fintype κ] (cap : κ → ℕ) (j : ℕ) : ℕ :=
-  ∑ J ∈ (Finset.univ : Finset κ).powersetCard j, ∏ c ∈ J, cap c
+its bound, `Σ_{J, #J = j} ∏_{c ∈ J} bound c`; `C(N, j) · bound^j` at one bound. -/
+def failPatterns {κ : Type} [Fintype κ] (bound : κ → ℕ) (j : ℕ) : ℕ :=
+  ∑ J ∈ (Finset.univ : Finset κ).powersetCard j, ∏ c ∈ J, bound c
 
 /-- **Weights on the number of failures** `0 … N` that sum to at most one (Kraft's inequality, without rounding a
 length up to a whole bit). -/
@@ -92,8 +92,8 @@ set_option linter.unusedVariables false
 /-- **The leak over a monitoring period, each failure charged as it happens: exactly `j` failures.**
 `MonitoringPeriodLeakChecked`, where each window's operator and registered values may follow the network certifier's fail cells
 over the period (`op φ i` and `ρ φ i`, `φ` the fail cell of each connection, `failCell`): the secrets whose run
-fails exactly `j` connections, each below its cap, and whose every window meets `ExecutionPhaseGoodChecked`, number at most
-`failPatterns cap j` times `MonitoringPeriodLeakChecked`'s count. At `j = 0` the factor is one.
+fails exactly `j` connections, each below its bound, and whose every window meets `ExecutionPhaseGoodChecked`, number
+at most `failPatterns bound j` times `MonitoringPeriodLeakChecked`'s count. At `j = 0` the factor is one.
 
 `op` and `ρ` are bound before the secrets and read the fail pattern alone: a window's operator and registered values
 are fixed for each pattern before the run, so they carry nothing of the secret beyond the pattern, which the factor
@@ -120,7 +120,7 @@ def MonitoringPeriodLeakFails : Prop :=
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
     (hch : MonitoringPeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
     (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
-    (hb : D.commit.Binds H) (cap : Conn → ℕ)
+    (hb : D.commit.Binds H) (bound : Conn → ℕ)
     (j : ℕ),
     (∀ m, ScopeAcc D lay k m →
         CheckedWitness H D (certifierRun H D.commit L K S lay k tops) valid₁ ε₁ m →
@@ -136,11 +136,11 @@ def MonitoringPeriodLeakFails : Prop :=
           (op (failCell (schedOf z) (arr (srvOf z))) i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) s (tops s)
           ((run tap (schedOf z, srvOf z)).2 i)) →
         {z | z ∈ Zs ∧ failCount (failCell (schedOf z) (arr (srvOf z))) = j ∧
-            FailsBelow cap (failCell (schedOf z) (arr (srvOf z))) ∧
+            FailsBelow bound (failCell (schedOf z) (arr (srvOf z))) ∧
             ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
               (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i)
               ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
-          ((failPatterns cap j : ℕ) : ℕ∞) *
+          ((failPatterns bound j : ℕ) : ℕ∞) *
             (Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞)))
 
 /-- **The leak over a monitoring period, each failure charged as it happens.** `MonitoringPeriodLeakChecked`, where each
@@ -154,8 +154,8 @@ window's operator and registered values may follow the network certifier's fail 
   * **held**: the cells the client receives are read from the windows' records under a registered parameter of `Θ`,
     and each window's record is a sequence its registered Program accepts with a valid run (`AccSeqsChecked`), on a
     run with failed connections as on one with none;
-  * **counted**: those whose run fails at most `j` connections, each below its cap, number at most
-    `(Σ_{i ≤ j} failPatterns cap i) · #Θ · windowsCount`. The factor is one at `j = 0` and `∏_c (cap c + 1)`,
+  * **counted**: those whose run fails at most `j` connections, each below its bound, number at most
+    `(Σ_{i ≤ j} failPatterns bound i) · #Θ · windowsCount`. The factor is one at `j = 0` and `∏_c (bound c + 1)`,
     `MonitoringPeriodLeakAccepted`'s factor for the cells, at every connection.
 
 `Conn` is every connection slot of the period, over all its links, and `j` the period's failures: one factor for the
@@ -182,7 +182,7 @@ def MonitoringPeriodLeakFailsAtMost : Prop :=
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
     (hch : MonitoringPeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
     (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
-    (hb : D.commit.Binds H) (cap : Conn → ℕ)
+    (hb : D.commit.Binds H) (bound : Conn → ℕ)
     (j : ℕ),
     (∀ m, ScopeAcc D lay k m →
         CheckedWitness H D (certifierRun H D.commit L K S lay k tops) valid₁ ε₁ m →
@@ -208,16 +208,16 @@ def MonitoringPeriodLeakFailsAtMost : Prop :=
                   (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r) δ
                   (op (failCell (schedOf z) (arr (srvOf z))) i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) Dj) ∧
           {z | z ∈ Zs ∧ failCount (failCell (schedOf z) (arr (srvOf z))) ≤ j ∧
-              FailsBelow cap (failCell (schedOf z) (arr (srvOf z))) ∧
+              FailsBelow bound (failCell (schedOf z) (arr (srvOf z))) ∧
               ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
                 (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i)
                 ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
-            ((∑ i ∈ Finset.range (j + 1), failPatterns cap i : ℕ) : ℕ∞) *
+            ((∑ i ∈ Finset.range (j + 1), failPatterns bound i : ℕ) : ℕ∞) *
               (Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞)))
 
 /-- **The charge a period's failures pay, as one that adds over periods.** Under weights `w` on the number of failed
 connections that sum to at most one (`KraftWeights`) and finitely many registered parameters `Θ`, a run that fails `j`
-connections is charged `log2 (failPatterns cap j · #Θ · windowsCount / w j)` bits. For every `T`, the secrets whose
+connections is charged `log2 (failPatterns bound j · #Θ · windowsCount / w j)` bits. For every `T`, the secrets whose
 every window meets `ExecutionPhaseGoodChecked` and whose run is charged at most `log2 T` bits number at most `T`: the number of
 failures is the sender's choice, and the weight charges for it, so the charges of two periods add. -/
 def MonitoringPeriodLeakCharged : Prop :=
@@ -242,13 +242,13 @@ def MonitoringPeriodLeakCharged : Prop :=
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
     (hch : MonitoringPeriodChannelReg f allows (Θ : Set Par) Zs schedOf srvOf dec fun p => (run tap p).1)
     (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
-    (hb : D.commit.Binds H) (cap : Conn → ℕ)
+    (hb : D.commit.Binds H) (bound : Conn → ℕ)
     (w : ℕ → ℚ≥0) (hw : KraftWeights w (Fintype.card Conn)) (T : ℕ),
     (∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s)
         (op (failCell (schedOf z) (arr (srvOf z))) i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) s (tops s)
         ((run tap (schedOf z, srvOf z)).2 i)) →
-      {z | z ∈ Zs ∧ FailsBelow cap (failCell (schedOf z) (arr (srvOf z))) ∧
-          ((failPatterns cap (failCount (failCell (schedOf z) (arr (srvOf z)))) *
+      {z | z ∈ Zs ∧ FailsBelow bound (failCell (schedOf z) (arr (srvOf z))) ∧
+          ((failPatterns bound (failCount (failCell (schedOf z) (arr (srvOf z)))) *
               (Θ.card * windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β) : ℕ) : ℚ≥0) ≤
             w (failCount (failCell (schedOf z) (arr (srvOf z)))) * (T : ℚ≥0) ∧
           ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)

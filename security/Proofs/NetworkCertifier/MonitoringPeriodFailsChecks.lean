@@ -45,7 +45,7 @@ import Std.Tactic.BVDecide.Normalize.Bool
 # Checks of the period statements with each failure charged: the factor is met, and the weights must sum to one
 
 `MonitoringPeriodLeakFails`, `MonitoringPeriodLeakFailsAtMost` and `MonitoringPeriodLeakCharged` let the operator's moves and the registered values
-follow the network certifier's fail cells, and pay for it: a factor `failPatterns cap j` on the count, or a charge
+follow the network certifier's fail cells, and pay for it: a factor `failPatterns bound j` on the count, or a charge
 under weights on the number of failures (`KraftWeights`). These checks are at the monitoring period of one placed
 window that `Proofs.NetworkCertifier.MonitoringPeriodCheckedExclusion` builds: the code `posL`, which rejects every run, the
 record format `bitFmt` of one connection of one cell with no data, under the one schedule `oneSched`, with the secret
@@ -55,7 +55,7 @@ The operator's ingress is whether the connection failed: it follows the fail pat
 registers the window at both secrets (`bit_registers`) and both meet the good event (`bit_good`).
 
 **The factor is met** (`MonitoringPeriodLeakFailsAtMost_factor_met`). Every premise of `MonitoringPeriodLeakFailsAtMost` holds there at
-one connection of cap 1 and at most one failure, and the two secrets are counted: against `#Θ · windowsCount = 1`
+one connection of bound 1 and at most one failure, and the two secrets are counted: against `#Θ · windowsCount = 1`
 the count fails, and the statement's factor there is 2 (`failsFactor_one`). So the count of `MonitoringPeriodLeakChecked`
 does not hold at an operator that follows the fail pattern, and no smaller factor does at this period. It drops no
 premise: it is a lemma about the factor, and no exclusion.
@@ -102,7 +102,7 @@ theorem failCount_unit_le (φ : Unit → Option ℕ) : failCount φ ≤ 1 := by
   unfold failCount
   exact (Finset.card_filter_le _ _).trans (by decide)
 
-/-- The connection's fail cell is below the cap 1: its lane has one cell. -/
+/-- The connection's fail cell is below the bound 1: its lane has one cell. -/
 theorem bit_failsBelow (z : Bool) : FailsBelow (fun _ : Unit => 1) (failCell oneSched (bitArr z)) :=
   failsBelow_of_cells_le oneSched (bitArr z) (fun _ => 1) fun _ => le_rfl
 
@@ -130,14 +130,14 @@ theorem bit_channel :
 
 /-! ## The failures' factor is met -/
 
-/-- One connection of cap 1 has one fail pattern at each number of failures it can have. -/
+/-- One connection of bound 1 has one fail pattern at each number of failures it can have. -/
 theorem failPatterns_unit (φ : Unit → Option ℕ) : failPatterns (fun _ : Unit => 1) (failCount φ) = 1 := by
   have h := failCount_unit_le φ
   generalize failCount φ = m at h
   rw [failPatterns_const, Fintype.card_unit, one_pow, mul_one]
   rcases (by omega : m = 0 ∨ m = 1) with rfl | rfl <;> rfl
 
-/-- The factor of `MonitoringPeriodLeakFailsAtMost` at one connection of cap 1 and at most one failure is 2. -/
+/-- The factor of `MonitoringPeriodLeakFailsAtMost` at one connection of bound 1 and at most one failure is 2. -/
 theorem failsFactor_one : ∑ i ∈ Finset.range (1 + 1), failPatterns (fun _ : Unit => 1) i = 2 :=
   (failPatterns_sum fun _ : Unit => 1).trans (by simp)
 
@@ -145,7 +145,7 @@ theorem failsFactor_one : ∑ i ∈ Finset.range (1 + 1), failPatterns (fun _ : 
 `recordingCode bitFmt`, and the operator whose ingress is whether the connection failed: the coins are a nonempty type
 and `δ = 0` is nonnegative; `Compiled.KS`, the commitment's binding, the window's placement, its check's pinning,
 `TrustedHost`, the read-back under the one registered parameter and the channel all hold; the network certifier
-registers its observations at both secrets; the two secrets, each with at most one failure below the cap 1 and a
+registers its observations at both secrets; the two secrets, each with at most one failure below the bound 1 and a
 window that meets its good event, are counted against `#Θ · windowsCount = 1`, which fails; and the factor of
 `MonitoringPeriodLeakFailsAtMost` there is 2. -/
 theorem MonitoringPeriodLeakFailsAtMost_factor_met :
@@ -196,7 +196,7 @@ theorem bit_charge (z : Bool) :
 
 /-- **`MonitoringPeriodLeakCharged`'s count fails at weights that sum to 2.** At `posL`, one window, the connection of `oneSched`
 and the operator whose ingress is whether the connection failed, at the weights `w_j = 1` and `T = 1`: the two secrets,
-each below the cap 1, charged at most `log2 1` (`bit_charge`) and with a window that meets its good event, are counted
+each below the bound 1, charged at most `log2 1` (`bit_charge`) and with a window that meets its good event, are counted
 against 1. -/
 theorem MonitoringPeriodLeakCharged_nontrivial :
     ¬ {z : Bool | z ∈ (Set.univ : Set Bool) ∧ FailsBelow (fun _ : Unit => 1) (failCell oneSched (bitArr z)) ∧

@@ -45,8 +45,9 @@ a registered parameter that holds `r`, `D` and the rule that gives the admission
 at the lengths rows.
 
 What a layout has to give is `LengthsRows.read_write`: the three fields of every connection come back from the rows
-it writes. No device's layout is modelled here (which link-window holds a connection's slot, and the slot's bytes):
-`laneRows`, which writes the lane records as they are, shows the laws hold together and is no device's.
+it writes. No device's layout is modelled here (which execution phase's transfer blocks hold a connection's slot,
+and the slot's bytes): `laneRows`, which writes the lane records as they are, shows the lengths layout's conditions
+hold together and is no device's.
 -/
 
 @[expose] public section
@@ -227,7 +228,7 @@ theorem readsBy : F.format.ReadsBy (fun θ ob => lanesView θ (F.read ob)) fun �
 
 end LengthsRows
 
-/-- The layout that writes the lane records as they are: every lengths layout's laws hold at it. -/
+/-- The layout that writes the lane records as they are: every lengths layout's condition holds at it. -/
 def laneRows (κ Cell : Type) : LengthsRows κ Cell (κ → LaneRecord Cell) where
   write _ x := x
   read x := x
