@@ -58,7 +58,7 @@ def test_no_configuration_states_a_shape_of_its_own():
     norm's epsilon, the QKV bias); and a served configuration whose model the slowdown calculator has a row for has that row's shape."""
     from verity.definitions.registry import b1
     served = (b1.B0_CONFIG, b1.B1_CONFIG, b1.SMOL360_CONFIG)
-    models = R.rho_models()
+    models = R.slowdown_models()
     constructed = []
     for name, (C, _) in R.configs().items():
         if any(C is s for s in served):
@@ -72,9 +72,9 @@ def test_no_configuration_states_a_shape_of_its_own():
         R.shape(models["kimi-k2"])
 
 
-def test_reading_rho_shadows_no_module_of_this_benchmark():
+def test_reading_the_slowdown_calculator_shadows_no_module_of_this_benchmark():
     """benchmarks/slowdown has a `run.py` of its own: reading its models leaves `run` this benchmark's."""
-    R.rho_models()
+    R.slowdown_models()
     import run
     assert Path(run.__file__).parent == Path(R.__file__).parents[1]
 
@@ -112,8 +112,8 @@ def test_smollm2_layer():
     assert m.products == H * (C["QKV"] + C["NH"] * C["D"] + C["GU"]) + I * H
     assert (m.a_out, m.a_in, m.s_x) == (C["GU"], H, 681)
     assert m.activation_values == 16 * (3 * H + I) and m.excluded == {}
-    rho = run.rho_shapes("smollm2-135m", C)
-    row = rho["models.toml"]
+    shapes = run.slowdown_shapes("smollm2-135m", C)
+    row = shapes["models.toml"]
     assert (row["fanout"], row["legs"], row["layer_products"]) == (m.a_out, m.a_in, m.products)
     assert (row["derived_fanout"], row["derived_legs"]) == (m.a_out, m.a_in)
-    assert (rho["config"]["fanout"], rho["config"]["legs"], rho["config"]["layer_products"]) == (m.a_out, m.a_in, m.products)
+    assert (shapes["config"]["fanout"], shapes["config"]["legs"], shapes["config"]["layer_products"]) == (m.a_out, m.a_in, m.products)
