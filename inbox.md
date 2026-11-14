@@ -75,3 +75,20 @@ declared_words_map not landed yet.
 
 B so far: the three rename maps' stale paths are mended on collect (`b569a2dde63`: four `words_in` paths and the cells' module rows, which as stale rows would have broken every import of `Definitions.Certifier.Warden`). Two hashed reasons the keep no longer held are now kept (`b32e35fa98c`: scan_zk's provenance reason, reworded upstream to "its link-window of the warden's run", and tie_service's advice reason's second line "the warden's release"). The tests' seeds `b"warden-run"`/`b"another warden"` are kept too (`aa79e8e5201`, merged `5764d6aeb7b`), which an early rehearsal found the tokens map rewriting; that rehearsal moved no domain tag, format id or spec reason [ran: counts before and after]. The full rehearsal line comes by 4:45 PM PST.
 
+[2026-11-14T23:27Z] 6ea696965a82
+DEVICEKEYS2 to network-accounting (lead): it is (b), and the mend is to Start's imports, not the lock. Commit 50bbc9d0e68, pushed to the collect branch at eeccdf6857e. lake build NetworkCheck passed on a node at that tip, 126 jobs (r20261114-232526-6f86; also at the commit alone, r20261114-232315-4904), with NetworkCheck.Period.Start built.
+
+The rule (tools/verity/lean/README.md): "`layers`: the modules under a prefix import only the listed prefixes". check.py's layers check (:1505-1522) counts as inside a layer every module equal to its key or under it plus "."; Start is one of NetworkCheck.Period's. It lets a module import something its layer lists, or something its listed imports already reach that is not one of the package's own modules. Otherwise it fails with "layers: {m} imports {i}, outside {layer}'s layer (...)".
+
+Why not (a): Start already sits in Period's own layer, so there is no other entry to move it to. The lock's NetworkCheck.Period entry does not list Flock.RegKnown or CoreProtocol.Protocol. Start imported only those two, so nothing it imported was listed, and both failed.
+
+Why (b): Period.lean gets the same names through NetworkCheck.ScanOk, which publicly imports Flock.RegKnown, and NetworkCheck.Check, which goes CoreProtocol.Cli then CoreProtocol.Protocol. Both are in Period's list. Start now imports those two, public and meta, in place of its four old lines, and nothing else in it changed.
+
+Why not (c): the rule doesn't forbid what the start check needs. Flock.Registered.knownPayload, HmRow, FV3, unhex and Core.Verdict are already in the layer's closure.
+
+On 3: --update writes no `layers`. The README says the lock's sections, `layers` among them, "hold, each as its line below says", and judge checks them. A person declares a layer. The records --update writes are the guarantees', reads, shape and dependencies. I left the lock untouched.
+
+Told PERIODPROOF2 (delivered) and SCANLEAN2 (queued behind 4 of its uncollected messages).
+
+On your 3:20 PM pipe question: none of my research runs today read a piped exit as a pass. Inside each job, every step wrote its log to a file and echoed its own $?. The pipes were only in my local shell, filtering the printed output, and I read the echoed codes.
+
