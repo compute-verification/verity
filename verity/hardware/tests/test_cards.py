@@ -96,17 +96,25 @@ def test_a_measurement_cites_the_run_that_measured_it() -> None:
 #: invented one.
 MEASURED_ONLY = {"gpu": {"store.l15", "store.l1i", "store.l0i", "store.const_l0"}, "host": {"disk.read"}}
 
+#: The entries one card of a kind holds alone, each with its card: a ceiling only that card's protocol states, built on
+#: its MEASURED_ONLY entries, so no other card of the kind has what it sums.
+ONE_CARD = {"gpu": {"store.chip": "rtx-pro-6000-server"}}
+
 
 @pytest.mark.parametrize("kind", CARD_KINDS)
 def test_one_schema_across_the_cards_of_a_kind(kind: str) -> None:
-    """A reader can take any number from any card of a kind by the same key, the entries of `MEASURED_ONLY` apart: a
-    card that has one marks it a measurement, and some card has each."""
-    apart = MEASURED_ONLY.get(kind, set())
+    """A reader can take any number from any card of a kind by the same key, the entries of `MEASURED_ONLY` and
+    `ONE_CARD` apart: a card that has one of the first marks it a measurement, and some card has each; one of the second
+    is in its card alone."""
+    alone = ONE_CARD.get(kind, {})
+    apart = MEASURED_ONLY.get(kind, set()) | set(alone)
     keys = {sku: sorted(set(entries(load_card(sku))) - apart) for sku in skus(kind)}
     assert len({tuple(k) for k in keys.values()}) == 1, keys
-    for key in apart:
+    for key in MEASURED_ONLY.get(kind, set()):
         marks = {card[key]["mark"] for card in map(entries, map(load_card, skus(kind))) if key in card}
         assert marks == {"measurement"}, (key, marks)
+    for key, sku in alone.items():
+        assert [s for s in skus(kind) if key in entries(load_card(s))] == [sku], key
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
