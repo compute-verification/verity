@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.Wait
 public import Proofs.Flock.Claims.KS.Fork
 public import Definitions.Claims
+public import Proofs.Flock.Claims.KOf
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -54,7 +55,7 @@ table (`Flock.Splits`) wherever the verifier accepts some run (`Flock.NoAcc`) (`
   `C(x)`, such that at every tape with acceptance `ε > 0`, `ε · Pr[k accepted runs don't extract] ≤
   ε_table + escapes(ω) + (N₀/(e·k))·ε`. This is the old soundness's per-tape bound (`joint_le_accB`) at the deployed
   verifier, on the opened columns, with each finder's escape tied to the verifier's calls.
-* **Assembly**: `ERep_trunc` at `rate = N₀/(e·k) ≤ 1/4` (`Flock.rate_le`, from `k = ⌈4N₀/e⌉`) gives
+* **Assembly**: `ERep_trunc` at `rate = N₀/(e·k) ≤ 1/4` (`Flock.rate_le`, from `k = ⌈4N₀/e₋⌉`) gives
   `4·(ε_table + 𝔼[escapes]) + 2^{−m′} + 2k/K + e^{−k/8}`, and `Escapes.le` puts `4·𝔼[escapes]` under `√(γ·Pr[B])`.
 -/
 
@@ -137,12 +138,12 @@ def OneWait (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
         D.εtable x + e.term ω + D.N₀ x / (Real.exp 1 * D.k x) * accPr H D.V P x ω
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-/-- `E^rep`'s relative rate `N₀/(e·k)` is at most `1/4`, as `k = ⌈4·N₀/e⌉`. -/
+/-- `E^rep`'s relative rate `N₀/(e·k)` is at most `1/4`, as `k ≥ 4·N₀/e` (`le_kOfReal`). -/
 theorem rate_le (D : Deploy Coin Col T) (x : Msg) (hk : 0 < D.k x) : D.N₀ x / (Real.exp 1 * D.k x) ≤ 1 / 4 := by
   have hk' : (0 : ℝ) < D.k x := by exact_mod_cast hk
   have he := Real.exp_pos 1
   rw [div_le_iff₀ (mul_pos he hk')]
-  have hc : 4 * D.N₀ x / Real.exp 1 ≤ D.k x := Nat.le_ceil _
+  have hc : 4 * D.N₀ x / Real.exp 1 ≤ D.k x := le_kOfReal _
   rw [div_le_iff₀ he] at hc
   linarith
 

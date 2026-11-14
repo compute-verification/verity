@@ -371,7 +371,7 @@ table's error, `N₀`, the weight `C`, the outer verifier's rounds, `E^rep`'s wa
 messages before the coins (`leaves`), and of its answers to one sample of the coins (`coinLeaves`). -/
 structure Nums where
   εtable : ℝ
-  N₀ : ℝ
+  N₀ : ℚ
   weight : ℝ
   rounds : ℕ
   waits : ℕ
@@ -379,8 +379,8 @@ structure Nums where
   leaves : ℕ
   coinLeaves : ℕ
 
-/-- `E^rep`'s accepted reruns per wait, `k = ⌈4·N₀/e⌉`, as `Flock.Deploy.k`. -/
-noncomputable def Nums.k (n : Nums) : ℕ := ⌈4 * n.N₀ / Real.exp 1⌉₊
+/-- `E^rep`'s accepted reruns per wait, `k = ⌈4·N₀/e₋⌉` (`Flock.kOf`), as `Flock.Deploy.k`. -/
+def Nums.k (n : Nums) : ℕ := Flock.kOf n.N₀
 
 /-- The outer session's knowledge error, as `Flock.κ`: `4·ε_table + 2^{−m′} + 2k/K + e^{−k/8}`. -/
 noncomputable def Nums.κ (n : Nums) : ℝ :=

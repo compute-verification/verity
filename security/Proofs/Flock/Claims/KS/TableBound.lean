@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.KOf
 public import Proofs.Flock.Claims.KS.ConflictTied
 public import Proofs.Flock.Claims.KS.Trace
 public import Proofs.Flock.Claims.Scope.Deployed
@@ -186,7 +187,7 @@ theorem kFits_all (zk : Bool) (m : ℕ) : (level0 zk m).d ≤ ((wSched zk m).lev
     exact Nat.zero_le _
 
 theorem tableWeight_ge (zk : Bool) (st : Stmt) :
-    2 + 4 * 2 ^ ((wSched zk st.m).levels.headD default).logLen / Real.exp 1 ≤ tableWeight zk st := by
+    2 + 4 * 2 ^ ((wSched zk st.m).levels.headD default).logLen / 2.7182818283 ≤ tableWeight zk st := by
   have h2 : ∀ sch N, (2 : ℝ) ≤ Claims.Flock.Numbers.weightNat sch N := fun sch N => by
     unfold Claims.Flock.Numbers.weightNat
     exact_mod_cast Nat.le_add_left 2 _
@@ -216,14 +217,14 @@ end Gen
 theorem weight_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ weight zk x :=
   Gen.weight_nonneg (S := S₀) (zk := zk) (x := x)
 
-/-- **A table's weight covers its length's share of `k`**: `2 + 4·2^{d₀}/e`, its schedule's level 0 as long as the
+/-- **A table's weight covers its length's share of `k`**: `2 + 4·2^{d₀}/e₋`, its schedule's level 0 as long as the
 verifier's (`kFits_all`). -/
-theorem tableLen_le_weight (zk : Bool) (st : Stmt) : 4 * tableLen zk st / Real.exp 1 + 2 ≤ tableWeight zk st := by
+theorem tableLen_le_weight (zk : Bool) (st : Stmt) : 4 * tableLen zk st / 2.7182818283 + 2 ≤ tableWeight zk st := by
   have hw := tableWeight_ge zk st
   have hpow : tableLen zk st ≤ 2 ^ ((wSched zk st.m).levels.headD default).logLen :=
     pow_le_pow_right₀ (by norm_num) (kFits_all zk st.m)
-  have hdiv : 4 * tableLen zk st / Real.exp 1 ≤ 4 * 2 ^ ((wSched zk st.m).levels.headD default).logLen /
-      Real.exp 1 := by
+  have hdiv : 4 * tableLen zk st / 2.7182818283 ≤ 4 * 2 ^ ((wSched zk st.m).levels.headD default).logLen /
+      2.7182818283 := by
     gcongr
   linarith
 
@@ -233,7 +234,7 @@ theorem tableLen_nonneg (zk : Bool) (st : Stmt) : 0 ≤ tableLen zk st := by
 
 /-- **Tables' weights cover their lengths' share of `k`**, and `2` more each (`tableLen_le_weight`). -/
 theorem lens_le_weights (zk : Bool) (l : List (SessionSpec × Stmt)) :
-    4 * (l.map fun p => tableLen zk p.2).sum / Real.exp 1 + 2 * l.length ≤ (l.map fun p => tableWeight zk p.2).sum ∧
+    4 * (l.map fun p => tableLen zk p.2).sum / 2.7182818283 + 2 * l.length ≤ (l.map fun p => tableWeight zk p.2).sum ∧
       0 ≤ (l.map fun p => tableLen zk p.2).sum := by
   induction l with
   | nil => simp
@@ -241,8 +242,8 @@ theorem lens_le_weights (zk : Bool) (l : List (SessionSpec × Stmt)) :
     simp only [List.map_cons, List.sum_cons, List.length_cons, Nat.cast_add, Nat.cast_one]
     have h1 := tableLen_le_weight zk a.2
     have h2 := tableLen_nonneg zk a.2
-    have e : 4 * (tableLen zk a.2 + (l.map fun p => tableLen zk p.2).sum) / Real.exp 1 =
-        4 * tableLen zk a.2 / Real.exp 1 + 4 * (l.map fun p => tableLen zk p.2).sum / Real.exp 1 := by ring
+    have e : 4 * (tableLen zk a.2 + (l.map fun p => tableLen zk p.2).sum) / 2.7182818283 =
+        4 * tableLen zk a.2 / 2.7182818283 + 4 * (l.map fun p => tableLen zk p.2).sum / 2.7182818283 := by ring
     rw [e]
     constructor <;> linarith [ih.1, ih.2]
 
@@ -261,32 +262,31 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **`k ≤ weight`** at every statement: `k = ⌈4N₀/e⌉ < 4N₀/e + 1`, and each table's weight holds its length's share
+/-- **`k ≤ weight`** at every statement: `k = ⌈4N₀/e₋⌉ < 4N₀/e₋ + 1` (`kOfReal_lt`), and each table's weight holds its length's share
 and `2` more (`lens_le_weights`). -/
-theorem k_le_weight (zk : Bool) (x : Claims.Msg) : (⌈4 * N₀ zk x / Real.exp 1⌉₊ : ℝ) ≤ weight zk x := by
-  have he := Real.exp_pos 1
+theorem k_le_weight (zk : Bool) (x : Claims.Msg) : (Claims.Flock.kOfReal (N₀ zk x) : ℝ) ≤ weight zk x := by
   unfold N₀ weight
   cases ht : tables zk x with
   | nil => simp
   | cons p rest =>
     obtain ⟨h1, h2⟩ := lens_le_weights zk (p :: rest)
-    have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) h2) he.le)
+    have hceil := Claims.Flock.kOfReal_lt h2
     simp only [List.length_cons, Nat.cast_add, Nat.cast_one] at h1
     have : (0 : ℝ) ≤ rest.length := Nat.cast_nonneg _
     linarith
 
 end Gen
 
-/-- **`k ≤ weight`** at every statement: `k = ⌈4N₀/e⌉ < 4N₀/e + 1`, and each table's weight holds its length's share
+/-- **`k ≤ weight`** at every statement: `k = ⌈4N₀/e₋⌉ < 4N₀/e₋ + 1` (`kOfReal_lt`), and each table's weight holds its length's share
 and `2` more (`lens_le_weights`). -/
-theorem k_le_weight (zk : Bool) (x : Claims.Msg) : (⌈4 * N₀ zk x / Real.exp 1⌉₊ : ℝ) ≤ weight zk x :=
+theorem k_le_weight (zk : Bool) (x : Claims.Msg) : (Claims.Flock.kOfReal (N₀ zk x) : ℝ) ≤ weight zk x :=
   Gen.k_le_weight (S := S₀) (zk := zk) (x := x)
 
 theorem plain_k_le (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     ((deployPlain rel).k x : ℝ) ≤ 2 * (deployPlain rel).weight x := by
   have := k_le_weight false x
   have := weight_nonneg false x
-  show (⌈4 * N₀ false x / Real.exp 1⌉₊ : ℝ) ≤ 2 * weight false x
+  show (Claims.Flock.kOfReal (N₀ false x) : ℝ) ≤ 2 * weight false x
   linarith
 
 namespace Gen
@@ -297,7 +297,7 @@ theorem zk_k_le (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     ((deployZk rel).k x : ℝ) ≤ 2 * (deployZk rel).weight x := by
   have := k_le_weight true x
   have := weight_nonneg true x
-  show (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ) ≤ 2 * weight true x
+  show (Claims.Flock.kOfReal (N₀ true x) : ℝ) ≤ 2 * weight true x
   linarith
 
 end Gen

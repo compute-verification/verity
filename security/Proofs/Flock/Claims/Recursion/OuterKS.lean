@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.KS
+public import Proofs.Flock.Claims.KOf
 public import Proofs.Flock.Claims.Recursion.CostExp
 public import Definitions.Claims.RecursionGeneric.Session
 
@@ -105,7 +106,7 @@ def SessionNums {Coin Col T : Type} (D : Deploy Coin) (DO : Flock.Deploy Coin Co
     DO.V.k ((D.vstar x ms).getD s []) = (D.nums x s).rounds ∧
       DO.waits ((D.vstar x ms).getD s []) = (D.nums x s).waits ∧
       DO.cap ((D.vstar x ms).getD s []) = (D.nums x s).cap ∧
-      DO.N₀ ((D.vstar x ms).getD s []) = (D.nums x s).N₀ ∧
+      DO.N₀ ((D.vstar x ms).getD s []) = ((D.nums x s).N₀ : ℝ) ∧
       DO.εtable ((D.vstar x ms).getD s []) = (D.nums x s).εtable ∧
       DO.weight ((D.vstar x ms).getD s []) = (D.nums x s).weight
 
@@ -396,7 +397,7 @@ theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
   change DO.weight (sessStmt H D I P x ω s r) = _ at hwt
   have hkk : DO.k (sessStmt H D I P x ω s r) = (D.nums x s).k := by
     unfold Flock.Deploy.k Nums.k
-    rw [hN₀]
+    rw [hN₀, Flock.kOf_eq]
   have hle : offO H D I DO P x ω s r + DO.V.k (sessStmt H D I P x ω s r) ≤ D.V.k x := hRd x s _
   unfold sessPrB
   split_ifs with hA

@@ -115,7 +115,7 @@ theorem κFAt_innerN₀ (x : Msg) : κFAt D x (D.innerN₀ x) = Claims.Sampling.
 
 omit [Fintype Coin] [Nonempty Coin] in
 theorem κFAt_eq (x : Msg) (n : ℝ) : κFAt D x n = 4 * D.εtable x + 2 ^ (-(D.innerWaits x : ℝ)) +
-    2 * (⌈4 * n / Real.exp 1⌉₊ : ℝ) / D.innerCap x + Real.exp (-(⌈4 * n / Real.exp 1⌉₊ : ℝ) / 8) := rfl
+    2 * (Claims.Flock.kOfReal n : ℝ) / D.innerCap x + Real.exp (-(Claims.Flock.kOfReal n : ℝ) / 8) := rfl
 
 omit [Fintype Coin] [Nonempty Coin] in
 theorem ofDeployAt_nPU (x : Msg) : (ofDeployAt D iroots n₀).nPU x = Claims.Sampling.nPU D x := rfl
@@ -230,7 +230,7 @@ theorem runs_ofDeployAt (H : Msg → Msg) (hruns : Claims.Sampling.SessionRunsTo
     rw [dite_eq_left hcard]
     exact congrArg r' (congrFun he i).symm
   obtain ⟨hw, hc, hN, he, hwt⟩ := hnum x u _ xS _ (hsess r fun _ _ _ => rfl).1
-  have hk : D.flock.k xS = ⌈4 * n₀ x u / Real.exp 1⌉₊ := by
+  have hk : D.flock.k xS = Claims.Flock.kOfReal (n₀ x u) := by
     unfold Claims.Flock.Deploy.k
     rw [hN]
   refine ⟨xS, P', ?_, ?_, ?_, hcard, fun r' hr' => ?_, fun r' hr' => ?_⟩

@@ -557,7 +557,7 @@ merged by round, with a term no smaller (`JointR`: `Claims.Escapes.mergeR`, `Cla
 deployed masked verifier is KS from `ZkLiveAccWJ` where some run accepts and `ExtendJ`
 (`FlockDeploy.KS.zk_KS_of_tableBoundJR`, `FlockDeploy.KS.zk_KS_of_liveAccWJ`). Every table's bound counted per
 round is a bound at each table, so the extractor at one table of a session (`Flock.ETable`), whose waits stop at
-`k_j = ⌈4·N_j/e⌉` accepted reruns with `N_j` that table's word's length alone, is KS at that table's own relation, at
+`k_j = ⌈4·N_j/e₋⌉` accepted reruns with `N_j` that table's word's length alone, is KS at that table's own relation, at
 the tables' errors summed (`KSTable`: `Claims.Flock.oneWait_le_table`, `Claims.Flock.KSTable_of_tableBoundJR`), and at
 an error for each table from each table's bound at it (`Claims.Flock.TableBoundEachR`,
 `Claims.Flock.tableBoundEachR_of_eachAccAtR`, `Claims.Flock.tableBoundEachR_of_extend`,

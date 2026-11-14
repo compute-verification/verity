@@ -53,7 +53,7 @@ import Proofs.Flock.Claims.KS.ZkXferW
 
 `Flock.KSTable` at the deployed masked record, its tables' words' lengths (`wordLenJ true`) and SHA-512, at each table's
 own error (`tableErrJ true`), with no premise (`zk_KSTable_untrim`): the extractor at one table of a session, whose
-waits stop at `k_j = ⌈4·N_j/e⌉` accepted reruns, is knowledge sound at that table's own relation, and its knowledge
+waits stop at `k_j = ⌈4·N_j/e₋⌉` accepted reruns, is knowledge sound at that table's own relation, and its knowledge
 error reads that table's error alone, not `ε_table`, the tables' errors summed.
 
 * **A table's own error** (`tableErrJ`, defined in `TableErrJ`) is at most `ε_table` (`tableErrJ_le_εtable`).
@@ -212,7 +212,7 @@ theorem kTable_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claim
       rw [hw, Nat.cast_pow, Nat.cast_ofNat]
       exact two_pow_le hd10
     have := Claims.Flock.Numbers.k_ge hN
-    unfold Claims.Flock.kTable
+    rw [Claims.Flock.kTable, Claims.Flock.kOf_natCast]
     omega
   · refine .inr (.inl ?_)
     have hge : (tables true x).length ≤ j := by
@@ -222,7 +222,7 @@ theorem kTable_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claim
       simp [wordLenJ, List.getElem?_eq_none hge]
     unfold Claims.Flock.kTable
     rw [h0]
-    simp
+    simp [Claims.Flock.kOf]
 
 /-- **Masked knowledge soundness at each table of a session, at the untrimmed instance**, at SHA-512 at the deployed
 relation, with no premise: `Flock.KSTable` at the tables' words' lengths and each table's own error

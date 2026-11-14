@@ -26,7 +26,7 @@ the gates of a sample of one finder a gate, with a limit on each finder's furthe
 
 * T: the calls of SHA-512 in a run, the prover's and the verifier's together, each call on a whole message. T bounds
   every run, not the mean. B is two runs, so its calls are at most 2T.
-* k: a session's accepted reruns a wait, ⌈4·N₀/e⌉ at a session whose level-0 codewords have N₀ symbols in all
+* k: a session's accepted reruns a wait, ⌈4·N₀/e₋⌉ (e₋ = 2.7182818283) at a session whose level-0 codewords have N₀ symbols in all
   (`queries`). The extractor waits 210 times a session (`WAITS`), so e_s bounds the expected reruns of one session's
   extraction.
 * N_s (`sessions`): the sessions of a sampled replay block's sample, in the mean. A design that states it is

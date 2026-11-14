@@ -45,7 +45,7 @@ the terms' tighter bounds give `λ₂ ≥ 135.7` (`lamLin2_deployedB_ge_tight`; 
 `v ≤ 2^55`): each term is at least `138.3`, and `log₂ 6 ≤ 2.6` (`6^5 ≤ 2^13`). The bounds are exact rational and real
 inequalities:
 
-* `k_I`, `k_O ≤ 2468800000` (`k_le_200`: `⌈4·N₀/e⌉` at `N₀ ≤ 200·2^23`, and `4·200·2^23/e < 2468797139`), so
+* `k_I`, `k_O ≤ 2468800000` (`k_le_200`: `⌈4·N₀/e₋⌉` at `N₀ ≤ 200·2^23`, and `4·200·2^23/e₋ < 2468797139`), so
   `N_I ≤ 1 + 210·2468800000` and `c_S ≤ 4 + 420·2^16·2468800000 + 3·2^56 ≤ 2^58` at `|S(x_I)| ≤ 2^56`, `n ≤ 2^55`
   and `v ≤ 2^55`;
 * the inner verifier's rounds `≤ 880002` (`2 + 4400·200`);
@@ -86,15 +86,9 @@ theorem logb_six_le_tight : Real.logb 2 6 ≤ 2.6 := by
   have e : ((13 : ℕ) : ℝ) / ((5 : ℕ) : ℝ) = 2.6 := by norm_num
   linarith
 
-/-- **`⌈4·N₀/e⌉ ≤ 2468800000`** at `N₀ ≤ 200·2^23`: `4·200·2^23/e < 2468797139`. -/
-theorem k_le_200 {N : ℝ} (hN : N ≤ 200 * 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 2468800000 := by
-  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
-  have hlo := Real.exp_one_gt_d9
-  have h2 : (200 : ℝ) * 2 ^ 23 = 1677721600 := by norm_num
-  refine Nat.ceil_le.2 ?_
-  rw [div_le_iff₀ he0]
-  push_cast
-  linarith
+/-- **`⌈4·N₀/e₋⌉ ≤ 2468800000`** at `N₀ ≤ 200·2^23`: `4·200·2^23/e₋ < 2468797139`. -/
+theorem k_le_200 {N : ℝ} (hN : N ≤ 200 * 2 ^ 23) : Claims.Flock.kOfReal N ≤ 2468800000 :=
+  Claims.Flock.kOfReal_le (by norm_num at hN ⊢; linarith)
 
 /-- **`λ₂ ≥ 135.7` from its numbers**: `lamLin2`'s six terms, over the numbers they read as in `lamLin2_core`, each at
 least `138.3`, at the inner verifier's rounds `VI ≤ 880002`, the inner and each part's `E^rep` reruns per wait at most
@@ -318,7 +312,7 @@ theorem lamLin2_deployed_ge_dep_tight (rel : _root_.Flock.Readable.Parsed → _r
   · obtain ⟨i, spec', sts', hp⟩ := hO j j.isLt
     obtain ⟨-, hhi⟩ := N₀O_le hp
     have hsz' : (sts'.size : ℝ) ≤ 200 := by exact_mod_cast hp.size_le
-    exact k_le_200 (N := N₀O (staged b.st x (pick b.st x j) j)) (hhi.trans (by gcongr))
+    exact (numsOf_k _).le.trans (k_le_200 (N := N₀O (staged b.st x (pick b.st x j) j)) (hhi.trans (by gcongr)))
 
 /-- **Route 2C's `λ₂ ≥ 135.7` at the deployed brings**: `lamLin2_deployedB_ge`'s statement, at the same hypotheses and
 the call bound `v = 2^55`, with `135.7` for `100`. -/

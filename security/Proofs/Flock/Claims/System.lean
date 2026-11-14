@@ -3,6 +3,7 @@ module
 public import Proofs.Core.ProofSystem
 public import Proofs.Flock.Claims.ERep
 public import Proofs.Flock.Claims.Recursion.Wald
+public import Proofs.Flock.Claims.KOf
 
 /-!
 # Flock as a proof system
@@ -54,15 +55,23 @@ noncomputable def system (D : Deploy Coin Col T) (decode : List (ℕ × Col) →
   stops := stops
   len := len
 
-/-- **A statement's public shape**: the numbers Flock's errors read, at its leaves and coin leaves. -/
-noncomputable def shape (D : Deploy Coin Col T) (leaves coinLeaves : Msg → ℕ) (x : Msg) : Recursion.Nums :=
-  ⟨D.εtable x, D.N₀ x, D.weight x, D.V.k x, D.waits x, D.cap x, leaves x, coinLeaves x⟩
+/-- **A statement's public shape**: the numbers Flock's errors read, at its `N₀` on `ℚ` (`n₀`), leaves and coin
+leaves. -/
+noncomputable def shape (D : Deploy Coin Col T) (n₀ : Msg → ℚ) (leaves coinLeaves : Msg → ℕ) (x : Msg) :
+    Recursion.Nums :=
+  ⟨D.εtable x, n₀ x, D.weight x, D.V.k x, D.waits x, D.cap x, leaves x, coinLeaves x⟩
+
+/-- The shape's `k` is the record's where `n₀` is its `N₀`. -/
+theorem shape_k (D : Deploy Coin Col T) {n₀ : Msg → ℚ} (hn₀ : ∀ x, (n₀ x : ℝ) = D.N₀ x) (leaves coinLeaves : Msg → ℕ)
+    (x : Msg) : (shape D n₀ leaves coinLeaves x).k = D.k x := by
+  show kOf (n₀ x) = kOfReal (D.N₀ x)
+  rw [kOf_eq, hn₀]
 
 /-- **Masked Flock as a zero-knowledge proof system**: `system` at the masked record, with its masked prover over the
 `Hello` round and `V`'s; simulators `Sim t` at each attempt budget wherever `Hides` holds, at the errors Flock's `--zk`
 zero knowledge has, `Nums.εzk` and `4t·3^t`; and each statement's shape. -/
 noncomputable def zkSystem (D : ZkDeploy Coin Col T) (decode : List (ℕ × Col) → List T)
-    (stops : (Msg → Msg) → Msg → List Coin → Bool) (len : Msg → ℕ → ℕ) (leaves coinLeaves : Msg → ℕ)
+    (stops : (Msg → Msg) → Msg → List Coin → Bool) (len : Msg → ℕ → ℕ) (n₀ : Msg → ℚ) (leaves coinLeaves : Msg → ℕ)
     (Sim : ℕ → Simulator) (Hides : (Msg → Msg) → ℝ≥0 → Prop) : ZkProofSystem Coin Wit where
   toProofSystem := system D.toDeploy decode stops len
   kZK x := D.V.k x + 1
@@ -70,11 +79,11 @@ noncomputable def zkSystem (D : ZkDeploy Coin Col T) (decode : List (ℕ × Col)
   Rest _ := D.Rest
   Pz w _ := D.prover w
   Sim := Sim
-  εzk t δ₁ x := (shape D.toDeploy leaves coinLeaves x).εzk t δ₁
+  εzk t δ₁ x := (shape D.toDeploy n₀ leaves coinLeaves x).εzk t δ₁
   γzk t _ := 4 * t * 3 ^ t
   Hides := Hides
   Shape := Recursion.Nums
-  shape := shape D.toDeploy leaves coinLeaves
+  shape := shape D.toDeploy n₀ leaves coinLeaves
   CS n S := Fin n.waits → Fin n.cap → S
   κS := Recursion.Nums.κ
   wS n := [n.γ]
@@ -142,18 +151,30 @@ theorem system_scopeMatches_iff : (system D decode stops len).ScopeMatches ↔ S
   Iff.rfl
 
 /-- **Masked Flock's errors are its shape's**: its extractor's coins, `κ`, `γ`, reruns and simulation errors are
-functions of the statement's `Nums`. -/
-theorem zkSystem_byShape (D : ZkDeploy Coin Col T) (leaves coinLeaves : Msg → ℕ) (Sim : ℕ → Simulator)
-    (Hides : (Msg → Msg) → ℝ≥0 → Prop) : (zkSystem D decode stops len leaves coinLeaves Sim Hides).ByShape :=
-  fun _ => ⟨fun _ => rfl, le_rfl, .cons le_rfl .nil, le_rfl, le_rfl, fun _ _ => le_rfl, fun _ => le_rfl⟩
+functions of the statement's `Nums`, where `n₀` is its `N₀`. -/
+theorem zkSystem_byShape (D : ZkDeploy Coin Col T) {n₀ : Msg → ℚ} (hn₀ : ∀ x, (n₀ x : ℝ) = D.N₀ x)
+    (leaves coinLeaves : Msg → ℕ) (Sim : ℕ → Simulator) (Hides : (Msg → Msg) → ℝ≥0 → Prop) :
+    (zkSystem D decode stops len n₀ leaves coinLeaves Sim Hides).ByShape := by
+  intro x
+  have hk := shape_k D.toDeploy hn₀ leaves coinLeaves x
+  refine ⟨fun _ => rfl, ?_, .cons le_rfl .nil, ?_, le_rfl, fun _ _ => le_rfl, fun _ => le_rfl⟩
+  · show κ D.toDeploy x ≤ (shape D.toDeploy n₀ leaves coinLeaves x).κ
+    refine le_of_eq ?_
+    unfold κ Recursion.Nums.κ
+    rw [hk]
+    rfl
+  · show 1 + D.waits x * D.toDeploy.k x ≤
+      1 + (shape D.toDeploy n₀ leaves coinLeaves x).waits * (shape D.toDeploy n₀ leaves coinLeaves x).k
+    rw [hk]
+    exact le_rfl
 
 /-- **Masked Flock's zero knowledge is `Flock.ZK`** at each attempt budget's simulator and errors, wherever the
 commitments hide. -/
-theorem zkSystem_zk_iff (H : Msg → Msg) (D : ZkDeploy Coin Col T) (leaves coinLeaves : Msg → ℕ)
+theorem zkSystem_zk_iff (H : Msg → Msg) (D : ZkDeploy Coin Col T) (n₀ : Msg → ℚ) (leaves coinLeaves : Msg → ℕ)
     (Sim : ℕ → Simulator) (Hides : (Msg → Msg) → ℝ≥0 → Prop) (hzk : D.zk = true) :
-    (zkSystem D decode stops len leaves coinLeaves Sim Hides).ZK H ↔
+    (zkSystem D decode stops len n₀ leaves coinLeaves Sim Hides).ZK H ↔
       ∀ t, 0 < t → ∀ δ₁ : ℝ≥0, Hides H δ₁ →
-        ZK H { D with S := Sim t } (fun x => (shape D.toDeploy leaves coinLeaves x).εzk t δ₁)
+        ZK H { D with S := Sim t } (fun x => (shape D.toDeploy n₀ leaves coinLeaves x).εzk t δ₁)
           (fun _ => 4 * t * 3 ^ t) := by
   constructor
   · intro h t ht δ₁ hδ

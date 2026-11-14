@@ -61,11 +61,11 @@ theorem ρs_compiledTrunc_le (x : Claims.Msg) :
   Claims.SamplingGeneric.maxBelowN_le fun _ _ => le_rfl
 
 /-- **Each session's knowledge error at the truncation**: `κ_s ≤ t·2^{−203} + 2^{−210} + 2k/K₀ + 2^{−250}` where the
-statement's sessions set up at most `t` tables at `N₀ ≥ 2^10`, `k = ⌈4N₀/e⌉`: `κ_F`'s terms at the record, as
+statement's sessions set up at most `t` tables at `N₀ ≥ 2^10`, `k = ⌈4N₀/e₋⌉`: `κ_F`'s terms at the record, as
 Flock's `κ` at a truncation `K₀` is bounded, at `ε_table = t·2^{−205}`. -/
 theorem κs_compiledTrunc_le (x : Claims.Msg) (hN : 2 ^ 10 ≤ c.innerN₀ x) :
     (compiledTrunc K₀ c iroots).κs x ≤ (c.tables x : ℝ) * 2 ^ (-(203 : ℝ)) + 2 ^ (-(210 : ℝ)) +
-      2 * (⌈4 * c.innerN₀ x / Real.exp 1⌉₊ : ℝ) / K₀ + 2 ^ (-(250 : ℝ)) := by
+      2 * (Claims.Flock.kOfReal (c.innerN₀ x) : ℝ) / K₀ + 2 ^ (-(250 : ℝ)) := by
   have hk := Claims.Flock.Numbers.exp_neg_k_le (Claims.Flock.Numbers.k_ge hN)
   have h4 : 4 * ((c.tables x : ℝ) * 2 ^ (-(205 : ℝ))) = (c.tables x : ℝ) * 2 ^ (-(203 : ℝ)) := by
     have : (2 : ℝ) ^ (-(203 : ℝ)) = 4 * 2 ^ (-(205 : ℝ)) := by
@@ -75,8 +75,8 @@ theorem κs_compiledTrunc_le (x : Claims.Msg) (hN : 2 ^ 10 ≤ c.innerN₀ x) :
     unfold Claims.Flock.Numbers.waits; norm_num
   refine Claims.SamplingGeneric.maxBelow_le (by positivity) fun u _ => ?_
   have hb : (compiledTrunc K₀ c iroots).κb x u = 4 * ((c.tables x : ℝ) * 2 ^ (-(205 : ℝ))) +
-      2 ^ (-(Claims.Flock.Numbers.waits : ℝ)) + 2 * (⌈4 * c.innerN₀ x / Real.exp 1⌉₊ : ℝ) / K₀ +
-      Real.exp (-(⌈4 * c.innerN₀ x / Real.exp 1⌉₊ : ℝ) / 8) := rfl
+      2 ^ (-(Claims.Flock.Numbers.waits : ℝ)) + 2 * (Claims.Flock.kOfReal (c.innerN₀ x) : ℝ) / K₀ +
+      Real.exp (-(Claims.Flock.kOfReal (c.innerN₀ x) : ℝ) / 8) := rfl
   rw [hb, h4, hw]
   linarith
 

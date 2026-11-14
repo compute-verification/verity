@@ -73,7 +73,7 @@ record of the deployed relation, at each table's own word length (`FlockDeploy.K
 statement and every prover, the probability that the verifier accepts the session and the extractor at table `j`
 (`Claims.Flock.ETable`) recovers no witness of the statement the record's `table` gives at `j` (`Claims.Flock.RTable`)
 is at most `κ_j(x) + √(γ(x)·Pr[B outputs a collision])`, with `κ_j` the knowledge error at table `j`
-(`Claims.Flock.κTable`), which reads table `j`'s error and its `k_j = ⌈4·N_j/e⌉` accepted reruns a wait, `γ` the
+(`Claims.Flock.κTable`), which reads table `j`'s error and its `k_j = ⌈4·N_j/e₋⌉` accepted reruns a wait, `γ` the
 record's, and `B` the claim's collision finder built from the prover. It takes no hypothesis.
 
 What it does not say:

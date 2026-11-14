@@ -111,15 +111,9 @@ is applied at. -/
 theorem cast_pow_le_two_pow {a q N : ℕ} (h : a ^ q ≤ 2 ^ N) : (a : ℝ) ^ q ≤ (2 : ℝ) ^ N := by
   exact_mod_cast h
 
-/-- **`⌈4·N₀/e⌉ ≤ 12343986`** at `N₀ ≤ 2^23`, one table's: `4·2^23/e < 12343985.7`. -/
-theorem k_le_one {N : ℝ} (hN : N ≤ 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 12343986 := by
-  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
-  have hlo := Real.exp_one_gt_d9
-  have h2 : (2 : ℝ) ^ 23 = 8388608 := by norm_num
-  refine Nat.ceil_le.2 ?_
-  rw [div_le_iff₀ he0]
-  push_cast
-  linarith
+/-- **`⌈4·N₀/e₋⌉ ≤ 12343986`** at `N₀ ≤ 2^23`, one table's: `4·2^23/e₋ < 12343985.7`. -/
+theorem k_le_one {N : ℝ} (hN : N ≤ 2 ^ 23) : Claims.Flock.kOfReal N ≤ 12343986 :=
+  Claims.Flock.kOfReal_le (by norm_num at hN ⊢; linarith)
 
 /-- **`κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` from their numbers**: `κ` and `epsLin2`'s five terms, over the numbers
 they read as in `lamLin2_core_tight`, at the inner verifier's rounds `VI ≤ 4402`, the inner and each part's `E^rep`
@@ -334,7 +328,7 @@ theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
   · obtain ⟨i, spec', sts', hp, hp1⟩ := hO j j.isLt
     obtain ⟨-, hhi⟩ := N₀O_le hp
     rw [hp1, Nat.cast_one, one_mul] at hhi
-    exact k_le_one (N := N₀O (staged b.st x (pick b.st x j) j)) hhi
+    exact (numsOf_k _).le.trans (k_le_one (N := N₀O (staged b.st x (pick b.st x j) j)) hhi)
 
 /-- **The deployment's sizes at a statement `x`**, `kappa_eps_deployed`'s side conditions on `x`: its inner statement
 is one plain table, each V\* part it stages is one `--zk` table, and its inner setup has at most `2^32` calls. The

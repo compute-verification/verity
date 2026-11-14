@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.KOf
 public import Proofs.Flock.RecGeneric.AtFlockCompiled
 public import Proofs.Flock.Claims.Recursion.DeploySessions
 public import Proofs.Flock.Claims.Recursion.BoundDeploy
@@ -61,7 +62,7 @@ theorem ofRec_bounded (H : Msg → Msg) (hN : SessionNums (D.record IV) DO) (hε
       (IV.k (Claims.Recursion.xI (D.record IV) x) + (D.record IV).kS x))).getD s []) =
       ((D.record IV).nums x s).k := by
     unfold Claims.Flock.Deploy.k Nums.k
-    rw [hN₀]
+    rw [hN₀, Claims.Flock.kOf_eq]
   refine ⟨le_of_eq ?_, le_of_eq ?_⟩
   · show Claims.Flock.κ DO (((D.record IV).vstar x ((run H P (D.record IV).V x ω r).msgs.take
       (IV.k (Claims.Recursion.xI (D.record IV) x) + (D.record IV).kS x))).getD s []) = ((D.record IV).nums x s).κ

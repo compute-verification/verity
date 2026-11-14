@@ -330,6 +330,12 @@ noncomputable def εtableO (x : Claims.Msg) : ℝ := ((tablesO x).map fun p => t
 `FlockDeploy.N₀ true` sums them: table 0's `2^{d₀}` at one table. -/
 noncomputable def N₀O (x : Claims.Msg) : ℝ := ((tablesO x).map fun p => tableLen true p.2).sum
 
+/-- **`N₀` on `ℚ`**, as an outer session's numbers carry it (`Claims.Recursion.Nums`): `N₀O`'s sum (`N₀Oq_cast`). -/
+noncomputable def N₀Oq (x : Claims.Msg) : ℚ := ((tablesO x).map fun p => (2 : ℚ) ^ (Claims.Flock.zkLevel0 p.2.m).d).sum
+
+theorem N₀Oq_cast (x : Claims.Msg) : (N₀Oq x : ℝ) = N₀O x := by
+  simp [N₀Oq, N₀O, tableLen, Rat.cast_list_sum, List.map_map, Function.comp_def]
+
 /-- **Table `j`'s word's length**: its masked level-0 codeword length `2^d`; `0` past the statement's tables. -/
 def wordLenJO (x : Claims.Msg) (j : ℕ) : ℕ :=
   match (tablesO x)[j]? with

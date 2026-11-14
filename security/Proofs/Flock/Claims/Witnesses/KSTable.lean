@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Witnesses.Flock
+public import Proofs.Flock.Claims.KOf
 public import Definitions.Claims.SamplingTable
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -32,19 +33,14 @@ open Claims
 /-- The toy lengths: every table's word has length `1`. -/
 def ksN : Msg → ℕ → ℕ := fun _ _ => 1
 
-theorem ceil_four_div_e_pos : 1 ≤ ⌈4 * ((1 : ℕ) : ℝ) / Real.exp 1⌉₊ :=
-  Nat.one_le_iff_ne_zero.2 (Nat.ceil_pos.2 (div_pos (by norm_num) (Real.exp_pos 1))).ne'
+theorem ksN_kTable_eq (j : ℕ) (x : Msg) : Claims.Flock.kTable ksN j x = Claims.Flock.kOfReal ((1 : ℕ) : ℝ) :=
+  Claims.Flock.kOf_natCast 1
 
-theorem ceil_four_div_e_le : ⌈4 * ((1 : ℕ) : ℝ) / Real.exp 1⌉₊ ≤ 2 := by
-  have h2 : (1 : ℝ) + 1 ≤ Real.exp 1 := Real.add_one_le_exp 1
-  refine Nat.ceil_le.2 ?_
-  rw [div_le_iff₀ (Real.exp_pos 1)]
-  push_cast
-  linarith
+theorem ksN_kTable_pos (j : ℕ) (x : Msg) : 1 ≤ Claims.Flock.kTable ksN j x := by
+  rw [ksN_kTable_eq]; exact Claims.Flock.kOfReal_pos (by norm_num)
 
-theorem ksN_kTable_pos (j : ℕ) (x : Msg) : 1 ≤ Claims.Flock.kTable ksN j x := ceil_four_div_e_pos
-
-theorem ksN_kTable_le (j : ℕ) (x : Msg) : Claims.Flock.kTable ksN j x ≤ 2 := ceil_four_div_e_le
+theorem ksN_kTable_le (j : ℕ) (x : Msg) : Claims.Flock.kTable ksN j x ≤ 2 := by
+  rw [ksN_kTable_eq]; exact Claims.Flock.kOfReal_le (by norm_num)
 
 theorem exp_neg_eighth_le : Real.exp (-(1 / 8 : ℝ)) ≤ 8 / 9 := by
   have h8 : (1 / 8 : ℝ) + 1 ≤ Real.exp (1 / 8) := Real.add_one_le_exp (1 / 8)

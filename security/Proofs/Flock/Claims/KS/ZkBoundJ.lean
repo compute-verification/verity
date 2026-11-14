@@ -268,13 +268,13 @@ theorem sum_map_eq_range {α : Type} (l : List α) (g : ℕ → α) (hg : ∀ j 
   rw [h]
 
 /-- **A table's weight pays for its old masked fork events and its share of `k`**, with `2` to spare: the fork events'
-weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, within the table's `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2 + 4·2^{d₀}/e`,
-when `N_p` is at most the deployed pads' domain; level 0's `2·2^{d₀}·Q₀ ≥ 2` is the `2`, and `4·2^{d₀}/e` the
+weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, within the table's `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2 + 4·2^{d₀}/e₋`,
+when `N_p` is at most the deployed pads' domain; level 0's `2·2^{d₀}·Q₀ ≥ 2` is the `2`, and `4·2^{d₀}/e₋` the
 share of `k` (`kFits_all`). -/
 theorem cZ_sum_le_tableWeight {st : Stmt} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35)
     {sch : FlockSoundness.Accounting.Schedule} (hsch : sch = Accounting.m1Schedule st.m) (Np : ℕ)
     (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)) :
-    4 * tableLen true st / Real.exp 1 + ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i + 2 ≤
+    4 * tableLen true st / 2.7182818283 + ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i + 2 ≤
       tableWeight true st := by
   set f : Accounting.Level → ℝ := fun l => 2 ^ l.logLen * l.queries with hf
   have hsum : ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i =
@@ -309,8 +309,8 @@ theorem cZ_sum_le_tableWeight {st : Stmt} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35
   simp only [level0, wSched, ↓reduceIte, ← hsch] at hfits
   have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
     pow_le_pow_right₀ (by norm_num) hfits
-  have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 ≤
-      4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
+  have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / 2.7182818283 ≤
+      4 * 2 ^ (sch.levels.headD default).logLen / 2.7182818283 := by
     gcongr
   rw [hsum, hlen, htw, Claims.Flock.Numbers.weightOf, weightNat_cast, ← hhead]
   linarith
@@ -318,7 +318,7 @@ theorem cZ_sum_le_tableWeight {st : Stmt} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35
 /-- **The joined escapes fit the masked weight with the fork event of weight `k`**, at a statement whose tables
 `st j` are Flock ZK's, when each table's pads' weight is at most its deployed pads' domain: each table's weight
 pays for its fork events and its share of `k` with `2` to spare (`cZ_sum_le_tableWeight`), and
-`k < 4·N₀/e + 1`. -/
+`k < 4·N₀/e₋ + 1`. -/
 theorem joinEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
@@ -343,21 +343,21 @@ theorem joinEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω :
     sum_map_eq_range (tables true x) (fun j => (spec, st j)) hst _
   have hN : N₀ true x = ∑ j ∈ Finset.range n, tableLen true (st j) :=
     sum_map_eq_range (tables true x) (fun j => (spec, st j)) hst _
-  have hk : ((deployZk rel).k x : ℝ) = (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ) := rfl
+  have hk : ((deployZk rel).k x : ℝ) = (Claims.Flock.kOfReal (N₀ true x) : ℝ) := rfl
   show ((deployZk rel).k x : ℝ) + _ ≤ weight true x
   rcases Nat.eq_zero_or_pos n with h0 | hpos
   · have := k_le_weight true x
     rw [h0, Finset.sum_range_zero, add_zero, hk]
     exact this
-  have hper : ∀ j ∈ Finset.range n, 4 * tableLen true (st j) / Real.exp 1 +
+  have hper : ∀ j ∈ Finset.range n, 4 * tableLen true (st j) / 2.7182818283 +
       ∑ i, Claims.Flock.cZ (sch j) (Np j) i + 2 ≤ tableWeight true (st j) := fun j hj => by
     have hj := Finset.mem_range.1 hj
     exact cZ_sum_le_tableWeight (h25 j hj) (h35 j hj) (hsch j hj) (Np j) (hNp j hj)
   have hs := Finset.sum_le_sum hper
   rw [Finset.sum_add_distrib, Finset.sum_add_distrib, ← Finset.sum_div, ← Finset.mul_sum, ← hN, ← hw,
     Finset.sum_const, Finset.card_range, nsmul_eq_mul] at hs
-  have he := Real.exp_pos 1
-  have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg true x)) he.le)
+  have he : (0 : ℝ) < 2.7182818283 := by norm_num
+  have hceil := Claims.Flock.kOfReal_lt (N₀_nonneg true x)
   have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast hpos
   rw [hk]
   linarith

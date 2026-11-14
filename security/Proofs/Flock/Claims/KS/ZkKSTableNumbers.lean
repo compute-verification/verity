@@ -70,7 +70,9 @@ open Flock
 theorem κTable_eq_κ {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (N : Claims.Msg → ℕ → ℕ)
     (ε : Claims.Msg → ℕ → ℝ) (j : ℕ) (x : Claims.Msg) :
     Claims.Flock.κTable D N ε j x =
-      Claims.Flock.κ { D with εtable := fun y => ε y j, N₀ := fun y => (N y j : ℝ) } x := rfl
+      Claims.Flock.κ { D with εtable := fun y => ε y j, N₀ := fun y => (N y j : ℝ) } x := by
+  unfold Claims.Flock.κTable Claims.Flock.κ Claims.Flock.kTable Claims.Flock.Deploy.k
+  rw [Claims.Flock.kOf_natCast]
 
 /-- `κ_j ≤ 2^{−202.98}` from the table's numbers: its error at most `2^{−205}`, `210` waits, the truncation `2^256`
 and a word of `2^10` to `2^23` symbols (`Numbers.κ_le` at the table's record). -/
@@ -155,7 +157,7 @@ theorem one_le_κTable_past (rel : Readable.Parsed → Readable.Relation) (x : C
   have hk : Claims.Flock.kTable (wordLenJ true) j x = 0 := by
     unfold Claims.Flock.kTable
     rw [h0]
-    simp
+    simp [Claims.Flock.kOf]
   have hε : 0 ≤ tableErrJ true x j := by
     unfold tableErrJ
     cases (tables true x)[j]? with

@@ -365,7 +365,7 @@ theorem weightNat_cast (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) :
 /-- **Table 0's weight and the other tables' share of `k`** fit in the weight (`lens_le_weights`). -/
 theorem weight_split {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables zk x).head? = some (spec, st)) :
-    tableWeight zk st + 4 * (N₀ zk x - tableLen zk st) / Real.exp 1 ≤ weight zk x := by
+    tableWeight zk st + 4 * (N₀ zk x - tableLen zk st) / 2.7182818283 ≤ weight zk x := by
   unfold weight N₀
   cases ht : tables zk x with
   | nil => rw [ht] at h0; cases h0
@@ -378,8 +378,8 @@ theorem weight_split {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stm
     linarith
 
 /-- **The plain weight's room past the old escapes**: the fork events' weights `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ` and the fork
-of weight `k`, at two fork events a round, leave level 0's `2·2^{d₀}·Q₀` of the weight unused, since `k < 4·N₀/e + 1`
-fits in the weight's `2 + 4·2^{d₀}/e` (`kFits_all`): escapes of total weight up to `2·2^{d₀}·Q₀` more, with at most
+of weight `k`, at two fork events a round, leave level 0's `2·2^{d₀}·Q₀` of the weight unused, since `k < 4·N₀/e₋ + 1`
+fits in the weight's `2 + 4·2^{d₀}/e₋` (`kFits_all`): escapes of total weight up to `2·2^{d₀}·Q₀` more, with at most
 two fork events a round in all, still fit. -/
 theorem plain_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
     {st : Stmt} (h0 : (tables false x).head? = some (spec, st)) {sch : FlockSoundness.Accounting.Schedule}
@@ -403,18 +403,18 @@ theorem plain_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claim
   have hlen : tableLen false st = 2 ^ (Claims.Flock.plainLevel0 st.m).d := rfl
   have hfits := kFits_all false st.m
   simp only [level0, wSched, Bool.false_eq_true, ↓reduceIte, hgs] at hfits
-  have he := Real.exp_pos 1
+  have he : (0 : ℝ) < 2.7182818283 := by norm_num
   have hpow : (2 : ℝ) ^ (Claims.Flock.plainLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
     pow_le_pow_right₀ (by norm_num) hfits
-  have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.plainLevel0 st.m).d / Real.exp 1 ≤
-      4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
+  have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.plainLevel0 st.m).d / 2.7182818283 ≤
+      4 * 2 ^ (sch.levels.headD default).logLen / 2.7182818283 := by
     gcongr
-  have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg false x)) he.le)
-  have hk : ((deployPlain rel).k x : ℝ) = (⌈4 * N₀ false x / Real.exp 1⌉₊ : ℝ) := rfl
+  have hceil := Claims.Flock.kOfReal_lt (N₀_nonneg false x)
+  have hk : ((deployPlain rel).k x : ℝ) = (Claims.Flock.kOfReal (N₀ false x) : ℝ) := rfl
   have hsplit := weight_split h0
   rw [hlen] at hsplit
-  have e : 4 * (N₀ false x - 2 ^ (Claims.Flock.plainLevel0 st.m).d) / Real.exp 1 =
-      4 * N₀ false x / Real.exp 1 - 4 * 2 ^ (Claims.Flock.plainLevel0 st.m).d / Real.exp 1 := by ring
+  have e : 4 * (N₀ false x - 2 ^ (Claims.Flock.plainLevel0 st.m).d) / 2.7182818283 =
+      4 * N₀ false x / 2.7182818283 - 4 * 2 ^ (Claims.Flock.plainLevel0 st.m).d / 2.7182818283 := by ring
   rw [e] at hsplit
   show ((2 : ℕ) : ℝ) * ((deployPlain rel).k x + ∑ i : Fin 2 × Fin sch.levels.length,
     Claims.Flock.cOf sch (i.2.val + 1)) + 4 * ((2 : ℝ) ^ (sch.levels.headD default).logLen *
@@ -426,7 +426,7 @@ theorem plain_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claim
 
 /-- **The old escapes fit the plain weight with the fork event of weight `k`**, at a statement whose table 0 has
 schedule `sch`, when no two of them share a round: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ`, within the
-weight's `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ`, and `k < 4·N₀/e + 1` within its `2 + 4·2^{d₀}/e` (`kFits_all`). -/
+weight's `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ`, and `k < 4·N₀/e₋ + 1` within its `2 + 4·2^{d₀}/e₋` (`kFits_all`). -/
 theorem oldEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
@@ -567,7 +567,7 @@ theorem m1_queries₀_pos : ∀ m : Fin 11,
 /-- **The old masked escapes fit the masked weight with the fork event of weight `k`**, at a statement whose table 0
 has Flock ZK's schedule, when no two of them share a round and the pads' weight `N_p` is at most the deployed pads'
 domain: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, within the weight's
-`2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2`, and `k < 4·N₀/e + 1` within `4·2^{d₀}/e` and level 0's `2·2^{d₀}·Q₀ ≥ 2`. -/
+`2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2`, and `k < 4·N₀/e₋ + 1` within `4·2^{d₀}/e₋` and level 0's `2·2^{d₀}·Q₀ ≥ 2`. -/
 theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables true x).head? = some (spec, st))
     (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) {sch : FlockSoundness.Accounting.Schedule}
@@ -621,18 +621,18 @@ theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : 
     have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.m).d := rfl
     have hfits := kFits_all true st.m
     simp only [level0, wSched, ↓reduceIte, ← hsch] at hfits
-    have he := Real.exp_pos 1
+    have he : (0 : ℝ) < 2.7182818283 := by norm_num
     have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
       pow_le_pow_right₀ (by norm_num) hfits
-    have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 ≤
-        4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
+    have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / 2.7182818283 ≤
+        4 * 2 ^ (sch.levels.headD default).logLen / 2.7182818283 := by
       gcongr
-    have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg true x)) he.le)
-    have hk : ((deployZk rel).k x : ℝ) = (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ) := rfl
+    have hceil := Claims.Flock.kOfReal_lt (N₀_nonneg true x)
+    have hk : ((deployZk rel).k x : ℝ) = (Claims.Flock.kOfReal (N₀ true x) : ℝ) := rfl
     have hsplit := weight_split h0
     rw [hlen] at hsplit
-    have e : 4 * (N₀ true x - 2 ^ (Claims.Flock.zkLevel0 st.m).d) / Real.exp 1 =
-        4 * N₀ true x / Real.exp 1 - 4 * 2 ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 := by ring
+    have e : 4 * (N₀ true x - 2 ^ (Claims.Flock.zkLevel0 st.m).d) / 2.7182818283 =
+        4 * N₀ true x / 2.7182818283 - 4 * 2 ^ (Claims.Flock.zkLevel0 st.m).d / 2.7182818283 := by ring
     rw [e] at hsplit
     show ((2 : ℕ) : ℝ) * ((deployZk rel).k x + ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i) ≤
       2 * weight true x

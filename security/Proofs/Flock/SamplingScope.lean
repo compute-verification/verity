@@ -2,6 +2,7 @@ module
 
 public import Definitions.Claims.Sampling
 public import Proofs.Flock.SamplingGeneric.Deployed
+public import Proofs.Flock.Claims.KOf
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -176,22 +177,19 @@ theorem exp_neg_div_eight_le {a : ℝ} (ha : 0 ≤ a) : Real.exp (-a / 8) ≤ 8 
   calc (Real.exp (a / 8))⁻¹ ≤ (a / 8 + 1)⁻¹ := inv_anti₀ hpos h
     _ = 8 / (a + 8) := by field_simp
 
-/-- `k′ = ⌈12000/e⌉` is between `4411` and `4446`. -/
+/-- `k′ = ⌈12000/e₋⌉` is between `4411` and `4446`. -/
 theorem innerK_bounds {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) :
     (4411 : ℝ) ≤ D.innerK x ∧ (D.innerK x : ℝ) ≤ 4446 := by
-  have he1 := Real.exp_one_gt_d9
   have he2 := Real.exp_one_lt_d9
   have hpos : 0 < Real.exp 1 := Real.exp_pos 1
-  have h1 : 4 * D.innerN₀ x / Real.exp 1 ≤ D.innerK x := Nat.le_ceil _
-  have h2 : (D.innerK x : ℝ) < 4 * D.innerN₀ x / Real.exp 1 + 1 :=
-    Nat.ceil_lt_add_one (by rw [h.innerN₀]; positivity)
+  have h1 : 4 * D.innerN₀ x / Real.exp 1 ≤ D.innerK x := Claims.Flock.le_kOfReal _
+  have h2 : (D.innerK x : ℝ) < 4 * D.innerN₀ x / 2.7182818283 + 1 :=
+    Claims.Flock.kOfReal_lt (by rw [h.innerN₀]; norm_num)
   rw [h.innerN₀] at h1 h2
   have hlo : (4411 : ℝ) ≤ 4 * 3000 / Real.exp 1 := by
     rw [le_div_iff₀ hpos]
     linarith
-  have hhi : 4 * 3000 / Real.exp 1 ≤ (4445 : ℝ) := by
-    rw [div_le_iff₀ hpos]
-    linarith
+  have hhi : 4 * 3000 / (2.7182818283 : ℝ) ≤ 4445 := by norm_num
   exact ⟨hlo.trans h1, by linarith⟩
 
 /-- The sessions' knowledge error at these numbers is below `1/100`. -/

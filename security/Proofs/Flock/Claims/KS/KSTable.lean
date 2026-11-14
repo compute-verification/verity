@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.KS.JointR
 public import Definitions.Claims.SamplingTable
+public import Proofs.Flock.Claims.KOf
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real
@@ -56,7 +57,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 `Flock.KSTable`: the extractor at one table of a session (`Flock.ETable`) is knowledge sound at that table's own
 relation
-(`Flock.RTable`), with each wait stopping at `k_j = ⌈4·N_j/e⌉` accepted reruns, `N_j` the table's word's length alone.
+(`Flock.RTable`), with each wait stopping at `k_j = ⌈4·N_j/e₋⌉` accepted reruns, `N_j` the table's word's length alone.
 Every table's bound counted per round (`TableBoundJR`) is already a bound at each table: at a table `j` and a table at
 its word's positions that does not extract, the session accepts with probability at most `ε_table + escapes(ω)` beyond
 that of accepting and opening a position of table `j`'s word off the table. So the product form (`joint_acc_le`) runs
@@ -112,13 +113,13 @@ theorem checkTable_sound (table : Msg → ℕ → Option Stmt) (j : ℕ) :
     exact ⟨t, ht, of_decide_eq_true h⟩
   · simp at h
 
-/-- `E^rep`'s relative rate at table `j`, `N_j/(e·k_j)`, is at most `1/4`, as `k_j = ⌈4·N_j/e⌉`. -/
+/-- `E^rep`'s relative rate at table `j`, `N_j/(e·k_j)`, is at most `1/4`, as `k_j ≥ 4·N_j/e` (`le_kOfReal`). -/
 theorem rateTable_le (N : Msg → ℕ → ℕ) (j : ℕ) (x : Msg) (hk : 0 < kTable N j x) :
     (N x j : ℝ) / (Real.exp 1 * kTable N j x) ≤ 1 / 4 := by
   have hk' : (0 : ℝ) < kTable N j x := by exact_mod_cast hk
   have he := Real.exp_pos 1
   rw [div_le_iff₀ (mul_pos he hk')]
-  have hc : 4 * (N x j : ℝ) / Real.exp 1 ≤ kTable N j x := Nat.le_ceil _
+  have hc : 4 * (N x j : ℝ) / Real.exp 1 ≤ kTable N j x := by rw [kTable, kOf_natCast]; exact le_kOfReal _
   rw [div_le_iff₀ he] at hc
   linarith
 
@@ -378,9 +379,7 @@ theorem KSTable_of_tableBoundEachR (H : Msg → Msg) (D : Deploy Coin Col T) (N 
     κTable D N ε j x + Real.sqrt (γ D x * PrB H D.V P x)
   rcases hk x j with ⟨hj, hk8⟩ | hk0 | hno
   · obtain ⟨e₀, hfit, hb⟩ := htab x Ω P
-    have hkle : kTable N j x ≤ D.k x :=
-      Nat.ceil_mono (div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left (hN x j hj) (by norm_num))
-        (Real.exp_pos 1).le)
+    have hkle : kTable N j x ≤ D.k x := by rw [kTable, kOf_natCast]; exact kOfReal_mono (hN x j hj)
     have hfit' : e₀.FitsForkR (D.weight x) (kTable N j x) := hfit.mono (Nat.cast_le.2 hkle)
     unfold κTable
     refine ksTable_of_oneWait H D N decode hlw j x P (hK x) hk8 (ε x j) (hεt x j)

@@ -301,12 +301,22 @@ def ZkDeploy.prover {Coin Col T : Type} (D : ZkDeploy Coin Col T) (w : Wit) : Pr
     | (_, ρ) :: ops => (allPass (D.chk x ω.1 ρ) 0 (ops.map Prod.snd)).bind fun ok =>
         if ok then (D.P w).next x (ops.map fun p => (p.1, D.coinOf p.2)) (D.tapeOf ω) else .ret D.abort⟩
 
+/-- `e`'s lower bound `e₋ = 2.7182818283` (`Real.exp_one_gt_d9`), which `E^rep`'s `k` divides by. -/
+def eLo : ℚ := 27182818283 / 10000000000
+
 section Claims
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- `E^rep`'s accepted reruns per wait, `k = ⌈4·N₀/e⌉`. -/
-noncomputable def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := ⌈4 * D.N₀ x / Real.exp 1⌉₊
+/-- `E^rep`'s accepted reruns per wait at the level-0 length `N₀`: `k = ⌈4·N₀/e₋⌉`, with `e₋ = 2.7182818283 < e`
+(`eLo`) in place of `e`, so `k` is arithmetic on `ℚ`, and at least `4·N₀/e`. -/
+def kOf (N₀ : ℚ) : ℕ := ⌈4 * N₀ / eLo⌉₊
+
+/-- `kOf` at a real `N₀`: `⌈4·N₀/e₋⌉`. -/
+noncomputable def kOfReal (N₀ : ℝ) : ℕ := ⌈4 * N₀ / (eLo : ℝ)⌉₊
+
+/-- `E^rep`'s accepted reruns per wait, `k = ⌈4·N₀/e₋⌉` (`kOf`). -/
+noncomputable def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := kOfReal (D.N₀ x)
 
 /-- **Flock's extractor**, `E^rep` at a decoder: an accepted rerun's opening is its tables' columns (`D.cols v`), which
 `assemble` decodes and checks table by table, each against the table's own statement (`D.table`). -/

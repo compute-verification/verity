@@ -236,11 +236,13 @@ theorem lamLin2_ge_of {C W' : Type} [Fintype C] [Nonempty C] [Inhabited C] (D : 
 
 /-- **`κ ≤ n·2^{−202.98}`** at an outer session's numbers, as `Flock.Numbers.κ_le_mul` at a `Flock.Deploy`'s. -/
 theorem numsκ_le_mul (m : Claims.Recursion.Nums) {n : ℝ} (hn : 1 ≤ n) (hε : m.εtable ≤ n * 2 ^ (-(205 : ℝ)))
-    (hw : 210 ≤ m.waits) (hK : m.cap = Claims.Flock.Numbers.cap) (hN : 2 ^ 10 ≤ m.N₀) (hN' : m.N₀ ≤ n * 2 ^ 23) :
-    m.κ ≤ n * 2 ^ (-(202.98 : ℝ)) := by
+    (hw : 210 ≤ m.waits) (hK : m.cap = Claims.Flock.Numbers.cap) (hN : 2 ^ 10 ≤ (m.N₀ : ℝ))
+    (hN' : (m.N₀ : ℝ) ≤ n * 2 ^ 23) : m.κ ≤ n * 2 ^ (-(202.98 : ℝ)) := by
   have hn0 : (0 : ℝ) ≤ n := by linarith
-  have hk1 : 1507 ≤ m.k := Claims.Flock.Numbers.k_ge hN
-  have hk2 : (m.k : ℝ) ≤ n * 2 ^ 24 := Claims.Flock.Numbers.k_le_mul hn (le_trans (by norm_num) hN) hN'
+  have hkm : m.k = Claims.Flock.kOfReal m.N₀ := Claims.Flock.kOf_eq _
+  have hk1 : 1507 ≤ m.k := by rw [hkm]; exact Claims.Flock.Numbers.k_ge hN
+  have hk2 : (m.k : ℝ) ≤ n * 2 ^ 24 := by
+    rw [hkm]; exact Claims.Flock.Numbers.k_le_mul hn (le_trans (by norm_num) hN) hN'
   have h1 : 4 * m.εtable ≤ n * 2 ^ (-(203 : ℝ)) := by
     have e : (2 : ℝ) ^ (-(203 : ℝ)) = 4 * 2 ^ (-(205 : ℝ)) := by
       rw [show (-(203 : ℝ)) = 2 + -(205 : ℝ) by norm_num, Real.rpow_add (by norm_num)]; norm_num
@@ -347,12 +349,14 @@ theorem weightO_le (h : PartIn xO s spec sts) : weightO xO ≤ sts.size * 2 ^ 33
 /-- **A part's `κ_O ≤ n·2^{−202.98}`**, `n` its tables. -/
 theorem numsOf_κ_le (h : PartIn xO s spec sts) : (numsOf xO).κ ≤ sts.size * 2 ^ (-(202.98 : ℝ)) := by
   obtain ⟨hlo, hhi⟩ := N₀O_le h
-  exact numsκ_le_mul (numsOf xO) (FlockDeploy.size_one_le h.size_pos) (εtableO_le h) (le_of_eq rfl) rfl hlo hhi
+  exact numsκ_le_mul (numsOf xO) (FlockDeploy.size_one_le h.size_pos) (εtableO_le h) (le_of_eq rfl) rfl
+    (by rw [numsOf_N₀]; exact hlo) (by rw [numsOf_N₀]; exact hhi)
 
 theorem numsOf_k_le (h : PartIn xO s spec sts) : (numsOf xO).k ≤ 2 ^ 32 := by
   obtain ⟨hlo, hhi⟩ := N₀O_le h
-  have h1 : ((numsOf xO).k : ℝ) ≤ sts.size * 2 ^ 24 :=
-    Claims.Flock.Numbers.k_le_mul (N := N₀O xO) (FlockDeploy.size_one_le h.size_pos) (le_trans (by norm_num) hlo) hhi
+  have h1 : ((numsOf xO).k : ℝ) ≤ sts.size * 2 ^ 24 := by
+    rw [numsOf_k]
+    exact Claims.Flock.Numbers.k_le_mul (FlockDeploy.size_one_le h.size_pos) (le_trans (by norm_num) hlo) hhi
   have h2 : (sts.size : ℝ) ≤ 200 := by exact_mod_cast h.size_le
   have h3 : ((numsOf xO).k : ℝ) ≤ 2 ^ 32 := by nlinarith
   exact_mod_cast h3

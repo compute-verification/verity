@@ -5,7 +5,7 @@ public import Definitions.Claims.SamplingGeneric
 /-!
 # Claims: Flock's extractor at one table of a session
 
-`Flock.E` extracts a session whole: each wait of `E^rep` stops at `k = ⌈4·N₀/e⌉` accepted reruns, with `N₀` the level-0
+`Flock.E` extracts a session whole: each wait of `E^rep` stops at `k = ⌈4·N₀/e₋⌉` accepted reruns, with `N₀` the level-0
 codeword lengths of the session's tables summed, and `Flock.assemble` returns a witness of every table or none. So a
 session's expected reruns, `1 + m′·k`, grow with its tables, and so does `Compiled.es` at `Arg.ofFlock`.
 
@@ -14,7 +14,7 @@ This file states the extractor at one table of a session, beside `Flock.E`, `Flo
 
 1. **The extractor** (`Flock.ETable D N decode j`): `E^rep` at the session's verifier, so a rerun is the whole
    session's, on fresh coins at every round, against the prover at the judged run's tape, and an accepted rerun is one
-   the whole session accepts. Each wait stops at `k_j = ⌈4·N_j/e⌉` accepted reruns (`Flock.kTable`), with `N_j` table
+   the whole session accepts. Each wait stops at `k_j = ⌈4·N_j/e₋⌉` accepted reruns (`Flock.kTable`), with `N_j` table
    `j`'s level-0 codeword length alone. Its assemble step is table `j`'s step of `Flock.assemble`
    (`Flock.assembleTable`): table `j`'s opened columns of the reruns, decoded by the one decoder, and the first
    candidate that, read alone, is a witness of table `j`'s own statement. Nothing of the session's other tables is read
@@ -63,9 +63,9 @@ def assembleTable {Col T : Type} (table : Msg → ℕ → Option Stmt) (decode :
   ((table x j).bind fun t =>
     (decode (opens.flatMap fun o => o j)).find? fun M => decide (RelS t (read [M]))).map fun M => read [M]
 
-/-- `E^rep`'s accepted reruns per wait at table `j`, `k_j = ⌈4·N_j/e⌉`, with `N x j` table `j`'s level-0 codeword
+/-- `E^rep`'s accepted reruns per wait at table `j`, `k_j = ⌈4·N_j/e₋⌉` (`kOf`), with `N x j` table `j`'s level-0 codeword
 length. -/
-noncomputable def kTable (N : Msg → ℕ → ℕ) (j : ℕ) (x : Msg) : ℕ := ⌈4 * (N x j : ℝ) / Real.exp 1⌉₊
+def kTable (N : Msg → ℕ → ℕ) (j : ℕ) (x : Msg) : ℕ := kOf (N x j)
 
 section Table
 
@@ -114,7 +114,7 @@ def flockAssembleTable (D : Claims.Flock.Deploy Coin Col T) (j : ℕ) (x : Msg) 
 statement (`names y`). The verifier is Flock's at the named statement, so a session's run is the session's whatever
 table is named; the extractor is `E^rep` at the named table and the deployed decoder (`Flock.ETable D N D.decode`), its
 assemble step counted (`flockAssembleTable`); the shape is the numbers it reads (waits `m′`, truncation `K`, rounds, and
-the named table's level-0 codeword length, which fixes each wait's `k_j = ⌈4·N_j/e⌉`, `Flock.kTable`, and so its
+the named table's level-0 codeword length, which fixes each wait's `k_j = ⌈4·N_j/e₋⌉`, `Flock.kTable`, and so its
 expected reruns); and its errors are Flock's at the table (`Flock.κTable`) and the session's `γ` (`Flock.γ`). -/
 noncomputable def Arg.ofFlockTable (D : Claims.Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ)
     (names : Msg → ℕ × Msg) : Arg Coin where
@@ -130,7 +130,7 @@ noncomputable def Arg.ofFlockTable (D : Claims.Flock.Deploy Coin Col T) (N : Msg
   assemble y := flockAssembleTable D (names y).1 (names y).2
   check y := Claims.Flock.checkTable D.table (names y).1 (names y).2
   waits s := s.1
-  k s := ⌈4 * (s.2.2.2 : ℝ) / Real.exp 1⌉₊
+  k s := Claims.Flock.kOf s.2.2.2
   cap s := s.2.1
   κ y := Claims.Flock.κTable D N ε (names y).1 (names y).2
   γ y := Claims.Flock.γ D (names y).2

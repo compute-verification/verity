@@ -501,8 +501,8 @@ section Extract
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- The session's `E^rep` waits for `k′ = ⌈4·N₀/e⌉` accepted reruns. -/
-noncomputable def Deploy.innerK (D : Deploy Coin Col T) (x : Msg) : ℕ := ⌈4 * D.innerN₀ x / Real.exp 1⌉₊
+/-- The session's `E^rep` waits for `k′ = ⌈4·N₀/e₋⌉` accepted reruns (`Flock.kOfReal`). -/
+noncomputable def Deploy.innerK (D : Deploy Coin Col T) (x : Msg) : ℕ := Flock.kOfReal (D.innerN₀ x)
 
 /-- The proof blocks at `x`, `0` on a statement that doesn't parse. -/
 def nPU (D : Deploy Coin Col T) (x : Msg) : ℕ :=

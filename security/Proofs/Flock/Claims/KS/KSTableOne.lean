@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.SamplingTable
+public import Proofs.Flock.Claims.KOf
 
 /-!
 # Flock at one table of a session: at a statement of one table it is the session's statement
@@ -33,14 +34,14 @@ theorem mapM_range_one {α : Type} (f : ℕ → Option α) : (List.range 1).mapM
 theorem kTable_zero_eq {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg)
     (hN : (N x 0 : ℝ) = D.N₀ x) : Claims.Flock.kTable N 0 x = D.k x := by
   unfold Claims.Flock.kTable Claims.Flock.Deploy.k
-  rw [hN]
+  rw [Claims.Flock.kOf_natCast, hN]
 
 /-- The knowledge error: `κ_0` is the session's `κ` where table `0`'s error and length are the session's. -/
 theorem κTable_zero_eq {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ)
     (x : Msg) (hε : ε x 0 = D.εtable x) (hN : (N x 0 : ℝ) = D.N₀ x) :
     Claims.Flock.κTable D N ε 0 x = Claims.Flock.κ D x := by
   unfold Claims.Flock.κTable Claims.Flock.κ Claims.Flock.kTable Claims.Flock.Deploy.k
-  rw [hε, hN]
+  rw [Claims.Flock.kOf_natCast, hε, hN]
 
 /-- The relation: table `0`'s is the statement's where table `0`'s own statement is the statement. -/
 theorem RTable_zero_iff_R (parse : Msg → Option Stmt) (table : Msg → ℕ → Option Stmt) (x : Msg) {s : Stmt}

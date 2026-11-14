@@ -990,7 +990,7 @@ def flockAssemble (D : Claims.Flock.Deploy Coin Col T) (x : Msg) (os : List (ℕ
 
 /-- **Flock as a proof system for proof blocks**: `E^rep` at the deployed decoder (`Flock.E D D.decode`), its assemble
 step counted (`flockAssemble`), its shape the numbers it reads (waits `m′`, truncation `K`, rounds, and `N₀`, which
-fixes each wait's `k = ⌈4·N₀/e⌉`, `Flock.Deploy.k`, and so its expected reruns), and its errors Flock's (`Flock.κ`,
+fixes each wait's `k = ⌈4·N₀/e₋⌉`, `Flock.Deploy.k`, and so its expected reruns), and its errors Flock's (`Flock.κ`,
 `Flock.γ`). -/
 noncomputable def Arg.ofFlock (D : Claims.Flock.Deploy Coin Col T) : Arg Coin where
   Sh := ℕ × ℕ × ℕ × ℝ
@@ -1005,7 +1005,7 @@ noncomputable def Arg.ofFlock (D : Claims.Flock.Deploy Coin Col T) : Arg Coin wh
   assemble := flockAssemble D
   check := Claims.Flock.check D.parse
   waits s := s.1
-  k s := ⌈4 * s.2.2.2 / Real.exp 1⌉₊
+  k s := Claims.Flock.kOfReal s.2.2.2
   cap s := s.2.1
   κ := Claims.Flock.κ D
   γ := Claims.Flock.γ D

@@ -295,7 +295,7 @@ theorem side {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)
 
 /-- The numbers of a session of one table `t`. -/
 noncomputable def numsT (t : Flock.Stmt) : Claims.Recursion.Nums :=
-  ⟨FlockDeploy.tableErr true t.spec t, FlockDeploy.tableLen true t, FlockDeploy.tableWeight true t,
+  ⟨FlockDeploy.tableErr true t.spec t, (2 : ℚ) ^ (Claims.Flock.zkLevel0 t.m).d, FlockDeploy.tableWeight true t,
     2 + 2 * FlockDeploy.repRounds true t.spec t, Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, 0, 0⟩
 
 theorem rounds_one (zk : Bool) (spec : SessionSpec) (t : Flock.Stmt) :
@@ -309,7 +309,7 @@ theorem numsOf_one {xO : Claims.Msg} {i : RecIns} {t : Flock.Stmt} (h : setupO x
     rw [h]
     all_goals rfl
   have hk : VO.k xO = 2 + FlockDeploy.rounds true t.spec #[t] := by simp only [VO, h]
-  unfold numsOf εtableO N₀O weightO numsT
+  unfold numsOf εtableO N₀Oq weightO numsT
   rw [ht, hk, rounds_one]
   all_goals simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
 

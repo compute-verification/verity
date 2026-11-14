@@ -3,6 +3,7 @@ module
 public import Mathlib.Data.UInt
 public import Proofs.Flock.Claims.Complete.Zk.Coins
 public import Proofs.Flock.Claims.Recursion.DeployOuter
+public import Proofs.Flock.Claims.KOf
 public import Proofs.Flock.Claims.Recursion.Scope
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -462,7 +463,12 @@ noncomputable def staged (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg ×
 `N₀`, weight, waits and truncation. No check reads the `--zk` leaf counts, left `0` here; the record's are
 `numsZk`'s. -/
 noncomputable def numsOf (xO : Claims.Msg) : Claims.Recursion.Nums :=
-  ⟨εtableO xO, N₀O xO, weightO xO, VO.k xO, Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, 0, 0⟩
+  ⟨εtableO xO, N₀Oq xO, weightO xO, VO.k xO, Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, 0, 0⟩
+
+theorem numsOf_N₀ (xO : Claims.Msg) : ((numsOf xO).N₀ : ℝ) = N₀O xO := N₀Oq_cast xO
+
+theorem numsOf_k (xO : Claims.Msg) : (numsOf xO).k = Claims.Flock.kOfReal (N₀O xO) := by
+  rw [Claims.Recursion.Nums.k, Claims.Flock.kOf_eq, numsOf_N₀]
 
 open Classical in
 /-- Inner rounds at which part `s`'s staged statement sets up, when there are any. -/

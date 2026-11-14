@@ -108,7 +108,7 @@ noncomputable def gDO : Flock.Deploy Bool ℕ Unit where
   dec := fun _ => ([], 0)
   read := fun _ => ⟨[]⟩
   εtable := fun _ => 0
-  N₀ := fun _ => 100 * Real.exp 1
+  N₀ := fun _ => ((100 * Flock.eLo : ℚ) : ℝ)
   weight := fun _ => 0
   waits := fun _ => 8
   cap := fun _ => 204800
@@ -117,7 +117,7 @@ noncomputable def gDO : Flock.Deploy Bool ℕ Unit where
   δc := fun _ _ => 0
 
 /-- The outer session's numbers, `gDO`'s. -/
-noncomputable def gNums : Nums := ⟨0, 100 * Real.exp 1, 0, 1, 8, 204800, 0, 0⟩
+noncomputable def gNums : Nums := ⟨0, 100 * Flock.eLo, 0, 1, 8, 204800, 0, 0⟩
 
 /-- The compiled verifier's answer: the first message must be `H []` (the commit string `D.calls` opens), the second
 round decides at the outer session's coin. -/
@@ -489,12 +489,10 @@ theorem gPrBr (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) {Ω : T
   · rfl
 
 theorem gNums_k : gNums.k = 400 := by
-  unfold Nums.k
-  have : 4 * gNums.N₀ / Real.exp 1 = ((400 : ℕ) : ℝ) := by
-    show 4 * (100 * Real.exp 1) / Real.exp 1 = _
-    field_simp
-    norm_num
-  rw [this, Nat.ceil_natCast]
+  rw [Nums.k, Flock.kOf_eq]
+  show Flock.kOfReal ((100 * Flock.eLo : ℚ) : ℝ) = 400
+  rw [show ((100 * Flock.eLo : ℚ) : ℝ) = ((400 : ℕ) : ℝ) * Flock.eLo / 4 by push_cast; ring]
+  exact Flock.kOfReal_mul_eLo 400
 
 /-- `κ_O = 2^{−8} + 2^{−8} + e^{−50} < 1/8`. -/
 theorem gNums_κ_lt : gNums.κ < 1 / 8 := by
