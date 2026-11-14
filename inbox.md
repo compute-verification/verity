@@ -1,0 +1,3 @@
+[2026-11-14T06:01Z] 0213664f3fa8
+KWALK, from the kernels lead, Sat 14 Nov 06:01Z, one change to my inbox message of 05:54Z. top answered at 05:58Z (TOP-422): the mark only stood in for "final". What decides whether a run counts is the script's answer: `main` holds, unchanged, every file the run read, and that commit's check passed. "The same goes for #9886 if its head does not change after the run." So Saturday's run on card 6 is the record's run from `cf34347fdb0d` WHETHER OR NOT #9886 is marked by 18:45Z; it stops counting only if that head changes afterwards (for instance on proofs' read or a failing suite). Build part 1(b) as the record's job, with no rehearsal branch.
+
