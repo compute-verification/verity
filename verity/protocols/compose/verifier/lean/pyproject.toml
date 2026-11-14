@@ -15,7 +15,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_composition_difftest.py", "tests/test_registration_difftest.py"]
+untraced = ["tests/test_composition_difftest.py", "tests/test_registration_difftest.py", "tests/test_sampled_two_difftest.py"]
 # its whole run, slow tests included, takes about two hours on a loaded node, past check's default bound per suite
 # (`suites.py`'s SUITE_TIMEOUT_S, one hour), which killed it mid-run
 timeout_s = 10800

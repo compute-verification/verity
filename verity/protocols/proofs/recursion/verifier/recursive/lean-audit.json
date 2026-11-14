@@ -2,7 +2,8 @@
  "format": 1,
  "roots": ["VStarRecursive"],
  "exempt": {
-  "VStarRecursiveMain": "the vstar-recursive executable's entry point, one line; its command is VStar.Recursive.Sampled.main, audited under VStarRecursive"
+  "VStarRecursiveMain": "the vstar-recursive executable's entry point, one line; its command is VStar.Recursive.Sampled.main, audited under VStarRecursive",
+  "SampledTwoMain": "the sampled-two executable's entry point, one line; its command is VStar.Recursive.SampledTwo.protocol.main, audited under VStarRecursive"
  },
  "layers": {
   "VStarRecursive": {

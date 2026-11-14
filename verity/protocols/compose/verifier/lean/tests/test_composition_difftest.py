@@ -45,6 +45,7 @@ from hypothesis import strategies as st
 
 import periods
 import reference as R
+import test_sampled_two_difftest as TWO
 import verity_difftest as D
 from verity_difftest import canonical
 from verity_difftest import settings as opt
@@ -149,8 +150,8 @@ V2_BREAKS = {
 }
 
 
-#: One break of SPOT's form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form or another form,
-#: the recursive form's params (refused by name), or its evidence with none of its files.
+#: One break of SPOT's form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form or one no form's
+#: reading takes, the recursive form's params (refused by name), or its evidence with none of its files.
 FORM_BREAKS = ["params-no-form", "params-form-other", "params-recursive", "evidence-no-form", "evidence-recursive"]
 
 
@@ -159,7 +160,7 @@ def _with_form(x, br: str | None, side: str):
     it."""
     if not isinstance(x, dict) or br == f"{side}-no-form":
         return x
-    return {**x, "form": {f"{side}-form-other": "two-stage", f"{side}-recursive": "recursive"}.get(br, "one-stage")}
+    return {**x, "form": {f"{side}-form-other": "other", f"{side}-recursive": "recursive"}.get(br, "one-stage")}
 
 
 def form_case(a: dict, br: str | None = None) -> dict:
@@ -635,6 +636,72 @@ def test_spot_refuses_the_recursive_form(name, request):
             seen[br] += 1
     check()
     assert set(seen) == {"named", "unnamed"}, dict(seen)
+
+
+def _two_stage_evidence(a: dict) -> dict:
+    """Evidence under the two-stage form that its Lean reads in full (`SampledTwo.evidenceOf`): v2's evidence of `a` as
+    the interior audit's, in the per-member form (`OneStageZk.membersEvidenceOf`) with its sessions one member's
+    statement, and the form's other keys each of its type."""
+    interior = {**_without(a["evidence"], "proofs"),
+                "proofs": {"statements": [{"member": "m", "sessions": a["evidence"]["proofs"]["sessions"]}]}}
+    return {"form": TWO.T.TWO_STAGE, "coins": None, "interior": interior, "received": "", "record": {}, "source": "00",
+            "statements": []}
+
+
+def _two_stage_cases(a: dict) -> dict[str, dict]:
+    """The two-stage form's cases on v2's audit `a`, its record and evidence: the form's params missing a key
+    (``params-keys``, `TWO.CHANGES`); v2's params with the evidence under the two-stage form missing its keys
+    (``evidence-keys``); and v2's params with evidence under the two-stage form that its Lean reads in full
+    (``evidence-other``, `_two_stage_evidence`)."""
+    v2 = {**a["params"], "form": "one-stage"}
+    return {"params-keys": OS._case({"params": TWO.CHANGES["a-key-missing"](TWO.base()), "record": a["record"],
+                                     "evidence": {**a["evidence"], "form": "one-stage"}}),
+            "evidence-keys": OS._case({"params": v2, "record": a["record"],
+                                       "evidence": {**a["evidence"], "form": TWO.T.TWO_STAGE}}),
+            "evidence-other": OS._case({"params": v2, "record": a["record"], "evidence": _two_stage_evidence(a)})}
+
+
+def test_spot_reads_the_two_stage_form(remote_server):
+    """SPOT reads the two-stage form with the form's own readings (`SampledTwo.paramsOfJson`, `SampledTwo.evidenceOf`)
+    and refuses evidence of another form than the params' by name (`VStar.Recursive.Sampled.MISMATCH`). Remote, every
+    other subprotocol aimed at acceptance on the audit's record, rejects with SPOT's reason: the form's params missing a
+    key and v2's params with evidence under the two-stage form missing its keys, each refused by the form's reading, in
+    Lean as in Python (`_two_stage_cases`); and v2's params with evidence under the two-stage form, which the Lean
+    reads in full and refuses as a mismatch of forms, with the Python's words (`R.mismatch`): the Python reads the
+    form's evidence only up to its keys, so it decides no case past them, and an audit that passes every check is the
+    form's own difftest's to build."""
+    product = R.REMOTE
+    want = {"params-keys": "params: the keys of the parameters are not ",
+            "evidence-keys": "evidence: the keys of the evidence are not ",
+            "evidence-other": R.mismatch("one-stage", TWO.T.TWO_STAGE)}
+    others = [C for C in product.components if C is not R.SAMPLED_PROOFS]
+    seen = collections.Counter()
+
+    @settings(max_examples=2, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
+    def check(drawn, audit):
+        for br, sampled in _two_stage_cases(audit).items():
+            if br == "evidence-other":
+                with pytest.raises(ValueError, match="outside the mirror"):
+                    R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+                why = want[br]
+                component = {**as_component(R.SAMPLED_PROOFS, form_case(audit)),
+                             "evidence": bytes.fromhex(sampled["evidence"])}
+            else:
+                got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+                why = got["reason"]
+                assert got["verdict"] == R.REJECT and why.startswith(want[br]), got
+                component = as_component(R.SAMPLED_PROOFS, sampled)
+            by_id = {c["id"]: c for c in (*drawn, component)}
+            case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
+            if br != "evidence-other":
+                assert product.answer(case)["verdict"] == R.REJECT
+            out = remote_server.exchange(case)
+            refused = f"{R.SAMPLED_PROOFS.id} reject: {why}"
+            assert out["verdict"] == R.REJECT and refused in out["reason"], f"{br}: {out['verdict']}: {out['reason']}"
+            seen[br] += 1
+    check()
+    assert set(seen) == set(want), dict(seen)
 
 
 #: `reusing`'s R's law: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins

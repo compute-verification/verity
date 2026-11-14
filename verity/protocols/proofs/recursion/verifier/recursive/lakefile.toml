@@ -30,3 +30,8 @@ name = "VStarRecursive"
 [[lean_exe]]
 name = "vstar-recursive"
 root = "VStarRecursiveMain"
+
+# The two-stage form (`VStar.Recursive.SampledTwo`, `id | check | serve`), which nothing dispatches to: its difftest drives it.
+[[lean_exe]]
+name = "sampled-two"
+root = "SampledTwoMain"
