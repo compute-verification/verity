@@ -45,6 +45,8 @@ from verity_vllm.pipeline.row_json import load_json
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
 
+__all__ = ["Row", "Stop", "stage_on"]
+
 CLI = ("-m", "verity_vllm.pipeline.cli")
 #: A row's stages as research Attempts (`row stage|chain|shed`), loaded by name (`config.run_store`): it runs the run store.
 RESEARCH = "verity_vllm.pipeline.research"

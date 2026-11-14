@@ -14,11 +14,13 @@ import json
 import os
 from collections import defaultdict
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
+
+from verity_vllm.records.fields import RecordError
 
 _ITEMSIZE = {"bfloat16": 2, "float16": 2, "float32": 4, "float64": 8, "int32": 4, "int64": 8, "int16": 2, "int8": 1, "uint8": 1, "bool": 1,
              "float8_e4m3fn": 1, "float8_e5m2": 1}
+VIEW = "a fold instance's view"
 _ROPE_MEMBER = {"query": "rope.q", "key": "rope.k"}                # RoPE's members (the Build's hints) -> the Match fold's hint suffixes
 
 
@@ -46,6 +48,40 @@ def _listed(holder: Mapping[Any, Any], key: Any) -> list[Any]:
     return listed if listed else []
 
 
+def _sha256_at(name: str) -> str:
+    """sha256 of the bytes of the file `name`, opened by that name as it is given."""
+    with open(name, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def _refused(view: Mapping[str, Any], key: str, kind: str) -> RecordError:
+    """The refusal, by name, of what a fold view states under `key` where it is not `kind`."""
+    return RecordError(VIEW, key, f"is {view.get(key)!r}, not {kind} (the view: {json.dumps(view, default=str)[:200]})")
+
+
+def _stated_number(view: Mapping[str, Any], key: str) -> int | None:
+    """The number a fold view states under `key`, or None where it leaves the key out or states null.  Anything else there is
+    refused by name."""
+    x = view.get(key)
+    if x is None:
+        return None
+    try:
+        return int(x)
+    except (TypeError, ValueError, OverflowError) as e:
+        raise _refused(view, key, "a number") from e
+
+
+def _stated_numbers(view: Mapping[str, Any], key: str) -> list[int]:
+    """The numbers a fold view lists under `key`, none where it lists none.  Anything else there is refused by name."""
+    xs = _listed(view, key)
+    if not isinstance(xs, (list, tuple)):
+        raise _refused(view, key, "a list of numbers")
+    try:
+        return [int(x) for x in xs]
+    except (TypeError, ValueError, OverflowError) as e:
+        raise _refused(view, key, "a list of numbers") from e
+
+
 def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
     """The facts that tie an oracle to a Match record: sha256 of match/fold_summary.json, of match/instances.jsonl, of the
     RunHeader line (line 1 of capture/log.jsonl.gz, the created_utc carrier); a missing file is named None (never a placeholder digest),
@@ -53,7 +89,7 @@ def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key, rel in (("fold_summary_sha256", "fold_summary.json"), ("instances_sha256", "instances.jsonl")):
         pth = os.path.join(match_dir, rel)
-        out[key] = hashlib.sha256(Path(pth).read_bytes()).hexdigest() if os.path.exists(pth) else None
+        out[key] = _sha256_at(pth) if os.path.exists(pth) else None
     lg = os.path.join(match_dir, "capture", "log.jsonl.gz")
     out["run_header_sha256"] = None
     if os.path.exists(lg):
@@ -77,7 +113,8 @@ class MatchOracle:
         for p in (self.snap_path, self.inst_path, self.log_path):
             if not os.path.exists(p):
                 raise FileNotFoundError(f"match oracle: {p} missing (Match stage of this attempt did not write it)")
-        snap = json.loads(Path(self.snap_path).read_text())
+        with open(self.snap_path) as f:
+            snap = json.load(f)
         self.snapshot_steps: set[int] = {int(s) for s in _listed(snap, "steps")}
         # (event, alloc) -> [entries]; an entry = spanned storage bytes [byte_offset, byte_offset+nbytes) of one alloc, copied right after the call
         self._snap: dict[tuple[int, int], list[dict]] = defaultdict(list)
@@ -139,12 +176,14 @@ class MatchOracle:
         self._outs_by_step: dict[int, dict[int, list[tuple[int, int, dict]]]] = {}
         self._families_at: dict[tuple[int, str], frozenset[str]] = {}
         tok = os.path.join(capture_dir, "tokens.json")
-        self.tokens_sha256 = hashlib.sha256(Path(tok).read_bytes()).hexdigest() if os.path.exists(tok) else None
+        self.tokens_sha256 = _sha256_at(tok) if os.path.exists(tok) else None
         # the ids of every row of every step: prompt ids + generated ids per request (tokens.json) at the StepStart rows' (request, position)
         # -- the runner's ids buffer is a Root of the capture (prompt_token roots), so it is never in a snapshot; this IS its value record
         self.tokens: dict[str, tuple[list[int], list[int]]] = {}
         if os.path.exists(tok):
-            for r in _listed(json.loads(Path(tok).read_text()), "requests"):
+            with open(tok) as f:
+                served = _listed(json.load(f), "requests")
+            for r in served:
                 self.tokens[str(r.get("request_id"))] = ([int(x) for x in _listed(r, "prompt_token_ids")], [int(x) for x in _listed(r, "generated_token_ids")])
 
     # ------------------------------------------------------------------ provenance
@@ -192,7 +231,8 @@ class MatchOracle:
     def _file(self, rel: str) -> bytes:
         b = self._files.get(rel)
         if b is None:
-            b = Path(os.path.join(self.dir, "capture", rel)).read_bytes()
+            with open(os.path.join(self.dir, "capture", rel), "rb") as f:
+                b = f.read()
             if len(self._files) > 64:
                 self._files.clear()
             self._files[rel] = b
@@ -231,17 +271,17 @@ class MatchOracle:
     @staticmethod
     def _view_bytes_range(view: Any) -> tuple[int, int, int] | None:
         """(alloc, byte lo, byte hi) the storage range a fold view spans (contiguous: offset..offset+numel; strided: the span), or None
-        when there is no view, its allocation, offset, shape or strides cannot be read, or its dtype has no itemsize: such a view is skipped."""
-        try:
-            alloc, off = int(view["alloc"]), int(view["offset"])
-            shape, strides = list(_listed(view, "shape")), list(_listed(view, "strides"))
-            isz = _ITEMSIZE.get(str(view.get("dtype")))
-        except (KeyError, TypeError, ValueError):
+        when there is no view, it states no allocation or no offset, or its dtype has no itemsize: such a view is skipped.  One that
+        states an allocation or an offset that is no number, or a shape or strides that are no list of numbers, is refused by name."""
+        if not isinstance(view, Mapping):
             return None
-        if isz is None:
+        alloc, off = _stated_number(view, "alloc"), _stated_number(view, "offset")
+        isz = _ITEMSIZE.get(str(view.get("dtype")))
+        if alloc is None or off is None or isz is None:
             return None
+        shape, strides = _stated_numbers(view, "shape"), _stated_numbers(view, "strides")
         numel = _prod(shape) if shape else 1
-        span = numel if (not strides or _contiguous(shape, strides)) else 1 + sum((int(d) - 1) * int(s) for d, s in zip(shape, strides))
+        span = numel if (not strides or _contiguous(shape, strides)) else 1 + sum((d - 1) * s for d, s in zip(shape, strides))
         return alloc, off * isz, (off + span) * isz
 
     def _step_outputs(self, step: int) -> dict[int, list[tuple[int, int, dict]]]:
@@ -497,7 +537,7 @@ class MatchOracle:
 
 def _port_view(member: str, producer: dict[str, Any] | None) -> int | None:
     """The output view of a several-output Call that `member` is: its manifest row's `port`, else the port `query.required.member_name`
-    spells into it (`<port>`, or `<hint>.<port>` when the Build recorded a hint), when that port is a digit; else None."""
+    spells into it (`<port>`, or `<hint>.<port>` when the Build recorded a hint), when that port is a decimal number; else None."""
     port = (producer or {}).get("port")
     port = str(port) if port is not None else member.rsplit(".", 1)[-1]
-    return int(port) if port.isdigit() else None
+    return int(port) if port.isdecimal() else None

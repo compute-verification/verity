@@ -28,7 +28,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -269,14 +269,14 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
     F, R = TT._SPLIT_FANOUT, TT._SPLIT_ROUNDS
     record = None
     if record_npz:
-        record = (np.load(record_npz), json.load(open(record_npz + ".json")))
+        record = (np.load(record_npz), json.loads(Path(record_npz + ".json").read_text()))
     cases = build_manifest(seed, with_record=record is not None)
     o = Path(out)
     o.mkdir(parents=True, exist_ok=True)
-    arrays: dict[str, np.ndarray] = {}
+    arrays: dict[str, Any] = {}
     summary = []
 
-    def run_pipeline(x_dev: "torch.Tensor", p_dev: "torch.Tensor", S: int, V: int):
+    def run_pipeline(x_dev: torch.Tensor, p_dev: torch.Tensor, S: int, V: int):
         """stats -> 5 steps -> (instrumented mask on a copy | real mask kernel in place); returns (keep_real, keep_probe, zlane, stats, sc)."""
         stats = x_dev.new_empty((S, 4))
         parts = x_dev.new_empty((1, R, S, F, 3))
@@ -457,7 +457,7 @@ class ProduceOptions:
     out: str = option("--out")
     record: str | None = option("--record", default=None)
     seed: int = option("--seed", type=int, default=MANIFEST_SEED)
-    cmd: str = field(default="produce", init=False)
+    cmd: Literal["produce"] = field(default="produce", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -465,13 +465,13 @@ class CheckOptions:
     dir: str = option("--dir")
     record: str | None = option("--record", default=None)
     out: str | None = option("--out", default=None)
-    cmd: str = field(default="check", init=False)
+    cmd: Literal["check"] = field(default="check", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
 class ManifestOptions:
     record: bool = option("--record", default=False, action="store_true")
-    cmd: str = field(default="manifest", init=False)
+    cmd: Literal["manifest"] = field(default="manifest", init=False)
 
 
 COMMANDS = {"produce": ProduceOptions, "check": CheckOptions, "manifest": ManifestOptions}

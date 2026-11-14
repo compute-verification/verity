@@ -27,7 +27,7 @@ from typing import Any
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import option
 from verity_vllm.program import quarantine as _quarantine
-from verity_vllm.properties.record import seal
+from verity_vllm.records.property_record import seal
 
 ROOT = Path(_quarantine.__file__).parent
 FORBIDDEN_IMPORTS = ("os", "sys", "time", "datetime", "random", "secrets", "pathlib", "io", "json", "pickle", "subprocess", "socket",

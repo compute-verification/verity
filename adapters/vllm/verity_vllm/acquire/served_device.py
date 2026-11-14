@@ -11,7 +11,7 @@ A Build vouches for its own device only.  What the served Program binds is the d
   * the Triton kernels' compile target (`inductor_templates.FLAGS`).
 
 A device without one of them is refused with every missing binding by name (`device_of`), never bound to another device's.  A served
-target is held to its card file first (`card_of`: `engine.profiles.devices.CARD`, `verity.hardware.cards`): a device whose compute
+target is held to its card file first (`card_of`: `engine.profiles.devices.CARD`, `verity.device.load_card`): a device whose compute
 capability or SM count is not its card's is refused, naming each field, both values and the card file.  Only a target
 `engine.profiles.devices.NO_CARD` lists is held to none, and any other is refused.
 
@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from verity.definitions.numerics import derived_rows as DR
@@ -38,7 +38,7 @@ from verity.definitions.registry import fa3_check_inf as F3
 from verity.definitions.registry import inductor as IR
 from verity.definitions.registry.hopper import Fa3InvSum
 from verity.definitions.registry.prims import Fa2InvSum
-from verity.hardware.cards import load
+from verity.device import load_card
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
@@ -114,7 +114,7 @@ def card_of(name: str) -> str | None:
 
 def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
     """Refuse a device whose compute capability or SM count is not that of card `sku` (its `arch` and `sm.count`)."""
-    c = load(sku)
+    c = load_card(sku)
     arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", c["arch"])
     if arch is None:
         raise Unmodelled(f"hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
@@ -164,12 +164,9 @@ def attention_rows(qlen: int, klen: int, NS: int, *, NH: int, KVH: int, D: int, 
 
 
 # ---------------------------------------------------------------------------------------------------- FA2 (cc 10.0 and 12.0)
-def fa2_launch(qlens: list[int], *, NH: int, KVH: int, D: int, sms: int, batch: int, max_seqlen_k: int | None) -> dict[str, Any]:
-    """FA2's launch of one varlen step (module docstring): swapped or not, its kBlockN and its split count.  Only a swapped launch
-    reads `max_seqlen_k`; one given none (a FULL graph's on a device that binds no max_model_len) is refused."""
+def fa2_launch(qlens: list[int], *, NH: int, KVH: int, D: int, sms: int, batch: int, max_seqlen_k: int) -> dict[str, Any]:
+    """FA2's launch of one varlen step (module docstring): swapped or not, its kBlockN and its split count."""
     if max(qlens) == 1 and NH > KVH and D % 8 == 0:
-        if max_seqlen_k is None:
-            raise Unmodelled("FA2's split count reads max_seqlen_k and the launch has none: a FULL graph's is the device's max_model_len")
         ns = W.fa2_num_splits(batch, KVH, NH // KVH, max_seqlen_k, D, sms)
         return {"swapped": True, "BN": W.fa2_align_kblock_n(D) if ns == 1 else W.fa2_split_kblock_n(D), "NS": ns,
                 "batch": batch, "max_seqlen_k": max_seqlen_k}
@@ -201,8 +198,9 @@ def launch(device: DeviceBindings, qlens: list[int], klens: list[int], heads: tu
                 for q, k, ns in zip(qlens, klens, sp["NS"])]
         return sp["NS"], rows, {"fa3": {"BM": sp["BM"], "BN": sp["BN"], "static_splits": sp["static"]}}
     full = mode == "FULL"
+    # `device_of` binds no FA2 device without its max_model_len; one built without it fails where the split count reads it
     la = fa2_launch(qlens, NH=NH, KVH=KVH, D=D, sms=device.sms, batch=padded if full else len(qlens),
-                    max_seqlen_k=device.max_model_len if full else max(klens))
+                    max_seqlen_k=cast(int, device.max_model_len) if full else max(klens))
     rows = [fa2_attention_rows(q, k, la, NH=NH, KVH=KVH, D=D, dot=device.dot) for q, k in zip(qlens, klens)]
     return [la["NS"]] * len(qlens), rows, {"fa2": la}
 

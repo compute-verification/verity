@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
@@ -100,7 +99,8 @@ def parse_wrapper(path: str) -> dict[str, Any]:
     edges [{arg, role, src}] (the DATAFLOW: every non-weight input's producer)}], the wrapper's positional args with their kinds
     (tensor | int, from get_args()), the return tuple with each position's producer, and the count of `.run(` lines the parser did not
     read (must be 0: an unparsed launch is an undeclared part of the implementation)."""
-    src = Path(path).read_text()
+    with open(path) as f:
+        src = f.read()
     if "    def call(self, args):" not in src:
         return {"launches": [], "args": [], "arg_kinds": {}, "returns": [], "unparsed_runs": 0, "signatures": {}}
     signatures = kernel_signatures(src)
@@ -254,7 +254,8 @@ def split_graph_wiring(path: str) -> dict[str, Any]:
     without the attention splitting op), each attention op, and for every piece argument WHERE ITS VALUE COMES FROM -- another piece's
     return position, the attention op's output buffer, a weight, positions, input ids, or a symbolic int.  This is the wiring the
     Inductor wrappers cannot show (they see `argN_1`)."""
-    src = Path(path).read_text()
+    with open(path) as f:
+        src = f.read()
     top, *classes = re.split(r"\n    class (submod_\d+)\(torch\.nn\.Module\):", src)
     sigs: dict[str, list[tuple[str, str]]] = {}
     is_attn: dict[str, bool] = {}
@@ -369,7 +370,10 @@ COMMANDS = {"verify": VerifyOptions}
 
 
 def main(a: VerifyOptions) -> int:
-    used, rebuilt = (json.loads(Path(p).read_text()) for p in (a.manifest, a.rebuilt))
+    with open(a.manifest) as f:
+        used = json.load(f)
+    with open(a.rebuilt) as f:
+        rebuilt = json.load(f)
     # a Build may leave out its rows, its populations and its compile artifact, or hold each empty: then it has none
     rows = used.get("identities")
     rows = rows if rows else []

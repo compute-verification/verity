@@ -1,0 +1,12 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "vllm/serving-cost-glm53"
+title = "GLM-5.3's serving cost over stock vLLM"
+owner = "vllm"
+unit = "percent of stock's serving compute"
+better = "lower"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model glm53"
+every = "7d"
+goal = "vllm/serving-cost-benchmark"

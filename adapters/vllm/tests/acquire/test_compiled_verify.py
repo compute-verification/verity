@@ -66,6 +66,23 @@ def test_a_build_that_differs_is_refused_and_says_why(tmp_path, capsys, side, ch
     assert line.startswith("[compiled_manifest verify] ok=False ") and f" -- {rec['why']} -> " in line
 
 
+@pytest.mark.parametrize("side", ["--manifest", "--rebuilt"])
+@pytest.mark.parametrize(("form", "refusal"), [("{}/", NotADirectoryError), ("", FileNotFoundError)], ids=["slash-after", "empty"])
+def test_a_build_is_opened_at_the_path_as_given(tmp_path, monkeypatch, side, form, refusal):
+    """A Build's path is opened as it is given, nothing normalised on the way: a file's name with a slash after it names no
+    directory, the empty path names nothing, and no record is written."""
+    used, rebuilt = _builds()
+    args = {"--manifest": str(tmp_path / "build.json"), "--rebuilt": str(tmp_path / "build_rebuilt.json")}
+    (tmp_path / "build.json").write_text(json.dumps(used))
+    (tmp_path / "build_rebuilt.json").write_text(json.dumps(rebuilt))
+    args[side] = form.format(args[side])
+    out = tmp_path / "manifest_verify.json"
+    monkeypatch.chdir(tmp_path)     # the suite's read guard takes an open of "" for a read of the directory the test runs in
+    with pytest.raises(refusal):
+        cli.main(["compiled", "verify", "--manifest", args["--manifest"], "--rebuilt", args["--rebuilt"], "--out", str(out)])
+    assert not out.exists()
+
+
 LEFT_OUT = "left out"
 
 

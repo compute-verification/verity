@@ -30,7 +30,6 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
@@ -113,8 +112,8 @@ def device_cc() -> tuple[tuple[int, int] | None, str]:
         import torch  # the fallback only: this module is torch-free at import
 
         if torch.cuda.is_available():
-            major, minor = torch.cuda.get_device_capability(0)
-            return (major, minor), "torch.cuda.get_device_capability"
+            capability: Any = tuple(torch.cuda.get_device_capability(0))
+            return capability, "torch.cuda.get_device_capability"
         return None, "torch.cuda.is_available() False"
     except Exception as e:  # noqa: BLE001
         return None, f"no device: {type(e).__name__}"
@@ -218,8 +217,13 @@ class Options:
 
 
 def main(a: Options) -> int:
-    wl = json.loads(Path(a.workload).read_text()) if a.workload and os.path.exists(a.workload) else None
-    bs = json.loads(Path(a.build_summary).read_text()) if a.build_summary and os.path.exists(a.build_summary) else None
+    wl = bs = None
+    if a.workload and os.path.exists(a.workload):
+        with open(a.workload) as f:
+            wl = json.load(f)
+    if a.build_summary and os.path.exists(a.build_summary):
+        with open(a.build_summary) as f:
+            bs = json.load(f)
     stages = [s for s in a.stages.replace(" ", "").split(",") if s]
     rec = check(a.row, wl, stages, want_device=not a.no_device, build_summary=bs, waiver=a.waiver, devices=a.devices,
                 match_phase=a.match_phase)

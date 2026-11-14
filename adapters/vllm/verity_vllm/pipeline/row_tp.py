@@ -576,6 +576,7 @@ class TpRow(Row):
                        "--hidden-so", self.hidden_so, "--openings", "64", "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.commit_util}", *self.engine, *self.build_ranks(),
                        "--required-manifest", f"{d}/manifest.json", *match, "--checkpoint-dir", self.ck, "--checkpoint-model", self.repo,
+                       "--checkpoints-manifest", self.path("manifests/checkpoints.json"),
                        *arms, "--replay-workers", str(ck.replay_workers), "--label", self.row, "--out", f"{d}/commit")
         if not self.config_run and self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):
             cmd.append("--require-fold-match")

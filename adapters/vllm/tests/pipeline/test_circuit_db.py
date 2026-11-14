@@ -21,12 +21,12 @@ from verity.circuits.evaluation.reference import evaluate
 from tests.program.test_running_example import make_program
 from verity_vllm import glue
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.config import WORKLOADS, RowId, UsageError
+from verity_vllm.config import WORKLOADS, RowId, UsageError, workload_file
 from verity_vllm.pipeline import circuit_db, cli, epoch
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research_outputs as ro
 from verity_vllm.pipeline import row_records as RR
-from verity_vllm.properties.record import REGISTRY, seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 REPO = "meta-llama/Llama-3.2-1B"
@@ -45,7 +45,7 @@ SUMMARY: dict[str, Any] = {
 def test_index_names_rows_of_record():
     for row, e in circuit_db.index().items():
         RowId.parse(row)
-        assert (WORKLOADS / f"{row}.json").is_file(), row
+        assert workload_file(WORKLOADS / f"{row}.json").is_file(), row
         assert e["record"] is None or circuit_db.ART.fullmatch(e["record"]), (row, e["record"])
         assert "aot" not in e or (circuit_db.RUN.fullmatch(e["aot"]["comparison"]) and circuit_db.ART.fullmatch(e["aot"]["trace"])
                                   and RowId.parse(row).world > 1), (row, e["aot"])
@@ -97,7 +97,7 @@ def store(tmp_path, monkeypatch):
     monkeypatch.setattr(circuit_db, "INDEX", tmp_path / "records.json")
     (tmp_path / "maps").mkdir()
     monkeypatch.setattr(CM, "MAPS", tmp_path / "maps")
-    _w(tmp_path / "workloads" / f"{ROW}.json", _capped(json.loads((WORKLOADS / f"{ROW}.json").read_text())))
+    _w(tmp_path / "workloads" / f"{ROW}.json", _capped(json.loads(workload_file(WORKLOADS / f"{ROW}.json").read_text())))
     monkeypatch.setattr(CR, "WORKLOADS", tmp_path / "workloads")
     return LocalStore(tmp_path / "store", config_path=tmp_path / "store.toml")
 
@@ -224,7 +224,7 @@ def test_publish_refuses_a_failed_row_another_builds_commit_and_a_build_without_
 def test_publish_refuses_a_row_not_done_only_at_its_public_cap_before_it_writes_anything(tmp_path, store):
     d = _row_dir(tmp_path)
     build = _build_art(store, d, tmp_path / "run")
-    wl, eos = CR.WORKLOADS / f"{ROW}.json", json.loads((WORKLOADS / f"{ROW}.json").read_text())
+    wl, eos = CR.WORKLOADS / f"{ROW}.json", json.loads(workload_file(WORKLOADS / f"{ROW}.json").read_text())
     publish = lambda: circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits",  # noqa: E731
                                       tier="fast", summary=_served(d))
     stored = store.artifact_ids()
@@ -382,7 +382,7 @@ def test_pull_refuses_a_row_not_done_only_at_its_public_cap_before_it_touches_th
     art = circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="heavy",
                           summary=_served(d))
     monkeypatch.setattr(circuit_db, "INDEX", tmp_path / "checkout.json")
-    _w(CR.WORKLOADS / f"{ROW}.json", json.loads((WORKLOADS / f"{ROW}.json").read_text()))
+    _w(CR.WORKLOADS / f"{ROW}.json", json.loads(workload_file(WORKLOADS / f"{ROW}.json").read_text()))
     with pytest.raises(UsageError, match=rf"{ROW}: a row of record \(records\.json\) is done only at its public cap, and its done source "
                                          r"is 'eos-token'.*pull would index it as one, so it indexes nothing"):
         circuit_db.pull(art)
@@ -450,7 +450,7 @@ def test_a_row_is_switched_by_a_comparison_equal_on_every_rank_and_publishes_onl
 def test_switch_refuses_a_row_not_done_only_at_its_public_cap_before_it_touches_the_index(tmp_path, store):
     d = _row_dir(tmp_path)
     run, trace, cmp = "r20261018-001500-aaaa", "art:" + "5" * 64, _comparison(d)
-    wl, eos = CR.WORKLOADS / f"{ROW}.json", json.loads((WORKLOADS / f"{ROW}.json").read_text())
+    wl, eos = CR.WORKLOADS / f"{ROW}.json", json.loads(workload_file(WORKLOADS / f"{ROW}.json").read_text())
     _w(wl, eos)
     with pytest.raises(UsageError, match=rf"{ROW}: a row of record \(records\.json\) is done only at its public cap, and its done source "
                                          r"is 'eos-token'.*switch would index it as one, so it switches nothing"):

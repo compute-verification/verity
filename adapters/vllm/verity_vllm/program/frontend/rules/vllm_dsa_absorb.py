@@ -7,6 +7,8 @@ from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
 
+from typing import cast
+
 import torch
 from verity.circuits.refs import array_of
 
@@ -80,9 +82,7 @@ def _single_data_user(node):
 def _transpose_01(node, ctx) -> bool:
     if not isinstance(node, torch.fx.Node) or node.target is not aten.transpose.int or len(shape(ctx, node) or ()) != 3:
         return False
-    d0, d1 = node.args[1], node.args[2]
-    if not isinstance(d0, int) or not isinstance(d1, int):
-        return False
+    d0, d1 = int(cast("int", node.args[1])), int(cast("int", node.args[2]))  # an fx argument's annotation is wider
     d0 = d0 + 3 if d0 < 0 else d0
     d1 = d1 + 3 if d1 < 0 else d1
     return {d0, d1} == {0, 1}

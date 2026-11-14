@@ -40,7 +40,13 @@ def checkpoint(tmp_path_factory):
 def scheduler(checkpoint):
     """vLLM's scheduler on the pool, at the limit vLLM fitted the launch at -1 to; and its config."""
     import torch
-    from vllm.config import CacheConfig, DeviceConfig, ModelConfig, SchedulerConfig, VllmConfig
+    from vllm.config import (
+        CacheConfig,
+        DeviceConfig,
+        ModelConfig,
+        SchedulerConfig,
+        VllmConfig,
+    )
     from vllm.v1.core import kv_cache_utils as K
     from vllm.v1.core.sched.scheduler import Scheduler
     from vllm.v1.core.single_type_kv_cache_manager import register_all_kvcache_specs
@@ -77,6 +83,7 @@ def serve(sched, requests):
 
     for r in requests:
         sched.add_request(r)
+    done: dict[str, tuple[int, str | None]]
     rows, done = [], {}
     for _ in range(4 * FITTED):
         so = sched.schedule()

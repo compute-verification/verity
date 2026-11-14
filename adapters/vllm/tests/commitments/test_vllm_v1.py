@@ -30,7 +30,8 @@ def _path(entries: list[str | None]) -> list[bytes | None]:
 
 
 def test_vectors_file_is_what_the_reference_generates() -> None:
-    assert V.VECTORS.read_text(encoding="utf-8") == V.render(), f"{V.VECTORS} is not what tests/commitments/vectors.py renders"
+    assert V.VECTORS.read_text(encoding="utf-8") == V.render(), (
+        f"{V.VECTORS} is not what tests/commitments/vectors.py renders; from adapters/vllm, `{V.GENERATOR}` writes it again")
 
 
 def test_scheme_implements_the_interface() -> None:
@@ -189,7 +190,9 @@ def test_headers_refuse_fields_that_would_alias() -> None:
 
 
 def test_sha512_vectors_file_is_what_the_reference_generates() -> None:
-    assert V512.VECTORS.read_text(encoding="utf-8") == V512.render(), f"{V512.VECTORS} is not what tests/commitments/vectors_sha512.py renders"
+    assert V512.VECTORS.read_text(encoding="utf-8") == V512.render(), (
+        f"{V512.VECTORS} is not what tests/commitments/vectors_sha512.py renders; from adapters/vllm, "
+        f"`{V512.GENERATOR}` writes it again")
 
 
 def test_sha512_leaves_and_tree_hash_vectors() -> None:

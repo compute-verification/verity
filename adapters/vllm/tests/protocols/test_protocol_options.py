@@ -16,7 +16,8 @@ from typing import Any
 
 import pytest
 
-from verity_vllm import config
+from verity_vllm import config, errors
+from verity_vllm import llm as L
 from verity_vllm import protocols as PO
 from verity_vllm.config import RowConfig
 from verity_vllm.engine import hooks
@@ -29,6 +30,7 @@ from verity_vllm.program.frontend.target_profile import (
     TargetProfile,
     check_reuse,
 )
+from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 
 DEFAULT_DIGEST = "86c255b375c6cf028a3bc3b7deeed96fd10b520956325accb8b541fbc90026b1"   # TargetProfile() on main before the field existed
 ALL = ("pouw:ncp-v1", "pous:band-chain/d12/v1", "sampled-proofs:rows-sha512")
@@ -182,6 +184,15 @@ def test_the_record_says_what_each_option_committed_to(monkeypatch):
     assert comp.info()["sampled-proofs:rows-sha512"]["commitment_scheme"] == "rows-sha512"
 
 
+def test_the_records_schema_is_the_registered_id_letter_for_letter(monkeypatch):
+    """A Commit's `protocols.json` on disk carries this string: the package's name for it, the registered id and what
+    `Composition.record` writes are that string, letter for letter."""
+    assert PO.RECORD_SCHEMA == PROTOCOL_COMPOSITION_SCHEMA == "verity-vllm/protocol-composition/v0"
+    _fake_adapter(monkeypatch, "pous", _pous([]))
+    with PO.install(Model(), PO.Context(stage="commit", enabled=("pous:s1",))) as comp:
+        assert comp.record("d" * 64)["schema"] == "verity-vllm/protocol-composition/v0"
+
+
 def test_an_install_that_raises_leaves_nothing_installed(monkeypatch):
     log: list[str] = []
     _fake_adapter(monkeypatch, "pouw", _pouw(log), schemes=("ncp-v1",))
@@ -219,6 +230,90 @@ def test_an_unknown_protocol_has_no_adapter():
     with pytest.raises(PO.Refused) as e:
         PO.adapter("zk")
     assert e.value.reasons == (reason,) and str(e.value) == f"protocol options refused: {reason}"
+
+
+def test_the_door_refuses_a_set_in_the_packages_words():
+    """`verity_vllm.llm.protocol_context` refuses a set the package refuses as the package does, before any engine
+    exists: `Refused` with every reason, reading "protocol options refused: " and then the reasons."""
+    opts = {"protocols": ALL[2], "protocols_config": None, "tensor_parallel_size": 1, "enforce_eager": True}
+    with pytest.raises(PO.Refused) as e:
+        L.protocol_context(opts)
+    assert e.value.reasons == PO.refusals(_serve(ALL[2], enforce_eager=True))
+    assert len(e.value.reasons) == 1 and e.value.reasons[0].startswith(f"{ALL[2]}: SPOT runs in the Commit stage")
+    assert str(e.value) == "protocol options refused: " + e.value.reasons[0]
+
+
+def test_the_packages_refusal_is_the_adapters_one_refused_named_protocol_options():
+    """`protocols.Refused` is `errors.Refused` under its old name; `refused`, which the package declares, builds it for
+    a caller to raise, named "protocol options"."""
+    assert PO.Refused is errors.Refused and "refused" in PO.__all__
+    r = PO.refused(["a", "b"])
+    assert type(r) is errors.Refused
+    assert (r.reasons, r.what, str(r)) == (("a", "b"), "protocol options", "protocol options refused: a; b")
+    assert PO.refused("a").reasons == ("a",)
+    with pytest.raises(errors.Refused) as e:
+        PO.adapter("zk")
+    assert type(e.value) is errors.Refused and e.value.what == "protocol options"
+
+
+def _no_runner(scheme, settings, llm, epoch):
+    raise RuntimeError("no runner")
+
+
+def _beside_a_live_option():
+    with PO.install(Model(), _serve(ALL[0])):
+        PO.install(Model(), _serve("pous:s1"))
+
+
+SPOT = config.PROTOCOLS[2]
+(POUB,) = PO.DRIVERS
+ROW_SET = ("pous:s1", ALL[2])
+AT_TP_2 = "protocol options at TP 2: each rank would install its own composition, which is not wired yet"
+NO_REGISTRY = "verity.protocols.accounting.pouw.verifier.not_a_circuit_registry"
+#: a refusal by name, the dict of the package it needs changed first (name, key, value), the call, and its reasons
+SAID = [
+    ("a driver off this tree", ("DRIVERS", POUB, "not_landed_here"), lambda: PO.driver(POUB, "remote"),
+     (f"{POUB}: its driver verity_vllm.protocols.not_landed_here.remote is not on this tree",)),
+    ("a protocol with no driver", None, lambda: PO.driver("pous", "remote"), (f"no driver of protocol 'pous' (known: {POUB})",)),
+    ("a circuit registry not installed", ("CIRCUITS", "pouw", NO_REGISTRY), lambda: PO.circuit_registry("pouw"),
+     (f"pouw: its circuit registry {NO_REGISTRY} is not installed ({NO_REGISTRY})",)),
+    ("an engine that fills nothing", None, lambda: PO.from_engine(_serve(ALL[0], filled={"pouw": ("runner",)}), object()),
+     (f"{ALL[0]}: its settings ['runner'] come from the built engine, which doesn't supply them: no runner",)),
+    ("an install beside a live option", None, _beside_a_live_option, (f"options installed outside this composition are live: ['{ALL[0]}']",)),
+    ("a Commit at TP 2", None, lambda: PO.commit_context(TargetProfile(protocols=ROW_SET), world=2), (AT_TP_2,)),
+    ("a row whose knob contradicts its target", None,
+     lambda: PO.at_row(",".join(ROW_SET), {"engine": {"target": {"protocols": [ALL[0], ALL[2]]}}}),
+     (f"PROTOCOLS {list(ROW_SET)} contradicts the workload target's protocols {[ALL[0], ALL[2]]}",)),
+    ("a row without SPOT", None, lambda: PO.at_row("pous:s1", {}),
+     (f"['pous:s1']: a row is a {SPOT} run, so its set names {SPOT}:<scheme> (serve without it through verity_vllm.LLM)",)),
+    ("a row at TP 2", None, lambda: PO.at_row(",".join(ROW_SET), {}, world=2), (AT_TP_2,)),
+]
+
+
+@pytest.mark.parametrize("patched,call,reasons", [c[1:] for c in SAID], ids=[c[0] for c in SAID])
+def test_a_refusal_reads_protocol_options_refused_and_then_its_reasons(monkeypatch, patched, call, reasons):
+    """Each refusal the package raises to its caller is a `Refused`, a `ValueError`, whose ``reasons`` is the tuple of its
+    reasons and whose text is "protocol options refused: " and then the reasons, joined by "; "."""
+    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",)).from_engine = _no_runner
+    _fake_adapter(monkeypatch, "pous", _pous([]))
+    if patched is not None:
+        monkeypatch.setitem(getattr(PO, patched[0]), *patched[1:])
+    with pytest.raises(PO.Refused) as e:
+        call()
+    assert e.value.reasons == reasons and isinstance(e.value, ValueError)
+    assert str(e.value) == "protocol options refused: " + "; ".join(reasons) and e.value.args == (str(e.value),)
+
+
+@pytest.mark.parametrize("kw,reason", [
+    ({"installs": False}, "this Commit (TP) installs no protocol options yet"),
+    ({"commit_scheme": "vllm-v1"}, (f"{ALL[2]} is what the target declares the Commit commits under, but its committer commits "
+                                    "under vllm-v1: run it with --commit-scheme rows-sha512"))])
+def test_the_commit_guard_says_its_own_refusal_as_the_package_does_on_one_line(monkeypatch, capsys, kw, reason):
+    _fake_adapter(monkeypatch, "pous", _pous([]))
+    with pytest.raises(SystemExit) as e:
+        PO.commit_guard(TargetProfile(protocols=ROW_SET), **kw)
+    assert e.value.code == 3
+    assert capsys.readouterr().out == f"[delta] REFUSE (fail-closed): protocol options refused: {reason}\n"
 
 
 def test_an_option_live_outside_the_composition_refuses_the_install(monkeypatch):
@@ -609,13 +704,13 @@ def test_beside_sampled_proofs_pearl_c_is_admitted_only_in_a_window_cut_at_its_s
     assert PO.refusals(_cut_window()) == (uncut,)
     other = PO.refusals(_cut_window("pouw:ncp-v2"))
     assert other[0] == uncut and "not 'pouw:ncp-v2'" in other[1] and "an adapter's cuts" in other[2]
-    assert PO.refusals(_cut_window(PEARL, x=1)) == ("sampled-proofs:rows-sha512: the sampled-proofs settings ['x'] are none "
-                                                    "of its (cut)",)
+    assert PO.refusals(_cut_window(PEARL, x=1)) == (("sampled-proofs:rows-sha512: the sampled-proofs settings ['x'] are none "
+                                                     "of its (cut)"),)
     ncp = PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"),
                      settings={"sampled-proofs": {PO.CUT: "pouw:ncp-v2"}})
-    assert PO.refusals(ncp) == ("the sampled-proofs setting 'cut' names 'pouw:ncp-v2', and a window's circuit is cut only at "
-                                "the sites of an enabled executor with no circuit of its own whose calls commit the tables "
-                                "the cut reads (an adapter's cuts)",)
+    assert PO.refusals(ncp) == (("the sampled-proofs setting 'cut' names 'pouw:ncp-v2', and a window's circuit is cut only at "
+                                 "the sites of an enabled executor with no circuit of its own whose calls commit the tables "
+                                 "the cut reads (an adapter's cuts)"),)
     assert PO.refusals(PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"))) == ()
     assert PO.refusals(_serve(PEARL, settings={"pouw": PEARL_SETTINGS})) == ()
     row = f"{PEARL},sampled-proofs:rows-sha512"

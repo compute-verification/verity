@@ -109,6 +109,42 @@ def test_chain_refuses_its_own_flags_among_the_stage_flags(tmp_path):
         row.main(ch)
 
 
+def test_main_hands_each_subcommand_to_what_runs_it_and_returns_its_answer(tmp_path, monkeypatch, capsys):
+    """`row stage` and `row shed` are the run store's, each asked for by its entry point, and `row stage` is handed the function that
+    runs a row; `row run` runs the row at the stages its caller named; `row fa-version` prints the number alone, which a row's setup
+    reads from the command's output."""
+    from verity_vllm.pipeline import row
+    env = {"PY": sys.executable}
+    calls: list[tuple] = []
+
+    class Store:
+        def __init__(self, module: str, entry: str):
+            self.asked = (module, entry)
+
+        def stage(self, o, run):
+            calls.append((*self.asked, o, run))
+            return 7
+
+        def shed(self, o):
+            calls.append((*self.asked, o))
+            return 8
+
+    def run_row(o, stages):
+        calls.append((o, stages))
+        return 9
+
+    monkeypatch.setattr(row, "run_store", Store)
+    monkeypatch.setattr(row, "run_row", run_row)
+    monkeypatch.setattr(row, "fa_version", lambda workload, target: {("w.json", None): 2, ("w.json", "{}"): 3}[workload, target])
+    st = cli.parse("row", ["stage", "commit", ROW, "R", "o/r", "rev"], env)
+    sh = cli.parse("row", ["shed", "--force"], env)
+    o = _opts(tmp_path, "--stages", "build,match")
+    assert (row.main(st), row.main(sh), row.main(o)) == (7, 8, 9)
+    assert calls == [(row.RESEARCH, "row stage", st, run_row), (row.RESEARCH, "row shed", sh), (o, "build,match")]
+    assert [row.main(cli.parse("row", ["fa-version", "w.json", *t], env)) for t in ([], ["--target", "{}"])] == [0, 0]
+    assert capsys.readouterr().out == "2\n3\n"
+
+
 def test_a_rows_effective_config_is_its_file_its_stage_configs_and_what_the_caller_moved(tmp_path, monkeypatch):
     """What a run of a row used (`row.effective_config`, written as the row's ``effective_config.json``): the row's file without its
     requests and that file's digest, the run's own words and which of them differ from the file's, each stage's config in full, the
@@ -472,6 +508,8 @@ def _batch_build(tmp_path, monkeypatch, summary: str = "PASS", compose_rc: int =
 def test_a_batch_composes_and_builds_its_manifest_without_waiting_for_the_envelope(tmp_path, monkeypatch):
     r, seen = _batch_build(tmp_path, monkeypatch)
     assert (r.LP, r.T) not in R.request_shapes(r.path(r.wl))
+    for marker in ("derives_done", "derives_failed"):                 # an earlier attempt's markers end nothing of this Build's
+        Path(f"{r.d}/build_workload.{marker}").touch()
     r.build()
     assert seen["before_derives_end"] == ((0, 0), True) and seen["manifests"] == ["w" * 64]
     assert seen["derived"] == [f"{r.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(r.path(r.wl), r.LP, r.T)]
@@ -816,6 +854,30 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     dense = _tp_row(tmp_path, TP_DENSE)
     cmd = dense.commit_cmd(R.applicable_taps(_tap_manifest(tmp_path / "dense.json", "norm_scales", "vocab_range"), dense.ck_))
     assert "--norm-tap-so" in cmd and "--vocab-range" in cmd and "--router-tap-so" not in cmd
+
+
+def test_a_tp_rows_commit_names_the_trees_checkpoint_pins_as_its_replay_does(tmp_path, monkeypatch):
+    """`tp-commit` with no ``--checkpoints-manifest`` takes the package's own; the row names the tree's file to it, the one it
+    names to `tp-commit-replay`, so the Commit's record says which pins its shards were held to.  A config run's Commit, one
+    instrumented arm with no Match to compare against, names it as a full run's does."""
+    tp = _tp_row(tmp_path, TP_DENSE)
+    pins = os.path.join(tp.tree, "manifests/checkpoints.json")
+    for row, config_run in ((tp, False), (_tp_row(tmp_path, TP_DENSE, "--config-run", "1"), True)):
+        cmd = row.commit_cmd([])
+        assert cmd[cmd.index("--checkpoints-manifest") + 1] == pins and cmd.count("--checkpoints-manifest") == 1, config_run
+        assert ("--only-arm" in cmd, "--match-dir" in cmd) == (config_run, not config_run)
+    seen: list[list[str]] = []
+
+    def run_tl(stage: str, to: int, log: str, argv: list[str]) -> int:
+        seen.append(argv)
+        return 0
+
+    monkeypatch.setattr(tp, "run_tl", run_tl)
+    monkeypatch.setattr(os.path, "isdir", lambda p: p == "/ck" or os.path.exists(p))
+    os.makedirs(f"{tp.d}/commit")
+    Path(f"{tp.d}/commit/replay_deferred.json").write_text("{}")
+    tp.replay()
+    assert [c[c.index("--checkpoints-manifest") + 1] for c in seen] == [pins]
 
 
 def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):

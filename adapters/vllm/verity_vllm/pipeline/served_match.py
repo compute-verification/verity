@@ -37,6 +37,7 @@ from typing import Any
 
 from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine import env as engine_env
+from verity_vllm.pipeline.row_json import read_json, write_json
 from verity_vllm.query.manifest.format import SERVED_IDS
 
 __all__ = ["Options", "ServedCommit", "main"]
@@ -131,24 +132,33 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
     # each tensor under its first registration, the name the loader fills from the checkpoint: the runner re-registers the block's
     # gate as its own `gate`
     named = {id(p): n for n, p in model.named_parameters()}
-    out: dict[str, dict[str, Any]] = {}
-    for m in runners:
+
+    def layer(m: Any) -> dict[str, Any]:
         ex, r, gate = m.routed_experts, m.router, getattr(m, "gate", None)
         experts = getattr(getattr(ex.quant_method, "moe_kernel", None), "fused_experts", None)
         w = {"gate": getattr(gate, "weight", None), "w13": ex.w13_weight, "w2": ex.w2_weight}
         E = int(ex.w13_weight.shape[0])
-        out[str(m.layer_name)] = {
+        return {
             **{k: {"weight": named.get(id(t)), "shape": list(t.shape)} if t is not None else None for k, t in w.items()},
             "E": E, "top_k": int(r.top_k), "renormalize": flag(lambda: r.renormalize), "VPT": router_vpt_bf16(E),
             "gate_held": gate is not None, "fused_gate": flag(lambda: m._fse_fuse_gate),
             "shared_experts": flag(lambda: m.shared_experts is not None), "routed_scaling": flag(lambda: m.routed_scaling_factor != 1.0),
             "softmax_router": flag(lambda: type(r) is FusedTopKRouter and r.scoring_func == "softmax"),
             "triton_experts": flag(lambda: type(experts) is TritonExperts and not ex.quant_method.is_monolithic),
-            "bias": flag(lambda: experts.w1_bias is not None or experts.w2_bias is not None),
-            "clamp": flag(lambda: experts.activation_config.clamp_limit is not None),
+            "bias": None if experts is None else flag(lambda: experts.w1_bias is not None or experts.w2_bias is not None),
+            "clamp": None if experts is None else flag(lambda: experts.activation_config.clamp_limit is not None),
             "silu": flag(lambda: m.activation == MoEActivation.SILU),
             "bf16": all(t is not None and t.dtype == torch.bfloat16 for t in w.values())}
-    return out
+
+    return {str(m.layer_name): layer(m) for m in runners}
+
+
+def _own_dirs() -> dict[str, str]:
+    """This process's own compile dirs (`engine.env.compile_dirs`); a process that was given none is refused."""
+    dirs = engine_env.compile_dirs()
+    if dirs is None:
+        raise UsageError("this process was not given its own compile dirs (engine.env.own_compile_dirs, ops/served_commit.sh)")
+    return dirs
 
 
 def build_here(src: Any, facts: dict[str, Any], schedule: list[dict[str, Any]], steps: int, out: str) -> dict[str, Any]:
@@ -158,21 +168,22 @@ def build_here(src: Any, facts: dict[str, Any], schedule: list[dict[str, Any]], 
     from verity_vllm.acquire import served as SV
 
     configs = src.launch_configs()
-    json.dump(configs, open(f"{out}/launch_configs.json", "w"), indent=1)
+    with open(f"{out}/launch_configs.json", "w") as f:
+        json.dump(configs, f, indent=1)
     graphs = glob.glob(os.path.join(facts["cache_dir"], "**", "computation_graph.py"), recursive=True)
     if len(graphs) != 1:
         raise UsageError(f"{len(graphs)} computation_graph.py under {facts['cache_dir']}: one split graph is required")
-    dirs = engine_env.compile_dirs()
-    if dirs is None:
-        raise UsageError("this process was not given its own compile dirs (engine.env.own_compile_dirs, ops/served_commit.sh)")
+    dirs = _own_dirs()
     kw = dict(split_graph=graphs[0], launch_configs=configs, schedule=schedule, steps=steps, capture_sizes=facts["cudagraph_capture_sizes"],
               max_num_seqs=facts["max_num_seqs"], device=device_of(facts))
     if facts.get("moe"):
         kw["moe"] = {"layers": facts["moe"], "pieces": dict(src.moe_pieces), "configs": src.moe_configs, "cc": facts["cc"]}
-        json.dump(kw["moe"], open(f"{out}/moe.json", "w"), indent=1)
+        with open(f"{out}/moe.json", "w") as f:
+            json.dump(kw["moe"], f, indent=1)
     build = SV.build(dirs["inductor"], routes={}, **kw)
     routes = SV.probe_routes(build["routes_missing"])
-    json.dump(routes, open(f"{out}/routes.json", "w"), indent=1)
+    with open(f"{out}/routes.json", "w") as f:
+        json.dump(routes, f, indent=1)
     return SV.build(dirs["inductor"], routes=routes, **kw)
 
 
@@ -213,7 +224,8 @@ def check_committed(build: dict[str, Any], com: Any, weight: Callable[[str], Any
     check = SC.ServedCheck(build, weight, rows=SC.ROWS if rows is None else rows, prompts=prompts, log=log, seed=seed)
     for s in sorted(com._layouts):
         values = {m.name: _words(S._committed(com, s, m.name)) for m in com._layouts[s]}
-        check.step(SC.Step(s, [(logical_request(rid, order), lo, hi) for rid, lo, hi in com.step_rows.get(s) or []], values))
+        filed = com.step_rows.get(s)    # a step the committer recorded no row order for is checked with no request rows
+        check.step(SC.Step(s, [(logical_request(rid, order), lo, hi) for rid, lo, hi in filed] if filed else [], values))
     return check.report()
 
 
@@ -230,9 +242,10 @@ class ServedCommit:
     weight: Callable[[str], Any] | None
 
     def __init__(self, build: dict[str, Any], fault: str | None) -> None:
-        from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
-
         from verity_vllm.acquire import served_artifact as SA
+        from verity_vllm.acquire.sources.served_compiled_source import (
+            ServedCompiledSource,
+        )
 
         if engine_env.compile_dirs() is None:
             raise UsageError("--compiled-taps served: the Build reads this process's own compile artifact; export its own "
@@ -270,11 +283,12 @@ class ServedCommit:
         except Unmodelled as e:
             b = {"program_digest": None, "manifest_digest": None, "complete": False, "unmodelled": {"build_refused": str(e)},
                  "populations": {"identities": 0}, "identities": []}
-        json.dump(b, open(f"{out}/build_rebuilt.json", "w"), indent=1)
-        loaded = b.get("artifact") or {"winners": SA.winners(engine_env.compile_dirs()["inductor"])}
+        with open(f"{out}/build_rebuilt.json", "w") as f:
+            json.dump(b, f, indent=1)
+        loaded = b.get("artifact") or {"winners": SA.winners(_own_dirs()["inductor"])}
         diff = SA.differences(self.pin, loaded, SA.PARTS if "artifact" in b else ("winners",))
-        json.dump({"pinned": self.pin["digest"], "loaded": loaded.get("digest"), "equal": not diff, "differences": diff},
-                  open(f"{out}/artifact_check.json", "w"), indent=1)
+        with open(f"{out}/artifact_check.json", "w") as f:
+            json.dump({"pinned": self.pin["digest"], "loaded": loaded.get("digest"), "equal": not diff, "differences": diff}, f, indent=1)
         if diff:
             print(f"[delta] REFUSE: this process loaded compile artifact {str(loaded.get('digest', 'of a refused Build'))[:16]}, not the Build of record's "
                   f"{self.pin['digest'][:16]} ({len(diff)} differences: {diff[:3]})", flush=True)
@@ -293,6 +307,8 @@ class ServedCommit:
         order = {str(q["request_id"]): f"r{i}" for i, q in enumerate(reqs)}
         prompts = {f"r{i}": [int(t) for t in q["prompt_token_ids"]] for i, q in enumerate(reqs)}
         try:
+            if self.weight is None:
+                raise UsageError("--compiled-taps served: a run's C2 before `engine` read the served weights")
             rep = check_committed(self.build, com, self.weight, prompts, order, seed=seed)
         except Exception as e:  # noqa: BLE001  -- recorded: the run's C2 fails with the error
             rep = {"ok": False, "error": repr(e)[:300], "traceback": traceback.format_exc()[-1200:], "tally": {}, "steps": {}, "failures": []}
@@ -303,7 +319,9 @@ class ServedCommit:
         pairs, unlinked, horizon, prompt_linked = 0, [], {}, {}
         for p in sorted(self.build["steps_plan"], key=lambda p: int(p["step"])):
             s = int(p["step"])
-            ids_ok = bool(((rep["steps"].get(str(s)) or {}).get(SERVED_IDS) or {}).get("ok"))
+            step = rep["steps"].get(str(s))                 # a step the check did not run has no report,
+            ids = step.get(SERVED_IDS) if step else None    # and one that did not check the served ids none of them
+            ids_ok = bool(ids.get("ok")) if ids else False
             for rq in p["requests"]:
                 pairs += 1
                 horizon.setdefault(rq["request_id"], [s, s])[1] = s
@@ -323,7 +341,7 @@ class ServedCommit:
                    "steps_unrun": rep.get("steps_unrun"), "mismatch": rep.get("failures"), "errors": self.src.errors,
                    "why": rep.get("error") or ("every value replays word for word from the committed values" if ok else "see mismatch/errors"),
                    "method": "sampled-exact-replay: the served Build's Program (acquire.served) on the committed values word for word "
-                             "(served_check.py): every call of every piece on every row; each GEMM and attention op on a seeded draw of "
+                             "(served_check.py): every call of every piece on every row; each GEMM and attention op on a seeded sample of "
                              "each request's rows; the logits and the sampled ids of every request"}
         linkage = {"result": linked_ok, "pairs": pairs, "unlinked_n": len(unlinked), "linked": pairs - len(unlinked), "unlinked": unlinked[:16],
                    "horizon": horizon, "prompt_linked": prompt_linked, "embed_op_path": SERVED_IDS, "committed_chain": chain,
@@ -347,7 +365,7 @@ def main(a: Options) -> int:
     dirs = engine_env.own_compile_dirs(out)
     from verity_vllm.acquire import served_artifact as SA
 
-    of_record = json.load(open(a.build_of_record)) if a.build_of_record else None
+    of_record = read_json(a.build_of_record) if a.build_of_record else None
     if of_record is not None:
         SA.seed(SA.pinned(of_record), dirs["TORCHINDUCTOR_CACHE_DIR"])
 
@@ -363,7 +381,7 @@ def main(a: Options) -> int:
 
     t0 = time.perf_counter()
     log = lambda s: print(f"[served-match {time.perf_counter() - t0:7.1f}s] {s}", flush=True)
-    wl = json.load(open(a.workload))
+    wl = read_json(a.workload)
     schedule, steps = schedule_of(wl)
     reqs = [SimpleNamespace(request_id=s["request_id"], prompt_token_ids=[int(t) for t in r["prompt_token_ids"]],
                             max_tokens=s["max_tokens"], arrive_step=s["arrive"]) for s, r in zip(schedule, wl["requests"])]
@@ -384,7 +402,7 @@ def main(a: Options) -> int:
         device_of(facts)
     except Unmodelled as e:
         log(f"Build refused: {e}")
-        json.dump({"ok": False, "build_refused": str(e), "facts": facts}, open(f"{out}/match.json", "w"), indent=1, default=str)
+        write_json({"ok": False, "build_refused": str(e), "facts": facts}, f"{out}/match.json")
         return 3
 
     com = NativeCollectCommitter(eng, run_id="served-match", arena_bytes=None, wrap=True, gather=True, native_hooks=True,
@@ -400,7 +418,10 @@ def main(a: Options) -> int:
     com.reset()
     src.begin_run()
     com.install()
-    params = lambda r: SamplingParams(temperature=0.0, max_tokens=r.max_tokens, ignore_eos=True, detokenize=False)
+
+    def params(r: SimpleNamespace) -> Any:
+        return SamplingParams(temperature=0.0, max_tokens=r.max_tokens, ignore_eos=True, detokenize=False)
+
     fin, _ = run_requests_arrivals(eng.llm, reqs, params)
     rc = com.finalize()
     facts.update(run_root=bytes(rc.run_root).hex(), tokens={rid: list(o.outputs[0].token_ids) for rid, o in fin.items()},
@@ -411,10 +432,11 @@ def main(a: Options) -> int:
         build = build_here(src, facts, schedule, steps, out)
     except Unmodelled as e:
         log(f"Build refused: {e}")
-        json.dump({"ok": False, "build_refused": str(e), "facts": facts}, open(f"{out}/match.json", "w"), indent=1, default=str)
+        write_json({"ok": False, "build_refused": str(e), "facts": facts}, f"{out}/match.json")
         return 3
-    json.dump(build, open(f"{out}/build.json", "w"), indent=1)
-    json.dump(facts, open(f"{out}/facts.json", "w"), indent=1, default=str)
+    with open(f"{out}/build.json", "w") as f:
+        json.dump(build, f, indent=1)
+    write_json(facts, f"{out}/facts.json")
     log(f"Build: program {build['program_digest'][:16]} manifest {build['manifest_digest'][:16]} identities {len(build['identities'])} "
         f"complete {build['complete']}")
 
@@ -425,8 +447,7 @@ def main(a: Options) -> int:
         of_record = {"program_digest": of_record["program_digest"], "artifact": of_record["artifact"]["digest"], "artifact_differences": diff[:20],
                      "equal": of_record["program_digest"] == build["program_digest"] and not diff}
     ok = bool(rep["ok"] and build["complete"] and not facts["errors"] and (of_record is None or of_record["equal"]))
-    json.dump({"ok": ok, "build": {**{k: build[k] for k in ("program_digest", "manifest_digest", "complete")}, "artifact": build["artifact"]["digest"]},
-               "build_of_record": of_record,
-               "check": rep, "facts": facts}, open(f"{out}/match.json", "w"), indent=1, default=str)
+    write_json({"ok": ok, "build": {**{k: build[k] for k in ("program_digest", "manifest_digest", "complete")}, "artifact": build["artifact"]["digest"]},
+                "build_of_record": of_record, "check": rep, "facts": facts}, f"{out}/match.json")
     log(f"Match {'PASS' if ok else 'FAIL'}: tally {json.dumps(rep['tally'])}")
     return 0 if ok else 1

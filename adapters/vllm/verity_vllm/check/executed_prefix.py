@@ -10,7 +10,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from pathlib import Path
 from typing import Any
 
 from verity_vllm.commit.executed_prefix import ACTIVE_REFERENCE_ONLY
@@ -35,7 +34,8 @@ def load_match_account(match_dir: str | None) -> dict[str, Any]:
             out["notes"].append(f"{os.path.relpath(path, match_dir)} not found")
             continue
         try:
-            raw = Path(path).read_bytes()
+            with open(path, "rb") as f:
+                raw = f.read()
             out[key] = GlobalMatch.of(json.loads(raw), path) if key == "global_match" else json.loads(raw)
             out[f"{key}_sha256"] = hashlib.sha256(raw).hexdigest()
         except Exception as e:  # noqa: BLE001

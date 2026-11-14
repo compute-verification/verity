@@ -10,10 +10,10 @@ import pytest
 from verity.circuits import word as W_
 
 from tests.check.test_sampled_replay_v2_addresses import _tp_rank_program, _v2_manifest
+from tests.properties.vocab_range_exactness import edge_ids, ir_values
 from verity_vllm.acquire import plan
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check.replay import coverage
-from verity_vllm.properties.vocab_range_exactness import edge_ids, ir_values
 from verity_vllm.query import vocab_range as VR
 from verity_vllm.query.manifest import format as fmt
 
