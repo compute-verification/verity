@@ -13,7 +13,7 @@ Three objects, all pure Python (no torch; testable on any host):
   for and only when every applicability condition it was built under holds for the requester; the refusal names every differing
   field with both values.
 
-Canonical bytes = `verity.circuits.codec.canonical_json` (compact, keys sorted, ASCII); a tuple is written as a list, a set as its sorted list.
+Canonical bytes = `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`; tuples are serialised as lists.
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ import json
 from dataclasses import asdict, dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
-from verity.circuits.codec import canonical_json
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
 from verity_vllm.program.frontend.compilations import COMPILATIONS
 from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
@@ -35,14 +34,15 @@ SCHEMA = "verity/aot-artifact/v1"
 
 
 def canonical_bytes(obj: Any) -> bytes:
-    return canonical_json(_plain(obj))
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=_json_default).encode()
 
 
-def _plain(o):  # a set as its sorted list, which is how these bytes have always held one
-    if isinstance(o, dict):
-        return {k: _plain(v) for k, v in o.items()}
-    seq = sorted(o) if isinstance(o, (set, frozenset)) else o
-    return [_plain(v) for v in seq] if isinstance(o, (list, tuple, set, frozenset)) else o
+def _json_default(o):
+    if isinstance(o, (set, frozenset)):
+        return sorted(o)
+    if isinstance(o, tuple):
+        return list(o)
+    raise TypeError(f"not canonicalisable: {type(o).__name__}")
 
 
 def sha256_hex(b: bytes) -> str:
@@ -455,15 +455,15 @@ class TargetProfile:
                     "program_derivation": "the eager Program's Definitions, each captured launch-dependent selection at the step's padded tokens",
                     "claim": "the eager kernels replayed from breakable CUDA graphs (no torch.compile): eager's Definitions at the capture size"}
         return {"enforce_eager": False, "compilation": {**self.COMPILATIONS[self.compilation], "profile": self.compilation},
-                "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact (compiled_relations.py; "
+                "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact ("
                                        "GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
-                                       "compilation facts + kernel_set digest (DECISIONS-2 §7 S1)" if not self.COMPILATIONS[self.compilation]["emulate_precision_casts"]
+                                       "compilation facts + kernel_set digest" if not self.COMPILATIONS[self.compilation]["emulate_precision_casts"]
                                        else "eager module-forward trace (the emulation performs the eager roundings inside the fused kernels)"),
                 "claim": ("P_compiled kernel-level conformance: every non-weight buffer of every kernel launch is committed under graph replay "
-                          "(wrapper-level hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes "
-                          "(S2: 4016/4016 launches on the B1 row); the eager Program is NOT a model of this execution (P_compiled != P_eager: "
+                          "(wrapper-level hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes; "
+                          "the eager Program is NOT a model of this execution (P_compiled != P_eager: "
                           "roundings elided, residual recomputed unrounded, other reduction orders; tokens diverge from eager). Attention = eager "
-                          "FA2 splitting op; lm_head eager (DECISIONS-2 §7, ruling M-0380)")}
+                          "FA2 splitting op; lm_head eager")}
 
     # -- serialisation ---------------------------------------------------------------------------------------------------
     def to_json(self) -> dict:
@@ -527,7 +527,9 @@ class TargetProfile:
     def tuned_gemm_arch_family(self) -> str | None:
         """vLLM's tuned-GEMM arch family for the declared capability (`gemm_targets.vllm_tuned_gemm_arch_family`: vLLM's own function
         when importable, else its pinned rule). Selects vLLM's tuned table — and therefore the launch geometry — on the target."""
-        from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # lazy: keeps this module light
+        from verity_vllm.program.frontend.gemm_targets import (
+            vllm_tuned_gemm_arch_family,  # lazy: keeps this module light
+        )
         return vllm_tuned_gemm_arch_family(self.compute_capability)
 
     def gemm_target(self, arch_family: Any = ...) -> GemmTarget:
@@ -552,7 +554,6 @@ class TargetProfile:
         import torch  # lazy: the module is torch-free on CPU hosts
         p = torch.cuda.get_device_properties(device)
         return cls.default().with_overrides(compute_capability=(int(p.major), int(p.minor)), num_sms=int(p.multi_processor_count))
-
 
     @classmethod
     def from_gpu_document(cls, doc: Any) -> TargetProfile | None:
@@ -595,11 +596,11 @@ class TargetProfile:
         tp = cls.from_gpu_document(profile_doc.get("gpu"))
         if tp is None:
             return None
-        fav = ((profile_doc.get("backends") or {}).get("attention_flash_attn_version"))
+        backends = profile_doc.get("backends")
+        fav = backends.get("attention_flash_attn_version") if backends else None
         if fav is not None and int(fav) != tp.effective_flash_attn_version():
             tp = tp.with_overrides(flash_attn_version=int(fav))
         return tp
-
 
     @property
     def capability_str(self) -> str:
@@ -676,7 +677,6 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
         if got != profile.moe_experts_class():
             bad.append(f"moe_backend declared {profile.moe_backend!r} ({profile.moe_experts_class()}), applied {got!r}")
     return bad
-
 
 
 # -- the artifact wrapper --------------------------------------------------------------------------------------------------

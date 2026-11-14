@@ -35,18 +35,27 @@ import math
 import os
 from typing import Any
 
-from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
+from verity_vllm.acquire.sources.hidden_source import (
+    CHUNK_WORDS,
+    fa2_kblock_n,
+    fa3_tile,
+    mat_total_words,
+)
+from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.pipeline.telemetry import admission as plan
+from verity_vllm.records.schema_ids import ADMISSION_BOUND_SCHEMA
 
-SCHEMA = "verity-sweep/admission/f-da-15/v1"
+__all__ = ["admission", "committer_resident"]
+
+SCHEMA = ADMISSION_BOUND_SCHEMA
 LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes
-MiB = 1 << 20
 
 
 def _hidden_words(HB: int, M: int, NB: int, BN: int, D: int) -> int:
     return -(-mat_total_words(HB, M, NB, BN, D) // CHUNK_WORDS) * CHUNK_WORDS
 
 
-def _launch_hidden_words(model: dict[str, Any], *, n_seq: int, seqlen_q: int, seqlen_k: int, per_sequence: bool) -> int:
+def _launch_hidden_words(model: dict[str, Any], *, n_seq: int, seqlen_q: int, seqlen_k: int) -> int:
     """Words of the M1 hidden stream(s) one attention launch binds, in the geometry the record shows (see module doc)."""
     heads, kvh, hd = int(model["heads"]), int(model["kv_heads"]), int(model["head_dim"])
     g = max(1, heads // kvh)
@@ -65,14 +74,16 @@ def _launch_hidden_words(model: dict[str, Any], *, n_seq: int, seqlen_q: int, se
 
 def per_token_bytes_of(sizing: dict[str, Any]) -> tuple[int, str | None]:
     """The sizing record's bytes per token, corrected by name when the record predates the per-layer RotaryEmbedding count (the module
-    is shared by every layer and invoked once per layer; `step_bound_bytes` counted it once -> 76,800 B/token short on Llama-3.2-1B)."""
+    is shared by every layer and invoked once per layer; `step_bound_bytes` counted it once -> 76,800 B/token short on Llama-3.2-1B).
+    A record may leave out its `widths` or its `model`: no width, or one layer, is nothing to add."""
     pt = int(sizing["per_token_bytes"])
     if sizing.get("rope_per_layer"):
         return pt, None
-    rope = int((sizing.get("widths") or {}).get("RotaryEmbedding") or 0)
-    layers = int((sizing.get("model") or {}).get("layers") or 1)
+    widths, model = sizing.get("widths"), sizing.get("model")
+    rope = int((widths.get(LC.ROTARY) if widths else None) or 0)
+    layers = int((model.get("layers") if model else None) or 1)
     if rope and layers > 1:
-        return pt + rope * (layers - 1), f"RotaryEmbedding width {rope} B counted once in the sizing record: x{layers} layers (+{rope * (layers - 1)} B/token)"
+        return pt + rope * (layers - 1), f"{LC.ROTARY} width {rope} B counted once in the sizing record: x{layers} layers (+{rope * (layers - 1)} B/token)"
     return pt, None
 
 
@@ -86,7 +97,7 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
     per_seq, per_step = int(sizing["per_seq_bytes"]), int(sizing["per_step_bytes"])
     reqs = []
     for i, r in enumerate(requests):
-        p = int(r.get("prompt_len") or len(r.get("prompt_token_ids") or []))
+        p = plan.request_prompt_len(r)
         c = int(r.get("max_tokens") or 1)
         a = int(r.get("arrive_step") or 0)
         if p <= 0 or c <= 0 or a < 0:
@@ -114,13 +125,17 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
         hid = 0
         if hidden_m1:
             for r in pref:
-                hid += _launch_hidden_words(model, n_seq=1, seqlen_q=r["prompt"], seqlen_k=K, per_sequence=True)
+                hid += _launch_hidden_words(model, n_seq=1, seqlen_q=r["prompt"], seqlen_k=K)
             if dec:
-                hid += _launch_hidden_words(model, n_seq=len(dec), seqlen_q=1, seqlen_k=K, per_sequence=False)
+                hid += _launch_hidden_words(model, n_seq=len(dec), seqlen_q=1, seqlen_k=K)
         hb = layers * 4 * hid
         tb, sb, pb = tokens * per_token, len(live) * per_seq, per_step * chunks
         b = tb + sb + pb + hb
-        tot += b; tok_b += tb; seq_b += sb; step_b += pb; hid_b += hb
+        tot += b
+        tok_b += tb
+        seq_b += sb
+        step_b += pb
+        hid_b += hb
         decode_rows += len(dec)
         steps.append({"step": s, "prefills": len(pref), "decodes": len(dec), "tokens": tokens, "K": K, "chunks": chunks, "bytes": b, "hidden_bytes": hb})
     peak = max(steps, key=lambda x: x["bytes"])
@@ -171,7 +186,6 @@ def committer_resident(workload: dict[str, Any], host_cap_bytes: int | None, *, 
     """What the Commit holds beside the pinned pool at its peak, from the row planner's commit stage (`telemetry.admission.predict`):
     the C2 Programs and match oracle, the leaf digests, the binding index, the forked replay workers, the serving base and the margins.
     #23 B64 Llama: pool 183,694 MiB + resident 122,745 MiB; the pool alone fit the 239,372 MiB limit and the run OOM'd at it."""
-    from verity_vllm.pipeline.telemetry import admission as plan
     cfg = plan.row_config_from_workload(workload, pairs=max(1, int(pairs)), replay_workers=replay_workers, host_limit_bytes=host_cap_bytes)
     cfg.host_cpus = os.cpu_count() or cfg.host_cpus
     commit = plan.predict(cfg)["commit"]
@@ -218,7 +232,8 @@ def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_b
                                         f"container memory limit {host_cap_bytes >> 20} MiB by {(predicted - host_cap_bytes) >> 20} MiB -- not launched unchanged; "
                                         f"the change that admits it is a larger container or a non-host retention, never a smaller check"))
     else:
-        envp = rec["envelope_predicted_host_bytes"]
+        # read back typed Any: the record's fields are evaluated in their order, as on main, and its values are objects to mypy
+        envp: Any = rec["envelope_predicted_host_bytes"]
         env_note = (f"envelope bound {envp >> 20} MiB was {'over' if envp > host_cap_bytes else 'under'} it" if envp else "no envelope bound on this record")
         rec.update(admitted=True, why=f"predicted host {predicted >> 20} MiB (pool {pool >> 20} MiB = raw {raw >> 20} MiB x{levels_factor}; resident "
                                       f"{(predicted - pool) >> 20} MiB) fits the container limit "

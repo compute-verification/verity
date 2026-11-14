@@ -100,8 +100,11 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
   let (draw, _, read) ← IO.ofExcept (← timed "select" v.program
     (fun pr => Select.select res pr v.query v.workTable none source) isOk)
   let family := match getD j "family" with | .str f => some f | _ => none
+  let key : Option Challenger.ChallengerKey ← match getD j "key" with
+    | .null => pure none
+    | k => some <$> IO.ofExcept (Challenger.ChallengerKey.ofJson k)
   let _ ← timed "coinsCode" (getD j "coins")
-    (fun c => Run.coinsCode c rec_ v.windowRoot family (source.extract 0 read)) (·.isNone)
+    (fun c => Run.coinsCode key (getD j "main") c rec_ v.windowRoot family (source.extract 0 read)) (·.isNone)
   let _ ← timed "checkDraw" draw (fun d => Draw.checkDraw d (getD rec_ "population") derived) (·.isEmpty)
   let proved := Draw.proved draw
   let _ ← timed "checkVerdicts" verdicts (fun vs => Service.checkVerdicts vs sessions outputs)

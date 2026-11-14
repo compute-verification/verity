@@ -10,9 +10,12 @@ the run dir first), publishes only its report, windows.jsonl and serve.json, and
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
 seed or trace record); chain runs chain_record.sh's warden path on the kept fetch with the endpoint's art or a dry
 rehearsal's records, and is refused without the leak guard; its sample on the gate's coins names the auditor's node as
-the coin link's peer, and the served node is refused."""
+the coin link's peer, and the served node is refused. The gate's host is the challenger host's address, which the
+environment holds and site.json only names the variable of: a session, or a chain on the gate's coins, without it is
+refused by that name before anything is sent."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import io
 import json
@@ -34,6 +37,9 @@ import served_session as SS  # noqa: E402
 import scan_zk as sz  # noqa: E402
 
 RUN = "c20261028T120000Z-0000"
+#: the challenger host's address as the environment holds it, here a documentation address, and the gate `SS.GATE` is then
+CHALLENGER_HOST = "192.0.2.21"
+LIVE_GATE = f"research@{CHALLENGER_HOST}"
 #: made-up names of a served node and of an auditor's node, for where any name does
 SOME_PEER, SOME_AUDITOR = "some-served-node", "some-auditors-node"
 #: a witness value (the stub's witness/certified.jsonl) its status plants with STUB_NOTE: two of the guard's text pieces
@@ -140,6 +146,9 @@ def test_the_plans_runs_are_on_the_nodes_it_is_given_and_its_commands_name_no_ot
     assert (session.cmd, session.peer) == ("session", SOME_PEER) and not hasattr(session, "auditor")
     # the chain samples on the gate's coins where it runs
     assert SS.parser().parse_args(shlex.split(runs["chain"][-1])[2:]).coin_peer == SOME_AUDITOR
+    # the two runs that ask the gate take the challenger host's address from the launcher's environment
+    assert {name for name, run in runs.items() if "VY_CHALLENGER_1_HOST=$VY_CHALLENGER_1_HOST" in run} == {"session", "chain"}
+    assert CHALLENGER_HOST not in text
     # nothing of site.json is written into the plan but the lane, which is each run's --as
     assert not [k for k, v in SS.SITE.items() if k != "lane" and v in text]
 
@@ -157,6 +166,31 @@ def test_the_plans_runs_are_on_the_nodes_it_is_given_and_its_commands_name_no_ot
 def test_a_request_the_gate_or_the_class_refuses_is_refused_with_its_reason(flags, why, capsys):
     assert SS.main(["plan", *flags]) == 2
     assert why in capsys.readouterr().err
+
+
+@pytest.fixture(autouse=True)
+def challenger_host(monkeypatch):
+    monkeypatch.setenv("VY_CHALLENGER_1_HOST", CHALLENGER_HOST)
+
+
+def test_the_gates_host_is_the_address_the_environment_holds_and_unset_it_is_refused_by_name(tmp_path, monkeypatch, capsys):
+    """site.json names the variable that holds the challenger host's address, never the address: `gate_at` fills it,
+    leaves a gate given whole and ``local`` as they are, and a session or a chain on the gate's coins with it unset is
+    refused, naming it, before anything is sent or written. A plan, and a chain on the verifier's coins, read no gate."""
+    assert SS.GATE == "research@${VY_CHALLENGER_1_HOST}" and SS.gate_at(SS.GATE) == LIVE_GATE
+    assert [SS.gate_at(g) for g in ("local", "vy-admin@192.0.2.9")] == ["local", "vy-admin@192.0.2.9"]
+    monkeypatch.delenv("VY_CHALLENGER_1_HOST")
+    why = ("refused: VY_CHALLENGER_1_HOST is unset: the gate is research@${VY_CHALLENGER_1_HOST}, so set it to the "
+           "challenger host's address, or give --gate USER@HOST")
+    (tmp_path / "out").mkdir()
+    assert SS.main(["session", "--out", str(tmp_path / "out"), "--keep", str(tmp_path / "keep")]) == 2
+    assert why in capsys.readouterr().err and list(tmp_path.iterdir()) == [tmp_path / "out"]
+    assert list((tmp_path / "out").iterdir()) == []
+    assert SS.main(["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate"]) == 2
+    assert why in capsys.readouterr().err
+    assert SS.main(["chain", "--run", RUN, "--keep", str(tmp_path / "keep")]) == 2
+    assert "no kept fetch" in capsys.readouterr().err
+    assert SS.main(["plan"]) == 0
 
 
 def _session(tmp_path, monkeypatch, *flags):
@@ -520,7 +554,7 @@ def test_a_gate_coin_draw_runs_on_the_auditors_side_and_never_on_the_served_node
     argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
     assert SS.main(argv) == 0
     scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")
-    assert scan == ["--draw", "8", "--challenger", f"gate:{SS.GATE}", "--main", str(tmp_path / "main.txt"), "--peer",
+    assert scan == ["--draw", "8", "--challenger", f"gate:{LIVE_GATE}", "--main", str(tmp_path / "main.txt"), "--peer",
                     SS.AUDITOR, "--challenger-key", str(tmp_path / "challenger-key.json"),
                     "--gate-key", str(tmp_path / "gate-key")]
     for peer in (SS.PEER, SOME_PEER):
@@ -532,3 +566,28 @@ def test_a_gate_coin_draw_runs_on_the_auditors_side_and_never_on_the_served_node
     assert "no gate key" in capsys.readouterr().err
     assert SS.main([a for a in argv if a not in ("--draw", "8")]) == 2
     assert "give K" in capsys.readouterr().err
+
+
+def test_a_relay_sessions_request_is_the_gates_and_a_run_opened_earlier_is_ended_by_its_close(tmp_path, monkeypatch):
+    """A namespace naming a ``client_port`` asks for the gate's relay session, which this tree's gate takes; one with
+    a ``close`` starts nothing: the session's fetch is what ``close`` returns, kept and published as any session's."""
+    a = argparse.Namespace(peer=SOME_PEER, port=18782, client_port=8012, windows=20, minutes=8, height=10,
+                           bucket_ms=None, scan_class=None)
+    assert SS.words(a) == ["relay-session", "--peer", SOME_PEER, "--port", "18782", "--client-port", "8012",
+                           "--windows", "20", "--minutes", "8", "--height", "10"]
+    a.bucket_ms, a.scan_class = 200, "w63"
+    assert SS.words(a)[-4:] == ["--bucket-ms", "200", "--scan-class", "w63"]
+    req = SS.A.REHEARSALS["relay-session"](SS.words(a)[1:], SS.scratch_host(tmp_path / "host", SOME_PEER))
+    assert (req["client_port"], req["windows"], req["bucket_ms"], req["scan_class"]) == (8012, 20, 200, "w63")
+    assert _session(tmp_path, monkeypatch) == 0
+    full, asked = (tmp_path / "keep" / RUN / "fetch.tar.gz").read_bytes(), (tmp_path / "request").read_text()
+    (tmp_path / "request").unlink()
+    a.gate, a.at, a.keep, a.out = "research@some-gate", None, tmp_path / "keep-2", tmp_path / "out-2"
+    a.close = lambda hold: full
+    a.out.mkdir()
+    assert SS.session(a, b"", []) == 0
+    assert not (tmp_path / "request").exists() and asked.startswith("warden-rehearse ")
+    assert (tmp_path / "keep-2" / RUN / "fetch.tar.gz").read_bytes() == full
+    assert sorted(p.name for p in a.out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json"]
+    doc = json.loads((a.out / "session.json").read_text())
+    assert doc["request"] == shlex.join(SS.words(a)) and doc["gate"] == "research@some-gate"

@@ -128,7 +128,7 @@ def test_the_construction_is_declared_and_selected_by_name_never_inferred(tmp_pa
     with pytest.raises(ValueError):
         ov_moe_patterns(C, gemm_constexprs={}, gemm_num_sms=1, moe_construction="fixed-slot")
     # run_config reads the declaration from the row file (engine.target.moe_construction) and validates it by the frontend's table
-    from verity_vllm.pipeline.match import _workload_moe_construction
+    from verity_vllm.pipeline.match_workload import _workload_moe_construction
     base = {"schema": "x", "requests": [], "sampling": {}}
     for name, target, want in (("none", None, None), ("pad", {"moe_construction": "padded"}, "padded"), ("ir", {"moe_construction": "indexed-read"}, "indexed-read")):
         p = tmp_path / f"{name}.json"

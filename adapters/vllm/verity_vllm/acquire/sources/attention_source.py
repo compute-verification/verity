@@ -44,7 +44,7 @@ import inspect
 import re
 import sys
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, cast
 
 import torch
 
@@ -156,16 +156,13 @@ class AttentionSource:
         unknown = sorted(set(self.taps) - TAPS)
         if unknown:
             raise ValueError(f"capture map {self.cmap.get('id')}: the attention source binds no tap {unknown}")
-        #: tap id -> layer -> the committed name, for the taps bound here (the target_only ones on the target only)
-        self.names = {tid: {i: CM.at_layer(t["commit"]["name"], i) for i in self._layers_of(t)}
+        #: tap id -> layer -> the committed name, for the taps bound here (the target_only ones on the target only).  Each is bound at
+        #: an attention layer's call; a model-level tap (`layer`) has no layers, and the loop over None raises `TypeError`
+        self.names = {tid: {i: CM.at_layer(t["commit"]["name"], i) for i in cast("list[int]", CM.tap_layers(self.cmap, t, self.env))}
                       for tid, t in self.taps.items() if self.on_target or not t.get("target_only")}
-        widths = {tid: CM.dim(t["shape"][-1], self.env, free) for tid, t in self.taps.items()}
-        per_step = sorted(tid for tid in (MLA_ROWS, INDEX_ROWS, TOPK) if isinstance(widths.get(tid), str))
-        if per_step:
-            raise ValueError(f"capture map {self.cmap.get('id')}: the row width of {per_step} reads a per-step size; the source cuts "
-                             f"their rows by a number")
-        #: tap id -> its last dimension, where the map fixes it: the width the cache taps' and the top-k's rows are cut by
-        self.width: dict[str, int] = {tid: w for tid, w in widths.items() if isinstance(w, int)}
+        #: tap id -> its last dimension: a number where the map fixes it (the cache taps' and the top-k's rows are cut by theirs), the
+        #: entry as the map writes it where it reads a per-step size
+        self.width: dict[str, Any] = {tid: CM.dim(t["shape"][-1], self.env, free) for tid, t in self.taps.items()}
         self.homes: list[Any] = []
         for i, m in sorted(self.layers.items()):
             impl = getattr(m, "impl", None)
@@ -194,14 +191,6 @@ class AttentionSource:
         self._mqa_rows = 0
         self.stats: dict[str, Any] = {}
         self.begin_run()
-
-    def _layers_of(self, tap: dict[str, Any]) -> list[int]:
-        """The layers one of this source's taps is captured at: each is bound at an attention layer's call."""
-        layers = CM.tap_layers(self.cmap, tap, self.env)
-        if layers is None:
-            raise ValueError(f"capture map {self.cmap.get('id')}: the attention source binds per-layer taps (`layers`); {tap['id']} is a "
-                             f"model-level one (`layer`)")
-        return layers
 
     # -- install / steps ------------------------------------------------------------------------------------------------------
     def install(self) -> None:

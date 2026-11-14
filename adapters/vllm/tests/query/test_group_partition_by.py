@@ -3,6 +3,9 @@
 ids, Calls and order (the root's Input nodes are the view's parameters, so they are no Call)."""
 from __future__ import annotations
 
+import gzip
+import json
+
 import pytest
 from verity.circuits import query_ast as G
 from verity.circuits.codec import encode_program
@@ -15,7 +18,7 @@ from verity.definitions.registry import prims as P
 from verity.definitions.registry.prims import BF16, F32
 
 from verity_vllm.query.program_view import from_descriptor
-from verity_vllm.query.units import partition_by
+from verity_vllm.query.units import ValueRef, partition_by
 
 
 def _mix(B, S, x, xb, w):
@@ -59,3 +62,19 @@ def test_group_over_the_roots_nodes_is_partition_by(mix, key):
     units = [(u.id, u.calls) for u in partition_by(KEYS[key])(view)]
     assert classes == units
     assert len(units) > 1 or key == ()
+
+
+def test_a_descriptor_file_views_as_its_document_and_the_checks_are_the_last_leaves_it_returns(mix, tmp_path):
+    program, view = mix
+    desc = encode_program(program)
+    for name, opener in (("descriptor.json", open), ("descriptor.json.gz", gzip.open)):
+        with opener(tmp_path / name, "wt") as f:
+            json.dump(desc, f)
+        assert from_descriptor(str(tmp_path / name), registry=REGISTRY) == view and from_descriptor(str(tmp_path / name)) == view
+    # the Program returns 4 + 2 + 4 + 4 + 1 leaves: its last is Call 5's, the four before it the batch's (Call 3)
+    last, batch = ValueRef(5, "out"), ValueRef(3, "out")
+    assert view.checks == () and view.outputs[-2:] == (batch, last)
+    checks = {n: from_descriptor(desc, registry=REGISTRY, checks=n).checks for n in (1, 2, 5, 15)}
+    assert checks == {1: (last,), 2: (batch, last), 5: (batch, last), 15: view.outputs}
+    with pytest.raises(ValueError, match="^the Program returns fewer than its 16 checks' leaves$"):
+        from_descriptor(desc, registry=REGISTRY, checks=16)

@@ -59,9 +59,6 @@ research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sy
   K from 384.
 - `--guard` exits 1 and names each shape whose SHA-512 or k_log fails. `--tree PATH` runs another checkout's lowering (a
   worktree of your approach) under this harness.
-- `fit.py RECORD...` fits ANDs, bytes, peak and wall on one unit's terms and projects them:
-  - lane and combine, one leaf at a time: 1 and K, projected to K 2048, 8192 and 14336 at that leaf;
-  - tile: 1, R C, R C K and (R + C) K, projected to (2048, 32 × 32), (8192, 32 × 32) and (128, 32 × 32).
 - `mem_profile.py --k K --tile R,C [--unit tile|lane|combine] --scratch DIR --out DIR [--frames N]` runs the lowering
   in-process. It reports:
   - each phase's peak: `unit_lowering`, `ir_lower.lower`, `ir_lower.layout`, `circuit.compose`, the circuit's description, the digests;

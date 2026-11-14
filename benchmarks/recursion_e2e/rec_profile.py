@@ -5,21 +5,37 @@
 row per timed thing: a prover's runs (``inner``, ``oprove``: the timed runs' ``LIVE`` lines), or a tool's
 ``/usr/bin/time -v`` over the repeats (``icheck``, ``vstage``, ``vcap``, ``oreplay``, ``lean``), or the build once, and one row
 per flipped inner coin (``negative``). Every time is a ``Stat`` (median, min, max and the values); nothing is averaged across
-different things. ``headline`` says whether the run is a whole recursive run (every step ran) and was accepted (every
-step exited 0, every honest verdict accepted, every flipped coin refused). A record line or file that doesn't parse (a
+different things. ``headline`` says whether the run is a whole recursive run (every step ran), whether its parts passed
+(every step exited 0, every honest verdict accepted, every flipped coin refused), whether Lean composed V*'s parts into
+the recursive statement, and whether it is an accepted recursive run: its parts passed and Lean accepted the
+composition. A record line or file that doesn't parse (a
 line cut short when its run stopped) is read as absent, and each one is logged at debug level. Stdlib only: the job runs
-it on the node's ``python3``.
+it on the node's ``python3``. What one record file says is ``rec_logs``'s, apart from Flock's own output formats, read
+here, and the rows that read none of those are built in ``rec_rows``.
 """
 from __future__ import annotations
 
 import json
 import logging
 import re
-import statistics
-from collections.abc import Iterable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any
+
+from rec_logs import (
+    COMPOSITION,
+    composition,
+    exit_status,
+    gpu_peak,
+    lean_verdict,
+    live_lines,
+    params,
+    processes,
+    tagged,
+    text,
+    timev,
+)
+from rec_rows import Row, Stat, compose_row, forge_after_rows, forged, forgeries, refused, step_row, tool_rows
 
 log = logging.getLogger(__name__)
 
@@ -54,134 +70,11 @@ PHASES = ("t.witness", "t.encoding_commitment", "t.link", "t.zerocheck", "t.linc
           "t.firewall_recheck", "t.lean_finish", "t.zk_inner")
 
 
-@dataclass(frozen=True)
-class Stat:
-    median: float
-    min: float
-    max: float
-    values: tuple[float, ...]
-
-    @classmethod
-    def of(cls, xs: Iterable[float | None]) -> Stat | None:
-        v = tuple(float(x) for x in xs if x is not None)
-        return cls(statistics.median(v), min(v), max(v), v) if v else None
-
-
-@dataclass
-class Row:
-    stage: str
-    step: str
-    what: str
-    kind: str                       # gpu (runs) | cpu (repeats) | setup (once)
-    wall_s: Stat | None = None      # gpu: prove_total_s per timed run; cpu and setup: the tool's wall
-    e2e_s: Stat | None = None       # gpu: each timed run's wall, its waits on the live verifier included
-    peak_rss_gb: float | None = None
-    gpu_peak_mib: float | None = None
-    proof_bytes: int | None = None
-    wire_bytes: dict[str, int | None] | None = None
-    dominant: dict[str, Any] | None = None
-    ok: bool | None = None
-    note: str = ""
-    extra: dict[str, Any] = field(default_factory=dict)
-
-    def to_json(self) -> dict[str, Any]:
-        return json.loads(json.dumps(asdict(self)))
-
-    @classmethod
-    def from_json(cls, d: dict[str, Any]) -> Row:
-        st = {k: Stat(d[k]["median"], d[k]["min"], d[k]["max"], tuple(d[k]["values"])) if d.get(k) else None
-              for k in ("wall_s", "e2e_s")}
-        return cls(**{**{k: v for k, v in d.items() if k in cls.__dataclass_fields__}, **st})
-
-
-def text(p: Path) -> str:
-    try:
-        return p.read_text(errors="replace")
-    except OSError:
-        return ""
-
-
-_WALL = re.compile(r"Elapsed \(wall clock\) time \(h:mm:ss or m:ss\): (\S+)")
-_RSS = re.compile(r"Maximum resident set size \(kbytes\): (\d+)")
-
-
-def wall_seconds(s: str) -> float:
-    """``/usr/bin/time -v``'s elapsed time, ``h:mm:ss`` or ``m:ss.ss``, in seconds."""
-    parts = [float(p) for p in s.split(":")]
-    return sum(p * 60 ** i for i, p in enumerate(reversed(parts)))
-
-
-class TimeV(TypedDict):
-    wall_s: float
-    peak_rss_gb: float | None
-    cpu_s: float
-
-
-def timev(p: Path) -> TimeV | None:
-    """Wall seconds, peak RSS (GB) and CPU seconds of one ``/usr/bin/time -v`` file; None when it has no wall line."""
-    t = text(p)
-    m = _WALL.search(t)
-    if not m:
-        return None
-    rss = _RSS.search(t)
-    cpu = sum(float(x) for x in re.findall(r"(?:User|System) time \(seconds\): ([0-9.]+)", t))
-    return {"wall_s": wall_seconds(m.group(1)), "peak_rss_gb": int(rss.group(1)) / 2**20 if rss else None, "cpu_s": cpu}
-
-
-def live_lines(p: Path) -> list[tuple[float | None, dict[str, Any]]]:
-    """The prover's ``LIVE`` records with the time each arrived: ``prove.tsv`` is 85's stamped stdout
-    (``time<TAB>LIVE<TAB>{json}``, printed when the run's verdict is in); a plain stdout has no times."""
-    out = []
-    for ln in text(p).splitlines():
-        t = None
-        head, _, rest = ln.partition("\t")
-        if rest.startswith("LIVE"):
-            try:
-                t, ln = float(head), rest
-            except ValueError as e:
-                log.debug("%s: a LIVE line's stamp %r is no time (%s), so the line is read unstamped", p, head, e)
-        if ln.startswith("LIVE"):
-            try:
-                out.append((t, json.loads(ln[5:])))
-            except ValueError as e:
-                log.debug("%s: a LIVE line that isn't JSON is skipped (%s)", p, e)
-    return out
-
-
-def tagged(p: Path, tag: str) -> list[dict[str, Any]]:
-    """``TAG<TAB>{json}`` lines (serve's ``SESSION``, the replay's ``UPSTREAM``)."""
-    out = []
-    for ln in text(p).splitlines():
-        if ln.startswith(tag + "\t"):
-            try:
-                out.append(json.loads(ln.split("\t", 1)[1]))
-            except ValueError as e:
-                log.debug("%s: a %s line that isn't JSON is skipped (%s)", p, tag, e)
-    return out
-
-
-def lean_verdict(p: Path) -> dict[str, Any] | None:
-    t = text(p)
-    at = t.find("VERDICT ")
-    if at < 0:
-        return None
-    try:
-        return json.JSONDecoder(strict=False).raw_decode(t[at + 8:])[0]
-    except ValueError as e:
-        log.debug("%s: its VERDICT isn't JSON, read as no verdict (%s)", p, e)
-        return None
-
-
 def lean_split(p: Path) -> dict[str, float]:
     """flock-verify's stderr: ``inputs: N ms`` (from its start), ``setup: N ms`` (from the verification's start), then the verification's
     whole time (``/path: N ms``, setup included), as 85's summary reads them."""
     ms = [int(x) for x in re.findall(r"^(?:inputs|setup(?: \(drawn\))?|/\S+): (\d+) ms$", text(p), re.M)]
     return {"inputs_s": ms[0] / 1e3, "setup_s": ms[1] / 1e3, "session_s": (ms[2] - ms[1]) / 1e3} if len(ms) == 3 else {}
-
-
-def gpu_peak(p: Path) -> float | None:
-    xs = [int(x) for x in text(p).split() if x.isdigit()]
-    return float(max(xs)) if xs else None
 
 
 def _bucket_sums(buckets: list[dict[str, Any]] | None) -> dict[str, float]:
@@ -270,34 +163,6 @@ def repeats(root: Path, step: str) -> list[Path]:
     """The step's invocations' out/ directories, r1, r2, ... in order."""
     d = root / "steps" / step
     return [p / "out" for p in sorted(d.glob("r*"), key=lambda p: int(p.name[1:]) if p.name[1:].isdigit() else 0)] if d.is_dir() else []
-
-
-def tool_rows(outs: list[Path], step: str, rel: dict[str, tuple[str, str]], verdict=None) -> list[Row]:
-    """One row per tool: its ``/usr/bin/time -v`` file (``rel``: name -> (path under out/, what)) over every repeat; none
-    for a step that never ran."""
-    rows: list[Row] = []
-    if not outs:
-        return rows
-    for name, (path, what) in rel.items():
-        ts = [timev(o / path) for o in outs]
-        got = [t for t in ts if t]
-        r = Row(name, step, what, "cpu", wall_s=Stat.of(t["wall_s"] for t in got),
-                peak_rss_gb=max((t["peak_rss_gb"] for t in got if t["peak_rss_gb"] is not None), default=None))
-        if not got:
-            r.note = "not run"
-        if verdict:
-            # only repeats whose tool finished (``time -v`` opens its file at the start and writes it at the end)
-            vs = [v for o in outs if timev(o / path) if (v := verdict(o, name)) is not None]
-            r.ok = all(v is True for v in vs) if vs else None
-        rows.append(r)
-    return rows
-
-
-def step_row(outs: list[Path], step: str, what: str) -> Row:
-    """A step's whole wall over its repeats (job.sh's ``time-step.txt`` around each invocation of 85)."""
-    ts = [t for t in (timev(o.parent / "time-step.txt") for o in outs) if t]
-    return Row(f"{step} step", step, what, "cpu", wall_s=Stat.of(t["wall_s"] for t in ts),
-               peak_rss_gb=max((t["peak_rss_gb"] for t in ts if t["peak_rss_gb"] is not None), default=None))
 
 
 def _names(outs: list[Path], sub: str, pattern: str) -> list[str]:
@@ -419,6 +284,7 @@ def read(root: Path) -> dict[str, Any]:
                 r.note = next((w for w in why if w and w != "None"), text(ln[0] / "lean" / f"{name}.log")[-200:].strip())
         rows.append(step_row(ln, "lean", "85 STEP=lean whole (JOBS verifications at once), as an auditor waits"))
         rows += lrows
+        rows.append(compose_row([composition(o) for o in ln]))
     fa = repeats(root, "forge-after")
     if fa:
         rows.append(step_row(fa, "forge-after", "forge_after.py: every forged case and honest control, LEAN_JOBS at once"))
@@ -447,7 +313,8 @@ def read(root: Path) -> dict[str, Any]:
         doc["release"] = side
     doc["headline"] = headline(rows, s, steps) | ({"released": side["ok"]} if side else {})
     if doc["params"].get("release") == "1":
-        doc["headline"]["ok"] = doc["headline"]["ok"] and bool(side and side["ok"])
+        for k in ("ok", "parts_ok"):
+            doc["headline"][k] = doc["headline"][k] and bool(side and side["ok"])
     # each session step's first invocation's /usr/bin/time -v (None for a step that didn't run), what a session's cost is
     # scaled from
     doc["session_times"] = {x: timev(outs[0].parent / "time-step.txt") if (outs := repeats(root, x)) else None
@@ -509,11 +376,6 @@ def staged_units(p: Path) -> dict[str, dict[str, Any]]:
 _FORGED = re.compile(r"forged-inner-([a-z]+)-(.+)")
 
 
-def exit_status(p: Path) -> int | None:
-    m = re.search(r"^\s*Exit status: (\d+)\s*$", text(p), re.M)
-    return int(m.group(1)) if m else None
-
-
 def negative_rows(d: Path) -> list[Row]:
     """One row per flipped coin (85's ``forged-inner-COIN-STATEMENT`` parts, read as ``lean_verdicts.py`` reads them): a
     statement refuses it when flock-verify exited 1 with a VERDICT and none accepting; the coin is refused when one statement
@@ -547,125 +409,26 @@ def negative_rows(d: Path) -> list[Row]:
     return rows
 
 
-def refused(r: Row) -> None:
-    """A forged statement's outer row: refused when no run of it was accepted (the ZK server stopped it before release, or
-    its releases were refused), the stop or the refusal as its note; `forgeries` judges an accepted one."""
-    r.extra["forged"] = True
-    r.extra["refused"] = r.ok is not True
-    r.ok = r.extra["refused"]
-
-
-def kind_of(part: str, honest: list[str]) -> str:
-    """The forgery ``forged-KIND-PART`` is KIND, PART the longest honest part it ends with; else the name without ``forged-``
-    (lean_verdicts.py's rule)."""
-    name = part.removeprefix("forged-")
-    ends = [h for h in honest if name.endswith("-" + h)]
-    return name[: -len(max(ends, key=len)) - 1] if ends else name
-
-
-def forgeries(rows: list[Row]) -> None:
-    """85's forged statements, judged per forgery as lean_verdicts.py judges them: V* accepts only when every part does, so a
-    forgery is refused when one of its parts is, and a part it leaves as the honest one (forged-message's alg-p1) is accepted.
-    An accepted part's row is ok when another part of its forgery, at the same step, was refused."""
-    groups: dict[tuple[str, str], list[Row]] = {}
-    for step in ("oprove", "lean"):
-        named = [(r, r.stage.split(" ", 1)[1]) for r in rows if r.step == step and r.stage.startswith(("outer ", "lean "))]
-        honest = [n for r, n in named if not r.extra.get("forged")]
-        for r, n in named:
-            if "refused" in r.extra:
-                r.extra["kind"] = kind_of(n, honest)
-                groups.setdefault((step, r.extra["kind"]), []).append(r)
-    for rs in groups.values():
-        held = any(r.extra["refused"] for r in rs)
-        for r in rs:
-            if not r.extra["refused"]:
-                r.ok = held
-                r.note = ("accepted: a part this forgery leaves as the honest one; " if held
-                          else "ACCEPTED: no part of this forgery was refused; ") + r.note
-
-
-def forge_after_rows(p: Path) -> list[Row]:
-    """One row per forge_after.py case (``<bin>/<kind>-<case>``): ok when a forged case was refused (exit 1 and no accepting
-    VERDICT) or the honest control accepted, Lean's why as its note; none when the file is missing."""
-    try:
-        doc = json.loads(text(p) or "null")
-    except ValueError as e:
-        log.debug("%s isn't JSON, read as no case (%s)", p, e)
-        doc = None
-    if not doc:
-        return []
-    rows = []
-    for name, v in doc.get("verify", {}).items():
-        kind, case = name.split("/")[-1].rsplit("-", 1)
-        honest = case == "honest"
-        r = Row(f"forge-after {name}", "forge-after",
-                f"{kind}'s honest control" if honest else f"{kind} forged after proving ({case})", "cpu")
-        accepted = v.get("rc") == 0 or bool(v.get("accepted"))
-        r.ok = accepted if honest else not accepted
-        r.note = ("ACCEPTED: " if accepted and not honest else "") + str(v.get("why") or "")[:200]
-        r.extra = {"rc": v.get("rc"), "forged": not honest}
-        rows.append(r)
-    if not doc.get("untouched", True):
-        r = Row("forge-after inputs", "forge-after", "the honest releases and statements, hashed before and after", "cpu")
-        r.ok, r.note = False, "an input changed under forge_after.py"
-        rows.append(r)
-    return rows
-
-
 def headline(rows: list[Row], s: dict[str, Any], steps: dict[str, list[str]]) -> dict[str, Any]:
-    """Whether the run is one whole recursive run (every step of ``E2E_STEPS`` ran) and accepted (every invocation exited
-    0, no row refused or unrun, and every flipped coin refused), with the numbers a reader looks for first."""
+    """Whether the run is one whole recursive run (``complete``: every step of ``E2E_STEPS`` ran), whether its parts passed
+    (``parts_ok``: it is whole, every invocation exited 0, no row refused or unrun, and every flipped coin refused),
+    whether Lean composed V*'s parts into the recursive statement (``composed``, `compose_row`'s; ``not_composed`` is why
+    not; ``refused`` is Lean's reason where it refused the composition, a forced retry among them), and whether it is an
+    accepted recursive run (``ok``: its parts passed and Lean accepted the composition), with the numbers a reader looks
+    for first. A run that passed on its parts with no composition is not ``ok``."""
     complete = all(steps.get(x) for x in E2E_STEPS)
     neg = {r.stage[len("negative inner-"):]: r.ok for r in rows if r.step == "negative" and r.stage.startswith("negative inner-")}
-    ok = (complete and all(rc == "0" for v in steps.values() for rc in v) and not s.get("not_ok")
-          and all(v is True for v in neg.values()))
+    parts_ok = (complete and all(rc == "0" for v in steps.values() for rc in v) and not s.get("not_ok")
+                and all(v is True for v in neg.values()))
+    c = next((r for r in rows if r.step == "lean" and r.stage == "compose"), None)
+    composed = c.extra.get("composed") if c else None
     mode = next(iter(k for k in s.get("pipeline", {}) if k.startswith("outer prove")), None)
-    return {"complete": complete, "ok": ok, "pipeline_sum_s": s.get("pipeline_sum_s"), "pipeline": s.get("pipeline"),
+    return {"complete": complete, "ok": parts_ok and c is not None and c.ok is True, "parts_ok": parts_ok, "composed": composed,
+            "not_composed": None if composed is True else c.note if c else f"no record of the composition ({COMPOSITION})",
+            "refused": c.note.removeprefix("refused: ") if c is not None and c.ok is False else None,
+            "pipeline_sum_s": s.get("pipeline_sum_s"), "pipeline": s.get("pipeline"),
             "outer": s.get("outer"), "outer_mode": mode, "slowest": s.get("slowest"), "negative_refused": neg or None,
             "forged_refused": forged(rows) or None}
-
-
-def forged(rows: list[Row]) -> dict[str, bool]:
-    """Each forgery kind's verdict: 85's forged statements of it refused at each step (`forgeries`), forge-after's cases of
-    it every one refused, and forge-after's honest controls of it accepted."""
-    out: dict[str, bool] = {}
-    for r in rows:
-        if r.ok is None:
-            continue
-        m = re.fullmatch(r"forge-after [^/]+/([a-z]+)-[a-z]+", r.stage) if r.step == "forge-after" else None
-        kind = m.group(1) if m else r.extra.get("kind") if r.step in ("oprove", "lean") else None
-        if kind:
-            out[kind] = out.get(kind, True) and r.ok
-    return out
-
-
-def processes(p: Path, comm: str) -> list[dict[str, Any]]:
-    """Each ``comm`` process the run's sampler saw (``research run``'s ``resources.jsonl`` beside ``out/``): its CPU seconds and
-    peak RSS at its last sample, and when it was first and last seen; the run's own telemetry, not 85's records."""
-    seen: dict[int, dict[str, Any]] = {}
-    for ln in text(p).splitlines():
-        if '"kind":"process"' not in ln or comm not in ln:
-            continue
-        try:
-            d = json.loads(ln)
-        except ValueError as err:
-            log.debug("%s: a process sample that isn't JSON is skipped (%s)", p, err)
-            continue
-        for q in d.get("processes", []):
-            if q.get("comm") == comm:
-                e = seen.setdefault(q["pid"], {"pid": q["pid"], "first": d["t_utc"]})
-                e |= {"last": d["t_utc"], "cpu_s": q.get("cpu_s"), "rss_hwm_gb": round((q.get("rss_hwm_bytes") or 0) / 2**30, 2),
-                      "threads": q.get("threads")}
-    return [e for e in seen.values() if (e.get("cpu_s") or 0) >= 1]
-
-
-def params(root: Path) -> dict[str, str]:
-    out = {}
-    for tok in text(root / "params.txt").split():
-        if "=" in tok:
-            k, v = tok.split("=", 1)
-            out[k] = v
-    return out
 
 
 def step_status(root: Path) -> dict[str, list[str]]:

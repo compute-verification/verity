@@ -27,7 +27,7 @@ from typing import Any
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import UsageError, option
-from verity_vllm.properties.record import REGISTRY, seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 CORPUS = Path(__file__).resolve().parent / "golden" / "corpus.json"
 

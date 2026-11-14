@@ -9,3 +9,10 @@ REMOTETIE = os.environ.get("VERITY_PROVE_PATH_REMOTETIE", "") == "1"
 """`VERITY_PROVE_PATH_REMOTETIE=1`: test_remotetie and test_pearltie record, commit and write their toys' windows and run the
 Lean verifiers on them, which takes minutes and Lean's toolchain (`served_cases.build` runs ``lake build``); without it those
 tests skip."""
+
+
+def zk_self_check() -> str | None:
+    """`FC_ZK_SELF_CHECK` as it stands at the call, which is what a prover started then takes for its check of its own
+    proofs: ``skip`` and it proves a false witness. test_records_audit reads it where the audit starts its sessions, for
+    which of the audit's modes skip that check."""
+    return os.environ.get("FC_ZK_SELF_CHECK")

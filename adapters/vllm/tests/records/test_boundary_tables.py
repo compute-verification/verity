@@ -5,7 +5,12 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.records.boundary_tables import ASSIGN, ROOTS, TableAssignment, TableRoots
+from verity_vllm.records.boundary_tables import (
+    ASSIGN,
+    ROOTS,
+    TableAssignment,
+    TableRoots,
+)
 from verity_vllm.records.fields import MissingField, RecordError, UnknownField
 
 
@@ -33,6 +38,8 @@ def test_an_assignment_and_an_answer_load_and_dump_back_to_themselves():
 def test_another_format_or_a_wrong_missing_or_unknown_field_is_refused_by_name():
     with pytest.raises(RecordError, match="'format' is 'other'"):
         TableAssignment.of(_assign() | {"format": "other"}, "w")
+    with pytest.raises(RecordError, match="'format' cannot be read: the record is a list, not a JSON object"):
+        TableRoots.of([_roots()], "w")
     with pytest.raises(UnknownField, match="'spans\\[0\\].slot'"):
         TableAssignment.of(_assign() | {"spans": [{**_assign()["spans"][0], "slot": 0}]}, "w")
     with pytest.raises(MissingField, match="'spans\\[0\\].finish'"):

@@ -21,10 +21,21 @@
 // (gt_s); clock64 over %globaltimer for the whole kernel and for its tensor phases alone (warp 0's issue to its drain);
 // MACs a SM-cycle.
 //
+// FP32 beside the tensor pipe (arms A to D): one CTA an SM of a wgmma e4m3 warpgroup (wg_e4m3's batch) and FW FP32
+// warps, two a scheduler, each thread looping 64 FADDs on FCH chains and 3 loop instructions an iteration (the card's
+// price.fp32_loop). The CTA runs in steps, one named barrier each: thread 0 picks the step's mode from %globaltimer,
+// the warpgroup runs NB_STEP batches when the tensor is on, and the FP32 warps their iterations when FP32 is on, the
+// adds in the wgmma's shadow. A: tensor alone; B: FP32 alone (F_ITERS a step); C: both every step, X the MACs an add (the add:MAC
+// ratio 1/X); D: tensor and FP32 alone in alternating phases of X ms. Classes: zero, const and uniform, the wgmma's
+// operands as wg_e4m3's and the adds' 0, 1 and +-[1, 2) from the same hash. Readings: MACs and adds over the host's
+// wall clock; clock64 over %globaltimer for the kernel and for each mode's steps (thread 0's, step start to step
+// start); the first FP32 warp's own adding time (fp32_share, of the kernel's) and its clock64 MHz.
+//
 // Build: python3 gen_wgmma.py && nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -I. -I../int8_class_rate \
 //          -o duty duty.cu
 // Run:   duty ARM CLASS FILL BURST SECS DUTY...    (BURST in SM-cycles, DUTY in percent)
-// One JSON line for the calibration, then one a point, on stdout.
+//        duty A|B|C|D CLASS SECS X...               (X: C's MACs an add, D's phase in ms; A and B a point each X)
+// One JSON line for the calibration, then one a point, on stdout (arms A to D: one a point).
 
 #include <cuda_runtime.h>
 
@@ -34,6 +45,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -289,6 +301,141 @@ __global__ void __launch_bounds__(SW * 32, 1) sync_k(int cls, u32 nb, int cont, 
   if (threadIdx.x == 0) out[blockIdx.x] = Stamp{t0, gtimer(), base, clk(), ops, tns, tcyc, smid(), 0};
 }
 
+constexpr int FW = 8;          // FP32 warps a CTA, two a scheduler: one warp's issue gaps (its taken branch) are the other's slots
+constexpr int FCH = 16;        // independent add chains a thread
+constexpr int NB_STEP = 16;    // tensor batches a step
+constexpr u32 F_ITERS = 512;   // iterations an FP32-alone step
+constexpr int BT = 128 + FW * 32;  // the CTA's threads
+constexpr double STEP_MACS = NB_STEP * WB<true> * WG_MACS;  // a CTA's MACs a tensor step
+constexpr double ITER_ADDS = FW * 32 * 64.0;                // a CTA's adds an iteration
+
+enum Mode { STOP = 0, TENSOR = 1, FP32 = 2, BOTH = 3 };
+static const char* MODE_NAMES[] = {"other", "tensor", "fp32", "both"};
+
+struct BStamp {
+  u64 t0, t1, c0, c1, ops, iters, fcyc, fns, mcyc[4], mns[4];
+};
+
+__device__ inline float fword(u32 i, int cls) {
+  if (cls == ZERO) return 0.f;
+  if (cls == CONST) return 1.f;
+  return __uint_as_float((mix(i * 2654435761u + 0x85ebca6bu) & 0x807fffffu) | 0x3f800000u);
+}
+
+__device__ __forceinline__ void add_loop(float* f, const float* g, u32 n) {
+#pragma unroll 1
+  for (u32 i = 0; i < n; ++i) {
+#pragma unroll
+    for (int r = 0; r < 64 / FCH; ++r)
+#pragma unroll
+      for (int j = 0; j < FCH; ++j) f[j] = __fadd_rn(f[j], g[j]);
+  }
+}
+
+// the step barrier, named so the warpgroup's and the FP32 warps' loops meet at it from their own code
+__device__ __forceinline__ void step_bar() { asm volatile("bar.sync 1, %0;\n" ::"n"(BT) : "memory"); }
+
+// arm 'A', 'B', 'C' or 'D' (header); citers: C's iterations a step; phase_ns: D's. The warpgroup and the FP32 warps
+// run their own branch, so the kernel's registers are the larger branch's, not the sum of the accumulators and chains.
+__global__ void __launch_bounds__(BT, 1)
+    beside_k(int cls, int arm, u32 citers, u64 phase_ns, u64 ns, BStamp* out, u32* sink) {
+  extern __shared__ __align__(1024) uint8_t smem[];
+  __shared__ u64 s_t0, s_c0;
+  __shared__ int s_mode[2];  // a step's mode, double-buffered so one barrier a step suffices
+  constexpr int ABYTES = 64 * 32, BBYTES = N * 32;
+  uint8_t* A = smem;
+  uint8_t* B = smem + KS * ABYTES;
+  const u32 seed = blockIdx.x * 0x10000u;
+  for (int i = threadIdx.x; i < KS * (ABYTES + BBYTES) / 4; i += BT)
+    reinterpret_cast<u32*>(smem)[i] = word(seed + i, cls, true);
+  __syncthreads();
+  asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
+  if (threadIdx.x == 0) { s_t0 = gtimer(); s_c0 = clk(); }
+  __syncthreads();
+  const u64 t0 = s_t0, c0 = s_c0, tend = t0 + ns;
+  BStamp& o = out[blockIdx.x];
+  u32 x = 0;
+  if (threadIdx.x < 128) {
+    uint64_t da[KS], db[KS];
+#pragma unroll
+    for (int k = 0; k < KS; ++k) { da[k] = desc(A + k * ABYTES, 128, 256); db[k] = desc(B + k * BBYTES, 128, 256); }
+    float d[N / 2];
+#pragma unroll
+    for (int i = 0; i < N / 2; ++i) d[i] = 0;
+    u64 ops = 0, mcyc[4] = {}, mns[4] = {}, pg = t0, pc = c0;
+    int pm = STOP;
+    for (u32 k = 0;; ++k) {
+      if (threadIdx.x == 0) {
+        const u64 gt = gtimer(), c = clk();
+        mns[pm] += gt - pg;
+        mcyc[pm] += c - pc;
+        pg = gt;
+        pc = c;
+        pm = gt >= tend ? STOP
+             : arm == 'A' ? TENSOR
+             : arm == 'B' ? FP32
+             : arm == 'C' ? BOTH
+             : ((gt - t0) / phase_ns) % 2 ? FP32 : TENSOR;
+        s_mode[k & 1] = pm;
+      }
+      step_bar();
+      const int m = s_mode[k & 1];
+      if (m == STOP) break;
+      if (m & TENSOR) {
+        for (int j = 0; j < NB_STEP; ++j) {
+          pass(d);
+          asm volatile("wgmma.fence.sync.aligned;\n" ::: "memory");
+#pragma unroll
+          for (int q = 0; q < WB<true>; ++q) wgmma_e4m3_m64n256k32(d, da[q % KS], db[q % KS]);
+          asm volatile("wgmma.commit_group.sync.aligned;\n" ::: "memory");
+          asm volatile("wgmma.wait_group.sync.aligned 0;\n" ::: "memory");
+          pass(d);
+        }
+        ops += NB_STEP * WB<true>;
+      }
+    }
+#pragma unroll
+    for (int i = 0; i < N / 2; ++i) x ^= __float_as_uint(d[i]);
+    if (threadIdx.x == 0) {
+      o.t0 = t0, o.c0 = c0, o.ops = ops;
+      for (int i = 0; i < 4; ++i) o.mcyc[i] = mcyc[i], o.mns[i] = mns[i];
+    }
+  } else {
+    const bool f0 = threadIdx.x == 128;
+    float f[FCH], g[FCH];
+#pragma unroll
+    for (int j = 0; j < FCH; ++j) {
+      f[j] = fword(seed + threadIdx.x * 2 * FCH + j, cls);
+      g[j] = fword(seed + threadIdx.x * 2 * FCH + FCH + j, cls);
+    }
+    u64 iters = 0, fcyc = 0, fns = 0;
+    for (u32 k = 0;; ++k) {
+      step_bar();
+      const int m = s_mode[k & 1];
+      if (m == STOP) break;
+      if (m & FP32) {
+        const u32 n = m == BOTH ? citers : F_ITERS;
+        u64 ga = 0, ca = 0;
+        if (f0) { ga = gtimer(); ca = clk(); }
+        add_loop(f, g, n);
+        if (f0) {
+#pragma unroll
+          for (int j = 0; j < FCH; ++j) asm volatile("" ::"f"(f[j]));  // its adds issued before its time is read
+          fns += gtimer() - ga;
+          fcyc += clk() - ca;
+        }
+        iters += n;
+      }
+    }
+#pragma unroll
+    for (int j = 0; j < FCH; ++j) x ^= __float_as_uint(f[j]);
+    if (f0) o.iters = iters, o.fcyc = fcyc, o.fns = fns;
+  }
+  if (x == 0x9e3779b9u) sink[blockIdx.x * BT + threadIdx.x] = x;
+  __syncthreads();
+  if (threadIdx.x == 0) o.t1 = gtimer(), o.c1 = clk();
+}
+
 using KernelFn = void (*)(int, u32, int, u64, u64, Stamp*, u32*);
 
 struct Arm {
@@ -316,9 +463,89 @@ struct Point {
   double host_t0, host_t1, event_s, macs, cyc, ns, tcyc, tns, gt_s;
 };
 
+static int beside_main(int argc, char** argv) {
+  const std::string aname = argv[1], cname = argv[2];
+  const int arm = aname[0];
+  int cls = -1;
+  for (int c = 0; c <= UNIFORM; ++c)
+    if (cname == CLS_NAMES[c]) cls = c;
+  if (cls < 0) {
+    fprintf(stderr, "CLASS: zero, const or uniform\n");
+    return 2;
+  }
+  const double secs = atof(argv[3]);
+  std::vector<double> xs;
+  for (int i = 4; i < argc; ++i) xs.push_back(atof(argv[i]));
+  for (double x : xs)
+    if ((arm == 'C' && std::lround(STEP_MACS / x / ITER_ADDS) < 1) || (arm == 'D' && x <= 0)) {
+      fprintf(stderr, "X: C's MACs an add, at most %.0f; D's phase in ms, over 0\n", STEP_MACS / ITER_ADDS);
+      return 2;
+    }
+  cudaDeviceProp p;
+  CK(cudaGetDeviceProperties(&p, 0));
+  const int nsm = p.multiProcessorCount, threads = BT;
+  const size_t smem = (size_t)KS * (64 * 32 + N * 32);
+  CK(cudaFuncSetAttribute(beside_k, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem));
+  BStamp* sd;
+  u32* sink;
+  CK(cudaMalloc(&sd, nsm * sizeof(BStamp)));
+  CK(cudaMalloc(&sink, (size_t)nsm * threads * 4));
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0));
+  CK(cudaEventCreate(&e1));
+  auto citers = [&](double x) { return arm == 'C' ? (u32)std::lround(STEP_MACS / x / ITER_ADDS) : 0u; };
+  auto run = [&](double x, double s, std::vector<BStamp>& st) {
+    double ht[2];
+    ht[0] = unix_now();
+    CK(cudaEventRecord(e0));
+    beside_k<<<nsm, threads, smem>>>(cls, arm, citers(x), arm == 'D' ? (u64)std::llround(x * 1e6) : 0, (u64)(s * 1e9),
+                                     sd, sink);
+    CK(cudaGetLastError());
+    CK(cudaEventRecord(e1));
+    CK(cudaEventSynchronize(e1));
+    ht[1] = unix_now();
+    float ms;
+    CK(cudaEventElapsedTime(&ms, e0, e1));
+    st.resize(nsm);
+    CK(cudaMemcpy(st.data(), sd, st.size() * sizeof(BStamp), cudaMemcpyDeviceToHost));
+    return std::vector<double>{ht[0], ht[1], ms * 1e-3};
+  };
+  std::vector<BStamp> st;
+  run(xs.empty() ? 0 : xs[0], 0.05, st);
+  for (double x : xs) {
+    const std::vector<double> h = run(x, secs, st);
+    double macs = 0, adds = 0, cyc = 0, ns = 0, fcyc = 0, fns = 0, mcyc[4] = {}, mns[4] = {};
+    u64 a = ~0ull, b = 0;
+    for (auto& s : st) {
+      macs += (double)s.ops * WG_MACS;
+      adds += (double)s.iters * ITER_ADDS;
+      cyc += (double)(s.c1 - s.c0);
+      ns += (double)(s.t1 - s.t0);
+      fcyc += (double)s.fcyc;
+      fns += (double)s.fns;
+      for (int i = 0; i < 4; ++i) mcyc[i] += (double)s.mcyc[i], mns[i] += (double)s.mns[i];
+      a = std::min(a, s.t0);
+      b = std::max(b, s.t1);
+    }
+    printf("{\"arm\": \"%c\", \"class\": \"%s\", \"x\": %g, \"citers\": %u, \"secs\": %.2f, \"sms\": %d, "
+           "\"host_t0\": %.3f, \"host_t1\": %.3f, \"event_s\": %.6f, \"gt_s\": %.6f, \"macs\": %.6e, \"adds\": %.6e, "
+           "\"clock64_mhz\": %.2f, \"macs_per_smclk\": %.2f, \"adds_per_smclk\": %.3f, \"fp32_share\": %.5f, "
+           "\"fp32_busy_mhz\": %.2f",
+           arm, cname.c_str(), x, citers(x), secs, nsm, h[0], h[1], h[2], (b - a) * 1e-9, macs, adds,
+           cyc / ns * 1e3, macs / cyc, adds / cyc, fns / ns, fns > 0 ? fcyc / fns * 1e3 : 0.0);
+    for (int i = 0; i < 4; ++i)
+      printf(", \"%s_mhz\": %.2f, \"%s_s\": %.6f", MODE_NAMES[i], mns[i] > 0 ? mcyc[i] / mns[i] * 1e3 : 0.0, MODE_NAMES[i],
+             mns[i] / nsm * 1e-9);
+    printf("}\n");
+    fflush(stdout);
+  }
+  return 0;
+}
+
 int main(int argc, char** argv) {
+  if (argc >= 5 && strlen(argv[1]) == 1 && strchr("ABCD", argv[1][0])) return beside_main(argc, argv);
   if (argc < 7) {
-    fprintf(stderr, "duty ARM CLASS FILL BURST SECS DUTY...\n");
+    fprintf(stderr, "duty ARM CLASS FILL BURST SECS DUTY...\nduty A|B|C|D CLASS SECS X...\n");
     return 2;
   }
   const std::string aname = argv[1], cname = argv[2], fname = argv[3];

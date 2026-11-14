@@ -22,9 +22,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import verity_difftest as D
 from hypothesis import strategies as st
 
-import verity_difftest as D
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period, run
 from verity.protocols.accounting.pous.verifier import setup as pous_setup
@@ -87,20 +87,20 @@ def rows_of(q: P2.P2Params, tag: int) -> tuple[bytes, ...]:
 
 
 @st.composite
-def runs(draw, signer: M.AtLeaf | None = None, stores: st.SearchStrategy | None = None) -> Run:
+def runs(sample, signer: M.AtLeaf | None = None, stores: st.SearchStrategy | None = None) -> Run:
     """An honest run: a setup at a sampled reduced point, the memory challenger's session over its `C*` (some rounds late, some
     answers tampered) at the point's `k`, a limit within the point's, bound to the setup's root, under the designated id.
     With `stores`, a strategy of honest setups `(q, W, salt, C*)`, the setup is one it samples and `C*` its encoding, which
     the setup protocol accepts (the run's `setup_of`); else `C*` is labels of no setup."""
-    stored = draw(stores) if stores is not None else None
+    stored = sample(stores) if stores is not None else None
     if stored is None:
-        w, c0 = draw(st.sampled_from(WIDTHS))
-        q = P2.P2Params(w, c0, draw(st.integers(1, 4)), draw(st.integers(1, 3)))
+        w, c0 = sample(st.sampled_from(WIDTHS))
+        q = P2.P2Params(w, c0, sample(st.integers(1, 4)), sample(st.integers(1, 3)))
     else:
         q = stored[0]
-    k, limit = draw(st.integers(1, 4)), draw(st.integers(2, 10 ** 6))
+    k, limit = sample(st.integers(1, 4)), sample(st.integers(2, 10 ** 6))
     point = run.Point(q, k, limit)
-    tag = draw(st.integers(0, 3))
+    tag = sample(st.integers(0, 3))
     if stored is None:
         salt = hashlib.sha512(b"run salt %d" % tag).digest()[:run.SALT_BYTES]
         blocks = tuple(M.block(tag * 1000 + i, q.block_bytes) for i in range(q.blocks))
@@ -114,15 +114,15 @@ def runs(draw, signer: M.AtLeaf | None = None, stores: st.SearchStrategy | None 
     root = VerifierKey.from_row_digests(q, salt, list(rows)).root
     setup = run.Setup(q.blocks, commitment, root, salt)
     if signer is None:
-        height = draw(st.integers(1, 2))
-        signer = M.test_signer(draw(st.sampled_from(M.SECRETS)), height, draw(st.integers(0, 2 ** height - 1)))
-    session_limit = draw(st.sampled_from([limit, limit - 1, limit // 2 + 1]))
-    session_id = hashlib.sha512(b"run session %d" % draw(st.integers(0, 3))).digest()[:32]
-    tree = mc.CoinTree.draw(b"run source %d" % tag, session_id, q.blocks, k, key=draw(st.sampled_from(M.COIN_KEYS)),
+        height = sample(st.integers(1, 2))
+        signer = M.test_signer(sample(st.sampled_from(M.SECRETS)), height, sample(st.integers(0, 2 ** height - 1)))
+    session_limit = sample(st.sampled_from([limit, limit - 1, limit // 2 + 1]))
+    session_id = hashlib.sha512(b"run session %d" % sample(st.integers(0, 3))).digest()[:32]
+    tree = mc.CoinTree.draw(b"run source %d" % tag, session_id, q.blocks, k, key=sample(st.sampled_from(M.COIN_KEYS)),
                             salts=[hashlib.sha512(b"run coin salt %d %d" % (tag, j)).digest() * 3 for j in range(k)])
-    spends = draw(st.lists(st.sampled_from([0, 1, session_limit, session_limit + 1]), min_size=k, max_size=k))
-    tampered = draw(st.sets(st.integers(0, k - 1), max_size=1))
-    clock = M.Clock(draw(st.integers(0, 2 ** 40)))
+    spends = sample(st.lists(st.sampled_from([0, 1, session_limit, session_limit + 1]), min_size=k, max_size=k))
+    tampered = sample(st.sets(st.integers(0, k - 1), max_size=1))
+    clock = M.Clock(sample(st.integers(0, 2 ** 40)))
     c = mc.MemoryChallenger(tree, signer, log=M.ts.session_log(), limit_ns=session_limit, block_bytes=q.block_bytes,
                             binding=root, clock=clock)
     while not c.done:
@@ -132,7 +132,7 @@ def runs(draw, signer: M.AtLeaf | None = None, stores: st.SearchStrategy | None 
         b = blocks[i]
         c.receive(b[:-1] + bytes([b[-1] ^ 1]) if j in tampered else b)
     s = M.Session(c.close(), c.commitment, c.openings(), rows, (signer.public_key,), signer)
-    return Run(point, setup, s, draw(st.sampled_from([(signer.scheme,), (signer.scheme, mc.LMS), (mc.LMS,)])), session_id,
+    return Run(point, setup, s, sample(st.sampled_from([(signer.scheme,), (signer.scheme, mc.LMS), (mc.LMS,)])), session_id,
                setup_of)
 
 

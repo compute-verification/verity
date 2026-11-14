@@ -54,7 +54,7 @@ class StoreUnavailable(RuntimeError):
 
 def _research_src() -> Path | None:
     """`$RESEARCH_SRC` when it holds `research.store`, else where the installed `research` distribution's package lives (a
-    workspace sync installs it; a checkout without it, such as the public export, has none and the store tests skip)."""
+    workspace sync installs it; a checkout without it has none and the store tests skip)."""
     cand = os.environ.get("RESEARCH_SRC")
     if cand and (Path(cand) / "research" / "store").is_dir():
         return Path(cand)

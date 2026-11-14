@@ -16,6 +16,12 @@ files. It refuses with Lean's reason where Lean refuses, and accepts nothing eit
 findings, which the audit above it (v1's check at the coins, then the refusal) reads. Each session's verdict is the
 Flock verifier's own (`flock_verdict`: its executable's ``verify --zk``, as `proofs.verify` runs it).
 
+Before any session it holds every member's files, sampled or not, in the members' order (`OneStageZk.membersFiles`):
+the reads Lean's `Member.statement` makes of them, then what a session's verdict checks of the files alone
+(`files_why`, Lean's `StepAt.filesHeld`), a refusal naming the member. A member the sample missed is refused there as
+one it holds is. The form the sampled audit's knowledge soundness covers is the Flock verifier's own there too
+(`flock_form`: its executable's ``ks-form``).
+
 Where it is not Lean's step for step, each on a case neither side accepts:
 
 * **A link's ``root_B`` length** (`challenger.LINK_ROOT_LEN`). Lean holds each session's link to the length its
@@ -23,8 +29,14 @@ Where it is not Lean's step for step, each on a case neither side accepts:
   it verifies any session. This sets up no session, so it passes no length (`TABLES`): a session Lean refuses there for
   that length alone is here a session its own verdict rejects, since the verifier holds ``root_B`` to that length.
 * **A circuit's ``vus_per_block``** (`OneStageZk.Member.blockHeld`). Lean refuses a circuit file that parses with
-  another ``vus_per_block`` than the parameters', and leaves one that does not parse to its session's reject. This
-  reads the file's META alone, so it refuses both.
+  another ``vus_per_block`` than the parameters', and one that does not parse for that, where it holds the member's
+  files. This reads the file's META alone, so it refuses both for the ``vus_per_block``.
+* **The scope's rules on a circuit that parses, and the ports' roots** (`Flock.ProvedScope.circuitRules`,
+  `Flock.PortRoots.checkOf`, both in `StepAt.filesHeld`). Lean holds every member's files to them before any session.
+  The Flock verifier's executable runs neither without a session, so `files_why` answers the rest of that check in
+  Lean's order and passes these two: files Lean refuses for one of them are refused here by a later check of the files
+  where one applies, else left to the member's session, whose verdict rejects, and unanswered for a member with no
+  statement.
 * **A session's coin-tree key, fresh among the earlier sessions'** (`Flock.CoinTree.checkFresh`): implied here by the
   trees' check, which holds each session to a logged tree of its own, no key twice in the log.
 * **Lengths past a statement's 8-byte word** (`OneStageZk.fitsWhy`, `EVIDENCE_FITS`), which no file
@@ -120,6 +132,12 @@ MEMBER_UNITS = ("units: the public file's units.indices are not exactly the memb
                 "table is the member's i-th unit")
 #: `OneStageZk.provedHeld`'s refusal
 PROVED_UNITS = "the units the sessions proved are not the evidence's proved_units"
+#: the heads of the two refusals `Flock.KsScope.checkOf` and the scope (`Flock.ProvedScope.checkOf`) word alike, of
+#: files neither reads: a circuit that does not parse, a public file that does not load
+UNREAD = ("refused: a circuit that does not parse (", "refused: a public file that does not load (")
+#: a statement's form held on its circuit and public files and the lookup tables, by name, with no session: None, or
+#: the refusal (`flock_form`)
+Form = Callable[[Path, Path, Sequence[tuple[str, Path]]], "str | None"]
 _HEX = frozenset("0123456789abcdef")
 
 
@@ -446,6 +464,76 @@ def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, S
     return f"public file: not the registration's: {', '.join(codes)}" if codes else None
 
 
+def flock_form(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]]) -> str | None:
+    """The Flock verifier's check of a statement's form on its files, with no session: its executable's ``ks-form`` on
+    the circuit and public files with the lookup tables `tables` (``--tables``), which is `Flock.KsScope.checkOf`
+    without a sample and so, at the one table of a member's session, `KsScope.filesOf`. None where they pass, else the
+    refusal. `Outside` where the verifier answers neither."""
+    with tempfile.TemporaryDirectory(prefix="verity-members-form-") as d:
+        for name, f in tables:
+            os.symlink(f, Path(d, f"{name}.u32"))
+        p = subprocess.run([str(PF.executable()), "ks-form", "--statement", PF.STATEMENT, "--circuit", str(circuit),
+                            "--public", str(public), "--tables", d], capture_output=True, text=True,
+                           env=PF.verifier_env())
+    out = p.stdout.removesuffix("\n")
+    if not out.startswith("KS-FORM ") or p.returncode != (0 if out == "KS-FORM ok" else 1):
+        raise Outside(f"the verifier answered no form check for the files (exit {p.returncode}): {(p.stderr or p.stdout)[-400:]}")
+    return None if out == "KS-FORM ok" else out[len("KS-FORM "):]
+
+
+def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], units: Sequence[Sequence[int]],
+              strata: Any, slice_: Mapping[str, Any], form: Form) -> str | None:
+    """`OneStageZk.StepAt.filesHeld` as far as this answers it (module docstring): why the files of a member of the
+    units `units` are refused with no session, the first of Lean's that applies, None where none does. A circuit that
+    does not parse or a public file that does not load (`form`'s refusal, which is the scope's word for word,
+    `UNREAD`), the template's refusals (`proofs.template_why`), the rest of the form without a sample (`form`), then
+    the member's population check at the registration's `strata` and the member's slice `slice_` (`population_why`).
+    `Outside` where the strata or the public file's header are not read."""
+    formed = form(circuit, public, tables)
+    if formed is not None and formed.startswith(UNREAD):
+        return formed
+    if (template := PF.template_why(circuit)) is not None:
+        return template
+    if formed is not None:
+        return formed
+    if isinstance(strata, Exception):
+        raise Outside(f"the registration's strata are not read ({strata}), whose refusal is the Lean parser's own")
+    try:
+        header = _header(public)
+    except ValueError as e:
+        raise Outside(f"{e}, whose refusal is the Lean parser's own") from None
+    return population_why(units, strata, header, slice_)
+
+
+def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes,
+           tables: Sequence[tuple[str, Path]], strata: Any, slice_: Mapping[str, Any], form: Form) -> tuple[Path, Path]:
+    """`OneStageZk.Member.files`: the member `name`'s circuit and public files, read as `Member.statement` reads them
+    and held with no session (`files_why`); a refusal names the member."""
+    try:
+        circuit = _blob(blobs, m["circuit"], "circuit")
+        meta = _meta(circuit)
+        try:
+            lookups = PF.lookups_of(meta)
+        except ValueError as e:
+            raise _Refused(str(e)) from None
+        if (why := PF.tables_why(lookups, blobs)) is not None:
+            raise _Refused(why)
+        if m["registered"] is None and PF.reads_registered(descriptor):
+            raise _Refused("registered: the program reads registered values (a RegisteredInput among its "
+                           "definitions) and the verifier holds no registered reads: verify with its own "
+                           "registered file")
+        public = _blob(blobs, m["public"], "public file")
+        g = meta.get("vus_per_block") if isinstance(meta, dict) else None
+        if _nat(g) and g != m["vus_per_block"]:
+            raise _Refused(f"vus_per_block: the member's circuit has {g} units a proof block, not the "
+                           f"{m['vus_per_block']} the parameters name")
+        if (why := files_why(circuit, public, tables, m["units"], strata, slice_, form)) is not None:
+            raise _Refused(why)
+    except _Refused as e:
+        raise _Refused(f"member {name}: {e}") from None
+    return circuit, public
+
+
 def flock_verdict(st: Statement) -> dict[str, Any]:
     """The Flock verifier's verdict on the statement `st`'s one session: its executable's ``verify --zk`` on its files, as
     `proofs.verify` runs it, with the lookup tables `st` holds (``--tables``); the verdict's line. `Outside` where the
@@ -476,24 +564,13 @@ def flock_verdict(st: Statement) -> dict[str, Any]:
     return lines[0]
 
 
-def _session(name: str, member: str, m: Mapping[str, Any], st: Statement, record: Any, strata: Any,
-             slice_: Mapping[str, Any], verdict: Callable[[Statement], Mapping[str, Any]]) -> PF.Finding:
-    """One member's session's finding (`OneStageZk.step`): the verifier's verdict, a session it accepts rejected where
-    the circuit is past a template instance's form (`proofs.template_why`) or the member's population check fails
-    (`population_why`), and refused where it names another program than the partition object's."""
+def _session(name: str, member: str, st: Statement, record: Any,
+             verdict: Callable[[Statement], Mapping[str, Any]]) -> PF.Finding:
+    """One member's session's finding (`OneStageZk.step`): the verifier's verdict, refused where it accepts naming
+    another program than the partition object's. The template's and the population's refusals, which Lean's verdict
+    runs again, passed on the member's files before any session (`files_why`)."""
     v = verdict(st)
     ok, why = v.get("accepted") is True, str(v.get("why", ""))
-    if ok and (template := PF.template_why(st.circuit)) is not None:
-        ok, why = False, template
-    if ok:
-        try:
-            if isinstance(strata, Exception):
-                raise ValueError(str(strata))
-            population = population_why(m["units"], strata, _header(st.public), slice_)
-        except ValueError as e:
-            population = str(e)
-        if population is not None:
-            ok, why = False, population
     sha, want = v.get("program_sha512"), st.partition.get("program")
     if ok and (type(sha) is not str or sha != want):
         raise _Refused(f"member {member}: session {name}'s verdict names program {sha if type(sha) is str else 'none'}, "
@@ -511,14 +588,15 @@ def _session(name: str, member: str, m: Mapping[str, Any], st: Statement, record
 
 def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any],
                 blobs: Mapping[str, Path], *, program: Program, verify: Ch.Verify,
-                verdict: Callable[[Statement], Mapping[str, Any]] = flock_verdict) -> tuple[Run | None, str | None]:
+                verdict: Callable[[Statement], Mapping[str, Any]] = flock_verdict,
+                form: Form = flock_form) -> tuple[Run | None, str | None]:
     """`OneStageZk.membersRun` (module docstring): the per-member form's sessions' run on the parameters `params`, the
     registration record `record`, the evidence `evidence` (each as its parser read it) and the files `blobs`, by SHA-512
     (`blobs_of`), under the verifier's own `program`, the one `params` names, and its challenger's signature check
     `verify`. The run and None, or None and Lean's refusal, the reason `membersOutcome` prints after ``proofs:``. It
     accepts nothing: a run whose sessions all accepted is what the audit above it reads, v1's check at the coins and then
-    the form's refusal (`ALL_PASSED`). `verdict` is one session's verdict of the Flock verifier (`flock_verdict`).
-    `Outside` on what it does not decide."""
+    the form's refusal (`ALL_PASSED`). `verdict` is one session's verdict of the Flock verifier (`flock_verdict`), and
+    `form` its check of a member's files' form with no session (`flock_form`). `Outside` on what it does not decide."""
     ms, sts = _parsed(params, evidence)
     if P.program_sha512(program) != params["partition"].get("program"):
         raise Outside("the program is not the one the parameters' partition object names")
@@ -544,35 +622,20 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
             strata = e
         descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
         tables = tuple((n, blobs[d]) for n, d in PF.MUFU_SHA512.items() if d in blobs)
+        files = {name: _files(name, m, blobs, descriptor, tables, strata,
+                              {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form)
+                 for name, m in ms.items()}
         findings: list[PF.Finding] = []
         for st, name in zip(sts, held):
-            m, (s,) = ms[name], st["sessions"]
+            (s,) = st["sessions"]
             try:
-                circuit = _blob(blobs, m["circuit"], "circuit")
-                meta = _meta(circuit)
-                try:
-                    lookups = PF.lookups_of(meta)
-                except ValueError as e:
-                    raise _Refused(str(e)) from None
-                if (why := PF.tables_why(lookups, blobs)) is not None:
-                    raise _Refused(why)
-                if m["registered"] is None and PF.reads_registered(descriptor):
-                    raise _Refused("registered: the program reads registered values (a RegisteredInput among its "
-                                   "definitions) and the verifier holds no registered reads: verify with its own "
-                                   "registered file")
-                public = _blob(blobs, m["public"], "public file")
-                g = meta.get("vus_per_block") if isinstance(meta, dict) else None
-                if _nat(g) and g != m["vus_per_block"]:
-                    raise _Refused(f"vus_per_block: the member's circuit has {g} units a proof block, not the "
-                                   f"{m['vus_per_block']} the parameters name")
                 path = _blob(blobs, s["record"], f"session {s['name']}'s record")
                 _, parsed = _record(path, s["name"])
             except _Refused as e:
                 raise _Refused(f"member {name}: {e}") from None
-            files = Statement(circuit, public, descriptor, params["partition"], m["registered"], tables, path,
-                              tuple((f, blobs[s["reps"][f]]) for f in sorted(s["reps"])))
-            slice_ = {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}
-            findings.append(_session(s["name"], name, m, files, parsed, strata, slice_, verdict))
+            statement = Statement(*files[name], descriptor, params["partition"], ms[name]["registered"], tables, path,
+                                  tuple((f, blobs[s["reps"][f]]) for f in sorted(s["reps"])))
+            findings.append(_session(s["name"], name, statement, parsed, verdict))
         proved = tuple(u for f in findings for u in f.units)
         every = all(f.accepted for f in findings)
         if every and sorted(proved) != evidence["proved_units"]:
@@ -591,6 +654,7 @@ def run_reason(run: Run | None, refused: str | None) -> str | None:
     return ALL_PASSED if run.all else None
 
 
-__all__ = ["ALL_PASSED", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "MULTI_REFUSED", "NO_CHALLENGER", "Outside",
-           "POPULATION_ORDER", "PROVED_UNITS", "REFUSAL", "ROW_TABLES", "Run", "Statement", "TABLES", "TABLE_PORT",
-           "blobs_of", "case_refusal", "flock_verdict", "members_run", "population_why", "refusal", "run_reason"]
+__all__ = ["ALL_PASSED", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "MULTI_REFUSED", "NO_CHALLENGER",
+           "Outside", "POPULATION_ORDER", "PROVED_UNITS", "REFUSAL", "ROW_TABLES", "Run", "Statement", "TABLES",
+           "TABLE_PORT", "UNREAD", "blobs_of", "case_refusal", "files_why", "flock_form", "flock_verdict", "members_run",
+           "population_why", "refusal", "run_reason"]

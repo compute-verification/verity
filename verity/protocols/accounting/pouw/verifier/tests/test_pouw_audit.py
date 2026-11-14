@@ -9,7 +9,7 @@ from fractions import Fraction
 import pytest
 
 from verity.errors import ProtocolError
-from verity.protocols.accounting.pouw.clear.clear_audit import Lottery, Prover, Sampled, Verifier, reference_kernel, tickets
+from verity.protocols.accounting.pouw.prover.clear.clear_audit import Lottery, Prover, Sampled, Verifier, reference_kernel, tickets
 from verity.protocols.accounting.pouw.prover.schemes import ncp
 from verity.protocols.accounting.pouw.verifier.audit import (HM96_WEIGHTS, Epoch, Workload, activation_binding, commit_rows, tile_refs,
                                               weight_binding)

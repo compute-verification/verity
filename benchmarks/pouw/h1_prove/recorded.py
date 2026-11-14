@@ -138,12 +138,12 @@ sys.path.insert(0, str(HERE))
 import h1unit as U  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.randomness import derive  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import core_check as CC  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import verifier  # noqa: E402
 from verity.protocols.accounting.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
 
 SAMPLE_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = U.TILE
@@ -391,7 +391,7 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
     that refuses, or None: the layout of ``descriptor`` (`credit.layout_of`, `credit.strata`), each session's ok rows
     held to the verifier's own (`credit._ok_held`, step 5's rule: each sampled proof block's finding opened ``o1`` at ``ok``,
     the value and root of the verifier's ``ok``, `ok_registration`), one accepted outcome per sampled proof block
-    (`credit._proved`, ``drawn`` h1_prove's own sample, not credit's work-law sample), and the registration
+    (`credit._proved`, ``drawn`` h1_prove's own sample, not that of credit's work sampling design), and the registration
     (`credit._registration`): the execution phase's registered ``entries`` (the commitment's: no entry registers ``ok``), each
     proof's ``registered`` the finding of the session that proved the unit (``findings``, unit -> `findings_of`), under
     the open root ``window_root``, each call a step of its own (`h1unit.steps`). Each proof's ``program`` is the

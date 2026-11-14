@@ -131,15 +131,15 @@ def test_core_checks_rounds_reads_the_challengers_own_session():
     in_process = rounds_cases.Session(random.Random("p"), prover, [bytes.fromhex(r) for r in d["roots"]], None, seed=1)
     ops = [o.to_json() for o in in_process.rounds.openings]
     assert CC.rounds(*rounds_cases.rounds_args({**d, "session": in_process.files(), "openings": ops})) == \
-        ("coin", "the challenger's session is not trusted: the challenger record's signature does not verify under the "
-                 "verifier's challenger key")
+        ("coin", ("the challenger's session is not trusted: the challenger record's signature does not verify under "
+                  "the verifier's challenger key"))
     assert CC.rounds(*rounds_cases.rounds_args({**d, "session": {**d["session"], "close": None}})) == \
         ("coin", f"the challenger's session is not trusted: {Ch.NO_CLOSE}")
     end = next(i for i, line in enumerate(d["ledger"]) if json.loads(line)["kind"] == "end"
                and json.loads(line)["session"] == s.sid)
     assert CC.rounds(*rounds_cases.rounds_args({**d, "ledger": d["ledger"][:end]})) == \
-        ("coin", f"the challenger's session is not trusted: the auditor's ledger has no end for session {s.sid}: the "
-                 "session never ended, or the ledger is older than its end")
+        ("coin", (f"the challenger's session is not trusted: the auditor's ledger has no end for session {s.sid}: the "
+                  "session never ended, or the ledger is older than its end"))
     assert CC.rounds(*rounds_cases.rounds_args({**d, "roots": ["AB" * 64] + d["roots"][1:]})) == \
         ("rounds", "the round roots are not a list of SHA-512 digests")
 

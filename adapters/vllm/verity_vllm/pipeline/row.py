@@ -31,14 +31,33 @@ from importlib import metadata
 from typing import Any
 
 from verity_vllm import protocols as PO
-from verity_vllm.config import (ROOT, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError, done_source_refusal,
-                                group, option, row_file, row_path, row_world, run_store)
-from verity_vllm.pipeline import config_record as CR
-from verity_vllm.pipeline.row_driver import RESEARCH
 from verity_vllm import settings
+from verity_vllm.config import (
+    ROOT,
+    BuildConfig,
+    CommitConfig,
+    MatchConfig,
+    RowConfig,
+    RunEnv,
+    UsageError,
+    done_source_refusal,
+    group,
+    option,
+    row_file,
+    row_path,
+    row_world,
+    run_store,
+)
+from verity_vllm.pipeline import cli, row_stages, row_tp
+from verity_vllm.pipeline import config_record as CR
+from verity_vllm.pipeline import row_records as R
+from verity_vllm.pipeline.row_driver import RESEARCH
+from verity_vllm.records.schema_ids import EFFECTIVE_CONFIG_SCHEMA
+
+__all__ = ["COMMANDS", "main"]
 
 STAGES = "build,match,commit"
-EFFECTIVE_SCHEMA = "verity-vllm/effective-config/v1"
+EFFECTIVE_SCHEMA = EFFECTIVE_CONFIG_SCHEMA
 EFFECTIVE_NAME = "effective_config.json"
 #: The environment a row's engines inherit that can change their kernels, recorded beside the config (never a credential).
 ENGINE_ENV = ("VLLM_", "NCCL_", "CUBLAS", "TORCH_", "TORCHINDUCTOR_", "TRITON_", "FLASHINFER_", "CUDA_VISIBLE_DEVICES")
@@ -186,19 +205,16 @@ def run_row(o: Run | Stage, stages: str) -> int:
         json.dump(effective_config(o, stages, protocols), f, indent=1, sort_keys=True, default=str)
         f.write("\n")
     if row_world(o.row) > 1:
-        from verity_vllm.pipeline import row_records as R
-        from verity_vllm.pipeline.row_tp import TpRow
         from verity_vllm.pipeline.tp.c2 import DEFER_WORLDS
         world = o.world if o.world is not None else R.tp_world(_workload(o.row))
         if world < 2:
             raise UsageError(f"--world {world}: a tensor-parallel row needs a world of at least 2 ranks")
         if o.commit.replay_deferred == "slim" and world in DEFER_WORLDS:     # at any other world the TP Commit replays in process
             raise UsageError(f"--replay-deferred slim: {o.row} is a tensor-parallel row; the slim plan is a single-GPU Commit's (TP defers with 1)")
-        return TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=stages, env=o.env, world=world, gpu_util=o.gpu_util,
-                     build=o.build, match=o.match, commit=o.commit).run()
-    from verity_vllm.pipeline.row_stages import SingleRow
-    return SingleRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=stages, env=o.env, gpu_util=o.gpu_util or "0.5",
-                     build=o.build, match=o.match, commit=o.commit, protocols=protocols).run()
+        return row_tp.TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=stages, env=o.env, world=world, gpu_util=o.gpu_util,
+                            build=o.build, match=o.match, commit=o.commit).run()
+    return row_stages.SingleRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=stages, env=o.env, gpu_util=o.gpu_util or "0.5",
+                                build=o.build, match=o.match, commit=o.commit, protocols=protocols).run()
 
 
 def _workload(row: str) -> str:
@@ -223,7 +239,6 @@ def main(o: Any) -> int:
                  if f in o.flags]
         if stray:
             raise UsageError(f"{', '.join(stray)} must come before ROW (the flags after the positionals go to every stage)")
-        from verity_vllm.pipeline import cli
         first = o.stages.split(",")[0]
         st = cli.parse("row", ["stage", first, o.row, o.role, o.repo, o.rev, *o.flags], o.env.environ)
         return run_store(RESEARCH, "row chain").chain(o, st.env.sweep_dir)

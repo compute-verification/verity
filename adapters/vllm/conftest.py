@@ -25,7 +25,6 @@ if importlib.util.find_spec("torch") is not None:  # torch is an extra of this p
 
 import verity.circuits.defs  # noqa: E402,F401  (loaded before the first test, so the guard's snapshot always holds it)
 
-
 _MISSING = object()
 
 

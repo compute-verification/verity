@@ -30,6 +30,24 @@ def test_a_step_with_no_logits_indices_or_an_empty_value_there_reads_as_none(tmp
         CL.read_steps(_log(tmp_path, {"step": 0, **rows, "logits_indices": 7}))
 
 
+def test_a_log_holds_one_run_header_wherever_it_stands(tmp_path):
+    header = {"$e": "RunHeader", "workload": {"requests": [{"request_id": "a"}]}}
+    step = {"$e": "StepStart", "step": 0, "rows": [["a", 0]], "logits_rows": []}
+    path = tmp_path / "capture.jsonl"
+
+    def read(*lines: dict[str, Any]) -> tuple[dict, dict[int, dict]]:
+        path.write_text("".join(json.dumps(line) + "\n" for line in lines))
+        return CL.read_steps(str(path))
+
+    assert read(step, header) == (header, {0: {"rows": [("a", 0)], "logits_rows": [], "logits_indices": []}})
+    for none in ((), (step,), (step, {"$e": "Note", "text": "RunHeader"})):
+        with pytest.raises(ValueError, match=r"capture\.jsonl: no RunHeader$"):
+            read(*none)
+    for two in ((header, header), (header, step, header)):
+        with pytest.raises(ValueError, match="^log has two RunHeader records$"):
+            read(*two)
+
+
 def test_a_headers_requests_are_its_prompt_parameters_and_a_child_reads_its_parents():
     reqs = [{"request_id": "a"}, {"request_id": "b"}]
     header = {"workload": {"requests": reqs, "children": [{"request_id": "c", "parent": "b"}]}}

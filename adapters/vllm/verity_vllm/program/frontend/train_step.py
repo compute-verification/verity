@@ -2,20 +2,24 @@
 front door as a served model (`derive_graph.derive_graph`), with the training rules (`rules/training.py`) added to the default ones.
 
     step_program(model, loss_fn, optimizer, example_batch, mode="reference", cc=None) -> Program | Unsupported
+    structure_program(model, loss_fn, optimizer, example_batch, cc=cc) -> Program | Unsupported   the step at a cc, cells unread
 
 The step is one function of everything a step reads,
 
     (params, exp_avg, exp_avg_sq, decay, neg_step_size, bc2_sqrt, buffers, batch) -> (loss, params', exp_avg', exp_avg_sq')
 
 built with `torch.func.functional_call` and `grad_and_value`, the optimizer a function (`AdamW.update`), and traced as one joint ATen
-graph on fake tensors (`make_fx` of the functionalized step, SDPA's math backend), which `derive_graph` derives. No value is read:
+graph on fake tensors (`make_fx` of the functionalized step, SDPA's math path), which `derive_graph` derives. No value is read:
 the parameters, the optimizer state, the step's three host scalars (`AdamW.scalars`), the module's buffers and the batch are the
 Program's inputs, in that order, each tensor one parameter named after it (`param_<fqn>`, `exp_avg_<fqn>`, ...). The parameters
 are the Program's theta (`Program.theta`: the start's weights); the optimizer state, the scalars and the batch are not.
 
 At a compute capability (`cc`) the step is traced as that GPU runs it (`export_step(..., gpu=True)`): a `Tensor.is_cuda` the step's
-own code reads is True, so it takes its CUDA branches (`x.bfloat16() if x.is_cuda else x.float()` is bf16), and the TF32 setting
-its calls run under (cuda.matmul.allow_tf32), which the traced graph doesn't show, is the rules' `tf32`.
+own code reads is True, so it takes its CUDA branches (`x.bfloat16() if x.is_cuda else x.float()` is bf16); an attention call
+the card gives its flash kernel is that kernel's op, which autograd pairs with the kernel's backward, one it gives its
+memory-efficient kernel is that kernel's op, which no rule lowers, and one whose kernel the trace can't name is refused
+(`_CardSdpa`); and the two settings its calls run under that the traced graph doesn't show are the rules': TF32
+(cuda.matmul.allow_tf32, `tf32`) and deterministic algorithms (`deterministic`), which the flash backward reads.
 
 A node no rule lowers is `Unsupported`, as for any derivation. `step_report(..., survey=True)` instead lowers every node it can and
 takes each refused one's output as a field of the `run` input (a hole, `rules.training_survey`), and returns a `StepSurvey`: every
@@ -30,6 +34,7 @@ from __future__ import annotations
 
 import contextlib
 import keyword
+import math
 import os
 import re
 import sys
@@ -39,6 +44,7 @@ from dataclasses import dataclass
 from typing import cast
 
 import torch
+import torch.nn.functional as F
 from torch.func import functional_call, grad_and_value
 from torch.overrides import TorchFunctionMode
 from verity.circuits import parts
@@ -116,7 +122,8 @@ class _Loss(torch.nn.Module):
 @dataclass
 class StepLayout:
     """Which Program input and output is which: the parameters' and buffers' fqns in order, the host scalars, the batch; and how
-    the step was traced: as a GPU runs it (`gpu`), and then with cuda.matmul.allow_tf32 on (`tf32`)."""
+    the step was traced: as a GPU runs it (`gpu`), and then with cuda.matmul.allow_tf32 on (`tf32`) and under deterministic
+    algorithms (`deterministic`)."""
     params: list[str]
     buffers: list[str]
     scalars: tuple[str, ...]
@@ -124,6 +131,7 @@ class StepLayout:
     outputs: list[str]
     gpu: bool = False
     tf32: bool = False
+    deterministic: bool = False
 
     def to_json(self) -> dict:
         return {"params": self.params, "buffers": self.buffers, "scalars": list(self.scalars), "inputs": self.inputs,
@@ -150,6 +158,85 @@ class _TF32Seen(TorchFunctionMode):
         return func(*args, **(kwargs or {}))
 
 
+def _deterministic() -> bool:
+    """Whether the flash attention backward runs its deterministic algorithm now: torch.use_deterministic_algorithms on and not
+    warn-only, under which the kernel runs its non-deterministic one and warns. It is the one kernel of a step that reads it."""
+    return torch.are_deterministic_algorithms_enabled() and not torch.is_deterministic_algorithms_warn_only_enabled()
+
+
+#: the dtypes of q, k and v the flash kernel takes, and the memory-efficient kernel from sm_80 (cuDNN's are the flash kernel's)
+_FLASH, _FUSED = (torch.float16, torch.bfloat16), (torch.float16, torch.bfloat16, torch.float32)
+
+
+def _efficient_takes(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mask: torch.Tensor | None, gqa: bool) -> bool:
+    """Whether torch's memory-efficient kernel takes a 4-D call of one dtype of `_FUSED` on a card of sm_80 to sm_121, as
+    `can_use_mem_efficient_attention` decides for dense inputs; a grouped-query call (`gqa`) is not decided here: False."""
+    a = 4 if q.dtype == torch.float32 else 8   # `minimum_gemm_alignment`: 128 bits of the dtype, and at least 4
+    D, Dv = q.shape[-1], v.shape[-1]
+    return (not gqa and k.shape[-1] == D and D > 0 and Dv > 0 and D % a == 0 and Dv % a == 0
+            and all(t.storage_offset() % a == 0 and t.stride(-1) == 1 for t in (q, k, v)) and (mask is None or mask.stride(-1) == 1)
+            and q.shape[-2] > 0 and k.shape[-2] > 0 and q.shape[0] == k.shape[0] == v.shape[0]
+            and (q.shape[1] == k.shape[1] == v.shape[1] or (q.shape[1] > 0 and k.shape[1] == v.shape[1] == 1)))
+
+
+class _CardSdpa(TorchFunctionMode):
+    """`F.scaled_dot_product_attention` as torch's composite dispatches it on a CUDA device of sm_80 to sm_121 whose order of
+    backends is torch's default, flash, memory-efficient, math and cuDNN (torch puts cuDNN first only on some sm_9x and sm_10x
+    cards), every backend enabled. A call with 3-D q, k and v is the call on a batch of one, its output that batch's. A call with no mask whose q, k and
+    v are 4-D f16 or bf16 tensors is the flash kernel's op, `aten._scaled_dot_product_flash_attention`, at the head dim padded to
+    a multiple of 8 and the scale written out (1 / sqrt(D) by default), its output cut back to D; autograd pairs it with
+    `aten._scaled_dot_product_flash_attention_backward`. Another 4-D call of one dtype of `_FUSED` that the memory-efficient
+    kernel takes (`_efficient_takes`) is that kernel's op, `aten._scaled_dot_product_efficient_attention`, its mask as the
+    composite hands it over, which no rule lowers; one it doesn't take is refused (`ValueError`), naming the call, since it is
+    then a card's math path only by checks this trace doesn't read. Only a call no fused kernel takes, its q, k and v not all 4-D
+    of one such dtype, is left to the trace, which decomposes it to the math path. Collects whether each call it sends to the
+    flash kernel ran under deterministic algorithms, which the kernel's backward reads."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.deterministic: set[bool] = set()
+
+    def __torch_function__(self, func, types, args=(), kwargs=None):
+        kwargs = kwargs or {}
+        if func is not F.scaled_dot_product_attention:
+            return func(*args, **kwargs)
+        call = {**dict(zip(("query", "key", "value", "attn_mask", "dropout_p", "is_causal"), args)), **kwargs}
+        q, k, v, mask = call["query"], call["key"], call["value"], call.get("attn_mask")
+        if all(t.dim() == 3 for t in (q, k, v)):
+            q, k, v = (t.unsqueeze(0) for t in (q, k, v))
+            while mask is not None and mask.dim() < 4:
+                mask = mask.unsqueeze(0)
+        if any(t.dim() != 4 for t in (q, k, v)) or len({t.dtype for t in (q, k, v)}) != 1 or q.dtype not in _FUSED:
+            return func(*args, **kwargs)
+        out = self._fused(q, k, v, mask, call)
+        return out.squeeze(0) if q.dim() != call["query"].dim() else out
+
+    def _fused(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mask: torch.Tensor | None, call: dict) -> torch.Tensor:
+        scale, dropout_p, is_causal = call.get("scale"), call.get("dropout_p", 0.0), call.get("is_causal", False)
+        if mask is not None or q.dtype not in _FLASH:
+            if not _efficient_takes(q, k, v, mask, call.get("enable_gqa", False)):
+                raise ValueError(f"export_step: an attention call of q {list(q.shape)} {q.dtype}"
+                                 f"{' with a mask' if mask is not None else ''} is not one torch's flash kernel takes, nor its "
+                                 "memory-efficient kernel by the checks this trace reads, and no kernel is claimed for it")
+            if mask is not None:
+                if mask.dtype == torch.bool:
+                    mask = torch.where(mask, 0.0, torch.scalar_tensor(-math.inf, dtype=q.dtype, device=mask.device))
+                if not (mask.stride(-1) == 1 and all(s % 8 == 0 for s in mask.stride()[:-1])):
+                    L = mask.shape[-1]
+                    mask = F.pad(mask, (0, 8 - L % 8))[..., :L]
+                mask = mask.expand(q.shape[0], q.shape[1], q.shape[2], k.shape[2])
+            lse = torch.is_grad_enabled() and any(t.requires_grad for t in (q, k, v) + ((mask,) if mask is not None else ()))
+            return torch.ops.aten._scaled_dot_product_efficient_attention(q, k, v, mask, lse, dropout_p, is_causal, scale=scale)[0]
+        self.deterministic.add(_deterministic())
+        D = q.shape[-1]
+        pad = -D % 8
+        if pad:
+            q, k, v = (F.pad(t, (0, pad)) for t in (q, k, v))
+        out = torch.ops.aten._scaled_dot_product_flash_attention(q, k, v, dropout_p, is_causal, False,
+                                                                 scale=1.0 / math.sqrt(D) if scale is None else scale)[0]
+        return out[..., :D] if pad else out
+
+
 @contextlib.contextmanager
 def _patched(owner, name: str, value):
     """``owner.name = value`` for the block. Afterwards ``owner`` holds under ``name`` what it held itself before: that attribute
@@ -169,22 +256,25 @@ def _patched(owner, name: str, value):
 @contextlib.contextmanager
 def _gpu_branches():
     """The step as a GPU runs it, on meta tensors: a `Tensor.is_cuda` read from outside torch is True (torch's own reads keep the
-    meta tensor's answer, so its dispatch is unchanged); yields the set of TF32 settings the step's calls ran under."""
+    meta tensor's answer, so its dispatch is unchanged) and attention is dispatched as the card dispatches it (`_CardSdpa`); yields
+    the set of TF32 settings the step's calls ran under and the set of deterministic-algorithms settings its flash attention calls
+    ran under."""
     # read from the class this is the descriptor, where torch's stubs give the bool an instance answers with
     base = cast(types.GetSetDescriptorType, torch._C.TensorBase.is_cuda)
 
     def is_cuda(t: torch.Tensor) -> bool:
         return True if not sys._getframe(1).f_code.co_filename.startswith(_TORCH_DIR) else base.__get__(t)
 
-    with _patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as mode:
-        yield mode.seen
+    with _patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as tf32, _CardSdpa() as sdpa:
+        yield tf32.seen, sdpa.deterministic
 
 
 def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
                 gpu: bool = False) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
     """The step's joint ATen graph (a `make_fx` `GraphModule`), its example inputs (meta tensors) and its `StepLayout`. `gpu`: traced
-    as a GPU runs it (`_gpu_branches`): its CUDA branches, and the layout's `tf32` the cuda.matmul.allow_tf32 its calls ran
-    under, which must be one setting for the whole step (a step that changes it between products is refused)."""
+    as a GPU runs it (`_gpu_branches`): its CUDA branches, its attention the card's fused kernel where the card takes one, and the
+    layout's `tf32` and `deterministic` the cuda.matmul.allow_tf32 its calls and the deterministic algorithms its flash attention
+    ran under, each of which must be one setting for the whole step (a step that changes one between calls is refused)."""
     from torch.fx.experimental.proxy_tensor import make_fx
     from torch.nn.attention import SDPBackend, sdpa_kernel
 
@@ -223,14 +313,17 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | to
     inputs = ([_ident(f"param_{n}") for n in short] + [_ident(f"exp_avg_{n}") for n in short] + [_ident(f"exp_avg_sq_{n}") for n in short]
               + list(scalars) + [_ident(f"buf_{n}") for n in bshort] + ["batch"])
     outputs = ["loss"] + [f"param:{n}" for n in short] + [f"exp_avg:{n}" for n in short] + [f"exp_avg_sq:{n}" for n in short]
-    branches: contextlib.AbstractContextManager[set[bool]] = _gpu_branches() if gpu else contextlib.nullcontext(set())
-    with sdpa_kernel(SDPBackend.MATH), branches as tf32:
+    branches: contextlib.AbstractContextManager[tuple[set[bool], set[bool]]] = (
+        _gpu_branches() if gpu else contextlib.nullcontext((set(), set())))
+    with sdpa_kernel(SDPBackend.MATH), branches as (tf32, deterministic):
         gm = make_fx(torch.func.functionalize(step, remove="mutations"), tracing_mode="fake")(*metas)
-    if len(tf32) > 1:
-        raise ValueError("export_step: the step changes cuda.matmul.allow_tf32 between its calls, and the rules take one setting "
-                         "for the whole step: set it once, outside the step")
+    for seen, setting in ((tf32, "cuda.matmul.allow_tf32"), (deterministic, "torch.use_deterministic_algorithms")):
+        if len(seen) > 1:
+            raise ValueError(f"export_step: the step changes {setting} between its calls, and the rules take one setting for the "
+                             "whole step: set it once, outside the step")
     return gm, metas, StepLayout(short, bshort, scalars, inputs, outputs, gpu=gpu,
-                                 tf32=gpu and (tf32.pop() if tf32 else bool(torch.backends.cuda.matmul.allow_tf32)))
+                                 tf32=gpu and (tf32.pop() if tf32 else bool(torch.backends.cuda.matmul.allow_tf32)),
+                                 deterministic=gpu and (deterministic.pop() if deterministic else _deterministic()))
 
 
 @dataclass(frozen=True)
@@ -249,10 +342,13 @@ class StepSurvey:
 def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
                 mode: str = "reference",
                 survey: bool = False, rules: RuleSet | None = None, cc: tuple[int, int] | None = None, name: str = "TrainStep",
-                exported: tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout] | None = None) -> DeriveReport | StepSurvey:
-    """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules(cc=cc, tf32=...)`, with
-    the step's TF32 setting at a `cc`). `exported`: `export_step`'s result, at a `cc` traced as the GPU runs it (`gpu=True`).
-    `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole (`rules.training_survey.survey`)."""
+                exported: tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout] | None = None,
+                structure: bool = False) -> DeriveReport | StepSurvey:
+    """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules(cc=cc, tf32=...,
+    deterministic=...)`, with the step's two settings at a `cc`). `exported`: `export_step`'s result, at a `cc` traced as the GPU runs it (`gpu=True`).
+    `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole (`rules.training_survey.survey`).
+    `structure`, at a `cc`: `structure_program`'s report, with `training_rules(cc=cc, structure=True)`, and its Program's
+    `annotations["train_step"]["structure"]` True (no other step's annotation has the key)."""
     from verity_vllm.program.frontend.rules.training import training_rules
     from verity_vllm.program.frontend.rules.training_survey import (
         survey as survey_graph,
@@ -260,17 +356,21 @@ def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | to
 
     if rules is not None and cc is not None:
         raise ValueError("step_report: pass rules or cc, not both (training_rules(cc=...) is the rule set cc names)")
+    if structure and (cc is None or survey):
+        raise ValueError("step_report: a structure derivation is of a step at a cc, and has no survey")
     gpu = cc is not None
     gm, metas, layout = exported if exported is not None else export_step(model, loss_fn, optimizer, example_batch, gpu=gpu)
     if gpu and not layout.gpu:
-        raise ValueError("step_report: at a cc the step is the GPU's, its CUDA branches and its TF32 setting: export it with "
-                         "export_step(..., gpu=True)")
-    ruleset = rules if rules is not None else training_rules(cc=cc, tf32=layout.tf32)
+        raise ValueError("step_report: at a cc the step is the GPU's, its CUDA branches, its attention kernel and its settings: "
+                         "export it with export_step(..., gpu=True)")
+    ruleset = rules if rules is not None else (training_rules(cc=cc, structure=True) if structure else
+                                               training_rules(cc=cc, tf32=layout.tf32, deterministic=layout.deterministic))
     theta = layout.inputs[:len(layout.params)]
     rep = derive_graph(gm, metas, mode=mode, rules=ruleset, name=name, input_names=layout.inputs, theta=theta)
-    rep.provenance["train_step"] = layout.to_json()
+    ann = {**layout.to_json(), **({"structure": True} if structure else {})}
+    rep.provenance["train_step"] = ann
     if rep.program is not None:
-        rep.program.annotations["train_step"] = layout.to_json()
+        rep.program.annotations["train_step"] = ann
     if not survey:
         return rep
     holes, prog = ([], rep.program) if rep.program is not None else survey_graph(gm, metas, mode=mode, rules=ruleset, name=name,
@@ -314,6 +414,18 @@ def step_program(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | t
     return report.result
 
 
+def structure_program(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer,
+                      example_batch: torch.Tensor, *, cc: tuple[int, int], mode: str = "reference") -> Program | Unsupported:
+    """The step at a `cc` as a structure Program: `step_program`'s graph as that GPU runs it (`export_step(..., gpu=True)`), at
+    `example_batch`'s shape, of which a reader takes only the occurrences and the views their inputs are read through, never a
+    cell. So no capture fits it and none is read: its matrix products are lowered as without a `cc` and each flash attention op is
+    its head Definition at a stand-in block size (`training_rules(cc=cc, structure=True)`). Its
+    `annotations["train_step"]["structure"]` is True, which marks it as no step's Program."""
+    report = step_report(model, loss_fn, optimizer, example_batch, mode=mode, cc=cc, structure=True)
+    assert isinstance(report, DeriveReport)
+    return report.result
+
+
 def in_bits_beyond_theta(program: Program, gates: GateSet) -> int | parts.Unsupported:
     """The bits a witness block `gates` reads beyond theta: the summed widths of the distinct gates outside it with a wire into it
     (`boundary.in_gates`), less theta's input gates (the start's weights, `Program.root.theta`) and structure (a constant, or a gate
@@ -351,4 +463,5 @@ def _structure(circuit, g: int, memo: dict[int, bool]) -> bool:
     return True
 
 
-__all__ = ["AdamW", "StepLayout", "StepSurvey", "export_step", "in_bits_beyond_theta", "primitives", "step_report", "step_program"]
+__all__ = ["AdamW", "StepLayout", "StepSurvey", "export_step", "in_bits_beyond_theta", "primitives", "step_report", "step_program",
+           "structure_program"]

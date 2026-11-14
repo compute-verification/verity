@@ -112,7 +112,7 @@ def test_miss_at_most_decides_by_bounds_as_the_integers_do():
         q = Fraction(rng.randint(max(1, b - b // 50 - 1), b - 1), b)
         k = Wd.EXACT_BITS // max(1, b.bit_length()) + rng.randint(1, 3000)
         delta = Fraction(1, 2 ** rng.randint(1, 40)) if rng.random() < 0.5 else q ** k * Fraction(rng.choice((999, 1001)), 1000)
-        if not 0 < delta:
+        if not delta > 0:
             continue
         assert Wd.miss_at_most(q, k, delta) == (q.numerator ** k * delta.denominator <= delta.numerator * q.denominator ** k)
 

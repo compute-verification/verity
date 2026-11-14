@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from types import SimpleNamespace as NS
 
 import numpy as np
@@ -46,6 +47,9 @@ class Runner:
                                                  Layer("model.layers.0.self_attn.indexer.k_cache", torch.uint8, 132, None),
                                                  Layer("model.layers.3.self_attn.attn", dtype, width, fmt)])
         self.bytes = {m.name: m.kv_cache.shape[-1] * m.kv_cache.element_size() for m in self.model.layers}
+        self.blocks: dict[str, list[int]]
+        self.gen: dict[str, int]
+        self.execute_model_state: NS | None
         self.blocks, self.free, self.gen, self.flip, self.execute_model_state = {}, list(range(16)), {}, flip, None
 
     def row(self, request: str, position: int, layer: str) -> np.ndarray:
@@ -138,7 +142,7 @@ def test_the_tables_guard_passes_a_bf16_cache_and_refuses_an_fp8_one_by_name():
     assert "uint8" in said["tables_guard"]["message"] and "--kv-cache-dtype auto" in said["tables_guard"]["message"]
 
 
-def doc(tmp_path, tag: str, fmt: str, flip: tuple[str, int, int] | None = None, tokens: dict | None = None) -> tuple[dict, object]:
+def doc(tmp_path, tag: str, fmt: str, flip: tuple[str, int, int] | None = None, tokens: dict | None = None) -> tuple[dict, Path]:
     runner, rows, _said, _tables = serve(fmt, flip)
     digests, raw = rows.digest()
     np.savez(tmp_path / f"{tag}.npz", **raw)
@@ -200,6 +204,7 @@ def test_routes_count_each_decision_by_what_it_reads_and_a_write_kernels_ptx_is_
     bare.layers = torch.nn.ModuleList([Layer("attn", torch.uint8, 656, "fp8_ds_mla")])
     assert X.Routes(Hooks(tag="test"), bare).count == {}
 
+    seen: set[str]
     cache, seen = tmp_path / "triton", set()
     for key, text in (("a" * 40, "div.full.f32 %f1, %f2, %f3;\ndiv.full.f32 %f4, %f5, %f6;\nrem.s32 %r1, %r2, %r3;"),
                       ("b" * 40, "div.rn.f32 %f1, %f2, %f3;\ndiv.s64 %rd1, %rd2, %rd3;")):
@@ -223,7 +228,7 @@ def test_the_plan_shares_a_prefix_holds_one_prompt_past_the_top_k_and_samples_ha
     def wrapped():
         pass
 
-    wrapped.dsa_topk_canon = canon = object()
+    wrapped.__dict__["dsa_topk_canon"] = canon = object()
     monkeypatch.setattr(torch.ops._C, X.TOPK_OPS[2], wrapped, raising=False)
     assert X.canonical_topk() is canon
     assert plan == X.plan(7) and len(plan) == X.REQUESTS and len({r["id"] for r in plan}) == X.REQUESTS

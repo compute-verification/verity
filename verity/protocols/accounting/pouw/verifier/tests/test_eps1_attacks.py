@@ -139,18 +139,18 @@ def _reused_operand_roots(args):
 
 #: name -> (build the attacked call_check arguments, one-line reason it is refused)
 ATTACKS = {
-    "skipped-words": (_skipped_words, "the fold recomputes every segment's MACs from the committed operands; a dropped "
-                      "segment changes the receipt"),
+    "skipped-words": (_skipped_words, ("the fold recomputes every segment's MACs from the committed operands; a "
+                      "dropped segment changes the receipt")),
     "forged-receipt": (_forged_receipt, "the committed receipt word is bound by SHA-512; a flipped bit is not the fold"),
-    "swapped-weights": (_swapped_weights, "the fold reads the committed w leaf; a receipt from a different weight does not "
-                        "match"),
+    "swapped-weights": (_swapped_weights, ("the fold reads the committed w leaf; a receipt from a different weight does not "
+                        "match")),
     "skipped-filler": (_skipped_filler, "H1's residue-digit words are folded too; a dropped D_d changes the receipt"),
-    "replay": (_replay, "the receipt is the thread's at its committed slot; reading another slot reads another thread's "
-               "word"),
-    "commit-after-salt": (_commit_after_salt, "the seed binds the salt; noise under another salt does not fold to the "
-                          "committed receipt"),
-    "reused-operand-roots": (_reused_operand_roots, "the seed binds (forward, position); a second call's noise differs, so "
-                             "the first call's receipt fails"),
+    "replay": (_replay, ("the receipt is the thread's at its committed slot; reading another slot reads another thread's "
+               "word")),
+    "commit-after-salt": (_commit_after_salt, ("the seed binds the salt; noise under another salt does not fold to the "
+                          "committed receipt")),
+    "reused-operand-roots": (_reused_operand_roots, ("the seed binds (forward, position); a second call's noise differs, so "
+                             "the first call's receipt fails")),
 }
 
 

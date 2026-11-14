@@ -27,6 +27,10 @@ template's parse (`HmOut.parseTmpl`), which carries its template, never `HmOut.p
 flat one, `HmOut.parse`'s. A templated circuit is held to the unit's form on the template's description (`unitWhy`:
 `ProvedScope.scopeOkT` at `count` tables), never on the rows the template unrolls to, and its statement circuit, the
 flat circuit `HmOut.unrolled` gives, is then in `scopeOkH`. `checkOf_ok` says what passing establishes at any circuit.
+
+`filesOf parsed tags publicFile count` is `checkOf` without the session's sample: what `checkOf` holds of a
+statement's files alone, so a statement no session samples can be held to it. `checkOf` passes exactly where `filesOf`
+does and the sample passes `drawWhy` (`checkOf_iff`), and `filesOf_ok` says what passing establishes of the files.
 -/
 module
 
@@ -130,6 +134,20 @@ def checkOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count :
         | none => match drawWhy count draw with
           | some why => .error (ProvedScope.refusal why)
           | none => .ok ()
+
+/-- **`checkOf` without the session's sample**: the tags (`tagsWhy`), and on the circuit `parsed` and the public file as
+`HmOut.loadPublic` loads it the unit's form and no shared rows, or V5's shared-row form (`filesWhy`). It reads no
+session, so it holds a statement's files whether or not a session samples them (`checkOf_iff`). -/
+def filesOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count : Nat) : Except String Unit :=
+  match tagsWhy tags with
+  | some why => .error (ProvedScope.refusal why)
+  | none => match parsed with
+    | .error e => .error (ProvedScope.refusal s!"a circuit that does not parse ({e})")
+    | .ok c => match HmOut.loadPublic tags c publicFile with
+      | .error e => .error (ProvedScope.refusal s!"a public file that does not load ({e})")
+      | .ok pub => match filesWhy tags count c pub publicFile with
+        | some why => .error (ProvedScope.refusal why)
+        | none => .ok ()
 
 /-- `checkOf` on the circuit file as `HmOut.parse` reads it. -/
 def check (tags : Tags) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
@@ -280,5 +298,39 @@ theorem checkOf_ok {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count : 
       | none =>
         obtain ⟨hu, hp⟩ := filesWhy_none hf
         exact ⟨rfl, hu, hp, rfl⟩
+
+/-- **`checkOf` passes exactly where the files pass `filesOf` and the session's sample passes `drawWhy`.** -/
+theorem checkOf_iff {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count : Nat} {draw : Option Json} :
+    checkOf parsed tags pf count draw = .ok () ↔ filesOf parsed tags pf count = .ok () ∧ drawWhy count draw = none := by
+  unfold checkOf filesOf
+  cases ht : tagsWhy tags with
+  | some w => simp
+  | none =>
+    cases parsed with
+    | error e => simp
+    | ok c =>
+      cases hl : HmOut.loadPublic tags c pf with
+      | error e => simp [hl]
+      | ok pub =>
+        cases hf : filesWhy tags count c pub pf with
+        | some w => simp [hl, hf]
+        | none => cases hd : drawWhy count draw <;> simp [hl, hf]
+
+/-- **What `filesOf` passing says of the files**, at any circuit `parsed` holds: what `checkOf_ok` says of them, with
+no session's sample. -/
+theorem filesOf_ok {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count : Nat} {c : Circuit} {pub : Public}
+    (h : filesOf parsed tags pf count = .ok ()) (hc : parsed = .ok c) (hpub : HmOut.loadPublic tags c pf = .ok pub) :
+    tagsWhy tags = none ∧ unitWhy tags count c = none ∧ (pub.tables = none ∨ SharedOk tags c pf) := by
+  subst hc
+  unfold filesOf at h
+  cases ht : tagsWhy tags with
+  | some w => simp [ht] at h
+  | none =>
+    simp only [ht, hpub] at h
+    cases hf : filesWhy tags count c pub pf with
+    | some w => simp [hf] at h
+    | none =>
+      obtain ⟨hu, hp⟩ := filesWhy_none hf
+      exact ⟨rfl, hu, hp⟩
 
 end Flock.KsScope

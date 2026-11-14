@@ -2,9 +2,9 @@
 
 Every other test of the committers holds a root to the reference under the run's own fresh step keys.  Here the tensors and
 the step keys are fixed, so the bytes each part of a committer makes are the ones written below: the offline core's step
-roots, run root, context and layout digests (step hashing), a leaf opening and a range opening (retention and openings), a
-dumped store's files, the weights' registration, and the windowed collector's roots over its CPU stand-ins.  A change that
-moves one of them changes the commitment, wherever the code that makes it lives.
+roots, run root, context and layout digests (step hashing), a served model's geometry digest, a leaf opening and a range
+opening (retention and openings), a dumped store's files, the weights' registration, and the windowed collector's roots over
+its CPU stand-ins.  A change that moves one of them changes the commitment, wherever the code that makes it lives.
 
 The modules under test: ``verity_vllm.commit.committer.native_host`` (the offline core), ``verity_vllm.commit.step_rows``,
 ``verity_vllm.commit.store_dump`` and ``verity_vllm.commit.committer.native_collect`` (the windowed collector).
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -53,6 +54,8 @@ STEP_ROOTS = "30233ecaad7966e2da2d7bd9e2b4b50ad17abb4deae03b735efc8d994db9aefc"
 TREE_ROOTS = "4c3fa181a990ad208f6315f0ac3b124547170e4e7713d32b3d3816309bff9244"
 LAYOUT_DIGESTS = "7077f32bf5bf2ec654667dd047447e8cc152ccc0f42c99f26041736fb72777d7"
 CTX_DIGESTS = "1cfe770299944ab9b973c89af7ec614fbf65f8b2268ce7212f7400807a4c070b"
+MODEL_GEO = ("32cbe32da333795ead217d1099a3b1eaca4d821474a51b3f91e6b96993026e00"
+             "d7854ccb792d665f1cfbc99d69a3d4ad1e88ba529e4d5666d1999791ea1aa745")
 LEAF_OPENING = "67201ce867d92ae2a1399e48c88c8c0fd2a3103b2dce844222a990c7419cb6fb"
 RANGE_OPENING = "034b4a411a79e5ecd8122b7357ed817956028e0bba4aa3ac83062eb1fceffe0d"
 STORE_FILES = ["keys.bin", "levels/s0.bin", "levels/s1.bin", "levels/s2.bin", "raw/s0.bin", "raw/s1.bin", "raw/s2.bin"]
@@ -78,6 +81,18 @@ def test_the_offline_cores_roots_and_digests():
     assert sha256(*(s.merkle_root for s in rc.steps)) == TREE_ROOTS
     assert sha256(*(com.layout_digest(com._layouts[s]) for s in sorted(com._layouts))) == LAYOUT_DIGESTS
     assert sha256(*(com._ctx_digest(s) for s in sorted(com._layouts))) == CTX_DIGESTS
+
+
+def test_a_served_models_geometry_digest():
+    """The digest a committer on an engine takes of its model: seven fields of the model's config, the field the config
+    lacks (``model_type``, which enters as null), the checkpoint's repo and revision, and the committer's chunk.  No test
+    without a GPU serves an engine, so a stand-in holds what the committer reads of one."""
+    com = O.committer(run_id="pins")
+    config = SimpleNamespace(hidden_size=64, num_hidden_layers=2, num_attention_heads=4, num_key_value_heads=2, head_dim=16,
+                             intermediate_size=128, vocab_size=1000)
+    engine = SimpleNamespace(vllm_config=SimpleNamespace(model_config=SimpleNamespace(hf_config=config)))
+    com.engine = SimpleNamespace(llm=SimpleNamespace(llm_engine=engine), cp={"repo": "pins/model", "revision": "r0"})
+    assert com._model_geo_digest().hex() == MODEL_GEO
 
 
 def test_a_leaf_opening_and_a_range_opening():

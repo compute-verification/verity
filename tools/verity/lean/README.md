@@ -267,7 +267,7 @@ The auditor:
 - `Unread.lean`: what each declaration mentions, for `unread.py` and the audit.
 - `sandbox.sh`: the build sandbox. `setup.sh`: Lean and a package's dependencies on a Linux machine.
 - `settings.py`: the environment variables the Lean tools read. `moved.py`: where a path of an earlier layout is now
-  (`setup.sh` runs it). `public_lock.py`: a lock as the public export ships it.
+  (`setup.sh` runs it).
 - `headers.py`: the one reading of a Lean file's import header. `modules.py`: the module-system codemod.
 - `module_keys.py`: a Lake module's key, under which the node's artifact cache, which every sandboxed build fills,
   restores it.

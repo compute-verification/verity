@@ -7,7 +7,7 @@ catalog bindings' records (`circuit_check.units`) in `RECORDS`, the directory `c
 `CIRCUIT_CHECK_RECORDS`: each record that counts is taken, and this process builds no binding a record misses
 (`_from_records`).  The bindings whose record doesn't count, a handed one's too, are built once a session by a process of
 its own, ``circuit-check --all --records-only`` (`_recorded`), which builds each of them in a process forked for it, as many
-at once as the session has workers (or this process CPUs) and their memory holds at `heavy.json`'s peaks (`_budget`,
+at once as the session has workers (or this process CPUs) and their memory holds at their owners' peaks (`cli.heavy`, `_budget`,
 `units.built_apart`), and stores each one's record in that directory, as `check`'s circuit-check stores it; the session then
 takes them all.  Under xdist the first worker that asks starts it and writes what it reported beside the workers' basetemps
 (`RECORDED`), while the others wait on its lock and then take the records too (`_once`).  Where that process stored no
@@ -248,13 +248,15 @@ def _budget(env: Mapping[str, str], worker_gb: float = WORKER_GB) -> float:
 
 
 def _apart_built(entries: list[UN.Entry], jobs: int) -> tuple[list[UN.Entry], list[tuple[str, ...]], str]:
-    """`units.built_apart` within `_budget`, each binding counted at how far `heavy.json` says its process grows; and how the
-    build went, naming the bindings that grew past that, whose growth belongs in `heavy.json`."""
+    """`units.built_apart` within `_budget`, each binding counted at how far its owner's unkeyed file says its process grows
+    (`cli.heavy`); and how the build went, naming the bindings that grew past that, whose growth belongs there
+    (`units.peak_file`)."""
     weights = cli.heavy()
     kept, dropped, grew, _ = UN.built_apart(entries, jobs, _budget(os.environ), weights)
     past = sorted(((gb, name) for name, gb in grew.items() if gb > weights.get(name, UN.APART_GB)), reverse=True)
-    return kept, dropped, "built apart" + (f" ({len(past)} grew past their heavy.json GiB: "
-                                           + ", ".join(f"{name} {gb}" for gb, name in past[:5]) + ")" if past else "")
+    return kept, dropped, "built apart" + (f" ({len(past)} grew past the GiB their owners' unkeyed files give: "
+                                           + ", ".join(f"{name} {gb} ({UN.peak_file(name)})" for gb, name in past[:5]) + ")"
+                                           if past else "")
 
 
 def _built(entries: list[UN.Entry], shared: Path | None, jobs: int) -> tuple[list[UN.Entry], str]:
@@ -418,6 +420,15 @@ def catalog_guard():
         mp.setattr(TG, "suite", (lambda: _BUILT[0].suite) if _BUILT else _unbuilt)
         mp.setattr(TG, "catalog", _unbuilt)
         yield
+
+
+@pytest.fixture
+def hand(monkeypatch) -> Callable[[str, dict], None]:
+    """Hand `targets.HOOKS`' ``name`` the catalog's entries and a test's own over them, for one test (`targets._HANDS`)."""
+    def put(name: str, entries: dict) -> None:
+        have = TG._handed(name)
+        monkeypatch.setitem(TG._HANDS, name, lambda: {**have(), **entries})
+    return put
 
 
 @pytest.fixture(scope="session")

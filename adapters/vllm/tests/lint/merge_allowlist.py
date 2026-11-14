@@ -10,8 +10,7 @@ sides set to different values, or that one side removed and the other changed, r
 ruff list's findings per `(file, rule)`, an entry `{file, rule, count}`, and the environment-read list's reads per file,
 `{file, count}`.  A count both sides changed takes the larger (a removed entry counts 0), which allows at least what either
 side's tree finds.  The environment-read list's settings registry marks, `{file, registry: true}`, merge like any entry, and
-P16's `public` table (each command run from outside the integration, or only from a file the public export doesn't copy,
-with the file that runs it) by command, as the keep map
+P16's `public` table (each command run from outside the integration, with the file that runs it) by command, as the keep map
 by module.  Entries keep OURS' order, with THEIRS' additions after them.
 Exit 0: merged, written to OURS in the file's own format.  Exit 1: refused, the entries named on stderr and OURS left as it
 was, which git reports as a conflict.  A merged list is a candidate: the lints judge it on the merged tree, so an entry kept
@@ -27,8 +26,8 @@ from typing import Any
 KEY = ("file", "kind", "symbol", "detail")
 #: the repository lists' keys, each entry a count: the ruff list's per (file, rule), the environment-read list's per file
 COUNTED = (("file", "rule"), ("file",))
-#: the tables merged by key: the keep map's ``modules``, P16's ``public`` (each command run from outside the integration, or
-#: only from a file the public export doesn't copy, and the file that runs it)
+#: the tables merged by key: the keep map's ``modules``, P16's ``public`` (each command run from outside the integration, and
+#: the file that runs it)
 TABLES = ("modules", "public")
 MISSING: Any = object()
 

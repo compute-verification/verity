@@ -25,7 +25,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # what it imports (PoUW's `circuit/` seeds, one-stage's `produced.py`, and the `verity.circuits.kernels` `tc.py` they reach).
 inputs = ["verity/protocols/proofs/spot/verifier/one_stage/link_points.py", "verity/protocols/proofs/spot/device/remote.py",
           "tools/difftest", "verity/__init__.py",
-          "verity/hardware/record.py",
+          "verity/channel.py",
           "verity/protocols/accounting/pouw/verifier/__init__.py",
           "verity/claims/__init__.py",
           "verity/protocols/accounting/pouw/verifier/window.py", "verity/protocols/accounting/pouw/verifier/core_check.py",

@@ -20,7 +20,7 @@ imply: 2MNK per int8 GEMM and lm_head call at the model's shapes, 4 H d L per qu
 the square for a causal prefill); elementwise FLOPs are left out.
 
     python share.py --arm exact-fused --out OUT/exact-fused [--scratch S]   # under nsys --capture-range=cudaProfilerApi
-    python share.py --analyse capture.sqlite --meta OUT/exact-fused/share.json > OUT/exact-fused/analysis.json
+    python share.py --analyse trace.sqlite --meta OUT/exact-fused/share.json > OUT/exact-fused/analysis.json
     python share.py --summary OUT                                          # every arm's table and the token gate
 """
 from __future__ import annotations
@@ -121,7 +121,8 @@ def drive(eng: LLMEngine, tag: str, reqs: list[list[int]], decode: bool, nvtx: M
 
 
 def run(a: argparse.Namespace) -> int:
-    os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    # the engine in this process: --analyse assigns kernels to ranges by the process that launched them
+    os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
     import torch
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -301,11 +302,11 @@ def analyse(path: str, meta: dict) -> dict:
     kern = [(strings.get(n, str(n)), int(c), int(s), int(e), g is not None) for n, c, s, e, g in db.execute(
         f"SELECT demangledName, correlationId, start, end, {gcol} FROM CUPTI_ACTIVITY_KIND_KERNEL")]
     mem = []
+    # nsys exports a memcpy or memset table only when the capture holds one
+    present = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     for table in ("CUPTI_ACTIVITY_KIND_MEMCPY", "CUPTI_ACTIVITY_KIND_MEMSET"):
-        try:
+        if table in present:
             mem += [(int(c), int(s), int(e)) for c, s, e in db.execute(f"SELECT correlationId, start, end FROM {table}")]
-        except sqlite3.Error:
-            pass
     cfg = meta["config"]
     doc: dict = {}
     for rng, (r0, r1, p) in sorted(outer.items()):

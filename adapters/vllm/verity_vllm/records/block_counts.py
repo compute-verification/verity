@@ -31,8 +31,8 @@ def _nat(doc: Mapping[str, Any], key: str, where: str, name: str) -> int:
     return v
 
 
-def _counts(doc: Any, where: str, name: str) -> dict[str, int]:
-    if not isinstance(doc, Mapping) or not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in doc.values()):
+def _counts(doc: Mapping[str, Any], where: str, name: str) -> dict[str, int]:
+    if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in doc.values()):
         raise RecordError(where, name, "is not {primitive: natural}")
     return {str(k): int(v) for k, v in sorted(doc.items())}
 

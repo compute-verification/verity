@@ -5,7 +5,7 @@ indices and its length FlashMLA's sparse prefill reads) and `dsv4_indexer.Dsv4Sh
 (TOP_K 1024 in a row of 1152) and a ratio-128 layer at three `active_topk_width`s K (256 in a buffer 8192 wide, 896 in its own, and
 8192), each row round_up(K + 128, 128) wide, the window 128.  Line numbers under `vllm/models/deepseek_v4/` unless named.
 
-One GPU process writes `<out>/dsv4_indices_capture.json`, the property record `dsv4_indices_capture` (`properties.record`), and the
+One GPU process writes `<out>/dsv4_indices_capture.json`, the property record `dsv4_indices_capture` (`records.property_record`), and the
 two Triton kernels' PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one line per launch and
 per case, then `DSV4-INDICES GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else runs when
 it fails (exit 3).  A case that raises records its error and fails its cases without stopping the others.  The operands are the
@@ -78,7 +78,7 @@ from tests.properties import dsv4_compressor_capture_gpu as CX
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-indices-capture/v1"
 RECORD = "dsv4_indices_capture.json"

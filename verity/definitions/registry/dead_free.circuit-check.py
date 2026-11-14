@@ -16,7 +16,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `GumbelTopPTokenSelect_v3` at its vocabulary (V = 154,880), the latter at the H200's registered split count
     (`topp_geometry.registered_splits(132)` = 32, the S every served top-p launch is pinned to), the two the step compiler emits.
     Both are over `targets.MAX_GATES`, so ``--all`` checks the greedy one's combine at the served V and builds the top-p one,
-    whose keep word's `live_replay` holds V-sized liveness sets (heavy.json): a build that fails only at the served V fails here."""
+    whose keep word's `live_replay` holds V-sized liveness sets (its peak in this module's unkeyed file): a build that fails only at the served V fails here."""
     from verity.circuits.defs import bind
     from verity.definitions.registry import dead_free as DF, hopper, prims as P
     from verity.definitions.registry.topp_geometry import registered_splits

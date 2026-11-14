@@ -167,7 +167,7 @@ def test_the_loop_in_watchers_toml_builds_the_nightly_command_from_its_settings(
     assert lp.argv[:3] == ["python3.12", "-s", "/data/watchers/src/infra/control/nightly_check.py"]
     cfg, ns = N.parse(lp.argv[3:])
     assert N.command(cfg, "python") == [
-        "python", "tools/verity/check/check.py", "--record", "--on", "vy-nebius-cpu-8", "--pool", "nightly",
+        "python", "tools/verity/check/check.py", "--record", "--on", "vy-nebius-cpu-14", "--pool", "nightly",
         "--base", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "--no-cache", "--timeout", "36000"]
     assert N.command(cfg)[0] == sys.executable
     assert cfg.hour == 9 and not ns.once and not ns.dry_run

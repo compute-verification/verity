@@ -5,7 +5,7 @@ K-cache gather and `flash_mla_sparse_fwd`'s sm_90 `phase1<512, true>`, as `_forw
 statics on one TP8 rank: 16 real heads padded to 64, the 128-token sliding window over an `fp8_ds_mla` cache, the compressed rows
 of a compress-ratio 4 and 128 layer, and the sink.
 
-One GPU process writes `<out>/dsv4_flashmla_capture.json`, the property record `dsv4_flashmla_capture` (`properties.record`); it
+One GPU process writes `<out>/dsv4_flashmla_capture.json`, the property record `dsv4_flashmla_capture` (`records.property_record`); it
 prints one line per launch and per case, then `DSV4-FLASHMLA GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs
 first and nothing else runs when it fails (exit 3).  A phase that raises records its error and fails the verdict without stopping
 the others.  The operands are random at the served shapes (`case_operands`), so no model weights are read.
@@ -100,7 +100,7 @@ from verity.definitions.registry import flashmla_prefill as P
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-flashmla-capture/v1"
 RECORD = "dsv4_flashmla_capture.json"

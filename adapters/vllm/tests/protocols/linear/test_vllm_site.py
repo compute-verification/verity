@@ -1,12 +1,14 @@
 """`verity_vllm.protocols.linear.vllm_site` on stand-in layers, without vLLM: the sites are the linear layers in module order, one
 patch per quant method goes through `engine.hooks` and comes off with them, a site's call reaches the stack and any other
-layer vLLM's own apply, and nothing is set on the layers."""
+layer vLLM's own apply, and nothing is set on the layers.  Where a test needs vLLM's own linear type, vLLM is
+`tests.fake_vllm`."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 import pytest
 
+from tests import fake_vllm
 from verity_vllm.engine import hooks
 from verity_vllm.protocols.linear import vllm_site
 from verity_vllm.protocols.linear.api import Arm, PassSpec, Shard, Stack
@@ -102,3 +104,24 @@ def test_attach_patches_each_quant_method_once_through_hooks_and_sets_nothing_on
     finally:
         h.uninstall()
     assert hooks.live("pouw:test") == () and all("apply" not in vars(layer.quant_method) for _, layer in sites)
+
+
+def test_with_no_types_named_the_sites_are_the_layers_of_vllms_linear_base_type(model, monkeypatch):
+    """vLLM is `tests.fake_vllm` here, and its ``LinearBase`` this file's `Linear`."""
+    fake_vllm.install(monkeypatch).set("vllm.model_executor.layers.linear:LinearBase", Linear)
+    assert vllm_site.linear_types() == (Linear,)
+    found = vllm_site.discover(model)
+    assert [s.qualname for s, _ in found] == ["model.layers.0", "model.layers.2", "model.layers.3"]
+    assert found == vllm_site.discover(model, types=(Linear,))
+
+
+def test_a_stack_executes_only_under_an_arm_that_names_an_executor(model):
+    ex = Executor()
+    stack = Stack([s for s, _ in vllm_site.discover(model, types=(Linear,))], ex)
+    assert stack.executing is False                                           # no arm: vLLM's own apply
+    stack.activate(Arm("bf16", "bf16"))
+    assert stack.executing is False                                           # an arm of vLLM's own apply
+    stack.activate(Arm("pearlc", "bf16", ex.name))
+    assert stack.executing is True
+    stack.activate(None)
+    assert stack.executing is False

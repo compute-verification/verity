@@ -178,25 +178,25 @@ queue = "deployments-gpu"
 """
 
 
-def test_node1_cap_is_the_pool_queues_quota_unless_every_waiter_is_preemptible(tmp_path):
+def test_node1_limit_is_the_pool_queues_quota_unless_every_waiter_is_preemptible(tmp_path):
     desc = tmp_path / "nebius.toml"
     desc.write_text(DESC)
     plain, fill = [{"n": "4"}], [{"n": "4", "preempt": "1"}]
-    assert H.n1_cap("/run/gpu-lease", 4, plain, None, NOW, desc) == (
+    assert H.n1_limit("/run/gpu-lease", 4, plain, None, NOW, desc) == (
         "node 1's provers pool grants at most the provers queue's quota, 2 GPU(s), less its other Workloads', while a waiter isn't "
         "--preemptible; this asks for 4, more than that")
-    assert "the deployments-gpu queue's quota, 6 GPU(s)" in H.n1_cap("/run/gpu-lease-circuits", 1, plain, None, NOW, desc)
-    assert "borrows more only while every waiter is --preemptible" in H.n1_cap("/run/gpu-lease", 4, fill, None, NOW, desc)
+    assert "the deployments-gpu queue's quota, 6 GPU(s)" in H.n1_limit("/run/gpu-lease-circuits", 1, plain, None, NOW, desc)
+    assert "borrows more only while every waiter is --preemptible" in H.n1_limit("/run/gpu-lease", 4, fill, None, NOW, desc)
     lim = "max=8 borrow=6 borrow-until=2026-10-07T12:00:00Z from=policy"
-    assert H.n1_cap("/run/gpu-lease", 4, fill, lim, NOW, desc).startswith(
+    assert H.n1_limit("/run/gpu-lease", 4, fill, lim, NOW, desc).startswith(
         "node 1's provers pool grants at most 8 GPU(s): the provers queue's quota 2 + borrow 6, max 8")
-    assert H.n1_cap("/run/gpu-lease", 4, plain, lim, NOW, desc).endswith("this asks for 4, more than that")
-    assert H.n1_cap("/run/gpu-lease", 4, fill, lim.replace("10-07", "10-06"), NOW, desc).startswith("node 1's provers pool grants at most 2 GPU(s)")
-    assert H.n1_cap("/run/other", 1, plain, None, NOW, desc) is None
-    assert H.n1_cap("/run/gpu-lease", 1, plain, None, NOW) is not None          # the repository's description still reads
+    assert H.n1_limit("/run/gpu-lease", 4, plain, lim, NOW, desc).endswith("this asks for 4, more than that")
+    assert H.n1_limit("/run/gpu-lease", 4, fill, lim.replace("10-07", "10-06"), NOW, desc).startswith("node 1's provers pool grants at most 2 GPU(s)")
+    assert H.n1_limit("/run/other", 1, plain, None, NOW, desc) is None
+    assert H.n1_limit("/run/gpu-lease", 1, plain, None, NOW) is not None          # the repository's description still reads
 
 
-def test_node1_waits_name_their_cap():
+def test_node1_waits_name_their_limit():
     node = {"leases": {"/run/gpu-lease": {"gpus": 8, "locked": 8, "owners": [], "limits": None, "pool": None,
                                           "waits": [{"file": "wait.1.60", "pid": "60", "n": "1", "run": "r2", "since": "2026-10-07T03:01:00Z"}]}}}
     (line,) = H.gpu_waits("r2", "vy-nebius-1", node, NOW)

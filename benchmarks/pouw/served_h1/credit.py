@@ -31,7 +31,7 @@ sample is uniform over every unit position of the window, dead ones included, ne
 """
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -206,10 +206,10 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
             "tally": f"no proof block until a tally Definition exists; the harness computes and commits {steps * len(sites)} "
                      f"per (step, site) popcount sums (<= 2^11), {len(sites)} per-site sums over the steps (< 2^16), and "
                      "the level (window.level(floor_point(sum_site count N K)), <= 9 bits)",
-            "dead_unit": "a drawn dead unit proves, with the live tile's template (PouwH1Tile_v4), that its 32 bound "
-                         "admit bits are 0 and so its receipt is the canonical empty receipt; no noise is computed when "
-                         "serving. Its rows are the canonical empty row because the admit unit refuses a slot not "
-                         "admitted whose row is not",
+            "dead_unit": "a dead unit in the sample proves, with the live tile's template (PouwH1Tile_v4), that its 32 "
+                         "bound admit bits are 0 and so its receipt is the canonical empty receipt; no noise is "
+                         "computed when serving. Its rows are the canonical empty row because the admit unit refuses a "
+                         "slot not admitted whose row is not",
             "egress": "no dead slot's output reaches a served output: the receipts are beside the served y and feed no "
                       "egress, and vLLM samples each served token from the step's selected rows only (admit is the served "
                       "prefix [1] * m + [0] * (T - m) in every call)"}

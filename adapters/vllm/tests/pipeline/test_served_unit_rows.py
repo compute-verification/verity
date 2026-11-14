@@ -13,8 +13,8 @@ from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
 
 SERVED = [Path(__file__).resolve().parents[4] / "benchmarks/one_stage" / f"glm53_{p}.json"
           for p in ("all_families_tp8_step16", "sparse_mla_tp8_step16", "prefill_tp8_step0")]
-STATEMENTS = ("ce7f954ee9b7cdeb24a073d1ec2eb10d47949cee815699bfb2604d3e3844c96e"
-              "e95bb7a435a137c5f123b5af2927bba5a91df8bb76b5d3c81e0b077844e55096")
+STATEMENTS = ("7c7dddb9687e6d5895f492881964df6bea65a453cb26a6988650be7631824de8"
+              "e8e37acea0bce0a1d5f6c09266f1c43129184db6e814d29b4fb6e9338ef6a0b6")
 
 
 def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monkeypatch):
@@ -25,4 +25,17 @@ def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monk
     members = [SimpleNamespace(template=t, schemas=True) for t in tmpls]
     sts = SRW.circuit_record(SimpleNamespace(members=members, row_tables=()), [])
     got = hashlib.sha512(IF.circuit_bytes(sts)).hexdigest()
-    assert len(sts) == 55 and got == STATEMENTS, got
+    assert len(sts) == 87 and got == STATEMENTS, got
+
+
+def test_each_served_key_rows_writer_commits_the_bits_it_returns():
+    """Each key rows' writer the served partitions name commits 16 NVIS W bits (`partition._template_bits`, the class the
+    partition checks and the weight the leak bound gives a wrong proof block of it), 65,536 at 64 keys of 64 columns: the
+    row it returns, which every head's scores and values units read, though it is its input."""
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+
+    writers = sorted({t for f in SERVED for t in json.loads(f.read_text())["templates"]
+                      if t.startswith("SparseMlaHeadKeysWire_")})
+    got = {t: (P._template_bits(fn), 16 * fn.statics["NVIS"] * fn.statics["W"]) for t in writers for fn in [SRW.template(t).fn]}
+    assert len(writers) == 18 and all(b == want for b, want in got.values()), got
+    assert got["SparseMlaHeadKeysWire_v2{NVIS=64,W=64,C=0}"] == (65536, 65536)

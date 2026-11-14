@@ -897,7 +897,7 @@ def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(t
 
 def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_kinds(monkeypatch):
     """`units.call_families` gives `targets.call_families`' Calls: a word Call family made on demand (`Const32[0x..]_v1`) has
-    its Boolean version among them though no record holds one, `targets.CALLEE_CALLS`' families are among them, and a vocabulary
+    its Boolean version among them though no record holds one, `targets.callee_calls`' families are among them, and a vocabulary
     kind that doesn't bind refuses them by name, as `targets.word_call_families` does (left out, its family's partition would be
     judged as no Call's)."""
     from circuit_check import targets as TG, units as UN
@@ -907,7 +907,7 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
         m.setattr(TG, "word_call_families", lambda: {"Const32[0x00000001]_v1", "GatherI32x16_v1"})
         m.setattr(TG, "boolean_call_candidates", lambda words: set())
         assert UN.call_families([], nothing, {}) == {"Const32[0x00000001]_v1", "GatherI32x16_v1",
-                                                    "Const32[0x00000001]_v2", "GatherI32x16_v2", *TG.CALLEE_CALLS}
+                                                    "Const32[0x00000001]_v2", "GatherI32x16_v2", *TG.callee_calls()}
     from circuit_check import sidecars as SC
 
     syn = types.ModuleType("syn.circuit-check")

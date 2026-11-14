@@ -104,3 +104,27 @@ def test_result_json_under_a_run(tmp_path, monkeypatch):
     assert chk.valid, chk.errors
     assert chk.validation_status == "failed" and chk.doc["validation"]["evidence"] == ["out/probe.verdict.json"]
     assert {m["name"]: m["value"] for m in chk.doc["measurements"]}["checks_ok"] == 1
+
+
+def test_an_empty_variable_is_unset_and_the_result_names_the_runs_commit(tmp_path, monkeypatch):
+    """`exact_kit.settings`: an empty ``OUT`` writes no verdict and an empty run id no result.json; under a run the
+    result's ``source_sha`` is ``RESEARCH_SOURCE_SHA``, and None where it is unset."""
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("OUT", "")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "")
+    monkeypatch.chdir(tmp_path)
+    c, _ = _run(tmp_path, body=lambda c: c.check("a", True))
+    assert c.finish() == 0
+    assert sorted(p.name for p in tmp_path.rglob("*")) == ["probe.py", "run"]
+
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    monkeypatch.delenv("RESEARCH_SOURCE_SHA", raising=False)
+    c, _ = _run(tmp_path, body=lambda c: c.check("a", True))
+    assert c.finish() == 0
+    assert json.loads((run_dir / "result.json").read_text())["workload_fingerprint"]["source_sha"] is None
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "0" * 40)
+    c, _ = _run(tmp_path, body=lambda c: c.check("a", True))
+    assert c.finish() == 0
+    assert json.loads((run_dir / "result.json").read_text())["workload_fingerprint"]["source_sha"] == "0" * 40

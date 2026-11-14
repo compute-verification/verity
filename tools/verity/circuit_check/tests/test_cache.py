@@ -739,9 +739,11 @@ def test_an_unpinned_target_reruns_when_its_pin_is_added_where_it_goes_or_to_its
 
 def test_a_new_pin_goes_to_the_sidecar_of_its_definitions_module(tmp_path):
     """`sidecars.pin_file`: a pin is written where it is, and a new one to the pins file of the module that defines its
-    Definition, a module without a sidecar getting one beside it."""
+    Definition, a module without a sidecar getting one beside it.  The owners are found by `targets.load_registries`, which reads
+    the tree's catalog from the sidecar that hands it (`targets.HOOKS`): a stand-in that loads nothing more."""
     root = _tree(tmp_path)
     _sidecar(root)
+    (root / "syn/catalog.circuit-check.py").write_text("def enumerators():\n    return set()\n\n\ndef load_catalog():\n    pass\n")
     code = HARNESS.split("CC.trace(root)")[0] + """
 import syn.kdef, syn.other, syn.top  # noqa: E401
 CK.load_pins()
@@ -1490,14 +1492,14 @@ def test_a_pins_owner_is_what_its_key_names_not_what_the_process_built():
     """`sidecars.pin_owner` asked in a fresh process, then again once the on-demand Definitions are built (an earlier test in the
     process, or another target's check, builds them): the same owner for every pin, so a pin's file is a function of the tree.
     An on-demand primitive is its factory's (`prims`, `sampling`), not its caller's; a level of a gather's tree, which no key
-    makes alone, has none."""
+    makes alone, is the module's whose binding file holds its family (`sidecars.body_family`)."""
     r = subprocess.run([sys.executable, "-c", OWNERS], capture_output=True, text=True, cwd=REPO, check=True)
     got = json.loads(r.stdout)
     assert len(got["built"]) == 4, got["built"]
     assert got["before"] == got["after"], {k: (v, got["after"][k]) for k, v in got["before"].items() if got["after"][k] != v}
     assert got["before"]["pieces GatherBf16x1_v1"] == "verity.definitions.registry.prims"
     assert got["before"]["pieces BitAtx32_v1"] == "verity.definitions.registry.sampling"
-    assert got["before"]["definitions GatherBf16x1024u10_v1"] is None
+    assert got["before"]["definitions GatherBf16x1024u10_v1"] == "verity.definitions.registry.boolean_gather"
 
 
 def test_a_run_of_imports_is_held_by_the_names_it_binds_not_their_order():
@@ -1574,18 +1576,18 @@ def _enumerator_misuses(tree) -> list[str]:
 
 
 def test_each_enumerator_only_imports_what_it_lists():
-    """`cache._ENUMERATORS` (and `targets.load_registries`) are held by the modules a package lists rather than by its
-    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields, and each name only built from one, is
-    only compared, imported (``importlib.import_module``), written into an error, or queued on a work list (``todo``)
-    whose entries are popped and only imported."""
+    """The enumerators the catalog's sidecar hands (`targets.HOOKS`, `cache.enumerators`), its ``load_catalog`` among them,
+    are held by the modules a package lists rather than by its listing, on a claim about their bodies: each name a ``pkgutil``
+    listing yields, and each name only built from one, is only compared, imported (``importlib.import_module``), written into
+    an error, or queued on a work list (``todo``) whose entries are popped and only imported."""
     import ast
     import importlib
     import inspect
     import textwrap
 
-    from circuit_check import cache as CC
+    from circuit_check import targets as TG
 
-    for mod, qual in sorted(CC._ENUMERATORS | {("circuit_check.targets", "load_registries")}):
+    for mod, qual in sorted(TG._handed("enumerators")()):
         fn = importlib.import_module(mod)
         for part in qual.split("."):
             fn = getattr(fn, part)
@@ -1806,26 +1808,35 @@ def test_a_constructed_family_s_members_share_a_process_and_each_holds_what_it_w
 
 #: the harness with the checker a copy inside the tree (``checker/circuit_check``), as `src/circuit_check/` is inside the
 #: repository, whose scheduler's peaks the process has read before the checks (`cli.heavy`, as a run of the parallel path does)
+#: and whose task list goes through the guard (`cli.task_list_guard`, as ``--all`` runs it)
 CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root / 'checker'))")
            .replace("rep = cli.run(", "cli.heavy()\nrep = cli.run(")
+           .replace('cache=root / "cache")', 'cache=root / "cache", guard="check")')
            .replace('"hits": hits}', '"hits": hits, "checker": cli.__file__}'))
 
 
+def _unkeyed(root: Path, mod: str, d: dict) -> None:
+    (root / f"syn/{mod}.circuit-check.unkeyed.json").write_text(json.dumps(d))
+
+
 @pytest.mark.slow
-def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
-    """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
-    computes: an edit to it reuses every target and the task list (so adding a peak never makes
+def test_the_scheduler_s_peaks_and_the_guard_s_reference_are_in_no_key(tmp_path):
+    """The peaks and family counts beside their owners (`sidecars.UNKEYED`) say only which targets may run beside which
+    (`cli.run`'s scheduler) and how large the task list may grow (`cli.task_list_guard`, with its `cli.TASK_LIST`), never what
+    a check computes: an edit to any of them reuses every target and the task list (so adding a peak never makes
     `circuit-check --all` run cold), and so does an edit to the checker's docstrings and comments (`cache.version`), while an
     edit to the checker's code still reruns them all."""
     import shutil
 
     root = _tree(tmp_path)
     checker = root / "checker" / "circuit_check"
-    shutil.copytree(REPO / "tools/verity/circuit_check/src/circuit_check", checker,
-                    ignore=shutil.ignore_patterns("__pycache__", "heavy.json"))
-    (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0}))
+    shutil.copytree(REPO / "tools/verity/circuit_check/src/circuit_check", checker, ignore=shutil.ignore_patterns("__pycache__"))
+    _unkeyed(root, "other", {"peaks": {"SynOther_v1": 20.0}})
     assert _run(root, CHECKER)["checker"] == str(checker / "cli.py")
-    (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0, "SynTop_v1": 161.8}))
+    _unkeyed(root, "other", {"peaks": {"SynOther_v1": 21.0}, "tasks": {"SynOther": 1}})
+    _unkeyed(root, "top", {"peaks": {"SynTop_v1": 161.8}, "binding_peaks": {"_core_roots": 3.0}})
+    ref = json.loads((checker / "task_list.json").read_text())
+    (checker / "task_list.json").write_text(json.dumps({**ref, "targets": ref["targets"] + 1}))
     out = _run(root, CHECKER)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
     checks = checker / "checks.py"

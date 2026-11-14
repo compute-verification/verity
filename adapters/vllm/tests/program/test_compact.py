@@ -287,20 +287,20 @@ def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
     # (rank_match.own_producers_from_record, the one consumer of NODE-space refs from the file) reads the same producers from either store,
     # and the cross-rank verdict over them is the same PASS; every negative above is a compare negative, this check is the record reader's.
     from verity_vllm.check.match import rank_match as RM
-    from verity_vllm.pipeline import match as RC
+    from verity_vllm.pipeline import match_fold as MF
     folds = {r: T.fold_rank(r) for r in (0, 1)}
     prod: dict[str, dict] = {}
     for form in ("runs", "progressions"):
-        monkeypatch.setenv(RC.INSTANCES_FORM_ENV, form)
+        monkeypatch.setenv(MF.INSTANCES_FORM_ENV, form)
         prod[form] = {}
         for r in (0, 1):
             d = tmp_path / f"store_{form}_rank{r}"
             d.mkdir()
             T.persist_fold(folds[r], d, r)
             hdr = json.loads((d / "instances.jsonl").read_text().splitlines()[0])
-            assert hdr["operand_refs_form"] == form and hdr["schema"] == (RC.INSTANCES_SCHEMA_V2 if form == "progressions" else RC.INSTANCES_SCHEMA)
+            assert hdr["operand_refs_form"] == form and hdr["schema"] == (MF.INSTANCES_SCHEMA_V2 if form == "progressions" else MF.INSTANCES_SCHEMA)
             prod[form][r] = RM.own_producers_from_record(d / "instances.jsonl")
-    monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
+    monkeypatch.delenv(MF.INSTANCES_FORM_ENV, raising=False)
     assert prod["runs"] == prod["progressions"] and prod["runs"][0] and prod["runs"][0] == {k: v for k, v in RM.own_producers(folds[0]).items()}
     verdicts = [RM.cross_rank_check({0: folds[0].collectives, 1: folds[1].collectives}, producers=prod[form],
                                     fold_errors={0: len(folds[0].errors), 1: len(folds[1].errors)})["verdict"] for form in ("runs", "progressions")]
@@ -326,7 +326,7 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
     from verity_vllm.check.match import global_match as gm
     from verity_vllm.check.match import global_match_fast as GMF
     from verity_vllm.check.match import program_compare as C
-    from verity_vllm.pipeline import match as RC
+    from verity_vllm.pipeline import match_fold as MF
     gp, oracle = T.assemble([T.R0, T.R1_LATE], tmp_path)
     assert not [f for f in os.listdir(oracle) if ".compact." in f], os.listdir(oracle)   # the fold emits no sidecar
     # a "sidecar" pair whose source binding is perfect (the true digest, bytes and sha256 of THIS fold's record files) and whose content
@@ -347,7 +347,7 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
     for compact in (False, True):
         C.LOAD_NOTES.clear()
         P = C.load_oracle(oracle, "o", compact=compact)
-        assert {k: C.LOAD_NOTES[oracle][k] for k in ("source", "instances_schema", "operand_refs_form")} == {"source": "record files", "instances_schema": RC.INSTANCES_SCHEMA, "operand_refs_form": "runs"}
+        assert {k: C.LOAD_NOTES[oracle][k] for k in ("source", "instances_schema", "operand_refs_form")} == {"source": "record files", "instances_schema": MF.INSTANCES_SCHEMA, "operand_refs_form": "runs"}
         # [n2] the two record files are named by content too (sha256 as read)
         from tests.program.instances_forms import sha256_file as _sf
         assert C.LOAD_NOTES[oracle]["instances_sha256"] == _sf(os.path.join(oracle, "instances.jsonl"))[0]
@@ -378,12 +378,12 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
     from verity_vllm.check.match import global_match_fast as GMF
     from verity_vllm.check.match import program_loaders as PL
     from verity_vllm.pipeline import cli
-    from verity_vllm.pipeline import match as RC
-    monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
+    from verity_vllm.pipeline import match_fold as MF
+    monkeypatch.delenv(MF.INSTANCES_FORM_ENV, raising=False)
     gp1, o1 = T.assemble([T.R0, T.R1_LATE], tmp_path / "v1")
-    monkeypatch.setenv(RC.INSTANCES_FORM_ENV, "progressions")
+    monkeypatch.setenv(MF.INSTANCES_FORM_ENV, "progressions")
     gp2, o2 = T.assemble([T.R0, T.R1_LATE], tmp_path / "v2")
-    monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
+    monkeypatch.delenv(MF.INSTANCES_FORM_ENV, raising=False)
     docs = {}
     PL.LOAD_NOTES.clear()               # fold_load copies the process's loads so far: start from none, as a command's process does
     for impl in ("record", "fast"):
@@ -399,7 +399,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
         fl = d["impl"]["fold_load"]
         o = o1 if tag == "v1" else o2
         assert {k: fl[o][k] for k in ("source", "instances_schema", "operand_refs_form")} == {
-            "source": "record files", "instances_schema": RC.INSTANCES_SCHEMA if tag == "v1" else RC.INSTANCES_SCHEMA_V2,
+            "source": "record files", "instances_schema": MF.INSTANCES_SCHEMA if tag == "v1" else MF.INSTANCES_SCHEMA_V2,
             "operand_refs_form": "runs" if tag == "v1" else "progressions"}, (impl, tag, fl)
         # [n2] EVERY document (record and fast, both stores) ties itself to the two fold files by content: sha256 as read == the files'
         from tests.program.instances_forms import sha256_file as _sf
@@ -459,16 +459,16 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     from tests.program import instances_forms as IF
     from verity_vllm.check.match import global_match as gm
     from verity_vllm.check.match import program_compare as C
-    from verity_vllm.pipeline import match as RC
-    monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
+    from verity_vllm.pipeline import match_fold as MF
+    monkeypatch.delenv(MF.INSTANCES_FORM_ENV, raising=False)
     gp1, o1 = T.assemble([T.R0, T.R1_LATE, T.R2_LATE], tmp_path / "v1")
-    monkeypatch.setenv(RC.INSTANCES_FORM_ENV, "progressions")
+    monkeypatch.setenv(MF.INSTANCES_FORM_ENV, "progressions")
     gp2, o2 = T.assemble([T.R0, T.R1_LATE, T.R2_LATE], tmp_path / "v2")
-    monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
+    monkeypatch.delenv(MF.INSTANCES_FORM_ENV, raising=False)
     i1, i2 = os.path.join(o1, "instances.jsonl"), os.path.join(o2, "instances.jsonl")
     h1, h2 = json.loads(_first_line(i1)), json.loads(_first_line(i2))
-    assert h1["schema"] == RC.INSTANCES_SCHEMA and h1["operand_refs_form"] == "runs"
-    assert h2["schema"] == RC.INSTANCES_SCHEMA_V2 and h2["operand_refs_form"] == "progressions" and h1["digest"] == h2["digest"]
+    assert h1["schema"] == MF.INSTANCES_SCHEMA and h1["operand_refs_form"] == "runs"
+    assert h2["schema"] == MF.INSTANCES_SCHEMA_V2 and h2["operand_refs_form"] == "progressions" and h1["digest"] == h2["digest"]
     assert IF.instances_form_of(i1) == "runs" and IF.instances_form_of(i2) == "progressions"
     rows1, rows2 = _text(i1).split("\n")[1:], _text(i2).split("\n")[1:]
     assert rows1 != rows2 and len(rows1) == len(rows2)
@@ -479,15 +479,15 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     assert r["items_out"] < r["items_in"] and _text(c12).split("\n")[1:] == rows2
     IF.convert_instances(i2, c21, "runs")
     assert _text(c21).split("\n")[1:] == rows1
-    assert json.loads(_first_line(c21))["operand_refs_form"] == "runs" and json.loads(_first_line(c12))["schema"] == RC.INSTANCES_SCHEMA_V2
+    assert json.loads(_first_line(c21))["operand_refs_form"] == "runs" and json.loads(_first_line(c12))["schema"] == MF.INSTANCES_SCHEMA_V2
     # (2) the same RootView (record form and compact form) and the same GM-01 document
     for compact in (False, True):
         C.LOAD_NOTES.clear()
         assert _prog_facts(C.load_oracle(o1, "o", compact=compact)) == _prog_facts(C.load_oracle(o2, "o", compact=compact))
         # (4) the form READ is named per fold dir (-> impl.config.fold_load): the two documents are distinguishable by content
         _form_keys = ("source", "instances_schema", "operand_refs_form")
-        assert {k: C.LOAD_NOTES[o1][k] for k in _form_keys} == {"source": "record files", "instances_schema": RC.INSTANCES_SCHEMA, "operand_refs_form": "runs"}
-        assert {k: C.LOAD_NOTES[o2][k] for k in _form_keys} == {"source": "record files", "instances_schema": RC.INSTANCES_SCHEMA_V2, "operand_refs_form": "progressions"}
+        assert {k: C.LOAD_NOTES[o1][k] for k in _form_keys} == {"source": "record files", "instances_schema": MF.INSTANCES_SCHEMA, "operand_refs_form": "runs"}
+        assert {k: C.LOAD_NOTES[o2][k] for k in _form_keys} == {"source": "record files", "instances_schema": MF.INSTANCES_SCHEMA_V2, "operand_refs_form": "progressions"}
         # [n2] and by content: the instances.jsonl digests differ between the two stores (the program.json ones are equal -- same descriptor)
         assert C.LOAD_NOTES[o1]["instances_sha256"] == IF.sha256_file(i1)[0] != C.LOAD_NOTES[o2]["instances_sha256"] == IF.sha256_file(i2)[0]
         assert C.LOAD_NOTES[o1]["program_sha256"] == C.LOAD_NOTES[o2]["program_sha256"] == IF.sha256_file(os.path.join(o1, "program.json"))[0]
@@ -521,14 +521,14 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
 
     from tests.check import test_global_match as T
     from verity_vllm.observe.fold.fold import fold
-    from verity_vllm.pipeline import match as RC
+    from verity_vllm.pipeline import match_fold as MF
     from verity_vllm.program.compact import file_items_from_refs_json
     evs = T.batched_log([T.R0, T.R1_LATE, T.R2_LATE], wl_sha=None)
     res = fold(evs, T.profile(), strict=True)
     assert res.report.unsupported == 0 and not res.errors and res.instances and res.accesses
 
     def generic_view(v):
-        return dataclasses.asdict(v) if dataclasses.is_dataclass(v) and not isinstance(v, type) else RC._jsonable(v)
+        return dataclasses.asdict(v) if dataclasses.is_dataclass(v) and not isinstance(v, type) else MF._jsonable(v)
 
     def generic_rows(form):        # the generic writer, verbatim
         out = []
@@ -544,7 +544,7 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
             if node is not None:
                 rec["operand_refs"] = ([file_items_from_refs_json(arg.refs.to_json()) for arg in node.args] if form == "progressions"
                                        else [[list(r) for r in runs(arg.refs)] for arg in node.args])
-            out.append(json.dumps(RC._jsonable(rec), separators=(",", ":")))
+            out.append(json.dumps(MF._jsonable(rec), separators=(",", ":")))
         return out
 
     def generic_journal(form):     # under `progressions` a journal Refs is stored compact too, as an operand is
@@ -555,14 +555,14 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
             v = r2["refs"]
             r2["refs"] = (file_items_from_refs_json(v.to_json()) if form == "progressions" and v is not None and not isinstance(v, list)
                           else access_runs(v))
-            out.append(json.dumps(RC._jsonable(r2), separators=(",", ":")))
+            out.append(json.dumps(MF._jsonable(r2), separators=(",", ":")))
         return out
 
     for form in ("runs", "progressions"):
-        monkeypatch.setenv(RC.INSTANCES_FORM_ENV, form)
+        monkeypatch.setenv(MF.INSTANCES_FORM_ENV, form)
         d = tmp_path / form
         d.mkdir()
-        w = RC.persist_program(res, d, profile_name="toy", log_path="toy")
+        w = MF.persist_program(res, d, profile_name="toy", log_path="toy")
         assert w["instances"]["operand_refs_form"] == form
         rows = _text(os.path.join(d, "instances.jsonl")).split("\n")[1:-1]
         assert rows == generic_rows(form) and len(rows) == len(res.instances)

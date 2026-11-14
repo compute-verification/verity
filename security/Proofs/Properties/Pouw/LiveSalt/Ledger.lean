@@ -505,6 +505,23 @@ theorem jsonTrue_eq' {j : Json} (h : jsonTrue j = true) : j = .bool true := by
 theorem nat_nonnull {j : Json} {n : Nat} (h : Spot.nat? j = some n) : j.isNull = false := by
   cases j <;> first | rfl | simp [Spot.nat?, Spot.int?] at h
 
+/-! The reader compares a value with `null` or a Boolean by a match (`Json.isNull`, `jsonTrue`, `Spot.jsonBoolIs`), as
+it compares one with a string (`Spot.jsonStrIs`, read back by `LiveSalt.jsonStrIs_eq`), never by `BEq Json`'s `==`, a
+`partial def` no proof reads. Each comparison holds of the value it names (`_self`) and of no other (`_eq`). -/
+
+theorem jsonTrue_self : jsonTrue (.bool true) = true := by rfl
+
+theorem isNull_eq {j : Json} (h : j.isNull = true) : j = .null := by
+  cases j <;> first | rfl | cases h
+
+theorem isNull_self : Json.null.isNull = true := by rfl
+
+theorem jsonBoolIs_eq {j : Json} {b : Bool} (h : Spot.jsonBoolIs j b = true) : j = .bool b := by
+  cases j <;> simp_all [Spot.jsonBoolIs]
+
+theorem jsonBoolIs_self (b : Bool) : Spot.jsonBoolIs (.bool b) b = true := by
+  simp [Spot.jsonBoolIs]
+
 theorem strOf_eq {j : Json} {s : String} (h : strOf j = s) (hs : s ≠ "") : j = .str s := by
   cases j <;> first | (subst h; rfl) | exact absurd h.symm hs
 

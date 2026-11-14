@@ -4,7 +4,7 @@ sm_90 by default, against `registry.deepgemm`: the H200's first-hour go/no-go fo
 which quantises its input itself) and `ScaledMmFp8BlockGrouped_v1` (`fp8_einsum("bhr,hdr->bhd", recipe=(1, 128, 128))`), and the
 load-time weight processing whose words they bind as derived Inputs (`kernels.deepgemm_twins`).
 
-One GPU process writes `<out>/deepgemm_capture.json`, the property record `deepgemm_capture` (`properties.record`), and
+One GPU process writes `<out>/deepgemm_capture.json`, the property record `deepgemm_capture` (`records.property_record`), and
 prints one line per case and then `DEEPGEMM GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
 nothing else runs when it fails (exit 3).  vLLM runs with DeepGEMM on (`VLLM_USE_DEEP_GEMM=1`, `VLLM_USE_DEEP_GEMM_E8M0=1`,
 `VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER=1`: the defaults on Hopper) and not batch invariant, so M < 32 takes FlashInfer's branch;
@@ -94,7 +94,7 @@ from verity.definitions.registry import fp8 as F
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as B
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/deepgemm-capture/v2"
 RECORD = "deepgemm_capture.json"

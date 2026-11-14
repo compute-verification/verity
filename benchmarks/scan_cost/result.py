@@ -346,7 +346,7 @@ def write(run_dir: Path, scan_exit: int) -> tuple[dict | None, bool, str]:
     if holds:
         writer = kit.Writer(run_dir, run, stamp)
         for m in measurements(doc):
-            writer.measurement(**m)
+            writer.measurement(**m, mark="measured")
     return doc, holds, detail
 
 

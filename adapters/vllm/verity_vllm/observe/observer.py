@@ -7,14 +7,16 @@ handler runs, so the op's Python body would otherwise be invisible; instead the 
 registered with `direct_register_custom_op`) is executed under a **fresh nested mode instance** sharing the same
 recorder, so the body's dispatcher calls (`_C.reshape_and_cache_flash`, the FA2 op, ...) appear as children of the
 outer call.  Calling the `OpOverload` again under the nested mode would re-enter this handler forever, hence the
-direct call of the registered implementation (the trick of `verity_vllm/observe/capture.py:493-511`).
+direct call of the registered implementation.
 
 Non-interference: the observer never mutates tensors, never synchronises, keeps no tensor references beyond the
 call (only `ViewDesc`s, which are plain ints/strings), and records a `Note` before re-raising an exception.
 
 `encode_arg` is the one encoder for arguments / outputs: tensors -> `ViewDesc` via `StorageAdapter.view_of`;
-None / bool / int / float / str as they are; lists and tuples -> lists; dtype / device / memory_format / layout ->
-their `str`; `SymInt`/`SymFloat`/`SymBool` -> plain numbers; everything else -> `{"$repr": repr(x)[:200]}`.
+None / bool / int / float / str as they are; lists and tuples -> lists; dicts -> dicts keyed by `str(key)`; dtype /
+device / memory_format / layout -> their `str`; `SymInt`/`SymFloat`/`SymBool` -> plain numbers, or their repr when
+they have no value; Triton's `constexpr` -> its value, encoded, and Triton's `dtype` -> its `str`; everything else
+-> `{"$repr": repr(x)[:200]}`.
 """
 
 from __future__ import annotations
@@ -294,7 +296,8 @@ _LAYER_PREFIX = re.compile(r"^(.*?layers\.\d+\.)")
 class ModuleNamer:
     """Forward pre/post hooks on every named submodule maintain `Recorder.module_stack` (a diagnostic hint on every
     DispatchEnter).  A module instance shared across layers (vLLM's cached rotary embedding) is registered under
-    the first layer's name; it is reported under the layer that is calling it.  `remove()` uninstalls."""
+    the first layer's name; called from inside another layer's submodule it is reported under that layer, and called
+    by a layer module itself it keeps its registered name.  `remove()` uninstalls."""
 
     def __init__(self, rec: Recorder, model: torch.nn.Module) -> None:
         self.rec = rec

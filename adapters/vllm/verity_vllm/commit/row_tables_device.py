@@ -1,5 +1,6 @@
-"""`row_tables.step_roots` on the GPU: a step's row tables hashed by `protocol_options/pouw_cuda/row_table.cu` on a side stream,
-behind an event on the serving stream, so the serving loop records the step's root when it is ready, without a host sync.
+"""`row_tables.step_roots` on the GPU: a step's row tables hashed by
+`verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu` on a side stream, behind an event on the serving
+stream, so the serving loop records the step's root when it is ready, without a host sync.
 
 `step_roots` takes what `row_tables.step_roots` takes, with ``codes`` and ``scales`` CUDA tensors that hold until the result is
 ready (a step's quantize outputs, in buffers the next step does not write), and returns a `Pending`: ``ready()`` asks the side

@@ -12,7 +12,14 @@ SHA-512 calls of the world's GPUs and of the datacenter's, and as a share of the
 ~~~text
 python benchmarks/recursion_figures/figures.py RESULT.json          # the table
 python benchmarks/recursion_figures/figures.py RESULT.json --json   # the figures
+python benchmarks/recursion_figures/figures.py --from RUN           # a recorded run's records, from the evidence store
 ~~~
+
+`--from RUN` fetches the `out/` of the run's record and reads it with this tree's reader, so a run recorded before
+`session_times` gives its figures too. Under a research run (`metrics.toml`'s command, from the run of record) the
+command also writes `METRICS` into the run's result: the world year's CPU core-years, log₂ knowledge-soundness error and
+stop-leak bits, each modeled and written for each fleet's week, month and year, the world's year last. The validation
+passes only for figures of an accepted recursive run with every figure there.
 
 It sits beside the bench rather than in it because it reads the census and the monitoring periods, which the public
 export doesn't copy.

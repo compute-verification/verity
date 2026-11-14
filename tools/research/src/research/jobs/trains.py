@@ -1,4 +1,4 @@
-"""Stage 1.5 of the Job queue: trains that the service builds, checks and lands, as an in-memory model beside `model.py`.
+"""Step 1.5 of the Job queue: trains that the service builds, checks and lands, as an in-memory model beside `model.py`.
 
 The research coordinator names a train (`POST /api/trains`: PR numbers in order).  The service, with the `verity-merge-queue`
 App's token, merges each PR's head onto a new `train/{id}` branch through GitHub's Merges API and adds one `merge-check` job for
@@ -39,6 +39,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+import sys
 from dataclasses import dataclass, field
 
 from ..merge import REFUSED_KINDS, rule_touches
@@ -242,7 +243,8 @@ def declared(text: str) -> tuple[list[str], dict[str, list[str]]]:
     def literal(key, empty, ok):
         try:
             v = ast.literal_eval(given[key]) if key in given else empty
-        except Exception:  # noqa: BLE001  (anything but a literal is unreadable)
+        except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError) as e:
+            print(f"trains: {TOOL_PY} on main has a {key} that is not a literal ({type(e).__name__}: {e})", file=sys.stderr)
             v = None
         if not ok(v):
             raise ValueError(f"{TOOL_PY} on main has a {key} this gate can't read")

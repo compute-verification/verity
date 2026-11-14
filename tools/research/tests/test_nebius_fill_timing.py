@@ -201,7 +201,7 @@ def test_a_malformed_header_files_its_job_under_failed_and_the_tick_goes_on(node
     assert fr.running["old.sh"]["h"]["gpus"] == 1
 
 
-def test_no_exception_lifts_a_timing_job_past_its_cap_and_a_commit_is_never_one(node2):
+def test_no_exception_lifts_a_timing_job_past_its_limit_and_a_commit_is_never_one(node2):
     """Nothing stops a timing job before its max_min, so nothing lifts that past FILL_TIMING_MAX_MIN: not a FILL_DIR/max-min line
     (they used to give it the line's minutes), a fence that names it (up to 4 h) or the Commit prefix (120 min and rank 0, above
     every job). A Commit guest's timing=1 is ignored: it stays an ordinary, preemptible Commit."""
@@ -325,7 +325,7 @@ def test_a_new_fence_moves_other_fill_jobs_threads_but_never_a_timing_jobs(node2
 
 def test_start_runs_a_timing_job_unpreemptible_at_nice_0_in_a_top_level_scope_and_a_restart_keeps_its_cores(node2, monkeypatch):
     """The command: vy-provers' form (`sudo -n systemd-run --scope --slice=...`) with the scope's AllowedCPUs, nice 0 and memory
-    cap, then this user with this user's groups (setpriv), then gpu-lease without --preemptible or a scope of its own, inside
+    limit, then this user with this user's groups (setpriv), then gpu-lease without --preemptible or a scope of its own, inside
     the system scope, and taskset on the same CPUs; no `nice -n 19`. A stop kills the system scope through sudo. A restarted
     runner adopts the chunk with its cores, or with all of 124-191 (recorded for `fence`) when no record names them, and as a
     timing job by its unit, whatever its header or FILL_DIR/timing-owners says by then."""

@@ -13,6 +13,7 @@ from verity.definitions.registry import fa2_softcap as F2S
 from verity.definitions.registry import prims as P
 
 from verity_vllm.program.frontend import targets as TG
+from verity_vllm.query import program_view as PV
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 FA2 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}
@@ -188,8 +189,8 @@ def test_the_partition_rule():
     statics = {"T": 40, "NH": 2, "KVH": 1, "D": 16, "BN": 16, "CAP": CAP, "DOT": {"fn": "HopperBF16WgmmaDot16_v1"},
                "INV": {"fn": "Fa2InvSum_v1"}}
     for mf in (2, 0):
-        r = W.unit_rule(W.specialization("AttentionSoftcap_v2", dict(statics, MASKED_FROM=mf)))
+        r = W.unit_rule(PV.specialization("AttentionSoftcap_v2", dict(statics, MASKED_FROM=mf)))
         assert r["violations"] == [] and r["max_out_bits"] <= 32
-    g = W.Graph(W.specialization("AttentionHeadSoftcap_v2", {k: v for k, v in dict(statics, MASKED_FROM=2).items() if k not in ("NH", "KVH")}))
+    g = W.Graph(PV.specialization("AttentionHeadSoftcap_v2", {k: v for k, v in dict(statics, MASKED_FROM=2).items() if k not in ("NH", "KVH")}))
     R = W.units(g, 16, 32)
     assert R["cut"].ok and not g.recomputed and bool(R["ok"].all())

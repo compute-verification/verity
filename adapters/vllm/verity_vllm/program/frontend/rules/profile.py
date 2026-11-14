@@ -35,8 +35,9 @@ from verity_vllm.program.frontend.rules.common import (
 )
 from verity_vllm.program.frontend.rules.reference import LinearRule
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.targets import UnregisteredTarget
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+from verity_vllm.program.frontend.value_types import shape_of
 
 aten = torch.ops.aten
 BF16 = torch.bfloat16

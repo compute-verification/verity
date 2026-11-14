@@ -44,11 +44,12 @@ from typing import Any
 
 import numpy as np
 
+from verity_vllm.check.replay import launch_args
 from verity_vllm.check.replay.fork import fork_pool
 from verity_vllm.config import option, workload_arg, workload_file
 from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.log import read_log
-from verity_vllm.program import sampling_rng
+from verity_vllm.records.schema_ids import STOCH_RECOMPUTE_SCHEMA
 from verity_vllm.records.workload import Workload
 
 __all__ = ["Options", "main", "recompute_run"]
@@ -77,15 +78,17 @@ def _stated(k: str, default: Any, request: dict, per_request: dict, sampling: di
 
 def _request_facts(header) -> dict[str, dict]:
     wl = header.workload or {}
-    s = dict(wl.get("sampling") or {})
-    per = {p["request_id"]: p for p in s.get("per_request", []) or []}
+    sampling, requests, children = wl.get("sampling"), wl.get("requests"), wl.get("children")   # each may be left out, and then declares nothing
+    s = dict(sampling if sampling else {})
+    entries = s.get("per_request")
+    per = {p["request_id"]: p for p in (entries if entries else [])}
     out: dict[str, dict] = {}
-    for r in wl.get("requests", []) or []:
+    for r in requests if requests else []:
         p = per.get(r["request_id"], {})
         out[r["request_id"]] = {"seed": None if r.get("seed") is None else int(r["seed"]),
                                 "temperature": float(_stated("temperature", 0.0, r, p, s)),
                                 "top_p": float(_stated("top_p", 1.0, r, p, s)), "top_k": int(_stated("top_k", 0, r, p, s) or 0)}
-    for c in wl.get("children", []) or []:
+    for c in children if children else []:
         base = dict(out.get(c["parent"], {}))
         base["seed"] = None if c.get("seed") is None else int(c["seed"])
         out[c["request_id"]] = base
@@ -195,8 +198,8 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
             continue
         if not r.get("ok", True) or r.get("wrapper") != "request":
             continue
-        smp = r.get("sampling") or {}
-        if smp.get("splits") is not None:
+        smp = r.get("sampling")                                                    # a result that states no sampling declares no split count
+        if smp and smp.get("splits") is not None:
             by_shape[(int(r["LP"]), int(r["T"]))] = smp["splits"]
     out: dict[str, Any] = {}
     for q in Workload.load(workload_file(workload)).requests:
@@ -220,7 +223,8 @@ def _stop_rule(build_dir: str | Path | None) -> dict:
                 gp = json.loads(p.read_text())
         except (OSError, ValueError) as e:
             return {"source": str(p), "error": f"{type(e).__name__}: {e}"[:200]}
-        return dict(gp.get("stop_rule") or {}) | {"source": str(p)}
+        rule = gp.get("stop_rule")                                                 # a workload Program without one states its source alone
+        return dict(rule if rule else {}) | {"source": str(p)}
     return {}
 
 
@@ -514,21 +518,21 @@ def _sampled_rows(per_step: dict[int, dict], store, facts: dict[str, dict], prog
             reasons.append(f"step {step}: {n_rows_step} sampled row(s) not value-checked (the logits row fed to the sampler was not snapshotted)")
             continue
         bf_words = np.asarray(store.extract(bsnap, bf)).reshape(bf.shape)
-        masked_obs = sampling_rng._as_f32(np.asarray(store.extract(msnap, lv)), lv.dtype).reshape(lv.shape) if msnap is not None else None
+        masked_obs = launch_args._as_f32(np.asarray(store.extract(msnap, lv)), lv.dtype).reshape(lv.shape) if msnap is not None else None
         R_, V = bf.shape
         cx = dict(g.constexprs or {})
         S = None
         if d["mask"] is not None:
             S = (d["mask"].constexprs or {}).get("S")
-        seeds_snap = sampling_rng._small_int_arg(store, g, "seeds_ptr")
-        pos_snap = sampling_rng._small_int_arg(store, g, "pos_ptr")
-        temp_snap = sampling_rng._small_arg(store, g, "temp_ptr", np.float32)
-        map_snap = sampling_rng._small_int_arg(store, g, "expanded_idx_mapping_ptr")
+        seeds_snap = launch_args._small_int_arg(store, g, "seeds_ptr")
+        pos_snap = launch_args._small_int_arg(store, g, "pos_ptr")
+        temp_snap = launch_args._small_arg(store, g, "temp_ptr", np.float32)
+        map_snap = launch_args._small_int_arg(store, g, "expanded_idx_mapping_ptr")
         p_snap = None
         if d["mask"] is not None:                                   # the split kernels' signature names the top-p buffer `P`
-            p_snap = sampling_rng._small_arg(store, d["mask"], "P", np.float32)
+            p_snap = launch_args._small_arg(store, d["mask"], "P", np.float32)
             if p_snap is None:
-                p_snap = sampling_rng._small_arg(store, d["mask"], "p_ptr", np.float32)
+                p_snap = launch_args._small_arg(store, d["mask"], "p_ptr", np.float32)
         served = list(se.sampled_token_ids)
         for row, (rid, pos_fact) in enumerate(ss.logits_rows):
             f = facts.get(rid)
@@ -724,7 +728,8 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
                       f"(device-tied) at {n_dev} of {checked} checked rows via the kernel-consumed seeds_ptr/pos_ptr/temp_ptr/P snapshots"
                       + (f"; S: kernel constexpr == Program TopPMask S at {s_checked} of {checked} rows" if program_S else
                          "; S: kernel constexpr only (no --build given: the Program's S is checked by cb_a.compare spec equality, not here)"))
-    return {"schema": "verity-r15/stoch-recompute/v2", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "log": str(log_path),
+    given = (header.workload or {}).get("sampling")        # the sampling the run was given; a header that states none has an empty one
+    return {"schema": STOCH_RECOMPUTE_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "log": str(log_path),
             "workload": None if workload is None else str(workload), "build": None if build_dir is None else str(build_dir),
             "declared_facts": facts, "run_header_facts": run_facts, "program_splits": program_S,
             "header_vs_manifest": header_vs_manifest, "structure_note": structure_note,
@@ -744,7 +749,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
                                     "at every value-checked row (device_facts_checked); the draw LEDGER below (rng_advances_iff_run)",
                     # R5's record half, MEASURED per request: the ledger of every sampled row (snapshot or not)
                     "rng_advances_iff_run": ledger},
-            "sampling": dict((header.workload or {}).get("sampling") or {}),
+            "sampling": dict(given if given else {}),
             "summary": {"engine_steps_in_record": engine_steps, "sampled_steps_in_log": steps_seen, "steps_chain_absent": len(chain_absent),
                         "sampled_rows_total": sampled_rows_total, "rows_checked": checked, "complete": complete,
                         "rows": tally, "device_facts_all_match": device_ok, "device_facts_rows": n_dev,

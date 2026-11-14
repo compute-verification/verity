@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 from pathlib import Path
 
 import pytest
@@ -112,6 +113,18 @@ def test_identities_sample_through_the_picker():
     assert all(0 <= pick(i, 7) < 7 for i in range(100))
 
 
+@pytest.mark.parametrize(("extra", "said"), [
+    (None, "none recorded"), ({}, "none recorded"), ({"steps": 1}, "none recorded"), ({"errors": None}, "none recorded"),
+    ({"errors": []}, "none recorded"), ({"errors": ()}, "none recorded"), ({"errors": ["first", "second"]}, "first"),
+    ({"errors": ("only",)}, "only"),
+], ids=["no extra", "an empty extra", "no errors", "null errors", "an empty list", "an empty tuple", "two errors", "a tuple of one"])
+def test_a_run_without_a_root_names_its_first_error_where_it_records_one(extra, said):
+    """`run_root_of` reads the errors a run's ``extra`` may leave out, give null or give empty: the refusal then names none."""
+    run = RunCommitment(b"", [StepCommitment(0, b"", b"", 4, 64, 1, b"", 0.0, 0.0, 0)], {}, 0.0, 0.0, 0, 0, extra=extra)
+    with pytest.raises(CH.NoRunRoot, match=rf"1 of 1 steps not committed \(steps \[0\]\); first error: {said}$"):
+        CH.run_root_of(run)
+
+
 def test_non_legacy_replay_sample_is_the_former_proof_block_draw():
     key = CH.replay_key(AUDITOR_KEY, ROOT)
     assert key == derive(AUDITOR_KEY, "verity/sampled-proofs/vu-sample/v1", {"run_root": ROOT})
@@ -130,3 +143,18 @@ def test_stratum_picks_takes_a_seed_or_a_key():
     assert CH.stratum_picks([[1, 2], [3]], 5, None, key=CH.replay_key(AUDITOR_KEY, ROOT)) == [[1, 2], [3]]
     with pytest.raises(ValueError):
         CH.stratum_picks([[1, 2]], -1, None, key=CH.replay_key(AUDITOR_KEY, ROOT))
+
+
+def test_stratum_picks_names_what_it_refuses_and_samples_a_legacy_seed_pool_by_pool():
+    key = CH.replay_key(AUDITOR_KEY, ROOT)
+    for seed, k in ((None, None), (1, key)):
+        for per in (1, -1):                                                 # the pair is refused before the count is read
+            with pytest.raises(ValueError, match="takes a legacy seed or a key, not both"):
+                CH.stratum_picks([[1, 2]], per, seed, key=k)
+    with pytest.raises(ValueError, match="needs per_stratum >= 0"):
+        CH.stratum_picks([[1, 2]], -1, None, key=key)
+    pools = [list(range(10)), [7], []]
+    rng = random.Random(5)
+    assert CH.stratum_picks(pools, 3, 5) == [rng.sample(pools[0], 3), [7], []]
+    assert CH.stratum_picks(pools, 3, True) == CH.stratum_picks(pools, 3, 1)       # the seed is read as an int
+    assert CH.stratum_picks(pools, 0, 5) == [[], [], []] == CH.stratum_picks(pools, 0, None, key=key)

@@ -2,13 +2,15 @@
 # Served proof blocks' Flock --zk prove time against the statement's size, on one GPU or on the CPU prover, for each block
 # type's proof overhead and its fixed cost a statement. Run from the tree (research run --on NODE --cwd source):
 #   1. build   flock-circuit (verity/protocols/proofs/flock/prover/pod/60-circuit.sh MODE=build; with PT_DEVICE=gpu its CUDA prover), outside any lease
-#   2. stage   each UNIT of PT_UNITS (stage.py's TYPE[:S=V,...] or census:NAME, `+public-weights` for its --public-weights,
-#              `+packed-weights` for --public-weights --packed) at each N of
+#   2. stage   each UNIT of PT_UNITS (stage.py's TYPE[:S=V,...] or census:NAME, bound as stage.py stages it,
+#              `+public-weights` for its --public-weights, `+packed-weights` for --public-weights --packed) at each N of
 #              PT_NS, or of its own list (UNIT@N,N...; a census type's N may be stage.py's full or full/D), PT_JOBS at a
-#              time, outside any lease, into $FLOCK_WORK/data/ (kept, keyed by the staging tree)
+#              time, outside any lease, into $FLOCK_WORK/data/ (kept, keyed by the staging tree); a templated statement's
+#              unit (stage.py's unit.tmpl at its layout mode, unit.layout) placed by flock-tmpl-unit as unit.placed
 #   3. prove   per statement, a loopback --zk session set: a verifier process on VCPUS cores, WARM + RUNS prover sessions on the
 #              rest, as benchmarks/flock_s8_block/run.sh runs its sessions (the ZK server's send check off, FC_COINS=os),
-#              each with every unit in its sample (`subset:N`: Lean's verifier refuses a session without a sample);
+#              each with every unit in its sample (`subset:N`: Lean's verifier refuses a session without a sample), and a
+#              templated statement's server and prover each given its unit.placed (--tmpl-unit);
 #              with PT_DEVICE=gpu every session under one `gpu-lease 1` of at most LEASE_MIN minutes, the prover with --gpu;
 #              out/DEV/NAME/start and done hold the statement's start and end (epoch seconds), and exit the prover's exit
 #              status: done is written once the session set ends, whatever that status, so a statement finished only on 0
@@ -22,6 +24,8 @@
 #      (LIGERITO_TRACE=1 PCS_TRACE=1 LINCHECK_TRACE=1, into prove.err)
 #      PT_STATEMENTS="DIR ...": statement directories staged elsewhere (stage_window.py's served members), each proved as it
 #      is under its directory's name after PT_UNITS' (which then defaults to none)
+#      PT_TMPL_UNIT: flock-tmpl-unit, which places a templated statement's unit; by default built once per Lean source under
+#      $FLOCK_WORK/tmpl-unit as pod/90-tmpl-unit.sh builds it (a FLOCK_WORK mounted noexec takes it built elsewhere)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/served-units-time}/out; mkdir -p $O
@@ -82,19 +86,49 @@ name() {
   [ ${#s} -gt 96 ] && s="${s:0:80}-$(echo -n "$1" | sha256sum | cut -c1-12)"
   echo "$s-n${2//\//-}"
 }
+# tmpl_unit: the path of flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls a templated statement's unit and so is no
+# part of the verifier): PT_TMPL_UNIT, else the verifier's Lake package with TmplUnit as one more lean_exe, built once per
+# Lean source under $FW/tmpl-unit (its log $O/build-tmpl-unit.log)
+tmpl_unit() {
+  [ -n "${PT_TMPL_UNIT:-}" ] && { echo "$PT_TMPL_UNIT"; return 0; }
+  local L=$FW/tmpl-unit LC=$REPO/verity/protocols/proofs/flock/prover/pod/lake_closure.py TU=$REPO/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean
+  local lsha; lsha=$(python3 $LC key $REPO/verity/protocols/proofs/flock/verifier $TU) || return 1
+  local bin=$L/lean-$lsha/flock-tmpl-unit; mkdir -p $L
+  (
+    flock 8
+    [ -x $bin ] && exit 0
+    export PATH=$HOME/.elan/bin:$PATH
+    command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+    rm -rf $L/lean-src && src=$(python3 $LC copy $REPO/verity/protocols/proofs/flock/verifier $L/lean-src) && cp $TU $src/ \
+      && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $src/lakefile.toml \
+      && (cd $src && lake build flock-tmpl-unit) && mkdir -p $L/lean-$lsha && cp $src/.lake/build/bin/flock-tmpl-unit $bin
+  ) 8> $L/.lock >> $O/build-tmpl-unit.log 2>&1 || { echo "flock-tmpl-unit not built: $O/build-tmpl-unit.log" >&2; return 1; }
+  echo $bin
+}
+# place_unit DIR LOGDIR: a templated statement's unit rows at their positions, DIR/unit.placed, which its server and prover
+# load with its circuit (--tmpl-unit); flock-tmpl-unit's TMPL line in LOGDIR/tmpl-unit.log
+place_unit() {
+  local tu; tu=$(tmpl_unit) || return 1
+  $tu $1/unit.tmpl --layout "$(cat $1/unit.layout)" --out $1/unit.placed.part > $2/tmpl-unit.log 2>&1 \
+    && mv $1/unit.placed.part $1/unit.placed \
+    || { echo "flock-tmpl-unit FAILED on $1: $(tail -1 $2/tmpl-unit.log)"; rm -f $1/unit.placed.part; return 1; }
+}
 # stage UNIT N: stage.py's statement into $FW/data/NAME-KEY, its record under $O/stage/NAME
 stage() {
   local u=${1%+*} flag= nm=$(name "$1" $2)
-  case $1 in *+public-weights) flag=--public-weights ;; *+packed-weights) flag="--public-weights --packed" ;; *) u=$1 ;; esac
+  case $1 in *+public-weights) flag=--public-weights ;; *+packed-weights) flag="--public-weights --packed" ;;
+    *) u=$1 ;; esac
   local d=$FW/data/$nm-$KEY o=$O/stage/$nm
   mkdir -p $o $FW/data
   (
     flock 9
-    [ -e $d/.done ] && exit 0
-    rm -rf $d && mkdir -p $d
-    $TIMEV ${TIMEV:+$o/time-stage.txt} $PY $REPO/benchmarks/served_units/stage.py "$u" $2 $d $flag > $o/stage.log 2>&1 \
-      || { echo "stage $nm FAILED: $(tail -1 $o/stage.log)"; rm -rf $d; exit 1; }
-    touch $d/.done
+    if [ ! -e $d/.done ]; then
+      rm -rf $d && mkdir -p $d
+      $TIMEV ${TIMEV:+$o/time-stage.txt} $PY $REPO/benchmarks/served_units/stage.py "$u" $2 $d $flag > $o/stage.log 2>&1 \
+        || { echo "stage $nm FAILED: $(tail -1 $o/stage.log)"; rm -rf $d; exit 1; }
+      touch $d/.done
+    fi
+    [ ! -e $d/unit.tmpl ] || [ -s $d/unit.placed ] || place_unit $d $o
   ) 9> $d.lock || return 1
   cp $d/stage.json $o/
   echo "staged $nm: $(python3 -c "import json; s = json.load(open('$o/stage.json')); print(s['ands'], 'ANDs, k_log', s['k_log'], 'G', s['vus_per_block'], s['seconds'])")"
@@ -129,16 +163,21 @@ session_at() {
   local nm=$1 d=$2 G= GS=; local o=$O/$DEV/$nm
   [ $DEV = gpu ] && G=--gpu
   mkdir -p $o $O/stage/$nm; rm -rf $d/sessions $o/done $o/exit; cp $d/stage.json $O/stage/$nm/; date +%s.%N > $o/start
-  local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1)
+  local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1) U=()
+  if [ -e $d/unit.tmpl ]; then
+    [ -s $d/unit.placed ] || { echo "$nm: a templated statement without unit.placed (prove_time.sh's stage step places it)" \
+      | tee $o/serve.log; echo 1 > $o/exit; date +%s.%N > $o/done; return 1; }
+    U=(--tmpl-unit $d/unit.placed)
+  fi
   local N=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['n'])" $d/stage.json)
   taskset -c $VCPU $B serve --zk --draw subset:$N --listen 127.0.0.1:$PORT --out $d/sessions --instances $d/pub.bin \
-    --circuit $d/circuit.txt --pin $PIN --operator loopback --concurrency $((NSESS + 1)) > $o/serve.log 2>&1 &
+    --circuit $d/circuit.txt "${U[@]}" --pin $PIN --operator loopback --concurrency $((NSESS + 1)) > $o/serve.log 2>&1 &
   local SP=$!
   wait_serving $o/serve.log $SP || { tail -20 $o/serve.log; return 1; }
   [ $DEV = gpu ] && { gpu_sample $o & GS=$!; }
   local PERF=; [ "${PT_PERF:-0}" = 1 ] && PERF="perf record -q -F ${PT_PERF_HZ:-499} -o $o/perf.data --"
   RAYON_NUM_THREADS=$((NC - VC)) FC_VERIFY_AHEAD=$NSESS taskset -c $PCPU $TIMEV ${TIMEV:+$o/time-prove.txt} $PERF $B prove --zk $G \
-    --verifier 127.0.0.1:$PORT --instances $d/inst.bin --circuit $d/circuit.txt --warm $WARM --runs $RUNS \
+    --verifier 127.0.0.1:$PORT --instances $d/inst.bin --circuit $d/circuit.txt "${U[@]}" --warm $WARM --runs $RUNS \
     2> $o/prove.err | stamp > $o/prove.tsv
   local rc=${PIPESTATUS[0]}
   echo "prove $nm exit $rc: $(grep -o '"accepted":[a-z]*' $o/prove.tsv | sort | uniq -c | tr '\n' ' ')$(grep -o '"why":"[^"]*"' $o/prove.tsv | sort -u | head -2 | tr '\n' ' ')"

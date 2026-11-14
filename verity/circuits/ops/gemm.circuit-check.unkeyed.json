@@ -1,0 +1,7 @@
+{
+ "held": {
+  "a served GEMM row whole over its N weight rows: serving stages it as its N = 1 slices (serving_templates.SLICES), which fit, a sixth of the block at K = 6,144": [
+   "Gemm_v2{K=6144,N=160,DOT=HopperBF16WgmmaDot16_v1}"
+  ]
+ }
+}

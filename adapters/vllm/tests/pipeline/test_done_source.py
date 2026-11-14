@@ -84,6 +84,29 @@ def test_a_row_of_record_with_another_done_source_is_refused_by_name(change, nam
     assert str(e.value).startswith(f"{row}: ") and named in str(e.value)
 
 
+def _no_sampling(d):
+    d.pop("sampling")
+
+
+def _sampling_a_list(d):
+    d["sampling"] = ["ignore_eos"]
+
+
+@pytest.mark.parametrize("change", [_no_sampling, _sampling_a_list])
+def test_a_workload_of_record_whose_sampling_is_no_block_is_refused_as_one_that_stops_at_eos(change):
+    row = sorted(C.rows_of_record())[0]
+    d = _row_file(row)
+    assert C.done_source_refusal(d) is None
+    declares_nothing = _row_file(row)
+    _no_ignore_eos(declares_nothing)
+    change(d)
+    refusal = C.done_source_refusal(d)
+    assert refusal is not None and refusal == C.done_source_refusal(declares_nothing)
+    assert refusal.startswith(f"{row}: ") and refusal.endswith(
+        "its done source is 'eos-token' (sampling.ignore_eos is None): declare sampling.ignore_eos: true, "
+        "so every request runs its public max_tokens")
+
+
 def test_a_research_row_keeps_its_eos_stops_until_the_index_lists_it(monkeypatch, tmp_path):
     assert EOS_ROW not in C.rows_of_record()
     cfg = C.RowConfig.load(EOS_ROW)

@@ -9,8 +9,9 @@
   none; a replay record states its strata under `sampled_replay`, else under `replay_partition`, else the run has no units; a stored
   Program without `build_dirs` places no request.
 * `verity_vllm.pipeline.match`: the realized shape of a run counts a request's tokens only where its record states no count, reads
-  the engine's steps at the record's top, else under its `timing`, and the steps kept under either of two names; the Program
-  writer's request table and instance rows list nothing for a request with no prompt ids or samples and an instance with no views.
+  the engine's steps at the record's top, else under its `timing`, and the steps kept under either of two names.
+* `verity_vllm.pipeline.match_fold`: the Program writer's request table and instance rows list nothing for a request with no
+  prompt ids or samples and an instance with no views.
 * `verity_vllm.pipeline.global_program`: a component states its applicability at its record's top, else under `artifact`; a
   declaration without components, or without a sampler, is a greedy one; a weights record without `unresolved` or `checkpoint`
   lists none and names no directory; the command's summary states null for a block the result does not have.
@@ -43,6 +44,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as GP
 from verity_vllm.pipeline import manifest as M
 from verity_vllm.pipeline import match as RC
+from verity_vllm.pipeline import match_fold as MF
 from verity_vllm.pipeline import program_cache as PC
 from verity_vllm.pipeline import program_graph as PG
 from verity_vllm.pipeline import vu_store as VS
@@ -55,13 +57,16 @@ SWEEP = {"sampling": "greedy", "sampling_params": {"top_k": 4}, "batch": 2, "sam
 @pytest.fixture(autouse=True)
 def _the_collector_as_pytest_has_it(monkeypatch):
     """`build`, `manifest` and `global-program` tune the collector of the process their `main` runs in, which here is pytest's:
-    `tune` is stood in for, and a command that reads it from anywhere else fails the test that ran it."""
+    `tune` is stood in for, and a command that reads it from anywhere else fails the test that ran it.  Each test runs one over
+    the process's first threshold, so a command that tunes fails it in a process that is tuned already too."""
     monkeypatch.setattr(gc_tuning, "tune", lambda: None)
     before = gc.get_threshold()
+    held = (before[0] + 1, before[1], before[2])
+    gc.set_threshold(*held)
     yield
     after = gc.get_threshold()
     gc.set_threshold(*before)
-    assert after == before, "a command's `main` tuned this process's collector: it does not read `verity_vllm.gc_tuning.tune`"
+    assert after == held, "a command's `main` tuned this process's collector: it does not read `verity_vllm.gc_tuning.tune`"
 
 
 @pytest.mark.parametrize("doc, want", [
@@ -282,6 +287,28 @@ def test_a_run_with_no_tokens_record_has_no_realized_shape(tmp_path, monkeypatch
     assert RC.write_realized(plan) is None and "realized" not in json.loads(plan.p("run").read_text())
 
 
+@pytest.mark.parametrize("control", [None, "null", "not json"])
+@pytest.mark.parametrize("empty", ["{}", "[]", "0", '""', "false", "0.0"])
+def test_an_empty_capture_document_beside_no_control_s_raises_and_leaves_no_realized_shape(tmp_path, monkeypatch, empty, control):
+    plan = _plan(tmp_path, monkeypatch)
+    (plan.capture_dir / "tokens.json").write_text(empty)
+    if control is not None:
+        plan.control_tokens_path().parent.mkdir()
+        plan.control_tokens_path().write_text(control)
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'get'"):
+        RC.write_realized(plan)
+    assert "realized" not in json.loads(plan.p("run").read_text())
+
+
+def test_an_empty_capture_document_gives_way_to_the_control_s(tmp_path, monkeypatch):
+    plan = _plan(tmp_path, monkeypatch)
+    (plan.capture_dir / "tokens.json").write_text("{}")
+    plan.control_tokens_path().parent.mkdir()
+    plan.control_tokens_path().write_text(json.dumps({"requests": [{"request_id": "r0", "first_step": 0, "finish_step": 1}]}))
+    real = RC.write_realized(plan)
+    assert real is not None and [r["request_id"] for r in real["requests"]] == ["r0"]
+
+
 @pytest.mark.parametrize("kept, steps", [
     ('{"steps": [3, 1, 1]}', [1, 3]), ('{"snapshot_steps": ["2", 0]}', [0, 2]), ('{"steps": [4], "snapshot_steps": [5]}', [4]),
     ('{"steps": [], "snapshot_steps": [5]}', [5]), ('{"steps": null, "snapshot_steps": [5, 6]}', [5, 6]),
@@ -303,7 +330,7 @@ def _fold(**stated) -> SimpleNamespace:
 
 
 def test_the_program_writer_lists_nothing_for_a_request_without_ids_or_samples_and_an_instance_without_views(tmp_path, monkeypatch):
-    monkeypatch.setenv(RC.INSTANCES_FORM_ENV, "runs")
+    monkeypatch.setenv(MF.INSTANCES_FORM_ENV, "runs")
     requests = [{"request_id": "r0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}, {"request_id": "r1", "prompt_token_ids": None},
                 {"request_id": "r2", "prompt_token_ids": []}, {"request_id": "r3"}, {"prompt_token_ids": [9]}]
     instances = [{"step": 0, "name": "a"}, {"step": 1, "name": "b", "operand_views": None, "output_views": []},
@@ -313,7 +340,7 @@ def test_the_program_writer_lists_nothing_for_a_request_without_ids_or_samples_a
                           ("some", {"sampled": {"r0": [5, 6], "r1": [], "r2": None, None: [1]}})):
         d = tmp_path / name
         d.mkdir()
-        written = RC.persist_program(_fold(requests=requests, instances=instances, **sampled), d, profile_name="toy", log_path="log")
+        written = MF.persist_program(_fold(requests=requests, instances=instances, **sampled), d, profile_name="toy", log_path="log")
         assert written == {"instances": {"path": str(d / "instances.jsonl"), "bytes": (d / "instances.jsonl").stat().st_size, "n": 3,
                                          "operand_refs_form": "runs"}}
         head, *rows = [json.loads(line) for line in (d / "instances.jsonl").read_text().splitlines()]
@@ -325,7 +352,7 @@ def test_the_program_writer_lists_nothing_for_a_request_without_ids_or_samples_a
     for name, absent in (("no requests", {}), ("null requests", {"requests": None}), ("empty requests", {"requests": []})):
         d = tmp_path / name
         d.mkdir()
-        RC.persist_program(_fold(instances=[], **absent), d, profile_name="toy", log_path="log")
+        MF.persist_program(_fold(instances=[], **absent), d, profile_name="toy", log_path="log")
         assert json.loads((d / "instances.jsonl").read_text())["requests"] == []
 
 
@@ -334,9 +361,9 @@ def test_the_program_writer_looks_a_request_s_id_up_whether_or_not_the_fold_samp
     """An id that is no key raises where it is looked up, in the fold's samples or in the empty table of a fold with none; a
     prompt with no length raises first."""
     with pytest.raises(TypeError, match="unhashable type: 'list'"):
-        RC.persist_program(_fold(requests=[{"request_id": ["r0"]}], instances=[], **sampled), tmp_path, profile_name="toy", log_path="log")
+        MF.persist_program(_fold(requests=[{"request_id": ["r0"]}], instances=[], **sampled), tmp_path, profile_name="toy", log_path="log")
     with pytest.raises(TypeError, match="object of type 'int' has no len"):
-        RC.persist_program(_fold(requests=[{"request_id": ["r0"], "prompt_token_ids": 7}], instances=[], **sampled), tmp_path,
+        MF.persist_program(_fold(requests=[{"request_id": ["r0"], "prompt_token_ids": 7}], instances=[], **sampled), tmp_path,
                            profile_name="toy", log_path="log")
 
 

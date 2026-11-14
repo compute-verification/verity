@@ -26,6 +26,7 @@ import pytest
 TOOL = Path(__file__).resolve().parents[2] / "tools" / "description_sizes.py"
 LIST = Path(__file__).resolve().parent / "allowlists" / "description_sizes.json"
 _spec = importlib.util.spec_from_file_location("description_sizes", TOOL)
+assert _spec is not None and _spec.loader is not None
 DS = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(DS)
 

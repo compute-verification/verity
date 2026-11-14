@@ -18,7 +18,7 @@ from verity.definitions.numerics import dsv4_decode_metadata_twin as T
 
 from tests import fake_vllm
 from tests.properties import dsv4_decode_metadata_capture_gpu as X
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 SMALL = {"swa": "swa-4096", "c128a": "c128-4096"}
 

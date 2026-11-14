@@ -54,6 +54,10 @@ CENSUS = Path("benchmarks/census")
 DATACENTER, WORLD = "dc-12500-machines-600s", "world-inference-2027"
 #: the one conversion from FLOP to Boolean gates, with its source and status
 GATES = Path("benchmarks/rho/data/hardware.toml")
+#: the table a research run of `table` keeps beside its result, relative to the run's directory (`record`)
+TABLE = "out/overhead-table.json"
+#: the unit of every γ `record` writes
+GAMMA_UNIT = "busy SM-seconds over stock's, less one"
 
 Executor = Callable[[Sequence[str], Path], int]
 
@@ -317,6 +321,51 @@ def build(store: Any = None, *, root: Path | None = None, local_only: bool = Fal
             row["periods"] = O.periods(g, c["gpus"], c["window_s"], c["world_flop_per_year"], c["flop_per_s"][row["card"]],
                                        c["gates_per_flop"])
     return {"schema": "verity-bench/overhead-table/v1", "census": c, "covers": O.covers(), "rows": rows}
+
+
+def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
+    """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, that
+    row's γ of record with its interval, measured, held to the scheme gate (`overhead.GAMMA_MAX`) as its target, from its
+    run and its points' art, with its note and what every γ is over; where the table has no γ of record there, no value
+    and why."""
+
+    rows = {(r["scheme"], r["card"], r["point"]): r for r in table["rows"]}
+    out = []
+    for name, row in metrics.items():
+        scheme, card, point = row.split("/")
+        r = rows.get((scheme, card, point))
+        g = (r or {}).get("gamma") or {}
+        m = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
+             "extra": {"covers": table["covers"]}}
+        if r is None or not r["of_record"] or g.get("gamma") is None:
+            why = (r or {}).get("why") or f"no labelled run times {scheme} at {card}'s {point} (`{RUN_OF_RECORD}={RUN_RECORD}`)"
+            out.append(m | {"value": None, "why": f"no γ of record: {why}"})
+            continue
+        verdict = "within target" if g["gamma"] <= O.GAMMA_MAX else "over target"
+        out.append(m | {"value": g["gamma"], "interval": g.get("ci95"), "verdict": verdict,
+                        "inputs": [r["run"], r["points_art"]],
+                        "extra": m["extra"] | ({"note": r["note"]} if r.get("note") else {})})
+    return out
+
+
+def record(table: Mapping, metrics: Mapping[str, str]) -> None:
+    """Writes a table (`build`) into this research run's result (`kit.writer`): the table as `TABLE`, named a measurement
+    file and the validation's evidence, the runs of record it read in the fingerprint, `measurements` under `metrics`' ids,
+    and the validation: passed when each metric has a γ of record, else failed, naming those without one."""
+
+    writer = kit.writer(settings.RESEARCH_RUN_DIR)
+    kept = writer.out / TABLE
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    kept.write_text(json.dumps(table, indent=1, sort_keys=True) + "\n")
+    writer.fingerprint(benchmark="overhead", runs=sorted({r["run"] for r in table["rows"] if r["of_record"]}))
+    writer.measurement_file(TABLE)
+    written = measurements(table, metrics)
+    for m in written:
+        writer.measurement(**m)
+    missing = [m["name"] for m in written if m["value"] is None]
+    detail = (f"{len(written) - len(missing)} of {len(written)} metrics have a γ of record (the source check, `of_record`)"
+              + (f"; none for {', '.join(missing)}" if missing else ""))
+    writer.validation("failed" if missing else "passed", "verity_bench.overhead_records.of_record", detail, [TABLE])
 
 
 def _g(x: Mapping | None) -> str:

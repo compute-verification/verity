@@ -1,0 +1,10 @@
+# /etc/systemd/system/vy-launcher-copies-gc.timer on vy-nebius-cpu-7: hourly, like vy-retention-gc.
+[Unit]
+Description=retention gc of the checker's copies of its runs, every hour
+
+[Timer]
+OnBootSec=25min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target

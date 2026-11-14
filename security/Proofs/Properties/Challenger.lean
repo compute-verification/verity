@@ -103,20 +103,21 @@ theorem familyOneCommitment_nontrivial :
   · rw [hnone] at hw
     cases hw
 
-/-- **`FamilyOneCommitmentRead`'s nontrivial lemma**: its conclusion fails at the record `null` for every key, since
-that record names none. A reader that gives no reason for any record gives none there. -/
+/-- **`FamilyOneCommitmentRead`'s nontrivial lemma**: its conclusion fails at the device that ran nothing (`idle`) and
+the record `null`: no run of it released anything, and the finder finds no break in a record that holds nothing. A
+reader that gives no reason for any record gives none there. -/
 theorem familyOneCommitmentRead_nontrivial :
-    ∀ key, ¬ (Spot.Challenger.ChallengerKey.ofJson (Spot.getD Lean.Json.null "key") = .ok key ∧
-      ((∃ s ∈ idle.runs key.pub, OpensOn idle key.pub "" s.id ∧
+    ¬ ((∃ s ∈ idle.runs noKey.pub, OpensOn idle noKey.pub "" s.id ∧
           (s.released "" ByteArray.empty).extract 0 ByteArray.empty.size = ByteArray.empty ∧
           (ByteArray.empty.size + Spot.Challenger.COIN_BYTES - 1) / Spot.Challenger.COIN_BYTES =
             (s.released "" ByteArray.empty).size / Spot.Challenger.COIN_BYTES ∧
           ∀ r ∈ s.roots "", r = ByteArray.empty) ∨
-        Break idle key "" Lean.Json.null)) := by
-  obtain ⟨e, he⟩ : ∃ e, Spot.Challenger.ChallengerKey.ofJson (Spot.getD Lean.Json.null "key") = .error e := ⟨_, rfl⟩
-  rintro key ⟨hk, -⟩
-  rw [he] at hk
-  cases hk
+        Break idle noKey "" Lean.Json.null) := by
+  have hnone : findBreak idle noKey "" Lean.Json.null = none := rfl
+  rintro (⟨s, hs, -⟩ | ⟨w, hw, -⟩)
+  · simp [idle] at hs
+  · rw [hnone] at hw
+    cases hw
 
 /-- What one-stage's protocol accepts, its coin-free `check` accepts: `checkAt` only adds the coins' refusals. -/
 theorem oneStage_check_of_accept {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}

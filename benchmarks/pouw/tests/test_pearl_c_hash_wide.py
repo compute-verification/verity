@@ -11,14 +11,14 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
-import importlib.util
 import re
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
+import test_pearl_c_hash_host as HH  # hash_h3.cuh's host test: the host `Dev` (`Host`), its build, the pinned row
+from conftest import load
 
 from verity.commitments.merkle import tree_levels
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
@@ -27,20 +27,7 @@ from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, rows_dom
 
 HERE = Path(__file__).resolve().parent
 POUW = HERE.parent
-
-
-def load(name: str, path: Path):
-    """The module at `path` under its own name: other trees in the suite have a run.py too."""
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, path)
-        mod = sys.modules[name] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-    return sys.modules[name]
-
-
-R = load("pearl_c_sm90_run", POUW / "pearl_c_sm90" / "run.py")
-#: the host `Dev` (`Host`), its build of hash_host.cpp (`host`) and the pinned row (`h3_row`): hash_h3.cuh's host test's
-HH = load("pearl_c_hash_host_test", HERE / "test_pearl_c_hash_host.py")
+R = load("pearl_c_sm90/run.py")
 host = HH.host
 SOURCE = (POUW / "pearl_c" / "hash_wide.cuh").read_text()
 POISON = 0xA5

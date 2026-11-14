@@ -20,7 +20,7 @@ import pytest
 from tests import fake_vllm
 from tests.check.opened import commit_steps
 from tests.pipeline.test_config_run import _tp
-from tests.pipeline.test_row import TP_DENSE, _opts
+from tests.pipeline.test_row import GLM53, TP_DENSE, _opts
 from verity_vllm.check import fp8_ue8m0 as FU
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check import weights_of_record as WR
@@ -737,3 +737,30 @@ def test_a_slim_bundle_at_an_unproven_world_is_not_refused_and_reaches_tp_commit
     t.W = 4
     cmd = t.commit_cmd([])
     assert cli.parse("tp-commit", cmd[cmd.index("tp-commit") + 1:], {}).replay_deferred == "full"
+
+
+def test_a_tp_row_runs_at_the_world_its_file_says_unless_the_flag_names_one(tmp_path, monkeypatch):
+    worlds: list[int] = []
+
+    def run(self):
+        worlds.append(self.W)
+        return 0
+
+    monkeypatch.setattr(TpRow, "run", run)
+    for row, flags in ((GLM53, ()), (TP_DENSE, ()), (GLM53, ("--world", "4"))):
+        o = _opts(tmp_path, *flags, row=row)
+        assert run_row(o, o.stages) == 0
+    assert worlds == [8, 2, 4]
+
+
+def test_a_tp_row_refuses_a_world_of_one_rank_and_runs_nothing(tmp_path, monkeypatch):
+    ran: list[int] = []
+
+    def run(self):
+        ran.append(self.W)
+        return 0
+
+    monkeypatch.setattr(TpRow, "run", run)
+    with pytest.raises(UsageError, match="--world 1: a tensor-parallel row needs a world of at least 2 ranks"):
+        run_row(_opts(tmp_path, "--world", "1", row=TP_DENSE), "build")
+    assert ran == []

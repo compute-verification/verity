@@ -25,8 +25,8 @@ from verity_machine_model import headline as H
 from verity_machine_model.eps import UNI, design, eps, machine
 from verity_machine_model.model import model, vector
 
-__all__ = ["Const", "Figure", "Form", "Kind", "Peak", "ROOT", "Reading", "Sheet", "at_fmax", "differences", "figures",
-           "lean", "lines", "literal", "moves", "omega", "reading", "relative_path", "row", "sheet", "uni"]
+__all__ = ["Const", "Figure", "Form", "Kind", "Peak", "ROOT", "Reading", "Sheet", "at_fmax", "cited", "differences",
+           "figures", "lean", "lines", "literal", "moves", "omega", "reading", "row", "sheet", "uni"]
 
 ROOT = Path(__file__).resolve().parents[3]
 SHEET = "sheet.toml"
@@ -325,9 +325,10 @@ def _doc(text: str) -> list[str]:
     return _wrap(text + " -/", "/-- ")
 
 
-def relative_path(s: Sheet) -> str:
-    """The sheet's file, from the repository's root."""
-    return f"benchmarks/pouw/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}"
+def cited(s: Sheet) -> str:
+    """How generated text names the sheet's file: as the committed Lean files do, by a path under `benchmarks/pouw/`
+    that the data no longer has. A change of that text changes those Lean files with it."""
+    return f"`benchmarks/pouw/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}`"
 
 
 def _simp(head: str, names: list[str]) -> list[str]:
@@ -396,7 +397,7 @@ def lean(s: Sheet, data: Path) -> str:
                         "NVSwitch and sends back (whole tiles as 64-byte digests) is outside it: the sheet bounds what "
                         "the credited GPU's SMs compute, not which GPU computed a tile, and `Device.lean`'s side "
                         "channels don't list NVLink peer offload.", "")
-    out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from `{relative_path(s)}`, and "
+    out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from {cited(s)}, and "
                         "the machine model's tests hold it to that output.", "")
     out += ["-/", "", "@[expose] public section", "", f"namespace Accounting.TS.Sheets.{s.name}", "",
             "noncomputable section", ""]

@@ -16,7 +16,9 @@ import pytest
 
 from verity import config as K
 from verity.protocol import Channel, Role
+from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
 from verity.channel import Refused
@@ -482,6 +484,17 @@ def test_verity_run_with_no_table_is_refused_by_name(tmp_path, capsys, monkeypat
     assert "refused no-table" in capsys.readouterr().err
     assert R.config_main(["check", str(path)]) == 2
     assert "refused no-table" in capsys.readouterr().out
+
+
+def test_the_certifier_and_the_policy_are_declared_from_their_manifests():
+    certifier, policy = REG.components["certifier"], REG.components["inference-only"]
+    assert (policy.id, policy.parties, policy.channels) == (IO.ID, IO.MANIFEST.parties, IO.MANIFEST.channels)
+    assert (certifier.id, certifier.channels) == (NC.ID, NC.MANIFEST.channels)
+    assert [r for r in NC.MANIFEST.parties if r not in certifier.parties] == [NC.MANIFEST.role(NC.WORKERS)]
+    assert all(r in NC.MANIFEST.parties for r in certifier.parties)
+    assert set(D.PARTIES["certifier"]) == {r.name for r in certifier.parties}
+    assert [r.name for r in D.TOY.parties] == [NC.WORKERS]
+    assert NC.WORKERS not in {p for ps in D.PARTIES.values() for p in ps}
 
 
 def test_the_table_holds_what_the_listed_components_need():

@@ -21,7 +21,7 @@ from verity.definitions.registry import sparse_mla_split as W
 from tests import fake_vllm
 from tests.properties import glm53_fa3_split_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 U32 = np.uint32
 

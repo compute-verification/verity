@@ -3,7 +3,9 @@
 ## Interface
 
 The inference-only policy's check, in Lean only. This directory is `lean/` and this file: it has no Python package
-and no console script.
+and no console script. The policy's only Python is beside it: its manifest on the deployment layer, `../parties.py`
+(`verity.protocols.policy.inference_only.verifier.parties`: one party, the verifier, no channel and no message), which a
+deployment configuration's table declares the policy's party from, with its test in `../tests`.
 
 - **Lean**: `lean/` is the Lake package `nci_check`, whose library `NciCheck` the packages at `../../../../accounting/certifier/verifier/lean`,
   `verity/protocols/compose/verifier/onsite`, `verity/protocols/compose/verifier/remote` and `security/Properties` require by path.

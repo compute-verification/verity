@@ -1,7 +1,8 @@
 """`dead_code_census.py --tests-for`: the tests that go with a deleted set, and those to edit.
 
 The rule on small maps (a test goes when every library module it reaches is deleted, a helper goes when only going tests reach
-it), and the map on the tree: what a file names itself, through the helpers it names, and never through the library.
+it), and the map on the tree: what a file names itself, through the helpers it names, and never through the library.  Last, the
+command without a set: the census's own document.
 """
 from __future__ import annotations
 
@@ -108,3 +109,15 @@ def test_the_command_writes_its_plan(tmp_path, capsys):
     assert census.main(["--tests-for", m, "--out", str(out)]) == 0
     assert rel in json.loads(out.read_text())["goes"]
     assert capsys.readouterr().out.startswith("deleting 1 modules: ")
+
+
+@pytest.mark.slow
+def test_the_command_without_a_set_writes_the_census(tmp_path, capsys):
+    g, _, _ = _tree()
+    out = tmp_path / "census.json"
+    assert census.main(["--out", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    assert doc["schema"] == "vllm-dead-code-census/v2" and doc["artifacts"] is None
+    assert {e["module"] for e in doc["modules"].values() if e["class"] != "LIVE"} == set(census.non_live_modules(g))
+    assert {e["last_commit_date"] for e in doc["modules"].values()} == {None}
+    assert capsys.readouterr().out.startswith("all ")

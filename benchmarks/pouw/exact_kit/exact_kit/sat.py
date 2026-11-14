@@ -41,8 +41,8 @@ class Cnf:
         return [self.var(f"{name}[{i}]") for i in range(k)]
 
     def add(self, clause: Iterable[int]) -> None:
-        clause = [int(l) for l in clause]
-        if any(l == 0 or abs(l) > self.top for l in clause):
+        clause = [int(lit) for lit in clause]
+        if any(lit == 0 or abs(lit) > self.top for lit in clause):
             raise ValueError(f"literal out of range in {clause}")
         self.clauses.append(clause)
 
@@ -76,8 +76,8 @@ class Cnf:
         if not lits:
             return -self.true
         z = lits[0]
-        for l in lits[1:]:
-            z = self.xor(z, l)
+        for lit in lits[1:]:
+            z = self.xor(z, lit)
         return z
 
     def parity(self, lits: Sequence[int], odd: bool) -> None:
@@ -89,7 +89,7 @@ class Cnf:
         with Solver(name=SOLVER, bootstrap_with=self.clauses) as s:
             if not s.solve(assumptions=list(assumptions)):
                 return None
-            return {abs(l): l > 0 for l in s.get_model()}
+            return {abs(lit): lit > 0 for lit in s.get_model()}
 
     def models(self, over: Sequence[int], limit: int | None = None) -> list[dict[int, bool]]:
         """Every distinct assignment of the variables `over` that extends to a model (up to `limit`), each blocked once
@@ -100,7 +100,7 @@ class Cnf:
             while limit is None or len(found) < limit:
                 if not s.solve():
                     break
-                m = {abs(l): l > 0 for l in s.get_model()}
+                m = {abs(lit): lit > 0 for lit in s.get_model()}
                 proj = {v: m.get(v, False) for v in over}
                 found.append(proj)
                 s.add_clause([-v if proj[v] else v for v in over])
@@ -108,4 +108,4 @@ class Cnf:
 
     def value(self, model: dict[int, bool], word: Sequence[int]) -> int:
         """A word's value in a model."""
-        return sum((model[abs(l)] == (l > 0)) << i for i, l in enumerate(word))
+        return sum((model[abs(lit)] == (lit > 0)) << i for i, lit in enumerate(word))

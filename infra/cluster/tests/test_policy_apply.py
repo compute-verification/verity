@@ -306,7 +306,8 @@ def test_a_write_touches_only_policy_files_and_the_log_and_never_reverts_or_rest
 
 def test_the_cli_refuses_apply_without_who_and_why(capsys, monkeypatch, tmp_path):
     node = n1(tmp_path, N1_DRIFT)
-    monkeypatch.setattr(policy_apply.status, "ssh", lambda dest, key=None: node.run)
+    monkeypatch.setenv("VY_NEBIUS_1_HOST", "192.0.2.11")
+    monkeypatch.setattr(policy_apply.status, "ssh", lambda dest, key=None: {"research@192.0.2.11": node.run}[dest])
     assert cli.main(["policy", "apply", "--on", "nebius-1", "--apply", "--as", "infra"]) == 2
     assert "--apply needs --as (the handle who decided it) and --reason (why)" in capsys.readouterr().out
     before = node.snapshot()

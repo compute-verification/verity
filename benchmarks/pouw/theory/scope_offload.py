@@ -53,9 +53,9 @@ card's SM clock), and its device memory; the headline eps at both
 readings, `headline.row` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;
 ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one way; RTX PRO 6000 has no
 NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120); H1's smallest tile
-4 x 8 at K = 64 (`h1tile.circuit-check.py`). Host rates: `benchmarks/host_tiles` runs, cited where they're used; host
-core counts from each run's lscpu, and NVIDIA's DGX H200 / B200 data sheets (2 x 56 cores beside 8 GPUs); cores and
-clocks of the Xeon 6776P, 8468, 8480C, 8570 and 8580 from Intel ARK.
+4 x 8 at K = 64 (`h1tile.circuit-check.py`). Host rates: measured per core, each cited where it's set (the AMX
+bench, `ncp_amx`, is not in this tree); host core counts from each run's lscpu, and NVIDIA's DGX H200 / B200 data
+sheets (2 x 56 cores beside 8 GPUs); cores and clocks of the Xeon 6776P, 8468, 8480C, 8570 and 8580 from Intel ARK.
 """
 from __future__ import annotations
 

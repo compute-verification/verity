@@ -220,3 +220,53 @@ def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, t
     only = [CHECK.CIRCUIT_ENTRIES, CHECK.COMPARED] if circuit_cache else CHECK.COMPARED
     assert [x.get("only") for x in doc["verdicts"]["in"]] == [only]
     assert not urls.exists() and ("recorded checks' packs" in capsys.readouterr().out) == sent
+
+
+def test_record_sends_the_commit_its_suites_lend_from_only_when_it_is_the_runs_base(monkeypatch, capsys):
+    """The verified queue names the candidate a launched candidate is built on (`TRAIN_SUITES_FROM`): a `--deferred` run that
+    reuses passes carries it (`LEND_FILE`) when it is the run's own base, the commit whose check gates before this one's
+    counts.  Named for any other run (another base, an uncached run), or not named, nothing is sent and every suite runs."""
+    real, sent = subprocess.run, {}
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            sent.update({Path(cmd[i + 1]).name: Path(cmd[i + 1]).read_text() for i, x in enumerate(cmd) if x == "--send"})
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(CHECK, "landable", lambda base: True)
+    monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: ["slot"])
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
+    head, below = CHECK._rev("HEAD"), CHECK._rev("HEAD^")
+
+    def launch(*argv: str) -> str | None:
+        sent.clear()
+        assert CHECK.record(["--on", "vy-x", "--priority", "--keep-going", *argv]) == 0
+        return sent.get(CHECK.LEND_FILE)
+
+    monkeypatch.delenv("TRAIN_SUITES_FROM", raising=False)
+    assert launch("--base", "HEAD^", "--deferred", "pytest") is None
+    monkeypatch.setenv("TRAIN_SUITES_FROM", below)
+    assert launch("--base", "HEAD^", "--deferred", "pytest") == f"{below}\n" and "lends no suite" not in capsys.readouterr().out
+    assert launch("--base", "HEAD^", "--deferred", "pytest", "--no-cache") is None
+    assert "lends no suite: only a --deferred run that reuses passes" in capsys.readouterr().out
+    monkeypatch.setenv("TRAIN_SUITES_FROM", head)
+    assert launch("--base", "HEAD^", "--deferred", "pytest") is None
+    assert f"TRAIN_SUITES_FROM {head} lends no suite: it is not the run's base HEAD^" in capsys.readouterr().out
+    monkeypatch.setenv("TRAIN_SUITES_FROM", "no-such-ref")
+    assert launch("--base", "HEAD^", "--deferred", "pytest") is None
+
+
+def test_a_run_sent_a_lender_hands_it_to_both_suite_steps_unless_uncached(tmp_path):
+    """The commit a run was sent as its suites' lender (`LEND_FILE`, among its inputs) reaches `suites.py --lend-from` in the
+    pytest and lean-suites steps alike; a run sent none, and an uncached run, which reuses nothing, pass no such flag."""
+    def suites(**kw) -> dict[str, str]:
+        return {s[0]: " ".join(s[1]) for g in CHECK.groups(tmp_path, 16, **kw) for s in g if s[0] in ("pytest", "lean-suites")}
+
+    assert suites() and not any("--lend-from" in argv for argv in suites().values())
+    (tmp_path / "inputs").mkdir()
+    (tmp_path / "inputs" / CHECK.LEND_FILE).write_text("0123abcd\n")
+    got = suites()
+    assert set(got) == {"pytest", "lean-suites"} and all("--lend-from 0123abcd" in argv for argv in got.values()), got
+    assert not any("--lend-from" in argv for argv in suites(cache=False).values())

@@ -898,7 +898,7 @@ def row_rho(scheme, k: int) -> int | None:
     return at.denominator
 
 
-def served(scheme, shape: Shape) -> "pc8.Shape":
+def served(scheme, shape: Shape) -> pc8.Shape:
     """``scheme``'s unit ``shape`` as the hiding call with the inert-work bound: its device and tile, at its device's ρ,
     and with `row_rho`'s per-row inert-work bound.  Refuses a unit outside the scheme's domain (`PearlC.check`) and a
     scheme this circuit doesn't price (forming v0, or another device's prices)."""

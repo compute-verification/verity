@@ -221,7 +221,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     report: dict = {"gate": "verity/protocols/compose/device/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
                     "key_sha512": key_sha512, "period": PERIOD, "steps": log,
                     "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session",
-                                  "sampled_proofs": "registration.json chained after W, a records-audit summary tied to W "
+                                  "spot": "registration.json chained after W, a records-audit summary tied to W "
                                                     "and a toy circuit record beside R, the period's circuit",
                                   "lean": "pearlplus-lean.json copied from Pearl+'s answer (--lean runs the node's step)"}}
 
@@ -315,7 +315,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     (audit / S.CIRCUIT_RECORD).write_bytes(circuit_record.read_bytes())
 
     def row() -> dict:
-        r = S.piece_row("work", piece.parent, sampled_proofs=audit, key_sha512=key_sha512, lane=LANE)
+        r = S.piece_row("work", piece.parent, spot=audit, key_sha512=key_sha512, lane=LANE)
         return {k: r.get(k) for k in ("protocol", "verdict", "why", "commitment", "quantity")} | {
             "profile": {k: ((r.get("answer") or {}).get("profile") or {}).get(k)
                         for k in ("lane", "period", "session", "draw_session", "source", "source_from")}}
