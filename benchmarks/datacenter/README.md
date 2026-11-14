@@ -5,15 +5,12 @@
 - **Python**: the package `datacenter`, the distribution `verity-datacenter` (this directory's `pyproject.toml`; it
   depends on `verity` alone). It is not a member of the uv workspace, so nothing installs it: an importer puts this
   directory on `sys.path`.
-- **Importers**: `benchmarks/network_sim` alone (its `graph.py`, `mockdc.py`, `records.py` and `workload/`, and their
-  tests). No code under `verity/` imports it. What they import:
-  - from `datacenter`: `Datacenter`, `Fleet`, `Plan`, `Profile`, `Interval`, `Maintenance`, `Carried`, `Refused`,
-    `LinkEntry`, `Port`, `PortRecord`, `Cadence`, `Assumption`, `serve_time`, `check_records` and `account`;
-    `workload/accounting.py` imports the package whole;
-  - from `datacenter.examples`: `leaf_spine` and `two_sites`;
+- **Importers**: `benchmarks/network_sim/workload` alone, and its tests. No code under `verity/` imports it. What they
+  import:
+  - from `datacenter`: `Assumption` and `Cadence`; `workload/accounting.py` imports the package whole;
+  - from `datacenter.examples`: `leaf_spine`; `workload/run.py` imports the module whole;
   - from `datacenter.logical`: `binding`, `gates` and `layout`.
-- **Command**: `python -m datacenter.demo`, run from this directory; `benchmarks/network_sim/run.py` runs it and
-  keeps what it prints. There is no console script.
+- **Command**: `python -m datacenter.demo`, run from this directory. There is no console script.
 - **Lean**: none. `physical` mirrors the Lean physical model, and no Lake package is here.
 - **Documents**: none. The package writes no file and defines no schema.
 - **Loads from**: `verity.circuits`, `verity.commitments`, `verity.definitions`, the registration log
@@ -70,8 +67,7 @@ scaled up from the demo's machines says which parts are proved and which are sca
 nodes), `with_dpu` (a BlueField-3 between its NIC and its certifier, with its BMC behind it), `leaf_spine` (nodes behind
 their certifiers on a leaf-spine fabric), `rack` (the demo's) and `two_sites` (a `Fleet` of two leaf-spines joined by
 a WAN between their spines). A link between datacenters is fabric, as a switch is: coverage is per block, every block's
-boundary is certified already, and the outside world is everything off every block. `benchmarks/network_sim/graph.py`
-exports them as a network, a netns plan or a GML graph, and its tests pin their tensor-core rates to the census.
+boundary is certified already, and the outside world is everything off every block.
 `models` builds the demo's and the tests' small Programs from registered Boolean Definitions (`Gemm_v3`, the BF16
 tensor-core step on bits, which `Gemm_v2`'s kernel evaluates through the word view).
 
