@@ -12,7 +12,7 @@ READS = """
 import os, sys
 seen = []
 sys.addaudithook(lambda event, args: seen.append(args[0]) if event in ("open", "os.scandir", "os.listdir") else None)
-import verity.hardware.record, verity.hardware.registration, verity.device as S
+import verity.hardware.record, verity.protocols.accounting.registration.verifier.registration, verity.device as S
 sheets = {os.fspath(S.CARDS), os.fspath(S.NODES)}
 read = sorted({os.fspath(p) for p in seen if isinstance(p, (str, os.PathLike))
                and (os.fspath(p) in sheets or os.path.dirname(os.fspath(p)) in sheets)})
