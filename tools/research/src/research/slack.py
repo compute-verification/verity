@@ -933,6 +933,18 @@ def stamp_time(text: str, now: datetime) -> str:
     return f"{text[:m.end()]} (sent {real:%H:%M}Z){text[m.end():]}"
 
 
+COMMENT_STAMP = "__STAMP__"
+
+
+def comment_stamped(text: str, now: datetime) -> str:
+    """A Linear comment with its one `__STAMP__` as the time it is sent, Pacific with its date, then UTC (`Sat 14 Nov 12:00 AM
+    PST (08:00Z)`), so a body written ahead carries no hand-typed time."""
+    if text.count(COMMENT_STAMP) > 1:
+        raise SlackError(f"the comment holds {COMMENT_STAMP} {text.count(COMMENT_STAMP)} times: write it once, where the time goes")
+    p = now.astimezone(PACIFIC)
+    return text.replace(COMMENT_STAMP, f"{p:%a} {p.day} {p:%b} {both(now.timestamp())}")
+
+
 def plain(text: str, reg: dict | None = None) -> str:
     """A post as an agent should read it: no footer, Slack's markup undone (names, dates, links, escapes).  With `reg`, a
     user group shows as its handle, a bare id copied into a doorbell included."""
@@ -1152,7 +1164,8 @@ def unrouted_names(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()
 
 def warn_unrouted(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()) -> None:
     """Say which names a post mentions past its start, where nothing rings.  It posts anyway: refusing costs re-sends, and the
-    sender learns here that those names weren't woken."""
+    sender learns here that those names weren't woken.  A Linear comment that starts with no name at all is refused instead
+    (`cmd_linear`): it would ring its issue's team alone."""
     if names := unrouted_names(body, reg, author, rung):
         print(f"note: it names {' '.join('@' + n for n in names)} past its start, so they aren't rung: only the names a post "
               "starts with wake anyone. To ring them, move them to the start (--to, or the leading @names)", file=sys.stderr)
@@ -2032,7 +2045,9 @@ def render_asks(rows: list[dict], now: float) -> str:
 
 def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     """`check` (what the credentials reach), `state ISSUE STATE`, `comment ISSUE TEXT --as HANDLE` (or `--worker NAME`, a
-    lane's worker, which holds no handle: as LANE/NAME, ringing no one), `list TEAM [--state S]`, `audit [TEAM ...]
+    lane's worker, which holds no handle: as LANE/NAME, ringing no one; its one `__STAMP__` becomes the time it is sent;
+    refused when it names a handle but starts with no name), `comments ISSUE [--since ISO] [--author NAME]` (each whole,
+    oldest first), `list TEAM [--state S]`, `audit [TEAM ...]
     [--lane HANDLE]` (exit 1 on any finding; a team the app can't read is named and skipped; `--close-strays --as HANDLE`
     also cancels the strays, a line each on stderr), `place ISSUE PROJECT
     [--milestone M]` (`--asks [--asker NAME]`: the ledger of people's asks), `edit ISSUE [--title T] [--due D|none]
@@ -2042,7 +2057,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     KEY...] [--date D] [--status S]` and `milestone create|edit
     PROJECT NAME [--date D] [--description-file F] [--rename NEW]` and `response [--since ISO|--hours N] [--lane HANDLE]
     [--open-over MINUTES]` (the minutes each lane takes to answer a comment that rings it: `response`). Each prints one
-    line, but `audit`, `list` and `response`; a refusal exits 2."""
+    line, but `audit`, `list`, `response` and `comments`; a refusal exits 2."""
     from . import linear
 
     def need(value: str | None, what: str) -> str:
@@ -2161,6 +2176,18 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             print(f"{made['identifier']} {made['url']}" + (f" on {board}" if board else ""))
             return 0
         issue = need(ns.target, "the ISSUE (e.g. INF-12)")
+        if ns.verb == "comments":
+            from .timefmt import _utc
+            try:
+                since = _utc(ns.since) if ns.since else None
+            except ValueError:
+                raise SlackError(f"--since {ns.since!r}: give a UTC time as ISO (2026-11-14T06:00Z)") from None
+            rows = [{"at": c["createdAt"], "by": comment_by(c), "reply": bool(c.get("parent")), "body": c["body"]}
+                    for c in lin.issue_comments(issue) if not since or _utc(c["createdAt"]) > since]
+            if ns.author:
+                rows = [r for r in rows if ns.author.lstrip("@").lower() in (r["by"] or "").lower()]
+            print(json.dumps(rows, indent=1) if ns.json else render_comments(issue, rows))
+            return 0
         if ns.verb == "relate":
             if len(ns.value) != 2:
                 raise SlackError(f"linear relate: give ISSUE {'|'.join(linear.RELATE)} OTHER")
@@ -2191,9 +2218,13 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             i = lin.edit(issue, ns.title, ns.due, brief, ns.parent, send=not ns.dry_run)
             print(("dry-run: would set " if ns.dry_run else f"{issue} set ") + linear.said(i))
             return 0
-        text = need(value or brief, "the TEXT (or --file BODY.md)")
+        text = comment_stamped(need(value or brief, "the TEXT (or --file BODY.md)"), _now())
         if not ns.worker:
             author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
+            if not lead_names(text, reg) and (names := unrouted_names(text, reg, author)):
+                at = " ".join("@" + n for n in names)
+                raise SlackError(f"the comment names {at} but starts with no name, so only its issue's team is rung: start it "
+                                 f"with the names to ring ({at} ...), or put them in code (`@{names[0]}`) to name them without ringing")
             warn_unrouted(text, reg, author)
         info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } } }", {"id": issue})["issue"]
         if ns.worker:
@@ -2875,6 +2906,17 @@ def inbox_read(ns: argparse.Namespace, reg: dict, r: dict) -> int:
 
 
 # --- traffic: the monitor ---------------------------------------------------------------------------------------------------
+
+def render_comments(issue: str, rows: list[dict]) -> str:
+    """Each comment whole, oldest first, under a line with its time and author."""
+    if not rows:
+        return f"{issue}: no comments"
+    def day(at: str) -> str:
+        p = datetime.fromisoformat(at.replace("Z", "+00:00")).astimezone(PACIFIC)
+        return f"{p:%a} {p.day} {p:%b}"
+    return "\n\n".join(f"--- {i}/{len(rows)} {day(r['at'])} {both(r['at'])} {r['by'] or 'someone'}"
+                       f"{' (a reply)' if r['reply'] else ''}\n{r['body']}" for i, r in enumerate(rows, 1))
+
 
 def comment_by(c: dict) -> str | None:
     """Who a Linear comment is from: the app's `createAsUser` name, else (a person's key, where every comment shows as that
@@ -4571,7 +4613,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("linear", "Linear issues, relations, projects and milestones, through the app (never the Linear MCP connector, "
                       "which acts as Daniel): `check` (what "
                       "the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` (by name; " + LINEAR_STATES + "), "
-                      "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `list TEAM [--state S]` (open by "
+                      "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`; `__STAMP__` in it becomes the time "
+                      "it is sent; one that names a handle but starts with no name is refused), `comments ISSUE [--since ISO] "
+                      "[--author NAME] [--json]` (each whole, oldest first), `list TEAM [--state S]` (open by "
                       "default), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, and each person's "
                       "ask parked, unstaffed, slipped or asked again, with its fix; exit 1 on any; `--asks [--asker NAME]`: "
                       "the ledger of people's asks, delivered or not; `--close-strays --as HANDLE`: also cancel each stray "
@@ -4586,8 +4630,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "[--lane HANDLE] [--open-over MINUTES]` (how fast each lane answers the comments that ring it: "
                       "research/response.py); none sends a state")
     p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
-                                    "project", "milestone", "create", "response"))
-    p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
+                                    "project", "milestone", "create", "response", "comments"))
+    p.add_argument("target", nargs="?", help="state, comment, comments, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
                                              "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
                                             "relate: the kind and the other issue; unrelate: the other issue; project create: "
@@ -4627,10 +4671,13 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--remove", action="store_true", help="edit --label: remove it instead")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")
     p.add_argument("--json", action="store_true", help="audit: the findings and counts (--asks: the asks) as JSON; response: "
-                                                       "its figures and every ask")
+                                                       "its figures and every ask; comments: each comment's time, author, "
+                                                       "whether a reply, and body")
     p.add_argument("--now", default=None, metavar="EPOCH", help="audit, response: the time it reads at, in seconds since the "
                                                                 "epoch (default: now)")
-    p.add_argument("--since", default=None, metavar="ISO", help="response: the window's start, a UTC time (default: --hours before now)")
+    p.add_argument("--since", default=None, metavar="ISO", help="response: the window's start, a UTC time (default: --hours "
+                                                                "before now); comments: only those made after it")
+    p.add_argument("--author", default=None, metavar="NAME", help="comments: only those whose author's name holds NAME (top, Daniel)")
     p.add_argument("--hours", type=float, default=24, metavar="N", help="response: the window, hours before now (default 24)")
     p.add_argument("--open-over", type=float, default=30, metavar="MINUTES",
                    help="response: list the open asks older than this (default 30)")

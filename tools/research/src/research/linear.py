@@ -789,6 +789,19 @@ class Linear:
                 return out
             after = page["pageInfo"]["endCursor"]
 
+    def issue_comments(self, issue: str) -> list[dict]:
+        """Every comment on the issue a team key and number identify, oldest first, COMMENT_PAGE a page: {id, createdAt, body,
+        parent {id}, user {name}, botActor {userDisplayName}}; `NoIssue` when Linear has none."""
+        out, after = [], None
+        while True:
+            got = self._issue(issue, f"comments(first: {COMMENT_PAGE}{f', after: {json.dumps(after)}' if after else ''}) "
+                                     "{ pageInfo { hasNextPage endCursor } nodes { id createdAt body parent { id } user { name } "
+                                     "botActor { userDisplayName } } }")["comments"]
+            out += got["nodes"]
+            if not got["pageInfo"]["hasNextPage"]:
+                return sorted(out, key=lambda c: c["createdAt"])
+            after = got["pageInfo"]["endCursor"]
+
     def comment(self, issue_id: str, sender: str, body: str) -> None:
         i = {"issueId": issue_id, "body": body if self.app else f"@{sender}: {body}"}
         if self.app:
