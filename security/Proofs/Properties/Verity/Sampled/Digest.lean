@@ -275,15 +275,60 @@ def DigestAt (σ : Strategy (V.game θ F c)) (dg : ByteArray) : Prop :=
       bindMsg k ds = bindMode V k θ F c σ ∧ (VStar.Recursive.Sampled.PROTOCOL, dg) ∈ ds
 
 open Classical in
+/-- **Sampled proofs' digest in `σ`'s play `x`, where it meets the clause**: where the sampled verdict accepts the play
+and the digests its commitment binds (`bindsOf`) have the most likely message (`bindMode`), the digest of their entry
+for sampled proofs; else none. -/
+noncomputable def digAt (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ) : Option ByteArray :=
+  if V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) then
+    (bindsOf k (CoinTape.run (V.game θ F c) σ x).sent).bind fun ds =>
+      if bindMsg k ds = bindMode V k θ F c σ then
+        (ds.find? (·.1 == VStar.Recursive.Sampled.PROTOCOL)).map (·.2)
+      else none
+  else none
+
+/-- **A play `digAt` answers for meets the clause** (`DigestAt`). -/
+theorem digAt_some {σ : Strategy (V.game θ F c)} {x : CoinTape (V.game θ F c) σ} {v : ByteArray}
+    (h : digAt V k θ F c σ x = some v) : DigestAt V k θ F c σ v := by
+  rw [digAt] at h
+  split at h
+  · rename_i hvd
+    obtain ⟨ds', hbd, hmeq'⟩ := Option.bind_eq_some_iff.1 h
+    split at hmeq'
+    · rename_i hmeq
+      obtain ⟨e, hfind, hev⟩ := Option.map_eq_some_iff.1 hmeq'
+      have hm1 : e.1 = VStar.Recursive.Sampled.PROTOCOL := by simpa using List.find?_some hfind
+      refine ⟨x, ds', hvd, bindsOf_eq.mp hbd, hmeq, ?_⟩
+      have he : (VStar.Recursive.Sampled.PROTOCOL, v) = e := Prod.ext hm1.symm hev.symm
+      rw [he]
+      exact List.mem_of_find?_eq_some hfind
+    · cases hmeq'
+  · cases h
+
+/-- **A play meeting the clause makes `digAt` answer**. -/
+theorem digAt_isSome {σ : Strategy (V.game θ F c)} {x : CoinTape (V.game θ F c) σ}
+    {ds : List (String × ByteArray)} (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x))
+    (hB : BindsAt k (CoinTape.run (V.game θ F c) σ x).sent ds) (hm : bindMsg k ds = bindMode V k θ F c σ)
+    {dg : ByteArray} (hmem : (VStar.Recursive.Sampled.PROTOCOL, dg) ∈ ds) :
+    (digAt V k θ F c σ x).isSome := by
+  rw [digAt, if_pos hv, bindsOf_eq.mpr hB, Option.some_bind, if_pos hm, Option.isSome_map]
+  exact List.find?_isSome.2 ⟨_, hmem, by simp⟩
+
 /-- **The sample's digest at `σ`**: sampled proofs' digest in one of `σ`'s accepted plays whose message is the most
-likely one (`DigestAt`), or the empty string where there is none. -/
+likely one (`DigestAt`), the first such in the listing of the tapes (`Finset.univ.toList`), or the empty string where
+there is none. -/
 noncomputable def afterAt (σ : Strategy (V.game θ F c)) : ByteArray :=
-  if h : ∃ dg, DigestAt V k θ F c σ dg then h.choose else ByteArray.empty
+  ((Finset.univ : Finset (CoinTape (V.game θ F c) σ)).toList.findSome? (digAt V k θ F c σ)).getD ByteArray.empty
 
 theorem afterAt_spec {σ : Strategy (V.game θ F c)} (h : ∃ dg, DigestAt V k θ F c σ dg) :
     DigestAt V k θ F c σ (afterAt V k θ F c σ) := by
-  rw [afterAt, dite_eq_left h]
-  exact h.choose_spec
+  obtain ⟨dg, x, ds, hv, hB, hm, hmem⟩ := h
+  have hgx : (digAt V k θ F c σ x).isSome := digAt_isSome V k θ F c hv hB hm hmem
+  have hfs : ((Finset.univ : Finset (CoinTape (V.game θ F c) σ)).toList.findSome? (digAt V k θ F c σ)).isSome :=
+    List.findSome?_isSome_iff.2 ⟨x, Finset.mem_toList.2 (Finset.mem_univ x), hgx⟩
+  obtain ⟨v, hv'⟩ := Option.isSome_iff_exists.1 hfs
+  rw [afterAt, hv', Option.getD_some]
+  obtain ⟨x', -, hfx⟩ := List.exists_of_findSome?_eq_some hv'
+  exact digAt_some V k θ F c hfx
 
 /-- **An accepted play that doesn't miss at the commitment's cut samples at `afterAt`**: its message is the most likely
 one, so its digests are those of `afterAt`'s play (`eq_of_bindMsg`), which give sampled proofs one digest. -/
