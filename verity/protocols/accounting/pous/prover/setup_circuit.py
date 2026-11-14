@@ -13,9 +13,9 @@ fills ⌈N/P⌉ blocks, P of its bytes a block, its last block zero past the row
 (`verity/protocols/accounting/pous/verifier/layout.py`) with each row in the place of a tensor.  Slot k of a row is
 then its bytes [kP, kP + P), zero past N (`slot_payload`).
 
-**The unit.** ``block`` is C's row j (2,056 bytes at P2's point) and ``base`` the decode's expansion base
-``expand_prefix(params, salt) ‖ u64be(s) ‖ u64be(j)`` (`decode_circuit`); ``row`` is W's registered row that holds block
-j's payload and ``slot`` that payload's slot in it.  The one bit is 1 iff
+**The unit.** ``block`` is C's row j (2,056 bytes at P2's point), block v of segment s, and ``base`` the decode's
+expansion base ``expand_prefix(params, salt) ‖ u64be(s) ‖ u64be(v)`` (`decode_circuit`); ``row`` is W's registered row
+that holds block j's payload and ``slot`` that payload's slot in it.  The one bit is 1 iff
 
     ok ∧ slot < n ∧ payload = slot_payload(row, slot)
 
@@ -24,8 +24,10 @@ row's end.  The unit hashes nothing beyond the decode's keys: which row of W and
 ``block`` and ``row`` are the committed rows, are the statement's around it.
 
 **The slot.** One Program serves every block of a row width: the slot is an input, and `PousP2SlotMatch_v1` selects
-its P bytes by a multiplexer tree over the row's n slots (one AND a bit a merge, (n − 1)·8P at most, fewer where the
-last slot's tail is constant zero), then compares them with the payload (8P − 1 ANDs) and the slot with n.
+its P bytes by a multiplexer tree over the row's n slots, one AND a bit a merge, (n − 1)·8P in all; then one AND tree
+over the 8P bits' agreement with the payload, ok and slot < n (at most 8P + 1 ANDs), the bound itself at most S − 1
+more, and none when n is a power of two.  Its counts at P2's payload are pinned in
+`verity/protocols/accounting/pous/verifier/tests/test_pous_setup_circuit.py`.
 """
 from __future__ import annotations
 
