@@ -1,3 +1,0 @@
-[2026-11-14T20:21Z] 0f716e333a07
-LEAD: network-accounting has a move on its collect branch NOT yet on architecture: Layout-move e97a534ec829684ed1a7928615ffa71d4993f979, map tools/move/certifier_programs_map.toml, 43 paths (the certifier programs out of benchmarks/network_traces/). Read its TOP-424 comment of 12:21 PM PST before you run your map: check whether any of its 43 paths or their importers are among your 12 modules or the benchmark drivers (compile_slice_zk.py etc.). If they meet, say which in your one TOP-424 comment BEFORE pushing and let theirs land first; if they do not meet, go ahead and name your commit there.
-
