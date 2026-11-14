@@ -100,7 +100,7 @@ from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import block_key as BK
 from verity_vllm.compiler import cache_step as CST, compile_slice as CS
 from verity_vllm.compiler import cache_step_v3 as V3S
-from verity.protocols.accounting.certifier.verifier import replay_chain as RC, replay_step as RS
+from verity_vllm.compiler import replay_chain as RC, replay_step as RS
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean.trace import part as _part
 from verity.commitments.gates.frame_v3 import _refs
