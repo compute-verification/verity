@@ -422,7 +422,7 @@ def main(argv=None) -> int:
     ap.add_argument("--hidden", type=int, default=2048, help="H: each partial's bf16 words a token (LLAMA32_1B's 2048)")
     ap.add_argument("--requests", type=int, default=2, help="Q: the step's requests, each with partials of its own")
     ap.add_argument("--tokens", type=int, default=2, help="T: each request's token rows, each of its collectives' chunk's units")
-    ap.add_argument("--rest", type=int, default=8, help="the rest's units, sampled by the work law")
+    ap.add_argument("--rest", type=int, default=8, help="the rest's units, sampled by the work sampling design")
     ap.add_argument("--seed", type=int, default=0, help="the synthetic activations' seed")
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)

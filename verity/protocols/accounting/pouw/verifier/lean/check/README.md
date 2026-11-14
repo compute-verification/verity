@@ -109,7 +109,7 @@ session the auditor's ledger opens for the execution phase; so a bit changed aft
 calls are the rows whose bit is true. `drawn`: the units the sampling coin selects, never a list handed in: `drawCheck`'s rule
 under the sampling design `work:k` (`workUnits`), over the execution phase's layout (`h1window.program`'s arguments, its units the compiled
 Program's, call by call, each call's tiles row block major), one stratum per K (`strata`), each unit's work R·C·K, at
-the K its credit period's open committed (`law`; `committedK` reads `draw_k`, and an execution phase with fewer units than K is refused).
+the K its credit period's open committed (`samplingDesign`; `committedK` reads `draw_k`, and an execution phase with fewer units than K is refused).
 `servedRows`: each manifest row states its call's served rows m_s (`served`, under `calls_root`, so fixed before the
 sampling coin), a natural at most the T table rows its credit period's open committed (`committedRows` reads `rows`, and an
 execution phase whose A slot M is not `slotOf` T, the least power of two at or above T and at least R, is refused), one m_s for

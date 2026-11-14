@@ -93,7 +93,7 @@ theorem registered_ok (p : Params) (c : ExecutionPhaseCommitmentRecord) (f : Fix
         by_cases h5 : c.population = (PouwWindow.Work.at p.gridBits ell).n
         case neg => rw [ite_eq_left h5] at h; cases h
         rw [ite_eq_right (Classical.not_not.mpr h5)] at h
-        by_cases h6 : cs c.samplingDesign = cs (subsetLaw s.k)
+        by_cases h6 : cs c.samplingDesign = cs (subsetSamplingDesign s.k)
         case neg => rw [ite_eq_left h6] at h; cases h
         rw [ite_eq_right (Classical.not_not.mpr h6)] at h
         by_cases h7 : c.query = p.query

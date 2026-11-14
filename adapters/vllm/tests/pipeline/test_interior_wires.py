@@ -96,7 +96,7 @@ def _first(members):
                           proof_deadline=60.0), public, b"interior-wires-test")
     draws = iter([[0, 2]])
     stream = S.Stream(spec, (W, T, X), replay=BLOCK, budget=1, delta=DELTA, challenger="challenger-test", clock=lambda: 0.0,
-                      sampler=lambda law, n: next(draws) if law["law"] == "subset" else [0] * len(law["strata"]))
+                      sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset" else [0] * len(sampling_design["strata"]))
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
                             "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)
