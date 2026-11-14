@@ -128,3 +128,36 @@ The eight checks.
 - Events meant for @training reached me through the hook, and I acted on none: WALKER's 1:01 AM report with its 30-minute question, and its 1:10, 1:24 and 1:43 AM status messages. I read your 1:10 and 1:25 AM messages, which name me, as asks.
 - Launched: nothing. Posted: nothing.
 
+[2026-11-14T09:37Z] 16a8803d47f1
+
+READCIRC to training and WALKER, TRN-162 read of #9730's merged head, Sat 14 Nov 1:37 AM PST (09:37Z, from `date`). Note: training/20261114T0937Z-report-trn162-readcirc-c4.
+
+NOT READY 2 9155c1dc31c2087c252c1b69468ca78adc19c52e
+
+C's own change is clean: the merges add nothing, no figure of C's moves, and M-C1 and M-C2 still fail their cases. Both items are A's MUST FIX (training/20261114T0936Z-report-trn162-readcirc-a4), which C carries by the merge. Merging A's fix cures them here. I applied the patch at 9155c1dc: it applies cleanly, `test_work.py` passes 134 plus the two new tests, and every reading stays the same.
+
+## MUST FIX
+
+- **M1 and M2, A's.** A zero one-row operand is charged whole, and anti-correlated zero rows in a batch are charged. The code is the same in C's `points.py`: RAN at 9155c1dc, `xzero` N 48 and `anti` N 24, both 0 with the patch.
+
+## SHOULD FIX
+
+- A's S1 and S2, the same text in C.
+
+## NOTE
+
+- **The merges are clean and add nothing.** RAN.
+  - `git show --remerge-diff` of 1cf8759b and of 9155c1dc: 0 lines each.
+  - C's own diff, `git diff 9767b09f 9155c1dc` against `git diff 1637d668 7e94d534`: the same 4 files, 5,654 in and 48 out, and every added and removed line identical.
+- **No figure of C's moves, and no C test rests on a zero row.** RAN: every `WK.read` in `test_work.py`, `test_value_reading.py` and `test_program_reading.py`, logged per test at 7e94d534 and at 9155c1dc.
+  - What differs is A's alone: the renamed zero tests, and `sdpa`/`relu`, refused at 7e94d534 and 3,776/4,800 at 9155c1dc. Nothing rises.
+  - C's structured-reading tests read the same N at both heads. The "zero" words in C's diff are stated mask words (`const(32, 0)`), not zero rows of a product.
+  - `test_work.py` 134 passed; `test_value_reading.py` and `test_program_reading.py` 20 passed.
+- **M-C1 and M-C2.** RAN at 9155c1dc: M-C1 (`_nth(vals, 0)`) fails `[first-masked]` alone, and M-C2 (the `uniform(...) is _MIXED` guard dropped) fails `[computed-mask]` alone. Each gives 1 failed and 133 passed.
+- **The body.** RAN: all 33 `work.py` lines the body cites (sections "Rows", "Selects", "Runs", "The reading says how it read", and the two mutations at 1077 and 1047) are, line for line, the lines at 7e94d534 moved by two. That is A's two docstring lines above them, and at 7e94d534 I matched them to their claims.
+
+## For the lead to read
+
+- C is READY once A's fix is merged in and its sha sent. For that delta I would read the remerge-diff, the probes and M-C1 and M-C2 again.
+- Events meant for @training reached me, and I acted on none: they are named in A's verdict. Launched: nothing. Posted: nothing.
+
