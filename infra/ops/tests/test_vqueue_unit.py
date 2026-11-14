@@ -309,14 +309,18 @@ def test_graph2_s_wrapper_reaches_its_machine_by_name_with_each_argument_whole(t
     def graph2(*args: str, **more: str) -> subprocess.CompletedProcess:
         return subprocess.run([str(VQ / "graph2.sh"), *args], env={**env, **more}, capture_output=True, text=True)
 
-    assert graph2("list", "a b;c $(id)", "--json").returncode == 0
+    words = ["list", "a b;c $(id)", "it's", "two\nlines", "", "\\'\"", "--json"]
+    assert graph2(*words).returncode == 0
     [argv] = [json.loads(ln) for ln in out.read_text().splitlines()]
     assert argv[:-1] == ["-i", "/k", "-p", "22", "-o", "ControlMaster=auto", "-o", f"ControlPath={fake.home}/.runpod/ssh/cm-g2-%C",
                          "-o", "ControlPersist=600", f"research@$(touch {odd})"] and not odd.exists()
-    assert shlex.split(argv[-1]) == [*GRAPH2, "list", "a b;c $(id)", "--json"]
+    # ssh hands the command to the remote user's shell: shlex.split parses it by POSIX sh's rules, bash's alone not among them
+    assert shlex.split(argv[-1]) == [*GRAPH2, *words]
     assert fake.made() == [["pods", "ssh", "vy-nebius-cpu-7", "--print"]]
+    assert graph2().returncode == 0
+    assert shlex.split(json.loads(out.read_text().splitlines()[-1])[-1]) == GRAPH2
     r = graph2("list", VQ_GRAPH2_NODE="vy-nowhere")
-    assert r.returncode == 1 and "no machine named 'vy-nowhere'" in r.stderr and len(out.read_text().splitlines()) == 1
+    assert r.returncode == 1 and "no machine named 'vy-nowhere'" in r.stderr and len(out.read_text().splitlines()) == 2
 
 
 def test_the_lean_publish_pushes_the_full_sha_to_the_cache_s_machine_then_starts_its_publisher(tmp_path):
