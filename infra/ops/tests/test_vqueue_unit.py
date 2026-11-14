@@ -231,8 +231,8 @@ class Research:
         (pkg / "__main__.py").write_text(FAKE_MAIN)
         (pkg / "merge.py").write_text(FAKE_MERGE)
         (self.home / "live").mkdir(parents=True)
-        self.env = {"PATH": os.environ["PATH"], "HOME": str(self.home), "PYTHONPATH": str(pkg.parent),
-                    "VQ_PYTHON": sys.executable, "FAKE_CALLS": str(self.calls)}
+        self.env = {**{k: v for k, v in os.environ.items() if not k.startswith(("VQ_", "FAKE_"))}, "HOME": str(self.home), "PYTHONPATH": str(pkg.parent), "VQ_PYTHON": sys.executable,
+                    "FAKE_CALLS": str(self.calls)}
 
     def made(self) -> list[list[str]]:
         return [json.loads(ln) for ln in self.calls.read_text().splitlines()] if self.calls.exists() else []
