@@ -10,6 +10,8 @@ from typing import Any, overload
 
 import numpy as np
 
+from verity.protocols.accounting.pouw.prover.serving import int8_arm as ARM
+
 #: a unit's rows and columns (`pouw_h1.TILE`, `engine.int8_exact.UNIT`)
 UNIT = (32, 32)
 #: a unit's record: its s32 z, then its bf16 y
@@ -51,11 +53,10 @@ def split(records: np.ndarray, rows: int, n: int) -> tuple[np.ndarray, np.ndarra
 
 
 def _dq(z: np.ndarray, sa: np.ndarray, s_w: Any) -> np.ndarray:
-    """dq(z, s_a, s_w)'s bf16 bits as int16 (`engine.int8_exact.dequantize`, row by row)."""
+    """dq(z, s_a, s_w)'s bf16 bits as int16 (the arm's `dequantize`, `int8_arm.Int8Arm`, row by row)."""
     import torch
 
-    from verity_vllm.engine import int8_exact as E
-    return E.dequantize(torch.from_numpy(z), torch.from_numpy(sa),
+    return ARM.arm().dequantize(torch.from_numpy(z), torch.from_numpy(sa),
                         torch.from_numpy(np.ascontiguousarray(s_w, np.float32).reshape(-1))).view(torch.int16).numpy()
 
 
@@ -130,13 +131,12 @@ def refusal(held: tuple[np.ndarray, np.ndarray, np.ndarray] | None, call: Any, y
 
 def holds_on(zy: Any, rows: int, n: int, y: Any, s_a: Any, s_w: Any) -> bool:
     """Whether `reason` finds nothing, read on the records' own device from the call's tensors (``scaled_mm_zy``'s zy, the
-    served y [m, n] bf16, s_a [m] and s_w [n]) with one sync for the answer. dq there is `engine.int8_exact.dequantize`: an
+    served y [m, n] bf16, s_a [m] and s_w [n]) with one sync for the answer. dq there is the arm's `dequantize` (`int8_arm.Int8Arm`): an
     s32 to f32 conversion, two f32 products and a bf16 rounding, each to nearest, so its bits are the host's but for a NaN's.
     False, for `refusal` to read the host's copy, when they aren't a call's tensors on one device, s_w isn't finite, a dq is
     a NaN, or anything doesn't hold."""
     import torch
 
-    from verity_vllm.engine import int8_exact as E
     ur, uc = UNIT
     if not all(torch.is_tensor(t) for t in (zy, y, s_a, s_w)):
         return False
@@ -153,7 +153,7 @@ def holds_on(zy: Any, rows: int, n: int, y: Any, s_a: Any, s_w: Any) -> bool:
     sw = s_w.detach().reshape(-1).to(torch.float32)
     sa = torch.zeros(rows, dtype=torch.float32, device=dev)
     sa[:m] = s_a.detach().reshape(-1).to(torch.float32)
-    dq = E.dequantize(z, sa, sw).view(torch.int16)
+    dq = ARM.arm().dequantize(z, sa, sw).view(torch.int16)
     bad = (~torch.isfinite(sw).all() | ((dq & 0x7FFF) > 0x7F80).any() | (dq != yr).any() | (z[m:] != 0).any()
            | (yr[:m] != y.detach().contiguous().view(torch.int16).reshape(m, n)).any())
     return not bool(bad)

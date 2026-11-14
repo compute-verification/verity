@@ -443,6 +443,14 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
     return out
 
 
+def sampled_reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int], units: Sequence[int],
+                  schemas: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
+    """`reads` at the sample's proof blocks `units` alone (`OneStageZk.sampledReadsOf`): `{template parameter: {"value",
+    "rows"}}` with a row for each of `units` only, each position derived from the unit's index, never from a walk over
+    every proof block of the population or a supplied position row. Not written."""
+    raise NotImplementedError("proofs/zero-knowledge: registered reads at the sample's units alone (sampled_reads)")
+
+
 def registered_entries(program: Program, values: Mapping[str, int], schemas: Mapping[str, str] | None = None,
                        window: str | None = None, fixed: Sequence[str] = ()) -> dict[str, dict[str, Any]]:
     """The verifier's own `{value: {"leaves", "words", "word_bits", "domain"}}` for the parameters it expects registered

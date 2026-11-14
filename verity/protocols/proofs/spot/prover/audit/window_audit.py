@@ -210,11 +210,11 @@ if TYPE_CHECKING:
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
 sys.path.insert(0, str(HERE))
 
-import a0  # noqa: E402
-import a5_coins as AC  # noqa: E402
-import a5_memo as AM  # noqa: E402
-import member_trees as MT  # noqa: E402
-import r2_population as R2  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import check_memo as AM  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
+from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
@@ -222,8 +222,13 @@ from verity_flock.proof_server import ProofServer, ProofServerError, Session, St
 from verity.commitments import row_table as RT  # noqa: E402
 from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as MB, partition as P, registration as R, \
-    verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    draw as D,
+    members as MB,
+    partition as P,
+    docket as R,
+    verifier as V,
+)  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments.windows import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
 from verity.commitments.windows import wiring as WI  # noqa: E402
@@ -658,7 +663,7 @@ def compose_key(compose: Callable, defn: object, template: str) -> str | None:
     inputs = getattr(compose, "inputs", None)
     if inputs is None:
         return None
-    import compose_circuit as CM
+    from verity.protocols.proofs.spot.verifier.one_stage import compose_circuit as CM
 
     return CM.cache_key(["a5/own", template, P.program_digest(Program(defn)), inputs],
                         files=(Path(CM.__file__), Path(inspect.getsourcefile(compose))))
@@ -670,7 +675,7 @@ def own_composed(a: argparse.Namespace, compose: Callable, defn: object, templat
     ``out``, bound to ``pd`` and ``program``: through ``a.compose_cache`` (`compose_circuit.cached`, keyed by `compose_key`)
     when given and the composer says what it composes from, else composed at ``out``. -> (compose's line with the circuit's
     META, whether the cache held it already: None off the cache)."""
-    import compose_circuit as CM
+    from verity.protocols.proofs.spot.verifier.one_stage import compose_circuit as CM
 
     cache = getattr(a, "compose_cache", None)
     key = compose_key(compose, defn, template) if cache else None
@@ -863,7 +868,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         else:
             src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
                 ["--input-set", str(sets[m.template][0])]
-            p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), *src, "--out", str(st_dir / "circuit.txt"),
+            compose = Path(__file__).resolve().parents[2] / "verifier" / "one_stage" / "compose_circuit.py"
+            p = a0.run([sys.executable, str(compose), *src, "--out", str(st_dir / "circuit.txt"),
                         "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath},
                        timeout=a.session_timeout)
             if p.returncode != 0:

@@ -274,11 +274,31 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 
 Tests: `uv run tools/verity/check/suites.py protocols/spot`.
 
+### Verdicts of record
+
+No function here returns a verdict of its own. Each verdict SPOT acts on is the Lean's: `one_stage.verifier` asks
+`sampled-proofs-verifier` and computes the Python twin beside it, and a disagreement, or no answer from the Lean, is a
+refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
+`NotImplementedError("proofs/spot-two-stage-sound")` (`verifier.not_written`), and its twin answers the difftest only.
+
+| Verdict | Entry | Lean of record | Twin |
+| --- | --- | --- | --- |
+| R1-R8 on a registration | `verifier.check` | `registration` (`OneStage`) | `registration.check` |
+| The audit record | `verifier.audit_record` | `Record.record` | `audit.audit_record` |
+| A registration's whole run | `verifier.run` | `Run.run` | the stream's own outcome |
+| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it refuses every two-stage run while `SecondStage.FORM` is off | the two records' join |
+| Round 2's statements | `second_stage.check` | `SecondStage.checkAny`, which only `Run.run` reaches | `check_twin` |
+| A two-stage outcome's completeness | `second_stage.complete` | none yet | `complete_twin` |
+
+A two-stage run whose stages read no coin bytes gives `Run.run` nothing to read, so `_audit_two` raises rather than
+join its records. `parties`' `_held` and `one_stage.proofs`' `ks_form_why`, `template_why` and `population_why` are
+guards: they only turn an accept into a refusal, never accept.
+
 ## Core API
 
 ~~~python
 from verity.protocols.proofs.spot.verifier import service
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw, partition, registration
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw, partition, docket as registration
 from verity.protocols.proofs.spot.device.coins import OwnRandomness, closure_of, draw_first
 from verity.protocols.proofs.spot.verifier.consumers import compute_bound, exfiltration_bound, infiltration_bound, location_bits
 from verity.protocols.proofs.spot.prover.optimize import Candidate, CostModel, Objective, frontier, for_budget
@@ -507,8 +527,11 @@ is the record's own: whether every verdict ran. An accept waits on the verdicts 
 accept can say `complete` is false, and then a verdict that is not of record did not run. A reader that wants a
 complete audit reads `audit.answer_complete`, never the verdict alone: it is true only of an accept whose `complete`
 is true, so an answer without the field (one written before it, a reject, an undecided) is not complete. A two-stage
-outcome says it only under `second_stage.complete`: the two-stage form allowed, the replay block the registered
-request Definition, and each audit record accepted and complete.
+outcome says it only under `second_stage.complete`, which raises until its Lean is written (`verifier.not_written`,
+goal `proofs/spot-two-stage-sound`); its twin `complete_twin` holds when the two-stage form is allowed, the replay block
+is the registered request Definition, and each audit record accepted and is complete. A two-stage outcome's accept is
+`Run.run`'s symbol alone: round 2's check (`second_stage.check`) raises the same way, and its twin `check_twin` is the
+Python side the run is held to.
 
 Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
 sampling design).

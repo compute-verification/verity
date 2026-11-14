@@ -19,7 +19,7 @@ from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class
 from verity.commitments.windows import interface as IF
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[6] / "benchmarks" / "prove_path")))
-import class_rows as CR  # noqa: E402
+from verity.protocols.proofs.spot.prover.cost import class_rows as CR  # noqa: E402
 
 #: adapters/vllm's `tests.program.predict.test_steps.TINY` and its grain in test_window_circuit
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
