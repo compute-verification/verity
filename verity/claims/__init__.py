@@ -199,7 +199,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # a live coin flipped after its root commits its digest, the writers' choices for each append fixed before its coin
     # and the pass's layout fixed apart from the encodings: `Accounting.Assumptions.KeyBinding`
     # (security/Definitions/Assumptions/Accounting.lean); the seed's key alone lets a writer choose a block's
-    # encoding, and each coin keys a block apart (verity/protocols/poub/verifier/tests/test_key_binding.py)
+    # encoding, and each coin keys a block apart (verity/protocols/accounting/poub/verifier/tests/test_key_binding.py)
     Entry("key-binding", "assumption",
           "Key binding (append-coin form): for the protocol's codec, whatever the writers choose for each append from "
           "the codec and the coins of earlier appends (the registration being append 0, whose coin is the seed; every "
@@ -291,7 +291,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "id from its session log, and its host never restores an earlier copy of the state the device keeps there: "
           "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
-    # its falsification test is the measurement behind ROOT_CALL_NS (verity/protocols/pous/verifier/PROTOCOL.md, P2's SeqRoot):
+    # its falsification test is the measurement behind ROOT_CALL_NS (verity/protocols/accounting/pous/verifier/PROTOCOL.md, P2's SeqRoot):
     # the timing red team's modelled floor and the 8-core cooperation run; a faster squaring on the stated device
     # falsifies it
     Entry("pous-ring-speed", "assumption",

@@ -18,7 +18,7 @@ product, one Pearl+ epoch a Commit window, under the server's own Commit, whose 
   challenger (`live`): reserved at the window's open under the lane (`pouw_h1_window.reserve_salt`, joining the lane's
   open period), opened by the install on its salt epoch's root and its salt coin flipped from it
   (`pouw_h1_window.salt_session`). Without them it is an in-process challenger of epoch k over the Lean
-  verifier's entropy (`verity.protocols.pouw.verifier.coins.Challenger`, `verifier.coins`), which credits nothing.
+  verifier's entropy (`verity.protocols.accounting.pouw.verifier.coins.Challenger`, `verifier.coins`), which credits nothing.
 * **Its close**, on the engine loop: the hooks off, the option closed (the last pass's files waited for,
   `PearlCDeviceRun.finish`), then ``pearl/w<k>/coins.json``, the epoch's coin commitment (`verify_run.epoch_coins`), and
   ``served.json`` (`pearl_c.window.SERVED_SCHEMA`): the window's passes with calls, each timed, with its manifest's path,
@@ -40,8 +40,8 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes.pearl_c_device import H100
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import H100
 
 #: pearl_c_sm90's scheme, one of `pearl_c.SCHEMES`: v1 forming on the device record of an H100 or H200, -h3 hashing
 SCHEME = C.PearlC(forming="v1", device=H100, hashing="h3").name
@@ -127,8 +127,8 @@ def refusal(opts: Any) -> str | None:
 def in_process(window: int) -> dict[str, Any]:
     """Window ``window``'s coins held in this process: epoch ``window``'s challenger over the Lean verifier's
     entropy, which credits nothing."""
-    from verity.protocols.pouw.verifier import verifier
-    from verity.protocols.pouw.verifier.coins import Challenger
+    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity.protocols.accounting.pouw.verifier.coins import Challenger
 
     return {"coins": Challenger(window, verifier.coins)}
 
@@ -186,7 +186,7 @@ class PearlWindows:
         """What window 0's open would otherwise do first, done before the server listens: the kernel loaded
         (`pearl_c.Kernel.load`, once a process) and, for in-process coins, the Lean verifier built
         (`verifier.executable`, their entropy); ``readied``, with each part's time."""
-        from verity.protocols.pouw.verifier import verifier
+        from verity.protocols.accounting.pouw.verifier import verifier
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         pw, t0 = self.config["pouw"], self.clock()
