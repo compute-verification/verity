@@ -1,5 +1,5 @@
-"""The bench's environment variables (settings.py): each is declared with its default, and run.py, the one module that
-reads any, reads them only by a declared name."""
+"""The bench's environment variables (settings.py): each is declared with its default, and run.py and int8_kscale_gpu.py,
+the modules that read any, read them only by a declared name."""
 import argparse
 import ast
 from pathlib import Path
@@ -13,14 +13,16 @@ import settings
 def test_an_unset_variable_takes_its_default_and_a_set_one_its_value(monkeypatch):
     for name, (default, what) in settings.DECLARED.items():
         monkeypatch.delenv(name, raising=False)
-        assert settings.get(name) == default and what
+        assert settings.get(name) == default and what and settings.given(name) is None
         monkeypatch.setenv(name, "set")
-        assert settings.get(name) == "set"
+        assert settings.get(name) == settings.given(name) == "set"
 
 
 def test_an_undeclared_variable_is_refused_by_name():
     with pytest.raises(KeyError, match="PPL_NOPE"):
         settings.get("PPL_NOPE")
+    with pytest.raises(KeyError, match="PPL_NOPE"):
+        settings.given("PPL_NOPE")
 
 
 def test_run_reads_each_declared_variable_and_no_other():

@@ -5,8 +5,8 @@
 # PoUS's prover loads it by its module name (`p2_store/store.py`'s `GENERATOR`). It goes to PoUS's prover as a module
 # of `verity`, since every reader names it by module from the root (`-m`, an `importlib` default, an import);
 # `p2/` is an import root of its own (`p2_store`), which those readers would have to put on `sys.path`. The staging
-# decode's timing, the receipts kernel and the bandwidth stage stay in `benchmarks/torch_gpu/p2_stage/`. The network
-# certifier's files, which name the module in prose, are left to their owner. No file is split, edited beyond its
+# decode's timing, the receipts kernel and the bandwidth stage stay in `benchmarks/torch_gpu/p2_stage/`. No file is
+# split, edited beyond its
 # paths or deleted. The format is `layout_map.toml`'s.
 
 [roots]
@@ -24,10 +24,10 @@ paths = []
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
-# archive), files whose bytes a digest pins, lock files and Lean sources; and the network certifier's files.
+# archive), files whose bytes a digest pins, lock files and Lean sources.
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "**/*vectors*.json",
            "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/research/src/research/store/moves.json",
-           "**/*.lean", "tests/tree.toml", "verity/protocols/accounting/certifier/**"]
+           "**/*.lean", "tests/tree.toml"]
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)

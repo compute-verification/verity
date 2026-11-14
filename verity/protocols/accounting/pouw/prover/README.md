@@ -20,9 +20,9 @@ verifier's parameters: it imports `verity.circuits`, `verity_vllm.definitions`, 
 `verity.protocols.accounting.pouw.verifier` and SPOT's verifier (`verity.protocols.proofs.spot.verifier`, for a window's Program and
 sampling design), with `verity.errors`, and nothing else of the workspace, except that `serving/` also imports SPOT's
 device code and `verity_flock` (inside functions), and no tensor library: the workload hands `serving/` its tensors and H1's
-device (`serving/tensors.py`; `verity_torch.pouw` does, at import). It reads no environment variable outside `kernels/`, and nothing under
+device (`serving/tensors.py`; the device adapter does, at import). It reads no environment variable outside `kernels/`, and nothing under
 `benchmarks/` or `adapters/`; outside `kernels/` and `serving/` it reads no file. Its tests are in `tests/` and in
-`verity/protocols/accounting/pouw/verifier/tests/`; the PyTorch adapter's (`adapters/torch/tests/pouw/`) test the device code
+`verity/protocols/accounting/pouw/verifier/tests/`; the device adapter's own tests cover the device code
 it hands in, and the vLLM adapter's own tests drive `serving/` on its engine.
 
 `kernels/` holds the device code, one directory each:

@@ -393,7 +393,7 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
         [[ $KV_ARCH =~ ^sm_[0-9]+a?$ ]] || refuse "KV_ARCH=$KV_ARCH is no card's architecture (sm_90), and the row's target" \
           "declares no compute_capability to build kv.cu for: state KV_ARCH, or KV_LIB=cpu"
         nvcc -O3 -arch="$KV_ARCH" -std=c++17 -Xcompiler -fPIC -shared -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" \
-          benchmarks/word_codec/kv.cu > "$O/kv.build.log" 2>&1 ||
+          verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.build.log" 2>&1 ||
           { tail -40 "$O/kv.build.log"; echo "run.sh: kv.cu's build for $KV_ARCH failed (KV_LIB=cpu encodes on the CPU)"; exit 4; }
         sha256sum "$B/kv.so" > "$O/libs.sha256"
         KV=(--remote-kv-lib "$B/kv.so") ;;
@@ -424,13 +424,13 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
   fi
   if [ "$ROLE" = both ]; then
     if [ -z "${LEAN_EXE:-}" ]; then
-      LEAN_EXE=$("$PY" -c 'from verity.protocols.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
+      LEAN_EXE=$("$PY" -c 'from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
         2> "$O/lean-build.log") ||
         { tail -20 "$O/lean-build.log"; echo "run.sh: the Lean verifier's build failed (LEAN_EXE names a built one)"; exit 4; }
     fi
     eval "VA=(${VERIFIER_ARGS:-})"
     set -m # a process group of its own: stopping it stops its Lean verifier and its check workers with it
-    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 \
+    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 \
       "${VERIFY[@]}" --lean-exe "$LEAN_EXE" "${VA[@]}" < /dev/null > "$O/verifier.log" 2>&1 &
     SV=$!
     set +m

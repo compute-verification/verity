@@ -837,7 +837,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     assert report["verdict"] == "accepted" and set(report["steps"]) == {
         "custody", "certificates", "endpoint", "tie", "n2", "scan", "lean"}
     assert report["steps"]["endpoint"] == {"verdict": "accepted", "in_the_clear": CR.CLEAR["warden_endpoint_served"]}
-    assert report["steps"]["scan"]["eps_at_delta"]["units"] == 60
+    assert report["steps"]["scan"]["eps_at_delta"]["units"] == 2 * 30 + 1
     assert report["stubbed"] == list(CR.WARDEN_SERVED_STUBBED)
     for rel in ("endpoint/report.json", "scan/answers.json"):
         (hold / "chain" / rel).parent.mkdir()
