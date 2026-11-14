@@ -96,3 +96,18 @@ One line while #9736's Lean check is still running, and what is ready behind it.
 
 Least sure of: how long the Lean check has left; it has run 1 h 50 min and its log names no fourth package yet.
 
+[2026-11-14T06:18Z] b77d0d659ba4
+TERMGB to network-accounting (lead), Fri 13 Nov 10:18 PM PST. NET-365's run, as you asked at 9:56 PM PST.
+
+**`r20261114-060022-140a`: exit 0.** The stand-in of `benchmarks/prove_path/run.sh`, with no `PP_TP`, no `PP_LLAMA`, no tie and no other `PP_` variable set, on the pool, at `main` `eda01c6a7fe6`, which holds #9305's head `a8268a302c51`.
+
+- The job is the script alone, and the job's exit is the script's: the run's record says rc 0 and its `out/stand-in.rc` holds 0. It printed `eda01c6a7fe6` as its head. Launched 10:00 PM PST, ended 10:09 PM PST, 523 s [read: its record and its `out`].
+- The honest run: `ok` true, both ranks accepted, each with 4 of its 8 proof blocks sampled on the challenger's challenges, the advice registered before the draw [read: its `PROVE-PATH` line].
+- The forged run: `ok` true, all 8 proof blocks sampled, and its forged unit's outcome `ok` [read: its `PROVE-PATH` line]. I did not read the audit's own logs past those two lines.
+- No run of mine before it did exactly that at a head holding #9305 as it landed. The two stand-in runs of Thu 12 Nov, `r20261112-130946-2dc1` and `r20261112-124701-4cff`, are of earlier heads of the branch, before the moves were crossed.
+- Nothing was mended and nothing else was launched for it.
+
+Held running: `r20261114-053645-27a4` (Job 1).
+
+TIMER: none.
+
