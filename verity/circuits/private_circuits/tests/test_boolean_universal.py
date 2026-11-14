@@ -28,13 +28,13 @@ def _unit(G: int, N_IN: int, N_OUT: int):
     return bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
 
 
-def _netlist(rng: random.Random, G: int, N_IN: int, N_OUT: int, in_range: bool) -> U.Netlist:
+def _private_circuit(rng: random.Random, G: int, N_IN: int, N_OUT: int, in_range: bool) -> U.PrivateCircuit:
     """Sources below each gate's own wire and outputs below W, or else any K-bit index (forward reads, past W)."""
     k = U.index_bits(G, N_IN)
     W = N_IN + G
     gates = tuple((rng.randrange(4), *(rng.randrange(N_IN + g) if in_range else rng.randrange(1 << k) for _ in range(2)))
                   for g in range(G))
-    return U.Netlist(N_IN, gates, tuple(rng.randrange(W if in_range else 1 << k) for _ in range(N_OUT)))
+    return U.PrivateCircuit(N_IN, gates, tuple(rng.randrange(W if in_range else 1 << k) for _ in range(N_OUT)))
 
 
 def _columns(nets, xs) -> list[np.ndarray]:
@@ -48,7 +48,7 @@ def test_the_ops_and_the_reads_past_the_wires() -> None:
              (U.AND, 1, 10), (U.XNOR, 1, 99)]
     for a in (0, 1):
         for b in (0, 1):
-            net = U.Netlist(2, tuple(gates), tuple(range(2, 12)) + (12, 999))
+            net = U.PrivateCircuit(2, tuple(gates), tuple(range(2, 12)) + (12, 999))
             assert U.interpret(net, [a, b]) == [a ^ b, a & b, 1 ^ a ^ b, 1 ^ (a & b), 0, 1, 1 ^ a, b, 0, 1 ^ b, 0, 0]
 
 
@@ -72,11 +72,11 @@ def test_the_unit_is_a_function_of_its_class(cls) -> None:
 
 
 @pytest.mark.parametrize("cls", CLASSES, ids=str)
-def test_random_netlists_agree_with_interpret(cls) -> None:
+def test_random_private_circuits_agree_with_interpret(cls) -> None:
     rng = random.Random(f"universal{cls}")
     target = _unit(*cls)
     G, N_IN, N_OUT = cls
-    nets = [_netlist(rng, *cls, in_range=i % 2 == 0) for i in range(128)]
+    nets = [_private_circuit(rng, *cls, in_range=i % 2 == 0) for i in range(128)]
     xs = [[rng.randrange(2) for _ in range(N_IN)] for _ in nets]
     want = [U.interpret(n, x) for n, x in zip(nets, xs)]
     got = np.asarray(E.evaluate_batch(target, *_columns(nets, xs))).reshape(len(nets), N_OUT)
@@ -85,24 +85,24 @@ def test_random_netlists_agree_with_interpret(cls) -> None:
         assert list(E.evaluate(target, *U.arguments(n, x))) == w
 
 
-def _decode(op, src, out, G: int, N_IN: int, N_OUT: int) -> U.Netlist:
+def _decode(op, src, out, G: int, N_IN: int, N_OUT: int) -> U.PrivateCircuit:
     k = U.index_bits(G, N_IN)
 
     def word(bits, i, w):
         return sum(b << j for j, b in enumerate(bits[i * w:i * w + w]))
 
-    return U.Netlist(N_IN, tuple((word(op, g, 2), word(src, 2 * g, k), word(src, 2 * g + 1, k)) for g in range(G)),
+    return U.PrivateCircuit(N_IN, tuple((word(op, g, 2), word(src, 2 * g, k), word(src, 2 * g + 1, k)) for g in range(G)),
                      tuple(word(out, i, k) for i in range(N_OUT)))
 
 
-def test_every_program_bit_flip_is_another_netlist_on_the_same_circuit() -> None:
+def test_every_program_bit_flip_is_another_private_circuit_on_the_same_circuit() -> None:
     """Each private circuit one program bit away from a random one, run by the one circuit of the class, gives the outputs
     `interpret` gives for that private circuit: program bits are values only."""
     cls = G, N_IN, N_OUT = 16, 16, 8
     rng = random.Random(11)
     target = _unit(*cls)
     x = [rng.randrange(2) for _ in range(N_IN)]
-    op, src, out, xb = U.arguments(_netlist(rng, *cls, in_range=True), x)
+    op, src, out, xb = U.arguments(_private_circuit(rng, *cls, in_range=True), x)
     program = op + src + out
     rows, want = [], []
     for i in range(len(program)):
@@ -125,7 +125,7 @@ def test_padding_leaves_the_outputs_unchanged(cls) -> None:
     nets, xs, want = [], [], []
     for _ in range(64):
         g, n = rng.randint(1, G), rng.randint(1, N_IN)
-        small = _netlist(rng, g, n, N_OUT, in_range=True)
+        small = _private_circuit(rng, g, n, N_OUT, in_range=True)
         x = [rng.randrange(2) for _ in range(n)]
         net = U.pad(small, G, N_IN)
         assert len(net.gates) == G and net.n_in == N_IN and net.gates[g:] == (U.NOOP,) * (G - g)
@@ -137,14 +137,14 @@ def test_padding_leaves_the_outputs_unchanged(cls) -> None:
     assert got.tolist() == want
 
 
-def test_malformed_netlists_are_refused() -> None:
+def test_malformed_private_circuits_are_refused() -> None:
     with pytest.raises(ValueError, match="op in 0..3"):
-        U.Netlist(1, ((4, 0, 0),), (0,))
+        U.PrivateCircuit(1, ((4, 0, 0),), (0,))
     with pytest.raises(ValueError, match="in range"):
-        U.pad(U.Netlist(1, ((U.AND, 0, 1),), (0,)), 4, 2)
+        U.pad(U.PrivateCircuit(1, ((U.AND, 0, 1),), (0,)), 4, 2)
     with pytest.raises(ValueError, match="does not fit"):
-        U.pad(U.Netlist(3, ((U.AND, 0, 1),), (0,)), 4, 2)
+        U.pad(U.PrivateCircuit(3, ((U.AND, 0, 1),), (0,)), 4, 2)
     with pytest.raises(ValueError, match="4-bit wire indices"):
-        U.arguments(U.Netlist(8, ((U.AND, 0, 16),), (0,)), [0] * 8)
+        U.arguments(U.PrivateCircuit(8, ((U.AND, 0, 16),), (0,)), [0] * 8)
     with pytest.raises(ValueError, match="N_OUT is an int >= 1"):
         _unit(4, 4, 0).signature()

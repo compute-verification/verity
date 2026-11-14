@@ -10,14 +10,14 @@ public import Definitions.Pous.Claims.StreamedWipeServer
 `M_s` (`StreamedWipeMeetsServer`), at the 5 GB point (`StreamedWipeMeetsServer5GB`), and at the deployed H200 as
 measured (`StreamedWipeMeetsServerH200`). Another server's operating point is an `OperatingPoint` of
 `StreamedWipeMeetsServer5GB`, stated from its node's card once its `R` is measured. The vocabulary is
-`Security/Definitions/Pous/Model/StreamedWipeServer.lean`, the game `Security/Definitions/Pous/Model/StreamedWipe.lean`,
-the proofs `Security/Proofs/Pous/StreamedWipe/Server.lean`.
+`security/Definitions/Pous/Model/StreamedWipeServer.lean`, the game `security/Definitions/Pous/Model/StreamedWipe.lean`,
+the proofs `security/Proofs/Pous/StreamedWipe/Server.lean`.
 
-The first four are their claims (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) at the wipe's own
+The first four are their claims (`security/Definitions/Pous/Claims/StreamedWipeServer.lean`) at the wipe's own
 acceptance rule, `StreamedWipe.Accepts`. Each has its honest lemma (`Pous.Claims.<name>_meets`: its numeric
 antecedents hold at the deployed H200 as measured, `StreamedWipe.h200`) and its nontrivial lemma
 (`Pous.Claims.<name>_fails`: the claim is false at `StreamedWipe.acceptAll`), both in
-`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`. The PRF term is the advantage of the distinguisher built from the
+`security/Proofs/Pous/StreamedWipe/Witnesses.lean`. The PRF term is the advantage of the distinguisher built from the
 prover, `StreamedWipe.wipeDistinguisher P`.
 
 **What they rest on.** No named assumption, as `StreamedWipe`: the PRF (C3) enters as its advantage in the conclusion,
@@ -66,7 +66,7 @@ it, is accepted with probability at most `2^-128` plus the PRF's advantage again
 `StreamedWipe.Accepts`.
 
 At the 5 GB point (`StreamedWipe.OperatingPoint`, `B ≤ 4·10^10` bits; `StreamedWipeMeetsServer5GB`), the least `r` and
-its least `k`. A GB is `10^9` bytes. The H200 is vy-dc-h200-2's card as measured (`StreamedWipe.h200`): 143,771 MiB
+its least `k`. A GB is `10^9` bytes. The H200 is one card as measured (`StreamedWipe.h200`): 143,771 MiB
 in all, a fill of 4,425 segments (148.48 GB), so `R` = 2.276 GB. Another server's row is an `OperatingPoint` of
 `StreamedWipeMeetsServer5GB`, stated from its node's card once its `R` is measured.
 
@@ -93,7 +93,7 @@ footing as `StreamedWipe`. Proof: `PousStreamedWipe.streamed_wipe_meets_server_5
 Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
 def StreamedWipeMeetsServer5GB : Prop := Pous.Claims.StreamedWipeMeetsServer5GB StreamedWipe.Accepts
 
-/-- **The deployed H200 at 5 GB: 148.48 GB filled on vy-dc-h200-2's card at 5500 reads, with 2.276 GB outside the
+/-- **The deployed H200 at 5 GB: 148.48 GB filled on one card at 5500 reads, with 2.276 GB outside the
 fill.** `StreamedWipeMeetsServer5GB` at `StreamedWipe.h200`, as measured:
 `n = 2,319,974,400` labels (4,425 segments of 32 MiB) on a card of `M_s = 1,206,038,560,768` bits (143,771 MiB),
 so `R = 18,211,667,968` bits, at the deployed `k = 5500` and its published `r = 62`. A server with `E` bits of egress
