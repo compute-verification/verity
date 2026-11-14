@@ -168,9 +168,9 @@ theorem second_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursiv
     ∃ out, secondRead p e bs ξ = some out := by
   obtain ⟨raw, hraw, -⟩ := oneStageZk_reads p.audit c₂ d hd' e.interior ξ hξ
   obtain ⟨cm, roots, htsn, -⟩ := Verity.Sampled.drawCoins_ok hraw
-  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedSessionOf_ok htsn
-  obtain ⟨_, hso⟩ := Verity.Sampled.sessionNamed_ok hsn
-  obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok htsn
+  obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
+  obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.challengePhaseOf_ok hso
   have hl : Verity.Sampled.linesOf e.interior = .ok lines := Verity.Sampled.Binding.linesOf_eq hlog hls
   have hct : coinTreesOf lines = .ok ts := Verity.Sampled.Binding.trees_of hts hlog hls
   obtain ⟨recs, hrecs⟩ := Option.isSome_iff_exists.1 (mapM_isSome_of (Verity.Sampled.recordOn bs) _ hrec)
