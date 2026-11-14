@@ -1524,7 +1524,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool) -> di
         reads = st.get("registered_file")
         out.append(PF.Member(m.key, PF.Proof(mm["circuit"], st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
                              st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
-        tables.update((f.name, f) for f in looked_up_tables(st["dir"]) if f.name not in tables)
+        tables.update((f.name, f) for f in looked_up_tables(mm["circuit"].parent) if f.name not in tables)
     return {"members": out, "tables": [tables[x] for x in sorted(tables)]}
 
 

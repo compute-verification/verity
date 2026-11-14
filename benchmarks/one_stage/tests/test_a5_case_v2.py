@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import sys
 import types
 from pathlib import Path
@@ -449,11 +450,13 @@ def test_case_members_names_every_member_and_a_statement_for_each_sampled_one(tm
 
 def test_a_templates_members_name_its_one_circuit_file_and_the_case_lists_it_once(tmp_path, RP):
     """a5 composes a template's circuit once, in its first member's directory, and a later member that is not sampled
-    has none of its own: each member names its template's file, and the case lists each path once."""
-    mms = [staged(tmp_path, 0, "t/c0", 0, 3), staged(tmp_path, 1, "t/c1", 3, 2), staged(tmp_path, 2, "t/c2", 5, 4),
-           staged(tmp_path, 3, "u/c0", 9, 1)]
+    has none of its own, nor its tables: each member names its template's file, the tables the template's circuit looks up
+    are the ones beside that file, and the case lists each path once."""
+    mms = [staged(tmp_path, 0, "t/c0", 0, 3, lookups='{"rcp": {}}'), staged(tmp_path, 1, "t/c1", 3, 2),
+           staged(tmp_path, 2, "t/c2", 5, 4), staged(tmp_path, 3, "u/c0", 9, 1)]
     for mm in mms[1:3]:
         (mm["st"]["dir"] / "circuit.txt").unlink()
+        shutil.rmtree(mm["st"]["dir"] / "tables")
         mm["circuit"] = mms[0]["circuit"]
     done = [session(tmp_path, mms[3], "a")]
     names = [sha(done[0]["sdir"] / "sessions" / "a" / "session.json")]
@@ -462,6 +465,7 @@ def test_a_templates_members_name_its_one_circuit_file_and_the_case_lists_it_onc
     proof = a5.members_proof(mms, done, zk=True)
     assert [m.proof.circuit for m in proof["members"]] == [tmp_path / "m0" / "circuit.txt"] * 3 + [
         tmp_path / "m3" / "circuit.txt"]
+    assert proof["tables"] == [tmp_path / "m0" / "tables" / "rcp.u32"]
     blobs = a5.case_members(case, **proof)["blobs"]
     assert len(blobs) == len(set(blobs)) and all(Path(b).is_file() for b in blobs)
     assert blobs.count(str(tmp_path / "m0" / "circuit.txt")) == 1
