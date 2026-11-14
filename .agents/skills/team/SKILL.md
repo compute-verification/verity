@@ -44,9 +44,9 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 ## Landing
 
-`main` holds only fully checked commits. ci's verified queue (`research queue vqueue`: `research.vqueue_loop`'s docstring
-has the rules, `tools/verity/check/drive.toml` the settings) merges the PRs ready to land onto `main` as a candidate, checks
-it, and fast-forwards `main` only to a candidate with no new failure:
+ci's verified queue (`research queue vqueue`: `research.vqueue_loop`'s docstring has the rules,
+drive.toml the settings) merges the PRs ready to land onto `main` as a candidate, checks it, and
+fast-forwards `main` to one with no new failure:
 
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F
   --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY`; a failed
@@ -54,17 +54,17 @@ it, and fast-forwards `main` only to a candidate with no new failure:
   page), which `open` writes as `Goal <id>`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A
   body naming neither a live goal (`Goal <id>`) nor `Issue: none: REASON` only warns (fix: `research queue edit N
   --body-file F`). A new head needs a new mark and a new review unless its own diff, whitespace too, is unchanged (`git
-  patch-id --verbatim`), as after merging `main`. `research queue status` says what each PR waits for and lists the PRs
+  patch-id --verbatim`), as after merging `main`. `research queue status` says what each PR waits for and lists those
   naming no issue. The mark's preflight refuses a head that conflicts or that drive.toml's `landing_gates` refuse; a
-  Markdown file over its cap, the vLLM ratchet gate and a marked PR the head doesn't merge with (named, with its files
-  and the fix) only warn. A `hold` label keeps a PR out.
+  Markdown file over its cap, the vLLM ratchet gate and a marked PR the head doesn't merge with only
+  warn. A `hold` label keeps a PR out.
 - Before marking, run the suites your change touches (the testing skill's pre-mark run), plus a suite's slow tier when
   you changed its core; no Lean records run of your own. Prefer small PRs.
 - Reviewers ci staffs, never the owner, record a verdict at the head (`research queue review N --land|--hold REASON --by
   LANE`), signed as that reviewer once ci's holder registers its agent (`research queue delegate AGENT --by review-NN`);
   no other per-head grant exists. While drive.toml's `lowrisk_lane` is on, a PR touching nothing its
   `lowrisk_excludes` names (Lean, locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark
-  alone, with no verdict (the low-risk lane), as does a move's PR (`Move: tools/move/MAP.toml`), whatever it touches,
+  alone (the low-risk lane), as does a move's PR (`Move: tools/move/MAP.toml`), whatever it touches,
   once the loop certifies its map, from `main`, rerun on its batch's tip; with `signed_verdicts` true, not one changing
   `SIGNED_GUARDS`.
 - The loop builds candidates from the marked PRs with a land verdict or on their mark alone, in the priority file's order
@@ -72,19 +72,21 @@ it, and fast-forwards `main` only to a candidate with no new failure:
   below, and one `Queue: #N` merge per PR. Stack only on your own unlanded PR, two deep at most: hand a longer chain in
   as one head, marked once, with the marks below withdrawn. A PR that doesn't merge onto `main` is left out, and its
   owner told the fix. A candidate changing a lock, the spec or Lean that runs as code first runs `lean-audit` alone (its
-  records run) off the chain, beside batches touching no Lean input (`vqueue_slim.lean_inputs`), then goes on the chain's
-  top with its regenerated records committed (`Lock records regenerated for #N...`) and is checked on that commit, so
+  records run) off the chain, beside batches touching no Lean input, then goes on the chain's
+  top with its regenerated records committed and is checked on that commit, so
   `main` moves only to regenerated records.
 - A candidate's check is graph2's tasks by default, with lean-agreement and ratchet-gate beside them (under `--gate
-  check`, `check.py --record` of every step, in shards), judged on the merge gate, where an unexpired allowance of
-  policy.toml at the candidate's base covers a failure. On a pass `main` moves to it. A failure its base shares blames no
-  PR: @ci and the owners of what fails are rung once. Otherwise the PRs whose change touches what failed are its suspects
+  check`, every step in shards), judged on the merge gate, where an unexpired allowance of policy.toml at its base
+  covers a failure. On a pass `main` moves to it. Under `--gate verdict` a plain candidate (no Lean, lock, move or
+  landing code) lands on its members' land verdicts and the quick tier; `main`'s whole check follows, and its
+  red reverts the one culprit or, with none, sends plain candidates back to the whole check. A failure its base shares
+  blames no PR: @ci and the owners of what fails are rung once. Otherwise the PRs whose change touches what failed are its suspects
   (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks' logs,
-  several are bisected, and in the same tick the candidate and those above it are built again without them; a PR held,
+  several are bisected, and in the same tick the candidate and those above it are rebuilt without them; a PR held,
   ejected or unmarked leaves the same way, taking no other PR out. A failure above the lowest candidate waits for its
-  base's check unless only its own PRs meet it. A failure of the machines (a timeout, a kill, a full disk) is no red and
+  base's check unless only its own PRs meet it. A machine's failure (a timeout, a kill, a full disk) is no red and
   blames no PR: it is retried on other machines and rung to @infra, and only one that persists from runs that started the
-  candidate's steps splits it, ejecting nobody; a red off the gate (circuit-check, ratchet-gate) holds nothing. Only the
+  candidate's steps splits it, ejecting nobody; a red off the gate holds nothing. Only the
   loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
 - Anyone may do whatever it takes to cut check time: a change to how `check` runs lands without its file owner's review,

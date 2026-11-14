@@ -38,11 +38,13 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     assert DriveFlags.parse('warn_steps = ["ratchet-gate"]\n').warn_steps == ("ratchet-gate",)
     assert DriveFlags.parse('lowrisk_excludes = ["*.lean", "verity/", "verity/__init__.py"]\n').lowrisk_excludes == (
         "*.lean", "verity/", "verity/__init__.py")
+    assert DriveFlags.parse('verdict_excludes = ["*.lean", "tools/verity/check/", "a/queue.py"]\n') == DriveFlags(
+        verdict_excludes=("*.lean", "tools/verity/check/", "a/queue.py"))
     assert [DriveFlags.parse(f'after_landing_shards = "{v}"\n').after_landing_shards for v in ("auto", "auto:4")] == ["auto", "auto:4"]
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
                         "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= warn_steps= verdict_first=False "
                         "stale_days=3 stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
-                        "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= verdict_carry=off bottom_ring=@ci "
+                        "lowrisk_per_tick=20 lowrisk_excludes= verdict_excludes= executor=off executor_enqueue= verdict_carry=off bottom_ring=@ci "
                         "bottom_wait_min=45 signed_verdicts=off restack_jobs=3")
     assert [DriveFlags.parse(f'executor = "{v}"\n').executor for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     assert [DriveFlags.parse(f'verdict_carry = "{v}"\n').verdict_carry for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
@@ -75,6 +77,8 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ('lowrisk_excludes = ["../x/"]', "lowrisk_excludes = ['../x/']: a non-empty list"),
                       ('lowrisk_excludes = ["verity/*/x.py"]', "lowrisk_excludes = ['verity/*/x.py']: a non-empty list"),
                       ('lowrisk_excludes = ["x/../y.py"]', "lowrisk_excludes = ['x/../y.py']: a non-empty list"),
+                      ("verdict_excludes = []", "verdict_excludes = []: a non-empty list of directories"),
+                      ('verdict_excludes = ["/tools/"]', "verdict_excludes = ['/tools/']: a non-empty list"),
                       ("bottom_ring = []", "bottom_ring = []: a non-empty list of handles, each `@` and its lower-case name, "
                                            "as [\"@ci\"]"),
                       ('bottom_ring = "@ci"', "bottom_ring = '@ci': a non-empty list of handles"),
@@ -121,7 +125,7 @@ def test_the_strict_parse_refuses_an_unknown_key_naming_the_keys_it_reads_and_th
                             "marked_after, regenerate_locks, land, land_into, after_landing_no_cache, landing_gates, "
                             "warn_gates, warn_steps, verdict_first, stale_days, stale_close_days, stale_keep, close_unlandable, "
                             "after_landing_shards, command_line, lowrisk_lane, "
-                            "lowrisk_per_tick, lowrisk_excludes, executor, executor_enqueue, verdict_carry, bottom_ring, "
+                            "lowrisk_per_tick, lowrisk_excludes, verdict_excludes, executor, executor_enqueue, verdict_carry, bottom_ring, "
                             "bottom_wait_min, signed_verdicts, restack_jobs; "
                             "rename or remove it, or update this research")
 
@@ -179,6 +183,25 @@ def test_the_low_risk_lane_excludes_what_runs_with_the_control_pods_or_every_age
     excludes = tomllib.loads((root / "tools/verity/check/drive.toml").read_text())["lowrisk_excludes"]
     for path in ("infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"):
         assert path in excludes, f"drive.toml's lowrisk_excludes lacks {path}"
+
+
+def test_the_land_verdicts_gate_excludes_lean_its_locks_the_check_and_the_code_that_lands_and_reverts():
+    """Where the land verdicts gate (`research queue vqueue --gate verdict`), a change to Lean, a lock, a Lake file or the
+    trusted hashes (`main` moves only to regenerated records), to the check, or to the code that lands a candidate and reverts
+    a culprit takes the whole check before it lands, whatever its land verdicts: drive.toml's `verdict_excludes` names each,
+    and a change to it is a change under tools/verity/check/."""
+    import tomllib
+
+    root = Path(__file__).resolve().parents[3]
+    flags = DriveFlags.parse((root / "tools/verity/check/drive.toml").read_text())
+    assert flags.verdict_excludes == tuple(tomllib.loads((root / "tools/verity/check/drive.toml").read_text())["verdict_excludes"])
+    for path in ("security/Proofs/Core/X.lean", "tools/pous_grader/lean-audit.json", "security/lakefile.toml",
+                 "security/lean-toolchain", "security/lake-manifest.json", "x/TRUSTED.sha256", ".gitattributes",
+                 "tools/verity/check/check.py", "tools/verity/check/drive.toml", "tools/verity/check/policy.toml",
+                 *(f"tools/research/src/research/{m}.py" for m in ("queue", "landing", "vqueue", "vqueue_loop", "vqueue_slim"))):
+        assert not lowrisk([path, "README.md"], flags.verdict_excludes), f"drive.toml's verdict_excludes lets {path} through"
+    for path in ("tests/test_tree.py", "verity/circuits/program.py", "tools/research/src/research/cli.py", "x/queue.py"):
+        assert lowrisk([path], flags.verdict_excludes), f"drive.toml's verdict_excludes keeps {path} on the whole check"
 
 
 #: drive.toml's `lowrisk_excludes`
