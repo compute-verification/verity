@@ -276,14 +276,17 @@ def outcome_counted(server: bytes, session: bytes, trusted: Collection[bytes], c
                     signed: sw.SignedWipe | None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES, *,
                     egress_mib: int | None) -> tuple:
     """`MemoryChallenger.WipeProtocol.checkCounted`, the check with its count held by a composition: `outcome`'s
-    refusals, then a rejection of an evidence that gives no count (`NO_COUNT`) and of a session that names no start
-    mark (`NO_MARK`), and on acceptance `certify` at the evidence's count with `counted_profile`. It holds the count
-    to nothing, as `outcome` does: only under a composition that ties `named` to the network certifier's count over
-    the span between the session's two marks is the count the certifier's."""
+    refusals, then a rejection where `named` refuses the session, of an evidence that gives no count (`NO_COUNT`) and
+    of a session that names no start mark (`NO_MARK`), and on acceptance `certify` at the evidence's count with
+    `counted_profile`. It holds the count to nothing, as `outcome` does: only under a composition that ties `named` to
+    the network certifier's count over the span between the session's two marks is the count the certifier's."""
     out = outcome(server, session, trusted, commitment, signed, schemes, egress_mib=egress_mib)
     if out[0] != "accept":
         return out
-    n = named(commitment, signed, egress_mib)
+    try:
+        n = named(commitment, signed, egress_mib)
+    except OverflowError as e:
+        return ("reject", str(e))
     if n is None:
         return ("reject", NO_COUNT)
     if len(n["start_mark"]) != sw.MARK_BYTES:
