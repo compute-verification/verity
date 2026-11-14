@@ -12,7 +12,7 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 /-!
 # How many proof blocks the second stage proves (`size_proved_selectSecond`)
 
-The second stage's law has one cell per template `t` and sampled replay block, each sampling `k_t` of its `n_t` proof
+The second stage's sampling design has one cell per template `t` and sampled replay block, each sampling `k_t` of its `n_t` proof
 blocks (`flockLaw_second`); its sample returns each cell's count (`stratifiedWith_size`), and its sample object carries
 those units and no closure. So an accepted second stage proves exactly `|sample| · Σ_t k_t` proof blocks. At a
 registration the replay sample is `RegTwo.sample src₁`, the units the first stage proves, and this is the count
@@ -31,7 +31,7 @@ theorem getD_draw_closure (sample ns ks : Array ℕ) (m : ℕ) (units : Array �
     getD (Json.mkObj ((entries (Select.secondLaw sample ns ks)).toList ++
       [("population", Lean.toJson m), ("units", natsJson units)])) "closure" = Json.null := (rfl)
 
-/-- **An accepted second stage's sample object**: it passed `secondProblem`, drew `units` under `secondLaw`'s Flock law
+/-- **An accepted second stage's sample object**: it passed `secondProblem`, drew `units` under `secondLaw`'s Flock sampling design
 over the `|sample|·Σ n_t` proof blocks, and carries those units and no closure. -/
 theorem selectSecond_units {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
