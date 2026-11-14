@@ -26,9 +26,9 @@ from verity_vllm.check.c2_rules import (
     _no_evaluator_gaps,
 )
 from verity_vllm.check.commit_pass import commit_verdict
-from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.gemm_targets import REGISTERED
+from verity_vllm.records.replay_codes import NOT_YET, why_class
 
 
 def _bnd(n_req):

@@ -28,13 +28,13 @@ from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import linkage as LK
 from verity_vllm.check.replay import opening as OP
 from verity_vllm.check.replay import population as POP
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay import sample as SM
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import program_view as PV
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import Q_MODULE_BODY_ID, request_manifest
+from verity_vllm.records import replay_codes as RC
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
