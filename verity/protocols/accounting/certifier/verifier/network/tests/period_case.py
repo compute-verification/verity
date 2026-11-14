@@ -7,8 +7,9 @@ and checks a period with the Python the period's pieces already have: one-stage'
 reads them (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates and clock certificates
 under its LMS key (`certifier.certificate`), Σ_sync (`certifier.schedule`), one-stage's `registration.digest` (a
 registration record is ASCII-only, where its canonical JSON is Lean's), and in the rows form
-the schedule (`warden.WardenParams`) and the verifier's read of each row registration
-(`warden_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
+the schedule (`warden.WardenParams`), the verifier's read of each row registration
+(`warden_rows.check_registration`) and the scan's ok bits' constants, computed once a period and compared an execution
+phase (`scan_ok.constants` and `held`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. Public is `K` and its terms over
 `MonitoringPeriodLeakAccepted`'s windows (the clock form's audits, the rows form's scans, all at one δ), each with its `delta`,
@@ -30,8 +31,13 @@ and domain of chunk j's entries port of that link-window's slot entries' templat
 at its smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan
 slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
 (`_prog_tied`, `_wired`), and its
-state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
-stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
+state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), and each member's ok bits
+(`<member>/o0`) at the schedule's constant (`_ok_entries`; `ok-unheld`: one execution phase's broken, `UNOKS`; `ok-equal`:
+a schedule of three ticks, where two members' are at one domain and root; `one-tick`: a schedule of one tick, which
+has no constants), answered by one-stage with a
+stratified or subset sample at the period's δ, its public outputs naming its lanes' `prog<j>` tied (`TIED_KEY`,
+`prog_params`) where several of its units read one slot entry (`every` ≥ 2), as one-stage's registration check
+publishes them; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
 the checker form is a bad scan (`bad_scans`), as is each negative of a check of the rows the scan's ties equate, of
 what `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read (`scan_negatives`). Beside them, the
@@ -44,7 +50,10 @@ sample (a work sampling design's) and its bound on incorrect proof blocks, every
 `subset:k`, the demo's sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-sampled`,
 `tied-slots-sampled`), and a link-window whose scan's state is not its
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
-at another root or domain, or none, `UNSTATES`). An answer whose profile samples more than its level holds is refused
+at another root or domain, or none, `UNSTATES`). A scan's answer that names only lanes' `prog<j>` tied is accepted in
+any shape (`answer-tied-held`: every lane's, some, in another order, one twice, none, `TIED_HELD`), and one that names
+anything else, a tie the check does not wire, is refused (`answer-tied-unheld`: a name that is no lane's, or no list of
+names, `TIED_UNHELD`). An answer whose profile samples more than its level holds is refused
 in either form (`OVERSAMPLED`): a compute audit's (`audit-oversampled`, tied or not; `tied-oversampled`, the tied audit
 of the aimed scan) and a scan's (`answer-oversampled`), each under a registration that samples within its population.
 So is one with a stratum that samples more than the stratum holds in a level whose total still holds
@@ -73,6 +82,7 @@ from pathlib import Path
 
 import verity_difftest as D
 from verity_difftest import protocol as P
+from verity.protocols.accounting.certifier.verifier import scan_ok
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
                                                             certificate_digest, clock_digest)
@@ -842,6 +852,8 @@ PROG = "scan/prog"
 #: value a window circuit registers the scan's state rows as (`stateValue`, the certifier's `blocks.SCAN_STATE`)
 STATE = "scan/state"
 SCAN_STATE = "verity/certifier/scan-state/v1"
+#: `tiedKey`: the key of one-stage's public outputs that holds the tied Inputs its registration check let through
+TIED_KEY = "rests_on_period_check"
 
 
 def output_port(port) -> bool:
@@ -950,6 +962,34 @@ def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
         for a, r in zip(p.audits, audits))
 
 
+def lane_tied(s: WardenParams, t) -> bool:
+    """`laneTied`: an entry under `TIED_KEY` that names a lane's Programs' rows (`prog_params`)."""
+    return isinstance(t, str) and t in prog_params(s.lanes)
+
+
+def tied_input_wired(s: WardenParams, a: dict) -> bool:
+    """`tiedInputWired`: the answer's public outputs have no `TIED_KEY`, or under it a list whose every entry is a
+    lane's name (`lane_tied`), in any order, a lane's more than once or not at all."""
+    pub = a["public"]
+    if not (isinstance(pub, dict) and TIED_KEY in pub):
+        return True
+    return isinstance(pub[TIED_KEY], list) and all(lane_tied(s, t) for t in pub[TIED_KEY])
+
+
+def tied_unheld(s: WardenParams, a: dict) -> str:
+    """`tiedUnheld`: what an answer `tied_input_wired` refuses holds under `TIED_KEY`, as Lean's refusal words it: the
+    first entry that is no lane's name, or the key's value where it is no list, beside the lanes' names."""
+    pub = a["public"]
+    tied, lanes = pub.get(TIED_KEY) if isinstance(pub, dict) else None, ", ".join(prog_params(s.lanes))
+
+    def text(j) -> str:
+        return json.dumps(j, separators=(",", ":"), sort_keys=True)
+
+    if not isinstance(tied, list):
+        return f"is {text(tied)}, no list of names of the scan's lanes' {lanes}"
+    return f"names {text(next((t for t in tied if not lane_tied(s, t)), None))}, none of the scan's lanes' {lanes}"
+
+
 def _prog_tied(audits: list[dict], reg: dict) -> bool:
     """`progTied`: some audit is tied to the scan's `prog` (`_tied_audits`)."""
     return bool(_tied_audits(audits, reg))
@@ -1043,6 +1083,12 @@ STRATA_SIZES = "their sizes do not sum to the level's"
 UNWIRED = "the scan's prog is no compute audit's slot entries"
 #: `stateCheck`'s refusal, after its window's number.
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
+#: `tiedInputCheck`'s refusal, after its window's number and before what the answer holds instead (`tied_unheld`).
+TIE_UNHELD = "the scan's answer rests on a tie this check does not hold"
+#: `okCheck`'s refusal, after its execution phase's number.
+UNOK = "the scan's ok bits are not the schedule's constants"
+#: `okCheck`'s refusal where the schedule has no constants, after its execution phase's number and before why.
+UNCOMPUTED = "the scan's ok bits' constants do not compute"
 
 
 def clog2(x: int) -> int:
@@ -1130,6 +1176,19 @@ def check(p: Params, c: Commitment, e) -> tuple:
                      if not _wired(p, c.audits, reg)]
         findings += [Finding(REJECT, f"window {p.first + i}: {UNSTATED}") for i, reg in enumerate(c.windows)
                      if not _state_tied(p, c.audits, reg)]
+        findings += [Finding(REJECT, f"window {p.first + i}: {TIE_UNHELD}: its public outputs' {TIED_KEY} "
+                                     f"{tied_unheld(p.schedule, x.answer)}")
+                     for i, x in enumerate(windows) if not tied_input_wired(p.schedule, x.answer)]
+        # `okChecks`: the schedule's constants, hashed once a period, and each registration compared to them; a
+        # schedule with none refuses every registration
+        try:
+            consts = scan_ok.constants(p.schedule.window)
+        except scan_ok.FewTicks as few:
+            findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNCOMPUTED}: {few}")
+                         for i in range(len(c.windows))]
+        else:
+            findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNOK}") for i, reg in enumerate(c.windows)
+                         if not scan_ok.held(consts, reg)]
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
         return REJECT, rejected.reason
     if findings:
@@ -1179,7 +1238,7 @@ EXPECT = {
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
     "rows-honest": ACCEPT, "rows-tied-partial": ACCEPT, "rows-tied-sampled": ACCEPT,
-    "rows-tied-entries-sampled": ACCEPT, "rows-tied-slots-sampled": ACCEPT,
+    "rows-tied-entries-sampled": ACCEPT, "rows-tied-slots-sampled": ACCEPT, "rows-answer-tied-held": ACCEPT,
     "rows-program": REJECT,
     "rows-cert-missing": REJECT, "rows-cert-swap": REJECT, "rows-cert-fails-link": REJECT,
     "rows-cert-direction": REJECT, "rows-cert-forged": REJECT, "rows-cert-window": REJECT, "rows-cert-session": REJECT,
@@ -1189,8 +1248,10 @@ EXPECT = {
     "rows-schedule": REJECT, "rows-capped": ACCEPT, "rows-cap-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
-    "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
+    "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-answer-tied-unheld": REJECT,
+    "rows-delta": REJECT, "rows-units": REJECT,
     "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT,
+    "rows-ok-unheld": REJECT, "rows-ok-equal": ACCEPT, "rows-one-tick": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
     "rows-audit-oversampled": REJECT, "rows-tied-oversampled": REJECT, "rows-tied-stratum-oversampled": REJECT,
@@ -1256,11 +1317,12 @@ def schedule_json(s: WardenParams) -> dict:
 CAPPED_CELL = HEADER.size + MAX_TOKENS_AT + ID_DIGITS
 
 
-def _small_schedule(r: random.Random, small: bool, capped: bool = False) -> WardenParams:
-    """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T at most 3 (2 if
-    `small`), and a timestep `every` that divides T; `capped`: with a response cap, B just past the least cell that
-    holds an id request's `max_tokens` (`CAPPED_CELL`)."""
-    T = r.randint(1, 2 if small else 3)
+def _small_schedule(r: random.Random, small: bool, capped: bool = False, T: int | None = None) -> WardenParams:
+    """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T 2 or 3 (2 if
+    `small`: the least a scan has, `scan_ok.constants`) or the `T` asked for, and a timestep `every` that divides T;
+    `capped`: with a response cap, B just past the least cell that holds an id request's `max_tokens`
+    (`CAPPED_CELL`)."""
+    T = r.randint(2, 2 if small else 3) if T is None else T
     s = WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
                      delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8), window=T,
                      ingress_cells=r.randint(1, 8), ingress_buckets=r.randint(1, 4), egress_cells=r.randint(1, 16),
@@ -1487,23 +1549,66 @@ def templates_of(desc: dict) -> list[tuple[str, str, int]]:
             if (d := defs[k := callees[x["fn"]]])["form"] != "primitive"]
 
 
-#: How `rows-prog-untied` breaks its link-window's tie of the scan's `prog` to an audit's output, at every lane: the
+#: How `rows-prog-untied` breaks its execution phase's tie of the scan's `prog` to an audit's output, at every lane: the
 #: scan's `scan/prog<j>` entries at another root or domain, the audit's chunks' entries at ports that are no unit's
-#: output nor a chunk's entries port, no `scan/prog<j>` entry or each under another name (`scan/prog` among them),
-#: the chunks' entries in the scan's own registration and in no audit's, or no entry's root a string
+#: output nor a chunk's entries port, no `scan/prog<j>` entry or each under another name (`scan/prog` among them), the
+#: chunks' entries in the scan's own registration and in no audit's, or no entry's root a string
 UNTIES = ("root", "domain", "port", "missing", "renamed", "scan", "untyped")
-#: How `rows-prog-unwired` breaks its link-window's wiring at one lane j while its tie holds: the audit's chunk j
+#: How `rows-prog-unwired` breaks its execution phase's wiring at one lane j while its tie holds: the audit's chunk j
 #: entry at an output port (another unit's `o1`, or the chunk's own), at another `SlotEntry_v1` or `SelectEntry_v1`
 #: template's entries port than any of its Program's, at another chunk's (`chunk`), of other than T / every leaves
 #: (`leaves`), the scan's lane j entry named another lane's (`lane`), its Program's slot entries' template one member
 #: off a slot each, or that template under its name and descriptor id with another body (`RENAMED_SLOT_ENTRY`,
 #: `RENAMED_SELECT_ENTRY`)
 UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
-#: How `rows-state-untied` breaks its link-window's tie of the scan's state to its wired audit's `SCAN_STATE` while its
-#: `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of the
-#: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
-#: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second
+#: How `rows-state-untied` breaks its execution phase's tie of the scan's state to its wired audit's `SCAN_STATE` while
+#: its `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of
+#: the scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no
+#: string, or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a
+#: second
 UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra")
+#: What `rows-answer-tied-held` puts under `TIED_KEY` in its execution phase's scan's answer, each a list of lanes'
+#: names: every lane's in the lanes' order, all but the last lane's (a proper subset), the lanes' in reverse, the first
+#: lane's twice after them, and none
+TIED_HELD = ("all", "subset", "order", "twice", "empty")
+#: What `rows-answer-tied-unheld` puts there, each naming a tie the check does not wire or no list of names: after the
+#: lanes' names the name past the last lane's (``prog<lanes>``), another Input's (``state``) or the first lane's
+#: registration entry in place of its parameter (``scan/prog0``); ``state`` before them, or alone; a lane's name
+#: without its lane, alone (``prog``); a lane's name as a string, in a nested list, or beside a number; and null
+TIED_UNHELD = ("next", "state", "entry", "first", "alone", "bare", "string", "nested", "number", "null")
+
+
+def tied_list(kind: str, lanes: int):
+    """What a change of `TIED_HELD` or `TIED_UNHELD` puts under `TIED_KEY`, for a scan of `lanes` lanes."""
+    names = list(prog_params(lanes))
+    return {"all": names, "subset": names[:-1], "order": names[::-1], "twice": [*names, names[0]], "empty": [],
+            "next": [*names, f"prog{lanes}"], "state": [*names, "state"], "entry": [*names, prog_name(0)],
+            "first": ["state", *names], "alone": ["state"], "bare": ["prog"], "string": names[0],
+            "nested": [names], "number": [*names, 0], "null": None}[kind]
+
+
+#: How `rows-ok-unheld` breaks its execution phase's scan's ok bits while every other check holds: one member's
+#: `<member>/o0` entry at another root (a tree with a row that is not the ok row, or under other salts), domain or
+#: leaf count; no entry for it, or for any member; its entry under another port; a second entry for it at another
+#: root, or an entry at a port ending `/o0` that is no member's; every member's at another schedule's constants; its
+#: root or domain no string; the entries by value under `registered`, which the period reads no ok bit from; or the
+#: members of a group of two execution phases' scan (`PAIR`), each at the root of its ok rows
+UNOKS = ("root", "domain", "leaves", "missing", "renamed", "extra", "other", "untyped", "registered", "group")
+#: The T `rows-ok-equal` runs at: the least where two members, `ingress-0` and `last`, are one proof block of one
+#: template each, so their ok bits are at one domain and one root
+EQUAL_T = 3
+#: The T `rows-one-tick` runs at: its one bucket would be the scan's first and its last, so it has no constants
+ONE_TICK = 1
+
+
+def PAIR(T: int) -> tuple[tuple[str, str, int], ...]:
+    """The members (name, template, proof blocks) of one scan over a group of two execution phases of `T` ticks, as
+    the staging names them: bucket 0's `first`; `ingress-0`, buckets 1 … T − 1, and `ingress-1`, buckets T … 2T − 2;
+    `last`, bucket 2T − 1; and `egress-0` and `egress-1`, T buckets each. The rows form reads one execution phase a
+    registration, so such a registration is refused: `ingress-0` is over T − 1 buckets, not T − 2, and `ingress-1`
+    and `egress-1` are no member of one execution phase's scan."""
+    return (("first", "first", 1), ("ingress-0", "ingress", T - 1), ("ingress-1", "ingress", T - 1),
+            ("last", "ingress", 1), ("egress-0", "egress", T), ("egress-1", "egress", T))
 
 
 def _present(e: dict) -> dict:
@@ -1556,6 +1661,43 @@ def _state_entries(rp: random.Random, states: dict, i: int, where: str, unstate:
         e |= states[rp.choice([j for j in states if j != i])]
     extra = [e | {"root": rp.randbytes(64).hex()}] if unstate == "extra" else []
     return [_present(x) for x in [e, *extra]]
+
+
+def _ok_entries(ro: random.Random, T: int, unok: str | None) -> tuple[str, list[dict]]:
+    """The scan's registration's entries for its members' ok bits, and the list they go in: each member's
+    `<member>/o0` in `roots` at the schedule's constant (`scan_ok.constants`), broken as `unok` says. A schedule of
+    one tick has no constants: its registration names those of two ticks."""
+    es = [{"domain": c.domain, "leaves": c.leaves, "port": c.port, "root": c.root}
+          for c in scan_ok.constants(max(T, 2))]
+    hit = ro.randrange(len(es))
+    e, member = es[hit], es[hit]["port"].removesuffix("/o0")
+    if unok == "root":
+        e["root"] = ro.choice([ro.randbytes(64).hex(), e["root"].upper(), e["root"][:-2], e["domain"]])
+    elif unok == "domain":
+        e["domain"] = ro.choice([ro.randbytes(64).hex(), e["domain"].upper(), e["root"]])
+    elif unok == "leaves":
+        e["leaves"] = ro.choice([e["leaves"] + 1, e["leaves"] - 1, -1, None, str(e["leaves"]),
+                                 *([True] if e["leaves"] == 1 else [])])
+    elif unok == "missing":
+        es = ro.choice([es[:hit] + es[hit + 1:], []])
+    elif unok == "renamed":
+        e["port"] = ro.choice([f"{member}/o1", f"{member}/O0", f"{member}/o0/", f"{member}x/o0", f"{member}/o00",
+                               "o0", member, 7, None])
+    elif unok == "extra":
+        es.append(ro.choice([e | {"root": ro.randbytes(64).hex()}, e | {"port": "other/o0"},
+                             e | {"port": entries_port(SLOT_KEY)}]))
+    elif unok == "other":
+        es = [{"domain": c.domain, "leaves": c.leaves, "port": c.port, "root": c.root}
+              for c in scan_ok.constants(T + ro.choice([1, 2]))]
+    elif unok == "untyped":
+        e[ro.choice(["root", "domain"])] = ro.choice([None, 7, False])
+    elif unok == "registered":
+        return "registered", [{("value" if k == "port" else k): v for k, v in x.items()} for x in es]
+    elif unok == "group":
+        es = [{"domain": c.domain, "leaves": c.leaves, "port": c.port, "root": c.root}
+              for c in (scan_ok.constant(*m) for m in PAIR(T))]
+    ro.shuffle(es)
+    return "roots", [_present(x) for x in es]
 
 
 def _output_entries(rp: random.Random, i: int, ties: dict, nb: int, aimed: int, untie: str | None,
@@ -1653,6 +1795,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     the toy key, as few link-windows and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     rp = random.Random(f"network-period prog {m} {seed}")
+    rt = random.Random(f"network-period tied {m} {seed}")
+    ro = random.Random(f"network-period ok {m} {seed}")
     rows = form_of(m) == "rows"
     m = m.removeprefix("rows-")
     ki = 0 if small else r.randrange(len(KEYS))
@@ -1671,7 +1815,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1))) if rows else n_audits
     first = r.choice([0, 0, r.randrange(1, 6)])
     if rows:
-        sched = bound = _small_schedule(r, small, capped=m in ("capped", "cap-schedule"))
+        sched = bound = _small_schedule(r, small, capped=m in ("capped", "cap-schedule"),
+                                        T={"ok-equal": EQUAL_T, "one-tick": ONE_TICK}.get(m))
         # an egress bucket's state is its ingress bucket's view read as u16 words, so the view is 16 bits a word
         widths = (r.randint(1, 3), r.randint(1, 4), OUT_BITS * (words := r.randint(1, 2)), words)
         scan = json.loads(scan_descriptor(sched.window, WR.row_bytes(sched), widths, lanes=sched.lanes,
@@ -1697,6 +1842,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     states = {i: {"root": rp.randbytes(64).hex(), "domain": rp.randbytes(64).hex()} for i in range(n_audits)} \
         if rows else {}
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
+    unok = ro.choice(UNOKS) if m == "ok-unheld" else None
     if untie == "untyped":
         for c in ties[first + t]["chunks"]:
             c["root"] = rp.choice([None, 7, False])
@@ -1828,14 +1974,25 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         rp.shuffle(entries)
         rec = {"format": fmt, "law": law, "partition": f"{link}/scan/{w}", "population": units, "program": program,
                "protocol": ONE_STAGE, where: entries, "window": {"kind": "stand-in", "window": w}}
+        there, oks = _ok_entries(ro, T, unok if aimed else None)
+        rec[there] = rec.get(there, []) + oks
+        ro.shuffle(rec[there])
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
         digest = bytes.fromhex(R.digest(rec))
         answer = _accepted(digest, program, rec["partition"], units, k,
                            r.choice([d for d in DELTAS if d != delta]) if aimed and m == "delta" else delta,
                            r.randint(0, units), strata)
+        if sched.every > 1:
+            # every `every` units read one slot entry of each lane, which one-stage's registration check lets through
+            # only tied, and its verdict then names each lane's
+            answer["public"][TIED_KEY] = list(prog_params(sched.lanes))
         if aimed:
-            if m == "answer-protocol":
+            if m == "answer-tied-held":
+                answer["public"][TIED_KEY] = tied_list(rt.choice(TIED_HELD), sched.lanes)
+            elif m == "answer-tied-unheld":
+                answer["public"][TIED_KEY] = tied_list(rt.choice(TIED_UNHELD), sched.lanes)
+            elif m == "answer-protocol":
                 answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
             elif m == "answer-other":
                 answer["commitment"] = r.choice([r.randbytes(64).hex(), R.digest(rec | {"population": 1})])
