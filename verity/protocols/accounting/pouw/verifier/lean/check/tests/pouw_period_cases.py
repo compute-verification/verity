@@ -1,12 +1,11 @@
 """The period protocol's difftest cases: each of `pouw_credit_cases.period_instance`'s periods (honest, or with one mutation
 aimed at a refusal of `credit.period_credit`) as a `serve` case of ``verity/pouw/period/v1`` (`serve`: the verifier's
-``{head, key, main, name, place, sessions}`` its parameters, the sessions those its ledger's close lists, the
-auditor's ledger its commitment, ``{pins, windows}`` its evidence), its windows in the one form the period's guarantee
-covers (`COVERED`: J10-R's per-call unit over ``PouwH1Tile_v5``, at one K); one mutation each of the protocol's own
-framing (`FRAMING`): a parameter dropped, added or out of its form, a session of the close the parameters don't list,
-the ledger not a list, the evidence's keys other or the evidence a bare list; and one period in each form the guarantee
-doesn't cover (`FORMS`): a
-Pearl-C pass among its windows, a circuit that is not an H1 window (a per-tile protocol's H1 tile), today's per-unit
+``{key, main, name, sessions}`` its parameters, the sessions those its ledger's close lists, the auditor's ledger its
+commitment, ``{pins, windows}`` its evidence), its windows in the one form the period's guarantee covers (`COVERED`:
+J10-R's per-call unit over ``PouwH1Tile_v5``, at one K); one mutation each of the protocol's own framing (`FRAMING`): a
+parameter dropped, added (a device's head or place among them) or out of its form, a session of the close the
+parameters don't list, the ledger not a list, the evidence's keys other or the evidence a bare list; and one period in
+each form the guarantee doesn't cover (`FORMS`): a Pearl-C pass among its windows, a circuit that is not an H1 window (a per-tile protocol's H1 tile), today's per-unit
 noise, J10-R's v6 and units at two K."""
 from __future__ import annotations
 
@@ -19,10 +18,8 @@ from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import period_check as PC
 from verity.protocols.accounting.pouw.verifier import salt as PS
 
-FRAMING = ["params-missing", "params-extra", "params-head", "params-place", "params-sessions", "params-partial",
-           "alone", "sessions-unlisted", "ledger-object", "evidence-missing", "evidence-extra", "evidence-list"]
-#: the parameters' keys that name the registration, all or none
-REGISTERED = ("head", "place", "sessions")
+FRAMING = ["params-missing", "params-extra", "params-device", "params-sessions", "alone",
+           "sessions-unlisted", "ledger-object", "evidence-missing", "evidence-extra", "evidence-list"]
 FORMS = ["form-pass", "form-not-h1", "form-per-unit", "form-v6", "form-strata"]
 NAMES = credit_cases.PERIOD_NAMES + FRAMING + FORMS
 COVERED = {"j10r": True, "nks": 1, "tile": 5}
@@ -34,11 +31,6 @@ FORM_OF = {"form-pass": COVERED, "form-not-h1": {**COVERED, "program_fn": CORE_T
 
 def _hex(x: object) -> str:
     return CC._canon(x).encode().hex()
-
-
-#: the registration log's head the cases' periods are accounted against
-HEAD = hashlib.sha512(b"the registration log's head").hexdigest()
-PLACE = "gpu0"
 
 
 def listed(ledger: list, name: str) -> list[str]:
@@ -62,7 +54,7 @@ def listed(ledger: list, name: str) -> list[str]:
 def serve(d: dict) -> dict:
     """`period_instance`'s period `d` as the protocol's `serve` case."""
     return {"commitment": _hex(d["ledger"]), "evidence": _hex({"pins": d["pins"], "windows": d["windows"]}),
-            "params": {"head": HEAD, "key": d["key"], "main": d["main"], "name": d["name"], "place": PLACE,
+            "params": {"key": d["key"], "main": d["main"], "name": d["name"],
                        "sessions": listed(d["ledger"], d["name"])}}
 
 
@@ -77,21 +69,16 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
     case = serve(d)
     match name:
         case "params-missing":
-            del case["params"][rng.choice(PC.PARAMS_KEYS)]
+            del case["params"][rng.choice(PC.ALONE_KEYS)]
         case "params-extra":
             case["params"]["ledger"] = d["ledger"]
-        case "params-head":
-            case["params"]["head"] = rng.choice([HEAD.upper(), HEAD[:64], None])
-        case "params-place":
-            case["params"]["place"] = rng.choice(["", None, ["gpu0"]])
+        case "params-device":
+            case["params"] |= rng.choice([{"head": hashlib.sha512(b"head").hexdigest()}, {"place": "gpu0"},
+                                          {"head": hashlib.sha512(b"head").hexdigest(), "place": "gpu0"}])
         case "params-sessions":
             case["params"]["sessions"] = rng.choice([None, "s0", ["-s0"], ["s" * 65], [1]])
-        case "params-partial":
-            for k in rng.sample(REGISTERED, rng.randint(1, len(REGISTERED) - 1)):
-                del case["params"][k]
         case "alone":
-            for k in REGISTERED:
-                del case["params"][k]
+            del case["params"]["sessions"]
         case "sessions-unlisted":
             ss = case["params"]["sessions"]
             del ss[rng.randrange(len(ss))]
