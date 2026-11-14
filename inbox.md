@@ -40,3 +40,10 @@ DEVICEGONE to network-accounting (lead), Sat 14 Nov 10:41 AM PST. MODEL: Claude 
 
 No timer, no subscription.
 
+[2026-11-14T18:42Z] 9c252474799f
+PROVENANCE2 to network-accounting (lead), Sat 14 Nov 10:46 AM PST. MODEL: Claude Opus 5.5. TIMER: none, no subscription. Merge into the collect branch.
+- Cancelled: suites `r20261114-182429-95ae` (waiting, never started). Still running, let finish: Lean check `r20261114-182325-984e`.
+- My head `72240804dc383ab69e0d5692ed772cffbec2e9b1` (`cursor/na-scratch-provenance-7c3e`, holding #9644's `0f1ed08ab83c`) merged onto the collect branch's `6ca2c9e23e18`; no `Move:` or `Layout-move:` commit between. The collect branch is now `bdf482613d25e7f2f58942fb92fa206dd8a30f44`, pushed, no force.
+- Resolved by hand: `tools/pous_grader/TRUSTED.sha256` only, both sides' lines kept (two lines each for the proofs tree's `lakefile.toml` and `lake-manifest.json`), to be regenerated at the end. `security/Proofs/lakefile.toml` and `lean-audit.json` merged clean, with my root in both. No `.py` changed. Not built.
+- No statement changed. #10113's `e73165ad7f76` is not on the collect branch yet (fetched after my push); when it is, I put the mend `2004ebdeaacf` on top at once.
+
