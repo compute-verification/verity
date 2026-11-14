@@ -1909,7 +1909,7 @@
     {"file": "security/Properties/Composition.lean", "count": 2},
     {"file": "security/Properties/NetworkPeriod.lean", "count": 59},
     {"file": "security/Properties/NetworkScan.lean", "count": 7},
-    {"file": "security/Properties/Pous/Component.lean", "count": 7},
+    {"file": "security/Properties/Pous/Component.lean", "count": 6},
     {"file": "security/Properties/Pous/EndToEnd.lean", "count": 12},
     {"file": "security/Properties/Pous/EndToEndAt.lean", "count": 9},
     {"file": "security/Properties/Pous/Obligation.lean", "count": 9},
