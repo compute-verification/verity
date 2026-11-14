@@ -1948,7 +1948,7 @@
     {"file": "security/Proofs/Properties/Challenger/ChallengePhase.lean", "count": 13},
     {"file": "security/Proofs/Properties/Challenger/Window.lean", "count": 18},
     {"file": "security/Proofs/Properties/Firewall.lean", "count": 8},
-    {"file": "security/Proofs/Properties/Nci.lean", "count": 14},
+    {"file": "security/Proofs/Properties/Nci.lean", "count": 18},
     {"file": "security/Proofs/Properties/Nci/Agrees.lean", "count": 11},
     {"file": "security/Proofs/Properties/Nci/Baseline.lean", "count": 9},
     {"file": "security/Proofs/Properties/Nci/BaselineSteps.lean", "count": 7},
@@ -4674,6 +4674,7 @@
     {"file": "verity/protocols/proofs/spot/prover/tests/test_cost_glm53.py", "count": 3},
     {"file": "verity/protocols/proofs/spot/prover/tests/test_cost_recursion.py", "count": 2},
     {"file": "verity/protocols/proofs/spot/prover/tests/test_cost_transformer.py", "count": 15},
-    {"file": "verity/protocols/proofs/spot/prover/cost/transformer.py", "count": 50}
+    {"file": "verity/protocols/proofs/spot/prover/cost/transformer.py", "count": 50},
+    {"file": "security/Proofs/Properties/Nci/DefinitionDigest.lean", "count": 4}
   ]
 }
