@@ -1,6 +1,6 @@
 """`pouw_h1.H1Run`'s call tables hashed on the GPU: a call's A table and z table, each
 `pouw_h1_requests.hiding_rows` of its leaves, computed by the Commit's row-table kernels
-(`verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu`, `commit.row_tables_device`) as a step of one table.
+(`verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu`, `row_table_kernels`) as a step of one table.
 
 The kernels hash rows of K 8-bit codes then a 4-byte word, so a table's leaf value is that row followed by its 192-byte salt,
 and its root is `hiding_rows`' when the table's layout says so (`layout`): the domain id is ``audit.rows_domain``'s (the
@@ -13,8 +13,8 @@ f32 scale; a z table's leaf is a ``ZY_BYTES`` record, its first ``ZY_BYTES - 4``
 stream has enqueued, nothing waiting on the host, and hands back a `Pending` whose `roots` waits for them: `H1Run` reads a
 step's roots at its round's close, so a call's tables hash beside the forward rather than in it. `device_roots` waits at once.
 `host_roots` runs the same functions on the CPU (`row_table_host.cpp`), the twin the CPU tests hold to `hiding_rows` on
-machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`) and its per-device state
-(`row_tables_device.DeviceLibrary`); nvcc is `pouw_device`'s.
+machines without a GPU. Builds share the Commit's row-table builds (`row_table_kernels._build`) and its per-device state
+(`row_table_kernels.DeviceLibrary`); nvcc is `pouw_device`'s.
 
 `commit_tables` is `H1Run`'s commit of a call's tables, by `hiding_rows` (the reference) or by these kernels where `path`
 says, and `settle` records the roots of the calls the GPU has finished hashing, in call order.
@@ -38,7 +38,7 @@ import numpy as np
 from verity.protocols.accounting.pouw.verifier.audit import HM96, rows_domain
 from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
-from verity_vllm.commit import row_tables_device as RTD
+from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as RTD
 from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ

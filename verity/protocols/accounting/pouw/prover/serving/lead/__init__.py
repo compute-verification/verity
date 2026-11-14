@@ -41,7 +41,7 @@ from verity.protocols.accounting.pouw.verifier.serving import PassCommitment
 from verity.commitments.merkle import CommitmentDomain
 
 from verity.protocols.accounting.pouw.prover.serving.lead import rows as L
-from verity_vllm.errors import Refused
+from verity.errors import Refused
 from verity.protocols.accounting.pouw.prover.serving.lead import feed as F
 from verity.protocols.accounting.pouw.prover.serving.lead import record as R
 

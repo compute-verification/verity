@@ -63,7 +63,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.definitions.registry import catalog
 
-import r2_population as R2
+from verity.protocols.proofs.spot.verifier.tests import other_population as R2
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW = "hm96-sha512/row/v1"
@@ -1552,7 +1552,7 @@ def registered_gemm(run: Run) -> Iterator[Case]:
 
 
 #: what the era's code imports from a run's commit
-ERA_PATHS = ("verity", "catalog/verity_catalog", "kernels/verity_kernels", "benchmarks/pouw/served_zk")
+ERA_PATHS = ("verity", "catalog/verity_catalog", "kernels/verity_kernels", "verity/protocols/accounting/pouw/prover/kernels/served_zk")
 
 
 def era_tree(run: Run, commit: str) -> Path:
@@ -1582,7 +1582,7 @@ def era_python(tree: Path, code: str, *args: str) -> Any:
 #: served_zk's verifier copies at each level, by the era's own `served_commit`
 SERVED_ZK_ERA = r'''
 import json, sys
-sys.path.insert(0, "benchmarks/pouw/served_zk")
+sys.path.insert(0, "verity/protocols/accounting/pouw/prover/kernels/served_zk")
 import served_commit as SC
 from verity.protocols.verification.spot.one_stage import partition as PT
 from verity.primitives.circuits.codec import encode_program
@@ -1619,7 +1619,7 @@ SERVED_OUTSIDE = (
 
 
 def served_window(run: Run) -> Iterator[Case]:
-    """served_zk's window through the proof system (`benchmarks/pouw/served_zk`): the request's registration of PoUW's
+    """served_zk's window through the proof system (`verity/protocols/accounting/pouw/prover/kernels/served_zk`): the request's registration of PoUW's
     tiles (`population_program` of the tile template over the registered level's N, `Q_template_instance`), received
     under the verifier's own copies (its `params.json`: the program at the record's level, the sampling design of `pouw.window.sampling`,
     the window's served domain and W's domain, no leaf layer, no anchors, the stream's empty log), then one outcome per case
@@ -1779,10 +1779,10 @@ def served_audit(run: Run) -> Iterator[Case]:
     from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc8
     from verity.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
-    src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/pouw/served_zk/served_commit.py"],
+    src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py"],
                          capture_output=True, text=True) if commit else None
     if src is None or src.returncode != 0:
-        raise Missing(f"benchmarks/pouw/served_zk/served_commit.py at {commit} (git history)")
+        raise Missing(f"verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py at {commit} (git history)")
     binding_run = "def run_of" in src.stdout
     prov0: dict = {"commit": commit, "program": "P.population_program(pc8 tile template, the statement's tiles, the record's "
                                                 "version)",

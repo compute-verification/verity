@@ -102,7 +102,7 @@ def lowered_facts(serve: Mapping[str, Any], row: str, config: str, cls: str, sch
     each as `phi` compares it, and the facts of the window circuit each lowers at class `cls` cut at Pearl+'s linears under
     `scheme` -> (the φ fields, the row's own revision among them, the served circuit's facts, the row's)."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
-    import prove_path as PP
+    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
     from verity_vllm.engine.served_seed import DEFAULT_SEED
     from verity_vllm.pipeline.workload_file import workload_file
     from verity_vllm.program.predict import window_circuit as WC

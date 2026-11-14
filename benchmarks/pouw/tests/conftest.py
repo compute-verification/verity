@@ -32,7 +32,7 @@ NOT_SCRIPTS = frozenset({"tests", "exact_kit", "edited_gemm"})
 #: PoUW's prover's kernels, where the directories `MOVED` of ``benchmarks/pouw/`` went: this suite still takes their
 #: scripts, by the same names (``gpu_kit/sass_gate.py``)
 KERNELS = POUW.parents[1] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels"
-MOVED = ("floored_gemm", "gpu_kit", "masked_gemm", "pearl_c")
+MOVED = ("floored_gemm", "gpu_kit", "masked_gemm", "pearl_c", "served_zk")
 #: the directories of ``benchmarks/pouw/`` whose kernels went to `KERNELS` and whose checks, ships and model drivers
 #: stayed: `load` reads a file from where it is
 SPLIT = ("pearl_c_sm120", "pearl_c_sm90")

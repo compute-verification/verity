@@ -72,7 +72,7 @@ from verity.commitments.windows import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))
-import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
 
 ROOT = HERE.parents[2]
 ONE_STAGE = ROOT / "benchmarks" / "one_stage"

@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import glm53  # noqa: E402
+from verity.protocols.proofs.spot.prover.cost import glm53  # noqa: E402
 
 __all__ = ["COUNTS", "EXPERTS", "SCHEDULES", "SHAPES", "WARM_GRAPHS", "check_shape", "stock_arms"]
 

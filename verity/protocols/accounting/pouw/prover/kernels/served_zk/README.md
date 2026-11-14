@@ -15,7 +15,7 @@ as a `research run`'s command. Each script's header has its full `research run` 
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd source --declared-output 'out/*' \
-  --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/served_zk/run.sh bench
+  --env GPU_LEASE_WHO=LANE -- bash verity/protocols/accounting/pouw/prover/kernels/served_zk/run.sh bench
 ~~~
 
 | job | what it runs | writes under `$OUT` |
@@ -25,7 +25,7 @@ research run --on MACHINE --project verity --source . --cwd source --declared-ou
 | `zk_window` | `pearl_c_vllm/window.sh` with the served row's switches and `statement.py`'s rows (`MODE`: `smoke`, `window` or `build`) | `window/`, `tree.txt`, `build.log`, `nvcc-rows.txt`, `prebuilt.sha256` |
 | `job` | the window through the proof system on CPUs, over a `serve` run's retained requests (`SERVED_RUN`): commit, register, the challenger's coins, the sample, each sampled tile proved under Flock `--zk` and opened, a filler tile, the outcome and every control | `summary.json` (each check and the verdict it must give), and a file or directory a step, listed in the script's header |
 
-`job` is started through `hidden_zk/scope.sh` with `HZ_JOB=benchmarks/pouw/served_zk/job.sh`, which gives it a systemd
+`job` is started through `hidden_zk/scope.sh` with `HZ_JOB=verity/protocols/accounting/pouw/prover/kernels/served_zk/job.sh`, which gives it a systemd
 scope of its own on the node's CPUs; its header has the full command. `job` reads `hidden_zk/job.sh` for its builds.
 
 ## Other commands
