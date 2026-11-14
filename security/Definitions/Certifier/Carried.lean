@@ -19,7 +19,7 @@ check pins (`CheckedClosing`), unless two different rows have one root, a collis
 hashed. So a period's count charges no bit of an opened row, and its escape bound adds a collision term for each opening.
 
 * `poolOpen` and `PoolChained`: the record rule over a period's runs. Run `i` opens the row run `i - 1` left where it
-  carries the pool (`chains i`, the record rule's `Registration.Pool.chains`), else `genesis i`, the empty pool's row (for
+  carries the pool (`chains i`, the record rule's `Docket.Pool.chains`), else `genesis i`, the empty pool's row (for
   the period's first run, the row the period starts from).
 * `CheckedClosing`: the check pins the closing row, as `CheckedUnique` pins the egress.
 * `AcceptedCarried` and `LeakAtCarried`: `AcceptedChecked` and `LeakAtChecked` with the run reading the row `rin` at its
@@ -43,7 +43,7 @@ namespace NetTiming
 open Claims Claims.Sampling
 
 /-- **The row run `i` opens under the record rule**: the row run `i - 1` left (`rout (i - 1)`) where run `i` carries the
-pool (`chains i`), and `genesis i` otherwise. Over roots it is `Registration.poolOpen`. -/
+pool (`chains i`), and `genesis i` otherwise. Over roots it is `Docket.poolOpen`. -/
 def poolOpen {m : ℕ} {R : Type} (chains : Fin m → Bool) (genesis rout : Fin m → R) (i : Fin m) : R :=
   if 0 < i.val ∧ chains i = true then rout ⟨i.val - 1, lt_of_le_of_lt (Nat.sub_le i.val 1) i.isLt⟩ else genesis i
 

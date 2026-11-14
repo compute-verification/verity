@@ -261,7 +261,7 @@ theorem stops_le_maxLeaves : 2 * (1 + A.N) ≤ maxLeaves := by
 theorem rounds_tree : 2 * 2 ^ A.coinSpec.roundsLog + 1 ≤ A.rounds := le_rfl
 
 /-- **The registration** the live audit's prover sends before the sample: the registration record's digest, the head of
-the registration log after it (`Spot.Registration.digest`), which the period's composite commitment binds
+the registration log after it (`Spot.Docket.digest`), which the period's composite commitment binds
 under SPOT's id (`Core.Composition.bind`) and the sample's coins are released after (`coinsRead`'s `after`). -/
 abbrev Reg (_ : Live) : Type := ByteArray
 
@@ -669,7 +669,7 @@ def OneStatement (θ : ByteArray) : Prop :=
 `Spot.Draw.deriveSamplingDesign` derives, or else the expanded rule's (`Spot.Draw.flockSamplingDesign` at
 `Spot.Draw.derive`'s), as `Spot.OneStage.sampledFrom` reads it before `Spot.Draw.sampleUnits`
 samples. -/
-def samplingDesignAt (v : _root_.Spot.Registration.Verifier) (n : ℕ) : Flock.V Flock.Draw.SamplingDesign := do
+def samplingDesignAt (v : _root_.Spot.Docket.Verifier) (n : ℕ) : Flock.V Flock.Draw.SamplingDesign := do
   let samplingDesignJ ← _root_.Spot.Draw.derive v.program v.query v.samplingDesign v.workTable
   let derived ← _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
   pure (derived.getD (← _root_.Spot.Draw.flockSamplingDesign samplingDesignJ n))

@@ -2484,9 +2484,6 @@
     {"file": "benchmarks/pouw/budget.py", "count": 9},
     {"file": "benchmarks/pouw/filler/arms.py", "count": 1},
     {"file": "benchmarks/pouw/filler/comm/tpcomm.cu", "count": 18},
-    {"file": "benchmarks/pouw/filler/dcap.cu", "count": 2},
-    {"file": "benchmarks/pouw/filler/flin.cuh", "count": 12},
-    {"file": "benchmarks/pouw/filler/pfill.cuh", "count": 2},
     {"file": "benchmarks/pouw/h1_lanes/j10r.py", "count": 4},
     {"file": "benchmarks/pouw/h1_lanes/job.sh", "count": 2},
     {"file": "benchmarks/pouw/h1_lanes/served.py", "count": 22},
@@ -3954,7 +3951,7 @@
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Produced.lean", "count": 7},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Rate.lean", "count": 4},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Record.lean", "count": 98},
-    {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Registration.lean", "count": 24},
+    {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Docket.lean", "count": 24},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Run.lean", "count": 51},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Select.lean", "count": 153},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Service.lean", "count": 3},
@@ -4676,6 +4673,9 @@
     {"file": "verity/protocols/accounting/pous/device/wipe_challenger.py", "count": 2},
     {"file": "verity/protocols/accounting/poub/prover/session_prover.py", "count": 3},
     {"file": "verity/protocols/experimental/pearl_c4/prover/f1_fast.py", "count": 3},
-    {"file": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_f1_fast.py", "count": 6}
+    {"file": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_f1_fast.py", "count": 6},
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu", "count": 2},
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/filler/flin.cuh", "count": 12},
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/filler/pfill.cuh", "count": 2}
   ]
 }

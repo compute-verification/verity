@@ -476,30 +476,30 @@ theorem executionPhases_tied {kI kW kS : Case} {cI : NciCheck.Protocol.Commitmen
 /-! ## The caller's check's steps -/
 
 /-- The declared day's code (`VStar.Recursive.Caller.declaredCode`) is none exactly when `DeclaredDay` holds. -/
-theorem declaredCode_none_iff (rec : Json) (v : Spot.Registration.Verifier) :
+theorem declaredCode_none_iff (rec : Json) (v : Spot.Docket.Verifier) :
     (VStar.Recursive.Caller.declaredCode (Spot.getD rec "program") v.declared).isSome = false ↔
       Properties.Spot.DeclaredDay rec v := by
   unfold Properties.Spot.DeclaredDay VStar.Recursive.Caller.declaredCode
   rcases v.declared with _ | ⟨day, ds⟩
   · simp
-  · rcases h : Spot.Registration.declaredOf day ds with _ | ⟨p, _ | ⟨q, l⟩⟩
+  · rcases h : Spot.Docket.declaredOf day ds with _ | ⟨p, _ | ⟨q, l⟩⟩
     · simp [h]
     · by_cases hp : Spot.jeq (Spot.getD rec "program") (.str p) = true <;> simp [h, hp]
     · simp [h]
 
 /-- The pool chain (`VStar.Recursive.Caller.poolChained`) holds exactly when `PoolChained` does. -/
-theorem poolChained_iff (rec : Json) (v : Spot.Registration.Verifier) :
+theorem poolChained_iff (rec : Json) (v : Spot.Docket.Verifier) :
     VStar.Recursive.Caller.poolChained rec v = true ↔ Properties.Spot.PoolChained rec v := by
   unfold VStar.Recursive.Caller.poolChained Properties.Spot.PoolChained
   rcases hp : v.pool with _ | p
   · simp
-  · rcases he : Spot.Registration.entryOf rec p.pin with _ | e <;>
-      rcases ho : Spot.Registration.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
+  · rcases he : Spot.Docket.entryOf rec p.pin with _ | e <;>
+      rcases ho : Spot.Docket.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
     exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
 
 /-- The pool's codes (`VStar.Recursive.Caller.poolMarks`) add none exactly when the window names the pool's reset, week
 and spent mark and no reset falls where the week's is spent before it. -/
-theorem poolMarks_nil (w : Json) (pool : Option Spot.Registration.Pool) (log : Array Json) (c : Array String) :
+theorem poolMarks_nil (w : Json) (pool : Option Spot.Docket.Pool) (log : Array Json) (c : Array String) :
     VStar.Recursive.Caller.poolMarks w pool log c = #[] ↔ c = #[] ∧
       Spot.jeq (Spot.getD w "pool_reset") (match pool with | some p => .bool p.reset | none => .null) = true ∧
       Spot.jeq (Spot.getD w "pool_week") (match pool with | some p => Lean.toJson p.week | none => .null) = true ∧
@@ -513,12 +513,12 @@ theorem poolMarks_nil (w : Json) (pool : Option Spot.Registration.Pool) (log : A
 /-- The registered compiler's codes (`VStar.Recursive.Caller.compilerMarks`) add none exactly when the window names the
 log's compiler and advice within its length. -/
 theorem compilerMarks_nil (w : Json) (b : Option (Option (String × Nat))) (c : Array String) :
-    VStar.Recursive.Caller.compilerMarks w b c = #[] ↔ c = #[] ∧ Spot.Registration.compilerOk w b = true ∧
-      Spot.Registration.adviceOk w b = true := by
+    VStar.Recursive.Caller.compilerMarks w b c = #[] ↔ c = #[] ∧ Spot.Docket.compilerOk w b = true ∧
+      Spot.Docket.adviceOk w b = true := by
   rw [VStar.Recursive.Caller.compilerMarks, Properties.Spot.kept_nil, Properties.Spot.kept_nil, and_assoc]
 
 /-- The declared day's codes (`VStar.Recursive.Caller.declaredMarks`) add none exactly when `DeclaredDay` holds. -/
-theorem declaredMarks_nil (rec : Json) (v : Spot.Registration.Verifier) (c : Array String) :
+theorem declaredMarks_nil (rec : Json) (v : Spot.Docket.Verifier) (c : Array String) :
     VStar.Recursive.Caller.declaredMarks (Spot.getD rec "program") v.declared c = #[] ↔
       c = #[] ∧ Properties.Spot.DeclaredDay rec v := by
   rw [← declaredCode_none_iff]
@@ -544,11 +544,11 @@ theorem bindingMarks_nil (w : Json) (b : Option (String × String)) (c : Array S
 
 /-- The two codes the caller's check adds for a verifier that expects values registered (`R7-pool-chain`,
 `R7-output-refused`) are none exactly when, for such a verifier, `PoolChained` and `OutputPortsAccepted` hold. -/
-theorem v2Marks_iff (rec : Json) (v : Spot.Registration.Verifier) :
-    ((!v.v2 || VStar.Recursive.Caller.poolChained rec v) = true ∧ (!v.v2 || Spot.Registration.portsAccepted v) = true) ↔
+theorem v2Marks_iff (rec : Json) (v : Spot.Docket.Verifier) :
+    ((!v.v2 || VStar.Recursive.Caller.poolChained rec v) = true ∧ (!v.v2 || Spot.Docket.portsAccepted v) = true) ↔
       (Properties.Spot.ExpectsV2 v → Properties.Spot.PoolChained rec v ∧ Properties.Spot.OutputPortsAccepted v) := by
   rw [← poolChained_iff, ← Properties.Spot.portsAccepted_iff]
-  unfold Properties.Spot.ExpectsV2 Spot.Registration.Verifier.v2
+  unfold Properties.Spot.ExpectsV2 Spot.Docket.Verifier.v2
   cases v.registered.isEmpty && v.certified.isEmpty <;> simp
 
 /-- **`CallerCheckMeans`**: the caller's check finds nothing exactly where the record keeps the caller's facts. -/

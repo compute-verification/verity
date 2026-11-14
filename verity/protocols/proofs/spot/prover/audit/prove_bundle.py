@@ -49,9 +49,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
-REPO = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "benchmarks" / "one_stage" / "interfaces"),
+REPO = Path(__file__).resolve().parents[6]
+sys.path[:0] = [str(REPO / "benchmarks" / "one_stage" / "interfaces"),
                 str(REPO / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement")]
 
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402

@@ -245,7 +245,7 @@ theorem flockSamplingDesign_bernoulli_text (a b n : ℕ) (hb : 0 < b) (hab : a �
 
 /-- **`samplingDesignAt`'s steps**: the verifier's sampling design's expansion, the sampling design `flockSamplingDesign` reads from its sampling design object, and the
 expansion where there is one. -/
-theorem samplingDesignAt_ok {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L : Flock.Draw.SamplingDesign}
+theorem samplingDesignAt_ok {v : _root_.Spot.Docket.Verifier} {n : ℕ} {L : Flock.Draw.SamplingDesign}
     (h : samplingDesignAt v n = .ok L) :
     ∃ derived parsed, _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable = .ok derived ∧
       _root_.Spot.Draw.flockSamplingDesign (samplingDesignObj v.samplingDesign derived) n = .ok parsed ∧ L = derived.getD parsed := by
@@ -270,7 +270,7 @@ def samplingDesignText : Flock.Draw.SamplingDesign → String
 /-- **The design at the sampling design's text is the sampling design `samplingDesignAt` reads**: over the verifier's program and query of `n` units,
 where `samplingDesignAt` reads the sampling design `L`, `slotDesign` under the rule `samplingDesign (samplingDesignText L)` is `L`'s one-stage design, then `all`,
 at a subset sampling design of at least one unit. -/
-theorem slotDesign_samplingDesignText {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L : Flock.Draw.SamplingDesign}
+theorem slotDesign_samplingDesignText {v : _root_.Spot.Docket.Verifier} {n : ℕ} {L : Flock.Draw.SamplingDesign}
     (hu : _root_.Spot.Partition.units v.program v.query = .ok n) (hl : samplingDesignAt v n = .ok L)
     (hk : ∀ k, L = .subset k → 1 ≤ k) :
     _root_.Properties.Spot.slotDesign (.samplingDesign (samplingDesignText L)) v.program v.query v.workTable =
@@ -303,7 +303,7 @@ theorem slotDesign_samplingDesignText {v : _root_.Spot.Registration.Verifier} {n
 
 /-- **v2's design at the sampling design's text**: over the verifier's program and query of `A`'s population, where `samplingDesignAt` reads
 `A`'s sampling design, the design under `samplingDesign (samplingDesignText A.design)` is `designSlots A`. -/
-theorem slotDesign_designSlots (A : Live) {v : _root_.Spot.Registration.Verifier}
+theorem slotDesign_designSlots (A : Live) {v : _root_.Spot.Docket.Verifier}
     (hu : _root_.Spot.Partition.units v.program v.query = .ok A.n) (hl : samplingDesignAt v A.n = .ok A.design)
     (hk : ∀ k, A.design = .subset k → 1 ≤ k) :
     _root_.Properties.Spot.slotDesign (.samplingDesign (samplingDesignText A.design)) v.program v.query v.workTable =
