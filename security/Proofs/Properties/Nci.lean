@@ -4,6 +4,7 @@ public import Proofs.Properties.Nci.Lemmas
 public import Proofs.Properties.Nci.Desc
 public import Proofs.Properties.Nci.Count
 public import Proofs.Properties.Nci.DefinitionDigest
+public import Proofs.Properties.Nci.ClosureDigest
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Init.Data.Ord.String
@@ -15,7 +16,8 @@ Each statement of `Properties.Nci`, proved of `NciCheck.evaluate` from the lemma
 (`Proofs.Properties.Nci.Lemmas`), and the description-sized check's summaries against it (`sizes_eq_tally`, with
 `Proofs.Properties.Nci.Desc`); and the day's bound a published count gives once `DescCountsCK` holds
 (`Proofs.Properties.Nci.Count`). It also brings in which branch a Definition's digests take
-(`Proofs.Properties.Nci.DefinitionDigest`), which no statement here reads.
+(`Proofs.Properties.Nci.DefinitionDigest`) and what a closure digest hashes (`Proofs.Properties.Nci.ClosureDigest`),
+which no statement here reads.
 -/
 
 @[expose] public section
