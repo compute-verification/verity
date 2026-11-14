@@ -684,9 +684,9 @@ end Site
 /-! ## The auditor's devices, by their keys
 
 A protocol's answer names the key its check ran under, never a location. `holder` finds the one device of the auditor's
-that holds that key, and `hostLinks` and `hostsOf` what that device witnesses: the links that join it and a host of the
-prover's, and those hosts. A network certifier's is the half of its uplink on its host's side and that host; a memory
-challenger's, its links and the hosts they join it to. -/
+that holds that key, and `hostLinks` and `hostsOf` what that device witnesses: a network certifier, the links that join
+it and a host of the prover's, the half of its uplink on its host's side; a memory challenger, the hosts its links join
+it to. -/
 
 namespace Site
 
@@ -708,13 +708,18 @@ def holder (A : Registration.Auditor) (k : String) : Option Loc :=
     | _ => none
   else none
 
-/-- **The links `i` reaches**: those that join it and a host of the prover's, in the Site's order. -/
+/-- **The links certifier `i` reaches**: those that join it and a host of the prover's, in the Site's order. None for a
+location that is no certifier. -/
 def hostLinks (i : String) : List Link :=
-  S.links.filter fun k =>
-    (k.ends.1 = i ∧ S.kind? k.ends.2 = some .host) ∨ (k.ends.2 = i ∧ S.kind? k.ends.1 = some .host)
+  if S.kind? i = some .certifier then
+    S.links.filter fun k =>
+      (k.ends.1 = i ∧ S.kind? k.ends.2 = some .host) ∨ (k.ends.2 = i ∧ S.kind? k.ends.1 = some .host)
+  else []
 
-/-- **The hosts `i` reaches**: the far ends of its links that are hosts of the prover's, each once. -/
-def hostsOf (i : String) : List String := ((S.far i).filter fun h => S.kind? h = some .host).eraseDups
+/-- **The hosts challenger `i` reaches**: the far ends of its links that are hosts of the prover's, each once. None for
+a location that is no challenger. -/
+def hostsOf (i : String) : List String :=
+  if S.kind? i = some .challenger then ((S.far i).filter fun h => S.kind? h = some .host).eraseDups else []
 
 end Site
 
