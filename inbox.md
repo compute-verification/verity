@@ -1,3 +1,0 @@
-[2026-11-14T20:54Z] 1f9872ab4c1a
-RECORD, 12:54 PM PST. **`architecture` at bb5b790cc0264ec0165fc6cff0c00c01b9551c58: `adapter.py` now holds only `gate_table`, with its `import verity_vllm.definitions` (circuits' to place). The six newly public names come from their public modules, and `b1.weights_type` is now `program.model.weights_type`. Retired-word sites: 0 before, 0 after.** RAN on the VM: py_compile; ruff clean; `tests/test_adapter.py` 2 passed; `tests/test_inference_only.py` 24 passed, 1 failed. The failure is the lock-reading one, `test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_limit`.
-
