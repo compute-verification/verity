@@ -1,0 +1,12 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "console/top-goals-running"
+title = "Top goals on the Metrics dashboard whose own number has a target, a fresh value and a mark"
+owner = "console"
+unit = "goals"
+better = "higher"
+command = "research run --on auto --cwd source -- uv run python benchmarks/dashboard/run.py"
+every = "1d"
+goal = "console/one-dashboard"

@@ -119,6 +119,8 @@ inputs = [
     # door's runner, which a test runs
     "benchmarks/rho/data/reference.toml",
     "benchmarks/prove/run.py",
+    # the dashboard's runner counts the top goals whose number runs, which a test checks on made-up dashboard data
+    "benchmarks/dashboard/run.py",
     # `verity bench exfiltration` reads the network certifier's calculator of K for its term, which its tests run beside
     # fixture rows; the calculator counts the sampling plan's requests, which it reads from the break-even planner (its
     # modules, with the figure's model, the cost model and the cards they read, and rho's world fleet); a test runs its
