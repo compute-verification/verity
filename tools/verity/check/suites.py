@@ -122,9 +122,10 @@ recorded checks hold). A stop mid-run (SIGINT) still keeps the passes of runs th
 
 `--lend-from COMMIT` is for a check of a commit that can count only after COMMIT's own check (the verified queue's candidate
 built on a candidate still in flight): a suite with no pass here whose inputs, runner, fixtures and Lake build sources read
-the same in COMMIT's tree, every `pyproject.toml`, the lockfile and the check's own code being as they are here, would only run
-again what COMMIT's check is running. It is reported `lent`, a row with `"lent": COMMIT`, and counts as passed for whoever holds this check's
-verdict until COMMIT's is in; it earns no pass, so none is kept or packed for it and a run without the flag runs it.
+the same in COMMIT's tree, every `pyproject.toml`, the lockfile and the check's own code being as they are here, would only
+run again what COMMIT's check is running. It is reported `lent`, a row with `"lent": COMMIT`, and counts as passed for
+whoever holds this check's verdict until COMMIT's is in; it earns no pass, so none is kept or packed for it and a run
+without the flag runs it.
 
 Each suite's pytest runs in a process group of its own, and whatever is left in the group when pytest ends (a multiprocessing
 forkserver and its workers, after a kill) is killed with it. A suite whose pytest dies by a signal is reported with it, its peak

@@ -103,7 +103,10 @@ candidate below that is.  It reads lean-audit as pending while the candidate who
 ``lean_audit_from``) is in flight, whatever that check says then, and once that candidate has landed takes the verdict the
 run beside `main` keeps (`vqueue_slim.audited`): it lands after it, drops with it as its base failed, and stays pending while
 it is rerun, so a failure the rerun clears is never its own.  One started once its base is `main`, or once that candidate
-has landed while the run beside `main` keeps no verdict on lean-audit, audits.  A failed step
+has landed while the run beside `main` keeps no verdict on lean-audit, audits.  Its check also leaves to its base's the
+suites keyed in the base's tree as in its own (`Loop._suites_from`, `suites.py --lend-from`), which that check is running:
+only while the check of `main` passed both suite steps and the base's is judged on them under the policy of its own base
+(`vqueue_slim.lends_suites`), so its pass of a suite it left out is its base's, without which it never lands.  A failed step
 is inherited by its failing tests, those the run beside its base's check failed too.  A shard that failed a step it is
 judged on, or a suite of one, fails it while the other shards still run (an early red, `vqueue_slim.judge`), decided as a
 finished fail is: on the lowest candidate at once, on one above it once its base's check has ended (`vqueue_slim.based`),
@@ -3239,12 +3242,14 @@ class Loop:
         heavy = self._heavy_on(line) if self.gate == CHECK_GATE else ""
         try:
             audit = self._audit_from(d, main, line, below, lent)
+            suites = self._suites_from(d, main, line, below, lent)
             after = self.slim.replaced(Past.read(self.log_path, self.now() - self.slim.CARRY_WAIT_S).lines,
                                        line.get("members") or (), self.now()) if self.gate == CHECK_GATE else {}
             with self.steps("launch"):
                 rec, error = self.slim.start(d, line["sha"], line["base"],
                                              **({"shards": self.shards} if self.gate == CHECK_GATE else {}),
                                              **({"audit_from": audit} if audit else {}),
+                                             **({"suites_from": suites} if suites else {}),
                                              **({"deselect": f} if (f := getattr(self.world, "deselect_file", None)) else {}),
                                              **({"after": after} if after else {}),
                                              **({"heavy_on": heavy} if heavy else {}),
@@ -3292,6 +3297,15 @@ class Loop:
                     f"{ran[:12]}'s: its Lean inputs can't be read: {e}")
             return None
         return ran
+
+    def _suites_from(self, d: Landing, main: str, line: dict, below: dict | None, lent: Lent | None) -> str | None:
+        """The candidate whose check answers for the suites of the check of ``line`` that are keyed there as here
+        (`vqueue_slim.start`'s ``suites_from``): its base, where the check gates and the base is a candidate in flight
+        (``below``, its record) whose check lends them (`vqueue_slim.lends_suites`, on the record of the check of ``main``,
+        ``lent``).  None else: the check runs every suite it has no pass of."""
+        if self.gate != CHECK_GATE or below is None or lent is None:
+            return None
+        return line["base"] if self.slim.lends_suites(d, below, lent(main)[0]) else None
 
     def _advance(self, c: Candidate, t: Tick) -> dict:
         """Push `main` to ``c`` (with --shadow, the shadow's own `main`).  Logged as soon as it is pushed, before what follows

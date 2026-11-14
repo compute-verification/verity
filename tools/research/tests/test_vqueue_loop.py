@@ -4595,6 +4595,40 @@ def test_under_gate_check_a_candidate_changing_no_lean_input_takes_lean_audit_fr
     assert loop.world._changed(main, common) == {"tools/verity/check/common.py"}
 
 
+@pytest.mark.parametrize("main_says", ["passed", "nothing yet", "failed pytest"])
+def test_under_gate_check_a_candidate_on_one_in_flight_leaves_suites_to_its_base_s_check_once_main_s_passed_them(
+        env, monkeypatch, main_says):
+    """Three candidates stacked, one PR each.  The lowest is on `main`, whose check answers for nothing in flight: it names
+    no lender.  Each above it names its base (``suites_from``) once the check of `main` passed both suite steps, and none
+    while that check runs or failed one: a candidate lands on `main`'s failure as inherited, and a check that left the
+    failing suite out would record its step passed.  A check that left suites to its base's stands on it as every stacked
+    candidate does: passed, it advances nothing while its base's runs, and its base failed drops it."""
+    main = env.main()
+    env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(2, {"b.txt": "1\n"})
+    env.put(3, {"c.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=3)
+    loop.tick()
+    if main_says == "passed":
+        runs.end(main)
+    elif main_says == "failed pytest":
+        runs.end(main, shard=2, step="pytest", rows=(_row(OLD),))
+    loop.tick()
+    loop.tick()
+    started = [r for r in env.lines() if r["action"] == "slim" and r["why"] == "started" and r["sha"] != main]
+    one, two, three = (r["sha"] for r in started)
+    assert [r["base"] for r in started] == [main, one, two]
+    assert [r["record"].get("suites_from") for r in started] == ([None, one, two] if main_says == "passed" else [None] * 3)
+    if main_says != "passed":
+        return
+    runs.end(two)
+    runs.end(three)
+    assert not {"advance", "drop"} & {*_acts(loop.tick())} and env.main() == main
+    runs.end(one, shard=2, step="pytest", rows=(_row(NEW),))
+    dropped = {r["sha"]: r["why"] for r in loop.tick() if r["action"] == "drop"}
+    assert (dropped[two], dropped[three]) == ("its base failed",) * 2 and one in dropped and env.main() == main
+
+
 def test_under_gate_check_a_candidate_changing_only_the_task_graph_s_contract_audits_itself(env, monkeypatch):
     """The task graph's contract is in every audit's key (`lean_audit.CONTRACT`): the candidate on a Lean one in flight
     whose member changes only it runs lean-audit itself, its record naming no check whose verdict it takes."""
