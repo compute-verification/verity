@@ -3191,6 +3191,86 @@ def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins
         assert not any(x.startswith("GATE") for x in lines), lines
 
 
+@pytest.mark.parametrize("live, peer, exported", [(False, None, ""), (True, None, "vy-dc-h200"), (True, "vy-peer", "vy-peer")])
+def test_under_pouw_pearlplus_the_challenger_peer_takes_its_default_only_where_there_is_a_gate(tmp_path, live, peer,
+                                                                                              exported):
+    """Under POUW=pearlplus the run's steps read Pearl+'s gate and peer from its environment as a pair, and what reads
+    them (bench_arm.py's live coins, at the serve and at the verify) refuses a peer with no gate: with the gate empty the
+    run exports no peer, where H1_PEER as its default had Pearl+'s verify refuse before its coin; with a gate the peer is
+    H1_PEER unless PEARLC_CHALLENGER_PEER names another. Here step 0's `predict row` says the pair it was started
+    under, then fails."""
+    venv = tmp_path / "toy-venv" / "bin"
+    said = tmp_path / "pair"
+    _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && '
+                             f'{{ printf "%s\\n" "${{PEARLC_CHALLENGER_GATE-unset}}" "${{PEARLC_CHALLENGER_PEER-unset}}" > {said}; '
+                             f'exit 9; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    _script(gate := tmp_path / "gate", FAKE_GATE)
+    (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
+    (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", POUW="pearlplus",
+                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                      PEARLC_CHALLENGER_GATE=str(gate) if live else "", PEARLC_CHALLENGER_PEER=peer)
+    assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
+    assert said.read_text().splitlines() == [str(gate) if live else "", exported]
+
+
+@pytest.mark.parametrize("there", [True, False])
+def test_the_run_keeps_the_builds_checkpoint_config_beside_its_predicted_json(tmp_path, there):
+    """`predict row`'s predicted.json names its checkpoint config where the run's tree has it, and a run's own clone goes
+    when it ends. So step 0 copies the config beside predicted.json (served_compare.py's CONFIG_COPY), where the served
+    compare reads it, on this run and on a kept serve dir afterwards; a config it can't copy stops the run there. Here
+    `predict row` writes a predicted.json naming CONFIG_NAMED, and `predict compare` then fails."""
+    venv = tmp_path / "toy-venv" / "bin"
+    _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n'
+                             'if [ "$1 $2 $3 $4" = "-m verity_vllm.pipeline.cli predict row" ]; then\n'
+                             '  mkdir -p "$8" && printf \'{"config": "%s"}\' "$CONFIG_NAMED" > "$8/predicted.json"; echo "{}"; exit 0\n'
+                             'fi\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && exit 9\n'
+                             f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
+    (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    named = tmp_path / "clone" / "LLAMA.config.json"
+    if there:
+        named.parent.mkdir()
+        named.write_text('{"hidden_size": 2048}')
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", CONFIG_NAMED=str(named),
+                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}")
+    kept = tmp_path / "serve" / "predicted" / "checkpoint_config.json"
+    if there:
+        assert rc == 18 and lines[-1] == "STOP at predict-compare (exit 18)", lines
+        assert kept.read_text() == '{"hidden_size": 2048}'
+    else:
+        assert rc == 17 and lines[-2:] == [
+            f"PREDICT-ROW row: its checkpoint config {named} can't be kept beside predicted.json, where the served "
+            "compare reads it", "STOP at predict (exit 17)"], lines
+        assert not kept.exists()
+
+
+@pytest.mark.parametrize("extra, refused", [
+    ({"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "vy-peer"}, True),
+    ({"PEARLC_CHALLENGER_GATE": ""}, False),
+    ({"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": ""}, False),
+    ({"PEARLC_CHALLENGER_GATE": "a gate", "PEARLC_CHALLENGER_PEER": "vy-peer"}, False),
+    ({"POUW": "h1", "H1_GATE": "", "PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "vy-peer"}, False),
+])
+def test_the_preflight_refuses_a_pearlplus_challenger_peer_with_no_gate(tmp_path, extra, refused):
+    """Under POUW=pearlplus a peer set with PEARLC_CHALLENGER_GATE empty is a pair Pearl+'s serve and verify refuse
+    (bench_arm.py's live coins), the verify only once the window is served and tied: the preflight
+    refuses it before anything runs, naming both ways out. A peer with a gate, no peer, and the pair under H1, which
+    reads neither, pass."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "POUW": "pearlplus", **extra}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    line = ("PREFLIGHT: PEARLC_CHALLENGER_PEER is vy-peer and PEARLC_CHALLENGER_GATE is empty, which leaves Pearl+'s coins "
+            "in-process, and Pearl+'s serve and verify refuse a peer with no gate (bench_arm.py's live coins): unset "
+            "PEARLC_CHALLENGER_PEER, or set PEARLC_CHALLENGER_GATE (unset, it is the lane's gate)")
+    assert (rc, said) == ((3, [line]) if refused else (0, []))
+
+
 def test_the_script_parses_whole():
     """bash parses a top-level command only once a run reaches it, and no toy run here reaches the serve's later steps."""
     run = subprocess.run(["bash", "-n", str(HERE.parent / "served_verdicts.sh")], capture_output=True, text=True)
@@ -3595,9 +3675,14 @@ def test_the_preflight_refuses_pearlplus_tie_under_a_live_gate_without_main_file
 
 #: `df` on a toy filesystem: its arguments in $ORDER.df, the line under its header DF_LINE
 FAKE_DF = 'echo "$@" > "$ORDER.df"\necho "Inodes IFree Mounted on"\necho "$DF_LINE"'
-SHORT_INODES = ("PREFLIGHT: the serve dir's filesystem /workspace has 100 inodes free, 772288 short of PEARLPLUS_INODES "
-                "(772388), two commits of the tied window at three files a member: delete earlier runs' Pearl+ windows "
-                "with `research retention rm`, or set SERVE_ROOT on another filesystem")
+#: the preflight's refusal of a serve dir short of inodes: ``{short}`` short of ``{inodes}``, ``{held}`` what holds them
+SHORT_OF_INODES = ("PREFLIGHT: the serve dir's filesystem /workspace has 100 inodes free, {short} short of PEARLPLUS_INODES "
+                   "({inodes}), two commits of the tied window at three files a member. {held}. Remove enough, each with "
+                   "its retention record's owner's yes and none that a deferred V3c audit still reads: `research "
+                   "retention rm DIR --approved-by @OWNER --ref WHERE-THEY-SAID-YES` is the dry run, and `--apply` "
+                   "deletes; or set SERVE_ROOT on another filesystem")
+NONE_KEPT = "No other serve dir under {at}/root keeps a tied window (v3c-w*/window), so what holds them is elsewhere on /workspace"
+SHORT_INODES = SHORT_OF_INODES.format(short=772288, inodes=772388, held=NONE_KEPT)
 
 
 @pytest.mark.parametrize("env, df, refusal", [
@@ -3626,6 +3711,34 @@ def test_the_preflight_refuses_a_pearlplus_tie_where_the_serve_dirs_filesystem_h
         assert (rc, order) == (0, []) and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed"), lines
     else:
         assert (rc, lines, order) == (3, [refusal.format(at=tmp_path)], [])
+
+
+@pytest.mark.parametrize("inodes, held", [
+    ("104", "{root}/r0/v3c-w*/window (5 entries)"),
+    ("106", "{root}/r0/v3c-w*/window (5 entries), {root}/r2/v3c-w*/window (2 entries)"),
+    ("772388", "{root}/r0/v3c-w*/window (5 entries), {root}/r2/v3c-w*/window (2 entries); together they hold 7, so 772281 "
+               "more are elsewhere on /workspace"),
+])
+def test_a_preflight_short_of_inodes_names_the_kept_tied_windows_that_hold_them_and_the_command(tmp_path, inodes, held):
+    """What fills the serve dir's filesystem is the tied windows earlier runs' serve dirs keep, three files a member.
+    So the refusal names them: each other serve dir under the serve root that keeps one, the largest first with its
+    entries, until they cover the shortfall (and how much is elsewhere when they don't), and the command that removes
+    one with its owner's yes, dry run first. The run's own serve dir and a serve dir with no tied window aren't named;
+    the window's number isn't either, which no public line says."""
+    root = tmp_path / "root"
+    for run, window, files in (("r0", "v3c-w3-4-32-4", ("a", "b", "c", "members/d")), ("r2", "v3c-w9-4-32-4", ("a", "b")),
+                               ("r1", "v3c-w7-4-32-4", ("a", "b", "c", "d", "e", "f", "g", "h"))):
+        for f in files:
+            (root / run / window / "window" / f).parent.mkdir(parents=True, exist_ok=True)
+            (root / run / window / "window" / f).write_text("")
+    (root / "r3" / "pearlplus").mkdir(parents=True)
+    _script(tmp_path / "bin" / "df", FAKE_DF)
+    rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", D=str(root / "r1"),
+                                     DF_LINE="2000000 100 /workspace", PEARLPLUS_INODES=inodes, **PEARL_TIED)
+    said = SHORT_OF_INODES.format(short=int(inodes) - 100, inodes=inodes, held=(
+        f"Other serve dirs' tied windows under {root} hold them, the largest first: " + held.format(root=root)))
+    assert (rc, lines, order) == (3, [said], [])
 
 
 TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
@@ -4921,6 +5034,63 @@ def test_onsite_defaults_come_from_the_file_onsite_pieces_names(tmp_path, produc
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     assert (rc, (tmp_path / "called").read_text().split() if (tmp_path / "called").exists() else []) == (0, called)
+
+
+NO_PIECE = "set POUS_CMD empty, which runs no PoUS piece and leaves its row missing"
+POUS_PIECE = 'bash benchmarks/pous/served_piece.sh "$@"'
+
+
+@pytest.mark.parametrize("pous_cmd, asked, line", [
+    (POUS_PIECE, 'exit 0', None),
+    (POUS_PIECE, 'echo "checkpoints-int8.json pins no $1@$2"; exit 3',
+     "PREFLIGHT: PoUS's piece answers no period of some/model@abc, the checkpoint this run serves: checkpoints-int8.json "
+     "pins no some/model@abc. Serve a row whose checkpoint the piece pins (ROW, REPO and REV), run a tree whose piece "
+     f"pins this one, or {NO_PIECE}"),
+    (POUS_PIECE, 'echo "ModuleNotFoundError: No module named torch" >&2; exit 1',
+     "PREFLIGHT: PoUS's piece can't be asked whether it pins some/model@abc, the checkpoint this run serves "
+     "(onsite_pous_pins exit 1: ModuleNotFoundError: No module named torch): the piece would not start on this node "
+     f"either. Mend what it names, or {NO_PIECE}"),
+    ("", 'exit 3', None),
+    ("another-piece", 'exit 3', None),
+    (POUS_PIECE, None, None),
+])
+def test_the_preflight_refuses_a_checkpoint_the_trees_pous_piece_does_not_pin(tmp_path, pous_cmd, asked, line):
+    """PoUS's piece answers only a checkpoint its own manifests pin, and says so only once the window is served and tied.
+    So where POUS_CMD is the tree's piece, the preflight asks the piece (ONSITE_PIECES' `onsite_pous_pins REPO REV`, here
+    a stand-in that exits as the piece's lookup does) and refuses a checkpoint it doesn't pin with the piece's own
+    words and the ways out; a lookup that doesn't run is refused too, since the piece would not start either. With no
+    PoUS piece, another command, or an ONSITE_PIECES file with no such question, nothing is asked."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    (tree / "pieces.sh").write_text("onsite_piece_commands() { :; }\n"
+                                    + (f'onsite_pous_pins() {{ echo "$PWD" > {tmp_path}/asked; {asked}; }}\n' if asked else ""))
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "ONSITE_PIECES": "pieces.sh", "POUS_CMD": pous_cmd, "REPO": "some/model", "REV": "abc"}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "pous-pins"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+    was_asked = (tmp_path / "asked").read_text().split() if (tmp_path / "asked").exists() else []
+    assert was_asked == ([str(tree)] if asked and pous_cmd == POUS_PIECE else [])
+
+
+@pytest.mark.parametrize("pinned", [True, False])
+def test_the_serves_preflight_asks_pous_piece_about_the_checkpoint_before_anything_runs(tmp_path, pinned):
+    """The whole preflight of a serving run (PREFLIGHT_ONLY, in `_v3c`'s toy tree) asks the question with the run's own
+    REPO and REV: a checkpoint the piece doesn't pin is refused there, and one it pins passes."""
+    (pieces := tmp_path / "pieces.sh").write_text(
+        "onsite_piece_commands() { :; }\n"
+        f'onsite_pous_pins() {{ echo "$1@$2" > {tmp_path}/asked; {"return 0" if pinned else "echo no pin; return 3"}; }}\n')
+    rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", ONSITE_PIECES=str(pieces),
+                                     POUS_CMD=POUS_PIECE, REPO="some/model", REV="abc")
+    assert (tmp_path / "asked").read_text().split() == ["some/model@abc"] and order == []
+    if pinned:
+        assert rc == 0 and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed"), lines
+    else:
+        assert rc == 3 and len(lines) == 1 and lines[0].startswith(
+            "PREFLIGHT: PoUS's piece answers no period of some/model@abc, the checkpoint this run serves: no pin. "), lines
 
 
 def test_a_missing_onsite_pieces_file_is_refused(tmp_path):

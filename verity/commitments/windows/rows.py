@@ -855,18 +855,23 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
 
 
 def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served",
-                 registrar: Any, entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+                 registrar: Any, entries: Sequence[Mapping[str, Any]] = (),
+                 outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Core's ``verity/registration/v1`` record of the window, made by ``registrar`` (core's ``one_stage.registration``: its
     ``record``, ``KINDS``): its program, query and law, the scheme, every port's root, leaves and window domain, the leaf layer,
     and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
     the prover's last record; None for its first).  ``entries``: those of the values its program takes as parameters
-    (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``served``: these roots are the integration's
-    own commitment as it ran, made before any sample; ``stand-in``: a fresh commitment to values opened from its record afterwards,
-    whose link to the record's roots is provenance."""
+    (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``outputs``: the registered values the window
+    outputs for a later record to take (``{"port", "root", "leaves", "domain"}`` each), named among the roots after its ports.
+    ``served``: these roots are the integration's own commitment as it ran, made before any sample; ``stand-in``: a fresh
+    commitment to values opened from its record afterwards, whose link to the record's roots is provenance."""
     if kind not in registrar.KINDS:
         raise ValueError(f"window kind {kind!r} is not one of {registrar.KINDS}")
     w = c.window
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
+    if {o["port"] for o in outputs} & set(c.roots):
+        raise ValueError(f"output values {sorted({o['port'] for o in outputs} & set(c.roots))} are named like the window's ports")
+    roots += [{k: o[k] for k in ("port", "root", "leaves", "domain")} for o in outputs]
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
                             leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table,
@@ -1180,13 +1185,13 @@ def read_private(window_dir: str | Path, win: Mapping[str, Any], k: int) -> byte
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
           kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any,
           index_salt: bytes | None = None, previous: str | None = None,
-          entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+          entries: Sequence[Mapping[str, Any]] = (), outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`, by ``registrar``, which also names and digests
-    the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous`` and registering
-    the values' ``entries``; the window's provenance gets the index's hiding leaf (`index_leaf`), so the
-    registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt are prover only: the salt is
-    ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the OS.  ``registered``: by member
-    key, an outside value's reads (``salts_of``), each a header entry
+    the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous``, registering
+    the values' ``entries`` and naming the roots of the values it ``outputs``; the window's provenance gets the index's hiding
+    leaf (`index_leaf`), so the registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt
+    are prover only: the salt is ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the
+    OS.  ``registered``: by member key, an outside value's reads (``salts_of``), each a header entry
     (``{port: {"value", "positions", "paths"}}``), whose paths ``window.json`` gives once for the window
     (``registered_paths``, by value and position; `registered_header`).  A member's ``m<k>-private.bin`` is its prover body
     less two kinds of port, rows and salts: a port given as a registered value's rows (`Committed.by_value`) its entry names
@@ -1205,7 +1210,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     with _private(d / INDEX_SALT) as f:
         f.write(salt)
     rec = registration(c, {**provenance, "index_leaf": leaf, "order": ORDER}, previous, kind=kind, registrar=registrar,
-                       entries=entries)
+                       entries=entries, outputs=outputs)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
     trees: dict[int, RT.RowTable] = {}
     members, paths, read = [], {}, {}

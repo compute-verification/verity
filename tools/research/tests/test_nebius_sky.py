@@ -1236,11 +1236,13 @@ def test_researchs_store_eviction_also_removes_what_nothing_else_does_and_says_w
 def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_trees_and_else_evicts_no_blob(tmp_path):
     """Node 1's runs have no private remote and the public export can lack a fixture, so the evictor passes the union of
     `artifacts.json` at the newest `refs/research/src/*` commits as `--keep-registry`; with no registry to read, or a tool
-    without the flag, it evicts no store blob or run file (`--min-mb 1e12`) and says why."""
+    without the flag, it evicts no store blob or run file (`--min-mb 1e12`) and says why.  A commit from before the registry
+    moved to the root holds it under `fixtures/` (the older commit here), and its fixtures are kept like a newer one's."""
     import subprocess
     git_dir = tmp_path / "verity.git"
     work = tmp_path / "work"
     (work / "fixtures").mkdir(parents=True)
+    root, before = Path("artifacts.json"), Path("fixtures", "artifacts.json")
 
     def git(*a, date=0):
         subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a], cwd=work, check=True, capture_output=True,
@@ -1248,9 +1250,10 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
 
     subprocess.run(["git", "init", "-q", "--bare", str(git_dir)], check=True)
     git("init", "-q")
-    for n, reg in enumerate(({"art:old": "a"}, {"art:new": "b", "previous": {"art:new": ["art:gone"]}})):
-        (work / "artifacts.json").write_text(json.dumps(reg))
-        git("add", ".")
+    for n, (place, reg) in enumerate(((before, {"art:old": "a"}), (root, {"art:new": "b", "previous": {"art:new": ["art:gone"]}}))):
+        (work / before).unlink(missing_ok=True)
+        (work / place).write_text(json.dumps(reg))
+        git("add", "-A", ".")
         git("commit", "-q", "-m", str(n), date=n)
         git("push", "-q", str(git_dir), f"HEAD:refs/research/src/c{n}")
     tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
