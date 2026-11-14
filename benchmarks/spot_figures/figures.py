@@ -9,7 +9,7 @@ points and run Lean's checks of their designs, each point one job, so the JSON i
         [--workers N] [--no-lean] [--serving measured]
 
 `--serving measured` reads serving's rate from the model's `serving_rate` card (`figure1.SERVING`) and writes into
-DIR/measured, each JSON that read the rate naming it under `serving`; without it every figure is planned at rho's
+DIR/measured, each JSON that read the rate naming it under `serving`; without it every figure is planned at the slowdown calculator's
 fleet utilization, whatever cards exist.
 """
 from __future__ import annotations

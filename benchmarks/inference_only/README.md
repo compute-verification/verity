@@ -99,7 +99,7 @@ compute: the blocks, their gates and the untied words; then under each reading t
 its limit at `s`, and the training the blocks hold at most at that limit, in gates (the gates `c` counts) and as a share
 of the blocks' gates. A node's bound on its untied words doesn't grow with the period, so one phase's figure is the
 weakest, and is printed beside the periods', which are the result. Three lines say what is proved (each count's
-statement with the standing the locks give it, `rho.lean.status`; a `β_x` a block is no Lean statement, and no limit is
+statement with the standing the locks give it, `slowdown.lean.status`; a `β_x` a block is no Lean statement, and no limit is
 proved, being arithmetic on the typed share), what is a premise (the share, the tie, the bound on the untied words, (H)
 and (E)), and what is scaled (every row). `--policy tied.toml` is refused: it would print the number alone.
 
@@ -108,7 +108,7 @@ and (E)), and what is scaled (every row). `--policy tied.toml` is refused: it wo
 The number is a block's ratio under two assumptions, on a check that Lean does not yet accept for any class.
 
 - **Two assumptions.** The bound holds under (H), the cut's hardness, and (E), its exports, conjectures
-  (`min_cut.HARDNESS` and `min_cut.EXPORTS` are their Lean names). The values of (H)'s β by `k` are rho's
+  (`min_cut.HARDNESS` and `min_cut.EXPORTS` are their Lean names). The values of (H)'s β by `k` are the slowdown calculator's
   (`benchmarks/slowdown/data/premises.toml`).
 - **No class passes the check.** The Lean count is given the session Program with no θ and no dataflow, so it counts
   every row a unit reads as fresh and refuses the policy on `k`. A built policy's `c` and `k` are the Python count of
