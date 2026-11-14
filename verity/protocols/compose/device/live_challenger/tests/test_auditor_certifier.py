@@ -188,7 +188,9 @@ def test_a_rehearsal_runs_through_the_tunnel_and_its_end_is_status_and_fetch(hos
     assert end["pinned"] == PIN and "ended_utc" not in end
     out = host.certifier / run / "out"
     assert json.loads((out / "summary.json").read_text())["upstream"] == f"http://127.0.0.1:{local}"
-    assert set(end["files"]) == {"summary.json", "honest/check.json", "tunnel.log", "rehearse.log"}
+    assert set(end["files"]) == {"summary.json", "honest/check.json"}
+    assert {p.name for p in (host.certifier / run / A.WITNESS).iterdir()} == {"tunnel.log", "rehearse.log", A.ENDED_WHY}
+    assert not any(log in json.dumps(end) for log in ("tunnel.log", "rehearse.log"))
 
     rc, st = A.gate(["--ssh", f"status {run}"], host, certifier_active=lambda r: True)
     doc = json.loads(st)
@@ -197,7 +199,7 @@ def test_a_rehearsal_runs_through_the_tunnel_and_its_end_is_status_and_fetch(hos
     with tarfile.open(fileobj=io.BytesIO(tgz)) as tar:
         assert {f"{run}/request.json", f"{run}/end.json", f"{run}/out/summary.json",
                 f"{run}/out/honest/check.json"} <= set(tar.getnames())
-        assert not [n for n in tar.getnames() if n.startswith(f"{run}/{A.WITNESS}")]
+        assert not [n for n in tar.getnames() if n.startswith(f"{run}/{A.WITNESS}") or n.endswith(".log")]
     with pytest.raises(A.Refused, match="has run already"):
         A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                         command=rehearsal(SUMMARY), wait=wait)
@@ -243,7 +245,7 @@ def test_a_rehearsal_past_its_minutes_is_stopped_and_a_tunnel_that_never_came_up
                           command=lambda *a: pytest.fail("ran without its tunnel"))
     assert end["rc"] == 2 and end["ended"] == "tunnel" and "vy-nebius-1" not in json.dumps(end)
     assert "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in ended_why(host, end)
-    assert set(end["files"]) == {"tunnel.log"}
+    assert end["files"] == {} and (host.certifier / run / A.WITNESS / "tunnel.log").is_file()
 
 
 def test_the_rehearsal_runs_certifier_serve_on_the_requests_shim_and_profile_through_the_tunnels_local_end(tmp_path):

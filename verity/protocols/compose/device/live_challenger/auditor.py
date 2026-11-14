@@ -198,9 +198,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
   rehearsal through it into `out/`, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, how
   it ended in one of `ENDED`'s words, the SHA-512 of each file of `out/`, and from `out/summary.json` each run's
-  verdict, network verdict, audit, salt and what a second reveal of window 0's salt got). The sentence the word stands
-  for, with the peer, the port and for an unruled line the line and the fix, is the run's `witness/ended.txt`, for
-  the run's own lane and vy-admin alone, as every run's is. The end holds no time: when a run ended follows what
+  verdict, network verdict, audit, salt and what a second reveal of window 0's salt got). What the rehearsal prints
+  (`rehearse.log`) and what its tunnel's `ssh` prints (`tunnel.log`) are free text and are in the run's `witness/`,
+  with the sentence the end's word stands for (`witness/ended.txt`: the peer, the port and for an unruled line the
+  line and the fix), for the run's own lane and vy-admin alone, as every run's are. The end holds no time: when a run ended follows what
   the peer sent and when. `status RUN` and `fetch RUN` return the end, and the request less its peer and the lane
   that asked (`REQUEST_WITHHELD`), which only the run's own lane and vy-admin are given: in `status`, and in a
   fetch as `witness/request.json`. The rehearsal's keys are made in a scratch directory and removed, and `out/`
@@ -2965,8 +2966,9 @@ def certifier_run(host: Host, run: str, *, pinned: str,
     peer's clients to its listener, `tunnel_argv`'s third argument, and the session is stopped when that ssh exits),
     as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
-    `end.json`. A warden rehearsal writes to `witness/`, its own output (`rehearse.log`) and its tunnels'
-    (`tunnel.log`) with it, and its public outcome (`warden_outcome`) to `out/` and the end; a line of its cells'
+    `end.json`. Every run's own output (`rehearse.log`) and its tunnels' (`tunnel.log`) are free text and go to
+    `witness/`. A warden rehearsal writes to `witness/` too, and its public outcome (`warden_outcome`) to `out/`
+    and the end; a line of its cells'
     registrations that `ROW_LINE` doesn't rule ends it nonzero, the end saying `unruled` and the witness's
     `ENDED_WHY` the line and the fix, and so does an accepted check that counted another number of requests than
     the request's (`miscounted`). A store's write opens no tunnel: it runs `weights_command`
@@ -2983,10 +2985,9 @@ def certifier_run(host: Host, run: str, *, pinned: str,
     out.mkdir(mode=0o755)
     if weights:
         return _weights_run(host, d, req, pinned=pinned, command=command, wait=wait)
-    work = out
-    if warden:
-        work = d / WITNESS
-        work.mkdir(mode=0o700, exist_ok=True)
+    logs = d / WITNESS
+    logs.mkdir(mode=0o700, exist_ok=True)
+    work = logs if warden else out
     sys.path.insert(0, str(HERE))
     import serve
     kept = "client_port" in req
@@ -2998,7 +2999,7 @@ def certifier_run(host: Host, run: str, *, pinned: str,
         back, command = ((req["client_port"], listen),), _listening(command, listen)
     argv = (tunnel_argv or (lambda ssh, local, *back: forward_argv(ssh, local, req["port"], *back)))(ssh, local, *back)
     rc, word, why, tunnels = 2, None, None, []
-    with open(work / "tunnel.log", "wb") as log:
+    with open(logs / "tunnel.log", "wb") as log:
         tunnels.append(subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
         for s in sinks:
             tunnels.append(subprocess.Popen((sink_argv or forward_argv)(ssh, s, load["sink_port"]),
@@ -3011,7 +3012,7 @@ def certifier_run(host: Host, run: str, *, pinned: str,
                                    "(tunnel.log)")
         else:
             to = {"sinks": [("127.0.0.1", s) for s in sinks], "store": host.store} if load else {}
-            with open(work / "rehearse.log", "wb") as log:
+            with open(logs / "rehearse.log", "wb") as log:
                 proc = subprocess.Popen(command(req, work, f"http://127.0.0.1:{local}", **to), stdin=subprocess.DEVNULL,
                                         stdout=log, stderr=subprocess.STDOUT, env=certifier_env(),
                                         start_new_session=True)
