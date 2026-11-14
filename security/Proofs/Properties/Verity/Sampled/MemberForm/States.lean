@@ -51,7 +51,7 @@ theorem statementOf_reads {p : _root_.Spot.OneStageZk.Own} {population : ByteArr
   obtain ⟨⟨⟩, htab, h⟩ := ebind_ok h
   obtain ⟨circuitB', hc', htab⟩ := ebind_ok htab
   obtain ⟨names, hl, htab⟩ := ebind_ok htab
-  have hn : tables.map (·.1) = names := _root_.Spot.OneStageZk.tablesMatch_ok htab
+  have hn : tables.map (·.1) = names := Properties.Spot.SecurityProofs.tablesMatch_ok htab
   rw [← hn] at hl
   split at h
   · cases h
@@ -90,7 +90,7 @@ theorem statement_reads {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs 
   have ha : a' = a := Except.ok.inj h
   subst ha
   obtain ⟨tables, ht, hs⟩ := ebind_ok hs
-  obtain ⟨circuitB, names, hc, hl, rfl⟩ := _root_.Spot.OneStageZk.ownTables_ok ht
+  obtain ⟨circuitB, names, hc, hl, rfl⟩ := Properties.Spot.SecurityProofs.ownTables_ok ht
   obtain ⟨tags0, circuitB', pubB, htags, hc', hp, hl', hI⟩ := statementOf_reads hs
   have hcc : circuitB' = circuitB := Except.ok.inj (hc'.symm.trans hc)
   subst hcc
