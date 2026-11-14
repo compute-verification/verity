@@ -88,6 +88,8 @@ LEAN_BLOCK = re.compile(r"/-|-/")
 LEAN_DOC = re.compile(r"/-!.*?-/", re.DOTALL)
 GENERATED = re.compile(r"\bgenerated\b", re.IGNORECASE)
 SLASH_COMMENT = re.compile(r"(?<![:\\])//[^\n]*|/\*.*?\*/", re.DOTALL)
+#: a numeral ``number`` reads, its separators and C suffix gone: an exponent past three digits is no device's figure
+NUMERAL_TEXT = re.compile(r"0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d{1,3})?")
 HASH_COMMENT = re.compile(r"(?:^|(?<=\s))#[^\n]*", re.MULTILINE)
 
 
@@ -180,14 +182,18 @@ def figures(cards: dict[str, str], nodes: dict[str, str]) -> Figures:
 
 def fold(values: list[Fraction], ops: list[str]) -> Fraction | None:
     """``values[0] ops[0] values[1] ...`` by precedence (``**`` and ``^`` from the right), or None where it can't be."""
-    def apply(a: Fraction, op: str, b: Fraction) -> Fraction:
+    def apply(a: Fraction | None, op: str, b: Fraction | None) -> Fraction | None:
+        if a is None or b is None:
+            return None
         if op in ("**", "^", "<<"):
             if b.denominator != 1 or not 0 <= b <= 256 or op == "<<" and a.denominator != 1:
-                raise ValueError(op)
+                return None
             return a * 2 ** int(b) if op == "<<" else a ** int(b)
+        if op != "*" and b == 0:
+            return None
         return a * b if op == "*" else a / b if op == "/" else Fraction(a // b)
 
-    def parse(i: int, level: int) -> tuple[Fraction, int]:
+    def parse(i: int, level: int) -> tuple[Fraction | None, int]:
         if level > 3:
             return values[i], i
         a, i = parse(i, level + 1)
@@ -199,10 +205,7 @@ def fold(values: list[Fraction], ops: list[str]) -> Fraction | None:
             a, i = apply(a, ops[i], b), j
         return a, i
 
-    try:
-        return parse(0, 1)[0]
-    except (ValueError, ZeroDivisionError, OverflowError):
-        return None
+    return parse(0, 1)[0]
 
 
 def number(text: str, c: bool = False) -> Fraction | None:
@@ -214,12 +217,9 @@ def number(text: str, c: bool = False) -> Fraction | None:
     s = text.replace("_", "").replace("'", "")
     if c:
         s = s.rstrip("fFuUlL")
-    if not s or s[-1] in "jJ":
+    if not NUMERAL_TEXT.fullmatch(s):
         return None
-    try:
-        return Fraction(int(s, 0)) if s[:2].lower() in ("0x", "0o", "0b") else Fraction(Decimal(s))
-    except (ArithmeticError, ValueError):
-        return None
+    return Fraction(int(s, 0)) if s[:2].lower() in ("0x", "0o", "0b") else Fraction(Decimal(s))
 
 
 class Run(NamedTuple):
@@ -243,13 +243,7 @@ def match(run: Run, figs: Figures) -> Figure | None:
 
 
 def python_runs(text: str) -> list[Run]:
-    toks: list[tokenize.TokenInfo] = []
-    try:
-        for t in tokenize.generate_tokens(io.StringIO(text).readline):
-            if t.type not in (tokenize.NL, tokenize.COMMENT):
-                toks.append(t)
-    except (tokenize.TokenError, SyntaxError):
-        pass
+    toks = [t for t in tokenize.generate_tokens(io.StringIO(text).readline) if t.type not in (tokenize.NL, tokenize.COMMENT)]
     out, i = [], 0
     while i < len(toks):
         if toks[i].type != tokenize.NUMBER:
@@ -339,12 +333,13 @@ def text_runs(code: str, ops: frozenset[str], sms: frozenset[Fraction], c: bool 
 
 
 def data_runs(text: str, path: str) -> list[Run]:
-    """Each number of a ``.toml`` or ``.json`` data file, with its key path in place of a line (0)."""
+    """Each number of a ``.toml`` or ``.json`` data file, with its key path in place of a line (0); a file that doesn't
+    parse, each numeral of its text, with its line."""
     try:
         doc = tomllib.loads(text, parse_float=Decimal) if path.endswith(".toml") else \
             json.loads(text, parse_float=Decimal)
     except ValueError:
-        return []
+        return text_runs(text, frozenset(), frozenset())
     out: list[Run] = []
     todo: list[tuple[str, str | None, object]] = [("", None, doc)]
     while todo:
@@ -579,6 +574,8 @@ def test_what_is_a_figure_and_what_is_not() -> None:
         "[a.sms] 132", "[a.mhz] 1980"]
     assert [r.text for r, _ in sites('{"x": [1830, 1.597], "bw": 4.916736e12}', "d.json", figs)] == [
         "[x[0]] 1830", "[bw] 4.916736e12"]
+    assert [(r.line, r.text) for r, _ in sites('{"x": 1830,\n "y": 1980', "e.json", figs)] == [(1, "1830"), (2, "1980")]
+    assert fold([Fraction(1830), Fraction(0)], ["/"]) is None and number("1e9999") is None and number("0x726") == 1830
     [(run, fig)] = sites('{"r 7168 64": [1830]}', "d.json", figs)
     assert say("d.json", run, fig).startswith("    d.json [r 7168 64[0]]: 1830 equals g clock.tensor (MHz).")
     assert holds("benchmarks/x.py") and not holds("hardware/cards/g.toml") and not holds("a/tests/b.py")
