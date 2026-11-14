@@ -35,10 +35,10 @@ def slowdown(over: dict, tier: str) -> float:
     return S.slowdown(P | over, tier)
 
 
-def test_the_slowdown_is_a_hardware_multiple_against_the_unconstrained_run():
-    """Unregistered compute trains like the unconstrained developer, and so do dark fragments of registered capacity
+def test_the_slowdown_compares_with_the_unconstrained_run():
+    """Unregistered compute trains like the unconstrained developer, and so does free compute on registered capacity
     (reference efficiency: ``evaluate`` at ``free_mfu`` = MFU_0); the rest are counted multiplications, so
-    D = 1 / (s + rest / mfu): the slowdown calculator's ``multiple_bound`` in Lean's form, ``remoteSlowdown``, at tiers'
+    the slowdown is 1 / (s + rest / mfu): the slowdown calculator's ``multiple_bound`` in Lean's form, ``remoteSlowdown``, at tiers'
     terms."""
     p = P | {"unregistered": 0.01, "free": 0.01, "host_share": 0.05, "clock_share": 0.0}
     r = T.evaluate(p, T.TIERS["T4"], p["mfu"])
@@ -50,12 +50,12 @@ def test_the_slowdown_is_a_hardware_multiple_against_the_unconstrained_run():
 
 
 def test_the_remote_slowdown_at_the_defaults():
-    """At tiers' server (the floor credit; hosts carry no compute; reference efficiency) the residual r = 0.33 trains at
-    MFU_0 and the inference-only policy's term nu is counted multiplications, so D = 1/(r + nu/MFU_0) is 3.02 at T1 to T4, just under 1/eta =
-    3.04, the same terms against a reference at capacity. Without the reference-efficiency assumption the residual is at
-    peak, ``Slowdown.Guarantees.SlowdownRemote``'s slowdown max(1, 1/(s + x/MFU_0)) as stated, and D is 1.21; without the hosts
-    assumption too (host CPUs at 12.6% of the GPUs) x = 0.45 is above MFU_0 and D is 1; without the hosts assumption
-    alone D is 2.19."""
+    """At tiers' server (the floor credit; hosts carry no compute; reference efficiency) free compute r = 0.33 trains at
+    MFU_0 and the inference-only policy's term nu is counted multiplications, so the slowdown 1/(r + nu/MFU_0) is 3.02 at
+    T1 to T4, just under 1/(counted share) = 3.04, the same terms against a reference at capacity. Without the
+    reference-efficiency assumption free compute is at peak, ``Slowdown.Guarantees.SlowdownRemote``'s slowdown
+    max(1, 1/(s + x/MFU_0)) as stated, and the slowdown is 1.21; without the hosts assumption too (host CPUs at 12.6% of
+    the GPUs) x = 0.45 is above MFU_0 and the slowdown is 1; without the hosts assumption alone it is 2.19."""
     def at_peak(p: dict, t: str) -> float:
         return S.multiple_bound(p["mfu"], *T.remote_terms(p, T.evaluate(p, T.TIERS[t])), reference_efficiency=False)
     for t in ("T1", "T2", "T3", "T4"):
@@ -63,7 +63,7 @@ def test_the_remote_slowdown_at_the_defaults():
         assert S.slowdown(P, t) == pytest.approx(1 / (r["free"] / P["mfu"] + r["declared"] / P["mfu"]), rel=1e-9)
         assert r["free"] / P["mfu"] == pytest.approx(T.free_share(P) + LAG, rel=1e-9)
     assert S.slowdown(P, "T1") == pytest.approx(3.022, abs=1e-3)
-    assert 1 / T.evaluate(P, T.TIERS["T1"])["efficiency"] == pytest.approx(3.04, abs=0.01)
+    assert 1 / T.evaluate(P, T.TIERS["T1"])["counted_share"] == pytest.approx(3.04, abs=0.01)
     assert at_peak(P, "T1") == pytest.approx(1.215, abs=1e-3)
     hosts = P | {"host_share": 0.12608}
     assert all(at_peak(hosts, t) == 1.0 for t in T.TIERS)
@@ -84,9 +84,9 @@ def test_the_ladder_is_evaluate_at_the_rungs():
             assert rows[name]["slowdown"][t] == pytest.approx(slowdown(STREAMED | {"unfilled_gb": gb - 0.17}, t), rel=0.005)
 
 
-def test_d_is_the_hardware_multiple_of_the_binding_terms():
-    """D = 1 / (r + Delta/H + nu / MFU_0) where the residual binds (as at power removal's 1 GB, where mu > 1): the
-    residual and the verdict lag train at MFU_0 (reference efficiency), nu is counted multiplications."""
+def test_the_slowdown_is_set_by_the_binding_terms():
+    """The slowdown is 1 / (r + Delta/H + nu / MFU_0) where free compute binds (as at power removal's 1 GB, where
+    mu > 1): free compute and the verdict lag train at MFU_0 (reference efficiency), nu is counted multiplications."""
     rows = {r["rung"]: r for r in S.ladder()}
     nu = X.nu(P) / P["mfu"]
     best = T.free_share(P | RUNGS["Best plausible PoUW design"])
@@ -125,7 +125,7 @@ def test_the_fit_bound_rows_are_fits_with_chi_on_top():
 
 
 def test_the_regimes_add_unregistered_compute_at_full_efficiency():
-    """With today's wipes the fit bound caps nothing; at 6 GB it caps the best design's residual, which trains at
+    """With today's wipes the fit bound caps nothing; at 6 GB it caps the best design's free compute, which trains at
     MFU_0 (reference efficiency) where the cap and nu are counted multiplications."""
     q = P | S.BEST
     registered = T.free_share(q) + LAG + X.nu(q) / P["mfu"]
@@ -140,8 +140,8 @@ def test_the_regimes_add_unregistered_compute_at_full_efficiency():
 
 
 def test_the_ladders_fit_bound_is_fit_row_at_the_memory_rungs():
-    """At the streamed-label and power-removal rungs, D by the fit bound is ``fit.row``'s; at today's 166 GB, where the
-    fit bound doesn't hold, it is D without a memory cap (T2's)."""
+    """At the streamed-label and power-removal rungs, the slowdown by the fit bound is ``fit.row``'s; at today's 166 GB,
+    where the fit bound doesn't hold, it is the slowdown without a memory cap (T2's)."""
     law, target = S.FIT_TARGET
     L = F.target_loss(law, target)
     N = F.n_star(law, L)
@@ -167,8 +167,8 @@ def test_the_fit_edges_are_where_the_fit_bound_crosses_each_level():
 
 
 def test_the_recipe_multiplier_scales_the_fit_bounds_cap():
-    """As in ``tiers.evaluate``, where registered efficiency is capped at m times the memory cap: at 6 GB the cap binds
-    on the best design, so D is MFU_0 / (m mu) by both ``statement.capped`` and ``fit.slowdown``."""
+    """As in ``tiers.evaluate``, where the registered counted share is capped at m times the memory cap: at 6 GB the cap
+    binds on the best design, so the slowdown is MFU_0 / (m mu) by both ``statement.capped`` and ``fit.slowdown``."""
     mu = S.fit_mu(6.0)
     for m in (1.0, 3.0):
         q = P | S.BEST | S.streamed(6.0) | {"m": m}
@@ -197,9 +197,10 @@ def test_the_symbols_closed_forms_are_what_evaluate_uses():
     assert sym[("χ", "cheating share (T5)")] == T.evaluate(P, T.TIERS["T5"])["cheat"]
 
 
-def test_the_thresholds_are_on_d_not_on_one_over_eta():
-    """At T1 with host CPUs and the clock at 0, D < X once r̂ > (1 / X - nu / MFU_0 - Delta/H - eps_W - eps') / (1 - eps_W):
-    the residual trains at MFU_0 (reference efficiency) and nu is counted multiplications; on 1/eta, nu counts at 1."""
+def test_the_thresholds_are_on_the_slowdown_not_on_one_over_the_counted_share():
+    """At T1 with host CPUs and the clock at 0, the slowdown is below X once
+    r̂ > (1 / X - nu / MFU_0 - Delta/H - eps_W - eps') / (1 - eps_W): free compute trains at MFU_0 (reference efficiency)
+    and nu is counted multiplications; on 1/(counted share), nu counts at 1."""
     found = S.search(("defaults", "T1", 0))
     for level in S.LEVELS:
         edge = (1 / level - X.nu(P) / P["mfu"] - LAG - P["eps_w"] - EPS) / (1 - P["eps_w"])
@@ -255,7 +256,7 @@ def test_it_renders_every_section_as_markdown_and_json(capsys, monkeypatch):
     md = capsys.readouterr().out
     assert md.startswith("# ") and "at commit `" in md
     for heading in ("## Slide forms", "## 0. Symbols", "## 4. The terms", "## The ladder", "## The fit bound",
-                    "## Years of growth", "## The unregistered share by regime", "## 6. Thresholds on D",
+                    "## Years of growth", "## The unregistered share by regime", "## 6. Thresholds on the slowdown",
                     "## Known holes"):
         assert heading in md
     assert S.main(["--json"]) == 0

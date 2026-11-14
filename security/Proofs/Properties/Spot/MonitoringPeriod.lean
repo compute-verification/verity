@@ -217,7 +217,7 @@ theorem wins_inj {wins : Array Win}
 
 /-- `read`'s session of the ledger's window `w`: one where `w`'s open is a v2 entry of the lane numbered from `start`
 up to `stop`, with `reserves` the lane's reserves and `periods` the ledger's periods. -/
-def sessionAt (p : Params) (periods : Array MonitoringPeriod) (reserves : Array String) (start stop : Nat)
+def sessionAt (p : Params) (periods : Array PeriodRecord) (reserves : Array String) (start stop : Nat)
     (w : Win) : Option Session :=
   let e := w.opened
   if e.schema == LEDGER_SCHEMA && laneOf e.body == p.lane && start ≤ e.seq && e.seq < stop then
@@ -227,7 +227,7 @@ def sessionAt (p : Params) (periods : Array MonitoringPeriod) (reserves : Array 
             period := (periods.find? (·.windows.contains e.session)).map (·.name) } : Session)
   else none
 
-theorem sessionAt_some {p : Params} {periods : Array MonitoringPeriod} {reserves : Array String} {start stop : Nat}
+theorem sessionAt_some {p : Params} {periods : Array PeriodRecord} {reserves : Array String} {start stop : Nat}
     {w : Win} {s : Session} (h : sessionAt p periods reserves start stop w = some s) :
     (w.opened.schema = LEDGER_SCHEMA ∧ laneOf w.opened.body = p.lane ∧ start ≤ w.opened.seq ∧
         w.opened.seq < stop) ∧
@@ -237,7 +237,7 @@ theorem sessionAt_some {p : Params} {periods : Array MonitoringPeriod} {reserves
   obtain ⟨hc, rfl⟩ := ite_some h
   exact ⟨keep_of hc, rfl, rfl, rfl, rfl⟩
 
-theorem sessionAt_of {p : Params} {periods : Array MonitoringPeriod} {reserves : Array String} {start stop : Nat}
+theorem sessionAt_of {p : Params} {periods : Array PeriodRecord} {reserves : Array String} {start stop : Nat}
     {w : Win} (h1 : w.opened.schema = LEDGER_SCHEMA) (h2 : laneOf w.opened.body = p.lane)
     (h3 : start ≤ w.opened.seq) (h4 : w.opened.seq < stop) :
     ∃ s, sessionAt p periods reserves start stop w = some s := by
@@ -268,7 +268,7 @@ theorem read_spec (p : Params) (ledger : Json) :
 /-! ## What `runsIn` returns -/
 
 /-- The ledger's periods that list one of the sessions `sampled`. -/
-def heldOf (r : Read) (sampled : Array Session) : Array MonitoringPeriod :=
+def heldOf (r : Read) (sampled : Array Session) : Array PeriodRecord :=
   r.periods.filter fun mp => sampled.any (·.period == some mp.name)
 
 /-- Whether the ledger opens the session `ses`. -/
@@ -281,7 +281,7 @@ closed; every session such a period lists was opened and is one of them; and eac
 structure ExecutionPhasesIn (p : Params) (r : Read) (ws : Runs) (sampled : Array Session) : Prop where
   parts : r.sessions.partition (fun s => holds p.label s.families) = (sampled, ws.others)
   nonempty : ¬ sampled.isEmpty = true
-  windows : ∃ g : Session × Nat → Except (Code × String) Window, sampled.zipIdx.mapM g = .ok ws.windows ∧
+  windows : ∃ g : Session × Nat → Except (Code × String) _root_.Spot.MonitoringPeriod.Run, sampled.zipIdx.mapM g = .ok ws.windows ∧
     ∀ x w, g x = .ok w →
       x.1.period = some w.period ∧ w.phase = x.2 ∧ w.session = x.1.session ∧ w.root = x.1.root
   closed : (heldOf r sampled).find? (!·.closed) = none
@@ -309,7 +309,7 @@ theorem runsIn_ok {p : Params} {r : Read} {ws : Runs} (h : runsIn p r = .ok ws) 
   dsimp only at hg
   split at hg
   · rename_i name hname
-    have hw : ({ period := name, phase := i, session := s.session, root := s.root } : Window) = w :=
+    have hw : ({ period := name, phase := i, session := s.session, root := s.root } : _root_.Spot.MonitoringPeriod.Run) = w :=
       Except.ok.inj hg
     subst hw
     exact ⟨hname, rfl, rfl, rfl⟩
@@ -395,7 +395,7 @@ theorem executionPhase_of_sampled (hR : Returned p ledger r ws stop sampled) {s 
   exact ⟨ws.windows[j], Array.getElem_mem hjw, hw.2.2.2, hw.2.2.1, hw.1⟩
 
 /-- Each window is of a session whose layout holds the sample's family. -/
-theorem sampled_of_executionPhase (hR : Returned p ledger r ws stop sampled) {w : Window} (hw : w ∈ ws.windows) :
+theorem sampled_of_executionPhase (hR : Returned p ledger r ws stop sampled) {w : _root_.Spot.MonitoringPeriod.Run} (hw : w ∈ ws.windows) :
     ∃ s ∈ sampled, w.root = s.root ∧ w.session = s.session ∧ s.period = some w.period := by
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hw
   have hjs : j < sampled.size := by rw [← hR.size]; exact hj
@@ -443,7 +443,7 @@ theorem period_of_sampled (hR : Returned p ledger r ws stop sampled) {s : Sessio
   exact ⟨v, hv, hvs.trans (beq_iff_eq.1 hts)⟩
 
 /-- No key of a window's root and session is returned twice, among the windows and the others together. -/
-theorem nodup (hR : Returned p ledger r ws stop sampled) {β : Type} (k : Session → β) (kw : Window → β)
+theorem nodup (hR : Returned p ledger r ws stop sampled) {β : Type} (k : Session → β) (kw : _root_.Spot.MonitoringPeriod.Run → β)
     (hk : ∀ j (hj : j < ws.windows.size) (hs : j < sampled.size), kw ws.windows[j] = k sampled[j])
     (hn : (r.sessions.toList.map k).Nodup) :
     (ws.windows.toList.map kw ++ ws.others.toList.map k).Nodup := by
@@ -533,7 +533,7 @@ set_option maxHeartbeats 4000000 in
 /-- What `caseAt` read where it returns: the case's registration, whose digest is the one wanted; one-stage v2's
 parameters at the window; the public file's header, which names no `shared_rows`; and one-stage v2's evidence. It
 returns the registration's record and what the audit answers on them. -/
-theorem caseAt_ok {inner : Inner} {p : AuditParams} {ledger pins session : Json} {w : Window} {want : String}
+theorem caseAt_ok {inner : Inner} {p : AuditParams} {ledger pins session : Json} {w : _root_.Spot.MonitoringPeriod.Run} {want : String}
     {before : Array Json} {k : Case} {bs : Core.Blobs} {x : Json × Core.Outcome OneStage.Public Core.Integrity}
     (h : caseAt inner p ledger pins session w want before k bs = .ok x) :
     ∃ (cm : OneStage.Commitment) (q : OneStageZk.Params) (ev : OneStageZk.Evidence),
@@ -559,7 +559,7 @@ theorem caseAt_ok {inner : Inner} {p : AuditParams} {ledger pins session : Json}
   all_goals exact ⟨_, _, _, by assumption, beq_iff_eq.1 (by assumption), by assumption,
     ⟨_, by assumption, Bool.eq_false_iff.2 (by assumption)⟩, by assumption, rfl⟩
 
-theorem caseAt_spec (inner : Inner) (p : AuditParams) (ledger pins session : Json) (w : Window) (want : String)
+theorem caseAt_spec (inner : Inner) (p : AuditParams) (ledger pins session : Json) (w : _root_.Spot.MonitoringPeriod.Run) (want : String)
     (before : Array Json) (k : Case) (bs : Core.Blobs) :
     ⦃⌜True⌝⦄ caseAt inner p ledger pins session w want before k bs
       ⦃⇓? x => ⌜caseAt inner p ledger pins session w want before k bs = .ok x⌝⦄ := ok_spec _
@@ -571,7 +571,7 @@ files under the key, its coin commitment withheld, the one registration its log 
 record and answer (`caseAt`). An accept adds the window with its one audit and the record; an undecided adds the
 record and is kept. -/
 theorem executionPhaseAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledger pins : Json} {bs : Core.Blobs}
-    {st st' : Progress} {w : Window} {we : RunEvidence}
+    {st st' : Progress} {w : _root_.Spot.MonitoringPeriod.Run} {we : RunEvidence}
     (h : executionPhaseAt inner p r ledger pins bs st w we = .ok st') :
     ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (roots : Roots) (d : String) (k : Case) (record : Json)
         (o : Core.Outcome OneStage.Public Core.Integrity),
@@ -617,14 +617,14 @@ theorem executionPhaseAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledge
 the window is added with one audit `a`, which is the check's audit at `w` after the records in `st`, and its record
 is added; or an audit is left undecided. -/
 def StepOk (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (r : Read)
-    (st : Progress) (w : Window) (we : RunEvidence) (st' : Progress) : Prop :=
+    (st : Progress) (w : _root_.Spot.MonitoringPeriod.Run) (we : RunEvidence) (st' : Progress) : Prop :=
   (∃ a record, st'.before = st.before.push record ∧
       st'.passed = st.passed.push { window := w, audits := #[a] } ∧ st'.undecided = st.undecided ∧
       AuditedAt inner p c e bs r w we st.before record a) ∨
     st'.undecided.isSome = true
 
 theorem executionPhaseAt_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence} {bs : Core.Blobs} {r : Read}
-    {st st' : Progress} {w : Window} {we : RunEvidence}
+    {st st' : Progress} {w : _root_.Spot.MonitoringPeriod.Run} {we : RunEvidence}
     (h : executionPhaseAt inner p r c.ledger e.pins bs st w we = .ok st') : StepOk inner p c e bs r st w we st' := by
   obtain ⟨au, opened, lc, roots, d, k, record, o, h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := executionPhaseAt_raw h
   obtain ⟨cm, q, ev, c1, c2, c3, c4, c5, c6⟩ := caseAt_ok h8
@@ -722,12 +722,12 @@ theorem run_ok {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence}
     {x : Array Other × Progress} (h : _root_.Spot.MonitoringPeriod.run inner p c e bs = .ok x) :
     ∃ r ws, read p.ledger c.ledger = .ok r ∧ runsIn p.ledger r = .ok ws ∧ registeredIn p r ws = .ok x.1 ∧
       e.windows.size = ws.windows.size ∧
-      ∃ f : Progress → Window × RunEvidence → Except (Code × String) Progress,
+      ∃ f : Progress → _root_.Spot.MonitoringPeriod.Run × RunEvidence → Except (Code × String) Progress,
         (ws.windows.zip e.windows).foldlM f ({} : Progress) = .ok x.2 ∧
         ∀ st w ev, f st (w, ev) = executionPhaseAt inner p r c.ledger e.pins bs st w ev := by
   refine of_triple (Q := fun x => ∃ r ws, read p.ledger c.ledger = .ok r ∧ runsIn p.ledger r = .ok ws ∧
       registeredIn p r ws = .ok x.1 ∧ e.windows.size = ws.windows.size ∧
-      ∃ f : Progress → Window × RunEvidence → Except (Code × String) Progress,
+      ∃ f : Progress → _root_.Spot.MonitoringPeriod.Run × RunEvidence → Except (Code × String) Progress,
         (ws.windows.zip e.windows).foldlM f ({} : Progress) = .ok x.2 ∧
         ∀ st w ev, f st (w, ev) = executionPhaseAt inner p r c.ledger e.pins bs st w ev) ?_ h
   clear h
@@ -758,14 +758,14 @@ theorem checkWith_accept {inner : Inner} {p : AuditParams} {c : Commitment} {e :
 one passed window and one record for each, and window `i` passed with one audit, the check's at that window after
 the records of the windows before it. -/
 def FoldGood (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (r : Read)
-    (pre : List (Window × RunEvidence)) (st : Progress) : Prop :=
+    (pre : List (_root_.Spot.MonitoringPeriod.Run × RunEvidence)) (st : Progress) : Prop :=
   st.passed.size = pre.length ∧ st.before.size = pre.length ∧
-    ∀ (i : Nat) (w : Window) (we : RunEvidence), pre[i]? = some (w, we) →
+    ∀ (i : Nat) (w : _root_.Spot.MonitoringPeriod.Run) (we : RunEvidence), pre[i]? = some (w, we) →
       ∃ a record, st.passed[i]? = some { window := w, audits := #[a] } ∧ st.before[i]? = some record ∧
         AuditedAt inner p c e bs r w we (st.before.extract 0 i) record a
 
 theorem foldGood_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence} {bs : Core.Blobs}
-    {r : Read} {pre : List (Window × RunEvidence)} {st st' : Progress} {w : Window} {we : RunEvidence}
+    {r : Read} {pre : List (_root_.Spot.MonitoringPeriod.Run × RunEvidence)} {st st' : Progress} {w : _root_.Spot.MonitoringPeriod.Run} {we : RunEvidence}
     {a : Audit} {record : Json} (hG : FoldGood inner p c e bs r pre st)
     (hb : st'.before = st.before.push record) (hp : st'.passed = st.passed.push { window := w, audits := #[a] })
     (hA : AuditedAt inner p c e bs r w we st.before record a) :
@@ -795,11 +795,11 @@ theorem foldGood_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Ev
 
 /-- The fold's invariant: while no audit is undecided, `FoldGood`. -/
 def FoldInv (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (r : Read)
-    (pre : List (Window × RunEvidence)) (st : Progress) : Prop :=
+    (pre : List (_root_.Spot.MonitoringPeriod.Run × RunEvidence)) (st : Progress) : Prop :=
   st.undecided = none → FoldGood inner p c e bs r pre st
 
 theorem foldInv_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence} {bs : Core.Blobs}
-    {r : Read} {pre : List (Window × RunEvidence)} {st st' : Progress} {w : Window} {we : RunEvidence}
+    {r : Read} {pre : List (_root_.Spot.MonitoringPeriod.Run × RunEvidence)} {st st' : Progress} {w : _root_.Spot.MonitoringPeriod.Run} {we : RunEvidence}
     (hI : FoldInv inner p c e bs r pre st) (hS : StepOk inner p c e bs r st w we st') :
     FoldInv inner p c e bs r (pre ++ [(w, we)]) st' := by
   unfold FoldInv at hI ⊢
@@ -991,7 +991,7 @@ theorem decodedMeans : DecodedMeans := by
 -- `mvcgen` splits `auditedIn` into one goal per check it makes of the window and its `end`
 set_option maxHeartbeats 4000000 in
 /-- `auditedIn` reads the session of the first of the ledger's windows whose root is the one the caller names. -/
-theorem auditedIn_ok {wins : Array Win} {periods : Array MonitoringPeriod} {window : Json} {a : Audited × Json}
+theorem auditedIn_ok {wins : Array Win} {periods : Array PeriodRecord} {window : Json} {a : Audited × Json}
     (h : auditedIn wins periods window = .ok a) :
     ∃ win, wins.find? (fun w => w.root == strOf (getD window "root")) = some win ∧
       a.1.session = win.opened.session := by
@@ -1003,7 +1003,7 @@ theorem auditedIn_ok {wins : Array Win} {periods : Array MonitoringPeriod} {wind
   all_goals exact ⟨_, by assumption, rfl⟩
 
 /-- `auditedIn` on a root reads the session of one of the ledger's windows on that root. -/
-theorem auditedIn_root {wins : Array Win} {periods : Array MonitoringPeriod} {root : String} {a : Audited × Json}
+theorem auditedIn_root {wins : Array Win} {periods : Array PeriodRecord} {root : String} {a : Audited × Json}
     (h : auditedIn wins periods (Json.mkObj [("root", Json.str root)]) = .ok a) :
     ∃ win ∈ wins, win.root = root ∧ a.1.session = win.opened.session := by
   obtain ⟨win, hfind, hses⟩ := auditedIn_ok h

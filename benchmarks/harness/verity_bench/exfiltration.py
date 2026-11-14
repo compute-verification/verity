@@ -213,9 +213,10 @@ TOGETHER = {"scan": "as the scan's check charges it today",
 WHOLE = {"all three": "with the timing taken once and the entries charged through the compute audit, its stop class "
                       "charged its whole schedule",
          "design": "by the design no run has behind it, its stop class charged its whole schedule"}
-#: the network certifier's benchmarks' module that reads the stop class's verdict records of the runs of `VERDICTS`:
-#: its `of_runs` answers how the calculator's rows read from verdict records are charged
+#: the network certifier's prover's module that reads the stop class's verdict records of the runs of `VERDICTS`:
+#: its `of_runs` answers how the calculator's rows read from verdict records are charged (`_reader`)
 READER = "stop_verdicts"
+READER_MODULE = f"verity.protocols.accounting.certifier.prover.{READER}"
 #: the network certifier's row whose schedules are what a response's output count is charged while the server chooses
 #: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"
@@ -336,6 +337,14 @@ def _load(root: Path, directory: str, module: str) -> Any:
         del sys.modules[module]
         raise
     return loaded
+
+
+def _reader(root: Path) -> Any:
+    """The stop verdicts' reader (`READER_MODULE`). It imports the calculator by its bare name, ``leak_bounds``, so that is
+    loaded from ``root``'s `benchmarks/network_traces` first."""
+
+    _load(root, "network_traces", "leak_bounds")
+    return importlib.import_module(READER_MODULE)
 
 
 # ---- the compute audit's part: the planner's rows of record -----------------------------------------------------------
@@ -684,7 +693,7 @@ def stop_charge(root: Path, store: Any, labelled: Mapping[str, Sequence[str]]) -
     verdicts' reader's answer (`READER`'s `of_runs`), which `certifier` hands the calculator. The reader is handed
     every run of ``labelled`` and, as superseded, those another run replaces; this reads none of their files itself."""
 
-    return _load(root, "network_traces", READER).of_runs(store, list(labelled), [run for run, by in labelled.items() if by])
+    return _reader(root).of_runs(store, list(labelled), [run for run, by in labelled.items() if by])
 
 
 def stop_verdicts(store: Any, labelled: Mapping[str, Sequence[str]]) -> tuple[list[dict], list[str], list[dict]] | None:

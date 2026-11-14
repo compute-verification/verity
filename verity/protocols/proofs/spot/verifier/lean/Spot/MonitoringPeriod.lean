@@ -27,7 +27,7 @@ refusal is the answer: there is at least one (`missing`); each is in a period of
 period is closed, and every session it lists that was opened is a window (`period`); no session it lists was left
 unopened, and each window has ended (`missing`). The lane's other sessions are returned beside the windows (`others`)
 with nothing held of them here: the period's check refuses each that is not another registration's
-(`Spot.PeriodRecord.registeredIn`).
+(`Spot.MonitoringPeriod.registeredIn`).
 
 The difftest's piece: `period_windows`.
 -/
@@ -37,7 +37,7 @@ public import Spot.ChallengerSession
 
 @[expose] public section
 
-namespace Spot.PeriodRecord
+namespace Spot.MonitoringPeriod
 
 open Lean (Json)
 open Flock (V)
@@ -267,4 +267,4 @@ def runsPiece (j : Json) : V Json := do
           ("windows", Json.arr (ws.windows.map Run.toJson))]
       | .error (code, why) => Json.mkObj (refusedJson code why ++ [sessions])
 
-end Spot.PeriodRecord
+end Spot.MonitoringPeriod

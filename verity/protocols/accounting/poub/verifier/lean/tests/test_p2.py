@@ -209,7 +209,7 @@ GEOMETRIES = ((4, 1), (2, 3), (3, 3), (5, 3), (17, 4))
 
 
 @functools.cache
-def drawn_store(k: int, rows: int) -> p2_prover.Store:
+def sampled_store(k: int, rows: int) -> p2_prover.Store:
     """A store of sampled proof blocks (P2's check never decodes, so they needn't be codewords) under geometry `k`, with
     every byte's extremes among them."""
     bps, segments = GEOMETRIES[k]
@@ -244,7 +244,7 @@ def opening_inputs(take) -> dict:
     """An opening of a sampled pass over a sampled store, honest, from a prover that committed a wrong receipt, or with one
     field of the opening, the pass or the registration changed."""
     k, rows = take(st.integers(0, len(GEOMETRIES) - 1)), take(st.sampled_from([16, 16, 64]))
-    store = drawn_store(k, rows)
+    store = sampled_store(k, rows)
     reg = store.registration
     order = take(st.permutations(range(reg.blocks)))[:take(st.integers(1, reg.blocks))]
     plan = Plan([tuple(r) for r in canonical_runs(order)], reg.blocks)
@@ -507,7 +507,7 @@ def p2_session_inputs(take) -> dict:
     early first (8 … 15); or the request off the auditor's session, in a sampled set of its values (16), or the sampled
     session's request under `SESSION` (17)."""
     k, rows = take(st.integers(0, len(GEOMETRIES) - 1)), take(st.sampled_from([16, 64]))
-    store = drawn_store(k, rows)
+    store = sampled_store(k, rows)
     reg = store.registration
     stated = None
     if take(st.booleans()):

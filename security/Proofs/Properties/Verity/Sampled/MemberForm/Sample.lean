@@ -140,7 +140,7 @@ theorem membersStructure_laid {p : _root_.Spot.OneStageZk.Params} {ms : Array _r
 units are the population and the members' reads' units summed, and a member whose files pass has as many units in
 its read as proof blocks. -/
 theorem ExecutionPhaseOn.total {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
-    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : ExecutionPhaseOn V θ F W)
+    {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase} (h : ExecutionPhaseOn V θ F W)
     (hp : ∀ m ∈ W.ms, FilesPass m) : (W.ms.map fun m => m.n).sum = W.nJ := by
   obtain ⟨m₀, rest, hW, hread⟩ := h.read
   have hu : V.units θ F = ((W.ms.map fileRead).map Verity.FileRead.units).sum := by
@@ -157,7 +157,7 @@ theorem ExecutionPhaseOn.total {ι : Type} {d : Accounting.Device ι} {α : Type
 files pass, where the form's structure holds the members to the registration `rec` (`Spot.OneStageZk.laidHeld`),
 the window's population is the population `rec` names. -/
 theorem ExecutionPhaseOn.population {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
-    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : ExecutionPhaseOn V θ F W)
+    {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase} (h : ExecutionPhaseOn V θ F W)
     (hp : ∀ m ∈ W.ms, FilesPass m) {p : _root_.Spot.OneStageZk.Params}
     {ms : Array _root_.Spot.OneStageZk.Member} (hpa : ParamsAt θ p) (hms : p.members = some ms) {rec : Json}
     (hl : _root_.Spot.OneStageZk.laidHeld ms rec = .ok ()) {n : ℕ}
