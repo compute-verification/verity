@@ -25,7 +25,8 @@ records enters the chain.
   certificates, in order: a witness line that says the signer refused its execution phase has no public line, so a
   public file beside one isn't the gate's. Of the check it writes what the gate's end publishes and no more
   (`verdict`, `COUNTS`): whether it accepted, and the gate's own list of counts, less those only an accepted check's
-  end holds (`ACCEPTED_COUNTS`).
+  end holds (`ACCEPTED_COUNTS`). Which execution phases were certified or refused, and how many problems the check
+  found, follow the traffic: `checked` keeps them on the chain's private side (`WITNESS_KEYS`), out of the record.
 * `io`: the certified I/O, read off the records' cells alone, in a certifier rehearsal's certified I/O's keys: each
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`id_form.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
@@ -84,6 +85,12 @@ CELL_ROWS = ("registered", "of")
 #: of those, the counts that are one fewer for each execution phase the signer refused, which only an accepted
 #: check's verdict holds (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`)
 ACCEPTED_COUNTS, ACCEPTED_CELL_ROWS = ("certified_windows", "certificates"), ("registered",)
+#: what `checked` keeps on the chain's private side and never publishes: which execution phases the signer refused,
+#: how many it certified, each one's certified, and how many problems the network certifier's own check found, each of
+#: which follows what the node sent and when
+WITNESS_KEYS = ("issuer_refused", "certified_windows", "rows", "problems")
+#: why `checked` refuses a run the network certifier's own check refuses, its one word of it
+REFUSES = "the network certifier's own check refuses the run, which warden_serve.py check says on the witness"
 
 
 def found(run: Path, name: str, required: bool = True) -> Path | None:
@@ -206,10 +213,16 @@ def verdict(check: dict) -> dict:
 
 
 def certificates(run: Path, deployed: bool = False) -> dict:
-    """The certificates' check on the run (the module docstring's `certificates`), one row an execution phase: certified
-    when each of its three records is, complete. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`. A run
-    the network certifier's own check refuses is refused with how many problems the check found:
-    ``warden_serve.py check`` on the witness says them."""
+    """What the certificates' check on the run (`checked`) publishes: its record, ``certs.json``."""
+    return checked(run, deployed)[0]
+
+
+def checked(run: Path, deployed: bool = False) -> tuple[dict, dict]:
+    """The certificates' check on the run (the module docstring's `certificates`): what it publishes, and what it
+    keeps on the chain's private side (`WITNESS_KEYS`). A run is certified when each of an execution phase's three
+    records is, complete, for every execution phase. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`. A
+    run the network certifier's own check refuses is refused by that word alone: its problems, and how many there are,
+    are the private side's, and ``warden_serve.py check`` on the witness says them."""
     dep, _ = deployment(run)
     wit = witness(run)
     check = RC.check(wit)
@@ -230,14 +243,14 @@ def certificates(run: Path, deployed: bool = False) -> dict:
            "parameters": dep["digest"], "records_file": "certified.jsonl",
            "public_file": None if public is None else public.name, "clock_certificates": 0, "sync_bits": 0.0,
            "warden_check": verdict(check),
-           "certified_windows": sum(r["certified"] for r in rows), "issuer_refused": refused,
-           "public_is_the_records": None if public is None else theirs == mine, "rows": rows}
+           "public_is_the_records": None if public is None else theirs == mine}
     why = ("the key isn't LMS at lms.DEPLOYED" if deployed and not out["key"]["deployed"]
            else "the public certificates.jsonl isn't the certified records' certificates" if public and theirs != mine
-           else (f"the network certifier's own check refuses the run: {len(check['problems'])} problems, which "
-                 "warden_serve.py check says on the witness") if not check["accepted"]
+           else REFUSES if not check["accepted"]
            else None)
-    return out | {"verdict": "refused" if why else "accepted", "why": why}
+    private = {"issuer_refused": refused, "certified_windows": sum(r["certified"] for r in rows), "rows": rows,
+               "problems": len(check["problems"])}
+    return out | {"verdict": "refused" if why else "accepted", "why": why}, private
 
 
 def io(run: Path) -> dict:
