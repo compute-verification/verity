@@ -12,8 +12,8 @@
                               served statics over `targets.MAX_GATES`, ``digests``, which keeps it in ``--all``; and a
                               family's struct budget, ``struct_max_gates``: {family: gates}, `checks.struct_budget`)
     widget.circuit-check.unkeyed.json
-                              what the scheduler and the report read of its targets, and no check: their peaks and
-                              its held blocks (`UNKEYED`), in no key
+                              what the scheduler, the task list's guard and the report read of its targets, and no
+                              check: their peaks, its held blocks and its families' counts (`UNKEYED`), in no key
 
 A module's bindings bind the Definitions it defines (a template module's, its templates), and its pins are the lowerings of its
 Definitions (`owner`; a template's subcircuits for the template module), each the one its pin's key names alone (`pin_owner`),
@@ -110,15 +110,16 @@ def discover() -> dict[str, dict[str, Path]]:
     return _beside(("py", "json"))
 
 
-#: the kind of a module's unkeyed file, ``<module>.circuit-check.unkeyed.json``: what circuit-check's scheduler and its
-#: report read of the module's targets, and no check, so no key holds it (`cache.version` reads no
+#: the kind of a module's unkeyed file, ``<module>.circuit-check.unkeyed.json``: what circuit-check's scheduler, its task
+#: list's guard and its report read of the module's targets, and no check, so no key holds it (`cache.version` reads no
 #: file outside the checker, and no recording holds one read under `cache.internal`) and the registries import no module
 #: for having one.  Its sections (`UNKEYED_SECTIONS`): ``peaks``, the GiB a target grows past the task list it is forked
 #: with, by target label (`cli.heavy`); ``binding_peaks``, the GiB a catalog binding's build grows, by the binding's name
 #: with each ``<module>.circuit-check#`` of this module left out (`units.built_apart`); ``held``, the Definitions past
-#: Flock's proved range that the report holds, by why (`block_held`)
+#: Flock's proved range that the report holds, by why (`block_held`); ``tasks``, how many targets of each family the
+#: task list held when it last passed (`cli.task_list_guard`)
 UNKEYED = "unkeyed.json"
-UNKEYED_SECTIONS = ("peaks", "binding_peaks", "held")
+UNKEYED_SECTIONS = ("peaks", "binding_peaks", "held", "tasks")
 
 
 @cache

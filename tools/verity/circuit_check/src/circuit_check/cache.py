@@ -65,8 +65,8 @@ it lists by their names, each module's content used only to follow a move (`_chi
 pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``), unless it is
 the checker's own: those, like the checker code that ran, are held by the checker's version alone.  The checker's
 own version is the digest of this package's code (each module's AST without its docstrings, `_code`, so an edit to its prose or
-comments reruns no target) less `targets.py`, ``pins/`` and `SHARD` (which targets a shard checks and how
-shards' records are joined); the scheduler's peaks, which
+comments reruns no target) less `targets.py`, ``pins/``, `SHARD` (which targets a shard checks and how
+shards' records are joined) and `TASK_LIST` (whether a run starts at all, `cli.task_list_guard`); the scheduler's peaks, which
 decide only which targets run beside which, are beside their owners, outside this package, and no recording holds them
 (`cli.heavy`, read under `internal`).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
@@ -187,6 +187,9 @@ TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
 #: which targets a ``--shard`` checks and how ``--combine`` joins the shards' records (`circuit_check.shard`): no input of any
 #: target, since no check imports it
 SHARD = _HERE / "shard.py"
+#: the task list's guard's reference (`cli.task_list_guard`): no input of any target, since it decides only whether a run
+#: starts
+TASK_LIST = _HERE / "task_list.json"
 #: a sidecar's name beside its module's (`sidecars`): ``widget.circuit-check.py`` and ``.json`` of ``widget.py``
 SUFFIX = ".circuit-check"
 #: the binding files beside `targets.py` (each Definition module's sidecar, `sidecars`), absolute; the pins files (``pins/``'s
@@ -2078,10 +2081,10 @@ def _stat(p: str | Path) -> tuple[int, ...] | None:
 
 def version() -> str:
     """The checker's own version: the digest of this package's code (`_code`: no docstring or comment), less `targets.py` and
-    ``pins/`` (each target holds its own parts of them) and `SHARD` (no target's input).  Computed once a process
+    ``pins/`` (each target holds its own parts of them), `SHARD` and `TASK_LIST` (no target's input).  Computed once a process
     (`key` asks for it once for every target), and again only when a directory or file it read has another stat now (an
     edit in this process, as a test makes), or had one that changed within `RACY_NS` of when it was read."""
-    where = (_HERE, TARGETS, PINS, SHARD)
+    where = (_HERE, TARGETS, PINS, SHARD, TASK_LIST)
     _INTERNAL.append(True)
     try:
         if _VERSION and _VERSION[0][0] == where and all(_stat(p) == s for p, s in _VERSION[0][1]):
@@ -2095,7 +2098,7 @@ def version() -> str:
             files += [Path(d, n) for n in names]
         h = hashlib.sha512()
         for p in sorted(files):
-            if p not in (TARGETS, SHARD):
+            if p not in (TARGETS, SHARD, TASK_LIST):
                 seen.append((str(p), _stat(p)))
                 h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + _code(p) + b"\0")
         _VERSION[:] = [] if any(s is None or max(s[2], s[3]) >= at - RACY_NS for _p, s in seen) else \

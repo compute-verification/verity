@@ -1808,8 +1808,10 @@ def test_a_constructed_family_s_members_share_a_process_and_each_holds_what_it_w
 
 #: the harness with the checker a copy inside the tree (``checker/circuit_check``), as `src/circuit_check/` is inside the
 #: repository, whose scheduler's peaks the process has read before the checks (`cli.heavy`, as a run of the parallel path does)
+#: and whose task list goes through the guard (`cli.task_list_guard`, as ``--all`` runs it)
 CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root / 'checker'))")
            .replace("rep = cli.run(", "cli.heavy()\nrep = cli.run(")
+           .replace('cache=root / "cache")', 'cache=root / "cache", guard="check")')
            .replace('"hits": hits}', '"hits": hits, "checker": cli.__file__}'))
 
 
@@ -1818,9 +1820,10 @@ def _unkeyed(root: Path, mod: str, d: dict) -> None:
 
 
 @pytest.mark.slow
-def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
-    """The peaks beside their owners (`sidecars.UNKEYED`) say only which targets may run beside which (`cli.run`'s
-    scheduler), never what a check computes: an edit to any of them reuses every target and the task list (so adding a peak never makes
+def test_the_scheduler_s_peaks_and_the_guard_s_reference_are_in_no_key(tmp_path):
+    """The peaks and family counts beside their owners (`sidecars.UNKEYED`) say only which targets may run beside which
+    (`cli.run`'s scheduler) and how large the task list may grow (`cli.task_list_guard`, with its `cli.TASK_LIST`), never what
+    a check computes: an edit to any of them reuses every target and the task list (so adding a peak never makes
     `circuit-check --all` run cold), and so does an edit to the checker's docstrings and comments (`cache.version`), while an
     edit to the checker's code still reruns them all."""
     import shutil
@@ -1830,8 +1833,10 @@ def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     shutil.copytree(REPO / "tools/verity/circuit_check/src/circuit_check", checker, ignore=shutil.ignore_patterns("__pycache__"))
     _unkeyed(root, "other", {"peaks": {"SynOther_v1": 20.0}})
     assert _run(root, CHECKER)["checker"] == str(checker / "cli.py")
-    _unkeyed(root, "other", {"peaks": {"SynOther_v1": 21.0}})
+    _unkeyed(root, "other", {"peaks": {"SynOther_v1": 21.0}, "tasks": {"SynOther": 1}})
     _unkeyed(root, "top", {"peaks": {"SynTop_v1": 161.8}, "binding_peaks": {"_core_roots": 3.0}})
+    ref = json.loads((checker / "task_list.json").read_text())
+    (checker / "task_list.json").write_text(json.dumps({**ref, "targets": ref["targets"] + 1}))
     out = _run(root, CHECKER)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
     checks = checker / "checks.py"
