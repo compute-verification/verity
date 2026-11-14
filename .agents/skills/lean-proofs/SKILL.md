@@ -97,7 +97,7 @@ the lock's sections, each naming the docstring with the detail. This is the work
 - **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
   (a module or a list of them: `security/Properties` also lists `Properties/Assumptions.lean`, for one stated over the
   code, which the spec can't import), or in a module under it that reads less than the root module (`Assumptions/Flock.lean`,
-  since the root module reads Nci); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
+  since the root module reads InferenceOnly); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
   `Proofs/Flock/Soundness/Assumptions` for now), each owner in the lock. Its docstring opens with its claim id
   (`verity.claims`) and gives its rationale; a ledger points to it.
 - **List what you cite**: a guarantee a ledger, table or PR cites as proved is in `guarantees`, its record committed with

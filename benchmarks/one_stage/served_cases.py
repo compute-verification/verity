@@ -312,7 +312,7 @@ def __getattr__(name: str) -> Any:
 
 
 def _reference():
-    """`nci_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
+    """`inference_only_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
     return policy().reference()
 
 
