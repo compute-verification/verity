@@ -300,9 +300,9 @@ def place(layout: BR.Layout, blocks: bool = False) -> int:
 
 def family_of(layout: BR.Layout, blocks: bool = False) -> str:
     """The family of its window's session that a class's sample reads its challenges from (``blocks``: its stop
-    blocks' sample): its place's (`window_place.family`), ``draw/<place>``, the family `a5_coins.family` gives the
-    rank of that number. The first stage reserves it and samples from it, and whoever reads the sample again names it
-    from the class's layout, never from a file the prover wrote."""
+    blocks' sample): its place's (`window_place.family`), the prefix `window_place.FAMILY` and the place, the family
+    `a5_coins.family` gives the rank of that number. The first stage reserves it and samples from it, and whoever
+    reads the sample again names it from the class's layout, never from a file the prover wrote."""
     return WP.family(place_window(layout, blocks))
 
 
