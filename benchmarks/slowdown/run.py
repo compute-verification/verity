@@ -132,7 +132,7 @@ def certified(s: Scenario) -> dict | None:
            "links": loc.links, "declared": cert.declared, "given": cert.ingress is not None}
     if cert.declared:
         out |= {"r_in": cert.r_in, "r_out": cert.r_out, "window_buckets": cert.window_buckets,
-                "declared_x": cert.declared_x, "faulty_unit_bits": cert.faulty_unit_bits}
+                "declared_x": cert.declared_x, "incorrect_block_bits": cert.incorrect_block_bits}
     return out
 
 
@@ -145,7 +145,7 @@ def certified_md(d: dict | None) -> list[str]:
         basis = (f"{fmt(d['declared_x'])} × each server's declared inputs, r_in = {fmt(d['r_in'])} bit/s (r_out = "
                  f"{fmt(d['r_out'])} bit/s out) over a {fmt(d['window_buckets'])}-bucket link-window, at the warden "
                  f"form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect "
-                 f"ingress unit's {fmt(d['faulty_unit_bits'])} bits are excluded, and 0 when every ingress unit is "
+                 f"ingress unit's {fmt(d['incorrect_block_bits'])} bits are excluded, and 0 when every ingress unit is "
                  f"drawn); line rate, {fmt(d['links'])} bit/s, is its upper end until Lean proves that bound")
     else:
         basis = "`intake · α Φ`, a server's ingress only its declared inputs (draft:declared-ingress)"

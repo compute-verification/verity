@@ -173,11 +173,11 @@ def test_s_times_and_gates_per_flop_come_from_one_source():
     assert build(REG.override({"units.basis": design}), "reference-onsite-h200-elementary").structure.s_times == 1
 
 
-def test_unmonitored_is_the_algorithm_alone():
+def test_unregistered_is_the_algorithm_alone():
     """The bound counts every gate at capacity, so its padded size ratio is `μ`; a construction trains at its MFU on a
     circuit padded to capacity, so the best attack's is `μ / MFU`. The overhead is against the reference at that MFU, so
     no protocol gives `max(1, μ)` for the attack, 1 for the reference's own family, and the reference's time."""
-    r = evaluate_named(REG, "unmonitored-h200-kimi")
+    r = evaluate_named(REG, "unregistered-h200-kimi")
     f0 = r.scenario.context.fleet
     mfu = f0.eps_unreg * f0.unreg_mfu + (1 - f0.eps_unreg) * f0.mfu_train
     assert r.scenario.mfu == pytest.approx(mfu)
@@ -274,7 +274,7 @@ def test_no_protocol_gives_1_and_the_overhead_is_against_the_reference_at_its_mf
     compute counts at `MFU₀`, so each is its padded size ratio (3.04); without it the monitored terms shrink by 2.5
     and the unregistered leaves don't (1.22). With the draft bounds admitted onsite is far above, and still above 10
     without reference efficiency."""
-    u = evaluate_named(REG, "unmonitored-h200-kimi")
+    u = evaluate_named(REG, "unregistered-h200-kimi")
     assert u.lo == u.attack == 1.0
     remote, onsite = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-onsite-h200")
     deployed = evaluate_named(REG, "reference-remote-h200-pouw")
