@@ -39,6 +39,12 @@ open FlockSoundness
 /-- The salt hash keys Hm96 hiding at `2^-193` (`HashDerivedKey` at `ZkView.My`, `ZkView.saltHash`). -/
 def HashDerivedKeyHm96 : Prop := HashDerivedKey Discharge.ZkView.My Discharge.ZkView.saltHash
 
+/-- `HashDerivedKeyHm96` is `Claims.Hm96Hiding` at the deployed instance, by definition: it adds no assumption. -/
+theorem hashDerivedKeyHm96_iff :
+    HashDerivedKeyHm96 ↔
+      Claims.Hm96Hiding Discharge.ZkView.My Discharge.ZkView.saltHash ((2 : ENNReal) ^ (-193 : ℤ)) :=
+  Iff.rfl
+
 /-- Every pad of at most 40 columns is nonvanishing under `execArith` at `fOf PAD_C`. -/
 def PadNonvanishing40 : Prop :=
   ∀ cols ≤ 40, PadNonvanishing execArith cols (Refine.fOf Flock.Zk.PAD_C)
