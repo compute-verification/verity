@@ -66,7 +66,7 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes, stop_after: int | N
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=log, egress_bits=0, reads=params.k,
+            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=log, reads=params.k,
                                 clock=itertools.count(T0, STEP).__next__)
 
     t = threading.Thread(target=side)
@@ -78,7 +78,7 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes, stop_after: int | N
 
 
 def challenger_capabilities(secret: bytes, params: sw.WipeParams) -> dict:
-    return {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "egress_bits": 0, "reads": params.k}
+    return {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "reads": params.k}
 
 
 def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=sw.Prover,
