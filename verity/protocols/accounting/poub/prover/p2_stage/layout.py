@@ -29,7 +29,7 @@ from pathlib import Path
 
 from verity.protocols.accounting.pous.verifier.schemes import p2 as S
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[6]
 sys.path.insert(0, str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
 from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R  # noqa: E402
 from p2_store.load import (COLUMNS, LEAD, MATRICES, PARAMS, PARTS, PAYLOAD, ROW, SPEC, StoreLayout,  # noqa: E402, F401

@@ -1,0 +1,38 @@
+# The bandwidth session's prover beside PoUB's other provers: what `tools/move/layout.py --map
+# tools/move/memory_gpu_bandwidth_map.toml` moves and rewrites.
+#
+# `bandwidth.py` is the prover's side of PoUB's P2 session over PoUS's store, which the served run's bandwidth piece runs
+# (`held_bandwidth.py` in the PoUS piece, `served_bandwidth.sh` without it). It reads the store through the staging
+# decode, `stage.py` (with its segment reader, `Segments`) and `layout.py`. The three go to PoUB's prover as siblings,
+# loaded by path under their own names (`bandwidth`, `stage`, `layout`) as its other files are. The staging decode's
+# timing (`full.py`, `layer.py`, `check.py`), its receipts kernel and sketch, the toy store (`bandwidth_toy.py`, which
+# reads the CPU reference `serve.py`) and the other timing stay in `benchmarks/` and load them from where they land. No
+# file is split, edited beyond its paths or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"benchmarks/pous/p2_v1/bandwidth.py" = "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py"
+"benchmarks/torch_gpu/p2_stage/stage.py" = "verity/protocols/accounting/poub/prover/p2_stage/stage.py"
+"benchmarks/torch_gpu/p2_stage/layout.py" = "verity/protocols/accounting/poub/prover/p2_stage/layout.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), files whose bytes a digest pins, lock files and Lean sources; and the network certifier's files.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "**/*vectors*.json",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/research/src/research/store/moves.json",
+           "**/*.lean", "tests/tree.toml", "verity/protocols/accounting/certifier/**"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"benchmarks.pous.p2_v1.bandwidth" = "verity.protocols.accounting.poub.prover.p2_stage.bandwidth"
+"benchmarks.torch_gpu.p2_stage.layout" = "verity.protocols.accounting.poub.prover.p2_stage.layout"
+"benchmarks.torch_gpu.p2_stage.stage" = "verity.protocols.accounting.poub.prover.p2_stage.stage"

@@ -1946,7 +1946,7 @@
     {"file": "benchmarks/pous/held_bandwidth.py", "count": 5},
     {"file": "benchmarks/pous/memory_challenger/live.py", "count": 5},
     {"file": "verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu", "count": 1},
-    {"file": "benchmarks/pous/p2_v1/bandwidth.py", "count": 5},
+    {"file": "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py", "count": 5},
     {"file": "benchmarks/pous/p2_v1/bw_session.sh", "count": 2},
     {"file": "benchmarks/pous/p2_v1/harness.py", "count": 4},
     {"file": "verity/protocols/accounting/pous/prover/p2/p2_store/p2v1.cu", "count": 9},
