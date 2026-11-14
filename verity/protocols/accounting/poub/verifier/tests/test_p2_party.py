@@ -230,7 +230,7 @@ def test_the_verifiers_start_refuses_a_closer_key_the_configuration_does_not_pin
     from types import SimpleNamespace
 
     from verity.channel import Refused
-    from verity.protocols.accounting.pous.verifier import period
+    from verity.protocols.accounting.pous.device import onsite
 
     def pinned(key: bytes) -> dict:
         pin = {"party": "memory-challenger", "protocol": "pous", "key-sha512": hashlib.sha512(key).hexdigest()}
@@ -238,13 +238,13 @@ def test_the_verifiers_start_refuses_a_closer_key_the_configuration_does_not_pin
 
     start = p2_parties.PROTOCOLS[p2_parties.ID].starts[p2_parties.VERIFIER]
     bound = {"challenger": str(tmp_path)}
-    with pytest.raises(Refused, match="unpinned-key"):
+    with pytest.raises(Refused, match="pin"):
         start({}, bound, None)
-    with pytest.raises(Refused, match="no-key"):
+    with pytest.raises(Refused, match="state"):
         start(pinned(b"key"), bound, None)
     (tmp_path / "seed").write_bytes(b"seed")
-    monkeypatch.setattr(period, "challenger", lambda directory: SimpleNamespace(public_key=b"key"))
-    with pytest.raises(Refused, match="unpinned-key"):
+    monkeypatch.setattr(onsite, "device_key", lambda directory: SimpleNamespace(public_key=b"key"))
+    with pytest.raises(Refused, match="pin"):
         start(pinned(b"another key"), bound, None)
     with pytest.raises(NotImplementedError, match=p2_parties.GOAL):
         start(pinned(b"key"), bound, None)

@@ -34,6 +34,7 @@ import numpy as np
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import option
+from verity_vllm.pipeline.cli import write
 
 __all__ = ["COMMANDS", "main"]
 
@@ -330,7 +331,7 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
         c["numkeep"] = None if np.isnan(sc[0, 4]) else float(sc[0, 4])
         c["numdup"] = None if np.isnan(sc[0, 5]) else float(sc[0, 5])
         summary.append(c)
-        print(json.dumps({k: c[k] for k in ("id", "kind", "S", "V", "p", "kept", "z_nunique", "ties", "numkeep", "numdup", "probe_keep_eq_real")}), flush=True)
+        write(json.dumps({k: c[k] for k in ("id", "kind", "S", "V", "p", "kept", "z_nunique", "ties", "numkeep", "numdup", "probe_keep_eq_real")}))
     # drain: the real entry point on a stacked batch
     dc = [c for c in cases if c["kind"] == "drain"][0]
     V = dc["V"]
@@ -353,14 +354,14 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
             s *= 2
         arrays[f"drain_B{B}_keep"] = np.packbits(keep, axis=1, bitorder="little")
         dc["batches"].append({"B": B, "S": s, "kept": [int(k.sum()) for k in keep]})
-        print(json.dumps({"drain": B, "S": s, "kept": [int(k.sum()) for k in keep][:8]}), flush=True)
+        write(json.dumps({"drain": B, "S": s, "kept": [int(k.sum()) for k in keep][:8]}))
     summary.append(dc)
     np.savez_compressed(o / "fixture.npz", **arrays)
     (o / "manifest.json").write_text(json.dumps({
         "cases": summary, "seed": seed, "num_sm": int(num_sm), "gpu": torch.cuda.get_device_name(0), "torch": torch.__version__,
         "triton": triton.__version__, "vllm": __import__("vllm").__version__, "record": os.path.basename(record_npz) if record_npz else None,
         "secs": round(time.time() - t0, 1)}, indent=1))
-    print("cases", len(summary), "->", o / "fixture.npz", f"{(o / 'fixture.npz').stat().st_size / 1024:.0f} KB", f"{time.time() - t0:.1f}s")
+    write(f"cases {len(summary)} -> {o / 'fixture.npz'} {(o / 'fixture.npz').stat().st_size / 1024:.0f} KB {time.time() - t0:.1f}s")
 
 
 # ------------------------------------------------------------------------------------------------ check (CPU)
@@ -425,8 +426,8 @@ def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
                                 "lanes_differ": int(len(diff)), "first": [int(i) for i in diff[:8]], "numkeep_model": tr.get("numkeep"), "numdup_model": tr.get("numdup"),
                                 "numkeep_kernel": c.get("numkeep"), "numdup_kernel": c.get("numdup")})
         if verbose:
-            print(json.dumps({"id": c["id"], "kind": c["kind"], "S": S, "V": V, "mask_ok": mask_ok, "stats_ok": stats_ok, "zgroup_ok": zg_ok, "ties": c.get("ties"),
-                              "kept": c.get("kept")}), flush=True)
+            write(json.dumps({"id": c["id"], "kind": c["kind"], "S": S, "V": V, "mask_ok": mask_ok, "stats_ok": stats_ok, "zgroup_ok": zg_ok, "ties": c.get("ties"),
+                              "kept": c.get("kept")}))
     dc = [c for c in man["cases"] if c["kind"] == "drain"]
     if dc:
         dc = dc[0]
@@ -445,10 +446,10 @@ def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
             if ok_rows != B:
                 rep["fail"].append({"drain_B": B, "S": S, "rows_ok": ok_rows})
             if verbose:
-                print(json.dumps({"drain_B": B, "S": S, "rows_ok": f"{ok_rows}/{B}"}), flush=True)
+                write(json.dumps({"drain_B": B, "S": S, "rows_ok": f"{ok_rows}/{B}"}))
     rep["ok"] = not rep["fail"] and rep["mask_ok"] == rep["n"] and rep["stats_ok"] == rep["n"] and rep["zgroup_ok"] == rep["zgroup_checked"]
     if verbose:
-        print("TOTALS", json.dumps({k: v for k, v in rep.items() if k not in ("fail", "drain")}), "fail:", rep["fail"][:5])
+        write(f"TOTALS {json.dumps({k: v for k, v in rep.items() if k not in ('fail', 'drain')})} fail: {rep['fail'][:5]}")
     return rep
 
 
@@ -487,4 +488,4 @@ def main(args: ProduceOptions | CheckOptions | ManifestOptions) -> None:
         sys.exit(0 if rep["ok"] else 1)
     else:
         for c in build_manifest(MANIFEST_SEED, with_record=args.record):
-            print(json.dumps(c))
+            write(json.dumps(c))

@@ -19,9 +19,11 @@ from pathlib import Path
 import pytest
 
 from verity import config as K
+from verity.commitments.crypto import lms
 from verity.protocol import Channel
 from verity.channel import Refused
 from verity.protocols.accounting.certifier.verifier import parties as NC
+from verity.protocols.accounting.pous.device import onsite
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import Law
@@ -304,15 +306,38 @@ def test_the_live_challenger_is_bound_only_when_given(tmp_path, capsys):
 
 def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_it_nothing(tmp_path, capsys,
                                                                                          monkeypatch):
-    """The prover node's and the auditor's host's runtime parties need what their machine hands them (`held`: the
-    served store, the auditor's signer and log, the party key, the request), which doesn't reach the table yet: the
-    run raises by the row's name before the served window starts."""
+    """The prover node's runtime parties need what their protocol's start reads (the served store, the card, setup's
+    request), which doesn't reach the table yet: the run raises by the row's name before the served window starts."""
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
-    for machine in (T.PROVER_NODE, T.AUDITOR_HOST):
-        state = tmp_path / machine
-        with pytest.raises(NotImplementedError) as e:
-            R.run_main([str(CONFIG), "--on", machine, "--bindings", bindings(tmp_path), "--state", str(state)], REG)
-        assert e.value.args == (T.NOT_YET,) and not (state / "out.started").exists()
+    state = tmp_path / T.PROVER_NODE
+    with pytest.raises(NotImplementedError) as e:
+        R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path), "--state", str(state)], REG)
+    assert e.value.args == (T.NOT_YET,) and not (state / "out.started").exists()
+
+
+def test_the_memory_challengers_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
+                                                                                                     capsys):
+    """On the auditor's host each memory challenger's start checks its key against `demos/onsite_full.toml`'s pin
+    first: a state with no key is refused ``key``, and one whose key the configuration doesn't pin ``pin``, before any
+    request is read or any party or the served window starts."""
+    state = tmp_path / T.AUDITOR_HOST
+    run = [str(CONFIG), "--on", T.AUDITOR_HOST, "--bindings", bindings(tmp_path), "--state", str(state)]
+    assert R.run_main(run, REG) == 2 and "refused key" in capsys.readouterr().err
+    other = b"a key the auditor never pinned"
+    for component in ("pous", "wipe"):
+        mine = state / "runs" / component / T.MEMORY_CHALLENGER
+        mine.mkdir(parents=True)
+        (mine / "seed").write_bytes(bytes(lms.DEPLOYED.N))
+        lms.LeafState.create(mine / onsite.KEY_STATE, other, lms.DEPLOYED.H)
+    assert R.run_main(run, REG) == 2
+    err = capsys.readouterr().err
+    assert "refused pin" in err and hashlib.sha512(other).hexdigest() in err
+    assert not (state / "runs" / "pous" / T.MEMORY_CHALLENGER / "tree.bin").exists()
+
+
+def test_the_wipes_and_the_rounds_parties_each_have_their_protocols_start():
+    for s in (T.WIPE, T.POUS):
+        assert sorted(s.protocol().starts) == sorted(s.roles.values())
 
 
 def test_a_binding_the_file_lacks_is_refused(tmp_path, capsys):
