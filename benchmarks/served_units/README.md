@@ -103,7 +103,7 @@ their count:
 uv run -q python benchmarks/served_units/cover_count.py art:ID              # the Boolean version counted where the listed form has none
 uv run -q python benchmarks/served_units/cover_count.py art:ID --form listed # the listed form only
 uv run -q python benchmarks/served_units/cover_count.py cover.json --check  # exit 1 unless every type has one
-uv run -q python benchmarks/served_units/cover_count.py art:ID --card benchmarks/sampling_plan/glm53_blocks.json  # exit 2: not its types
+uv run -q python benchmarks/served_units/cover_count.py art:ID --card benchmarks/sampling_plan/glm53_blocks.json  # exit 2 unless its types are the card's
 ~~~
 
 ## Interface
