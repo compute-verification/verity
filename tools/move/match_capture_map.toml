@@ -10,6 +10,17 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "adapters/vllm/verity_vllm/pipeline/m1_capture.py" = "adapters/vllm/verity_vllm/pipeline/match_capture.py"
 "adapters/vllm/tests/pipeline/test_m1_capture_main.py" = "adapters/vllm/tests/pipeline/test_match_capture_main.py"
 
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), files whose bytes a digest pins, recorded data and Lean sources.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
 [modules]
 "verity_vllm.pipeline.m1_capture" = "verity_vllm.pipeline.match_capture"
 "tests.pipeline.test_m1_capture_main" = "tests.pipeline.test_match_capture_main"
