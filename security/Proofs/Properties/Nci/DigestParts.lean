@@ -326,9 +326,9 @@ private theorem withinOf_jsonEquiv {leaves : Bool → Nat → Option Nat} {s s' 
   rw [spaceOf_jsonEquiv hs, natJ_jsonEquiv hi]
 
 private theorem arr_of_jsonEquiv {a : Array Json} {b : Json} (h : JsonEquiv (.arr a) b) :
-    ∃ c, b = .arr c ∧ a.size = c.size ∧ ∀ k (h₁ : k < a.size) (h₂ : k < c.size), JsonEquiv a[k] c[k] := by
+    ∃ ys, b = .arr ys ∧ a.size = ys.size ∧ ∀ k (h₁ : k < a.size) (h₂ : k < ys.size), JsonEquiv a[k] ys[k] := by
   cases b with
-  | arr c => exact ⟨c, rfl, (jsonEquiv_arr_iff a c).1 h⟩
+  | arr ys => exact ⟨ys, rfl, (jsonEquiv_arr_iff a ys).1 h⟩
   | _ => simp [JsonEquiv, jsonForm] at h
 
 private theorem explicitItem_jsonEquiv {leaves : Bool → Nat → Option Nat} {m m' : String} {r r' : Json} {x : Ref}
@@ -339,7 +339,7 @@ private theorem explicitItem_jsonEquiv {leaves : Bool → Nat → Option Nat} {m
   rcases l with _ | ⟨s, _ | ⟨i, _ | ⟨k, _ | ⟨y, l⟩⟩⟩⟩
   all_goals try (delta explicitItem at h; injection h; done)
   rcases l' with _ | ⟨s', _ | ⟨i', _ | ⟨k', _ | ⟨y', l'⟩⟩⟩⟩
-  all_goals try (simp at hsz; done)
+  all_goals try simp at hsz
   have hs : JsonEquiv s s' := hel 0 (by simp) (by simp)
   have hi : JsonEquiv i i' := hel 1 (by simp) (by simp)
   have hk : JsonEquiv k k' := hel 2 (by simp) (by simp)
@@ -425,10 +425,10 @@ theorem part_jsonEquiv {n m : Nat} {j j' : Json} {leaves : Bool → Nat → Opti
     obtain ⟨s, i, b, c, b0, c0, rfl, hb, hc0, hq⟩ := parse_affine h (by rw [h1]; rfl) (by rw [h2]; rfl) h3
     obtain ⟨⟨l'⟩, rfl, hsz, hel⟩ := arr_of_jsonEquiv hae
     rcases l' with _ | ⟨s', _ | ⟨i', _ | ⟨b', _ | ⟨c', _ | ⟨y', l'⟩⟩⟩⟩⟩
-    all_goals try (simp at hsz; done)
+    all_goals try simp at hsz
     have hs : JsonEquiv s s' := hel 0 (by simp) (by simp)
     have hi : JsonEquiv i i' := hel 1 (by simp) (by simp)
-    refine affine_fwd h1' h2' h3' ((intJ_jsonEquiv (hel 2 (by simp) (by simp))) ▸ hb)
+    refine affine_fwd (b0 := b0) (c0 := c0) h1' h2' h3' ((intJ_jsonEquiv (hel 2 (by simp) (by simp))) ▸ hb)
       ((natJ_jsonEquiv (hel 3 (by simp) (by simp))) ▸ hc0) ?_
     rw [← spaceOf_jsonEquiv hs, ← withinOf_jsonEquiv hs hi]
     exact hq
@@ -438,10 +438,10 @@ theorem part_jsonEquiv {n m : Nat} {j j' : Json} {leaves : Bool → Nat → Opti
       parse_strided h h1 h2 h3 h4
     obtain ⟨⟨l'⟩, rfl, hsz, hel⟩ := arr_of_jsonEquiv hae
     rcases l' with _ | ⟨s', _ | ⟨i', _ | ⟨b', _ | ⟨inner', _ | ⟨os', _ | ⟨is', _ | ⟨c', _ | ⟨y', l'⟩⟩⟩⟩⟩⟩⟩⟩
-    all_goals try (simp at hsz; done)
+    all_goals try simp at hsz
     have hs : JsonEquiv s s' := hel 0 (by simp) (by simp)
     have hi : JsonEquiv i i' := hel 1 (by simp) (by simp)
-    refine strided_fwd h1' h2' h3' h4' ((intJ_jsonEquiv (hel 2 (by simp) (by simp))) ▸ hb)
+    refine strided_fwd (b0 := b0) (inner0 := inner0) (os0 := os0) (is0 := is0) (c0 := c0) h1' h2' h3' h4' ((intJ_jsonEquiv (hel 2 (by simp) (by simp))) ▸ hb)
       ((natJ_jsonEquiv (hel 3 (by simp) (by simp))) ▸ hin) ((intJ_jsonEquiv (hel 4 (by simp) (by simp))) ▸ ho)
       ((intJ_jsonEquiv (hel 5 (by simp) (by simp))) ▸ his) ((natJ_jsonEquiv (hel 6 (by simp) (by simp))) ▸ hc0)
       hi0 ?_
