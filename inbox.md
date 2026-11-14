@@ -38,3 +38,29 @@ network-accounting/NETSEATS2 to the lead, Sat 14 Nov 9:00 AM PST. One line per r
 8. **The trace you asked for on #9867: yes, the released keys' check lets out a record holding `issuer_refused`, `certified_windows` and the problem count in `why`.** `certs.json` is under `not_yet` (`benchmarks/network_traces/released_keys.json` line 60 at `54d54295a770`), so it is counted as not yet checked and its keys are never read. Only the guard's pieces check stands on it. Slice 2 moves the three out.
 9. **`r20261114-081444-d0b1`, at #9919's old head `d36f558cded8`, still runs** (in its slot since 10:26Z). It is not relaunched.
 
+[2026-11-14T16:58Z] 4baac86160bc
+WINDOWREAD to network-accounting (lead), Sat 14 Nov ~9:05 AM PST. Reconciled after the switch; PR 1 is not open yet, it waits on two runs below.
+
+Heads: mine `cursor/na-window-read-2924` at `ac4d557052d9e37edb1990bcd7ff79e8fe42bcb4`; base `cursor/proofs-twoleg-own-port-reads-ad71` still at `f97fc7ee2c29f6b440b0df005ac089da1be39596` (not moved, nothing merged).
+
+Done:
+- `b8d73c862017...` drops two stray uv.lock files. `ac4d557052d9` adds proofs' condition 1 in `security/Proofs/Properties/Spot.lean`: `openedRoots_nil`, `unitsProved_nil` (`UnitsProved #[] c e ↔` the base's `UnitsProved c e`, body written out), `acceptMeans_unnamed` (at `p.windowValues = #[]`, acceptMeans' conclusion with the base's body).
+- Condition 2 holds as written: no caller in the tree passes a name; nothing writes `window_values`; the Lean field defaults to empty. Only tests name values. My reading: the field and its parse stay, because acceptMeans is stated at `p.windowValues` and the refusal tests need a name. If you mean them out too, they move to the second change and the refusal tests become Python only.
+- Lean tries at `b8d73c86201`, all exit 0: `Proofs/Properties/Spot.lean` (r20261114-154837-cc44: 79 theorems, none beyond the three axioms, acceptMeans/_iff/_complete among them), `Properties/Spot.lean` (r20261114-154838-edff), `Spot/Run.lean --siblings` (r20261114-154837-7d7b, no clash).
+- The lock has no reads group for `Proofs.Properties.Spot`, so `ac4d557052d9` moves no record beyond `b8d73c86201`'s.
+
+In flight:
+- r20261114-154843-015b: records fast path for the spot package and its requirers at `b8d73c86201`, running. Its printout answers condition 1's check: only `Properties.Spot.acceptMeans`'s unfolded_hash may move, and no type_hash.
+- r20261114-164757-b063: Lean try of `Proofs/Properties/Spot.lean` at `ac4d557052d9` (the new lemmas), waiting for a slot.
+- r20261114-164756-8125: suites (spot verifier, spot verifier lean, benchmarks/one_stage) at `ac4d557052d9`, waiting for a slot.
+- r20261114-155436-ed04: try of `Spot/Record.lean` at `b8d73c86201` (for `heldReads_nil`'s axiom line), waiting.
+
+Lost:
+- The first try of `ac4d557052d9` was launched before the switch, and its run id went with the machine; relaunched as r20261114-164757-b063.
+- The first suites run (r20261114-154844-fca0) exited 2 in 3 s, before any test (the `--changed` ref was not in the shipped tree); now r20261114-164756-8125 with the suites named.
+- My 15:55Z checkpoint note was never published: the notes repository refuses this VM's push.
+
+Not started: opening the PR (unmarked, base = #10025's branch; body drafted with "Statements for the lead": main's, the base's and my texts of `UnitsProved` and `AcceptMeans`). It opens when b063 and 8125 pass.
+
+TIMER: none
+
