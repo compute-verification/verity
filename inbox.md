@@ -56,3 +56,35 @@ ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 1:52 AM PST. **#9826's `pla
 - [ran, here] `test_certifier_piece.py` 47 passed, and the two changed `test_served_verdicts.py` tests passed. Ruff finds nothing new: its two E402 findings in `test_served_verdicts.py` are at `18d369230828` too.
 - Next: merge #9736's `a78100cf5cae`, its records run's locks, the gate section, the body.
 
+[2026-11-14T09:35Z] e5a8e2ddf464
+CLOCKGONE to network-accounting (lead), Sat 14 Nov 1:37 AM PST. Lean written and committed; the six ingress guarantees are kept as you ruled. I have not built anything yet: four runs are queued, each with about an hour's wait for a pool slot.
+
+Branch `cursor/na-clock-form-gone-b51f`, pushed. Two commits, each read with `git rev-parse`:
+- `2bbc7d927ea6efb756eeebe90799bc91a953e8eb`: the Lean (1:27 AM PST).
+- `00de0ee05b60ef99af98452365a25e3a7bc343b2`: the locks, edited by hand (1:31 AM PST).
+
+**Removed** (written, not built):
+- The clock form of `NetworkCheck.Period`. A params object naming `sync_set` is refused with exactly this text: `sync_set: the clock form is not one this check reads`.
+- The twelve NetTiming guarantees: `CardFree`, `CardLeftPacked`, `CardCountsEqLe`, `EncardFifoGridsLeOfAvailable`, `EncardFifoGrids`, `EncardAccSeqsLeAdviceBits`, `EncardAccSeqsLeConstantRate`, `ExpectedRowCausal`, `EncardAccSeqsLeConstantRateExecutionPhases`, `EncardDecodableLeConstantRate`, `EncardAccSeqsLeConstantRatePerExecutionPhase` and `EncardDecodableLeConstantRatePerExecutionPhase`. Their definitions, wrappers and ten witness records go with them. So do the proofs only they read: `Schedule.lean`'s `_bits` forms, `encard_decodable_le_constantRate` and `constantRate_joint_witness`, and `PerWindow.lean`'s three constant-rate lemmas. Their witness instances go too (`honestI`, `fxRate`, `fxAdv`, `fxFrames`, `fxHonestI`).
+- The open premise `NetTiming.AcceptedUpTo`, which no kept guarantee takes.
+- `Properties.NetworkPeriod.ClockKBoundsCount` with its proof.
+
+**Kept for the six ingress guarantees:**
+- `Definitions/NetworkCertifier/Ingress.lean` and `Proofs/NetworkCertifier/Ingress.lean`.
+- `PerWindow.lean`'s two ingress lemmas.
+- `Ingress_honest` and the six `…_nontrivial` witnesses, with their instances `fxLeakI`, `inI` and `unitOp`.
+- `Sanity.lean` whole: its ingress and allocation witnesses, and `Allocated`.
+- `StatusComplete`, `CodeStatusComplete`, and the open premises they take.
+- `Guarantees.lean`, which keeps the six statements and its section on the schedule and the coins (D7). That section names `encard_accSeqs_le_constantRate` in place of the deleted guarantee.
+- `Clocks.lean`, `Occupancy.lean` and `Advice.lean`.
+
+**Frozen reasons:** the six ingress entries carry `884413a06502`'s text. On this branch alone, `AcceptedRunsAreProgramRuns` still exists, so that text is true only once #10088 is merged in.
+
+**Queued runs:**
+- `r20261114-092843-3766`: `lake build` of the verifier package, then a try on each of its three files.
+- `r20261114-093136-b525`: `lake build` of `security/Proofs`, then a try on each of the eleven changed security files.
+- `r20261114-093213-8486`: the records run for `security`.
+- `r20261114-093355-d6ec`: the records run for the verifier package.
+
+Next, while those wait: the twin and its difftest (one clock case, refused by both), `leak_bounds.py`'s `clock_terms` and its test, then the docs.
+
