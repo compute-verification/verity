@@ -20,7 +20,7 @@ Three exact backends, each with that epilogue in that order (run.py's `--kernel`
   m16n8k32; on sm_90 a second exact kernel beside wgmma.
 - **any card: `int_mm.py`** (`--kernel int_mm`): `torch._int_mm`, cuBLASLt's s32 GEMM, then the epilogue as its own
   launch, `"fused"` (one Triton kernel of the Definition's PTX, held to `int_mm.ptx_audit`) or `"eager"` (four torch
-  kernels). `int_mm.linear` is the plain GEMM that `p2_stage` and `j10r_sm90` call.
+  kernels). `int_mm.linear` is the plain GEMM that `p2_stage` calls.
 
 Set aside: vLLM's CUTLASS int8 GEMM (its epilogue applies s_w first; on the transposed product it is the Definition's
 order but needs M a multiple of 16 and writes y^T), a baseline in `bench.py`.

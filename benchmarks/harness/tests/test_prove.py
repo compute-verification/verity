@@ -1601,8 +1601,9 @@ def registered(block: str) -> str:
 
     from verity.definitions import boolean
     from verity.circuits.call_scope import spec_base, spec_statics, specialization
+    from verity.definitions.registry.catalog import load
 
-    return boolean.boolean_version(specialization(spec_base(block), spec_statics(block))).id
+    return boolean.boolean_version(specialization(spec_base(block), spec_statics(block), load()[0])).id
 
 
 def test_a_definition_is_a_types_boolean_version_only_where_the_trees_registry_says_so():
@@ -2333,13 +2334,14 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     assert arts[R.SAMPLING] in targets
     head, seconds = by["benchmarks/prover-gpus-per-serving-gpu"], by["benchmarks/prover-gpu-seconds-per-token"]
     assert head["value"] == pytest.approx(0.5420038985704952, rel=1e-12) and seconds["value"] == t["gpu_seconds_per_token"]
-    assert head["inputs"][0] == (f"modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
-                                 f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}")
-    assert head["inputs"][1].startswith("serving rate (modeled, a stated input): MFU ") and head["inputs"][2:] == targets
-    assert seconds["inputs"][0].startswith("modeled: ") and seconds["inputs"][1:] == targets
+    assert head["mark"] == "modeled" and head["inputs"][:2] == [
+        "modeled", f"proving: modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
+                   f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}"]
+    assert head["inputs"][2].startswith("serving rate (modeled, a stated input): MFU ") and head["inputs"][3:] == targets
+    assert seconds["mark"] == "modeled" and seconds["inputs"][0].startswith("modeled: ") and seconds["inputs"][1:] == targets
     assert "why" not in head and head["ci95"] is None and head["host"]["node"] == "cpu-node-0"
     for name in ("benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token"):
-        assert by[name]["value"] is None and by[name]["inputs"] == targets
+        assert by[name]["value"] is None and by[name]["mark"] == "modeled" and by[name]["inputs"] == ["modeled", *targets]
         assert by[name]["why"] == "not measured: no Lean verifier run of record measures a block type " \
                                   "(`run_of_record=prove-glm53-lean-verify`)"
     steady = next(x["block_types"] for x in doc["sources"] if x["source"] == P.STEADY)
@@ -2357,7 +2359,7 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     for name, key, unit in (("benchmarks/lean-verifier-seconds-per-token", "lean_verifier_seconds_per_token", "s an AND gate"),
                             ("benchmarks/proof-bytes-per-token", "proof_bytes_per_token", "bytes a witness bit")):
         v = t[key]
-        assert lean[name]["value"] == v["value"] and "why" not in lean[name]
+        assert lean[name]["value"] == v["value"] and lean[name]["mark"] == "modeled" and "why" not in lean[name]
         own, family, fitted = (v["sources"][k] for k in ("measured", "family", "fitted"))
         assert own["block_types"] == 1 and fitted["block_types"] > 0 and v["fitted_rate"] > 0
         assert lean[name]["inputs"][0] == (
@@ -2376,11 +2378,36 @@ def test_the_proving_totals_marks_give_the_plans_own_prices_where_its_record_sta
     mix = fixture("mix.json")
     s, _ = recorded(tmp_path, cells=[c | {"prove_s": 0.002 * c["taken"]} for c in mix["cells"]])
     doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
-    marks = [m["inputs"][0] for m in R.measurements(doc, {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"})]
+    head, seconds = R.measurements(doc, {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"})
+    marks = [head["inputs"][1], seconds["inputs"][0]]
     planned = doc["totals"]["planned"]
     assert [m.rsplit("; ", 1)[1] for m in marks] == [
         f"at the sampling plan's own prices, which its planner sized the sample at: {planned[k]:.6g}"
         for k in ("gpus_per_serving_gpu", "gpu_seconds_per_token")]
+
+
+def test_the_prover_gpus_a_serving_gpu_take_the_weaker_of_provings_and_the_serving_rates_marks(tmp_path):
+    """The headline is the proving total over a stated serving rate, so its mark is the weaker of the two's (measured,
+    then partial, then modeled), and its inputs list both; the proving GPU-seconds keep proving's own."""
+
+    mix = fixture("mix.json")
+    s, _ = recorded(tmp_path, cells=[c | {"prove_s": 0.002 * c["taken"]} for c in mix["cells"]])
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    assert R.STRENGTH == ("measured", "partial", "modeled") and set(R.STRENGTH) == set(kit.MARKS)
+    metrics = {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"}
+    for proving, missing, serving, weaker in (("measured", [], "modeled", "modeled"), ("measured", [], "measured", "measured"),
+                                              ("measured", ["t"], "measured", "partial"), ("modeled", [], "measured", "modeled"),
+                                              ("measured", ["t"], "modeled", "modeled")):
+        given = doc | {"totals": doc["totals"] | {"status": proving, "missing": missing},
+                       "serving": doc["serving"] | {"status": serving}}
+        head, seconds = R.measurements(given, metrics)
+        own = "partial" if missing else proving
+        assert (head["mark"], seconds["mark"]) == (weaker, own), (proving, missing, serving)
+        assert head["inputs"][0] == weaker and head["inputs"][1].startswith(f"proving: {own}")
+        assert head["inputs"][2].startswith(f"serving rate ({serving}, a stated input): ")
+        assert seconds["inputs"][0].startswith(own)
+        w = kit.writer(tmp_path / f"{proving}-{len(missing)}-{serving}")
+        assert w.measurement(**head)["inputs"] == head["inputs"] and w.measurement(**seconds)["mark"] == own
 
 
 def test_the_validation_fails_where_no_steady_state_row_prices_a_type_or_a_total_leaves_a_type_out():

@@ -612,26 +612,33 @@ def _periods(root: Path, rate: P.Serving, ratio: float, sampled: P.SamplingPlan 
 # ---- the result ------------------------------------------------------------------------------------------------------------
 
 
-def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str]:
-    """A total's value and its mark, in the table's words. The proving totals: their status (`measured`, `modeled`, or
-    `partial` with how many block types it leaves out), the share of the proving time steady-state rows measure and
-    the range's other end. The Lean verifier's seconds and the proof's bytes: `not measured`, with no value, else the
-    status, each source's share of the figure (own, family, fitted) with the fitted rate, and the block type measured
-    with what its accept holds (its record's `label`)."""
+#: the kit's marks (`kit.MARKS`) from the strongest to the weakest: a total computed from two figures takes the weaker
+#: of their marks
+STRENGTH = ("measured", "partial", "modeled")
+
+
+def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str, str]:
+    """A total's value, its mark (`kit.MARKS`) and that mark in the table's words. The proving totals: their status
+    (`measured`, `modeled`, or `partial` with how many block types it leaves out), the share of the proving time
+    steady-state rows measure and the range's other end. The Lean verifier's seconds and the proof's bytes: `not
+    measured`, with no value and the mark `modeled` (no run of record measures every block type, so a figure the
+    table has is in part fitted), else the status, each source's share of the figure (own, family, fitted) with the
+    fitted rate, and the block type measured with what its accept holds (its record's `label`)."""
 
     t = doc["totals"]
     if figure in ("gpus_per_serving_gpu", "gpu_seconds_per_token"):
+        mark = "partial" if t["missing"] else t["status"]
         status = (f"partial: {len(t['missing'])} block type(s) with no figure, whose proving it leaves out"
                   if t["missing"] else t["status"])
         low, high = t[f"{figure}_range"]
         other = "" if low == high else f"; range {low:.6g} to {high:.6g}, the other end {t['range_basis']}"
         own = (f"; at the sampling plan's own prices, which its planner sized the sample at: {t['planned'][figure]:.6g}"
                if t.get("planned") else "")
-        return t[figure], (f"{status}: steady-state measurements cover {t['steady_time_share']:.1%} of the proving time"
+        return t[figure], mark, (f"{status}: steady-state measurements cover {t['steady_time_share']:.1%} of the proving time"
                            f"{' it prices' if t['missing'] else ''}{other}{own}")
     v = t[figure]
     if v is None:
-        return None, ("not measured: no Lean verifier run of record measures a block type "
+        return None, "modeled", ("not measured: no Lean verifier run of record measures a block type "
                       f"(`{RUN_OF_RECORD}={record_name(doc['workload'], LEAN)}`)")
     m = t["lean_verify"][0]
     status = "modeled, not measured" if v["status"] == "modeled" else v["status"]
@@ -640,27 +647,32 @@ def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str]:
     rate = ("no fitted rate" if v["fitted_rate"] is None else
             f"fitted rate {v['fitted_rate']:.4g} {LEAN_RATE_UNITS[figure]}")
     one = "one block type" if len(t["lean_verify"]) == 1 else f"{len(t['lean_verify'])} block types, the most proving time first"
-    return v["value"], (f"{status}: {shares} ({rate}); measured on {one}, `{m['block']}` ({m['label']}, run {m['run']}): "
+    return v["value"], v["status"], (f"{status}: {shares} ({rate}); measured on {one}, `{m['block']}` ({m['label']}, run {m['run']}): "
                         f"{v['basis']}")
 
 
 def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dict]:
     """The kit writer's measurements of a table, one a metric id of `metrics`: the total its
-    key names (`FIGURES`), in that total's unit. A total with a value has its mark as the first of its inputs, since
-    the kit holds a `why` only for a measurement with no value, then (for the prover GPUs a serving GPU) the stated
-    serving rate, then the records the table read; a total with none has its mark as its `why`."""
+    key names (`FIGURES`), in that total's unit, with its mark (`_mark`). A total with a value has its mark in the
+    table's words as the first of its inputs, since the kit holds a `why` only for a measurement with no value, then
+    the records the table read; a total with none has those words as its `why`. The prover GPUs a serving GPU are the
+    proving total over the stated serving rate, so their mark is the weaker of the two's (`STRENGTH`), first among
+    their inputs, then proving's words and the serving rate's."""
 
     if bad := sorted(set(metrics.values()) - FIGURES.keys()):
         raise ValueError(f"no total of the table is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
     targets = list(dict.fromkeys(t for i in doc["inputs"] for t in i["targets"]))
     s, out = doc["serving"], []
     for name, figure in metrics.items():
-        value, mark = _mark(doc, figure)
+        value, mark, said = _mark(doc, figure)
         if value is None:
-            out.append({"name": name, "value": None, "unit": FIGURES[figure], "why": mark, "inputs": targets})
+            out.append({"name": name, "value": None, "unit": FIGURES[figure], "why": said, "inputs": targets, "mark": mark})
             continue
-        serving = [f"serving rate ({s['status']}, a stated input): {s['basis']}"] if figure == "gpus_per_serving_gpu" else []
-        out.append({"name": name, "value": value, "unit": FIGURES[figure], "inputs": [mark, *serving, *targets]})
+        inputs = [said]
+        if figure == "gpus_per_serving_gpu":
+            mark = max(mark, s["status"], key=STRENGTH.index)
+            inputs = [mark, f"proving: {said}", f"serving rate ({s['status']}, a stated input): {s['basis']}"]
+        out.append({"name": name, "value": value, "unit": FIGURES[figure], "inputs": [*inputs, *targets], "mark": mark})
     return out
 
 

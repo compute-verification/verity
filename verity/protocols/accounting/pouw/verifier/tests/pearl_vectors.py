@@ -63,9 +63,9 @@ def inputs() -> dict:
     ops = [[bf16_of(1 + (a % 1000) / 7.0) ^ (0x8000 * (a & 1)), bf16_of(0.01 + (b % 997) / 101.0), bf16_of((c % 1001) / 3.0 - 150)]
            for a, b, c in zip(ops[0::3], ops[1::3], ops[2::3])]
     ops += [[0x3F80, 0x4000, 0x3F80], [0x4315, 0x3F80, 0x3B95], [0x0001, 0x3F80, 0x8001], [0x7F7F, 0x3F00, 0x7F7F]]
-    census = [{"device": (a >> 20) & 1, "alpha": 0x3F80 | (a % 0x7F), "x": (x % 0x7F00) | (0x8000 * (x & 1)), "l2": 0x3C00 + l % 0x800,
+    census = [{"device": (a >> 20) & 1, "alpha": 0x3F80 | (a % 0x7F), "x": (x % 0x7F00) | (0x8000 * (x & 1)), "l2": 0x3C00 + l2 % 0x800,
                "z": 2.0 ** ((z % 60) - 30), "m": 2.0 ** ((m % 60) - 30) * 1.5, "lb": 20000 + lb % 30000}
-              for a, x, l, z, m, lb in zip(*(iter(words("census", 6 * 64)),) * 6)]
+              for a, x, l2, z, m, lb in zip(*(iter(words("census", 6 * 64)),) * 6)]
     matmul = [{"m": 2, "n": 3, "k": 64, "a": bytes(fp8_codes("mm/a", 128)).hex(), "b": bytes(fp8_codes("mm/b", 192)).hex()},
               {"m": 1, "n": 2, "k": 40, "a": bytes(fp8_codes("mm2/a", 40)).hex(), "b": bytes(fp8_codes("mm2/b", 80)).hex()}]
     tiles = [{"k": K, "seed_a": seeds[0].hex(), "a": side("t0/a", 16, 0, seeds[0], seeds[1], 32), "b": side("t0/b", 16, 1, seeds[1], seeds[1], 48)},
