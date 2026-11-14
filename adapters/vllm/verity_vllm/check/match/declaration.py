@@ -260,7 +260,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     # the artifact's `workload_digest` field is a CLAIM: recompute it from the descriptor GP-01 wrote beside the
     # artifact (descriptor.json.gz) and refuse a mismatch, so a digest edited/zeroed in the Build's artifact cannot flow into this checker's
     # copy (global_match_global_program.json) and the finalizer's same-attempt rule.  Absent descriptor (an evidence dir pulled without the
-    # 17-25 MB file) -> recorded as unverified, never as verified.
+    # descriptor) -> recorded as unverified, never as verified.
     digest_verification = {"verified": False, "why": "descriptor.json.gz not beside the artifact"}
     dpath = os.path.join(os.path.dirname(os.path.abspath(artifact_path)), "descriptor.json.gz")
     if os.path.exists(dpath):
