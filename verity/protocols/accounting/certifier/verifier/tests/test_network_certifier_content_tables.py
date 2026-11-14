@@ -719,6 +719,43 @@ def test_under_form_2_a_fail_before_any_data_cell_is_filed_in_no_class(ran, load
     assert [CT.end_of(row) for row in told["end.1"]] == [(True, 0), (True, 2), (True, 1)]
 
 
+def test_the_filed_releases_are_each_classes_rows_by_release_number_under_the_signed_head(loads, counted, monkeypatch):
+    """What the network certifier hands the prover of an execution phase's filing: each class's releases by their
+    place in the release order, in row order, so row r of class i's tables is of release `classes[i][r]`, under the
+    digest of the head signed over those tables. Under form 2 the list leaves out the `FAIL` before any `DATA`
+    cell, and each class's list is as long as the head's count of it; under form 1 it is the releases whose rows
+    are held. It is made by the one call of the rule the tables are laid by: with another rule there, both are that
+    rule's. A head that counts other rows than the hand files is refused, and an execution phase with no head has
+    the record with no list."""
+    _, by_load = counted
+    for params, table in ((HELD, HELD_FILED), (CON, FILED)):
+        for load, strides in loads.items():
+            got = [r for stride in strides for r in stride]
+            want = [[r.order for r in got if table[r.order] and table[r.order][0] == i]
+                    for i in range(len(CLASSES))]
+            assert [list(c) for c in CR.filed(params, strides)] == want
+            tables = CR.tables(params, strides)
+            by_order = {r.order: r for r in got}
+            for i, orders in enumerate(want):
+                p = CLASSES[i][0]
+                assert [CT.request_of(row, B, p) for row in tables[f"request.{i}"][:len(orders)]] == \
+                    [by_order[n].request for n in orders]
+    assert CR.filed(HELD, loads["second"]) == ((), (5, 6), (), ()) and CR.filed(CON, loads["second"])[1] == (4, 5, 6)
+    for load, (_, doc, head, _) in by_load.items():
+        record = CR.filed_record(head, HELD, loads[load])
+        assert record == {"format": CR.FILED, "link": LINK, "window": 0, "head": doc["certificate"]["digest"],
+                          "classes": [list(c) for c in CR.filed(HELD, loads[load])]}
+        assert [len(c) for c in record["classes"]] == list(COUNTS[load]) == [e.rows for e in head.tables[2::3]]
+        assert json.loads(json.dumps(record)) == record
+    with pytest.raises(ValueError, match="the head is not this hand's"):
+        CR.filed_record(by_load["first"][2], HELD, loads["second"])
+    assert CR.not_filed(LINK, 3) == {"format": CR.FILED, "link": LINK, "window": 3, "head": None, "classes": None}
+    monkeypatch.setattr(CT, "file", lambda params, r: 3)
+    assert CR.filed(HELD, loads["second"]) == ((), (), (), (4, 5, 6))
+    assert [len(rows) for name, rows in CR.tables(HELD, loads["second"]).items() if name.startswith("end.")] == \
+        [0, 0, 0, 3]
+
+
 def test_under_form_2_one_head_counts_each_classes_held_rows_and_its_other_fields_are_the_schedules(loads, counted):
     """The opposite of form 1's head: under form 2 the same three loads give heads whose content entries are the
     load's. A class's three entries hold the count of the releases filed in it, each with the domain of that count;

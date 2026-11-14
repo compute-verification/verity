@@ -2168,7 +2168,8 @@ prompt ids and a size of ids released, each a power of two.
   `max_tokens` to): the longest request it admits is one that only a class of that P holds.
 - **A row's place.** Row r of class i's tables is the execution phase's r-th release, in release order, among those
   filed in class i. A release has its three rows at one r.
-- **The filing** is one function with one caller (`content_rows.file`, which `connection_rows.tables` calls): the
+- **The filing** is one function called in one place (`content_rows.file`, in `connection_rows`, which lays the
+  tables by it and hands the prover each class's releases by it, `connection_rows`' "The filed releases"): the
   first listed class that holds the request's bytes and the ids released. It reads the release's own sizes and
   nothing the server says, and `content_rows.tables`, which lays the tables, takes each release's class as an
   argument. A release that fits no class, or under form 1 one whose class's rows are all held, has no content row,

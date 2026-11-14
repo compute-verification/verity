@@ -104,8 +104,9 @@ more than O, is refused, never cut short.
   most its class's P.
 
 **The filing** (`file`): a release's class is the first the schedule lists that holds it. The rule reads the
-release as the network certifier cut it and nothing a server says. It has one caller, `connection_rows.tables`, and
-`tables` lays whatever class that caller gives. The network certifier releases no request longer than the
+release as the network certifier cut it and nothing a server says. It is called in one place, in `connection_rows`,
+which lays the tables by it (`connection_rows.tables`) and lists each class's releases by it
+(`connection_rows.filed`, through `filed` here); `tables` lays whatever class it is given. The network certifier releases no request longer than the
 schedule's largest class holds (the schedule's `request_bound`: ingress refuses it), so none it releases is unfiled
 for its request's length; and a class of the largest P holds the most ids a response releases ("The classes"), so
 none is unfiled for its ids. Every release of a schedule's own network certifier fits a class.
@@ -460,15 +461,10 @@ def file(params: WardenParams, release: Released) -> int | None:
     return None
 
 
-def tables(params: WardenParams, released: Sequence[Released],
-           filing: Sequence[int | None]) -> dict[str, list[bytes]]:
-    """An execution phase's content tables (the module docstring's "The tables") from its releases in release order
-    and each one's class in `filing`, None for a release filed in none: each table its held rows and, under form 1,
-    zero rows to the class's rows. ValueError for a schedule without content rows, releases out of order or without
-    the content of their lengths slots, a class the schedule doesn't list, a release filed in a class that doesn't
-    hold it, under form 2 a release filed in a class past its R-th, naming the release, the class and R, or in a
-    schedule with request words a release filed in a class whose request `request_words` doesn't read, whose
-    `max_tokens` is past the response cap or whose ids are more than its `max_tokens`, naming the release."""
+def _laid(params: WardenParams, released: Sequence[Released],
+          filing: Sequence[int | None]) -> tuple[list[list[Released]], dict[int, tuple[int, int]]]:
+    """The releases `tables` lays in each class, in row order, and in a schedule with request words each one's
+    words by its place in the release order: `tables`' checks, and its refusals."""
     if params.content is None:
         raise ValueError("the schedule has no content rows (WardenParams.content)")
     if len(filing) != len(released):
@@ -510,8 +506,22 @@ def tables(params: WardenParams, released: Sequence[Released],
                                  f"{r.outputs} ids where the schedule's max_tokens_cap is {most}: the network "
                                  f"certifier releases no request whose max_tokens is past it and no id past a "
                                  f"request's max_tokens")
+    return filed, words
+
+
+def tables(params: WardenParams, released: Sequence[Released],
+           filing: Sequence[int | None]) -> dict[str, list[bytes]]:
+    """An execution phase's content tables (the module docstring's "The tables") from its releases in release order
+    and each one's class in `filing`, None for a release filed in none: each table its held rows and, under form 1,
+    zero rows to the class's rows. ValueError for a schedule without content rows, releases out of order or without
+    the content of their lengths slots, a class the schedule doesn't list, a release filed in a class that doesn't
+    hold it, under form 2 a release filed in a class past its R-th, naming the release, the class and R, or in a
+    schedule with request words a release filed in a class whose request `request_words` doesn't read, whose
+    `max_tokens` is past the response cap or whose ids are more than its `max_tokens`, naming the release."""
+    laid, words = _laid(params, released, filing)
+    B, listed = params.cell_bytes, sized(params)
     out: dict[str, list[bytes]] = {}
-    for i, ((P, O, rows), mine) in enumerate(zip(listed, filed)):
+    for i, ((P, O, rows), mine) in enumerate(zip(listed, laid)):
         made = ([request_row(r.request, B, P) for r in mine], [response_row(ids_of(r.ids), O) for r in mine],
                 [end_row(r.failed, r.outputs) for r in mine])
         for name, held_, empty in zip(names(i), made, empty_rows(B, P, O)):
@@ -521,9 +531,17 @@ def tables(params: WardenParams, released: Sequence[Released],
     return out
 
 
+def filed(params: WardenParams, released: Sequence[Released],
+          filing: Sequence[int | None]) -> tuple[tuple[int, ...], ...]:
+    """The releases `tables` lays in each class, class by class in the schedule's order, each by its place in the
+    release order (`Released.order`) and in row order: row r of class i's tables is of release `filed(…)[i][r]`.
+    A release with no content row is in no class's. `tables`' refusals."""
+    return tuple(tuple(r.order for r in mine) for mine in _laid(params, released, filing)[0])
+
+
 __all__ = ["END", "END_BYTES", "END_SLOT", "ENDED", "FAILED", "MIN_SIZE", "MOST_CLASSES", "NO_COUNT", "REQUEST",
            "RESPONSE", "TIE_WORDS", "U32_BYTES", "WORDS", "WORDS_BYTES", "WORDS_ROW", "check_ids", "check_size",
-           "classes", "counted", "empty_rows", "end_of", "end_row", "file", "held", "ids_of", "layout",
+           "classes", "counted", "empty_rows", "end_of", "end_row", "file", "filed", "held", "ids_of", "layout",
            "most_classes", "most_ids", "names", "names_of", "request_bytes", "request_of", "request_room",
            "request_row", "request_words", "response_bytes", "response_of", "response_row", "sized", "tables",
            "tables_of", "words_name", "words_of", "words_row"]
