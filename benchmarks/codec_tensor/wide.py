@@ -36,9 +36,19 @@ consecutive words (L·S a multiple of 16 so a task is one bulk copy), word w of 
 
 from __future__ import annotations
 
-from verity.protocols.accounting.poub.verifier.codec import (  # noqa: F401  the store codec's, which this module's users take
-    MASK_INDEX, P512, P1024, SEED_BYTES, Field, Key, Sloth, derive, rho, rho_inv)
 from verity.protocols.accounting.poub.verifier import codec as RB
+from verity.protocols.accounting.poub.verifier.codec import (  # noqa: F401  the store codec's, which this module's users take
+    MASK_INDEX,
+    P512,
+    P1024,
+    SEED_BYTES,
+    Field,
+    Key,
+    Sloth,
+    derive,
+    rho,
+    rho_inv,
+)
 
 DOMAIN = b"verity/word-codec/wide/v0\0"
 TASK_BYTES = 8192

@@ -155,7 +155,7 @@ def test_the_chained_pass_completes_the_driver_s_messages():
     for plan in (rb.Plan(((901, 37), (5, 300), (2000, 18)), 4096), rb.Plan.whole(4096), rb.Plan.whole(1)):
         m = RD.chain_messages(plan, key)
         for seed in (SEED, rb.seed(b"\x01" * 32, 7, b"\x02" * 64)):
-            def put(name, v):
+            def put(name, v, m=m):
                 t, a = m[name]
                 return t[:a] + v + t[a + 64:]
             assert put("receipt", seed) == rb.prefix(seed)
