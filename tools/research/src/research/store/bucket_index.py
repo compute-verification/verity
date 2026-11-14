@@ -582,7 +582,7 @@ def default_path(store_root: Path | str, policy: str = PRIVATE) -> Path:
 
 
 def dump(db: Path | str | SqliteIndex | PostgresIndex) -> dict[str, list[tuple]]:
-    """Every row of records, fields and edges, sorted: what two builds of one bucket must agree on (listings carry their time)."""
+    """Every row of the tables records, fields and edges, sorted: what two builds of one bucket must agree on (listings carry their time)."""
     if isinstance(db, PostgresIndex):
         s = db.schema
         recs = [(*r[:4], canon.dumps(json.loads(r[4])).decode())

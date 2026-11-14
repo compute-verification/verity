@@ -9,7 +9,7 @@ import Mathlib.Data.Finset.Attr
 import Mathlib.Data.Nat.Cast.Order.Basic
 import Mathlib.Tactic.Bound.Init
 import Mathlib.Tactic.SetLike
-import Proofs.Properties.NetworkCertifier.Records.Bytes
+import Proofs.Properties.Certifier.Records.Bytes
 import Proofs.Properties.Pous.MemoryChallenger.Sort
 
 /-!

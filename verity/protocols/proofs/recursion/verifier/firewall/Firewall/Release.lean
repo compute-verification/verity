@@ -1,4 +1,8 @@
-/-
+module
+
+public import Firewall.Record
+
+/-!
 # One outer session's stages, held to the record's rules
 
 Take the slot, then admit the session and the registrations its statement reads (`seat`, `Firewall.Record`); `prove`
@@ -12,9 +16,6 @@ record again: an error is a record the ZK server can't read, and the session end
 `Firewall.Loop` runs these stages on the record's file around the session loop (`core-firewall session`), and the
 difftest's `outer` (`Firewall.Json`) runs them in turn on a record and a clock it is given.
 -/
-module
-
-public import Firewall.Record
 
 @[expose] public section
 

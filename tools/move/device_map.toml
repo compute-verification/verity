@@ -1,0 +1,16 @@
+# The auditor's devices, the assumption's Lean name: what `tools/move/rename.py --map tools/move/device_map.toml` renames,
+# on a tree `device_term_map.toml`'s move has run on. The named assumption `trusted-host`, that each auditor's device runs
+# its stated code, is `Verity.Assumptions.TrustedHost` in Lean, and becomes `Verity.Assumptions.TrustedDevice`, wherever
+# it is spelled. It renames a Lean declaration and nothing else, so `move_check.py` certifies its move. The locks record
+# the name (`security/lean-audit.json`'s premises and reads): `rename.py --moves` prints the rename that
+# `tools/verity/lean/check.py --update --moved` takes, `{"Verity.Assumptions.TrustedHost":
+# "Verity.Assumptions.TrustedDevice"}`.
+
+[words]
+"TrustedHost" = "TrustedDevice"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), files whose bytes a
+# digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock"]

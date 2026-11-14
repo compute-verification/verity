@@ -6,7 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 # The headline over hidden-output sessions, with every open guarantee named
 
 `Prog.flock_headline_live_on` at the one-table plan of a hidden-output session's inputs (`planAtH`, `tablesAtH`): at a
-sample flock-verify sets up under hidden outputs, the table is `stmtOf` of the `Stmt.setupHidden` statement it accepted
+sample verity-verify-proof sets up under hidden outputs, the table is `stmtOf` of the `Stmt.setupHidden` statement it accepted
 (`tableAtH_of_accepts`), and elsewhere no witness satisfies it (`tableAtH_unsat`).
 
 `flock_headline_hidden` is that instance for any program `p`, outputs `outs`, places `pp`, constant and zero gates and
@@ -37,7 +37,7 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
 hidden outputs, and let the challenger write sample `S` as the JSON `dj S` (`x₀` one sample it sets up with
 `Stmt.setupHidden`). Let the units be sampled with `Flock.Draw.drawWith`'s stratified sampling design on the challenger's coins, a
 byte source A3 makes uniform, and let each sample's session be the challenger's one table (`liveTable`, A6), written out
-by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K` incorrect proof blocks of the program `p`, at the
+by `wr`. Against any live prover `τ`, verity-verify-proof accepts with at least `K` incorrect proof blocks of the program `p`, at the
 simulated prover's committed values, with probability at most `miss(K) + ε_ks + δ_link`, given the program's places,
 constant and zero columns and binding at the hidden tables (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`) and `hdec`. -/
 theorem flock_headline_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}

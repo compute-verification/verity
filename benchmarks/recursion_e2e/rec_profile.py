@@ -40,6 +40,12 @@ from rec_rows import Row, Stat, compose_row, forge_after_rows, forged, forgeries
 log = logging.getLogger(__name__)
 
 SCHEMA = "recursion-e2e/v1"
+#: oprove's mode through the ZK server, as 85-rec-reprice.sh's MODES and its oprove directories name it
+ZK_SERVER_MODE = "firewall"
+#: the summary's key for the ZK server's Lean session loop, and the one results recorded before it hold
+LOOP, RECORDED_LOOP = "lean_session_loop", "flock_firewall"
+#: the ZK server's Lean session loop's process name, which the run's process samples carry
+LOOP_PROCESS = "flock-firewall"
 #: the steps one recursive run needs, in order (vcap stages RecCap, which V*'s verdict needs; ``negative`` checks the
 #: run, ``icheck`` and ``oreplay`` time more of it)
 E2E_STEPS = ("build", "inner", "vstage", "vcap", "oprove", "lean")
@@ -53,13 +59,13 @@ STATEMENTS = {
              "rec_live's proxy",
     "vstar": "V*'s statements over the inner's last proxied run: each Ligerito level's RecOpen and RecCap, the algebra's "
              "InnerRepCheck parts (rec_vstage)",
-    "outer": "each V* statement with --zk on loopback, every unit drawn, one at a time, in each of MODES",
-    "verify": "flock-verify verify --zk --rec-inner-session --rec-inner-transcript on each V* release (the last mode's), "
-              "and flock-verify statement on the inner statement",
+    "outer": "each V* statement with --zk on loopback, every proof block sampled, one at a time, in each of MODES",
+    "verify": "the Lean verifier's verify --zk --rec-inner-session --rec-inner-transcript on each V* release (the last "
+              "mode's), and its statement check on the inner statement",
     "negative": "each V* release verified again over a copy of the inner run with rep 0's coin flipped "
                 "(rec_inner.py forge), which some statement must refuse",
     "forged": "85's FORGE statements (rec_vstage --forge: a prover row that does not open the verifier's registration), "
-              "which the firewall must stop or Lean refuse",
+              "which the ZK server must stop or Lean refuse",
     "forge-after": "coef, dirs and message made after proving on the honest L0 and alg-p0 releases' statements: row 0 one bit "
                    "off as its b || c, as pub.bin's consistent table, then as the whole registration (forge_after.py), each "
                    "refused by Lean beside its honest control",
@@ -71,7 +77,7 @@ PHASES = ("t.witness", "t.encoding_commitment", "t.link", "t.zerocheck", "t.linc
 
 
 def lean_split(p: Path) -> dict[str, float]:
-    """flock-verify's stderr: ``inputs: N ms`` (from its start), ``setup: N ms`` (from the verification's start), then the verification's
+    """The Lean verifier's stderr: ``inputs: N ms`` (from its start), ``setup: N ms`` (from the verification's start), then the verification's
     whole time (``/path: N ms``, setup included), as 85's summary reads them."""
     ms = [int(x) for x in re.findall(r"^(?:inputs|setup(?: \(drawn\))?|/\S+): (\d+) ms$", text(p), re.M)]
     return {"inputs_s": ms[0] / 1e3, "setup_s": ms[1] / 1e3, "session_s": (ms[2] - ms[1]) / 1e3} if len(ms) == 3 else {}
@@ -184,7 +190,7 @@ def read(root: Path) -> dict[str, Any]:
     if b:
         o = b[0]
         t = timev(o.parent / "time-step.txt")
-        r = Row("build", "build", "85 STEP=build: the CUDA prover, flock-verify and both stagings, as the job found its caches",
+        r = Row("build", "build", "85 STEP=build: the CUDA prover, the Lean verifier and both stagings, as the job found its caches",
                 "setup", wall_s=Stat.of([t["wall_s"]]) if t else None, peak_rss_gb=t["peak_rss_gb"] if t else None,
                 ok=text(o.parent / "rc").strip() == "0")
         r.extra = {"binary": text(o / "binary.sha256").split()[:1], "lean": text(o / "lean.sha").split()[:1],
@@ -228,15 +234,15 @@ def read(root: Path) -> dict[str, Any]:
     cpu_prover = params(root).get("OPROVE_GPU") == "0"
     for o in repeats(root, "oprove")[:1]:
         for d in sorted((p for p in (o / "oprove").glob("*") if p.is_dir()), key=lambda p: p.name):
-            mode = next((m for m in ("firewall", "host", "dev") if d.name.endswith("-" + m)), "dev")
+            mode = next((m for m in (ZK_SERVER_MODE, "host", "dev") if d.name.endswith("-" + m)), "dev")
             stmt = d.name[: -len(mode) - 1] if d.name.endswith("-" + mode) else d.name
             rows.append(prover_row(d, f"outer {stmt}", "oprove", f"V*'s {stmt} with --zk, mode {mode}"
                                    + (", CPU prover" if cpu_prover else "")))
             rows[-1].extra |= {"mode": mode, "statement": stmt, "prover": "cpu" if cpu_prover else "gpu"}
             if stmt.startswith("forged-"):
                 refused(rows[-1])
-            if mode == "firewall" and rows[-1].wall_s:
-                rows[-1].note = ("the prover's phase buckets include its waits on the Lean session loop (flock-firewall), "
+            if mode == ZK_SERVER_MODE and rows[-1].wall_s:
+                rows[-1].note = ("the prover's phase buckets include its waits on the ZK server's Lean session loop, "
                                  "the reps' overlapping; " + rows[-1].note).rstrip("; ")
     orr = repeats(root, "oreplay")
     if orr:
@@ -246,9 +252,10 @@ def read(root: Path) -> dict[str, Any]:
     ln = repeats(root, "lean")
     if ln:
         names = [n for n in _names(ln, "lean", r"time-(.+)\.txt")]
-        rel = {f"lean {n}": (f"lean/time-{n}.txt", ("flock-verify statement on the inner statement" if n == "inner-statement"
-                                                    else "flock-verify verify on the inner run" if n == "inner"
-                                                    else f"flock-verify verify --zk on V*'s {n} release")) for n in names}
+        rel = {f"lean {n}": (f"lean/time-{n}.txt", ("the Lean verifier's statement check on the inner statement"
+                                                    if n == "inner-statement"
+                                                    else "the Lean verifier's verify on the inner run" if n == "inner"
+                                                    else f"the Lean verifier's verify --zk on V*'s {n} release")) for n in names}
 
         def lv(o: Path, n: str) -> bool | None:
             name = n[len("lean "):]
@@ -272,7 +279,7 @@ def read(root: Path) -> dict[str, Any]:
                 if stat:
                     r.extra[k] = asdict(stat)
                     parts[k] = stat.median
-            # flock-verify's own split: its inputs read, the verification's setup, and its checks after it
+            # the Lean verifier's own split: its inputs read, the verification's setup, and its checks after it
             if parts and r.wall_s:
                 parts = {"lean.inputs": parts.get("inputs_s", 0.0), "lean.setup": parts.get("setup_s", 0.0),
                          "lean.checks": max(0.0, parts.get("session_s", 0.0))}
@@ -295,15 +302,15 @@ def read(root: Path) -> dict[str, Any]:
         rows += negative_rows(ng[0] / "lean")
     forgeries(rows)
     s = summary(rows)
-    fw = processes(root.parent / "resources.jsonl", "flock-firewall")
-    if fw:
-        s["flock_firewall"] = fw
+    loop = processes(root.parent / "resources.jsonl", LOOP_PROCESS)
+    if loop:
+        s[LOOP] = loop
     steps = step_status(root)
     staged = json.loads(text(root / "stage.json") or "null")
     inputs = STATEMENTS if staged is None else {**STATEMENTS, "inner": (
         f"{staged['n']} x {staged['unit']} ({staged['subcircuit']}, m = {staged['m']}) under Q_template_instance, staged by "
         + (f"stage.sh from served window {staged['window']['run'][:16]}'s member {staged['window']['member']}"
-           if staged.get("window") else "stage.sh from seeded draws (generated values)")
+           if staged.get("window") else "stage.sh from seeded inputs (generated values)")
         + ", verity/flock-circuit+plain-leaves, M0 (no --zk), on the challenger's coin tree (FC_COINS=tree), through "
           "rec_live's proxy")}
     doc = {"schema": SCHEMA, "params": params(root), "inputs": inputs, "rows": [r.to_json() for r in rows], "summary": s,
@@ -378,7 +385,7 @@ _FORGED = re.compile(r"forged-inner-([a-z]+)-(.+)")
 
 def negative_rows(d: Path) -> list[Row]:
     """One row per flipped coin (85's ``forged-inner-COIN-STATEMENT`` parts, read as ``lean_verdicts.py`` reads them): a
-    statement refuses it when flock-verify exited 1 with a VERDICT and none accepting; the coin is refused when one statement
+    statement refuses it when the Lean verifier exited 1 with a VERDICT and none accepting; the coin is refused when one statement
     refuses it and every honest statement has a verdict over it (a statement that reads no flipped coin rightly accepts)."""
     honest = sorted(m.group(1) for f in d.glob("time-*.txt") if (m := re.fullmatch(r"time-(.+)\.txt", f.name))
                     and not m.group(1).startswith(("forged-", "inner")))
@@ -458,7 +465,7 @@ def summary(rows: list[Row]) -> dict[str, Any]:
     whole = {r.step: med(r) for r in rows if r.stage == f"{r.step} step" and r.wall_s}
     inner = next((r for r in rows if r.stage == "inner M0"), None)
     # the mode that proved the most statements (ZK server on a tie): a mode measured on one statement is no run's path
-    mode = max(outer, key=lambda m: (outer[m]["statements"], m == "firewall"), default=None)
+    mode = max(outer, key=lambda m: (outer[m]["statements"], m == ZK_SERVER_MODE), default=None)
     # one recursive run's path, each part as long as an auditor waits for it: the inner run, V*'s staging (the
     # vstage and vcap steps' whole walls: their statements are staged in parallel), V*'s statements proved one after
     # another, and Lean's checks (the lean step's whole wall, the inner run's and statement's checks included)
@@ -484,9 +491,9 @@ def merge(docs: list[dict[str, Any]]) -> dict[str, Any]:
     rows = sorted(by.values(), key=lambda r: order.get(r["step"], len(order)))
     objs = [Row.from_json(r) for r in rows]
     s = summary(objs)
-    fw = [e | {"run": d.get("ref") or d.get("run")} for d in docs for e in d.get("summary", {}).get("flock_firewall", [])]
-    if fw:
-        s["flock_firewall"] = fw
+    loop = [e | {"run": d.get("ref") or d.get("run")} for d in docs for e in loop_samples(d.get("summary", {}))]
+    if loop:
+        s[LOOP] = loop
     # a merged result is one recursive run only as far as its runs' steps are: each step's exits, from the last run with it
     last: dict[str, list[str]] = {}
     for d in docs:
@@ -498,11 +505,17 @@ def merge(docs: list[dict[str, Any]]) -> dict[str, Any]:
             "steps": {f"{k} ({d.get('ref') or d.get('run')})": v for d in docs for k, v in d.get("steps", {}).items()}}
 
 
+def loop_samples(s: dict[str, Any]) -> list[dict[str, Any]]:
+    """A summary's process samples of the ZK server's Lean session loop, under ``LOOP`` or a recorded result's
+    ``RECORDED_LOOP``."""
+    return s.get(LOOP) or s.get(RECORDED_LOOP) or []
+
+
 def loop_line(s: dict[str, Any]) -> str | None:
-    """The table's line on the Lean session loop, from the run's process samples (``processes``); None where they hold
-    none."""
-    if not s.get("flock_firewall"):
+    """The table's line on the ZK server's Lean session loop, from the run's process samples (``processes``); None where
+    they hold none."""
+    if not loop_samples(s):
         return None
-    return "The Lean session loop (flock-firewall, from the run's process samples): " + "; ".join(
+    return "The ZK server's Lean session loop (from the run's process samples): " + "; ".join(
         f"{e['cpu_s']:.0f} CPU s, peak RSS {e['rss_hwm_gb']} GB, {e['threads']} threads, seen {e['first'][11:19]}–"
-        f"{e['last'][11:19]}Z" + (f" ({e['run']})" if e.get("run") else "") for e in s["flock_firewall"]) + "."
+        f"{e['last'][11:19]}Z" + (f" ({e['run']})" if e.get("run") else "") for e in loop_samples(s)) + "."

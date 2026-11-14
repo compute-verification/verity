@@ -195,7 +195,7 @@ noncomputable def zkReader {F K : Type} [Field F] [Fintype F] [DecidableEq F] [F
 
 /-! ## The deployed masked code in the radius form -/
 
-/-- The masked reader at index `i` (`m = 25 + i`). -/
+/-- The masked reader at index `i`. -/
 noncomputable def flockZkReader (i : Flock.ZkIdx) : Reader (Flock.flockZkLevelZero i) :=
   zkReader execArith execArith_correct (Flock.zkWidth i) (Flock.zkCols i) (Flock.zkPad i) (Flock.zkLen i)
     (GF128.of Flock.Zk.PAD_C) (Flock.zkShape_fits i).1 (Flock.zkShape_fits i).2

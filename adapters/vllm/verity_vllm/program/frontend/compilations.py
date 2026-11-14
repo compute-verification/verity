@@ -6,7 +6,7 @@ header's read-back form (`vllm_adapter.compilation_facts`). Under Inductor, `cap
 `compile_cache` (a process switch; cached and fresh Inductor graphs are the same code) are not declared, so not constrained: GM-01
 compares only the keys both sides carry.
 
-* `piecewise`: vLLM's production default compiled configuration (default Inductor config: fp32 carried through the fused regions),
+* `piecewise`: vLLM's serving default compiled configuration (default Inductor config: fp32 carried through the fused regions),
   the panel's bi-compiled workloads. Its Program is P_compiled at Inductor-kernel granularity (S1/S2).
 * `piecewise-emu`: the separate declared specialization with Inductor's emulate_precision_casts (the eager roundings performed inside
   the fused kernels; a different numerical computation). Not a panel workload unless added by a 7-field note.

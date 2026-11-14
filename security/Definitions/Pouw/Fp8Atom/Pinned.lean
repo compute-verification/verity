@@ -7,7 +7,7 @@ public import Mathlib.Data.Finset.Card
 public import Mathlib.Data.Fintype.Basic
 
 /-!
-# `Pouw.Fp8Atom`'s pinned statements (trusted)
+# `Pouw.Fp8Atom`'s guarantees (trusted)
 
 The bit-exact `HOPPER_E4M3_K32` step and its basic facts.
 

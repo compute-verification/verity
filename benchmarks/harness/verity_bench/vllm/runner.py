@@ -229,7 +229,7 @@ def h1_summary(run: Any) -> dict[str, Any]:
            "static": bool(run.details.get("static")), "credit_gate_passed": passed,
            "credit_gate_refusals": sorted({str(v.get("reason")) for v in verdicts if not v.get("credit")})[:3],
            "requests": len(run.requests), "refused_requests": len(run.refused_requests), "request_gaps": len(gaps),
-           "unopened": run.details.get("unopened"), "u": run.details.get("u"), "coin_source": run.coin_source}
+           "unopened": run.details.get("unopened"), "u": run.details.get("u"), "coins": run.coin_source}
     out["ok"] = bool(verdicts and out["static"] and not run.refused and passed == len(verdicts) and not gaps
                      and not run.refused_requests and out["unopened"] is None)
     return out

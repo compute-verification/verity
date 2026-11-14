@@ -46,7 +46,7 @@ committed rows and one post-draw partials record. Accepted together, they realiz
 `Accounting.TS.Lanes.leafLayer`, whose relation is the unit's served checks on the leaf's 32 × 32 cells (`UnitServed`:
 `z = A·Bᵀ` and `y = dq(z)` at every cell, the receipt the XOR of its lanes' honest partials) unless two of the
 sessions' registrants' records exhibit a SHA-512 collision (`LeafColl`) or a session's known-content tie does
-(`LeafKnownColl`). Its acceptance includes flock-verify's known-content, complete and known-read checks at each of
+(`LeafKnownColl`). Its acceptance includes verity-verify-proof's known-content, complete and known-read checks at each of
 the 33 sessions, and the leaf verifier's checks of each session's registered file (`PouwWindow.Lanes.checkOwn`) and
 of its sample (`PouwWindow.Lanes.checkFull`: every unit of a non-empty population) and of the file's reads
 (`PouwWindow.Lanes.checkOneRead`: one read at each port), all run by `pouw-leaf-own`. Each session is
@@ -107,7 +107,7 @@ each a session `sess₀ x w i k` (a `RowsSession`) at its registrants' openings 
 built from `own` (`RowsSession.canon`: each unit reads its row of every circuit port `own` names, through `own`'s first
 port of that name at that port's one position, the registrants committing only the rows, salts and paths, each opening
 `own`'s root there), with outcomes `out x w i k`, and the leaf layer
-`leafLayer sess out known full want (dqOf Pouw.H1Zy.zyDequant) (partOf (laneChain K nw)) pub receiptOf leafOf right` (accepted where flock-verify `--zk --registered` accepts all
+`leafLayer sess out known full want (dqOf Pouw.H1Zy.zyDequant) (partOf (laneChain K nw)) pub receiptOf leafOf right` (accepted where verity-verify-proof `--zk --registered` accepts all
 33 sessions, its known-content check at `known x w i k = knownOf (pub x w i) (salts x w i k) k`, the rows of the path's
 public inputs `pub x w i` (`PouwWindow.Lanes.knownRows`) under any salts, and its complete check
 (`Flock.Registered.checkComplete`, run on every statement whenever `--registered` is given: every port of the circuit is

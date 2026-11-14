@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A gate run's steps through the two auditor hosts' gates under the lane's gate key (GATE_KEY), as a job on the machine
+# A gate run's steps through the two auditor devices' gates under the lane's gate key (GATE_KEY), as a job on the machine
 # that holds it, cwd = a clone of COMMIT, the commit the verifier host's verifier is pinned at.
 # `gate_run.sh` launches it; one VERB a run, everything into $OUT:
 #

@@ -3,7 +3,7 @@
 (1 when unset), and SESSIONS, WINDOWS, WINDOW_MS and SAMPLES reach gate.sh in place of PACED; with none of them the
 prover's run and the gate steps' variables are the launcher's defaults. A HOST_GIB that isn't whole GiB, a LEAF_CTAS
 that isn't a count of CTAs, a form or a BIND gate.sh refuses, and a host whose address the environment doesn't hold, end it
-before anything is written or run; the gate steps are handed the two auditor hosts' addresses. The launcher is
+before anything is written or run; the gate steps are handed the two auditor devices' addresses. The launcher is
 a copy in a throwaway repository whose origin's main names one role; `uv` is a stub on PATH that records
 each `research run` and answers with a run id, so nothing is launched."""
 from __future__ import annotations

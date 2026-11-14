@@ -117,8 +117,8 @@ def test_the_head_blocks_spec_runs_direct_on_the_h200_nodes_whose_slots_give_ten
 
 
 def test_a_node_outside_the_direct_nodes_is_refused_at_dispatch_and_no_point_starts_there(tmp_path):
-    """A node joins `jobs.DIRECT_NODES` with its slots file: one without is refused here, where the tuple and the file
-    to add are named, and not by the slot at the start of each point's run."""
+    """A node outside `jobs.DIRECT_NODES` is refused here, where the tuple and the slots file it joins with are named,
+    before any run starts there."""
 
     root, path = real(tmp_path)
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))

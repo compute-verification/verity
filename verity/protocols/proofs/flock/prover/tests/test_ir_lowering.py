@@ -229,7 +229,7 @@ def test_the_nvfp4_cast_and_bit_and_pieces_match_the_ir_primitives(name, widths,
     """Exact bits: the E4M3 widening on every byte (NaN 0x7FFFE000), the AND on every pair of bits, and the E2M1 cast on each
     boundary of its grid (the six ties and 5, where saturation begins) within 4 ulps and with each of its low 21 bits set, on
     ±0, subnormals, ±inf and a NaN per payload bit, across the exponents around the grid and on random words, both signs."""
-    import verity.circuits.ops.prims  # noqa: F401  (registers the casts)
+    import verity.circuits.ops.prims  # registers the casts
     import verity.circuits.ops.scalar  # noqa: F401  (registers BitAnd_v1)
 
     vecs = gen(random.Random(name))

@@ -685,3 +685,24 @@ def test_a_result_that_names_no_fingerprint_and_no_file_is_written_byte_for_byte
         "status": "passed", "checker": "a benchmark", "detail": "4 of 4 gates hold", "evidence": ["out/gates.json"]}},
         indent=1) + "\n"
     assert not {"workload_fingerprint", *kit.FILES} & json.loads(text).keys()
+
+
+def test_a_writer_of_a_kind_writes_it_and_refuses_a_result_of_another(tmp_path, no_gpu):
+    """`research` stores a result as the artifact kind its `kind` names (`bench-result/v1` where it has none), so a
+    benchmark whose results are stored as their own kind writes it through the writer, and one run writes one kind."""
+
+    from research import result as research_result
+
+    kind = "verity-steady-point/v1"
+    kit.writer(tmp_path, kind).measurement("rate", 2.5, "1/s", mark="measured")
+    kit.writer(tmp_path).validation("passed", "a benchmark", "4 of 4 gates hold")
+    held = _result(tmp_path)
+    assert held["kind"] == kind and [m["name"] for m in held["measurements"]] == ["rate"]
+    assert research_result.check(tmp_path, RUN).valid
+    assert kit.writer(tmp_path, kind).fingerprint(point="p")["point"] == "p"
+    with pytest.raises(ValueError, match="writes one kind"):
+        kit.writer(tmp_path, "verity-vllm-benchmark/v1").measurement("wall", 1.5, "s", mark="measured")
+    with pytest.raises(ValueError, match="NAME/vN"):
+        kit.writer(tmp_path / "other", "a steady point").measurement("wall", 1.5, "s", mark="measured")
+    kit.writer(tmp_path / "plain").measurement("wall", 1.5, "s", mark="measured")
+    assert "kind" not in _result(tmp_path / "plain")

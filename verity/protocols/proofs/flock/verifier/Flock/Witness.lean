@@ -8,7 +8,7 @@ public import Flock.WitnessZk
 
 `RecursiveAudit`'s event (`Proofs.Flock.Recursive.Property`) and the facts its premises take of V*'s sessions are this
 library's functions returning `.ok`, so they can be evaluated on recorded files, and a theorem whose event no honest session
-meets is found by a run rather than by reading. Each check here is one of them, as a function of the files `flock-verify`
+meets is found by a run rather than by reading. Each check here is one of them, as a function of the files `verity-verify-proof`
 reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the model's predicate.
 
 * `inner --circuit F --public F [--partition F] [--program F] [--registered F] [--record F]`: the inner statement.
@@ -21,7 +21,7 @@ reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the mo
   (`outerPartsOf`, `outerParts`) and V*'s statements there (`RecVStar.statements`).
 * `session [--statement ID] --circuit F --public F [--partition F] [--program F] [--registered F] [--tables DIR]
   [--session-tables J] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] --session DIR...`: one of V*'s outer
-  sessions, with `flock-verify verify --zk`'s flags. Once: `tagsOk` (`DecodeZL.TagsOk`, public outputs) and `tagsOkZHJ`
+  sessions, with `verity-verify-proof verify --zk`'s flags. Once: `tagsOk` (`DecodeZL.TagsOk`, public outputs) and `tagsOkZHJ`
   (`ZkHidden.TagsOkZHJ`, hidden outputs, `ZkOuterR.hTags`), which no session meets both of, the statement check without
   and with the registered reads (`ScopeZ`, `ScopeZR`), and the circuit's `scopeOk` (`VStmt.hscope`). Per session: `fullDraw`
   (the record's sample is the full sample `RecordCustody` reads, `subset` of every unit of the population), `acceptsZKRAt`
@@ -63,7 +63,7 @@ def innerSetup (cf pf : ByteArray) (partition : Option Json) (program : Option B
 def acceptsStmtAt (r : V (SessionSpec × Array Stmt)) : V Stmt := do
   let r ← r
   let st ← one r.2
-  let _ ← Zk.schedule st.m
+  let _ ← Zk.schedule st.wideLeaf st.m
   pure st
 
 /-- **Lean's verifier accepts `st` as the inner statement** (`AcceptsStmt`), from the inner statement's files, partition
@@ -100,7 +100,7 @@ def acceptsDescription (st : Stmt) (own : Array Registered.Port) : V Unit := do
   Registered.checkDescription st.c st.pub own
   if own.isEmpty then throw "the verifier holds no registered reads (--registered)"
 
-/-- `--rec-inner F`, `--rec-part J`, `--rec-bindings F` and `--rec-rows F`, as `flock-verify verify` reads them: the inner
+/-- `--rec-inner F`, `--rec-part J`, `--rec-bindings F` and `--rec-rows F`, as `verity-verify-proof verify` reads them: the inner
 shape (`RecVStar.Inner.ofJson`), which of V*'s statements the sessions are, the verifier's own bindings
 (`RecVStar.ownBindingsOfJson`) and its shared rows (`Registered.ofJson`). -/
 def vstarOf (args : List String) :
@@ -121,7 +121,7 @@ def vstarOf (args : List String) :
 def scheduleOf (s : V (SessionSpec × Array Stmt)) : List (String × Json) :=
   match s with
   | .ok (_, sts) => match sts[0]? with
-    | some st => match Zk.schedule st.m with
+    | some st => match Zk.schedule st.wideLeaf st.m with
       | .ok (sch, _) => match sch.levels[0]? with
         | some l => [("m", Lean.toJson st.m), ("level0", Json.mkObj [("n", Lean.toJson sch.n), ("rate", Lean.toJson l.rate),
             ("q", Lean.toJson l.q), ("cols", Lean.toJson l.cols), ("d", Lean.toJson l.d), ("lanes", Lean.toJson l.lanes)])]

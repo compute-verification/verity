@@ -39,7 +39,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # `Claims.Recursion.ScopeMatches` at the compiled verifier's parser and scope check
 
-The compiled verifier (`flock-verify verify --rec-inner`) reads, of a recursion statement, the inner statement's bytes,
+The compiled verifier (`verity-verify-proof verify --rec-inner`) reads, of a recursion statement, the inner statement's bytes,
 the inner statement's files where it holds them (`RecCoins.Source`), its own inner shape (`RecVStar.Inner`,
 `--rec-inner`) and each V* session's record (`Read`). Its setup refuses an inner shape whose V* list
 `RecVStar.statements` refuses, at candidate 3's sparse shape one whose inner statement `RecCoins.checkAtC3`

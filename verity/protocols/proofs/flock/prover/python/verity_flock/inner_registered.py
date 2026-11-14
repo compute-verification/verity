@@ -13,7 +13,7 @@ verifier's files and writes ``registered.json`` beside them, the verifier's own 
 position (the description port's ref of the unit's instance), which the Lean verifier does not read for an inner statement
 (`Registered.checkDescription`: no position depends on which unit an instance is). Every other port, each input row and
 output row, is the prover's own registration of its table under the value of its name, its rows and salts the staged
-ones, so the reads file names every port of the statement, as `flock-verify` requires of any `--registered` file
+ones, so the reads file names every port of the statement, as `verity-verify-proof` requires of any `--registered` file
 (`Registered.checkComplete`); those are no part of the circuit registration. The description's registered value is
 its packed row (16 description bits to a u16 word, as the class statement lays out the parameter), so its row width is
 the port's words, not the parameter's leaf count.
@@ -142,7 +142,7 @@ def registration_record(program, partition: Mapping, entries: Sequence[Mapping])
     """The circuit registration over ``program`` (a core ``Program``) and its ``verity/partition/v1`` object ``partition``,
     registering ``entries`` (`Registered.entry`): one-stage ``registration.record`` with the sampling design ``stratified`` over the
     population, the statement's scheme, no served roots and the `WINDOW` (the module docstring)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 
     query = partition["query"]
     return R.record(program, query, {"law": "stratified", "k": P.units(program, query)}, FC.SCHEME, [], WINDOW,
@@ -169,7 +169,7 @@ def bind(stage: Path, program, partition: Mapping, entries: Sequence[Mapping], p
     every value an earlier `bind` registered; a value is registered once) written to `REGISTRATION`, its digest bound into
     META (`REGISTRATION_KEY`), and ``private`` (``{value: {"nodes", "salts"}}``, the prover's openings) added to `PRIVATE`.
     Refused unless META names ``partition`` and its program. Returns the record."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 
     stage = Path(stage)
     m = meta(stage)
@@ -192,7 +192,7 @@ def bind(stage: Path, program, partition: Mapping, entries: Sequence[Mapping], p
 
 def bound(stage: Path) -> dict:
     """The staged statement's circuit registration, refused unless its digest is the one META carries."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
     stage = Path(stage)
     want = meta(stage).get(REGISTRATION_KEY)

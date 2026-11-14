@@ -7,8 +7,8 @@ meta import NetworkCertifier.WindowDifftest
 `NetworkCertifier.WindowCharge.WindowDifftest.main`, audited under `NetworkCertifier`.
 
 It is the one test that holds `window_charge.reference_window`, which circuit-check holds `ChargeCount_v2{N, H, O}`'s
-circuit to, to the certifier program's `WindowCharge.charges`, which `Proofs.NetworkCertifier.Code` (`CodeChargesWhole`)
-proves equal to the reference definition (`Security/Definitions/NetworkCertifier/WindowCharge.lean`). -/
+circuit to, to the certifier program's `WindowCharge.charges`, which `Proofs.Certifier.Code` (`CodeChargesWhole`)
+proves equal to the reference definition (`Security/Definitions/Certifier/WindowCharge.lean`). -/
 
 @[expose] public section
 

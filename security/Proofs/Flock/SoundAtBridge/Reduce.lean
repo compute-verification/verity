@@ -93,7 +93,7 @@ theorem openedPlur_zero (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin 
   unfold Pouw.RelativeSecurity.prob Claims.prUniform
   simp
 
-/-- **The proof layer a family of sessions gives**: proof `i` of round `w` is accepted exactly where flock-verify
+/-- **The proof layer a family of sessions gives**: proof `i` of round `w` is accepted exactly where verity-verify-proof
 accepts its session's outcome, its opening is the session's value layer read as a layer value, and its relation holds
 there when no sampled proof block of the session is wrong or off at its own reads. -/
 noncomputable def rowsLayer (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
@@ -104,8 +104,8 @@ noncomputable def rowsLayer (sess : Paths Ω S → Fin S → Fin nπ → RowsSes
   rel x w i _ := ∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u
   right := right
 
-/-- **The layer's premises hold together, at flock-verify's acceptance** (non-vacuity of `AcceptedLive`,
-`OpenedPlurAt` and `RelOfRows`): at any family of sessions, `rowsLayer` accepts exactly where flock-verify accepts, and
+/-- **The layer's premises hold together, at verity-verify-proof's acceptance** (non-vacuity of `AcceptedLive`,
+`OpenedPlurAt` and `RelOfRows`): at any family of sessions, `rowsLayer` accepts exactly where verity-verify-proof accepts, and
 meets `AcceptedLive`, `OpenedPlurAt` at `δo = 0` and `RelOfRows`. `WindowLaw` and `RowsSession.CR` are premises of the
 sessions, not of the layer. -/
 theorem rowsLayer_premises (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
@@ -118,7 +118,7 @@ theorem rowsLayer_premises (sess : Paths Ω S → Fin S → Fin nπ → RowsSess
 
 /-- **`SoundAtBridge` from `EndToEndRegisteredRows`**: an unsound proof whose opening is the value layer's reading
 fails its relation there, so by `RelOfRows` some sampled proof block of its session is wrong or off at its own reads, and by
-`AcceptedLive` flock-verify accepted: the per-unit event, at most `n · bound ≤ δ` in every session
+`AcceptedLive` verity-verify-proof accepted: the per-unit event, at most `n · bound ≤ δ` in every session
 (`RowsSession.prob_badU_le`); one whose opening isn't is in `OpenedPlurAt`'s event, at most `δo`. `WindowLaw` carries
 the sessions' bound to the window's paths (`soundAt_of_sessions`). -/
 theorem soundAtBridge_of_rows (hE : Flock.Guarantees.EndToEndRegisteredRows) : Flock.Guarantees.SoundAtBridge := by

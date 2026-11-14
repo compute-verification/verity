@@ -25,7 +25,7 @@ import Proofs.Flock.Soundness.ParseStmt
 /-!
 # What the verifier accepts: `Accepts` and its statement check
 
-`flock-verify verify` refuses every session of a statement whose form the soundness proof does not cover:
+`verity-verify-proof verify` refuses every session of a statement whose form the soundness proof does not cover:
 `Main.verifyCmd` runs `Flock.ProvedScope.check` on the statement in every session's verdict, after every other check but
 the draw-less session's refusal, and refuses the session when it fails. So what the verifier accepts is `Verifies`
 (under `--zk`, `VerifiesZK`; with `--registered F`, `VerifiesR` and under `--zk` `VerifiesZKR`): the setup and verdict
@@ -427,28 +427,28 @@ end Checks
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **`flock-verify verify`'s statement check** (no `--zk`), without the verifier's own registered reads. -/
+/-- **`verity-verify-proof verify`'s statement check** (no `--zk`), without the verifier's own registered reads. -/
 def Scope (I : Inputs) : Prop := Checks I.tags false I false
 
-/-- **`flock-verify verify --registered F`'s statement check** (no `--zk`): the check with the verifier's own registered
+/-- **`verity-verify-proof verify --registered F`'s statement check** (no `--zk`): the check with the verifier's own registered
 reads, which also passes a shared-row public file of a statement with hidden outputs and `hm96-sha512/v1` leaves. -/
 def ScopeR (I : Inputs) : Prop := Checks I.tags false I true
 
-/-- **What `flock-verify verify` accepts** (no `--zk`): the setup and verdict `Accepts` models, and the statement check. -/
+/-- **What `verity-verify-proof verify` accepts** (no `--zk`): the setup and verdict `Accepts` models, and the statement check. -/
 def Verifies (I : Inputs) (t : Exec.Transcript) : Prop := Accepts I t ∧ Scope I
 
 /-- `Verifies` at the live session's transcript. -/
 def LiveVerifies (I : Inputs) (o : Reg × Finset (Fin n) × Exec.Transcript) : Prop := Verifies I o.2.2
 
-/-- **`flock-verify verify --zk`'s statement check**, at the session's tags (`zkTags`), without the verifier's own
+/-- **`verity-verify-proof verify --zk`'s statement check**, at the session's tags (`zkTags`), without the verifier's own
 registered reads. -/
 def ScopeZ (I : Inputs) : Prop := Checks (zkTags I) true I false
 
-/-- **`flock-verify verify --zk --registered F`'s statement check**, at the session's tags (`zkTags`): the check with the
+/-- **`verity-verify-proof verify --zk --registered F`'s statement check**, at the session's tags (`zkTags`): the check with the
 verifier's own registered reads, which also passes a shared-row public file of a statement with hidden outputs. -/
 def ScopeZR (I : Inputs) : Prop := Checks (zkTags I) true I true
 
-/-- **What `flock-verify verify --zk` accepts**: the setup and verdict `AcceptsZK` models, and the statement check. -/
+/-- **What `verity-verify-proof verify --zk` accepts**: the setup and verdict `AcceptsZK` models, and the statement check. -/
 def VerifiesZK (I : Inputs) (t : Exec.Transcript) : Prop := AcceptsZK I t ∧ ScopeZ I
 
 /-- `VerifiesZK` at the live session's transcript. -/
@@ -610,7 +610,7 @@ theorem Scope.count {I : Inputs} (h : Scope I) : I.count ≤ 1 := by
   · cases h'
   · exact h'
 
-/-- **`flock-verify verify --plain-tables`'s statement check** (no `--zk`, without the verifier's own registered reads,
+/-- **`verity-verify-proof verify --plain-tables`'s statement check** (no `--zk`, without the verifier's own registered reads,
 which `verifyCmd` passes as `false` under the flag, so a shared-row public file is refused): `ProvedScope.checkP`, which
 refuses hidden outputs with leaves other than `hm96-sha512/v1` (`ScopeP.merkleLeaf`) and more than `Tags.MAX_TABLES`
 tables, is otherwise the check at one table, and holds the verifier's own program (`--program`) to the one the circuit's
@@ -618,7 +618,7 @@ META binds (`ScopeP.program`). -/
 def ScopeP (I : Inputs) : Prop :=
   ProvedScope.checkP I.tags I.circuitFile I.publicFile I.tables I.count I.program false false = .ok ()
 
-/-- **What `flock-verify verify --plain-tables` accepts**: the setup and verdict `Accepts` models, and its statement
+/-- **What `verity-verify-proof verify --plain-tables` accepts**: the setup and verdict `Accepts` models, and its statement
 check. -/
 def VerifiesP (I : Inputs) (t : Exec.Transcript) : Prop := Accepts I t ∧ ScopeP I
 

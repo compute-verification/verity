@@ -33,7 +33,7 @@ docstring lists every arm and flag, and `settings.py` every variable they read (
 
 ## What the rest of the tree reads
 
-- `h1u.cu`: the proof-block kernels: H1 + fx1's seeds and proof blocks, the one-stream `kh_one`, and J10-R's (`kh_seeds_j10r`, `kh_units_multi_j10r`). `benchmarks/pouw/served_h1` builds
+- `h1u.cu` (with the kernels, below): the proof-block kernels: H1 + fx1's seeds and proof blocks, the one-stream `kh_one`, and J10-R's (`kh_seeds_j10r`, `kh_units_multi_j10r`). `benchmarks/pouw/served_h1` builds
   it, and `verity/protocols/accounting/pouw/prover/circuit/h1device.py` states the domain it serves on sm_90.
 - `j10r_ws.py`: a J10-R call's workspace, sized from the loaded build's own flags (`workspace_bytes`).
 - `j10r_units.py`: J10-R's proof blocks on the host, each receipt bit for bit `h1tile.j10r_reference`'s.
@@ -58,6 +58,9 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
   receipts.
 
 ## Kernels
+
+The kernels are in `verity/protocols/experimental/dither/prover/kernels/`, beside Dither's circuit; their Python front
+ends and the scripts that build them stay here.
 
 - `h1c.cu` (`h1c.py`): the execution phase's tables on the device, bit for bit `benchmarks/pouw/served_h1/commit.py`'s.
 - `h1r.cu` (`h1r.py`): a step's H1 + fx1 proof blocks in two launches.

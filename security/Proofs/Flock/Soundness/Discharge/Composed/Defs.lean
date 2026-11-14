@@ -131,7 +131,7 @@ variable (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg 
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) (L : Law n)
 
-/-- **The decoder is right at the sampling design's samples** (`DecodesZK` at `L.draw ω` only): on every live outcome flock-verify
+/-- **The decoder is right at the sampling design's samples** (`DecodesZK` at `L.draw ω` only): on every live outcome verity-verify-proof
 `--zk` accepts at a sample the sampling design makes, each rep's game runs on the tape decoded from its stream and proof file, and
 the compiled table's verdict on those runs holds. -/
 def DecodesOnZK : Prop :=
@@ -186,8 +186,8 @@ theorem execRefinesZK_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L
     (dec (L.draw ω) τ.1) (one (L.draw ω) τ.1) (fin (L.draw ω) τ.1) (capOf (L.draw ω) τ.1) N (Gz A Hs T (L.draw ω) τ.1)
     (fun pts r => allInh_repZCAt A Hs (T (L.draw ω) τ.1) pts r) (hdec ω τ.1) _
 
-/-- **The `--zk` headline at flock-verify's acceptance, from the decoder at the sampling design's samples**: a bound on the compiled
-batched audit's acceptance with any event `Q` at `simZ … τ` bounds flock-verify `--zk`'s acceptance with `Q`. -/
+/-- **The `--zk` headline at verity-verify-proof's acceptance, from the decoder at the sampling design's samples**: a bound on the compiled
+batched audit's acceptance with any event `Q` at `simZ … τ` bounds verity-verify-proof `--zk`'s acceptance with `Q`. -/
 theorem zk_headline_exec_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) (Q : Prop) (B : ℝ≥0∞)
     (hB : prob (fun o => o.1 = true ∧ Q) (audit L Reg (batchedSessionZC A Hs (planOf T)))

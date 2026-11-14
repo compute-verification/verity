@@ -35,11 +35,11 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# `flock-verify rec-compose` at the compiled verifier's parts
+# `verity-verify-proof rec-compose` at the compiled verifier's parts
 
 `RecDeploy.V` runs part `s` of a recursive statement at `partRaw r st x ms s p`: what every part shares
 (`stagedShared`, the link table among it), with the part's own Flock statement, index and bindings (`partRaw_ofShared`).
-The deployed composition runs the parts as separate `flock-verify verify --zk --rec-part J` processes, so nothing but
+The deployed composition runs the parts as separate `verity-verify-proof verify --zk --rec-part J` processes, so nothing but
 `rec-compose` holds them to one shared set. `composed_parts`: where `rec-compose` accepts the parts' verdicts
 (`RecCompose.Accepts`, which `RecCompose.check_accepts` proves of every composition it accepts), either two of the parts'
 shared files are distinct with one SHA-512, or every part's recursive statement is `RecRaw.ofShared S` at one shared set
@@ -54,7 +54,7 @@ the challenger opened for the statement's parts recorded, and the staging before
 `composed_run` carries it to the parts' runs (`OneRunOf`): `composed_parts`' shared set `S` is what the record staged
 before any session opened, and the parts' sessions are exactly the ones it opened, one per V* statement, so a part
 retried until it accepts is refused. That the record is the challenger's, and that the challenger logs every `Hello` it
-answers, is the auditor-trusted challenger's (`trusted-host`), as its other records are.
+answers, is the auditor-trusted challenger's (`trusted-device`), as its other records are.
 -/
 
 @[expose] public section

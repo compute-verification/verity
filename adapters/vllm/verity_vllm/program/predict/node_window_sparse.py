@@ -6,7 +6,7 @@ DSA attention:
   gather), its norm's weights and its position's cos/sin row, and returns the key row the attention reads (`HISTORY`'s writer).
 * `BatchedGemm_v1{B, K, N}` is its ``SLICES``: unit (b, n) reads head b's K words of x whole and returns output word (b, n).
   Its weight ``w[b, n, :]`` is a strided column of the weights record (the record holds the field as (B, K, N)), which no
-  registered read takes, so the port is left a free input under the weights record.
+  read of the record takes, so the port reads the rank's entry of the weight in the port's order (`entry`, ``/bnk``).
 * `SparseMlaSplit_v1` is its ``CHAINS`` cut in whole key blocks (`sparse_mla_split.split_chain`, `chain_rows.plan`): per head,
   its key blocks in FA3's visit order, each reading the head's q_nope and q_rope whole and its keys as the latent rows that
   hold them (a key a row, the port cut that many ways), the blocks after a chain's first the state the one before returns,
@@ -24,9 +24,11 @@ from __future__ import annotations
 from typing import Any
 
 from verity.circuits.codec import descriptor_id
+from verity.circuits.refs import Affine, runs
 from verity.commitments.windows import interface as IF
 from verity.definitions.registry import sparse_mla_split as SMS
 
+from verity_vllm.check.weights_of_record import weight_param
 from verity_vllm.pipeline import chain_rows as CR
 from verity_vllm.pipeline import expert_rows as XR
 from verity_vllm.pipeline import serving_templates as ST
@@ -71,9 +73,9 @@ def latent_row(w: NodeWindow, j: int, node: Any) -> None:
 
 def batched_gemm(w: NodeWindow, j: int, node: Any) -> None:
     """`BatchedGemm_v1{B, K, N}` as its ``SLICES``: unit (b, n) of member t, ``a + (b N + n) M + t``, reads head b's K words
-    of x whole and ``w[b, n, :]``, and returns output word (b, n). Its ``w`` is read in the record's (B, K, N) order, a strided
-    column a unit, which no registered read takes: a free input under the weights record (unless the record's run is the
-    port's own order, which a registered read takes)."""
+    of x whole and ``w[b, n, :]``, and returns output word (b, n). Its ``w`` is the weights record's run where the record
+    holds the port's own order, else the record's (B, K, N) order, a strided column a unit, which no read of the record
+    takes: then the rank's entry of the weight in the port's order (`entry`)."""
     spec, M = descriptor_id(node.fn), w.members(node)
     B, K, N = (int(node.fn.bindings[x]) for x in ("B", "K", "N"))
     fn = _part(spec, "BatchedGemm_v1", B=1, N=1)
@@ -85,8 +87,30 @@ def batched_gemm(w: NodeWindow, j: int, node: Any) -> None:
     if len(w.segments(refs.slice(0, K))) == 1:
         w.b.read(t, "w", a, (B, N, M), w.weight(refs, B * N * K), (N * K, K, 0))
     else:
-        w.feed(t, "w", a, _Free([("param", WEIGHTS, _label_at(w, refs))]), (B, N, M))
+        w.b.read(t, "w", a, (B, N, M), 0, (N * K, K, 0), param=entry(w, refs, K))
     w.out(j, node, [Piece(0, B * N, Row(t, a, "o0", 1), M, 1)])
+
+
+def entry(w: NodeWindow, refs: Any, K: int) -> str:
+    """The rank's registered entry of the weight ``refs`` reads as rows of ``K`` words in ``refs``' own order, a batched
+    GEMM's ``w`` (`batched_gemm`): ``weights/<label>@<K>/bnk`` (`node_window_embed.split` keeps it with the tables), its
+    words the record's at ``refs`` in turn (`NodeWindow.entries` keeps them). Refused where ``refs`` leave the one weight,
+    or another read gave the name other words."""
+    label = _label_at(w, refs)
+    first, n = next((f, k) for x, f, k in w.b.weights if x == label)
+    rs = runs(refs)
+    if any(s != "p" or w.params[i] != WEIGHTS for s, i, _lo, _hi in rs):
+        raise Unexpressible(f"{label}: a batched GEMM's weight reads past the weight")
+    lo, hi = min(r[2] for r in rs), max(r[3] for r in rs)
+    (s,) = w.segments(Affine("p", rs[0][1], lo, hi - lo))
+    if not first <= s[2] < s[3] <= first + n:
+        raise Unexpressible(f"{label}: a batched GEMM's weight reads past the weight")
+    param = f"{weight_param(label, K)}/bnk"
+    prev = w.entries.setdefault(param, refs)
+    if prev is not refs and runs(prev) != rs:
+        raise Unexpressible(f"{param}: read at two layouts of the weights record")
+    w.b.params[param] = len(refs)
+    return param
 
 
 def row_gemm(w: NodeWindow, j: int, node: Any) -> None:

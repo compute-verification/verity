@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The ingress tie in zero knowledge (n2_tie_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
-# Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the sampled-proofs verifier
+# Flock's flock-circuit and the Lean verity-verify-proof) with the ZK server's Lean frame and the sampled-proofs verifier
 # built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in one of the network slots, as a job of at most 180
 # minutes:
 #   env N2_MEM_GB=56 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \

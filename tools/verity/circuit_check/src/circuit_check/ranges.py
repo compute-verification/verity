@@ -1,6 +1,6 @@
 """A Definition registered over a range of its statics: a sidecar's ``RANGES``, {rule: its spots}.  A rule is the family's id with
 ``lo..hi`` in place of each static it spans, or ``lo..hi step s`` for lo, lo + s, ..., hi (a grid of size classes,
-``N=4096..131072 step 2048``), and the rest at the values the id spells (``SparseMlaSplit_v1{T=1..2048,NS=1..28,NH=8,...}``); a
+``N=4096..131072 step 2048``), and the rest at the values the id spells (``WidgetSplit_v1{T=1..2048,NS=1..28,NH=8,...}``); a
 spot gives each spanned static a value (``"T=2048,NS=28"``), and the spots reach both ends of each range (`parse` refuses a rule
 whose spots don't).
 

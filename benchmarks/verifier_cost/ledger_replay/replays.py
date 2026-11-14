@@ -5,7 +5,7 @@
 Per W, DIR/period-W.json is one request of `pouw-period serve`, a line: an honest period of W windows in the form the
 period's guarantee covers, as PoUW's period difftest generates one (`pouw_credit_cases.period_instance`). One line of
 JSON a W on stdout: the period's windows, its ledger's entries and sessions, the reference's verdict
-(`period_check.case`), and how many times the reference replayed the ledger on the way (`replays`, the calls of
+(`period_check.case_twin`), and how many times the reference replayed the ledger on the way (`replays`, the calls of
 `challenger._verify`).
 """
 from __future__ import annotations
@@ -38,7 +38,7 @@ def count(windows: int) -> tuple[dict, dict]:
 
     Ch._verify = counted
     try:
-        answer = period_check.case(case)
+        answer = period_check.case_twin(case)
     finally:
         Ch._verify = verify
     kinds = [json.loads(line)["kind"] for line in d["ledger"]]

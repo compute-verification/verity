@@ -1,7 +1,7 @@
 """The network certifier's transfer rows: a host's load, each value of the weights it loads once a session, committed
 by the network certifier on the host's uplink as it crosses, never by the prover, and signed with its key. The verifier
 pins each load's root from that certificate alone (`blocks.pins`), so every unit's row of a load is a registered read
-opened against the certifier's signed root by the Lean verifier's registered reads (`flock-verify --registered`,
+opened against the certifier's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`,
 `Flock.Registered.checkPort`), which don't change. Every other row into the host is the scan's state
 (`ingress_scan.SCAN_STATE`), which the scan places inside the zero-knowledge proof, and its egress the scan's egress
 side's (`egress`): no request, response or value one host sends another has a head of its own.

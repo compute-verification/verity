@@ -42,7 +42,7 @@ def wrappedU (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (ω : Nois
 
 namespace RouteU
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **The reduction on route U, grouped by entry** (`Relation.ReductionOnlyIf` for `C^U`, every `β` and input): if a
 rule is an identity in the noise of route U's checked values at position `p`, then for every entry `e` the unbiased

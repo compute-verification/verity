@@ -1,5 +1,5 @@
-"""The rounds and salt difftests' cases: `core_check.rounds`'s arguments, ``{"key", "ledger", "pins", "main", "window",
-"session", "roots", "openings"}``, and `core_check.salt`'s, ``{"key", "ledger", "pins", "main", "window", "session",
+"""The rounds and salt difftests' cases: `core_check.rounds_twin`'s arguments, ``{"key", "ledger", "pins", "main", "window",
+"session", "roots", "openings"}``, and `core_check.salt_of_record`'s, ``{"key", "ledger", "pins", "main", "window", "session",
 "weights", "requests", "opening"}``.
 
 A rounds case is an honest live execution phase read through its challenger's session: a live execution phase's coins
@@ -443,7 +443,7 @@ def rounds_instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 def rounds_args(d: dict) -> tuple:
-    """`core_check.rounds`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
+    """`core_check.rounds_twin`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
     return d["key"], d["ledger"], d["pins"], d["main"], d["window"], d["session"], d["roots"], d["openings"], lms_verify
 
 
@@ -584,6 +584,6 @@ def salt_instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 def salt_args(d: dict) -> tuple:
-    """`core_check.salt`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
+    """`core_check.salt_of_record`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
     return (d["key"], d["ledger"], d["pins"], d["main"], d["window"], d["session"], d["weights"], d["requests"],
             d["opening"], lms_verify)

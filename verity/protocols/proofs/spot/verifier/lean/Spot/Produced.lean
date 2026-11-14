@@ -1,4 +1,8 @@
-/-
+module
+
+public import Spot.Registered
+
+/-!
 Produced values (`one_stage/produced.py`): rows the prover computes after the sample from what it committed
 before it, committed under hiding leaves and read as inputs by several statements of a session, each read opened against
 the one root the record names. They are never outputs. H1's sampled leaf is proved as its 32 lanes and their combine
@@ -23,9 +27,6 @@ the one root the record names. They are never outputs. H1's sampled leaf is prov
 The verifier's own entries and every read are the protocol's, in Python (`produced.entry`, `pouw.leaf_lanes.reads`);
 Flock's `--registered` opens them (`Flock.Registered`).
 -/
-module
-
-public import Spot.Registered
 
 @[expose] public section
 

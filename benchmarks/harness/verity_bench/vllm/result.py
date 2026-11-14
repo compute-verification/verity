@@ -85,8 +85,8 @@ def write(doc: Mapping[str, Any], path: str | Path) -> None:
 def measurements(doc: Mapping[str, Any], evidence: str) -> list[dict[str, Any]]:
     """The kit writer's arguments for each number of `doc`'s timed points, each measured from `evidence`: an arm's mean
     of a metric with its 95% interval, named ``ARM.METRIC``, and for each arm but the baseline its paired ratio over the
-    baseline's reps, ``ARM.METRIC.ratio``, with no value where a baseline rep measured zero. A failed gate leaves no
-    timed point, so it leaves no measurement."""
+    baseline's reps, ``ARM.METRIC.ratio``, with no value where a baseline rep measured zero; each the sweep's point it
+    was timed at as its `member`. A failed gate leaves no timed point, so it leaves no measurement."""
 
     out: list[dict[str, Any]] = []
     for point in doc["points"]:
@@ -95,24 +95,22 @@ def measurements(doc: Mapping[str, Any], evidence: str) -> list[dict[str, Any]]:
             for metric, m in held["metrics"].items():
                 out.append({"name": f"{arm}.{metric}", "value": m["mean"], "unit": UNITS[metric],
                             "interval": m.get("ci95"), "why": None if m["mean"] is not None else "no rep measured it",
-                            "inputs": [evidence], "extra": {**at, "n": m["n"]}})
+                            "inputs": [evidence], "member": at["point"], "extra": {**at, "n": m["n"]}})
                 if arm == doc["baseline"]:
                     continue
                 r = m["ratio_to_stock"]
                 out.append({"name": f"{arm}.{metric}.ratio", "value": r["mean"], "unit": "ratio", "interval": r.get("ci95"),
                             "why": None if r["mean"] is not None else "a baseline rep measured zero",
-                            "inputs": [evidence], "extra": {**at, "n": r["n"], "baseline": doc["baseline"]}})
+                            "inputs": [evidence], "member": at["point"],
+                            "extra": {**at, "n": r["n"], "baseline": doc["baseline"]}})
     return out
 
 
-def record(doc: Mapping[str, Any], run_dir: Path, run: str, evidence: str) -> None:
-    """Appends `doc`'s `measurements` to the run's result in `run_dir` through the kit's writer, under the host's stamp
-    now."""
+def record(doc: Mapping[str, Any], writer: kit.Writer, evidence: str) -> None:
+    """Appends `doc`'s `measurements` to the run's result through the kit's `writer`."""
 
-    if found := measurements(doc, evidence):
-        writer = kit.Writer(run_dir, run, kit.host_stamp())
-        for m in found:
-            writer.measurement(**m, mark="measured")
+    for m in measurements(doc, evidence):
+        writer.measurement(**m, mark="measured")
 
 
 def _leaves(value: Any, prefix: str = "") -> dict[str, Any]:

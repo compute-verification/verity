@@ -53,7 +53,7 @@ the served schedule, which `Tie.commit` and `Tie.receipt` state. What stays of i
 * **population** (`ServedUnits`): each linear's Program has the shape's unit count, and the declared circuit's units are
   the window's `population`;
 * **the sample** (`SampleMissesSubset`): the verifier's `subset:K_d` sample over the window's population from `L` uniform bytes
-  (`Spot.Draw.drawUnits`, what `flock-verify draw --population N --k K` runs) misses a set `U` no more often
+  (`Spot.Draw.drawUnits`, what `verity-verify-proof draw --population N --k K` runs) misses a set `U` no more often
   than `Pouw.Window.subsetDraw K_d` of a uniform permutation does. It is over the code alone, like
   `Properties.Spot.DrawMisses`.
 

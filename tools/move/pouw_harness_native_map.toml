@@ -1,0 +1,51 @@
+# The PoUW harness's device library and the plain NVFP4 GEMM it builds, to PoUW's prover: what
+# `tools/move/layout.py --map tools/move/pouw_harness_native_map.toml` moves and rewrites.
+#
+# `benchmarks/pouw/harness/native/` (`build.sh` and the sources of `libpouw_harness.so`: fills, flushes, events, graphs,
+# cuBLASLt and the CUTLASS baselines) and `benchmarks/pouw/nvfp4_sm120/` (the plain NVFP4 and FP8 GEMMs, which
+# `build.sh` compiles into the library) become `verity/protocols/accounting/pouw/prover/kernels/harness/native/` and
+# `verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/`, beside the Pearl-C kernels' directories. They move
+# together and keep their places relative to each other, so `build.sh`'s path to the plain GEMM
+# (`PLAIN=../../nvfp4_sm120/nvf4_plain`) and the sources' includes are unchanged. The harness's Python (`native.py`,
+# `bench.py` and the rest) stays in `benchmarks/pouw/harness/`. No file is split, added or deleted, and no Python file
+# moves. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"benchmarks/pouw/harness/native/" = "verity/protocols/accounting/pouw/prover/kernels/harness/native/"
+"benchmarks/pouw/nvfp4_sm120/" = "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row
+paths = ["benchmarks/pouw/harness/native/", "benchmarks/pouw/nvfp4_sm120/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: the layout of record (`tests/tree.toml`), records of what was (the earlier moves and their maps,
+# changelogs, research's recorded moves, the archive), files whose bytes a digest pins, and Lean sources.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json"]
+
+[split]
+# A reference to `benchmarks/pouw/harness/`, which the map splits, follows the harness where it means the harness, which
+# stays: "old file: old directory" = { to, why }.
+"benchmarks/pouw/nvfp4_sm120/README.md: benchmarks/pouw/harness" = { to = "benchmarks/pouw/harness", why = "the harness that gates and times the baselines, which stays" }
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`): the two directories as dotted paths, which no file spells
+# (the harness loads its `native.py` as `native`, from its own directory, and that file stays)
+"benchmarks.pouw.harness.native" = "verity.protocols.accounting.pouw.prover.kernels.harness.native"
+"benchmarks.pouw.nvfp4_sm120" = "verity.protocols.accounting.pouw.prover.kernels.nvfp4_sm120"

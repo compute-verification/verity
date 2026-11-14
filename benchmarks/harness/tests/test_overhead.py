@@ -243,7 +243,6 @@ def scheme(tmp_path, monkeypatch):
     sch = O.Scheme("pearl-plus", O.SCHEMES["pearl-plus"].family, "overhead_arm:PearlPlus", str(arm_dir),
                    "overhead_eps_standin:epsilon")
     monkeypatch.setitem(O.SCHEMES, "pearl-plus", sch)
-    monkeypatch.setattr(sys, "path", list(sys.path))
     return sch
 
 
@@ -519,9 +518,9 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
     result = json.loads((run_dir / "result.json").read_text())
     assert result["validation"]["status"] == "passed"
     written = {m["name"]: m for m in result["measurements"]}
-    assert set(written) == {"gamma_C", "gamma_L"}
+    assert set(written) == {"benchmarks/overhead.gamma-c", "benchmarks/overhead.gamma-l"}
     for name, p in doc["points"].items():
-        m = written[f"gamma_{name}"]
+        m = written[f"benchmarks/overhead.gamma-{name.lower()}"]
         assert (m["value"], m["ci95"], m["unit"]) == (p["gamma"]["gamma"], p["gamma"]["ci95"], "ratio")
         assert (m["target"], m["verdict"], m["mark"]) == (None, None, "measured")
         assert m["inputs"] == ["measured", "out/overhead.json"]

@@ -42,9 +42,9 @@ or each row's leaves are of one width and the writer's divides the reader's.
 
 namespace NciCheck.Properties.Record.SecurityProofs
 
-open Flock.Program (Prog Scope Ref Ty Defn)
+open Flock.Program (Prog Scope Ref Ty Defn fieldsOf)
 open Flock.TemplateQuery (TRange)
-open NciCheck.RecordText (Row Tmpl fieldsOf outerOf templatesOf)
+open NciCheck.RecordText (Row Tmpl outerOf templatesOf)
 open NciCheck.Record (unwhole leavesOf passedOn)
 open NciCheck.Record.SecurityProofs (runOf runOf_some mem_of_lookup shaped_of_tmplOf whole_spec bitsOf_eq passOf
   passedOn_get)

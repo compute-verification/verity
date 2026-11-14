@@ -5,7 +5,7 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, ZK server 
     python benchmarks/prove_path/served_tie_zk.py cost [--out DIR]
     python benchmarks/prove_path/served_tie_zk.py build --class slice|9c10|served --g G [--out DIR]
     python benchmarks/prove_path/served_tie_zk.py prove --serve-run DIR --window K [--g G] [--blocks all|executed] [--per N]
-      --bin flock-circuit --lean flock-verify --out DIR [--dry]
+      --bin flock-circuit --lean verity-verify-proof --out DIR [--dry]
     python benchmarks/prove_path/served_tie_zk.py rescan --serve-run DIR --window K [--g G] [--blocks ...] [--per N]
       --from PROVE_OUT --out DIR
 
@@ -279,7 +279,7 @@ def audit(M, N2, a, sg, m: dict, units: list, w: int, run_root: bytes, out: Path
                                         and (live or {}).get("roots") == fv["roots"] and v.ok,
                                         "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}}
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
-    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program"}
+    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program"}
     proved = a0.proved_units(m["header"], live or {})
     timing = {k: (live or {}).get(k) for k in N2.TIMING}
     statement = {name: {"session_s": proc["wall_s"], **{k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest",

@@ -5,7 +5,7 @@
 # other instruction once a tile, so an over-count); the peel's MMAs are IMMA16832's 0.0156 above 1.
 name = "a100-l32"
 status = "measured"
-source = "AMPERE r2's egemm80 e32 (benchmarks/pouw/edited_gemm/egemm80.cu, `egemm80.py summary`), bit-exact against derive.py's receipts by egemm80_ref.py"
+source = "AMPERE r2's egemm80 e32 (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/egemm80.cu, `egemm80.py summary`), bit-exact against derive.py's receipts by egemm80_ref.py"
 L = 32
 
 [mma]

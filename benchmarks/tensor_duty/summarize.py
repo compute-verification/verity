@@ -10,21 +10,23 @@ shorter. Only PASS exits 0. Throughput rests on the host's wall clock alone; the
 reading. The tables give the maximum by clock, arm and operand class, each clock's and arm's duty x class table, and
 the fills and bursts compared; each point is joined to the nvidia-smi samples taken inside its host interval.
 
-`--arms fp32-beside` reads run.sh's FP32-beside-tensor points (beside.jsonl, duty.cu's arms A to D) instead: the time
-price of an FP32 add in tensor units, p = R_t,alone / R_f,mixed, for each point of arms C and D. R_t,alone is the
-highest arm A point's MACs over its host interval at the point's clock setting and class; R_f,mixed is the point's adds
-over the part of its host interval its FP32 warps spent adding (`fp32_share`, of the kernel's %globaltimer time). The
-run prices nothing: it tests each reading of the add's price (`price_readings`): per clock, 32 (both pipes at one
-clock); the sheet's clocks, 32 x clock.tensor / clock.sm; and a cautious one, 32 x the base clock / clock.sm. A reading
-survives when every C and D point has p >= its price x (1 - 0.005) with the host stamps against it, is refuted when one
-has p under that with them for it, and is undecided otherwise, when a point has no arm A point beside it, or when an
-arm B point adds under 95% of the loop's ideal, 32 x rate.issue x 64 / 67 a SM-clock (`undersaturated`: R_f is then
-under-measured and p reads high). It exits 0 only when every reading is decided. Each point's clock is the one it held
-(nvidia-smi's mean over its interval, else clock64), never the one the run asked nvidia-smi to lock; arm B's p, the
-loop's price alone, is given and not judged.
+`--arms fp32-beside` reads run.sh's FP32-beside-tensor points (beside.jsonl, duty.cu's arms A to D) instead, and judges
+each of the card's two clock readings of an FP32 add's price (`price_readings`: `price.fp32.sm`, 32, both pipes at
+clock.sm, the card's `clock.default`; `price.fp32.tensor`, 29.58, the tensor at clock.tensor) under the unit CMP-438
+rules: each operation charged in seconds at its own pipe's data-sheet ceiling. A reading is refuted by a point, of any
+arm, whose MACs over its host interval lengthened by a stamp exceed the tensor's ceiling at that reading's tensor clock,
+or whose adds over it exceed the FP32 pipe's, 32 x rate.issue at clock.sm; it is undecided when a point does so only
+over its interval shortened by a stamp, and survives otherwise. It exits 0 only when every reading is decided. Each
+point's clock is the one it held (nvidia-smi's mean over its interval, else clock64), never the one the run asked nvidia-smi to lock.
 
-    PYTHONPATH=. python3 benchmarks/tensor_duty/summarize.py OUT [OUT...] [--arms fp32-beside [--base-mhz MHZ --base-source TEXT]] \
-        [--json FILE]
+Beside the verdicts, a diagnostic judged against nothing: p = R_t,alone / R_f,mixed for each point of arms B, C and D,
+the time price of an add in the tensor pipe's own time, the unit CMP-438 refused. R_t,alone is the highest arm A point's
+MACs over its host interval at the point's clock setting and class; R_f,mixed is the point's adds over the part of its
+host interval its FP32 warps spent adding (`fp32_share`, of the kernel's %globaltimer time). An arm B point adding under
+95% of the loop's ideal, 32 x rate.issue x 64 / 67 a SM-clock, is marked `undersaturated` (R_f is then under-measured
+and p reads high).
+
+    PYTHONPATH=. python3 benchmarks/tensor_duty/summarize.py OUT [OUT...] [--arms fp32-beside] [--json FILE]
 """
 from __future__ import annotations
 
@@ -35,19 +37,14 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from verity.device import load_card, rate
+from verity.device import READINGS, load_card, number, rate
+from verity.device import readings as card_readings
 
 SKU = "h200-sxm-141gb"
 #: the resolution of duty.cu's host stamps, which it prints to the millisecond
 STAMP_S = 1e-3
-#: W1's price of an FP32 add in tensor units at one clock, and TT_OUT's margin at 8192³ that every reading keeps
-ADD_PRICE, MARGIN = 32, 0.005
 #: the FP32 loop: adds and instructions an iteration; arm B under SATURATED of its ideal rate is undersaturated
 LOOP_ADDS, LOOP_INSNS, SATURATED = 64, 67, 0.95
-#: the cautious reading's tensor clock: the card file and the H200 data sheet state no base clock
-BASE_MHZ = 1500
-BASE_SOURCE = ("third-party GPU databases' H200 SXM 141 GB base clock, 1500 MHz (specdb.mudol.app, gpus.axiomgaming.net); "
-               "neither the card file nor the NVIDIA H200 data sheet states one")
 
 
 def readings(sku: str = SKU) -> tuple[float, float, float]:
@@ -230,15 +227,29 @@ def fp32_rate(r: dict, pad: float = 0.0) -> float:
     return r["adds"] / span if span > 0 else float("inf")
 
 
-def price_readings(sku: str = SKU, base_mhz: float = BASE_MHZ, base_source: str = BASE_SOURCE) -> list[dict]:
-    """Each reading of an FP32 add's price in tensor units, with the threshold a C or D point's p must meet."""
-    clock = load_card(sku)["clock"]
-    sm, tensor = clock["sm"]["value"], clock["tensor"]["value"]
-    rows = [("per-clock", ADD_PRICE, "W1: the tensor and the FP32 pipe at one SM clock"),
-            ("sheet-clocks", ADD_PRICE * tensor / sm, f"the card's clock.tensor {tensor} MHz over clock.sm {sm} MHz"),
-            ("cautious", ADD_PRICE * base_mhz / sm, f"a base clock of {base_mhz:g} MHz over clock.sm {sm} MHz: "
-                                                     f"{base_source}")]
-    return [{"reading": n, "price": p, "threshold": p * (1 - MARGIN), "source": src} for n, p, src in rows]
+def price_readings(sku: str = SKU) -> list[dict]:
+    """The card's clock readings of an FP32 add's price in tensor units (`price.fp32.<reading>`, by `READINGS`), its
+    `clock.default` first, each with its pipes' ceilings: the tensor's e4m3 MACs a second under the reading
+    (`verity.device.readings`), and the FP32 pipe's adds a second, 32 x rate.issue at clock.sm."""
+    card = load_card(sku)
+    clock, default = card["clock"], card["clock"]["default"]
+    sm = clock["sm"]["value"]
+    adds = 32 * float(rate(card, "issue"))
+    peaks = card_readings(card, fmt="e4m3")
+    source = {"sm": f"both pipes at clock.sm's {sm} MHz",
+              "tensor": f"the tensor at clock.tensor's {clock['tensor']['value']} MHz beside FP32 at clock.sm's {sm} "
+                        f"MHz; it holds only if the tensor pipe never exceeds {clock['tensor']['value']} MHz"}
+    order = [default, *(r for r in READINGS if r != default)]
+    return [{"reading": r, "price": float(number(card["price"]["fp32"][r])), "default": r == default,
+             "tensor_mhz": clock[r]["value"], "tensor_ceiling": float(peaks[r]), "fp32_ceiling": adds,
+             "source": ("the default: " if r == default else "") + source[r]} for r in order]
+
+
+def over(r: dict, rd: dict, pad: float) -> bool:
+    """Whether the point's MACs or adds over its host interval, lengthened by ``pad`` seconds, exceed the reading's
+    tensor or FP32 ceiling."""
+    span = r["host_t1"] - r["host_t0"] + pad
+    return span <= 0 or r["macs"] / span > rd["tensor_ceiling"] or r["adds"] / span > rd["fp32_ceiling"]
 
 
 def ideal_adds(sku: str = SKU) -> float:
@@ -255,8 +266,7 @@ def held(r: dict) -> float:
     return r.get("smi_mhz_mean") or r["clock64_mhz"]
 
 
-def beside(pts: list[dict], sku: str = SKU, base_mhz: float = BASE_MHZ,
-           base_source: str = BASE_SOURCE) -> tuple[bool, list[str], dict]:
+def beside(pts: list[dict], sku: str = SKU) -> tuple[bool, list[str], dict]:
     """Whether every reading is decided, and the Markdown lines and summary.json of ``pts`` (module docstring)."""
     ideal = ideal_adds(sku)
     alone: dict[tuple[str, str], dict] = {}
@@ -271,7 +281,7 @@ def beside(pts: list[dict], sku: str = SKU, base_mhz: float = BASE_MHZ,
         span = r["host_t1"] - r["host_t0"]
         rows.append({
             "set": setting(r["clock"]), "held_mhz": held(r), "arm": r["arm"], "class": r["class"], "x": r["x"],
-            "judged": r["arm"] in ("C", "D"), "macs_per_s": host_rate(r), "adds_per_s": r["adds"] / span,
+            "macs_per_s": host_rate(r), "adds_per_s": r["adds"] / span,
             "r_t_alone": a and host_rate(a), "r_f_mixed": fp32_rate(r) if r["fp32_share"] > 0 else None,
             "p": host_rate(a) / fp32_rate(r) if priced else None,
             "p_lo": host_rate(a, STAMP_S) / fp32_rate(r, -STAMP_S) if priced else None,
@@ -281,34 +291,36 @@ def beside(pts: list[dict], sku: str = SKU, base_mhz: float = BASE_MHZ,
             **{k: r[k] for k in ("clock64_mhz", "fp32_busy_mhz", "fp32_share", "macs_per_smclk", "adds_per_smclk")},
             **{f"{m}_mhz": r[f"{m}_mhz"] or None for m in ("tensor", "fp32", "both")},
             **{k: r.get(k) for k in ("smi_mhz_mean", "smi_mhz_max", "smi_w_mean")}})
-    judged = [x for x in rows if x["judged"]]
     under = [x for x in rows if x["undersaturated"]]
-    low = min((x for x in judged if x["p"] is not None), key=lambda x: x["p"], default=None)
+    low = min((x for x in rows if x["arm"] in "CD" and x["p"] is not None), key=lambda x: x["p"], default=None)
     verdicts = []
-    for rd in price_readings(sku, base_mhz, base_source):
-        t = rd["threshold"]
-        refuted = [x for x in judged if x["p"] is not None and x["p_hi"] < t]
-        undecided = [x for x in judged if x["p"] is None or x["p_lo"] < t <= x["p_hi"]]
-        v = "refuted" if refuted else "undecided" if undecided or under or not judged else "survives"
+    for rd in price_readings(sku):
+        refuted = [r for r in pts if over(r, rd, STAMP_S)]
+        undecided = [r for r in pts if over(r, rd, -STAMP_S) and not over(r, rd, STAMP_S)]
+        v = "refuted" if refuted else "undecided" if undecided else "survives"
         verdicts.append({**rd, "verdict": v, "refuting": len(refuted), "undecided": len(undecided)})
     decided = all(v["verdict"] != "undecided" for v in verdicts)
 
     def where(x: dict) -> str:
         return f"{x['set']} (held {x['held_mhz']:.0f} MHz), arm {x['arm']} {x['class']}, X {x['x']:g}"
 
-    L = [f"Of {len(judged)} points of arms C and D, the lowest time price of an FP32 add is "
-         + (f"p = {low['p']:.3f} tensor units (from {low['p_lo']:.3f} to {low['p_hi']:.3f} at the host stamps' "
-            f"{STAMP_S * 1e3:g} ms), at {where(low)}." if low else "unread.")]
-    b_rates = ", ".join(f"{x['adds_per_smclk']:.2f}" for x in rows if x["arm"] == "B") or "nothing"
-    L.append(f"Arm B adds {b_rates} a "
-             f"SM-clock against the loop's ideal {ideal:.2f}"
-             + (f": **undersaturated** ({len(under)} under {SATURATED:.0%}), so R_f is under-measured, p reads high, "
-                f"and no reading survives." if under else "."))
-    L += ["", "| reading | price (tensor units) | threshold | verdict | points refuting | undecided | source |",
-          "| --- | ---: | ---: | --- | ---: | ---: | --- |"]
+    L = [f"Of {len(pts)} points, each reading's verdict: refuted by a point whose MACs or adds over its host interval, "
+         f"at its longest reading (the host stamps' {STAMP_S * 1e3:g} ms), exceed that reading's tensor or FP32 "
+         "ceiling (CMP-438's unit: each operation charged in seconds at its own pipe's data-sheet ceiling).", ""]
+    L += ["| reading | price (tensor units) | tensor ceiling (T MAC/s) | FP32 ceiling (G add/s) | verdict | "
+          "points refuting | undecided | source |", "| --- | ---: | ---: | ---: | --- | ---: | ---: | --- |"]
     for v in verdicts:
-        L.append(f"| {v['reading']} | {v['price']:.3f} | {v['threshold']:.3f} | **{v['verdict']}** | {v['refuting']} | "
-                 f"{v['undecided']} | {v['source']} |")
+        L.append(f"| {v['reading']} | {v['price']:.3f} | {v['tensor_ceiling'] * 1e-12:.2f} | "
+                 f"{v['fp32_ceiling'] * 1e-9:.1f} | **{v['verdict']}** | {v['refuting']} | {v['undecided']} | "
+                 f"{v['source']} |")
+    b_rates = ", ".join(f"{x['adds_per_smclk']:.2f}" for x in rows if x["arm"] == "B") or "nothing"
+    L += ["", "A diagnostic, judged against nothing: p, an add's price in the tensor pipe's own time, the unit CMP-438 "
+          "refused. Its lowest over arms C and D is "
+          + (f"p = {low['p']:.3f} tensor units (from {low['p_lo']:.3f} to {low['p_hi']:.3f} at the host stamps' "
+             f"{STAMP_S * 1e3:g} ms), at {where(low)}." if low else "unread."),
+          f"Arm B adds {b_rates} a SM-clock against the loop's ideal {ideal:.2f}"
+          + (f": **undersaturated** ({len(under)} under {SATURATED:.0%}), so R_f is under-measured and p reads high."
+             if under else ".")]
     L += ["", "## The clocks the arms held (MHz; a setting is what the run asked nvidia-smi for, not what held)", "",
           "| setting | arm | smi mean | smi max | clock64 mean |", "| --- | --- | ---: | ---: | ---: |"]
     for s in sorted({x["set"] for x in rows}):
@@ -334,8 +346,8 @@ def beside(pts: list[dict], sku: str = SKU, base_mhz: float = BASE_MHZ,
                  f"{fmt(x['fp32_busy_mhz'] or None)} | {x['fp32_share']:.4f} | {x['adds_per_smclk']:.2f}"
                  f"{' (under)' if x['undersaturated'] else ''} | {fmt(x['smi_mhz_max'], 0)} | "
                  f"{fmt(x['smi_w_mean'], 0)} |")
-    doc = {"decided": decided, "verdicts": verdicts, "margin": MARGIN, "stamp_s": STAMP_S, "ideal_adds_per_smclk": ideal,
-           "saturated_at": SATURATED, "undersaturated": len(under) > 0, "points": len(rows), "judged": len(judged),
+    doc = {"decided": decided, "verdicts": verdicts, "stamp_s": STAMP_S, "ideal_adds_per_smclk": ideal,
+           "saturated_at": SATURATED, "undersaturated": len(under) > 0, "points": len(rows),
            "lowest": low and {k: low[k] for k in ("set", "held_mhz", "arm", "class", "x", "p", "p_lo", "p_hi")},
            "rows": rows}
     return decided, L, doc
@@ -345,8 +357,6 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("outs", nargs="+", type=Path)
     ap.add_argument("--arms", choices=("duty", "fp32-beside"), default="duty")
-    ap.add_argument("--base-mhz", type=float, default=BASE_MHZ, help="fp32-beside's cautious reading's tensor clock")
-    ap.add_argument("--base-source", default=BASE_SOURCE, help="where --base-mhz is read")
     ap.add_argument("--json", type=Path)
     a = ap.parse_args(argv)
     pts, unread = [], []
@@ -360,7 +370,7 @@ def main(argv: list[str] | None = None) -> int:
         print("no points")
         return 2
     if a.arms == "fp32-beside":
-        ok, lines, doc = beside(pts, base_mhz=a.base_mhz, base_source=a.base_source)
+        ok, lines, doc = beside(pts)
     else:
         v, lines, doc = report(pts)
         ok = v == "PASS"

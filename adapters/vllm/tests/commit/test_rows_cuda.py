@@ -30,8 +30,10 @@ from verity_vllm.commit import step_rows as R  # noqa: E402
 from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 
 _CORE = os.path.dirname(merkle.__file__)
-FRAME = json.load(open(os.path.join(_CORE, "frame_v3", "vectors_sha512.json")))
-HM96 = json.load(open(os.path.join(_CORE, "hm96", "vectors_sha512.json")))
+with open(os.path.join(_CORE, "frame_v3", "vectors_sha512.json")) as f:
+    FRAME = json.load(f)
+with open(os.path.join(_CORE, "hm96", "vectors_sha512.json")) as f:
+    HM96 = json.load(f)
 OTHER_KEY = bytes.fromhex(HM96["other_key"])
 PD, CTX, GEO = (hashlib.sha256(t).digest() for t in (b"program", b"ctx", b"geo"))
 BITS = 8 * R.ROW_BYTES
@@ -231,7 +233,8 @@ def test_windows_folded_together_copy_their_levels_on_another_stream(ext, hasher
         tops: list[torch.Tensor] = []
         held: list[torch.Tensor] = []
 
-        def fold() -> None:
+        def fold(held: list[torch.Tensor] = held, tops: list[torch.Tensor] = tops, n_levels: int = n_levels,
+                 host: list[torch.Tensor] = host) -> None:
             lv = torch.cat(held) if len(held) > 1 else held[0]
             held.clear()
             first, m = sum(int(t.shape[0]) for t in tops) << (n_levels - 1), int(lv.shape[0])

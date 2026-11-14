@@ -5,7 +5,7 @@ is a template, its units staged from the step's own values, sampled by the strat
 
     PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a11.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
-      --lean flock-verify --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
+      --lean verity-verify-proof --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
 
 ``--save-values DIR`` stops after the values, writing each kind's rows and its unit Definitions (a few MB); ``--load-values
 DIR`` stages from them without the fold, which is most of a run's time on a shared CPU node.
@@ -68,10 +68,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "served_units"))
 sys.setrecursionlimit(100000)
 
-import a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 import a6  # noqa: E402
 import a11_kinds as K  # noqa: E402
-import r2_population as R2  # noqa: E402
+from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.evaluation.reference import evaluate_region  # noqa: E402
@@ -79,7 +79,7 @@ from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 
 ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 WINDOW_OF = ("GLM-5.3 TP8 B1 rank 0's step values: the Match capture's activation snapshots of row " + ROW
@@ -982,7 +982,7 @@ def main() -> int:
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
         with slot("lean"):
             lean_v = a0.lean_verify(a.lean, m["st"], m["n"], sdir, zk=True)
-        verdicts[f"lean-verify/{m['name']}"] = {**lean_v, "tool": "flock-verify verify --zk --archive --partition --program"}
+        verdicts[f"lean-verify/{m['name']}"] = {**lean_v, "tool": "verity-verify-proof verify --zk --archive --partition --program"}
         statement[m["name"]] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                                 "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
                                 "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),

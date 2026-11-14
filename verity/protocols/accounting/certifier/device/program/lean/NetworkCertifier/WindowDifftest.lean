@@ -11,8 +11,8 @@ public import Lean.Data.Json.Parser
 `verity.ml.protocols.certifier.window_charge.reference_window` on them. `NetworkCertifier/WindowDifftestMain.lean`
 reads both files and fails unless `evaluate`, which computes the same results from the program's definitions
 (`NetworkCertifier.WindowCharge`), gives every one of them. The Lean audit runs it (`runs` in `lean-audit.json`):
-compiled evaluation, a test and not a proof. `Proofs.NetworkCertifier.Code` (`CodeChargesWhole`) proves `charges` equal
-to the reference's (`Security/Definitions/NetworkCertifier/WindowCharge.lean`).
+compiled evaluation, a test and not a proof. `Proofs.Certifier.Code` (`CodeChargesWhole`) proves `charges` equal
+to the reference's (`Security/Definitions/Certifier/WindowCharge.lean`).
 
 An instance is a window's slot counts `N`, `H`, `O` and `L`, a book (each of `window_charge.SYMBOLS`' tables, its
 frequencies at the bins a window reaches and its total, and the contexts' `priors`), a carry, and windows, each its `N`

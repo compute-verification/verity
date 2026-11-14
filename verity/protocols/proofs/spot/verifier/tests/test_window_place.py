@@ -50,8 +50,8 @@ MORE = {"kind": "served", "run": "ab" * 64, "row": 3, "check": "c", "stop": {"id
 def test_a_windows_place_is_its_four_items_alone():
     """`of` is ((prompt · 2^32 + outputs) · 2 + stopped) · 2 + blocks over four items of a record's window: its
     ``prompt``, its ``outputs``, ``stopped`` true and, on a stop record, ``population`` "stop"; no other item moves
-    it. The family is ``draw/<place>``, the place in decimal. Refused, by `of` and `family` alike: a window that is no
-    object, a size that is no natural number below 2^32, a ``stopped`` that is neither true nor false, a
+    it. The family is `FAMILY`, a slash and the place in decimal. Refused, by `of` and `family` alike: a window that is
+    no object, a size that is no natural number below 2^32, a ``stopped`` that is neither true nor false, a
     ``population`` other than "stop", and the stop blocks of a class that is no stop class."""
     assert WP.SIZES == 2**32 and WP.FAMILY == "draw"
     for window, at in PLACES:

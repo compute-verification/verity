@@ -372,7 +372,7 @@ def verify_registered(program: str, name: str, leaves: int, root: bytes, index: 
 
 def registered_reads(program: Program, tp: TemplatePartition, call: int, roots: dict[str, str], window: str,
                      window_root: str, prog: str | None = None) -> dict:
-    """The verifier's ``--registered`` file of a statement over call ``call``'s units (flock-verify ``verify --zk
+    """The verifier's ``--registered`` file of a statement over call ``call``'s units (verity-verify-proof ``verify --zk
     --registered``, `h1window.table_reads_file`): for each registered port (`window_ports`), the value it reads (the
     call's A table or z table, or the weights' b/<K>), its root (``roots`` ``{value: root}``, the execution phase's registration),
     rows, width and domain (the tables' binding the execution phase's open root ``window_root``, b/<K>'s none), and the row each

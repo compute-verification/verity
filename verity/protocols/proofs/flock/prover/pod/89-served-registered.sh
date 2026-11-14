@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The served-registered fixture (tests/served_registered.py, tests/test_lean_served_registered.py): a RoPE d64 statement
 # whose `cs` rows are a served tree registered as a port (`one_stage.served.register_served`), proved in one loopback --zk
-# session under a subset sample, then Lean's `flock-verify verify --zk --registered` on it with the verifier's own file
+# session under a subset sample, then Lean's `verity-verify-proof verify --zk --registered` on it with the verifier's own file
 # (accepted) and with the tree's root changed (refused). The staged files, the session and its challenger's challenger/
 # (no private key or secret) go into the evidence store as a fixture (`research data put --kind fixture/v1 --preserve`),
 # whose id `out/fixture.txt` names. Run from the verity tree (research run --cwd source); CPU only. The session's coin
@@ -9,7 +9,7 @@
 # challenger's release log. Outputs under out/: host.txt,
 # stage.json, statement.txt, serve.log, prove.txt and prove.err, live.json (the LIVE record), challenger/ (its record,
 # releases.jsonl, hellos.jsonl and audit.json), lean-honest.log and lean-root.log (each its VERDICT line), fixture.txt.
-# ZK=0 is the plain session instead (no --zk anywhere): a stratified sample of K units, Lean's (`flock-verify sample
+# ZK=0 is the plain session instead (no --zk anywhere): a stratified sample of K units, Lean's (`verity-verify-proof sample
 # --stratified K` on the stage's program and partition, on DRAW_COINS=FILE, the challenger's bytes: the verifier has none
 # of its own, so ZK=0 without DRAW_COINS refuses), served from its file and verified with `--stratified K --coins tree`
 # (FC_COINS=tree: its coins the challenger's tree's, as --zk's); Lean also verifies it without --registered (lean-none.log,
@@ -46,16 +46,16 @@ unset CARGO_TARGET_DIR
 trap 'rm -rf $S' EXIT
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$SR_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-}"; } > $O/host.txt 2>&1
 
-# Lean's flock-verify, built once per source, while the prover builds
+# Lean's verity-verify-proof, built once per source, while the prover builds
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
-LEAN_BIN=$L/lean-$LSHA/flock-verify
+LEAN_BIN=$L/lean-$LSHA/verity-verify-proof
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ]; then
     rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-      && (cd $LEAN_SRC && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN
+      && (cd $LEAN_SRC && lake build verity-verify-proof) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!

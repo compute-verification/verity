@@ -533,9 +533,9 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.TC.Relation.Witness`: becomes one Core witness (lean)",
     "security/Definitions/Nci/Cover.lean::Nci.Cover.Circuit":
         "duplicate of `Verity.Circuit`: becomes it, with registered parameters (compute-accounting)",
-    "security/Definitions/NetworkCertifier/Run.lean::NetTiming.Program":
+    "security/Definitions/Certifier/Run.lean::NetTiming.Program":
         "homonym, a committed Program's egress prediction: rename (network-accounting)",
-    "security/Definitions/NetworkCertifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
+    "security/Definitions/Certifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
     "security/Definitions/Spot/Exfiltration.lean::Population.Exfil.Strategy":
         "homonym, an adaptive exfiltration strategy, each window's leak and escaping coins from the earlier coins: rename (lean)",
@@ -665,7 +665,7 @@ KNOWN: dict[str, str] = {
         "homonym, a table of benchmark lowerings: rename (compute-accounting)",
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
-    "benchmarks/one_stage/a5_coins.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
+    "verity/protocols/proofs/spot/device/challenger_session.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
     "benchmarks/pous/p2_v1/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
     "verity/protocols/accounting/pouw/prover/clear/clear_audit.py::Transcript":
@@ -694,13 +694,13 @@ KNOWN: dict[str, str] = {
         "duplicate of the execution block (no canonical yet): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/served_h1/serve.py::Record":
         "homonym, a served request's benchmark row: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/of_record.py::Record":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py::Record":
         "homonym, a check's two verdicts side by side: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/replay_window.py::Window":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py::Window":
         "homonym, one replayed window's checks: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/served_commit.py::Challenger":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/served_zk/statement.py::Statement":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/statement.py::Statement":
         "homonym, a benchmark's statement bench: rename (compute-accounting)",
     "benchmarks/pouw/theory/checked_strip.py::Block":
         "homonym, a block of rows and columns of one design: rename (compute-accounting)",
@@ -721,8 +721,8 @@ KNOWN: dict[str, str] = {
     "benchmarks/rho/rho/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
     "benchmarks/rho/rho/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
-    "benchmarks/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
-    "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
+    "verity/protocols/proofs/spot/prover/cost/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
+    "verity/protocols/proofs/spot/prover/cost/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
     # demos/
     "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
@@ -753,11 +753,11 @@ KNOWN: dict[str, str] = {
         "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (vllm)",
     "adapters/vllm/verity_vllm/program/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
-    "adapters/vllm/verity_vllm/protocols/pouw/credit_gate.py::Trace":
+    "verity/protocols/accounting/pouw/prover/serving/credit_gate.py::Trace":
         "homonym, one linear call's recorded ops and their writers: rename (vllm)",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1/challenger.py::Ledger":
+    "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py::Ledger":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes it (deleted) (vllm)",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1/window.py::Window":
+    "verity/protocols/accounting/pouw/prover/serving/h1/window.py::Window":
         "duplicate of the execution block (no canonical yet): becomes a client of it (vllm)",
     "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Layout":
         "duplicate of the Site (`Verity.Site`): becomes its memory leaves by tier (vllm)",

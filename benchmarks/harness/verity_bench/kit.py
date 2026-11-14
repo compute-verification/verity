@@ -6,7 +6,8 @@
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
-  `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once.
+  `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once, and
+  `writer(out, kind)` writes a result of that `kind`, the artifact kind `research` stores it as.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
   `research` keeps; the first of them writes all three of its keys, so a result that uses none holds none.
 
@@ -86,6 +87,8 @@ PERIODS = ("phase", "week", "month", "year")
 OVER = ("world", "datacenter")
 #: the first word of an input, which the console's Metrics tab reads a mark from (as `markOf` does)
 LEADING_WORD = re.compile(r"^([a-z]+)\b")
+#: a result's `kind`, as `research` stores an artifact's: a name and a version
+KIND = re.compile(r"[a-z0-9][a-z0-9-]*/v[0-9]+")
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
@@ -263,20 +266,42 @@ def _locked(directory: Path) -> Iterator[None]:
 @dataclass(frozen=True)
 class Writer:
     """`writer(out)`: the one writer of `out/result.json`, for the run `run` under the host stamp `stamp`. `out` is the
-    directory the result is in: under a research run the run's own, whatever `writer` was given."""
+    directory the result is in: under a research run the run's own, whatever `writer` was given. `kind`, where given,
+    is the result's `kind`, the artifact kind `research` stores it as (`bench-result/v1` where it has none): the
+    writer writes it into the result and refuses a result of another kind."""
 
     out: Path
     run: str
     stamp: Mapping
+    kind: str | None = None
 
     def measurement(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
                     why: str | None = None, *, mark: str | None = None, period: str | None = None,
                     over: str | None = None, member: str | None = None,
                     extra: Mapping[str, Any] | None = None) -> dict:
-        """Appends one measurement to `out/result.json` and returns it: `value` in `unit` (None where the benchmark has
-        no finite value to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high),
-        which the result holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
+        """Appends one measurement to `out/result.json` and returns it, the one way a benchmark writes a number (what it
+        holds and refuses: `_entry`). It also refuses a name, period, `over` and member the result already holds, and a
+        result of another run."""
+
+        entry = self._entry(name, value, unit, interval, target, verdict, inputs, why, mark=mark, period=period, over=over,
+                           member=member, extra=extra)
+        with self._open() as (path, doc):
+            key = (name, period, over, member)
+            if any((m.get("name"), m.get("period"), m.get("over"), m.get("member")) == key for m in doc["measurements"]):
+                raise ValueError(f"{path} already holds a measurement named {name} at period={period!r}, over={over!r} and "
+                                 f"member={member!r}: a result holds one a name, period, over and member (a rerun writes a "
+                                 "fresh directory)")
+            doc["measurements"].append(entry)
+        return entry
+
+    def _entry(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
+               target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
+               why: str | None = None, *, mark: str | None = None, period: str | None = None,
+               over: str | None = None, member: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
+        """One measurement as `measurement` appends it: `value` in `unit` (None where the benchmark has no finite value
+        to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high), which the result
+        holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
         against that target, and the `inputs` it was computed from, with this run, its commit and the host stamp, and
         beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
         is required, a value of None's too, which takes the mark its value would have had. It is also the first of
@@ -285,9 +310,8 @@ class Writer:
         say what span of time and of compute the value is over, and `member` which member of a set it is for, each its own
         field where given. It refuses what isn't a measurement (a value that isn't a number, a verdict with no target or
         in a verdict of record's or a seal's words, a `why` beside a value), a missing or unknown mark and a first input
-        that opens with another one, a period or an `over` it doesn't know, a member that isn't a non-empty string, an
-        `extra` key the entry already has a meaning for or a value that isn't JSON, a name, period, `over` and member the
-        result already holds, and a result of another run."""
+        that opens with another one, a period or an `over` it doesn't know, a member that isn't a non-empty string, and
+        an `extra` key the entry already has a meaning for or a value that isn't JSON."""
 
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"a measurement has a name, not {name!r}")
@@ -340,13 +364,6 @@ class Writer:
             except (TypeError, ValueError):
                 raise ValueError(f"{name}'s extra {key} is a JSON value, not {held!r}") from None
             entry[key] = held
-        with self._open() as (path, doc):
-            key = (name, period, over, member)
-            if any((m.get("name"), m.get("period"), m.get("over"), m.get("member")) == key for m in doc["measurements"]):
-                raise ValueError(f"{path} already holds a measurement named {name} at period={period!r}, over={over!r} and "
-                                 f"member={member!r}: a result holds one a name, period, over and member (a rerun writes a "
-                                 "fresh directory)")
-            doc["measurements"].append(entry)
         return entry
 
     def validation(self, status: str, checker: str, detail: str, evidence: Sequence[str] = ()) -> dict:
@@ -454,8 +471,11 @@ class Writer:
     def _read(self, path: Path) -> dict:
         """The result at `path` to append to: this run's, or a new one where there is none."""
 
+        if self.kind is not None and not KIND.fullmatch(self.kind):
+            raise ValueError(f"a result's kind is NAME/vN, as research stores it, not {self.kind!r}")
         if not path.exists():
-            return {"schema": RESULT_SCHEMA, "run_id": self.run, "measurements": []}
+            return {"schema": RESULT_SCHEMA, **({"kind": self.kind} if self.kind else {}), "run_id": self.run,
+                    "measurements": []}
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
         except ValueError as ex:
@@ -467,14 +487,18 @@ class Writer:
                              "its own directory")
         if not isinstance(doc.setdefault("measurements", []), list):
             raise ValueError(f"{path}'s measurements aren't a list: the writer appends only to a {RESULT_SCHEMA} result")
+        if self.kind is not None:
+            if doc.setdefault("kind", self.kind) != self.kind:
+                raise ValueError(f"{path} is a {doc['kind']} result, and this writer writes a {self.kind} one: a run "
+                                 "writes one kind of result")
         return doc
 
 
-def writer(out: str | os.PathLike) -> Writer:
-    """The writer of this run's result (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now. Under a
-    research run (`RESEARCH_RUN_DIR` set) the result is `$RESEARCH_RUN_DIR/result.json`, the one file `research` reads a
-    run's result from, whatever `out` is, so its evidence paths are relative to the run's directory; outside one it is
-    `out/result.json`."""
+def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
+    """The writer of this run's result (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now, of `kind`
+    where given (`Writer.kind`). Under a research run (`RESEARCH_RUN_DIR` set) the result is
+    `$RESEARCH_RUN_DIR/result.json`, the one file `research` reads a run's result from, whatever `out` is, so its evidence
+    paths are relative to the run's directory; outside one it is `out/result.json`."""
 
     where = settings.RESEARCH_RUN_DIR if settings.is_set("RESEARCH_RUN_DIR") else out
-    return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp())
+    return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp(), kind)

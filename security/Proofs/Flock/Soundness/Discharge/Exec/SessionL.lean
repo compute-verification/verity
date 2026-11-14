@@ -9,8 +9,8 @@ import Mathlib.Combinatorics.Matroid.Init
 
 `batchedSession` (`Audit/FlockBatched.lean`) checks every opened path from the unsalted leaf `H(encode row)`
 (`OpensOK`). The statements the headline is about commit their proof rows with `hm96-sha512/v1` leaves, whose salts the
-prover sends with the openings, and flock-verify checks those paths from the salted leaf (`verify_refines_hm96`:
-`OpensOKL` at `leaf512`). An honest hm96 transcript fails `OpensOK`, so flock-verify's acceptance refines the session
+prover sends with the openings, and verity-verify-proof checks those paths from the salted leaf (`verify_refines_hm96`:
+`OpensOKL` at `leaf512`). An honest hm96 transcript fails `OpensOK`, so verity-verify-proof's acceptance refines the session
 below, not `batchedSession`.
 
 The session is `sessionB` with each table's run after the link points `tableAfterL`: `tableAfter`, whose openings'
@@ -118,7 +118,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 open Classical in
 /-- **The batched session on a sample, under `Lf`**: `Audit.Partition.batchedSession` with salted openings. At
-`Refine.leaf512` it is the session flock-verify's hm96 statements run. -/
+`Refine.leaf512` it is the session verity-verify-proof's hm96 statements run. -/
 noncomputable def batchedSessionL {n : ℕ} {Reg : Type} [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (S : Finset (Fin n)) (R : Reg) : Game Bool :=

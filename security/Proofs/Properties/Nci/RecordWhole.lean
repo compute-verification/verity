@@ -19,7 +19,7 @@ distinct ids (`leaves_find`), and a name's entry in a list of named values with 
 
 namespace NciCheck.Record.SecurityProofs
 
-open NciCheck.RecordText (Tmpl fieldsOf)
+open NciCheck.RecordText (Tmpl)
 open Flock.Program
 open Flock.Sigma (bits)
 

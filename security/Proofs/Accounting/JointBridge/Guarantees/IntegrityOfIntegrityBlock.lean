@@ -27,7 +27,7 @@ adaptive prover over the whole monitoring period (`Flock.Guarantees.CarriedBlock
 a wipe read at its carried leaves, each at one value in every session that shares it.
 `RealizesIntegrityOfIntegrityBlock` ties the block's period to it: the period's sampled audit's own coins drive the
 monitoring period's game at the prover's strategy, as far as block `b`'s sampling blocks' records go, its verdict is
-flock-verify's on every sampling block of the server-time block, and the claim's units and incorrect proof blocks are those
+verity-verify-proof's on every sampling block of the server-time block, and the claim's units and incorrect proof blocks are those
 sampling blocks'.
 
 `IntegrityOfIntegrityBlock` is `PeriodRun.Sound` for the server-time block's sampled audit at error
@@ -62,7 +62,7 @@ sampling block `S.W t`. Every field is a property of the deployed run:
   verifier's byte source, which the period's sampled coordinate is (A3,
   `FlockSoundness.Assumptions.UniformRandomBytes`, stays a hypothesis of the guarantee). The sessions of the
   server-time blocks before `b` are played at the coins they were, which the strategy sees through `ξ`.
-* `accepts_iff`: the period's sampled audit accepts exactly when flock-verify accepts every sampling block of the
+* `accepts_iff`: the period's sampled audit accepts exactly when verity-verify-proof accepts every sampling block of the
   server-time block.
 * `wrong_eq`: the incorrect proof blocks of the period's partition in its committed trace are, in number, the block's
   sampling blocks' incorrect proof blocks (`CarriedBlocks.wrongSet`: `wrongRegZ` in the trace fixed at registration, over the
@@ -78,14 +78,14 @@ structure RealizesIntegrityOfIntegrityBlock {ι : Type} {d : Device ι} {α : Ty
   /-- the prover strategy the node plays the monitoring period's game with, at the coins (it reads only the other
   coins) -/
   strat : ((i : I) → Ω i) → FlockSoundness.Game.Strategy S.game
-  /-- block `b`'s sampling blocks' records at the coins: flock-verify's verdict and the incorrect proof blocks of each -/
+  /-- block `b`'s sampling blocks' records at the coins: verity-verify-proof's verdict and the incorrect proof blocks of each -/
   record : ((i : I) → Ω i) → List Flock.Guarantees.WindowRec
   /-- the period's sampled audit's own coins drive the monitoring period's game at the strategy, on block `b`'s
   sampling blocks -/
   law : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.WindowRec → Prop),
     ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
       FlockSoundness.Game.value (fun l => E (l.filter fun w => w.idx ∈ S.sessions b)) (S.run (strat ξ))
-  /-- the sampled audit accepts exactly when flock-verify accepts every sampling block of the server-time block -/
+  /-- the sampled audit accepts exactly when verity-verify-proof accepts every sampling block of the server-time block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
   /-- the period's incorrect proof blocks are its sampling blocks' (M1, the program-from-circuit correspondence) -/
   wrong_eq : ∀ ξ, (r.parts.wrong (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum

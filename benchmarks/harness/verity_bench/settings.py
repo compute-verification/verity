@@ -9,7 +9,7 @@ value settings in force (`record`) beside its result (``out/settings.json``).
 Read a setting as an attribute, ``settings.VERITY_BENCH_VENV`` (or `get` by name).  `put`, `setdefault` and `unset` write a
 declared variable; `environ` is a copy of the whole environment, for code that passes it on (a spec's ``[env]`` and
 ``"$NAME"`` values name variables the arms read).  A variable the vLLM integration declares (``verity_vllm/settings.py``) is
-never declared here too: the harness writes one through the integration's writer, ``verity_vllm.engine.env.apply_target``.
+never declared here too: the harness writes one through the integration's writer, ``apply_target`` (`verity_bench.adapter`).
 
 `validate` (the registry's `Registry.check`) refuses a ``VERITY_BENCH_*`` variable that nothing reads (the registry's
 ``elsewhere`` names the ones other parts of the tree read), a declared value that doesn't parse, and on a run of record a

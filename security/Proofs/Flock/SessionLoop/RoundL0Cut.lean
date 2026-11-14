@@ -100,7 +100,7 @@ theorem runCut_l0Body {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Ta
   have hk6 := hwf.hk6
   have hkm := hwf.hk
   have hst : (stsOf x)[j.val]! = stAt x j := getElem!_pos _ _ _
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [show (2 * j.val + r.val) / 2 = j.val by omega, hst]
     exact (zkTab x j).hz
@@ -255,7 +255,7 @@ theorem enc_l0 (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x)
   have hsrc : Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t =
       Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x C) (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) :=
     rfl
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [Masked.stsOf_half x j r]
     exact (Masked.zkTab x j).hz

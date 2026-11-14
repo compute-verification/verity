@@ -28,7 +28,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 # The decoder is right at the hidden-output headline's samples
 
 `decodesOn_execH`: DecodeZL's `decodesOn_exec` at the hidden tables, from `Discharge/PlaysCoin`'s `decodesOnOfRuns`. At an
-outcome flock-verify accepts under hidden outputs:
+outcome verity-verify-proof accepts under hidden outputs:
 
 * `accepts_repsH`: DecodeZL's `accepts_reps` under hidden outputs. The one table's statement `st` is setupHidden's at
   the record's sample, and the per-rep facts come from the acceptance lemmas without `hh` (`accepts_verdict_leafAny`,
@@ -53,7 +53,7 @@ open FlockSoundness.Discharge.HiddenExec
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **flock-verify's acceptance of a one-table session under hidden outputs, rep by rep**: DecodeZL's `accepts_reps`
+/-- **verity-verify-proof's acceptance of a one-table session under hidden outputs, rep by rep**: DecodeZL's `accepts_reps`
 with setupHidden's statement `st` at the record's sample, the verdict at the model's leaf of the tags' leaf scheme. -/
 theorem accepts_repsH {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = true)
     (hrr : I.tags.retainRounds = true)

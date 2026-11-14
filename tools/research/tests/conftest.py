@@ -66,7 +66,7 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("NODE_SLOT_ONLY_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-slot_only.py"))
     # ... nor what a node requires of a shipped research package (/usr/local/lib/vy-monitoring/tool_rules.py)
     monkeypatch.setenv("NODE_TOOL_RULES_FILE", str(tmp_path_factory.mktemp("tool-rules") / "absent-tool_rules.py"))
-    # ... nor an auditor host's list of the only commands it runs (/etc/vy/auditor)
+    # ... nor an auditor device's list of the only commands it runs (/etc/vy/auditor)
     monkeypatch.setenv("AUDITOR_FILE", str(tmp_path_factory.mktemp("auditor") / "absent-auditor"))
     # ... nor its learned bundle sizes: on vy-nebius-1 the pacer mirrors them to /workspace/jobs/dispatch/bundle-sizes.json
     monkeypatch.setenv("VY_BUNDLE_SIZES", str(tmp_path_factory.mktemp("bundle-sizes") / "bundle-sizes.json"))

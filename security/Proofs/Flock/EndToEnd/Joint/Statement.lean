@@ -15,18 +15,18 @@ without replacement, and an incorrect set `B` holds `x_s` of them. `B` escapes t
 subcircuit and no sum of per-subcircuit worst cases.
 
 `StratifiedBlock` is such a sampling block: one hidden-output `--zk` session of one table (a stratified sample is a
-one-table session: flock-verify takes only the subset sample at more than one table, `RecordCustodyZKJ`) whose units the
+one-table session: verity-verify-proof takes only the subset sample at more than one table, `RecordCustodyZKJ`) whose units the
 challenger's coins sample by the live stratified sample (`Flock.Draw.drawWith` at `.stratified`, `Law.execOS`), with every
 binder of `zk_session_soundH_custody` but the prover. Its incorrect proof blocks are `wrongRegZ` in the committed transcript fixed
 at registration (`XplurZC`), as `SamplingBlock`'s are.
 
-* `JointStratified`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if flock-verify accepts, the
+* `JointStratified`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if verity-verify-proof accepts, the
   sampling block's incorrect proof blocks `B` lie in the confidence set (`Law.stratified`'s escape of `B` is at least `δ`), so they
   spend at most the one budget, `Σ_s k_s·x_s/n_s ≤ ln(1/δ)`, and their ANDs and their output bits are each at most the
   most any set in the confidence set holds (`StratifiedBlock.maxHarm`). Both harm bounds are read from the same sample,
   at the same `δ`.
 * `JointStratifiedHorizon`, pooled: the same over a period of `T` sampling blocks played by one adaptive prover, with
-  one budget for the whole period: except with probability `δ + Σ_t (ε_ks,t + ε_bind,t)`, if flock-verify accepts every
+  one budget for the whole period: except with probability `δ + Σ_t (ε_ks,t + ε_bind,t)`, if verity-verify-proof accepts every
   sampling block, the product of their escapes is at least `δ`, the incorrect proof blocks of all of them spend at most
   `Σ_t Σ_s k_{t,s}·x_{t,s}/n_{t,s} ≤ ln(1/δ)`, and their ANDs and output bits in all are each at most the most any
   choice of wrong sets the period's samples miss together with probability at least `δ` holds. The bound is absolute: it
@@ -180,7 +180,7 @@ end StratifiedBlock
 
 /-- **The joint stratified bound, per sampling block.** For a sampling block as in `StratifiedBlock`, whose sample takes
 `k_s` of the `n_s` units of each subcircuit `s` by the live stratified sample, every `δ > 0` and every per-unit weights
-`ands` (each unit's ANDs) and `bits` (its output bits), and every live prover `τ`, the probability that flock-verify
+`ands` (each unit's ANDs) and `bits` (its output bits), and every live prover `τ`, the probability that verity-verify-proof
 accepts and the sampling block's incorrect proof blocks `B` are not within its one budget is at most
 $$\delta + \varepsilon_{ks} + \varepsilon_{bind}:$$
 outside it, an accepted sampling block's incorrect proof blocks escape the stratified sample with probability at least `δ`, spend
@@ -198,7 +198,7 @@ def JointStratified : Prop :=
     prob (fun o => LiveAcceptsZK w.I o ∧ ¬ w.Within δ ands bits (w.wrongSet τ)) w.game τ ≤
       ENNReal.ofReal δ + w.epsKs + w.link
 
-/-- What a period's run records of sampling block `idx`: whether flock-verify accepted it, its incorrect proof blocks
+/-- What a period's run records of sampling block `idx`: whether verity-verify-proof accepted it, its incorrect proof blocks
 (`StratifiedBlock.wrongSet`), and whether a sampled proof block is one of them. -/
 structure BlockRec (W : ℕ → StratifiedBlock) where
   idx : ℕ
@@ -269,7 +269,7 @@ end Stratified
 
 /-- **The joint stratified bound over a period, pooled.** In a period of `T` sampling blocks `W t` as in
 `StratifiedBlock`, each with a fresh live stratified sample, played by one adaptive prover `s`, for every `δ > 0` and
-every per-unit weights `ands t` (each unit's ANDs) and `bits t` (its output bits), the probability that flock-verify
+every per-unit weights `ands t` (each unit's ANDs) and `bits t` (its output bits), the probability that verity-verify-proof
 accepts every sampling block and their incorrect proof blocks are not within the period's one budget is at most
 $$\delta + \sum_t (\varepsilon_{ks,t} + \varepsilon_{bind,t}):$$
 outside it, when every sampling block is accepted, their samples miss their incorrect proof blocks together with probability at

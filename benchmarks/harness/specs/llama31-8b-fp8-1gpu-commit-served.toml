@@ -1,7 +1,7 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-commit-served"
-# The Commit (sampled proofs, rows-sha512: hm96-sha512 hiding rows in frame-v3-sha512 trees) against stock FP8 as vLLM
+# The Commit (SPOT, rows-sha512: hm96-sha512 hiding rows in frame-v3-sha512 trees) against stock FP8 as vLLM
 # serves it. Two eager arms, `commit` against batch-invariant eager `stock-fp8` (sampled-proofs:rows-sha512 is refused
 # as a protocol arm on verity_vllm.LLM, so the arm installs the Commit's committer itself, verity_bench.vllm.commit_arm,
 # whose module-boundary hooks compiled graphs never run), plus

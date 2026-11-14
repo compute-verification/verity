@@ -47,14 +47,14 @@ what those bits are, so `LaneHolds` and `CombHolds` become statements of the row
   (`HiddenExec.rowOfH`, `P.io`): an input gate `u` reads, or a gate `u` returns. A fact of the circuit;
 * `vb_pos_row`, `vb_bit_row`: the value binding puts such a gate in its row's commit string, at bit `k`
   (`Readers.ofRows`);
-* `openedReg_row`: under flock-verify's complete check (`Flock.Registered.checkComplete`) and a registrant that reads
+* `openedReg_row`: under verity-verify-proof's complete check (`Flock.Registered.checkComplete`) and a registrant that reads
   `u`'s served roots (`ServedRegistered`), the opened rows at such a gate are bit `k` of the value `u`'s registrant
   opened at that row (`rowVal`);
 * `portBit_opened`: so in a circuit that names each port once, `portBit` at the port's name is that bit;
 * `rowVal_bit`: at a `sha512/row/v2` port without segments, a value whose row bytes are `rowBytesV2 row` has bit `k`
   the row's word `k / 16`'s bit `k % 16` (`FlockC3.RegLevels.bits_of_v2`);
 * `portBit_bytes`, `holds_of_bytes`: `portBit` at a read bit, and `Holds` on a field all of whose bits are read, from
-  the row's bytes. A known row (`KnownHeld`, flock-verify's `--known` check) and a registered one give those bytes.
+  the row's bytes. A known row (`KnownHeld`, verity-verify-proof's `--known` check) and a registered one give those bytes.
 -/
 
 @[expose] public section

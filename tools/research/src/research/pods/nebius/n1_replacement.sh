@@ -64,7 +64,7 @@ plan() {
   names=$(printf '%s\n' "$NODES" | cut -d' ' -f1 | tr '\n' ' ')
   read -r first _ <<< "$NODES"
   quota_note=""
-  [ "$path" != quota ] || quota_note=$'\n    On 1024 GB nodes, give cpu-4/5 their own user-slice and session caps too (cpu-1\'s 700G and 600G are for 755 GB).'
+  [ "$path" != quota ] || quota_note=$'\n    On 1024 GB nodes, give cpu-4/5 their own user-slice and session limits too (cpu-1\'s 700G and 600G are for 755 GB).'
   cat <<EOF
 # n1's replacement, path "$path": ${names}from $REF
 # Each step: who runs it, about how long, then the commands. Steps marked (coordinator) spend or create.

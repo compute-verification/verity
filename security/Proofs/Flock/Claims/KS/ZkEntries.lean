@@ -167,7 +167,7 @@ symbols, the masked reader's entries at the rep's stream rounds and proof bytes.
 theorem zk_rep_entries {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
-    (bytes : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
+    (bytes : ByteArray) (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
@@ -182,7 +182,7 @@ theorem zk_rep_entries {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl)
       R.depth = Model.pathLen (lvOf T.sch 0)) ∧
     (ZkLink.slotOpensZ out r.val 0 (lvOf T.sch 0).queries).map (fun x => (x.1, x.2.1.take (2 ^ T.sch.k0))) =
       Claims.Flock.zkRepColsOf (shapeZK st sch extras) rounds bytes := by
-  obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   obtain ⟨-, h2, hl0, -⟩ := hdim
   obtain ⟨pend', hp', -, hreqs, R, rest, hR, hl, hpos⟩ :=
     zk_rep_reqs Hs T pts r st sch tPad extras zp rounds dom tr hsch hseam hlen hext hwf hrun hk
@@ -216,7 +216,7 @@ theorem zk_table_opens₀Z {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → R
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
     (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
     (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
     (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (h0 : Zk.verifyRep spec st sch tPad sess i 0 b₀ = .ok c) (h1 : Zk.verifyRep spec st sch tPad sess i 1 b₁ = .ok c)
@@ -239,7 +239,7 @@ theorem zk_table_opens₀Z {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → R
         (fun x => (x.1, x.2.1.take (2 ^ (T S R).sch.k0))) =
       Claims.Flock.zkRepColsOf (shapeZKn st sch N) s₀.rounds b₀ ++
         Claims.Flock.zkRepColsOf (shapeZKn st sch N) s₁.rounds b₁ := by
-  obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   obtain ⟨-, h2, -, -⟩ := hdim
   have hseam0 : LevelSeam (sch.levels.getD 0 default) := hlv 0 (by omega)
   obtain ⟨s₀', ex, zp₀', tr₀, hs₀', hx₀, hd₀', -, -, hrun₀, hk₀, -, -⟩ :=

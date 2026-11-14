@@ -63,7 +63,7 @@ def _round() -> dict:
 def _written(version: int = 2) -> tuple[dict, dict]:
     """W as its writer writes it at ``version`` over one retained pass (`_round`), and the facts of a circuit cut at that
     pass's calls: its Pearl+ values at their sizes, a weight, and each call's (K, N, W)."""
-    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
     man = _round()
     params = {**{PWR.a_value(0, c): u["m"] * u["k"] * 2 for c, u in enumerate(man["matmuls"])},
@@ -78,7 +78,7 @@ def test_cut_takes_ws_b_rows_of_the_weights_the_cuts_calls_read_and_no_other_val
     once, which the circuit never reads: CUT passes where each is N rows of K words for a call's (K, N), every call's
     (K, N) has a weight and none has more weights than calls. A weight at version 1, a weight of rows no call reads, a
     weight past its shape's calls, a call's shape with no weight and a value that is neither are each named."""
-    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
     w, facts = _written(1 if case.startswith("v1") else PWR.VERSION)
     params, calls = facts["params"], facts["calls"]
@@ -125,19 +125,66 @@ def test_phi_takes_every_field_and_the_circuit_and_names_a_target_the_circuit_do
     assert v["target_differs"] == ["device_name"] and (v["templates"], v["values"]) == (1, 3)
 
 
+def test_phi_at_another_pinned_revision_compares_it_and_reports_the_rows():
+    """Under --revision the row's declared φ is taken at that revision: the served revision is compared with it, and the
+    row's own revision is reported beside the fields, never compared."""
+    v = SC.phi({**FIELDS, "revision": ["r2", "r2"], "row_revision": "r"}, _facts(), _facts())
+    assert v["ok"] and v["differ"] == [] and v["row_revision"] == "r" and "row_revision" not in v["fields"]
+    v = SC.phi({**FIELDS, "revision": ["r2", "r3"], "row_revision": "r"}, _facts(), _facts())
+    assert not v["ok"] and v["differ"] == ["revision"]
+
+
+#: the channel-swapped revision of the 1B that `manifests/checkpoints.json` pins beside the row's
+SWAPPED = "ccf98f3652864935e2973dd22fe15fffd514f865"
+
+
+def test_at_revision_takes_a_revision_the_manifests_pin_of_the_rows_model_and_refuses_another():
+    """`at_revision` moves the row's declared φ to another revision only where the manifests pin the row's model at it,
+    keeping its checkpoint config, target and execution."""
+    from verity_vllm.program.predict.phi import Phi
+
+    row = Phi(model={"repo": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+                     "hf_config": {"hidden_size": 2048}, "dtype": "bf16"}, target={"device_name": "h200"})
+    for rev, want in ((None, row.model["revision"]), (row.model["revision"], row.model["revision"]), (SWAPPED, SWAPPED)):
+        at = SC.at_revision(row, rev)
+        assert at.model == {"repo": "unsloth/Llama-3.2-1B", "revision": want, "hf_config": {"hidden_size": 2048}}
+        assert (at.target, at.execution) == (row.target, row.execution)
+    with pytest.raises(ValueError, match=f"--revision {'ab' * 20}: no manifest pins unsloth/Llama-3.2-1B at it"):
+        SC.at_revision(row, "ab" * 20)
+
+
+def test_the_compare_takes_its_revision_and_its_lines_name_both(tmp_path, monkeypatch, capsys):
+    """--revision reaches the lowering; PHI's line names the revision served, the one compared and the row's own, and the
+    last line, the one the record names, says the serve is at another revision than the row's workload declares."""
+    revisions: list = []
+    fields = {**FIELDS, "revision": ["r2" * 6, "r2" * 6], "row_revision": "r1" * 6}
+    rc, out = _main(tmp_path, monkeypatch, revision="r2" * 6, revisions=revisions, fields=fields)
+    lines = capsys.readouterr().out.splitlines()
+    assert rc == 0 and revisions == ["r2" * 6], lines
+    assert lines[0].endswith(f"; revision served {'r2' * 6}…, compared with {'r2' * 6}…, the row's workload declaring "
+                             f"{'r1' * 6}…): PASS"), lines
+    assert lines[-1] == json.loads((out / "served_compare.json").read_text())["line"] == (
+        f"SERVED-COMPARE: EQUAL (the serve at revision {'r2' * 6}… against row row-1's Build of record, whose workload "
+        f"declares {'r1' * 6}…: PHI, BUILD and CUT PASS; B-OF-RECORD is the seal's)")
+
+
 def _main(tmp_path: Path, monkeypatch, declared: str = "ee" * 64, config: bool = True,
           written: tuple[dict, dict] | None = None, kept: str | None = None,
-          lowered: list[str] | None = None) -> tuple[int, Path]:
+          lowered: list[str] | None = None, revision: str | None = None, revisions: list | None = None,
+          fields: dict | None = None) -> tuple[int, Path]:
     """The compare over a stand-in serve dir, the lowering stubbed. ``written`` is W and the served circuit's facts
     (`_written`); without it W is `_w`'s exact one and the facts `_facts`'s. predicted.json names a config in a tree
     beside the serve dir, which is there only under ``config``; ``kept`` is the copy the Build's dir keeps of it, and
-    ``lowered`` gets the config each lowering read."""
+    ``lowered`` gets the config each lowering read. ``revision`` is given as --revision, ``revisions`` gets the one each
+    lowering was handed, and the lowering returns ``fields`` (default `FIELDS`)."""
     served = _facts() if written is None else written[1]
 
-    def lowered_facts(serve, row, cfg, cls, scheme):
+    def lowered_facts(serve, row, cfg, cls, scheme, revision=None):
         if lowered is not None:
             lowered.append(cfg)
-        return FIELDS, served, {**served, "digest": declared}
+        if revisions is not None:
+            revisions.append(revision)
+        return fields or FIELDS, served, {**served, "digest": declared}
 
     monkeypatch.setattr(SC, "lowered_facts", lowered_facts)
     (serve := tmp_path / "serve").mkdir()
@@ -155,7 +202,8 @@ def _main(tmp_path: Path, monkeypatch, declared: str = "ee" * 64, config: bool =
     w.write_text(_w(tmp_path, "exact").read_text() if written is None else json.dumps(written[0]))
     out = tmp_path / "out"
     rc = SC.main(["--serve", str(serve), "--row", "row-1", "--class", "4,32,4", "--pearl-tables", SCHEME, "--pred",
-                  str(pred), "--of-record", f"{PROGRAM}:{MANIFEST}", "--window-record", str(w), "--out", str(out)])
+                  str(pred), "--of-record", f"{PROGRAM}:{MANIFEST}", "--window-record", str(w), "--out", str(out),
+                  *(["--revision", revision] if revision else [])])
     return rc, out
 
 

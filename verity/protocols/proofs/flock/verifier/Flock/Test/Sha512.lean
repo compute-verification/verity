@@ -1,14 +1,15 @@
-/-
-The straight-line `Sha512.compress` against the three loops it replaced (`compressLoops`, kept here as the test's
-reference only) on 200 chained blocks, on blocks at unaligned offsets and on one running past the data's end, and
-`Sha512.hash` on the FIPS 180-4 "abc" digest and on messages of every length below 300 bytes.
--/
 module
 
 public import Flock.Bytes
 public import Flock.Hash
 meta import Flock.Bytes
 meta import Flock.Hash
+
+/-!
+The straight-line `Sha512.compress` against the three loops it replaced (`compressLoops`, kept here as the test's
+reference only) on 200 chained blocks, on blocks at unaligned offsets and on one running past the data's end, and
+`Sha512.hash` on the FIPS 180-4 "abc" digest and on messages of every length below 300 bytes.
+-/
 
 @[expose] public section
 

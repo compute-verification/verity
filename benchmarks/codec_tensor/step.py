@@ -832,8 +832,9 @@ def write_result(res: dict, out_dir: Path, libs) -> None:
     for a, v in res.get("times", {}).items():
         ms.append({"name": f"{a}_s", "value": v, "unit": "s"})
     for k, row in res.get("model", {}).get("k", {}).items():
-        for name in ("step_over_plain", "d", "weights", "weights_decode", "weights_receipt", "weights_commit",
-                     "attention", "attention_receipt", "append_async"):
+        ms.append({"name": f"memory-accounting/codec-tensor.k{k}-step-over-plain", "value": row["step_over_plain"], "unit": "1"})
+        for name in ("d", "weights", "weights_decode", "weights_receipt", "weights_commit", "attention", "attention_receipt",
+                     "append_async"):
             ms.append({"name": f"k{k}_{name}", "value": row[name], "unit": "1"})
     rel = os.path.relpath(out_dir, run_dir)
     files = [f"{rel}/step.json", f"{rel}/step.log"] + ([f"{rel}/step-points.json"] if "model" in res else [])

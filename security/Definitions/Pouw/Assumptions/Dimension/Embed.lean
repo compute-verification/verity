@@ -137,7 +137,7 @@ open Classical in
 noncomputable def canonNaN (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (a b c : ℚ) : ℚ :=
   if NaNGap (fpSem κ a b c) then 2147483647 else fpSem κ a b c
 
-/-! ## Pinned statements (draft semantics, pending review) -/
+/-! ## Guarantees (draft semantics, pending review) -/
 
 /-- **The embedding theorem** (draft semantics, pending review): for every FP32 semantics, every
 well-formed `M4090` program on inputs in `V₀` maps to an `OpenQuadPipe 16 8` program whose slots contain every

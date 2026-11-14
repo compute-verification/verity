@@ -3,29 +3,37 @@ registry's products whose work is known by hand: a training loop's scan, whose c
 their second iteration, whose batch is free, and whose value input's rows are left out however the Program writes
 them; carried rows no one node shows distinct left out, one multiply by an input's words however it is written, a
 stated 0's update `θ`'s, a weight rounded to bf16 charged, rows times an input however a product reads them, a
-weight cancelled against itself or times its own rows in another order, the updates' premise held as facts; a lookup
+weight cancelled against itself, through a call too, or times its own rows in another order refused at a point, and a
+row holding a NaN, rows of one value that are inf there, or a specific operand overflowed there, the updates'
+premise held as facts; a lookup
 whose table is the registered one or the loop's own; a Program with no scan; one array times itself; two
 activations; the largest set of arrays a work multiplies pairwise; a weight decoded from a ternary code; a one-hot
-row; a rank-4 bottleneck between two carried weights; each operand's β at min(16, β(k)); and |C| in Boolean gates."""
+row; a rank-4 bottleneck between two carried weights; what the point's walk holds after a pass; each operand's β at
+min(16, β(k)); and |C| in Boolean gates."""
 
 from __future__ import annotations
 
 import json
+import math
 import sys
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
 import pytest
+from circuit_properties import points as PT
 from circuit_properties import work as WK
 from circuit_properties.ops import flatten
 
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import compile as compile_bits
 from verity.circuits.program import Program, is_input
-from verity.circuits.refs import Coll, Strided, concat, tuple_of
+from verity.circuits.refs import Coll, Strided, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.boolean import NoBooleanVersion, boolean_version
+from verity.circuits.ops import scalar as SC
 from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import F32Neg
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as RP
 from verity.definitions.registry.sampling import bit_at
@@ -35,6 +43,7 @@ F32, I32 = P.F32, P.I32
 W_T, X_T, Y_T = Array(N, Array(K, F32)), Array(K, F32), Array(N, F32)
 TABLE_T = Array(V, Array(K, F32))
 LIN = bind(RP.LinearRef, K=K, N=N, DT="f32", BIAS=False)
+LIN16 = bind(RP.LinearRef, K=K, N=N, DT="bf16", BIAS=False)
 DOT = bind(RP.DotRef, K=K)
 EMB = bind(RP.EmbeddingRef, V=V, H=K, DT="f32")
 #: a ternary code's row: one bit a value in each of two plane words
@@ -210,7 +219,7 @@ def _pairs_loop() -> Program:
 def test_the_arrays_multiplied_pairwise_set_F():
     w = WK.read(_pairs_loop(), KB)
     (g,) = w.groups
-    assert g.weight == (True, True) and w.N == 3 * (T - 1) * K and WK.clique(g.edges) == 3
+    assert g.weight == (True, True) and w.N == 3 * (T - 1) * K and MC.clique(g.edges) == 3
     b = WK.bound(w, C)
     assert b.omega == 3 and b.bound.F == MC.share(3) and b.bound.statement == MC.HE_SHARED
 
@@ -318,6 +327,37 @@ def test_the_bound_is_the_calculators_at_the_groups_beta():
     whole = MC.bound(C, KB, N=w.N, O=w.O, size=w.gates, beta_w=bk, beta_x=bk, b=MC.BF16, F=MC.share(2))
     assert (best.bound.beta_w, best.bound.beta_x, best.bound.b) == (bk, bk, MC.BF16)
     assert best.bound.blocks == pytest.approx(whole.blocks) and best.N == w.N
+
+
+def test_a_long_contraction_alone_binds_where_a_short_one_holds_most_of_the_wires():
+    """Two groups, the first of short contractions with most of the wires: the second alone binds, a sub-work only a
+    threshold at a contraction length gives. Its bound is the count's least `m` on the second group, solved here."""
+    k, c, gates = 65536.0, 1e12, 2e15
+    short = WK.Group("a", (16, 16), (True, False), 16, 4, 10 ** 12, 4 * 10 ** 12, frozenset({frozenset("AF")}),
+                     beta=(4.0, 8.0))
+    long = WK.Group("b", (16, 16), (False, True), 8, 256, 10 ** 12, 31_250_000_000, frozenset({frozenset("FD")}),
+                    beta=(1.0, 2.0))
+    best = WK.bound(WK.Work(k, gates, [short, long]), c)
+    q, b, N, O = 2.0 * 1.0, 8.0, 1e12, 3.125e10
+    A, D = k + math.sqrt(k ** 3 / (q * b)) / 2, (k / 2) * math.sqrt(O / q)
+    m = ((-D + math.sqrt(D * D + 4 * A * N)) / (2 * A)) ** 2
+    assert best.groups == (long,) and best.omega == 2
+    assert best.bound.blocks == pytest.approx(m) and best.bound.slowdown == pytest.approx(m * c / gates)
+
+
+def test_a_group_with_no_edge_leaves_f_the_graphs_of_the_others():
+    """One group multiplies four arrays pairwise and the other states no pair: `F` is `share(4)` of the first's graph,
+    not the kinds' rule. Its bound is the count's least `m` on both groups at that `F`, solved here."""
+    k, c, gates = 65536.0, 1e12, 10 ** 15
+    k4 = frozenset(frozenset(p) for p in ("WX", "WY", "WZ", "XY", "XZ", "YZ"))
+    a = WK.Group("a", (16, 16), (True, False), 16, 4096, 10 ** 13, 10 ** 10, k4, beta=(2.0, 2.0))
+    b = WK.Group("b", (16, 16), (False, True), 16, 4096, 10 ** 13, 10 ** 10, frozenset(), beta=(2.0, 2.0))
+    best = WK.bound(WK.Work(k, gates, [a, b]), c)
+    F, q, bits, N, O = math.sqrt(2 * (1 - 1 / 4)), 4.0, 16.0, 2e13, 2e10
+    A, D = k + F * math.sqrt(k ** 3 / (q * bits)) / 2, F * (k / 2) * math.sqrt(O / q)
+    m = ((-D + math.sqrt(D * D + 4 * A * N)) / (2 * A)) ** 2
+    assert best.groups == (a, b) and best.omega == 4 and best.bound.F == pytest.approx(F)
+    assert best.bound.blocks == pytest.approx(m) and best.bound.slowdown == pytest.approx(m * c / gates)
 
 
 def test_every_operand_is_at_most_bf16_and_beta_k():
@@ -637,32 +677,131 @@ def test_rows_times_an_input_are_left_out_however_the_product_reads_them(form):
     assert WK.read(_rows_times(form, "one-word"), KB).N == (T - 1) * PN * K * N
 
 
-def _self_cancel(cancel: bool) -> Program:
-    """prev′ = the PN rows looked up by the iteration's tokens, plus (``cancel``) M plus -1 times M, M carried; and
-    prev W^T."""
+#: a table of so many rows that two tokens that aren't one token pick one row with probability 1/VB
+VB = 4096
+EMB_VB = bind(RP.EmbeddingRef, V=VB, H=K, DT="f32")
+
+
+def _self_cancel(cancel: bool, overflow: bool = False) -> Program:
+    """prev′ = the PN rows looked up by the iteration's tokens in a table of `VB` rows (``overflow``: times 2^127
+    twice), plus (``cancel``) M plus -1 times M, M carried; and prev W^T."""
+    big = const(32, 0x7F000000)
+
     def step(B, c, tok, z, zr):
         table, w, prev, m = c
-        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        rows = Coll(ROWS_T, concat([B.call(EMB_VB, tok[p], table).refs for p in range(PN)]))
+        if overflow:
+            rows = _mul(B, _mul(B, rows, B.call(big)), B.call(big))
         new = _add(B, _add(B, m, _mul(B, m, B.call(const(32, 0xBF800000)))), rows) if cancel else rows
         return (_add(B, table, z), _add(B, w, z), new, _add(B, m, zr)), B.batch(LIN, prev, w, axes=(0, None))
 
-    return _loop("SelfCancel" if cancel else "RowsAlone", (("table", TABLE_T), ("w", W_T), ("prev", ROWS_T),
-                                                            ("m", ROWS_T)),
+    name = ("SelfCancel" if cancel else "RowsAlone") + ("Inf" if overflow else "")
+    return _loop(name, (("table", Array(VB, X_T)), ("w", W_T), ("prev", ROWS_T), ("m", ROWS_T)),
                  (("tok", Array(PN, I32)), ("z", X_T), ("zr", ROWS_T)), Array(PN, Y_T), step)
 
 
-def test_a_weight_cancelled_against_itself_still_counts_as_a_weight():
-    """The updates' premise at its sharpest, held as facts. M plus -1 times M is 0, but the reading takes it as a
-    weight with distinct rows, so the looked-up rows plus it, carried and times W, are charged as two weights, though
-    they are the looked-up rows, which repeat with the tokens and are left out as gathered where the Program carries
-    them alone. W times v plus -1 times v, v registered or V carried, keeps W's rows too."""
+def test_a_weight_cancelled_against_itself_is_refused():
+    """M plus -1 times M is 0, which the reading's rules take as a weight with distinct rows, so the looked-up rows
+    plus it, carried, are the looked-up rows, which repeat with the tokens: at the point, whose tokens are one token,
+    its two rows are equal, and the Program is refused (`points.check`), naming the product and the rows. Where the
+    Program carries the rows alone they are left out as gathered. W times v plus -1 times v, v registered or V
+    carried, makes every row of W the update's z, and is refused too."""
     alone = WK.read(_self_cancel(False), KB)
     assert alone.groups == [] and alone.left_out["gathered"] == (T - 1) * PN * K * N
-    cancel = WK.read(_self_cancel(True), KB)
-    assert cancel.N == (T - 1) * PN * K * N and {g.weight for g in cancel.groups} == {(True, True)}
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_self_cancel(True), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows) == ("SelfCancelStep_v1", "x", (0, 1))
     for kind in ("thetas-cancel", "carried-cancel"):
-        (g,) = WK.read(_scaled(kind), KB).groups
-        assert g.weight == (True, True) and g.macs == (T - 1) * K * N
+        with pytest.raises(WK.RepeatedRows) as e:
+            WK.read(_scaled(kind), KB)
+        assert e.value.operand == "w"
+
+
+def test_rows_of_one_value_that_are_inf_at_the_point_are_refused_as_equal():
+    """The looked-up rows times 2^127 twice are ±inf in every word at the point, and rows 0 and 1, one token's, carry
+    one value: compared by their words they are equal, and the Program is refused. Compared by their difference,
+    inf - inf is a NaN and would let them through."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_self_cancel(True, overflow=True), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows) == ("SelfCancelInfStep_v1", "x", (0, 1))
+
+
+def _zero_signs(signs: bool, width: int = 32) -> Program:
+    """W plus -1 times W, 0 in every word, times a stated S, ±1: with ``signs`` S is -1 at one word of each row past
+    the first, another word a row, so the rows are zeros whose signs differ; else S is 1 everywhere. W′ = W plus z;
+    u W′′^T, W′′ the product, at ``width`` 16 both rounded to bf16 and the product a bf16 `LinearRef`."""
+    one, neg = 0x3F800000, 0xBF800000
+
+    def step(B, c, z):
+        w, u = c
+        zero = _add(B, w, _mul(B, w, B.call(const(32, neg))))
+        s = concat([B.call(const(32, neg if signs and i >= 1 and j == i - 1 else one)).refs
+                    for i in range(N) for j in range(K)])
+        flat = Array(N * K, F32)
+        wp = B.batch(P.F32Mul, Coll(flat, zero.refs), Coll(flat, s), axes=(0, 0))
+        new = (_add(B, w, z), _add(B, u, z))
+        if width == 32:
+            return new, B.call(LIN, u, wp.reshape(W_T))
+        w16 = B.batch(P.F32ToBf16Rn, wp, axes=(0,)).reshape(Array(N, Array(K, P.BF16)))
+        u16 = B.batch(P.F32ToBf16Rn, u, axes=(0,)).reshape(Array(K, P.BF16))
+        return new, B.call(LIN16, u16, w16)
+
+    name = ("ZeroSigns" if signs else "ZeroOnes") + ("" if width == 32 else str(width))
+    return _loop(name, (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T if width == 32 else Array(N, P.BF16), step)
+
+
+@pytest.mark.parametrize("signs,width", [(True, 32), (False, 32), (True, 16)], ids=["signs", "ones", "bf16"])
+def test_rows_of_zeros_whose_signs_differ_are_not_charged(signs, width, monkeypatch):
+    """W plus -1 times W times a stated ±1 is 0 in every word, whatever W, which the reading's rules take as distinct
+    rows: read with the two zeros one word at every width, every row is zero at the point, the signs as S states them
+    or not, at f32 and rounded to bf16. A product by a zero row is zero, so u W′′^T is read and none of its MACs is
+    charged. Without the point it is charged whole."""
+    w = WK.read(_zero_signs(signs, width), KB)
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    full = WK.read(_zero_signs(signs, width), KB)
+    assert full.N == (T - 1) * K * N and w.N == 0
+
+
+def _xzero() -> Program:
+    """u′ = u plus -1 times u, 0 in every word, one row; u′ W^T, u and W carried, each plus z."""
+    neg = const(32, 0xBF800000)
+
+    def step(B, c, z):
+        w, u = c
+        return (_add(B, w, z), _add(B, u, z)), B.call(LIN, _add(B, u, _mul(B, u, B.call(neg))), w)
+
+    return _loop("XZero", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step)
+
+
+def _anti() -> Program:
+    """Two members of x_m W_m^T, a batch whose operands are both per member, x and W carried, each plus z: x′ is x
+    minus x times a stated mask that is 1 in member 0 and 0 in member 1, so x′'s member 0 is 0; W′ the same with the
+    mask's members swapped, so W′'s member 1 is 0. Every MAC reads a zero row, half by each operand."""
+    one, zero = 0x3F800000, 0
+
+    def masked(B, a: Coll, first: bool) -> Coll:
+        n = a.type.leaves
+        m = concat([B.call(const(32, one if (j < n // 2) == first else zero)).refs for j in range(n)])
+        flat = Array(n, F32)
+        am = B.batch(P.F32Mul, Coll(flat, a.refs), Coll(flat, m), axes=(0, 0)).reshape(a.type)
+        return _add(B, a, _mul(B, am, B.call(const(32, 0xBF800000))))
+
+    def step(B, c, z):
+        w, x = c
+        y = B.batch(LIN, masked(B, x, True), masked(B, w, False), axes=(0, 0))
+        return (_add(B, w, z), _add(B, x, z)), y
+
+    return _loop("Anti", (("w", Array(2, W_T)), ("x", Array(2, X_T))), (("z", X_T),), Array(2, Y_T), step)
+
+
+@pytest.mark.parametrize("make,full", [(_xzero, (T - 1) * K * N), (_anti, (T - 1) * 2 * K * N)], ids=["xzero", "anti"])
+def test_every_mac_reading_a_zero_row_is_left_out(make, full, monkeypatch):
+    """A zero operand of one row (``xzero``), which has no pair to compare, and two operands whose zero rows are in
+    different members of a batch both per member (``anti``), so no zero row of one meets a zero row of the other: every
+    MAC reads a zero row, so none is charged. Without the point the product is charged whole."""
+    w = WK.read(make(), KB)
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    assert WK.read(make(), KB).N == full and w.N == 0
 
 
 def _swap(order: str, carried: bool) -> Program:
@@ -681,15 +820,303 @@ def _swap(order: str, carried: bool) -> Program:
 
 
 @pytest.mark.parametrize("carried", [True, False], ids=["carried", "own"])
-def test_a_weight_times_its_own_rows_in_another_order_still_counts_as_a_weight(carried):
-    """The updates' premise for a weight combined with its own words, held as a fact. With PN = 2, M times swap(M) has
-    two rows equal for every M (M0 M1 = M1 M0), so the looked-up rows plus it repeat with the tokens and the work is
-    the first iteration's PN K N, as `_rows_plus("weight")`'s; the reading charges them as two weights from the second
-    iteration on, M carried or `θ`'s own. M times M in its own order has distinct rows, and is charged as is right."""
+def test_a_weight_times_its_own_rows_in_another_order_is_refused(carried):
+    """With PN = 2, M times swap(M) has two rows equal for every M (M0 M1 = M1 M0), so the looked-up rows plus it
+    repeat with the tokens, which the reading's rules take as two weights from the second iteration on, M carried or
+    `θ`'s own: at the point its two rows are equal, and the Program is refused. M times M in its own order has
+    distinct rows, and is charged as is right."""
     assert PN == 2
-    for order in ("swap", "same"):
-        w = WK.read(_swap(order, carried), KB)
-        assert w.N == (T - 1) * PN * K * N and {g.weight for g in w.groups} == {(True, True)}
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_swap("swap", carried), KB)
+    assert (e.value.operand, e.value.rows) == ("x", (0, 1))
+    w = WK.read(_swap("same", carried), KB)
+    assert w.N == (T - 1) * PN * K * N and {g.weight for g in w.groups} == {(True, True)}
+
+
+NEG_ROWS = bind(_def("NegRows", ((("rows", ROWS_T),), ROWS_T),
+                     lambda B, S, rows: B.batch(F32Neg, Coll(FLAT, rows.refs), axes=(0,)).reshape(ROWS_T)))
+
+
+def _cross_call() -> Program:
+    """prev′ = the PN rows looked up by the iteration's tokens, plus M plus `NEG_ROWS` of M, a composite negating M's
+    rows, M carried; and prev W^T."""
+    def step(B, c, tok, z, zr):
+        table, w, prev, m = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        new = _add(B, rows, _add(B, m, B.call(NEG_ROWS, m)))
+        return (_add(B, table, z), _add(B, w, z), new, _add(B, m, zr)), B.batch(LIN, prev, w, axes=(0, None))
+
+    return _loop("CrossCall", (("table", TABLE_T), ("w", W_T), ("prev", ROWS_T), ("m", ROWS_T)),
+                 (("tok", Array(PN, I32)), ("z", X_T), ("zr", ROWS_T)), Array(PN, Y_T), step)
+
+
+def test_a_weight_cancelled_through_a_call_is_refused(monkeypatch):
+    """M plus a call's negation of M is 0, an identity seen only with the callee's output at the caller's words: the
+    reading's rules alone charge the looked-up rows plus it as two weights, and the point, which evaluates the call
+    at M's words, finds its two rows equal and refuses the Program, naming the product, the rows and the fix."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_cross_call(), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows) == ("CrossCallStep_v1", "x", (0, 1))
+    assert str(e.value).endswith(
+        "operand 'x', whose rows the reading shows distinct, holds rows 0 and 1 equal at the point; fix: compute it "
+        "from a weight one to one (a shift, a rounding, a multiply by a word no input reaches) or let it read the "
+        "inputs, which leaves its product out as gathered")
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    w = WK.read(_cross_call(), KB)
+    assert w.N == (T - 1) * PN * K * N and {g.weight for g in w.groups} == {(True, True)}
+
+
+def test_a_weight_times_a_difference_of_inputs_is_refused():
+    """W times z0 minus z1, two words of an input, is one word every member reads, which the reading takes as a
+    nonzero multiplier (`Status.fixed`); it is 0 wherever the input repeats, as the point's does, so every row of W
+    is the update's z there, and the Program is refused."""
+    def step(B, c, z):
+        w, u = c
+        d = B.call(RP.F32Sub, z[0], z[1])
+        return (_add(B, _mul(B, w, d), z), _add(B, u, z)), B.call(LIN, u, w)
+
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_loop("Difference", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step), KB)
+    assert e.value.operand == "w"
+
+
+def test_what_the_point_never_meets_stays_a_premise():
+    """Rows equal only at values the point never takes are charged, held as facts beside those of
+    `test_what_the_carried_words_premise_leaves_held_as_facts` (a one-word multiplier that is 0) and
+    `test_an_update_by_a_stated_zero_leaves_a_weight_thetas` (W plus z plus -1 times z): W plus an input's rows Z,
+    whose rows are equal where Z is fitted to W (Z0 - Z1 = W1 - W0), M times W0 minus a stated c, a circuit that
+    tests its own weights, whose rows are all 0 where W0 is c, and W times z0 plus max(z0, -z0), plus z, whose
+    multiplier is 0, and its rows z's, only where the input's word z0 is negative, which the point's positive
+    inputs never are."""
+    def fitted(B, c, zr, z):
+        w, u = c
+        return (_add(B, w, zr), _add(B, u, z)), B.call(LIN, u, w)
+
+    w = WK.read(_loop("Fitted", (("w", W_T), ("u", X_T)), (("zr", W_T), ("z", X_T)), Y_T, fitted), KB)
+    assert w.N == (T - 1) * K * N and {g.weight for g in w.groups} == {(True, True)}
+
+    def tests(B, c, z, v):
+        w, u = c
+        d = B.call(RP.F32Sub, v[0], B.call(const(32, 0x3F800000)))
+        return (_add(B, _mul(B, w, d), z), _add(B, u, z)), B.call(LIN, u, w)
+
+    w = WK.read(_loop("TestsItself", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, tests, shared=(("v", X_T),),
+                      registered=("v",)), KB)
+    assert w.N == (T - 1) * K * N and {g.weight for g in w.groups} == {(True, True)}
+
+    def negative(B, c, z):
+        w, u = c
+        m = B.call(P.F32Add, z[0], B.call(P.F32Max, z[0], B.call(F32Neg, z[0])))
+        return (_add(B, _mul(B, w, m), z), _add(B, u, z)), B.call(LIN, u, w)
+
+    w = WK.read(_loop("Negative", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, negative), KB)
+    assert w.N == (T - 1) * K * N and {g.weight for g in w.groups} == {(True, True)}
+
+
+#: a bf16 weight of one-word rows, more rows than the point samples bf16 words, so that its rows repeat at one point
+NB = 2048
+BF16 = P.BF16
+LIN_NB = bind(RP.LinearRef, K=1, N=NB, DT="f32", BIAS=False)
+
+
+def _widen(B, a: Coll) -> Coll:
+    return B.batch(P.Bf16ToF32, Coll(Array(a.type.leaves, BF16), a.refs), axes=(0,)).reshape(Array(NB, Array(1, F32)))
+
+
+def test_a_narrow_row_is_compared_at_enough_points_to_hold_64_bits():
+    """A bf16 weight's one-word rows hold `points.held(16)` = 10 sampled bits each, so they are compared at
+    ceil(64 / 10) = 7 points: at one, its NB rows, more than the 1024 bf16 words the point samples, would repeat
+    whatever the weight. Rounded after each update and widened before its product, the weight is charged and not
+    refused."""
+    assert (PT.points(1, PT.held(16)), PT.points(K, PT.held(32)), PT.points(1, 4)) == (7, 1, 16)
+
+    def step(B, c, z):
+        w, g = c
+        wide = Coll(Array(NB, F32), _widen(B, w).refs)
+        new = B.batch(P.F32ToBf16Rn, _add(B, wide, z), axes=(0,)).reshape(w.type)
+        return (new, _add(B, g, z)), B.call(LIN_NB, g, _widen(B, w))
+
+    p = _loop("Narrow", (("w", Array(NB, Array(1, BF16))), ("g", Array(1, F32))), (("z", Array(1, F32)),),
+              Array(NB, F32), step)
+    w, R, root, reasons = WK._read(p, KB, WK.PRODUCTS, WK.LOOKUPS)
+    assert w.N == (T - 1) * NB and PT.check(p, R, root, reasons).points == 7
+
+
+def test_a_row_with_a_nan_is_refused(monkeypatch):
+    """sqrt(-(W ⊙ W)) has distinct rows by the reading's rules and a NaN in every word at the point: no comparison
+    shows a NaN row distinct, so the Program is refused, naming the rows that hold one and the fix; without the
+    point its product is charged."""
+    def step(B, c, z):
+        w, u = c
+        neg = B.batch(F32Neg, Coll(FLAT_W, _mul(B, w, w).refs), axes=(0,))
+        root = B.batch(RP.F32Sqrt, neg, axes=(0,)).reshape(W_T)
+        return (_add(B, w, z), _add(B, u, z)), B.call(LIN, u, root)
+
+    p = _loop("NanRows", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step)
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(p, KB)
+    assert (e.value.operand, e.value.rows, e.value.nan) == ("w", None, (N, N))
+    assert str(e.value).endswith(
+        f"operand 'w', whose rows the reading shows distinct, holds a NaN in {N} of its {N} rows at the point, which "
+        "leaves them uncompared; fix: keep its values finite at the point, whose weights and registered values take "
+        "every sign and whose inputs are positive: square a weight or a registered value before a square root or a "
+        "logarithm reads it, or carry it in as an input")
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    assert WK.read(p, KB).N == (T - 1) * K * N
+
+
+def test_a_nan_made_from_an_inf_is_refused():
+    """W ⊙ W times 2^127 twice is +inf in every word at the point, and it plus -1 times it is inf - inf, a NaN in
+    every word: the NaN reaches the charged operand's rows, and the Program is refused there, naming the claim."""
+    big = const(32, 0x7F000000)
+
+    def step(B, c, z):
+        w, u = c
+        inf = _mul(B, _mul(B, _mul(B, w, w), B.call(big)), B.call(big))
+        nan = _add(B, inf, _mul(B, inf, B.call(const(32, 0xBF800000))))
+        return (_add(B, w, z), _add(B, u, z)), B.call(LIN, u, nan)
+
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_loop("InfNanRows", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows, e.value.nan) == ("InfNanRowsStep_v1", "w", None, (N, N))
+
+
+def test_a_claim_past_a_scan_the_point_does_not_run_whole_is_refused():
+    """An inner scan whose contexts repeat before its last iteration leaves its outputs unevaluated at the point, so a
+    charged weight carried out of it is refused, with the scan named and the fix."""
+    one = const(32, 0x3F800000)
+    inner = _def("InnerStep", ((("w", W_T),), Tuple(W_T, F32)),
+                 lambda B, S, w: tuple_of(_add(B, w, B.call(one)), B.call(const(32, 0))))
+
+    def step(B, c, z):
+        w, u = c
+        out = B.scan(bind(inner), w, n=4)
+        return (_add(B, Coll(W_T, out.refs.slice(0, N * K)), z), _add(B, u, z)), B.call(LIN, u, w)
+
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_loop("Outer", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step), KB)
+    assert (e.value.scan.fn, e.value.scan.ran, e.value.scan.n, e.value.operand) == ("OuterStep_v1", 1, 4, "w")
+    assert str(e.value).endswith(
+        f"operand 'w', whose rows the reading shows distinct, reads the outputs of scan node {e.value.scan.node} of "
+        "OuterStep_v1, which the point runs 1 of its 4 iterations; fix: carry the weight through the outer scan "
+        "rather than out of a scan whose contexts repeat")
+
+
+def test_the_point_is_sampled_once_a_program_and_read_at_every_k(monkeypatch):
+    """Two walks of one Program sample one point (SHA-512 of its digest, nothing else), and its reads at two k make
+    one pass."""
+    p = carried_loop()
+    w, R, root, reasons = WK._read(p, KB, WK.PRODUCTS, WK.LOOKUPS)
+    from verity.circuits.codec import program_digest
+    cl, d = PT.claims(R, root, reasons), program_digest(p)
+    a, b = (PT.Walk(p, R, root, cl, d).inputs() for _ in range(2))
+    assert a.keys() == b.keys() and all((a[k] == b[k]).all() for k in a)
+    runs = []
+    real = PT.Walk.run
+
+    def counted(self):
+        runs.append(1)
+        return real(self)
+
+    PT._MEMO.clear()
+    monkeypatch.setattr(PT.Walk, "run", counted)
+    WK.read(p, KB), WK.read(p, 4 * KB)
+    assert len(runs) == 1
+
+
+#: the words a strided take reads in the walk's memory test: an index of them is 8 * WIDE bytes
+WIDE = 8192
+
+
+def _strided_takes(positions: int) -> Program:
+    """`carried_loop` beside a wide carried array that each of ``positions`` rows of an input is added to, the row
+    repeated to the array's length by a `Strided` reference of its own base: the takes an embedding's gradient makes
+    at each of its batch times ctx token positions, each as wide as the table."""
+    e_t = Array(WIDE, F32)
+
+    def step(B, c, z, h):
+        w, g, u, e = c
+        r = h.refs
+        for pos in range(positions):
+            row = Coll(e_t, Strided(r.space, r.idx, r.base + pos * K, K, 0, 1, WIDE))
+            e = B.batch(P.F32Add, e, row, axes=(0, 0))
+        return (*(_add(B, a, z) for a in (w, g, u)), e), B.call(LIN, _mul(B, u, g), w)
+
+    return _loop(f"Strided{positions}", (("w", W_T), ("g", X_T), ("u", X_T), ("e", e_t)),
+                 (("z", X_T), ("h", Array(positions, X_T))), Y_T, step)
+
+
+def _left_by_a_pass(p: Program) -> int:
+    """The bytes a pass leaves allocated while its walk lives (tracemalloc, which counts numpy's arrays)."""
+    import gc
+    import tracemalloc
+
+    from verity.circuits.codec import program_digest
+    _w, R, root, reasons = WK._read(p, KB, WK.PRODUCTS, WK.LOOKUPS)
+    walk = PT.Walk(p, R, root, PT.claims(R, root, reasons), program_digest(p))
+    gc.collect()
+    tracing = tracemalloc.is_tracing()
+    if not tracing:
+        tracemalloc.start()
+    try:
+        before = tracemalloc.get_traced_memory()[0]
+        tally = walk.run()
+        gc.collect()
+        left = tracemalloc.get_traced_memory()[0] - before
+    finally:
+        if not tracing:
+            tracemalloc.stop()
+    assert tally.claims == 2 and not tally.unrun
+    return left
+
+
+def test_what_the_walk_holds_does_not_grow_with_its_strided_takes():
+    """At four times the token positions, each with a `Strided` take of its own base, a pass leaves less than one
+    take's index more: nothing the walk keeps is a take's size, so its memory is not the count of its takes. An
+    index kept for each take would leave 12 more of them. A pass runs first, so what the first pass of a process
+    loads is in neither reading."""
+    few, many = 4, 16
+    _left_by_a_pass(_strided_takes(few))
+    left = [_left_by_a_pass(_strided_takes(n)) for n in (few, many)]
+    assert left[1] - left[0] < 8 * WIDE, left
+
+
+def test_the_product_kernel_is_the_products_body():
+    """`points.dot`, by which the point computes a `DotRef` and an f32 `LinearRef` without a bias, gives the words
+    their bodies give, on the point's samples and on uniform words with edge words mixed in."""
+    import numpy as np
+    from verity.circuits.evaluation.batch import evaluate_batch, sample_uniform
+
+    rng = np.random.default_rng(0)
+    for f, rows in ((DOT, 1), (LIN, N)):
+        params = [t for _n, t in f.signature()[0]]
+        for words in ([np.asarray(a, dtype=np.uint64) for a in sample_uniform(rng, 256, params)],
+                      [PT.sample(rng, 32, (256, t.leaves)) for t in params]):
+            x, w = (a.reshape(256, -1) for a in words)
+            ref = np.asarray(evaluate_batch(f, x, w, kernel="reference"), dtype=np.uint64).reshape(256, rows)
+            assert (PT.dot(x[:, None, :], w.reshape(256, rows, K)) == ref).all()
+            assert PT._rows_of(f) == rows
+
+
+def test_each_twin_is_the_reference():
+    """Each numpy twin (`points.TWINS`) gives the reference's words, on uniform words with the edge words
+    `sample_uniform` mixes in and on the point's own samples: bit-exact for every word but the exponential's, which is
+    held on these words only."""
+    import numpy as np
+    from verity.circuits.defs import REGISTRY
+    from verity.circuits.evaluation.batch import evaluate_batch, sample_uniform
+
+    rng = np.random.default_rng(0)
+    for fid, twin in PT.TWINS.items():
+        f = REGISTRY[fid]
+        params = [t for _n, t in f.signature()[0]]
+        n = 512 if fid == "F32ExpRn_v1" else 4096
+        uni = [np.asarray(a, dtype=np.uint64) for a in sample_uniform(rng, n, params)]
+        near = [PT.sample(rng, max(t.width_set()), (n,)) for t in params]
+        for words in (uni, near):
+            ref = np.asarray(evaluate_batch(f, *words, kernel="reference"), dtype=np.uint64).reshape(-1)
+            got = np.asarray(twin(*words), dtype=np.uint64).reshape(-1)
+            assert (got == ref).all(), (fid, [hex(int(w[i])) for w in words for i in np.flatnonzero(got != ref)[:1]])
 
 
 def _cast(B, a: Coll) -> Coll:
@@ -805,6 +1232,192 @@ def test_a_token_indexed_product_is_charged_at_keep_and_two_activations_are_left
                           "activations": (T - 1) * PN * K * PN}
 
 
+def _specific_overflow() -> Program:
+    """`_attention_loop`'s O1 = P V1^T, specific, squared and times 2^127 twice, plus the carried Wq: Q, whose rows
+    are specific and distinct, both by the reading's rules; and u Q^T, u carried."""
+    big = const(32, 0x7F000000)
+
+    def step(B, c, tok, z, zn):
+        table, w1, v1, wq, u = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        s = B.batch(LIN_S, rows, w1, axes=(0, None))
+        mask = concat([B.call(const(32, 0 if j <= p else 0xFF800000)).refs for p in range(PN) for j in range(D)])
+        flat = Array(PN * D, F32)
+        h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0)).reshape(Array(PN, S_T))
+        o1 = B.batch(LIN_P, B.batch(SOFTMAX, h, axes=(0,)), v1, axes=(0, None))
+        q = _add(B, _mul(B, _mul(B, _mul(B, o1, o1), B.call(big)), B.call(big)), wq)
+        return (_add(B, table, z), _add(B, w1, z), _add(B, v1, zn), _add(B, wq, z), _add(B, u, z)), \
+            B.call(LIN_A, u, q)
+
+    carry = (("table", TABLE_T), ("w1", Array(D, X_T)), ("v1", V_T), ("wq", ROWS_T), ("u", X_T))
+    return _loop("SpecificOverflow", carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN, F32), step)
+
+
+def test_a_specific_operand_is_tested_at_the_point_too(monkeypatch):
+    """Q is specific and distinct by the reading's rules, and its rows, past f32's range, are all +inf at the point:
+    the point tests a specific operand's rows as any other's, so the Program is refused, rows 0 and 1, as an overflow
+    is everywhere else. Without the point u Q^T is charged."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_overflow(), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows) == ("SpecificOverflowStep_v1", "w", (0, 1))
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    w = WK.read(_specific_overflow(), KB)
+    (g,) = w.groups
+    assert g.weight == (True, False) and w.N == (T - 1) * K * PN
+
+
+def _specific_alone(how: str) -> Program:
+    """`_attention_loop`'s O1 = P V1^T cancelled against itself, Q = O1 plus -1 times O1, whose rows the reading
+    shows specific and not distinct and which are 0 for every input; with ``how`` "equal" Q plus a stated 1, rows
+    equal for every input and not 0; with "first" Q's first row and O1's others; with "nan" a NaN in every word (O1
+    squared and times 2^127 twice, an inf, before the cancel), and with "scan" Q's rows plus a stated 1 by a scan over
+    them, whose contexts repeat before its last iteration; and u Q^T, u carried."""
+    one, big, neg = const(32, 0x3F800000), const(32, 0x7F000000), const(32, 0xBF800000)
+    inner = _def("Inner" + how.title(), ((("acc", F32), ("q", X_T)), Tuple(F32, X_T)),
+                 lambda B, S, acc, q: tuple_of(acc, _add(B, q, B.call(one))))
+
+    def step(B, c, tok, z, zn):
+        table, w1, v1, u = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        s = B.batch(LIN_S, rows, w1, axes=(0, None))
+        mask = concat([B.call(const(32, 0 if j <= p else 0xFF800000)).refs for p in range(PN) for j in range(D)])
+        flat = Array(PN * D, F32)
+        h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0)).reshape(Array(PN, S_T))
+        o1 = B.batch(LIN_P, B.batch(SOFTMAX, h, axes=(0,)), v1, axes=(0, None))
+        if how == "nan":
+            o1 = _mul(B, _mul(B, _mul(B, o1, o1), B.call(big)), B.call(big))
+        q = _add(B, o1, _mul(B, o1, B.call(neg)))
+        if how == "equal":
+            q = _add(B, q, B.call(one))
+        if how == "first":
+            q = Coll(ROWS_T, concat([q[0].refs, *(o1[p].refs for p in range(1, PN))]))
+        if how == "scan":
+            q = Coll(ROWS_T, B.scan(bind(inner), B.call(const(32, 0)), xs=[q], shared=[])[1].refs)
+        return (_add(B, table, z), _add(B, w1, z), _add(B, v1, zn), _add(B, u, z)), B.call(LIN_A, u, q)
+
+    carry = (("table", TABLE_T), ("w1", Array(D, X_T)), ("v1", V_T), ("u", X_T))
+    name = "Specific" + how.title()
+    return _loop(name, carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN, F32), step)
+
+
+def test_specific_rows_equal_for_every_input_are_refused_at_the_word_by_word_point(monkeypatch):
+    """Q's rows are specific alone by the reading's rules, and Q plus a stated 1 is 1 for every input. The one-word
+    point holds one token at every position, which breaks `P_BATCH`, so it can't show a specific operand's rows
+    distinct; the word-by-word point, whose tokens are distinct rows of the table, meets it, and refuses Q, rows 0 and
+    1, as rows equal by an identity of the circuit and not 0. Without the point u Q^T is charged."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_alone("equal"), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows) == ("SpecificEqualStep_v1", "w", (0, 1))
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    w = WK.read(_specific_alone("equal"), KB)
+    (g,) = w.groups
+    assert g.weight == (True, False) and w.N == (T - 1) * K * PN
+
+
+@pytest.mark.parametrize("how,zero", [("cancel", PN), ("first", 1)])
+def test_specific_rows_zero_at_the_word_by_word_point_are_not_charged(how, zero, monkeypatch):
+    """Q's rows, specific alone, are 0 at the word-by-word point: all of them (O1 cancelled against itself) or the
+    first (that row cancelled, O1's others). A product by a zero row is zero, so the zero rows are left out of the
+    comparison and their MACs out of N; the other rows are compared and pass. Without the point u Q^T is charged
+    whole."""
+    w = WK.read(_specific_alone(how), KB)
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    full = WK.read(_specific_alone(how), KB)
+    assert full.N == (T - 1) * K * PN and w.N == full.N - full.N * zero // PN
+
+
+def test_the_word_by_word_points_refusal_says_specific_and_names_that_point():
+    """A specific-alone operand's refusal says the reading shows its rows specific, names the word-by-word point and
+    gives a fix about its positions, not a weight's."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_alone("equal"), KB)
+    assert e.value.by_words and "shows specific" in str(e.value) and "at the word-by-word point" in str(e.value)
+    assert "from a weight one to one" not in str(e.value)
+
+
+def _specific_members() -> Program:
+    """`_attention_loop`'s O1 cancelled against itself plus a stated 1, Q = O1 plus -1 times O1 plus 1, 1 for every
+    input and specific alone, one row a member of a composite batched over the positions, each Q's row times a carried
+    W the members share."""
+    one = const(32, 0x3F800000)
+    neg = const(32, 0xBF800000)
+    per = _def("PerRow", ((("q", X_T), ("w", W_T)), Y_T), lambda B, S, q, w: B.call(LIN, q, w))
+
+    def step(B, c, tok, z, zn):
+        table, w1, v1, w = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        s = B.batch(LIN_S, rows, w1, axes=(0, None))
+        mask = concat([B.call(const(32, 0 if j <= p else 0xFF800000)).refs for p in range(PN) for j in range(D)])
+        flat = Array(PN * D, F32)
+        h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0)).reshape(Array(PN, S_T))
+        o1 = B.batch(LIN_P, B.batch(SOFTMAX, h, axes=(0,)), v1, axes=(0, None))
+        q = _add(B, _add(B, o1, _mul(B, o1, B.call(neg))), B.call(one))
+        y = Coll(Array(PN * N, F32), B.batch(bind(per), q, w, axes=(0, None)).refs)
+        return (_add(B, table, z), _add(B, w1, z), _add(B, v1, zn), _add(B, w, z)), y
+
+    carry = (("table", TABLE_T), ("w1", Array(D, X_T)), ("v1", V_T), ("w", W_T))
+    return _loop("SpecificMembers", carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN * N, F32),
+                 step)
+
+
+def test_a_specific_row_repeated_across_members_is_refused_at_the_word_by_word_point(monkeypatch):
+    """Q's rows are 1 for every input, one a member, each times the W the members share: one activation holds one row,
+    so rows are compared across the members whose other operand is the same at the word-by-word point, and Q is refused,
+    row 0 of two members. Without the point Q W^T is charged, the work repeated a member."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_members(), KB)
+    assert (e.value.operand, e.value.rows, e.value.by_words) == ("x", (0, 0), True)
+    assert isinstance(e.value.member, tuple) and e.value.member[0] != e.value.member[1]
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    assert WK.read(_specific_members(), KB).N == (T - 1) * PN * N * K
+
+
+def test_the_word_by_word_points_token_input_is_a_permutation_of_the_least_tables_rows(monkeypatch):
+    """The token input, 32 bits wide like an f32, is found by its use as a lookup's token and drawn at the
+    word-by-word point's lanes as a permutation of the least table's rows, repeated, not as a float."""
+    seen = {}
+    inputs = PT.Walk.inputs
+
+    def spy(walk):
+        seen["walk"], seen["env"] = walk, inputs(walk)
+        return seen["env"]
+
+    monkeypatch.setattr(PT.Walk, "inputs", spy)
+    PT._MEMO.clear()
+    with pytest.raises(WK.RepeatedRows):
+        WK.read(_specific_alone("equal"), KB)
+    walk, env = seen["walk"], seen["env"]
+    (k,) = walk.token_inputs()
+    assert PT._leaf_width(walk.program.root.body.nodes[k]) == 32
+    rows, lanes = walk.table_rows(), env["n", k][walk.P:]
+    n = lanes.shape[1]
+    assert rows == V and n >= rows
+    for lane in lanes:
+        assert sorted(lane[:rows].tolist()) == list(range(rows)) and (lane == lane[np.arange(n) % rows]).all()
+
+
+def test_the_word_by_word_point_refuses_a_nan_and_an_unrun_scan_as_the_one_word_point_does():
+    """A specific-alone operand that holds a NaN in every word, or reads the outputs of a scan the point runs 1 of its
+    PN iterations, is refused at the word-by-word point, by the same refusals a distinct one gets at the one-word
+    point."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_alone("nan"), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows, e.value.nan) == \
+        ("SpecificNanStep_v1", "w", None, (PN, PN))
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_alone("scan"), KB)
+    assert (e.value.scan.fn, e.value.scan.ran, e.value.scan.n, e.value.operand) == ("SpecificScanStep_v1", 1, PN, "w")
+
+
+def test_the_word_by_word_points_tokens_are_distinct_rows_of_every_table():
+    """Each lane's tokens are a permutation of the least table's rows, repeated, so any that many positions running
+    pick distinct rows of every table at least as long."""
+    rng = np.random.default_rng(0)
+    t = PT.tokens(rng, (3, 40), 16)
+    assert all(len(set(row[i:i + 16].tolist())) == 16 for row in t for i in range(40 - 16 + 1))
+    assert all(len({int(x) % 24 for x in row[:16]}) == 16 for row in t)
+
+
 #: a chain longer than Python's default recursion limit
 DEEP = 3000
 
@@ -821,11 +1434,99 @@ def test_a_chain_deeper_than_the_recursion_limit_is_read_as_a_short_one(depth):
         [(g.product, g.weight, g.macs, g.reason) for g in plain.groups]
 
 
-def test_clique():
-    tri = [frozenset(e) for e in ((1, 2), (2, 3), (1, 3), (3, 4))]
-    assert WK.clique(tri) == 3
-    assert WK.clique(tri + [frozenset(e) for e in ((1, 4), (2, 4))]) == 4
-    assert WK.clique([frozenset((1, 2))]) == 2 and WK.clique([]) == 0
+#: the guarded attention's variants, each with the nodes it reads from runs and those it reads word by word: its form,
+#: and each off it by one word or reaching a branch a causal mask never does. A condition that is not a constant stops
+#: the reading at the select, before the softmax's rows, and so does a compare with a word of a node whose words
+#: differ.
+GUARDED = {"form": ({"softmax", "select"}, set()), "split": ({"softmax", "select"}, set()),
+           "input-word": ({"select"}, set()), "repeated-base": ({"softmax"}, {"select"}),
+           "masked-row": ({"select"}, set()), "finite": ({"softmax", "select"}, set()),
+           "unguarded-input-word": (set(), {"softmax"}), "first-masked": ({"softmax", "select"}, set()),
+           "computed-mask": (set(), {"softmax", "select"})}
+
+
+def _guarded_attention(kind: str) -> Program:
+    """`_attention_loop`'s softmax under a causal mask behind the guard a training step's softmax has: P where some
+    word of the row's scores is not −inf, else 0, the condition an and, one node a word, of the row's compares with −inf.
+    ``kind`` "split" writes both rows' constants 0, row 1's from two constants of one value; "input-word" reads row
+    1's first mask word from an input, and "unguarded-input-word" too without the guard; "repeated-base" has one and
+    read a word of the row twice and another not at all; "masked-row" masks row 1 wholly; "finite" gives row 1 row 0's
+    constants plus 1.0, which a softmax doesn't tell from row 0's; "first-masked" masks row 1 at its first word alone,
+    so that the and's first member is not its last one's; "computed-mask" computes row 1's constants, each plus a
+    stated 0 in one batch, and compares with −inf read from that batch's last word, a word of a node whose words
+    differ."""
+    neg = 0xFF800000
+
+    def mask_word(B, zn, zeros, p: int, j: int):
+        if kind.endswith("input-word") and (p, j) == (1, 0):
+            return zn[0].refs
+        if kind == "masked-row" and p == 1:
+            return B.call(const(32, neg)).refs
+        if kind == "finite" and p == 1:
+            return B.call(const(32, 0x3F800000 if j == 0 else neg)).refs
+        if kind == "split" and p == 1:
+            return zeros[j < D // 2].refs
+        if kind == "first-masked" and p == 1:
+            return B.call(const(32, neg if j == 0 else 0)).refs
+        return B.call(const(32, 0 if j <= p or (kind == "split" and p == 0) else neg)).refs
+
+    def step(B, c, tok, z, zn):
+        table, g, w1 = c[:3]
+        zeros = (B.call(const(32, 0)), B.call(const(32, 0)))
+        assert zeros[0].refs[0] != zeros[1].refs[0]
+        rows = _mul(B, Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)])), g)
+        s = B.batch(LIN_S, rows, w1, axes=(0, None))
+        flat = Array(PN * D, F32)
+        mask = concat([mask_word(B, zn, zeros, p, j) for p in range(PN) for j in range(D)])
+        inf = None
+        if kind == "computed-mask":
+            row = B.batch(P.F32Add, Coll(S_T, mask.slice(D, 2 * D)), zeros[0], axes=(0, None))
+            mask, inf = concat([mask.slice(0, D), row.refs]), row[D - 1]
+        h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0))
+        p_ = B.batch(SOFTMAX, h.reshape(Array(PN, S_T)), axes=(0,))
+        if kind.startswith("unguarded"):
+            return finish(B, c, z, zn, p_)
+        e = B.batch(SC.F32Eq, h, B.call(const(32, neg)) if inf is None else inf, axes=(0, None))
+        bases = list(range(D))
+        if kind == "repeated-base":
+            bases[2] = 1
+        col = lambda b: Coll(Array(PN, SC.BIT), strided_view(e, b, 1, D, 0, PN))  # noqa: E731
+        acc = B.batch(SC.BitAnd, col(bases[0]), col(bases[1]), axes=(0, 0))
+        for b in bases[2:]:
+            acc = B.batch(SC.BitAnd, acc, col(b), axes=(0, 0))
+        cond = Coll(Array(PN * D, SC.BIT), strided_view(acc, 0, D, 1, 0, PN * D))
+        p_ = B.batch(SC.SelectF32, cond, B.call(const(32, 0)), Coll(flat, p_.refs), axes=(0, None, 0))
+        return finish(B, c, z, zn, p_.reshape(Array(PN, S_T)))
+
+    def finish(B, c, z, zn, p_):
+        table, g, w1, v1, v2, wo = c
+        o1, o2 = (B.batch(LIN_P, p_, v, axes=(0, None)) for v in (v1, v2))
+        y = concat([B.batch(LIN, o1, wo, axes=(0, None)).refs, B.batch(LIN_A, o1, o2, axes=(0, None)).refs])
+        new = (_add(B, table, z), _add(B, g, z), _add(B, w1, z), _add(B, v1, zn), _add(B, v2, zn),
+               _add(B, wo, _add(B, o1[0], o1[1])))
+        return new, Coll(Array(PN * (N + PN), F32), y)
+
+    carry = (("table", TABLE_T), ("g", X_T), ("w1", Array(D, X_T)), ("v1", V_T), ("v2", V_T), ("wo", W_T))
+    return _loop("Guarded", carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN * (N + PN), F32), step)
+
+
+@pytest.mark.parametrize("kind", sorted(GUARDED))
+def test_a_guarded_softmax_reads_the_same_from_its_runs_as_word_by_word(kind):
+    """The reading from runs (`Reader(structure=True)`) is the word-by-word one, whole, on the guarded attention and on
+    each variant: equal constants written as other parts, a mask word or an and off the form by one word, a row wholly
+    masked, a finite nonzero constant; and each node reads from runs or falls back as `GUARDED` says."""
+    prog = _guarded_attention(kind)
+    assert _reading(WK.read(prog, KB)) == _reading(WK.read(prog, KB, structure=False))
+    R = WK.Reader(prog, KB)
+    R.root()
+    assert tuple({n for (n, how) in R.read_by if how == h} for h in ("runs", "words")) == GUARDED[kind]
+
+
+def test_the_guarded_softmax_charges_what_the_unguarded_one_does():
+    """The guard changes nothing the reading charges: P's rows are the mask's through the select whose condition is
+    false, as without it."""
+    w, plain = WK.read(_guarded_attention("form"), KB), WK.read(_attention_loop(), KB)
+    assert (w.N, w.keep, w.left_out) == (plain.N, plain.keep, plain.left_out)
 
 
 #: the suite's Programs built by name, each held to its reading in `READINGS`
@@ -857,12 +1558,19 @@ def _reading(w: WK.Work) -> dict:
                           list(g.bits), list(g.beta), g.reason] for g in w.products]}
 
 
+def _reading_of(name: str) -> dict:
+    try:
+        return _reading(WK.read(CASES[name](), KB))
+    except WK.RepeatedRows as e:
+        return {"refused": [e.definition, e.operand, None if e.rows is None else list(e.rows)]}
+
+
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_the_suites_programs_keep_their_readings(name):
-    """Each of the suite's Programs gives its reading in `READINGS` (written by running this file), compared whole, so
-    a change to the reader that moves a word or their order shows."""
-    assert _reading(WK.read(CASES[name](), KB)) == json.loads(READINGS.read_text())[name]
+    """Each of the suite's Programs gives its reading in `READINGS` (written by running this file), or the refusal it
+    raises, compared whole, so a change to the reader that moves a word or their order shows."""
+    assert _reading_of(name) == json.loads(READINGS.read_text())[name]
 
 
 if __name__ == "__main__":
-    READINGS.write_text(json.dumps({n: _reading(WK.read(CASES[n](), KB)) for n in sorted(CASES)}, indent=1) + "\n")
+    READINGS.write_text(json.dumps({n: _reading_of(n) for n in sorted(CASES)}, indent=1) + "\n")

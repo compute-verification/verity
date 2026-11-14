@@ -197,7 +197,7 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
   verifier's own registration: it holds the file's roots and domain ids before the proof, and within one verification it reads
   them as given. Any consumer that carries a registered root into another statement or commitment recomputes that root's domain
   id from its own derivation of the binding, and refuses a root whose recorded domain differs (R3-domain in
-  `verity.protocols.proofs.spot.verifier.one_stage.registration` does).
+  `verity.protocols.proofs.spot.verifier.one_stage.docket` does).
 - **Reference and conformance.** `verity.commitments.rowleaf`: `bit_row`, `sha512_row_v2_prefix`, `_layout` and `_digest`, the last
   refusing a nonzero fill. The vectors in `vectors_sha512.json` are `bit_row_leaves`, `bit_row_trees` and `bit_row_hiding_leaves`:
   random rows at ℓ = 0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172 and 8192 (888 and 896 straddle the length whose SHA-512 padding
@@ -264,8 +264,8 @@ never published) and salt its live salt; ks ‖ salt is one 128-byte block (`Has
 tops with distinct domain ids, a distinguisher's view (the key leaf and every digest) moves by at most the explicit
 advantages of two distinguishers built from it, one in hm96's hiding game and one against SHA-512 as a PRF keyed by its
 first block (`Pouw.Guarantees.KeyedLeaf.Hides`). The window's key is committed before its salt as its key leaf, the
-`hm96-sha512/v1` leaf over ks under 192 OS salt bytes, which the lead's registration records (`pouw.salt.lead_record`)
-and a proof opens ks against.
+`hm96-sha512/v1` leaf over ks under 192 OS salt bytes, which the window's registration records and a proof opens ks
+against.
 
 **Openings and multiproofs.**
 - Paths carry 64-byte siblings.

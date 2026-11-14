@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
@@ -100,7 +99,8 @@ def parse_wrapper(path: str) -> dict[str, Any]:
     edges [{arg, role, src}] (the DATAFLOW: every non-weight input's producer)}], the wrapper's positional args with their kinds
     (tensor | int, from get_args()), the return tuple with each position's producer, and the count of `.run(` lines the parser did not
     read (must be 0: an unparsed launch is an undeclared part of the implementation)."""
-    src = Path(path).read_text()
+    with open(path) as f:
+        src = f.read()
     if "    def call(self, args):" not in src:
         return {"launches": [], "args": [], "arg_kinds": {}, "returns": [], "unparsed_runs": 0, "signatures": {}}
     signatures = kernel_signatures(src)
@@ -254,7 +254,8 @@ def split_graph_wiring(path: str) -> dict[str, Any]:
     without the attention splitting op), each attention op, and for every piece argument WHERE ITS VALUE COMES FROM -- another piece's
     return position, the attention op's output buffer, a weight, positions, input ids, or a symbolic int.  This is the wiring the
     Inductor wrappers cannot show (they see `argN_1`)."""
-    src = Path(path).read_text()
+    with open(path) as f:
+        src = f.read()
     top, *classes = re.split(r"\n    class (submod_\d+)\(torch\.nn\.Module\):", src)
     sigs: dict[str, list[tuple[str, str]]] = {}
     is_attn: dict[str, bool] = {}
@@ -341,15 +342,20 @@ def tokens_at(schedule: list[dict[str, Any]], step: int) -> list[tuple[str, int]
 def assign_wrappers(wrappers: list[dict[str, Any]], graph: dict[str, Any]) -> list[dict[str, Any]]:
     """Each compiled piece of the split graph -> the ONE Inductor wrapper whose positional signature matches it (argument count and
     tensor/int kinds = the submodule's forward() placeholders, number of returned values = the values the graph takes from it).
-    Ambiguity or no match is a refusal: the artifact set does not describe the graph.  A layer-name placeholder is an argument of
-    no kind get_args() names ("?")."""
+    Ambiguity or no match is the Build's refusal (`inductor_templates.Unmodelled`): the artifact set does not describe the graph.  A
+    layer-name placeholder is an argument of no kind get_args() names ("?").
+
+    The refusal's class is imported here and not among the module's imports: its module loads numpy and the Definitions, and
+    `verity-vllm compiled verify` runs without either."""
+    from verity_vllm.acquire.inductor_templates import Unmodelled
+
     out = []
     for pc in graph["wiring"]:
         kinds = ["?" if k == "layer" else k for k in pc["arg_kinds"]]
         cands = [w for w in wrappers if len(w["args"]) == len(pc["args"]) and w["arg_kinds"] == kinds and len(w["returns"]) == pc["n_ret"]]
         sigs = {_sig(w["launches"]) for w in cands}
         if not cands or len(sigs) != 1:
-            raise SystemExit(f"compiled_manifest: piece {pc['piece']} ({pc['submod']}, {len(pc['args'])} args, {pc['n_ret']} returns): "
+            raise Unmodelled(f"compiled_manifest: piece {pc['piece']} ({pc['submod']}, {len(pc['args'])} args, {pc['n_ret']} returns): "
                              f"{len(cands)} wrapper candidates with {len(sigs)} launch programs -- the wrapper set does not describe the split graph")
         out.append(cands[0])
     return out
@@ -369,7 +375,10 @@ COMMANDS = {"verify": VerifyOptions}
 
 
 def main(a: VerifyOptions) -> int:
-    used, rebuilt = (json.loads(Path(p).read_text()) for p in (a.manifest, a.rebuilt))
+    with open(a.manifest) as f:
+        used = json.load(f)
+    with open(a.rebuilt) as f:
+        rebuilt = json.load(f)
     # a Build may leave out its rows, its populations and its compile artifact, or hold each empty: then it has none
     rows = used.get("identities")
     rows = rows if rows else []

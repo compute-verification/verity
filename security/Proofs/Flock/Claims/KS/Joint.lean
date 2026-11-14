@@ -538,14 +538,14 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **The word's length**: table 0's level-0 codeword length `2^d`; `0` where the statement does not set up. -/
 def wordLen (zk : Bool) (x : Claims.Msg) : ℕ :=
   match (tables zk x).head? with
-  | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d
+  | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).d
   | none => 0
 
 /-- **The zero column**: table 0's level-0 witness lanes, each `0`. -/
 noncomputable def zeroCol (zk : Bool) (x : Claims.Msg) : List 𝔽 :=
   match (tables zk x).head? with
   | some (_, st) =>
-    List.replicate (2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes) 0
+    List.replicate (2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes) 0
   | none => []
 
 theorem wordLen_le_N₀ (zk : Bool) (x : Claims.Msg) : (wordLen zk x : ℝ) ≤ N₀ zk x := by

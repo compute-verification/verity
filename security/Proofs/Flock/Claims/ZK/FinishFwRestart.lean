@@ -118,6 +118,8 @@ theorem wS_foldKs (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (b : Arr
     rw [List.foldl_append]
     rfl
 
+variable {wideLeaf : Bool}
+
 set_option maxHeartbeats 4000000 in
 /-- **A deployed rep's level-0 restart is `Σ y₁'·bFold`**: where `repFwC` on table `j`'s rep `r`, answered by the opened
 coins from the rep's base at the packed table of the witness's trace (`hg`) and extra lanes that are the tape's below
@@ -186,7 +188,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
        obtain ⟨⟨rfl, -⟩, -⟩ := hp
        rfl)
   -- the setup is the statement's
-  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hk6' : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
   have hkm : (stAt x j).c.kLog ≤ (stAt x j).m := (zkTab x j).wf.1.hk
   have hj : j.val < (stsOf x).size := lt_of_jOf j
@@ -220,7 +222,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
   have hL2 : l₂.size = repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6) + 3 + ((stAt x j).c.kLog - 6) := by
     rw [hl₂, hl₁, hl, hkL, hSk, hSm]
   -- level 0 starts at `p₀`
-  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]
     exact (zkTab x j).hz

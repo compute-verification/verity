@@ -1,12 +1,13 @@
-/-
+module
+
+public import Spot.Partition
+
+/-!
 The sample (`one_stage/draw.py`): the verifier's law expanded over its own program and query (`derive`), a sample held to the
 registration and to that sampling design (`checkDraw`), and the proved statement's units held to the sample (`checkProved`). The strata,
 their rules, the sampling design object and the samplers are Flock's (`Flock.Draw`). The check samples nothing: the sample comes from
 the challenger's coins, raw bytes with no derivation, which `drawFirst` reads as `coins.draw_first` does.
 -/
-module
-
-public import Spot.Partition
 
 @[expose] public section
 set_option backward.privateInPublic true

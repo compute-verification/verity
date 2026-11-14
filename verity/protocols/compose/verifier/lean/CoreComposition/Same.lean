@@ -1,4 +1,8 @@
-/-
+module
+
+public import CoreComposition.Product
+
+/-!
 A composition whose subprotocols must commit to one record, remote's and onsite's shape (`Core.Remote.protocol`,
 `Core.Onsite.protocol`): `same` is `product` whose subprotocols `ss` must all have committed to the first one's digest. At
 remote they are the inference-only policy, PoUW's window and sampled proofs' one-stage audit, each of whose commitment is
@@ -6,9 +10,6 @@ the run's record; at onsite the policy and the one-stage audit. Once the cases f
 whatever the subprotocols answer; one whose commitment doesn't decode rejects as a subprotocol. Its parameters, commitment
 and evidence are `product`'s.
 -/
-module
-
-public import CoreComposition.Product
 
 @[expose] public section
 

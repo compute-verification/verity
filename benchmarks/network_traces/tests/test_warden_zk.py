@@ -7,7 +7,7 @@ reads exactly as the member says (sender and receiver accepted; unsigned and alt
 made for other proof blocks' wiring, by their value, swapped at the Program's own rows; pad-named, under the Program's
 value, by its row's position); the
 scan's public pieces hold every pad the warden wrote, pad's read among them, and none of the Program's cells; the toy
-unit is the identity on a row's bits. Lean's statement setup (`flock-verify statement`, the verifier's checks before
+unit is the identity on a row's bits. Lean's statement setup (`verity-verify-proof statement`, the verifier's checks before
 any proof, `Registered.checkComplete` among them) holds staged members to the verifier's registered reads of every
 port. Nothing here proves (`warden_zk.prove` does, on a node)."""
 
@@ -50,8 +50,8 @@ needs_lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 
 def flock_verify() -> Path:
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
-    return LEAN / ".lake" / "build" / "bin" / "flock-verify"
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
+    return LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 
 
 def statement(m: dict, tmp: Path, *, ports: dict | None = None, header: tuple[str, ...] | None = None) -> tuple[int, str]:

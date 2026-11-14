@@ -429,10 +429,6 @@ def idx_values(t: tuple) -> Iterable[int]:
     return range(idx0, idx0 + c * dI, dI)
 
 
-def singleton(head: tuple, base: tuple) -> tuple:
-    return head + (base, (0,) * len(base), 1)
-
-
 def rle_mapped(items: list[tuple]) -> list[tuple]:
     """Re-normalise a list of MAPPED progressions `head + (base, delta, count)` (one canonical source per progression of an operand) to the
     greedy RLE of the mapped RUN list: adjacent progressions with the same head merge where the record's per-run canonical list would

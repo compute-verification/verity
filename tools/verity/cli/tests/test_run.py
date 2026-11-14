@@ -1,6 +1,7 @@
 """`verity config` and `verity run` (`verity_cli.run`, `verity.config`): the configuration's refusals by name,
-a list of subprotocols that is neither composite's among them, its hash, the example reproduced by `config new`, and
-runs of a step-0 table (`step0.py`) for onsite and remote: its entries in this process, and core's sampled-proofs
+a list of subprotocols that is neither composite's among them and a malformed pin, its hash, which covers the pins and
+is unchanged by stating none, the example reproduced by `config new`, and
+runs of a step-0 table (`step0.py`) for onsite and remote: its entries in this process, and core's SPOT
 parties in the deployment layer's live run, on a machine with stand-in capabilities and a stand-in product executable,
 every party on in-memory channels, so no build, GPU, network or clock is involved."""
 from __future__ import annotations
@@ -20,7 +21,7 @@ from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.channel import Refused
 from verity_cli import run as R
 
@@ -72,6 +73,14 @@ def channel(cfg, source, to):
     return next(c for c in cfg["channel"] if (c["from"], c["to"]) == (source, to))
 
 
+#: a pin the toy's onsite configuration accepts: the network certifier's key for the certifier's sessions
+PIN = {"party": "network-certifier", "protocol": "certifier", "scheme": K.SCHEMES[0], "key-sha512": "5a" * 64}
+
+
+def pinned(**fields) -> dict:
+    return edit(lambda c: c.update(pin=[PIN | fields]))
+
+
 REFUSALS = {
     "unknown-key": lambda c: c.update(extra=1),
     "missing-key": lambda c: c.pop("service"),
@@ -101,6 +110,12 @@ REFUSALS = {
     "repeated-channel": lambda c: c["channel"].append(dict(channel(c, "firewall", "verifier"))),
     "dial": lambda c: channel(c, "firewall", "verifier").update(dial="both"),
     "placement": lambda c: party(c, "network-certifier").update(machine="auditor-2"),
+    "pin-hash": lambda c: c.update(pin=[PIN | {"key-sha512": "5A" * 64}]),
+    "pin-scheme": lambda c: c.update(pin=[PIN | {"scheme": "ed25519"}]),
+    "pin-party": lambda c: c.update(pin=[PIN | {"party": "oracle"}]),
+    "pin-principal": lambda c: c.update(pin=[PIN | {"party": "workers", "protocol": "sampled-proofs"}]),
+    "pin-protocol": lambda c: c.update(pin=[PIN | {"protocol": "pous"}]),
+    "repeated-pin": lambda c: c.update(pin=[PIN, PIN | {"key-sha512": "a5" * 64}]),
 }
 
 
@@ -171,29 +186,29 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
     assert set(K.TRANSPORT["party"]) <= set(K.PARTY) and set(K.TRANSPORT["channel"]) <= set(K.CHANNEL)
 
 
-#: The onsite configuration's hash before the network certifier's response cap and its lengths rows' form were
+#: The onsite configuration's hash before the network certifier's bound on a response's tokens and its lengths rows' form were
 #: parameters: a configuration that sets neither keeps it.
-UNCAPPED_ONSITE = ("8bb037ee67cf0b2fd8475458194d5d0ea79d7e9ed1285b398a9b20420e1f6e64"
+UNBOUNDED_ONSITE = ("8bb037ee67cf0b2fd8475458194d5d0ea79d7e9ed1285b398a9b20420e1f6e64"
                    "cbb336535923a6320f0cf3f717ddecfccd9ff8cef279e1eb20d992ab719fb9b8")
 
 
-def capped(cap):
-    return edit(lambda c: c.setdefault("params", {}).setdefault("verity/certifier/v0", {}).update(max_tokens_cap=cap))
+def bounded(tokens):
+    return edit(lambda c: c.setdefault("params", {}).setdefault("verity/certifier/v0", {}).update(max_tokens_cap=tokens))
 
 
-def test_an_uncapped_certifier_configuration_hashes_as_before_the_cap():
+def test_an_unbounded_certifier_configuration_hashes_as_before_the_bound():
     cfg = K.check(config(), REG.components, REG.workloads)
     assert not {"max_tokens_cap", "lengths", "content"} & set(cfg["params"]["verity/certifier/v0"])
-    assert K.digest(cfg) == UNCAPPED_ONSITE
+    assert K.digest(cfg) == UNBOUNDED_ONSITE
 
 
-def test_a_capped_certifier_configuration_round_trips():
-    cfg = K.check(K.parse(K.render(capped(4))), REG.components, REG.workloads)
+def test_a_bounded_certifier_configuration_round_trips():
+    cfg = K.check(K.parse(K.render(bounded(4))), REG.components, REG.workloads)
     table = cfg["params"]["verity/certifier/v0"]
     assert table["max_tokens_cap"] == 4
     assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).max_tokens_cap == 4
     assert K.check(cfg, REG.components, REG.workloads) == cfg
-    assert K.digest(cfg) != UNCAPPED_ONSITE
+    assert K.digest(cfg) != UNBOUNDED_ONSITE
 
 
 def with_lengths(**schedule):
@@ -203,7 +218,7 @@ def with_lengths(**schedule):
 
 def test_a_certifier_configuration_with_lengths_rows_round_trips_and_needs_a_schedule_that_fits_them():
     fits = {"cell_bytes": 512, "ingress_buckets": 10, "egress_cells": 2048}
-    digests = {UNCAPPED_ONSITE}
+    digests = {UNBOUNDED_ONSITE}
     for form in (1, 2):  # the lengths rows' two forms, each a configuration of its own digest
         cfg = K.check(K.parse(K.render(with_lengths(**fits | {"lengths": form}))), REG.components, REG.workloads)
         table = cfg["params"]["verity/certifier/v0"]
@@ -218,11 +233,63 @@ def test_a_certifier_configuration_with_lengths_rows_round_trips_and_needs_a_sch
         assert e.value.name == "params" and "lengths" in e.value.detail
 
 
-@pytest.mark.parametrize("cap", [0, -1, True, "4", 4096, 1 << 32])
-def test_a_bad_response_cap_is_refused_by_name(cap):
+@pytest.mark.parametrize("tokens", [0, -1, True, "4", 4096, 1 << 32])
+def test_a_bad_response_bound_is_refused_by_name(tokens):
     with pytest.raises(Refused) as e:
-        K.check(capped(cap), REG.components, REG.workloads)
+        K.check(bounded(tokens), REG.components, REG.workloads)
     assert e.value.name == "params" and "max_tokens_cap" in e.value.detail
+
+
+@pytest.mark.parametrize("fields, name", [
+    ({"key-sha512": "5a" * 63}, "pin-hash"), ({"key-sha512": "5a" * 65}, "pin-hash"), ({"key-sha512": 5}, "pin-hash"),
+    ({"protocol": "telepathy"}, "pin-protocol"), ({"party": "challenger", "protocol": "pouw"}, "pin-protocol"),
+    ({"host": "auditor-1"}, "unknown-key"), ({"session": "s-1"}, "unknown-key"),
+])
+def test_a_malformed_pin_is_refused_by_name(fields, name):
+    assert refused(pinned(**fields)) == name
+
+
+@pytest.mark.parametrize("cfg, name", [
+    (edit(lambda c: c.update(pin=[{k: v for k, v in PIN.items() if k != "scheme"}])), "missing-key"),
+    (edit(lambda c: c.update(pin=PIN)), "type"),
+])
+def test_a_pin_that_is_not_an_entry_is_refused_by_name(cfg, name):
+    assert refused(cfg) == name
+
+
+def test_the_schemes_are_the_domain_tables():
+    from verity.commitments import domains
+
+    assert K.SCHEMES == (domains.LMS_SHA512_N64_W1_H20,)
+
+
+def test_pins_are_hashed_and_round_trip_and_none_hashes_as_no_pins():
+    base = K.digest(K.check(config(), REG.components, REG.workloads))
+    assert K.digest(K.check(edit(lambda c: c.update(pin=[])), REG.components, REG.workloads)) == base
+    challenger = PIN | {"party": "challenger", "protocol": "sampled-proofs", "key-sha512": "c3" * 64}
+    cfg = edit(lambda c: c.update(pin=[PIN, challenger]))
+    text = K.render(cfg)
+    assert "[[pin]]" in text and K.parse(text) == cfg
+    checked = K.check(K.parse(text), REG.components, REG.workloads)
+    assert checked["pin"] == [challenger, PIN] and K.check(checked, REG.components, REG.workloads) == checked
+    assert K.parse(K.render(checked)) == checked
+    assert K.hashed(checked)["pin"] == checked["pin"]
+    digest = K.digest(checked)
+    assert digest != base
+    assert K.digest(K.check(edit(lambda c: c.update(pin=[challenger, PIN])), REG.components, REG.workloads)) == digest
+    assert K.digest(K.check(edit(lambda c: c.update(pin=[challenger, PIN | {"key-sha512": "5b" * 64}])),
+                            REG.components, REG.workloads)) != digest
+
+
+def test_config_new_with_pins_renders_and_checks_back(capsys, tmp_path):
+    cfg = K.new("toy", list(ONSITE), REG.components, REG.workloads, COMMIT)
+    assert "pin" not in cfg
+    cfg["pin"] = [PIN]
+    path = tmp_path / "config.toml"
+    path.write_text(K.render(cfg))
+    assert R.config_main(["hash", str(path)], REG) == 0
+    assert capsys.readouterr().out.strip() == K.digest(K.check(cfg, REG.components, REG.workloads))
+    assert R.load(path, REG)["pin"] == [PIN]
 
 
 def test_the_canonical_form_is_verity_canonical_json():
@@ -320,7 +387,7 @@ class StandIn(D.Machine):
         write(self.state / "public" / f"w{i}" / "registration.json", {"period": i})
         return json.dumps({"period": i}).encode()
 
-    def audit(self, i, registration, challenger, firewall):
+    def audit(self, i, registration, challenger, zk_server):
         v = self._of("sampled-proofs", i)
         answer = {"verdict": v, "commitment": RG.digest(json.loads(registration))}
         write(self.state / "record" / f"w{i}" / "sampled-proofs" / "answer.json", answer)

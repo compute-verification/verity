@@ -111,13 +111,18 @@
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
+  "PouwCheck.CreditOnce": {
+   "imports": ["PouwCheck.Credit", "Spot.ChallengerSession"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
   "PouwCheck.LeafOwn": {
    "imports": ["PouwCheck.Credit", "PouwWindow.RegFile"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Period": {
-   "imports": ["CoreProtocol.Cli", "PouwCheck.Credit"],
+   "imports": ["CoreProtocol.Account", "CoreProtocol.Cli", "PouwCheck.Credit", "PouwCheck.CreditOnce"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   }

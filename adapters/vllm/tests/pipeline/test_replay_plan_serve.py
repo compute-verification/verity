@@ -1,11 +1,15 @@
 """The body of the slim bundle's planner process (`verity_vllm.pipeline.replay_plan`: `_serve`, `serve`, `main`) in this process,
 on stand-ins for the steps that read Programs: what it loads, what it sends the Commit once it has prepared, the sample it takes when
-the Commit's facts arrive (the replay's own, read only) and the committed reads it sends back, each once."""
+the Commit's facts arrive (the replay's own, read only) and the committed reads it sends back, each once.  Last, the Commit's side
+(`Planner`), over a stand-in of the process that serves its pipe on a thread of this one."""
 from __future__ import annotations
 
 import json
 import multiprocessing as mp
 import os
+import subprocess
+import threading
+from multiprocessing.connection import Connection
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -169,3 +173,76 @@ def test_the_command_serves_the_connection_it_is_handed_and_exits_0(tmp_path: Pa
     with pytest.raises(OSError):
         os.fstat(fd)
     commit.close()
+
+
+class Process:
+    """A stand-in for the planner's process: `serve` on a thread of this process over the end of the pipe the Commit hands it, or,
+    for a process that does not exit when asked, that end held and never read until it is killed."""
+
+    def __init__(self, argv: list[str], *, pass_fds: tuple[int, ...], exits: bool = True) -> None:
+        self.argv, self.pass_fds = argv, pass_fds
+        self.waited: list[float] = []
+        self.killed = False
+        self.end = Connection(os.dup(pass_fds[0]))
+        self.thread = threading.Thread(target=RP.serve, args=(self.end,)) if exits else None
+        if self.thread is not None:
+            self.thread.start()
+
+    def wait(self, timeout: float) -> int:
+        self.waited.append(timeout)
+        if self.thread is None:
+            raise subprocess.TimeoutExpired(self.argv, timeout)
+        self.thread.join()
+        return 0
+
+    def kill(self) -> None:
+        self.killed = True
+        self.end.close()
+
+
+def planner(steps: Steps, monkeypatch: pytest.MonkeyPatch, *, exits: bool = True) -> tuple[RP.Planner, list[Process]]:
+    """A `Planner` of the Commit's options (`steps.args`) whose process is a `Process`, and that process."""
+    started: list[Process] = []
+
+    def popen(argv: list[str], *, pass_fds: tuple[int, ...]) -> Process:
+        started.append(Process(argv, pass_fds=pass_fds, exits=exits))
+        return started[-1]
+
+    monkeypatch.setattr(RP, "subprocess", SimpleNamespace(Popen=popen, TimeoutExpired=subprocess.TimeoutExpired))
+    return RP.Planner(SimpleNamespace(**steps.args())), started
+
+
+def test_the_planner_says_once_what_the_linkage_reads_and_answers_the_commit_s_facts_with_its_reads(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Commit's `Planner` starts the `replay-plan` command on its end of a pipe, sends it the Commit's options, reads what the
+    linkage reads once however often it is asked, and on the run's facts gets back each committed read once; then it closes its end
+    and waits for the process, which has exited."""
+    steps = Steps(monkeypatch, tmp_path)
+    p, (proc,) = planner(steps, monkeypatch)
+    assert proc.argv[1:4] == ["-m", "verity_vllm.pipeline.cli", "replay-plan"] and proc.argv[4:] == [str(proc.pass_fds[0])]
+    ready = p.ready()
+    assert ready["embed_op_path"] == "model/embed" and p.ready() is ready
+    got = p.plan(steps.facts())
+    assert got == {"reads": [(1, "x", 0, 4), (2, "y", 4, 6)], "plan": PLAN | {"reads_made": 3}}
+    assert steps.seen["workload"] == "workload.json" and steps.seen["replay"][1] == BINDING_MAP
+    assert p._conn.closed and proc.waited == [5] and not proc.killed
+
+
+def test_a_plan_the_process_cannot_make_reaches_the_commit_by_name_and_the_process_is_waited_for(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    steps = Steps(monkeypatch, tmp_path)
+
+    def unbound(*a: Any, **kw: Any) -> dict[str, Any]:
+        raise KeyError("binding")
+
+    monkeypatch.setattr(SR, "sampled_replay", unbound)
+    p, (proc,) = planner(steps, monkeypatch)
+    with pytest.raises(RuntimeError, match=r"^replay planner: KeyError: 'binding'$"):
+        p.plan(steps.facts())
+    assert p._conn.closed and proc.waited == [5] and not proc.killed
+
+
+def test_a_planner_process_that_does_not_exit_when_closed_is_killed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    p, (proc,) = planner(Steps(monkeypatch, tmp_path), monkeypatch, exits=False)
+    p.close()
+    assert p._conn.closed and proc.waited == [5] and proc.killed

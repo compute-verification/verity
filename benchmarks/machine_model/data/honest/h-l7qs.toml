@@ -5,7 +5,7 @@
 # 1.284x plain's (e_l7qs 1.300x) though its issue bound a useful MMA is 2.29x plain's.
 name = "h-l7qs"
 status = "measured"
-source = "BC-KERNEL's h_l7qs (benchmarks/pouw/edited_gemm/cgemm.cu) at 8192 x 8192 x 128, `eps_profile.py OUT --toml`, census VF3n-16's classes (bit-exact against checked_strip's honest_words at r = 64, cgemm_ref.py)"
+source = "BC-KERNEL's h_l7qs (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cgemm.cu) at 8192 x 8192 x 128, `eps_profile.py OUT --toml`, census VF3n-16's classes (bit-exact against checked_strip's honest_words at r = 64, cgemm_ref.py)"
 L = 32
 
 [mma]

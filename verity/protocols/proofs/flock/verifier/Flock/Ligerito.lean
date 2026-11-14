@@ -1,10 +1,11 @@
-/-
-The dense Ligerito opening and its Merkle caps (`Flock.Merkle`).
--/
 module
 
 public import Flock.Merkle
 public import Flock.Piop
+
+/-!
+The dense Ligerito opening and its Merkle caps (`Flock.Merkle`).
+-/
 
 @[expose] public section
 

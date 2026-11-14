@@ -17,7 +17,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 public import Proofs.Flock.Soundness.Discharge.Exec
 
 /-!
-# The statement flock-verify sets up for one table, under either tag
+# The statement verity-verify-proof sets up for one table, under either tag
 
 `Stmt.setupTables` sets up each table with its `setup`: `Stmt.setupHidden` under a tag with hidden outputs
 (`Tags.hiddenOutputs`: `verity/flock-circuit`, the default `--statement`, and `verity/flock-circuit/types`), and
@@ -33,7 +33,7 @@ namespace FlockSoundness.Discharge.HiddenExec
 open Flock
 open Lean (Json)
 
-/-- **The statement flock-verify sets up for one table** (`Stmt.setupTables`' `setup`): `Stmt.setupHidden` under a tag
+/-- **The statement verity-verify-proof sets up for one table** (`Stmt.setupTables`' `setup`): `Stmt.setupHidden` under a tag
 with hidden outputs, `Stmt.setupH` otherwise. -/
 def setupOne (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (draw partition : Option Json) (program : Option ByteArray) : V Stmt :=

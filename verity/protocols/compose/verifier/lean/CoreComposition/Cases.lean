@@ -1,11 +1,12 @@
-/-
+module
+
+public import CoreComposition.Product
+
+/-!
 Inputs for a composition, which the `#guard`s of the composition and of each product build: a stub's case (its
 parameter k, the units sampled and passed its evidence records, its root), any subprotocol's case as its own `serve` reads
 it (`Case`), and the composition's params, evidence and commitment over a list of them.
 -/
-module
-
-public import CoreComposition.Product
 
 @[expose] public section
 

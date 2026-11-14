@@ -55,7 +55,9 @@ statement (`setupTables_okH'`).
 The numbers read a table's `m`, `mPts`, `k_log` and region count and the spec's `points` and `mPts`. `setupHidden_key`
 reads those off the circuit (`HmOut.parseCommit`, the same file) and the statement's `n`: without a sample, the loaded file's
 instance count, which `RecVStar.checkCircuit` holds to the instances of V*'s statement `s` at the verifier's own inner
-shape (`staged_pop`); with one, the sample's proved units (`Layout.drawn_spec`), the same sample.
+shape (`staged_pop`); with one, the sample's proved units (`Layout.drawn_spec`), the same sample. They read the
+statement's version too (`Stmt.wideLeaf`, which schedule its tables' proofs follow), and that is its tags', the same
+at both setups (`Hidden.setupHidden_tagsP`).
 -/
 
 @[expose] public section
@@ -185,14 +187,14 @@ theorem setupHidden_key {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     · dsimp only
       rw [Array.size_append, outRegions_size ‹HmOut.regions _ _ = _›, inRegions_size ‹HmIn.regions _ _ _ = _›]
 
-/-- **Two setups at the same arguments but the public file have the same numbers' inputs**, where they hold the same
-population without a sample. -/
+/-- **Two setups at the same arguments but the public file have the same numbers' inputs**, the statement's version
+among them, where they hold the same population without a sample. -/
 theorem hidden_same {tags : Tags} {cf pf pf' : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program q : Option ByteArray} {t t' : Flock.Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program q = .ok t)
     (h' : Stmt.setupHidden tags cf pf' coins tables draw partition program q = .ok t')
     (hpop : draw = none → RecVStar.population t = RecVStar.population t') :
-    t.c = t'.c ∧ t.m = t'.m ∧ t.mPts = t'.mPts ∧ t.regions.size = t'.regions.size := by
+    t.c = t'.c ∧ t.m = t'.m ∧ t.mPts = t'.mPts ∧ t.regions.size = t'.regions.size ∧ t.wideLeaf = t'.wideLeaf := by
   obtain ⟨hc, pi, pop, hpi, hl, hn0, hd0, hr, hn, hm, hmp⟩ := setupHidden_key h
   obtain ⟨hc', pi', pop', hpi', hl', hn0', hd0', hr', hn', hm', hmp'⟩ := setupHidden_key h'
   have ec : t.c = t'.c := Except.ok.inj (hc.symm.trans hc')
@@ -220,10 +222,12 @@ theorem hidden_same {tags : Tags} {cf pf pf' : ByteArray} {coins : Coins} {table
       obtain ⟨D', hD', -, hnD', -⟩ := FlockSoundness.Discharge.Layout.drawn_spec e₂
       obtain rfl : D' = D := Except.ok.inj (hD'.symm.trans hD)
       rw [hnD, hnD']
-  refine ⟨ec, ?_, ?_, ?_⟩
+  refine ⟨ec, ?_, ?_, ?_, ?_⟩
   · rw [hm, hm', ec, en]
   · rw [hmp, hmp', ec, en]
   · rw [hr, hr', ec, epi]
+  · exact congrArg Flock.Tags.wideLeaf ((FlockSoundness.Discharge.Hidden.setupHidden_tagsP h).trans
+      (FlockSoundness.Discharge.Hidden.setupHidden_tagsP h').symm)
 
 /-! ## A staged part's setup -/
 
@@ -288,12 +292,12 @@ theorem staged_pop {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i 
   exact ⟨r, ss, sv, hr, hss, hjs, hpop⟩
 
 /-- **Part `s`'s staged statements at two inner rounds set up the same numbers' inputs**: one table each, at the same
-`m`, `mPts`, `k_log` and region count, each the spec's one table. -/
+`m`, `mPts`, `k_log` and region count and of the same version, each the spec's one table. -/
 theorem staged_same {st : Stage} {x : Msg} {ms ms' : List (Msg × Out)} {s : ℕ} {i i' : RecIns}
     {spec spec' : Flock.SessionSpec} {sts sts' : Array Flock.Stmt}
     (h1 : setupO (staged st x ms s) = some (i, spec, sts)) (h2 : setupO (staged st x ms' s) = some (i', spec', sts')) :
     ∃ t t', sts = #[t] ∧ sts' = #[t'] ∧ spec = t.spec ∧ spec' = t'.spec ∧ t.m = t'.m ∧ t.mPts = t'.mPts ∧
-      t.c.kLog = t'.c.kLog ∧ t.regions.size = t'.regions.size := by
+      t.c.kLog = t'.c.kLog ∧ t.regions.size = t'.regions.size ∧ t.wideLeaf = t'.wideLeaf := by
   obtain ⟨hins1, hset1⟩ := setupO_some h1
   obtain ⟨hins2, hset2⟩ := setupO_some h2
   obtain ⟨hsz1, hh⟩ := staged_one hins1 hset1
@@ -328,8 +332,8 @@ theorem staged_same {st : Stage} {x : Msg} {ms ms' : List (Msg × Out)} {s : ℕ
     obtain rfl : ss = ss' := Except.ok.inj (hss.symm.trans hss')
     obtain rfl : sv = sv' := Option.some.inj (hj.symm.trans hj')
     exact (hp₁ : RecVStar.population t = _).trans (hp₂ : RecVStar.population t' = _).symm
-  obtain ⟨hc, hm, hmp, hrs⟩ := hidden_same ht ht' hpop
-  exact ⟨t, t', rfl, rfl, rfl, rfl, hm, hmp, by rw [hc], hrs⟩
+  obtain ⟨hc, hm, hmp, hrs, hw⟩ := hidden_same ht ht' hpop
+  exact ⟨t, t', rfl, rfl, rfl, rfl, hm, hmp, by rw [hc], hrs, hw⟩
 
 /-! ## The numbers -/
 
@@ -360,9 +364,9 @@ theorem numsFixed (st : Stage) : NumsFixed st := by
   intro x ms ms' s h1 h2
   obtain ⟨⟨i, spec, sts⟩, hs1⟩ := Option.isSome_iff_exists.1 h1
   obtain ⟨⟨i', spec', sts'⟩, hs2⟩ := Option.isSome_iff_exists.1 h2
-  obtain ⟨t, t', rfl, rfl, rfl, rfl, hm, hmp, hk, hr⟩ := staged_same hs1 hs2
+  obtain ⟨t, t', rfl, rfl, rfl, rfl, hm, hmp, hk, hr, hw⟩ := staged_same hs1 hs2
   rw [numsOf_one hs1, numsOf_one hs2]
   simp only [FlockDeploy.tableErr, FlockDeploy.acct, FlockDeploy.tableLen, FlockDeploy.tableWeight,
-    FlockDeploy.repRounds, Flock.Stmt.spec, hm, hmp, hk, hr]
+    FlockDeploy.repRounds, Flock.Stmt.spec, hm, hmp, hk, hr, hw]
 
 end RecDeploy

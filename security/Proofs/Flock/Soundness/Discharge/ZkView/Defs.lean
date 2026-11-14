@@ -32,7 +32,7 @@ public import Proofs.Flock.Soundness.CROnly
 /-!
 # The `--zk` tables at the executable's leaves, and the honest prover's pre-final messages
 
-`ZK.Table` leaves its leaf functions abstract. A `--zk` session's leaves are the executable's (`flock-verify verify --zk`):
+`ZK.Table` leaves its leaf functions abstract. A `--zk` session's leaves are the executable's (`verity-verify-proof verify --zk`):
 a level-0 leaf is `MerkleScheme.hm96Sha512.leaf` of its row (68 lanes: the `2^k₀` witness lanes, then the extra lanes
 `R^0_0, R^0_1, R^1_0, R^1_1`), a pads leaf is `verifyInner`'s `Default512.leaf (SHA-512(a ‖ b))` of its column `(a, b)`, and
 `τ`'s commitment is `Zk.tauCommitment`; each under a 192-byte salt. Here:

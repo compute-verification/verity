@@ -43,20 +43,23 @@ event is the verifier's acceptance (`Accepts k`) while the claim of one of `k`'s
 strategy is its published `δ` plus its collision term at the probability that its fixed finder outputs a SHA-512
 collision (`Vocab.error`).
 
-`SoundnessOf` is the one statement, at every composite: each of its subprotocols' targets gives `Vocab.SoundnessAt`,
-with the errors summed over its subprotocols. `Soundness` is it at onsite, from its seven targets
-(`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
-`NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same statement at remote's composite of record
-(`Core.Remote.V1.protocol`, `verity/remote/v1`), from its three (sampled proofs, PoUW, which at remote is Pearl+'s run
-verdict and its claim in MACs at the credit its check published, and the inference-only policy). They are proved by
+`SoundnessOf` is the one statement, at every composite, a list of its subprotocols' ids: each of its subprotocols'
+targets gives `Vocab.SoundnessAt`, with the errors summed over its subprotocols. `Soundness` is it at onsite's list,
+with its seven targets taken by name (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`,
+`BandwidthAuditSound`, `NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` is it at remote's, the list of its
+composite of record (`Core.Remote.V1.protocol`, `verity/remote/v1`), with its three (sampled proofs, PoUW, which at
+remote is Pearl+'s run verdict and its claim in MACs at the credit its check published, and the inference-only
+policy). They are proved by
 `Properties.Composition` (a composite's acceptance is its subprotocols' and its record's) and the union bound over one
 strategy in one game.
 
 Each target is a hypothesis until its subprotocol's piece proves it at its compiled check, and `Vocab`'s fields are given
 until each piece defines its own: v2's reading of the committed files, the positions, the coin commitment's families and
-the device's log each subprotocol read, the extractor and the finders, the gates computed, the world, the declaration's
-registered inputs, the wipe and the play read at its boundary, and the published certificates, thresholds, errors and
-collision terms.
+the device's log each subprotocol read, the extractor and the finders, the gates computed, the world, the wipe and the
+play read at its boundary, and the published certificates, thresholds, errors and collision terms. The inference-only
+policy's target reads none of them: its claim is on its own case in the play's messages, and
+`Proofs.Properties.Verity.InferenceOnly` proves it of the case as sent. The link from that case to the committed files is
+two checks the verifier lacks (`Vocab.Holds` names them), so the target stays a hypothesis here.
 -/
 
 @[expose] public section
@@ -75,13 +78,14 @@ def SoundnessOf : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (k : Verity.Registration.Composite),
     (∀ a ∈ subprotocols k, V.Target k a) → V.SoundnessAt k
 
-/-- **Soundness at onsite's verifier, from its seven subprotocols' targets.** If sampled proofs, PoUW, the
-inference-only policy, PoUS, PoUB-P2, the network certifier and the wipe each meet their target at onsite, then the
-probability that onsite's compiled verifier accepts files that passed the commit phase's check while one of the
-period's claims fails (more than an `ε` share of the units unbound in the extractor's transcript, fewer than `W` gates
-computed after their coin, a declaration that doesn't comply with the policy, fewer than `S` bits held on average,
-fewer than `Q` bits read, more than `K` bits through the network certifiers, or foreign content kept across the wipe past
-its survivor threshold) is at most the seven errors at that strategy summed. -/
+/-- **Soundness at onsite's verifier, from its seven subprotocols' targets**: `SoundnessOf` at onsite's list, each
+target by its name. If sampled proofs, PoUW, the inference-only policy, PoUS, PoUB-P2, the network certifier and the
+wipe each meet their target at onsite, then the probability that onsite's compiled verifier accepts files that passed
+the commit phase's check while one of the period's claims fails (more than an `ε` share of the units unbound in the
+extractor's transcript, fewer than `W` gates computed after their coin, a case of the policy whose Program doesn't
+meet the policy, fewer than `S` bits held on average, fewer than `Q` bits read, more than `K` bits through the network
+certifiers, or foreign content kept across the wipe past its survivor threshold) is at most the seven errors at that
+strategy summed. -/
 def Soundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
     V.SpotSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
@@ -92,8 +96,9 @@ def Soundness : Prop :=
 published) and the inference-only policy each meet their target at remote, then the probability that remote's compiled
 verifier accepts files that passed the commit phase's check while one of their claims fails is at most their three
 errors at that strategy summed. Discharging `V.PouwSound .remote` reads Pearl+'s properties in
-`Properties.Pouw.PearlPlus` (`AcceptMeans`, proved as `acceptMeans`, and `WorkIsTheCredit`, `DrawIsOnItsStreams` and
-`CoinBytesGiveUniformTickets`, unproved); that is the Pearl+ target's proof, not this statement's. -/
+`Properties.Pouw.PearlPlus` (`AcceptMeans`, `WorkIsTheCredit`, `DrawIsOnItsStreams` and `CoinBytesGiveUniformTickets`,
+each proved under its name in lower camel case, `workIsTheCredit` among them); that is the Pearl+ target's proof, not
+this statement's. -/
 def RemoteSoundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
     V.SpotSound .remote → V.PouwSound .remote → V.InferenceOnlySound .remote → V.SoundnessAt .remote

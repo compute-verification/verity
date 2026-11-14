@@ -1,5 +1,5 @@
 """The keyed coin tree, `coin-tree/hm96-sha512/v2` (`docs/coin-tree-v2.md` §3 and §7), on the Lean verifier's side
-(`Flock.CoinTree`, `flock-verify coin-tree-check`): R7 takes the prover's nonce from its `Hello` and requires the verifier's
+(`Flock.CoinTree`, `verity-verify-proof coin-tree-check`): R7 takes the prover's nonce from its `Hello` and requires the verifier's
 own `Hello` with that nonce, byte for byte; the record's `coin_tree` has the nonce, a key with bit 2047 zero, a root and the
 verifier's spec; and no two sessions verified together share a key. The values are the spec's §9 vectors."""
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 
 #: coin-tree-v2.md §9
 NONCE = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"

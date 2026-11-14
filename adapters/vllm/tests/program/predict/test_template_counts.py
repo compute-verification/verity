@@ -9,17 +9,24 @@ window's planned units."""
 from __future__ import annotations
 
 from collections import Counter
+from typing import Any
 
 import pytest
 
 from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import Builder
 from verity.circuits.partition_object import TemplatePartition, calls, template_instances_query
+from verity.circuits.refs import Affine, Coll
+from verity.circuits.types import Array, Value
 from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 from verity_vllm.program.frontend.rules import vllm_dsa
+from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
 from verity_vllm.program.predict.build import build_program
+from verity_vllm.program.predict.common import _Stochastic, kind, select_token
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered, plan_steps, policy_of, request_program
 from verity_vllm.program.predict.template_counts import TemplateCounts
+from verity_vllm.program.prune import swapped
 from tests.program.predict.test_node import _first_layers
 from tests.program.predict.test_steps import _b8_window, _class_g, _spec
 
@@ -39,11 +46,13 @@ def _phi(tmp_path, layers: int = 4, topk: int | None = None) -> Phi:
 def _instances(program) -> Counter:
     """Each template's instances in `program` as `TemplatePartition` numbers them, a root Call one and a batch its members, which
     the partition itself gives where it applies: a const called alone is a primitive node, which its query refuses."""
-    nodes, out = program.root.body.nodes, Counter()
+    nodes = program.root.body.nodes
+    out: Counter[str] = Counter()
     for k, fn in calls(program):
         out[descriptor_id(fn)] += nodes[k].n if nodes[k].form == "batch" else 1
     if all(nodes[k].form in ("call", "batch") for k, _ in calls(program)):
-        part, by = TemplatePartition(program, template_instances_query(sorted(out))), Counter()
+        part = TemplatePartition(program, template_instances_query(sorted(out)))
+        by: Counter[str] = Counter()
         for _k, tid, _at, n in part.ranges:
             by[tid] += n
         assert by == out
@@ -57,11 +66,25 @@ def _check(phi: Phi, LP: int, T: int, policy: dict = GREEDY, table_reads: bool =
     assert got == want, {t: (got[t], want[t]) for t in sorted(got.keys() | want.keys()) if got[t] != want[t]}
 
 
+def _select_alone(V: int, pos: int, policy: dict | None) -> Counter:
+    """A Program of one sample's select alone, over V logits at position `pos` (`common.select_token`, as a decoder's sample
+    writes it), each Definition swapped for its dead-free version (`prune.swapped`) -> its calls by Definition."""
+    params = [("logits", Array(V, Value(16))), ("seed", Value(64))]
+    B = Builder(params, Value(1))
+    logits, seed = (Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params))
+    read = None
+    if policy is not None and policy["kind"] == "stochastic":
+        read = _Stochastic(seed, int(policy["splits"]), f32_bits(policy["temperature"]), f32_bits(policy["top_p"]))
+    tok = select_token(lambda fn, *refs: B.call(fn, *(Coll(t, r) for (_, t), r in zip(fn.signature()[0], refs))), kind, logits.refs, V, pos, read)
+    B.ret_type = tok.type
+    return Counter(descriptor_id(n.fn) for n in swapped(B.finish(tok)).nodes)
+
+
 def _decodes(LP: int, T: int, first: list) -> list:
     return [first] + [[[1, LP + t]] for t in range(T)]
 
 
-SERVED = {
+SERVED: dict[str, dict[str, Any]] = {
     "beside-decodes": dict(LP=3, T=2, batch=[[[3, 0]], [[1, 3], [1, 9]], [[1, 4], [1, 10]]]),
     "chunks": dict(LP=6, T=1, chunks=(4, 2), batch=[[[4, 0], [1, 7]], [[2, 4]], [[1, 6]]]),
     "first-rows-of-a-sequence": dict(LP=6, T=1, chunks=(4, 2), entries=(5, 2), batch=[[[5, 0], [1, 7]], [[2, 4]], [[1, 6]]]),
@@ -71,7 +94,7 @@ SERVED = {
     "unfused": dict(LP=5, T=1, batch=[[[5, 0], [40, 0]], [[1, 5], [1, 40]]]),
     "stop": dict(LP=3, T=2, stop=_spec(3, 2, 3), batch=_decodes(3, 2, [[3, 0]])),
 }
-DENSE = {
+DENSE: dict[str, dict[str, Any]] = {
     "alone": dict(LP=4, T=1, batch=_decodes(4, 1, [[4, 0]])),
     "chunk-with-context": dict(LP=6, T=0, chunks=(3, 3), batch=[[[3, 0]], [[3, 3]]]),
     "first-rows-of-a-sequence": dict(LP=6, T=0, chunks=(3, 3), entries=(5, 3), batch=[[[5, 0], [4, 2]], [[3, 3]]]),
@@ -80,7 +103,7 @@ DENSE = {
     "after-a-history": dict(LP=6, T=1, C=3, batch=_decodes(6, 1, [[3, 3]])),
     "then-past-topk": dict(LP=12, T=6, batch=_decodes(12, 6, [[12, 0]])),
 }
-LONG = {
+LONG: dict[str, dict[str, Any]] = {
     "prefill-and-decodes": dict(LP=6, T=2, batch=_decodes(6, 2, [[6, 0]])),
     "chunks-to-an-edge": dict(LP=9, T=-1, chunks=(5, 3), edge=EDGE, batch=[[[5, 0]], [[3, 5]]]),
     "first-rows-of-a-sequence": dict(LP=9, T=1, chunks=(5, 4), entries=(7, 4), batch=[[[7, 0]], [[4, 5]], [[1, 9]]]),
@@ -94,6 +117,22 @@ LONG = {
 @pytest.mark.parametrize("case", SERVED)
 def test_a_units_counts_are_its_programs_at_the_served_index_topk(tmp_path, case):
     _check(_phi(tmp_path), **SERVED[case])
+
+
+@pytest.mark.parametrize("stated", [None, GREEDY, {"temperature": 0.8, "top_p": 0.95, "seed": 11}], ids=["no-policy", "greedy", "stochastic"])
+def test_a_samples_select_counts_are_the_selects_calls(tmp_path, stated):
+    """One sample's select at a vocabulary of 64 logits, a Program of its own: a unit that states no policy or the greedy one
+    counts one dead-free TokenSelect, and a stochastic one the seeded top-p select at its registered split count, dead-free,
+    and its four consts (top_p, the position, the temperature and S).  The slow test below counts them in a request's whole
+    Program, at GLM-5.3's vocabulary."""
+    phi = _phi(tmp_path)
+    policy = stated if stated in (None, GREEDY) else policy_of(0, stated, phi.target_profile().num_sms, request_id="q1")[0]
+    got: Counter[str] = Counter()
+    for need, n in TemplateCounts(phi)._select(policy, 64, 5):
+        got[need.id] += n
+    assert got == _select_alone(64, 5, policy)
+    assert sorted(t.split("{")[0].split("[")[0] for t in got) == (
+        ["TokenSelect_v4"] if stated in (None, GREEDY) else ["Const32"] * 3 + ["Const64", "GumbelTopPTokenSelect_v3"])
 
 
 @pytest.mark.slow

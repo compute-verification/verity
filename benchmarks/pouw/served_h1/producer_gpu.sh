@@ -25,11 +25,11 @@ for name in "${builds[@]}"; do
   [ -n "${LEVERS[$name]+x}" ] || { echo "producer_gpu: no build $name (${!LEVERS[*]})"; exit 2; }
   read -r -a kc <<< "${LEVERS[$name]}"
   nice -n 10 "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GENCODE" -Xcompiler -fPIC \
-    -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kc[@]}" -o "$S/h1u_$name.so" benchmarks/hash/dither/h1u.cu \
+    -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kc[@]}" -o "$S/h1u_$name.so" verity/protocols/experimental/dither/prover/kernels/h1u.cu \
     > "$OUT/build-$name.log" 2>&1 || { echo "producer_gpu: NVCC_FAIL $name"; tail -30 "$OUT/build-$name.log"; exit 11; }
   sha256sum "$S/h1u_$name.so" | tee -a "$OUT/builds.txt"
 done
-nice -n 10 "$NVCC" -O3 -std=c++17 -I verity/circuits/kernels -gencode "$GENCODE" -cubin \
+nice -n 10 "$NVCC" -O3 -std=c++17 -I verity/commitments/cuda -gencode "$GENCODE" -cubin \
   -o "$S/noise.cubin" verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/noise.cu > "$OUT/build-noise.log" 2>&1 \
   || { echo "producer_gpu: NVCC_FAIL noise.cu"; tail -30 "$OUT/build-noise.log"; exit 11; }
 sha256sum "$S/noise.cubin" | tee -a "$OUT/builds.txt"

@@ -164,9 +164,9 @@ def test_the_pair_index_key_gives_the_deterministic_aligns_blocks(E: int, P: int
 def test_align_bodies_are_cut_per_pair() -> None:
     """Both align Definitions are separable with no value two pair members compute, so the word check cuts one member however many
     pairs a batch routes (DeepSeek-V4-Pro's 256-token prefill: 1536 pairs, 42.5M gates in one body)."""
-    from verity.circuits.cut import separable
     from verity.circuits import word as W
     from verity.circuits.cross_call import members_check
+    from verity.circuits.cut import separable
     for fn in (bind(MM.MoeAlignRanks, E=384, P=64, BM=8), bind(MM.MoeAlignBlocks, P=64, BM=8)):
         assert separable(fn) is not None, fn.id
         assert not members_check(fn, {})["recomputes"], fn.id

@@ -10,7 +10,8 @@ which only shrinks. The forms, each read from where the verifier or the agreemen
   the Lean verifier refuses), each of its `--lean-refuses…` markers on a set, and a set without `--program`
   (`agree.NO_PROGRAM`).
 
-`--zk` sessions are outside the corpus: no pinned upstream build has them."""
+`--zk` sessions are outside the corpus: no pinned upstream build has them. So a statement version the verifier takes
+under `--zk` alone (the wide-leaf ones) is named in `UNCOVERED` and stays there."""
 from __future__ import annotations
 
 import json
@@ -39,7 +40,9 @@ UNCOVERED = frozenset({
     "statement verity/flock-circuit/types",
     "statement verity/flock-circuit/types+seed-injection",
     "statement verity/flock-circuit+plain-leaves",
+    "statement verity/flock-circuit+wide-leaf",
     "statement verity/flock-circuit/tmpl",
+    "statement verity/flock-circuit/tmpl+wide-leaf",
     "check S0",
     "check S1",
     "check S4",

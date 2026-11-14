@@ -35,7 +35,7 @@ units as the circuit states them and compares no Program with the circuit, so an
 `COVER_LABEL`, word for word, and never as the verifier knowing what the statement computes. Any other accept is
 labelled by its partition rule alone (`label`). `verity bench prove` prints the label with the seconds.
 
-**A run** is one process of the verifier's `verify`, as `benchmarks/one_stage/a0.py` runs the verifier: the
+**A run** is one process of the verifier's `verify`, as `verity/protocols/proofs/spot/prover/audit/template_audit.py` runs the verifier: the
 statement's files held by content in the verifier's own archive (its `archive-put`, timed apart and in no
 run's seconds), then `verify --archive --circuit --public [--partition --program --registered] --zk --session`. So a
 run's wall seconds hold the verifier reading the statement, setting it up and verifying the one session. The command

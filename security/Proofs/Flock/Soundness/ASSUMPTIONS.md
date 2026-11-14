@@ -6,7 +6,7 @@ and, for the audit layer, `Audit/README.md`. `DESIGN.md` holds the derivations.
 
 **The guarantee of record** for the one-stage `--zk` audit is `Flock.Guarantees.EndToEnd`
 (`../EndToEnd/Statement.lean`, proved as `Flock.SecurityProofs.EndToEnd`). It bounds the executable verifier's
-acceptance, `flock-verify verify --zk`, with no model between them, under A3, `live-verifier` (with A6), `cr/sha-512`
+acceptance, `verity-verify-proof verify --zk`, with no model between them, under A3, `live-verifier` (with A6), `cr/sha-512`
 and `ecr/sha-512`, each a hypothesis (below). The rest of this section and The headline describe the older, model-level
 forms.
 
@@ -38,7 +38,7 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
 | `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the unit sample (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, flipped after the prover's message; under `--zk` or `--coins tree`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
-| `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's challenger wrote for the live session (`RecordsLiveZK`), and its sample file the one `flock-verify draw` printed for the verifier's own sample (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each sample of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
+| `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's challenger wrote for the live session (`RecordsLiveZK`), and its sample file the one `verity-verify-proof draw` printed for the verifier's own sample (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each sample of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
 | `Assumptions.RecordCustodyExec` (`…ExecH`); `Zk.RecordCustodyZKLaw` (`…ZKHLaw`, `…ZKJLaw`, `…ZKHJLaw`) | `live-verifier` | none: as `RecordCustodyZK`, with `DrawOk` (`DrawOkZK`, and forms) at each sample of the sampling design | `SoundExec*`'s and `SoundZ*`'s `hCust` |
 | none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P`, as do `ZkHidden.zk_session_viewH`, `zk_session_viewHJ` and `zk_session_composedHJ` |
 
@@ -47,8 +47,8 @@ evaluations, since collisions exist, so neither is stated for all finders: each 
 from the prover it bounds. Neither is asked of every prover at once, which SHA-512 can't meet: a prover that hard-codes two
 openings of one commit string has finders that find a collision. A finder is a game with a
 fixed strategy, whose outcomes record the pair it outputs and the SHA-512 evaluations it made, `t` for each run of the
-prover. Its success is a collision because Merkle binding is proved (`Merkle.opening_binding`): two openings that verify
-under one cap and differ give two distinct inputs with one SHA-512 output.
+prover. Its success is a collision because Merkle binding is proved (`Merkle.openCollPair_spec`): from two openings that verify
+under one cap and differ, `Merkle.openCollPair` computes two distinct inputs with one SHA-512 output.
 
 **Teeth** (`Teeth.lean`). Both forms hold for every finder of an injective hash (`strict_of_injective`,
 `expected_of_injective`, the latter for a nonnegative cost), and both fail for a constant hash, at the finder that outputs
@@ -98,6 +98,9 @@ sense, ePrint 2024/1434), for the audit's value layer.
 - **Where it is used.** The link theorem takes it for the finders it builds from the prover it bounds (`LinkCR … R τ …`).
   `flock_batched_linkSoundE` gives the bound at each prover whose finders satisfy it, and `⊤` at any other
   (`linkBoundCR`); the end-to-end theorems take `hCR` for `σ`'s finders alone.
+- **What its cost counts.** A link finder's cost is its count of SHA-512 evaluations and nothing else. The compiled
+  link finder (`Exec.outCL`) also decodes each extracted table with the radius decoder (`Exec.candL`), which hashes
+  nothing: the decoder's running time is not bounded by that count.
 - **Why it is plausible:** `assumption-notes/a2-sha512-expected-time-cr.md`.
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
@@ -146,7 +149,7 @@ coins.
     loop), not when it was sampled or opened. On `sampled-proofs-one-stage-zk` the auditor's challenger samples each
     session's tree and opens each round after its message digest, logging both under its signed
     close, and the audit holds each session's record to those lines, one tree per session
-    (`verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerTrees.lean`). There the ordering rests on `trusted-host`.
+    (`verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerTrees.lean`). There the ordering rests on `trusted-device`.
   - *Why the model's coins are still the run's.* Given the key, each leaf has its own salt, so opening one reveals
     nothing about another. A hybrid swaps the unopened leaves for commitments to independent coins (openings resampled
     consistently); each leaf moves it by at most
@@ -254,7 +257,7 @@ NOT, one generic Boolean-semantics lemma can state it for every template.
 
 **Its coins.** The statement is for live uniform coins: the model's proof coins are uniform and sampled after the
 prover's message. The circuit prover's non-ZK session has them on the challenger's keyed coin tree under `FC_COINS=tree` on both sides
-(`serve --tree-from`), which `flock-verify verify --coins tree` reads (the verifier reads coins only from a challenger's
+(`serve --tree-from`), which `verity-verify-proof verify --coins tree` reads (the verifier reads coins only from a challenger's
 log). The benches run it so by default (`verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh`, `60-circuit.sh`, `61-circuit-cell.sh`),
 and their records name the coins (`coins: coin-tree`). The binary's default still derives every coin from one OS seed
 through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`). That rests on
@@ -460,8 +463,8 @@ before the session's first coin, not bounds state by state.
 `lean-audit.json` records each guarantee's statement (`guarantees`) and the definitions it reads (`reads`). The audit
 fails when either changes until the record is rewritten. A rewritten record is shown when it lands on `main`; nobody
 signs off and nothing waits on it. The
-guarantees include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
-`Merkle.opening_binding`; none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
+guarantees include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms) and `execArith_correct`;
+none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
 (`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
 and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, whose bound is
 `linkBoundCR`: finite exactly at the provers whose link finders satisfy `SHA512CRExpected`. The end-to-end skeleton's `flock_e2e_count` and

@@ -136,7 +136,7 @@ theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha5
   Gen.acc_draw (S := S₀) (zk := zk) (x := x) (hacc := hacc)
 
 open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
-/-- **`wrP`'s verdict at the sample `d`**: flock-verify accepts what `wrP` writes for the outcome at `d` and no sampled
+/-- **`wrP`'s verdict at the sample `d`**: verity-verify-proof accepts what `wrP` writes for the outcome at `d` and no sampled
 proof block, the outcome's root is `rootB₀`'s, and the deployed reader looks up no column off `C` in it. -/
 def plainVerdict (I : Exec.Inputs) (d : Json) {N mPts : ℕ} (C : Fin N → List 𝔽) (rootB₀ : Array ByteArray)
     (o : Tables.LiveOutJ 1 mPts) : Prop :=

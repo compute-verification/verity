@@ -27,7 +27,7 @@ is out of range: flock-circuit refuses it.
 **Per workload** (:func:`audit`): the padding table's body in its dp4 buckets at B = 16 and its tail at B = 1
 (``unit_costs_padding``); each shape's sessions (mean and the public 1 − 2⁻⁴⁰ count), its session's RSS and prove time, and
 the prover time per audit, Σ sessions x session time (with the slot sumcheck below), on one prover. **The limit**
-(:func:`find_limit`; the output's ``cap``) is the largest power of two Z at which a B = 16 session at the workload's least
+(:func:`find_limit`; the output's ``limit``) is the largest power of two Z at which a B = 16 session at the workload's least
 ρ is in range and fits one node's memory (:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU fit taken as a bound on
 the CUDA prover's). A unit over the limit is split below the subcircuit into ceil(z / limit) pieces, its pieces in a
 bucket of their own at the limit (sessions ceil(p X / B) for X of its units sampled); every other unit keeps its dp4
@@ -104,6 +104,7 @@ __all__ = [
     "staging",
     "staging_fit",
     "template_class",
+    "workload",
 ]
 
 #: vy-nebius-1 and vy-nebius-2: ``free -g`` total (GiB)
@@ -297,7 +298,7 @@ def fit(source: Sequence[tuple] = SOURCE, fits: Mapping[str, Sequence[int]] = FI
     resid = {"rss_gib": max(abs(p["rss_gib"] - p["rss_gib_fit"]) for p in points),
              **{k: max(abs(p[k] / p[f"{k}_fit"] - 1) for p in points if p["threads"] == 32) for k in ("prove_s", "wall_s")}}
     return {"coef": coef, "points": points, "max_residual": resid,
-            "law": "y = c0 + c1 D/2^30 + c2 (circuit bytes)/GiB + c3 2^k_log/2^30 (prove: c2 = 0); RSS GiB unweighted over "
+            "fit": "y = c0 + c1 D/2^30 + c2 (circuit bytes)/GiB + c3 2^k_log/2^30 (prove: c2 = 0); RSS GiB unweighted over "
                    "all records, prove and process wall seconds weighted by 1/y^2 over the 32-thread records"}
 
 
@@ -314,12 +315,12 @@ def check(coef: Mapping[str, Sequence[float]], before: Sequence[tuple] = HIDDEN_
         now = session(Z, Z / (K // 16 * 9473), coef, r[2], nets=[BYTES_PER_NNZ * TC_STEP_NNZ])
         row = {"K": K, "run": r[0], "Z": Z, "k_log": r[3], "D": 2.0 ** r[4], "circuit_bytes": r[5],
                "measured": {"rss_gib": r[8], "prove_s": r[6], "wall_s": r[7]},
-               "law_at_measured": {k: _at(old[k], x) for k in ("rss_gib", "prove_s", "wall_s")},
+               "fit_at_measured": {k: _at(old[k], x) for k in ("rss_gib", "prove_s", "wall_s")},
                "posted": {k: posted[k] for k in ("k_log", "D", "circuit_bytes", "rss_gib", "prove_s", "wall_s")},
                "now": {k: now[k] for k in ("k_log", "D", "circuit_bytes", "rss_gib", "prove_s", "wall_s")}}
         for k in ("rss_gib", "prove_s"):
             row[f"{k}_vs_posted"] = r[8 if k == "rss_gib" else 6] / posted[k] - 1
-            row[f"{k}_vs_law"] = r[8 if k == "rss_gib" else 6] / row["law_at_measured"][k] - 1
+            row[f"{k}_vs_fit"] = r[8 if k == "rss_gib" else 6] / row["fit_at_measured"][k] - 1
         out.append(row)
     return out
 
@@ -620,15 +621,15 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
                            "staging": {"shapes": len(stage), "max": max(stage, key=lambda x: x["peak_gib"], default=None),
                                        "total_h": sum(x["wall_s"] for x in stage) / 3600,
                                        "fits_node": all(x["peak_gib"] <= NODE_GIB for x in stage)},
-                           "range_cap": find_limit(r0, coef, math.inf, nets=every, **ck)}
+                           "range_limit": find_limit(r0, coef, math.inf, nets=every, **ck)}
     for node, gib in (("cpu", NODE_GIB), ("gpu", GPU_GIB)):
         c = find_limit(r0, coef, gib, nets=every, **ck)
         over = [u for u in units if c is not None and u.z > c]
         at = audit(N, K, units, rho, coef, limit=c, nets=nets, **kw) if over else unsplit
-        out[node] = {"gib": gib, "cap": c, "cap_flock": find_limit(r0, coef, gib, nets=every, **{**ck, "slot": None}),
+        out[node] = {"gib": gib, "limit": c, "limit_flock": find_limit(r0, coef, gib, nets=every, **{**ck, "slot": None}),
                      "fits_unsplit": unsplit["in_range"] and unsplit["max_peak_gib"] <= gib,
-                     "split": [{"unit_type": u.label, "nnz": u.z, "draw_share": u.n / N, "pieces": math.ceil(u.z / c)} for u in over],
-                     "at_cap": at,
+                     "split": [{"unit_type": u.label, "nnz": u.z, "sample_share": u.n / N, "pieces": math.ceil(u.z / c)} for u in over],
+                     "at_limit": at,
                      "heaviest": max(at["body"] + at["rare"] + at["tail"], key=lambda s: s["session"]["total_s"])["session"],
                      "band": [hours(audit(N, K, units, rho, coef, limit=c if over else None, nets=nets,
                                           **{**kw, "slot": dict(kw["slot"], k1_ns=b)}), b)
@@ -727,16 +728,17 @@ def _slot_table(pr: Mapping[str, Any]) -> list[str]:
           "sumcheck memory | peak | prover h mean / public | sumcheck share mean / public | band low: prover h (share) | "
           "band high: prover h (share) |"), "|" + "---|" * 15]
     for w in pr["workloads"]:
-        n, g, a = w["cpu"], w["gpu"], w["cpu"]["at_cap"]
+        n, g, a = w["cpu"], w["gpu"], w["cpu"]["at_limit"]
         s = n["heaviest"]
-        sh = lambda m: a[f"sumcheck_h_{m}"] / a[f"prover_h_{m}"] if a[f"prover_h_{m}"] else 0.0  # noqa: E731
+        h = hours(a)
         bd = [f"{b['prover_h_mean']:.3g} / {b['prover_h_public']:.3g} ({b['share_mean']:.0%})" for b in n["band"]]
         L.append("| " + " | ".join([
-            P._short(w["workload"]), f"{_p2(n['cap'])} / {_p2(g['cap'])}", f"{_p2(n['cap_flock'])} / {_p2(g['cap_flock'])}",
+            P._short(w["workload"]), f"{_p2(n['limit'])} / {_p2(g['limit'])}", f"{_p2(n['limit_flock'])} / {_p2(g['limit_flock'])}",
             P._si(s["Z"]), P._si(s["template"]), _t(s["prove_s"]), _t(s["sumcheck_s"]), _t(s["total_s"]),
             f"{s['rss_gib']:.3g} GiB",
             f"{s['sumcheck_gib']:.3g} GiB", f"{s['peak_gib']:.3g} GiB",
-            f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}", f"{sh('mean'):.0%} / {sh('public'):.0%}", *bd]) + " |")
+            f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}",
+            f"{h['share_mean']:.0%} / {h['share_public']:.0%}", *bd]) + " |")
     return L
 
 
@@ -757,7 +759,7 @@ def _menu_table(pr: Mapping[str, Any]) -> list[str]:
           "zpad / pad_mean / public | registered |"), "|" + "---|" * 9]
     for ws in zip(pr["workloads"], pr["workloads_dp4t"], pr["whatif_registered"]):
         for tag, w in zip(("dp4", "dp4t", "dp4t, registered"), ws):
-            n, a, b, p = w["cpu"], w["cpu"]["at_cap"], w["unsplit"]["buckets"], w["unsplit"]["padding"]
+            n, a, b, p = w["cpu"], w["cpu"]["at_limit"], w["unsplit"]["buckets"], w["unsplit"]["padding"]
             h = n["heaviest"]
             reg = w.get("registered_whatif") or []
             L.append("| " + " | ".join([
@@ -765,7 +767,7 @@ def _menu_table(pr: Mapping[str, Any]) -> list[str]:
                 f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}",
                 f"{a['sumcheck_h_mean'] / a['prover_h_mean']:.0%}" if a["prover_h_mean"] else "–",
                 f"{P._si(h['Z'])}, {P._si(h['template'])}: {_t(h['prove_s'])} + {_t(h['sumcheck_s'])}, {h['peak_gib']:.3g} GiB",
-                f"{_p2(n['cap'])} / {_p2(w['gpu']['cap'])}", f"{p['zpad']:.3f} / {p['pad_mean']:.3f} / {p['public']:.3f}",
+                f"{_p2(n['limit'])} / {_p2(w['gpu']['limit'])}", f"{p['zpad']:.3f} / {p['pad_mean']:.3f} / {p['public']:.3f}",
                 _names(reg) if tag.endswith("registered") else "–",
             ]) + " |")
     L += ["", "### dp4t buckets, unsplit", "", ("| workload | class | Z | slots | types | sessions mean / public | template | "
@@ -806,11 +808,11 @@ def render(pr: Mapping[str, Any]) -> str:
          ("| K | run | Z | k_log | D | circuit text | peak RSS | posted model | posted fit at measured D, cb | this model | "
           "prove | posted model | posted fit | this model |"), "|" + "---|" * 14]
     for r in pr["check"]:
-        m, po, la, no = r["measured"], r["posted"], r["law_at_measured"], r["now"]
+        m, po, la, no = r["measured"], r["posted"], r["fit_at_measured"], r["now"]
         L.append(f"| {r['K']} | {r['run']} | {P._si(r['Z'])} | {r['k_log']} | 2^{int(math.log2(r['D']))} | "
                  f"{r['circuit_bytes'] / 1e6:.1f} MB | {m['rss_gib']:.3g} GiB | {po['rss_gib']:.3g} ({r['rss_gib_vs_posted']:+.0%}) | "
-                 f"{la['rss_gib']:.3g} ({r['rss_gib_vs_law']:+.0%}) | {no['rss_gib']:.3g} | {_t(m['prove_s'])} | "
-                 f"{_t(po['prove_s'])} ({r['prove_s_vs_posted']:+.0%}) | {_t(la['prove_s'])} ({r['prove_s_vs_law']:+.0%}) | "
+                 f"{la['rss_gib']:.3g} ({r['rss_gib_vs_fit']:+.0%}) | {no['rss_gib']:.3g} | {_t(m['prove_s'])} | "
+                 f"{_t(po['prove_s'])} ({r['prove_s_vs_posted']:+.0%}) | {_t(la['prove_s'])} ({r['prove_s_vs_fit']:+.0%}) | "
                  f"{_t(no['prove_s'])} |")
     L += ["", "## Per workload: dp4 at B = 16, unsplit and at the limit", "",
           ("limit: the largest power-of-two bound whose 16-slot session is in range and whose peak (Flock's and the slot "
@@ -823,11 +825,11 @@ def render(pr: Mapping[str, Any]) -> str:
           "|" + "---|" * 15]
     for w in pr["workloads"]:
         u, n, g, s, st = w["unsplit"], w["cpu"], w["gpu"], w["top_session"], w["staging"]
-        a, ag = n["at_cap"], g["at_cap"]
+        a, ag = n["at_limit"], g["at_limit"]
         L.append("| " + " | ".join([
             P._short(w["workload"]), P._si(w["dp4_top"]), f"{s['k_log']}", _t(s["prove_s"]), f"{s['rss_gib']:.3g} GiB",
-            f"{_yn(u['in_range'])} (k_log ≤ {u['max_k_log']})", f"{_p2(n['cap'])} / {_p2(g['cap'])}",
-            f"{len(n['split'])} ({sum(x['draw_share'] for x in n['split']):.2%})",
+            f"{_yn(u['in_range'])} (k_log ≤ {u['max_k_log']})", f"{_p2(n['limit'])} / {_p2(g['limit'])}",
+            f"{len(n['split'])} ({sum(x['sample_share'] for x in n['split']):.2%})",
             f"{a['sessions_mean']:.0f} / {a['sessions_public']}", f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}",
             f"{ag['prover_h_mean']:.3g} / {ag['prover_h_public']:.3g}", _st(w["top_staging"]), _st(st["max"]),
             _yn(st["fits_node"]), f"{st['shapes']} shapes, {st['total_h']:.3g} h"]) + " |")
@@ -857,7 +859,7 @@ def render(pr: Mapping[str, Any]) -> str:
     L += ["", "## Shapes", "", ("| workload | split at | part | Z | k_log | slots | pieces | types | sessions mean / public | "
            "session RSS | session prove | slot sumcheck | its memory | prover h mean | largest staging |"), "|" + "---|" * 15]
     for w in pr["workloads"]:
-        for tag, a in (("unsplit", w["unsplit"]), ("node limit", w["cpu"]["at_cap"] if w["cpu"]["split"] else None)):
+        for tag, a in (("unsplit", w["unsplit"]), ("node limit", w["cpu"]["at_limit"] if w["cpu"]["split"] else None)):
             if a is None:
                 continue
             for part in ("body", "tail"):

@@ -5,7 +5,7 @@ hold have their own variables and files, so they can't collide:
     research jobs     `$JOBS_TOKEN`, else ~/.research/jobs/token: the coordinator's, which adds jobs
     research worker   `$JOBS_WORKER_TOKEN`, else ~/.research/jobs/dispatch-{name}.token: the dispatcher's `jobs:work` token
 Each file is one line, mode 600.  A token is sent as `Authorization: Bearer`, never printed, and never put
-in an argv.  The site is `$JOBS_URL`, default the production control app.
+in an argv.  The site is `$JOBS_URL`, default the deployed control app.
 """
 from __future__ import annotations
 

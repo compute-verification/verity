@@ -10,7 +10,7 @@ form (`KsScope.filesWhy`) refuses. `verify` gives that reason only once every ea
 passed, so it says the session was otherwise accepted. The honest session under a statement its files don't fit
 (`WRONG_TAGS`: typed, public outputs, plain leaves, templated) is refused as at generation.
 
-`Flock.KsScope`'s own tests run its check functions on Lean values, and `flock-verify ks-form` runs the check alone; these are
+`Flock.KsScope`'s own tests run its check functions on Lean values, and `verity-verify-proof ks-form` runs the check alone; these are
 the tests that `verify --zk`'s verdict calls them. Each verify sets up an m = 25 table (about 10 s), so they are slow.
 
 The sessions are a fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs, so a

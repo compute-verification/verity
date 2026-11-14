@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+/-!
 A plain session samples by the subset sampling design at hidden outputs (`ProvedScope.lawWhy`, the one rule for which law each form
 samples by), at one table, the form `flock_verify_sound`'s plain hidden-output branch covers (`SoundExecH` at its subset
 sample design): a plain subset sample passes at hidden outputs and under `--zk`, and is still refused at public outputs; a
 plain session at hidden outputs is still refused at two tables, the form just past the proof.
 -/
-module
-
-public import Flock.ProvedScope
-meta import Flock.ProvedScope
 
 @[expose] public section
 

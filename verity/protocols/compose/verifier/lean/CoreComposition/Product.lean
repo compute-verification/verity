@@ -1,4 +1,10 @@
-/-
+module
+
+public import CoreProtocol.Protocol
+public import CoreProtocol.Protocol.Canonical
+public import Base.Hash
+
+/-!
 A composition of core protocols, the common part of onsite and remote Verity: one `Core.Protocol` whose check runs each
 subprotocol's own `answer` on that subprotocol's case, and decides so that any rejection rejects the whole.
 
@@ -17,11 +23,6 @@ line that subprotocol's own `serve` reads, under its id, in the same order:
 `{"components":[{"commitment":HEX,"evidence":HEX,"id":ID,"params":PARAMS},...]}`. All three are canonical JSON or bytes,
 and an object with a key missing or a key more is refused.
 -/
-module
-
-public import CoreProtocol.Protocol
-public import CoreProtocol.Protocol.Canonical
-public import Base.Hash
 
 @[expose] public section
 set_option backward.privateInPublic true

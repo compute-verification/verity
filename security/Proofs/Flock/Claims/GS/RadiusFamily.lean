@@ -56,7 +56,7 @@ decoder (`famDecodeR`): each runs on the opened columns read at its width (`IRS.
 
 At the masked verifier's code (`Flock.zkEncD`, its traces `Flock.ZkTrace`, `m = 25..35`): `zkDecodeRD` meets
 `ListWithin` at `Flock.zkLenD`, `zkEncD` read through such a `t`, and `Flock.zkThetaD`, the length `2^d` and the radius
-`1 − √ρ_zk − 1/200` read off the trace's `m` (`listWithin_zkDecodeRD`), with its count at most `11·(zkPolyR + X)` at
+`1 − √ρ_zk − 1/200` read off the trace's `m` (`listWithin_zkDecodeRD`), with its count at most `15·(zkPolyR + X)` at
 the schedules' sizes summed (`zkSizeRD`, `zkDecodeRD_complexity`), and its lists at most that long
 (`zkDecodeRD_length_le`).
 -/
@@ -184,9 +184,9 @@ theorem listWithin_zkDecodeRD (t : List GF128 → List GF128) (ht : ∀ u ℓ, (
       rw [Flock.flockZkLevelZero, Flock.zkLevelZero_enc]
       exact listWithin_zkDecodeR i
 
-/-- **The masked verifier's radius decoder's complexity**: at most `11·(zkPolyR + X)` at the schedules' sizes
+/-- **The masked verifier's radius decoder's complexity**: at most `15·(zkPolyR + X)` at the schedules' sizes
 summed. -/
-theorem zkDecodeRD_complexity : DecoderComplexity zkDecodeRD zkCountedRD zkSizeRD (C 11 * (zkPolyR + X)) := by
+theorem zkDecodeRD_complexity : DecoderComplexity zkDecodeRD zkCountedRD zkSizeRD (C 15 * (zkPolyR + X)) := by
   have hle : ∀ (i : Flock.ZkIdx) (os : List (ℕ × List GF128)),
       (os.length + 2 ^ Flock.zkLen i) * Flock.zkWidth i * 128 ≤ zkSizeRD os := fun i os =>
     Finset.single_le_sum (f := fun i : Flock.ZkIdx => (os.length + 2 ^ Flock.zkLen i) * Flock.zkWidth i * 128)
@@ -203,10 +203,10 @@ theorem zkDecodeRD_complexity : DecoderComplexity zkDecodeRD zkCountedRD zkSizeR
   rw [Fintype.card_fin] at this
   exact this
 
-/-- **The masked verifier's radius decoder lists at most `11·(zkPolyR + X)` at `zkSizeRD`**: each `m`'s decoder lists
+/-- **The masked verifier's radius decoder lists at most `15·(zkPolyR + X)` at `zkSizeRD`**: each table's decoder lists
 at most `2^d`, one per point of the filled word (`length_gsDecode_le`), and `2^d` is within the size. -/
 theorem zkDecodeRD_length_le (os : List (ℕ × List GF128)) :
-    (zkDecodeRD os).length ≤ (C 11 * (zkPolyR + X)).eval (zkSizeRD os) := by
+    (zkDecodeRD os).length ≤ (C 15 * (zkPolyR + X)).eval (zkSizeRD os) := by
   have hi : ∀ i : Flock.ZkIdx, (zkDecodeR i (IRS.colsAt (Flock.zkWidth i) os)).length ≤ zkSizeRD os := by
     intro i
     unfold zkDecodeR
@@ -221,6 +221,6 @@ theorem zkDecodeRD_length_le (os : List (ℕ × List GF128)) :
       _ = (os.length + 2 ^ Flock.zkLen i) * Flock.zkWidth i * 128 := by ring
   refine (length_famDecodeR_le zkDecodeR os _ hi).trans ?_
   simp only [Fintype.card_fin, eval_mul, eval_C, eval_add, eval_X]
-  exact Nat.mul_le_mul_left 11 (Nat.le_add_left _ _)
+  exact Nat.mul_le_mul_left 15 (Nat.le_add_left _ _)
 
 end Claims.GS

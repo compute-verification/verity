@@ -1,0 +1,61 @@
+# SPOT[Flock], out of recursion into a directory of its own: what
+# `tools/move/layout.py --map tools/move/spot_flock_map.toml` moves and rewrites.
+#
+# `verity/protocols/proofs/recursion/verifier/recursive/`, the Lake package `core_vstar_recursive` (`VStarRecursive`),
+# holds what stands on compose's two lists for the proofs: SPOT over Flock's verifier, run on the proofs themselves
+# (`VStar.Recursive.Sampled.protocol`), and the recursive audit, which takes its verdicts from V*'s compiled check of
+# the same verifier. SPOT is a transform and this is the argument it builds over Flock, a protocol: it requires the
+# interface, Flock's verifier and SPOT, and nothing of recursion's or SPOT's requires it. So it becomes a protocol's
+# directory in the proofs group, above SPOT and recursion: `verity/protocols/proofs/spot_flock/`, its Lean in
+# `verifier/lean/`.
+#
+# - The directory moves whole and laid out as it was: the package's `.lean` files, lakefile, manifest, lock and
+#   toolchain. The test that drives its command (`recursion/verifier/vstar_cli/tests/test_vstar_recursive.py`) stays in
+#   its suite and reads the package at its new path.
+# - A Lean module is named from its package's root (`VStarRecursive.Sampled`), so no Lean module, declaration or lock
+#   record changes; what changes in a lakefile or a manifest is a path to this package or from it.
+# - No directory is split, and no file is edited, added or deleted. Never rewritten besides the group map's: the layout
+#   of record (`tests/tree.toml`), whose row for the new directory is written by hand after the move, with the import
+#   listing's. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/proofs/recursion/verifier/recursive/" = "verity/protocols/proofs/spot_flock/verifier/lean/"
+
+[retired]
+# the directory this map empties: `layout.py` refuses a tracked file under one that has no row, and its row is a
+# directory's, so a file only a branch has under it is carried
+paths = ["verity/protocols/proofs/recursion/verifier/recursive/"]
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json",
+           "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "archive/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "benchmarks/network_e2e/tests/data/**",
+           "adapters/vllm/manifests/**", "adapters/vllm/workloads/**", "adapters/vllm/data/**",
+           "adapters/vllm/verity_vllm/pins/**", "adapters/vllm/tools/migrate/superseded_quarantine.py", "adapters/vllm/tests/migrate/test_superseded_quarantine.py",
+           "**/*.lean", "tests/tree.toml", "**/*.cu",
+           "**/*.cuh", "**/*.cpp", "**/*.h",
+           "**/*.c"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md",
+           "**/lake-manifest.json", "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean", "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json", "verity/protocols/flock/prover/tests/fixtures/inner_claims.json", "verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_two_lean.json", "verity/protocols/spot/verifier/tests/fixtures/history_read_vector.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/pouw/verifier/tests/vectors/pearl_c_u.json", "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c_u.json"]
+root_prefixes = ["/opt/vy-verifier/current/"]
+
+[modules]
+# the rename [paths] implies (`layout.py --modules`): the directory as a dotted path. No module lives in it: the package
+# is Lean.
+"verity.protocols.proofs.recursion.verifier.recursive" = "verity.protocols.proofs.spot_flock.verifier.lean"

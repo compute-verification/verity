@@ -20,7 +20,7 @@ bits of the port's row, and where the verifier opens that row (`Source`). At the
 The leaf and the receipt are the ones the registrants' rows of `a`, `b`, `zy` and `receipt` decode to at these rows
 (`Lanes.Committed`). Four lanes read each A row and four each B row, and lane `l`'s `partials` and the combine's
 `p<l>` read one row: each such pair reads one row of one registered tree (`PouwWindow.Lanes.ownOf`) in full, so they
-decode it alike (`Lanes.Partials`' `read_bits`). The known values' content is flock-verify's known-content and
+decode it alike (`Lanes.Partials`' `read_bits`). The known values' content is verity-verify-proof's known-content and
 known-read checks' (`Lanes.KnownRead`).
 -/
 

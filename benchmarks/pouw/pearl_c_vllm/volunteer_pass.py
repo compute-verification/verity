@@ -13,14 +13,14 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
 - **Why after the pass.** A row's debit is its words' (`pearl_c_debit`): it reads the tile's A′ and B̃ codes, which the
   salt's noise forms, so the screen's per-row rules on the activations can't decide it.  The prover knows the salt when it
   forms and commits, and replays every tile as the verifier will, before the challenger opens the sampling coin.
-- **What changes** is the records alone: each call's ``voluntary_a`` and each weight's ``voluntary_b`` (V-EX's ⌈m/64⌉ and
+- **What changes** is the records alone: each call's ``voluntary_a`` and each fixed operand's ``voluntary_b`` (V-EX's ⌈m/64⌉ and
   ⌈n/64⌉, `clear_work.check_records`) and the ``records_root`` over them.  The transcript (the tile leaves and tree, A's
   roots, every committed byte) is the pass's.  A pass already given up is left as it is.
 - **The replay** runs on `fast_tile`'s batch forms over J processes: each tile opened from the pass's files
   (`verify_run.Opened`), encoded under the epoch's salt as `clear_work.check_drawn` encodes it, and its words' counts taken
   (`fast_tile.word_debits`).
 - **On the device** (``--device``, an H100 or H200 and pearl_c_sm90's debit_sm90.cubin): each call's A′ (its real rows) and
-  each weight's B̃ formed once on the J processes, as `encode` forms them (the scheme's `_side`, on fast_tile's `form_v1`;
+  each fixed operand's B̃ formed once on the J processes, as `encode` forms them (the scheme's `_side`, on fast_tile's `form_v1`;
   B̃ kept across the passes of one salt), every word's counts taken by `debit.Debit` and cut into the tiles in
   `scheme.tiles`' order, filler rows zero.  A tile with a word the device marks non-finite is replayed (the reference
   decides it), and so is every Nth tile (``--cross-check``, default `CROSS_CHECK`): any difference from the device's
@@ -60,7 +60,7 @@ CROSS_CHECK = 1024
 #: the rows a forming job takes
 FORM_ROWS = 64
 _JOB: dict = {}
-#: B̃ by (salt, the weight's root): a weight's codes are the same in every pass of one salt
+#: B̃ by (salt, the fixed operand's root): a fixed operand's codes are the same in every pass of one salt
 _B_CODES: dict[tuple[bytes, bytes], np.ndarray] = {}
 _DEBIT: dict[str, object] = {}
 
@@ -122,7 +122,7 @@ def _ctx(p: VR.Pass, pos: int) -> Context:
 
 
 def _form(job: tuple[str, int, int, int]) -> tuple[tuple[str, int, int, int], np.ndarray]:
-    """Rows lo..hi of A′ (side "a", record position `at`) or of B̃ (side "b", the weight of record position `at`) of the pass
+    """Rows lo..hi of A′ (side "a", record position `at`) or of B̃ (side "b", the fixed operand of record position `at`) of the pass
     in `_JOB`, formed as `encode` forms a tile's: (job, codes)."""
     side, at, lo, hi = job
     p = _JOB["pass"]

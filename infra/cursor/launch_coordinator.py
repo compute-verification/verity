@@ -102,7 +102,7 @@ NEW_SLICE = dict(
 
 
 MODEL = "claude-fable-5-2"
-EFFORT = "xhigh"
+EFFORT = "medium"
 FOLLOW_UPS = "https://cursor.com/docs/cloud-agent/api/endpoints"
 CLOUD_AGENT = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 
@@ -294,7 +294,7 @@ def main(argv: list[str] | None = None) -> None:
     src.add_argument("--charter-from", help="a new slice: the charter author's agent id (reads artifacts/charter-HANDLE.md)")
     q.add_argument("--pairing-thread", required=True, help="ts of the handover or launch thread in #agent-coordination")
     q.add_argument("--generation", type=int, help="default: 2 for a successor, 1 for a new slice")
-    q.add_argument("--model", default=MODEL, help=f"a canonical model id from GET /v1/models; default {MODEL} (coordinators run Fable 5.2 at xhigh, never the account default)")
+    q.add_argument("--model", default=MODEL, help=f"a canonical model id from GET /v1/models; default {MODEL} (coordinators run Fable 5.2 at medium, never the account default)")
     q.add_argument("--effort", default=EFFORT, help=f"the model's effort parameter; default {EFFORT}")
     q.add_argument("--text-file", help="read the handoff or charter from this file instead of the author's artifacts")
     q.add_argument("--dry-run", action="store_true", help="print the create request and send nothing")

@@ -112,7 +112,7 @@ def MinRank2 (k : ℕ) (R : Mat) : Prop :=
     (∀ a < k, ∀ b < k, ∑ t ∈ range (3 * k / 16 - 1), q t * (ckMat k R (16 * (t + 1)) a b : ℚ) = x a * y b) →
     (∀ a < k, x a = 0) ∨ (∀ b < k, y b = 0)
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **One dimension per priced value** (survey §2.3 step 1): `dim V(slots) ≤ dim V(inputs) + #priced`. -/
 def DimLePriced : Prop :=

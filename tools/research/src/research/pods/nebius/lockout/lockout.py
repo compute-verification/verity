@@ -454,8 +454,8 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Ca
         g = set()
     out.append(Check("ubuntu-unprivileged", not g & {"lxd", "docker", "disk"}, f"ubuntu's groups: {', '.join(sorted(g)) or 'none'}",
                      "vy-lockout harden --apply (lxd is root for its members, and research may act as ubuntu)"))
-    cap = run(["getcap", PY_SPY])
-    out.append(Check("py-spy", "cap_sys_ptrace" not in cap.stdout, cap.stdout.strip() or f"{PY_SPY}: no capability",
+    getcap = run(["getcap", PY_SPY])
+    out.append(Check("py-spy", "cap_sys_ptrace" not in getcap.stdout, getcap.stdout.strip() or f"{PY_SPY}: no capability",
                      "vy-lockout harden --apply (cap_sys_ptrace lets anyone read any process's memory)"))
     admin = [str(p) for p in sorted(at(RESEARCH_KUBE).glob("*")) if p.is_file() and kubeconfig_admin(p.read_text(errors="replace"))] \
         if at(RESEARCH_KUBE).is_dir() else []

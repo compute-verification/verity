@@ -3,9 +3,10 @@
 # (`core_base`: canonical JSON, bytes and hashes), the commitments' (`core_commitments`: the sampling designs a profile
 # records) and the difftest harness's Lean, and nothing else. Each protocol's package requires this one; none needs
 # Mathlib. It also holds the code's ticks, spans and monitoring period (`CoreProtocol.Period`), whose difftest port
-# `core-periods-difftest` serves through the difftest harness's Lean.
+# `core-periods-difftest` serves through the difftest harness's Lean, as `core-canonical-json-difftest` serves
+# `Core.canonicalJson`'s answer under each JSON parser.
 name = "core_protocol"
-defaultTargets = ["CoreProtocol", "core-protocol-example", "core-registration"]
+defaultTargets = ["CoreProtocol", "core-protocol-example"]
 
 [leanOptions]
 autoImplicit = false
@@ -32,11 +33,11 @@ name = "CoreProtocol"
 name = "core-periods-difftest"
 root = "CoreProtocol.PeriodDifftestMain"
 
+# Not a default target either: the difftest harness builds it by name.
+[[lean_exe]]
+name = "core-canonical-json-difftest"
+root = "CoreProtocol.CanonicalJsonDifftestMain"
+
 [[lean_exe]]
 name = "core-protocol-example"
 root = "CoreProtocol.ExampleMain"
-
-# The registration log's check as a core protocol (`verity/registration/log/v1`), the executable its difftest drives.
-[[lean_exe]]
-name = "core-registration"
-root = "CoreProtocol.RegistrationMain"

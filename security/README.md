@@ -56,13 +56,13 @@ incorrect set of the trace the extractor recovers.
    - Domain: a witness in the relation, at a statement the loop serves, in Flock's scope.
    - Real: `Claims.Hm96Hiding` bounds δ₁ and δ_{K*}, and SHA-512 collision resistance the fork term; at the operating
      system's bytes, `UniformRandomBytesTest` (`recursiveZK_os_gap`).
-   - Folds into: `Loop.Src` (the loop's inputs from its host are the tape's) into `trusted-host` and
+   - Folds into: `Loop.Src` (the loop's inputs from its host are the tape's) into `trusted-device` and
      `UniformRandomBytesTest`.
    - Open: `SwCausalOn`, the tables' side's one unproved premise; per worker, `LoopInnerRound0`, `LiveRoundEq` and
      `FillRoundEq`; and `OuterViewZK`.
-4. **Composed soundness.** `Verity.Soundness` and `Verity.RemoteSoundness` (`Properties/Verity/Soundness.lean`),
-   proved as `Verity.soundness_of_subprotocols` and `Verity.remote_soundness_of_subprotocols`
-   (`Proofs/Properties/Verity/Soundness.lean`): if each of the composite's subprotocols meets its target, then
+4. **Composed soundness.** `Verity.SoundnessOf` (`Properties/Verity/Soundness.lean`) at any list of ids, proved
+   as `Verity.soundness_at_of_targets` (`Proofs/Properties/Verity/Soundness.lean`); `Verity.Soundness` and
+   `Verity.RemoteSoundness` are it at onsite's and remote's: if each subprotocol meets its target, then
    Pr[the composite's verifier accepts files that passed the commit phase's check ∧ some subprotocol's claim fails]
    ≤ Σ_a error_a, where error_a is a's δ plus ε_forge plus its loss at the probability that a's finder outputs a
    SHA-512 collision, and ∞ where the finder or the forger breaks its premise.
@@ -75,7 +75,7 @@ incorrect set of the trace the extractor recovers.
 **The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
 declares it (The lock): `Claims.ExpectedCR` (SHA-512 collision resistance, which the other SHA-512 shapes
 fold into), `Claims.Hm96Hiding` (hm96 leaves hide at the pinned key) and `UniformRandomBytesTest` (the operating
-system's bytes are uniform up to η on each test). Beside them the statements read `trusted-host`, Core's challenger
+system's bytes are uniform up to η on each test). Beside them the statements read `trusted-device`, Core's challenger
 premises (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`) and `Hash.Assumptions.LmsUnforgeable`.
 
 ## The security argument
@@ -191,7 +191,7 @@ Remote, for each execution block E_j, in five steps:
 
 1. **Commitment.** The developer commits E_j's values under hiding leaves (every value crossing a proof-block boundary,
    its inputs and outputs), a_j, 𝒫_j and 𝓘_j, before any of E_j's coins.
-2. **Challenge.** The challenger, on an auditor host, flips live coins: the sample of proof blocks (by size class) and
+2. **Challenge.** The challenger, on an auditor device, flips live coins: the sample of proof blocks (by size class) and
    PoUW's noise and check coins.
 3. **Proof.** The developer proves each sampled proof block in zero knowledge and answers PoUW's challenges in time.
 4. **Validation.** The verifier checks the proofs, the partitions' public rules, 𝓘_j's budgets (c, k) and PoUW's
@@ -528,10 +528,10 @@ the statement's named assumptions, not the conditions on its inputs and setup (t
 | Subprotocol | Guarantee | Status |
 |---|---|---|
 | SPOT | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
-| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
+| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `verity-verify-proof --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved under named assumptions: the device model `DeviceModel`, the instantiation `Instantiates` (`pous-ring-instantiation`), and `P2RingAuditSecure`, an open conjecture; the coin-game form adds `Hash.Assumptions.Sha512Prf` at the memory challenger's two tests, its `ε_prf` in the bound, and names the certificate's fit (`Fits`) and the run's not reading the primitive (`ReadsNoPrimitive`) |
 | Bandwidth audit, PoUB's per-pass lemma | `Accounting.Guarantees.Remote.AuditRO`, `Definitions/Accounting/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
-| Network certification | `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean` | Proved under named assumptions: `TrustedHost`, and sampled proofs' `Claims.SamplingGeneric.Compiled.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
+| Network certification | `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`, `Definitions/Certifier/Guarantees/MonitoringPeriod.lean` | Proved under named assumptions: `TrustedDevice`, and sampled proofs' `Claims.SamplingGeneric.Compiled.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
 | PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/Accounting/Remote/Line.lean` | Inside protocol soundness: its P2 audit (`RemoteAudit.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. In its own form it is proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
 
@@ -550,15 +550,15 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
 - **Guarantees:** the table's SPOT row and PoUW's period guarantee,
   `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, both proved. Neither is stated yet as its target in
   `Verity.remote_soundness_of_subprotocols`, so the two compose by hand. At remote, SPOT's one-stage form is
-  v2, which runs `flock-verify --zk` on the sessions' files and reads the challenger's signed coins (v1, which takes
-  verdicts as evidence, is refused); where v2 accepts, its session is in V3's and V5's events
-  (`Verity.Sampled.checkBlobs_event`), and only V5's has a coupling.
+  v2, which runs `verity-verify-proof --zk` on the sessions' files and reads the challenger's signed coins (v1, which takes
+  verdicts as evidence, is refused); where v2 accepts, its session is in V5's event
+  (`Verity.Sampled.checkBlobs_event`), which has a coupling.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
   `SHA512CRExpected`, `TileServiceSound`, `TileSampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. Trust model: nothing the developer runs or hosts is trusted, and every coin is live,
-  with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
+  with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor devices. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
-  (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs are
+  (`trusted-device`); the verifier is the auditor's own check. Two premises about where the challenger runs are
   onsite's (`verity/protocols/proofs/spot/verifier/README.md`): `CoinsConfidential`, the named Prop
   `Pouw.Assumptions.CoinsConfidential` (`Definitions/Pouw/Assumptions/Dither.lean`, in the lock, taken by
   `Pouw.Guarantees.Dither.FleetSound`), and `OneClock`, prose only.

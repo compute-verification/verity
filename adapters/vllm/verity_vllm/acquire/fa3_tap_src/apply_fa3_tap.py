@@ -15,7 +15,7 @@ the pinned kernel up to the (unused) trailing `vt` parameter:
     convert), acc_o after each P.V wgmma completes (plane index = the block whose P.V it was) and the epilogue after finalize;
  3b. the same P site stores `tap_max_scaled` into the MS class (`VERITY_FA3_MS`, only with `VERITY_MAT_SRC & 64`);
  4. flash_fwd_launch_template.h: arms the tap from g_verity_tap only when the selected kernel is exactly the declared tile
-    (kBlockN == BN, kHeadDim == D), PackGQA, !Split/local/softcap/appendKV/Qv/FP8, and the declared caps cover the launch; else
+    (kBlockN == BN, kHeadDim == D), PackGQA, !Split/local/softcap/appendKV/Qv/FP8, and the declared bounds cover the launch; else
     g_verity_tap_skipped++ and nothing is written;
  5. writes fa3_torch_lib_verity.cpp = the pinned flash_api_torch_lib.cpp + the verity ops (namespace = TORCH_EXTENSION_NAME).
 """

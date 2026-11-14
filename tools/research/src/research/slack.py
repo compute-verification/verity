@@ -125,7 +125,7 @@ except ImportError:                                                 # run as a s
         return text
 
     class waitcap:  # research/waitcap.py's cap, which a single file carries itself
-        WAIT_CAP_S, STILL_GOING = 1200, 79
+        WAIT_LIMIT_S, STILL_GOING = 1200, 79
 
         @staticmethod
         def still_going(what: str, check: str, waited_s: float, end: str) -> str:
@@ -2041,7 +2041,9 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     blocks|blocked-by|related|duplicate OTHER`, `unrelate ISSUE OTHER`, `update PROJECT --health H --body-file F`,
     `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]`, `project edit PROJECT [--team
     KEY...] [--date D] [--status S]` and `milestone create|edit
-    PROJECT NAME [--date D] [--description-file F] [--rename NEW]`. Each prints one line; a refusal exits 2."""
+    PROJECT NAME [--date D] [--description-file F] [--rename NEW]` and `response [--since ISO|--hours N] [--lane HANDLE]
+    [--open-over MINUTES]` (the minutes each lane takes to answer a comment that rings it: `response`). Each prints one
+    line, but `audit`, `list` and `response`; a refusal exits 2."""
     from . import linear
 
     def need(value: str | None, what: str) -> str:
@@ -2116,6 +2118,18 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 print("\n".join([f"dry-run: would cancel {f['issue']}, a stray, with the comment: {linear.STRAY_NOTE}" for f in strays]
                                 if ns.dry_run else lin.close_strays(strays, author)) or "no strays to close", file=sys.stderr)
             return 1 if found else 0
+        if ns.verb == "response":
+            from . import response
+            from .timefmt import _utc
+            now = time.time() if ns.now is None else float(ns.now)
+            try:
+                since = _utc(ns.since).timestamp() if ns.since else now - ns.hours * 3600
+            except ValueError:
+                raise SlackError(f"--since {ns.since!r}: give a UTC time as ISO (2026-11-14T06:00Z)") from None
+            found, left = response.asks(lin.comments(response._iso(since)), reg, now, since)
+            rep = response.report(found, left, since, now, ns.open_over, ns.lane.lstrip("@") if ns.lane else None)
+            print(json.dumps(rep, indent=1) if ns.json else response.render(rep))
+            return 0
         if ns.verb == "update":
             print(lin.update(need(" ".join(filter(None, [ns.target, *ns.value])), "the PROJECT (a prefix of its name)"),
                              ns.health, brief))
@@ -4282,16 +4296,16 @@ def _decided(out: dict) -> bool:
 
 
 def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str, polls: int) -> int:
-    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_CAP_S run
+    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_LIMIT_S run
     out; a card still pending at the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
     follow = page_follower(ns, reg)
     out, capped = wait_for(lambda: follow(route.call("GET", "/" + urllib.parse.quote(cid, safe=""))), sleep=_sleep, every=ns.every,
-                           polls=polls, max_s=waitcap.WAIT_CAP_S, clock=_clock)
+                           polls=polls, max_s=waitcap.WAIT_LIMIT_S, clock=_clock)
     ring_decision(ns, reg, cid, out)
     rc = _show(out, ns.json)
     if not capped:
         return rc
-    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_CAP_S,
+    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_LIMIT_S,
                               end="End your turn now; a subscription to the card's thread (subscribe_slack_thread) wakes you "
                                   "when Daniel answers."), file=sys.stderr)
     return waitcap.STILL_GOING
@@ -4599,9 +4613,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
                       "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `project edit PROJECT [--team KEY...] [--date D] [--status S]` (adds teams, sets the target and status), `milestone create|edit PROJECT NAME "
                       "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`, `create --as HANDLE --title T --file BRIEF.md [--team KEY] "
-                      "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's); none sends a state")
+                      "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's), `response [--since ISO|--hours N] "
+                      "[--lane HANDLE] [--open-over MINUTES]` (how fast each lane answers the comments that ring it: "
+                      "research/response.py); none sends a state")
     p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
-                                    "project", "milestone", "create"))
+                                    "project", "milestone", "create", "response"))
     p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
                                              "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
@@ -4641,8 +4657,14 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--label", default=None, metavar="L", help="edit: add this label (`asker:NAME`, `asker-ok`)")
     p.add_argument("--remove", action="store_true", help="edit --label: remove it instead")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")
-    p.add_argument("--json", action="store_true", help="audit: the findings and counts (--asks: the asks) as JSON")
-    p.add_argument("--now", default=None, metavar="EPOCH", help="audit: the time it audits at, in seconds since the epoch (default: now)")
+    p.add_argument("--json", action="store_true", help="audit: the findings and counts (--asks: the asks) as JSON; response: "
+                                                       "its figures and every ask")
+    p.add_argument("--now", default=None, metavar="EPOCH", help="audit, response: the time it reads at, in seconds since the "
+                                                                "epoch (default: now)")
+    p.add_argument("--since", default=None, metavar="ISO", help="response: the window's start, a UTC time (default: --hours before now)")
+    p.add_argument("--hours", type=float, default=24, metavar="N", help="response: the window, hours before now (default 24)")
+    p.add_argument("--open-over", type=float, default=30, metavar="MINUTES",
+                   help="response: list the open asks older than this (default 30)")
     p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True)
     p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
@@ -4731,7 +4753,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--link", default=None, metavar="NOTION_URL", help="the ask's page, made with the Notion MCP, in place of --page")
     p.add_argument("--hours", type=float, default=24, metavar="H", help="pages: edited in the last H hours (default 24)")
     p.add_argument("--wait", action="store_true",
-                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_CAP_S} s (no tool "
+                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_LIMIT_S} s (no tool "
                         f"call blocks longer than 20 minutes): a card still pending then exits {waitcap.STILL_GOING}, "
                         "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")

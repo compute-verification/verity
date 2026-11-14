@@ -91,7 +91,7 @@ variable {R St n L np B n' : ℕ} {Ar : Type} [CommRing Ar]
 
 /-- `pouw-rs-staged-service` (proposed). **The staged service is sound up to its proof layer.** The service's seed is
 the window's live coins (`e`): `R` rounds, each `St` stage samples of the design's bits and one check of a stage and a
-cell-block (S4, round protocol with C1 per stage and C4 per sample; S5, live coins on `trusted-host`). For every
+cell-block (S4, round protocol with C1 per stage and C4 per sample; S5, live coins on `trusted-device`). For every
 adversary in `Mc` that commits first and every value `r` of its own coins, its run's play fixes each stage's error
 table at the stage's operand commitment, before its sample (the play's form, `StagedPlay`); every run the verifier
 accepts is accepted by the play's game or breaks binding or zero knowledge in some round (N1, X-RO commitments; F1 and
@@ -112,7 +112,7 @@ def ServiceSoundStaged (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L 
 /-- `pouw-rs-staged-service` (proposed; restates `ServiceSoundStaged` per prover). **The staged service is sound up to
 its proof layer, each break bounded through the adversary's own collision finders.** The seed, the round protocol and
 the play's form are `ServiceSoundStaged`'s (S4, round protocol with C1 per stage and C4 per sample; S5, live coins on
-`trusted-host`; `StagedPlay`). For every adversary in `Mc` that commits first and every value `r` of its own
+`trusted-device`; `StagedPlay`). For every adversary in `Mc` that commits first and every value `r` of its own
 coins, every run the verifier accepts is accepted by the play's game or breaks binding or zero knowledge in some round
 (N1, X-RO commitments; F1 and F2, Flock's binding and zero knowledge), and round `w`'s binding break has probability
 at most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]`, its zero-knowledge break `δz + βz · Pr[fz Ω' M r w …]`:
@@ -258,7 +258,7 @@ variable {R St L np : ℕ} {n B n' : Fin St → ℕ} {Ar : Type} [CommRing Ar]
 /-- `pouw-rs-overlap-service` (proposed). **The overlapped service is sound up to its proof layer.** The service's
 seed is the window's live coins (`e`): `R` rounds, each one sample a stage of the stage's design bits, the samples
 overlapping at any depth, and one check of a cell-block sampled uniformly among every stage's (S4, round protocol with
-C1 (i)–(ii) and C4 per sample; S5, live coins on `trusted-host`). For every adversary in `Mc` that commits first
+C1 (i)–(ii) and C4 per sample; S5, live coins on `trusted-device`). For every adversary in `Mc` that commits first
 and every value `r` of its own coins, its run's play fixes each round's error tables, every stage's, before the
 round's first sample (the play's form, `OvPlay`; this is E3, the round's run straight-line over every sample's bits,
 which K∥ reads in place of C1 (iii) and (iv), and which the service doesn't check); every run the verifier accepts is
@@ -285,7 +285,7 @@ def ServiceSoundOverlap (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n 
 /-- `pouw-rs-overlap-service` (proposed; restates `ServiceSoundOverlap` per prover). **The overlapped service is sound
 up to its proof layer, each break bounded through the adversary's own collision finders.** The seed, the round
 protocol, the uniform sample and the play's form are `ServiceSoundOverlap`'s (S4, round protocol with C1 (i)–(ii) and C4
-per sample; S5, live coins on `trusted-host`; `OvPlay`, which is E3). For every adversary in `Mc` that commits
+per sample; S5, live coins on `trusted-device`; `OvPlay`, which is E3). For every adversary in `Mc` that commits
 first and every value `r` of its own coins, every run the verifier accepts is accepted by the play's game or breaks
 binding or zero knowledge in some round (N1, X-RO commitments; F1 and F2, Flock's binding and zero knowledge), round
 `w`'s binding break at most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]` and its zero-knowledge break

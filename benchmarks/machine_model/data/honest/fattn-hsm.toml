@@ -1,4 +1,4 @@
-# H1's softmax with S never stored, a MMA as measured: hsm (benchmarks/pouw/edited_gemm/fattn.cu), S recomputed as a
+# H1's softmax with S never stored, a MMA as measured: hsm (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn.cu), S recomputed as a
 # plain GEMM W^ X^T (rows the queries) on the causal tiles of Llama-3.1-8B's attention at 2,048 tokens (32 query heads, 8
 # KV heads), the softmax in its epilogue: e = LUT[min(umulhi(m - S, A), 255)] from shared memory, P_prob's bytes in one
 # 8-byte store a row a lane (a quad transpose), e(0) and the row's sum of e (an atomicAdd). Every MMA is useful (no tail);
@@ -7,7 +7,7 @@
 # SM. 0.0731 ms here, and 1.0378 ms at 8,192 tokens at 47.7470 cycles a MMA.
 name = "fattn-hsm"
 status = "measured"
-source = "BC-KERNEL's hsm (benchmarks/pouw/edited_gemm/fattn.cu) at s = 2048, H = 32, rep = 4, causal, `eps_profile.py OUT --toml`, census VF3n-16's classes (P_prob, s_q and z_q equal to the unfused reference's from h_l7qs's stored S, fattn_ref.py on the CPU)"
+source = "BC-KERNEL's hsm (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn.cu) at s = 2048, H = 32, rep = 4, causal, `eps_profile.py OUT --toml`, census VF3n-16's classes (P_prob, s_q and z_q equal to the unfused reference's from h_l7qs's stored S, fattn_ref.py on the CPU)"
 L = 32          # the loader's field; hsm commits nothing
 
 [mma]

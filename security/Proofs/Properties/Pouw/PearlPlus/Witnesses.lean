@@ -358,8 +358,8 @@ theorem refusedBeforeTheCoin_nontrivial :
 
 The honest pass loads in the kernel once `load` is unfolded down to the salt coin's hm96 leaf, whose mask at its zero salt
 is given (`maskOr`) and whose leaf prefix is a literal (`Witness.leafPrefix_eq`), to the salt's and the sample's `derive`,
-whose sorted contexts are given (`qsort_salt`, `qsort_run`), and to the weight ids' `String.toNat?`, whose value on digits
-is given (`toNatOr`): the kernel computes the rest, the coin's opening, the salt, the weights' and records' roots, and
+whose sorted contexts are given (`qsort_salt`, `qsort_run`), and to the fixed operands' ids' `String.toNat?`, whose value on digits
+is given (`toNatOr`): the kernel computes the rest, the coin's opening, the salt, the fixed operands' and records' roots, and
 `plan`'s commitment and sample on that pass. -/
 
 namespace Witness
@@ -411,7 +411,7 @@ end Witness
 open Witness
 
 /-- `load` reads the honest pass from its manifest under the epoch's coins: its salt coin opens against them after the
-weights' root, the salt is the coin's, and its records keep the caps and are the ones whose root it published. -/
+fixed operands' root, the salt is the coin's, and its records keep the caps and are the ones whose root it published. -/
 theorem loadedGivesUp_honest : load honestCoins honestManifest = .ok honestPass := by
   apply eq_ok_of_toOption
   simp only [load, epochSalt, coinReason, leafValue, Flock.Hm96.Default512.leaf, Flock.Hm96.Default512.treeLeaf,
@@ -804,21 +804,28 @@ credited cell. -/
 theorem tileKeepsTheCap_nontrivial :
     ¬ TileKeepsTheCap.match_1 (motive := fun _ => Prop) (capRecord.credited [0] [0]) fun cr cc =>
       cr ≠ [] → cc ≠ [] →
-      ∃ (words : List (List (Array Bool × Nat))) (elems : List Nat),
+      ∃ (words : List (List (Array Bool × Nat))) (elems : List Nat)
+        (endsA endsB : List (Array Nat × Array Nat × Array Bool)),
         cr.mapM (fun i => cc.mapM fun j => Rule.wordFlags shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!) =
           .ok words ∧
         (cr.zip words).mapM (fun (iw : Nat × List (Array Bool × Nat)) =>
           Rule.rowElements shortOps.a.alpha[[0].idxOf iw.1]! shortOps.a.beta[[0].idxOf iw.1]!
             shortOps.a.x[[0].idxOf iw.1]! (iw.2.map Prod.fst)) = .ok elems ∧
+        cr.mapM (fun i => Rule.rowEnds shortOps.a.alpha[[0].idxOf i]! shortOps.a.beta[[0].idxOf i]!
+          shortOps.a.x[[0].idxOf i]!) = .ok endsA ∧
+        cc.mapM (fun j => Rule.rowEnds shortOps.b.alpha[[0].idxOf j]! shortOps.b.beta[[0].idxOf j]!
+          shortOps.b.x[[0].idxOf j]!) = .ok endsB ∧
         let credit := creditOf 1 capRecord.kKept capRecord.matmul.n
-        let rowDebit := (words.zip elems).map fun (we : List (Array Bool × Nat) × Nat) =>
-          Rule.debitUnits capRecord.matmul.n cc.length (we.1.foldl (fun t w => t + (w.1.filter id).size) 0)
-            (we.1.foldl (fun t w => t + w.2) 0) we.2
+        let rowDebit := ((words.zip elems).zip endsA).map
+          fun (we : (List (Array Bool × Nat) × Nat) × (Array Nat × Array Nat × Array Bool)) =>
+            Rule.debitUnits capRecord.matmul.n cc.length (we.1.1.foldl (fun t w => t + (w.1.filter id).size) 0)
+              (we.1.1.foldl (fun t w => t + w.2) 0) we.1.2 +
+              capRecord.matmul.n * endsB.foldl (fun t eb => t + Rule.wordMend we.2 eb) 0
         rowDebit.foldl (· + ·) 0 * Rule.CAP_DEN ≤ Rule.CAP_NUM * credit * cr.length * cc.length ∧
         ∀ d ∈ rowDebit, d * Rule.CAP_DEN ≤
           Rule.CAP_NUM * credit * cc.length * (if capScheme.censusKs.contains capRecord.matmul.k then 4 else 1) := by
   intro h
-  obtain ⟨words, _, hw, -⟩ := h (by decide) (by decide)
+  obtain ⟨words, _, _, _, hw, -⟩ := h (by decide) (by decide)
   have refused : ∀ e : Except String (List (List (Array Bool × Nat))), e = .ok words → e.toOption = none → False := by
     rintro e rfl h
     cases h

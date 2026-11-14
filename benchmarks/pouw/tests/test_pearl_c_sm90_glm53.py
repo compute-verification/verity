@@ -491,7 +491,7 @@ def test_whole_served_arm_captures_as_the_served_arm_does_on_this_kernel():
     `whole_options` takes but the pass end's and pearl_c_sm120's B̃ prefetch, so a new served option fails here."""
     import inspect
 
-    from verity_vllm.protocols.pouw.pearl_c.lanes import whole_options
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes import whole_options
     spec = importlib.util.spec_from_file_location("pearl_c_vllm_bench_arm", HERE.parent / "pearl_c_vllm" / "bench_arm.py")
     B = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(B)
@@ -570,7 +570,7 @@ def retained(tmp_path_factory):
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/prover/clear"))
     import clear_work as CW
     from clear_audit import Prover
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
     from verity.protocols.accounting.pouw.verifier import core_check as CC
     from verity.protocols.accounting.pouw.verifier.audit import (
@@ -595,15 +595,30 @@ def retained(tmp_path_factory):
     scheme = "pearl-c-h100-v1-h3"
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
     rng, k = np.random.default_rng(11), 128
-    words = lambda r: (rng.standard_normal((r, k)).astype(np.float32)).view(np.uint32) & 0xFFFF0000
-    rows = lambda x: [r.tobytes() for r in x]
-    bf16 = lambda x: b"".join((np.frombuffer(r, "<u4") >> 16).astype("<u2").tobytes() for r in rows(x))
-    laid = lambda d, leaves: b"".join(b"".join(level) for level in tree_levels(d, leaves))
+
+    def words(r):
+        return (rng.standard_normal((r, k)).astype(np.float32)).view(np.uint32) & 0xFFFF0000
+
+    def rows(x):
+        return [r.tobytes() for r in x]
+
+    def bf16(x):
+        return b"".join((np.frombuffer(r, "<u4") >> 16).astype("<u2").tobytes() for r in rows(x))
+
+    def laid(d, leaves):
+        return b"".join(b"".join(level) for level in tree_levels(d, leaves))
+
+    def inv(alpha):
+        return np.float32(1) / np.array(alpha, np.uint32).view(np.float32)
+
     wrows, acts = {0: words(16), 1: words(32)}, {0: words(32), 1: words(16)}
     acts[0][20:] = 0
     work = Workload((Matmul(0, Shape(32, k, 16), 0), Matmul(1, Shape(16, k, 32), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=bytes([1]) * 32)
-    salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)
+
+    def salted(v, nonce, i):
+        return v + hm96_salt(prover.salt_key, nonce, i)
+
     ch = Challenger(0, random.Random(7).randbytes)
     coins = ch.commitment, ch.open("salt", weights_root(prover.weight_roots))
     epoch = Epoch.start(work, prover.weight_roots, *coins)
@@ -636,7 +651,6 @@ def retained(tmp_path_factory):
         noise = s.noise(ctx)
         ops = s.encode(ctx, noise, x, rows(wrows[u.weight]), Tile(tuple(range(m)), tuple(range(n))))
         uu = np.array(s.checked(ctx, ops).u, np.uint32)[:rec.real_rows].view(np.float32)
-        inv = lambda alpha: np.float32(1) / np.array(alpha, np.uint32).view(np.float32)
         y = torch.from_numpy((uu * inv(ops.a.alpha)[:rec.real_rows, None]) * inv(ops.b.alpha)[None, :]).to(torch.bfloat16)
         (d / "y" / f"{u.index}.bf16").write_bytes(y.view(torch.int16).numpy().tobytes())
         y_words += y.numel()

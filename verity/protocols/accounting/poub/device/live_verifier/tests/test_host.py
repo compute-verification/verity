@@ -719,7 +719,7 @@ def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
 
 def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path, monkeypatch):
     """`exec_party` with a party that never exits (no prover joined): its timer kills it and its parent, and the log records
-    why. Killing the parent alone (runuser, on an auditor host) left the party listening and holding the pipe."""
+    why. Killing the parent alone (runuser, on an auditor device) left the party listening and holding the pipe."""
     armed: list[float] = []
 
     class Timer:

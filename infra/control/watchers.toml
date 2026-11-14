@@ -101,11 +101,13 @@ needs = ["{dir}/top-asks.json"]
 # top's hourly sweep (top_watch.py sweep; top's Cursor timer admin-hourly-v3): unanswered asks, agents with no handle, the rules
 # thread, main stalled while next is ahead, idle H200s from fleet's samples, and the Linear audit with relay.env's Linear app
 # credentials (LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET), whose lines go to {dir}/linear-audit.jsonl; it also saves the Goals
-# page each hour in {dir}/goals/, read with the site key in {dir}/goals.key (events:read) once that is placed
+# page each hour in {dir}/goals/, read with the site key in {dir}/goals.key (events:read) once that is placed, and puts each copy
+# in the store, preserved, with r2.env's bucket and key pair, through a scratch store in a temporary directory that each save
+# deletes; with that remote, the Linear audit reads each open PR's ready mark from the store, as `research msg linear audit` does
 [[loop]]
 name = "top-sweep"
 argv = ["python3.12", "-s", "{src}/infra/control/top_watch.py", "sweep", "--state", "{dir}/top-sweep.json"]
-env_files = ["/root/.config/verity/relay.env", "/data/agent-watch/cursor.env"]
+env_files = ["/root/.config/verity/relay.env", "/data/agent-watch/cursor.env", "/root/.config/verity/r2.env"]
 needs = ["{dir}/top-sweep.json"]
 env = { FLEET_DIR = "{dir}/fleet" }
 

@@ -3,7 +3,7 @@ module
 public import Properties.Nci
 public import Properties.Nci.Baseline
 public import NciCheck.DefinitionDigest
-public import NciCheck.RecordText
+public import Spot.RecordText
 public import Flock.TemplateQuery
 public import Spot.Wires
 public import Spot.Bits
@@ -94,10 +94,10 @@ registers was public (`Nci.Assumptions.ThetaRegistered`).
 namespace NciCheck.Properties.Record
 
 open Lean (Json)
-open Flock.Program (Prog Scope Ref Ty Defn Node)
+open Flock.Program (Prog Scope Ref Ty Defn Node fieldsOf)
 open Flock.TemplateQuery (TRange)
 open NciCheck.Baseline (getD strAt digest lastWith)
-open NciCheck.RecordText (Row Held fieldsOf outerOf)
+open NciCheck.RecordText (Row Held outerOf)
 open Spot.Bits (bitsOf)
 open NciCheck.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
 

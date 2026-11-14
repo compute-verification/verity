@@ -48,7 +48,7 @@ open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} (I : Inputs) (mPts : ℕ)
 
-/-- **A sample flock-verify sets up**: on the session's inputs `I`, `Stmt.setupH` accepts the sample's JSON `d`, which
+/-- **A sample verity-verify-proof sets up**: on the session's inputs `I`, `Stmt.setupH` accepts the sample's JSON `d`, which
 decodes to a sample `D` whose proved units include `S`'s; the statement's `c.g · 2^nbl` template instance slots hold `D`'s
 proved units, its `fast100` schedule has at least two levels (`hsch`, `hm`, as `TabSpec` asks), and its link points are
 `mPts`. -/
@@ -221,7 +221,7 @@ end DrawSetup
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
 
 open Classical in
-/-- **The table at sample `S`**: the sample's table (`DrawSetup.table`) when flock-verify sets up the sample's JSON `dj S`,
+/-- **The table at sample `S`**: the sample's table (`DrawSetup.table`) when verity-verify-proof sets up the sample's JSON `dj S`,
 and otherwise the reference setup `x₀`'s refused table. -/
 noncomputable def tableAt (S : Finset (Fin n)) : Table mPts S :=
   if h : Nonempty (DrawSetup I mPts S (dj S)) then (Classical.choice h).table ht else x₀.refused ht S
@@ -284,7 +284,7 @@ theorem sitesAt_parse (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) :
   rw [e1, e2, e3]
   exact hc
 
-/-- **Distinct sampled proof blocks have distinct sites** wherever flock-verify sets up the sample (the count judges each site
+/-- **Distinct sampled proof blocks have distinct sites** wherever verity-verify-proof sets up the sample (the count judges each site
 once). -/
 theorem sitesAt_inj {S : Finset (Fin n)} (hS : Nonempty (DrawSetup I mPts S (dj S))) (R : Reg) {u u' : Fin n}
     (h : u ∈ S) (h' : u' ∈ S)
@@ -299,7 +299,7 @@ theorem sitesAt_inj {S : Finset (Fin n)} (hS : Nonempty (DrawSetup I mPts S (dj 
 
 variable {pop : Public}
 
-/-- **The site fact at the sample's table**, with or without shared rows: at a sample flock-verify sets up, each sampled
+/-- **The site fact at the sample's table**, with or without shared rows: at a sample verity-verify-proof sets up, each sampled
 proof block's site is `BcSite`: the acceptance's sample is `dj S`, which decodes to `D`, and the unit's block and template
 instance index its rank in `D.proved`. -/
 theorem table_bcSiteS (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
@@ -326,7 +326,7 @@ theorem table_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (h
     Layout.BcSite (x.table ht).acc pop ((x.table ht).o u h) ((x.table ht).vu u h) u.val :=
   table_bcSiteS ht dj hc ho hpop x h
 
-/-- **`BcSite` at every satisfiable site** of the one-table plan: at a sample flock-verify sets up by `table_bcSite`; at a
+/-- **`BcSite` at every satisfiable site** of the one-table plan: at a sample verity-verify-proof sets up by `table_bcSite`; at a
 refused sample no message satisfies the table (`refused_unsat`). -/
 theorem sitesAt_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop) (hpt : pop.tables = none) :

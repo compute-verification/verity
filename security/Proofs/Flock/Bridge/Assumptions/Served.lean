@@ -34,7 +34,7 @@ no shared-row tables, and no two of `D`'s ports' published domains are one (`Por
 
 Assumption record. It assumes a computation's result: each conjunct evaluated with these functions, built from the
 source this module is checked at, on that fixture's two files (the public file publishes a 64-byte domain for each of
-the circuit's two ports, no two equal), beside `flock-verify verify --zk` on its honest session, which accepts it
+the circuit's two ports, no two equal), beside `verity-verify-proof verify --zk` on its honest session, which accepts it
 (`verity/protocols/flock/prover/tests/test_lean_forged_proofs.py`). A shared-row public file (the served
 registered fixtures) is `SampledKSLiveV5`'s. It asks nothing of a hash or of the prover; a change to any of these
 functions or to the files makes it a new premise, to be checked by a new run. -/

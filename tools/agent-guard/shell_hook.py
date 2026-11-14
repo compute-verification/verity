@@ -75,9 +75,9 @@ the check's suites and `verity check`. The same command through `research run`, 
 `AGENT_GUARD_LOCAL_OK=1` anywhere in the command passes it too.
 
 No tool call may block more than 20 minutes: an agent blocked in one long call looks silent and misses its wake-ups. So it
-refuses a command that plainly would: a `sleep` past BLOCK_CAP_S (`sleep 3000`, `sleep 30m`, `sleep 2h`, `sleep infinity`),
+refuses a command that plainly would: a `sleep` past BLOCK_LIMIT_S (`sleep 3000`, `sleep 30m`, `sleep 2h`, `sleep infinity`),
 there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends it sooner or it runs in the background (`&`), and
-`research run --wait-max S` past the cap. A polling loop is judged only by the sleeps it names.
+`research run --wait-max S` past the limit. A polling loop is judged only by the sleeps it names.
 
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
 a branch registered to another agent or of `main`, `checked` or `next`, to the repositories whose queue drive runs
@@ -1081,7 +1081,8 @@ def weight(text: str) -> int:
     """The heaviest simple command of `text` run on this VM: a command through `research run` or over ssh runs elsewhere."""
     try:
         commands = words_of(text)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split weighs nothing ({e})", file=sys.stderr)
         return 0
     return max((weight_words(words) for words, _ in commands), default=0)
 
@@ -1095,23 +1096,25 @@ def available() -> tuple[float, float] | None:
     try:
         info = dict(re.findall(r"^(\w+):\s+(\d+) kB", meminfo.read_text(), re.M))
         avail, total = int(info["MemAvailable"]) * 1024, int(info["MemTotal"]) * 1024
-    except (OSError, KeyError, ValueError):
+    except (OSError, KeyError, ValueError) as e:
+        print(f"shell_hook: {meminfo} unread, so memory is not known ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     # the balloon's pages are counted as used, but the hypervisor hands them back as the VM asks for memory
     if (vmstat := meminfo.with_name("vmstat")).is_file():
         v = dict(re.findall(r"^(balloon_inflate|balloon_deflate) (\d+)$", vmstat.read_text(), re.M))
         avail = min(total, avail + max(0, int(v.get("balloon_inflate", 0)) - int(v.get("balloon_deflate", 0))) * 4096)
     try:
-        rel = open("/proc/self/cgroup").read().split("::", 1)[1].strip()
+        rel = open("/proc/self/cgroup").read().partition("::")[2].strip()
         cg = os.environ.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
-        limit = open(f"{cg}/memory.max").read().strip()
+        limit = open(f"{cg}/memory.max").read().strip() if rel and os.path.exists(f"{cg}/memory.max") else "max"
         if limit != "max" and int(limit) < total:
             meminfo_avail, used, total = avail, int(open(f"{cg}/memory.current").read()), int(limit)
             avail = min(meminfo_avail, total - used)        # stands when memory.stat can't be read
             cache = int(dict(re.findall(r"^(\w+) (\d+)$", open(f"{cg}/memory.stat").read(), re.M)).get("inactive_file", 0))
             avail = min(meminfo_avail, total - max(0, used - cache))
-    except (OSError, IndexError, ValueError):
-        pass
+    except (OSError, ValueError) as e:
+        print(f"shell_hook: the cgroup's memory unread, so what was read before stands ({type(e).__name__}: {e})",
+              file=sys.stderr)
     return avail, total
 
 
@@ -1142,7 +1145,7 @@ def local_work_reason(command: str) -> str | None:
 
 
 #: no tool call may block longer: an agent blocked in one long call looks silent and misses its wake-ups
-BLOCK_CAP_S = 1200
+BLOCK_LIMIT_S = 1200
 DURATION = re.compile(r"(\d+(?:\.\d*)?|\.\d+)([smhd]?)")
 UNIT_S = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
 
@@ -1187,19 +1190,20 @@ def blocks_text(text: str) -> float:
     """The longest any simple command of `text` plainly blocks for; one sent to the background (`&`) blocks nothing."""
     try:
         commands = words_of(text)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split blocks for no time ({e})", file=sys.stderr)
         return 0.0
     return max((blocks_words(words) for words, op in commands if op != "&"), default=0.0)
 
 
 def block_reason(command: str) -> str | None:
-    """Why this command may not run as one tool call (it would block past BLOCK_CAP_S), or None."""
+    """Why this command may not run as one tool call (it would block past BLOCK_LIMIT_S), or None."""
     s = blocks_text(command)
-    if s <= BLOCK_CAP_S:
+    if s <= BLOCK_LIMIT_S:
         return None
-    return (f"this command would block for {'ever' if s == math.inf else f'{s:g} s'}, past {BLOCK_CAP_S} s: no tool call may block "
+    return (f"this command would block for {'ever' if s == math.inf else f'{s:g} s'}, past {BLOCK_LIMIT_S} s: no tool call may block "
             "more than 20 minutes (Daniel, 19 Oct); end your turn and let the run's completion or a timer subscription wake you. "
-            f"`research run --wait` stops after {BLOCK_CAP_S} s on its own and names the command to check back with.")
+            f"`research run --wait` stops after {BLOCK_LIMIT_S} s on its own and names the command to check back with.")
 
 
 def flattened(text: str) -> list[list[str]]:
@@ -1291,7 +1295,8 @@ def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     worktree_guard = guard()
     try:
         raw, (dirs, _) = flattened(command), cd_dirs(command, cwd)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split passes the checkout guard ({e})", file=sys.stderr)
         return None
     next_ok = [assigned(w, "AGENT_GUARD_PUSH_NEXT_OK") for w in raw]
     return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok, git_env(raw), dirs)
@@ -1346,9 +1351,12 @@ def delivery(conversation: str) -> str | None:
         return None
     box = os.path.join(INBOX, conversation + ".md")
     taking = box + ".taking"
+    if not os.path.exists(box):
+        return None
     try:
         os.replace(box, taking)
-    except OSError:
+    except OSError as e:
+        print(f"shell_hook: {box} not taken, so not delivered now ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     try:
         with open(taking) as f:
@@ -1471,7 +1479,8 @@ def main() -> int:
             print(f"shell_hook: inbox poll failed: {e}", file=sys.stderr)
         try:
             message = delivery(conversation)
-        except Exception:                               # an unreadable inbox must not block the agent's command
+        except (OSError, ValueError) as e:              # an unreadable inbox must not block the agent's command
+            print(f"shell_hook: inbox unreadable, no message delivered: {type(e).__name__}: {e}", file=sys.stderr)
             message = None
         try:
             merge_drivers(command, cwd)

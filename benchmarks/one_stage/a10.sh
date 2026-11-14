@@ -28,7 +28,7 @@ R() { PYTHONPATH=$SRC/benchmarks/proof_throughput python3 -c 'import os, sys
 from verity_proof_throughput.store import store_env
 os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], store_env())' "$@"; }
 R keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
-  --why "A10's builds (flock-circuit, flock-verify, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
+  --why "A10's builds (flock-circuit, verity-verify-proof, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 
 # the record's store ids and the Build's row dir, in a10_inputs.json
 IN() { python3 -c 'import json, sys; v = json.load(open(sys.argv[1]))[sys.argv[2]]; print(" ".join(v) if isinstance(v, list) else v)' \

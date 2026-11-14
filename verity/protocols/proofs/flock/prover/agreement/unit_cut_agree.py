@@ -1,4 +1,4 @@
-"""Conformance of the Lean partition check (`flock-verify unit-cut`, `Flock.Partition`) with the reference,
+"""Conformance of the Lean partition check (`verity-verify-proof unit-cut`, `Flock.Partition`) with the reference,
 `verity.circuits.partition.validate_unit_cut`, on random cuts.
 
     python unit_cut_agree.py --lean BIN --out DIR [--seed S] [--n N]

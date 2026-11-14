@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.TmplLayout
+
+/-!
 A net committed at a position map: the logical rows, checked as `Net.ofRows` checks them (their order
 included), placed at committed positions `pos`. Column `x` of the logical net is the committed net's column `pos[x]`, its
 row `pos[x]` the logical row `x` with every reference `v` read as `pos[v]`; the committed slot's other rows are empty (a
@@ -10,9 +14,6 @@ width, and the constant last. The inverse map is built without a check of its ow
 so `ofRowsAt_ok` and the lemmas after it read every property off `List.all`s. `Tmpl.unrollAt` takes `pos` from
 `Tmpl.posMap` under a layout.
 -/
-module
-
-public import Flock.TmplLayout
 
 @[expose] public section
 

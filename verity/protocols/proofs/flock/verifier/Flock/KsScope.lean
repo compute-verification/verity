@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.PortRoots
+
+/-!
 The forms `verify --zk` refuses so that the sampled audit's knowledge soundness (`Flock.Guarantees.SampledKSLiveV3`)
 takes none of `Flock.Bridge.SampledKSLiveRoots`' file preconditions as a hypothesis: no form goes ahead of its proof.
 Under `--zk` every session of a statement outside them is refused, beside `ProvedScope.check` and `PortRoots.check`:
@@ -19,7 +23,7 @@ Under `--zk` every session of a statement outside them is refused, beside `Prove
 and `check_ok` says what passing `check` establishes: `SampledKSLiveRoots`' file preconditions, or V5's at a shared-row
 file. Their sixth, that the unit is a built net, follows from the parse of an untyped statement. A V* session
 (`--rec-inner`) is the recursion's, whose guarantee is its own, so `verify` doesn't run the check on it.
-`flock-verify ks-form` runs `checkOf` alone on a statement's files, and the Python mirror
+`verity-verify-proof ks-form` runs `checkOf` alone on a statement's files, and the Python mirror
 (`one_stage.proofs.ks_form_why`, `filesWhy` on the files' heads) is held to it.
 
 `verify --zk` hands `checkOf` the circuit `ProvedScope.circuitOf` reads: at a templated statement (`Tags.isTmpl`) the
@@ -32,9 +36,6 @@ flat circuit `HmOut.unrolled` gives, is then in `scopeOkH`. `checkOf_ok` says wh
 statement's files alone, so a statement no session samples can be held to it. `checkOf` passes exactly where `filesOf`
 does and the sample passes `drawWhy` (`checkOf_iff`), and `filesOf_ok` says what passing establishes of the files.
 -/
-module
-
-public import Flock.PortRoots
 
 @[expose] public section
 

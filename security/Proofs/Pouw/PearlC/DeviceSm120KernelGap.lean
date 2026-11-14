@@ -2,12 +2,13 @@ module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Proofs.Pouw.PearlC.ChainOnlyGap
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.KernelWrefGap
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.TTOutW1Variants
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # g at the RTX PRO 6000 (sm_120) records against the kernel as it runs (staged)

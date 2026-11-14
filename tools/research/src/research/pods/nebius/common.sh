@@ -3,7 +3,7 @@
 #
 # Auth reads the Cursor secrets NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID and NEBIUS_SA_PRIVATE_KEY_B64: one line of base64 holding
 # either the key's PEM file (`base64 -w0 key.pem`) or its DER (`openssl pkey -in key.pem -outform DER | base64 -w0`).  The DER
-# form exists because Cursor caps a secret at 4096 bytes: an RSA-4096 key's PEM is ~3272 bytes, whose base64 (~4364) is refused,
+# form exists because Cursor limits a secret to 4096 bytes: an RSA-4096 key's PEM is ~3272 bytes, whose base64 (~4364) is refused,
 # while its DER (~2348 bytes) encodes to ~3132.  The two decode unambiguously: PEM text starts `-----BEGIN`, DER starts byte 0x30.
 # The key must be one line: a multi-line secret's body lines pass through `env | cut -d= -f1` and escape
 # Cursor's redaction, so a multi-line NEBIUS_SA_PRIVATE_KEY leaks. It is refused, so that nobody keeps it as a Cursor secret.
@@ -32,7 +32,7 @@ SSH_USER=research                                  # Nebius reserves root and ad
 RATE_USD_PER_HOUR=${NEBIUS_RATE_USD_PER_HOUR:-14.40}   # the RTX PRO 6000 preset's; any other shape states its own
 FS_ID=${NEBIUS_FILESYSTEM_ID:-}                    # a shared filesystem to attach read-write, mounted at /workspace/fs
 PREEMPTIBLE=${NEBIUS_PREEMPTIBLE:-}                # 1: a preemptible VM, stopped on preemption (its disks are kept)
-SPOT_POLICY_ID=${NEBIUS_SPOT_POLICY_ID:-}          # a preemptible VM's price cap (`nebius billing pricing-policy`), else the spot price
+SPOT_POLICY_ID=${NEBIUS_SPOT_POLICY_ID:-}          # a preemptible VM's price limit (`nebius billing pricing-policy`), else the spot price
 MACHINE=${VM_NAME}
 PROJECT=verity
 
@@ -54,7 +54,7 @@ nebius_auth() {
   if [ -z "${NEBIUS_SA_PRIVATE_KEY_B64:-}" ]; then
     [ -z "${NEBIUS_SA_PRIVATE_KEY:-}" ] || die "NEBIUS_SA_PRIVATE_KEY (the multi-line key) is no longer read: store the key as \
 NEBIUS_SA_PRIVATE_KEY_B64 (\`base64 -w0 key.pem\`, or \`openssl pkey -in key.pem -outform DER | base64 -w0\` when that exceeds \
-Cursor's 4096-byte secret cap) and delete NEBIUS_SA_PRIVATE_KEY (Dashboard -> Cloud Agents -> Secrets)"
+Cursor's 4096-byte secret limit) and delete NEBIUS_SA_PRIVATE_KEY (Dashboard -> Cloud Agents -> Secrets)"
     case ",${CLOUD_AGENT_INJECTED_SECRET_NAMES:-}," in
       *",NEBIUS_SA_PRIVATE_KEY_B64,"*)
         die "the Nebius key is not in this shell though this VM injects it: rerun from a fresh tmux login shell" ;;
@@ -68,11 +68,11 @@ Cursor's 4096-byte secret cap) and delete NEBIUS_SA_PRIVATE_KEY (Dashboard -> Cl
     || die "NEBIUS_SA_PRIVATE_KEY_B64 is not base64"
   if head -c 10 "$NB_DIR/key.raw" | grep -q -e '-----BEGIN'; then
     mv "$NB_DIR/key.raw" "$NB_DIR/key.pem"            # base64 of the PEM file itself
-  else                                                # base64 of the DER (the form that fits Cursor's secret cap for RSA-4096)
+  else                                                # base64 of the DER (the form that fits Cursor's secret limit for RSA-4096)
     command -v openssl > /dev/null 2>&1 || die "openssl is needed to read a DER-format key"
     (umask 077 && openssl pkey -inform DER -in "$NB_DIR/key.raw" -out "$NB_DIR/key.pem" 2>/dev/null) \
       || die "NEBIUS_SA_PRIVATE_KEY_B64 decodes to neither a PEM file nor a DER private key: store \
-\`openssl pkey -in key.pem -outform DER | base64 -w0\` (or \`base64 -w0 key.pem\` for a key whose base64 fits Cursor's 4096-byte secret cap)"
+\`openssl pkey -in key.pem -outform DER | base64 -w0\` (or \`base64 -w0 key.pem\` for a key whose base64 fits Cursor's 4096-byte secret limit)"
     rm -f "$NB_DIR/key.raw"
   fi
   "$NEBIUS_BIN" --no-check-update -c "$NB_DIR/config.yaml" profile create sa --endpoint api.nebius.cloud \

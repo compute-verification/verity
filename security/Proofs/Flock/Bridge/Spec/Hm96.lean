@@ -24,7 +24,7 @@ The executable's hm96 leaf at its key (`Hm96.Default512`, through `FlockSoundnes
 
 namespace Flock.Bridge.Spec
 
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length)
+open Properties.Certifier.Bytes (bs bs_append bs_length)
 open FlockSoundness.Discharge.Hm (bitL maskV bitL_mask)
 
 /-! ## Bits -/

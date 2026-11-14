@@ -109,7 +109,7 @@ def test_a_firing_notification_becomes_markdown_notes_naming_the_job_and_its_lan
     assert sink.job_id_of("gpu-209-ce1b86e4-head") == 209 and sink.job_id_of("m0-v3-a13-198-ce1b86e4-head") == 198
     assert sink.job_id_of("grafana-7d9f") is None
     table = sink.lane_table(MON / "lanes.tsv")
-    assert sink.lane_of("cov-g003", table) == "vllm-epoch-run" and sink.lane_of("m0-v3-a15b", table) == "flock-netlist (M0)"
+    assert sink.lane_of("cov-g003", table) == "vllm-epoch-run" and sink.lane_of("m0-v3-a15b", table) == "flock-circuit"
     assert sink.lane_of("sm120-qwen05-gb2-b1-2", table) is None and sink.lane_of(None, table) is None
     runs = tmp_path / "runs"
     (runs / "r1").mkdir(parents=True)

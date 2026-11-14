@@ -14,8 +14,8 @@
 # --arms fp32-beside: in place of the duty sweep, FP32 adds beside the tensor pipe (duty.cu's arms A to D) at each clock,
 # for each of BESIDE_CLASSES ("zero const uniform"): A, B, C at the add:MAC ratios 1/X for X in RATIOS ("128 32 8"), and D
 # in phases of PHASES_MS ("1 10 100"), each point SECS; the warm-up is arm A on uniform operands; nvidia-smi samples every
-# 10 ms; summarize.py --arms fp32-beside writes summary.json, a verdict per reading of an FP32 add's price, and
-# exits nonzero unless every reading is decided (BASE_MHZ and BASE_SOURCE: the cautious reading's base clock).
+# 10 ms; summarize.py --arms fp32-beside writes summary.json, a verdict per clock reading of an FP32 add's price, and
+# exits nonzero unless every reading is decided.
 # --no-lock (LOCK=0): no sudo; the clock and power limit stay as found and CLOCKS is `default`.
 #
 # Env: CLOCKS ("1980 default"); ARMS ("wg_s8 wg_e4m3 sync_s8"); each arm's classes and bursts (SM-cycles of tensor work
@@ -143,8 +143,7 @@ else
 fi
 echo "lease rc $?" | tee -a "$O/rc.txt"
 if [ "$ARMS" = fp32-beside ]; then
-  PYTHONPATH="$D/../.." python3 "$D/summarize.py" "$O" --arms fp32-beside --json "$O/summary.json" \
-    ${BASE_MHZ:+--base-mhz "$BASE_MHZ" --base-source "${BASE_SOURCE:?with BASE_MHZ}"} | tee "$O/summary.md"
+  PYTHONPATH="$D/../.." python3 "$D/summarize.py" "$O" --arms fp32-beside --json "$O/summary.json" | tee "$O/summary.md"
 else
   PYTHONPATH="$D/../.." python3 "$D/summarize.py" "$O" --json "$O/verdict.json" | tee "$O/summary.md"
 fi

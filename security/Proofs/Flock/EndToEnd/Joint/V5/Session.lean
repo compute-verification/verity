@@ -6,7 +6,7 @@ public import Proofs.Flock.Bridge.V5.OpeningsCanon
 public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 
 /-!
-# A member's session alone: its sampled proof blocks at flock-verify `--zk --public-inputs`, at any sampling design
+# A member's session alone: its sampled proof blocks at verity-verify-proof `--zk --public-inputs`, at any sampling design
 
 `SampledKSLiveV5`'s session with an event of the sample in place of the count curve, as
 `zk_session_soundJ_custody_drawn_reg` is `zk_session_soundJ_custody_reg`'s:

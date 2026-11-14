@@ -169,7 +169,7 @@ theorem plainRunCols_width {r : Claims.Flock.ZkRun} {p : ℕ × List 𝔽} (hp :
 
 /-- **A masked run's columns have level 0's `2^lanes` witness symbols.** -/
 theorem zkRunCols_width {r : Claims.Flock.ZkRun} {p : ℕ × List 𝔽} (hp : p ∈ Claims.Flock.zkRunCols r) :
-    p.2.length = 2 ^ (Claims.Flock.zkLevel0 r.m).lanes := by
+    p.2.length = 2 ^ (Claims.Flock.zkLevel0 r.wideLeaf r.m).lanes := by
   obtain ⟨y, -, hy⟩ := List.mem_flatMap.1 (mem_of_distinctBelow hp)
   exact zkRepColsOf_width hy
 
@@ -183,21 +183,25 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The run's reader sits at its last message's table `j`**: its `m` is that table's. -/
+/-- **The run's reader sits at its last message's table `j`**: its `m` is that table's, and at the masked record its
+statement version is that table's. -/
 theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun} (h : runOf zk s j = some r) :
     ∃ f s' spec sts st, lastFinal s = some f ∧ setupOf zk f.stmt = some (s', spec, sts) ∧ sts[j]? = some st ∧
-      r.m = st.m := by
+      r.m = st.m ∧ (zk = true → r.wideLeaf = st.wideLeaf) := by
   unfold runOf at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at h
   obtain ⟨f, hf, ⟨s', spec, sts⟩, hs, st, hst, _, _, _, _, rfl⟩ := h
-  exact ⟨f, s', spec, sts, st, hf, hs, hst, rfl⟩
+  refine ⟨f, s', spec, sts, st, hf, hs, hst, rfl, fun hz => ?_⟩
+  subst hz
+  rfl
 
 end Gen
 
-/-- **The run's reader sits at its last message's table `j`**: its `m` is that table's. -/
+/-- **The run's reader sits at its last message's table `j`**: its `m` is that table's, and at the masked record its
+statement version is that table's. -/
 theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun} (h : runOf zk s j = some r) :
     ∃ f s' spec sts st, lastFinal s = some f ∧ setupOf zk f.stmt = some (s', spec, sts) ∧ sts[j]? = some st ∧
-      r.m = st.m :=
+      r.m = st.m ∧ (zk = true → r.wideLeaf = st.wideLeaf) :=
   Gen.runOf_m (S := S₀) (zk := zk) (s := s) (j := j) (r := r) (h := h)
 
 /-! ## An accepted run decides on its last message -/
@@ -303,12 +307,12 @@ theorem acc_cols {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
     {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) {q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols zk (Claims.run H P (V zk) x ω r).seen 0) q = some u) :
     ∃ spec st, (tables zk x).head? = some (spec, st) ∧
-      u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes := by
+      u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes := by
   obtain ⟨s, spec, sts, f, hs, hf, hx⟩ := acc_last h
   unfold cols at hu
   split at hu
   · rename_i rr hrr
-    obtain ⟨f', s', spec', sts', st, hf', hs', hst, hm⟩ := runOf_m hrr
+    obtain ⟨f', s', spec', sts', st, hf', hs', hst, hm, hw⟩ := runOf_m hrr
     rw [hf] at hf'
     cases hf'
     rw [hx, hs] at hs'
@@ -319,13 +323,13 @@ theorem acc_cols {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
     · simp only [Bool.false_eq_true, ↓reduceIte] at hp ⊢
       rw [plainRunCols_width hp, hm]
     · simp only [↓reduceIte] at hp ⊢
-      rw [zkRunCols_width hp, hm]
+      rw [zkRunCols_width hp, hm, hw rfl]
   · simp [Claims.Flock.lookCol] at hu
 
 theorem zeroCol_length {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h : (tables zk x).head? = some (spec, st)) :
     (zeroCol zk x).length =
-      2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes := by
+      2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes := by
   unfold zeroCol
   rw [h]
   cases zk <;> simp

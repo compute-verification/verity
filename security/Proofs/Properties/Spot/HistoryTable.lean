@@ -45,8 +45,8 @@ local instance lawfulBEqByteArray_history : LawfulBEq ByteArray where
 /-! ## Bytes -/
 
 theorem be64_data (n : ℕ) : (Flock.be64 n.toUInt64).data.toList = Hash.be 8 n := by
-  have h := Properties.NetworkCertifier.Bytes.be64_bs n.toUInt64
-  simp only [Properties.NetworkCertifier.Bytes.bs] at h
+  have h := Properties.Certifier.Bytes.be64_bs n.toUInt64
+  simp only [Properties.Certifier.Bytes.bs] at h
   rw [h]
   simp only [Hash.be, List.range_succ, List.range_zero, List.nil_append, List.map_cons, List.map_nil,
     List.cons_append, List.cons.injEq, and_true]

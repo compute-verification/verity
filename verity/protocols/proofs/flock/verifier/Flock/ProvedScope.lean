@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.HmRow
+public import Flock.JsonParse
+
+/-!
 The statement forms the soundness proof covers. `verify` refuses every other: soundness is one theorem
 over every session the verifier accepts, so a form no theorem covers is refused, never accepted. Widening the proof to
 another form is a change to one rule here, with the proof that the headlines cover it. With hidden outputs that is the
 general instance form (`scopeOkI`, once `wiresAcyclic` passed); with public outputs, the unit's form (`scopeOk`).
 -/
-module
-
-public import Flock.HmRow
-public import Flock.JsonParse
 
 @[expose] public section
 
@@ -706,15 +707,27 @@ theorem programFields_held {parsed : V Circuit} {handed : Option (Option String)
           · exact ⟨c, m, rfl, by rw [he], hm, by simpa [programFields, notHeldWhy, hm, he] using h⟩
           · simp [programFields, notHeldWhy, hm, he] at h
 
-/-- **The statement versions `verify` takes**: the current statement, a recursive session's inner one, and the templated
-statement (`Tags.tmplName`; building `Tags.circuitTmpl` would hash its identity's key), which `check` passes only in the
-form `scopeOkT` covers and `--zk`'s form check (`KsScope.checkOf`) only on its template, and whose statement circuit, the
-flat circuit it unrolls to, is the one `SampledKSLiveV5` is stated at. Every other version `Tags.all` names is
+/-- **The statement versions `verify` takes**: the current statement, a recursive session's inner one, the wide-leaf
+statement (`Tags.wideLeafName`, under `--zk` only: `wideLeafWhy`), and the templated statement and its wide-leaf version
+(`Tags.tmplName`, `Tags.tmplWideLeafName`; building `Tags.circuitTmpl` would hash its identity's key), which `check`
+passes only in the form `scopeOkT` covers and `--zk`'s form check (`KsScope.checkOf`) only on its template, and whose
+statement circuit, the flat circuit it unrolls to, is the one `SampledKSLiveV5` is stated at. Every other version
+`Tags.all` names is
 superseded: a `+seed-injection` one is a selftest build's, whose coins the prover injected, and the older ones' coins
 derive through SHA-256 or, under `--zk`, their pads are ChaCha20 streams of the prover's seed. They stay in `Tags.all` so
 the agreement corpus and the recorded fixtures replay: `verify` runs every check on them, then refuses the session
 (`servedForm`). -/
-def served : List String := [Tags.circuit.name, Tags.circuitPlainLeaves.name, Tags.tmplName]
+def served : List String :=
+  [Tags.circuit.name, Tags.circuitPlainLeaves.name, Tags.wideLeafName, Tags.tmplName, Tags.tmplWideLeafName]
+
+/-- **Where a wide-leaf statement (`Tags.wideLeaf`) is taken**: under `--zk`, outside a recursive session (`recursive`:
+any `--rec-…` flag). The wide-leaf schedule is the `--zk` verifier's (`Zk.schedule`); the plain verifier and a recursive
+session's checks read `fast100`, so a wide-leaf statement there would be checked at the other version's schedule. -/
+def wideLeafWhy (tags : Tags) (zk recursive : Bool) : Option String :=
+  if !tags.wideLeaf then none
+  else if !zk then some s!"refused: {tags.name}, a wide-leaf statement, without --zk: the plain verifier reads fast100, the other statement version's schedule"
+  else if recursive then some s!"refused: {tags.name}, a wide-leaf statement, in a recursive session: its checks read fast100, the other statement version's schedule"
+  else none
 
 def versionWhy (tags : Tags) : Option String :=
   if served.contains tags.name then none

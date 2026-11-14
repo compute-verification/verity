@@ -257,6 +257,7 @@ def test_price_twins_read_each_pin_s_statement_path_price_and_value_and_skip_wha
 
 LIFTED = "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192"
 LIFTED_G = "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192"
+LIFTED_OLD = "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"
 LIFTED_SOURCE = """namespace Pouw.Guarantees.PearlC
 
 open Pouw.PearlC Pouw.PearlC.Assumptions
@@ -273,12 +274,15 @@ end Pouw.Guarantees.PearlC
 """
 
 
-def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = True) -> tuple[dict, Path]:
-    """The audit and its Lean root, `G`'s source in the audit's definitions tree when ``recorded``, else in its proofs tree."""
+def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = True, lemmas: str = "") -> tuple[dict, Path]:
+    """The audit and its Lean root, `G`'s source in the audit's definitions tree when ``recorded``, else in its proofs tree,
+    and the repository's lemmas at device records (`REPO_LEMMAS`) ``lemmas``."""
     lean = tmp_path / "security"
     tree = "Definitions" if recorded else "Proofs"
     (lean / tree / "Pouw" / "Guarantees").mkdir(parents=True)
     (lean / tree / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
+    (tmp_path / P.REPO_LEMMAS).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / P.REPO_LEMMAS).write_text(lemmas)
     audit = {"guarantees": {LIFTED: {"type_hash": "l", "signature": [f"{LIFTED} :", f"  {LIFTED_G}"]}},
              "trees": {"definitions": ["Definitions"], "proofs": ["Proofs"]},
              "reads": {"Definitions.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"}}}}
@@ -289,8 +293,7 @@ def test_a_lifted_guarantee_s_twin_is_read_from_its_recorded_definition(tmp_path
     """A twin pinned as `X : G` is the twin its old theorem was: the gap, cast, prices and cap read off `G`'s body."""
     audit, lean = lifted_audit(tmp_path)
     (row,) = P.extract(P.guarantees(audit), "t", {LIFTED: "l"}, P.lifted_definitions(audit, lean))
-    old = P.parse("Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192",
-                  PINS["Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"])
+    old = P.parse(LIFTED_OLD, PINS[LIFTED_OLD])
     assert row == old | {"pin": LIFTED, "type_hash": "l", "source": "t", "status": "pinned"}
 
 
@@ -312,7 +315,7 @@ def test_a_lifted_twin_without_a_recorded_definition_stating_its_gamma_fails_clo
 def test_a_store_pin_the_repository_holds_lifted_is_one_twin_the_store_s(tmp_path):
     """The store's pins keep their names from before the lift and the gap's rename; the repository's lifted copy of one
     is the same pin, not a second twin stating it."""
-    old = "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"
+    old = LIFTED_OLD
     audit, lean = lifted_audit(tmp_path)
     (lean / "lean-audit.json").write_text(json.dumps(audit))
     store = tmp_path / "store"
@@ -323,16 +326,32 @@ def test_a_store_pin_the_repository_holds_lifted_is_one_twin_the_store_s(tmp_pat
     assert (twin["pin"], twin["source"], twin["status"]) == (old, P.LEAN_STORE, "pinned")
 
 
-def test_every_pinned_twin_of_the_repository_is_its_audit_s_pin_and_states_its_gamma():
-    """The table's twins from the repository's audit name pins it holds, at their type hashes, and reading those pins now,
-    lifted guarantees included, gives the table's rows: a pin that moves or goes fails here until the table follows it."""
+def test_a_lemma_at_a_device_record_is_a_pinned_twin_of_its_proof_s_name(tmp_path):
+    """A statement that left the guarantees for the lemmas beside its proof (`REPO_LEMMAS`) is the twin its guarantee was,
+    under the same name, with no type hash: its body read as a lifted guarantee's, and pinned."""
+    audit, lean = lifted_audit(tmp_path, lemmas=LIFTED_SOURCE)
+    pins, defs = P.lemmas(lean)
+    assert set(pins) == {LIFTED}
+    (row,) = P.extract(pins, P.REPO_LEMMAS, {}, defs, proved=True)
+    old = P.parse(LIFTED_OLD, PINS[LIFTED_OLD])
+    assert row == old | {"pin": LIFTED, "type_hash": None, "source": P.REPO_LEMMAS, "status": "pinned"}
+    other = LIFTED_SOURCE.replace("namespace Pouw.Guarantees.PearlC\n", "namespace Pouw.Guarantees\n")
+    assert P.lemmas(lifted_audit(tmp_path / "other", lemmas=other)[1]) == ({}, {})
+
+
+def test_every_pinned_twin_of_the_repository_is_its_pin_and_states_its_gamma():
+    """The table's twins from the repository, its audit's pins at their type hashes and its lemmas at device records, are
+    what reading those now gives, lifted guarantees included: a pin or lemma that moves or goes fails here until the table
+    follows it."""
     audit = json.loads(P.REPO_AUDIT.read_text())
-    defs = P.lifted_definitions(audit, P.REPO_AUDIT.parent)
-    table = [t for t in P.load() if t["source"] == P.REPO_SOURCE]
+    lemma_pins, lemma_defs = P.lemmas(P.REPO_AUDIT.parent)
+    read = {P.REPO_SOURCE: (P.guarantees(audit), P.lifted_definitions(audit, P.REPO_AUDIT.parent)),
+            P.REPO_LEMMAS: (lemma_pins, lemma_defs)}
+    table = [t for t in P.load() if t["source"] in read]
     assert table and all(t["status"] == "pinned" for t in table)
     assert LIFTED in {t["pin"] for t in table}
-    pins = P.guarantees(audit)
     for t in table:
+        pins, defs = read[t["source"]]
         assert pins[t["pin"]]["type_hash"] == t["type_hash"], t["pin"]
         assert P._jsonable(P.parse(t["pin"], pins[t["pin"]], defs)) | {"source": t["source"], "status": "pinned"} == t
 
@@ -434,13 +453,19 @@ def test_a_repository_only_refresh_keeps_the_store_s_rows_and_rereads_the_reposi
     repository's re-read."""
     doc = json.loads(P.TABLE.read_text())
     assert P.refresh(doc) == doc, "price_twins.json is stale: run python benchmarks/pouw/harness/price_twins.py --repository-only"
-    audit = json.loads(P.REPO_AUDIT.read_text())
-    gone = next(t["pin"] for t in doc["twins"] if t["source"] == P.REPO_SOURCE)
-    del audit["guarantees"][gone]
-    (tmp_path / "lean-audit.json").write_text(json.dumps(audit))
-    for root in audit["roots"]:
-        (tmp_path / root).symlink_to(P.REPO_AUDIT.parent / root)
-    assert gone not in {t["pin"] for t in P.refresh(doc, tmp_path / "lean-audit.json")["twins"]}
+    gone = next(t["pin"] for t in doc["twins"] if t["source"] == P.REPO_LEMMAS)
+    lean = tmp_path / "security"
+    lean.mkdir()
+    (lean / "lean-audit.json").write_text(P.REPO_AUDIT.read_text())
+    for root in json.loads(P.REPO_AUDIT.read_text())["roots"]:
+        (lean / root).symlink_to(P.REPO_AUDIT.parent / root)
+    short = gone.rsplit(".", 1)[1]
+    source = (P.REPO_AUDIT.parent.parent / P.REPO_LEMMAS).read_text()
+    edited = source.replace(f"{short} : Prop :=", f"{short}Other : Prop :=")
+    assert edited != source
+    (tmp_path / P.REPO_LEMMAS).parent.mkdir(parents=True)
+    (tmp_path / P.REPO_LEMMAS).write_text(edited)
+    assert gone not in {t["pin"] for t in P.refresh(doc, lean / "lean-audit.json")["twins"]}
 
 
 def test_a_lookup_names_what_it_lacks_and_the_table_stays_small():

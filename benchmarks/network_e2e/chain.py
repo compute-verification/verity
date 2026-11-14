@@ -880,10 +880,10 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
                    "Commit and the warden's cells in an IoTieWindow unit.")
     where = str(r.get("where") or "")
     if where.startswith("off the developer's node"):
-        out.append("Auditor host: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
-                   "the auditor host (--from takes a gate run's fetch).")
+        out.append("Auditor device: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
+                   "the auditor device (--from takes a gate run's fetch).")
     elif not where.startswith("gate: "):
-        out.append("Auditor host: the certifier ran off the gate (--from takes a gate run's fetch).")
+        out.append("Auditor device: the certifier ran off the gate (--from takes a gate run's fetch).")
     return out
 
 

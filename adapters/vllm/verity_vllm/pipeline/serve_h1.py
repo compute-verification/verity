@@ -17,13 +17,13 @@ own Commit.
   times. The digest is hashed as the descriptor is written, ``h1/`` `PROGRAM` beside `PROGRAM_META` (`served.write_program`),
   and ``served_verdicts.py program`` writes the same file without serving, so the period-open of it (``served_verdicts.py
   period open``) goes out before the server starts, ahead of window 0's reserve at startup.
-* **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
+* **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor device's
   challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.ChallengerGate`): window 0's
   session is reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at startup (`arm_of`) and
   window k+1's while window k serves, off the engine loop (`GateSessions.take`), each with its sampling session,
   reserved withheld, beside it (`pouw_h1_challenger.draw_families`); round 0 opens it on the window's open root
   (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the gate's open answers once the auditor
-  host's ``ssh -R`` listens there (looked for every `LISTEN_S`), and the sampling session opens on the sample root once
+  device's ``ssh -R`` listens there (looked for every `LISTEN_S`), and the sampling session opens on the sample root once
   the prover's commitment is in (`pouw_h1_window.DrawSession`), its coin commitment released only at its close; the
   release waits for both end entries. The gate's open answers a port no session without an end entry holds, so a window
   whose session opens while the window before is still releasing takes a port of its own. A reserve joins its lane's
@@ -85,10 +85,10 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.pipeline.serve_h1_draw import drawn_reads, drawn_units, units
-from verity_vllm.pipeline.serve_h1_gate import LISTEN_S, MARGIN, POLLS, GateSessions, listening
+from verity.protocols.accounting.pouw.prover.serving.h1.serve_draw import drawn_reads, drawn_units, units
+from verity.protocols.accounting.pouw.prover.serving.h1.serve_gate import LISTEN_S, MARGIN, POLLS, GateSessions, listening
 from verity_vllm.config import option
-from verity_vllm.protocols.pouw.h1 import PROGRAM, PROGRAM_META, SCHEME
+from verity.protocols.accounting.pouw.prover.serving.h1 import PROGRAM, PROGRAM_META, SCHEME
 
 ENTRY = f"pouw:{SCHEME}"
 #: the pouw settings the server sets for each window itself
@@ -130,13 +130,13 @@ class GateOptions:
     """serve-openai's ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` (its ``gate`` group,
     `sessions_of`, `serve_pearl.live`)."""
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
-                                         help="with --protocols: the auditor host's challenger gate, its command as one string "
+                                         help="with --protocols: the auditor device's challenger gate, its command as one string "
                                               "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
                                               "session of its own there and draws its coins from it (serve_h1.GateSessions), "
                                               "each Pearl+ window a salt-only session (serve_pearl.live); "
                                               "without it they are in-process and credit nothing")
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
-                                         help="with --challenger-gate: this machine's name in the auditor host's peers, where its "
+                                         help="with --challenger-gate: this machine's name in the auditor device's peers, where its "
                                               "challenger reaches the server (ssh -R)")
     challenger_lane: str | None = option("--challenger-lane", default=None, metavar="LANE",
                                          help="with --challenger-gate under Pearl+'s arm: the lane whose gate key the gate's "
@@ -220,7 +220,7 @@ def refusal(opts: Any) -> str | None:
     gate, peer = opts.gate.challenger_gate, opts.gate.challenger_peer
     if bool(gate) != bool(peer):
         return ("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in the "
-                "auditor host's peers, where its challenger reaches the server (ssh -R)")
+                "auditor device's peers, where its challenger reaches the server (ssh -R)")
     if opts.gate.challenger_lane:
         from verity_vllm.pipeline.serve_pearl import ENTRY as PEARL
 
@@ -269,7 +269,7 @@ class H1Windows:
     ``steps`` a window, ``config`` the pouw settings of ``--protocols-config``, ``engine`` the built ``vllm.LLM`` the
     runner and each window's coins come from, ``out`` where each window's transcript goes (``h1/w<k>/``). ``key`` is the
     weights' registration key (a fresh one when None); ``unit`` the Program's tile unit at each K (`h1window.tile_unit`
-    when None); ``sessions`` each window's session on the auditor host's challenger (`GateSessions`; None: in-process
+    when None); ``sessions`` each window's session on the auditor device's challenger (`GateSessions`; None: in-process
     coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
     None: kept nowhere, so no sampled proof block or round of it can be proved), the calls' state written by ``writer`` (a
     `pouw_h1_prover.Writer` whose ring holds the window's bytes, `pouw_h1_prover.kept_bytes`), whose files a window's
@@ -288,10 +288,10 @@ class H1Windows:
                  draws: Any = None, model_key: Callable[[str], tuple[bytes, str]] | None = None,
                  clock: Callable[[], float] = time.perf_counter, receipts: bool = False, tie: Any = None) -> None:
         from verity_vllm.protocols import pouw
-        from verity_vllm.protocols.pouw import h1 as PH
-        from verity_vllm.protocols.pouw.h1 import hooks as PHK
-        from verity_vllm.protocols.pouw.h1 import prover as PV
-        from verity_vllm.protocols.pouw.h1 import served as SV
+        from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+        from verity_vllm.protocols.pouw import h1_hooks as PHK
+        from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
+        from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
         self.model, self.com, self.rows, self.steps, self.engine = model, com, int(rows), int(steps), engine
         self.out, self.config, self.unit, self.sessions = Path(out), dict(config or {}), unit, sessions
@@ -350,8 +350,9 @@ class H1Windows:
         release's verdicts) and window 0's reserve ended (`GateSessions.settled`, made here unless made ahead already);
         ``readied``, with where each part's time went (``seconds``)."""
         from verity.protocols.accounting.pouw.verifier import verifier
-        from verity_vllm.protocols.pouw.h1 import hooks as PHK, receipts as RC
-        from verity_vllm.protocols.pouw.h1 import tables_device as TD
+        from verity_vllm.protocols.pouw import h1_hooks as PHK
+        from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
+        from verity.protocols.accounting.pouw.prover.serving.h1 import tables_device as TD
 
         t0 = self.clock()
         PHK.weight_roots(self.layers)
@@ -402,7 +403,7 @@ class H1Windows:
         from verity_vllm import protocols as PO
         from verity_vllm.acquire import h1_commit as HC
         from verity_vllm.protocols import pouw
-        from verity_vllm.protocols.pouw.h1 import receipts as RC, served as SV
+        from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC, served as SV
 
         if self.comp is not None:
             raise RuntimeError(f"{ENTRY}: window {window} opens while window {self.window}'s H1 is open")
@@ -443,7 +444,7 @@ class H1Windows:
     def prover_of(self, window: int) -> Path | None:
         """Window ``window``'s prover directory, ``prover/w<k>`` (owner-only, `pouw_h1_prover.private`), or None
         without ``prover``."""
-        from verity_vllm.protocols.pouw.h1 import prover as PV
+        from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 
         return None if self.prover is None else PV.private(PV.private(self.prover) / f"w{window}")
 
@@ -574,7 +575,7 @@ class H1Windows:
         if self._layout is None:
             from verity.protocols.accounting.pouw.verifier import credit as CR
 
-            from verity_vllm.protocols.pouw.h1 import served as SV
+            from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
             layout, why = CR.layout_of(SV.descriptor(self.program))
             if why is not None:
@@ -589,7 +590,7 @@ class H1Windows:
         ValueError when the session joined no period or the ledger commits it no K."""
         from verity.protocols.accounting.pouw.verifier import credit as CR
 
-        from verity_vllm.protocols.pouw.h1 import challenger as PHC
+        from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 
         if held is None:
             return PHC.draw_k(self.layout()), run.commits["calls_root"], "the proof system's draw_k (in-process coins)"
@@ -613,7 +614,7 @@ class H1Windows:
         """Window ``window``'s outcome. With ``prover``, a window that served a step and registered its live tables has
         its rounds' live@<s> rows dumped to ``prover/w<k>/live`` (`pouw_h1_live.dump`), its outcome's ``live_dump``;
         with ``receipts``, the calls its producer computed and their time, its ``receipts``."""
-        from verity_vllm.protocols.pouw.h1 import live as LV
+        from verity.protocols.accounting.pouw.prover.serving.h1 import live as LV
 
         d, c = run.details, run.commits
         live_dump = None

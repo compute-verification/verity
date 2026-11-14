@@ -1,17 +1,21 @@
 """A `match --run-dir` re-run (`verity_vllm.pipeline.match`) takes what its run.json records, the tier-b steps of a `--full-replay`
-run among them unless `--tier-b-steps` names others.  `--no-verify-weights`, `--keep-traces` and `--chains` reach the capture's
-command, the census's and the manifest.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the
+run among them unless `--tier-b-steps` names others.  `--no-verify-weights` and `--chains` reach the capture's command and the
+manifest, and `--keep-traces` no stage's.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the
 realized shape of its capture.  What the driver says of a run goes to the log: a stage's command and status, and each record it
 could not write.  The phase's last word on the realized shape, the shape or that it was not written, is a line on stderr as it is
-written, which a pod's script shows."""
+written, which a pod's script shows.  A run directory with no run.json, and a recorded workload this checkout lacks, are refused
+by name.  A re-run takes its checkpoint, its family and its engine arguments from run.json unless they are given.  A
+checkpoint's configuration is the file `--hf-config` names, else its directory's, else the hub's newest snapshot's."""
 from __future__ import annotations
 
 import json
+import re
 import shlex
 import sys
 
 import pytest
 
+from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import match as RC
 
@@ -89,7 +93,7 @@ def test_a_first_run_s_tier_b_steps_are_the_flag_s_else_step_0_and_three_decode_
     assert (steps(), steps("--tier-b-steps", "4"), steps("--tier-b-steps", "")) == ([0, 1, 2, 3], [0, 4], [0, 1, 2, 3, 4])
 
 
-def test_the_capture_verifies_the_weights_and_the_census_keeps_no_trace_unless_a_flag_says_otherwise(tmp_path):
+def test_the_capture_verifies_the_weights_unless_a_flag_says_otherwise_and_keeping_traces_changes_no_command(tmp_path):
     (tmp_path / "wl.json").write_text(json.dumps({"requests": [{"request_id": "r0", "prompt_len": 5, "max_tokens": 4}]}))
     run = _run_dir(tmp_path, snapshot_steps=[0, 1])
 
@@ -98,10 +102,9 @@ def test_the_capture_verifies_the_weights_and_the_census_keeps_no_trace_unless_a
         RC._defaults_from_run_dir(a)
         return RC.Plan(a).cmd(stage)
 
-    unverified, kept = cmd("capture", "--no-verify-weights"), cmd("census", "--keep-traces")
+    unverified = cmd("capture", "--no-verify-weights")
     assert "--verify-weights" not in unverified and cmd("capture") == [*unverified, "--verify-weights"]
-    assert "--no-traces" not in kept and cmd("census") == [*kept, "--no-traces"]
-    assert cmd("capture", "--keep-traces") == cmd("capture") and cmd("census", "--no-verify-weights") == cmd("census")
+    assert cmd("capture", "--keep-traces") == cmd("capture") and cmd("census", "--keep-traces") is None
 
 
 CPU_STAGES = ("resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "root_policy", "golden", "wiring",
@@ -148,6 +151,27 @@ def test_a_cpu_phase_with_every_stage_skipped_writes_the_manifest_the_spec_and_t
     assert _cpu_phase(run, "--no-verify-weights", "--chains", "5") == 0
     man = json.loads((run / "run.json").read_text())
     assert (man["verify_weights"], man["sampling"]["chains"]) == (False, 5)
+
+
+@pytest.mark.parametrize("kept, steps", [({"snapshot_steps": [2, 0, 2]}, [0, 2]), ({"steps": [2, 0, 2]}, [0, 2]), ({"steps": []}, None)])
+def test_the_realized_shape_is_each_request_as_its_capture_states_it_and_the_kept_steps_under_either_name(tmp_path, monkeypatch, kept, steps):
+    """A request's lengths are its stated ones, else its token ids' counts; its arrival step is 0 unless stated.  The capture's
+    engine steps may sit under its `timing`, and its kept steps under `steps` or `snapshot_steps`."""
+    run = _one_request_run(tmp_path, monkeypatch)
+    r0 = {"request_id": "r0", "prompt_token_ids": [1, 2, 3], "generated_token_ids": [4, 5], "max_tokens": 4, "arrive_step": 2,
+          "arrive_step_realized": 3, "first_step": 3, "finish_step": 4, "finish_reason": "eos"}
+    r1 = {"request_id": "r1", "prompt_len": 6, "n_generated": 1, "max_tokens": 1, "first_step": 0, "finish_step": 0, "finish_reason": "length"}
+    _capture(run, [r0, r1], timing={"engine_steps": 5}, expected_engine_steps=7, serving_profile="sp", context_class="short")
+    (run / "capture" / "snapshots.json").write_text(json.dumps(kept))
+    assert _cpu_phase(run) == 0
+    assert json.loads((run / "run.json").read_text())["realized"] == {
+        "requests": [{"request_id": "r0", "prompt_len": 3, "max_tokens": 4, "n_generated": 2, "arrive_step": 2, "arrive_step_realized": 3,
+                      "first_step": 3, "finish_step": 4, "finish_reason": "eos"},
+                     {"request_id": "r1", "prompt_len": 6, "max_tokens": 1, "n_generated": 1, "arrive_step": 0, "arrive_step_realized": None,
+                      "first_step": 0, "finish_step": 0, "finish_reason": "length"}],
+        "prompt_lens": [3, 6], "n_generated": [2, 1], "engine_steps_capture": 5, "engine_steps_control": None,
+        "expected_engine_steps_declared": 7, "serving_profile": "sp", "context_class": "short", "snapshot_steps_realized": steps,
+        "max_concurrent_requests": 1}
 
 
 def test_a_request_that_never_ran_leaves_no_peak_and_no_capture_leaves_no_realized_shape(tmp_path, monkeypatch):
@@ -294,5 +318,74 @@ def test_an_hf_config_that_is_no_checkpoint_s_reads_as_none_and_the_log_warns(tm
     a = cli.parse("match", ["--hf-config", str(tmp_path / "config.json")], {})
     assert RC._hf_config_of(a, None) is None
     (said,) = _said(caplog, "WARNING")
-    assert said.startswith(f"{tmp_path / 'config.json'}: no configuration read, so provenance falls back to \"hand\" (")
+    assert re.fullmatch(re.escape(f"{tmp_path / 'config.json'}: no configuration read, so provenance falls back to \"hand\" (") + r"\w+: .+\)", said)
     assert RC._hf_config_of(cli.parse("match", [], {}), None) is None and len(_said(caplog)) == 1      # none named: nothing to say
+
+
+def test_a_run_dir_with_no_run_json_and_a_recorded_workload_this_checkout_lacks_are_refused_by_name(tmp_path, monkeypatch):
+    (tmp_path / "empty").mkdir()
+    refusal = f"--run-dir {tmp_path / 'empty'}: no run.json (the GPU phase writes it)"
+    with pytest.raises(UsageError, match=f"^{re.escape(refusal)}$"):
+        RC._defaults_from_run_dir(cli.parse("match", ["--run-dir", str(tmp_path / "empty")], {}))
+    run = _run_dir(tmp_path, workload_path="workloads/gone.json")               # as the GPU phase's checkout named it
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(UsageError, match="^workload workloads/gone.json not found in this checkout$"):
+        RC._defaults_from_run_dir(cli.parse("match", ["--run-dir", str(run)], {}))
+    (tmp_path / "workloads").mkdir()
+    (tmp_path / "workloads" / "gone.json").write_text("{}")
+    a = cli.parse("match", ["--run-dir", str(run)], {})
+    RC._defaults_from_run_dir(a)
+    assert (a.workload, a.out) == ("workloads/gone.json", str(run))
+    (tmp_path / "unnamed").mkdir()
+    a = cli.parse("match", ["--run-dir", str(_run_dir(tmp_path / "unnamed", workload_path=None))], {})
+    RC._defaults_from_run_dir(a)                                                # a run.json that names no workload: `main` asks for one
+    assert a.workload is None
+
+
+def test_a_run_dir_rerun_takes_its_checkpoint_its_family_and_its_engine_arguments_from_run_json_unless_they_are_given(tmp_path):
+    engine = {"max_num_seqs": 2, "enforce_eager": True, "seed": 7, "name": "x"}
+    run = _run_dir(tmp_path, checkpoint_dir="/ck/snap", checkpoints="ck.json", family="fam", engine_args_requested=engine)
+    a = cli.parse("match", ["--run-dir", str(run)], {})
+    RC._defaults_from_run_dir(a)
+    assert (a.checkpoint_dir, a.checkpoints, a.family) == ("/ck/snap", "ck.json", "fam")
+    assert (a.max_num_seqs, a.engine_arg) == (2, ["seed=7", 'name="x"'])       # but for the two the driver has options of its own for
+    given = ["--checkpoint-dir", "/ck/other", "--checkpoints", "other.json", "--family", "f2", "--max-num-seqs", "4", "--engine-arg", "seed=1"]
+    b = cli.parse("match", ["--run-dir", str(run), *given], {})
+    RC._defaults_from_run_dir(b)
+    assert (b.checkpoint_dir, b.checkpoints, b.family, b.max_num_seqs, b.engine_arg) == ("/ck/other", "other.json", "f2", 4, ["seed=1"])
+    (tmp_path / "plain").mkdir()
+    c = cli.parse("match", ["--run-dir", str(_run_dir(tmp_path / "plain"))], {})
+    RC._defaults_from_run_dir(c)                                                # a run.json that records none of them
+    assert (c.checkpoint_dir, c.checkpoints, c.family, c.max_num_seqs, c.engine_arg) == (None, RC.DEFAULT_CHECKPOINTS, None, 8, [])
+
+
+HF_CONFIG = {"model_type": "llama", "hidden_size": 2048, "num_hidden_layers": 16, "num_attention_heads": 32, "num_key_value_heads": 8,
+             "head_dim": 64, "intermediate_size": 8192, "vocab_size": 128256, "rms_norm_eps": 1e-5, "rope_theta": 500000.0,
+             "max_position_embeddings": 131072}
+
+
+def test_a_checkpoint_s_configuration_is_the_named_file_s_then_its_directory_s_then_the_hub_s_newest_snapshot_s(tmp_path, monkeypatch):
+    def config(directory, hidden):
+        directory.mkdir(parents=True)
+        (directory / "config.json").write_text(json.dumps({**HF_CONFIG, "hidden_size": hidden}))
+        return str(directory / "config.json")
+
+    def hidden(*given, C):
+        read = RC._hf_config_of(cli.parse("match", [*given], {}), C)
+        return read and read["H"]
+
+    named, held, model = config(tmp_path / "named", 64), tmp_path / "held", {"model": "org/x"}
+    config(held, 128)
+    for home, sizes in ((tmp_path / "hf", (256, 512)), (tmp_path / "home" / ".cache" / "huggingface", (1024,))):
+        for name, size in zip("ab", sizes):
+            config(home / "hub" / "models--org--x" / "snapshots" / (name * 40), size)
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    assert hidden("--hf-config", named, "--checkpoint-dir", str(held), C=model) == 64
+    assert hidden("--checkpoint-dir", str(held), C=model) == hidden("--checkpoint-dir", str(held), C=None) == 128
+    # no file named and no directory that holds one: the profile's repository under the hub, the last snapshot by name
+    assert hidden(C=model) == hidden("--checkpoint-dir", str(tmp_path / "none"), C=model) == hidden("--checkpoint-dir", named, C=model) == 512
+    assert [hidden(C=C) for C in (None, {}, {"model": "org/y"})] == [None] * 3
+    assert hidden("--hf-config", str(tmp_path / "none.json"), "--checkpoint-dir", str(held), C=model) is None     # the named file or none
+    monkeypatch.delenv("HF_HOME")
+    assert hidden(C=model) == 1024                                              # the cache under the home directory

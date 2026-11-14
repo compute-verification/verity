@@ -1,12 +1,13 @@
-/-
-`Flock.Record`, `Flock.Transcript` over the hash oracle (`Flock.With.Hashes`): the replay transcript's squeeze checks a round's digest through the oracle,
-and the session record's digests are the oracle's. A transcript action that hashes nothing is the compiled verifier's own,
-lifted (`liftTM`).
--/
 module
 
 public import Flock.With.Hashes
 public import Flock.Record
+
+/-!
+`Flock.Record`, `Flock.Transcript` over the hash oracle (`Flock.With.Hashes`): the replay transcript's squeeze checks a round's digest through the oracle,
+and the session record's digests are the oracle's. A transcript action that hashes nothing is the compiled verifier's own,
+lifted (`liftTM`).
+-/
 
 @[expose] public section
 

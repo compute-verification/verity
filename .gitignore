@@ -61,6 +61,7 @@ verity/protocols/proofs/flock/prover/tests/fixtures/hidden-outputs
 verity/protocols/proofs/flock/prover/tests/fixtures/honest-session
 verity/protocols/proofs/flock/prover/tests/fixtures/honest-plain
 verity/protocols/proofs/flock/prover/tests/fixtures/plain-tree
+verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case
 benchmarks/machine_model/data/cover/corpus.json
 benchmarks/machine_model/data/cover/bu_12_9.json
 benchmarks/machine_model/data/cover/sass_isa_tables.json
@@ -84,7 +85,7 @@ verity/protocols/accounting/certifier/verifier/tests/fixtures/cache_step_vectors
 verity/protocols/accounting/certifier/verifier/tests/fixtures/replay_step_vectors.json
 fixtures/lean-vectors
 verity/circuits/silicon/captures/autoproof-probe-vectors.json
-fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
+benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
 adapters/vllm/data/logs/m1.jsonl.gz
 adapters/vllm/data/logs/m6/log.jsonl.gz
 adapters/vllm/tests/regression/files.toml

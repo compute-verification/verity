@@ -4,7 +4,7 @@
 A key is a sha256 over `FORMAT` and its parts: an absolute path by its content (a directory's: each file's relative path and
 content), any other string as itself, and with `code`, the static import closure of those modules (a repository module by its
 content and the environment variables it names, the rest by `uv.lock` and the interpreter). `run` keys an executable that
-reads only its argv's paths and what is under them (`flock-verify`, `flock-witness`). A directory's build samples its OS bytes
+reads only its argv's paths and what is under them (`verity-verify-proof`, `flock-witness`). A directory's build samples its OS bytes
 from a stream of its name, so two builds under one key are the same bytes, and is kept with the repository files it opened,
 which a hit must find unchanged. What can't be keyed (a relative or absent path, a read outside the repository, a process or
 thread started, a function run from a repository file outside the closure, a key that changed as it ran) is built and not

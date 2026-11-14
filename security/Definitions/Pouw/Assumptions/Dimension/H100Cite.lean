@@ -39,7 +39,7 @@ The 25 FP8 and H100 pins are statements. What a citation may claim is limited in
 
 namespace Pouw.Dimension.H100
 
-/-! ## Pinned statements (draft semantics, pending review) -/
+/-! ## Guarantees (draft semantics, pending review) -/
 
 /-- **Credit per register, codes per register** (draft semantics, pending review): under `Floor c`, if a
 well-formed `MH100w` program on free inputs matches on `S` a finite set `T` of 32-bit slots, pairwise distinct on `S`

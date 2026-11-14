@@ -1,5 +1,5 @@
-"""The SASS gate (`verity/protocols/accounting/pouw/prover/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `fixtures/sass_gate/ftz_probe.cu` and
-`ftz_refused.cu` (sm_120a, and 13.0.1's sm_90a): builds without flags pass, with every flagged instruction inside a pinned sequence; --use_fast_math, -ftz=true
+"""The SASS gate (`verity/protocols/accounting/pouw/prover/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `ftz_probe.cu` and
+`ftz_refused.cu` (in `verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/`; sm_120a, and 13.0.1's sm_90a): builds without flags pass, with every flagged instruction inside a pinned sequence; --use_fast_math, -ftz=true
 and the approximate -prec-div=false -prec-sqrt=false fail, as does every kernel of `ftz_refused.cu`; a cubin whose ptxas
 (version, build, arguments) isn't pinned with a numeric run exempts nothing; an instruction a toolkit excepts (MUFU.EX2
 under 13.0.1-sm_90a, on kernels' units_softmax) passes alone, in its one form, and nothing else does; kernels' units.cu
@@ -25,7 +25,7 @@ import pytest
 
 #: the gate as the harness's scripts hold it: one module a process, which `ieee_pin` loads from its repository path
 SG = ieee_pin.SG
-FIX = Path(__file__).parent / "fixtures" / "sass_gate"
+FIX = Path(__file__).parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "tests" / "fixtures" / "sass_gate"
 NOTES = json.loads((FIX / "tool_notes.json").read_text())
 PLAIN_COVERED = {"int-seed": 10, "__cuda_sm20_rem_s64": 1, "__cuda_sm20_div_u64": 1, "__cuda_sm20_div_u16": 1,
                  "sqrt-fast-path": 6, "__cuda_sm20_sqrt_rn_f32_slowpath": 18, "div-fast-path": 4,
@@ -312,6 +312,22 @@ def test_a_signature_ignores_how_an_immediate_is_loaded_and_nothing_else():
     assert verdict("plain", text=in_function(n, "udiv16_k", hfma, "MOV R3, 0x4b800000"))["covered"] == PLAIN_COVERED
     v = verdict("plain", text=in_function(n, "udiv16_k", hfma, "MOV R3, 0x4b800001"))
     assert {o["function"] for o in v["offending"]} == {"udiv16_k"} and "__cuda_sm20_div_u16's body" in v["offending"][0]["why"]
+
+
+def test_a_signature_writes_each_branch_target_by_what_it_names():
+    """A subroutine by its name, a RET's as the caller, a label of the body as how many basic blocks ahead it is, and a
+    label past the body's end as END."""
+    fn = next(f for f in map(SG.Function, SG.parse_nvdisasm(listing("plain"))) if f.name == "sqrt_k")
+    (name, start, end), = fn.subroutines.values()
+
+    def targets(s: int, e: int) -> list[str]:
+        items = [item for block in SG.signature(fn, s, e) for item in block]
+        return sorted(t for item in items for t in re.findall(r"`\(([^)\s]+)\)", item))
+
+    assert name == "__cuda_sm20_sqrt_rn_f32_slowpath"
+    assert targets(start, end) == ["B+2", "B+3", "B+4", "caller"]
+    assert targets(0, len(fn.insns)) == ["B+2", "B+2", "B+2", "B+3", "B+4", "B+4", name, "caller"]
+    assert targets(start, (start + end) // 2) == ["END", "END", "END"]
 
 
 def test_a_float_immediate_is_the_bits_struct_packs_and_none_exactly_where_float_or_struct_refuse():
@@ -798,6 +814,14 @@ def test_tool_notes_reads_every_record_and_refuses_a_short_one():
     short = struct.pack("<III", 12, 8, 2000) + b"NVIDIA Corp\0" + bytes(8)
     with pytest.raises(SG.SassGateFailed, match="a .note.nv.tkinfo record of 8 bytes"):
         SG.tool_notes(elf(SG.EM_CUDA, {".note.nv.tkinfo": short}))
+
+
+def test_a_tool_notes_last_string_may_end_with_its_record():
+    """A string no NUL closes runs to the record's end, and bytes that aren't UTF-8 are read as U+FFFD."""
+    desc = struct.pack("<II4I", 0x81, 0, 1, 7, 9, 11) + b"\0pt\xffas\0v\0b\0-arch  sm_120a"
+    note = struct.pack("<III", 12, len(desc), 2000) + b"NVIDIA Corp\0" + desc
+    assert SG.tool_notes(elf(SG.EM_CUDA, {".note.nv.tkinfo": note})) == [
+        {"tool": "pt\ufffdas", "version": "v", "branch": "b", "args": "-arch sm_120a"}]
 
 
 # ---- the binary's verdict -------------------------------------------------------------------------------------------------

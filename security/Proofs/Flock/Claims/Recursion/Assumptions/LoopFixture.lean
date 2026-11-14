@@ -38,7 +38,7 @@ prover or the world. It is witnessed outside Lean by a run of `verity/ml/flock/v
 place is the loop's own (`Skeleton.rounds`, then `Drive.openStep`, which `Loop.schedSoFar` reads) and the finish holds
 each rep's opening's and inner proof's rounds itself, on its table's level 0 from the loop (`Finish.tabOfLevel0`, which
 `Loop.realOf` reads). The session had one table and two reps. The table's root of record and its finish's were one, each
-rep left its proof file, the session's live verifier accepted with both reps passing, and `flock-verify verify --zk`
+rep left its proof file, the session's live verifier accepted with both reps passing, and `verity-verify-proof verify --zk`
 passed every check, refusing only for want of the verifier's Program (`ProvedScope.NO_PROGRAM`, its last check), so its
 setup of the statement passed. A rep's inner proof leaves only past its scheduled rounds, so the loop's history passed
 each rep stream's inner proof's round 0. The run is weaker than the Prop in two ways: no Lean term `x`, `w`, `ρ`, `h` or

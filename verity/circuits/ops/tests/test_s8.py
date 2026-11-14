@@ -1,5 +1,5 @@
 """`verity.circuits.ops.s8`: the exact s8 matmul family against the exact integer sums, the edited arms' identities as the
-references state them (`benchmarks/pouw/edited_gemm/egemm_ref.py`, `apv_ref.py`), the no-wrap refusals and the census rule."""
+references state them (`verity/protocols/accounting/pouw/prover/kernels/edited_gemm/egemm_ref.py`, `apv_ref.py`), the no-wrap refusals and the census rule."""
 from __future__ import annotations
 
 import random

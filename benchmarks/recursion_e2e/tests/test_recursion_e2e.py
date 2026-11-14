@@ -15,6 +15,9 @@ import rec_rows as RR
 import rec_table as RT
 import run as RUN
 
+#: oprove's mode through the ZK server, as 85 names its directories
+ZK = RP.ZK_SERVER_MODE
+
 
 def timev(wall: str, rss_kb: int = 2 * 2**20, user: float = 1.5, sys_: float = 0.5) -> str:
     return (f"\tUser time (seconds): {user}\n\tSystem time (seconds): {sys_}\n"
@@ -63,7 +66,7 @@ def job(tmp: Path) -> Path:
     for sub in ("proxy", "m0", "zk"):
         prover_dir(i / "inner" / sub)
     p = rep("oprove", 1)
-    prover_dir(p / "oprove" / "L0-firewall", (5.0, 6.0, 7.0))
+    prover_dir(p / "oprove" / f"L0-{ZK}", (5.0, 6.0, 7.0))
     prover_dir(p / "oprove" / "L0-dev", (1.0, 1.0, 1.0))
     prover_dir(p / "oprove" / "alg-p0-dev", (2.0, 2.0, 2.0), accepted=False)
     for n in (1, 2):
@@ -135,12 +138,12 @@ def test_a_proxy_run_with_no_verdict_is_neither_accepted_nor_refused(tmp_path: P
 
 def test_outer_rows_by_mode_and_the_summary(tmp_path: Path) -> None:
     doc = RP.read(job(tmp_path))
-    fw = next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == "firewall")
-    assert fw["wall_s"]["median"] == 6.0 and fw["extra"]["statement"] == "L0"
+    zk = next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == ZK)
+    assert zk["wall_s"]["median"] == 6.0 and zk["extra"]["statement"] == "L0"
     alg = next(r for r in doc["rows"] if r["stage"] == "outer alg-p0")
     assert alg["ok"] is False and alg["extra"]["mode"] == "dev"
     s = doc["summary"]
-    assert s["outer"]["firewall"] == {"prove_s": 6.0, "e2e_s": 6.5, "proof_bytes": 2000, "statements": 1}
+    assert s["outer"][ZK] == {"prove_s": 6.0, "e2e_s": 6.5, "proof_bytes": 2000, "statements": 1}
     assert s["outer"]["dev"]["prove_s"] == 3.0 and s["outer"]["dev"]["statements"] == 2
     assert s["slowest"]["stage"] == "lean L0"                                             # 61.5 s, the largest median
     assert s["pipeline"]["outer prove (dev) e2e_s"] == 4.0    # dev proved both statements, ZK server one
@@ -194,28 +197,29 @@ def test_a_step_that_never_ran_is_not_a_row_and_a_failed_prover_says_so(tmp_path
 def test_a_preempted_statement_says_how_often(tmp_path: Path) -> None:
     o = job(tmp_path)
     out = o / "steps" / "oprove" / "r1" / "out"
-    (out / "oprove" / "L1-firewall").mkdir()
-    (out / "oprove" / "L1-firewall" / "prove.err").write_text("gpu-lease: GPU 1 (GPU-x) held 2m00s\n")
-    (out / "preempted.txt").write_text("".join(f"loopback L1-firewall: lease preempted, try {t}\n" for t in (1, 2, 3)))
+    (out / "oprove" / f"L1-{ZK}").mkdir()
+    (out / "oprove" / f"L1-{ZK}" / "prove.err").write_text("gpu-lease: GPU 1 (GPU-x) held 2m00s\n")
+    (out / "preempted.txt").write_text("".join(f"loopback L1-{ZK}: lease preempted, try {t}\n" for t in (1, 2, 3)))
     l1 = row(RP.read(o), "outer L1")
     assert l1["ok"] is False and l1["extra"]["preempted"] == 3
     assert l1["note"] == "lease preempted 3x; no run finished in the lease's 2m00s"
 
 
-def test_the_lean_firewall_is_read_from_the_runs_process_samples(tmp_path: Path) -> None:
+def test_the_zk_servers_lean_loop_is_read_from_the_runs_process_samples(tmp_path: Path) -> None:
     o = job(tmp_path)
 
     def sample(t: str, cpu: float) -> str:
-        procs = [{"pid": 7, "comm": "flock-firewall", "cpu_s": cpu, "rss_hwm_bytes": 8 * 2**30, "threads": 203},
-                 {"pid": 8, "comm": "flock-firewall", "cpu_s": 0.1, "rss_hwm_bytes": 0, "threads": 4},
+        procs = [{"pid": 7, "comm": RP.LOOP_PROCESS, "cpu_s": cpu, "rss_hwm_bytes": 8 * 2**30, "threads": 203},
+                 {"pid": 8, "comm": RP.LOOP_PROCESS, "cpu_s": 0.1, "rss_hwm_bytes": 0, "threads": 4},
                  {"pid": 9, "comm": "flock-circuit", "cpu_s": 16.0}]
         return json.dumps({"kind": "process", "t_utc": t, "processes": procs}, separators=(",", ":")) + "\n"
     (tmp_path / "resources.jsonl").write_text(sample("2026-10-24T07:17:46.6Z", 2.0) + sample("2026-10-24T07:26:27.6Z", 1177.0))
     doc = RP.read(o)
-    assert doc["summary"]["flock_firewall"] == [{"pid": 7, "first": "2026-10-24T07:17:46.6Z", "last": "2026-10-24T07:26:27.6Z",
-                                                 "cpu_s": 1177.0, "rss_hwm_gb": 8.0, "threads": 203}]
-    assert "flock-firewall" in next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == "firewall")["note"]
+    assert doc["summary"][RP.LOOP] == [{"pid": 7, "first": "2026-10-24T07:17:46.6Z", "last": "2026-10-24T07:26:27.6Z",
+                                        "cpu_s": 1177.0, "rss_hwm_gb": 8.0, "threads": 203}]
+    assert "Lean session loop" in next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == ZK)["note"]
     assert "1177 CPU s, peak RSS 8.0 GB, 203 threads, seen 07:17:46–07:26:27Z" in RT.markdown(doc)
+    assert RP.loop_line({RP.RECORDED_LOOP: doc["summary"][RP.LOOP]}) == RP.loop_line(doc["summary"])
 
 
 def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
@@ -236,7 +240,7 @@ def test_merge_takes_a_later_runs_row_for_the_same_step_stage_and_mode(tmp_path:
     b["rows"] = [r for r in b["rows"] if r["step"] == "oprove"]
     m = RP.merge([a, b])
     l0 = [r for r in m["rows"] if r["stage"] == "outer L0"]
-    assert {(r["extra"]["mode"], r["extra"]["run"], r["wall_s"]["median"]) for r in l0} == {("firewall", "rB", 6.0), ("dev", "rB", 4.0)}
+    assert {(r["extra"]["mode"], r["extra"]["run"], r["wall_s"]["median"]) for r in l0} == {(ZK, "rB", 6.0), ("dev", "rB", 4.0)}
     assert next(r for r in m["rows"] if r["stage"] == "build")["extra"]["run"] == "rA"
     assert [r["step"] for r in m["rows"]].index("oprove") > [r["step"] for r in m["rows"]].index("vstage")
     assert m["summary"]["outer"]["dev"]["prove_s"] == 6.0          # rB's L0 4.0 and alg-p0's 2.0
@@ -254,7 +258,7 @@ def test_a_cancelled_run_is_read_from_its_records(tmp_path: Path, monkeypatch, c
     o = job(tmp_path / ".research" / "runs" / "r20261024-000000-cafe")
     for step in ("icheck", "vstage", "lean"):
         shutil.rmtree(o / "steps" / step)
-    stopped = o / "steps" / "oprove" / "r1" / "out" / "oprove" / "L1-firewall"
+    stopped = o / "steps" / "oprove" / "r1" / "out" / "oprove" / f"L1-{ZK}"
     stopped.mkdir()
     (stopped / "prove.err").write_text("ZKRANK\t{}\n")
     (o / "steps" / "oprove" / "r1" / "rc").unlink()
@@ -311,19 +315,19 @@ def test_vstage_rows_carry_what_rec_vstage_staged(tmp_path: Path) -> None:
     assert sorted(row(doc, "stage alg")["extra"]["units"]) == ["alg-p0", "alg-p1"]
 
 
-def test_each_statement_has_its_own_lease_from_its_firewalled_release(capsys) -> None:
+def test_each_statement_has_its_own_lease_from_its_release_through_the_zk_server(capsys) -> None:
     assert RUN.stmt_lease_min("L0") == 94 and RUN.stmt_lease_min("L3") == 12 and RUN.stmt_lease_min("cap-L3") == 2
-    assert RUN.lease_min(1) == 94 and RUN.lease_min(2) == 187 and RUN.lease_min(1, firewall=False) == 10
+    assert RUN.lease_min(1) == 94 and RUN.lease_min(2) == 187 and RUN.lease_min(1, zk_server=False) == 10
     assert RUN.lease_min(1, levels="L3") == 12 and RUN.lease_min(1, levels="alg") == 22      # alg: alg-p0 and alg-p1
     assert RUN.statements("alg,cap") == ["alg-p0", "alg-p1", "cap"] and len(RUN.statements()) == 10
     assert RUN.main(["plan"]) == 0
     assert "leases (min): L0 94, L1 23, L2 21, L3 12, alg-p0 21, alg-p1 22, cap 2," in capsys.readouterr().out
     assert RUN.main(["run", "--dry-run"]) == 0
     cmd = capsys.readouterr().out.split()
-    assert "MODES=firewall" in cmd and "GPU_MAX_MIN=94" in cmd and "OPROVE_RUNS=1" in cmd
+    assert f"MODES={ZK}" in cmd and "GPU_MAX_MIN=94" in cmd and "OPROVE_RUNS=1" in cmd
     every = int(cmd[cmd.index("--timeout") + 1].removesuffix("m"))
     assert every > 7870 * 1.5 / 60                                         # every statement's release, one at a time
-    assert cmd[cmd.index("--mem-gb") + 1] == "128"                          # L0's firewalled release peaked at 99 GB
+    assert cmd[cmd.index("--mem-gb") + 1] == "128"                          # L0's release through the ZK server peaked at 99 GB
     assert RUN.main(["run", "--dry-run", "--env", "LEVELS=L3"]) == 0
     cmd = capsys.readouterr().out.split()
     assert "GPU_MAX_MIN=12" in cmd and int(cmd[cmd.index("--timeout") + 1].removesuffix("m")) < every - 60
@@ -335,12 +339,12 @@ def test_each_statement_has_its_own_lease_from_its_firewalled_release(capsys) ->
     assert cmd[cmd.index("--mem-gb") + 1] == "200"
 
 
-def test_firewalled_statements_name_the_cpu_prover(tmp_path: Path, capsys) -> None:
+def test_statements_behind_the_zk_server_name_the_cpu_prover(tmp_path: Path, capsys) -> None:
     o = job(tmp_path)
     (o / "params.txt").write_text("commit=abc K=4096 N=2 WARM=1 RUNS=3 REPEAT=2\n"
                                   "OPROVE_WARM=0 OPROVE_RUNS=1 OPROVE_GPU=0 OPROVE_JOBS=1\n")
     doc = RP.read(o)
-    r = next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == "firewall")
+    r = next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == ZK)
     assert r["what"].endswith(", CPU prover") and r["extra"]["prover"] == "cpu"
     assert "V* statements 1 at a time" in RT.markdown(doc)
     assert RUN.main(["run", "--dry-run", "--oprove-gpu", "1"]) == 0
@@ -349,11 +353,11 @@ def test_firewalled_statements_name_the_cpu_prover(tmp_path: Path, capsys) -> No
 
 def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(tmp_path: Path) -> None:
     o = job(tmp_path)
-    d = o / "steps" / "oprove" / "r1" / "out" / "oprove" / "forged-coef-L0-firewall"
+    d = o / "steps" / "oprove" / "r1" / "out" / "oprove" / f"forged-coef-L0-{ZK}"
     d.mkdir(parents=True)
     stop = "FIREWALL-REFUSED: circuit: the constraints lincheck fails"
     (d / "prove.tsv").write_text(f"1792871908.2\tLIVE\t{json.dumps({'accepted': False, 'prover_stopped': stop})}\n")
-    d = d.parent / "forged-dirs-L0-firewall"
+    d = d.parent / f"forged-dirs-L0-{ZK}"
     d.mkdir()
     (d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\n")
     for n in (1, 2):
@@ -379,7 +383,7 @@ def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(t
     assert coef["ok"] is True and coef["note"].endswith(stop)        # the release the ZK server stopped, from its LIVE record
     outer = row(doc, "outer forged-dirs-L0")
     assert outer["ok"] is True and outer["note"].startswith("no run finished") and "FIREWALL-REFUSED" in outer["note"]
-    assert doc["summary"]["outer"]["firewall"]["statements"] == 1      # a forged statement is no part of the run's cost
+    assert doc["summary"]["outer"][ZK]["statements"] == 1      # a forged statement is no part of the run's cost
     assert row(doc, "lean forged-top-L0")["ok"] is True
     assert row(doc, "lean forged-sum-alg-p0")["ok"] is True
     honest_part = row(doc, "lean forged-sum-alg-p1")

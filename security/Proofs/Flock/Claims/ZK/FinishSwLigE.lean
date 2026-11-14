@@ -207,7 +207,7 @@ theorem swSrcE_ligHyp_E {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ :
       (ligBasis x c w τ j r extras) (layE x j) (_root_.Flock.Firewall.Finish.padsOf q.draws).h r.val (zkTab x j).tPad
       ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val) ((UE.tapeZk τ).salt j.val r.val)
       ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val) := by
-  obtain ⟨h25, -, hsm, hk0, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, -, hsm, hk0, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   obtain ⟨hn7, h2, -⟩ := hdim
   obtain ⟨ey1, eybar, esalt⟩ := swSrcE_restart x c w (valsFw x c A B) τ j.val r.val
   have hy1 := ligY1E x hx w hw τ c n hn s spec hs j r extras he

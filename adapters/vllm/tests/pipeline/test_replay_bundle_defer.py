@@ -1,6 +1,6 @@
 """`replay_bundle.defer` at the C2 site of a deferred run: the slim bundle of a planned replay's reads, a plan that fails, a store
-over its bound and a write that was started beside the checks, with the line each logs.  CPU only; sealing and opening a
-bundle are `test_replay_bundle.py`."""
+over its bound and a write that was started beside the checks, with the line each logs, and when the placed identities go
+with the bundle.  CPU only; sealing and opening a bundle are `test_replay_bundle.py`."""
 from __future__ import annotations
 
 import logging
@@ -46,9 +46,10 @@ class Site:
         self.args = SimpleNamespace(**{"replay_deferred": "slim", "retain": "host", "required_manifest": None, "openings": 64} | args)
 
     def defer(self, **kw: Any) -> bool:
-        return RB.defer(self.out, 1, self.com, self.rc, self.args, tl=self.tl, arm="instrumented", versions={}, reqs=[], sampling={},
-                        tokens={}, stop_of_record=None, ids_full=None, declaration=None, required_classes=[], row=self.row,
-                        deferred=self.deferred, **kw)
+        """`defer` for a run of no request, or of the `reqs`, `tokens` and `ids_full` given."""
+        run: dict[str, Any] = {"reqs": [], "tokens": {}, "ids_full": None} | kw
+        return RB.defer(self.out, 1, self.com, self.rc, self.args, tl=self.tl, arm="instrumented", versions={}, sampling={},
+                        stop_of_record=None, declaration=None, required_classes=[], row=self.row, deferred=self.deferred, **run)
 
     def store_bytes(self) -> int:
         return sum(p.stat().st_size for p in (RB.partial(self.out, 1) / "store").rglob("*.bin"))
@@ -111,6 +112,21 @@ def test_a_store_over_its_bound_defers_nothing_and_the_replay_runs_in_process(tm
                           "in this process")]
 
 
+@pytest.mark.parametrize("tokens, kept", [({"a": [5, 6, 7], "b": [8]}, False), ({"a": [5, 6], "b": [8]}, True),
+                                          ({"a": [5, 6, 7], "b": []}, True), ({"a": [5, 6, 7, 9], "b": [8]}, False)])
+def test_the_placed_identities_go_with_the_bundle_only_when_a_request_stopped_early(tmp_path: Path, tokens: dict[str, list[int]],
+                                                                                    kept: bool) -> None:
+    """The replay reconciles what was not executed against the identities at the steps they were placed at, and reads them only
+    for a run in which a request stopped early: one whose served tokens are fewer than its `max_tokens`.  A request that
+    served as many, or more, is not one."""
+    site = Site(tmp_path, replay_deferred="full")
+    reqs = [{"request_id": "a", "max_tokens": 3}, {"request_id": "b", "max_tokens": 1}]
+    identities = [{"member": MEMBER, "engine_step": 0}]
+    assert site.defer(reqs=reqs, tokens=tokens, ids_full=identities)
+    context = site.deferred[1]
+    assert (context["requests"], context["tokens"], context["ids_full"]) == (reqs, tokens, identities if kept else None)
+
+
 def test_a_write_started_beside_the_checks_is_the_one_defer_takes(tmp_path: Path, logged: Lines) -> None:
     site = Site(tmp_path, replay_deferred="full", replay_bundle_overlap=1)
     started = RB.start(site.out, 1, site.com, site.rc, site.args, None)
@@ -121,6 +137,55 @@ def test_a_write_started_beside_the_checks_is_the_one_defer_takes(tmp_path: Path
     assert re.fullmatch(r"\[delta\] REPLAY BUNDLE \(pair 1\): store written in [0-9.]+ s beside the checks before the C2 site "
                         r"\(waited [0-9.]+ s here\)", taken), taken
     assert deferred == f"[delta] C2 SAMPLED REPLAY + LINKAGE (pair 1): DEFERRED -- store and weights tree written to {RB.partial(site.out, 1)}"
+
+
+NO_TREE = "replay bundle: the committer kept no weights tree for the run's committed weights root (register_weights)"
+
+
+@pytest.mark.parametrize("overlap", [1, 0], ids=["beside-the-checks", "at-the-site"])
+@pytest.mark.parametrize("tree", [None, {}, {"root": "ab" * 64, "names": []}], ids=["none", "empty", "another-root"])
+def test_a_committer_that_kept_no_tree_of_the_run_s_committed_weights_is_refused_where_the_write_is_taken(tmp_path: Path,
+                                                                                                         tree: dict[str, Any] | None,
+                                                                                                         overlap: int) -> None:
+    """A bundle carries the committed weights tree: a committer that kept none, or one of another root than the run registered, is
+    refused by name.  `start` reads the tree before it returns and keeps the refusal for its writer, so it is raised where the
+    write is taken, by `defer`, as it is for a write made there; a write started beside the checks has then written nothing."""
+    site = Site(tmp_path, replay_deferred="full", replay_bundle_overlap=overlap)
+    site.com.weights_tree = tree
+    started = RB.start(site.out, 1, site.com, site.rc, site.args, None)
+    assert (started is not None) == bool(overlap)
+    with pytest.raises(ValueError, match=f"^{re.escape(NO_TREE)}$"):
+        site.defer(started=started)
+    assert site.row == {"commit": {}} and site.deferred == {} and (started is None or not RB.partial(site.out, 1).exists())
+
+
+def test_a_registered_tensor_of_another_size_than_its_tree_entry_is_refused_by_name(tmp_path: Path) -> None:
+    """The bundle carries the bytes of the registered buffers, read from the model: one that holds another number of bytes than the
+    tree registers for it is refused with both; a tensor the tree names that is not a buffer is not read at all."""
+    torch = pytest.importorskip("torch")
+    site = Site(tmp_path, replay_deferred="full")
+    cos = torch.arange(4, dtype=torch.int32)
+    site.com.model.register_buffer("cos", cos)
+    site.com.weights_tree["names"] = [["w", "bfloat16", [2], 4], ["cos", "int32", [4], 12]]
+    with pytest.raises(ValueError, match="^replay bundle: cos holds 16 B, registered 12 B$"):
+        RB.weights_extra(site.com, site.rc)
+    site.com.weights_tree["names"][1][3] = 16
+    tree, extra = RB.weights_extra(site.com, site.rc)
+    assert tree is site.com.weights_tree and [(i, name, bytes(raw)) for i, name, raw in extra] == [(1, "cos", cos.numpy().tobytes())]
+
+
+def test_a_partial_bundle_an_earlier_commit_left_is_removed_before_the_store_is_written(tmp_path: Path) -> None:
+    """A Commit that ended before its bundle was sealed leaves the partial dir; the next write of the pair's bundle starts from
+    none, so the bundle holds the files of its own write and no other."""
+    again, fresh = Site(tmp_path / "again", replay_deferred="full"), Site(tmp_path / "fresh", replay_deferred="full")
+    left = RB.partial(again.out, 1) / "store" / "raw" / "left.bin"
+    left.parent.mkdir(parents=True)
+    left.write_bytes(b"an earlier Commit's")
+    assert again.defer() and fresh.defer()
+
+    def files(site: Site) -> set[str]:
+        return {f.relative_to(RB.partial(site.out, 1)).as_posix() for f in RB.partial(site.out, 1).rglob("*") if f.is_file()}
+    assert not left.exists() and files(again) == files(fresh) and "weights/tree.json" in files(again)
 
 
 def flags(**more: Any) -> SimpleNamespace:

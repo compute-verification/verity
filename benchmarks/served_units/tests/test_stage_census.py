@@ -19,6 +19,7 @@ from conftest import load
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import program_digest
 from verity.circuits.types import Array, Value
+from verity_flock import circuit as FC
 
 SILU = "SiluMul_v2{I=256}"
 
@@ -58,14 +59,20 @@ def test_census_leaves_bits(stage):
         stage.census_leaves(np.random.default_rng(7), Array(24, Value(1)), 3)
 
 
+TEMPLATE = "def unit\nend\n"
+
+
 class Stager:
-    """`UnitStager`'s face to `stage_census`: its META (k_log 32 and 4 units a block, so a statement holds 32 instances),
-    the rows it is handed, and the files a staging writes."""
+    """`UnitStager`'s face to `stage_census`: its META (k_log 32 and 4 units a block, so a statement holds 32 instances;
+    with a ``layout`` the templated statement, its circuit's template section ``TEMPLATE``), the rows it is handed, and the
+    files a staging writes."""
 
     seen: dict = {}
 
     def __init__(self, d, name, in_rows, out_rows, circuit, **stmt):
-        self.meta = {"k_log": 32, "vus_per_block": 4}
+        tmpl = {"statement": FC.TMPL_STATEMENT, "layout": stmt["layout"]} if "layout" in stmt else {"statement": FC.STATEMENT}
+        self.meta = {"k_log": 32, "vus_per_block": 4, **tmpl}
+        self.text = "FLOCK\nMETA {}\n" + (FC.template_section(TEMPLATE) if "layout" in stmt else "") + "rows\n"
         self.low = SimpleNamespace(layout=SimpleNamespace(counts={"ands": 5, "rows": 6, "nnz_a": 7, "nnz_b": 8}))
         self.pin, self.class_sha512 = "p" * 128, "c" * 128
         Stager.seen.update(definition=d.id, name=name, stmt=stmt, circuit=circuit)
@@ -92,7 +99,9 @@ def test_main_unbound(stage, monkeypatch, tmp_path, capsys, spec, n, want):
     assert (tmp_path / "pin.txt").read_text() == "p" * 128 and rec["class_sha512"] == "c" * 128
     assert rec["nets"] == [{"net": "unit", "ands": 5, "rows": 6, "nnz_a": 7, "nnz_b": 8}]
     assert (rec["k_log"], rec["vus_per_block"], rec["circuit_bytes"], rec["inst_bytes"]) == (32, 4, 2, 2)
-    assert Stager.seen["circuit"] == tmp_path / "circuit.txt" and Stager.seen["stmt"] == rec["statement"]
+    assert Stager.seen["circuit"] == tmp_path / "circuit.txt"
+    assert rec["statement"] == {**Stager.seen["stmt"], "id": FC.STATEMENT}
+    assert not (tmp_path / "unit.tmpl").exists() and not (tmp_path / "unit.layout").exists()
     assert Stager.seen["rows"] == {r: (want, b // 16) for r, _s, b, _ps in rec["in_rows"]}
     assert "bind" not in rec and not (tmp_path / "partition.json").exists() and not (tmp_path / "program.json").exists()
 
@@ -160,6 +169,21 @@ def test_rebind_refuses(stage, tmp_path):
         with pytest.raises(SystemExit, match=why):
             stage.rebind(f, stage.UNBOUND, new)
         assert f.read_bytes() == bad
+
+
+def test_main_writes_a_templated_statements_template(stage, monkeypatch, tmp_path, capsys):
+    """A census table read (`EmbeddingRead_v1`) is staged as the templated statement at the read layout, as serving stages
+    it, so its template and layout mode go beside the circuit for ``flock-tmpl-unit`` and stage.json names the statement
+    (under --unbound, which this stand-in stager covers; the template is written either way)."""
+    from verity_vllm.pipeline.chunk_rows import READ_LAYOUT
+
+    monkeypatch.setattr(stage.CS, "UnitStager", Stager)
+    monkeypatch.setattr(sys, "argv", ["stage.py", "census:EmbeddingRead_v1{V=256,H=4}", "2", str(tmp_path), "--unbound"])
+    stage.main()
+    rec = json.loads((tmp_path / "stage.json").read_text())
+    assert Stager.seen["stmt"] == {"layout": READ_LAYOUT, "structural": True}
+    assert rec["statement"] == {"layout": READ_LAYOUT, "structural": True, "id": FC.TMPL_STATEMENT}
+    assert (tmp_path / "unit.tmpl").read_text() == TEMPLATE and (tmp_path / "unit.layout").read_text() == READ_LAYOUT
 
 
 @pytest.mark.parametrize(("argv", "why"), [([f"census:{SILU}", "full/0"], "invalid literal"),

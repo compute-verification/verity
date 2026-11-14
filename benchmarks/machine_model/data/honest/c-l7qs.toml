@@ -5,7 +5,7 @@
 # Llama-3.1-8B's linears at 2,048 tokens run 1.47-1.52x plain int8 (cuBLASLt), within 1.7% of e_l7qs.
 name = "c-l7qs"
 status = "measured"
-source = "BC-KERNEL's c_l7qs (benchmarks/pouw/edited_gemm/cgemm.cu) at 8192^3, `eps_profile.py OUT --toml`, census VF3n-16's classes (bit-exact against checked_strip's co32c_words, cgemm_ref.py)"
+source = "BC-KERNEL's c_l7qs (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cgemm.cu) at 8192^3, `eps_profile.py OUT --toml`, census VF3n-16's classes (bit-exact against checked_strip's co32c_words, cgemm_ref.py)"
 L = 32
 
 [mma]

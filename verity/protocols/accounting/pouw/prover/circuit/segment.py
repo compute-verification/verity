@@ -80,7 +80,7 @@ v2's receipts (windows of S segments, one word each, the same keys and leaves), 
 segment, every window's keys and receipt leaf (the thread at the same position ``rsel`` in each), bsel's bits 8.. unread.
 1 exactly when every window's fold of T_(wS-1), T_(wS), ..., T_(wS+S-1), the T recomputed, is its leaf's word.
 
-H1 (cgemm.cu's c_l7qs, `benchmarks/pouw/edited_gemm/cgemm_ref.py`) serves O = (W + c) X^T with X = V + b (b the dither
+H1 (cgemm.cu's c_l7qs, `verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cgemm_ref.py`) serves O = (W + c) X^T with X = V + b (b the dither
 bits) on the tile's rows and W' = W + c + U (c the coin bits, U period 32) on its columns, and absorbs one call-wide fold a
 thread: T_0 .. T_(KS-1), then O' = T_last - U A_0 and D_d = U A_d (1 <= d < m) for the digits A_d of X's residue sums
 (`call_words`, m = `n_digits`(KS)). fx1 multiplies word q by `fx1_key`(q) first. Its receipt is a thread's 8 chain words

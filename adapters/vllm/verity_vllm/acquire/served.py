@@ -50,7 +50,6 @@ import hashlib
 import json
 import os
 import re
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -71,8 +70,9 @@ from verity_vllm.query.manifest.format import SERVED_IDS as IDS
 from verity_vllm.query.manifest.format import SERVED_LOGITS as LOGITS
 from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
 from verity_vllm.query.manifest.format import SERVED_SAMPLED as SAMPLED
+from verity_vllm.records.schema_ids import SERVED_REQUIRED_MANIFEST_KIND
 
-KIND = "verity/served-required-manifest/v1"
+KIND = SERVED_REQUIRED_MANIFEST_KIND
 FAMILY = SERVED_FAMILY
 #: vllm-flash-attn's `_DEFAULT_MAX_NUM_SPLITS_FOR_CUDA_GRAPH`: the static split count of a step a full graph may hold
 SPLIT_CAP = 32
@@ -162,8 +162,7 @@ class _Piece:
 
     def _register(self, name: str, dims: list[str], strides: list[str]) -> None:
         inner = dims[1:] if self._token(dims) else dims
-        want = ([str(_prod(inner))] if self._token(dims) else []) + _contiguous(inner)
-        if strides != want or any(not d.isdigit() for d in inner):
+        if any(not d.isdecimal() for d in inner) or strides != ([str(_prod(inner))] if self._token(dims) else []) + _contiguous(inner):
             raise self.fail(f"{name} {dims} strides {strides}: not a row-major buffer of token rows or a constant shape")
         self.shape[name] = (dims, strides)
 
@@ -188,7 +187,7 @@ class _Piece:
         bd = self.shape[name][0]
         if self._token(bd):
             W, inner = _prod(bd[1:]), dims[1:]
-            if (not self._token(dims) or any(not d.isdigit() for d in inner) or strides != [str(W)] + _contiguous(inner)
+            if (not self._token(dims) or any(not d.isdecimal() for d in inner) or strides != [str(W)] + _contiguous(inner)
                     or not 0 <= off <= off + _prod(inner) <= W):
                 raise self.fail(f"view {dims} {strides} +{off} of {name} {bd}: not a column range of its rows")
             w = _prod(inner)
@@ -248,7 +247,7 @@ class _Piece:
                 raise self.fail(f"{line!r}: reuse of an unknown buffer")
             if m.group(2):
                 dims, strides = C._dims(m.group(3)), C._dims(m.group(4))
-                if int(m.group(5)) != 0 or _prod(dims[1:]) > _prod(self.shape[old][0][1:]):
+                if int(m.group(5)) != 0 or any(not d.isdecimal() for d in dims[1:]) or _prod(dims[1:]) > _prod(self.shape[old][0][1:]):
                     raise self.fail(f"{line!r}: reuse beyond the dead buffer's rows")
             else:
                 dims, strides = self.shape[old]
@@ -381,7 +380,8 @@ _GRAPH_RETURN = re.compile(r"^\s*return \((\w+),\)\s*$", re.M)
 
 
 def _graph_output(path: str) -> str:
-    top = Path(path).read_text().split("\n    class submod_", 1)[0]
+    with open(path) as f:
+        top = f.read().split("\n    class submod_", 1)[0]
     m = _GRAPH_RETURN.search(top)
     if m is None:
         raise Unmodelled(f"{path}: the split graph returns no single value")
@@ -660,7 +660,8 @@ def assemble(wired: dict[str, Any], moe_plans: Any, final: dict[str, Any], kerne
 def _final_value(split_graph: str, graph: dict[str, Any], wired: dict[str, Any]) -> dict[str, Any]:
     """The backbone's output: the split graph's return, a piece's return that is a value."""
     out = _graph_output(split_graph)
-    src = Path(split_graph).read_text().split("\n    class submod_", 1)[0]
+    with open(split_graph) as f:
+        src = f.read().split("\n    class submod_", 1)[0]
     m = re.search(rf"^\s*{out} = (submod_\d+)\[(\d+)\]", src, re.M)
     pieces = [w["submod"] for w in graph["wiring"]]
     if m is None or m.group(1) not in pieces:
@@ -677,13 +678,15 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
     it (W rows past the probe's zero): x all ones against `bf16_gemm_check.splitk_count_probe`'s rows reads the split counts a
     partition could have (`fit_cublas_split_k`); of the routes those leave (`cublas_routes_at`), the one whose twin
     (`cublas_route_rows`) computes every word of `route_probe_rows`' spread and cancelling rows (sampled from the generator of
-    seed (M, K, N)) is the route, and none or more than one is refused, naming each route's missed words."""
+    seed (M, K, N)) is the route, and none or more than one is refused, naming each route's missed words.  A shape
+    `splitk_count_probe` builds no rows for is refused with the builder's reason."""
     import torch
 
     from verity_vllm.commit import challenge as CH
     from verity.definitions.registry import bf16_gemm_check as BC
 
-    to = lambda a: torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
+    def to(a: np.ndarray) -> torch.Tensor:
+        return torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
 
     def mm(M: int, K: int, N: int, x: np.ndarray, rows: np.ndarray) -> np.ndarray:
         w = torch.zeros((N, K), dtype=torch.bfloat16, device="cuda")
@@ -694,7 +697,11 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
 
     out: dict[str, Any] = {}
     for M, K, N in shapes:
-        probe, x = BC.splitk_count_probe(K, N), np.full((M, K), 0x3F80, np.uint16)
+        try:
+            probe = BC.splitk_count_probe(K, N)
+        except ValueError as e:
+            raise Unmodelled(f"cuBLAS at M={M} K={K} N={N}: {e}") from e
+        x = np.full((M, K), 0x3F80, np.uint16)
         fits = BC.fit_cublas_split_k(x[:1], probe, mm(M, K, N, x, probe)[:1], out="bf16")
         rows = sorted({0, M // 2, M - 1})
         tests = [(xr[rows], w, mm(M, K, N, xr, w)[rows])

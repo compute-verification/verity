@@ -66,6 +66,7 @@ import math
 import re
 import shlex
 import subprocess
+import sys
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -92,8 +93,8 @@ NO_SSH = "its ssh doesn't answer"
 HOLD_FILE = "/etc/vy/auto-hold"
 #: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: a machine out of inodes with half
 #: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
-#: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
-DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
+#: a large suite (tools/research's) holds some 250k pytest temp files at once: the floor is two of those
+DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 500_000, 50
 #: what a launch needs of a machine whatever the job, which the probe tries (its `no_start`): the null device, which the
 #: runner's start opens to read and write and git opens before it does anything, and git, which ships a tree as a checkout
 NULL_DEVICE, GIT = "/dev/null", "git"
@@ -336,7 +337,9 @@ def share_cpus(source: Path) -> str | None:
     """The CPUs of AUTO_PROJECT's share on AUTO_NODE in the source tree's cluster description, None when it says none."""
     try:
         desc = tomllib.loads((Path(source) / DESCRIPTION).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research run: {Path(source) / DESCRIPTION} unread, so {AUTO_PROJECT} has no share on {AUTO_NODE} "
+              f"({type(e).__name__}: {e})", file=sys.stderr)
         return None
     return next((s["cpus"] for s in desc.get("shares", []) if s.get("project") == AUTO_PROJECT and s.get("node") == AUTO_NODE
                  and isinstance(s.get("cpus"), str)), None)
@@ -561,7 +564,7 @@ def _ahead(fit: int, free: int, waiting: int) -> float:
 
 def _lean(doc: Any, pool: str | None) -> tuple[float | None, str]:
     """The line a run joins for a slot of Lean ``pool`` on the machine whose `read` document is ``doc``, and how to say it:
-    0 with no ``pool`` to take, where the machine caps no Lean, or while a slot is free for every waiter and this run; else the
+    0 with no ``pool`` to take, where the machine limits no Lean, or while a slot is free for every waiter and this run; else the
     waiters ahead and this run, per slot of the pool; infinite when its Lean slots weren't read; None, with why, when they give
     the pool none, so the run would never get one there."""
     if not pool:

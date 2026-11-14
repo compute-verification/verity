@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # The Lean verifier's seconds on a served block type's sessions, on one core, by the statement's blocks.
-#   1. hidden_zk/job.sh's builds (flock-circuit's proving build on CPUs, the Lean flock-verify, a venv), and flock-read
+#   1. hidden_zk/job.sh's builds (flock-circuit's proving build on CPUs, the Lean verity-verify-proof, a venv), and flock-read
 #      (flock_read/Main.lean) in a scratch Lake package against a copy of the built verifier
 #   2. flock_sessions.py stage: the block type's flat statement at `full`, as served_units/stage.py stages a census type,
 #      and from the same lowering the statement's first N blocks for each N given
 #   3. per N: one loopback --zk session of the CPU prover sampling all N blocks (job.sh's `session`), then
-#      `flock-verify verify --zk` on it FS_REPS times, as the proof server's verdict pool calls it (the statement and
+#      `verity-verify-proof verify --zk` on it FS_REPS times, as the proof server's verdict pool calls it (the statement and
 #      the public file by their archive keys), pinned to one core under /usr/bin/time -v; for the first N, a second
 #      session of the same statement and one `verify` handed both, a call of two sessions
 #   4. sessions.tar, where it is sent: a proof server's saved sessions of the full statement (one directory a session),

@@ -176,8 +176,8 @@ def test_the_capture_context_leaves_spot_out_and_is_none_without_an_executor():
 
 
 def test_the_served_y_alone_is_the_commits(linears):
-    from verity_vllm.protocols.pouw import circuit as PC
-    from verity_vllm.protocols.pouw import native as PN
+    from verity.protocols.accounting.pouw.prover.serving import circuit as PC
+    from verity.protocols.accounting.pouw.prover.serving import native as PN
     rng = np.random.default_rng(2)
     b = rng.integers(-63, 64, (48, 64)).astype(np.int8)
     t = (np.abs(rng.standard_normal(48)).astype(np.float32) * 0.01 + 1e-3).view(np.uint32)

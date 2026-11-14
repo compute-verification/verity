@@ -113,7 +113,7 @@ theorem swSrcE_repCut_fc_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : 
     simp [hpts]
   have hesz : extras.size = spec.points * (stAt x j).regions.size := by
     rw [FlockDeploy.extraClaims_size heS, hpsz, hpts, Nat.mul_comm]
-  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]
     exact (zkTab x j).hz
@@ -262,7 +262,7 @@ theorem innerAt_slot {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.C
     simp [hpts]
   have hesz : extras.size = spec.points * (stAt x j).regions.size := by
     rw [FlockDeploy.extraClaims_size heS, hpsz, hpts, Nat.mul_comm]
-  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]
     exact (zkTab x j).hz

@@ -1,7 +1,8 @@
 module
 
 public import Properties.Pous.MemoryChallenger
-public import Proofs.Properties.NetworkCertifier.Check.Bytes
+public import Proofs.Properties.Certifier.Check.Bytes
+public import Proofs.Flock.Bytes
 import Mathlib.Algebra.Order.Group.Nat
 import Mathlib.Algebra.Ring.Parity
 import Mathlib.Data.Finset.Attr
@@ -22,7 +23,7 @@ one level below it, down to the leaves, and one leaf one value (`tree_bind`).
 namespace MemoryChallenger.Properties.SecurityProofs.Tree
 
 open MemoryChallenger Flock Flock.FV3.Sha512
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size)
+open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size)
 
 /-- No two distinct strings of `S` share a SHA-512 digest. -/
 def CF (S : List ByteArray) : Prop := ∀ x ∈ S, ∀ y ∈ S, Sha512.hash x = Sha512.hash y → x = y
@@ -90,7 +91,7 @@ theorem get!_mem {a : Array ByteArray} {i : Nat} (h : i < a.size) : a[i]! ∈ a 
   rw [getElem!_pos a i h]
   exact Array.getElem_mem h
 
-theorem hash_size (m : ByteArray) : (Sha512.hash m).size = 64 := Properties.NetworkCertifier.Bytes.hash_size m
+theorem hash_size (m : ByteArray) : (Sha512.hash m).size = 64 := Properties.Certifier.Bytes.hash_size m
 
 theorem lev_width (d : Domain) (leaves : Array ByteArray) (h : ∀ x ∈ leaves, x.size = 64) :
     ∀ l, ∀ x ∈ lev d leaves l, x.size = 64

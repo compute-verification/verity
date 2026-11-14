@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.Firewall.Frames
+meta import Flock.Firewall.Frames
+
+/-!
 `Frames.askOf`, the answer to a prover's `place`, against its rep's own requests (`Frames.roundStep`,
 `Frames.coinsStep`), on a rep of two masked values in two scheduled one-value rounds: a place read before the rep's
 round and its coins answers from what it read; the frame after them is theirs alone, so the next round leaves under the
@@ -6,10 +11,6 @@ next pad. That frame put back as the place read it (with the place made, `placeO
 next round leaves under the pad the last one used, and the two releases' sum is the two device values' sum. `askOf`
 writes no frame, so nothing but a rep's round and coins puts its frame back.
 -/
-module
-
-public import Flock.Firewall.Frames
-meta import Flock.Firewall.Frames
 
 @[expose] public section
 

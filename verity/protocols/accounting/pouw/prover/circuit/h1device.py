@@ -9,7 +9,7 @@ record's s8 binding and refuses a contraction outside the record's domain.
   with it word for word on the H200), so an sm_90 execution phase's Program is the sm_120 one's, byte for byte, and a served
   path registers the same trees on either card.
 * **The domain** is the contractions the record's kernels serve, beyond what the Definitions refuse themselves (32 | K and
-  K < 2^17, `ops.gemm.S8_K_LIMIT`). sm_90's is Dither's h1u units (`benchmarks/hash/dither/h1u.cu`, gated on an H200 at
+  K < 2^17, `ops.gemm.S8_K_LIMIT`). sm_90's is Dither's h1u units (`verity/protocols/experimental/dither/prover/kernels/h1u.cu`, gated on an H200 at
   GLM-5.3 int8 v3's shapes): 512 | K, as h1u reads each noise block as 16 segments' bits
   (``kh_unit``: ``K % 512`` refused), and K >= 384, `h1zy.LEAST_K`, the least K whose leaf's combine is proved, so the least
   K served is 512. On that domain m = `segment.n_digits`(K / 32) is 2 or 3, the digits h1u's one stream recombines. h1u

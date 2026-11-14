@@ -6,7 +6,7 @@
                   [--decode-method dependent-chain|independent] [--bridge] [--traced] [--twins] --out run.json
   python bench.py --plan [--shapes ...]          the shapes' operand sets, bursts and memory, without a GPU
 
-On an RTX PRO 6000 (sm_120), or an H200 (sm_90: native/build.sh with PH_ARCH=sm_90a, cuBLASLt in the library and vLLM's
+On an RTX PRO 6000 (sm_120), or an H200 (sm_90: verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh with PH_ARCH=sm_90a, cuBLASLt in the library and vLLM's
 CUTLASS and DeepGEMM through torch with --bridge). A shape is any panel or model label, or any `m{m}-n{n}-k{k}`.
 
 The contract with arms is `arm.py`. Per run: identity (`identity.py`), the fill and derive preflights; the SASS gate

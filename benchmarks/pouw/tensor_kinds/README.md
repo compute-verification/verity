@@ -21,7 +21,7 @@ nvidia-smi sampling the leased GPU's clock and power every 200 ms.
 | --- | --- | --- |
 | `run.sh` | one RTX PRO 6000 (sm_120, the default), one L40S (`TK_ARCH=89`) or one B200 (`TK_ARCH=100`, the legacy `mma.sync` forms) | `tensor_kinds.cu`: every form alone and beside IADD3 and FFMA alternating, and beside IADD3, at 4 to 16 lane ops a MMA, warp-specialized and interleaved; then the fit |
 | `search.sh` | one RTX PRO 6000 | `search.cu`: the forms that set the model's joint rows over schedules (the lane op, its register layout, the warps a SMSP and their roles, where the lane ops sit), with the two facet programs first and last as the control |
-| `run_sm80.sh [GROUP...]` | one A100 (sm_80) | `sm80.cu`: every form alone and beside a scalar lane, the scalar pipes alone, in pairs and beside a saturated MMA, duo beside IMMA, and which integer forms leave the exact s32 word; `../gpu_kit/sass_gate.py` gates every timed kernel before the lease |
+| `run_sm80.sh [GROUP...]` | one A100 (sm_80) | `sm80.cu`: every form alone and beside a scalar lane, the scalar pipes alone, in pairs and beside a saturated MMA, duo beside IMMA, and which integer forms leave the exact s32 word; `../../../verity/protocols/accounting/pouw/prover/kernels/gpu_kit/sass_gate.py` gates every timed kernel before the lease |
 
 ~~~text
 research run --on MACHINE --project verity --source /workspace --cwd clone --custody-ttl 12h \

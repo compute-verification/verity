@@ -17,14 +17,14 @@ across strata, and the strata run over every table's units, so a table's subcirc
 `verify --zk --session-tables J` proves the sampled proof blocks in `J` equal consecutive parts, table `j` part `j` (`drawJ`,
 `partS`); when the units are laid out table by table and every table's strata sample the same number of units, part `j` is
 table `j`'s own stratified sample. The record's custody is `RecordCustodyZKJS` (`live-verifier` at the stratified sampling design);
-that the parts are proved and set up with the session's link points is flock-verify's own arithmetic
+that the parts are proved and set up with the session's link points is verity-verify-proof's own arithmetic
 (`ZkHidden.drawOkZKHJ_of_accepts_stratified`).
 
 `StratifiedBlockMT` is such a sampling block, with every binder of `EndToEndHidden` but the prover and its sampling design, as
 `Period`'s `SamplingBlock` is. Its incorrect proof blocks are `wrongRegZ` in the committed transcript fixed at registration
 (`XplurZC`). The bound is `JointStratified`'s, with the same budget and the same confidence set:
 
-* `JointStratifiedMT`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if flock-verify accepts, the
+* `JointStratifiedMT`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if verity-verify-proof accepts, the
   sampling block's incorrect proof blocks `B` lie in the confidence set (`Law.stratified`'s escape of `B` is at least `δ`), so they
   spend at most the one budget, `Σ_s k_s·x_s/n_s ≤ ln(1/δ)` over every stratum of every table, and their ANDs and their
   output bits are each at most the most any set in the confidence set holds (`StratifiedBlockMT.maxHarm`).
@@ -185,7 +185,7 @@ end StratifiedBlockMT
 /-- **The joint stratified bound, per sampling block of `J` tables.** For a sampling block as in `StratifiedBlockMT`,
 proved in `nTab I` tables, whose one live stratified sample takes `k_s` of the `n_s` units of each stratum `s` across the
 tables, every `δ > 0` and every per-unit weights `ands` (each unit's ANDs) and `bits` (its output bits), and every live
-prover `τ`, the probability that flock-verify accepts and the sampling block's incorrect proof blocks `B` are not within its one
+prover `τ`, the probability that verity-verify-proof accepts and the sampling block's incorrect proof blocks `B` are not within its one
 budget is at most
 $$\delta + \varepsilon_{ks} + \varepsilon_{bind}:$$
 outside it, an accepted sampling block's incorrect proof blocks escape the stratified sample with probability at least `δ`, spend
@@ -204,7 +204,7 @@ def JointStratifiedMT : Prop :=
     prob (fun o => LiveAcceptsZK w.I o ∧ ¬ w.Within δ ands bits (w.wrongSet τ)) w.game τ ≤
       ENNReal.ofReal δ + w.epsKs + w.link
 
-/-- What a period's run records of sampling block `idx`: whether flock-verify accepted it, its incorrect proof blocks
+/-- What a period's run records of sampling block `idx`: whether verity-verify-proof accepted it, its incorrect proof blocks
 (`StratifiedBlockMT.wrongSet`), and whether a sampled proof block is one of them. -/
 structure BlockRecMT (W : ℕ → StratifiedBlockMT) where
   idx : ℕ
@@ -276,7 +276,7 @@ end StratifiedMT
 /-- **The joint stratified bound over a period of sampling blocks of `J` tables, pooled.** In a period of `T` sampling
 blocks `W t` as in `StratifiedBlockMT`, each proved in its session's tables with a fresh live stratified sample, played by
 one adaptive prover `s`, for every `δ > 0` and every per-unit weights `ands t` (each unit's ANDs) and `bits t` (its
-output bits), the probability that flock-verify accepts every sampling block and their incorrect proof blocks are not within the
+output bits), the probability that verity-verify-proof accepts every sampling block and their incorrect proof blocks are not within the
 period's one budget is at most
 $$\delta + \sum_t (\varepsilon_{ks,t} + \varepsilon_{bind,t}):$$
 outside it, when every sampling block is accepted, their samples miss their incorrect proof blocks together with probability at

@@ -29,9 +29,9 @@ from typing import Any
 
 import torch
 
-from verity_vllm.protocols.pouw.h1 import records as ZR
-from verity_vllm.protocols.pouw.h1 import registered_device as D
-from verity_vllm.protocols.pouw.h1 import tables_device as TD
+from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as D
+from verity.protocols.accounting.pouw.prover.serving.h1 import tables_device as TD
 
 CALLS = ("qkv", "o", "gate_up", "down")
 KEY = bytes(range(32))

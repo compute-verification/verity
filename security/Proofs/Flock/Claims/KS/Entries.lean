@@ -4,10 +4,10 @@ public import Proofs.Flock.Claims.KS.OffSC
 public import Proofs.Flock.Claims.KS.LevelZeroAcc
 
 /-!
-# The deployed reader's level-0 entries at flock-verify's acceptance
+# The deployed reader's level-0 entries at verity-verify-proof's acceptance
 
 `exists_ne_of_off₀L_sc` (`OffSC`) needs, of a salted output, that its level-0 openings verify, sit below `2^d`, and are,
-with their rows, the deployed reader's entries. This file proves all three at flock-verify's acceptance:
+with their rows, the deployed reader's entries. This file proves all three at verity-verify-proof's acceptance:
 
 * `Claims.Flock.slotOpensL_entries`: a rep whose first request is level 0's, at the positions `Flock.positions` samples
   from `coins`, with one opened row per position, opens at level 0 exactly the entries `zkRepCols` reads off `coins`
@@ -107,7 +107,7 @@ open Flock Refine Model Game
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **At flock-verify's acceptance, each table's level-0 openings are its reps' deployed entries** (§9–§14). When
+/-- **At verity-verify-proof's acceptance, each table's level-0 openings are its reps' deployed entries** (§9–§14). When
 `Accepts I t`, at every table `j`, its `fast100` schedule and the statement read off its layout,
 every pair of the reps' runs on the proof files' messages and the streams' coins whose salted output accepts at a cap
 has its level-0 openings verifying against that cap at level 0's lanes and path length, below `2^d`, and its level-0

@@ -62,7 +62,7 @@ Compose's `Declared.round` numbers them), all committed before the execution pha
 opens after its own root, so a coin root released before them hides no choice the prover makes, and its commitment's
 root is in the salt and every round's noise key.  The salt coin opens once, after the
 execution phase's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
-rule is `core_check.salt`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
+rule is `core_check.salt_of_record`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
 round r commits, and round r's noise key is `round_key` of that coin and that root.  `rounds_reason` is the rule on an
 execution phase's round coins (Lean: `PouwWindow.Rounds`).  A Pearl-C pass's session takes its salt coin alone
 (`SALT_FAMILIES`, `salt_epoch_reason`; Lean `Properties.Pouw.LiveSalt.SaltEpoch`), opened after its execution phase's root

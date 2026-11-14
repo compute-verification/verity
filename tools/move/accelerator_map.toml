@@ -1,0 +1,28 @@
+# The GPU kind of a registered site: `Site.Kind`'s constructor `device` becomes `accelerator`, so that "device" is left
+# for the auditor's devices and a device with parts. Only the constructor is renamed: `Site.device` (a device's model),
+# the accounting device model, the rate audit's `device` field and the registration JSON's string "device" stay. The
+# string is a word of the versioned site format `verity/registration/site/v1`, and every registration's digest covers it.
+
+[words]
+
+[[words_in]]
+files = ["security/Definitions/Core/Site.lean", "verity/protocols/interface/CoreProtocol/Site.lean"]
+words = { "| device" = "| accelerator" }
+
+[[words_in]]
+files = ["security/Definitions/Core/Site.lean", "security/Properties/Core/Site.lean",
+         "verity/protocols/interface/CoreProtocol/Site.lean", "verity/protocols/interface/CoreProtocol/Registration.lean",
+         "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Registered.lean"]
+words = { ".device" = ".accelerator" }
+
+[[words_in]]
+files = ["security/Proofs/Core/Site.lean"]
+words = { "kind := .device" = "kind := .accelerator" }
+
+[keep]
+# The function that reads a device's model off the site keeps its name.
+strings = ["Site.device"]
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock"]

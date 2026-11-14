@@ -35,7 +35,7 @@ RULES: Counter[str] = Counter()
 
 
 def reference(case) -> dict:
-    a = PC.case(case)
+    a = PC.case_twin(case)
     RULES[f"{a['verdict']} {a['reason'].split(':')[0]}" if a["reason"] else a["verdict"]] += 1
     return a
 
@@ -60,20 +60,41 @@ def test_pouw_period(server):
     assert set(swept) == {"accept", "reject"}, dict(swept)
     assert {"accept", "reject params", "reject commitment", "reject evidence", "reject form", "reject period",
             "reject window", "reject circuit", "reject missing", "reject order", "reject coin",
-            "reject budget"} <= set(RULES), RULES
+            "reject budget", "reject sessions"} <= set(RULES), RULES
 
 
 def test_an_honest_period_is_its_credit():
     """An honest period's answer is `credit._period_outcomes`' credit, its digest the ledger's under the protocol's tag,
     and a framing break is refused naming its input."""
     case = cases.instance(random.Random("honest/credit"))
-    a = PC.case(case)
+    a = PC.case_twin(case)
     assert a["verdict"] == "accept", a["reason"]
     assert a["public"]["delta"] == "1/1099511627776" and a["profile"]["windows"] == len(a["public"]["windows"])
+    p, ledger = case["params"], [json.loads(x) for x in json.loads(bytes.fromhex(case["commitment"]))]
+    close = next(e for e in ledger if e["kind"] == "period-close" and e["body"]["period"] == p["name"])
+    start = next(e["seq"] for e in ledger if e["kind"] == "period-open" and e["body"]["period"] == p["name"])
+    assert {k: a["public"][k] for k in ("key", "roots", "start", "length")} == {
+        "key": p["key"], "roots": [w["root"] for w in close["body"]["windows"]], "start": start,
+        "length": close["seq"] + 1 - start}
+    assert not {"registration_head", "place", "part", "head"} & set(a["public"]), "the period names no device"
+    assert p["sessions"] == [w["session"] for w in close["body"]["windows"]] != []
     assert a["commitment"] == PC.digest({"bytes": bytes.fromhex(case["commitment"])}).hex()
-    for name, what in (("params-missing", "params"), ("ledger-object", "commitment"), ("evidence-list", "evidence")):
-        got = PC.case(cases.instance(random.Random(f"{name}/credit"), name))
+    for name, what in (("params-missing", "params"), ("params-device", "params"), ("params-sessions", "params"),
+                       ("sessions-unlisted", "sessions"), ("ledger-object", "commitment"), ("evidence-list", "evidence")):
+        got = PC.case_twin(cases.instance(random.Random(f"{name}/credit"), name))
         assert got["verdict"] == "reject" and got["reason"].startswith(f"{what}: "), (name, got)
+
+
+def test_the_parameters_name_no_device():
+    """Parameters naming a device's head or place are refused, and without `sessions` the period runs with no session
+    list, with the same answer."""
+    for seed in range(4):
+        got = PC.case_twin(cases.instance(random.Random(f"params-device/{seed}"), "params-device"))
+        assert got["verdict"] == "reject" and got["reason"] == f"params: {PC.KEYS_FORM}", got
+    alone = PC.case_twin(cases.instance(random.Random("honest/credit"), "alone"))
+    listed = PC.case_twin(cases.instance(random.Random("honest/credit")))
+    assert alone["verdict"] == "accept", alone["reason"]
+    assert alone["public"] == listed["public"]
 
 
 @pytest.mark.parametrize("name,why", [("form-pass", "is a Pearl-C pass"),
@@ -84,10 +105,10 @@ def test_an_uncovered_form_is_refused_by_name(name, why):
     """Every form `H1J10RCheckedCreditPeriod` doesn't cover is refused before the credit, naming the form and the
     guarantee, and the same period in the covered form (J10-R's per-call unit over PouwH1Tile_v5, at one K) is credited."""
     for seed in range(3):
-        got = PC.case(cases.instance(random.Random(f"{name}/{seed}"), name))
+        got = PC.case_twin(cases.instance(random.Random(f"{name}/{seed}"), name))
         assert got["verdict"] == "reject" and got["reason"].startswith("form: window "), (name, got["reason"])
         assert why in got["reason"] and PC.GUARANTEE in got["reason"], (name, got["reason"])
-        assert PC.case(cases.instance(random.Random(f"{name}/{seed}"), "honest"))["verdict"] == "accept"
+        assert PC.case_twin(cases.instance(random.Random(f"{name}/{seed}"), "honest"))["verdict"] == "accept"
 
 
 @pytest.mark.parametrize("raw", [b"\xff", b"\xed\xa0\x80", b'{"program_fn":"\xc0\xaf"}'])
@@ -97,5 +118,5 @@ def test_a_descriptor_not_utf8_is_left_to_the_credit(raw):
     assert PC._window_form("p", 0, {"descriptor": raw.hex()}) is None
     d = cases.credit_cases.period_instance(random.Random("utf8"), "honest", **cases.COVERED)
     d["windows"][0]["descriptor"] = raw.hex()
-    got = PC.case(cases.serve(d))
+    got = PC.case_twin(cases.serve(d))
     assert got["verdict"] == "reject" and not got["reason"].startswith("form: "), got["reason"]

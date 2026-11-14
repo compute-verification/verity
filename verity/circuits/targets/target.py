@@ -32,8 +32,8 @@ multiple of 16.
   word is a valid output of a transition and, through the epilogue, of the proof block; it is not a finite accumulator, so a
   chain whose intermediate transition saturates is rejected at the next step.  The pinned simulator masks the
   exponent instead and is not the reference there.
-* **Statement.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``, ``fixtures/typed-obligation-v0``)
-  whose family digest is :data:`FAMILY_DIGEST`.
+* **Statement.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``,
+  ``benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0``) whose family digest is :data:`FAMILY_DIGEST`.
 
 Transition unit versus proof block
 ==================================
@@ -72,8 +72,8 @@ Outside FIRST
   (:data:`verity.circuits.silicon.models.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
 * **Kernel-level accumulation order.** The target fixes the chain the *relation* checks (ascending ``k``, one
   accumulator).  Whether a given GEMM kernel launch (split-K, stream-K, different tile orders) realises exactly this
-  chain is a frontend binding question; ``fixtures/typed-obligation-v0``'s K = 1536 input is one captured case where
-  it did.
+  chain is a frontend binding question; ``benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0``'s
+  K = 1536 input is one captured case where it did.
 
 Draft targets
 =============

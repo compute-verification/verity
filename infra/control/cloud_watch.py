@@ -12,14 +12,14 @@ raised) and posts once in #agent-alerts naming infra's user group; it clears onc
 clear is a reply in the open post's thread. A post Slack refuses is tried again next pass. At `digest_hour_utc` each day the
 digest posts every check's lines: loop liveness, R2's size by top-level prefix, Neon, spend month to date and projected, the
 GitHub rate limit and the public endpoints. A check whose credential isn't in the environment is skipped, and the digest says
-once per check which key would close the gap (under *Unmonitored*: `needs KEY: what it would watch`). State: `state` in the config.
+once per check which key would close the gap (under *Unwatched*: `needs KEY: what it would watch`). State: `state` in the config.
 
 The checks (cloud_watch.toml holds every threshold, price and path):
 
 - **loops**: each loop post_start.sh starts leaves a success marker (a log line with its time, a JSON time field, or a file's
   mtime). One with no success in twice its period is an anomaly; a loop's `also_mention` user groups are named in it too, and
   once it is `page_after_s` later still, a second anomaly names `page_user` (the agent watch's: the top coordinator's group, then the person who runs the project).
-- **r2**: an incremental ListObjectsV2 sweep of each bucket, at most `page_cap` pages (1000 keys, one class-A op) a pass, resumed
+- **r2**: an incremental ListObjectsV2 sweep of each bucket, at most `page_limit` pages (1000 keys, one class-A op) a pass, resumed
   from the last key, so a complete sweep's totals per top-level prefix come every few passes at a bounded cost. Growth between
   the last two sweeps above `max_gib_per_day`, or `mean_ratio` times the 7-day mean, is an anomaly naming the prefix that grew most;
   so is a bucket with `stale_after_h` whose newest object is older than that (the Lean cache's daily publisher).
@@ -117,7 +117,7 @@ class Ctx:
     now: float
     http: Callable = http
     run: Callable = run
-    pages: int | None = None                            # --pages: override r2.page_cap for this pass
+    pages: int | None = None                            # --pages: override r2.page_limit for this pass
     clock: Callable[[], float] = time.time              # signing time: R2 refuses a signature over 15 min old, and a long pass outlives `now`
 
 
@@ -274,7 +274,7 @@ def check_r2(ctx: Ctx, rep: Report) -> None:
     for b in buckets(ctx, rep):
         st = ctx.state.setdefault("r2", {}).setdefault(b["label"], {"after": None, "partial": {}, "started": ctx.now, "sweeps": []})
         pages, done = 0, False
-        while pages < (ctx.pages or cfg["page_cap"]):
+        while pages < (ctx.pages or cfg["page_limit"]):
             keys, more = list_page(ctx, b, st["after"])
             pages += 1
             for k, size, modified in keys:
@@ -386,11 +386,27 @@ def check_neon(ctx: Ctx, rep: Report) -> None:
 
 # ---- spend -------------------------------------------------------------------------------------------------------------------------
 
+OLD_LINE_KEYS = {"cap_usd": "limit_usd", "cap_usd_per_day": "limit_usd_per_day"}   # budgets.toml's keys before the rename
+OLD_FINDING_ENDS = {"|cap": "|limit"}                                                 # a finding key's end before the rename
+_said: set[str] = set()
+
+
+def say_once(what: str) -> None:
+    if what not in _said:
+        _said.add(what)
+        print(what, file=sys.stderr)
+
+
 def budget_lines(ctx: Ctx) -> tuple[dict, str | None]:
     for p in ctx.cfg["spend"]["budgets"]:
         path = Path(os.path.expanduser(p))
         if path.is_file():
-            return tomllib.loads(path.read_text()).get("budgets", {}), str(path)
+            lines = tomllib.loads(path.read_text()).get("budgets", {})
+            old = sorted({k for v in lines.values() if isinstance(v, dict) for k in v if k in OLD_LINE_KEYS})
+            if old:
+                say_once(f"{path}: names {', '.join(old)}, read as {', '.join(OLD_LINE_KEYS[k] for k in old)}")
+            return {prefix: {**{new: v[k] for k, new in OLD_LINE_KEYS.items() if k in v and new not in v}, **v}
+                    if isinstance(v, dict) else v for prefix, v in lines.items()}, str(path)
     return {}, None
 
 
@@ -422,9 +438,12 @@ ACCOUNT_RE = re.compile(r"ACCOUNT \$[\d,.]+ at \$([\d,.]+)/h")
 
 def account_rate(log: Path) -> float | None:
     """RunPod's own spend rate for the account (every pod and volume), from the steward's last `ACCOUNT` line."""
+    if not log.exists():
+        return None
     try:
         got = tail_match(log, ACCOUNT_RE, limit=1 << 20)
-    except OSError:
+    except OSError as e:
+        print(f"{log}: unreadable, so RunPod's account rate is unknown ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     return None if got is None else float(got.replace(",", ""))
 
@@ -468,13 +487,13 @@ def spend_runpod(ctx: Ctx, rep: Report, lines: dict) -> None:
         line = lines.get(prefix)
         if not line or epoch(str(line.get("expires", "1970-01-01T00:00Z"))) < ctx.now:
             continue
-        cap, spent = line.get("cap_usd"), float(st.get("spent") or 0)
-        if line.get("cap_usd_per_day") is not None:
-            cap, spent = line["cap_usd_per_day"], float(st.get("window_usd") or 0)
-        if cap and spent >= cfg["line_alert_share"] * cap:
-            rep.findings.append(Finding(f"spend|runpod|{prefix}", f"*Budget line `{prefix}` at {usd(spent)} of {usd(cap)}*"
-                                                                  + (" today" if line.get("cap_usd_per_day") is not None else "")
-                                                                  + " on RunPod (the guard terminates its pods at the cap)."))
+        limit, spent = line.get("limit_usd"), float(st.get("spent") or 0)
+        if line.get("limit_usd_per_day") is not None:
+            limit, spent = line["limit_usd_per_day"], float(st.get("window_usd") or 0)
+        if limit and spent >= cfg["line_alert_share"] * limit:
+            rep.findings.append(Finding(f"spend|runpod|{prefix}", f"*Budget line `{prefix}` at {usd(spent)} of {usd(limit)}*"
+                                                                  + (" today" if line.get("limit_usd_per_day") is not None else "")
+                                                                  + " on RunPod (the guard terminates its pods at the limit)."))
 
 
 def nebius_instances(ctx: Ctx, rep: Report) -> list[dict] | None:
@@ -498,7 +517,8 @@ def rates(ctx: Ctx) -> dict[str, float]:
             for f in p.glob("*.toml"):
                 try:
                     r = tomllib.loads(f.read_text()).get("rate_usd_per_hour")
-                except (OSError, tomllib.TOMLDecodeError):
+                except (OSError, tomllib.TOMLDecodeError) as e:
+                    print(f"{f}: skipped, so its machine has no rate ({type(e).__name__}: {e})", file=sys.stderr)
                     continue
                 if r is not None:
                     out[f.stem] = float(r)
@@ -537,15 +557,15 @@ def spend_nebius(ctx: Ctx, rep: Report, lines: dict) -> None:
     for prefix, rate in sorted(burn.items(), key=lambda kv: -kv[1]):
         line = lines[prefix]
         hours = max(epoch(str(line["expires"])) - ctx.now, 0) / 3600 if line.get("expires") else month_hours(ctx.now)[1]
-        rep.lines.append(f"  `{prefix}`: {usd(rate)}/h, " + (f"{usd(rate * 24)}/day of {usd(line['cap_usd_per_day'])}/day"
-                                                         if line.get("cap_usd_per_day") is not None else
-                                                         f"{usd(rate * hours)} more to its expiry, cap {usd(line.get('cap_usd') or 0)}"))
-        if line.get("cap_usd_per_day") is not None and rate * 24 > line["cap_usd_per_day"]:
+        rep.lines.append(f"  `{prefix}`: {usd(rate)}/h, " + (f"{usd(rate * 24)}/day of {usd(line['limit_usd_per_day'])}/day"
+                                                         if line.get("limit_usd_per_day") is not None else
+                                                         f"{usd(rate * hours)} more to its expiry, limit {usd(line.get('limit_usd') or 0)}"))
+        if line.get("limit_usd_per_day") is not None and rate * 24 > line["limit_usd_per_day"]:
             rep.findings.append(Finding(f"spend|nebius|{prefix}|day", f"*Budget line `{prefix}` burning {usd(rate * 24)}/day* on Nebius, "
-                                                                      f"over its {usd(line['cap_usd_per_day'])}/day."))
-        elif line.get("cap_usd") and rate * hours > line["cap_usd"]:
-            rep.findings.append(Finding(f"spend|nebius|{prefix}|cap", f"*Budget line `{prefix}`'s running VMs alone reach "
-                                                                      f"{usd(rate * hours)} by its expiry*, over its {usd(line['cap_usd'])} cap "
+                                                                      f"over its {usd(line['limit_usd_per_day'])}/day."))
+        elif line.get("limit_usd") and rate * hours > line["limit_usd"]:
+            rep.findings.append(Finding(f"spend|nebius|{prefix}|limit", f"*Budget line `{prefix}`'s running VMs alone reach "
+                                                                      f"{usd(rate * hours)} by its expiry*, over its {usd(line['limit_usd'])} limit "
                                                                       f"({usd(rate)}/h for {hours:.0f} h)."))
 
 
@@ -707,7 +727,7 @@ def digest(ctx: Ctx, reports: dict[str, Report]) -> str:
     gaps = sorted({g for r in reports.values() for g in r.gaps})
     return "\n".join([head, *(f"• {ln}" for ln in body),
                       *([f"*Open* ({len(open_)}):"] + [f"• {t}" for t in open_] if open_ else ["Nothing open."]),
-                      *([f"*Unmonitored* ({len(gaps)}), each until its key is in the pod's environment:"] if gaps else []),
+                      *([f"*Unwatched* ({len(gaps)}), each until its key is in the pod's environment:"] if gaps else []),
                       *(f"• {g}" for g in gaps)])
 
 
@@ -758,10 +778,22 @@ def one_pass(ctx: Ctx, *, dry: bool = False, force_digest: bool = False, out=Non
 
 
 def load_state(path: Path) -> dict:
-    try:
-        return json.loads(path.read_text())
-    except (OSError, ValueError):
+    if not path.exists():
         return {}
+    try:
+        state = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        print(f"{path}: unreadable, so the watch starts from no state ({type(e).__name__}: {e})", file=sys.stderr)
+        return {}
+    for part in ("open", "gone"):
+        held = state.get(part) or {}
+        for key in [k for k in held if k.startswith("spend|") and any(k.endswith(e) for e in OLD_FINDING_ENDS)]:
+            end = next(e for e in OLD_FINDING_ENDS if key.endswith(e))
+            new = key[:-len(end)] + OLD_FINDING_ENDS[end]
+            held.setdefault(new, held[key])
+            del held[key]
+            say_once(f"{path}: the finding {key!r} is read as {new!r}, the same finding")
+    return state
 
 
 def save_state(path: Path, state: dict) -> None:
@@ -778,7 +810,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--state", type=Path, help="default: the config's `state`")
     ap.add_argument("--dry-run", action="store_true", help="print what would be posted; write no state unless --state names it")
     ap.add_argument("--digest", action="store_true", help="compose the digest this pass")
-    ap.add_argument("--pages", type=int, help="ListObjectsV2 pages per bucket this pass (default: r2.page_cap)")
+    ap.add_argument("--pages", type=int, help="ListObjectsV2 pages per bucket this pass (default: r2.page_limit)")
     a = ap.parse_args(argv)
     cfg = tomllib.loads(a.config.read_text())
     path = a.state or Path(cfg["state"])

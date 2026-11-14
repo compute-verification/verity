@@ -220,7 +220,7 @@ theorem finRepLanes_ret (vs : finS.SwVals)
     rw [hst]
     rfl
   obtain ⟨-, -, hsm, hk0, -, ⟨hn7, -⟩, -⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (Masked.zkTab x j).hz
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (Masked.zkTab x j).hz
   have hn : tb.sch.n ≠ 0 := by
     rw [hsch, hn7, hsm]
     omega
@@ -256,7 +256,7 @@ theorem finRepLanes_ret (vs : finS.SwVals)
     simp only [viewPoints, Array.size_map, Array.size_range]
     exact Nat.mul_comm _ _
   -- the rep's PIOP: `m + k_log − 6` bodies of zerocheck and lincheck, then `2 + |extras| + 1` of ring switch
-  have hzq : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hzq : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [Masked.stsOf_half]
     exact (Masked.zkTab x j).hz

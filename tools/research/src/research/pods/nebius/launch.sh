@@ -5,7 +5,7 @@
 #   launch.sh --max-hours H --yes [--register] [--deadline UTC]
 #                                                find or create each piece below, start the VM, arm its lease for H hours; --deadline
 #                                                (e.g. 2026-10-07T15:00:00Z, the end of the spend authorization) writes the VM's
-#                                                /etc/research/deadline, a hard cap no lease extension or restart passes (vm_setup.sh)
+#                                                /etc/research/deadline, a hard limit no lease extension or restart passes (vm_setup.sh)
 #
 # Idempotent: every resource is looked up by name first, so a rerun after a failure (or on a stopped VM) resumes; nothing is
 # ever deleted here (teardown.sh).  In order, in project NEBIUS_PROJECT_ID (the environment's, the id of the region's default
@@ -24,7 +24,7 @@
 # gpu-h200-sxm), NEBIUS_PRESET, NEBIUS_IMAGE_FAMILY, NEBIUS_DATA_GIB, NEBIUS_DATA_TYPE (network_ssd, or network_ssd_non_replicated
 # and network_ssd_io_m3 in multiples of 93 GiB) and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_DATA_DISK names the data disk
 # (default <vm>-data), so a VM can boot on another one's kept data disk, its filesystem untouched; NEBIUS_FILESYSTEM_ID attaches an
-# existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible, at most at the per-GPU-hour cap of
+# existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible, at most at the per-GPU-hour limit of
 # the pricing policy NEBIUS_SPOT_POLICY_ID (else whatever the spot price is).  GPU clocks are locked only on gpu-rtx6000.
 # Billing starts when the VM is Running and is per second; --yes is required for anything that starts it.
 set -euo pipefail

@@ -46,14 +46,14 @@ from verity_vllm.commit.served_record import PORT_NAMES
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import credit_gate as CG
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import commit as CT
-from verity_vllm.protocols.pouw.h1 import prover as PV
-from verity_vllm.protocols.pouw.h1 import records as ZR
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 K = 64
 #: the window's T
@@ -217,7 +217,7 @@ def _reach(monkeypatch, host):
 
 @pytest.fixture
 def auditor(tmp_path, monkeypatch):
-    """The auditor host's challenger, one challenge phase over a one-round live epoch, reached at `AUDITOR`, reserved as
+    """The auditor device's challenger, one challenge phase over a one-round live epoch, reached at `AUDITOR`, reserved as
     `RESERVED` and opened by `_gate`, which opens the window's sample's challenge phase (`DRAW_RESERVED`) withheld."""
     host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, gated=True)
     _reach(monkeypatch, host)
@@ -322,7 +322,7 @@ def _commit(tap, x, ids, n):
 def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None, ids=None, pad=0, graphs=()):
     """One small call (m rows of K, N = `n`) through `arm` with H1 installed (T = `ROWS`), its request admitted with an
     m-token prompt (with none: prompt embeddings, so no entry); the run closed and its y and run returned, the served y
-    the plain linear's when `exact`. Its coins are the auditor host's challenger's with `remote` (the `auditor` fixture),
+    the plain linear's when `exact`. Its coins are the auditor device's challenger's with `remote` (the `auditor` fixture),
     else held in this process; with `served` (`pouw_h1_served.Served`) its rows are the window Program's values and the
     Commit is in its engine (`_commit`, its input ids `ids`, else the prompt's). With `pad` the call runs `pad` rows past
     the m scheduled, as a CUDA graph of the engine's capture sizes `graphs` pads it, its padded input ids 0."""
@@ -370,7 +370,7 @@ def _refused(run, reason, m=3, n=32):
 def test_the_int8_arm_under_h1_serves_scaled_mm_zy_and_is_credited(auditor):
     """vllm's int8 arm with H1 installed: the install sets its ``zy_rows`` to T, so it serves ``scaled_mm_zy`` (y bit for
     bit the plain linear's) and hands over the records, which are the call's z table, one leaf a proof block; the call is
-    credited and the window, its coins the auditor host's challenger's, credits its served rows; the install's close
+    credited and the window, its coins the auditor device's challenger's, credits its served rows; the install's close
     takes ``zy_rows`` back off."""
     arm = ZyArm()
     y, run = _serve(arm, remote=True, n=64)
@@ -444,7 +444,7 @@ def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_no
 def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing(monkeypatch):
     """A claim instance names where coins come from, not who holds them. The harness's coins, held in the
     serving process, credit nothing (``coins-not-the-auditors``) even when the Lean verifier's claim instance
-    names their source; a window is credited only on the auditor host's challenge phase (the int8 arm's test above)."""
+    names their source; a window is credited only on the auditor device's challenge phase (the int8 arm's test above)."""
     held, real = [], Challenger
 
     def named(epoch, entropy):
@@ -1107,7 +1107,7 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
         assert CR.law(ss, k) is None
         want = CC.work_units(bytes.fromhex(coin), root, reg, {"receipts": receipts}, ss)
         got, why = PHC.drawn_of(record, {"root": root}, k, desc)
-        assert why is None and got == want == CR.drawn(coin, root, reg, {"receipts": receipts}, layout, k)[0]
+        assert why is None and got == want == CR.drawn_twin(coin, root, reg, {"receipts": receipts}, layout, k)[0]
         assert len(got) == len(set(got)) and all(0 <= u < 12 for u in got)
     assert set(PHC.drawn_of(record, {"root": root}, 12, desc)[0]) >= {4, 5, 10, 11}
     assert PHC.drawn_of(record, {"root": root}, 13, desc)[1][0] == "budget"

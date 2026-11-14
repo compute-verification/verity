@@ -1,4 +1,11 @@
-/-
+module
+
+public import Flock.Firewall.Coins
+public import Flock.Ligerito
+public import Flock.Merkle
+public import Flock.Zk
+
+/-!
 # The ZK server's level-0 recheck (live PROTOCOL.md §10): a table's level-0 root from its witness and level 0's hiding
 
 Before anything of a firewalled table leaves, the ZK server commits the table's level 0 again from the host's witness, the
@@ -23,12 +30,6 @@ and `flock-firewall finish`'s `table` request (`Flock.Firewall.Finish.commit0`, 
 leaves is one of these, and the finish keeps the table's tree for its reps' openings (`Finish.openLive`): Rust commits
 nothing of level 0 under the ZK server.
 -/
-module
-
-public import Flock.Firewall.Coins
-public import Flock.Ligerito
-public import Flock.Merkle
-public import Flock.Zk
 
 @[expose] public section
 
@@ -198,9 +199,11 @@ def layer (d : Nat) (lf : Nat → ByteArray) : Nat → Array ByteArray
 /-- A cap's entries, concatenated. -/
 def flat (cap : Array ByteArray) : ByteArray := cap.foldl (· ++ ·) ByteArray.empty
 
-/-- **What the recheck reads of one table**: its `m`, its packed table `g` (`2^(lanes + cols)` words), its four extra
-lanes `extra e c`, every lane's padding coefficients `lanePad l i` and level 0's salt `salt q` at each tree position. -/
+/-- **What the recheck reads of one table**: its `m` and its statement's version (`wideLeaf`, `Tags.wideLeaf`), which
+fix its `--zk` schedule, its packed table `g` (`2^(lanes + cols)` words), its four extra lanes `extra e c`, every lane's
+padding coefficients `lanePad l i` and level 0's salt `salt q` at each tree position. -/
 structure In where
+  wideLeaf : Bool
   m : Nat
   g : Array F128
   extra : Nat → Nat → F128
@@ -223,20 +226,20 @@ def cap (lv : Level) (tPad : Nat) (i : In) : Array ByteArray :=
 
 /-- **A table's level-0 root**: its cap, concatenated, at level 0 of its `--zk` schedule; empty where `m` has none. -/
 def root (i : In) : ByteArray :=
-  match Zk.schedule i.m with
+  match Zk.schedule i.wideLeaf i.m with
   | .ok (s, tPad) => flat (cap (s.levels.getD 0 default) tPad i)
   | .error _ => ByteArray.empty
 
-/-- A request's sizes at `m`: words of the packed table, columns, lanes with the extra ones, `t_pad`, and tree
-positions. -/
-def sizes (m : Nat) : V (Nat × Nat × Nat × Nat × Nat) := do
-  let (s, tPad) ← Zk.schedule m
+/-- A request's sizes at `m` (`wide`: of a wide-leaf statement): words of the packed table, columns, lanes with the
+extra ones, `t_pad`, and tree positions. -/
+def sizes (wide : Bool) (m : Nat) : V (Nat × Nat × Nat × Nat × Nat) := do
+  let (s, tPad) ← Zk.schedule wide m
   let lv := s.levels.getD 0 default
   return (2 ^ (lv.lanes + lv.cols), 2 ^ lv.cols, 2 ^ lv.lanes + Zk.EXTRA_LANES, tPad, 2 ^ lv.d)
 
 /-- A request's bytes at `m`. -/
-def wantBytes (m : Nat) : V Nat := do
-  let (nG, nC, nL, tPad, nQ) ← sizes m
+def wantBytes (wide : Bool) (m : Nat) : V Nat := do
+  let (nG, nC, nL, tPad, nQ) ← sizes wide m
   return 16 * nG + 16 * Zk.EXTRA_LANES * nC + 16 * nL * tPad + 192 * nQ
 
 /-- The word at byte `o` of `b`: `lo ‖ hi`, little-endian. -/
@@ -247,9 +250,9 @@ def wordsAt (b : ByteArray) (o n : Nat) : Array F128 := (Array.range n).map fun 
 
 /-- **A request's table** at `m`, from its bytes: the packed table's words, the extra lanes (each `2^cols` words), the
 lanes' paddings (each `t_pad` words), then the salts, `192` bytes per tree position; every word `lo ‖ hi`, little-endian. -/
-def parse (m : Nat) (b : ByteArray) : V In := do
-  let (nG, nC, nL, tPad, nQ) ← sizes m
-  let want ← wantBytes m
+def parse (wide : Bool) (m : Nat) (b : ByteArray) : V In := do
+  let (nG, nC, nL, tPad, nQ) ← sizes wide m
+  let want ← wantBytes wide m
   if b.size != want then throw s!"link: a {b.size}-byte table where m = {m} takes {want}"
   let g := wordsAt b 0 nG
   let oE := 16 * nG
@@ -257,7 +260,7 @@ def parse (m : Nat) (b : ByteArray) : V In := do
   let oP := oE + 16 * Zk.EXTRA_LANES * nC
   let pads := (Array.range nL).map fun l => wordsAt b (oP + 16 * tPad * l) tPad
   let oS := oP + 16 * nL * tPad
-  return { m, g, extra := fun e c => (ex[e]!)[c]!, lanePad := fun l k => (pads[l]!)[k]!
+  return { wideLeaf := wide, m, g, extra := fun e c => (ex[e]!)[c]!, lanePad := fun l k => (pads[l]!)[k]!
            salt := fun q => if q < nQ then b.extract (oS + 192 * q) (oS + 192 * (q + 1)) else ByteArray.empty }
 
 end Flock.Firewall.Link
