@@ -204,9 +204,9 @@ theorem drawCoins_roots {key : ChallengerKey} {w label : String} {after : ByteAr
       ∀ L, Verity.Sampled.look roots L =
         Verity.Sampled.sel L (pairs (lines.tail.filter fun l => !treeLine l)) := by
   obtain ⟨cm, roots, hts, hst⟩ := Verity.Sampled.drawCoins_ok h
-  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedSessionOf_ok hts
-  obtain ⟨_, hso⟩ := Verity.Sampled.sessionNamed_ok hsn
-  obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok hts
+  obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
+  obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.challengePhaseOf_ok hso
   obtain ⟨_, _, _, _, -, -, -, -, -, -, hall⟩ := Properties.Challenger.Coins.stream_ok hst
   exact ⟨cm, roots, ls, lines, hts, hlog, hls, hall, Verity.Sampled.releasedRootsOf_ok hrr⟩
 
