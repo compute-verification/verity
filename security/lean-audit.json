@@ -5711,9 +5711,9 @@
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
   "Definitions.Pous": {
-   "imports": ["Mathlib", "Definitions.Core.Game", "Definitions.Pous"],
+   "imports": ["Mathlib", "Definitions.Core.Game", "Definitions.Core.Accel", "Definitions.Pous"],
    "except": [],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; the probability is core's uniform probability (Verity.Game.prCoin, Definitions.Core.Game)"
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; the probability is core's uniform probability (Verity.Game.prCoin, Definitions.Core.Game); an instance at one card reads that card's table (Definitions.Core.Accel), the figures' one source in Lean"
   },
   "Definitions.Pous.Game": {
    "imports": ["Mathlib", "Definitions.Core.Game", "Definitions.Pous.Game"],
