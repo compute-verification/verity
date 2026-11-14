@@ -205,6 +205,7 @@ def test_runs_of_other_tokens_across_or_within_the_arms_are_refused(tmp_path: Pa
             records["runs"][0]["tokens_digest"] = letter * 16
             arms[arm].append(records)
     rc, summary, _ = merge(tmp_path, arms["control"], arms["treatment"])
+    differ = (f"generated tokens differ across arms/runs: control {sorted({x * 12 for x in control})} "
+              f"treatment {sorted({x * 12 for x in treatment})}")
     assert rc == 3 and summary["commit_pass"] is False and summary["tokens_equal"] is False
-    assert summary["problems"] == [f"generated tokens differ across arms/runs: control {sorted({x * 12 for x in control})} "
-                                   f"treatment {sorted({x * 12 for x in treatment})}"]
+    assert summary["problems"] == [differ]
