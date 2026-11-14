@@ -82,7 +82,7 @@ def commit_points(pairs: int) -> list[str]:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Row scale (plan-time inputs).  Artifact-derived overrides win over the structural estimates.
+# Row scale (plan-time inputs).
 # ---------------------------------------------------------------------------------------------------------------------
 @dataclass
 class RowScale:
@@ -109,15 +109,7 @@ class RowScale:
     retain_exclude: list[str] = field(default_factory=list)
     largest_request_rows: int | None = None   # (cap + lag) of the request with the largest rows x context product
     largest_request_ctx: int | None = None    # its prompt_len + cap + lag
-    largest_tensor_bytes: int | None = None   # 'largest tensor bound' ledger line when the row has run before
     host_limit_bytes: int | None = None
-    device_limit_bytes: int | None = None
-    # measured-at-plan-time overrides (admission JSON, fold_summary.json, commit.log)
-    scheduled_raw_bytes: int | None = None
-    token_bytes: int | None = None
-    hidden_bytes: int | None = None
-    n_instances: int | None = None
-    leaves: int | None = None
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -129,23 +121,15 @@ class RowScale:
         return int(self.prompt_tokens) + int(self.decode_rows)
 
     def instances(self) -> int:
-        if self.n_instances:
-            return int(self.n_instances)
         return round(self.spec["instances_per_layer_token"] * self.spec["layers"] * self.tokens)
 
     def token_bytes_est(self) -> int:
-        if self.token_bytes:
-            return int(self.token_bytes)
         return int(self.tokens * self.spec["per_token_bytes"])
 
     def hidden_bytes_est(self) -> int:
-        if self.hidden_bytes:
-            return int(self.hidden_bytes)
         return int(self.token_bytes_est() * self.max_context * self.spec["hidden_per_token_K"])
 
     def raw_bytes(self) -> int:
-        if self.scheduled_raw_bytes:
-            return int(self.scheduled_raw_bytes)
         return self.token_bytes_est() + self.hidden_bytes_est()
 
     def workers(self) -> int:
@@ -164,8 +148,6 @@ class RowScale:
         return max(1, min(int(self.max_context), max(rows, self.decode_rows // self.requests))), int(self.max_context)
 
     def largest_tensor(self) -> int:
-        if self.largest_tensor_bytes:
-            return int(self.largest_tensor_bytes)
         per_prompt = self.spec.get("largest_tensor_per_prompt", 554_000_000)
         rows, ctx = self.largest_request()
         lp = max(1, ctx - rows)
@@ -346,7 +328,7 @@ def predict(cfg: RowScale) -> dict[str, Any]:
         # that path, never 0 MiB by name
         pool = int(raw * lf)
         pool_basis = f"raw {raw // MiB} MiB x {lf} (--retain {cfg.retain}{'' if cfg.retain == 'host' else ': allocated regardless of retention on the unbounded windowed path'})"
-    leaves = int(cfg.leaves or raw // C["commit.run_record.bytes_per_leaf"]["value"])
+    leaves = int(raw // C["commit.run_record.bytes_per_leaf"]["value"])
     leaf_digests = leaves * 32
     pool_until = last
     oracle_b = int(sp["c2_oracle_per_instance"] * inst)
