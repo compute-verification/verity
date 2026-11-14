@@ -18,6 +18,7 @@ import torch
 from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period, setup
+from verity.runtime.stream import Side
 
 from tests import fake_vllm
 from tests.protocols.test_pous_option import (
@@ -236,7 +237,12 @@ def _subprotocol(opt, tmp_path, n):
     directory, out = _period_dir(tmp_path, n), tmp_path / f"out{n}"
     described = json.loads((directory / "period.json").read_text()) | {"tools": TOOLS}
     (directory / "period.json").write_text(json.dumps(described))
-    got = opt.leg(directory, NODE, out, side_of=Side.of, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+
+    def side_of(doc, node, key, local, what=None):
+        assert (key, what) == ("pous", None), "PoUS's side is period.json's challenger.pous"
+        return Side.of(doc, node, key, local, what)
+
+    got = opt.leg(directory, NODE, out, side_of=side_of, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     return got, json.loads((out / "pous.json").read_text())
 
 

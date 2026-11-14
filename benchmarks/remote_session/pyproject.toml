@@ -10,8 +10,7 @@
 # release log, read through the auditor's ledger, the verifier's stamps only a cross-check; it credits a session only when
 # its period committed the verifier that ran it, it and its period closed complete, the Lean accepted it, the host's pins
 # log records its pin as main's, and the verifier bound the store to the pinned model; every line says it is conditional
-# on NoOutsideCompute, and `--boundary` (off by default) holds each session's credit to the network certifiers' records
-# of the gate node's boundary. That store, what a pinned
+# on NoOutsideCompute. That store, what a pinned
 # checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are the remote audit's own
 # (`verity/protocols/accounting/poub/verifier/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
 [tool.pytest.ini_options]
@@ -55,6 +54,10 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py",
           # test_host_read_flow.py runs host_read.py, whose reference receipts are sketching.py's product
           "verity/protocols/accounting/poub/prover/codec_tensor/reader.py", "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py",
           "verity/protocols/accounting/poub/prover/codec_tensor/sketching.py",
+          # test_sass_gate.py: sass_gate.py runs the PoUW harness's mma_gate; test_rows.py checks that rows.sh's
+          # paths exist, these two among them
+          "verity/protocols/accounting/pouw/prover/sass_gate.py", "verity/protocols/accounting/poub/prover/word_codec/kv.cu",
+          "benchmarks/pouw/harness/jobs/toolkit.sh",
           # test_host_read_tiers.py: host_read_tiers.sh's lease, asked of the tree's own gpu-lease over faked cards
           "tools/research/src/research/pods/sh/gpu_lease.sh",
           "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py",
@@ -62,8 +65,6 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py",
           # ledger and credit checks' Lean verifier, `sampled-proofs-verifier` (`coins.lean_answer`), with the
           # interface its package requires
           "verity/protocols/proofs/spot", "verity/protocols/interface",
-          # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit
-          "verity/protocols/accounting/certifier", "verity/protocols/accounting/certifier/prover",
           # test_challengers.py: challengers.Gate against the auditor device's gate, its sessions served by serve.py
           "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json", "verity/protocols/compose/device/live_challenger/serve.py",
           "verity/protocols/compose/device/live_challenger/tests/stub_serve.py",

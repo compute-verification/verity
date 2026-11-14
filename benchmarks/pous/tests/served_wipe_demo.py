@@ -37,6 +37,7 @@ def main(argv: list[str]) -> int:
     doc = {"tools": {} if judge is None else {"wipe-protocol": judge}, "challenger_host": a.challenger,
            "challenger": {"wipe": {"command": shlex.split(a.challenger_command), "address": a.challenger_address}},
            "wipe": {"store": "host", "reads": int(a.reads), "trusted_sha512": a.trusted_sha512}}
+
     def stand_in(period, node, key, local, what=None):
         assert (key, what) == ("wipe", "the wipe"), "the wipe's side is period.json's challenger.wipe"
         named = Side.of(period, node, key, local, what)

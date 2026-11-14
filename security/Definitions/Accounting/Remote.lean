@@ -8,10 +8,12 @@ public import Definitions.Accounting.Remote.Draw
 public import Definitions.Accounting.Remote.Fork
 public import Definitions.Accounting.Remote.Sketch
 public import Definitions.Accounting.Remote.SketchLine
+public import Definitions.Accounting.Remote.SketchToy
 
 /-! The remote bandwidth audit's vocabulary: the node, the audit's parameters and the γ terms, a run and its routes,
 the node's memory as a trace (`Remote.Held`) and what devices outside it compute on (`Remote.Outside`), the verifier's
 opening draw with its pooled bound (`Remote.Draw`), the receipts' fork game (`Remote.Fork`), the receipts' sketch over
-a session's seeds and devices (`Remote.Sketch`), and the draw's coins read as a sketch outcome (`Remote.SketchLine`). -/
+a session's seeds and devices (`Remote.Sketch`), the draw's coins read as a sketch outcome (`Remote.SketchLine`), and
+the sketch's toy instances, at which the deployed sketch bound's witnesses are stated (`Remote.SketchToy`). -/
 
 @[expose] public section
