@@ -4,20 +4,26 @@ challenger on the auditor's host; its core answer in ``DIR/answer.json``.
 
     served_piece.py SERVE_DIR WINDOW DIR --hf-home H [--p2-lib LIB] [--device cuda] [--node NAME] [--private P]
       [--rounds K] [--challenger-host NAME --challenger-address HOST:PORT --challenger-command ARGV] [--trusted-sha512 HEX]
-      [--case-exe EXE]
+      [--case-exe EXE] [--sessions | --answers]
       [--bw-party CMD --bw-host HOST --bw-minutes M] [--bw-windows W --bw-passes P --bw-samples S --bw-window-s T]
       [--bw-out DIR] [--bw-private P] [--bw-case-exe EXE] [--no-bandwidth]
 
-`served_piece.sh` runs it under a lease of the card, as the composed run starts a piece (``bash -c CMD _ SERVE_DIR WINDOW
-DIR``).
+`served_piece.sh` runs it as the composed run starts a piece (``bash -c CMD _ SERVE_DIR WINDOW DIR``), in two parts.
+``--sessions`` is the part that needs the card, run under its lease: the weights, setup, PoUS's session and then
+PoUB-P2's over the same store (1 to 3 and 6's session below). It keeps what the sessions left in the private
+directories, ``C*`` as setup sent it among it (`STORE`), and answers nothing. ``--answers`` needs no card and runs
+once the lease is given back: from what was kept, PoUB-P2's answer and then PoUS's (4 to 6). `STORE` is removed once
+both are written and each Lean asked for has answered its case; until then ``--answers`` can be run again over the
+same sessions, which no second session replaces. With neither, one process does both (`run`).
 
 1. **The weights**: ``serve.json``'s model at its revision, the snapshot under ``--hf-home``, each of its safetensors files
-   held to its sha256 in the int8 manifest (`PINS`), and the serve dir's weights registration, when it has one, naming the
-   same model. ``W`` is each decoder layer's four linears as vLLM's Llama holds them (`MERGED`), int8 [N, K] beside f32
-   [N, 1] scales, put on ``--device``: the weights the serve read from that snapshot, loaded again on the card after the
-   window's serve ended. The rest of the checkpoint is outside ``W`` (the profile's ``outside``), and so is what serving
-   adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest run
-   doesn't need.
+   held to its sha256 in the manifest that pins the model (`PINS`: the int8 pins', then the others'), and the serve dir's
+   weights registration, when it has one, naming the same model. ``W`` is each decoder layer's four linears as vLLM's
+   Llama holds them (`MERGED`), in the form the checkpoint has them, int8 [N, K] beside f32 [N, 1] scales or plain BF16
+   [N, K] with none, put on ``--device``: the weights the serve read from that snapshot, loaded again on the card after
+   the window's serve ended. The rest of the checkpoint is outside ``W`` (the profile's ``outside``), and so is what
+   serving adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest
+   run doesn't need.
 2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, ``pous:p2-16448/v4``, its registered point): the
    commitment to ``W``, then the salt, which the memory challenger samples after it from its own host's OS and logs under
    the window's binding (`binding`; `challenger_session.salt`, the gate's ``challenger_party`` verb on a salt request),
@@ -33,13 +39,15 @@ DIR``).
    own inputs) under the session id the verdict derives itself from the window's binding and what setup published,
    never the report's (a report of a session under any other id is a reject), and its answer on that case's bytes
    (`served_case.pous_answer`, `period.answer`): the tie, the run's
-   check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused), and what
+   check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused;
+   ``pous.json``'s ``key_pinned`` says whether it was signed under that pin, and ``key_pin`` whether the pin is the
+   tree's for the challenger's host, ``tree``, or the run's own, ``run``), and what
    an accepted run certifies (`period.certify`): ``⌊ρ·|C|⌋`` bits at ``1% + 2^-128``, at `ROUNDS` challenges as at
-   105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The check takes about 2.3 minutes at the
-   registered point at 105 challenges or 320: the tie is its cost, not the rounds. With ``--case-exe``
-   (``pous-run-protocol``, which `served_piece.sh` builds) the Lean answers the same case while the piece still holds
-   it, and its answer is the verdict, refused unless it is the Python's but for the reason (`served_case.judged`): a
-   Lean that answers otherwise, or doesn't answer, leaves the window undecided, saying so, and no case is written.
+   105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The check's cost is the tie, which reads all of
+   ``C*``, not the rounds. With ``--case-exe``
+   (``pous-run-protocol``, which `served_piece.sh` builds) the Lean answers the same case, and its answer is the
+   verdict, refused unless it is the Python's but for the reason (`served_case.judged`): a Lean that answers
+   otherwise, or doesn't answer, leaves the window undecided, saying so, and no case is written.
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
    tree (`verity.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
    `binding`, so the record fixes the run and reveals nothing of ``W``'s digest, the salt or ``C*``'s root. Its opening,
@@ -47,11 +55,15 @@ DIR``).
    the run protocol's own answer on it (``case.json``, ``answer.json``: the composite's piece, `served_case.write`) go to
    ``--private`` (by default
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
-   placement and the weights' public properties: their model, count and size.
+   placement and the weights' public properties: their model, count and size. The placement's `trusted-host` holds
+   only for a session signed under a key `memory_challenger.AUDITOR_KEYS` pins for the challenger's host: a run's
+   own ``--trusted-sha512`` gets its session accepted, but its record is a rehearsal's, with no bound. Its ``setup``
+   is `challenger_session.SETUP`: the tie ran on the developer's node, so every verdict rests on setup checked by the
+   developer, not the auditor, which the ``POUS`` line prints after the premise.
 
-6. **The bandwidth session** (`held_bandwidth.py`): once PoUS's session completed, and before ``C*`` is released, the same
-   process runs PoUB-P2's session over the store it holds on the card, so both audits are of one store and no second one
-   is encoded. The session's request carried setup's published outputs and P2's parameters (`challenger_session.request_of`'s
+6. **The bandwidth session** (`held_bandwidth.py`): once PoUS's session completed, before either is answered and
+   before ``C*`` is released, the same process runs PoUB-P2's session over the store it holds on the card, so both
+   audits are of one store and no second one is encoded. The session's request carried setup's published outputs and P2's parameters (`challenger_session.request_of`'s
    ``published`` and ``params``), which the challenger kept on its host with the session's id; the bandwidth party there (``--bw-party``, the gate's
    ``bw_party --pous-session SID`` with ``--bw-minutes`` its cap) builds its registration from that record, never from
    the prover. The session's case and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``,
@@ -63,12 +75,18 @@ DIR``).
    its party holds every request to: it refuses one with another value before its first coin, naming each, and the
    bandwidth answer is then undecided. ``--no-bandwidth`` runs none.
 
-Writes ``DIR/answer.json`` and ``DIR/pous.json`` (sizes, the phases' timings, the SHA-512 of the key the session was
-signed under and whether it is the trusted one, ``key_sha512`` and ``key_pinned``, and under ``decided_by`` the program
-whose verdict the answer is with the host it ran on, `period.decided_by`: the Lean where it answered the case, with its
-seconds and its peak memory, else this Python) and prints one ``POUS`` line.
+Writes ``DIR/answer.json`` and ``DIR/pous.json`` (sizes, the phases' timings, the bytes of the case's line,
+``case_bytes``, the SHA-512 of the key the session was signed under and whether it is the trusted one, ``key_sha512``
+and ``key_pinned``, and under ``decided_by`` the program whose verdict the answer is with the host it ran on,
+`period.decided_by`: the Lean where it answered the case, with its seconds and its peak memory, else this Python, and
+of a session's answer ``setup``, `challenger_session.SETUP`),
+appends its timeline to ``DIR/stamps.txt`` (a UTC second and an event a line: the weights loaded, setup, each session,
+each answer, the case written; `served_piece.sh` adds its own) and prints one ``POUS`` line.
 Weights that aren't the pin's are a reject, and a session the challenger's side couldn't complete is undecided, each with
-its reason. Exit 0 on accept, 1 on any other answer, 2 when no answer could be made (no serve.json, no snapshot).
+its reason. Exit 0 on accept, 1 on any other answer, 2 when no answer could be made (no serve.json, no snapshot, and
+for ``--answers`` no kept sessions, or ones kept under another binding or id than the window's and its setup's).
+``--sessions`` exits 0 when the sessions are kept, with no answer yet, and 1 when they left one already, which is
+never an accept.
 """
 from __future__ import annotations
 
@@ -109,7 +127,8 @@ import served_case as SC
 
 pous = PO.adapter("pous")
 ROOT = Path(__file__).resolve().parents[2]
-PINS = ROOT / "adapters" / "vllm" / "manifests" / "checkpoints-int8.json"
+#: the manifests a served model's pin is read from, the first that names it at its revision
+PINS = tuple(ROOT / "adapters" / "vllm" / "manifests" / name for name in ("checkpoints-int8.json", "checkpoints.json"))
 ENTRY = f"pous:{pous.DEFAULT_SCHEME}"
 #: each linear as vLLM's Llama holds it, from the checkpoint's tensors concatenated by rows in this order
 MERGED = (("self_attn.qkv_proj", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")),
@@ -125,7 +144,8 @@ CHALLENGER_ADDRESS = "10.96.0.36:47610"
 CHALLENGER_COMMAND = ("ssh", "-i", "~/.ssh/vy-auditor2-pous", "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
                       "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=20", "research@10.96.0.36",
                       "challenger_party")
-#: the SHA-512 of the challenger's public key as its host made it (the gate's `party_key pous`)
+#: the SHA-512 of the challenger's public key as its host made it (the gate's `party_key pous`), one of the keys
+#: `memory_challenger.AUDITOR_KEYS` pins for `CHALLENGER_HOST`
 TRUSTED_SHA512 = ("39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
                   "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb")
 #: the bandwidth party on the auditor's host: the gate's `bw_party` verb under the card's key, its minutes the gate's cap
@@ -134,6 +154,9 @@ BW_PARTY = ("ssh -i ~/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes
 BW_PARTY_HOST = "10.96.0.36"
 BW_MINUTES = 10
 BINDING_TAG = b"verity/pous/served-window/v1"
+#: what `sessions` keeps in the private directory beside the run's record and the table until `answers` has answered:
+#: ``C*`` as setup sent it, its blocks end to end, and the summary so far
+STORE, HELD = "cstar.bin", "held.json"
 #: the period's challenges: the 320-read window's (`ObligationWide320`); an accepted run certifies at `1% + 2^-128`
 ROUNDS = P2.CERT_K_WIDE320
 DTYPES = {"I8": torch.int8, "F32": torch.float32, "BF16": torch.bfloat16, "F16": torch.float16}
@@ -152,9 +175,12 @@ class _Unused:
 
 
 class Linear:
-    def __init__(self, weight: torch.Tensor, scale: torch.Tensor) -> None:
+    """A linear as the adapter reads one: its weight and, in the int8 form, its per-row scales."""
+
+    def __init__(self, weight: torch.Tensor, scale: torch.Tensor | None = None) -> None:
         self.weight = torch.nn.Parameter(weight, requires_grad=False)
-        self.weight_scale = torch.nn.Parameter(scale, requires_grad=False)
+        if scale is not None:
+            self.weight_scale = torch.nn.Parameter(scale, requires_grad=False)
         self.quant_method = _Unused()
 
 
@@ -171,7 +197,8 @@ class Model:
     def named_parameters(self):
         for n, m in self.layers.items():
             yield f"{n}.weight", m.weight
-            yield f"{n}.weight_scale", m.weight_scale
+            if hasattr(m, "weight_scale"):
+                yield f"{n}.weight_scale", m.weight_scale
 
     def named_buffers(self):
         return iter(())
@@ -225,12 +252,13 @@ def _read(path: Path) -> tuple[bytearray, str]:
     return buf, h.hexdigest()
 
 
-def _pin(repo: str, revision: str, pins: Path) -> dict[str, str]:
-    """Each safetensors file's sha256 in the manifest's entry for ``repo`` at ``revision``."""
-    for c in json.loads(pins.read_text())["checkpoints"]:
-        if (c.get("repo"), c.get("revision")) == (repo, revision):
-            return {f: e["sha256"] for f, e in c["files"].items() if f.endswith(".safetensors")}
-    raise Refusal(f"{pins.name} pins no {repo}@{revision}")
+def _pin(repo: str, revision: str, pins: Sequence[Path]) -> dict[str, str]:
+    """Each safetensors file's sha256 in the entry for ``repo`` at ``revision`` of the first of ``pins`` that has one."""
+    for manifest in pins:
+        for c in json.loads(manifest.read_text())["checkpoints"]:
+            if (c.get("repo"), c.get("revision")) == (repo, revision):
+                return {f: e["sha256"] for f, e in c["files"].items() if f.endswith(".safetensors")}
+    raise Refusal(f"{', '.join(p.name for p in pins)} pin no {repo}@{revision}")
 
 
 def checkpoint(snapshot: Path, pin: Mapping[str, str]) -> tuple[Checkpoint, list[str]]:
@@ -255,7 +283,8 @@ def checkpoint(snapshot: Path, pin: Mapping[str, str]) -> tuple[Checkpoint, list
 
 
 def linears(ck: Checkpoint, device: torch.device) -> tuple[Model, dict[str, Any]]:
-    """vLLM's linears of the checkpoint on ``device`` (`MERGED`), and the checkpoint's other tensors' bytes, by kind."""
+    """vLLM's linears of the checkpoint on ``device`` (`MERGED`), and the checkpoint's other tensors' bytes, by kind. A
+    linear is int8 [N, K] with an f32 [N, 1] scale beside each of its parts, or BF16 [N, K] with a scale beside none."""
     keys = set(ck.tensors)
     layers: dict[str, Linear] = {}
     used: set[str] = set()
@@ -264,15 +293,22 @@ def linears(ck: Checkpoint, device: torch.device) -> tuple[Model, dict[str, Any]
         p = f"model.layers.{i}."
         for merged, parts in MERGED:
             names = [p + s + ".weight" for s in parts]
-            missing = [k for k in names + [k + "_scale" for k in names] if k not in keys]
+            missing = [k for k in names if k not in keys]
             if missing:
                 raise ValueError(f"{p + merged}: the checkpoint has no {missing}")
+            scales = [k + "_scale" for k in names if k + "_scale" in keys]
+            dtypes = sorted({ck.tensors[k][1] for k in names})
+            int8 = dtypes == ["I8"] and len(scales) == len(names)
+            if not int8 and (dtypes != ["BF16"] or scales):
+                raise ValueError(f"{p + merged}: {'/'.join(dtypes)} parts with {len(scales)} of {len(names)} scales are "
+                                 "neither an int8 linear with its scales nor a plain BF16 one")
             w = torch.cat([ck.tensor(k) for k in names]).contiguous()
-            s = torch.cat([ck.tensor(k + "_scale") for k in names]).contiguous()
-            if w.dtype != torch.int8 or s.dtype != torch.float32 or s.shape != (w.shape[0], 1):
-                raise ValueError(f"{p + merged}: {w.dtype} {tuple(w.shape)} with {s.dtype} {tuple(s.shape)} scales is not "
-                                 "an int8 linear")
-            layers[p + merged] = Linear(w.to(device), s.to(device))
+            s = torch.cat([ck.tensor(k) for k in scales]).contiguous() if int8 else None
+            if w.dim() != 2 or (s is not None and (s.dtype != torch.float32 or s.shape != (w.shape[0], 1))):
+                raise ValueError(f"{p + merged}: {w.dtype} {tuple(w.shape)}"
+                                 + ("" if s is None else f" with {s.dtype} {tuple(s.shape)} scales")
+                                 + f" is not {'an int8' if int8 else 'a BF16'} linear")
+            layers[p + merged] = Linear(w.to(device), None if s is None else s.to(device))
             used.update(names)
     outside: dict[str, int] = {}
     for k in sorted(keys - used):
@@ -286,6 +322,20 @@ def binding(model: str, revision: str, window: int, registration: str | None) ->
     """What the answer's hiding commitment is bound to: the served model, the window and its weights registration."""
     doc = {"model": model, "registration_sha512": registration, "revision": revision, "window": window}
     return hashlib.sha512(BINDING_TAG + canonical_json_bytes(doc)).digest()
+
+
+def _window(serve_dir: Path, window: int) -> tuple[str, str, str | None, bytes]:
+    """The served model and its revision (``serve.json``), the SHA-512 of the serve dir's weights registration where it
+    has one, and the window's binding over them (`binding`); `Refusal` where ``serve.json`` names no model."""
+    if not (serve_dir / "serve.json").is_file():
+        raise Refusal(f"{serve_dir} has no serve.json")
+    serve = json.loads((serve_dir / "serve.json").read_text())
+    repo, rev = serve.get("model"), serve.get("revision")
+    if not (isinstance(repo, str) and isinstance(rev, str)):
+        raise Refusal(f"serve.json names no model and revision ({repo!r}, {rev!r})")
+    reg_file = serve_dir / "weights_registration.json"
+    reg_sha = hashlib.sha512(reg_file.read_bytes()).hexdigest() if reg_file.is_file() else None
+    return repo, rev, reg_sha, binding(repo, rev, window, reg_sha)
 
 
 def _no(verdict: str, reason: str, commitment: str | None = None, protocol: str = period.PROTOCOL) -> dict[str, Any]:
@@ -309,26 +359,55 @@ def _private(directory: Path, docs: Mapping[str, Any], digests: bytes) -> None:
     (directory / "digests.bin").write_bytes(digests)
 
 
-def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str = "cuda", p2_lib: str | None = None,
-        node: str | None = None, party: Side | None = None, trusted_sha512: str = TRUSTED_SHA512,
-        private: Path | None = None, pins: Path = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
-        protocol: str = period.PROTOCOL, rounds: int = ROUNDS, bw_party: str | None = None,
-        bw_host: str = BW_PARTY_HOST, bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
-        bw_private: Path | None = None, bw_case_exe: str | None = None,
-        case_exe: str | None = None) -> dict[str, Any]:
-    """The piece (module docstring): its answer, written with ``pous.json`` to ``out``; `Refusal` when none can be made.
-    ``schemes`` and ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in
-    tests), ``rounds`` the session's challenges, ``case_exe`` the run protocol's Lean (``pous-run-protocol``), whose
-    answer on the case is then the verdict. With ``bw_party`` (the bandwidth party's command), PoUB-P2's session
-    over the held store once PoUS's has completed (`held_bandwidth.session`, under ``bw_request``, by default
-    `held_bandwidth.request`'s), its public answer to ``bw_out`` (by default ``out``'s sibling ``bandwidth``) and its
-    case to ``bw_private`` (by default ``SERVE_DIR/private/bandwidth``)."""
-    if not (serve_dir / "serve.json").is_file():
-        raise Refusal(f"{serve_dir} has no serve.json")
-    serve = json.loads((serve_dir / "serve.json").read_text())
-    repo, rev = serve.get("model"), serve.get("revision")
-    if not (isinstance(repo, str) and isinstance(rev, str)):
-        raise Refusal(f"serve.json names no model and revision ({repo!r}, {rev!r})")
+def _keep(private: Path, segments: Sequence[Sequence[bytes]]) -> None:
+    """``C*``, its blocks end to end, as `STORE` in ``private`` (0600)."""
+    fd = os.open(private / STORE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        for segment in segments:
+            f.write(b"".join(segment))
+
+
+def _kept(private: Path, q: P2.P2Params) -> list[list[bytes]]:
+    """``C*`` as `_keep` left it, segment by segment; `Refusal` unless it is the point's blocks."""
+    if not (private / STORE).is_file():
+        raise Refusal(f"{private} holds no {STORE}, C* as the sessions kept it")
+    raw = (private / STORE).read_bytes()
+    if len(raw) != q.blocks * q.block_bytes:
+        raise Refusal(f"{private / STORE} is {len(raw)} bytes, not C*'s {q.blocks} blocks of {q.block_bytes}")
+    segment = q.blocks_per_segment * q.block_bytes
+    return [[raw[o:o + q.block_bytes] for o in range(s, s + segment, q.block_bytes)]
+            for s in range(0, len(raw), segment)]
+
+
+def _stamp(out: Path, event: str) -> None:
+    """A line of the piece's timeline, ``DIR/stamps.txt``, as `served_piece.sh` writes its own: the UTC second and
+    ``event``."""
+    with open(out / "stamps.txt", "a") as f:
+        f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {event}\n")
+
+
+def _done(out: Path, summary: Mapping[str, Any], answer: dict[str, Any], **more: Any) -> dict[str, Any]:
+    (out / "answer.json").write_text(json.dumps(answer, indent=1, sort_keys=True) + "\n")
+    (out / "pous.json").write_text(json.dumps(dict(summary) | more | {"verdict": answer["verdict"],
+                                                                      "reason": answer["reason"]},
+                                              indent=1, sort_keys=True, default=str) + "\n")
+    return answer
+
+
+def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str = "cuda",
+             p2_lib: str | None = None, node: str | None = None, party: Side | None = None,
+             private: Path | None = None, pins: Sequence[Path] = PINS, protocol: str = period.PROTOCOL,
+             rounds: int = ROUNDS, bw_party: str | None = None, bw_host: str = BW_PARTY_HOST,
+             bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
+             bw_private: Path | None = None) -> dict[str, Any] | None:
+    """The piece's part on the card (module docstring, 1 to 3 and 6's session): the weights, setup, PoUS's session
+    of ``rounds`` challenges and, with ``bw_party`` (the bandwidth party's command), PoUB-P2's over the held store
+    (`held_bandwidth.held`, under ``bw_request``, by default `held_bandwidth.request`'s). Where they leave an answer
+    already (weights that aren't the pin's, no salt, a session that didn't complete or ran under another id), it is
+    written as `answers` writes one and returned, never an accept. Else None: what the sessions left is kept for
+    `answers`, in ``private`` (``run.json`` and the table, `STORE`, `HELD`) and ``bw_private`` (by default
+    ``SERVE_DIR/private/bandwidth``). `Refusal` when no answer can be made."""
+    repo, rev, reg_sha, bind = _window(serve_dir, window)
     snapshot = hf_home / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / rev
     if not snapshot.is_dir():
         raise Refusal(f"no snapshot of {repo}@{rev} under {hf_home}")
@@ -339,24 +418,19 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
     bw_out = bw_out or out.parent / "bandwidth"
     bw_private = bw_private or serve_dir / "private" / "bandwidth"
     out.mkdir(parents=True, exist_ok=True)
-    reg_file = serve_dir / "weights_registration.json"
-    reg_sha = hashlib.sha512(reg_file.read_bytes()).hexdigest() if reg_file.is_file() else None
-    bind = binding(repo, rev, window, reg_sha)
+    for name in (STORE, HELD):   # what an earlier run kept is never answered as this one's
+        (private / name).unlink(missing_ok=True)
     summary: dict[str, Any] = {"window": window, "model": repo, "revision": rev, "node": node, "challenger": party.host,
                                "binding": bind.hex(), "registration_sha512": reg_sha,
                                "decided_by": period.decided_by(None)}
 
     def done(answer: dict[str, Any], **more: Any) -> dict[str, Any]:
-        (out / "answer.json").write_text(json.dumps(answer, indent=1, sort_keys=True) + "\n")
-        (out / "pous.json").write_text(json.dumps(summary | more | {"verdict": answer["verdict"],
-                                                                    "reason": answer["reason"]},
-                                                  indent=1, sort_keys=True, default=str) + "\n")
-        return answer
+        return _done(out, summary, answer, **more)
 
     t0 = time.monotonic()
     ck, wrong = checkpoint(snapshot, _pin(repo, rev, pins))
     if reg_sha is not None:
-        reg = json.loads(reg_file.read_text()).get("model") or {}
+        reg = json.loads((serve_dir / "weights_registration.json").read_text()).get("model") or {}
         if (reg.get("repo"), reg.get("revision")) != (repo, rev):
             wrong.append(f"the weights registration is of {reg.get('repo')}@{reg.get('revision')}, not the served "
                          f"{repo}@{rev}")
@@ -370,6 +444,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
     total = sum(ck.bytes_of(k) for k in ck.tensors)
     del ck
     load_s = round(time.monotonic() - t0, 3)
+    _stamp(out, "the weights loaded")
 
     types = pous.linear_types
     pous.linear_types = _linear_types
@@ -385,11 +460,12 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                 HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
             return done(_no("undecided", why, None, protocol))
         install_s = round(time.monotonic() - t, 3)
+        _stamp(out, "setup done")
         try:
             opt = comp.get("pous")
             s = opt.store
             point = replace(s.point, k=rounds)
-            inputs = (s.commitment, s.salt, s.segments())
+            store = s.segments()
             details = opt.details
             weights = {"model": repo, "revision": rev, "covers": pous.COVERS, "linears": details["layers"], "bytes": details["tensor_bytes"],
                        "used_blocks": details["used_blocks"], "blocks": details["blocks"], "checkpoint_bytes": total,
@@ -411,72 +487,151 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                     HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
                 return done(_no("undecided", why, None, protocol), session_s=round(time.monotonic() - t, 3))
             session_s = round(time.monotonic() - t, 3)
+            _stamp(out, "PoUS's session done")
             if rep.get("session_id") != sid.hex():
                 return done(_no("reject", "the memory challenger's report is of a session under another id than the one "
                                 "the window's binding and its setup fix (challenger_session.session_id)", None, protocol),
                             session_s=session_s)
-            key_sha = hashlib.sha512(key).hexdigest()
-            trusted = (key,) if key_sha == trusted_sha512 else ()
-            t = time.monotonic()
-            case = period.case(point, sid, trusted, published, s.digests, session,
-                               period.setup_case(s.point.params, *inputs))
-            del inputs
-            inner = SC.pous_answer(case, schemes=schemes, protocol=protocol)
-            answer_s = round(time.monotonic() - t, 3)
-            decided, lean, agreed = period.decided_by(None), {}, True
-            if case_exe is not None:
-                t, rss = time.monotonic(), resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
-                try:
-                    inner, decided = SC.judged(case, inner, case_exe), period.decided_by(case_exe)
-                except SC.Refused as e:
-                    agreed, inner = False, _no("undecided", str(e)[:1000], inner["commitment"], protocol)
-                peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
-                # ru_maxrss is the largest of every child so far, in KiB: the Lean's only where it grew over this call
-                lean = {"lean_s": round(time.monotonic() - t, 3), "lean_peak_rss_kib": peak if peak > rss else None}
-            row = bytes.fromhex(inner["commitment"])
-            hidden = advice.commit([row], 8 * len(row), bind)
-            opening = hidden.open(0)
             _private(private, {
-                "opening.json": {"binding": bind.hex(), "count": 1, "index": opening.index, "n_bits": 8 * len(row),
-                                 "path": [p.hex() for p in opening.path], "root": hidden.root.hex(), "row": row.hex(),
-                                 "salt": opening.salt.hex()},
-                "run.json": {"answer": inner, "point": period.point_json(point), "published": published.to_json(),
-                             "session": rep["session"], "session_id": sid.hex(), "trusted": [k.hex() for k in trusted],
-                             "public_key": key.hex(), "host": rep.get("host"), "rounds_answered": rep.get("rounds"),
+                "run.json": {"point": period.point_json(point), "published": published.to_json(),
+                             "session": rep["session"], "session_id": sid.hex(), "public_key": key.hex(),
+                             "host": rep.get("host"), "rounds_answered": rep.get("rounds"),
                              "warmups": rep.get("warmups"), "latency": _latencies(session, point.limit_ns)}},
                      s.digests)
-            if agreed:
-                SC.write(private, case, inner)
-            pous_case = {"commitment": case["commitment"]}
-            del case
+            _keep(private, store)
+            del store
             bandwidth = None
             if bw_party is not None:
+                _stamp(out, "PoUB's session start")
                 t = time.monotonic()
-                bw = HB.session(s, node=node, party=bw_party, party_host=bw_host, sid=sid,
-                                request_=bw_request or HB.request(node.encode()), private=bw_private, public=bw_out,
-                                bind=HB.binding(repo, rev, window), window=window, pous_case=pous_case,
-                                case_exe=bw_case_exe)
-                bandwidth = {"verdict": bw["verdict"], "out": str(bw_out), "session_s": round(time.monotonic() - t, 3)}
-                print(HB.line(bw), flush=True)
-            answer = inner | {"commitment": hidden.root.hex()}
-            if inner["verdict"] == "accept":
-                answer["profile"] = inner["profile"] | {
-                    "commitment": {"scheme": "hm96-sha512/row/v2 in frame-v3-sha512 (verity.commitments.advice)",
-                                   "rows": 1, "n_bits": 8 * len(row), "binding": bind.hex(),
-                                   "of": "the run protocol's commitment, the SHA-512 of setup's published outputs"},
-                    "placement": CS.placement(node, party.host) | {
-                        "salt": f"drawn by the memory challenger on {party.host} from its OS after the commitment, "
-                                "logged under the window's binding, with the session's id derived from both"},
-                    "weights": weights | {"held": "loaded from the served snapshot on the card the window served on, "
-                                                  "after its serve ended"},
-                    "outside": outside, "window": window}
-            return done(answer, session_s=session_s, answer_s=answer_s, key_sha512=key_sha,
-                        key_pinned=bool(trusted), private=str(private), public=inner["public"], bandwidth=bandwidth,
-                        decided_by=decided, **lean)
+                HB.held(s, node=node, party=bw_party, party_host=bw_host, sid=sid,
+                        request_=bw_request or HB.request(node.encode()), private=bw_private)
+                bandwidth = {"session_s": round(time.monotonic() - t, 3)}
+                _stamp(out, "PoUB's session done")
+            (private / HELD).write_text(json.dumps({"summary": summary | {"session_s": session_s},
+                                                    "bandwidth": bandwidth}, indent=1, sort_keys=True, default=str)
+                                        + "\n")
+            return None
         finally:
             comp.close()
     finally:
         pous.linear_types = types
+
+
+def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str = TRUSTED_SHA512,
+            private: Path | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
+            protocol: str = period.PROTOCOL, bw_out: Path | None = None, bw_private: Path | None = None,
+            bw_case_exe: str | None = None, case_exe: str | None = None) -> dict[str, Any]:
+    """The piece's part that needs no card (module docstring, 4 to 6): the answers to what `sessions` kept, read
+    back from ``private``. First PoUB-P2's (`held_bandwidth.decide`, the Lean's with ``bw_case_exe``), to ``bw_out``
+    (by default ``out``'s sibling ``bandwidth``) and ``bw_private``, then PoUS's on its case, written with
+    ``pous.json`` to ``out`` and returned. ``schemes`` and ``protocol`` are the signatures the verifier accepts and the
+    id it answers under (a test signer's in tests), ``trusted_sha512`` the challenger key it trusts, ``case_exe`` the
+    run protocol's Lean (``pous-run-protocol``), whose answer on the case is then the verdict. What the sessions kept
+    only for this (`STORE`, `HELD`, the P2 case not yet answered) is removed last, once both answers are written and
+    each Lean asked for has answered its case: a call that ended before then, or whose Lean didn't answer or agree,
+    can be made again over the same sessions. The session's id is derived again here, from the window's binding
+    (``serve_dir``'s model and registration, ``window``) and what setup published, never taken from what was kept.
+    `Refusal`, before either answer, when ``private`` holds no sessions, or holds sessions kept under another binding
+    or id than those."""
+    private = private or serve_dir / "private" / "pous" / f"w{window}"
+    bw_out = bw_out or out.parent / "bandwidth"
+    bw_private = bw_private or serve_dir / "private" / "bandwidth"
+    if not (private / HELD).is_file():
+        raise Refusal(f"{private} holds no sessions to answer ({HELD}, which --sessions leaves)")
+    repo, rev, _, bind = _window(serve_dir, window)
+    held, kept = json.loads((private / HELD).read_text()), json.loads((private / "run.json").read_text())
+    summary = held["summary"]
+    node, host = summary["node"], summary["challenger"]
+    point, published = period.point_of(kept["point"]), R.Setup.from_json(kept["published"])
+    sid, key = CS.session_id(bind, published.commitment, published.salt), bytes.fromhex(kept["public_key"])
+    if (summary["binding"], kept["session_id"]) != (bind.hex(), sid.hex()):
+        raise Refusal(f"{private} keeps sessions under another binding or id than the ones window {window} of "
+                      f"{serve_dir} and its setup fix (challenger_session.session_id): they are not this window's")
+    out.mkdir(parents=True, exist_ok=True)
+    session, digests = R.ChallengePhaseRecord.from_json(kept["session"]), (private / "digests.bin").read_bytes()
+    key_sha = hashlib.sha512(key).hexdigest()
+    trusted = (key,) if key_sha == trusted_sha512 else ()
+    bandwidth = bw = None
+    if held["bandwidth"] is not None:
+        bw = HB.decide(bw_private, bw_out, bind=HB.binding(repo, rev, window),
+                       window=window, pous_case={"commitment": canonical_json_bytes(published.to_json()).hex()},
+                       case_exe=bw_case_exe)
+        bandwidth = {"verdict": bw["verdict"], "out": str(bw_out)} | held["bandwidth"]
+        print(HB.line(bw), flush=True)
+        _stamp(out, "PoUB's answer done")
+    t = time.monotonic()
+    case = period.case(point, sid, trusted, published, digests, session,
+                       period.setup_case(point.params, published.commitment, published.salt,
+                                         _kept(private, point.params)))
+    inner = SC.pous_answer(case, schemes=schemes, protocol=protocol)
+    answer_s = round(time.monotonic() - t, 3)
+    _stamp(out, "PoUS's answer by the Python done")
+    decided, lean, agreed = period.decided_by(None), {}, True
+    if case_exe is not None:
+        t, rss = time.monotonic(), resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        try:
+            inner, decided = SC.judged(case, inner, case_exe), period.decided_by(case_exe)
+        except SC.Refused as e:
+            agreed, inner = False, _no("undecided", str(e)[:1000], inner["commitment"], protocol)
+        peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        # ru_maxrss is the largest of every child so far, in KiB: the Lean's only where it grew over this call
+        lean = {"lean_s": round(time.monotonic() - t, 3), "lean_peak_rss_kib": peak if peak > rss else None}
+        _stamp(out, "PoUS's answer by the Lean done")
+    row = bytes.fromhex(inner["commitment"])
+    hidden = advice.commit([row], 8 * len(row), bind)
+    opening = hidden.open(0)
+    _private(private, {
+        "opening.json": {"binding": bind.hex(), "count": 1, "index": opening.index, "n_bits": 8 * len(row),
+                         "path": [p.hex() for p in opening.path], "root": hidden.root.hex(), "row": row.hex(),
+                         "salt": opening.salt.hex()},
+        "run.json": kept | {"answer": inner, "trusted": [k.hex() for k in trusted]}}, digests)
+    if agreed:
+        SC.write(private, case, inner)
+        _stamp(out, "PoUS's case written")
+    case_bytes = SC.line_bytes(case)
+    del case
+    answer = inner | {"commitment": hidden.root.hex()}
+    if inner["verdict"] == "accept":
+        answer["profile"] = inner["profile"] | {
+            "commitment": {"scheme": "hm96-sha512/row/v2 in frame-v3-sha512 (verity.commitments.advice)",
+                           "rows": 1, "n_bits": 8 * len(row), "binding": bind.hex(),
+                           "of": "the run protocol's commitment, the SHA-512 of setup's published outputs"},
+            "placement": CS.placement(node, host, key_sha) | {
+                "salt": f"drawn by the memory challenger on {host} from its OS after the commitment, "
+                        "logged under the window's binding, with the session's id derived from both"},
+            "weights": summary["weights"] | {"held": "loaded from the served snapshot on the card the window served "
+                                                     "on, after its serve ended"},
+            "outside": summary["outside"], "window": window}
+    _done(out, summary, answer, answer_s=answer_s, case_bytes=case_bytes, key_sha512=key_sha,
+          key_pinned=bool(trusted), key_pin="tree" if trusted_sha512 in mc.AUDITOR_KEYS.get(host, ()) else "run",
+          private=str(private), public=inner["public"], bandwidth=bandwidth,
+          decided_by=decided, setup=CS.SETUP, **lean)
+    # last, and only once each Lean asked for has answered its case: until then the same sessions can be answered again
+    unanswered = not agreed or (bw is not None and bw["verdict"] == "undecided" and (bw_private / HB.HELD).is_file())
+    if not unanswered:
+        for kept_file in (private / STORE, private / HELD, bw_private / HB.HELD):
+            kept_file.unlink(missing_ok=True)
+    return answer
+
+
+def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str = "cuda", p2_lib: str | None = None,
+        node: str | None = None, party: Side | None = None, trusted_sha512: str = TRUSTED_SHA512,
+        private: Path | None = None, pins: Sequence[Path] = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
+        protocol: str = period.PROTOCOL, rounds: int = ROUNDS, bw_party: str | None = None,
+        bw_host: str = BW_PARTY_HOST, bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
+        bw_private: Path | None = None, bw_case_exe: str | None = None,
+        case_exe: str | None = None) -> dict[str, Any]:
+    """The piece (module docstring) in one process, `sessions` and then `answers`: its answer, written with
+    ``pous.json`` to ``out``; `Refusal` when none can be made."""
+    early = sessions(serve_dir, window, out, hf_home=hf_home, device=device, p2_lib=p2_lib, node=node, party=party,
+                     private=private, pins=pins, protocol=protocol, rounds=rounds, bw_party=bw_party, bw_host=bw_host,
+                     bw_request=bw_request, bw_out=bw_out, bw_private=bw_private)
+    if early is not None:
+        return early
+    return answers(serve_dir, window, out, trusted_sha512=trusted_sha512, private=private, schemes=schemes,
+                   protocol=protocol, bw_out=bw_out, bw_private=bw_private, bw_case_exe=bw_case_exe,
+                   case_exe=case_exe)
 
 
 def _address(text: str) -> tuple[str, int]:
@@ -491,7 +646,7 @@ def line(answer: Mapping[str, Any]) -> str:
         return (f"POUS: accept: {w.get('model')}@{str(w.get('revision'))[:10]}'s {w.get('linears')} linears, "
                 f"{w.get('bytes')} B of the checkpoint's {w.get('checkpoint_bytes')} in {w.get('used_blocks')} of "
                 f"{w.get('blocks')} blocks; certifies {pub}; "
-                f"{(answer['profile'].get('placement') or {}).get(CS.PREMISE)}")
+                f"{CS.PREMISE} {(answer['profile'].get('placement') or {}).get(CS.PREMISE)}; {CS.SETUP}")
     return f"POUS: {answer['verdict']}: {answer['reason']}"
 
 
@@ -512,6 +667,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--trusted-sha512", default=TRUSTED_SHA512, help="the SHA-512 of the challenger key the verifier trusts")
     ap.add_argument("--case-exe", help="pous-run-protocol, whose answer on the case is the verdict and must agree with "
                                        "period.answer (else period.answer alone)")
+    part = ap.add_mutually_exclusive_group()
+    part.add_argument("--sessions", action="store_true", help="only the part on the card: the sessions, kept for "
+                                                              "--answers (exit 0), or the answer they leave already")
+    part.add_argument("--answers", action="store_true", help="only the part that needs no card: the answers to the "
+                                                             "sessions --sessions kept")
     bw = ap.add_argument_group("the bandwidth session over the held store (held_bandwidth.py)")
     bw.add_argument("--bw-party", default=BW_PARTY, help="the shell command that starts the bandwidth party (the gate's "
                                                          "bw_party verb), to which --minutes and --pous-session are added")
@@ -533,11 +693,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     bw_party = None if a.no_bandwidth else f"{a.bw_party} --minutes {a.bw_minutes}"
     bw_request = HB.request(node.encode(), windows=a.bw_windows, passes=a.bw_passes, samples=a.bw_samples,
                             window_s=a.bw_window_s, deadline_s=a.bw_deadline_s)
+    card = {"hf_home": a.hf_home, "device": a.device, "p2_lib": a.p2_lib, "node": node, "party": party,
+            "rounds": a.rounds, "bw_party": bw_party, "bw_host": a.bw_host, "bw_request": bw_request}
+    both = {"private": a.private, "bw_out": a.bw_out, "bw_private": a.bw_private}
+    none = {"trusted_sha512": a.trusted_sha512, "bw_case_exe": a.bw_case_exe, "case_exe": a.case_exe}
     try:
-        answer = run(a.serve_dir, a.window, a.out, hf_home=a.hf_home, device=a.device, p2_lib=a.p2_lib, node=node,
-                     party=party, trusted_sha512=a.trusted_sha512, private=a.private, rounds=a.rounds,
-                     bw_party=bw_party, bw_host=a.bw_host, bw_request=bw_request, bw_out=a.bw_out,
-                     bw_private=a.bw_private, bw_case_exe=a.bw_case_exe, case_exe=a.case_exe)
+        if a.answers:
+            answer = answers(a.serve_dir, a.window, a.out, **both, **none)
+        elif a.sessions:
+            answer = sessions(a.serve_dir, a.window, a.out, **card, **both)
+            if answer is None:
+                print("POUS: the sessions are kept, to be answered (--answers)", file=sys.stderr, flush=True)
+                return 0
+        else:
+            answer = run(a.serve_dir, a.window, a.out, **card, **both, **none)
     except Refusal as e:
         print(f"POUS: no answer: {e}", file=sys.stderr, flush=True)
         return 2
