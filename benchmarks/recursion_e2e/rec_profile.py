@@ -40,12 +40,17 @@ from rec_rows import Row, Stat, compose_row, forge_after_rows, forged, forgeries
 log = logging.getLogger(__name__)
 
 SCHEMA = "recursion-e2e/v1"
-#: oprove's mode through the ZK server, as 85-rec-reprice.sh's MODES and its oprove directories name it
-ZK_SERVER_MODE = "firewall"
+#: oprove's mode through the ZK server, as 85-rec-reprice.sh's MODES and its oprove directories name it, and the name
+#: runs recorded before it carry
+ZK_SERVER_MODE, RECORDED_MODE = "zk_server", "firewall"
 #: the summary's key for the ZK server's Lean session loop, and the one results recorded before it hold
 LOOP, RECORDED_LOOP = "lean_session_loop", "flock_firewall"
-#: the ZK server's Lean session loop's process name, which the run's process samples carry
-LOOP_PROCESS = "flock-firewall"
+#: the ZK server's Lean session loop's process name, which the run's process samples carry, then a recorded run's
+LOOP_PROCESSES = ("flock-zk-server", "flock-firewall")
+#: the lines a prover's stop starts with; a recorded run's ZK server refused as ``FIREWALL-REFUSED``
+STOPS = ("ZK-SERVER-REFUSED", "FIREWALL-REFUSED", "PROVER-STOPPED")
+#: prover buckets a recorded run names otherwise, by the name read
+RECORDED_BUCKETS = {"t.firewall_recheck": "t.zk_server_recheck"}
 #: the steps one recursive run needs, in order (vcap stages RecCap, which V*'s verdict needs; ``negative`` checks the
 #: run, ``icheck`` and ``oreplay`` time more of it)
 E2E_STEPS = ("build", "inner", "vstage", "vcap", "oprove", "lean")
@@ -73,7 +78,7 @@ STATEMENTS = {
 #: the prover's phase buckets (``flock-circuit``'s ``gpu_buckets``, both reps) a dominant phase is chosen among; the
 #: aggregates (``t.arithmetic``, ``t.total``) and host-side ``h.*`` stay out
 PHASES = ("t.witness", "t.encoding_commitment", "t.link", "t.zerocheck", "t.lincheck", "t.ring_switch", "t.ligerito",
-          "t.firewall_recheck", "t.lean_finish", "t.zk_inner")
+          "t.zk_server_recheck", "t.lean_finish", "t.zk_inner")
 
 
 def lean_split(p: Path) -> dict[str, float]:
@@ -88,6 +93,7 @@ def _bucket_sums(buckets: list[dict[str, Any]] | None) -> dict[str, float]:
     for b in buckets or []:
         for k, v in b.items():
             if k.startswith("t.") and isinstance(v, (int, float)):
+                k = RECORDED_BUCKETS.get(k, k)
                 sums[k] = sums.get(k, 0.0) + float(v)
     return sums
 
@@ -121,7 +127,7 @@ def prover_row(d: Path, stage: str, step: str, what: str) -> Row:
     if not timed:
         err = text(d / "prove.err")
         held = re.findall(r"^gpu-lease: GPU .* held (\d+m\d+s)", err, re.M)
-        stops = [ln for ln in err.splitlines() if ln.startswith(("FIREWALL-REFUSED", "PROVER-STOPPED")) or "panicked" in ln]
+        stops = [ln for ln in err.splitlines() if ln.startswith(STOPS) or "panicked" in ln]
         why = ([f"lease preempted {preempted}x"] if preempted else []) + [
             f"no run finished in the lease's {held[-1]}" if held else "no run finished before the step stopped"]
         r.ok, r.note = False, "; ".join(why + stops[:1])[:300] if d.exists() else "not run"
@@ -234,8 +240,9 @@ def read(root: Path) -> dict[str, Any]:
     cpu_prover = params(root).get("OPROVE_GPU") == "0"
     for o in repeats(root, "oprove")[:1]:
         for d in sorted((p for p in (o / "oprove").glob("*") if p.is_dir()), key=lambda p: p.name):
-            mode = next((m for m in (ZK_SERVER_MODE, "host", "dev") if d.name.endswith("-" + m)), "dev")
-            stmt = d.name[: -len(mode) - 1] if d.name.endswith("-" + mode) else d.name
+            named = next((m for m in (ZK_SERVER_MODE, RECORDED_MODE, "host", "dev") if d.name.endswith("-" + m)), "dev")
+            stmt = d.name[: -len(named) - 1] if d.name.endswith("-" + named) else d.name
+            mode = mode_name(named)
             rows.append(prover_row(d, f"outer {stmt}", "oprove", f"V*'s {stmt} with --zk, mode {mode}"
                                    + (", CPU prover" if cpu_prover else "")))
             rows[-1].extra |= {"mode": mode, "statement": stmt, "prover": "cpu" if cpu_prover else "gpu"}
@@ -302,7 +309,7 @@ def read(root: Path) -> dict[str, Any]:
         rows += negative_rows(ng[0] / "lean")
     forgeries(rows)
     s = summary(rows)
-    loop = processes(root.parent / "resources.jsonl", LOOP_PROCESS)
+    loop = [e for name in LOOP_PROCESSES for e in processes(root.parent / "resources.jsonl", name)]
     if loop:
         s[LOOP] = loop
     steps = step_status(root)
@@ -486,6 +493,8 @@ def merge(docs: list[dict[str, Any]]) -> dict[str, Any]:
     for d in docs:
         for r in d["rows"]:
             r = {**r, "extra": {**r.get("extra", {}), "run": d.get("ref") or d.get("run")}}
+            if "mode" in r["extra"]:
+                r["extra"]["mode"] = mode_name(r["extra"]["mode"])
             by[(r["step"], r["stage"], r["extra"].get("mode", ""))] = r
     order = {s: i for i, s in enumerate(ORDER)}
     rows = sorted(by.values(), key=lambda r: order.get(r["step"], len(order)))
@@ -509,6 +518,11 @@ def loop_samples(s: dict[str, Any]) -> list[dict[str, Any]]:
     """A summary's process samples of the ZK server's Lean session loop, under ``LOOP`` or a recorded result's
     ``RECORDED_LOOP``."""
     return s.get(LOOP) or s.get(RECORDED_LOOP) or []
+
+
+def mode_name(m: str) -> str:
+    """An oprove mode as MODES names it now, from a run's directory name or a recorded result's row."""
+    return ZK_SERVER_MODE if m == RECORDED_MODE else m
 
 
 def loop_line(s: dict[str, Any]) -> str | None:
