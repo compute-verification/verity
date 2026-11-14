@@ -12,7 +12,7 @@ deployment configuration's table declares the policy's party from, with its test
 - **Commands** (`lake exe`, in `lean/`):
   - `inference-only id | check PARAMS COMMITMENT EVIDENCE | serve`: the core protocol `verity/inference-only/v0`,
     which both composites compose;
-  - `nci-check [--unrolled] INSTANCE TRUSTED`, or with `--policy [--unrolled] INSTANCE` or
+  - `inference-only-check [--unrolled] INSTANCE TRUSTED`, or with `--policy [--unrolled] INSTANCE` or
     `--count [--detail] INSTANCE`: the verdict on one instance, as JSON on stdout. `benchmarks/verifier_cost` builds
     and runs it;
   - `inference-only-record-check CASE`: the record form on one case of its difftest's, such as
@@ -95,7 +95,7 @@ scenarios register a policy as if it were a subprotocol.
   `security/Definitions/Core/Formalism.lean`). It is the day's bound's only premise on the circuit
   (`InferenceOnly.Cut.Guarantees.CountHE`, with (H) and (E) on the work), and `SlowdownRemote` and `SlowdownRemotePeriod` take
   it for each declared day.
-- **The registered information's provenance**, `InferenceOnly.Assumptions.BaselineRegistered`: every θ entry is registered
+- **The registered information's provenance**, `InferenceOnly.Assumptions.ThetaRegistered`: every θ entry is registered
   public data, never an earlier run's output.
 
 ## The check
@@ -104,10 +104,10 @@ scenarios register a policy as if it were a subprotocol.
 in the package `core_circuits`) and imports nothing else but Lean core and the core interface (`core_protocol`): nothing
 of Flock's verifier.
 
-- `nci-check` runs `InferenceOnlyCheck.Theta.check`: `InferenceOnlyCheck.Desc.check`, which decides `InferenceOnly.CompliesRate c α` for a declared
+- `inference-only-check` runs `InferenceOnlyCheck.Theta.check`: `InferenceOnlyCheck.Desc.check`, which decides `InferenceOnly.CompliesRate c α` for a declared
   division aligned to the root's Calls at the cost of the descriptor (one summary per Definition), then each θ entry's
   provenance against the deployment's registration log.
-- `nci-check --count` runs `InferenceOnlyCheck.Count.check`, the count of (c, k)-inference blocks: the declaration names its block
+- `inference-only-check --count` runs `InferenceOnlyCheck.Count.check`, the count of (c, k)-inference blocks: the declaration names its block
   Definitions by descriptor key, and the check gives each one's Boolean gates (from a per-primitive gate table), its
   fresh input bits outside θ and its blocks, multiplied through batches and scans, and the root's total against n.
   - Public: the judgment against n, `{"complies": true|false}`, or the refusal (`{"error": code}`, with a `message`
@@ -119,12 +119,12 @@ of Flock's verifier.
   `InferenceOnly.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. The count's difftest holds
   both forms to the Python reference's `check_count` and `check_count_detail` (`lean/scripts/inference_only_reference.py`), run by
   `../../../accounting/certifier/verifier/network/tests/test_inference_only_count_difftest.py`.
-- `nci-check --unrolled` runs the same with `InferenceOnlyCheck.check`, the check gate by gate, kept as the reference; its input
+- `inference-only-check --unrolled` runs the same with `InferenceOnlyCheck.check`, the check gate by gate, kept as the reference; its input
   format is in `InferenceOnlyCheck.Check`'s docstring. `--policy` runs the policy's check alone, without θ's provenance, which
   is what `benchmarks/verifier_cost` measures.
 - `inference-only id | check | serve` runs `InferenceOnlyCheck.Theta.check` as the core protocol `verity/inference-only/v0`,
   the subprotocol of onsite and remote.
-- `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
+- `inference-only-difftest`, `inference-only-desc-difftest`, `inference-only-desc-liveness`, `inference-only-desc-fuzz` and `inference-only-theta-difftest` hold them to
   each other and to the Python reference `lean/scripts/inference_only_reference.py`, run by the `test_inference_only_*.py` of `../../../accounting/certifier/verifier/network/tests/`;
   `../../../accounting/certifier/verifier/network/tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's
   decoders.
@@ -137,7 +137,7 @@ literature index and the training algorithms' traits.
 
 ## Names
 
-The directory, the namespaces `InferenceOnly` and `InferenceOnlyCheck`, the `nci-*` executables, `benchmarks/nci` and the Lean's
+The directory, the namespaces `InferenceOnly` and `InferenceOnlyCheck`, the `inference-only-*` executables, `benchmarks/nci` and the Lean's
 docstrings keep the older names until they are renamed: "NCI" and "novel communication intensity" for the policy,
 "isolation unit" and "IU" for an inference block, "novel information" and `novelReads` for fresh input, and
 "baseline" for the registered information (`GLOSSARY.md`, Older names).

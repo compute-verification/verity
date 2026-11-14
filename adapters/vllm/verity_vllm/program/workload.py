@@ -477,7 +477,7 @@ class WorkloadProgram:
     def __init__(self, requests: list[WorkloadRequest], shared: str = "weights", manifest_digest: str | None = None,
                  ordering: str = "manifest", *, lag: int, theta_registered: bool = False, edge: Edge | None = None) -> None:
         """`theta_registered`: bind the model's weights (`theta`) at registration, as `RegisteredInput<w>_v1`, whatever the
-        components bind them as. The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`). Off, the
+        components bind them as. The inference-only check reads only registered inputs as θ (inference-only-check's `theta-not-registered`). Off, the
         weights are bound as the components bind them, so every workload digest built before it stands. `edge`: a Commit window's
         (`Edge`), the Program then `WORKLOAD_EDGE`'s; None, `WORKLOAD`'s."""
         if not requests:
