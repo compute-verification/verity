@@ -7,7 +7,7 @@ import random
 import numpy as np
 import pytest
 
-P = pytest.importorskip("verity.definitions.registry.prims")
+P = pytest.importorskip("verity_vllm.definitions.registry.prims")
 from test_ir_lowering import LOWERED, REG, SLICES, _check_set  # noqa: E402
 from verity_flock import ir_lower as IL  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
@@ -31,7 +31,7 @@ def test_the_ingress_parse_is_one_unit_equal_to_its_definition(tmp_path):
     """``ingress-prompt`` (the I/O shell's ``IngressPrompt_v1``) lowers as ONE unit (``ir_lower.whole``) whose input row is the
     body, whole SHA-512 blocks: its rows equal the IR on a synthetic set of schema bodies, and give ``io_shell.reference``'s
     (ok, ids, max_tokens) on the same bodies with one byte changed, which leaves the schema or moves a field."""
-    from verity.definitions.registry import io_shell as X
+    from verity_vllm.definitions.registry import io_shell as X
 
     mod, sub = REG.module("ingress-prompt"), TM.subcircuit("ingress-prompt", **INGRESS)
     s = InputSet.open(generate(sub, 4, 20261024, tmp_path)["path"])
@@ -55,7 +55,7 @@ def test_the_greedy_select_is_its_chunk_and_combine_units(tmp_path):
     chunk boundary, behind a NaN at a chunk's first logit, or alone in the last, short chunk."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_batch
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
 
     V = 200
     lows = {}

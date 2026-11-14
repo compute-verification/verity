@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.definitions.registry.fp8_moe`'s Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity_vllm.definitions.registry.fp8_moe`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3MmaV2Dot32
-    from verity.definitions.registry import fp8_moe
+    from verity_vllm.definitions.registry import fp8_moe
 
     return [
         # fused_moe_kernel's block FP8 expert coordinates: GLM-5.3's served ones (w13 K = 6144, w2 K = 256 at TP8), and small ones

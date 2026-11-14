@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.definitions.registry.boolean_sparse_mla`'s Definitions, in `circuit_check.targets`'
+"""circuit-check's bindings of `verity_vllm.definitions.registry.boolean_sparse_mla`'s Definitions, in `circuit_check.targets`'
 forms (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ def _glm53_served_roots() -> list[Any]:
     (`SparseMlaHeadKeysWire_v2`) the chain serves.  One over `targets.MAX_GATES` holds a ``digests`` pin, which keeps it in
     ``--all``; its description is rows of Calls, and its Flock block is read off them (`verity_flock.circuit.unit_block`)."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import boolean_sparse_mla
+    from verity_vllm.definitions.registry import boolean_sparse_mla
 
     S = {k: boolean_sparse_mla.SPARSE_MLA_GLM53[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")}
     # the block cut at P: a later 64-key block's scores and the first block's; a later block's O on 128, 64 and 32 of its
@@ -38,7 +38,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import boolean_sparse_mla
+    from verity_vllm.definitions.registry import boolean_sparse_mla
 
     return [
         ("SparseMlaBlock_v2", lambda: bind(boolean_sparse_mla.SparseMlaBlockV2, DR=16, DV=16, NVIS=5, FIRST=True, BN=16,

@@ -32,14 +32,14 @@ from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import scalar as SC
 from verity.circuits.boolean.gather import gather
 from verity.circuits.boolean.trace import definition
-from verity.definitions.registry import boolean_gather as BGA
-from verity.definitions.registry import boolean_moe as BMOE
-from verity.definitions.registry import fp8 as F8
-from verity.definitions.registry import fp8_moe as M
-from verity.definitions.registry import fp8_moe_experts as X
-from verity.definitions.registry.boolean_attention import _Bits
-from verity.definitions.registry.boolean_fp8 import F448, F_NEG448, Fp8RowScaleV2
-from verity.definitions.registry.prims import bits_of
+from verity_vllm.definitions.registry import boolean_gather as BGA
+from verity_vllm.definitions.registry import boolean_moe as BMOE
+from verity_vllm.definitions.registry import fp8 as F8
+from verity_vllm.definitions.registry import fp8_moe as M
+from verity_vllm.definitions.registry import fp8_moe_experts as X
+from verity_vllm.definitions.registry.boolean_attention import _Bits
+from verity_vllm.definitions.registry.boolean_fp8 import F448, F_NEG448, Fp8RowScaleV2
+from verity_vllm.definitions.registry.prims import bits_of
 
 BF16 = Array(16, BL.BIT)
 F32 = Array(32, BL.BIT)

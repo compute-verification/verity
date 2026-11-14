@@ -21,9 +21,9 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.batch import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.windows import interface as IF
-from verity.definitions.registry import b1
-from verity.definitions.registry import dead_free as DF
-from verity.definitions.registry import greedy_stages as G
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import dead_free as DF
+from verity_vllm.definitions.registry import greedy_stages as G
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NSEL.FAMILIES}
 V, K, N, R = 154880, 20, 7744, 121

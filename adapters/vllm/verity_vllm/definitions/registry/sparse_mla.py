@@ -61,10 +61,10 @@ from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
 from verity.circuits.ops.prims import const
-from verity.definitions.registry import hopper
-from verity.definitions.registry import prims as P
-from verity.definitions.registry.b1 import _lane
-from verity.definitions.registry.prims import BF16, F32
+from verity_vllm.definitions.registry import hopper
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.b1 import _lane
+from verity_vllm.definitions.registry.prims import BF16, F32
 
 _CONF = ("model-untested: read from vllm-flash-attn 506341a1's FA3 mainloop and softmax.h (the module docstring's files) at hdim "
          "64 / hdimv 512; tests/properties/glm53_dsa_capture_gpu.py is its hardware check")

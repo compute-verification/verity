@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.definitions.registry.boolean_fp8_moe`'s Definitions, in `circuit_check.targets`'
+"""circuit-check's bindings of `verity_vllm.definitions.registry.boolean_fp8_moe`'s Definitions, in `circuit_check.targets`'
 forms (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
     from verity.commitments.gates.embedding import read
-    from verity.definitions.registry import boolean_fp8_moe
+    from verity_vllm.definitions.registry import boolean_fp8_moe
 
     return [
         ("MoeExpertFp8BlockCoordinate_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV2, K=64, G=32, KB=32, SWAP=False)),

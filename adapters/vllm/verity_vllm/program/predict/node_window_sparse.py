@@ -25,7 +25,7 @@ from typing import Any
 
 from verity.circuits.codec import descriptor_id
 from verity.commitments.windows import interface as IF
-from verity.definitions.registry import sparse_mla_split as SMS
+from verity_vllm.definitions.registry import sparse_mla_split as SMS
 
 from verity_vllm.pipeline import chain_rows as CR
 from verity_vllm.pipeline import expert_rows as XR

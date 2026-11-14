@@ -21,11 +21,11 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions import boolean as SW
-from verity.definitions.numerics import sparse_mla_split_twins as TW
-from verity.definitions.registry import boolean_sparse_mla as BM
-from verity.definitions.registry import sparse_mla as M
-from verity.definitions.registry import sparse_mla_split as W
+from verity_vllm.definitions import boolean as SW
+from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
+from verity_vllm.definitions.registry import boolean_sparse_mla as BM
+from verity_vllm.definitions.registry import sparse_mla as M
+from verity_vllm.definitions.registry import sparse_mla_split as W
 
 GLM = M.SPARSE_MLA_GLM53
 SMALL = dict(DR=16, DV=16, BN=16, DOT=GLM["DOT"], SCALE=0.0625)

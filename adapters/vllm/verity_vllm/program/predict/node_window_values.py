@@ -127,7 +127,7 @@ def _embedding_shard(v: "Values", node: Any, t: int) -> np.ndarray:
 
 
 def _embedding_shard_small() -> tuple[Any, list[np.ndarray], np.ndarray]:
-    from verity.definitions.registry import b1_tp2 as B1T
+    from verity_vllm.definitions.registry import b1_tp2 as B1T
 
     fn = bind(B1T.EmbeddingShard, VS=4, H=3, START=2)
     table = np.arange(1, 13, dtype=np.uint16) * 0x0101

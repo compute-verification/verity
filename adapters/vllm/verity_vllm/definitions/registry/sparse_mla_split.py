@@ -81,10 +81,10 @@ from verity.circuits.ops.mufu import DivFullRcp
 from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.evidence import EVIDENCE
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import sparse_mla as M
-from verity.definitions.registry.prims import BF16, F32
+from verity_vllm.definitions.evidence import EVIDENCE
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import sparse_mla as M
+from verity_vllm.definitions.registry.prims import BF16, F32
 
 BIT = SC.BIT
 LG2_TABLE = "mufu_lg2.json"

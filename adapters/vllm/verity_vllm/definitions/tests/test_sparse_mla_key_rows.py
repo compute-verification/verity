@@ -14,10 +14,10 @@ from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
-from verity.definitions import boolean as SW
-from verity.definitions.registry import boolean_sparse_mla as BM
-from verity.definitions.registry import sparse_mla as M
-from verity.definitions.tests.test_sparse_mla_head_units import (BF16_SPECIALS, SERVED, SMALL, _bf16, _fields, _inputs, _operands,
+from verity_vllm.definitions import boolean as SW
+from verity_vllm.definitions.registry import boolean_sparse_mla as BM
+from verity_vllm.definitions.registry import sparse_mla as M
+from verity_vllm.definitions.tests.test_sparse_mla_head_units import (BF16_SPECIALS, SERVED, SMALL, _bf16, _fields, _inputs, _operands,
                                                                    _planted)
 
 #: DR = 32, DV = 64: key rows of three column blocks of 32, or six of 16

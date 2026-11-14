@@ -21,7 +21,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.refs import runs
 from verity.commitments.windows import interface as IF
-from verity.definitions.registry import b1_tp2 as B1T
+from verity_vllm.definitions.registry import b1_tp2 as B1T
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NM.FAMILIES}
 LP, WORLD, WIDTH, COLS = 43, 8, 6144, 192

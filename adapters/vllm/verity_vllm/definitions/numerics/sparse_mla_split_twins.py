@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry import sparse_mla as M
-from verity.definitions.registry import sparse_mla_split as W
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.registry import sparse_mla as M
+from verity_vllm.definitions.registry import sparse_mla_split as W
 
 U32 = np.uint32
 

@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.definitions.registry.boolean_dsa`'s Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity_vllm.definitions.registry.boolean_dsa`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def _glm53_served_roots() -> list[Any]:
     budget (this module's pins' ``struct_max_gates``), so each is realized by its structural lowering, and over
     `targets.MAX_GATES`, so each holds a ``digests`` pin, which keeps it in ``--all``."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import boolean_dsa
+    from verity_vllm.definitions.registry import boolean_dsa
 
     return [bind(boolean_dsa.DsaMqaLogitsQ, H=32, D=128), bind(boolean_dsa.DsaMqaLogitsKey, H=32, D=128)]
 
@@ -36,7 +36,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import boolean_dsa
+    from verity_vllm.definitions.registry import boolean_dsa
 
     return [
         ("DsaUe8m0Quant_v2", lambda: bind(boolean_dsa.DsaUe8m0QuantV2, N=4)),

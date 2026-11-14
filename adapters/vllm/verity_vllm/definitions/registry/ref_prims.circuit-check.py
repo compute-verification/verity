@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.definitions.registry.ref_prims`'s Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity_vllm.definitions.registry.ref_prims`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import ref_prims
+    from verity_vllm.definitions.registry import ref_prims
 
     return [
         ("RoPEHeadGptJ_v1", lambda: bind(ref_prims.RoPEHeadGptJ, D=16)),

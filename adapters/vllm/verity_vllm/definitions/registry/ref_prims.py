@@ -36,7 +36,7 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
   Profile-mode addition, NOT in the reference digest: `RoPEHeadGptJ{D}` (one head of vLLM's
   `rotary_embedding(is_neox=False)`, proof-supported through the `RopeOut`/`RopeOutAdd` twins; superseded by `boolean_rope`'s v2).
 
-**Loader note.**  Decoding a descriptor that names a reference kind requires `import verity.definitions.registry.ref_prims` first
+**Loader note.**  Decoding a descriptor that names a reference kind requires `import verity_vllm.definitions.registry.ref_prims` first
 (as for `hopper`/`fp8`).  `GatherF32x{V}_v1` is an on-demand family like `GatherBf16x{V}`; the codec's lazy-family table
 (`codec._LAZY_PRIMITIVE_FAMILIES`, a frozen file) is *extended by rebinding* from this module at import — additive, no
 edit to `codec.py`.
@@ -63,10 +63,10 @@ from verity.circuits.codec import register_lazy_family
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
 from verity.circuits.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.evidence import EVIDENCE
-from verity.definitions.registry import b1
-from verity.definitions.registry import prims as P
-from verity.definitions.registry.prims import BF16, BIT, F32, I32, F32_NAN, bits_of, f32_is_nan, f32_of
+from verity_vllm.definitions.evidence import EVIDENCE
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.prims import BF16, BIT, F32, I32, F32_NAN, bits_of, f32_is_nan, f32_of
 
 REF_VOCAB_VERSION = "verity-ref-vocab/1"
 
@@ -809,7 +809,7 @@ def ref_vocab_manifest() -> dict:
     for c in SHARED_COMPOSITES:
         shared[c.id] = {"kind": "composite", "body_sha256": _src_hash(c.body)}
     families = {name: _src_hash(fn) for name, fn in SHARED_FAMILIES.items()}
-    return {"schema": "verity-ir/ref-vocab/v0", "version": REF_VOCAB_VERSION, "module": "verity.definitions.registry.ref_prims",
+    return {"schema": "verity-ir/ref-vocab/v0", "version": REF_VOCAB_VERSION, "module": "verity_vllm.definitions.registry.ref_prims",
             "module_sha256": module_sha, "decimal_precision": _DEC_PREC, "kinds": kinds, "shared": shared, "families": families}
 
 

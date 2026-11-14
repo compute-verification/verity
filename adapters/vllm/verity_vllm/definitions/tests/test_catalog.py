@@ -1,6 +1,6 @@
 """`catalog.load()` registers exactly the Definitions and primitives `catalog_ids.json` lists, by id: a module that stops
 importing or registering, or one that registers more, fails here and names the ids.  Update the list in the change that adds or
-removes a Definition (`uv run python verity/definitions/tests/test_catalog.py --update`).
+removes a Definition (`uv run python adapters/vllm/verity_vllm/definitions/tests/test_catalog.py --update`).
 Each scope of `load` registers the Definitions of the walk it replaced (`REPLACED`), in the same order, whatever the registry
 holds: a module only `load`'s walk reaches, a registry subpackage's, can't register on import or move one unnoticed.
 
@@ -18,13 +18,13 @@ import sys
 from functools import cache
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[5]
 
 #: run in a fresh interpreter: what importing every registry module registers and imports, as JSON on its last line
 _LOAD = """
 import json, sys
 from pathlib import Path
-from verity.definitions.registry import catalog
+from verity_vllm.definitions.registry import catalog
 registry, errors = catalog.load()
 repo = Path(sys.argv[1])
 own = Path(catalog.__file__).resolve().parents[1]
@@ -64,19 +64,19 @@ def test_the_catalog_loads_every_definition_and_no_other():
     added, gone = sorted(set(got["ids"]) - set(want)), sorted(set(want) - set(got["ids"]))
     assert got["ids"] == want, (
         f"catalog.load() registers {len(added)} ids catalog_ids.json lacks, {added}, and lacks {len(gone)} it lists, {gone}. "
-        "If the change adds or removes them, update the list: uv run python verity/definitions/tests/test_catalog.py --update")
+        "If the change adds or removes them, update the list: uv run python adapters/vllm/verity_vllm/definitions/tests/test_catalog.py --update")
 
 
 #: by scope of `catalog.load`, the walk it replaced: the registry's own modules alone, none of a subpackage's, and replay's and
 #: the red-team demo's every module of ops and of the registry
 REPLACED = {
     "registry": ("import importlib, pkgutil\n"
-                 "import verity.definitions.registry as package\n"
+                 "import verity_vllm.definitions.registry as package\n"
                  "for m in sorted(pkgutil.iter_modules(package.__path__), key=lambda m: m.name):\n"
                  "    if m.name not in ('quarantine', 'catalog'):\n"
                  "        importlib.import_module(package.__name__ + '.' + m.name)\n"),
     ("ops", "registry"): ("import importlib, pkgutil\n"
-                          "for name in ('verity.circuits.ops', 'verity.definitions.registry'):\n"
+                          "for name in ('verity.circuits.ops', 'verity_vllm.definitions.registry'):\n"
                           "    package = importlib.import_module(name)\n"
                           "    for m in pkgutil.walk_packages(package.__path__, name + '.'):\n"
                           "        importlib.import_module(m.name)\n"),
@@ -97,7 +97,7 @@ def test_each_scope_registers_what_the_walk_it_replaced_did_in_its_order():
     the registry scope's walk reaches its subpackages' modules, which the old one never imported, so one that registers on import
     fails here.  Nothing to update when a Definition is added: both walks register it."""
     for scope, walk in REPLACED.items():
-        got = _registered(f"from verity.definitions.registry import catalog\nassert not catalog.load({scope!r})[1]\n")
+        got = _registered(f"from verity_vllm.definitions.registry import catalog\nassert not catalog.load({scope!r})[1]\n")
         want = _registered(walk)
         at = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
         assert got == want, (f"catalog.load({scope!r}) registers {len(got)} Definitions, the walk it replaced {len(want)}, first apart "
@@ -109,7 +109,7 @@ def test_the_ops_scope_imports_every_module_of_ops():
     and registers Definitions the registry alone does not: in a process of its own, so the list above stays the registry's."""
     code = ("import pkgutil, sys\n"
             "from verity.circuits import ops\n"
-            "from verity.definitions.registry import catalog\n"
+            "from verity_vllm.definitions.registry import catalog\n"
             "alone = len(catalog.load()[0].defs)\n"
             "registry, errors = catalog.load(('ops', 'registry'))\n"
             "assert not errors, errors\n"
