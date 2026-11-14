@@ -2,15 +2,13 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+from typing import Any, Callable
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`SeedBlocks_v1` at a message of one SHA-512 block (a 16-byte coin, a 4-byte id) and of two (a 64-byte coin, a 16-byte
     id); `SeedSelect_v1`, `SeedEqual_v1` and `SeedWord_v1` are static-free."""
     from verity.circuits.defs import bind
-
     from verity_vllm.program.frontend import seed_rule as SR
 
     return [
@@ -27,7 +25,6 @@ def _by_calls_roots() -> list[Any]:
     `Sha512Compress_v1` Call (a few hundred thousand gates) for each block but the last, then `SeedSelect_v1`, which compresses the
     last itself (and `SeedEqual_v1`); `SeedCheck_v2`'s are `SeedWord_v1` and then `SeedCheck_v1`'s."""
     from verity.circuits.defs import bind
-
     from verity_vllm.program.frontend import seed_rule as SR
 
     return [bind(d, COIN=c, RID=r) for d in (SR.ServedSeed, SR.SeedCheck, SR.SeedCheckWord) for c, r in ((16, 4), (64, 16))]
