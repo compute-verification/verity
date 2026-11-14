@@ -65,7 +65,7 @@ scenarios register a policy as if it were a subprotocol.
 ## The Lean
 
 - **The definition**, `security/Definitions/Nci.lean`. `Nci.Complies c k` says D has a (c, k)-partition
-  (`Verity.Partition.IsCK`): every block at most c gates and at most k fresh input bits (`Nci.novelReads`).
+  (`Verity.Partition.IsCK`): every block at most c gates and at most k fresh input bits (`Nci.freshInput`).
   `Nci.CompliesRate c α` is the form the check reads: blocks of at most c gates, each reading at most α fresh input bits
   per gate, so at most αc a block. Where the policy's guarantees assume the policy, they assume `Nci.CompliesRate`, what
   the check checks; `Nci.Guarantees.Inference` concludes `Nci.Complies`. A (c, k)-partition whose blocks have exactly c

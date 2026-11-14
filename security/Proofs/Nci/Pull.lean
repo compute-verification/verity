@@ -12,10 +12,10 @@ novel value it reads is either a computed gate of `c` outside the piece or a nov
 carries both to novel values its IU reads.
 
 Through a partial containment the pieces (`piece`) divide only the gates `S` that `d` computes, and the dark gates are in
-none. The same holds of each piece, with one more case for what it reads (`novelReads_piece`): a dark value enters `d` as
+none. The same holds of each piece, with one more case for what it reads (`freshInput_piece`): a dark value enters `d` as
 an input gate, which lies in no IU, so the IU reads it too, and it is outside `d`'s θ by `ThetaRegistered`. A
 total containment is a partial one with no dark gates (`PartialContainment.ofContainment`), and `ThetaRegistered` for
-it keeps the novel inputs of `c` that a piece reads out of `d`'s θ (`novelReads_pull`).
+it keeps the novel inputs of `c` that a piece reads out of `d`'s θ (`freshInput_pull`).
 -/
 
 @[expose] public section
@@ -87,10 +87,10 @@ theorem into_pull_into_computed (u : Fin n) {a : Fin C.N} (ha : a ∈ C.into ((p
 
 end Pull
 
-theorem novelReads_pull {c d : RegisteredCircuit} (M : Containment c.D d.D)
+theorem freshInput_pull {c d : RegisteredCircuit} (M : Containment c.D d.D)
     (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M)) {n : ℕ} (P : Partition d.D n)
-    (u : Fin n) : novelReads c ((pull M P).gates u) ≤ novelReads d (P.gates u) := by
-  unfold novelReads
+    (u : Fin n) : freshInput c ((pull M P).gates u) ≤ freshInput d (P.gates u) := by
+  unfold freshInput
   rw [width_map (M := M)]
   refine Finset.sum_le_sum_of_subset fun b hb => ?_
   obtain ⟨a, ha, rfl⟩ := Finset.mem_map.1 hb
@@ -149,8 +149,8 @@ theorem card_piece_le (u : Fin n) : (piece M P u).card ≤ (P.gates u).card :=
 /-- **A piece reads no more novel information than its IU.** A novel value the piece reads is a gate of `S` outside the
 piece, whose image is a computed gate outside the IU, or a gate outside `S`, whose image is an input gate of `d` outside
 its θ (`ThetaRegistered`) and so in no IU; either way the IU reads the image, which is as wide. -/
-theorem novelReads_piece (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :
-    novelReads c (piece M P u) ≤ novelReads d (P.gates u) := by
+theorem freshInput_piece (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :
+    freshInput c (piece M P u) ≤ freshInput d (P.gates u) := by
   have hA : ∀ a ∈ c.D.into (piece M P u) \ c.θ, a ∈ M.S ∪ c.D.into M.S := fun a ha =>
     into_piece_subset u (mem_sdiff.1 ha).1
   have hmaps : ∀ a ∈ c.D.into (piece M P u) \ c.θ, M.emb a ∈ d.D.into (P.gates u) \ d.θ := by
@@ -176,7 +176,7 @@ theorem novelReads_piece (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :
         rw [M.computed_emb a haS] at hi
         exact Bool.false_ne_true hi
       · exact haθ (hB a ((mem_union.1 (hA a ha)).resolve_left haS) hθ)
-  unfold novelReads Circuit.width
+  unfold freshInput Circuit.width
   calc ∑ a ∈ c.D.into (piece M P u) \ c.θ, c.D.w a
       = ∑ b ∈ (c.D.into (piece M P u) \ c.θ).image M.emb, d.D.w b := by
         rw [sum_image fun a ha b hb h => M.emb_inj a (hA a (mem_coe.1 ha)) b (hA b (mem_coe.1 hb)) h]
