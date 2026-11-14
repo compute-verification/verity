@@ -34,6 +34,28 @@ def test_parse_launch_context_forms():
         TG.parse_launch_context("[1024,0]")
 
 
+NEITHER_A_COUNT_NOR_JSON = ("x", "\u00b2", "--5", "+5", "-", "1024,1", "[1024,", "{batch: 1}", "conflict!")
+
+
+@pytest.mark.parametrize("text", NEITHER_A_COUNT_NOR_JSON)
+def test_a_string_that_is_neither_a_count_nor_json_is_refused_by_name(text):
+    """The Build's `--launch-context` hands its text to `parse_launch_context`.  The refusal is the function's own: it names the text
+    and says what a launch context may be, where `int`'s and `json`'s errors do neither."""
+    with pytest.raises(ValueError, match="^launch context: ") as refusal:
+        TG.parse_launch_context(text)
+    said = str(refusal.value)
+    assert type(refusal.value) is ValueError and repr(text) in said
+    assert all(form in said for form in ("(1024)", "[1024, 1, 1]", '{"0": 1024}', '{"batch": [[[rows, start], ...], ...]}', '"conflict"'))
+
+
+@pytest.mark.parametrize(("text", "said"), [("0", "max_seqlen_q 0 < 1"), ("-3", "max_seqlen_q -3 < 1"), ("[1024,0]", "must be >= 0 / >= 1"),
+                                            ("true", "launch context: True"), ("1.5", "unsupported spec float")])
+def test_a_count_or_json_that_is_no_launch_context_keeps_its_own_refusal(text, said):
+    with pytest.raises(ValueError) as refusal:
+        TG.parse_launch_context(text)
+    assert said in str(refusal.value) and "neither a count nor JSON" not in str(refusal.value)
+
+
 def test_launch_seqlen_q_is_the_launch_max_never_below_own_rows():
     # no context: own rows (B1 semantics)
     assert TG.launch_seqlen_q(8, 0, None) == (8, "own rows")
