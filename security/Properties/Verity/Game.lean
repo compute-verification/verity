@@ -207,10 +207,10 @@ each where `k` lists it. -/
 def tied (k : Verity.Registration.Composite) : List String :=
   [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id].filter (· ∈ k)
 
-/-- **The ties between subprotocols**: every window of PoUW's period on the policy's record (`Core.Remote.windows`),
+/-- **The ties between subprotocols**: every window of PoUW's period on the policy's record (`Core.Remote.executionPhases`),
 PoUS and PoUB-P2 on one store (`Core.Onsite.store`), Pearl+'s run on the policy's record (`Core.Remote.V1.run`), and
-Pearl+'s window record the one the policy's record is chained after (`Core.Remote.V1.window`). -/
-def allTies : List Composition.Tie := [Remote.windows, Onsite.store, Remote.V1.run, Remote.V1.window]
+Pearl+'s window record the one the policy's record is chained after (`Core.Remote.V1.executionPhase`). -/
+def allTies : List Composition.Tie := [Remote.executionPhases, Onsite.store, Remote.V1.run, Remote.V1.executionPhase]
 
 /-- The ties of composite `k`: each tie between subprotocols `k` lists, so a composite is its list and no tie is
 chosen beside it. Onsite has the first two, remote the last two. -/
