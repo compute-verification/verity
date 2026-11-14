@@ -1,5 +1,10 @@
-"""`engine.static_schedule`: a run that declares `sampling.ignore_eos` is held to a schedule the declaration alone decides."""
+"""`verity_vllm.engine.static_schedule`: a run that declares `sampling.ignore_eos` is held to a schedule the declaration alone
+decides."""
 from __future__ import annotations
+
+from typing import Any
+
+import pytest
 
 from verity_vllm.engine import static_schedule as ss
 
@@ -83,3 +88,45 @@ def test_host_prefix_cache_refusal():
     assert ss.host_prefix_cache_refusal(False) is None and ss.host_prefix_cache_refusal(None) is None
     msg = ss.host_prefix_cache_refusal(True)
     assert "enable_prefix_caching=false" in msg and "circuit-native form" in msg
+
+
+NO_RECORDS = [{}, {"requests": None}, {"requests": {}}, {"requests": {"a": None, "b": None}}, {"requests": {"a": {}, "b": {}}}]
+NO_RECORDS_IDS = ["absent", "null", "empty", "each null", "each empty"]
+
+
+@pytest.mark.parametrize("timing", NO_RECORDS, ids=NO_RECORDS_IDS)
+def test_the_schedule_of_a_timing_without_request_records_is_a_row_of_nulls_per_request(timing):
+    sched = ss.schedule_of(["a", "b"], timing)
+    assert sched["engine_steps"] is None and sched["requests"] == [dict.fromkeys(ss.SCHEDULE_FIELDS)] * 2
+    assert sched["digest"] == ss.schedule_of(["x", "y"], {})["digest"]
+
+
+@pytest.mark.parametrize("timing", NO_RECORDS, ids=NO_RECORDS_IDS)
+def test_a_timing_without_request_records_fails_every_request_by_name(timing):
+    rec = ss.check(REQS, timing)
+    assert not rec["ok"] and rec["schedule"] == ss.schedule_of(["a", "b"], {})
+    assert [p.split(":")[0] for p in rec["problems"]] == ["a", "b"]
+    assert rec["problems"][0].startswith("a: finished by None after None of its 3 tokens")
+
+
+@pytest.mark.parametrize("without", [{}, {"requests": None}, {"requests": []}], ids=["absent", "null", "empty"])
+def test_compare_counts_a_schedule_without_requests_as_none(without):
+    ref = ss.schedule_of(["a", "b"], _timing())
+    for a, b, counts in ((ref, {"digest": "0", **without}, "2 vs 0 requests"), ({"digest": "0", **without}, ref, "0 vs 2 requests")):
+        out = ss.compare(a, b)
+        why = (f"the schedule depends on the prompts' contents, not only on the declaration: engine steps "
+               f"{a.get('engine_steps')} vs {b.get('engine_steps')}; {counts}")
+        assert not out["ok"] and out["problems"] == [why]
+
+
+@pytest.mark.parametrize("timing", [None, 0, "x", [1]], ids=["null", "zero", "text", "list"])
+def test_a_timing_that_is_no_record_is_refused_before_the_ids_or_the_requests_are_read(timing):
+    """The requests' records are read from the timing first, so its error is the one raised whatever else is wrong."""
+    orders: tuple[Any, ...] = (None, 0, [], ["a"])
+    for order in orders:
+        with pytest.raises(AttributeError, match="has no attribute 'get'"):
+            ss.schedule_of(order, timing)
+    lists: tuple[Any, ...] = (None, 0, [], [{}], [{"request_id": "a"}], [{"request_id": "a", "max_tokens": "x"}], REQS)
+    for requests in lists:
+        with pytest.raises(AttributeError, match="has no attribute 'get'"):
+            ss.check(requests, timing)

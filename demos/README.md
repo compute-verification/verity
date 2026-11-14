@@ -12,7 +12,7 @@ Remote Verity (`verity/remote/v1`, `Core.Remote.V1` in `verity/protocols/remote/
 verifier establishes with no hardware of its own at the developer's site. It composes three protocols
 (`Core.Remote.V1.components`):
 
-- integrity, by sampled proofs (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
+- integrity, by SPOT (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled
   proof block in Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
 - work, by Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`): tiles of the run's retained passes, sampled by work
@@ -31,7 +31,7 @@ guarantee assumes; each subprotocol states its guarantee in `security/`, and the
 (`Verity.RemoteSoundness`, `security/Properties/Verity/Soundness.lean`) is proved from theirs, which it takes as
 hypotheses, so no demo's `proof` is past `none`. `lifecycle/` is the only demo that steps through the whole
 remote composite, H1's development one, on CPU with a stand-in prover. Its demo is the vLLM demo
-(`verity demo vllm`), on H1's development executable: one served run of Llama-3.2-1B INT8 on one H200, sampled proofs
+(`verity demo vllm`), on H1's development executable: one served run of Llama-3.2-1B INT8 on one H200, SPOT
 and PoUW on the served model, whose PoUW verdict is a development run that credits nothing. The inference-only policy
 runs in `lifecycle/` only: no served run produces the declared
 division yet. Five other things are called "remote" (PoUB among them);

@@ -5,22 +5,30 @@ TF32 GEMM (`Matmul`)."""
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
 from verity.definitions.registry import cublas_bf16 as CB
+
 from verity_vllm.program.frontend.derive import refuse
-from verity_vllm.program.frontend.rules.training_emit import _DT, BF16, F32, _batch, _shape, _TrainRule, aten
+from verity_vllm.program.frontend.rules.training_emit import (
+    _DT,
+    BF16,
+    F32,
+    _batch,
+    _shape,
+    _TrainRule,
+    aten,
+)
 from verity_vllm.program.frontend.rules.training_views import _info, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type
 
 #: F.linear's GEMM at x (M, K), W (N, K) by its mm's operand layouts (`_layout`) as autograd lays them out: x @ W^T, dY @ W, dY^T @ X
-_ROLES = {("row", "col"): "fwd", ("row", "row"): "dX", ("col", "row"): "dW"}
+_ROLES: dict[tuple[str | None, ...], str] = {("row", "col"): "fwd", ("row", "row"): "dX", ("col", "row"): "dW"}
 #: F.linear's (M, K, N) from its role's mm(a[Mm, Km], b[Km, Nm])
 _LINEAR_DIMS = {"fwd": lambda Mm, Km, Nm: (Mm, Km, Nm), "dX": lambda Mm, Km, Nm: (Mm, Nm, Km), "dW": lambda Mm, Km, Nm: (Km, Nm, Mm)}
 #: a layout's transpose: `mv(A, x)` is the mm x[1, K] @ A^T
-_FLIP = {"row": "col", "col": "row"}
+_FLIP: dict[str | None, str] = {"row": "col", "col": "row"}
 
 
 def _layout(t) -> str | None:
@@ -149,7 +157,7 @@ class Matmul(_TrainRule):
         mv = node.target is aten.mv.default
         if mv:
             (Nm, Km), Mm = _shape(ctx, node.args[0]), 1
-            layouts = ("row", _FLIP.get(_layout(ctx.tensor_meta(node.args[0]))))
+            layouts: tuple[str | None, ...] = ("row", _FLIP.get(_layout(ctx.tensor_meta(node.args[0]))))
         else:
             layouts = tuple(_layout(ctx.tensor_meta(a)) for a in node.args[:2])
             (Mm, Km), Nm = _shape(ctx, node.args[0]), _shape(ctx, node.args[1])[1]

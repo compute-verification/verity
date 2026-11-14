@@ -18,6 +18,7 @@ from verity_vllm.pipeline import window_advice as WA
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "advice_compile.py"
 _spec = importlib.util.spec_from_file_location("advice_compile", SCRIPT)
+assert _spec is not None and _spec.loader is not None
 AC = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("advice_compile", AC)
 _spec.loader.exec_module(AC)

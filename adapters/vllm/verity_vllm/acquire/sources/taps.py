@@ -19,21 +19,38 @@ the last layer's prompt rows before the last) whenever the manifest names narrow
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
-from verity_vllm.acquire.sources import (attention_source, call_boundary_source, dsv4_attention_source, int8_source,
-                                         linear_quant_source, moe_align_source, narrowed_source, norm_scale_source,
-                                         route_source, router_softmax_source, scale_products_source, vocab_range_source)
+from verity_vllm.acquire.sources import (
+    attention_source,
+    call_boundary_source,
+    dsv4_attention_source,
+    int8_source,
+    linear_quant_source,
+    moe_align_source,
+    moe_source,
+    narrowed_source,
+    norm_scale_source,
+    route_source,
+    router_softmax_source,
+    scale_products_source,
+    vocab_range_source,
+)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
-from verity_vllm.acquire.sources import moe_source
+from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
 from verity_vllm.config import option
+from verity_vllm.log import init_logger
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
+from verity_vllm.query.manifest.format import identity_rows
+
+logger = init_logger(__name__)
 
 #: (the TapSources field, the rank result's key, the source module, the manifest family, the source's class)
 SOURCES = (("norm_tap_so", "norm_scale_source", norm_scale_source, NS.FAMILY, norm_scale_source.NormScaleSource),
@@ -97,7 +114,7 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     align Definitions, and the MoE block source when the manifest names a call boundary it claims and no `moe_block_stream` plane (every
     rank attaches it, binding at the block's Calls: `pipeline.tp.rank_worker`, `moe_source.at_calls`); on any number of ranks, the
     narrowed-rows source when the manifest names narrowed rows."""
-    ids = (manifest or {}).get("identities") or []
+    ids = identity_rows(manifest)
     fams = {r.get("family") for r in ids}
     one = int((manifest or {}).get("ranks") or 1) == 1
     cmap = None if one else route_source.manifest_map(manifest)
@@ -118,7 +135,8 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **gi
     """A TP rank's side: attach each tap that is on with the rank's rows of the merged manifest, and the route source when a capture
     map describes the rank's model (`route_source`, absent when none does), per source its stats, or its refusal."""
     man = json.loads(Path(manifest_path).read_text()) if manifest_path else {}
-    mine = dict(man, identities=[r for r in man.get("identities") or [] if int(r.get("rank", 0)) == int(rank)])
+    rows = man.get("identities")
+    mine = dict(man, identities=[r for r in (rows if rows else ()) if int(r.get("rank", 0)) == int(rank)])
     out: dict[str, Any] = {}
     for f, key, mod, _fam, _cls in SOURCES:
         if not given.get(f):
@@ -161,6 +179,12 @@ def for_ranks(taps: TapSources) -> Any:
     return partial(attach_rank, **taps.given())
 
 
+def _recorded(rank: Mapping[str, Any], key: str) -> Any:
+    """What a rank recorded of the source `key` when it made its committer (`attach_rank`'s result); None where it recorded none."""
+    sources = rank.get("tap_sources")
+    return sources.get(key) if sources else None
+
+
 def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[str, ...], versions: dict[str, Any], taps: TapSources, *,
                           explicit_classes: bool) -> tuple[str, ...]:
     """The TP driver's side, once every rank made its committer: every tap that is on attached on every rank (else SystemExit, fail
@@ -169,11 +193,9 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     Definitions) and the narrowed-rows source (when any rank's rows are narrowed) attached on every rank (else SystemExit); the attention
     hidden class every rank reports
     (`hidden_source.require_hidden_on_every_rank`)."""
-    from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
-
     required_classes = require_hidden_on_every_rank(made, required_classes, versions, explicit_classes=explicit_classes)
     for key in ("route_source", "linear_quant_source", "moe_align_source", "narrowed_source"):
-        states = {int(m["rank"]): (m.get("tap_sources") or {}).get(key) for m in made}
+        states = {int(m["rank"]): _recorded(m, key) for m in made}
         if any(states.values()):
             bad = sorted(r for r, v in states.items() if not v or v.get("error"))
             if bad:
@@ -183,7 +205,7 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     for f, key, _mod, fam, _cls in SOURCES:
         if not getattr(taps, f):
             continue
-        states = {int(m["rank"]): (m.get("tap_sources") or {}).get(key) for m in made}
+        states = {int(m["rank"]): _recorded(m, key) for m in made}
         bad = sorted(r for r, v in states.items() if not v or v.get("error"))
         if bad or not states:
             raise SystemExit(f"fail-closed: the {fam} source did not attach on ranks {bad} of {len(made)}: {[states[r] for r in bad][:2]}")
@@ -191,7 +213,7 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
             required_classes = (*required_classes, fam)
         versions[key] = states
         versions["required_classes"] = list(required_classes)
-        print(f"[tp2commit] {fam} source attached on every rank ({states[min(states)]}); required classes {list(required_classes)}", flush=True)
+        logger.info("[tp2commit] %s source attached on every rank (%s); required classes %s", fam, states[min(states)], list(required_classes))
     return required_classes
 
 
