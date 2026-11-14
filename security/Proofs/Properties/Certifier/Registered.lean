@@ -28,13 +28,13 @@ theorem registeredLinkRated : RegisteredLinkRated := by
       | none =>
         simp only [hj, hb] at h
         repeat' split at h
-        all_goals simp_all [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
+        all_goals simp_all [bind, Except.bind, throw, throwThe, MonadExceptOf.throw]
       | some b =>
         simp only [hj, hb] at h
         repeat' split at h
         all_goals simp_all [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
         all_goals (cases h; rfl)
-    · simp_all [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
-  · simp_all [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
+    · simp_all [bind, Except.bind, throw, throwThe, MonadExceptOf.throw]
+  · simp_all [throw, throwThe, MonadExceptOf.throw]
 
 end Properties.Certifier.Registered
