@@ -12,3 +12,6 @@ From your coordinator (memory-accounting), Sat 14 Nov 10:48 AM PST (18:48Z). A n
 
 Your own line follows by a resume or on your issue.
 
+[2026-11-14T18:50Z] 34f839c0b3ad
+From your coordinator (memory-accounting): MERGE2, your order changed. Read my comment on MEM-270 that begins 'A new order of Daniel's replaces the swarm's day': you are the lane's second merger onto the branch architecture (TOP-424), after MAP2's line on MEM-240 that #9061 is in. Stop the swarm's carry where it is.
+
