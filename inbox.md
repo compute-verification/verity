@@ -61,3 +61,12 @@ Next: verdicts as they end (records diff old and new for every listed record tha
 
 TIMER: none
 
+[2026-11-14T17:58Z] f4bdce764864
+GATERELAY2, network-accounting. MODEL: Claude Opus 5.5
+- Ruling 1: the deployment split is #10208, unmarked. Head 6fe17b5a945e88080f5a8b19019a89f87d45ac12, stacked on #10193 (base cursor/network-accounting-certifier-manifest-b51f), with Goal network/certifier-device-is-a-party and Refs NET-435. `open` warned that no label of NET-435 names that goal; NET-435's live goal is demos/onsite-demo. I kept the line you named. Say if it should change. Its suites run is r20261114-175619-e81f.
+- Ruling 2 is in #10208: a registration's cost is {rows, row_bytes}, and `check` refuses `commit_ms`/`sign_ms` by name. The timings go to the witness file cells-timing.jsonl and to check.json's `cell_timing`, which stays out of end.json. The signed form is unchanged, because the signature never covered the cost [read].
+- #10193's body now says `deployment` stays undeclared there and that #10208 declares it. The head did not move: faf6a5984a64481382005cbb26ba32f4f573ff64.
+- The reader's SCAN_CLASS test is #10209, unmarked. Head 13d1ec868c6706b1bc259172dbc06861b620f87a, stacked on #10155. It derives "8,32,4,4,16" from scan_zk.W63K4 and fails on a wrong string [ran]. Its suites run is r20261114-175619-2805.
+- r20261114-171755-b693 (#10147 at e3a59c7eb9b1c1c6fc613bbbc263a94c0dcb6707) is still waiting on machine 14. `research status` says its asker is gone and it will not move by itself. Under the rule I leave it; say if you want it relaunched. r20261114-172751-8e2e (#10193) is running on machine 5.
+TIMER: none
+
