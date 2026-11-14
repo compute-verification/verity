@@ -451,6 +451,9 @@ def test_a_directory_without_the_card_names_itself(tmp_path) -> None:
     ('sku = "y"\nkind = "gpu"\n', "set it to the file's name"),
     ('sku = "x"\n', "kind = None; set it to one of"),
     ('sku = "x"\nkind = "cpu"\n', "kind = 'cpu'"),
+    ('sku = "x"\nkind = "gpu"\n', re.escape("x.toml: clock.default = None; set it to the reading its figures are "
+                                            "stated at, one of ('tensor', 'sm')")),
+    ('sku = "x"\nkind = "gpu"\n[clock]\ndefault = "boost"\n', re.escape("x.toml: clock.default = 'boost'")),
 ])
 def test_an_unsourced_or_unmarked_number_is_refused(tmp_path, monkeypatch, body: str, refusal: str) -> None:
     (tmp_path / "x.toml").write_text(body, encoding="utf-8")
