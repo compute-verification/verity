@@ -20,8 +20,7 @@ from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.population import population
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import spec_family
-from verity_vllm.query.program_view import specialization
-from verity_vllm.query.program_view import spec_statics
+from verity_vllm.query.program_view import spec_statics, specialization
 
 PROMPT = [0, 1, 2, 3, 4, 5, 9]
 
