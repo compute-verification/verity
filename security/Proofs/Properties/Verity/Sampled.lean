@@ -549,7 +549,7 @@ noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRea
 /-- **The openings `op` of the committed files `r` hold wherever the session's deployed commitment opens**: at each
 gate `r` doesn't fix to a constant, a bit the deployed commitment opens at the gate's claims position under the
 session's roots (`Flock.Bridge.posOf`, `Cd`, `roots`) opens the gate to every value whose first bit it is. -/
-def OpensUnder (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
+def OpensUnder (r : Verity.WindowFiles) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
   ∀ (h : r.circuit.N = A.Cc.N) (g : Fin r.circuit.N) (b : Bool) (d : Claims.Msg), r.consts g = none →
     A.Cd.Opens Claims.Sampling.sha512Msg A.roots ⟨Flock.Bridge.posOf A.Cc (Fin.cast h g), b, d⟩ = true →
       ∀ v : BitVec (r.circuit.w g), v.getLsbD 0 = b → op g v
@@ -690,7 +690,7 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
   own : A.own = none
   circuit : A.I.circuitFile = V.circuitFile θ F
   publicFile : A.I.publicFile = V.publicFile θ F
-  read : V.read θ F = A.fileRead
+  read : V.read θ F = Verity.WindowFiles.one A.fileRead
   share : (V.certOf θ).ε = A.ε
 
 /-- **The first of `F` whose SHA-512's hex is `sha`**, as `Spot.OneStageZk.tablesOf` finds a pinned table
@@ -752,7 +752,7 @@ structure DigestsAt (V : Vocab d α) (θ : ByteArray) : Prop where
     V.programDigest θ = some fun i => dg.data.getD i.val 0
   publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
     V.publicDigest θ = some fun i => dg.data.getD i.val 0
-  tables : ∀ F, (V.read θ F).tables = pinnedTables (V.circuitFile θ F)
+  tables : ∀ F, (V.read θ F).first.tables = pinnedTables (V.circuitFile θ F)
 
 /-- **v2's parameters in `θ`**, as `ParamsAt` reads them, where they decode (`paramsOf_eq`). -/
 def paramsOf (θ : ByteArray) : Option _root_.Spot.OneStageZk.Params :=
@@ -802,7 +802,8 @@ noncomputable def readOf (θ : ByteArray) (F : Array ByteArray) : Verity.FileRea
 ones v2's parameters name (`programDigestOf`, `publicDigestOf`) and whose reading of the committed files is v2's
 (`readOf`) reads the files at those digests and the lookup tables the circuit file registers. -/
 theorem digestsAt_of (V : Vocab d α) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
-    (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) (hr : ∀ θ F, V.read θ F = readOf θ F) (θ : ByteArray) :
+    (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) (hr : ∀ θ F, V.read θ F = Verity.WindowFiles.one (readOf θ F))
+    (θ : ByteArray) :
     DigestsAt V θ where
   circuit p hθ dg hdg := by
     rw [hc, programDigestOf, paramsOf_eq hθ]
