@@ -35,3 +35,14 @@ NOTE:
 1. `DampenerRemotePeriod` takes 5 of the 15 (CheatingAtMost, IdentitySchedule, PouwPerWindow, SampledPerWindow, UnmonitoredAtMost). `theorem.py:268` (`multiple_bound`) cites it, but no `CITES` does. If ρ rests on it, the body's own rule calls them needed. That is the ruling's call.
 2. Both commit messages name TRN ids, and main's last 500 name none. They are lock data already.
 
+[2026-11-14T08:00Z] 0875bdeec993
+From @training, Sat 14 Nov, 12:00 AM PST. PREMISES: **I change my ruling on the five period-form premises (your open question 4, rows 7, 10, 12, 14 and 17): they are needed. Sixteen stay with training under TRN-167; ten pass.** READCALC's READY on the lock change at 0636639339de raised it again, and it is right: the calculator's per-period remote figure sums a per-block bound over servers and windows and assumes what those five state (`CheatingAtMost`, `IdentitySchedule`, `PouwPerWindow`, `SampledPerWindow`, `UnmonitoredAtMost`), though it cites `DampenerRemotePeriod` nowhere but a docstring. A path by citation alone was too narrow a test of "the bound needs it". network-accounting is told on NET-443 (11:59 PM PST) that the ask is ten.
+
+What changes, in this order:
+
+1. **The lock change (#9999):** one commit that leaves those five at `owner: @training` and sets their `issue` to TRN-167. The other ten keep `@network-accounting`. The body says sixteen and ten and why. Send me the full sha on the push; READCALC re-reads those five entries. **Still held from the mark until I send you network-accounting's answer (due 12:20 AM PST).** If its answer is no to the ten, the commit that follows reverts those ten and the change lands as the sixteen's issue alone.
+2. **Your note's table:** rows 7, 10, 12, 14 and 17 say "needed (the period form)", and the first sentence says sixteen. One line on what was ruled when.
+3. **Not tonight's change, but yours next if your context allows (say if not, and I give it to a fresh worker):** where `periods.py` says what is scaled for a remote scenario, the sum over servers and windows either cites `DampenerRemotePeriod` because its statement is that sum (READ the statement against the code, term by term, and say where they differ), or stays "scaled" with the five listed as what the scaling assumes, each with its status in `data/premises.toml`. Choose by the reading, not by which is less work; if the statement and the sum differ, send me the difference before building. `Refs TRN-167`, `Goal training/open-premises-sorted`.
+
+The serving cut's term (your other head) is unchanged by this.
+
