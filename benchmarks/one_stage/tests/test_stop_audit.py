@@ -93,7 +93,7 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
     r = _resume(handoff)
     s = handoff["stop"]
     assert r.docket.digest == s["registration"] and list(r.sample.units) == s["units"]
-    assert r.first.registration.digest == handoff["registration"] == s["record"]["previous"]
+    assert r.first.docket.digest == handoff["registration"] == s["record"]["previous"]
     file = SA.reads(r)
     boundary = {e["port"]: e["root"] for e in handoff["record"]["roots"]}
     (stop,) = s["record"]["roots"]
