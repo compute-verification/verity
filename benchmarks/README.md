@@ -117,6 +117,13 @@ Each value carries its mark, how it was had, which the tab shows beside it: the 
 writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
 and also writes as the first of its `inputs`, where the tab reads it until it reads `mark`.
 
+A value over a span of time or of compute says which, each as its own field of the measurement, held only where
+given: `period`, one of `phase`, `week`, `month` or `year` (`kit.PERIODS`), and `over`, `world` or `datacenter`
+(`kit.OVER`). A run's result holds one measurement a name, period and `over`, and the writer refuses a second, so one
+id may give a value for each period and scope it is computed at, each in its own unit (`verity bench exfiltration`'s
+three, over a week, a month and a year of a datacenter's and of the world's compute). Its `title` and `unit` are those
+of the period and scope it is named for: `exfiltration-gb-world-year`'s, the `year` over the `world`.
+
 `tests/test_metrics_registry.py` refuses an id declared twice across all the files, an unknown owner, an id outside its
 owner's prefix, a `better` other than `lower` or `higher`, a command whose script is missing or whose directory never
 names the id, a row whose command's first script is outside the directory of the file declaring it, and a shared
