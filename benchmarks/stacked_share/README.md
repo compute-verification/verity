@@ -41,8 +41,7 @@ At f ≥ 1 no KV is credited.
   witness (`Witness.lean`'s `bounds_8b`, `bounds_70b`): c = R_cap over the certified bytes a second, the life its thresholds
   allow at each E, and the c the stated life allows (the witness's `c ≤ 0.442`, `E ≥ 364,497` restated at the new E).
 - `job.sh` builds the exact-int8 8B request Program (LP=256, T=31) on one GPU and runs `units.py` on it (`DESCRIPTOR=PATH`
-  skips the Build and needs no GPU). The Build's target takes its SM count as `NUM_SMS`, which the launch line in
-  `job.sh`'s header reads from the RTX PRO 6000's card (`verity.device`).
+  skips the Build and needs no GPU).
 - `beta.py DESCRIPTOR.json.gz --out beta.json [--chunk N ...]` bounds the stacked share by a min cut instead of the sampling design's
   rate. The graph is the Program's root Calls over its census/v1 steps. A value a later step reads is a dynamic-memory
   write, and each read is an edge from the Call that made it. Over cuts (U, D) with every write on D's side:

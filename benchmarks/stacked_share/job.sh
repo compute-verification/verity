@@ -2,19 +2,18 @@
 # The exact-int8 Llama-3.1-8B request Program (LP=256, T=31, the row's shape), then units.py on it, as served and modeled at
 # 70B TP8 (llama31-70b-tp8.json). Keeps the descriptor, the Build's result and both units documents in $OUT. The Build needs
 # no GPU: it traces on the meta device at the explicit TARGET, and gives the row's own request Program (digest
-# 8c683b2a...). DESCRIPTOR=PATH skips the Build and reads that one. NUM_SMS is TARGET's SM count, the RTX PRO 6000 card's
-# sm.count, which the launch reads from the card:
+# 8c683b2a...). DESCRIPTOR=PATH skips the Build and reads that one.
 #
-#   (cd adapters/vllm && OUT=DIR NUM_SMS=$(PYTHONPATH=../.. python3 -c 'from verity.device import load_card, number; print(int(number(load_card("rtx-pro-6000-server")["sm"]["count"])))') bash ../../benchmarks/stacked_share/job.sh)      # from a clone's root
+#   (cd adapters/vllm && OUT=DIR bash ../../benchmarks/stacked_share/job.sh)      # from a clone's root
 set -euo pipefail
 export PY=/workspace/jobs/venv312/bin/python3 PYTHONPATH=.:../..:../../tools/research/src HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
   TOKENIZERS_PARALLELISM=false
 ROW=llama31-8b__int8__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager
 REPO=verity-int8/Llama-3.1-8B-INT8
 REV=723d342ac443b040931242c768df342b0f6f15a7
+TARGET='{"int8_exact": "all", "compute_capability": [12, 0], "num_sms": 188}'
 HERE=../../benchmarks/stacked_share
 if [ -z "${DESCRIPTOR:-}" ]; then
-TARGET='{"int8_exact": "all", "compute_capability": [12, 0], "num_sms": '"${NUM_SMS:?set it to the RTX PRO 6000 card sm.count, as the launch line above does}"'}'
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
 "$PY" -m verity_vllm.pipeline.cli workload --row-id "$ROW" --hf-repo "$REPO" --revision "$REV" --batch 1 --max-input 256 \
