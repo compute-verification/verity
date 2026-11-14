@@ -59,4 +59,24 @@ theorem sessionGives : SessionGives := by
     simp only [hround j hj] at ht
     exact ⟨⟨o, ho, hrj, by rw [hoi, hri], hvc⟩, hb, hd, ht⟩
 
+/-- The values of a session that ended nowhere: no digest, no signature, no rounds. -/
+def noSession : Vals := ⟨.empty, .empty, "", #[], default⟩
+
+theorem sessionGives_nontrivial : SessionGivesNontrivial := by
+  refine ⟨default, .empty, fun _ => noSession, fun h => ?_⟩
+  have hclear : ClearOk SCHEMES [ByteArray.empty] LMS .empty default #[] (fun _ => 0) :=
+    ⟨⟨_, rfl⟩, List.mem_singleton.2 rfl, fun j hj => absurd hj (Nat.not_lt_zero _)⟩
+  have hrej : (verdict SCHEMES [ByteArray.empty] (fun _ => none)
+      (sessionOf default LMS .empty noSession noSession) default #[]).accepted = false := by
+    rw [Bool.eq_false_iff]
+    intro ha
+    obtain ⟨-, -, he, -⟩ := verdictAccepts _ _ _ _ _ _ ha
+    exact absurd he (by decide)
+  have hn : ¬ Hash.CollisionIn Verity.sha512 [] := by simp [Hash.CollisionIn]
+  simp only [prPMF, PMF.toOuterMeasure_pure_apply, Set.mem_ofPred_eq] at h
+  simp only [sessionOf] at hrej
+  simp only [constRun] at h
+  simp only [hclear, hrej, hn, sessionOf, and_true, not_false_eq_true, ↓reduceIte] at h
+  exact absurd h (by simp)
+
 end MemoryChallenger.Properties.InProofs.SecurityProofs

@@ -3,6 +3,7 @@ module
 public import Properties.Pous.MemoryChallenger
 public import Definitions.Core.InProofs
 public import Properties.Verity.Sha512
+public import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 /-!
 # PoUS's session inside proofs: an accepted run gives a session `verdict` accepts
@@ -100,5 +101,20 @@ def SessionGives : Prop :=
         (verdict schemes trusted expected
           (sessionOf c scheme pk (r.ports ⟨1, by omega⟩ ω) (r.ports ⟨0, by omega⟩ ω)) c openings).accepted = false ∧
         ¬ Hash.CollisionIn Verity.sha512 (r.hashInputs ω)) ≤ ε
+
+/-- The run that always accepts, holds `v u` at proof block `u` and hashes nothing. -/
+def constRun {n : ℕ} (v : Fin n → Vals) : Verity.InProofs.Run Unit n fun _ => Vals :=
+  ⟨fun _ => True, fun u _ => v u, fun _ => []⟩
+
+/-- **`SessionGives`' conclusion fails without its hypotheses**: under S1's scheme (`SCHEMES`, `LMS`) and a trusted key,
+a session of no rounds that did not end complete passes the clear checks and `verdict` rejects it, so a run that always
+accepts it and hashes nothing gives the event probability `1`, and the bound fails at `ε = 0`. -/
+def SessionGivesNontrivial : Prop :=
+  ∃ (c : SessionCommitment) (pk : ByteArray) (v : Fin (c.k + 2) → Vals),
+    ¬ prPMF (PMF.pure ()) (fun ω => (constRun v).accepts ω ∧ ClearOk SCHEMES [pk] LMS pk c #[] (fun _ => 0) ∧
+        (verdict SCHEMES [pk] (fun _ => none)
+          (sessionOf c LMS pk ((constRun v).ports ⟨1, by omega⟩ ω) ((constRun v).ports ⟨0, by omega⟩ ω)) c
+          #[]).accepted = false ∧
+        ¬ Hash.CollisionIn Verity.sha512 ((constRun v).hashInputs ω)) ≤ 0
 
 end MemoryChallenger.Properties.InProofs
