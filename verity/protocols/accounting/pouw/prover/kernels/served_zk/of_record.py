@@ -36,7 +36,7 @@ from verity.circuits import codec
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import verifier as V
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[7]
 POUW = REPO / "verity/protocols/accounting/pouw/verifier/lean/check"
 PIECES = REPO / "verity/protocols/proofs/spot/verifier/lean"
 DISAGREE = "lean-python-disagree"

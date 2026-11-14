@@ -4,7 +4,7 @@
 # `research run` from a pushed commit on a node (cwd = the source tree); its script's header has the full command, its
 # knobs and what it writes, and README.md's table has them side by side.
 #
-#   bash benchmarks/pouw/served_zk/run.sh JOB [ARGS...]
+#   bash verity/protocols/accounting/pouw/prover/kernels/served_zk/run.sh JOB [ARGS...]
 set -uo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 job=${1:-}

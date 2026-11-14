@@ -17,7 +17,7 @@ from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-from verity_vllm.errors import Refused
+from verity.errors import Refused
 from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
 
 __all__ = ["LEAF_NAMES", "LEAF_OUT_ROWS", "LEAF_PROGRAM", "held", "leaf_rows", "leaf_statement", "operands", "partials",

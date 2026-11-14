@@ -20,7 +20,7 @@ import json
 import tomllib
 from pathlib import Path
 
-from cpu_budget import PERIODS
+from verity.protocols.proofs.spot.prover.cost.cpu_budget import PERIODS
 
 ROOT = Path(__file__).resolve().parents[6]
 DEPLOYMENT = "dc-12500-machines-600s"

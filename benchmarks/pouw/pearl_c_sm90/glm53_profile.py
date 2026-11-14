@@ -76,7 +76,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import glm53  # noqa: E402
+from verity.protocols.proofs.spot.prover.cost import glm53  # noqa: E402
 
 WARM, CALLS = 3, 5
 SHAPES = ((4096, 6144), (6144, 2048))

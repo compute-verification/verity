@@ -25,7 +25,7 @@ from verity.commitments.windows import wiring as WI
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[6] / "benchmarks" / "one_stage")))
-import a5
+from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 
 GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
 WIDE = bind(G.Gemm, K=16, N=32, **G.GEMM_AMPERE)

@@ -825,7 +825,7 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
 
 
 def _pd():
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[7] / "benchmarks" / "pouw" / "pearl_c_vllm"))
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PD
     return PD
 
@@ -1447,7 +1447,7 @@ def cmd_challenger(a) -> int:
     if a.state:
         if not Path(a.state).is_file():
             raise SystemExit(f"no challenger state at {a.state}")
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[7] / "benchmarks" / "pouw" / "pearl_c_vllm"))
         from e2e import state_entropy
         entropy = state_entropy(a.state)
     else:

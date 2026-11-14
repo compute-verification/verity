@@ -20,7 +20,7 @@ import json
 import sys
 from dataclasses import asdict
 
-from glm53 import DEEPGEMM, FADD_READINGS, SCHEME, Linear, gamma, scheme
+from verity.protocols.proofs.spot.prover.cost.glm53 import DEEPGEMM, FADD_READINGS, SCHEME, Linear, gamma, scheme
 
 #: the checkpoint's config.json, the fields the linears read
 CONFIG = {"H": 2048, "NH": 32, "NKV": 8, "HD": 64, "I": 8192, "L": 16}

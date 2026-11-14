@@ -46,7 +46,7 @@ def members(shape: str, n: int) -> list:
         return [(t, max(1, round(n * w / 10))) for t, w in ((T.PAIR, 1), (T.TRIPLE, 6), (T.QUAD, 3))]
     if shape == "l5":
         sys.path.insert(0, str(ROOT / "benchmarks/prove_path"))
-        from records_audit import catalog_resolve
+        from verity.protocols.proofs.spot.verifier.one_stage.records_audit import catalog_resolve
         total = sum(c for _, c in L5)
         return [(catalog_resolve(t), max(1, round(n * c / total))) for t, c in L5]
     raise ValueError(f"shape {shape!r}: toy or l5")

@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import transformer as T
+from verity.protocols.proofs.spot.prover.cost import transformer as T
 from verity.protocols.proofs.spot.verifier.one_stage.draw import work_k
 from verity.protocols.proofs.spot.prover.optimize import Candidate
 from verity.circuits.codec import descriptor_id
