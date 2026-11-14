@@ -43,3 +43,12 @@ def test_serving_configuration_bytes_unchanged(tmp_path):
     M.write(after, "ServingConfiguration", json.dumps(record, indent=1, default=str).encode())
     assert after.read_bytes() == before.read_bytes()
     assert json.loads(M.read(after, "ServingConfiguration")) == json.loads(before.read_text())
+
+
+def test_committed_rows_bytes_unchanged(tmp_path):
+    doc = {"window": 2, "run_root": "ab" * 64, "statics": {"width": 4}, "ids": [[1, 2], [3]],
+           "session": [[None, [[0, 1]]]], "salts": [bytes(range(16)).hex()]}
+    before, after = tmp_path / "before.json", tmp_path / "after.json"
+    before.write_text(json.dumps(doc))
+    M.write(after, "CommittedRows", json.dumps(doc).encode())
+    assert after.read_bytes() == before.read_bytes()
