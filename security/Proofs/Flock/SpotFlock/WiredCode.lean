@@ -59,7 +59,7 @@ noncomputable def baseWired : Code :=
     parse := parseWired h ω keep
     scopeCheck := fun x => ((parseWired h ω keep x).bind (partitionWired h ω)).isSome
     partition := partitionWired h ω
-    stage2 := fun _ => univ
+    secondStage := fun _ => univ
     checked := fun _ _ => []
     rounds := fun _ u => univ.filter fun t =>
       off h (templateOf h.ms u) ≤ t.val ∧ t.val < off h (templateOf h.ms u) + k₀ h (templateOf h.ms u)

@@ -143,8 +143,10 @@ def join(ranks: Sequence[Rank], name: str = f"{NAME}/ranks") -> Joined:
     r - 1's in each template, its registration renamed to its own (`_renamed`), its boundary reads at its units. Each peer input of rank r (a ``peers_*``
     `Free`: input ``peers_<k(W-1)+j'>`` is rank j's partial at its k-th collective, j' rank j's place among the others) is
     wired from what rank j's own window wires into the same reader units and rows, its own partial there: rank j's wires
-    cut to them (`_within`). Where they don't cover the rows, the input stays free, listed in ``unwired``. The circuit's
-    order is made anew over every rank's runs (`interface.ordered`), its blocks from every rank's spans."""
+    cut to them (`_within`). Where they don't cover the rows, the input stays free, listed in ``unwired``. The wires are
+    each rank's own in rank order, then the join's, coalesced a reader rank at a time and in rank order, so a join wire's
+    reader units are one rank's (`interface.check_ranks`). The circuit's order is made anew over every rank's runs
+    (`interface.ordered`), its blocks from every rank's spans."""
     W = len(ranks)
     if [x.rank for x in ranks] != list(range(W)) or len({x.steps for x in ranks}) != 1:
         raise Unexpressible(f"{name}: ranks {[x.rank for x in ranks]} at steps {sorted({x.steps for x in ranks})}; the "
@@ -177,7 +179,7 @@ def join(ranks: Sequence[Rank], name: str = f"{NAME}/ranks") -> Joined:
                        base=w.base + first[j][w.writer], step=w.step, cut=w.cut)
 
     wires: list[IF.Wire] = [shift(w, x.rank, x.rank) for x in ranks for w in x.circuit.wires]
-    added: list[IF.Wire] = []
+    added: dict[int, list[IF.Wire]] = {}
     free: list[Free] = []
     wired: list[tuple[int, Free]] = []
     unwired: list[str] = []
@@ -208,7 +210,7 @@ def join(ranks: Sequence[Rank], name: str = f"{NAME}/ranks") -> Joined:
                                f"({', '.join(f.name for f in fs)}): {why}")
                 free += [replace(f, at=f.at + first[r][f.tid], name=f"r{r}/{f.name}") for f in fs]
                 continue
-            added += [shift(s, r, j) for j, s in got]
+            added.setdefault(r, []).extend(shift(s, r, j) for j, s in got)
             wired += [(r, f) for f in fs]
     reg = [_renamed(x.circuit.registered, x.rank, first[x.rank]) for x in ranks]
     registered = IF.Registered(
@@ -220,7 +222,7 @@ def join(ranks: Sequence[Rank], name: str = f"{NAME}/ranks") -> Joined:
         for tid, ss in x.spans.items():
             spans.setdefault(tid, []).extend((at + first[x.rank][tid], n, slot, step) for at, n, slot, step in ss)
     starts = {tid: [at for at, *_ in ss] for tid, ss in spans.items()}
-    wires += IF.coalesce(added)
+    wires += [w for r in sorted(added) for w in IF.coalesce(added[r])]
     boundary = tuple(IF.Read(r.reader, r.port, r.param, at=r.at + first[x.rank][r.reader], radix=r.radix, base=r.base,
                              step=r.step, cut=r.cut) for x in ranks for r in x.circuit.boundary_reads)
     circuit = IF.Circuit(name, tuple((fns[tid], total[tid]) for tid in fns), wires=tuple(wires), cuts=cuts,

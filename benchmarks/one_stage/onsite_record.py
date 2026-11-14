@@ -138,10 +138,10 @@ rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON
 tied to each execution phase's scan (``advice``: the bits each phase adds), the figure, with no tighter figure beside
 it, only how it tightens (``tight``, `TIGHT`), conditional on the coins and on each open premise of `UNCHARGED` while they are open
 (``conditional_on``). Its ``state_charge`` (`state_charge`, `STATE_CHARGE`) says which charge K applied each audit
-tied to a phase's scan: stateFree, its free inputs with its reads of the scan's state held, only where RowsStateHeld is
-in the lock at the statement and definitions `STATE_PINS` pins, so that its proof stands over the entry a window's
-activations commit, else free; where it is free and a tied audit's parameters state a circuit record, there is no
-figure (`STATE_UNCOVERED`). Beside the bound, ``advice_charge``: the served run's
+tied to a phase's scan: free, its whole free inputs, as the tree's period check charges it, refusing a scan state that
+is not its wired audit's (RowsStateTied); stateFree, its free inputs with its reads of the scan's state held, only where
+RowsStateHeld is in the lock at the statement and definitions `STATE_PINS` pins, which the tree's locks don't hold;
+where it is free and a tied audit's parameters state a circuit record, there is no figure (`STATE_UNCOVERED`). Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
 audits' unregistered inputs, read off the period's parameters, with no advice length and no cap in them); ``cap`` is
@@ -207,7 +207,7 @@ if str(HERE.parents[1]) not in sys.path:
     sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
 import advice_charge as AC  # noqa: E402
 import leak_bounds as LB  # noqa: E402
-from served_integrity import exact_delta  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage.served_integrity import exact_delta  # noqa: E402
 
 FORMAT = "verity/onsite-network-record/v1"
 EXTENDS = "verity/all-protocols-window/v1"
@@ -818,16 +818,16 @@ STATE_PINS: dict[str, str | None] = {
     "NetworkCheck.Period.stateHeldIn": "f034cfeb8082ba6a91f8d2d851c0f4aeda7145051f564a8312d76276b964925d",
     "NetworkCheck.Period.auditStateEntries": "e3e53a0ba614ba12360f3cf8e073412a146c1ba7eb144be53810be7027644996",
     "NetworkCheck.Period.stateEntries": "a7c8123beed3f6e036818652a4c5bca16f9b8a994fb5b074d052d5a8f55469e4"}
-STATE_CHARGE = ("which charge the rows form's K applied to each audit tied to an execution phase's scan "
-                "(`NetworkCheck.Period.chargeOf`): its free inputs with its reads of the scan's state held (stateFree) "
-                "where its SCAN_STATE is the scan's state in every phase tied to it (stateHeldIn, over the entries "
-                "auditStateEntries reads: its registered ones and its window's activations entry), else its free inputs "
-                "(free). The record states stateFree only where RowsStateHeld is in the lock at the statement, and "
-                "reading stateHeldIn, auditStateEntries and the stateEntries both call at the digests that "
-                "`STATE_PINS` pins, so that its proof "
-                "stands over the activations entry, and free otherwise, naming each digest the lock doesn't give as "
-                "pinned (``unpinned``). A tied audit's stateFree is its free unless the period's parameters state its "
-                "circuit record (``with_record``)")
+STATE_CHARGE = ("which charge the rows form's K applied to each audit tied to an execution phase's scan. The tree's "
+                "period check charges each its whole free inputs, the parameters' `free` of each audit the scan's "
+                "`prog` is an output of, once (`NetworkCheck.Period.rowsExecutionPhaseCheck`'s `tiedAudits` sum), and "
+                "refuses an execution phase whose scan's state is not its wired audit's SCAN_STATE "
+                "(`Properties.NetworkPeriod.RowsStateTied`), so at its locks, which hold no RowsStateHeld, the record "
+                "states free. It states stateFree, a tied audit's free inputs with its reads of the scan's state held, "
+                "a charge the tree's check doesn't make, only where a lock holds RowsStateHeld at the statement, and "
+                "reading stateHeldIn, auditStateEntries and stateEntries at the digests `STATE_PINS` pins, and free "
+                "otherwise, naming each digest the lock doesn't give as pinned (``unpinned``). A tied audit's "
+                "stateFree is its free unless the period's parameters state its circuit record (``with_record``)")
 STATE_UNCOVERED = ("the charge is free (`STATE_CHARGE`), and the period's parameters state a tied audit's circuit "
                    "record, so the rows form may have charged that audit its stateFree, less than its free, where no "
                    "proof in the lock stands over the entries it held; the public doesn't separate the two, so the "

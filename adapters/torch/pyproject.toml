@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-torch = ["torch>=2.4"]
+torch = ["torch>=2.4", "triton"]
 
 [build-system]
 requires = ["hatchling"]

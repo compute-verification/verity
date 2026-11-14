@@ -1338,8 +1338,8 @@ class Run:
         if path == old and new_target == target and not self._through_moved(posixpath.dirname(old), t):
             return None                                 # neither end moved: the token stays as written
         rel = posixpath.relpath(new_target, base_new or ".")
-        if t.startswith("./") and not rel.startswith("."):
-            rel = "./" + rel
+        if t.startswith(("./", "../")) and not rel.startswith("."):
+            rel = "./" + rel                            # still read as relative (`move_check.py`'s `RELATIVE`, `MD_RELATIVE`)
         if plain and rel.startswith(".."):
             self.note("relative paths that now leave their directory", f"{path}: {t} -> {rel}")
         return rel + ("/." if dot else "") + ("/" if slash else "")
@@ -2012,18 +2012,17 @@ def rust_literals(text: str) -> list[tuple[int, int]]:
 
 
 def py_string_spans(text: str) -> list[tuple[int, int]]:
-    """The offsets of each string literal of Python source ``text``, in order (none when it doesn't tokenize); an f-string's
+    """The offsets of each string literal of Python source ``text``, in order (none when it doesn't parse); an f-string's
     replacement fields are code."""
+    if parsed(text) is None:
+        return []
     lines = io.StringIO(text).readlines()
     starts = [0]
     for line in lines:
         starts.append(starts[-1] + len(line))
     kinds = {tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", tokenize.STRING)}
-    try:
-        return [(starts[t.start[0] - 1] + t.start[1], starts[t.end[0] - 1] + t.end[1])
-                for t in tokenize.generate_tokens(io.StringIO(text).readline) if t.type in kinds]
-    except (SyntaxError, ValueError, tokenize.TokenError, IndexError):
-        return []
+    return [(starts[t.start[0] - 1] + t.start[1], starts[t.end[0] - 1] + t.end[1])
+            for t in tokenize.generate_tokens(io.StringIO(text).readline) if t.type in kinds]
 
 
 def _inside(spans: list[tuple[int, int]], at: int) -> bool:

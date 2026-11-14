@@ -95,7 +95,7 @@ theorem oneRegRec_missed_le (H : Msg → Msg) (L : Compiled Coin A) (hS : L.Sess
         ≤ Pr (fun r : Fin (L.V.k y) → Coin => ∀ u ∈ L.checked y r, u ∉ L.Freg H P y ()) :=
           Pr_mono fun _ hr u hu hF => hr ⟨u, hu, hF⟩
       _ = Ex fun r => Pr fun d : Fin (L.V.k y) → Coin =>
-            ∀ u ∈ L.checked y (forkOn (L.stage2 y) r d), u ∉ L.Freg H P y () := Pr_forkOn (L.stage2 y) _
+            ∀ u ∈ L.checked y (forkOn (L.secondStage y) r d), u ∉ L.Freg H P y () := Pr_forkOn (L.secondStage y) _
       _ ≤ Ex esc := Ex_mono hesc
       _ ≤ s.design.Pa Pt (L.Freg H P y ()) := hEesc
       _ ≤ x ^ (L.Freg H P y ()).card := hpa y s Pt hs hPt hin _ hsub

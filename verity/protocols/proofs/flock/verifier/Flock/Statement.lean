@@ -172,7 +172,7 @@ theorem checkRegionBytes_ok (nbl : Nat) (regions : Array Region) :
     simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq, false_iff]
     exact fun h' => h (hall.2 h')
 
-/-- The coin source named in `Hello` (`Flock.Draw`). -/
+/-- The coins' origin named in `Hello` (`Flock.Draw`). -/
 inductive Coins where
   /-- upstream's committed seed: a plain session without a challenger, which `verify` refuses once every check has passed
   (`ProvedScope.servedForm`) -/

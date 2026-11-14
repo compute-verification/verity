@@ -136,7 +136,7 @@ theorem monitoringPeriodLeak_of_checked (hsrc : Guarantees.MonitoringPeriodLeakC
     have hcap1 : 0 < ∏ c, (cap c + 1) := Finset.prod_pos fun c _ => Nat.succ_pos _
     refine (Set.encard_le_encard fun z hz => ?_).trans (h.trans (mul_le_mul' le_rfl ?_))
     · exact ⟨hz.1, fun i => executionPhaseGoodChecked_of_executionPhaseGood (fun _ _ => ⟨trivial, trivial⟩) (hz.2 i)⟩
-    · simp only [windowsCount, Finset.union_empty]
+    · simp only [executionPhasesCount, Finset.union_empty]
       exact_mod_cast Nat.le_mul_of_pos_left _ hcap1
 
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.MonitoringPeriodLeakAccepted`, the instance

@@ -30,8 +30,7 @@ from verity.circuits.defs import bind
 from verity.circuits.ops.gemm import DotBf16
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.circuits.program import REGISTRATION, Program, input_prim
-from verity_vllm.definitions.registry import fa2_train as FT
-from verity_vllm.definitions.registry import fa2_train_bwd as FTB
+from verity_vllm.definitions.registry import catalog
 from verity_torch.frontend.train_step import primitives
 
 aten = torch.ops.aten
@@ -408,10 +407,12 @@ def test_against_a_trace_of_the_cards_attention(steps, unit_prices) -> None:
 
 #: each head Definition `ATTENTION` names at shapes it binds at: one block of keys and several, a split head's four, and a
 #: backward's key blocks one and two of its query blocks
-HEAD_SHAPES = [(FT.Fa2TrainHead, {"T": 32, "D": 32, "BN": 16}), (FT.Fa2TrainHead, {"T": 48, "D": 64, "BN": 16}),
-               (FT.Fa2TrainSplitHead, {"T": 64, "D": 32, "BN": 16}),
-               (FTB.Fa2TrainBwdHead, {"T": 32, "D": 32, "BM": 16, "BN": 16, "NS": 1}),
-               (FTB.Fa2TrainBwdHead, {"T": 64, "D": 32, "BM": 16, "BN": 32, "NS": 3})]
+REGISTRY = catalog.load()[0]
+HEAD_SHAPES = [(REGISTRY["Fa2TrainHead_v1"], {"T": 32, "D": 32, "BN": 16}),
+               (REGISTRY["Fa2TrainHead_v1"], {"T": 48, "D": 64, "BN": 16}),
+               (REGISTRY["Fa2TrainSplitHead_v1"], {"T": 64, "D": 32, "BN": 16}),
+               (REGISTRY["Fa2TrainBwdHead_v1"], {"T": 32, "D": 32, "BM": 16, "BN": 16, "NS": 1}),
+               (REGISTRY["Fa2TrainBwdHead_v1"], {"T": 64, "D": 32, "BM": 16, "BN": 32, "NS": 3})]
 
 
 @pytest.mark.parametrize(("head", "b"), HEAD_SHAPES, ids=lambda x: getattr(x, "name", None) or "-".join(map(str, x.values())))
