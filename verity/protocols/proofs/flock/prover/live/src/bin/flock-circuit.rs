@@ -3923,7 +3923,7 @@ fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::Ir
 }
 
 /// The ZK server's refusal of a session whose witness is not the host's: its recheck is of a host witness.
-const FIREWALL_HOST_WITNESS: &str = "FIREWALL-REFUSED: the firewall rechecks a host witness (FC_HOST_WITNESS=1)";
+const ZK_SERVER_HOST_WITNESS: &str = "FIREWALL-REFUSED: the firewall rechecks a host witness (FC_HOST_WITNESS=1)";
 
 /// How a session builds its witness: on the device (inputs and host slots) or on the host, with the units' slots on the host,
 /// the host slots in mapped memory, and the hm96 slots built on the device natively (beside the compressions' native witness).
@@ -4300,7 +4300,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                     else { "the verifier's seed commitment" })),
         }
         if no_recheck {
-            return Err(FIREWALL_HOST_WITNESS.into());
+            return Err(ZK_SERVER_HOST_WITNESS.into());
         }
         // under the ZK server every table's level 0 is the Lean session loop's, sampled once it has every table's witness, before
         // any rep's frame starts (its time counts in table 0's level 0)
@@ -4368,7 +4368,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 false => None,
                 true => {
                     let Some(WitData::Host((z, ..))) = wt0.as_ref() else {
-                        return Err(FIREWALL_HOST_WITNESS.into());
+                        return Err(ZK_SERVER_HOST_WITNESS.into());
                     };
                     let l0 = match zk_pre.as_ref() {
                         Some(z) => z[0].as_ref().expect("rep 0's pads").0.level0.clone(),
@@ -4816,7 +4816,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_worker_level0", false, false),
     ("zk_worker_pads", false, false),
     ("zk_value_salts", false, false),
-    ("zk_firewall_refuses_device_witness", false, false),
+    ("zk_server_refuses_device_witness", false, false),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -5231,8 +5231,8 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "zk_value_salts" {
         return value_salts_case(st, inst, gpu);
     }
-    if name == "zk_firewall_refuses_device_witness" {
-        return firewall_device_witness_case(gpu);
+    if name == "zk_server_refuses_device_witness" {
+        return zk_server_device_witness_case(gpu);
     }
     if name == "lincheck_modes_agree" {
         return lincheck_modes_case(st, inst, gpu);
@@ -6145,7 +6145,7 @@ fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, Strin
     })
 }
 
-/// `zk_firewall_refuses_device_witness` (live PROTOCOL.md §10.2, §10.4): the ZK server rechecks a host witness, so a
+/// `zk_server_refuses_device_witness` (live PROTOCOL.md §10.2, §10.4): the ZK server rechecks a host witness, so a
 /// session whose witness the device builds is refused by name before anything of its table leaves, with the device's level
 /// walk asked for (`FC_UNIT_WALK=1`, under which a deep unit's words are the device's and no host slots) as without it. Two
 /// ZK server sessions asked for the device (`--gpu`), each in a process of its own, with no `FC_HOST_WITNESS`, one with
@@ -6154,8 +6154,8 @@ fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, Strin
 /// from the session's witness mode before the session builds a witness; one the pipeline built ahead for it is waited for
 /// and dropped. So a build without the device holds it too (`device_build` false:
 /// the session's `--gpu` reaches nothing of a device before it is refused); a device build runs the case on the device.
-fn firewall_device_witness_case(gpu: bool) -> Value {
-    let name = "zk_firewall_refuses_device_witness";
+fn zk_server_device_witness_case(gpu: bool) -> Value {
+    let name = "zk_server_refuses_device_witness";
     if cfg!(feature = "gpu") && !gpu {
         return json!({"case": name, "pass": true, "skipped": "a device build runs the case on the device (--gpu)"});
     }
@@ -6163,7 +6163,7 @@ fn firewall_device_witness_case(gpu: bool) -> Value {
     if !lean.exists() {
         return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
     }
-    let want = "FIREWALL-REFUSED: the firewall rechecks a host witness (FC_HOST_WITNESS=1)";
+    let want = ZK_SERVER_HOST_WITNESS;
     let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
     // one session with the walk asked for, one with FC_UNIT_WALK unset; the first's record is the case's own, the second's beside it
     let one = |env: &[(&str, String)], asked: &str| {
