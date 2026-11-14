@@ -383,8 +383,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - **Transfer block**: the transfer gates a network certifier releases on one link, in one direction, at one tick of its
   clock (one bucket, `bucket_ms`): its row of that direction's record (`WardenParams.grid`), proved as its own proof
   block (`IngressScanBucket`, `EgressBucket`, `scan_zk.py`). The code's `link-window` is an execution phase's
-  2T transfer blocks, T buckets each way under one registration (`WardenParams.window`), its Program the T ingress then the
-  T egress proof blocks chained through the scan state; all are proved today (`scan_zk --draw K` samples), each certified
+  2T transfer blocks, T buckets each way under one registration (`WardenParams.window`), its Program the scan's start
+  (`IngressScanStart`, the state the execution phase starts from), then the T ingress and the T egress proof blocks
+  chained through the scan state; all are proved today (`scan_zk --draw K` samples), each certified
   one with one liveness bit. The signed `fails` record is the certifier's own. A certifier's *attachment* to a link (its
   32-byte id) is one key and schedule on it across many periods.
 - **Lemma**: any proved statement that isn't a guarantee. A package keeps its lemmas in `SecurityProofs`, outside its spec,

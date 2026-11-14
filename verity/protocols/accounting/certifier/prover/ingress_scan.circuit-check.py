@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _network_ingress_scan_roots() -> list[Any]:
-    """The scan's ingress bucket proof block and its first bucket's at the slow test's class: two lanes of two 512-byte
+    """The scan's ingress bucket proof block at the slow test's class: two lanes of two 512-byte
     cells, requests of at most four cells, a slot stride of 2 buckets (two Program slots each), a 3-bucket ingress
     bound, the network certifier's delay 5, 8 outputs and 100 prompt ids a request, which reaches a first and a
     continuation frame in one block, a new and a continuing block, the anchor's wrap, two requests anchored at one
@@ -14,27 +14,25 @@ def _network_ingress_scan_roots() -> list[Any]:
     class (B 512, r 4, lanes 4, C 47, EVERY 16, WITHIN 12, D 27, KO 64, KI 1,024) is about 1.2M ANDs, 100 s to trace, so
     it is checked by name, not in every run."""
     from verity.circuits.defs import bind
-    from verity.protocols.accounting.certifier.prover.ingress_scan import IngressScanBucket, IngressScanFirst
+    from verity.protocols.accounting.certifier.prover.ingress_scan import IngressScanBucket
 
-    statics = dict(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
-    return [bind(IngressScanBucket, **statics), bind(IngressScanFirst, **statics)]
+    return [bind(IngressScanBucket, B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)]
 
 
 def _network_ingress_scan_w63k4_roots() -> list[Any]:
-    """The two units at the w63k4 class (scan_zk.py's ``w63k4``: w63's at KO 4 and KI 32, a window circuit's of 8
-    slots, 32 prompt ids and 4 outputs a request), the circuits its scan registers: their digest pins hold the units
+    """The ingress bucket's unit at the w63k4 class (scan_zk.py's ``w63k4``: w63's at KO 4 and KI 32, a window circuit's
+    of 8 slots, 32 prompt ids and 4 outputs a request), the circuit its scan registers: its digest pin holds the unit
     the deployment proves, which the test class's can't, and they reach four lanes' slot entries, a 47-cell slot and an
     ingress bound below the timestep. As large as w63's in ANDs (a slot's C·K prompt ids dominate the state), so this
     unit is its own, rerun only when what it reads changes."""
     from verity.circuits.defs import bind
-    from verity.protocols.accounting.certifier.prover.ingress_scan import IngressScanBucket, IngressScanFirst
+    from verity.protocols.accounting.certifier.prover.ingress_scan import IngressScanBucket
 
-    statics = dict(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=4, KI=32)
-    return [bind(IngressScanBucket, **statics), bind(IngressScanFirst, **statics)]
+    return [bind(IngressScanBucket, B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=4, KI=32)]
 
 
 def _network_ingress_scan_start_roots() -> list[Any]:
-    """The carried start's unit at the two classes above, the slow test's and w63k4's: a state row of each class's
+    """The start's unit at the two classes above, the slow test's and w63k4's: a state row of each class's
     width, each bit through two NOTs. It has no AND and takes seconds, so it is a unit of its own that never waits on
     the buckets' traces."""
     from verity.circuits.defs import bind

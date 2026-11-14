@@ -26,21 +26,18 @@ class Toy:
 
 
 ING = Toy("Ing_v1", (("row", 1), ("aux", 1)), (("o0", 1, "dense"),))
-#: an ingress side's first bucket, its frame ``row`` too
-FIRST = Toy("First_v1", (("row", 1), ("aux", 1)), (("o0", 1, "dense"),))
 #: an egress bucket: its state ``y``; its verdict ``o0`` and its frame ``o1``, the row it computes
 EGR = Toy("Egr_v1", (("y", 1),), (("o0", 1, "dense"), ("o1", 1, "dense")))
 
 
-def side(tid, frame, links, T, verdict=None, first=None):
+def side(tid, frame, links, T, verdict=None):
     d = {"template": tid, "frame": frame, "links": links, "buckets": T, "slots": 1, "frame_bytes": 2}
-    return d | ({"verdict": verdict} if verdict else {}) | ({"first": first} if first else {})
+    return d | ({"verdict": verdict} if verdict else {})
 
 
-def record(toys, wires, LE, LI, T, first=False):
+def record(toys, wires, LE, LI, T):
     """A `verity/window-circuit/v1` record (the fields `boundary` reads) of ``toys`` ``[(Toy, n)]``, one member each, with
-    ``wires`` ``{(tid, port): writers}`` and the boundary of `EGR` (``LE`` links) and `ING` (``LI`` links, or none; with
-    ``first``, `FIRST` holds each link's bucket 0)."""
+    ``wires`` ``{(tid, port): writers}`` and the boundary of `EGR` (``LE`` links) and `ING` (``LI`` links, or none)."""
     members, base = [], 0
     for toy, n in toys:
         members.append({"template": toy.tid, "name": "", "n": n, "base": base, "rows": [list(r) for r in toy.rows],
@@ -50,8 +47,8 @@ def record(toys, wires, LE, LI, T, first=False):
     b = {"format": BD.FORMAT, "egress": side(EGR.tid, "o1", LE, T, "o0")}
     ext = [f"{EGR.tid}/o1", f"{EGR.tid}/o0"]
     if LI:
-        b["ingress"] = side(ING.tid, "row", LI, T, first=FIRST.tid if first else None)
-        ext += [f"{ING.tid}/row"] + ([f"{FIRST.tid}/row"] if first else [])
+        b["ingress"] = side(ING.tid, "row", LI, T)
+        ext += [f"{ING.tid}/row"]
     return {"format": BD.CIRCUIT, "templates": [[t.tid, n] for t, n in toys], "members": members, "external": ext,
             "boundary": b}
 
@@ -144,28 +141,25 @@ def test_an_egress_bucket_that_reads_a_later_buckets_ingress_is_refused_by_the_c
 
 def test_the_unit_grain_contains_depends_and_is_exact_on_dense_templates():
     """On random windows (seeds 0 … 299), `refusal` accepting implies `BoundaryGates.Fits` at the gate grain, and on
-    windows of dense templates the two agree; both verdicts occur. About half the windows with ingress over two buckets
-    or more hold each link's bucket 0 in a first template."""
+    windows of dense templates the two agree; both verdicts occur."""
     seen = {True: 0, False: 0}
     for seed in range(300):
         rng = random.Random(seed)
         T, LE, LI = rng.randint(1, 3), rng.randint(1, 2), rng.randint(0, 2)
-        first = LI > 0 and T > 1 and rng.random() < 0.5
         dense = seed % 2 == 0
         kind = (lambda: "dense") if dense else (lambda: rng.choice(["dense", "last"]))
         ing = Toy(ING.tid, ING.rows, (("o0", 1, kind()),))
-        fst = Toy(FIRST.tid, FIRST.rows, (("o0", 1, kind()),))
         mids = [Toy(f"Mid{j}_v1", (("x", 1), ("z", 1)), (("o0", 1, kind()),)) for j in range(rng.randint(0, 2))]
         egr = Toy(EGR.tid, EGR.rows, (("o0", 1, kind()), ("o1", 1, kind())))
-        toys = (([(fst, LI), (ing, LI * (T - 1))] if first else [(ing, LI * T)] if LI else [])
+        toys = (([(ing, LI * T)] if LI else [])
                 + [(t, rng.randint(1, 3)) for t in mids] + [(egr, LE * T)])
         total = sum(n for _, n in toys)
         wires = {}
         for toy, n in toys:
             for p, _ in toy.rows:
-                if (toy.tid, p) not in {(ING.tid, "row"), (FIRST.tid, "row")} and rng.random() < 0.7:
+                if (toy.tid, p) != (ING.tid, "row") and rng.random() < 0.7:
                     wires[(toy.tid, p)] = [rng.randrange(total) for _ in range(n)]
-        doc = record(toys, wires, LE, LI, T, first)
+        doc = record(toys, wires, LE, LI, T)
         ok, gate = BD.refusal(doc) is None, fits(doc, toys)
         assert gate or not ok, (seed, BD.refusal(doc))
         if dense:
@@ -219,18 +213,6 @@ def test_the_unit_of_a_bucket_is_its_templates_unit_link_times_T_plus_t():
     assert [b.unit(doc, "ingress", 0, t) for t in range(3)] == [0, 1, 2]
     with pytest.raises(ValueError, match=r"egress has links \[0, 2\) and buckets \[0, 3\), not \(2, 0\)"):
         b.unit(doc, "egress", 2, 0)
-    # with a first template: bucket 0 of link ℓ its proof block ℓ, bucket t ≥ 1 the other's proof block ℓ·(T − 1) + t −
-    # 1
-    toys = [(FIRST, 2), (ING, 4), (EGR, 6)]
-    doc = record(toys, {(EGR.tid, "y"): [0, 2, 3, 1, 4, 5]}, 2, 2, 3, first=True)
-    b = BD.parse(doc)
-    assert [b.unit(doc, "ingress", ell, t) for ell in range(2) for t in range(3)] == [0, 2, 3, 1, 4, 5]
-    assert [b.unit(doc, "egress", ell, t) for ell in range(2) for t in range(3)] == [6, 7, 8, 9, 10, 11]
-    assert accepted(doc) and fits(doc, toys)
-    doc["members"][2]["wired"][0][2][0] = 2
-    assert BD.refusal(doc).startswith("BoundaryGates.Fits, causal: egress bucket 0 of link 0 (unit 6) depends on "
-                                      "ingress bucket 1 of link 0 (unit 2)")
-    assert not fits(doc, toys)
 
 
 def _refused(edit, needle):
@@ -264,8 +246,8 @@ def _rename(name, **kw):
     (lambda d: _bd(d)["egress"].update(presence="o0"), "boundary egress: the fields"),
     (lambda d: _bd(d)["ingress"].update(verdict="o0"), "boundary ingress: the fields"),
     (lambda d: _bd(d)["egress"].update(first="Ing_v1"), "boundary egress: the fields"),
-    (lambda d: _bd(d)["ingress"].update(first="Ing_v1"), "boundary ingress: a first bucket's template is another than"),
-    (lambda d: _bd(d)["ingress"].update(first=""), "are named by nonempty strings"),
+    (lambda d: _bd(d)["ingress"].update(first="Ing_v1"), "boundary ingress: the fields"),
+    (lambda d: _bd(d)["ingress"].update(frame=""), "are named by nonempty strings"),
     (lambda d: _bd(d)["egress"].update(links=0), "are positive integers"),
     (lambda d: _bd(d)["egress"].update(links=True), "are positive integers"),
     (lambda d: _bd(d)["egress"].update(frame_bytes=3), "a cell is whole u16 words, not 3 bytes"),
@@ -274,7 +256,7 @@ def _rename(name, **kw):
     (lambda d: d["external"].pop(), "are not the boundary's rows"),
     (lambda d: d["external"].append("Ing_v1/aux"), "are not the boundary's rows"),
     (_rename("egress", template="Nope_v1"), "boundary egress: Nope_v1 is no template of the circuit"),
-    (_rename("ingress", first="First_v1"), "boundary ingress: First_v1 is no template of the circuit"),
+    (_rename("ingress", template="Nope_v1"), "boundary ingress: Nope_v1 is no template of the circuit"),
     (lambda d: _bd(d)["egress"].update(links=2), "boundary egress: Egr_v1 has 2 units, not links·buckets = 2·2"),
     (_rename("egress", verdict="o2"),
      "BoundaryGates.Fits, egress gates are returned: Egr_v1's verdict 'o2' is not an output row of one u16 word (a "
@@ -327,19 +309,19 @@ def _words(t) -> int:
 @pytest.mark.parametrize("G", [1, 2])
 def test_the_scans_link_windows_fit(G):
     """A group of G execution phases in the composed scan's generator form at w63's class (`benchmarks/network_traces/
-    scan_zk.py`), one link of G·T buckets: `IngressScanFirst` (bucket 0), G·T − 1 `IngressScanBucket` and G·T
+    scan_zk.py`), one link of G·T buckets: the scan's start (`IngressScanStart`), G·T `IngressScanBucket` and G·T
     `EgressBucket` proof blocks, each member's rows and outputs its Definition's signature's. The ingress frame is the
     network certifier's ingress row; the egress frame is the row `EgressBucket` computes (o1), beside its u16 verdict
-    (o0); ingress proof block t's state output (o1) is wired to proof block t + 1's ``sin`` and its view output (o2) to
-    egress proof block t's ``state``. The check passes it, and the checker form, its egress frame a parameter row, is
-    refused by name."""
+    (o0); the start's output is wired to ingress proof block 0's ``sin``, ingress proof block t's state output (o1) to
+    proof block t + 1's ``sin`` and its view output (o2) to egress proof block t's ``state``. The check passes it, and
+    the checker form, its egress frame a parameter row, is refused by name."""
     cls, T = IS.Class(B=512, r=4, lanes=4, C=47), 32
     n, sh = G * T, cls.egress
     st = {k: getattr(cls, k) for k in IS.STATICS}
-    defs = {"IngressScanFirst": bind(IS.IngressScanFirst, **st), "IngressScanBucket": bind(IS.IngressScanBucket, **st),
+    defs = {"IngressScanStart": bind(IS.IngressScanStart, **st), "IngressScanBucket": bind(IS.IngressScanBucket, **st),
             "EgressBucket": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D)}
-    counts = {"IngressScanFirst": 1, "IngressScanBucket": n - 1, "EgressBucket": n}
-    wired = {"IngressScanBucket": [["sin", "o1", list(range(n - 1))]], "EgressBucket": [["state", "o2", list(range(n))]]}
+    counts = {"IngressScanStart": 1, "IngressScanBucket": n, "EgressBucket": n}
+    wired = {"IngressScanBucket": [["sin", "o1", list(range(n))]], "EgressBucket": [["state", "o2", list(range(1, n + 1))]]}
     members, base = [], 0
     for tid, d in defs.items():
         params, ret = d.signature()
@@ -353,16 +335,16 @@ def test_the_scans_link_windows_fit(G):
     entries = {f"prog{j}": IS.entry_bits(cls) // 16 for j in range(cls.lanes)}
     assert entries == {"prog0": 71, "prog1": 71, "prog2": 71, "prog3": 71}
     assert rows["IngressScanBucket"] == {"row": cls.S * cls.B // 2, "sin": 9353, **entries}
-    assert rows["IngressScanFirst"] == {"row": cls.S * cls.B // 2, **entries}
-    assert outs["IngressScanBucket"] == outs["IngressScanFirst"] == {"o0": 1, "o1": 9353, "o2": sh.state_words}
+    assert rows["IngressScanStart"] == {"sin": 9353} and outs["IngressScanStart"] == {"o0": 9353}
+    assert outs["IngressScanBucket"] == {"o0": 1, "o1": 9353, "o2": sh.state_words}
     assert rows["EgressBucket"] == {"state": sh.state_words} and outs["EgressBucket"] == {"o0": 1, "o1": sh.R * sh.B // 2}
     b = BD.Boundary(BD.Side("EgressBucket", "o1", 1, n, sh.R, sh.B, "o0"),
-                    BD.Side("IngressScanBucket", "row", 1, n, cls.S, cls.B, first="IngressScanFirst"))
+                    BD.Side("IngressScanBucket", "row", 1, n, cls.S, cls.B))
     doc = {"format": BD.CIRCUIT, "templates": [[tid, counts[tid]] for tid in defs], "members": members,
            "external": sorted(b.ports()), "boundary": b.record()}
     assert BD.refusal(doc) is None
-    assert [b.unit(doc, "ingress", 0, t) for t in range(n)] == list(range(n))
-    assert [b.unit(doc, "egress", 0, t) for t in range(n)] == list(range(n, 2 * n))
+    assert [b.unit(doc, "ingress", 0, t) for t in range(n)] == list(range(1, n + 1))
+    assert [b.unit(doc, "egress", 0, t) for t in range(n)] == list(range(n + 1, 2 * n + 1))
     checker = copy.deepcopy(doc)
     checker["members"][2].update(rows=[["state", sh.state_words], ["row", sh.R * sh.B // 2]], outs=[["o0", 1]])
     checker["boundary"]["egress"]["frame"] = "row"
@@ -383,8 +365,3 @@ def test_parse_reads_only_the_boundary():
     egress_only = BD.Boundary(b.egress)
     assert egress_only.record() == {"format": BD.FORMAT, "egress": doc["boundary"]["egress"]}
     assert BD.parse({"format": BD.CIRCUIT}) is None
-    doc = record([(FIRST, 1), (ING, 1), (EGR, 2)], {(EGR.tid, "y"): [0, 1]}, 1, 1, 2, first=True)
-    b = BD.parse(doc)
-    assert b.ingress == BD.Side("Ing_v1", "row", 1, 2, 1, 2, first="First_v1") and b.record() == doc["boundary"]
-    assert b.ports() == {"Egr_v1/o1", "Egr_v1/o0", "Ing_v1/row", "First_v1/row"}
-    assert b.ingress.counts() == {"First_v1": 1, "Ing_v1": 1}

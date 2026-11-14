@@ -1,8 +1,8 @@
 """The ingress side of the step-indexed scan: one proof block a certifier bucket t, `IngressScanBucket`, which reads
 bucket t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's
-egress view, its outputs beside an ok bit (the generator form); the first bucket's, `IngressScanFirst`, reads no state
-and starts from the empty one. Every switch is computed from the state and the rows; none is witness. Nothing here is
-in a Spec.
+egress view, its outputs beside an ok bit (the generator form); the scan's start, `IngressScanStart`, gives the first
+bucket its S_{−1}. Every switch is computed from the state and the rows; none is witness. Nothing here is in a
+Spec.
 
 **The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
@@ -118,21 +118,17 @@ arrivals and the prompt lengths, which stay private.
 slot-entries row of slot j at t's boundary. o1 and o2 are gates, never inputs: the unit's statement commits o1 as the
 scan's state row t and o2 as its view row t, each registered as a read of its row (`checkPort` accepts a hidden-output
 statement's output row, the verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's `state`, which
-read those rows, read what bucket t computed: the carried state and the view are wires through the registered roots. The
-first bucket's unit, `IngressScanFirst`, has no `sin`: its S_{−1} is the empty state, constants of the circuit, so no
-row the prover commits stands in for it. Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and
-o2 are committed.
+read those rows, read what bucket t computed: the carried state and the view are wires through the registered roots.
+Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and o2 are committed.
 
-**A carried start.** `IngressScanStart` is the unit of a link-window whose scan starts from a state another record
-holds: its `sin` is that state, a registered read of the value the link-window's record names for it (an earlier
-link-window's last state row, or the empty state), and its output is `sin`, each bit through two NOTs, committed as the
-row the link-window's state tree holds at leaf 0, the row its first bucket's `sin` and its first boundary's Programs
-read. So that row is the carried state by gates, and no bucket's unit is another Definition for it: every bucket of
-such a link-window, the first included, is `IngressScanBucket`.
+**The start.** `IngressScanStart` is the first unit of every execution phase's scan: its `sin` is the state the scan
+starts from, a registered read of the value the execution phase's record names for it (the empty state in the run's
+first execution phase, the previous execution phase's last state row in every later one), and its output is `sin`,
+each bit through two NOTs, committed as the row the execution phase's state tree holds at leaf 0, the row its first
+bucket's `sin` and its first boundary's Programs read. So that row is the start by gates, and no bucket's unit is
+another Definition for it: every bucket, the first included, is `IngressScanBucket`.
 
     IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>, sin: Array<NS>,
-        prog0 … prog<lanes − 1>: Array<NE>) -> (u16, Array<NS>, Array<NV>)
-    IngressScanFirst{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>,
         prog0 … prog<lanes − 1>: Array<NE>) -> (u16, Array<NS>, Array<NV>)
     IngressScanStart{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(sin: Array<NS>) -> (Array<NS>)
         NS = `state_bits`: 96 + lanes·(338 + CB + (KO + C·K)·IDB) rounded up to a multiple of 16, K = (B − 9) // 11
@@ -574,8 +570,8 @@ def step(cls: Class, row: bytes, st: State, prog: Sequence[Entry] | None = None)
 
 def reference(cls: Class, row: bytes, sin: Sequence[int] | None, prog: Sequence[int]
               ) -> tuple[int, list[int] | None, list[int] | None]:
-    """`IngressScanBucket`'s outputs in the clear (`IngressScanFirst`'s for sin None, the empty state): ok, and S_t
-    and its egress view at t where ok is 1, None where it is 0."""
+    """`IngressScanBucket`'s outputs in the clear (sin None: the empty state): ok, and S_t and its egress view at t
+    where ok is 1, None where it is 0."""
     before = empty(cls) if sin is None else decode(cls, sin)
     st = step(cls, row, before, prog_decode(cls, prog))
     if st is None:
@@ -658,11 +654,6 @@ def _progs(cls: Class) -> tuple:
 def _sig(S):
     cls = _cls(S)
     return (("row", Array(cls.S * cls.B, BYTE)), ("sin", Array(state_bits(cls), BIT)), *_progs(cls)), _outs(cls)
-
-
-def _sig_first(S):
-    cls = _cls(S)
-    return (("row", Array(cls.S * cls.B, BYTE)), *_progs(cls)), _outs(cls)
 
 
 def _sig_start(S):
@@ -749,12 +740,6 @@ def _build(C, S, *e):
     cls = _cls(S)
     n = cls.S * cls.B
     return _scan(C, cls, e[:n], list(e[n]), [b for p in e[n + 1:] for b in p])
-
-
-def _build_first(C, S, *e):
-    cls = _cls(S)
-    n = cls.S * cls.B
-    return _scan(C, cls, e[:n], [ZERO] * state_bits(cls), [b for p in e[n:] for b in p])
 
 
 def _scan(C, cls: Class, row: Sequence, sin: list, prog: list) -> list:
@@ -917,30 +902,21 @@ IngressScanBucket = _part(
     "`SlotEntry_v1`'s row of its slot), and its egress view at t (`egress.EgressBucket`'s state), with 1 in bit 0 of "
     "the first output iff every check of the step holds: " + _STEP, version=3)
 IngressScanBucket.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
-IngressScanFirst = _part(
-    "IngressScanFirst", STATICS, _sig_first, _build_first,
-    "the scan's first state S_0 = `ingress_scan.step` of the empty state (all zeros, constants), bucket 0's ingress "
-    "row and the Programs' entries prog0 … prog<lanes − 1>, and its egress view at 0, with 1 in bit 0 of the first "
-    "output iff every check of the step holds: " + _STEP, version=3)
-IngressScanFirst.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
 IngressScanStart = CompositeDefinition(
     "IngressScanStart", 1, STATICS, _sig_start, _body_start, conformance="exact-model-tested",
-    doc="the scan's carried start: sin, the state a link-window's scan starts from (`state_bits` bits, the class's "
+    doc="the scan's start: sin, the state an execution phase's scan starts from (`state_bits` bits, the class's "
         "state row), each bit through two NOTs, so the row its output commits is sin")
 
 
-def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[int]] | tuple[bytes, Sequence[int]]]
-              ) -> list[list]:
-    """The arguments for (row, sin, prog) cases (`IngressScanBucket`) or (row, prog) cases (`IngressScanFirst`):
-    each row's bytes as bits, least significant first, sin as it is, and prog's entry rows, one port each
-    (`prog_rows`)."""
+def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[int]]]) -> list[list]:
+    """`IngressScanBucket`'s arguments for (row, sin, prog) cases: each row's bytes as bits, least significant first,
+    sin as it is, and prog's entry rows, one port each (`prog_rows`)."""
     rows = [[[b >> i & 1 for i in range(8)] for b in c[0]] for c in cases]
-    sins = [[list(c[1]) for c in cases]] if len(cases[0]) == 3 else []
-    progs = [prog_rows(cls, c[-1]) for c in cases]
-    return [rows, *sins, *([p[j] for p in progs] for j in range(cls.NR))]
+    progs = [prog_rows(cls, c[2]) for c in cases]
+    return [rows, [list(c[1]) for c in cases], *([p[j] for p in progs] for j in range(cls.NR))]
 
 
-__all__ = ["Class", "Entry", "IngressScanBucket", "IngressScanFirst", "IngressScanStart", "NONE", "STATICS", "Slot",
+__all__ = ["Class", "Entry", "IngressScanBucket", "IngressScanStart", "NONE", "STATICS", "Slot",
            "State", "arguments",
            "decode", "due", "empty", "encode", "entry", "entry_bits", "entry_encode", "entry_layout", "held", "layout",
            "position", "prog_bits", "prog_decode", "prog_encode", "prog_rows", "programs", "reference", "scan",
