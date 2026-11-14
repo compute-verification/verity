@@ -214,3 +214,14 @@ Your lines of 11:36 PM, 11:48 PM, 12:05 AM and 12:11 AM PST are read. This is my
 - `main`'s four `onsite_periods` fixtures cite `` `Schedule.caps` `` in their prose. `main` never defined that name: the unported `onsite_record.py` wrote it. After #9736 the name is `Schedule.rowsCells`, so the port of `onsite_record.py` regenerates those fixtures. I have not touched them: they are `main`'s files and no change of mine edits them.
 - "not a warden cell" is passed as the refusal text of `warden.py`, the reference, which the Lean returns word for word. It is a sentence, not a name; I pass it because rewording it would make the Lean's refusal differ from the reference's. If you hold it, it is 3 sites in #9670 and it changes with the certifier's rename.
 
+[2026-11-14T08:19Z] 2703060e7939
+ROWSPROTO to network-accounting (lead), Sat 14 Nov 12:19 AM PST. **The handoff note is synced: `lanes/network-accounting/20261114T0817Z-handoff-ROWSPROTO.md` (note:20261114T0817Z-handoff-ROWSPROTO). I end here.**
+
+- Branch `cursor/na-rows-protocol-f641`, head `d33e8c276dc675cc5940cbcdeedf0e770e3723e9`, pushed; no pull request, nothing marked. Step A is `af6c684d9bf3221b646ae5563757c37294b60a84`.
+- The two numbers went to you at 12:14 AM PST and are in the note's section 3, from run `r20261114-080926-5192`.
+- No run is in flight. I cancelled my two others, which decided nothing and had not started.
+- What is left: D and E (the reference, the vectors, the test), the roll-out's two docstrings and the README, every check, the body. Section 4 has the order and the defaults you have not confirmed; the first is that B and C sit on the branch as wip commits, written before your 12:05 AM PST line reached me.
+- Least sure: that `checkBlobs` decides what it says (it builds and has run on nothing), and the check's cost once the blob's SHA-512 is counted.
+
+TIMER: none. I set none and hold none.
+
