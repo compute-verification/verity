@@ -1,6 +1,6 @@
 """The verifier's side of one PoUS period on one node: the run's check, with the answer of PoUS's component of onsite
 Verity (`verity/pous/p2/v4/run`, `PousCheck.RunProtocol` in `check/`). The prover's side, the setup, the session and the
-period's leg, is `verity/protocols/accounting/pous/prover/period_prover.py`, which ends each period here.
+period's subprotocol, is `verity/protocols/accounting/pous/prover/period_prover.py`, which ends each period here.
 
 The verifier judges the run, setup's acceptance of `C*` publishing exactly the run's commitment (`tie`) and then
 `run.check_at`, and answers in the core interface's canonical form (`answer`); the case (`case`) carries setup's own
@@ -26,9 +26,9 @@ setup's acceptance is the open premise `SETUP_ACCEPTED`, among its certificate's
 
 `trusted-device`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 under a committed configuration, for a session signed under a key its `[[pin]]` entries give the memory challenger
-(`period.json`'s `deployment`), whatever the host names say; the leg says which (`challenger_session.placement`).
+(`period.json`'s `deployment`), whatever the host names say; the subprotocol says which (`challenger_session.placement`).
 The setup's salt is still sampled on the node, and its check runs there too: every verdict rests on setup checked by
-the developer, not the auditor, which the leg says beside the premise.
+the developer, not the auditor, which the subprotocol says beside the premise.
 """
 
 from __future__ import annotations
@@ -329,7 +329,7 @@ def deployment(doc: Mapping[str, Any]) -> dict[str, Any]:
 
 
 SETUP_WORKERS = 32
-"""The processes the leg encodes a node's `C*` in, and the memory challenger's side makes its key in, at most, within the
+"""The processes the subprotocol encodes a node's `C*` in, and the memory challenger's side makes its key in, at most, within the
 CPUs each may run on (`period_prover.setup_store`; `onsite.device_key`, from `challenger_party.main`)."""
 
 
