@@ -53,6 +53,14 @@ DIVISION16 = ["I2F.U16 R2, R3", "I2F.U16.RZ R4, R4", "FSETP.GEU.AND P1, PT, |R2|
               "FSETP.GT.AND P0, PT, |R2|, 8.50705917302346158658e+37, PT", "FSEL R5, R5, 1, !P1",
               "@!P0 FSEL R5, R5, 0.25, !P0", "FMUL R6, R2, R5", "MUFU.RCP R6, R6", "FMUL R5, R5, R6",
               "FMUL.RZ R5, R4, R5", "F2I.U32.TRUNC.NTZ R5, R5"]
+#: the leaf pass's reader as CUDA 13.0.88 builds it for sm_120a, its float instructions in its listing's order: a
+#: 32-bit division (a claim's tile by `tiles_per`) and a 16-bit one in 13.0's form, its dividend converted as a u32
+#: (the sign copy's trips: the signs left past a thread's first by `blockDim.x`)
+LEAF_DIVISIONS = ["UI2F.U32.RP UR4, UR5", "MUFU.RCP R2, UR4", "F2I.FTZ.U32.TRUNC.NTZ R3, R2", "I2F.U16 R3, R2",
+                  "I2FP.F32.U32.RZ R0, R0", "FSETP.GEU.AND P1, PT, |R3|.reuse, 1.175494350822287508e-38, PT",
+                  "FSETP.GT.AND P0, PT, |R3|, 8.50705917302346158658e+37, PT", "FSEL R4, R4, 1, !P1",
+                  "FSEL R4, R4, 0.25, !P0", "FMUL R5, R3, R4", "MUFU.RCP R5, R5", "FMUL R4, R4, R5",
+                  "FMUL.RZ R0, R0, R3", "F2I.U32.TRUNC.NTZ R0, R0"]
 CONSTANTS = ["HFMA2 R3, -RZ, RZ, 0, 0", "HFMA2 R11, -RZ, RZ, 0, 7.62939453125e-06"]
 IMMAS = ["IMMA.16832.S8.S8 R52, R36.ROW, R118.COL, R52"] * 32
 #: the default build's shape at sm_120a, and the capped one's, where the receipt kernels spill
@@ -63,7 +71,7 @@ SM120 = {"sketch64_pass_kernel": (162, 0, 0, 0, DIVISION_U + DIVISION16_U + IMMA
          "subtree64_receipts_kernel": (145, 0, 0, 0, DIVISION16 + IMMAS),
          "signs_kernel<64>": (128, 368, 0, 0, ["STL.64 [R1+0x40], R6"] + CONSTANTS),
          "chain_prepare_kernel<64>": (128, 352, 92, 92, ["LDL.64 R6, [R1+0x40]"] + CONSTANTS * 6),
-         "leaf_pass64_kernel": (255, 64, 64, 64, DIVISION_U + SPILL + IMMAS),
+         "leaf_pass64_kernel": (255, 64, 64, 64, LEAF_DIVISIONS + SPILL + IMMAS),
          "leaf_consumer64_kernel": (255, 72, 88, 72, DIVISION_U + DIVISION + SPILL + IMMAS)}
 SM120_CAPPED = {**SM120, "sketch64_pass_kernel": (128, 24, 24, 32, SM120["sketch64_pass_kernel"][4] + SPILL),
                 "subtree64_receipts_kernel": (128, *SM120["subtree64_receipts_kernel"][1:])}
@@ -104,8 +112,9 @@ def test_each_build_passes_with_each_kernels_record(name):
         assert r["instructions"] == len(body) and r["symbol"] == SYMBOL[k]
         assert r["IMMA"] == (32 if k in sass_gate.SKETCHING else 0)
     far = arch == "sm_120a"
-    assert funcs["pass_consumer_kernel<64>"]["divisions"] == {"u32": 1 + far, "u64": 1, "u16": 0}
-    assert funcs["sketch64_pass_kernel"]["divisions"] == {"u32": 1, "u64": 0, "u16": int(far)}
+    assert funcs["pass_consumer_kernel<64>"]["divisions"] == {"u32": 1 + far, "u64": 1, "u16": 0, "u16_13": 0}
+    assert funcs["sketch64_pass_kernel"]["divisions"] == {"u32": 1, "u64": 0, "u16": int(far), "u16_13": 0}
+    assert funcs["leaf_pass64_kernel"]["divisions"] == {"u32": 1, "u64": 0, "u16": 0, "u16_13": int(far)}
     assert funcs["subtree64_receipts_kernel"]["float"] == ({
         "I2F.U16": 1, "I2F.U16.RZ": 1, "FSETP.GEU.AND": 1, "FSETP.GT.AND": 1, "FSEL": 2, "FMUL": 2, "MUFU.RCP": 1,
         "FMUL.RZ": 1, "F2I.U32.TRUNC.NTZ": 1} if far else {})
@@ -179,7 +188,20 @@ REFUSED_120 = {
     "sm_90a's consumer frame": (changed(SM120, "pass_consumer_kernel<64>", frame=(160, 172, 224)), "local memory"),
     "the leaf pass's reader spilling more": (changed(SM120, "leaf_pass64_kernel", frame=(64, 72, 64)), "local memory"),
     "the leaf consumer past its frame": (changed(SM120, "leaf_consumer64_kernel", frame=(96, 88, 72)), "local memory"),
+    "13.0's 16-bit division without its dividend's conversion": (changed(SM120, "leaf_pass64_kernel", body=[
+        t for t in SM120["leaf_pass64_kernel"][4] if not t.startswith("I2FP")]),
+        "floating point other than integer division's"),
+    "13.0's 16-bit division short of its rounded product": (changed(SM120, "leaf_pass64_kernel", body=[
+        t for t in SM120["leaf_pass64_kernel"][4] if not t.startswith("FMUL.RZ")]),
+        "floating point other than integer division's"),
+    "a 16-bit division converting its dividend both ways": (changed(SM120, "leaf_pass64_kernel", body=SM120[
+        "leaf_pass64_kernel"][4] + ["I2F.U16.RZ R0, R0"]), "floating point other than integer division's"),
 }
+
+
+def test_each_division_form_has_a_mark_no_other_form_holds():
+    for form, mark in sass_gate.DIV_OF.items():
+        assert [f for f, ops in sass_gate.DIV.items() if mark in ops] == [form], (form, mark)
 
 
 @pytest.mark.parametrize("case", [*REFUSED, *(f"sm_120a: {c}" for c in REFUSED_120)])

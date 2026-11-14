@@ -74,13 +74,17 @@ ARCHS = {
 }
 CAP = 128
 COUNTS = {"LDL": r"\bLDL\b", "STL": r"\bSTL\b"}
-#: the float instructions of the compiler's unsigned division by a runtime divisor, by the divisor's width; a form's
-#: truncation (`DIV_OF`) is in no other. A uniform register's instruction (UI2F, UFMUL) counts as its plain one.
+#: the float instructions of the compiler's unsigned division by a runtime divisor, by the divisor's width (`u16_13`:
+#: CUDA 13.0's 16-bit form, its dividend converted as a u32); a form's mark (`DIV_OF`) is in no other: its truncation,
+#: or for the two 16-bit forms, which share theirs, the dividend's conversion. A uniform register's instruction (UI2F,
+#: UFMUL) counts as its plain one.
 DIV = {"u32": {"I2F.U32.RP": 1, "MUFU.RCP": 1, "F2I.FTZ.U32.TRUNC.NTZ": 1},
        "u64": {"I2F.U64.RP": 1, "MUFU.RCP": 1, "F2I.U64.TRUNC": 1},
        "u16": {"I2F.U16": 1, "I2F.U16.RZ": 1, "MUFU.RCP": 1, "FMUL": 2, "FMUL.RZ": 1, "FSEL": 2, "FSETP.GEU.AND": 1,
-               "FSETP.GT.AND": 1, "F2I.U32.TRUNC.NTZ": 1}}
-DIV_OF = {"u32": "F2I.FTZ.U32.TRUNC.NTZ", "u64": "F2I.U64.TRUNC", "u16": "F2I.U32.TRUNC.NTZ"}
+               "FSETP.GT.AND": 1, "F2I.U32.TRUNC.NTZ": 1},
+       "u16_13": {"I2F.U16": 1, "I2FP.F32.U32.RZ": 1, "MUFU.RCP": 1, "FMUL": 2, "FMUL.RZ": 1, "FSEL": 2,
+                  "FSETP.GEU.AND": 1, "FSETP.GT.AND": 1, "F2I.U32.TRUNC.NTZ": 1}}
+DIV_OF = {"u32": "F2I.FTZ.U32.TRUNC.NTZ", "u64": "F2I.U64.TRUNC", "u16": "I2F.U16.RZ", "u16_13": "I2FP.F32.U32.RZ"}
 _OP = re.compile(r"\s*/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][\w.]*)\s*([^;]*?)\s*;")
 _FLOAT = re.compile(r"U?(?:I2FP?|F2[IF]P?|MUFU|F(?:ADD|MUL|FMA|CMP|SETP?|SEL|MNMX|CHK|SWZADD|RND)|"
                     r"D(?:ADD|MUL|FMA|SETP|MNMX)|H(?:ADD|MUL|FMA|SETP?|MNMX)2)(?:\.|$)")
