@@ -186,7 +186,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   which the docket check takes (`declared`), so R2 refuses a program other than the day's declared one; a negative
   moves the day's declaration to another program (``program-not-the-days-declared``). The stream doesn't take them.
 * **The negatives at once.** The negatives that ask the verifier again once the audit record is decided (the coins',
-  the registration's R2 to R4 and its history root's, the transfer gates', the audit record's) run one after another in
+  the docket's R2 to R4 and its history root's, the transfer gates', the audit record's) run one after another in
   the audit's process, or with ``--negative-workers N`` up to N at once, each in a worker process forked from the audit
   with a Lean verifier process of its own, started only while its memory estimate, read when the workers start, fits
   the audit's memory (`NegativeWorkers`); Lean's on a sampled chunk's session (`registered_negatives`) then run that
@@ -2069,7 +2069,7 @@ def _work(fn: Callable[[], dict[str, dict]], send: Any, audit: int) -> None:
 
 
 class NegativeWorkers:
-    """The audit's negatives that re-decide with one input altered (the coin negatives, the registration's, the audit
+    """The audit's negatives that re-decide with one input altered (the coin negatives, the docket's, the audit
     record's), each a task: a function of no arguments that returns its entries by name. With one worker, the default,
     a task runs where it is submitted, in the audit's own process, so the negatives run in the order the audit reaches
     them. With more, the tasks wait for `run`, which gives each a worker process of its own forked from the audit, at

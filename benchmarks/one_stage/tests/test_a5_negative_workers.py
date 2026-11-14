@@ -16,7 +16,7 @@
   fix, and the audit's summary is written with it; the threads read before the first fork are printed and in the
   timing whether or not the run is refused;
 * the negatives' file is byte for byte the same with one worker and with several, on the toy window's coin negatives,
-  the registration's and the audit record's, each decided by the Lean and the Python, and a negative that isn't refused
+  the docket's and the audit record's, each decided by the Lean and the Python, and a negative that isn't refused
   is its entry's ``refused: false`` either way;
 * the registered reads' negatives, each a verify of its own, are the same entries in the same order on a pool of several,
   where every case's files are put in the session's archive before any case is verified, so no put writes an object a
@@ -275,7 +275,7 @@ ENDS = "import os, signal, sys; sys.stdin.readline(); os.kill(os.getpid(), signa
 
 
 def test_a_workers_lean_process_that_ends_without_an_answer_ends_the_run_and_refuses_no_negative(monkeypatch):
-    """The toy window's honest registration, nothing altered, checked as a5's ``registration`` task records it, by two
+    """The toy window's honest docket, nothing altered, checked as a5's ``registration`` task records it, by two
     workers whose every Lean verifier process ends on its first request without an answer (`ENDS`, a Python started
     where the verifier starts its executable). The run ends with `NegativeFailed`, the worker's error saying Lean gave
     no answer, and no entry exists: no negative is refused because a Lean process ended. Taken as Lean's refusal, as
@@ -328,7 +328,7 @@ def test_a_refusal_that_is_leans_own_answer_is_still_a_refusal_in_a_worker(tmp_p
 
 def _negatives_file(out: Path, n: int, passing: bool = False) -> bytes:
     """The toy window's negatives through `a5.NegativeWorkers` with ``n`` workers, written as a5 writes its
-    ``negatives.json``: each coin negative its own stream (`test_a5_memo._negatives`'s), the registration's with its
+    ``negatives.json``: each coin negative its own stream (`test_a5_memo._negatives`'s), the docket's with its
     program one proof block fewer (R2), its ports bound to another run (R3) and another leaf layer (R4), the audit
     record's re-decisions (`a0.audit_negatives`) and, between them, entries the audit makes itself. ``passing``: the R3
     task checks the honest ports instead, a negative that isn't refused."""
@@ -375,7 +375,7 @@ def test_the_negatives_file_is_byte_for_byte_the_same_with_one_worker_and_with_s
     """The same negatives, each decided by the Lean and the Python on the toy window, with one worker (each in this
     process, as it is submitted) and with four (side by side, each in a worker with its own Lean process), with and
     without the memo: the file a5 writes is the same bytes, every negative refused. A negative that isn't refused
-    (the registration checked on its honest ports) is ``refused: false`` in the file either way, the same bytes
+    (the docket checked on its honest ports) is ``refused: false`` in the file either way, the same bytes
     again, which fails the audit as it does today."""
     one = _negatives_file(tmp_path / "one", 1)
     assert _negatives_file(tmp_path / "four", 4) == one
