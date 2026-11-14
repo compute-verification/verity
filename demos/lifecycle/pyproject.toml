@@ -21,6 +21,6 @@ inputs = [
 [[tool.verity.tests.reads]]
 tests = ["tests/test_lifecycle.py"]
 paths = [
-    "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/theta_difftest_vectors.py",
-    "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/difftest_vectors.py",
+    "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/theta_difftest_vectors.py",
+    "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/difftest_vectors.py",
 ]
