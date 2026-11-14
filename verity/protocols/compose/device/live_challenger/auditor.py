@@ -245,6 +245,78 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
   `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
+- **A relay session** (`relay-session`, a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with
+  the rehearsals): the network certifier's relay kept up here, as the auditor's device, for a served run's own load.
+  The gate sends no request and runs no client: the clients are the served run's, on the peer, and a connection's
+  path is client ──cells──▶ the peer's 127.0.0.1:CLIENT_PORT ──tunnel──▶ the relay (here) ──tunnel──▶ the peer's
+  127.0.0.1:PORT. What follows is the contract a runner of another lane reads.
+  - *The verb.* `relay-session --peer NAME --port PORT --client-port PORT --windows N --minutes M [--bucket-ms MS]
+    [--scan-class CLASS] [--watermark] [--height H]`. `--peer`, `--port`, `--minutes`, `--bucket-ms`, `--scan-class`,
+    `--watermark` and `--height` are a scan rehearsal's, read and bounded by the same code (`parse_warden`). It takes
+    none of a rehearsal's traffic (`--requests`, `--tokens`, `--prompts`, `--window-per-group`, `--temperature`,
+    `--top-p`). The schedule is always the scan's, at the request's tick and class (`scan_schedule`), in the id egress
+    form: the one the certifier's piece reads. `--client-port` is a port of the peer's loopback, 1024 to 65535, not
+    `--port` and none of the challenge links' (`PORTS`). `--windows` is the session's length in execution phases,
+    1 to the most a rehearsal runs (`SESSION_WINDOWS`), fixed at the start.
+  - *Start.* The gate refuses the request while a rehearsal or another session runs, a key whose height can't sign
+    the session's execution phases (`warden_height`: `--height`, the deployed key's by default) and `--minutes`
+    under `session_minutes` (the execution phases' span, the key's generation and the check). It writes
+    `request.json` (the request, `client_port` and `windows` in it) and starts the rehearsal's unit; the reply, at
+    once, is the request with `run` and `unit`.
+  - *How long a session can be.* Its execution phases last windows · T · τ, T the scan's 32 buckets an execution
+    phase and τ its tick (`--bucket-ms`: 100 ms unless given, at most 4000). Two bounds hold it: `--windows` is at
+    most 1119 (`SESSION_WINDOWS`), and `--minutes` at most the gate's 170 (`CERTIFIER_MINUTES`), of which the start
+    and the check take three and the key one second each 4096 of its signatures (`session_minutes`). With the least
+    height that signs the execution phases (`warden_height`: 13 for 1119), the longest session at each tick is
+    - τ = 100 ms (an execution phase 3.2 s): 1119 execution phases, 59 min 40 s, `--minutes 63`;
+    - τ = 200 ms (6.4 s): 1119 execution phases, 119 min 21 s, `--minutes 123`;
+    - τ = 250 ms (8 s): 1119 execution phases, 149 min 12 s, `--minutes 153`;
+    - τ = 280 ms to 4000 ms: the gate's 170 minutes bound it, at the whole execution phases in 167 minutes less the
+      key's seconds, whatever the tick: 313 of them, 166 min 56 s, at 1000 ms; 78, 166 min 24 s, at 4000 ms.
+
+    Up to τ = 279 ms the 1119 execution phases are the bound, 59 min 40 s · τ / 100 ms. At the deployed key's
+    height, 20 (the default), the key takes four minutes more: `--minutes 67` at 100 ms, and from 273 ms the whole
+    execution phases in 162 min 44 s. The relay listens only once its key is made, so a load that must start soon
+    gives the least `--height` its `--windows` need. A load's last connection is admitted `WardenParams.span` + 1
+    buckets before the end ("End", and the runner's "A session").
+  - *The unit* opens one ssh to the peer with the auditor's tunnel key, which carries both forwards: a rehearsal's
+    `-L`, from a free port here to the endpoint's PORT, and a `-R`, from the peer's 127.0.0.1:CLIENT_PORT to the
+    relay's listener, a free port of the loopback here (`forward_argv`). It then runs
+    `benchmarks/network_traces/warden_serve.py session`: the key, the relay for exactly `--windows` execution phases,
+    and the check.
+  - *Where a client connects.* 127.0.0.1:CLIENT_PORT on the peer, one TCP connection a request, speaking the
+    relay's cells both ways (the relay's module, named above: `cells` sending, `Shim` reading) at the schedule the
+    deployment names. The port answers only while the unit's ssh is up: a connection refused there is the forward
+    down, and the run's `tunnel.log` says why.
+  - *Ready.* `status RUN` carries `relay`: null until the relay listens, then `{"client": "127.0.0.1:CLIENT_PORT",
+    "deployment": {...}}`, the relay's `deployment.json` as the run publishes it (its key, the session, the schedule,
+    `origin_unix`, `windows`, the run id). Bucket 0 starts at the origin, a few seconds after the relay listens; a
+    connection made before it waits in the relay's queue, which holds the schedule's `queue` and refuses the next.
+  - *End.* The relay stops when its `--windows` execution phases have run, windows · T · τ after the origin. The
+    runner then checks the run, the unit closes the ssh, publishes and writes `end.json`; `status RUN` then carries
+    `end` and `fetch RUN` gives the run. No verb ends a session early: its length is in the deployment before its
+    first execution phase, its key is sized to it and the check counts it. A unit stopped at `--minutes` first is a
+    failed run, as a rehearsal's.
+  - *What it publishes* is a rehearsal's, by the same code (`warden_outcome`): to `out/`, the relay's key, session
+    and schedule and each execution phase's certificates and registrations, and in `end.json` the check's verdict and
+    counts; in `witness/`, for the run's own lane and vy-admin alone, the three records, their heads and salts, the
+    cells' salts, the relay's log and the check. The gate holds no traffic and no client's log, so the check
+    (`warden_serve.py check`) reads the records, their certificates, the registrations and the audit, and nothing of
+    what a client received: the end's `requests`, `ended` and `cells_in_their_bucket` count none. A client holds its
+    own log to the run's `fetch`.
+  - *A connection open at the session's end is cut.* One still in the queue is closed with no cell and is in no
+    record. One admitted at bucket s and cut before s + D has its ingress cells in the record (its request may have
+    been released to the endpoint) and no answer cell, and the check refuses nothing for it. One cut at or after
+    s + D, with no `END` or `FAIL`, makes the check refuse the execution phase of its admission, so the run isn't
+    accepted. A connection admitted by bucket windows · T − span − 1 ends inside the session (`WardenParams.span`:
+    D + ⌊(egress cells − 1) / r⌋ buckets).
+  - *One verdict.* The check's verdict is the whole session's, whichever client a connection was: one connection
+    the relay failed closed, for its client's bytes (ingress past the schedule's bounds, or a malformed cell) or for
+    the endpoint's (an answer late, past its cells, not in the id form, or its connection failing), one refused at a
+    full queue, one cut at or after s + D, or one execution phase the relay faulted, and the run isn't accepted.
+  - *What it establishes.* The session's records cover the connections that crossed the relay, each cell in its
+    bucket. That nothing else reaches the endpoint is not the relay's to say: it is the placement's, and the
+    developer's forward's.
 - **The load** (a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with the
   rehearsals): the demo's weights, plain INT8 as interface 1 generates them from its public seed, sit on this
   host's store disk (`/var/lib/vy-challenger/store`, `Host.store`, its own mount, `auditor`'s) and are relayed to the
@@ -1416,15 +1488,17 @@ def parse_varied(a: argparse.Namespace, minutes: int, requests: int) -> dict:
     return given
 
 
-def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host) -> argparse.Namespace:
+def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host, *,
+                     sampled: bool = True) -> argparse.Namespace:
     """A rehearsal verb's arguments, with the three every rehearsal takes, `--temperature` and `--top-p`
     (`a.sampling`) and `--height` (`a.height`, the deployed key's by default), refused (with the verb's usage) when they
-    don't parse, `--peer` isn't a peer or the sampling or the height is out of its bounds."""
+    don't parse, `--peer` isn't a peer or the sampling or the height is out of its bounds. A verb that sends no
+    request (a relay session, `sampled` false) takes no sampling: `a.sampling` is empty."""
     def refuse(why: object) -> None:
         raise Refused(f"{p.prog.split()[-1]}: {why}; {' '.join(p.format_usage().split())}")
 
-    p.add_argument("--temperature", default="0")
-    p.add_argument("--top-p", default="1")
+    for flag, default in (("--temperature", "0"), ("--top-p", "1")) if sampled else ():
+        p.add_argument(flag, default=default)
     p.add_argument("--height", default=str(REHEARSAL_HEIGHT[1]))
     p.error = refuse
     try:
@@ -1433,7 +1507,7 @@ def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host) ->
         refuse(e)
     if a.peer not in peers(host):
         raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
-    a.sampling = sampling(a.temperature, a.top_p)
+    a.sampling = sampling(a.temperature, a.top_p) if sampled else {}
     a.height = bounded("--height", a.height, *REHEARSAL_HEIGHT)
     return a
 
@@ -1543,7 +1617,40 @@ def warden_group_minutes(groups: int, tokens: int, height: int = REHEARSAL_HEIGH
     return _minutes(-(-groups * scan_group_windows(tokens) * SCAN["--window"] * bucket_ms // 1000), height)
 
 
-def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
+#: a relay session's `--windows`, its length in execution phases: at most what the gate's longest rehearsal runs
+#: (`warden_windows` of `WARDEN_REQUESTS`' most), so a session's key and records are no larger than a rehearsal's
+SESSION_WINDOWS = (1, warden_windows(WARDEN_REQUESTS[1]))
+
+
+def session_minutes(windows: int, height: int = REHEARSAL_HEIGHT[1],
+                    window_ms: int = SCAN["--window"] * SCAN["--bucket-ms"]) -> int:
+    """The fewest minutes a relay session of `windows` execution phases of `window_ms` takes: `warden_minutes` with
+    their span in place of the arrivals, so its start, its check and its key at `height` as a rehearsal's."""
+    return _minutes(-(-windows * window_ms // 1000), height)
+
+
+def session_request(a: argparse.Namespace, port: int, minutes: int, window_ms: int) -> dict:
+    """A relay session's request, less its schedule's flags: `--client-port`, the port of the peer's loopback its
+    clients connect to (not the endpoint's, and none of the challenge links', which the peer's ssh forwards already),
+    and `--windows` (`SESSION_WINDOWS`) execution phases of `window_ms`, refused when the key at `--height` can't
+    sign them (`warden_height`) or `--minutes` is under `session_minutes` of them."""
+    client = bounded("--client-port", a.client_port, 1024, 65535)
+    if client == port or client in PORTS:
+        raise Refused(f"--client-port {client}: a port of the peer's loopback for the relay's clients, not the "
+                      f"endpoint's --port and none of the challenge links' ({PORTS[0]} to {PORTS[-1]})")
+    windows = bounded("--windows", a.windows, *SESSION_WINDOWS)
+    if a.height < (least := warden_height(windows)):
+        raise Refused(f"--height {a.height}: the key's {1 << a.height} one-time signatures don't sign {windows} "
+                      f"execution phases: give --height {least} or more, or fewer --windows")
+    if minutes < (least := session_minutes(windows, a.height, window_ms)):
+        raise Refused(f"--minutes {minutes}: {windows} execution phases of {window_ms} ms take {least} minutes "
+                      f"(their span, the start, the check and the key at height {a.height}): give --minutes {least} "
+                      f"or more, or fewer --windows")
+    return {"device": "warden", "peer": a.peer, "port": port, "client_port": client, "windows": windows,
+            "minutes": minutes, "height": a.height, "scan": True}
+
+
+def parse_warden(argv: list[str], host: Host, *, load: bool = False, session: bool = False) -> dict:
     """A warden rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
     `warden_minutes` of its requests and height), how many requests its traffic sends, when given the most tokens a
     request asks for (`warden_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic) with, when
@@ -1553,26 +1660,38 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     schedule, prompt ids and tokens), and `--window-per-group` (with `--prompts`) sends them a group a link-window's
     span; `warden_prompts` reads them and checks what depends on them. `--watermark` (recorded only when given) sends
     the endpoint the watermark stream. With `load` (`load-relay`) it is the serving session with its load first
-    (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before the rehearsal's."""
-    p = argparse.ArgumentParser(prog=f"vy-challenger-gate {'load-relay' if load else 'warden-rehearse'}",
-                                exit_on_error=False, add_help=False, allow_abbrev=False)
+    (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before the rehearsal's. With
+    `session` (`relay-session`, the module docstring's "A relay session") it is the relay kept up for clients that
+    aren't its own: none of the traffic's flags or the sampling, always the scan's schedule (``scan``, at
+    `--bucket-ms` and `--scan-class` when given), and `--client-port` and `--windows` (`session_request`)."""
+    verb = "relay-session" if session else "load-relay" if load else "warden-rehearse"
+    p = argparse.ArgumentParser(prog=f"vy-challenger-gate {verb}", exit_on_error=False, add_help=False,
+                                allow_abbrev=False)
+    def traffic(flag: str, **how: Any) -> None:
+        if not session:
+            p.add_argument(flag, **how)
+
     p.add_argument("--peer", required=True)
     p.add_argument("--port", required=True)
     p.add_argument("--minutes", required=True)
-    p.add_argument("--requests", default=None)
-    p.add_argument("--tokens", default=None)
-    p.add_argument("--scan", action="store_true")
+    traffic("--requests", default=None)
+    traffic("--tokens", default=None)
+    traffic("--scan", action="store_true")
     p.add_argument("--bucket-ms", default=None)
-    p.add_argument("--prompts", action="store_true")
+    traffic("--prompts", action="store_true")
     p.add_argument("--scan-class", default=None)
-    p.add_argument("--window-per-group", action="store_true")
+    traffic("--window-per-group", action="store_true")
     p.add_argument("--watermark", action="store_true")
+    if session:
+        p.add_argument("--client-port", required=True)
+        p.add_argument("--windows", required=True)
+        p.set_defaults(scan=True, prompts=False, window_per_group=False)
     if load:
         p.add_argument("--sink-port", required=True)
         p.add_argument("--program", required=True)
         p.add_argument("--shape", default=LOAD_SHAPES[0])
         p.add_argument("--streams", default=str(LOAD_DEFAULT_STREAMS))
-    a = _parse_rehearsal(p, argv, host)
+    a = _parse_rehearsal(p, argv, host, sampled=not session)
     port = bounded("--port", a.port, 1024, 65535)
     minutes = bounded("--minutes", a.minutes, *CERTIFIER_MINUTES)
     if a.prompts and not a.scan:
@@ -1581,13 +1700,16 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
         raise Refused("--bucket-ms: the scan's tick, with --scan")
     if a.window_per_group and not a.prompts:
         raise Refused("--window-per-group: groups of the --prompts")
-    if a.scan_class is not None and not a.prompts:
+    if a.scan_class is not None and not (a.prompts or session):
         raise Refused("--scan-class: the scan's class of the --prompts")
     if a.scan_class is not None and a.scan_class not in SCAN_CLASSES:
         raise Refused(f"--scan-class {a.scan_class!r}: one of {sorted(SCAN_CLASSES)}")
     tick = {} if a.bucket_ms is None else {"bucket_ms": bounded("--bucket-ms", a.bucket_ms, *SCAN_BUCKET_MS)}
     loaded = {"load": parse_load(a, host, port)} if load else {}
     watermark = {"watermark": True} if a.watermark else {}
+    if session:
+        cls = {} if a.scan_class is None else {"scan_class": a.scan_class}
+        return session_request(a, port, minutes, warden_window_ms({"scan": True} | tick)) | tick | cls | watermark
     spent = loaded["load"]["minutes"] if load else 0
     if minutes <= spent:
         raise Refused(f"--minutes {minutes}: the {loaded['load']['shape']} load takes {spent} minutes (its weights "
@@ -1737,9 +1859,11 @@ def certifier_prompts(req: dict, data: bytes) -> bytes:
 
 
 #: each verb the rehearsal unit runs, its request parser: the two rehearsals, the load (a warden rehearsal with its
-#: load first) and the store's write
+#: load first), the store's write and the relay session (the relay of a network certifier rehearsal, kept up for
+#: clients that aren't its own)
 REHEARSALS = {"certifier-rehearse": parse_certifier, "warden-rehearse": parse_warden,
-              "load-relay": lambda argv, host: parse_warden(argv, host, load=True), "weights-write": parse_weights}
+              "load-relay": lambda argv, host: parse_warden(argv, host, load=True), "weights-write": parse_weights,
+              "relay-session": lambda argv, host: parse_warden(argv, host, session=True)}
 
 
 def certifier_runs(host: Host) -> list[str]:
@@ -1791,7 +1915,19 @@ def certifier_status(run: str, host: Host, active: Callable[[str], bool]) -> dic
     def read(path: Path) -> dict | None:
         return json.loads(path.read_text()) if path.is_file() else None
     end = read(d / "end.json")
-    return {"run": run, "request": read(d / "request.json"), "end": end, "active": end is None and active(run)}
+    status = {"run": run, "request": read(d / "request.json"), "end": end, "active": end is None and active(run)}
+    return status | {"relay": session_relay(d, status["request"])} if "client_port" in status["request"] else status
+
+
+def session_relay(d: Path, req: dict) -> dict | None:
+    """What a relay session's `status` says of its relay once it listens, None before: where a client connects on
+    the peer, and the relay's `deployment.json`, which the run publishes at its end and is in `witness/` until then
+    (a file read half-written is not there yet)."""
+    for at in (d / "out", d / WITNESS):
+        with suppress(OSError, ValueError):
+            deployment = json.loads((at / "deployment.json").read_text())
+            return {"client": f"127.0.0.1:{req['client_port']}", "deployment": deployment}
+    return None
 
 
 def certifier_fetch(run: str, host: Host, *, witness: bool = False) -> bytes:
@@ -1830,6 +1966,8 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "| weights-write [--shape h200|tiny] "
          "| load-relay --peer NAME --port PORT --sink-port PORT --program SHA512 --minutes M [--shape h200|tiny] "
          "[--streams N] [warden-rehearse's flags] (a lane's own gate key, or vy-admin) "
+         "| relay-session --peer NAME --port PORT --client-port PORT --windows N --minutes M [--bucket-ms MS] "
+         "[--scan-class CLASS] [--watermark] [--height H] (a lane's own gate key, or vy-admin) "
          "| status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN")
 
 
@@ -1948,8 +2086,8 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
             doc = gate_model_key(rest, host)
         elif verb in REHEARSALS:
             if by is None:
-                what = {"load-relay": "a load", "weights-write": "the store's write"}.get(
-                    verb, f"a {verb.removesuffix('-rehearse')} rehearsal")
+                what = {"load-relay": "a load", "weights-write": "the store's write",
+                        "relay-session": "a relay session"}.get(verb, f"a {verb.removesuffix('-rehearse')} rehearsal")
                 raise Refused(f"this key reads only: {what} is started with a lane's own gate key, or by vy-admin")
             doc = gate_certifier(rest, host, by=by, now=now, token=hooks.get("token") or secrets.token_hex(2),
                                  start=hooks.get("start_certifier") or start_certifier_unit,
@@ -2427,7 +2565,7 @@ def certifier_env(tree: Path = TREE) -> dict[str, str]:
 
 
 def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: list[tuple[str, int]] = (),
-                   store: Path | None = None) -> list[str]:
+                   store: Path | None = None, listen: int | None = None) -> list[str]:
     """`warden_serve.py rehearse` of the request: the warden and its client here, the warden's upstream the endpoint
     at `url` (the tunnel's local end), its key at the request's height (`height_argv`), the request's number of
     requests on the gate's traffic (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`),
@@ -2436,11 +2574,18 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     (`--window-per-group`) when the request says so, the watermark stream (`--watermark`) when it says so, and the most
     tokens a request asks for only when the request has it. A `load-relay` request's load goes first: the `store`'s
     stream of its shape relayed to `sinks` (the sink tunnels' local ends) for its program, the endpoint given
-    `LOAD_READY_S` to come up after it."""
+    `LOAD_READY_S` to come up after it. A relay session's request (it has ``client_port``) runs `warden_serve.py
+    session` instead: the relay alone, with no client and no traffic, listening on this host's 127.0.0.1:`listen`
+    (where the peer's clients' forward ends) for the request's execution phases, its upstream, key, schedule and
+    watermark as a scan rehearsal's."""
     scan = ["--ids", *scan_schedule(req.get("bucket_ms"), req.get("scan_class"))] if req.get("scan") else []
     prompts = ["--prompts", str(out / PROMPTS)] if req.get("prompts") else []
     grouped = ["--window-per-group"] if req.get("window_per_group") else []
     watermark = ["--watermark"] if req.get("watermark") else []
+    if "client_port" in req:
+        return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "session",
+                "--upstream", url.removeprefix("http://"), "--listen", f"127.0.0.1:{listen}", "--out", str(out),
+                *height_argv(req), "--windows", str(req["windows"]), *scan[1:], *watermark]
     given = ["--max-tokens", str(req["tokens"])] if "tokens" in req else []
     load = req.get("load")
     loaded = [] if not load else ["--load-store", str(store), "--load-shape", load["shape"], "--load-sinks",
@@ -2502,9 +2647,27 @@ def warden_outcome(out: Path, witness: Path) -> dict:
             **({} if load is None else {"load": load})}
 
 
-def forward_argv(ssh: list[str], local: int, remote: int) -> list[str]:
-    """The tunnel from this host's 127.0.0.1:`local` to 127.0.0.1:`remote` on the peer `ssh` reaches."""
-    return [*TUNNEL_SSH, "-L", f"127.0.0.1:{local}:127.0.0.1:{remote}", *ssh]
+def forward_argv(ssh: list[str], local: int, remote: int, back: tuple[int, int] | None = None) -> list[str]:
+    """The tunnel from this host's 127.0.0.1:`local` to 127.0.0.1:`remote` on the peer `ssh` reaches, and with `back`
+    (a relay session's: the peer's port, then this host's) the same ssh's forward from the peer's 127.0.0.1:`back[0]`
+    to this host's 127.0.0.1:`back[1]`. `TUNNEL_SSH` exits when the peer refuses either."""
+    reverse = [] if back is None else ["-R", f"127.0.0.1:{back[0]}:127.0.0.1:{back[1]}"]
+    return [*TUNNEL_SSH, "-L", f"127.0.0.1:{local}:127.0.0.1:{remote}", *reverse, *ssh]
+
+
+def _listening(command: Callable[..., list[str]], listen: int) -> Callable[..., list[str]]:
+    """`command` (`warden_command`) for a relay session whose relay listens on this host's 127.0.0.1:`listen`."""
+    return lambda *a: command(*a, listen=listen)
+
+
+def _stop_with(tunnel: subprocess.Popen, proc: subprocess.Popen) -> None:
+    """Stops a relay session's runner `proc` once its `tunnel` exits, if it still runs: its clients reach the relay
+    through that ssh alone, so a session nobody can reach ends there and says so, rather than run out its
+    execution phases holding the unit."""
+    tunnel.wait()
+    if proc.poll() is None:
+        with suppress(ProcessLookupError):
+            os.killpg(proc.pid, signal.SIGTERM)
 
 
 def _local_ports(n: int) -> list[int]:
@@ -2516,13 +2679,15 @@ def _local_ports(n: int) -> list[int]:
 
 
 def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], datetime],
-                  tunnel_argv: Callable[[list[str], int], list[str]] | None = None,
+                  tunnel_argv: Callable[..., list[str]] | None = None,
                   sink_argv: Callable[[list[str], int, int], list[str]] | None = None,
                   up: Callable[[subprocess.Popen, int], bool] = tunnel_up,
                   command: Callable[..., list[str]] | None = None,
                   wait: Callable[[subprocess.Popen, float], int] | None = None) -> dict:
     """Run the requested rehearsal (the module docstring's "A certifier rehearsal", "A warden rehearsal" and "The
-    load"), as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
+    load") or relay session ("A relay session": a network certifier rehearsal's relay alone, where the same ssh also
+    brings the peer's clients to its listener, `tunnel_argv`'s third argument, and the session is stopped when that
+    ssh exits), as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
     `end.json`. A warden rehearsal writes to `witness/`, and its public outcome (`warden_outcome`) to `out/` and the
     end. A store's write opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries
@@ -2545,9 +2710,14 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
         work.mkdir(mode=0o700, exist_ok=True)
     sys.path.insert(0, str(HERE))
     import serve
-    local, *sinks = _local_ports(1 + (load["streams"] if load else 0))
+    kept = "client_port" in req
+    local, *sinks = _local_ports(1 + (load["streams"] if load else 0) + kept)
     ssh = serve.peer_ssh(host.peers, req["peer"])
-    argv = (tunnel_argv or (lambda ssh, local: forward_argv(ssh, local, req["port"])))(ssh, local)
+    back = ()
+    if kept:  # a relay session: the same ssh brings the peer's clients to the relay's listener, a free port here
+        listen = sinks.pop()
+        back, command = ((req["client_port"], listen),), _listening(command, listen)
+    argv = (tunnel_argv or (lambda ssh, local, *back: forward_argv(ssh, local, req["port"], *back)))(ssh, local, *back)
     rc, why, tunnels = 2, None, []
     with open(out / "tunnel.log", "wb") as log:
         tunnels.append(subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
@@ -2565,9 +2735,14 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
                 proc = subprocess.Popen(command(req, work, f"http://127.0.0.1:{local}", **to), stdin=subprocess.DEVNULL,
                                         stdout=log, stderr=subprocess.STDOUT, env=certifier_env(),
                                         start_new_session=True)
+            if kept:
+                threading.Thread(target=_stop_with, args=(tunnels[0], proc), daemon=True).start()
             rc = (wait or _wait)(proc, req["minutes"] * 60)
             if rc == -signal.SIGTERM:
                 why = f"stopped at --minutes {req['minutes']}"
+            if kept and tunnels[0].poll() is not None:
+                rc, why = rc or 2, (f"the tunnel to {req['peer']} closed before the session ended, and with it the "
+                                    "clients' way to the relay and the relay's to the endpoint (tunnel.log)")
     finally:
         for tunnel in tunnels:
             tunnel.terminate()
@@ -2584,6 +2759,8 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
                                 "audit": r.get("audit_accepted"), "salt": r.get("salt_accepted"),
                                 "salt_again": r.get("salt_again")}
                             for s, r in summary.get("runs", {}).items()}}
+    if kept and why is None:
+        why = "the session ended" if rc == 0 else f"the session exited {rc}"
     return _end(d, rc, why, outcome, pinned=pinned, now=now)
 
 
