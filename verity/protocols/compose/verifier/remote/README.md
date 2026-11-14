@@ -14,8 +14,8 @@ verifier from its three subprotocols' targets (`Vocab.SpotSound`, `PouwSound`, `
 premise until proved at remote.
 
 This file is an outline with signposts; the Lean is the definition. The vocabulary is `ARCHITECTURE.md`'s
-Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `Slowdown*` means
-overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window*` a period.
+Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `*Horizon` means a
+monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window*` a period.
 
 **Which "remote".** Five things in the tree are called "remote", and this page means the first:
 
