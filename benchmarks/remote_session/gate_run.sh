@@ -34,6 +34,8 @@
 # gate.sh's, under that machine's user's ~/.ssh), PROVER_SSH how GATE_ON reaches PROVER_NODE to read its lease (empty:
 # GATE_ON's /etc/vy/peers line), MAXMIN the prover's `gpu-lease --max-min` (a lease that would run into a booked window
 # of the node's waits it out), CHECKPOINT=0 skips step 1 and GATE_MEM=0 reserves no memory for the gate steps or whatif.
+# GATE_POOL (default research; empty: none) is the pool of GATE_ON's and WHATIF_ON's check slots the gate steps and
+# whatif run in (`research run --pool`), the one way a machine with /etc/vy/runs-via-slot takes a run.
 # LEASE_ON names the GPUs the prover leases (`gpu-lease --on`, default any ENGINES free ones) and LEASE_MEM_GB its host
 # memory (default 32 GB an engine and HOST_GIB more). HOST_GIB (whole GiB, default 0: none) is the store's host part,
 # the node's `--host-gib`: host memory the prover holds beside the cards' and reads in every pass, split among the
@@ -91,7 +93,9 @@ need VY_CHALLENGER_1_HOST "the challenger host"
 need VY_AUDITOR_1_HOST "the verifier host"
 [ -n "${PROVER_SSH+given}" ] || need VY_NEBIUS_2_HOST "the prover's node, or PROVER_SSH (empty: GATE_ON's /etc/vy/peers line)"
 PROVER_SSH=${PROVER_SSH--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@${VY_NEBIUS_2_HOST:-}}
-MAXMIN=${MAXMIN:-90} CHECKPOINT=${CHECKPOINT:-1} GATE_MEM=${GATE_MEM:-1}
+MAXMIN=${MAXMIN:-90} CHECKPOINT=${CHECKPOINT:-1} GATE_MEM=${GATE_MEM:-1} GATE_POOL=${GATE_POOL-research}
+POOL=()
+[ -z "$GATE_POOL" ] || POOL=(--pool "$GATE_POOL" --as memory-accounting)
 WHATIF_ON=${WHATIF_ON:-vy-nebius-cpu-4}
 ROLE=${ROLE:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} PORT=${PORT:-7951}
 HOST_GIB=${HOST_GIB:-0}
@@ -175,7 +179,7 @@ gate_step() {
   local name=$1 verb=$2 mem=(--mem-gb "$3" --mem-wait 3600)
   shift 3
   [ -z "$DRY" ] && [ "$GATE_MEM" != 0 ] || mem=()
-  launch "$name" --on "$GATE_ON" --cwd clone --send "$HERE/gate.sh" --send "$HERE/main_line.sh" "${GATE_ENV[@]}" \
+  launch "$name" --on "$GATE_ON" "${POOL[@]}" --cwd clone --send "$HERE/gate.sh" --send "$HERE/main_line.sh" "${GATE_ENV[@]}" \
     "${mem[@]}" "$@" -- bash -lc "bash \"\$RESEARCH_RUN_DIR/inputs/gate.sh\" $verb"
 }
 
@@ -194,7 +198,7 @@ if [ "$VERB" = whatif ]; then
   PROVER_ART=${PROVER_ART:-$(art "$prover")} || { echo "no artifact for $prover yet"; exit 3; }
   WM=(--mem-gb 16)
   [ "$GATE_MEM" != 0 ] || WM=()
-  launch whatif --on "$WHATIF_ON" --cwd clone "${WM[@]}" --timeout 30m --store-read --wait \
+  launch whatif --on "$WHATIF_ON" "${POOL[@]}" --cwd clone "${WM[@]}" --timeout 30m --store-read --wait \
     --env "RUN_ART=$RUN_ART" --env "SUB=${SUB:?}" --env "AUDITOR_ART=$AUDITOR_ART" --env "PROVER_ART=$PROVER_ART" \
     --env "PERIOD=$PERIOD" --env "PIN=$PIN" --env "COMMIT=$COMMIT" -- bash benchmarks/remote_session/gate_whatif.sh
   exit $?
