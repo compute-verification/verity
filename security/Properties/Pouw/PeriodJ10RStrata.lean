@@ -243,7 +243,7 @@ def H1J10RCheckedCreditPeriodStrata : Prop :=
       tileLuck Sc (Cd s) (tileCount σ s) t ≤ 7 / 8 ∧ tileLuck0 Sc (Cd s) (tileCount σ s) t ≤ 1 / 2) →
     (∀ s ∈ S, (Pl s).game =
       monitoringPeriodGame (tileStage (Cd s) (tileCount σ s)) (liveCone Sc (Cd s) (tileCount σ s)) 1 1 (k s) (Wp s)) →
-    (∀ s ∈ S, (Wp s).EveryWindow (fun live _ => DeadConeDead Sc (Cd s) (tileCount σ s) live)) →
+    (∀ s ∈ S, (Wp s).EveryExecutionPhase (fun live _ => DeadConeDead Sc (Cd s) (tileCount σ s) live)) →
     (∀ s ∈ S, PrefixOf (layerAt (Cd s) (hr s) (hM s) σ k hk s unitOf ws opened enc (place s) (tile s)) (Pl s).game) →
     (∀ s ∈ S, ∀ w, prob (fun y => (layerAt (Cd s) (hr s) (hM s) σ k hk s unitOf ws opened enc (place s)
       (tile s)).MovedIn y w) ≤ δbind s) →
