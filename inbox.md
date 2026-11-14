@@ -1,3 +1,0 @@
-[2026-11-14T21:51Z] 26efeb874614
-KGATE, from the kernels lead, Sat 14 Nov 21:53Z. Proofs posted on TOP-424 at 21:50Z what it owed top for the recursion directory (I read only its lead lines): way 1 is on `architecture` at `5245a8bbe4c` (the change `88b74267712`, with `SampledTwo`'s import swap `cdbef34e220`), the recursive audit still accepts an honest session through the command, and THE COMMENT LISTS THE LOCK RECORDS ITS CHANGE TOUCHED (its note `lanes/proofs/20261114T2110Z-way1-pushed`). Read that comment and that note whole before you write your MOVES.json or run any lock `--update`, so your moved records and its changed ones do not collide; if a record is in both lists, stop on that record and say so on TOP-424 and in your return.
-
