@@ -115,3 +115,55 @@ Branch `cursor/na-clock-form-gone-b51f`, head `9d40b06ee4915493000c0dff283b6f43c
 
 TIMER: none.
 
+[2026-11-14T17:03Z] 17e2a4f12272
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 9:03 AM PST. **The rename's table, final: the 31 rows of LAYOUTREAD's kept tokens (Fri 6:51 PM PST, at `2de57f84fd3e`) as you ruled them, counted at the rebuilt head `40d936872d5486d197e423899a5b41547072cbd8`.** At that head the counting test passes with no warning: 610 kept sites, each kind exactly at its cap (said 43, domain tag 27, circuit 18, caller's 201, kind 172, recorded 149), and no site outside the kinds [ran: `tests/test_retired_terms.py` and the test's own scan, grouped by spelling]. Every row ruled renamed has no site left [ran: `git grep` of each old token at the head, leaving out `tools/move/`, `moves.json` and the counting test's own fixture].
+
+**Kept: rows 1 to 11, 17 and 26.**
+
+| # | Token | Sites / files at the head (Friday) | Kind | Holds it |
+|---|---|---|---|---|
+| 1 | `warden.json` | 55 / 21 (55 / 21) | recorded | a kept run's relay log, which programs read back |
+| 2 | `"warden_run"`, quoted | 36 / 9 (37 / 10) | recorded | the chain summaries' key, which `chain_record.py` reads back |
+| 3 | `warden/` and `/warden`, a path's segment | 26 (30 / 5) | recorded | `<trace>/warden/` in the trace corpus, `$OUT/warden`, `$OUT/honest/warden` and `$OUT/late/warden`. `$W/warden`, the scratch directory, is renamed |
+| 4 | `--class warden`, `N2_CLASS=warden`, "served or warden" | 14 (14 / 5) | caller's | a launch line's class |
+| 5 | `CR_PATH=warden` | 10 (10 / 3) | caller's | a launch line's setting |
+| 6 | `warden/egress/`, `warden/ingress/`, `warden/<direction>/`, `warden/{d}/` | 8 (8 / 5) | kind | signed row registrations |
+| 7 | `warden-smallkv` | 5 / 3 (5 / 3) | recorded | a trace corpus label, beside `warden-heavy` (14 / 4) |
+| 8 | `warden-fails` | 3 / 2 (3 / 2) | kind | the fails certificate's link. The tokens map's header now says so |
+| 9 | `"warden:PID"`, `meta['warden']` | 3 (3 / 2) | recorded | the host sampler's watch label and the trace's meta key |
+| 10 | "client or warden" | 1 / 1 | recorded | the `ingress` value's refusal |
+| 11 | `negatives.py warden` | 1 / 1 | caller's | a subcommand |
+| 17 | `a5/warden-stand-in/v1`, `a5-warden/rest/` | 2 / 2 (2 / 1) | domain tag | bytes a digest takes in |
+| 26 | `unit/warden-row`, `unit/a5-warden` | 2 / 2 (2 / 2) | circuit | bytes a pin takes in |
+
+**Renamed or gone: rows 12 to 16, 18 to 25 and 27 to 29.** No site of any of them is left at the head.
+
+| # | Token | Friday's sites | By | Where |
+|---|---|---|---|---|
+| 12 | `warden-registration*.json` | 6 / 3 | a map row | #10013's map, applied by the third step |
+| 13 | `"warden_check"` | 3 / 3 | a map row | the same |
+| 14 | `"warden_cost"`, `"warden_costs"` | 2 / 1 | a map row | the same |
+| 15 | the trace summary's three keys | 4 / 2 | a map row | the same |
+| 16 | the a5 negatives' two names | 3 / 2 | a map row | the same |
+| 18 to 21 | four tests' made messages | 6 / 4 | each test builds its text from the kept value | #9998, on `main` |
+| 22 | `a.warden_run`, `a.warden` and the tests' stand-ins | 22 / 7 | `dest=` on 8 declarations, and their reads | the rename's commit "The kept flags name their attribute" (the same diff as `bb7073f355ec`) |
+| 23 | `scan_zk.warden_run`, a function | 5 / 2 | a map row | #10013's map, applied by the third step |
+| 24 | `scan_step`'s parameter `warden_run` | 3 / 1 | a map row | the same |
+| 25 | `CLEAR`'s three keys | 10 / 4 | a map row | the same |
+| 27 | `"g1/warden"` | 3 / 1 | a map row | the same |
+| 28 | `"not-the-wardens"` | 1 / 1 | a map row | the same |
+| 29 | `scan_period.sh`'s dead default ref | 2 / 1 | the default goes, and the script asks its caller for the ref | #9998, on `main` |
+
+**The two documents** (said): the Glossary's row, which now lists what keeps the name (38 sites in one line, Friday's 8), and ARCHITECTURE.md's steganography terms with the domain table's `say "warden"` (5).
+
+**Kept beside the 31 rows, which the table did not cover:**
+- caller's: the gate's verb `warden-rehearse` (69 / 24), the flags `--warden-run` (76 / 16) and `--warden` (5), and the six variables (26).
+- domain tag: the records' tags `verity-network-warden/…` (25).
+- circuit: `WardenRowIdentity` (16 / 5).
+- kind: the quoted word, `"warden"` (161 / 37).
+- recorded: `ingress="warden"` (6), `warden-heavy` (14) and `warden.released`, `warden.ordinal` and `warden.admitted` (3).
+
+Not read: why rows 2 and 3 fell from Friday's counts (one site and four). The renamed scratch directory accounts for some of row 3; I did not attribute the rest site by site.
+
+A correction to my two lines headed 9:00 AM PST: they were sent at 8:52 AM PST.
+
