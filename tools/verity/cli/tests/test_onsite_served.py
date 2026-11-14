@@ -24,9 +24,8 @@ from verity.protocols.proofs.spot.verifier.service import Law
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
-DIR = ROOT / "demos" / "onsite_served"
-CONFIG = DIR / "config.toml"
-REG = R.registry((DIR, "served_table"))
+CONFIG = ROOT / "demos" / "onsite_full.toml"
+REG = R.registry()
 T = sys.modules["served_table"]
 KEY = "0" * 128
 #: every binding the pieces read, on documentation addresses (RFC 5737)

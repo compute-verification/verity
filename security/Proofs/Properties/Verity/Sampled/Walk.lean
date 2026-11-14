@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Leaves
 public import Proofs.Core.Game.InterleaveBridge
 
 /-!
-# Sampled proofs' coupling: where the walk stops
+# SPOT's coupling: where the walk stops
 
 The projection (`Project`) walks a play of the period's game to the next node where one of the rounds' cuts is fixed
 (`Game.Pos.walk`). On the period's game as the device's releases and then the evidence (`relK`), at the cuts fixed at

@@ -1,8 +1,8 @@
-"""P2's arm of the POUS-only harness (`bench.py --impl p2-v1-gpu | p2-v3-gpu | p2-v3-mc-gpu`): P2 with its GPU kernels (`p2v1.cu`, `gpu.py`)
+"""P2's arm of the POUS-only harness (`bench.py --impl p2-v3-gpu | p2-v3-mc-gpu`): P2 with its GPU kernels (`p2v1.cu`, `gpu.py`)
 on one device, the same steps, controls and metrics as the band's arm (`band_gpu/harness.py`), so the two compare side by side.
-The kernels take a setup's key prefix, so one arm runs either framing, both on v4's counter-mode SHA-512 keys:
+The kernels take a setup's key prefix, so the arm runs the registered scheme's framing on v4's counter-mode SHA-512 keys,
+audited one of two ways:
 
-- `V1` (`p2-v1-gpu`): the v4 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
 - `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
   the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `verity/protocols/accounting/pous/device/timed_audit.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover, and judged by `pous-timed-audit` (`--pous-timed-audit`,
@@ -30,7 +30,7 @@ The kernels take a setup's key prefix, so one arm runs either framing, both on v
    bytes as `W` and runs the weight set's GEMMs on them; plain reads `W`. Both are timed from a CUDA graph where the path is
    capturable, every rep kept. Decode overhead is POUS over plain, minus one.
 4. **The limit and the audits.** The limit is fixed before any load (`Δ = 0.5 ms` plus the loopback allowance, which P2
-   caps at 354 µs); `p2_v1/memory_challenger.py` audits at k = 105 against it: the honest audit under POUS forwards, then the value control
+   caps at 354 µs); the framing's memory challenger audits at k = 105 against it: the honest audit under POUS forwards, then the value control
    (one block in ten zeroed), the late control (one answer in ten held past the limit; the only answers held) and the
    recompute control (one block in ten of all of `C` dropped, each challenged dropped block re-encoded on the device from its
    decoded row `Dec(C_i)`, which the game gives the prover free: two roots, and the margin is the limit minus each
@@ -59,7 +59,6 @@ from band_gpu import harness as H
 from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
 
 HERE = Path(__file__).resolve().parent
-MEMORY_CHALLENGER = HERE / "memory_challenger.py"
 SETUP_SOURCE = hashlib.sha256(b"verity-pous/bench/p2-v1/setup-source").digest()
 """The bench's setup source: in a deployment the verifier's secret or a beacon round sampled after the commitment to `W`."""
 PINS = ("P2MeetsM1pB19Uncond", "P2MeetsM1pFamilyUncond", "P2MeetsM1pW8192Uncond", "P2SlackB19Uncond", "P2SlackFamilyUncond",
@@ -70,11 +69,14 @@ RECOMPUTE_EVERY = 10
 """The recompute control drops one block in this many; P2's blocks are independent, so any pattern keeps what a block needs."""
 
 
-class V1:
-    """The frozen spec's framing (`reference.py`): its commitment to `W`, 32-byte setup salt, key prefix (which frames the
-    commitment and that salt) and leaves, audited by `p2_v1/memory_challenger.py`'s own loop (mode 0's challenge derivation)."""
+class V3:
+    """`p2-16448/v4` (`verity.protocols.accounting.pous.verifier.schemes.p2`): `protocol.commit`'s commitment to `W` under the
+    scheme's manifest, `protocol.draw_salt`'s 24-byte salt, its key prefix (which frames that salt and no commitment) and `vk`'s
+    leaves, audited by `protocol.TimedAudit` (`verity/protocols/accounting/pous/device/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the
+    certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
+    the gaps."""
 
-    impl, scheme, live = "p2-v1-gpu", R.PROTOCOL, MEMORY_CHALLENGER
+    impl, live = "p2-v3-gpu", H.MEMORY_CHALLENGER
     memory_challenger_args: tuple[str, ...] = ()
     accepted = "audits_accepted"
     """The audit document's count of accepted audits that the gates read."""
@@ -83,39 +85,6 @@ class V1:
     def c_of(self) -> str:
         """The arm whose `C` this framing serves, which keys `CCache`."""
         return self.impl
-
-    def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
-        self.P = P
-        self.model = R.w_commitment(P, w_host)
-        self.salt = R.setup_salt(SETUP_SOURCE, P, self.model)
-        self.prefix = R.expand_prefix(self.salt, P, self.model)
-
-    def manifest(self) -> dict[str, Any]:
-        return self.P.manifest()
-
-    def keys(self, i: int) -> tuple[int, int]:
-        k, t, _ = R.keys_after(self.prefix, self.P, *divmod(i, self.P.blocks_per_segment))
-        return k, t
-
-    def leaf(self, i: int, block: bytes) -> bytes:
-        return R.leaf(self.salt, *divmod(i, self.P.blocks_per_segment), block)
-
-    def ready(self) -> dict[str, Any]:
-        return {"salt": self.salt.hex(), "model": self.model.hex(), "manifest": self.P.manifest(),
-                "payload_bytes": self.P.payload_bytes}
-
-    def codec_gate(self, c_host: bytes, w_host: bytes, encoded: int) -> dict[str, Any] | None:
-        return None
-
-
-class V3(V1):
-    """`p2-16448/v4` (`verity.protocols.accounting.pous.verifier.schemes.p2`): `protocol.commit`'s commitment to `W` under the
-    scheme's manifest, `protocol.draw_salt`'s 24-byte salt, its key prefix (which frames that salt and no commitment) and `vk`'s
-    leaves, audited by `protocol.TimedAudit` (`verity/protocols/accounting/pous/device/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the
-    certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
-    the gaps."""
-
-    impl, live = "p2-v3-gpu", H.MEMORY_CHALLENGER
 
     def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
         from verity.protocols.accounting.pous.verifier import protocol, schemes
@@ -187,7 +156,7 @@ class MC(V3):
         return block_digest(block)
 
 
-FRAMINGS = {f.impl: f for f in (V1, V3, MC)}
+FRAMINGS = {f.impl: f for f in (V3, MC)}
 TAMPER_EVERY = 10
 """The tampered control flips the top bit of the last byte of one block in this many."""
 TIMED_AUDIT_CHECK = H.ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "check"
@@ -401,10 +370,10 @@ def _failed(gates: dict[str, Any], facts: dict[str, Any], P: R.Params, segments:
             "gates": gates, "metrics": None, "profile": None, "measurements": [], "stopped": H.stopped_reason(gates)}
 
 
-def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int, int, int], bytes], framing: type[V1] = V1,
+def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int, int, int], bytes], framing: type[V3] = V3,
         backend: Backend | None = None, params: R.Params | None = None, vectors: dict[str, Any] | None = None,
-        research: bool = False, load: Callable[[Any, V1], Callable[[], Any] | None] | None = None) -> dict[str, Any]:
-    """One run of P2's arm under `framing` (`V1`, the v4 spec's, or `V3`, `p2-16448/v4`'s).  `backend`, `params` and
+        research: bool = False, load: Callable[[Any, V3], Callable[[], Any] | None] | None = None) -> dict[str, Any]:
+    """One run of P2's arm under `framing` (`V3`, `p2-16448/v4`'s, or `MC`, its blocks under the memory challenger).  `backend`, `params` and
     `vectors` replace the GPU kernels, the deployment point and the pinned vectors, and `research` lets `V3`'s memory
     challenger audit where P2 has no certificate (the CPU tests).  `load(c, framing)`, from a caller hosting this harness in
     its own process, is called once `C` is on the device and before the limit is calibrated, and gives the honest audit's load
@@ -618,7 +587,7 @@ class CCache:
     prefix and commitment to `W`; a cached `C` must match the sha256 it was stored with, and goes through every gate a
     fresh one does (the round trip decodes all of it back to `W`).  `record` says which run encoded it and in what time."""
 
-    def __init__(self, root: Path, fr: V1) -> None:
+    def __init__(self, root: Path, fr: V3) -> None:
         key = {"impl": fr.c_of, "manifest": fr.manifest(), "prefix": fr.prefix.hex(), "model": fr.model.hex()}
         self.key = hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()
         self.data, self.meta = root / f"{self.key}.c", root / f"{self.key}.json"

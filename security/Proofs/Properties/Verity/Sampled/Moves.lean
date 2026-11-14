@@ -9,7 +9,7 @@ public import Proofs.Flock.Soundness.ExecStrataOf
 import all Init.Data.Repr
 
 /-!
-# Sampled proofs' coupling: the live audit's typed moves, from what v2 reads
+# SPOT's coupling: the live audit's typed moves, from what v2 reads
 
 The logged coupling reads a play of the period's game as a play of Flock's live audit (`Live.game`): the prover sends
 its registration, the tables' roots `rootB`, a submission (`SubmitJ`) for each round of a rep stream, and the proof

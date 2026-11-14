@@ -184,7 +184,7 @@ def test_the_outside_factor_multiplies_the_queries_the_bound_charges() -> None:
               f"2^{wide:.2f}": "`sketch_failure` at `rows=64` and F = 2^20"}
     totals = {}
     for f, largest in ((1, "profile"), (2 ** 20, "sketch")):
-        node = ledger.Node.stated(sketch_outside=f)
+        node = ledger.Node.stated(timing.RTX_PRO_6000_NODE, sketch_outside=f)
         assert ledger.compressions(record, node) == c
         parts = ledger.delta_parts(record, node)
         assert tuple(parts) == ledger.DELTA_PARTS and max(parts, key=parts.get) == largest
