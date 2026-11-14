@@ -31,7 +31,7 @@ public import PouwPearlPlus.Credit
   tile's reason is `pass i tile t: why`, joined by `; `.
 * **The work** an accepted run publishes: its credit at its scheme's named assumption at δ = 1/100 (`creditAtAssumption`), at X_O,
   the number of samples on tiles over their bound, which are credited nothing. A test instance's credits nothing
-  (`credited` 0), as `--recorded`'s salt claims nothing.
+  (`credited` 0).
 
 Out of scope, refused by name in `load`: sm_120's schemes.
 -/

@@ -7,7 +7,7 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
 (``--add`` names more, such as runs the store has not indexed yet); without
 ``--v2`` (A4's tree, or a tarball of it) it fetches A4's v2 run (`V2_ART`).  For each run with a summary:
 
-* **core cases** are the checks `core_check.case` decides, mapped to (params, registration, the service's answer):
+* **core cases** are the checks `pouw-check serve` decides (`core_check.case`, its twin `case_twin`), mapped to (params, registration, the service's answer):
   ``receive-honest`` and the registration controls ``receive-foreign``, ``receive-extra``, ``receive-raised`` and
   ``register-extra`` (the request's registration with the calls' shapes added, as `job.sh` asks the committer), each paired
   with the honest outcome's answer (in a window stopped before its outcome, the controls with `NO_OUTCOME` and
@@ -288,7 +288,7 @@ class Sides:
     """Python and Lean on one input each: `core` (a core_check case) and `opening`."""
 
     def __init__(self) -> None:
-        self.core = D.Server(D.ProtocolPort("pouw-check", CC.case, inputs=None, package=LEAN).argv())
+        self.core = D.Server(D.ProtocolPort("pouw-check", CC.case_twin, inputs=None, package=LEAN).argv())
         self.opening = D.Server(D.Port("pouw-check-difftest", "opening", opening_reference, inputs=None,
                                        package=LEAN).argv())
         self.record = OR.Record()
@@ -307,7 +307,7 @@ class Sides:
 
     def case(self, case: dict) -> tuple[dict, bool]:
         """Python's outcome, and whether Lean's is the same, reason included."""
-        py = CC.case(copy.deepcopy(case))
+        py = CC.case_twin(copy.deepcopy(case))
         return py, D.canonical(self.core.exchange(case)) == D.canonical(py)
 
     def open(self, x: dict) -> tuple[Any, bool]:

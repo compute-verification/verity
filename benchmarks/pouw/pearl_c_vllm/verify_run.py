@@ -6,8 +6,8 @@
 - **The execution phase** is re-started from the manifest's salt coin and every fixed operand's root (`Epoch.start`): the coin must open
   against the execution phase's coin commitment as the challenger published it (``--coins``, not the pass's copy; a live session's
   when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the fixed operands' root (a live
-  session's after its salt execution phase's root), and the salt must be the manifest's.  A pass recorded before the execution phase's coins (a v1 manifest)
-  carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
+  session's after its salt execution phase's root), and the salt must be the manifest's.  A pass recorded before the execution
+  phase's coins (a v1 manifest, which carries a beacon instead) is refused, as the Lean `PouwCheck.PearlPlus` refuses it.
 - **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
   `served_passes.py` holds a run's passes of one salt to distinct indices too.
 - **The records** (each matmul's real rows, width, excluded and voluntary rows; each fixed operand's excluded and voluntary rows)
@@ -307,18 +307,17 @@ def epoch_coins(path: Path) -> CoinCommitment | LiveCommitment:
     return (LiveCommitment if live else CoinCommitment).from_json(doc)
 
 
-def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, recorded: bool = False,
-         man: dict | None = None) -> Pass:
+def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, man: dict | None = None) -> Pass:
     """The pass at manifest `path`, its execution phase re-started under `coins` (`pouw_pearl_c_device.manifest_epoch`); raises
     `Refused` or ValueError on a pass that can't be checked."""
     man = read(path)[0] if man is None else man
-    PD.manifest_schema(man, recorded)
+    PD.manifest_schema(man)
     why = passes_distinct([man])
     if why is not None:
         raise Refused(why)
     scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
-    epoch, salt = PD.manifest_epoch(man, coins, recorded)
+    epoch, salt = PD.manifest_epoch(man, coins)
     records = records_of(man, matmuls)
     splits = {w: PW.Split(man["weights"][str(w)]["k"]) for w in epoch.workload.weights()}
     reason = CW.check_records(epoch, splits, records)
@@ -446,9 +445,9 @@ def replay(passes: list[Pass], todo: list[tuple[int, int, int]], jobs: int, fast
 
 
 def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None = None, fast: bool = False,
-           cross_check: int = 0, coins: CoinCommitment | LiveCommitment | None = None, recorded: bool = False) -> dict:
+           cross_check: int = 0, coins: CoinCommitment | LiveCommitment | None = None) -> dict:
     """The pass's verdict, its execution phase re-started under `coins`, the execution phase's published coin commitment
-    (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before the execution phase's coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
+    (`pouw_pearl_c_device.manifest_epoch`).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
     promoted device; otherwise the scalar reference, ``replay``), and the first of its tiles and every `cross_check`-th after
     it in the sample's order (`check`) on the scalar reference too: any verdict that differs is ``cross_check_failed``, and the
     pass is not accepted."""
@@ -456,7 +455,7 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
     out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": draws,
            "replay": "batch" if fast else "scalar"}
     try:
-        p = load(path, coins, recorded, man)
+        p = load(path, coins, man)
         scheme, records, c, out["salt"] = p.scheme, p.records, man["commitment"], p.salt
         source = PV.coins(32) if source is None else source
         key = CW.replay_key(CW.RecordedDraw(1, source), p.transcript.commitment.root, bytes.fromhex(man["records_root"]), p.epoch.salt)
@@ -847,7 +846,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
 
     The passes are all of one salt, and each one's instance is the served one, ``k_min`` `K_MIN` at `TILE` × `TILE` tiles:
     a pass of another is a test instance's, read only with ``test_instance``, whose verdict credits nothing (``credited``
-    0), as ``--recorded``'s salt claims nothing.
+    0).
 
     An accepted run's line names its credit (the protocol's output), the sample and the tie. How many exclusion tiles the
     passes' given-up rows made, each replayed tile's id, the MACs the passes declare and the exact credit are the
@@ -1022,10 +1021,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="with --fast, replay the first tile and every N-th after it, in the draw's order, on the scalar "
                         "reference too; any verdict that differs rejects the pass and exits 2 (0: none)")
     p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (e2e.py's coins.json)")
-    p.add_argument("--recorded", action="store_true", help="the pass was recorded before epoch coins: its salt is its beacon's")
     a = p.parse_args(argv)
     coins = epoch_coins(a.coins) if a.coins else None
-    r = verify(a.manifest, a.draws, a.jobs, a.commit, fast=a.fast, cross_check=a.cross_check, coins=coins, recorded=a.recorded)
+    r = verify(a.manifest, a.draws, a.jobs, a.commit, fast=a.fast, cross_check=a.cross_check, coins=coins)
     print(r["line"], flush=True)
     (a.manifest.parent / "verify.json").write_text(json.dumps(r, indent=1) + "\n")
     if r.get("cross_check_failed"):
