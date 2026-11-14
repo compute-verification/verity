@@ -180,10 +180,10 @@ def check_closed_form() -> list[dict]:
     one openings coin sampling over m groups (d = s/m), at two groups in flight and at one (each root c after its coin,
     the next coin a period after it). It holds while the wrong receipts fit in the stretch (β < G)."""
     out = []
-    for s, m, G, W, k, r, c, N, f in ((1, 1, 40, 3, 1, 8.0, 0.057, 10_000, 2), (2, 1, 40, 3, 2, 12.0, 0.03, 10_000, 2),
+    for s, m, G, W, k, r, c, N, f in ((1, 1, 80, 3, 1, 8.0, 0.057, 10_000, 2), (2, 1, 40, 3, 2, 12.0, 0.03, 10_000, 2),
                                       (64, 1, 12, 4, 1, 11.89, 0.057, 10_000, 2),
                                       (232, 1, 12, 7, 1, 15.0, 0.06, 130_023, 2),
-                                      (1, 4, 400, 3, 1, 8.0, 0.057, 10_000, 2), (1, 1, 40, 3, 1, 8.0, 0.057, 10_000, 1),
+                                      (1, 4, 400, 3, 1, 8.0, 0.057, 10_000, 2), (1, 1, 80, 3, 1, 8.0, 0.057, 10_000, 1),
                                       (64, 1, 12, 4, 1, 11.89, 0.057, 10_000, 1),
                                       (1, 4, 400, 3, 2, 8.0, 0.2, 10_000, 1)):
         d = s / m
