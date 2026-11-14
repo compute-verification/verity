@@ -1,4 +1,4 @@
-"""`h1r.cu` from torch: a step's served calls as one device table, their units' receipts in two launches on the current
+"""`h1r.cu`'s front end: a step's served calls as one device table, their units' receipts in two launches on the current
 stream into buffers the plan owns (allocated once, at `plan`), so a CUDA graph captures `launch`.
 
     lib = H1R("libh1r.so")
@@ -7,14 +7,24 @@ stream into buffers the plan owns (allocated once, at `plan`), so a CUDA graph c
     lib.launch(plan, salt, step_base=sb)                    # sb (1,) int64 on the device, added to every call's base
     lib.launch_j10r(plan, salt, m)                          # version 1 under J10-R's call-scale noise, Layout(m, N, K)
     plan.receipts(i)                                        # call i's (units, 2 sets) int32 view
+
+Verity imports no tensor runtime: what the front end asks of one (the table's upload, the plan's buffers and the launches'
+stream) is `H1R`'s `upload`, `empty` and `stream`, which raise here and which the caller's subclass supplies (the
+benchmarks' `h1r_torch.H1R`, on torch).
 """
 from __future__ import annotations
 
 import ctypes as C
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
-import torch
+
+#: a tensor on the device, of the caller's runtime
+Tensor = Any
+#: what `H1R`'s runtime methods raise until a subclass supplies them
+NEEDS_RUNTIME = ("H1R.{} needs a tensor runtime, which verity does not import (compute-accounting/dither-kernels-moved): "
+                 "use a subclass that supplies it, as the benchmarks' h1r_torch.H1R does")
 
 
 class _Call(C.Structure):
@@ -25,11 +35,11 @@ class _Call(C.Structure):
 
 @dataclass
 class Call:
-    a: torch.Tensor      # [T, K] int8
-    b: torch.Tensor      # [N, K] int8
+    a: Tensor      # [T, K] int8
+    b: Tensor      # [N, K] int8
     base: int
-    roots: torch.Tensor | int  # (16,) int64: root_a's then root_b's big-endian words; or root_a's device address
-    live: torch.Tensor   # (T / 32,) uint8
+    roots: Tensor | int  # (16,) int64: root_a's then root_b's big-endian words; or root_a's device address
+    live: Tensor   # (T / 32,) uint8
     root_b: int | None = None  # root_b's device address when ROOTS is root_a's
 
 
@@ -41,14 +51,14 @@ def words(b: bytes) -> np.ndarray:
 @dataclass
 class Plan:
     calls: list[Call]
-    table: torch.Tensor
+    table: Tensor
     ks: object
     max_units: int
-    seeds: torch.Tensor
-    out: torch.Tensor
+    seeds: Tensor
+    out: Tensor
     offs: list[tuple[int, int, int]]   # (word offset, units, words a unit)
 
-    def receipts(self, i: int) -> torch.Tensor:
+    def receipts(self, i: int) -> Tensor:
         o, n, w = self.offs[i]
         return self.out[o:o + n * w].view(n, w)
 
@@ -62,14 +72,26 @@ class H1R:
         if self.lib.h1r_call_bytes() != C.sizeof(_Call):
             raise RuntimeError(f"H1Call is {self.lib.h1r_call_bytes()} bytes in h1r.cu, {C.sizeof(_Call)} here")
 
+    def upload(self, data: bytes, like: Tensor) -> Tensor:
+        """``data`` as a uint8 tensor on ``like``'s device."""
+        raise NotImplementedError(NEEDS_RUNTIME.format("upload"))
+
+    def empty(self, n: int, dtype: str, like: Tensor) -> Tensor:
+        """``n`` uninitialised elements of ``dtype`` (``"int64"``, ``"int32"``) on ``like``'s device."""
+        raise NotImplementedError(NEEDS_RUNTIME.format("empty"))
+
+    def stream(self) -> int:
+        """The current stream's handle, which the launches run on."""
+        raise NotImplementedError(NEEDS_RUNTIME.format("stream"))
+
     def sets(self, k: int) -> int:
         ks = k // 32
         return ks + self.lib.h1r_n_digits(ks)
 
-    def plan(self, calls: list[Call], seeds: torch.Tensor | None = None, out: torch.Tensor | None = None) -> Plan:
+    def plan(self, calls: list[Call], seeds: Tensor | None = None, out: Tensor | None = None) -> Plan:
         """The calls' table, and its seed and receipt buffers: `seeds` and `out` when given (another plan's of the same
         calls' shapes, so several tables share them), else its own."""
-        dev = calls[0].a.device
+        like = calls[0].a
         tab = (_Call * len(calls))()
         seed0 = out0 = 0
         offs = []
@@ -87,25 +109,25 @@ class H1R:
             offs.append((out0, units, w))
             seed0 += units
             out0 += units * w
-        table = torch.frombuffer(bytearray(bytes(tab)), dtype=torch.uint8).to(dev)
+        table = self.upload(bytes(tab), like)
         ks = (C.c_int * len(calls))(*[c.a.shape[1] for c in calls])
         if (seeds is not None and seeds.numel() != seed0 * 16) or (out is not None and out.numel() != out0):
             raise ValueError(f"shared buffers of {seeds.numel() if seeds is not None else None} seed words and "
                              f"{out.numel() if out is not None else None} receipt words, not {seed0 * 16} and {out0}")
         return Plan(calls, table, ks, max(o[1] for o in offs),
-                    torch.empty(seed0 * 16, dtype=torch.int64, device=dev) if seeds is None else seeds,
-                    torch.empty(out0, dtype=torch.int32, device=dev) if out is None else out, offs)
+                    self.empty(seed0 * 16, "int64", like) if seeds is None else seeds,
+                    self.empty(out0, "int32", like) if out is None else out, offs)
 
-    def launch(self, plan: Plan, salt: torch.Tensor, nowrite: bool = False, version: int = 2,
-               step_base: torch.Tensor | None = None) -> None:
+    def launch(self, plan: Plan, salt: Tensor, nowrite: bool = False, version: int = 2,
+               step_base: Tensor | None = None) -> None:
         rc = self.lib.h1r_launch(plan.table.data_ptr(), len(plan.calls), plan.max_units, plan.ks, salt.data_ptr(),
                                  None if step_base is None else step_base.data_ptr(), plan.seeds.data_ptr(),
-                                 plan.out.data_ptr(), int(nowrite), int(version), torch.cuda.current_stream().cuda_stream)
+                                 plan.out.data_ptr(), int(nowrite), int(version), self.stream())
         if rc:
             raise RuntimeError(f"h1r_launch returned {rc}")
 
-    def launch_j10r(self, plan: Plan, salt: torch.Tensor, m: int, nowrite: bool = False,
-                    step_base: torch.Tensor | None = None) -> None:
+    def launch_j10r(self, plan: Plan, salt: Tensor, m: int, nowrite: bool = False,
+                    step_base: Tensor | None = None) -> None:
         """Version 1 under J10-R (h1r.cu's h1r_launch_j10r): every call's noise its seed_c's stream at call scale,
         Layout(m, N, K), m the calls' layout rows."""
         fn = getattr(self.lib, "h1r_launch_j10r", None)
@@ -114,6 +136,6 @@ class H1R:
         fn.argtypes = [*self.lib.h1r_launch.argtypes[:-2], C.c_int, C.c_void_p]
         rc = fn(plan.table.data_ptr(), len(plan.calls), plan.max_units, plan.ks, salt.data_ptr(),
                 None if step_base is None else step_base.data_ptr(), plan.seeds.data_ptr(), plan.out.data_ptr(),
-                int(nowrite), int(m), torch.cuda.current_stream().cuda_stream)
+                int(nowrite), int(m), self.stream())
         if rc:
             raise RuntimeError(f"h1r_launch_j10r returned {rc}")
