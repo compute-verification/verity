@@ -160,7 +160,7 @@ def test_a_step_runs_under_no_launch_context():
     """A request runs under its launch's context (`launch_rows`), read from the workload's requests at its (LP, T): here a
     prompt of 4 and 2 decodes, whose second launch holds the other request's 6-row prefill.  A step states neither and reads
     none: its Program is the same with the workload's requests and without them."""
-    requests = [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": cap, "arrive_step": i} for i, (lp, cap) in enumerate([(4, 3), (6, 2)])]
+    requests = [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": out, "arrive_step": i} for i, (lp, out) in enumerate([(4, 3), (6, 2)])]
     assert launch_rows(_phi(TINY, requests), 4, 2) == {"max_seqlen_q_by_step": {0: 4, 1: 6, 2: 1}, "conflict": False, "declared": True}
     assert launch_rows(_phi(TINY), 4, 2) is None
     assert build_program(_phi(TINY, requests), "step", M=2, pos0=3).digest == build_program(_phi(TINY), "step", M=2, pos0=3).digest
