@@ -54,7 +54,7 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
         check_cache_ownership_by_kind,
     )
     from verity_vllm.program.frontend import derive_examples as dex
-    from verity_torch.frontend.derive import derive_report
+    from verity_vllm.program.frontend.vllm_derive import derive_report
     rep = derive_report(dex.GreedyServe(B0_CONFIG, 15), (torch.zeros(32, dtype=torch.int32),), mode="profile", profile="b1-eager",
                         config=B0_CONFIG)
     assert rep.ok, rep.unsupported
@@ -79,7 +79,7 @@ def test_gpt2_bf16_in_the_b1_eager_profile_refuses_where_its_vocabulary_ends(ids
     are the transfer family's, so both refusals fall where the transfer family's do; once the profile carries GPT-2
     further, the case goes back to the PyTorch adapter's harness, which evaluates a derived Program against torch."""
     from verity_torch.frontend import derive_examples as tex
-    from verity_torch.frontend.derive import derive_report
+    from verity_vllm.program.frontend.vllm_derive import derive_report
     torch.manual_seed(0)
     m = tex.GPT2TinyLM().to(torch.bfloat16).eval()
     rep = derive_report(m, (torch.zeros(4, dtype=ids, device="meta"),), mode="profile", profile="b1-eager", name="GPT2TinyLM")
