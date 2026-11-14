@@ -161,6 +161,54 @@ The record is one JSON object (`served_share` in `exfiltration.py`):
 job serves. So the window's serving and, where the same job served `compiled` on the same plan and rate, stock's are
 read from that record, and no stock serve of this command's own is needed.
 
+The reader is `python -m verity_bench.served_record --second DIR [--first DIR] [--serve DIR] [--replay DIR]
+[--serving META] [--stock META]` (`benchmarks/harness/verity_bench/served_record.py`). A served run is four runs
+(the serve, the first stage, the replay of the sampled spans, the second stage), and each `DIR` is one's directory
+as it is fetched, its `job.json` beside its `out/`; only the second stage is required. It prints the record from the
+files those runs published and the two loads' `meta.json`, with `None` for each field those files lack, and names
+each one with the file it read and what that file holds instead. It computes no share and decides no verdict.
+
+- A session's seconds are those its own `prove_seconds_source` names in `audit.timing`: `busy`, the proof server's
+  clock on the session's prover (`busy_s`), or `session`, the audit's clock on the whole session (`session_s`). The
+  record's `prove_seconds_source` is `busy` only where every session's is, and `session` where any is; where a
+  session names none its seconds are `session_s` and the field is named as absent.
+- Beside the fields above the record holds `audit`, what the audit showed: the class the second stage audited, as
+  its summary names the first stage's file (`class`), and the digest of the registration it read (`registration`);
+  the sessions' verdicts counted by kind, the driver's checks, whether the second stage says it held, the stream's
+  outcome with its codes and whether it says it is complete, the layout the serve committed, what the interior
+  registered, and what holds the four runs' files to each other.
+
+## What a served run's audit showed
+
+From a record that holds `audit` the command prints one more section, before the resampling holes
+(`benchmarks/harness/verity_bench/served_row.py`; `served_run` in the JSON), read against the tree:
+
+- **The verdict**, in the verifier's own words: how many of the sampled proofs the Lean verifier accepted, then the
+  final accept as the stream's outcome gave it: given, refused with its codes, or withheld, where every check of the
+  second stage held and the outcome is refused by one code the table names a reason for. An accept the verifier
+  withheld is never printed as given, and neither is an outcome that accepted beside a second stage that did not
+  hold: that one is printed as refused. An accept whose outcome does not say it is complete is printed as given and
+  not complete. The summary's top-level `accepted` is the one-stage record of the sessions alone and is never read
+  as the audit's verdict.
+- **What the audit covered**: the replay block as the layout names it, the stand-in (instances of the check's
+  template) or a Definition of the class's own.
+- **To fully proved**: the replay block where it is the stand-in; its inputs where the interior registers them,
+  which is after the first stage's sample; every verdict a verifier that is not Lean decided; every Lean verdict
+  whose lock entry (`security/lean-audit.json`) is missing or lists open premises; and the final accept where it was
+  not given, or is not complete. Which verifier decides each kind of verdict, and the lock entry that covers it, are
+  data (`verity_bench/data/served_row.json`). The resampling holes and the cited theorem are the next block's, and
+  this one prints no line on them.
+- **The mark** is `proved` only where that list is empty, the final accept is given and complete, the cited
+  theorem's lock entry lists no open premise and each resampling hole is closed at every one of the served run's
+  four runs' commits, as the next block reads them; `run, not proved` otherwise.
+- **The prover's seconds** as the record holds them, said as "at most" where they are a session's, with the cards
+  the provers ran on and what the data file notes of a card.
+- **The verdict as a record** of the stop class's verdicts of record, for the piece `second_stage`, in the
+  command's own words: `accept` only for an accept that is complete, `not complete` for one that is not, `refuse`,
+  or `withheld`. Beside that record's fields it names what the verdict is of: its `class`, its `serve` (the serve's
+  run) and its `registration` (the digest the second stage read), each null where the served run's files give none,
+  and the section then says which it lacks.
+
 ## The security level
 
 Beside the GB the command prints the binding bound the row of record holds: the probability that an accepted run
