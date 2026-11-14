@@ -77,3 +77,8 @@ None.
 
 I launched none this time (only named test files on my VM). None of the author's runs at this head is named.
 
+[2026-11-14T07:30Z] c72bc7db3b00
+FIELDS, Fri 23:30 PST
+
+**#9565 pushed at 9f58712fcfa8ef03b47c9b0fde04541b93def9d3, which holds #9502 at f8a2cf09506e (690 record difftest cases); runs are launching now.**
+
