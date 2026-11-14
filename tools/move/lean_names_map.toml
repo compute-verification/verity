@@ -375,6 +375,16 @@ files = ["security/Proofs/Flock/Soundness/Audit/Pooled.lean"]
 words = { "Escapes" = "MissProb" }
 
 [[words_in]]
+files = [
+    "security/Proofs/Properties/Challenger/Lines.lean",
+    "security/Proofs/Properties/Challenger/Steps.lean",
+    "security/Proofs/Properties/Challenger/Window.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerSession.lean",
+]
+words = { "MonitoringPeriod" = "PeriodRecord" }
+
+[[words_in]]
 files = ["verity/protocols/proofs/spot/verifier/lean/Spot/MonitoringPeriod.lean"]
 words = { "Window" = "Run" }
 
@@ -918,6 +928,7 @@ files = [
     "security/Proofs/Properties/Pous/MemoryChallenger/Inputs.lean",
     "security/Proofs/Properties/Pous/MemoryChallenger/Session.lean",
     "security/Proofs/Properties/Pous/Run.lean",
+    "security/Proofs/Properties/Pous/RunAccepts.lean",
     "security/Proofs/Properties/Pous/RunAt.lean",
     "security/Properties/Pous/EndToEnd.lean",
     "security/Properties/Pous/EndToEndAt.lean",
@@ -995,6 +1006,7 @@ words = { "honestSession" = "honestWipe" }
 
 [[words_in]]
 files = [
+    "security/Proofs/Properties/Pous/WipeCount.lean",
     "security/Proofs/Properties/Pous/WipeSigned.lean",
     "security/Properties/Pous/WipeSigned.lean",
 ]
@@ -1038,6 +1050,7 @@ words = { "sessionInProofs" = "runInProofs" }
 
 [[words_in]]
 files = [
+    "security/Proofs/Pous/PeriodWitnesses.lean",
     "security/Proofs/Properties/Pous/MemoryChallenger/Device.lean",
     "security/Properties/Pous/EndToEnd.lean",
     "security/Properties/Pous/MemoryChallenger.lean",
