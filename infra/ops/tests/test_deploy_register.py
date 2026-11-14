@@ -328,9 +328,9 @@ def test_the_lists_key_is_taken_from_every_machine_it_names_and_no_other_line_ch
     assert _install(fleet)["files"][0]["accept"] == {"line": "kept", "added": 0, "sources": 4, "anywhere": False}
 
     # the key's line as a machine has it: sources no register holds, an option, another key before and after it
-    ak.write_text(f'{OTHER}\nrestrict,from="10.0.0.5,192.0.2.11",pty {KEY}\n# a comment\n{OTHER} again\n')
+    ak.write_text(f'{OTHER}\nrestrict,from="198.51.100.5,192.0.2.11",pty {KEY}\n# a comment\n{OTHER} again\n')
     assert _install(fleet)["files"][0]["accept"] == {"line": "extended", "added": 3, "sources": 5, "anywhere": False}
-    assert _keys(fleet) == [OTHER, f'restrict,from="10.0.0.5,192.0.2.11,192.0.2.12,192.0.2.20,192.0.2.2",pty {KEY}',
+    assert _keys(fleet) == [OTHER, f'restrict,from="198.51.100.5,192.0.2.11,192.0.2.12,192.0.2.20,192.0.2.2",pty {KEY}',
                             "# a comment", f"{OTHER} again"]
     assert {p.name.split(".")[0] for p in (ak.parent / ".deploy-prev").iterdir()} == {"authorized_keys"}
     record = [json.loads(ln) for ln in (fleet["tmp"] / "a/research/deploy/record.jsonl").read_text().splitlines()]
@@ -357,8 +357,9 @@ def test_the_lists_key_is_taken_from_every_machine_it_names_and_no_other_line_ch
     assert (fleet["tmp"] / "a" / "etc" / "peers").read_text() == "by hand\n"
 
 
-# Put before ACCEPT: records each open, and each id call a root process makes, stood in for so the script runs as any user.
-SPY = r'''
+# Put before a script: records each open and each other call that names a path (with whether it is relative to a directory's
+# descriptor), and each id call a root process makes, stood in for so the script runs as any user.
+SPY = r"""
 import builtins, json, os
 _log = os.open(os.environ["SPY_LOG"], os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
 def _say(*what):
@@ -371,47 +372,79 @@ def _spy_open(file, *args, **kwargs):
     if not isinstance(file, int):
         _say("open", os.fspath(file), None, None, False)
     return _open(file, *args, **kwargs)
+def _spy_path(name):
+    real = getattr(os, name)
+    def spy(*args, **kwargs):
+        _say(name, *(os.fspath(a) for a in args if isinstance(a, (str, os.PathLike))),
+             any(kwargs.get(k) is not None for k in ("dir_fd", "src_dir_fd", "dst_dir_fd")))
+        return real(*args, **kwargs)
+    setattr(os, name, spy)
+for _name in ("stat", "lstat", "chown", "chmod", "mkdir", "makedirs", "unlink", "rmdir", "link", "symlink", "rename", "replace",
+              "fchown"):
+    _spy_path(_name)
 os.open, builtins.open = _spy_os_open, _spy_open
 os.geteuid = os.getuid = os.getegid = os.getgid = lambda: 0
 os.setgroups = lambda groups: _say("setgroups", list(groups))
 os.setgid = lambda gid: _say("setgid", gid)
 os.setuid = lambda uid: _say("setuid", uid)
-'''
+"""
+NOFOLLOW_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+
+def _accept(fleet: dict, tmp_path: Path, *before: str, **more) -> tuple[subprocess.CompletedProcess, list[list]]:
+    """ACCEPT under --apply on node a, run as root runs it (SPY), with `before` put ahead of it: its result and its calls."""
+    ssh, log = fleet["tmp"] / "a" / "ssh", tmp_path / "spy.jsonl"
+    log.unlink(missing_ok=True)
+    req = {"key": str(ssh / "k.pub"), "authorized": str(ssh / "authorized_keys"), "sources": ["192.0.2.11"], "apply": True,
+           "record": str(fleet["tmp"] / "a" / "research" / "deploy" / "record.jsonl"), "commit": "c" * 40, "ref": "origin/main",
+           "by": "lane-x", **more}
+    r = subprocess.run([sys.executable, "-c", "".join(before) + SPY + deploy.ACCEPT], input=json.dumps(req).encode(),
+                       capture_output=True, env={**os.environ, "SPY_LOG": str(log)})
+    return r, [json.loads(ln) for ln in log.read_text().splitlines()] if log.exists() else []
 
 
 def test_the_keys_line_is_written_by_the_directorys_owner_and_root_appends_only_the_record(fleet, tmp_path):
-    """ACCEPT as root runs it under --apply: the child takes the directory's groups, gid and uid before it opens anything,
-    root opens nothing in the directory but the directory itself, the temporary file is made new with mode 0600 and never
-    through a link, and the record's line is root's alone."""
-    ssh, log = fleet["tmp"] / "a" / "ssh", tmp_path / "spy.jsonl"
-    record = fleet["tmp"] / "a" / "research" / "deploy" / "record.jsonl"
-    req = {"key": str(ssh / "k.pub"), "authorized": str(ssh / "authorized_keys"), "sources": ["192.0.2.11"], "apply": True,
-           "record": str(record), "commit": "c" * 40, "ref": "origin/main", "by": "lane-x"}
-    r = subprocess.run([sys.executable, "-c", SPY + deploy.ACCEPT], input=json.dumps(req).encode(), capture_output=True,
-                       env={**os.environ, "SPY_LOG": str(log)})
+    """ACCEPT as root runs it under --apply: the child takes the directory's groups, gid and uid before it opens anything and
+    then names nothing but by the directory's descriptor; root opens the home, the directory in it and the record's directory
+    above, and names nothing else by a path (the directory's owner is read from its descriptor, never by its name again); the
+    temporary file is made new with mode 0600 and never through a link, and the record's line is root's alone, through the
+    descriptors it opened, never a link."""
+    home = fleet["tmp"] / "a"
+    ssh, up = home / "ssh", home / "research"
+    up.mkdir()                                              # as /workspace/research is on a node
+    r, calls = _accept(fleet, tmp_path)
     assert (r.returncode, r.stderr) == (0, b"")
     assert json.loads(r.stdout) == {"line": "new", "added": 1, "sources": 1, "anywhere": False}
     assert _keys(fleet) == [OTHER, f'from="192.0.2.11" {KEY}']
-    calls = [json.loads(ln) for ln in log.read_text().splitlines()]
     root = calls[0][0]
     child = [c[1:] for c in calls if c[0] != root]
     own = ssh.stat()
+    tmp = ".authorized_keys.deploy-tmp"
     assert child[:3] == [["setgroups", []], ["setgid", own.st_gid], ["setuid", own.st_uid]]
-    assert [c for c in child if c[1] == ".authorized_keys.deploy-tmp"] == [
-        ["open", ".authorized_keys.deploy-tmp", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, True]]
-    assert [c[1:] for c in calls if c[0] == root] == [["open", str(ssh), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, 0o777, False],
-                                                      ["open", str(record), None, None, False]]
-    assert [json.loads(ln)["added"] for ln in record.read_text().splitlines()] == [1]
+    read = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW
+    assert child[3:] == [["open", "k.pub", read, 0o600, True], ["open", "authorized_keys", read, 0o600, True],
+                         ["open", ".deploy-prev", NOFOLLOW_DIR, 0o600, True], ["stat", tmp, True],
+                         ["open", tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, True],
+                         ["mkdir", ".deploy-prev", True], ["open", ".deploy-prev", NOFOLLOW_DIR, 0o600, True],
+                         ["link", "authorized_keys", next(p.name for p in (ssh / ".deploy-prev").iterdir()), True],
+                         ["replace", tmp, "authorized_keys", True]]
+    assert [c[1:] for c in calls if c[0] == root] == [
+        ["open", str(home), os.O_RDONLY | os.O_DIRECTORY, 0o777, False], ["open", "ssh", NOFOLLOW_DIR, 0o777, True],
+        ["open", str(up), NOFOLLOW_DIR, 0o777, False], ["mkdir", "deploy", True], ["open", "deploy", NOFOLLOW_DIR, 0o777, True],
+        ["open", "record.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o644, True],
+        ["fchown", False], ["fchown", False]]
+    assert [json.loads(ln)["added"] for ln in (up / "deploy" / "record.jsonl").read_text().splitlines()] == [1]
 
 
 def _entries(*tops: Path) -> dict[str, tuple]:
-    """Every entry under `tops`, links never followed: a link as its target, a directory as its mode, a file as its bytes too."""
+    """Every entry under `tops`, links never followed: a link as its target, a directory as its mode, a fifo as its mode (never
+    read), a file as its bytes too."""
     out = {}
     for top in tops:
         for d, dirs, files in os.walk(top):
             for p in (Path(d) / n for n in dirs + files):
                 out[str(p)] = (("link", os.readlink(p)) if p.is_symlink() else ("dir", p.stat().st_mode) if p.is_dir()
-                               else ("file", p.read_bytes(), p.stat().st_mode))
+                               else ("fifo", p.stat().st_mode) if p.is_fifo() else ("file", p.read_bytes(), p.stat().st_mode))
     return out
 
 
@@ -424,7 +457,12 @@ LINKED = {   # what the directory's owner puts there, and the refusal
     "authorized_keys is a link": (lambda ssh, away: ((ssh / "authorized_keys").unlink(), (ssh / "authorized_keys").symlink_to(away / "f")),
                                   "/NODE/ssh/authorized_keys is a link"),
     "a link at the temporary name": (lambda ssh, away: (ssh / ".authorized_keys.deploy-tmp").symlink_to(away / "f"),
-                                     "/NODE/ssh/.authorized_keys.deploy-tmp is there already"),
+                                     "/NODE/ssh/.authorized_keys.deploy-tmp is a link or not a regular file"),
+    "the key is a fifo": (lambda ssh, away: ((ssh / "k.pub").unlink(), os.mkfifo(ssh / "k.pub")), "/NODE/ssh/k.pub is not a regular file"),
+    "authorized_keys is a fifo": (lambda ssh, away: ((ssh / "authorized_keys").unlink(), os.mkfifo(ssh / "authorized_keys")),
+                                  "/NODE/ssh/authorized_keys is not a regular file"),
+    "authorized_keys is a directory": (lambda ssh, away: ((ssh / "authorized_keys").unlink(), (ssh / "authorized_keys").mkdir()),
+                                       "/NODE/ssh/authorized_keys is not a regular file"),
     ".deploy-prev is a link": (lambda ssh, away: ((away / "prev").mkdir(), (ssh / ".deploy-prev").symlink_to(away / "prev")),
                                "/NODE/ssh/.deploy-prev is a link or no directory"),
     "the directory is a link": (_move_away, "/NODE/ssh is a link or no directory: nothing in it is written"),
@@ -436,16 +474,102 @@ LINKED = {   # what the directory's owner puts there, and the refusal
 @pytest.mark.parametrize("case", LINKED)
 def test_a_link_in_the_keys_directory_or_a_directory_others_can_write_is_refused_and_nothing_is_written(fleet, capsys, case):
     """A link the directory's user puts there would have root's write land on a file of its choosing; a directory others can
-    write is one ssh refuses and one whose files another user can swap."""
+    write is one ssh refuses and one whose files another user can swap; a fifo would hold the step on its read forever, so
+    anything but a regular file is refused, unread. The record may be opened (and made, empty) before the child refuses; it
+    gets no line."""
     ssh, away = fleet["tmp"] / "a" / "ssh", fleet["tmp"] / "away"
     away.mkdir()
     (away / "f").write_text("another file\n")
     spoil, why = LINKED[case]
     spoil(ssh, away)
+    record = fleet["tmp"] / "a" / "research"
     before = _entries(fleet["tmp"] / "a", away)
     assert _main(fleet, "install", "a", "--by", "lane-x", "--apply", "/NODE/etc/peers") == 3
     assert f"research deploy: a: {why}" in capsys.readouterr().err
-    assert _entries(fleet["tmp"] / "a", away) == before
+    assert {p: v for p, v in _entries(fleet["tmp"] / "a", away).items() if not p.startswith(str(record))} == before
+    assert not (record / "deploy" / "record.jsonl").exists() or (record / "deploy" / "record.jsonl").read_text() == ""
+
+
+RECORD_SPOILED = {   # what the record directory's user puts at the record, and the refusal
+    "a link at the record": (lambda deploy_d, away: (deploy_d / "record.jsonl").symlink_to(away / "f"),
+                             "/NODE/research/deploy/record.jsonl is a link or not a regular file"),
+    "a link at its directory": (lambda deploy_d, away: ((away / "d").mkdir(), deploy_d.rmdir(), deploy_d.symlink_to(away / "d")),
+                                "/NODE/research/deploy is a link or no directory"),
+    "a fifo at the record": (lambda deploy_d, away: os.mkfifo(deploy_d / "record.jsonl"),
+                             "/NODE/research/deploy/record.jsonl is a link or not a regular file"),
+    "a second name of the record": (lambda deploy_d, away: ((deploy_d / "record.jsonl").write_text(""),
+                                                            os.link(deploy_d / "record.jsonl", away / "g")),
+                                    "/NODE/research/deploy/record.jsonl is not a regular file of one name"),
+}
+
+
+@pytest.mark.parametrize("route", ["the key's step", "an install", "a restart's record"])
+@pytest.mark.parametrize("case", RECORD_SPOILED)
+def test_the_record_is_appended_by_root_never_through_a_link_and_only_to_a_regular_file_of_its_own(fleet, capsys, case, route):
+    """The record's directory and the record are the research user's, and root appends to it: a link there would have root
+    write, and hand the user, a file or directory of its choosing (a link at the record to /etc/shadow, at its directory to
+    /etc/sudoers.d), a second name the same, and a fifo would hold the step forever. Each script that appends (the key's
+    step, an install, a restart's record, the attic) opens the record first and refuses, exit 3, before it changes anything."""
+    tmp, away = fleet["tmp"], fleet["tmp"] / "away"
+    deploy_d = tmp / "a" / "research" / "deploy"
+    deploy_d.mkdir(parents=True)
+    away.mkdir()
+    (away / "f").write_text("another file\n")
+    spoil, why = RECORD_SPOILED[case]
+    spoil(deploy_d, away)
+    before = _entries(tmp / "a", away)
+    if route == "a restart's record":
+        req = {"record": str(deploy_d / "record.jsonl"), "lines": [{"unit": "u", "restart": "restarted"}]}
+        r = subprocess.run([sys.executable, "-c", deploy.RECORD], input=json.dumps(req).encode(), capture_output=True)
+        assert (r.returncode, why.replace("/NODE/", f"{tmp}/a/") in r.stderr.decode()) == (3, True)
+    else:
+        path = "/NODE/etc/peers" if route == "the key's step" else "/NODE/etc/conf.json"
+        assert _main(fleet, "install", "a", "--by", "lane-x", "--apply", path) == 3
+        assert f"research deploy: a: {why}" in capsys.readouterr().err
+    assert _entries(tmp / "a", away) == before
+
+
+def test_the_keys_line_is_written_only_as_the_user_whose_home_holds_the_directory_and_the_key_is_read_beside_it(fleet, tmp_path):
+    """A directory root owns (one renamed onto the name, say) would leave the child root, and one another user owns would have
+    the line written as that user: each is refused before the child starts. The key is read in the directory, by its
+    descriptor, never by a path of its own."""
+    ssh = fleet["tmp"] / "a" / "ssh"
+    keys = (ssh / "authorized_keys").read_bytes()
+    for uid in (0, ssh.stat().st_uid + 1):
+        owner = ("import os as _o\n_fstat = _o.fstat\n"
+                 f"def _f(fd, _ino={ssh.stat().st_ino}):\n    st = _fstat(fd)\n"
+                 f"    return _o.stat_result((st.st_mode, st.st_ino, st.st_dev, st.st_nlink, {uid}, *st[5:10])) "
+                 "if st.st_ino == _ino else st\n_o.fstat = _f\n")
+        r, calls = _accept(fleet, tmp_path, owner)
+        assert r.returncode == 3 and f"{ssh} is owned by uid {uid}, not by the user whose home" in r.stderr.decode()
+        assert not [c for c in calls if c[1] in ("setgroups", "setgid", "setuid")] and (ssh / "authorized_keys").read_bytes() == keys
+    r, _ = _accept(fleet, tmp_path, key=str(fleet["tmp"] / "a" / "k.pub"))
+    assert r.returncode == 3 and "is not in" in r.stderr.decode() and (ssh / "authorized_keys").read_bytes() == keys
+
+
+def test_a_run_that_fails_once_its_temporary_file_is_made_removes_it_and_the_next_run_writes(fleet, tmp_path):
+    """A failure after the temporary file is made (a full disk, a link the kernel refuses) takes the file away, and one a run
+    killed mid-way left is removed by the next run as its own, so no later run is refused for it."""
+    ssh = fleet["tmp"] / "a" / "ssh"
+    tmp = ssh / ".authorized_keys.deploy-tmp"
+    keys = (ssh / "authorized_keys").read_bytes()
+    full = "import errno as _e, os as _o\ndef _full(*a, **k):\n    raise OSError(_e.ENOSPC, 'No space left on device')\n_o.replace = _full\n"
+    r, _ = _accept(fleet, tmp_path, full)
+    assert r.returncode == 1 and b"No space left on device" in r.stderr
+    assert not tmp.exists() and (ssh / "authorized_keys").read_bytes() == keys
+    assert not (fleet["tmp"] / "a" / "research" / "deploy" / "record.jsonl").read_text()
+    tmp.write_text("half a file a killed run left\n")
+    r, _ = _accept(fleet, tmp_path)
+    assert r.returncode == 0 and not tmp.exists() and _keys(fleet) == [OTHER, f'from="192.0.2.11" {KEY}']
+
+
+def test_every_other_line_of_authorized_keys_is_written_back_as_it_was_whatever_it_holds(fleet, tmp_path):
+    """Lines end at a newline only: a carriage return, a form feed or a line separator inside a line is part of it."""
+    ak = fleet["tmp"] / "a" / "ssh" / "authorized_keys"
+    odd = [f"{OTHER}\r", "# a comment\x0cwith a form feed\u2028and a line separator", "", f"{OTHER} \x1c again"]
+    ak.write_bytes(("\n".join(odd) + "\n").encode())
+    r, _ = _accept(fleet, tmp_path)
+    assert r.returncode == 0 and ak.read_bytes().decode().split("\n") == [*odd, f'from="192.0.2.11" {KEY}', ""]
 
 
 def test_a_roll_brings_a_new_machine_into_every_nodes_list_one_node_at_a_time_keys_first(fleet, capsys):
@@ -740,7 +864,7 @@ def _stand_in(tmp_path: Path, private: bool) -> deploy.Register:
     asked = {w for srcs in MADE.values() for s in srcs for w, _ in deploy.PLACE.findall((deploy.SRC / s).read_text())}
     names = {w for w in asked if not deploy.WILD.search(w)} | {"vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-10"}
     for i, n in enumerate(sorted(names)):
-        machine(tmp_path, n, f"192.0.2.{i + 1}", **({"private_host": f"10.0.0.{i + 1}"} if private else {}))
+        machine(tmp_path, n, f"192.0.2.{i + 1}", **({"private_host": f"198.51.100.{i + 1}"} if private else {}))
     machine(tmp_path, "vy-nebius-1", None)
     return deploy.register({"RESEARCH_MACHINES_D": str(tmp_path)})
 

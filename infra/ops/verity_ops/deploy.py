@@ -50,7 +50,10 @@ installed meanwhile, and an install that dies leaves the link on the directory i
 and the commit lacks is a change too, alone or with others: the new directory is without it and `install` says `dropped`
 (`would drop` without `--apply`); bytecode a run wrote there is no file of the tree. Afterwards every older directory goes,
 but the one just replaced and any a live process names (its cwd, command line or environment). One line per changed file
-goes to the node's record (path, blob, commit, ref, who, when), and one per dropped path, its blob null. A changed unit
+goes to the node's record (path, blob, commit, ref, who, when), and one per dropped path, its blob null. The record's directory
+and the record are the research user's and root appends to them, so every script that appends opens them first, never through
+a link and by descriptor once the directory above is open, and refuses (exit 3) a link at either, a fifo or a record with a
+second name, before it changes anything. A changed unit
 under /etc/systemd/system/ (or research's ~/.config/systemd/user/) is loaded with `systemctl [--user] daemon-reload`. Then each service the entry's `run` names whose unit
 file deploy.toml installs from `src` is restarted with `try-restart`, so a stopped one stays stopped, when the changed file is its
 unit or an environment file (/etc/vy/env/), or a process of that service still runs the old file; a node's `quiet` command
@@ -85,10 +88,13 @@ a machine out of, as it is, says why, and installs the node's other files; namin
 An entry's `accept` is a public key on the node (`/home/research/.ssh/vy-cluster.pub`): before the list is written, the
 `authorized_keys` beside the key takes it from the address of every machine the list names. Only the `from=` of the key's own
 line grows (a line is added when the file has none; one with no `from=` already takes the key from anywhere); no address is ever
-taken out, with `--allow-shrink` or without, and every other line stays as it was. The line is written as the directory's owner,
-never as root: root opens the directory and hands it to a child that takes its uid and gid before it reads or writes anything
-there, and appends the record's line once the child has written. A directory that is a link or that group or others can write,
-and a link at `authorized_keys`, at its temporary name or at `.deploy-prev`, are refused (exit 3), with nothing written.
+taken out, with `--allow-shrink` or without, and every other line stays as it was (a line ends at a newline only). The line is
+written as the user whose home holds the directory, never as root: root opens the directory and hands it to a child that takes
+that user's uid and gid before it reads or writes anything there, through the directory's descriptor only, and appends the
+record's line once the child has written. A directory that is a link, that group or others can write, or that root or another
+user owns, a key elsewhere than beside the file, a link or anything but a regular file at the key, at `authorized_keys`, at its
+temporary name or at `.deploy-prev`, are refused (exit 3), with nothing written; a fifo never holds the step. A temporary file
+a stopped run left is removed, and one a failing run made goes with it.
 `roll` puts one such PATH on every node that lists it (every node but the admin-only ones, or those `--on` names), one node at a
 time: it reads every node first and changes nothing if one refuses; then each node accepts the key, so that a machine a list comes to name
 already takes the key from every node; then each node's file is installed and read back, and the roll stops at the first node
@@ -164,7 +170,7 @@ def named(text, words):
 # the null device's mode and device numbers (or why it can't be read). For a path of `words`, its lines and which of those
 # words it names (`named`): names leave the node, never the file's text.
 PROBE = WALK + inspect.getsource(named) + r'''
-import glob, hashlib, json, sys
+import glob, hashlib, json, stat, sys
 req = json.loads(sys.argv[1])
 def blob(p):
     with open(p, "rb") as f:
@@ -218,7 +224,11 @@ for pid in filter(str.isdigit, os.listdir("/proc")):
             running.setdefault(p, []).append([start, unit(pid)])
 record = {}
 try:
-    for ln in open(req["record"]):
+    fd = os.open(req["record"], os.O_RDONLY | os.O_NONBLOCK)      # a fifo there would never end the read
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise OSError("the record is not a regular file")
+    for ln in os.fdopen(fd):
         try:
             r = json.loads(ln)
             record[r["path"]] = r
@@ -239,17 +249,50 @@ print(json.dumps({"files": files, "found": sorted(found), "links": links, "procs
                   "distrusted": distrusted, "null": null}))
 '''
 
-# On the node as root: append lines to the record, owned as the directory above the record's.
+# On the node as root: append lines to the record, owned as the directory above the record's. That directory's user owns the
+# record's directory and the record, so neither is ever named by path once the directory above is open: each is opened never
+# through a link, and the record is refused unless it is a regular file of one name. `record` opens and checks it before a
+# script changes anything (exit 3, nothing written); `append` writes through the descriptors it holds. The directories above
+# the record's are root's.
 APPEND = r'''
-import json, os, sys, time
-def append(rec, lines):
-    os.makedirs(os.path.dirname(rec), exist_ok=True)
-    with open(rec, "a") as fh:
-        for ln in lines:
-            fh.write(json.dumps(ln) + "\n")
-    top = os.stat(os.path.dirname(os.path.dirname(rec)))
-    os.chown(os.path.dirname(rec), top.st_uid, top.st_gid)
-    os.chown(rec, top.st_uid, top.st_gid)
+import errno, json, os, stat, sys, time
+def record(rec):
+    d, name = os.path.split(rec)
+    up, base = os.path.split(d)
+    def refuse(what):
+        print(f"{what}: the record is written only into a regular file of its own, never through a link; move it away", file=sys.stderr)
+        sys.exit(3)
+    try:
+        try:
+            top = os.open(up, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            os.makedirs(up)
+            top = os.open(up, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.mkdir(base, 0o755, dir_fd=top)
+        except FileExistsError:
+            pass
+        rd = os.open(base, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=top)
+    except OSError as e:
+        if e.errno in (errno.ELOOP, errno.ENOTDIR):
+            refuse(f"{d} is a link or no directory")
+        raise
+    try:
+        fd = os.open(name, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o644, dir_fd=rd)
+    except OSError as e:
+        if e.errno in (errno.ELOOP, errno.ENXIO, errno.EISDIR):
+            refuse(f"{rec} is a link or not a regular file")
+        raise
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+        refuse(f"{rec} is not a regular file of one name")
+    return top, rd, fd
+def append(ledger, lines):
+    top, rd, fd = ledger
+    os.write(fd, "".join(json.dumps(ln) + "\n" for ln in lines).encode())
+    own = os.fstat(top)
+    os.fchown(rd, own.st_uid, own.st_gid)
+    os.fchown(fd, own.st_uid, own.st_gid)
 '''
 
 # Runs on the node as root: write each file beside its target, keep the old one's owner, link the old one under .deploy-prev/,
@@ -259,6 +302,7 @@ def append(rec, lines):
 INSTALL = APPEND + WALK + r'''
 import base64, shutil, tempfile
 req = json.load(sys.stdin)
+ledger = record(req["record"])
 stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 def named(d):
     for pid in filter(str.isdigit, os.listdir("/proc")):
@@ -351,7 +395,7 @@ for f in req["files"]:
             pass
     os.replace(tmp, p)
     out.append(True)
-append(req["record"], [{"at": stamp, "path": p, "blob": blob, "commit": req["commit"], "ref": req["ref"], "by": req["by"]}
+append(ledger, [{"at": stamp, "path": p, "blob": blob, "commit": req["commit"], "ref": req["ref"], "by": req["by"]}
                        for p, blob in [*((f["path"], f["blob"]) for f, changed in zip(req["files"], out) if changed),
                                        *((p, None) for p in dropped)]])
 print(json.dumps({"changed": out, "dropped": dropped}))
@@ -361,6 +405,7 @@ print(json.dumps({"changed": out, "dropped": dropped}))
 ATTIC = APPEND + r'''
 import re, shutil
 req = json.load(sys.stdin)
+ledger = record(req["record"])
 stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 root = os.path.join(os.path.dirname(req["record"]), "attic", stamp)
 out = []
@@ -373,15 +418,16 @@ for p in req["paths"]:
     while re.search(req["backup"], os.path.basename(d)) and not os.listdir(d):
         os.rmdir(d)
         d = os.path.dirname(d)
-append(req["record"], [{"at": stamp, "path": p, "attic": d, "by": req["by"]} for p, d in zip(req["paths"], out)])
+append(ledger, [{"at": stamp, "path": p, "attic": d, "by": req["by"]} for p, d in zip(req["paths"], out)])
 print(json.dumps(out))
 '''
 
 # Runs on the node as root: append each of req["lines"] to the record, stamped.
 RECORD = APPEND + r'''
 req = json.load(sys.stdin)
+ledger = record(req["record"])
 stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-append(req["record"], [{"at": stamp, **ln} for ln in req["lines"]])
+append(ledger, [{"at": stamp, **ln} for ln in req["lines"]])
 '''
 
 # Runs on the node (as root under --apply; else as the login, and it only reads): the authorized_keys file req["authorized"]
@@ -390,14 +436,17 @@ append(req["record"], [{"at": stamp, **ln} for ln in req["lines"]])
 # other line is written back as it was, the old file linked under .deploy-prev/. It prints counts, never an address. Exit 3
 # is a refusal, before anything changed.
 # The directory is its user's, so nothing in it is read or written as root: root opens the directory once, never through a
-# link and refusing one that group or others can write, and a child that has taken the directory's uid and gid does the rest
-# through that descriptor. A link at authorized_keys, at its temporary name or at .deploy-prev is refused, and the temporary
-# file is made new. Root appends the record's line once the child has written.
+# link, refusing one that group or others can write or that isn't owned by its home's owner (never root), and a child that has
+# taken that user's uid and gid does the rest through that descriptor, never by a path. The key is read beside the file, from a
+# regular file only; a link at the key, at authorized_keys, at its temporary name or at .deploy-prev is refused, as is anything
+# there but a regular file (a fifo never blocks the step). A temporary file a stopped run left is removed, and one this run
+# made goes on any failure. Root opens the record before the child starts and appends its line once the child has written.
 ACCEPT = APPEND + r'''
-import errno, re, stat
+import re
 req = json.load(sys.stdin)
 key, ak, want = req["key"], req["authorized"], req["sources"]
 d, name = os.path.split(ak)
+home, kname = os.path.dirname(d), os.path.basename(key)
 tmp, prev = f".{name}.deploy-tmp", ".deploy-prev"
 stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 class Refusal(Exception):
@@ -416,17 +465,27 @@ def nolink(n, flags, mode=0o600):
             raise
         raise Refusal(f"{os.path.join(d, n)} is {is_}: nothing is written through a link or over a file this step didn't make; "
                       "remove it") from None
+def regular(n):
+    """`n`'s text and status, read only from a regular file (a fifo's read would never end), never through a link."""
+    fd = nolink(n, os.O_RDONLY | os.O_NONBLOCK)
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode):
+        os.close(fd)
+        raise Refusal(f"{os.path.join(d, n)} is not a regular file: nothing is read from it or written over it; remove it")
+    with os.fdopen(fd, "rb") as f:
+        return f.read().decode(), st
 def work():
     try:
-        with open(key) as f:
-            kind, body, *comment = f.read().split()
+        kind, body, *comment = regular(kname)[0].split()
     except PermissionError as e:
         return unread(key, e)
     except (OSError, ValueError) as e:
         raise Refusal(f"no public key at {key} ({type(e).__name__}): copy the key and its public half to this machine first")
     try:
-        with os.fdopen(nolink(name, os.O_RDONLY)) as f:
-            lines, st = f.read().splitlines(), os.fstat(f.fileno())
+        text, st = regular(name)
+        lines = text.split("\n")
+        if lines[-1] == "":
+            lines.pop()
     except FileNotFoundError:
         lines, st = [], None
     except PermissionError as e:
@@ -445,7 +504,7 @@ def work():
     add = [] if any(m is None for m in lists) else [s for s in want if s not in have]
     if not mine:
         how = "new"
-        lines.append(f'from="{",".join(want)}" {kind} {body} {" ".join(comment) or os.path.basename(key)}')
+        lines.append(f'from="{",".join(want)}" {kind} {body} {" ".join(comment) or kname}')
     elif add:
         how = "extended"
         (i, o, rest), m = mine[0], lists[0]
@@ -461,24 +520,44 @@ def work():
             keep = nolink(prev, os.O_RDONLY | os.O_DIRECTORY)
         except FileNotFoundError:
             pass
-    with os.fdopen(nolink(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as fh:
-        fh.write("\n".join(lines) + "\n")
-        os.fchmod(fh.fileno(), stat.S_IMODE(st.st_mode) if st else 0o600)
-    if st is not None:
-        if keep is None:
-            os.mkdir(prev, 0o700, dir_fd=dfd)
-            keep = nolink(prev, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        left = os.stat(tmp, dir_fd=dfd, follow_symlinks=False)
+    except FileNotFoundError:
+        left = None
+    if left is not None:
+        if not stat.S_ISREG(left.st_mode):
+            raise Refusal(f"{os.path.join(d, tmp)} is a link or not a regular file: nothing is written through a link or over "
+                          "a file this step didn't make; remove it")
+        os.unlink(tmp, dir_fd=dfd)                          # a run that was stopped left it
+    fd = nolink(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write("\n".join(lines) + "\n")
+            os.fchmod(fh.fileno(), stat.S_IMODE(st.st_mode) if st else 0o600)
+        if st is not None:
+            if keep is None:
+                os.mkdir(prev, 0o700, dir_fd=dfd)
+                keep = nolink(prev, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.link(name, f"{name}.{stamp}", src_dir_fd=dfd, dst_dir_fd=keep, follow_symlinks=False)
+            except FileExistsError:
+                pass
+        os.replace(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd)
+    except BaseException:
         try:
-            os.link(name, f"{name}.{stamp}", src_dir_fd=dfd, dst_dir_fd=keep, follow_symlinks=False)
-        except FileExistsError:
+            os.unlink(tmp, dir_fd=dfd)
+        except OSError:
             pass
-    os.replace(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd)
+        raise
     return {**out, "wrote": True}
 try:
     if not want:
         raise Refusal(f"no machine to take the key at {key} from")
+    if os.path.dirname(key) != d:
+        raise Refusal(f"the key {key} is not in {d}: it is read beside the file that takes it")
     try:
-        dfd = os.open(d, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        hfd = os.open(home, os.O_RDONLY | os.O_DIRECTORY)
+        dfd = os.open(os.path.basename(d), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=hfd)
     except FileNotFoundError:
         raise Refusal(f"no public key at {key} (no directory {d}): copy the key and its public half to this machine first") from None
     except PermissionError as e:
@@ -486,12 +565,17 @@ try:
         sys.exit(0)
     except OSError:
         raise Refusal(f"{d} is a link or no directory: nothing in it is written") from None
-    own = os.fstat(dfd)
+    up, own = os.fstat(hfd), os.fstat(dfd)
+    os.close(hfd)
     if own.st_mode & 0o022:
         raise Refusal(f"{d} is writable by group or others (mode {stat.S_IMODE(own.st_mode):o}): nothing in it is written")
+    if own.st_uid == 0 or own.st_uid != up.st_uid:
+        raise Refusal(f"{d} is owned by uid {own.st_uid}, not by the user whose home {home} is (never root): nothing in it is "
+                      "written, since the line is written as that user")
 except Refusal as e:
     print(e, file=sys.stderr)
     sys.exit(3)
+ledger = record(req["record"]) if req["apply"] else ()
 sys.stdout.flush()
 sys.stderr.flush()
 r, w = os.pipe()
@@ -500,6 +584,8 @@ if pid == 0:
     os.close(r)
     rc = 0
     try:
+        for fd in ledger:
+            os.close(fd)
         if os.geteuid() == 0:
             os.setgroups([])
             os.setgid(own.st_gid)
@@ -522,8 +608,8 @@ if rc:
     sys.exit(rc if rc > 0 else 1)
 out = json.loads(got)
 if out.pop("wrote", False):
-    append(req["record"], [{"at": stamp, "path": ak, "accept": key, "added": out["added"], "commit": req["commit"], "ref": req["ref"],
-                            "by": req["by"]}])
+    append(ledger, [{"at": stamp, "path": ak, "accept": key, "added": out["added"], "commit": req["commit"], "ref": req["ref"],
+                   "by": req["by"]}])
 print(json.dumps(out))
 '''
 BACKUP = re.compile(r"\.(bak|prev|orig)([-.\d_]|$)")       # a hand deploy's copy: x.py.bak-20261001T0611Z, x.sh.prev, x.orig
@@ -1241,6 +1327,8 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
                           for f in files] + lost([p for p in seen["found"] if p not in want], "would drop") + skipped}
     req = {"files": files, "commit": commit, "ref": ref, "by": by, "record": node.record}
     r = run(node.name, ["sudo", "-n", "python3", "-c", INSTALL], json.dumps(req).encode())
+    if r.returncode == 3:
+        raise Refused(f"{node.name}: {r.stderr.decode(errors='replace').strip()[-400:]}")
     if r.returncode != 0:
         raise RuntimeError(f"{node.name}: install failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
     changed, dropped = (json.loads(r.stdout)[k] for k in ("changed", "dropped"))
@@ -1407,6 +1495,8 @@ def attic(node: Node, ref: str, by: str, paths: list[str], backups: bool, run: R
         return [(p, None) for p in pick]
     req = {"paths": pick, "record": node.record, "by": by, "backup": BACKUP.pattern}
     r = run(node.name, ["sudo", "-n", "python3", "-c", ATTIC], json.dumps(req).encode())
+    if r.returncode == 3:
+        raise Refused(f"{node.name}: {r.stderr.decode(errors='replace').strip()[-400:]}")
     if r.returncode != 0:
         raise RuntimeError(f"{node.name}: attic failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
     return list(zip(pick, json.loads(r.stdout)))
