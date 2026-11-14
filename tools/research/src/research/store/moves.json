@@ -2479,6 +2479,11 @@
         "benchmarks/rho/": "benchmarks/slowdown/",
         "benchmarks/rho/rho/": "benchmarks/slowdown/slowdown/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/policy/inference_only/verifier/inference_only/": "verity/protocols/policy/inference_only/verifier/"
+      }
     }
   ]
 }

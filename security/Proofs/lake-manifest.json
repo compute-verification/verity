@@ -143,7 +143,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/protocols/policy/inference_only/verifier/inference_only/lean",
+   "../../verity/protocols/policy/inference_only/verifier/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

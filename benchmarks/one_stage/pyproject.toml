@@ -48,7 +48,7 @@ artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verif
 worker_gb = 6
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
-# `verity/protocols/policy/inference_only/verifier/inference_only/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
+# `verity/protocols/policy/inference_only/verifier/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
 # that package's `inference-only` check, which its tests `lake build` there, beside one-stage v1's case through
 # `sampled-proofs-one-stage`, v2's through `sampled-proofs-one-stage-zk` and remote's sampled proofs case through
 # `vstar-recursive sampled` (`verity/protocols/proofs/recursion/verifier/recursive`); its slow test builds the 4,32,4 class's
@@ -100,7 +100,7 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
-          "verity/protocols/policy/inference_only/verifier/inference_only/lean/lakefile.toml",
+          "verity/protocols/policy/inference_only/verifier/lean/lakefile.toml",
           "adapters/vllm/verity_vllm", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
           "benchmarks/torch_gpu/p2_stage/layout.py", "benchmarks/torch_gpu/p2_stage/stage.py",
