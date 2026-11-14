@@ -43,9 +43,13 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import restack as RS  # noqa: E402
 
-MOVE_CHECK = "tools/verity/check/move_check.py"
+#: the check's directory: `tools/check/`, or `tools/verity/check/` in a tree from before the move that put it there. A base
+#: holds `move_check.py` and the pins list in one of them, and this checkout's is the one `MOVE_CHECK` and `PINS` name
+CHECK_DIRS = ("tools/check/", "tools/verity/check/")
+CHECK_DIR = next((d for d in CHECK_DIRS if (HERE.parents[1] / d).is_dir()), CHECK_DIRS[0])
+MOVE_CHECK = f"{CHECK_DIR}move_check.py"
 #: what the scripts import from their own checkout: `tools/move/`'s other scripts and the pins list
-MOVE_DIR, PINS = "tools/move/", "tools/verity/check/pins.py"
+MOVE_DIR, PINS = "tools/move/", f"{CHECK_DIR}pins.py"
 #: a map is a file directly in `tools/move/`, where `move_check.py` reads word maps and drive's `Move:` line names them
 MAP = re.compile(r"^tools/move/[\w.-]+\.toml$")
 #: each kind of map's move line, which names its script (`restack.LINE_SCRIPT`) for whoever reruns the move
@@ -67,7 +71,8 @@ def git(repo: Path, *args: str) -> str:
 def scripts_at(repo: Path, rev: str, dest: Path) -> None:
     """`tools/move/`'s scripts, `move_check.py` and the pins list as ``rev`` has them, written under ``dest`` at their paths so
     each finds its imports beside it."""
-    for line in subprocess.run(["git", "ls-tree", "-z", rev, "--", MOVE_DIR, MOVE_CHECK, PINS], cwd=repo, check=True,
+    for line in subprocess.run(["git", "ls-tree", "-z", rev, "--", MOVE_DIR,
+                                *(d + f for d in CHECK_DIRS for f in ("move_check.py", "pins.py"))], cwd=repo, check=True,
                                capture_output=True, text=True).stdout.split("\0"):
         meta, _, path = line.partition("\t")
         if path.endswith(".py") and meta.split()[1:2] == ["blob"]:
@@ -155,7 +160,9 @@ class Stage:
         commit = git(self.repo, "commit-tree", tree, "-p", parent, "-m", message)
         git(self.wt, "reset", "-q", "--soft", commit)
 
-        c = self.run(MOVE_CHECK, parent, commit, *self.extra, "--json")
+        move_check = next((d + "move_check.py" for d in CHECK_DIRS if (self.scripts / d / "move_check.py").is_file()),
+                          MOVE_CHECK)
+        c = self.run(move_check, parent, commit, *self.extra, "--json")
         try:
             report = json.loads(c.stdout)
         except json.JSONDecodeError:
