@@ -4,7 +4,7 @@ The checkpoint is a safetensors file of two decoder layers in the int8 pin's for
 [N, 1] scale, a bf16 embedding and norms) in an HF cache, held to a manifest the test writes; P2 runs at the small point's
 1,024-bit blocks, 8 a segment (`pous._base`), so the adapter encodes it in milliseconds. The memory challenger's side is
 `challenger_party.serve` in a thread, signed by the PoUS tests' test signer on a counter clock, and the prover answers it
-over a socket pair, as `challenger_session.session` would across hosts. The answer is read back as the composed run reads it
+over a socket pair, as `challenger_prover.session` would across hosts. The answer is read back as the composed run reads it
 (`served_verdicts.piece_row`, `block_record.leg`).
 """
 from __future__ import annotations
@@ -33,6 +33,7 @@ from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier.schemes.p2 import POINT, P2Params
 from verity.protocols.accounting.poub.verifier import ledger, p2_case, p2_lean
@@ -125,8 +126,8 @@ def served(tmp_path, monkeypatch) -> Served:
 
 
 def _in_process_party(signer, log, keep=None, record=lambda request: request):
-    """`challenger_session.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
-    test signer, a counter clock) and the prover's over a socket pair (`challenger_session.answer`); with `keep`, the
+    """`challenger_prover.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
+    test signer, a counter clock) and the prover's over a socket pair (`challenger_prover.answer`); with `keep`, the
     challenger's device, where it keeps `record` of each completed session's request as `challenger_party.main` does."""
     calls = []
 
@@ -142,7 +143,7 @@ def _in_process_party(signer, log, keep=None, record=lambda request: request):
             served_side = pool.submit(challenger)
             try:
                 with a, a.makefile("rwb") as f:
-                    rounds = CS.answer(f, request["block_bytes"], respond)
+                    rounds = CR.answer(f, request["block_bytes"], respond)
             finally:
                 sid, signed = served_side.result()
         if keep is not None:
@@ -197,7 +198,7 @@ class Auditor:
 def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, **kw):
     auditor = auditor or Auditor(tmp_path)
     monkeypatch.setattr(CS, "salt", auditor.salt)
-    monkeypatch.setattr(CS, "session", auditor.session)
+    monkeypatch.setattr(CR, "session", auditor.session)
     monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
     kw.setdefault("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,

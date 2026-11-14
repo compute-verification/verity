@@ -1,10 +1,11 @@
-"""The memory challenger's session as PoUS runs it: the wire both sides speak, the prover's side, the request and the id
-a session runs under, and one session with the challenger's side as PoUS is handed it. The challenger's side is the
+"""The memory challenger's session as PoUS runs it: the wire both sides speak, the request and the id a session runs
+under, and the challenger's side as PoUS is handed it. The challenger's side is the
 auditor-trusted device (`challenger_party`, on a host the developer doesn't control: the challenger host, `trusted-host`),
 which imports this module and which this module never imports; how it runs a session is its docstring's.
 
 The two sides are parties of the deployment layer (`verity.runtime`), the challenger (`challenger_party.Challenger`)
-and the prover (`Prover`), whose messages are one frame each way a round (`MANIFEST`):
+and the prover (`verity.protocols.accounting.pous.prover.challenger_prover.Prover`), whose messages are one frame each
+way a round (`MANIFEST`):
 
 ~~~text
 memory-challenger -> prover   Warmup {index} ... then per round Index {index} (coins); End
@@ -12,7 +13,7 @@ prover -> memory-challenger   per frame Block, the whole block (private)
 ~~~
 
 `Frames` is their codec over the session's stream, `u64be index` for `Warmup` and `Index`, `u64be 2^64 − 1` for `End`
-and the whole block for a `Block`, which `run` steps them on: `answer` is the prover's party run there. Each side reads
+and the whole block for a `Block`, which `run` steps them on (`challenger_prover.answer` runs the prover there). Each side reads
 its connection through `Polled`, which polls for up to `SPIN_NS` before it blocks, so neither host's CPU sleeps through
 a round.
 
@@ -35,8 +36,8 @@ its own host under `SETUPS`, from which PoUB's verifier on the same host builds 
 
 `Side` is the challenger's side as what starts a run hands it over, wherever `period.json` puts it, and
 `command(device)` the argv that starts it on this machine. `salt(side, audit, commitment)` asks it for a salt, and
-`session(side, request, respond)` is PoUS's: one session with the side, each index answered with `respond(index)`
-(`answer`). `placement` says which host ran each party and whether `trusted-host`'s premise holds.
+`challenger_prover.session(side, request, respond)` is one session with the side, each index answered with
+`respond(index)`. `placement` says which host ran each party and whether `trusted-host`'s premise holds.
 """
 
 from __future__ import annotations
@@ -235,41 +236,6 @@ def coin_session_id(coins: bytes, domain: str, node: str, root: bytes) -> bytes:
     return derive(coins, domain, {"node": node, "setup": root}).stream("session", 32)
 
 
-class Prover:
-    """The prover: each index answered with its whole block (`respond`, else its machine's `capabilities["store"]`)
-    until the challenger ends the session; it finishes with the frames it answered, the warm-ups among them."""
-
-    def __init__(self, respond: Callable[[int], bytes] | None = None) -> None:
-        self.respond = respond
-
-    def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
-        self.block_bytes, self.answered = params["block_bytes"], 0
-        if self.respond is None:
-            self.respond = identity.capabilities["store"]
-        return []
-
-    def on(self, r: Received) -> list[Any]:
-        m = r.message
-        if m.type in ("Refused", "Closed"):
-            return [Finish(self.answered, m.fields["name"] if m.type == "Refused" else "closed")]
-        if m.type == "End":
-            return [Finish(self.answered)]
-        block = self.respond(m.fields["index"])
-        if len(block) != self.block_bytes:
-            raise ValueError(f"an answer is the whole {self.block_bytes}-byte block, not {len(block)} bytes")
-        self.answered += 1
-        return [Send(CHALLENGER, Message("Block", body=block))]
-
-
-def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes]) -> int:
-    """The prover's side over the connection `f`: `Prover`, each index answered with `respond(index)` until the
-    challenger ends the session, the collector paused as on the challenger's side; the frames answered, the warm-ups
-    among them."""
-    with mc.collector_paused():
-        done, _ = run(Prover(respond), {"block_bytes": block_bytes}, Identity(PROVER), f, Frames(), peer=CHALLENGER)
-    return done.outcome
-
-
 def command(device: str | Path) -> tuple[str, ...]:
     """The argv that starts the challenger's side as a process on this machine, its key and logs in `device`."""
     return (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0")
@@ -282,18 +248,6 @@ def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str,
     return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
             PREMISE: (f"holds: the memory challenger ran on {host}, not the prover's {node}" if held else
                       f"unmet: the memory challenger ran on the prover's node {node}")}
-
-
-def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], bytes]) -> dict[str, Any]:
-    """One session with the challenger's side `side` starts: `request` sent, each index answered with `respond`, the
-    side's report back, with `rounds`, the timed rounds the prover answered (the frames less the side's warm-ups)."""
-
-    def drive(s: socket.socket) -> int:
-        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        return answer(Polled(s), request["block_bytes"], respond)
-
-    out, rounds = side.talk(request, drive)
-    return out | {"rounds": rounds - out.get("warmups", 0)}
 
 
 def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:
@@ -343,6 +297,5 @@ def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 __all__ = ["CHALLENGER", "END", "ID", "MANIFEST", "MODULE", "PARAMS", "PREMISE", "PROVER",
-           "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Codec", "Frames", "Polled", "Prover", "answer",
-           "coin_session_id", "command", "placement", "request_of", "run", "salt", "session", "session_id", "setup_of",
-           "sleep_until"]
+           "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Codec", "Frames", "Polled", "coin_session_id", "command",
+           "placement", "request_of", "run", "salt", "session_id", "setup_of", "sleep_until"]

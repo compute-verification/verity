@@ -25,7 +25,7 @@ DIR``).
    inputs are kept as it sent them, for the tie. A challenger that samples no salt leaves the period undecided.
 3. **The session**: the memory challenger's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each of ``--rounds``
-   indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_session.session`). The request names the window's
+   indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_prover.session`). The request names the window's
    binding and setup's published outputs; the challenger refuses it unless they carry the salt it logged and the
    commitment it was sampled after, and runs one session a binding, under the id derived from them
    (`challenger_session.session_id`).
@@ -94,6 +94,7 @@ import torch
 from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import run as R
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
@@ -400,7 +401,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
             sid = CS.session_id(bind, s.commitment, s.salt)
             t = time.monotonic()
             try:
-                rep = CS.session(party, CS.request_of(node, point, s.root, audit=bind, published=published),
+                rep = CR.session(party, CS.request_of(node, point, s.root, audit=bind, published=published),
                                  opt.prover(()))
                 key = bytes.fromhex(rep["public_key"])
                 session = R.ChallengePhaseRecord.from_json(rep["session"])
