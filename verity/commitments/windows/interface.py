@@ -871,7 +871,8 @@ FREE_KINDS = ("peer", "weights", "table", "advice")
 @dataclass(frozen=True)
 class Free:
     """Template ``reader``'s units ``[at, at + units)`` read rows ``[c0, c0 + C)`` of their ``port`` (``cut``, its every row
-    by default) that no declaration fills, named by their ``kind`` (`FREE_KINDS`)."""
+    when absent) that no declaration fills, named by their ``kind`` (`FREE_KINDS`). The rows are the port's at the
+    record's own cut of it (``cuts``), so a range within a port is whole rows of that cut."""
     reader: str
     port: str
     at: int
@@ -1245,8 +1246,9 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
         _words, k = port(f.reader, f.port, f.doc())
         units(f.reader, f.at, f.units, f.doc())
         c0, c = f.cut if f.cut is not None else (0, k)
-        if f.kind not in FREE_KINDS or c0 < 0 or c < 1 or c0 + c > k:
-            raise ValueError(f"free rows {f.doc()}: of a kind of {FREE_KINDS}, rows [c0, c0 + C) of its port's {k}")
+        if f.kind not in FREE_KINDS or c0 < 0 or c < 1 or c0 + c > k or f.cut == (0, k):
+            raise ValueError(f"free rows {f.doc()}: of a kind of {FREE_KINDS}, rows [c0, c0 + C) of its port's {k} at the "
+                             "record's cut, and no cut where they are the whole port")
         rects.append((f.reader, f.port, f.at, f.at + f.units, c0, c0 + c, f.doc()))
     _disjoint(rects, "inputs")
     if free or ranks is not None:

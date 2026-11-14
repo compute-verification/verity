@@ -1119,7 +1119,7 @@ CI_TOML = "".join(f'[[job]]\nname = "{j}"\nowner = "{o}"\n\n' for j, o in (("pyt
 def ci_toml(argv, refs=None) -> subprocess.CompletedProcess | None:
     """GitHub's answer to `monitors._jobs`' read of ci.toml at a commit (`CI_TOML`, or ``refs``'s answer for that ref: None for
     a commit GitHub doesn't hold), None for another command."""
-    if argv[:2] != ["gh", "api"] or "/contents/tools/verity/check/ci.toml?ref=" not in argv[-1]:
+    if argv[:2] != ["gh", "api"] or "/contents/tools/check/ci.toml?ref=" not in argv[-1]:
         return None
     text = (refs or {}).get(ref := argv[-1].rpartition("?ref=")[2], CI_TOML)
     return subprocess.CompletedProcess(argv, *((0, text, "") if text is not None else

@@ -6,7 +6,9 @@ public import Spot.Pieces
 /-!
 # `sampled-proofs-verifier`: the verifier, and the challenger's coins
 
-The verifier's functions (`Pieces.verifier`) behind `Difftest.respond`'s line protocol, and one more request,
+The verifier's functions (`Pieces.verifier`: the one-stage audit's checks, the stream's and the fleet's rules, and the
+challenger's ledger and session checks, `challenger_ledger`, `challenger_head`, `challenger_session`,
+`challenger_credited` and `challenger_pinned`) behind `Difftest.respond`'s line protocol, and one more request,
 `{"fn": "coins", "input": n}`: `n` bytes of the operating system's randomness (`IO.getRandomBytes`, A3's
 `uniform/io-getrandombytes`), answered `{"output": HEX}`: the entropy a challenger flips its coins from
 (`LiveChallenger`, through `one_stage.verifier.coins`), on the challenger's own host, so the Python never reads it from the
