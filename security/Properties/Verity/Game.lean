@@ -1049,7 +1049,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
 /-- **The log subprotocol `a`'s check read is the whole log of a party it reads**: of one of the pinned parties `a`'s
 check reads (`AuditorPins.reads`), every release, in order, and no other (`coinsRead`, `logAt`; a check that reads none
 binds nothing). The party signs its log's line count and the lines' SHA-512 chain at its close (`close_session`), and
-v2 refuses a session whose signed close is missing or doesn't match its log (`Spot.Challenger.sessionOf`), so any other
+v2 refuses a session whose signed close is missing or doesn't match its log (`Spot.Challenger.challengePhaseOf`), so any other
 log a check read is a forgery of that party's LMS signature, on a message its pinned key never signed, in this play or
 an earlier one, which `a`'s error bounds where its forgers meet `Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`,
 `Vocab.epsForge`), or a SHA-512 collision of the chain, which its finder outputs. -/
