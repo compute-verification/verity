@@ -490,7 +490,7 @@ a card, with the counts by mark and every hole.
   `bu_12_9.json`, CUDA 13's in `sass_isa_tables.json`), every dotted form of the CUDA 13
   libraries' SASS corpus (`corpus.json`, with instruction counts), every census kind, and every unit the card table
   lists (`theta.UNITS`). The three JSON tables, all in `data/cover/`, are generated, so they are fetched fixtures
-  (`fixtures/artifacts.json`, gitignored): `suites.py` fetches them before the tests, and `uv run research data
+  (`artifacts.json`, gitignored): `suites.py` fetches them before the tests, and `uv run research data
   fetch-fixtures benchmarks/machine_model/data/cover` brings them into a checkout. `rows.toml`,
   the reviewed table, stays in Git.
 - **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, ACCEL op (`envelope`) with its pipe, stores or formats,
