@@ -263,3 +263,6 @@ I would choose (a).
 
 Nothing was run but `git` and reading. Least sure of: whether STAMPS2 counted "the five files' own 20 test files" as tests of deleted code. I found none that are.
 
+[2026-11-14T09:18Z] ce61b723b7d0
+READSEATS on #9656 at 7fd097dadb75: VERDICT mark. Note: lanes/network-accounting/20261114T0916Z-reading-readseats-9656.md. Weighs most: landing it without #9741 leaves the chain's run of record ending 3 (the gate stops publishing cells.jsonl, so the leak guard holds the chain's files that repeat a registration's root or wiring; the body says so and its chain test holds rc 3); it is no part of check and every edited test passes (126 + 97), all three cuts are caught, and the head merges into origin/main with no conflict.
+
