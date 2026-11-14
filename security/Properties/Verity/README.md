@@ -40,8 +40,7 @@ No clause of the conclusion reads either: the conclusion's clause for the policy
 The lock (`security/Properties/lean-audit.json`) records each with no named assumption among its hypotheses, which are
 the targets and, at remote, the two statements, and with its two witnesses at the idle deployment (`Idle.lean`):
 `*_honest`, every target (and `Vocab.WiresSound`) holds at `Idle.unbounded`, and `*_nontrivial`, the conclusion fails
-at `Idle.exact` for a verifier that accepts everything. `GateARow` reads no deployment, so no instance concludes it:
-the lock lists it under `witnesses_assumed`.
+at `Idle.exact` for a verifier that accepts everything. `GateARow` reads no deployment, so no instance concludes it.
 
 ## The subprotocols each composes
 

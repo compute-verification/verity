@@ -96,6 +96,7 @@
   "Properties.Core.Site",
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
+  "Properties.Verity.Committed",
   "Properties.Flock.Nets",
   "Properties.Flock.ReadNet",
   "Properties.Assumptions"
@@ -2146,9 +2147,6 @@
    "type_hash": "0f8b2d89ec524d62964511f87a23864eacc612e51d9b331978880e16cfe01502",
    "unfolded_hash": "1f21b6df5fa96097fb3a6c6c3364bd53addbd00548769bc4ed2429919ffb7ede"
   }
- },
- "witnesses_assumed": {
-  "Verity.GateARow": "not an assumption about the world but an unproved count over code that reads no deployment: every unit of `Flock.Bridge.circuitOfFile`, at files that parse, has `Spot.FilePart.ofCircuit`'s `m` gates; no instance concludes it, so until Lean proves it a witness leaves it as it stands."
  },
  "layers": {
   "Properties.Pouw": {
