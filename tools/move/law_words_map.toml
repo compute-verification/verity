@@ -246,7 +246,7 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.p
 
 [keep]
 patterns = ['"[a-z0-9_.-]*laws?[a-z0-9_.-]*"', "'[a-z0-9_.-]*laws?[a-z0-9_.-]*'", 'note:[\w./-]+', 'art:[0-9a-f]+',
-            'cursor/[\w./-]+', '"[^"\n]*\blaws?\b[^"\n]*"', '(?<=\.)(?<![^\w.]c\.)(?<![^\w.]CR\.)(?<![^\w.]Cr\.)laws?\b',
+            'cursor/[\w./-]+', '(?<=\.)(?<![^\w.]c\.)(?<![^\w.]CR\.)(?<![^\w.]Cr\.)laws?\b',
             '(?<=\n    )law(?=: (?:Mapping|dict)\[str, Any\]\n)']
-strings = ["the registration's law {law!r} is not subset:K′", "the registration's law is not subset:K′",
+strings = ["the registration's law {", "the registration's law is not subset:K′",
            "and ``law`` (the"]
