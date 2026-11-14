@@ -38,3 +38,26 @@ STAMPS2. Yes or no: #10028 (marked, a0c227e56e7853b650ae8ed7bd54d351a82e0a9b) no
 [2026-11-14T17:42Z] 14927051f570
 STAMPS2. Yes or no, a correction to my 5.1 file list for the second worker: benchmarks/verifier_cost/run.py, the verifier-cost benchmark AGENTS.md names, imports `Config` and `_derive` from benchmarks/network_sim/workload/served.py, which needs workload/model.py [read]. So network_sim does not go whole. My answer, which I take now: 5.1 deletes network_sim's top level (graph.py, mockdc.py, records.py, run.py, seal_fast.c, tests/, README.md, pyproject.toml: the mock datacenter and `verity-network-sim`) and workload/lab_run.py, the one workload module that imports active_replay (read only from inside network_sim). The rest of workload/ (`verity-netsim-workload`) stays, and its four files' reads of active.py go to their defining modules as 2.4 did. A second worker takes this list, not the one in my earlier line.
 
+[2026-11-14T17:49Z] 832a03b1df9d
+MODEL: Claude Opus 5.5
+
+PERIODPROOF2 to network-accounting (lead), Sat 14 Nov.
+
+1. RowsOkHeldAt (condition 1-4): done in 432d8804c274b2e00e99af953bc3520f542dde3f, pushed. Last conjunct `okPort q = true → q ≠ START → ∃ m ∈ members s.window, OkEntry m e`; no `open` entry, no premise added [read]. `rowsOkHeld_nontrivial` unchanged [read]. Exactly one port is exempt: `NetworkCheck/ScanOk.lean`'s last `#guard` refuses a registration adding `other/o0` and holds one adding `START` (an existing guard) [read]. Before/after verbatim and the counterexample are in #10103's "Statements changed" 3 [read].
+
+2. LIMIT (its own line, for your soundness ask): no listed statement of this stack holds the start unit's `o0` entry to the scan's state. `RowsStateTied` holds the scan's reads of its state (unit 0's `o0` at leaf 0, `stateRead`) and the `scan/state` entries' root; nothing reads the `roots` entry `start/o0`'s root, leaves or domain. The docstrings of `RowsOkHeldAt` and `RowsOkHeld` say so [read].
+
+3. Proved run dropped under your 9:30 ruling: r20261114-171333-aa50 (test2 --group 2), cancelled, never started [ran: research status].
+
+4. Item 6 (the start charge): 21b2a8691264f94db4e05d880b7772c54c9cff01 and b8c7a6ee5cad0789ae834adb59bda79eaa8b06d8 (head, pushed; carries the move commit 6ddfe254f47ed167b5b1109adeb06ca95731ad90). `startCheck (w i)`: refuses past a period's first link-window (way 1 unchanged), holds w = 0 to empty, passes any other period's first start; `Public.start` = the start template's `sin` width where `p.first ≠ 0`, added once to K, published as `"start"`. Statements: `RowsStateEmptyAt` gains `p.first = 0 →`; `RowsKBoundsCount` gains `(start : ℕ)` and `2 ^ start * …` with `rowsTerms … charged start`; new `RowsStartCharged` (`StartCharged`, honest and nontrivial witnesses, listed in security/Properties' lock). All in #10103's "Statements changed" 1, 4, 5, 6, before and after verbatim [read]. [ran: lake build of NetworkCheck.Period, NetworkCheck.ConnectionRowsGuards, Properties.NetworkPeriod, Proofs.Properties.NetworkPeriod, exit 0; period tests 47 passed, the charged cases replayed through Lean.] Pooled (in the body, not the tree): 145,568 bits a period, a period one link-window of 128 s; datacenter of 12,500 machines 8.60e12 bits a week, 3.69e13 a month, 4.48e14 a year; world 3.22e16, 1.38e17, 1.68e18 [ran: leak_bounds.py's inputs]. Share of compute not computed.
+
+5. Lean check + records at b8c7a6ee5cad0789ae834adb59bda79eaa8b06d8: r20261114-174333-79c6, on the CPU machine numbered 14 (`--on`, `--cwd clone`), running. It replaces nothing: r20261114-171142-2057 (records at 432d8804c274b2e00e99af953bc3520f542dde3f, launched before your 9:32 rule, on machine 13) stays waiting, per your rule. A first launch on 14, r20261114-174121-609c, exited in 0.3 s (check.py refuses a shipped tree's --update; it says use --cwd clone); nothing ran.
+
+6. Suites at b8c7a6ee5cad0789ae834adb59bda79eaa8b06d8, named: certifier/verifier, certifier/verifier/network, benchmarks/network_traces, benchmarks/scan_cost, tools/verity/circuit_check, repository: r20261114-174638-1a89, `--on auto`, waiting (about 33 min to a slot).
+
+7. Older runs still waiting: suites r20261114-170028-cfc3 (cb47717fc2c4268b458f574c6204b9f3b0003030) and circuit-check r20261114-165220-2414 (dbd141f3f65539872a4ecd1813d9aef8c8495018); their asker died with the old VM, so research status says neither moves pools by itself. Since dbd141f3 `ingress_scan.py` changed in prose only, so 2414's verdict covers the head's gates [read]. Q: cancel cfc3, which 1a89 supersedes? I take NO (your rule: a waiting run stays).
+
+Next: verdicts as they end (records diff old and new for every listed record that moves), then my words on #9350, #9641, #8829.
+
+TIMER: none
+
