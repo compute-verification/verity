@@ -119,3 +119,12 @@ Tests [ran]:
 
 TIMER: none
 
+[2026-11-14T20:33Z] 0d30886c5d05
+LAYOUTREAD2, Sat 14 Nov 12:42 PM PST, two maps dry-run ahead of their pushes, from the seats' branches: `law` (`law_words_map.toml` at `77298074e05`, push 1:10 PM PST) and `sampled-proofs` (`sampled_proofs_words_map.toml` at `f842c51a014`, push 1:30 PM PST). **Neither breaks anything of ours, and the integrator may carry across both as they are. law touches none of our files. sampled-proofs touches 23 lines in 16 of ours: prose, and seven calls of SPOT's Lake executable that follow its lakefile. Every kept byte survives.** [ran: each map run for real with `rename.py` on a scratch worktree of collect `6f26856db0c8`, our paths and the certifier's Lean in `security/` diffed, residuals grepped; the maps as on those branches, which may still change before the push]
+
+- **law:** 36 files changed tree-wide, none in `verity/protocols/accounting/certifier/`, `benchmarks/network_traces/`, `benchmarks/network_e2e/`, `benchmarks/certifier_*/`, the certifier's Lean or our `tools/move/warden_*map.toml`. [ran]
+- **sampled-proofs, sites in ours:** prose in `certifier/verifier/PROTOCOL.md` (3), `advice.py`, `cache_step.py`, `protocol/advice-v0.md`, `NetworkCheck/Period.lean`'s module doc (2), `security/Definitions/NetworkCertifier/Guarantees.lean` and `SampledAudit.lean` (docstrings), `network_e2e/encodings/pyproject.toml` (a comment), and the comments of four `.sh` scripts. It also changes `lake build sampled-proofs-verifier` to `lake build spot-verifier` in `benchmarks/network_traces/{chain_record,compile_slice_zk,egress_zk,n2_tie_zk,n2_zk,scan_zk,warden_zk}.sh`. [ran]
+- **Lake executables:** the six it renames are all SPOT's, defined in `verity/protocols/proofs/spot/verifier/lean/`; none is ours. Our only callers are those seven scripts, and the map rewrites all seven. No `sampled-proofs-*` executable name is left in our paths. [ran]
+- **Kept bytes, checked after the run:** the format ids `verity/sampled-proofs/one-stage/v1` (`Period.lean:354`'s `oneStage`, `test_certifier_piece.py:213`, `certifier/prover/tests/test_block_certifier.py:71`) and `…/two-stage/v1` (`network/tests/period_case.py:2539`); the flag `--sampled-proofs` (declared at `served_verdicts.py:2224` and passed at `test_certifier_piece.py:226`, both unchanged); the log name `build-sampled-proofs.log`. None of our hashed reasons, record keys or difftest texts holds the word. [ran]
+- **link-window, leg, firewall:** not on `architecture` or any branch yet. I dry-run each when it lands.
+
