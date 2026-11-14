@@ -223,10 +223,9 @@ kernel_gates = ["adapters/vllm/tests/engine/{int8_attention_sass,test_int8_atten
 adapters = [
     "adapters/vllm/verity_vllm/protocols/{pous.py,remote_bandwidth}",
 ]
-# vLLM's migration of superseded Definitions, which runs the circuit check, and the tests that read it
+# vLLM's pins of the superseded Definition versions kept so old records replay
 checks = [
-    "adapters/vllm/tools/migrate/superseded_quarantine.py",
-    "adapters/vllm/tests/{migrate/test_superseded_quarantine,program/test_superseded_kept}.py",
+    "adapters/vllm/tests/program/test_superseded_kept.py",
 ]
 # vLLM's tests held to a private oracle: H1's GPU rigs and circuits (`benchmarks/pouw/{h1_prove,hidden_zk,served_h1}`, the
 # live challenger's models and auditor), the int8 step's perplexity bench (`benchmarks/ppl`), and the tests that import them

@@ -612,7 +612,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         (Path(out) / "compute.json").write_text(line + "\n")
         writer = kit.writer(out)
         for m in measured:
-            writer.measurement(**m)
+            writer.measurement(**m, mark="measured")
     return 0
 
 

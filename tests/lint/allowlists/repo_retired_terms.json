@@ -984,8 +984,7 @@
     {"file": "security/Proofs/Flock/Claims/Recursion/AbortWait.lean", "count": 10},
     {"file": "security/Proofs/Flock/Claims/Recursion/AccFits.lean", "count": 4},
     {"file": "security/Proofs/Flock/Claims/Recursion/AccTies.lean", "count": 2},
-    {"file": "security/Proofs/Flock/Claims/Recursion/Assumptions/HonestFixture.lean", "count": 8},
-    {"file": "security/Proofs/Flock/Claims/Recursion/Assumptions/KSFixture.lean", "count": 1},
+    {"file": "security/Proofs/Flock/Claims/Recursion/Assumptions/HonestFixture.lean", "count": 2},
     {"file": "security/Proofs/Flock/Claims/Recursion/Assumptions/LoopFixture.lean", "count": 6},
     {"file": "security/Proofs/Flock/Claims/Recursion/Assumptions/PlainLeaves.lean", "count": 1},
     {"file": "security/Proofs/Flock/Claims/Recursion/BadLin.lean", "count": 14},
@@ -1041,7 +1040,6 @@
     {"file": "security/Proofs/Flock/Claims/Recursion/Gap.lean", "count": 14},
     {"file": "security/Proofs/Flock/Claims/Recursion/HhHeld.lean", "count": 2},
     {"file": "security/Proofs/Flock/Claims/Recursion/HonestAccR.lean", "count": 48},
-    {"file": "security/Proofs/Flock/Claims/Recursion/HonestHalf.lean", "count": 7},
     {"file": "security/Proofs/Flock/Claims/Recursion/HonestHalfTops.lean", "count": 1},
     {"file": "security/Proofs/Flock/Claims/Recursion/HonestIVStarR.lean", "count": 110},
     {"file": "security/Proofs/Flock/Claims/Recursion/HonestPartsLayR.lean", "count": 4},
@@ -3949,11 +3947,6 @@
     {"file": "adapters/vllm/verity_vllm/program/quarantine/act/silu_mul_difftest.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/program/quarantine/collective/allreduce.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/program/quarantine/collective/allreduce_difftest.py", "count": 4},
-    {"file": "adapters/vllm/verity_vllm/program/quarantine/dense/bf16_div_scalar.py", "count": 2},
-    {"file": "adapters/vllm/verity_vllm/program/quarantine/dense/bf16_mul_scalar.py", "count": 1},
-    {"file": "adapters/vllm/verity_vllm/program/quarantine/dense/bf16_tanh.py", "count": 1},
-    {"file": "adapters/vllm/verity_vllm/program/quarantine/dense/mean_triton.py", "count": 1},
-    {"file": "adapters/vllm/verity_vllm/program/quarantine/dense/softcap.py", "count": 3},
     {"file": "adapters/vllm/verity_vllm/program/sampling_topp_adapter.py", "count": 5},
     {"file": "adapters/vllm/verity_vllm/program/workload.py", "count": 57},
     {"file": "adapters/vllm/verity_vllm/properties/admission.py", "count": 8},
@@ -4481,7 +4474,6 @@
     {"file": "verity/protocols/accounting/pouw/verifier/coins.py", "count": 2},
     {"file": "verity/protocols/accounting/pouw/verifier/core_check.py", "count": 135},
     {"file": "verity/protocols/accounting/pouw/verifier/credit.py", "count": 250},
-    {"file": "verity/protocols/accounting/pouw/verifier/dither/PROTOCOL.md", "count": 15},
     {"file": "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck.lean", "count": 1},
     {"file": "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Check.lean", "count": 32},
     {"file": "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CommittedFiles.lean", "count": 1},
@@ -5430,6 +5422,7 @@
     {"file": "tests/import_order.toml", "count": 4},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu", "count": 5},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cuh", "count": 13},
-    {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table_host.cpp", "count": 4}
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table_host.cpp", "count": 4},
+    {"file": "verity/protocols/experimental/dither/PROTOCOL.md", "count": 15}
   ]
 }

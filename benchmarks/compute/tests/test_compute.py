@@ -468,7 +468,7 @@ def test_the_shared_result_is_the_metric_verified_and_error_with_capacity_and_fr
     assert "the answer's δ_s, sampling's alone" in C.DELTA_S
     for m in got.values():
         assert (m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP)
-        assert m["inputs"] == ([RUN, "delta_s"] if m["name"] == "error" else [RUN])
+        assert m["mark"] == "measured" and m["inputs"] == ["measured", RUN, *["delta_s"] * (m["name"] == "error")]
     assert C.NO_SPAN == ("a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
                          "developer's node")
 
