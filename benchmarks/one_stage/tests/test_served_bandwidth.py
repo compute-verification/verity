@@ -133,7 +133,7 @@ def test_collect_replaces_another_windows_answer_and_errs_on_another_protocols(t
     assert a["verdict"] == "undecided" and "is window 2's, not window 3's" in a["reason"] and S.check_answer(a)
     out = _held(tmp_path, 3, HELD | {"protocol": "verity/pous/p2/v4/run"})
     assert SB.main(["collect", "--serve-dir", str(tmp_path), "--window", "3", "--out", str(out)]) == 1
-    assert "not PoUB's" in capsys.readouterr().out.splitlines()[-1]
+    assert "not the remote bandwidth audit's" in capsys.readouterr().out.splitlines()[-1]
 
 
 def test_a_session_with_no_record_is_a_reject_that_says_its_window_was_not_served(tmp_path, monkeypatch) -> None:
