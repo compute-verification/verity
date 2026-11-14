@@ -1070,6 +1070,54 @@ def test_the_record_follows_the_switch(monkeypatch):
     assert ORL.Record().lean is True and ORL.Record(lean=False).lean is False
 
 
+@pytest.mark.parametrize("call", [lambda: SC.check({}, {}, {}, 0, b"", {}), lambda: SC.Challenger({}, None),
+                                  lambda: SC.replay({}, Path("log"), Path("out"))], ids=["check", "Challenger", "replay"])
+def test_the_checks_of_record_are_a_required_argument(call):
+    """`check`, `Challenger` and `replay` take the checks of record from their caller: none has a default to fall back
+    to, so a call without `record` is refused before it runs."""
+    with pytest.raises(TypeError, match="required keyword-only argument: 'record'"):
+        call()
+
+
+@pytest.mark.parametrize("argv", [["challenger", "p.json", "log"], ["replay", "p.json", "log", "out"],
+                                  ["check", "p.json", "r.json", "d.json", "0", "pub.bin", "op.json"]],
+                         ids=lambda a: a[0])
+def test_without_the_lean_side_the_commands_that_check_refuse_before_any_work(argv, tmp_path):
+    """`main`'s default checks of record (`lean_record`) refuse a command that checks before it reads or writes
+    anything, naming the runner that passes the Lean side; no input it names exists, and nothing appears under the
+    root."""
+    with pytest.raises(NotImplementedError, match="benchmarks/pouw/served_zk/served_commit_run.py") as e:
+        SC.main([argv[0], *(str(tmp_path / x) if not x.isdigit() else x for x in argv[1:])])
+    assert "compute-accounting/pouw-package-holds-kernels" in str(e.value)
+    assert list(tmp_path.iterdir()) == []
+
+
+def _stub_calls():
+    from verity.protocols.accounting.pouw.prover.kernels.served_zk import stage_tile as STG
+    from verity.protocols.accounting.pouw.prover.kernels.served_zk import statement as ST
+    st = object.__new__(ST.Statement)
+    record = OR.Record(lean=False)
+    torch = "benchmarks/pouw/served_zk/statement_torch.py"
+    calls = [("Stager.stage", lambda: STG.Stager().stage(*[None] * 9), "benchmarks/pouw/hidden_zk/served_stage.py"),
+             ("Statement.zeros", lambda: st.zeros(1), torch), ("Statement.empty", lambda: st.empty(1, 1), torch),
+             ("Statement.fill_stages", lambda: st.fill_stages(0), torch), ("Statement.check", lambda: st.check({}), torch),
+             ("Record.canonical", lambda: record.canonical({}), "benchmarks/pouw/served_zk/of_record_lean.py"),
+             ("Record.start", lambda: record.start("x", Path(".")), "benchmarks/pouw/served_zk/of_record_lean.py"),
+             ("fast_tile.install", lambda: SC.install_tiles(None), "benchmarks/pouw/served_zk/served_commit_run.py")]
+    return [pytest.param(*c, id=c[0]) for c in calls]
+
+
+@pytest.mark.parametrize("name, call, supplier", _stub_calls())
+def test_each_interface_verity_leaves_to_the_benchmark_side_names_its_supplier(name, call, supplier):
+    """Each method verity's served_zk leaves raising (verity imports neither `verity_flock`, `verity_difftest`, torch
+    nor `fast_tile`) refuses with `NotImplementedError` naming its issue and the benchmark-side file that supplies it,
+    which the tree holds."""
+    with pytest.raises(NotImplementedError) as e:
+        call()
+    assert name in str(e.value) and "compute-accounting/pouw-package-holds-kernels" in str(e.value)
+    assert supplier in str(e.value) and (Path(__file__).resolve().parents[3] / supplier).is_file()
+
+
 @LEAN
 def test_the_public_items_rule_of_a_window_is_leans(served):
     """The service's public-items rule over an execution phase's Spec is Lean's (`Service.checkPublic`): on generated registrations
