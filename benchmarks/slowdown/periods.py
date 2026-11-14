@@ -3,7 +3,7 @@
 For each scenario (by default the measured H200 ones, `reference-onsite-h200` and `reference-remote-h200`, the remote
 one with its proofs sampled beside it, `reference-remote-h200-sampled`, and today's operating point,
 `reference-onsite-h200-today`) on each fleet (`FLEETS`: one 100k-GPU datacenter, and the world's compute, the census's
-world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rho.params`), with the scenario's own
+world-inference-2027) and each monitoring period (`PERIODS`, core's, through `slowdown.params`), with the scenario's own
 `fleet` and `horizon` choices overridden (`scenario.<name>.fleet`, `scenario.<name>.horizon`):
 
 * **what it assumes about proofs** (`proofs`): every unit proved, or proofs sampled at the regime's compute share
@@ -78,7 +78,7 @@ def only(reg: Registry, names: Iterable[str], bounds: Sequence[str]) -> Registry
     scenario's table leaves out to take every class."""
     unknown = [b for b in bounds if b not in CLASSES]
     if unknown:
-        raise ValueError(f"{unknown} are not classes of rho.classes.CLASSES: {', '.join(CLASSES)}")
+        raise ValueError(f"{unknown} are not classes of slowdown.classes.CLASSES: {', '.join(CLASSES)}")
     keys = {f"scenario.{n}.bounds": list(bounds) for n in names}
     return Registry({p.key: p for p in reg.params()} | {k: Param(k, v) for k, v in keys.items()})
 
@@ -99,7 +99,7 @@ def without_hosts(reg: Registry) -> dict[str, float]:
 
 #: what the header says while `bounds.lock_only` holds
 LOCK_ONLY = (" Only a bound a lock states sets a row: a class one of whose own citations is a `draft:` statement sets "
-             "none, at any block size (`bounds.lock_only`), and `rho.md` lists it alone, labeled draft.")
+             "none, at any block size (`bounds.lock_only`), and `slowdown.md` lists it alone, labeled draft.")
 #: the overrides without the reference-efficiency assumption (`GLOSSARY.md`): a bound counts free compute at peak
 WITHOUT_REFERENCE_EFFICIENCY = {"task.reference_efficiency": False}
 
