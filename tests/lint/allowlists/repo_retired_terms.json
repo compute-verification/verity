@@ -2825,7 +2825,7 @@
     {"file": "benchmarks/network_traces/scan_zk.sh", "count": 49},
     {"file": "benchmarks/network_traces/served_session.py", "count": 56},
     {"file": "benchmarks/network_traces/stall_probe.py", "count": 1},
-    {"file": "verity/protocols/accounting/certifier/prover/tests/test_block_certifier.py", "count": 31},
+    {"file": "benchmarks/network_traces/tests/test_block_certifier.py", "count": 31},
     {"file": "benchmarks/network_traces/tests/test_certifier_piece.py", "count": 105},
     {"file": "benchmarks/network_traces/tests/test_chain_record.py", "count": 55},
     {"file": "benchmarks/network_traces/tests/test_demo_stub.py", "count": 10},
