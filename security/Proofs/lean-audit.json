@@ -254,6 +254,10 @@
    "why": "fwd_walk and fwd_def, a tactic and a command that step through a computation of the verifier by its head (a let, a jump, a bind, an if or a match, and a for loop whose body always yields as a fold) to the value it returns, rewriting by the hypotheses and lemmas they are given, in the concrete statement's walks of its circuit file's parse, its public file's load, Raw.ins and Ins.setup (SessionLoop/Concrete/File.lean to Inputs.lean); fwd_def adds the value as a definition and the walk's equation as a theorem with addDecl. kernel_rfl' closes an equation under metadata with Eq.refl, and case_both cases one discriminant on both sides of an equation (Concrete/Delta.lean). They run only inside the elaborator and read or write nothing outside it, and the kernel checks every definition and proof they add.",
    "digest": "e26b6b3ab8e52fcec443b72aa1820736fa41235402acc124ae30ab5fc7dacd1b"
   },
+  "Proofs.Flock.Soundness.Discharge.Hidden.OkWith": {
+   "why": "absurd_step, ok_step, name_ok and clear_walked, elabs that walk a setup's do-block towards OkWith by its head (the transport lemmas of Hidden/Sibling.lean and Hidden/CanonOk.lean): they read only the goal and the local context, and run refine of the module's okWith lemmas, rw by a hypothesis, split, exfalso with apply and rfl, a rename and a clear. They run only inside the elaborator, read no files and do no IO, and the kernel replays every proof they build.",
+   "digest": "2b05ccbb1e0339acc6f7ce1e99e53bed22ec0cf33ee762a55a241d96810350fc"
+  },
   "Proofs.Flock.Soundness.Refine.OkLe": {
    "why": "ok_le_walk, the tactic (an elab, over okLeStep) that walks two runs of one executable at once by their heads, closing each step with the module's okLe_bind/ite/dite/let/jp/forIn/throw lemmas (Refine/Lookups.lean's proofs that more lookup tables change nothing). It reads no files and does no IO, and the kernel replays every proof it builds.",
    "digest": "49cb6e0e891bd68f8179e5b3431afccbd9ddf46587024651f7e1141c7f6e3ac2"
