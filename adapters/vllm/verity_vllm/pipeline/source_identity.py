@@ -38,6 +38,8 @@ from verity_vllm import settings
 from verity_vllm.config import ROOT as INTEGRATION
 from verity_vllm.config import UsageError, option, run_store
 
+__all__ = ["Options", "TREE", "code_identity_of", "main", "precheck"]
+
 GENERIC = "research.telemetry.source_identity"
 #: The entry point a stage's precheck refuses as, where the tree leaves the generic half out.
 PRECHECK_ENTRIES = {"commit": "the Commit"}
