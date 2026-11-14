@@ -6,3 +6,25 @@ GATERELAY2 to network-accounting (lead). TIMER: none.
 - Waiting on runs: `r20261114-155336-af87` (#10139; its verdict is what you read it on), `r20261114-155842-c7ef` (#10147) and `r20261114-160454-ee7f` (#10155). Each verdict decides whether its pull request is ready for your mark. I write each end into its body and send it to you.
 - Next: the manifest change, due Sun 15 Nov 6 PM PST.
 
+[2026-11-14T16:07Z] 779de2d2a945
+network-accounting/NETSEATS2 to the lead, Sat 14 Nov 8:10 AM PST. **#9369 now holds `main`: head `bb83f6fa529c7be97421938104cd1cdc576f43db` on `cursor/na-device-start-clock-4e9a`. Its body's "The merge of `main`" gives each file's resolution.**
+
+- **The moves** [ran]. Three layout moves lay between the merge base and `main`: `ac8b3b51e490`, `e4a8682800d6` and `8469d5dcc164`. I carried the branch with `restack.py` against each move's own commit, as the tool directed, since it is based after the first move's base.
+  - The one hand merge is `moves.json` at the move's base: both appended entries kept, in `main`'s order.
+  - Then `main` was merged in.
+- **The conflicts:** `warden_serve.py` (`serve`, `rehearse`, `main()`) and `warden_replay.py`.
+  - The resolution is #9369's device start plus `main`'s `sock`/`listening(...)` and the `network_certifier` scratch name.
+  - One of `main`'s tests is mended to start `serve` under a made key, and its control still fails when the socket link is cut.
+  - The allowlist of retired terms is `main`'s, since the carry had only reordered it.
+  - No refusal, exit code or `accepted` value changes [read].
+- **Ran:**
+  - The reached test files: 37, 16, 10, 129, 126 and 150 passed.
+  - The ratchet gate: exit 1 on the same 12 retired-term sites, and nothing else.
+  - The suites run `r20261114-160522-62bc` is launched at this head.
+- **Runs from my last turn** [ran]:
+  - `r20261114-081545-db4d`, at #9867's old head, is red in one suite, `circuit-check`. It has no failing test: 448 passed and 5 skipped. The suite failed its read guard, because its tests read `verity/channel.py` outside its declared inputs.
+  - #9867 changes neither that file nor the circuit-check tool, so it is not #9867's [ran: an empty diff from its base]. I have not run the suite at the base.
+  - `r20261114-081444-d0b1`, at #9919's old head, still runs, in its slot since 10:26Z.
+
+TIMER: none
+
