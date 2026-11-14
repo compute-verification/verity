@@ -366,7 +366,6 @@
     {"file": "verity/protocols/accounting/pous/device/timed_audit.py", "count": 1},
     {"file": "tools/research/src/research/landing.py", "count": 10},
     {"file": "tools/research/src/research/vqueue_records.py", "count": 1},
-    {"file": "verity/protocols/accounting/poub/prover/codec_tensor/sketching.py", "count": 1},
     {"file": "verity/protocols/accounting/pous/verifier/p2_v1/vectors.py", "count": 1},
     {"file": "verity/protocols/accounting/pous/verifier/p2_v1/wire.py", "count": 2},
     {"file": "verity/protocols/accounting/poub/prover/remote_session/device.py", "count": 1},

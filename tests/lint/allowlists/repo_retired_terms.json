@@ -2720,7 +2720,7 @@
     {"file": "benchmarks/circuit_properties/circuit_properties/references.py", "count": 1},
     {"file": "benchmarks/circuit_properties/run.py", "count": 11},
     {"file": "benchmarks/circuit_properties/tests/test_references.py", "count": 5},
-    {"file": "benchmarks/codec_tensor/pyproject.toml", "count": 6},
+    {"file": "benchmarks/codec_tensor/pyproject.toml", "count": 2},
     {"file": "benchmarks/codec_tensor/tests/test_redteam_impl.py", "count": 1},
     {"file": "benchmarks/codec_tensor/wt.cu", "count": 5},
     {"file": "benchmarks/commitments/hiding_leaf_cost.py", "count": 1},
@@ -3398,7 +3398,7 @@
     {"file": "benchmarks/vllm_encoded/stack.py", "count": 4},
     {"file": "benchmarks/vllm_encoded/tests/properties/encoded_kv_append_capture_gpu.py", "count": 20},
     {"file": "benchmarks/vllm_encoded/window_gate.py", "count": 14},
-    {"file": "benchmarks/word_codec/README.md", "count": 4},
+    {"file": "benchmarks/word_codec/README.md", "count": 1},
     {"file": "demos/README.md", "count": 5},
     {"file": "benchmarks/one_stage/interfaces/README.md", "count": 17},
     {"file": "benchmarks/one_stage/interfaces/pyproject.toml", "count": 2},
@@ -5389,8 +5389,7 @@
     {"file": "benchmarks/serve_tax/tests/test_cell_shim.py", "count": 10},
     {"file": "benchmarks/serve_tax/tests/test_certified.py", "count": 5},
     {"file": "verity/protocols/accounting/poub/prover/codec_tensor/reader.cu", "count": 2},
-    {"file": "verity/protocols/accounting/poub/prover/codec_tensor/reader.py", "count": 4},
-    {"file": "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py", "count": 1},
+    {"file": "verity/protocols/accounting/poub/prover/codec_tensor/reader.py", "count": 2},
     {"file": "verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu", "count": 1},
     {"file": "verity/protocols/accounting/pous/prover/p2/p2_store/p2v1.cu", "count": 9},
     {"file": "verity/protocols/accounting/pous/verifier/p2_v1/reference.py", "count": 1},
@@ -5398,7 +5397,6 @@
     {"file": "verity/protocols/accounting/poub/prover/remote_session/device.py", "count": 18},
     {"file": "verity/protocols/accounting/poub/prover/remote_session/prover.py", "count": 31},
     {"file": "verity/protocols/accounting/poub/prover/word_codec/paged.py", "count": 6},
-    {"file": "verity/protocols/accounting/poub/prover/word_codec/kv.py", "count": 2},
     {"file": "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py", "count": 4}
   ]
 }

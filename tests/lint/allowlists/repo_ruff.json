@@ -3,7 +3,7 @@
   "entries": [
     {"file": "benchmarks/all_protocols/verity_all_protocols/runner.py", "rule": "BLE001", "count": 2},
     {"file": "benchmarks/circuit_properties/run.py", "rule": "E402", "count": 2},
-    {"file": "benchmarks/codec_tensor/bench.py", "rule": "F821", "count": 5},
+    {"file": "benchmarks/codec_tensor/bench.py", "rule": "F821", "count": 4},
     {"file": "benchmarks/codec_tensor/step.py", "rule": "F541", "count": 1},
     {"file": "benchmarks/codec_tensor/step.py", "rule": "F821", "count": 2},
     {"file": "benchmarks/codec_tensor/tests/test_sketch_receipt.py", "rule": "RUF100", "count": 1},
