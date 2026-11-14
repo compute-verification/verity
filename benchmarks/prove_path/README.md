@@ -256,7 +256,8 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   unchanged digests is refused (`circuit`). It imports no `verity_vllm` code. Its sampled members' sessions run one at a time
   (`a5.ONE_AT_A_TIME`), and Lean's checks of finished members run beside them, `--lean-workers` at a time (default 1), each starting
   only while its memory estimate fits within `--audit-mem-gb` beside the running session's and checks' (`a5.LeanPool`);
-  without the flag that memory is what is free as the sessions start, the least of the node's `MemAvailable` and
+  without the flag that memory is what is free, read as the sessions start and again as the negatives' workers and the
+  registered reads' pool are made, the least of the node's `MemAvailable` and
   the room under each cgroup memory limit over the audit (the lesser of `memory.high` and `memory.max`), a cgroup's
   file cache counted free less its dirty, writeback and mapped pages, and its shared memory not
   (`a5.available_memory`); each pool prints the two terms and which binds, and once what held a start back.

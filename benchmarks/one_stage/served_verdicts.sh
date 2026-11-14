@@ -122,7 +122,8 @@
 #     inactive_file and active_file, less file_dirty, file_writeback and file_mapped) is counted free, as MemAvailable
 #     counts the node's; its anonymous memory and its shared memory are not. So a follow-on inside a memory scope is
 #     held to the scope's room, read low rather than high. A set V3C_AUDIT_MEM_GB is the audit's memory in place of
-#     that reading as its sessions start; each check and worker still starts only while its estimate is free by it.
+#     that reading; unset, the reading is taken as the sessions start and again as the negatives' workers and the
+#     registered reads' pool are made. Each check and worker still starts only while its estimate is free by it.
 #     Each pool prints the two terms and which binds as it starts, and once what held a start back. Its negatives
 #     after the audit record run one after another, or with
 #     V3C_NEGATIVE_WORKERS that many at once, each in a worker process with its own Lean verifier process, started only

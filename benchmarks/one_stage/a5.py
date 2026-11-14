@@ -1816,7 +1816,8 @@ def available_memory(meminfo: Path = Path("/proc/meminfo"), cgroup: Path = Path(
 
 def audit_memory(a: argparse.Namespace, available: Callable[[], float]) -> float:
     """The audit's memory in bytes, which its sessions and the Lean checks beside them share (`LeanPool`): ``--audit-mem-gb``,
-    else what ``available()`` gives as its sessions start."""
+    else what ``available()`` gives each time it is asked: as the sessions start, and again as the negatives' workers
+    and the registered reads' pool are made."""
     gb = getattr(a, "audit_mem_gb", None)
     return gb * 2**30 if gb is not None else available()
 
@@ -2108,9 +2109,10 @@ def lean_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--audit-mem-gb", type=float,
                    help=f"the audit's memory: a Lean check starts only within it beside the running session, estimated at "
                         f"{SESSION_BYTES_PER_CIRCUIT_BYTE}x its circuit file, and the running checks, each at "
-                        f"{LEAN_BYTES_PER_CIRCUIT_BYTE}x (default: what is available as the sessions start, the least "
-                        f"of the node's MemAvailable and the room under each cgroup memory limit over the audit, its "
-                        f"file cache counted free)")
+                        f"{LEAN_BYTES_PER_CIRCUIT_BYTE}x (default: what is available, read as the sessions start and "
+                        f"again as the negatives' workers and the registered reads' pool are made, the least of the "
+                        f"node's MemAvailable and the room under each cgroup memory limit over the audit, its file "
+                        f"cache counted free)")
     p.add_argument("--negative-workers", type=positive, default=1,
                    help="the negatives after the audit record at once (`NegativeWorkers`): 1, one after another in the "
                         "audit's own process; more, each in a worker process forked from the audit with its own Lean "
