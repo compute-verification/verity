@@ -3343,6 +3343,11 @@
       "paths": {
         "adapters/vllm/tests/correspondence/test_descriptor_annotation_stream.py": "adapters/torch/tests/correspondence/test_descriptor_annotation_stream.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/device/two_stage.py": "verity/protocols/proofs/spot/prover/audit/two_stage.py"
+      }
     }
   ]
 }
