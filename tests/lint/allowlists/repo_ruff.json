@@ -370,7 +370,6 @@
     {"file": "verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_credit_cases.py", "rule": "F841", "count": 1},
     {"file": "verity/protocols/accounting/pouw/verifier/lean/scripts/fp8atom_vectors.py", "rule": "F841", "count": 1},
     {"file": "verity/protocols/accounting/pouw/verifier/lean/scripts/h1t_vectors.py", "rule": "RUF100", "count": 1},
-    {"file": "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c4.py", "rule": "RUF100", "count": 3},
     {"file": "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_sm120.py", "rule": "RUF100", "count": 1},
     {"file": "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_work.py", "rule": "RUF100", "count": 2},
     {"file": "verity/protocols/accounting/poub/verifier/period.py", "rule": "RUF100", "count": 1},

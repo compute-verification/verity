@@ -6,7 +6,6 @@
   unplaced   an open goal with no tier set that no goal waits on and that waits on no goal: tier 1 only by default
   order      an open goal due before an open goal it waits on, or waiting on a goal the page doesn't hold
   title      a title of more than TITLE_WORDS words
-  no-step    a lead whose open goals have none due in the next STEP_H hours
   no-goal    a lead named with --owner who owns no open goal
 
 A date gets more precise as it nears (Daniel, 13 Nov): a day more than a week out, the day now expected inside a week,
@@ -22,13 +21,12 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from .goals import PACIFIC, _when
 
-TITLE_WORDS = 8
-STEP_H = 12
+TITLE_WORDS = 10
 STALE_H = 24
 NEAR_H = 24
 #: the goal whose subgoals are paused: each keeps the state it stopped in until its review
 PARKED = "top/parked"
-KINDS = ("overdue", "stale", "near", "unplaced", "order", "title", "no-step", "no-goal")
+KINDS = ("overdue", "stale", "near", "unplaced", "order", "title", "no-goal")
 
 
 def due_at(due: str) -> datetime:
@@ -86,7 +84,6 @@ def findings(goals: list[dict], now: datetime, owners: Iterable[str] = ()) -> di
         lead = out.setdefault(g.get("owner") or "nobody", {"open": 0, "off_track": 0, "findings": []})
         lead["open"] += 1
         lead["off_track"] += g.get("status") == "off-track"
-    soon = now + timedelta(hours=STEP_H)
     for owner, lead in out.items():
         mine = sorted((g for g in open_ if (g.get("owner") or "nobody") == owner), key=lambda g: due_at(g["due"]))
         found: list[tuple[str, str | None, str]] = []
@@ -120,9 +117,6 @@ def findings(goals: list[dict], now: datetime, owners: Iterable[str] = ()) -> di
             if (words := len(str(g.get("title") or "").split())) > TITLE_WORDS:
                 found.append(("title", gid, f"`{gid}`'s title has {words} words: say what will be true in at most {TITLE_WORDS} "
                               f"(`research goals set {gid} --title T`)"))
-        if mine and not any(now <= due_at(g["due"]) <= soon for g in mine):
-            found.append(("no-step", None, f"no open goal is due in the next {STEP_H} hours: write today's step as a goal of its own "
-                          "(`research goals set STEP --tier 3 --due D ...`) and list it under the goal it serves (`--wait goal:STEP`)"))
         if not mine:
             found.append(("no-goal", None, "no open goal: the page says nothing of what this lead is working on; add the one to three "
                           "outcomes in hand (`research goals set ID --title T --status on-track --due D --owner HANDLE`)"))
