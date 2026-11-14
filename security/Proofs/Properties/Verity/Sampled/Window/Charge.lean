@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Draw
 public import Proofs.Properties.Verity.Sampled.CouplingAt
 
 /-!
-# Sampled proofs' coupling over a window: the stops' term within the hiding term
+# SPOT's coupling over a window: the stops' term within the hiding term
 
 The window's stops' term (`windowErr`) charges each member's stops their openings' gaps and empty classes, in the
 members' order. Each is within the class error of the node the stop is at (`openErr`), the class errors along a play

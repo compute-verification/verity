@@ -1287,7 +1287,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     heads, the stale bounds it keeps and the hook.
 - **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so registration order can't bind
   its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
-  but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that
+  but not stacking: SPOT shows a payload is the circuit's actual computation, and an arbitrary circuit that
   can learn the key can compute another registered block's encoding as that payload. So a KV page is credited only
   on the property's verdict on its writers (§3, `credit_post_seed`), and then \(\mu_{\text{carrier}}\) charges what
   its carriers can hold (§1). Only bound blocks may be registered after the seed. The reference appends them (§4):
@@ -1296,7 +1296,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   under with the coin, and releases that keep a block out of every later plan. Open:
   - *The verdict's binding.* `ledger` takes the verdict as given (`PostSeedVerdict`: whether it holds, and its carrier
     bytes for a window's certified reads). That it is of the circuits that wrote this session's appends, and that
-    their payloads are those circuits' values (sampled proofs), are I2's and I4's to check. That no appended block is
+    their payloads are those circuits' values (SPOT), are I2's and I4's to check. That no appended block is
     credited past \(L\) the session checks itself (§4, `lifetime`); that the verdict was computed at the record's
     \(L\) is the verdict's to say.
   - *Appends across sessions.* A session's appends end with it, and the next session starts again from \(N\), so a
@@ -1653,7 +1653,12 @@ differ the session is rejected `disagreement`. The session's parameters (W, the 
 values, by name, before the first coin, and so does the Lean, naming each in `p2_party.params_of`'s words
 (`P2Session.heldTo`). The process holds its pinned `P2Session.SESSION` unless the auditor's party names a toy's
 (`p2_hold`'s `session`), and the session's core case (`p2_case.py`), whose request no digest binds, is replayed under
-`SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there.
+`SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there. The case is signed: the memory
+challenger's key closes it (`p2_party.Closer`, its line count and its chain, `RemoteAudit.P2Close`) under the session id
+the auditor gave it, which its session log records before the first coin. The chain runs over the case's head (the
+commitment's digest and the clock floor, `P2Protocol.headOf`) and then every entry of its log, and it is the one
+SHA-512 the verifier's device keeps of the case (`p2_party.case_digest`). The check refuses a close that doesn't sign
+the case under a key and a session its params name before it replays any entry (`P2Protocol.closeRefusal`).
 
 **What it rests on, and what is open.**
 
