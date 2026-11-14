@@ -559,6 +559,11 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     return neg
 
 
+def many_rows(reads: Mapping[str, Mapping[str, Any]], mm: dict) -> bool:
+    """Whether a sampled member's registered reads name a value of more than one row (`registered_negatives`' next-row case)."""
+    return any(int(e["leaves"]) > 1 for e in reads[mm["m"].key]["ports"].values())
+
+
 def declared_ports(interface: Path, template: str) -> list[str]:
     """The ports the window's registered circuit record `interface` declares registered for `template`, as Lean's
     `RegBound.declaredOf` reads them: its committed reads' (`interface.committed_reads`: each registered read's port, each
@@ -569,12 +574,13 @@ def declared_ports(interface: Path, template: str) -> list[str]:
 
 
 def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
-    """A sampled chunk's honest session, a chunk that reads a row table or an outside registered value, re-verified by Lean against
-    registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its first port's
-    value's root replaced, and (a value of more than one row) every unit reading that value's next row, each with its other
-    ports' reads as registered; and its last port committed afresh, left out of both its header's registered rows and the
-    verifier's reads (`Flock.Registered.checkComplete`; where the file binds ports and the window's registered circuit
-    record declares that port registered, `RegBound.check` refuses it as declared first); and where the file binds its
+    """A sampled chunk's honest session, a chunk that reads a row table or an outside registered value, or holds a wired
+    port in its writer's tree, re-verified by Lean against registered reads it must refuse: none (its header names
+    registered reads the verifier holds no root for), its first port's value's root replaced, and (its first value of more
+    than one row) every unit reading that value's next row, each with its other ports' reads as registered; and its last
+    port committed afresh, left out of both its header's registered rows and the verifier's reads (`RegBound.check`: a
+    file that binds no port, as `Flock.Registered.checkComplete`; where the file binds ports and the window's registered
+    circuit record declares that port registered, it refuses it as declared first); and where the file binds its
     other ports (`REG.BOUND`), its first bound port bound at another
     root, or left out, and the file verified without the window's registered circuit record (`--interface`); and there,
     the first registered port the record declares registered for the chunk's template (an embedding read's ``o1``) bound at
@@ -595,9 +601,12 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
 
     cases = {"chunk-without-registered-reads": (None, "holds no registered roots", None),
              "registered-read-against-another-root": (at({"root": "00" * 64}), "does not open", None)}
-    if p["leaves"] > 1:
-        cases["registered-reads-another-row"] = (at({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}),
-                                                 "the verifier's program reads", None)
+    many = next((q for q, e in honest["ports"].items() if e["leaves"] > 1), None)
+    if many is not None:
+        e = honest["ports"][many]
+        cases["registered-reads-another-row"] = (
+            {**honest, "ports": {**honest["ports"], many: {**e, "reads": [(r + 1) % e["leaves"] for r in e["reads"]]}}},
+            "the verifier's program reads", None)
     if last != port:
         afresh = sdir / "port-committed-afresh"
         shutil.copytree(st["dir"], afresh, copy_function=os.link, dirs_exist_ok=True)
@@ -884,17 +893,20 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # registration's own roots, since Lean takes registered reads only when they name every port or bind the rest: a port
     # those reads leave out is bound to the registration's root and domain of its rows, which the checks above held its
     # header's to (`REG.bind_ports`), never a port the window's registered circuit record declares registered
-    # (`--interface`: the record the audit holds by SHA-512)
-    reads = CS.own_reads({**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})},
-                         mine, roots, registered=REG)
+    # (`--interface`: the record the audit holds by SHA-512); a member holding a wired port in its writer's tree (no tree
+    # of its own) reads it at its writer's root, a registered read those reads name and so never bound, its other ports
+    # at their own; the registration's root and domain of such a port's rows are its writer's port's (`Binding.held`)
+    held = {m.key: {"format": REG.READS_V1, "ports": {}} for m in mine.members if m.wired and not m.wired_trees}
+    reads = CS.own_reads({**held, **(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}),
+                          **(registered or {})}, mine, roots, registered=REG)
     iface = served / "circuit.json"
     iface = iface if iface.is_file() and hashlib.sha512(iface.read_bytes()).hexdigest() == summary.get("circuit") else None
     for mm in members:
         if mm["m"].key in reads:
             m = mm["m"]
             fv_roots = mm["header"]["frame_v3"]["roots"]
-            own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[m.port(p)]["root"], "domain": want[m.port(p)]["domain"]}
-                                                         for p in fv_roots})
+            own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[mine.held(m, p)]["root"],
+                                                              "domain": want[mine.held(m, p)]["domain"]} for p in fv_roots})
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
             mm["st"]["registered_file"].write_text(json.dumps(own, sort_keys=True))
             if iface is not None:
@@ -935,7 +947,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             print("A5 " + json.dumps({"refused_after_draw": {"wiring": False}, "checks": after}, default=str))
             return summary, False
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
-    linked = None       # the first sampled chunk with registered reads: its session, for the registered-reads negatives
+    linked = None       # the first sampled chunk whose registered reads name a value of more than one row (`many_rows`),
+    #                     else the first with registered reads: its session, for the registered-reads negatives
     row_verdicts: dict[str, dict] = {}      # each sampled chunk's Lean verdict with registered reads, whose finding the record carries
     if (why := port_refusal(mine, union_draw, port, ports)) is not None:
         summary["refused"] = why
@@ -1119,7 +1132,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         verdicts.update(got["verdicts"])
         if mm["m"].key in reads:
             row_verdicts[mm["m"].key] = got["lean_verify"]
-            linked = linked or (mm, got["sdir"])
+            if linked is None or (not many_rows(reads, linked[0]) and many_rows(reads, mm)):
+                linked = (mm, got["sdir"])
         statement[mm["m"].key] = got["statement"]
         sessions += got["sessions"]
         if got["challenger"] is not None:
