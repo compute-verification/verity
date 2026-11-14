@@ -42,8 +42,8 @@ runs the device with its carrier reads answered from the circuit's values (`PICh
 `RemoteRunConservationRelay` bounds its session, which is the stacked session's event.
 
 `Accounting.SecurityProofs.StackedRequirementSketchDeployed` and `Accounting.SecurityProofs.StackedRequirementRelay`
-bound a registered circuit's held and read bits over at most `k` steps by the store's `k·N·B` when the store and the plans
-are its own (`Requirement.cap_of_matches`, from `RequirementHeld` and `RequirementMoved` with no block held), so a
+bound a registered circuit's held and read bits over at most `k` steps by the store's `k·N·B` when the store and the
+plans are its own (`Requirement.cap_of_matches`, from `RequirementHeld` and `RequirementMoved` with no block held), so a
 shortfall against the requirement is one against the store.
 -/
 

@@ -14,13 +14,13 @@ vLLM's model, attaches the decode to its layers and holds the option.
 * **Commit** (`commit_weights`, the composition's first phase, model untouched): ``setup.commit(params, W)`` before any
   salt exists, recorded in the composition record's ``weights``.
 * **Install**, in order: the same commitment recomputed, refused if the weights changed since; the salt
-  ``setup.sample_salt(source, commitment)``, ``source`` the auditor's coin flipped after the commitment (``salt_source``);
-  ``C*`` encoded a segment at a time (`store.GpuEncoder`, ``libp2v1.so`` on the weights' GPU, which checks its own decode
-  of the whole segment; `store.CpuEncoder` on the CPU), two blocks of each segment held to ``W`` by the reference decode,
-  and ``C*`` held as one [blocks, block_bytes] uint8 tensor on the weights' device; the memory challenger's table of it
-  and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's tagged `Hooks`: the
-  plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's ``quant_method.apply``
-  wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the store's load
+  ``setup.sample_salt(source, commitment)``, ``source`` the auditor's coin flipped after the commitment
+  (``salt_source``); ``C*`` encoded a segment at a time (`store.GpuEncoder`, ``libp2v1.so`` on the weights' GPU, which
+  checks its own decode of the whole segment; `store.CpuEncoder` on the CPU), two blocks of each segment held to ``W``
+  by the reference decode, and ``C*`` held as one [blocks, block_bytes] uint8 tensor on the weights' device; the memory
+  challenger's table of it and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's
+  tagged `Hooks`: the plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's
+  ``quant_method.apply`` wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the store's load
   `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
   and the inner ``apply`` called with a proxy layer holding it), and the prover started last.  Uninstall runs newest
   first: prover, wrappers, then ``W`` restored; ``C*`` is freed after.

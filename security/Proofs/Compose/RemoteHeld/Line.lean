@@ -81,8 +81,8 @@ namespace Properties.Poub.Line.SecurityProofs
 open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
   Accounting.Remote.Draw.Assumptions _root_.Poub.Line Accounting.SecurityProofs.Remote Properties.Poub.Line
 
-/-- What `ofSummary` reads of a record it accepts: one group a window, and each window's receipts and samples, its samples
-`min(s, U_t)`. -/
+/-- What `ofSummary` reads of a record it accepts: one group a window, and each window's receipts and samples, its
+samples `min(s, U_t)`. -/
 theorem ofSummary_ok {sm : Poub.Session.Summary} {samples : ℕ} {seen : Array Seen} {gs : Array Group}
     {ws : Array (ℕ × ℕ)} (h : ofSummary sm samples seen = .ok (gs, ws)) :
     gs.size = sm.windows.size ∧ ws = sm.windows.map fun w => (receipts w, min samples (receipts w)) := by
@@ -99,8 +99,8 @@ theorem ofSummary_ok {sm : Poub.Session.Summary} {samples : ℕ} {seen : Array S
       simp only [hd]
 
 /-- What `ofSummaryAt` reads of a record it accepts: one group a window, and each sample's receipts and samples
-(`sampleReceipts`, a window's at one window a coin), its samples `min(s, U_c)`, and above one window a coin each sample's
-receipts below `RECEIPT_LIMIT`. -/
+(`sampleReceipts`, a window's at one window a coin), its samples `min(s, U_c)`, and above one window a coin each
+sample's receipts below `RECEIPT_LIMIT`. -/
 theorem ofSummaryAt_ok {g : ℕ} {sm : Poub.Session.Summary} {samples : ℕ} {seen : Array Seen}
     {gs : Array Group} {ws : Array (ℕ × ℕ)} (h : ofSummaryAt g sm samples seen = .ok (gs, ws)) :
     gs.size = sm.windows.size ∧ ws = (sampleReceipts g sm.windows).map (fun u => (u, min samples u)) ∧
@@ -148,8 +148,8 @@ theorem lineOfRecordAt_ok {g : ℕ} {sm : Poub.Session.Summary} {samples : ℕ} 
     exact ⟨gs, ws, hs, h⟩
   · cases h
 
-/-- A line the record gives is `line` at the groups and samples `ofSummaryAt` reads off the Lean verifier's record of the
-session, its registered blocks the record's, and those groups are the record's (`Record.groups`). -/
+/-- A line the record gives is `line` at the groups and samples `ofSummaryAt` reads off the Lean verifier's record of
+the session, its registered blocks the record's, and those groups are the record's (`Record.groups`). -/
 theorem lineOf_ok {node : Node} {r : Record} {l : Line} (h : lineOf node r = .ok l) :
     ∃ sm gs ws, r.summary node = some sm ∧
       ofSummaryAt node.groupsPerCoin sm node.params.samples r.seen = .ok (gs, ws) ∧ r.groups node = gs ∧
@@ -431,8 +431,8 @@ theorem foldl_extract_congr {α β : Type} (f : α → ℕ) (g : β → ℕ) {as
   rw [← Array.foldl_map (f := f) (g := fun x y => x + y), ← Array.foldl_map (f := g) (g := fun x y => x + y),
     Array.map_extract, Array.map_extract, h]
 
-/-- **The record's samples are the sample's**: on an accepted record whose samples the line reads, each sample's receipts in the
-Lean verifier's record are those its windows have in the state the record's session reaches, and below
+/-- **The record's samples are the sample's**: on an accepted record whose samples the line reads, each sample's
+receipts in the Lean verifier's record are those its windows have in the state the record's session reaches, and below
 `RECEIPT_LIMIT`, so `recordSample`'s sizes: at one window a coin each window's is below it (`ReceiptsBelowLimit`), and
 above it the line refuses a sample that isn't (`ofSummaryAt_ok`). -/
 theorem receipts_of_line {node : Node} {r : Record} {sm : Poub.Session.Summary} (hv : Verified node r)
@@ -498,9 +498,9 @@ theorem receiptMax_lt : receiptMax < 2 ^ 64 := by
 below the W every line of the record reads (`LineCoversRun`): the line reads each sample's receipts and samples off
 the record and refuses any samples but `min(s, U_c)`, the sample's at the session's `samples`, and the receipts are the
 sample's sizes (`receipts_of_line`). -/
-theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (DrawCoins node.samples κ X)}
-    {rec : DrawCoins node.samples κ X → Record} {correct : Fin node.samples → DrawCoins node.samples κ X → Finset ℕ}
-    {ω : DrawCoins node.samples κ X} (hv : Verified node (rec ω))
+theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (SampleCoins node.samples κ X)}
+    {rec : SampleCoins node.samples κ X → Record} {correct : Fin node.samples → SampleCoins node.samples κ X → Finset ℕ}
+    {ω : SampleCoins node.samples κ X} (hv : Verified node (rec ω))
     (hw : (T.incorrect ω : ℝ) ≤ (recordSample node rec correct).pooled node.delta ω) :
     ∀ l, lineOf node (rec ω) = .ok l → (T.incorrect ω : ℝ) ≤ l.wrong := fun l hline => by
   obtain ⟨sm, gs, ws, hsm, hs, -, hl⟩ := lineOf_ok hline

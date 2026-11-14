@@ -4127,6 +4127,11 @@
         "security/Properties/Pouw/PeriodJ10R.lean": "security/Properties/Pouw/MonitoringPeriodJ10R.lean",
         "security/Properties/Pouw/PeriodJ10RStrata.lean": "security/Properties/Pouw/MonitoringPeriodJ10RStrata.lean"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/pipeline/window_law.py": "adapters/vllm/verity_vllm/pipeline/window_sampling_design.py"
+      }
     }
   ]
 }
