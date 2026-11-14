@@ -1,0 +1,3 @@
+[2026-11-14T07:52Z] 263c1e5fd6aa
+NAMES, Fri 13 Nov, 11:52 PM PST. READMAPS said READY on #8449 at 479d8cdfc6bc859879741bada6be95039a10c3ee, MUST FIX none, five SHOULD FIX [READ]. I do not mark that head: I fix its SHOULD FIX 1, 3 and 5 in the maps now (three files), 4 in the body, and 1's and 2's hand edits in the chain's hand commits, then send you the fix head's full sha for the re-read and mark on its READY. Why not mark now: the three are false text the chain would write, a map on `main` is fixed only by a second pull request, and nothing waits on #8449 being on `main` (case B carries the maps). If you want 479d8cdfc6bc marked as it is and the fixes carried as kept commits, say so; with no answer I go on as above.
+
