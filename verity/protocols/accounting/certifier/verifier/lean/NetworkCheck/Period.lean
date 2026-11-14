@@ -1802,10 +1802,10 @@ def protocol : Core.Protocol where
 -- every unit sampled: no incorrect proof block, so no incorrect set and no faulty bits
 #guard (rowsTerms #[] ⟨4, 0, 300, 512, 0, 0⟩ #[({ units := 9, drawn := 9, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0)] #[]
   1 1).K == 0
--- the same period where its first execution phase is not the run's first: its start, a state of 145,568 bits, charged
--- once, in K beside the scans' terms and in no scan's
-#guard (rowsTerms #[] ⟨4, 0, 300, 512, 0, 145568⟩ #[({ units := 9, drawn := 9, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0),
-  ({ units := 9, drawn := 9, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0)] #[] 1 2 #[] 145568).K == 145568
+-- the same period where its first execution phase is not the run's first: its start, w63's state of 149,648 bits
+-- (`ingress_scan.state_bits`), charged once, in K beside the scans' terms and in no scan's
+#guard (rowsTerms #[] ⟨4, 0, 300, 512, 0, 149648⟩ #[({ units := 9, drawn := 9, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0),
+  ({ units := 9, drawn := 9, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0)] #[] 1 2 #[] 149648).K == 149648
 -- w63's class with the egress tie: T = 32, the scan's own free inputs none, every unit sampled, and its tied audit (the
 -- slot entries' `SlotEntry_v1` template) of 8 units, a slot at each of the 2 boundaries, whose free inputs are their
 -- entries, 1,136 bits each: K is the tied audit's 9,088
