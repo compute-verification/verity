@@ -1,6 +1,6 @@
 """PoUB over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
-answer as `RemoteAudit.Protocol.certify` publishes it and that session's error in its verifier's ledger (`ledger.Gamma`'s
+answer as `Poub.Protocol.certify` publishes it and that session's error in its verifier's ledger (`ledger.Gamma`'s
 `error`): `q_bytes`, the receipts not shown wrong in bytes, certified as read except with the session's whole error p.
 
 The whole error is the ledger's for the session's openings read pooled (its `horizon`): the openings' pooled bound's δ₀
@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocol import DELTAS, MONITORING_PERIODS, no_bound, summed
-# The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
+# The count bound is the wipe's too, held in pous: poub may import pous, and pous not it.
 from verity.protocols.accounting.pous.verifier.wipe_monitoring import block_count, short_sessions
 
 from . import codec, pooled
@@ -115,7 +115,7 @@ def per_window(t: int, windows: Sequence[tuple[int, int]], delta: Fraction, beyo
 
 def table(answer: Mapping[str, Any], error: Mapping[str, Any] | None, machines: int, window_s: int, *,
           deployment: str | None = None) -> dict[str, Any]:
-    """The monitoring-period result of one session's core answer (`RemoteAudit.Protocol`'s) and its error in its
+    """The monitoring-period result of one session's core answer (`Poub.Protocol`'s) and its error in its
     verifier's ledger (`ledger.Gamma.to_json`'s `error`; read only for an accepted session) when every one of
     `machines` runs such a session every `window_s` seconds."""
     head = {"format": FORMAT, "deployment": {"id": deployment, "machines": machines, "window_s": window_s},

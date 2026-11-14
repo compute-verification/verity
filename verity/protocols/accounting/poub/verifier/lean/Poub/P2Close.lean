@@ -20,7 +20,7 @@ hash.
 
 @[expose] public section
 
-namespace RemoteAudit.P2Close
+namespace Poub.P2Close
 
 open Flock
 
@@ -208,4 +208,4 @@ theorem closePreimage_ne_wipe {I I' s s' r : ByteArray} {lines : Nat} {entries :
     rolePreimage I s (closeRecord lines (chainOf entries)) ≠ rolePreimage I' s' r :=
   closePreimage_ne_digest hI hI' hs hs' (wipe_record_size h)
 
-end RemoteAudit.P2Close
+end Poub.P2Close

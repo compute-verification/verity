@@ -21,7 +21,7 @@ each a named `Prop` taken as a hypothesis, never an `axiom`:
   registration, are not bounded.
 * `SteeredLayout layout steer`: at each prefix of the session's coins, a pass's layout reads the codec and the append
   coins only through the `a`-bit summary `steer` its devices are told. What `a` is, is the schedule check's
-  (`Accounting.ScheduleDeterministic`, `RemoteAudit.Schedule.check`): the bits of the schedule each credited plan is
+  (`Accounting.ScheduleDeterministic`, `Poub.Schedule.check`): the bits of the schedule each credited plan is
   the verifier's plan of.
 -/
 
@@ -54,9 +54,9 @@ reads its append's coin, flipped after its payload is committed (`KeyBinding`), 
 carries nothing about its encoding, and only work after the coin helps rebuild it. Two claims about the code back the
 rest:
 
-* no pass reads an append's blocks `L` or more windows after the one it joined (remote_bandwidth's `lifetime`,
-  `Properties.RemoteAudit.LifetimeCapped`, proved), whose game form is this premise's hypothesis;
-* a re-key appends the block again and samples a fresh coin (`Properties.RemoteAudit.AppendsInOrder`, proved
+* no pass reads an append's blocks `L` or more windows after the one it joined (poub's `lifetime`,
+  `Properties.Poub.LifetimeCapped`, proved), whose game form is this premise's hypothesis;
+* a re-key appends the block again and samples a fresh coin (`Properties.Poub.AppendsInOrder`, proved
   with the live coins uniform): each append has its own uniform coin, as in the game's coins.
 
 So the work that helps rebuild an appended tile a pass reads lies in the `L` windows ending at the pass, counting the
@@ -93,15 +93,15 @@ writes at production, re-keys at the life cap only). What the prover chose after
 summary is the part of it the layout reads. The prover that steers the layout knows that part, so its devices are told
 it, and this premise is only that the layout reads nothing more of `y`. It holds of every layout at `a = |Y|`, so `a`
 is what the schedule check bounds (`Accounting.ScheduleDeterministic`): the verifier credits nothing after the seed
-unless every pass's plan is its own plan (`RemoteAudit.Schedule.plan`) of the schedule the prover publishes (when each
+unless every pass's plan is its own plan (`Poub.Schedule.plan`) of the schedule the prover publishes (when each
 block is written and freed, and each pass's step), and that schedule is within the cap on its bits the prover
 committed before the session's first coin (`audit.Params.schedule_cap`), which is what it credits
 (`audit.Ledger.steering`). `a` is one number for every coin, so it is that cap, not the bits of the schedule
 published after the coins, whose length can follow them. A layout the check accepts at cap `a` at every coin is
-`SteeredLayout` at `a + 1` (`Properties.RemoteAudit.steered_of_checked`, at the verifier's own layout,
-`Properties.RemoteAudit.runLayout`: its positions of the plan the pass sent, where it checks each opened block),
+`SteeredLayout` at `a + 1` (`Properties.Poub.steered_of_checked`, at the verifier's own layout,
+`Properties.Poub.runLayout`: its positions of the plan the pass sent, where it checks each opened block),
 and a layout that follows a
-coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`). The
+coin at a counted schedule is refused (`Properties.Poub.coinLayout_not_scheduled`, `ScheduleFixesLayout`). The
 schedule holds the run inputs and arrival steps the prover chose after the coins of the blocks the pass holds
 (arrivals, lengths, prefix-cache hits and preemptions, and every run input that moves them), and more: the whole
 session's, so its bits bound theirs from above. -/

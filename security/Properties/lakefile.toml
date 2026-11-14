@@ -67,7 +67,7 @@ name = "verity_evaluate"
 path = "../../verity/circuits/evaluate"
 
 [[require]]
-name = "remote_audit"
+name = "poub"
 path = "../../verity/protocols/accounting/poub/verifier/lean"
 
 [[require]]

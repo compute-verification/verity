@@ -41,7 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The memory line's arithmetic link, proved (`Properties.RemoteAudit.Line`: `LineChecked`, `StretchBound`,
+# The memory line's arithmetic link, proved (`Properties.Poub.Line`: `LineChecked`, `StretchBound`,
 `LineRegistered`)
 
 `line` runs `check`, then `stretches` at each form's charge. `check_ok` reads `check`'s refusals off its `if … then
@@ -60,9 +60,9 @@ model's `fill` is at most the code's (`stretch_fill`). `stretch_bound_of` puts t
 
 @[expose] public section
 
-namespace Properties.RemoteAudit.Line
+namespace Properties.Poub.Line
 
-open _root_.RemoteAudit.Line Accounting.Remote.Held
+open _root_.Poub.Line Accounting.Remote.Held
 
 /-- A loop in `Except` whose every step pushes one value `x` with `P a x` (or refuses): each value of its result was in
 the initial array or pushed at some `a ∈ l`. -/
@@ -337,14 +337,14 @@ theorem check_ok {gs : Array Group} {per blocks blockBytes nodeBytes : ℕ} {wro
     not_lt.1 h8, not_lt.1 h9, not_lt.1 h10, not_lt.1 h11⟩
 
 /-- The pooled bound is read only at a `δ` above 0 and below 1. -/
-theorem pooled_delta {ws : Array (ℕ × ℕ)} {δ : ℚ} {b : _root_.RemoteAudit.Pooled.Bound}
-    (h : _root_.RemoteAudit.Pooled.pooled ws δ = .ok b) : 0 < δ ∧ δ < 1 := by
+theorem pooled_delta {ws : Array (ℕ × ℕ)} {δ : ℚ} {b : _root_.Poub.Pooled.Bound}
+    (h : _root_.Poub.Pooled.pooled ws δ = .ok b) : 0 < δ ∧ δ < 1 := by
   by_contra hc
   have hδ : δ ≤ 0 ∨ 1 ≤ δ := by
     rcases le_or_gt δ 0 with h0 | h0
     · exact Or.inl h0
     · exact Or.inr (not_lt.1 fun h1 => hc ⟨h0, h1⟩)
-  simp only [_root_.RemoteAudit.Pooled.pooled, hδ, if_true] at h
+  simp only [_root_.Poub.Pooled.pooled, hδ, if_true] at h
   by_cases hs : ws.size = 0
   · simp only [hs, if_true] at h
     cases h
@@ -357,7 +357,7 @@ theorem line_delta {gs : Array Group} {per blocks blockBytes chipBytes nodeBytes
     {rates : Rates} {l : Line} (h : line gs per blocks blockBytes chipBytes nodeBytes ws δ rates = .ok l) :
     0 < δ ∧ δ < 1 := by
   unfold line at h
-  cases hp : _root_.RemoteAudit.Pooled.pooled ws δ with
+  cases hp : _root_.Poub.Pooled.pooled ws δ with
   | error e => rw [hp] at h; cases h
   | ok bd => exact pooled_delta hp
 
@@ -371,10 +371,10 @@ theorem line_spec {gs : Array Group} {per blocks blockBytes chipBytes nodeBytes 
       l.forms = #[⟨"time-held", (charges rates blockBytes).1, ts⟩,
         ⟨"link-charged", (charges rates blockBytes).2, ls⟩] := by
   unfold line at h
-  cases hp : _root_.RemoteAudit.Pooled.pooled ws δ with
+  cases hp : _root_.Poub.Pooled.pooled ws δ with
   | error e => rw [hp] at h; cases h
   | ok bd =>
-    have hp' : _root_.RemoteAudit.Pooled.pooled ws δ = pure bd := hp
+    have hp' : _root_.Poub.Pooled.pooled ws δ = pure bd := hp
     rw [hp', pure_bind] at h
     dsimp only at h
     cases hc : check gs per blocks blockBytes nodeBytes bd.wrong rates with
@@ -678,4 +678,4 @@ theorem lineRegistered : LineRegistered := by
     · simp [lineOfRegistered, unregistered, hd, hb] at h
   · simp [lineOfRegistered, unregistered, hd] at h
 
-end Properties.RemoteAudit.Line
+end Properties.Poub.Line

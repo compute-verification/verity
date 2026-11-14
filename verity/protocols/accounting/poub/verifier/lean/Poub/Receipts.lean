@@ -2,8 +2,8 @@ module
 
 public import Flock.FV3
 public import Flock.Hm96
-public import RemoteAudit.Codec
-public import RemoteAudit.Plan
+public import Poub.Codec
+public import Poub.Plan
 
 /-!
 # Receipts, seeds and the receipt tree: `receipts.py`, and `audit.py`'s chain over appends
@@ -31,7 +31,7 @@ receipt is computed (`Registration.make?`).
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace RemoteAudit
+namespace Poub
 
 def SEED_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/seed/v0"
 def RECEIPT_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/receipt/v0"
@@ -160,4 +160,4 @@ def verifyLeaf (seed : ByteArray) (plan : Plan) (root : ByteArray) (p : Nat) (le
   let d := treeDomain seed plan
   d.verifyOpening root d.count (p / PER_LEAF) (hidden leaf salt) SCHEMA path
 
-end RemoteAudit
+end Poub

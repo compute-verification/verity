@@ -1,9 +1,9 @@
 module
 
-public import RemoteAudit.P2Protocol
+public import Poub.P2Protocol
 
-/-! `remote-audit-p2-protocol`: the core protocol command line (`Core.Protocol.main`) of
-`RemoteAudit.P2Protocol.protocol`, `verity/remote-bandwidth/p2/v0`, a PoUB session over PoUS's P2 store. `id` prints
+/-! `poub-p2-protocol`: the core protocol command line (`Core.Protocol.main`) of
+`Poub.P2Protocol.protocol`, `verity/remote-bandwidth/p2/v0`, a PoUB session over PoUS's P2 store. `id` prints
 the protocol id; `check PARAMS COMMITMENT EVIDENCE` reads three files and prints the outcome's canonical JSON line;
 `serve` reads one case a line on standard input, `{"commitment": hex, "evidence": hex, "params": JSON}`, and prints one
 outcome line for each. A case's params name the memory challenger's session id and trusted keys, and its evidence
@@ -13,4 +13,4 @@ cases and runs `serve` on one (`judged`), and `tests/test_p2_case.py` holds its 
 
 @[expose] public section
 
-def main (args : List String) : IO UInt32 := RemoteAudit.P2Protocol.protocol.main args
+def main (args : List String) : IO UInt32 := Poub.P2Protocol.protocol.main args

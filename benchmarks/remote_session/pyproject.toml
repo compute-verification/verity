@@ -43,7 +43,7 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "v
           # the challenger's coins name their claim instance (spot/challenger.py's `coin_claim`)
           "verity/claims/__init__.py",
           # the Lean verifier the sessions run beside audit.AuditRun, which computes auditor_line.py's line
-          # (lean_verifier.py): what `lake build remote-audit-verifier` reads, PoUB's package and its
+          # (lean_verifier.py): what `lake build poub-verifier` reads, PoUB's package and its
           # path requires
           "verity/protocols/proofs/flock/verifier/Flock", "verity/protocols/proofs/flock/verifier/lakefile.toml",
           "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",

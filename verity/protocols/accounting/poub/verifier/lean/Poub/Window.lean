@@ -1,7 +1,7 @@
 module
 
 public import CoreProtocol.Protocol
-public import RemoteAudit.Receipts
+public import Poub.Receipts
 
 /-!
 # A window's receipt checks: `audit.py`'s `Session.close` draw and `Session.verify`
@@ -28,7 +28,7 @@ PoUW's tiles is refused (`Registration.make?`), a form no proof here covers.
 
 @[expose] public section
 
-namespace RemoteAudit
+namespace Poub
 
 def REGISTRATION_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/registration/v0"
 def PAYLOAD_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/payload/v0"
@@ -99,7 +99,7 @@ def Registration.digest (r : Registration) : ByteArray :=
 def payloadDomain (node : ByteArray) (blocks : Nat) : Flock.FV3.Sha512.Domain :=
   .make (sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 blocks
 
-def Registration.payloadDomain (r : Registration) : Flock.FV3.Sha512.Domain := RemoteAudit.payloadDomain r.node r.blocks
+def Registration.payloadDomain (r : Registration) : Flock.FV3.Sha512.Domain := Poub.payloadDomain r.node r.blocks
 
 /-- An append the verifier received: store indices `first … first + count − 1`, its payload tree's root, and the coin
 `c_a` it answered with. -/
@@ -251,4 +251,4 @@ def verifyWindow (reg : Registration) (appends : Array Append) (w : WindowRecord
   let drawn ← receiptSample digest w.index openingsCoin samples (w.passes.map (·.plan.length))
   pure (checkWindow reg digest appends w drawn openings)
 
-end RemoteAudit
+end Poub

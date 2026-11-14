@@ -38,7 +38,7 @@ from verity.protocols.accounting.poub.verifier.session import challengers  # noq
 from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
 from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
-from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
+from test_poub import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 import lean_stands_in  # noqa: E402
 from verity.protocols.accounting.poub.verifier import coins  # noqa: E402
@@ -56,7 +56,7 @@ CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
 PINS = [pin_line("d" * 40, "e" * 40, "2026-10-20T08:00:00Z"), pin_line(PIN, "f" * 40, "2026-10-21T00:30:00Z")]
 #: the auditor's first-parent list of main, newest first: both pins on it
 MAIN = ["f" * 40, PIN, "e" * 40, "d" * 40]
-#: the model the store is bound to (`remote_bandwidth.store`'s pin)
+#: the model the store is bound to (`poub.store`'s pin)
 MODEL = {"name": "synthetic-bf16", "checkpoint_sha512": "ab" * 64}
 #: the commit the verifier ran at (`--commit`): main's head
 VERIFIER = MAIN[0]
