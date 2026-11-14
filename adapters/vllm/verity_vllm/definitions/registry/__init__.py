@@ -10,7 +10,7 @@
 `b1`     — composites (`Gemm`, `RMSNormTriton`, `FusedAddRMSNormCuda`, `RoPE`, `Attention`, `SiluMul`,
            `EmbeddingGather`, `LMHead`, `TokenSelect`, `Layer`, `Prefill`, `DecodeStep`, `Serve`) and the
            static configuration record for the eager profile.
-`conformance` — the separate conformance record: which production kernels implement which registered
+`conformance` — the separate conformance record: which served kernels implement which registered
            definitions, and each definition's conformance status.
 
 Glossary (Draft 3 §12): a registered definition is a Definition; a Program is a sequence of Calls of Definitions; the Value<w>

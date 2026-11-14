@@ -27,7 +27,7 @@ Composition (spec §3): the `Serve_v2{C, LP, STEPS=D_MAX}` gate skeleton + one g
 Version discipline (spec §10): `Serve_v1`/`Serve_v2` are frozen historical — nothing here edits or rebinds
 them; `EOS_ID` lives only in `C₃` dicts bound into v3-family definitions (`C₃ = {**C, "EOS_ID": id}` at the
 binding site, never added to a dict bound into v1/v2).  Conformance: the guard/step/serve definitions are
-protocol definitions (spec §11: production correspondence applies to the live branch; inactive branches are
+protocol definitions (spec §11: serving correspondence applies to the live branch; inactive branches are
 validated against the registered specification — see `serve3_reference.py`).
 """
 
