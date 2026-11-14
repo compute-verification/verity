@@ -16,13 +16,13 @@ registered statement, with one network certifier on the server's uplink running 
 - per execution phase, at a statement in scope, `Pr[accept ∧ ¬RLeakCertifier(δ)] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
 - where the network certifier registers its observations in every execution phase, the secrets whose every execution
   phase meets its good event (`ExecutionPhaseGood`) number at most
-  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, whose log2 bounds the bits.
+  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i`, whose log2 bounds the bits.
 
 `RLeakCertifier(δ)` says every observation sequence the network certifier registers is one the registered Program
 accepts at the trace's committed values with some incorrect set the audit allows at δ. ε_ks and ε_bind are the sampled
 verifier's errors (`Compiled.KS`'s) and `B_tap` a collision between the extracted trace's openings and the network
 certifier's. `cap_c` bounds connection c's cells; `freeInputs_i \ reg_i` are execution phase i's free inputs (the
-advice) outside its registered inputs; `faultySets_i(δ)` are its possible incorrect sets at δ and β_i bounds the bits
+advice) outside its registered inputs; `incorrectSets_i(δ)` are its possible incorrect sets at δ and β_i bounds the bits
 any of them commits; k_i is its steps and `Dj` bounds each step's jitter class.
 
 It bounds each execution phase's failure on its own: the union over the monitoring period's live coins is not stated,
@@ -127,7 +127,7 @@ A spec-level reference for network accounting's timing channel:
   `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
   link registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
-- one vLLM v1 scheduler step (`replay_step`): `ReplayStep_v1`, a Boolean Definition with `reference` its spec, takes the
+- one vLLM v1 scheduler step, in vLLM's compiler (`verity_vllm.compiler.replay_step`): `ReplayStep_v1`, a Boolean Definition with `reference` its spec, takes the
   committed queue state, the certified arrivals and the committed decision bits to the step's rows (request, kind,
   start, n) and the next state, under sync or async scheduling and with `CacheStep_v1`'s walk entries, and refuses
   what its size class or the prefix layer's counts can't express. It is the compile slice's proof block's core, between
@@ -175,7 +175,7 @@ A spec-level reference for network accounting's timing channel:
 - advice v0's validity (`advice_check`): `AdviceCheck_v1{L}`, the compile slice's proof block's first part as a Boolean
   Definition, 1 exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode`
   it defers (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`;
-- the replay's state chain (`replay_chain`): ReplayStep_v1's state handed from one step proof block to the next as the
+- the replay's state chain, in vLLM's compiler (`verity_vllm.compiler.replay_chain`): ReplayStep_v1's state handed from one step proof block to the next as the
   state rows of a produced value a window, with private heads into the window row every step reads: the certified
   arrivals not yet taken and the window's decisions, since the step's cursors are private. `ReplayAdvance` sits beside
   each step and checks its arrivals and decision bits are the window row's at the heads; `ReplayLoad` runs once a

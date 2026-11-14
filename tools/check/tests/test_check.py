@@ -1408,21 +1408,12 @@ def test_a_step_is_hung_only_once_its_outputs_have_been_quiet_for_idle_s_and_ove
                                                             CHECK.STEP_BUDGET_S)
 
 
-def test_a_rust_crate_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
-    """flock-circuit-build fails, with cargo's line, only once `slow` is running (the FIFO): under --keep-going `slow` stops."""
-    gate = _gate(tmp_path, monkeypatch)
-    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
-    build = _py("import sys\nopen(sys.argv[1]).read(1)\nprint('error: could not compile `flock-circuit` (lib)')\nsys.exit(101)", gate)
-    _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("flock-circuit-build", build, tmp_path)]])
-    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
-    by = {s["step"]: s for s in done}
-    assert not passed and by["flock-circuit-build"]["status"] == "failed" and by["flock-circuit-build"]["halts"]
-    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: flock-circuit-build failed"
-
-
-def test_a_build_that_fails_without_compiling_does_not_halt(tmp_path, monkeypatch):
-    """A failed clone or toolchain download: no `halts`, so (the Steps test below) the other groups keep their verdicts."""
-    build = _py("print('fatal: unable to access https://github.com/...')\nraise SystemExit(128)")
+@pytest.mark.parametrize("said, rc", [("fatal: unable to access https://github.com/...", 128),
+                                       ("error: could not compile `flock-circuit` (lib)", 101)])
+def test_a_failed_flock_build_does_not_halt(tmp_path, monkeypatch, said, rc):
+    """A failed clone, toolchain download or compile: no `halts`, so (the Steps test below) under --keep-going the other groups
+    run on and keep their verdicts, and one round of the check lists every red."""
+    build = _py(f"print({said!r})\nraise SystemExit({rc})")
     _fake_run(monkeypatch, [[("flock-circuit-build", build, tmp_path)]])
     passed, (rec,) = CHECK.run(tmp_path, 1, keep_going=True)
     assert not passed and rec["status"] == "failed" and "halts" not in rec

@@ -39,11 +39,11 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
 /-- **The headline over the salted session**: `Prog.flock_headline` for the batched session at the leaf scheme `Lp`
 (`batchedSessionL H512 enc512 Lp plan`). If `execAccept` holds, the probability that at least `K` units of
 the program's rows circuit are incorrect at the committed values (1 on `ones`, 0 on `zeros`, the plurality of the prover's
-openings elsewhere) is at most `miss(K) + ε_ks + δ_link + δ_tree`:
+openings elsewhere) is at most `miss(K) + ε_ks + ε_bind + δ_tree`:
 * `miss(K)`, `SamplingDesign.stratified`'s count curve, under A3 (`hA3`);
 * `ε_ks = ksAvgStrict`, under `SHA512CRStrict` (`cr/sha-512`) for each table's knowledge finders at budgets `qF`, `qS`
   (`hKS`, `TableCRL`);
-* `δ_link = linkBoundE`, under `SHA512CRExpected` (`ecr/sha-512`) for the prover's link finders (`hCR`, `LinkCRL`);
+* `ε_bind = linkBoundE`, under `SHA512CRExpected` (`ecr/sha-512`) for the prover's link finders (`hCR`, `LinkCRL`);
 * `δ_tree = TreeRewind.bound qT`, under `SHA512CRStrict` (`cr/sha-512`) for the serving roots' rewinding finder (`hT`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_L {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
@@ -130,7 +130,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_LX {Lp : Merkle.Leaf (List Flo
 `Prog.flock_headline_L` (the live stratified sample under A3), and let the live audit `auditLive Lx Reg live`, played by
 the prover `τ`, refine the audit with `batchedSessionL H512 enc512 Lp plan` played by `σ`, up to the live event
 `bad` (`hRef`). If `σ`'s committed values have at least `K` incorrect proof blocks, verity-verify-proof accepts with probability at most
-`miss(K) + ε_ks + δ_link + Pr[bad]`. `pp`, `hConst`, `hZero`, `lay`, `rs` and `hHm` are open as in
+`miss(K) + ε_ks + ε_bind + Pr[bad]`. `pp`, `hConst`, `hZero`, `lay`, `rs` and `hHm` are open as in
 `Prog.flock_headline`; `hRef` is the refinement. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_execL {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)

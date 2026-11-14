@@ -39,7 +39,7 @@ def repCommits (r : RecRecord.Record) (s : List UInt8) : List (Nat × List (List
 
 /-- The refusal of a live-coin part's record that is not in its own format. -/
 def notOwnFormat : String :=
-  "rec inner transcript: the coin server's record does not read in its own format (RecRecord.readFull: " ++
+  "rec inner transcript: the challenger's live-coin part's record does not read in its own format (RecRecord.readFull: " ++
     "rec_live.record_bytes, its rounds first, then its kind, tops, Hello in its keys' order and the link's roots " ++
     "and points, at json.dumps' indent=1)"
 
@@ -65,7 +65,7 @@ def checkReads (i : RecVStar.Inner) (tt : String) (tr : Json) (record : String) 
   let some r := RecRecord.readFull tt.toUTF8.toList | throw notOwnFormat
   let t := lk.table
   let tb := t.toUTF8.toList
-  let at_ := "rec inner transcript: the coin server's record read in its own format holds "
+  let at_ := "rec inner transcript: the challenger's live-coin part's record read in its own format holds "
   if r.hello.tables != [tb] then throw s!"{at_}Hello's tables other than {t} alone, as its JSON reads them"
   if r.roots != [(tb, lk.root.toList.map (·.toList))] then
     throw s!"{at_}a link.roots other than {t}'s root_B alone, as its JSON reads it"
@@ -246,7 +246,7 @@ def fullSample (inner : Option RecVStar.Inner) (rec : Bool) (draw : Option Json)
 /-- The refusal of a session over an inner session whose record holds no sample. -/
 def noInnerSample : String :=
   "refused: the inner session's record (--rec-inner-session) holds no draw (unit_draw): the recursion's inner session " ++
-    "is drawn (the coin server's full draw, rec_live.full_draw), the only inner session the recursion's proof covers"
+    "is drawn (the challenger's live-coin part's full draw, rec_live.full_draw), the only inner session the recursion's proof covers"
 
 /-- **The recursion's inner session is sampled**: where the verifier holds the inner session's record (`src`, check 5's
 source: `--rec-inner-session` with the inner statement's files), the record holds a sample

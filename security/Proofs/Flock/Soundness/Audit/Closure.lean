@@ -25,8 +25,8 @@ program.
   incorrect proof blocks' harm (coverage), and `unsoundWork_singleton`: exactly, for one incorrect proof block.
 * `audit_work_closure`, `extraction_audit_work_closure`: under the work sampling design's closure sample, at any floors `f_s ≥ 1`, the
   audit accepts while the unsound units do at least `T` of the work with probability at most
-  `((W − T)/W)^K + ε_ks + δ_link`. `audit_work_closure_harm`: likewise while some incorrect proof block's harm is at least `T`.
-  `audit_work_closure_of_record`: at `K = 27,713`, unsound work of at least 0.1% with at most `2^-40 + ε_ks + δ_link`.
+  `((W − T)/W)^K + ε_ks + ε_bind`. `audit_work_closure_harm`: likewise while some incorrect proof block's harm is at least `T`.
+  `audit_work_closure_of_record`: at `K = 27,713`, unsound work of at least 0.1% with at most `2^-40 + ε_ks + ε_bind`.
 -/
 
 @[expose] public section
@@ -140,27 +140,27 @@ variable {n m : ℕ} {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → �
   {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
 /-- **The work audit with closure samples** (oracle layer): the audit accepts while its incorrect proof blocks and the units they make
-unsound do at least `T` of the work with probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
-theorem audit_work_closure (A : Analysis ((SamplingDesign.work σ w f K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
+unsound do at least `T` of the work with probability at most `((W − T)/W)^K + ε_ks + ε_bind`. -/
+theorem audit_work_closure (A : Analysis ((SamplingDesign.work σ w f K).closure cl) Reg session) {εks εbind : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit ((SamplingDesign.work σ w f K).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')))
         (audit ((SamplingDesign.work σ w f K).closure cl) Reg session) σ' ≤
-      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K + εks + δlink := by
+      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => T ≤ SamplingDesign.unsoundWork σ w cl B) σ').trans ?_
   gcongr
   exact iSup₂_le fun B hB => SamplingDesign.closure_escape_le_work σ w f K cl hf hW hB
 
 /-- **The work audit with closure samples** (compiled layer, randomized extractor): at most
-`((W − T)/W)^K + ε_ks(σ) + δ_link(σ)`. -/
+`((W − T)/W)^K + ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_work_closure (A : ExtractionAnalysis ((SamplingDesign.work σ w f K).closure cl) Reg session)
-    {εks δlink : (R : Reg) → Cont ((SamplingDesign.work σ w f K).closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
+    {εks εbind : (R : Reg) → Cont ((SamplingDesign.work σ w f K).closure cl) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit ((SamplingDesign.work σ w f K).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')))
         (audit ((SamplingDesign.work σ w f K).closure cl) Reg session) σ' ≤
       (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K +
-        εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
+        εks (reg σ') (cont σ') + εbind (reg σ') (cont σ') := by
   refine (extraction_audit_le A hks hlink (fun X _ => T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect X)) σ').trans ?_
   gcongr
   by_cases hB : T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ'))
@@ -168,24 +168,24 @@ theorem extraction_audit_work_closure (A : ExtractionAnalysis ((SamplingDesign.w
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **Each incorrect proof block is charged its harm** (oracle layer): the audit accepts while some incorrect proof block, sampled or not, has
-harm at least `T` with probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
-theorem audit_work_closure_harm (A : Analysis ((SamplingDesign.work σ w f K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
+harm at least `T` with probability at most `((W − T)/W)^K + ε_ks + ε_bind`. -/
+theorem audit_work_closure_harm (A : Analysis ((SamplingDesign.work σ w f K).closure cl) Reg session) {εks εbind : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit ((SamplingDesign.work σ w f K).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ ∃ u ∈ A.incorrect (A.committedOf σ'), T ≤ SamplingDesign.harm σ w cl u)
         (audit ((SamplingDesign.work σ w f K).closure cl) Reg session) σ' ≤
-      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K + εks + δlink := by
+      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K + εks + εbind := by
   refine le_trans (prob_mono (fun o ho => ⟨ho.1, ?_⟩) _ _) (audit_work_closure A hks hlink hf hW T σ')
   obtain ⟨u, hu, hT⟩ := ho.2
   exact hT.trans (SamplingDesign.harm_le_unsoundWork σ w cl hu)
 
 /-- **The closure audit at the sizing of record**: with `K = 27,713`, the audit accepts while its incorrect proof blocks and the units
-they make unsound do at least 0.1% of the work with probability at most `2^-40 + ε_ks + δ_link`. -/
-theorem audit_work_closure_of_record (A : Analysis ((SamplingDesign.work σ w f 27713).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w)
+they make unsound do at least 0.1% of the work with probability at most `2^-40 + ε_ks + ε_bind`. -/
+theorem audit_work_closure_of_record (A : Analysis ((SamplingDesign.work σ w f 27713).closure cl) Reg session) {εks εbind : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w)
     (σ' : Strategy (audit ((SamplingDesign.work σ w f 27713).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')))
-        (audit ((SamplingDesign.work σ w f 27713).closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink := by
+        (audit ((SamplingDesign.work σ w f 27713).closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.unsoundWork σ w cl B) σ').trans ?_
   gcongr
   refine iSup₂_le fun B hB => ?_

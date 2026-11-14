@@ -20,7 +20,7 @@ SHA-512 (`Refine.H512`), so `SHA512CRExpected` (`hCR`) is about SHA-512 itself, 
 of the finders built from the prover bounded (`hCR : LinkCR … (reg σ) (cont σ) …`). The other hypotheses (`dp`, `hConst`,
 `hZero`) are the skeleton's, unchanged (`E2E.lean`).
 
-**The two forms of SHA-512's collision resistance.** The binding error `δ_link` is under `SHA512CRExpected` (`ecr/sha-512`,
+**The two forms of SHA-512's collision resistance.** The binding error `ε_bind` is under `SHA512CRExpected` (`ecr/sha-512`,
 through `hCR`), of SHA-512 itself, since the rows' binding hashes with it. The knowledge term and `δ_tree` are under
 `SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`), of the session's hash `H`, which `Prog.flock_headline` takes to
 be SHA-512; each at its finders' budgets:
@@ -70,8 +70,8 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
 
 /-- **The end-to-end count curve, with the rows' value binding**: `flock_e2e_count` at `vb := HmRows.binding rs hHm`.
 If `execAccept` holds, the probability that at least `K` units of the committed circuit are incorrect at the committed values
-is at most `miss_L(K) + ε_ks + δ_link + δ_tree`: `ε_ks` and `δ_tree` under `SHA512CRStrict` of `H` (`cr/sha-512`,
-through `hKS` and `hT`), `δ_link` under `SHA512CRExpected` of SHA-512 (`ecr/sha-512`, through `hCR`). Beyond the
+is at most `miss_L(K) + ε_ks + ε_bind + δ_tree`: `ε_ks` and `δ_tree` under `SHA512CRStrict` of `H` (`cr/sha-512`,
+through `hKS` and `hT`), `ε_bind` under `SHA512CRExpected` of SHA-512 (`ecr/sha-512`, through `hCR`). Beyond the
 skeleton's `dp`, `hConst` and `hZero`, it takes the rows' layout (`lay`, `rs`), `HmRowComputes` (`hHm`) and the serving
 roots' rewinding (`tr`). It takes no A3: `miss_L` is the sampling design's own, and `Prog.flock_headline` bounds the live sample's by
 `SamplingDesign.stratified`'s under A3. -/
@@ -101,8 +101,8 @@ theorem flock_e2e_count_hm96
     (tr.le hT))
 
 /-- **The end-to-end drawn-unit bound, with the rows' value binding**: `flock_e2e_sampled` at
-`vb := HmRows.binding rs hHm`, at most `ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
-and `hT`, `ecr/sha-512` through `hCR`). It reads the sampling design only through `ε_ks` and `δ_link`, both at `L`, so it holds as
+`vb := HmRows.binding rs hHm`, at most `ε_ks + ε_bind + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
+and `hT`, `ecr/sha-512` through `hCR`). It reads the sampling design only through `ε_ks` and `ε_bind`, both at `L`, so it holds as
 stated at the live sample (`L := SamplingDesign.execOS …`), with no A3. -/
 theorem flock_e2e_sampled_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
@@ -132,7 +132,7 @@ theorem flock_e2e_sampled_hm96
 variable {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Ls : Fin m → ℕ)
 
 /-- **The e2e drawn-unit bound at the executable's sampling design, with the rows' value binding**: `flock_e2e_sampled_exec` at
-`vb := HmRows.binding rs hHm`, at most `ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
+`vb := HmRows.binding rs hHm`, at most `ε_ks + ε_bind + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
 and `hT`, `ecr/sha-512` through `hCR`). `SamplingDesign.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; the live
 verifier's bytes are `flock_e2e_sampled_hm96`'s at `L := SamplingDesign.execOS …`. -/
 theorem flock_e2e_sampled_exec_hm96
@@ -164,7 +164,7 @@ theorem flock_e2e_sampled_exec_hm96
 
 /-- **The e2e count curve at the executable's sampling design, with the rows' value binding**: `flock_e2e_count_exec` at
 `vb := HmRows.binding rs hHm`, its count curve bounded by `SamplingDesign.stratified`'s `miss`, at most
-`miss(K) + ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS` and `hT`, `ecr/sha-512`
+`miss(K) + ε_ks + ε_bind + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS` and `hT`, `ecr/sha-512`
 through `hCR`). `SamplingDesign.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; at the live verifier's bytes
 the same curve is `Prog.flock_headline`'s, under A3. -/
 theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)

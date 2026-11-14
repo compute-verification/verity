@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 # A monitoring period of sampled audits: each window's leak relation at its witness's incorrect set
 
 Definitions only. `RLeak δ` puts a window's observations among the sequences accepted with some incorrect set that `M_δ`
-allows (`AccSeqsSampled`), so a monitoring period charged by it pays `log2 #faultySets(δ)` and `δ` in every window. Over
+allows (`AccSeqsSampled`), so a monitoring period charged by it pays `log2 #incorrectSets(δ)` and `δ` in every window. Over
 a monitoring period the incorrect set that matters is the one of the witness computed from each window's registration,
 before its sample: the samples bound how many units those sets hold in total, and the count pays for which units they are
 once. `LeakAt` is the leak relation at one incorrect set, and `PooledGood` is every window's at its own set, with the

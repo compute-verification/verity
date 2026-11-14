@@ -90,7 +90,7 @@ def test_lowering_the_keep_word_names_the_word_gate_keep_word():
     prim = SM.topp_mask_word(16)
     assert prim.id not in IL.PIECES
     C = gf2.Circuit()
-    with pytest.raises(IL.NoPiece, match=r"^C-Flock has no piece for TopPMaskWordx16_v1: .*; bind the word-gate keep word "
+    with pytest.raises(IL.NoPiece, match=r"^Flock has no piece for TopPMaskWordx16_v1: .*; bind the word-gate keep word "
                                          r"\(TopPKeepWord_v2\{V,S\}, one per split count S, each of its gates a piece\) instead$"):
         IL.lower(C, prim, [C.input(f"in{j}", 32) for j in range(18)])
 

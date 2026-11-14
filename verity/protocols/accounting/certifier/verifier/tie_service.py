@@ -150,7 +150,7 @@ def _unit(check) -> CompositeDefinition:
 
 _UNIT = _unit(gate)
 #: the same proof block with the gate replaced by the Definition it names, as a proof's circuit lowers it
-_PROOF_UNIT = _unit(_expanded)
+_PROOF_BLOCK = _unit(_expanded)
 
 
 def request_cells(prompt_len: int, B: int) -> int:
@@ -340,7 +340,7 @@ class IngressTie:
     def proof_block(self):
         """The proof block a proof's circuit lowers: `unit` with its gate the Definition it names (`head_check.expand`,
         a `ValueError` for an unpinned size class)."""
-        return bind(_PROOF_UNIT, **dict(zip(_STATICS, self.key)))
+        return bind(_PROOF_BLOCK, **dict(zip(_STATICS, self.key)))
 
     @cached_property
     def query(self) -> dict[str, Any]:

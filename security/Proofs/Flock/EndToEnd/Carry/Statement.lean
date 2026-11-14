@@ -27,12 +27,12 @@ there (`CarriedBlocks.incorrectSet`).
 
 * `IntegrityPooledCarried`: `IntegrityPooledBlocks` with carried leaves. The probability that every session is
   accepted and the incorrect proof blocks over the monitoring period, each carried leaf read at its one value, total at least `ln(1/δ)/q` is
-  at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t) + Σ_ℓ δ_carry,ℓ`, with each carried leaf's term
+  at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + ε_bind,t) + Σ_ℓ δ_carry,ℓ`, with each carried leaf's term
   $$\delta_{carry,\ell} = \Big(\sum_{t \in \ell} \frac{\pi_{\ell,t}}{1 - \rho_t}\Big)
     \Big(\frac{2 \sum_{t \in \ell} (\sum_{j < t} t'_j + t'_t (1 + k_t))}{2^{256}} + \frac{m_\ell}{e M_\ell}\Big),$$
   `π_{ℓ,t}` the probability that session `t`'s sample reads the leaf and `m_ℓ` the number of sessions that share it: `m_ℓ`
   times the binding error of the leaf's finder (`LinkCarry`).
-* `IntegrityBlockCarried`: `IntegrityBlock` with carried leaves, at `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t) + Σ_ℓ δ_carry,ℓ,b`,
+* `IntegrityBlockCarried`: `IntegrityBlock` with carried leaves, at `δ + Σ_{t ∈ b} (ε_ks,t + ε_bind,t) + Σ_ℓ δ_carry,ℓ,b`,
   each leaf's term with only its sessions in block `b` weighed (`CarriedLeaf.carryOn`), so the blocks' terms sum to at
   most `Σ_ℓ δ_carry,ℓ`: the per-block form the joint guarantee over blocks reads.
 

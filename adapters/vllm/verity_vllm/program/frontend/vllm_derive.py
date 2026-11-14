@@ -14,8 +14,9 @@ from typing import TYPE_CHECKING, Any
 from verity_torch.frontend import derive as _derive
 from verity_torch.frontend.outcomes import Unsupported
 from verity_torch.frontend.report import DeriveReport
-from verity_vllm.program.frontend import seed_rule, stop_rule
+
 from verity.circuits.program import Program
+from verity_vllm.program.frontend import seed_rule, stop_rule
 
 if TYPE_CHECKING:
     import torch

@@ -33,7 +33,7 @@ from verity.protocols.proofs.spot.prover.optimize import (HM96_ANDS, KAPPAS, PRO
                                                            two_stage_counts, two_stage_design, two_stage_exfil,
                                                            two_stage_price, two_stage_statements, two_stage_strata, weigh,
                                                            work_sampling_design)
-from verity.circuits.partition_v2 import UNIT_CLASS_MAX
+from verity.circuits.partition_v2 import SIZE_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
 
@@ -258,9 +258,9 @@ def test_a_compression_costs_its_pin_which_is_the_gadgets_rows():
 
 
 def test_candidates_fit_a_size_class():
-    for bits, gates in ((16, 1), (64, 2), (2048, 128), (UNIT_CLASS_MAX, UNIT_CLASS_MAX // 16)):
+    for bits, gates in ((16, 1), (64, 2), (2048, 128), (SIZE_CLASS_MAX, SIZE_CLASS_MAX // 16)):
         Candidate("a", "A", 1, 1, bits, out_gates=gates)
-    for bits, gates in ((UNIT_CLASS_MAX + 1, 1), (UNIT_CLASS_MAX + 32, 8193)):
+    for bits, gates in ((SIZE_CLASS_MAX + 1, 1), (SIZE_CLASS_MAX + 32, 8193)):
         with pytest.raises(ValueError, match="size class"):
             Candidate("a", "A", 1, 1, bits, out_gates=gates)
     with pytest.raises(ValueError, match="n_rho"):

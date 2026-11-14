@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # memory-accounting's P2 decode library for the H200, built off the card (a CPU node):
 #
-#   research run --on auto --cwd source -- bash benchmarks/torch_gpu/p2_stage/build.sh
+#   research run --on auto --cwd source -- bash verity/protocols/accounting/pous/prover/p2/p2_store/build.sh
 #
 # P2's prover's libp2v1.so (p2_store's), unchanged, by its own Makefile (FAST's default: v4 keys by p2keys4.cuh, p2sq.cuh's
 # Karatsuba squaring), at ARCH (default sm_90a) with CGBN at p2_gpu/CGBN.commit. Writes into OUT (default $OUT):
@@ -16,7 +16,7 @@
 # toolkit path reproduces the cubins, and so does one after a source or a header only moved (ship_nvcc.sh's header).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-. "$HERE/../../kernels/ship.sh"
+. "$HERE/../../../../../../../benchmarks/kernels/ship.sh"
 OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
 P2=$(dirname verity/protocols/accounting/pous/prover/p2/p2_store/Makefile)
 ship_stage "$P2" "$(dirname verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu)" verity/commitments/cuda

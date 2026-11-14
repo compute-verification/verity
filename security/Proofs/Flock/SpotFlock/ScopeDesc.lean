@@ -20,7 +20,7 @@ member, slot and unit:
 * `fillOk`, `fillOk_iff`: the layout fills the members' files (`FilesFill`) exactly when each unit `x` of member `t` is
   in request `x / n_t`'s slot.
 * `memberOk`, `memberFits_of_memberOk`: a member fits (`MemberFits`) where its unit net is built and its descriptor
-  fits: `unitIns c + outBits c ≤ unitClassMax`, whatever its unit count `n`.
+  fits: `unitIns c + outBits c ≤ sizeClassMax`, whatever its unit count `n`.
 * `descOk`, `two_of_descOk`, `partition_two_of_descOk`: the registration's descriptor decided, and the registration's
   side of `stmtOk`, `(partition h s).isSome && (two h s).isSome`, from it and each member's unit net built (`Built`,
   which the unrolled circuit of a statement `Flock.Desc.parseStmt` parsed has, flat or templated:
@@ -118,11 +118,11 @@ open Claims Claims.Sampling Properties.Spot Flock.Bridge.Members
 /-! ## The descriptor's checks -/
 
 /-- **A member's descriptor fits the two-stage scope**, decided from the descriptor alone: `unitLog ≤ 32`, an instance a
-unit at least (`0 < upv`), and a unit's stacked rows' inputs and returned output bits at most `unitClassMax`
+unit at least (`0 < upv`), and a unit's stacked rows' inputs and returned output bits at most `sizeClassMax`
 (`unitIns`, `outBits`), whatever its unit count. -/
 def memberOk (ci : _root_.Flock.Circuit × Array ℕ) : Bool :=
   decide (ci.1.unit.unitLog ≤ 32) && decide (0 < ci.1.upv) &&
-    decide (unitIns ci.1 + Flock.Bridge.BlockCommits.outBits ci.1 ≤ unitClassMax)
+    decide (unitIns ci.1 + Flock.Bridge.BlockCommits.outBits ci.1 ≤ sizeClassMax)
 
 theorem memberFits_of_memberOk {ci : _root_.Flock.Circuit × Array ℕ} (hU : FlockSoundness.Built ci.1.unit)
     (h : memberOk ci = true) : MemberFits ci := by

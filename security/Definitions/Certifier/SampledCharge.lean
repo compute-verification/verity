@@ -40,7 +40,7 @@ Definitions only. An accepted sampled audit gives `Accepted` by the circuit's Pr
 holding values at the incorrect proof blocks' committed gates (`RAcc`, `Definitions.Certifier.SampledAudit`). Those
 values are the prover's to choose, and so is which proof blocks are faulty, so the leak bound of a sampled audit
 charges, beyond the inputs the circuit reads besides the ingress, the incorrect proof blocks' committed bits (`faultyBits`)
-and the choice of incorrect set among the ones `RAcc δ` allows (`faultySets`). The sequences it counts are
+and the choice of incorrect set among the ones `RAcc δ` allows (`incorrectSets`). The sequences it counts are
 `AccSeqsSampled`. Over a monitoring period a window's operator reads the windows before it, `runsBefore`.
 -/
 
@@ -58,7 +58,7 @@ def faultyBits (C : Prog) (P : Partition) (F : Finset ℕ) : ℕ :=
 open Classical in
 /-- **The possible incorrect sets at `δ`**: the sets of `P`'s slots that are in `M_δ` and hold no slot sampled `all`, the
 incorrect sets `RAcc δ` allows. At `δ ≥ miss(1)` none is non-empty. -/
-noncomputable def faultySets (d : Design) (P : Partition) (δ : ℝ) : Finset (Finset ℕ) :=
+noncomputable def incorrectSets (d : Design) (P : Partition) (δ : ℝ) : Finset (Finset ℕ) :=
   (Finset.range P.blocks.length).powerset.filter fun F => F ∈ d.M P δ ∧ Disjoint F (allSlots d P)
 
 /-- **Accepted with the incorrect set `F`**: some declared advice `(a, free)` makes the first `k` steps `Accepted` by the
@@ -73,7 +73,7 @@ def AcceptedFaulty {L K S : ℕ} (C : Prog) (P : Partition) (lay : BoundaryGates
 accepted with some possible incorrect set at `δ` (`AcceptedFaulty`). -/
 def AccSeqsSampled {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
     (As : Set (ℕ → Bool)) (δ : ℝ) (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) : Set (List (Obs L K S)) :=
-  {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ ∃ F ∈ faultySets d P δ, AcceptedFaulty C P lay n As F op o}
+  {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ ∃ F ∈ incorrectSets d P δ, AcceptedFaulty C P lay n As F op o}
 
 /-! ## The leak relation
 
@@ -87,7 +87,7 @@ the values the registration commits. -/
 inputs `ρ` besides the ingress is accepted with that set and inputs among `As`. -/
 def AdviceIn {L S : ℕ} (K : ℕ) (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (k : ℕ) (ρ : ℕ → Bool)
     (As : Set (ℕ → Bool)) (δ : ℝ) : Prop :=
-  ∀ F ∈ faultySets d P δ, ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
+  ∀ F ∈ incorrectSets d P δ, ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
     AcceptedFaulty C P lay k {ρ} F op o → AcceptedFaulty C P lay k As F op o
 
 /-- **The free inputs** of `C` over the horizon `k`: its input gates that are no step's ingress before `k`, the inputs

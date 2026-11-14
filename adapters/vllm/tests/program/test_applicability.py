@@ -76,6 +76,11 @@ def _env(extra=None, gpu_visible=False):
     return e
 
 
+def _spawn(out, cmd, **kw):
+    with open(out.with_suffix(".log"), "w") as log:
+        return subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, **kw)
+
+
 @pytest.fixture(scope="module")
 def builds(tmp_path_factory):
     root = tmp_path_factory.mktemp("cbfix")
@@ -85,18 +90,15 @@ def builds(tmp_path_factory):
         cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request", "--LP", "8", "--T", "4"]
         if target:
             cmd += ["--target", target]
-        procs[name] = (out, subprocess.Popen(cmd, cwd=REPO, env=_env(), stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
+        procs[name] = (out, _spawn(out, cmd, cwd=REPO, env=_env()))
     out = root / "export_divergence"
-    procs["export_divergence"] = (out, subprocess.Popen([sys.executable, "-c", _HOSTILE_EXPORT, str(out)], cwd=REPO, env=_env(),
-                                                        stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
+    procs["export_divergence"] = (out, _spawn(out, [sys.executable, "-c", _HOSTILE_EXPORT, str(out)], cwd=REPO, env=_env()))
     out = root / "dead_env"  # the default profile with the dead variable set in the environment
-    procs["dead_env"] = (out, subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request",
-                                                "--LP", "8", "--T", "4"], cwd=REPO, env=_env({"VLLM_ATTENTION_BACKEND": "TRITON_ATTN"}),
-                                               stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
+    procs["dead_env"] = (out, _spawn(out, [sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request",
+                                                "--LP", "8", "--T", "4"], cwd=REPO, env=_env({"VLLM_ATTENTION_BACKEND": "TRITON_ATTN"})))
     out = root / "gpu_host"  # the default profile on a host whose GPU (if any) is NOT hidden: a second construction host for (iii)
-    procs["gpu_host"] = (out, subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request",
-                                                "--LP", "8", "--T", "4"], cwd=REPO, env=_env(gpu_visible=True),
-                                               stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
+    procs["gpu_host"] = (out, _spawn(out, [sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request",
+                                                "--LP", "8", "--T", "4"], cwd=REPO, env=_env(gpu_visible=True)))
     res = {}
     for name, (out, p) in procs.items():
         rc = p.wait()

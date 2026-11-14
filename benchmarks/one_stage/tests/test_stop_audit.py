@@ -92,8 +92,8 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
         monkeypatch.setattr(owner, name, prover)
     r = _resume(handoff)
     s = handoff["stop"]
-    assert r.registration.digest == s["registration"] and list(r.sample.units) == s["units"]
-    assert r.first.registration.digest == handoff["registration"] == s["record"]["previous"]
+    assert r.docket.digest == s["registration"] and list(r.sample.units) == s["units"]
+    assert r.first.docket.digest == handoff["registration"] == s["record"]["previous"]
     file = SA.reads(r)
     boundary = {e["port"]: e["root"] for e in handoff["record"]["roots"]}
     (stop,) = s["record"]["roots"]
@@ -193,7 +193,7 @@ def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
     """`answer_of` on outcomes written by hand, of a stream that holds only its δ and its docket's digest: a
     record that did not accept for a verdict alone names the verdict; an outcome the stream refused, which has no
     audit record, says so; an outcome that did not accept beside a record that did is a reject."""
-    r = NS(stream=NS(delta=0.5), registration=NS(digest="ab" * 64))
+    r = NS(stream=NS(delta=0.5), docket=NS(digest="ab" * 64))
     entry = {"accepted": False, "checks": {"proved": {"ok": True}},
              "verdicts": {SA.LEAN: {"accepted": True}, SA.BOUNDARY_AUDIT: {"accepted": False}, SA.STOP_RULE: {"accepted": None}}}
     reject = {"commitment": "ab" * 64, "profile": None, "protocol": SA.R.PROTOCOL, "public": None, "verdict": "reject"}
@@ -626,7 +626,7 @@ def test_a_summary_states_the_stop_word_only_where_lean_refused_the_stop_relatio
     entry = got["audit"]["verdicts"][SA.LEAN]
     assert (entry["of_record"], entry["digest"], entry["why"]) == (True, UNSATISFIED["digest"], UNSATISFIED["why"])
     assert summary["reason"] == SA.reason({SA.LEAN: entry}) == SA.STOP_WORD
-    assert summary["accepted"] is False and summary["failed"] == ["registered", "roots"]
+    assert summary["accepted"] is False and summary["failed"] == ["roots"]
     _, summary = _audit(hand, SMALL.unaccepted(hand), **told)
     assert summary["reason"] == SA.STOP_WORD and summary["verdicts"][SA.BOUNDARY_AUDIT] is False
 

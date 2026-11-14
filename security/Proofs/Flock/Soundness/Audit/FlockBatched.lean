@@ -36,9 +36,9 @@ each sampled proof block's place in its table (`UnitPlace`), with `C` the rows t
 **The discharge** (`flock_batched_knowledgeSound`): per sample, the unit's table's
 `ε_c⁻ + K·Adv₀ + N₀/(eK)`, computed in the session (`joint_le_B'`, from `session_knowledge_sound`),
 bounded by the largest over the plan's tables, and averaged over the sample (`ksAvgB`), with no
-named assumption; `δ_link` stays named (`BindSound`).
+named assumption; `ε_bind` stays named (`BindSound`).
 
-`flock_batched_count`: `Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
+`flock_batched_count`: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + ε_bind(σ)`.
 -/
 
 @[expose] public section
@@ -165,31 +165,31 @@ theorem flock_batched_knowledgeSound
       ENNReal.ofReal (ksBoundB execArith H E (plan (L.draw ω) R) j Kr (batchStrat H E plan (τ ω))))
       (tab (L.draw ω) R u))
 
-/-- **The batched Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + δ_link(σ)`. -/
+/-- **The batched Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + ε_bind(σ)`. -/
 theorem flock_batched_count
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {Kr : ℕ}
     (hK : 1 ≤ Kr) (hlow : P.LoweringSoundB plan tab decode)
-    {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisB H E plan tab decode Xc Kr hlow).BindSound δlink) (K : ℕ)
+    {εbind : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
+    (hlink : (P.analysisB H E plan tab decode Xc Kr hlow).BindSound εbind) (K : ℕ)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (Xc (reg σ) (cont σ))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
-      L.miss K + ksAvgB H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
+      L.miss K + ksAvgB H E plan Kr (reg σ) (cont σ) + εbind (reg σ) (cont σ) :=
   extraction_audit_count (P.analysisB H E plan tab decode Xc Kr hlow)
     (P.flock_batched_knowledgeSound H E plan tab decode Xc hK hlow) hlink K σ
 
-/-- **Sampled proof blocks of the batched Flock audit** are correct up to `ε_ks(σ) + δ_link(σ)`. -/
+/-- **Sampled proof blocks of the batched Flock audit** are correct up to `ε_ks(σ) + ε_bind(σ)`. -/
 theorem flock_batched_sampled
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {Kr : ℕ}
     (hK : 1 ≤ Kr) (hlow : P.LoweringSoundB plan tab decode)
-    {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisB H E plan tab decode Xc Kr hlow).BindSound δlink)
+    {εbind : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
+    (hlink : (P.analysisB H E plan tab decode Xc Kr hlow).BindSound εbind)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
-      ksAvgB H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
+      ksAvgB H E plan Kr (reg σ) (cont σ) + εbind (reg σ) (cont σ) :=
   extraction_audit_sampled (P.analysisB H E plan tab decode Xc Kr hlow)
     (P.flock_batched_knowledgeSound H E plan tab decode Xc hK hlow) hlink σ
 
