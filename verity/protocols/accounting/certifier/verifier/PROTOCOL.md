@@ -8,7 +8,7 @@ order of every frame are fixed by the declared Program.
 
 - **Trust.** The certifier is auditor-trusted: it runs on a host the developer doesn't control, and the auditor trusts it
   to run the grid and to sign what it ran. That trust, with the custody of its keys and of its LMS leaf state, is the
-  named assumption `trusted-host`. The challenger's live coins reach it on two more premises, named in
+  named assumption `trusted-device`. The challenger's live coins reach it on two more premises, named in
   `verity/protocols/proofs/spot/verifier/README.md`, with the coins' path in `verity/protocols/compose/device/live_challenger/auditor.py`:
   `CoinsConfidential`, stated as `Pouw.Assumptions.CoinsConfidential`
   (`security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the certifier's
@@ -156,7 +156,7 @@ The `Issuer` starts its session on the signer (`Signer.start`) before its first 
 id it has already started, so the device runs once per session. A signer whose state is missing, behind the leaves its
 journal has used or its `floor`, or held by another signer, refuses (`SignerRefused`), and so does a refused start. The
 certifier then publishes nothing for the execution phase (`Issuer.refused` lists it), which fails closed as a
-`no-verdict`; it never signs with a reused leaf, nor in a session it has run before. Both rest on `trusted-host`, where
+`no-verdict`; it never signs with a reused leaf, nor in a session it has run before. Both rest on `trusted-device`, where
 the state the device keeps on its host is its next LMS leaf and the session ids it has started.
 
 **The check.** The certificate names the head's execution phase, D is the head's record digest under `salt_c`, and the
@@ -293,8 +293,7 @@ active network certifier's records, both ends at the network certifier's grid an
 
 Stated in Lean: `NetworkCheck.Period` (`verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
-and the bound `K` it publishes. The period check is not in the public tree, because it reads the inference-only
-policy's layout check, which is withheld.
+and the bound `K` it publishes. The period check reads the inference-only policy's layout check.
 
 ## A served link (`served`)
 
@@ -877,7 +876,7 @@ are a function of the map and the port, so the prover rebuilds them, and it comp
 **Composition.**
 - **N2** (`All`) holds the head's fields and counts and the certificate that signs them.
 - **The cells' root** is the network certifier's own per-window value, registered by the auditor's device
-  (`trusted-host`). It isn't the head's frames root, which is an unsalted tree that can't be opened outside a
+  (`trusted-device`). It isn't the head's frames root, which is an unsalted tree that can't be opened outside a
   proof. The head's counts and the cells come from one grid of the network certifier's: bucket t holds n_t data cells. The tie
   doesn't read the head; tying the cells' root into it (a record v3 field) is open.
 - **The map** is the advice's, charged as `A_c`. In v4 the verifier computes it from the opened advice v0, the named
@@ -993,7 +992,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | The reference schedule, over the first m execution blocks | `min(E, m)·k + n·log2 D` bits, for n ≤ m·g·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
 | The reference schedule, per execution block | `k + g·T·log2 D` bits per execution block over any m whole execution blocks from block e₀ ((e₀ + m)·g·T ≤ E·g·T), given everything the run showed before block e₀: k bits under J | `SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase` |
 | The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and an incorrect set is one `RAcc δ` allows (in `M_δ`, no unit sampled `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
-| The network certifier (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each window's sampled charge (the row above) at the network certifier's rows | for a decoder of the client's view, under `trusted-host`, `Claims.SamplingGeneric.Compiled.KS` and `Commitment.Binds`, `SecurityProofs.MonitoringPeriodLeakAccepted` |
+| The network certifier (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each window's sampled charge (the row above) at the network certifier's rows | for a decoder of the client's view, under `trusted-device`, `Claims.SamplingGeneric.Compiled.KS` and `Commitment.Binds`, `SecurityProofs.MonitoringPeriodLeakAccepted` |
 | No advice, under J (D = 1) | 0 bits: one accepted sequence for the ingress | `SecurityProofs.EncardAccSeqsLeConstantRate` at k = 0 and D = 1 |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
@@ -1035,7 +1034,7 @@ its bucket fails the connection there with one fail cell that carries no reason,
 scheduled end. So the client's view of the server side is the schedule, each connection's fail cell or none, and the
 data in the cells: the server's accept time, send timing, ACKs and flow control reach it only through the fail cells.
 One run of the network certifier's code gives both the cells the client receives and its record of them
-(`security/Definitions/NetworkCertifier/Tap.lean`, under `trusted-host`). The inference-only policy's transfer gates are these cells' bits,
+(`security/Definitions/NetworkCertifier/Tap.lean`, under `trusted-device`). The inference-only policy's transfer gates are these cells' bits,
 whose number per window the schedule fixes. The schedules are charged `log2 #schedules`, so a schedule that came to
 depend on the server is still counted. The content term comes from the audits, not from a premise:
 `SecurityProofs.MonitoringPeriodLeakAccepted` composes each window's sampled leak bound at the network certifier's rows with the
@@ -1231,7 +1230,7 @@ Each assumption, and what breaks without it:
   - Each field is charged to a window no later than the first window whose rows it can change. Then the first m
     windows' charges bound the first m windows, which the per-window form needs, as `expected_grids` gives it for the
     syncs (`Properties.NetworkCertifier.ExpectedGridCausal`). A prefill step that releases nothing is still charged.
-- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-host`, W1 to W6 and J (D = 1
+- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-device`, W1 to W6 and J (D = 1
   is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
   The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
   their deadlines, so they stay out of anything published, or they are charged.
@@ -1753,7 +1752,7 @@ them.
       `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
       compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
       configuration, compact ones included. The head model takes a frame as B opaque bytes, which a compact cell is.
-      The gate's rehearsal runs compact framing on the auditor's host
+      The gate's rehearsal runs compact framing on the auditor's device
       (`certifier-rehearse --traffic varied --compact B`), so with this coverage a compact run there gives a verdict of
       record.
   - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
@@ -1809,7 +1808,7 @@ them.
     tick, the salt's sampling, has run or was missed (a proxy back from maintenance after it), and a second root for p,
     so only the registered prover fixes p's root. Nothing the certifier sends depends on it. `Proxy.committed(p,
     registration)` gives it to the verifier on `reveal`'s conditions (as often as asked: it is a hiding commitment), and
-    refuses a window whose weights weren't recorded. The order is the certifier's word, under `trusted-host`,
+    refuses a window whose weights weren't recorded. The order is the certifier's word, under `trusted-device`,
     like the salt.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof system returned for p (`Registration`, from
@@ -1824,8 +1823,8 @@ them.
     or epoch, gets none. Nothing else publishes the salt.
   - **Asked for and answered under LMS** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the
     certifier runs on the link, off the developer's node, and the proof system's challenger, which is the
-    auditor's, on an auditor host. `challenger_key` comes from the auditor's deployment record, never from the
-    prover's configuration, and `trusted-host` covers that record's custody. Each proxy samples a run id at
+    auditor's, on an auditor device. `challenger_key` comes from the auditor's deployment record, never from the
+    prover's configuration, and `trusted-device` covers that record's custody. Each proxy samples a run id at
     construction, 32 bytes of the certifier's own randomness (`Proxy.run_id`; `run_nonce`, `secrets.token_bytes` by
     default, is the tests' hook), and the record gives it to the challenger beside the certifier's key, written when
     the auditor starts the proxy, since a restart samples a new one. The record, not a signed `hello`, because a hello
@@ -1854,7 +1853,7 @@ them.
     the challenger's client, given the certifier's key and run id by the deployment record, whose `reveal` and
     `committed` return the value they verified, as a keyless proxy's do in process, and raise `RuntimeError` on a
     refusal, an answer of another run, one that doesn't verify, or no answer. t_d, the deadline and the once rule are
-    unchanged. What still rests on `trusted-host` is the certifier's key custody, its signing key and leaf state
+    unchanged. What still rests on `trusted-device` is the certifier's key custody, its signing key and leaf state
     on its host (`LmsSigner`, one leaf at a time across the threads that share it) and its word on what it signs, and
     the deployment record's custody: the keys and the run id it gives each side. The challenger's key is the
     auditor's, on its own host. A proxy with neither key is the in-process call the tests and replays make
@@ -1864,7 +1863,7 @@ them.
     window p is accepted, at its first certifier window w = p·k, if w has exactly one raw record, which holds exactly
     one salt frame of p, carrying the placeholder, and p's revealed salt has `salt_bits` bits. Anything else, a missing
     salt included, is a `salt` violation at w, recorded with the audit's verdicts. No record binds the salt: the
-    revealed salt is the certifier's word, under `trusted-host`. A committed or certified record doesn't show
+    revealed salt is the certifier's word, under `trusted-device`. A committed or certified record doesn't show
     its frames, so there a proof opens the salt frame.
   - **Its place, pinned.** The audit takes the salt frame only as the first frame of w's bucket 0, slot 0, where the
     proxy releases it ("Into the block only"); anywhere else it is a `salt` violation at w. The served counts
@@ -1980,7 +1979,7 @@ sealed under an AEAD built from SHA-512 alone.
   - S and its keys live only in the two certifier processes and on their hosts, never in a record, a log or the
     prover's configuration.
   - They are protocol keys, which seal frames, not access keys.
-  - Their custody joins `trusted-host`, which now also covers each pair's secret on its two hosts and the
+  - Their custody joins `trusted-device`, which now also covers each pair's secret on its two hosts and the
     deployment channel that installs it.
   - A leaked S opens that pair's link for that session. It changes no record and no verdict: the account only loses
     the premise below, and the link is charged as an unsealed one.
@@ -2009,7 +2008,7 @@ sealed under an AEAD built from SHA-512 alone.
     value certified equal to the committed output at a certifier on the facility boundary, or one of s side-channel
     bits per window.
   - **The premise:** every link between two spatial units is a sealed pair link between two of the auditor's
-    certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-host`.
+    certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-device`.
   - **What it changes:** A1's units are then the facility, not each block.
 ## Tests
 
@@ -2123,10 +2122,10 @@ Which execution phases have a head is the form's:
     neither gives no verdict: it has not ended, or its signature was refused, and it fails closed as a record without
     a certificate does. Which of the two an execution phase has is a function of which execution phases' records were
     published complete, which their certificates already say, so the word makes nothing else public. That an
-    execution phase has one of the two and never both rests on the network certifier's own code (`trusted-host`).
+    execution phase has one of the two and never both rests on the network certifier's own code (`trusted-device`).
 
 The tables say what the same execution phases' records say, in another order: the network certifier writes both from
-the cells it cut and released, and that they agree rests on its own code (`trusted-host`), not on a proof. A reader
+the cells it cut and released, and that they agree rests on its own code (`trusted-device`), not on a proof. A reader
 who lays the tables from the records needs each release's place in the release order, which the records count from
 their `END` cells only up to an execution phase that isn't complete (`connection_rows.of_records`). The form enters
 the parameters' digest, so form 1's schedule and form 2's are two; a schedule without lengths rows hashes nothing of
@@ -2242,7 +2241,7 @@ prompt ids and a size of ids released, each a power of two.
 The classes enter the parameters' digest; a schedule without content rows hashes nothing of them and keeps its
 digest, records, heads and certificates. So do the request words, where a schedule has them: one without them
 hashes nothing of them and keeps its digest, its tables and its heads. As for the lengths rows, that the tables say what the records say rests on
-the network certifier's own code (`trusted-host`). The head of execution phase w exists from the close of execution
+the network certifier's own code (`trusted-device`). The head of execution phase w exists from the close of execution
 phase w + 1, and that of a run's last, under form 2, from its own close. Nothing here orders its signature or its
 registration against the compute audit's coins.
 
@@ -2316,12 +2315,12 @@ the network certifier's schedule as `security/Definitions/NetworkCertifier/Warde
 client's view read back from the certifier's record (`SecurityProofs.MonitoringPeriodLeakAccepted`; "Capacity"), not over
 `warden.py`'s code.
 
-**Deployment requirement (`trusted-host`).** The bound holds only on a host that gives the network certifier's process:
+**Deployment requirement (`trusted-device`).** The bound holds only on a host that gives the network certifier's process:
 - CPU isolation from every co-tenant (its own cores), so that no co-resident process, the prover's above all, can
   make a tick late and so choose which windows fault (about 1 bit a window otherwise);
 - a monotonic clock that nothing the prover runs can step or slew by more than the slack: buckets are read from it.
 
-Both are part of the named assumption `trusted-host` (the auditor's host and its provider are trusted). Neither is
+Both are part of the named assumption `trusted-device` (the auditor's device and its provider are trusted). Neither is
 checked here.
 
 **What it attests.** Each direction's records hold exactly the cells sent that way, padding included, so |T| is the
@@ -2332,7 +2331,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   the egress form's), whose `FAIL` cells and reasons don't match one for one, or in which a connection failed.
 - `benchmarks/network_traces/warden_serve.py` runs the network certifier live and checks that each client got exactly its egress
   record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`)
-  runs the same rehearsal on the auditor's host.
+  runs the same rehearsal on the auditor's device.
 - The server's copy of each request carries its release order (`release`), so that `serve-openai --admit
   release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
   index among the ingress records' `END` cells, `x-verity-release-run:` the network certifier's `run_id` (in
@@ -2376,7 +2375,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 **Named gaps:**
 - TLS isn't terminated: both sides are plain TCP.
 - Every recorded run had the network certifier on the server's host, and the server gets the ingress bytes over loopback, with no
-  shim on its side. `warden-rehearse` puts the network certifier and its client on the auditor's host and reaches the server
+  shim on its side. `warden-rehearse` puts the network certifier and its client on the auditor's device and reaches the server
   through the gate's ssh tunnel to the peer's loopback. No run of it is recorded yet, and the tunnel's far end is still
   loopback on the developer's host.
 - **The cells' wiring is open to the verifier.** A proof block's read is (q, k), connection q's

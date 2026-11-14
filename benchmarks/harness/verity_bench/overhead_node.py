@@ -53,6 +53,8 @@ POINTS_BENCH = ("--methods", "graph", "--decode-method", "independent")
 #: a timed run's: the graph method gives each stock kernel's wall time, the burst method the host's enqueue, and the traced
 #: pass beside them each item's busy SM-time
 RUN_BENCH = ("--methods", "graph", "burst", "--decode-method", "independent", "--traced", "--twins")
+#: a timed run's measurement of each point's γ, by the point's name (``C``, ``L``): the metric's id, OWNER/NAME
+GAMMA = "benchmarks/overhead.gamma-{}"
 #: the cubin the run was sent (`run --cubin ART`), which the scheme's arm loads and lists in its build record's `binaries`
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
 
@@ -295,7 +297,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
             p["epsilon"] = epsilon_at(sch, card, m, model)
             p["perplexity"] = {"value": None, "why": "a kernel point runs no model: perplexity is a served point's"}
             g = (p.get("gamma") or {}).get("gamma")
-            p["gate"] = None if g is None else {"cap": O.GAMMA_MAX, "passes": g <= O.GAMMA_MAX}
+            p["gate"] = None if g is None else {"gamma_max": O.GAMMA_MAX, "passes": g <= O.GAMMA_MAX}
             p["whys"] = O.point_whys(p)
             doc["points"][name] = p
     _write(out / "overhead.json", doc)
@@ -304,7 +306,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     write_result(a.run_dir, a.run_id, out, "overhead.json", ok,
                  "; ".join(f"γ at {n} {g:.4f}" if g is not None else f"no γ at {n}" for n, g in gammas.items())
                  or (whys[0] if whys else "nothing timed"),
-                 fingerprint, measured=[{"name": f"gamma_{n}", "value": gammas[n], "unit": "ratio",
+                 fingerprint, measured=[{"name": GAMMA.format(n.lower()), "value": gammas[n], "unit": "ratio",
                                          "interval": p["gamma"].get("ci95")}
                                         for n, p in doc["points"].items() if gammas[n] is not None])
     for n, p in doc["points"].items():

@@ -8,7 +8,7 @@ public import PouwWindow.Rounds
 # The run's coins: the epoch's salt coin and the verifier's sample (`verify_run`, "The run's sample" and "The coin record")
 
 * **The epoch's coins** (`EpochCoins`, `verify_run.epoch_coins`) are an in-process challenger's coin commitment
-  (`PouwCommit.CoinCommitment`), or a live session's on the auditor host's challenger when the coins file's scheme is
+  (`PouwCommit.CoinCommitment`), or a live session's on the auditor device's challenger when the coins file's scheme is
   `window.LIVE_SCHEME` (`Spot.Challenger.LiveCommitment`). A live pass's salt coin opens as `host.epoch_of` holds
   it (`liveSalt`): the commitment is a Pearl-C salt session's, its salt coin alone (`window.salt_epoch_reason`), and the
   opening is that coin opened after the salt epoch's open root (`salt.epoch_open_root` of the weights' root and the

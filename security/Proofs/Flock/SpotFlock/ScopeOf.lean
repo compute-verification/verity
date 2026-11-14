@@ -639,23 +639,26 @@ theorem scopeOk_members {ms : Spot.Bits.Members} {ns : Array ℕ} {l : Spot.Slot
 
 /-- **`two` returns the members' replay design** for members that fit, a replay layout that fits (`filesOk`) and fills
 their files, a well-formed first-stage design, second-stage counts of at least `1`, one for each member, and templates
-whose reference statements each read as a member's (`templateOk`). -/
+whose reference statements each read as a member's (`templateOk`), whose members' circuits are in the scope
+Flock's hidden-output proof covers (`membersScoped`) and whose registered wiring passes its check (`wiringOk`). -/
 theorem two_eq_filesReplay (h : Held) (s : AuditStatement) {l : Spot.Slots.SlotOrder} {d : Design}
     (hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption = some l) (hd : replayDesign h = some d)
     (hm : ∀ ci ∈ h.ms, Flock.Bridge.Members.MemberFits ci) (hfill : Flock.Bridge.Members.FilesFill h.ms h.reg.ns l)
     (hwf : d.WellFormed (filesReplay h.ms h.reg.ns l)) (hk : h.k.length = h.ms.length) (hk1 : ∀ x ∈ h.k, 1 ≤ x)
-    (hf : filesOk h.reg h.ms l h.k = true) (ht : ∀ t < h.ms.length, templateOk h t = true) :
+    (hf : filesOk h.reg h.ms l h.k = true) (ht : ∀ t < h.ms.length, templateOk h t = true)
+    (hsc : membersScoped h = true) (hw : wiringOk h = true) :
     two h s = some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ := by
   have hs := scopeOk_members hm (filesOk_sound hf).2.2.1 hfill hwf hk hk1
   unfold two
   rw [hl, hd]
-  simpa [hs, hf] using ht
+  simpa [hs, hf, hsc, hw] using ht
 
 theorem isSome_two (h : Held) (s : AuditStatement) {l : Spot.Slots.SlotOrder} {d : Design}
     (hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption = some l) (hd : replayDesign h = some d)
     (hm : ∀ ci ∈ h.ms, Flock.Bridge.Members.MemberFits ci) (hfill : Flock.Bridge.Members.FilesFill h.ms h.reg.ns l)
     (hwf : d.WellFormed (filesReplay h.ms h.reg.ns l)) (hk : h.k.length = h.ms.length) (hk1 : ∀ x ∈ h.k, 1 ≤ x)
-    (hf : filesOk h.reg h.ms l h.k = true) (ht : ∀ t < h.ms.length, templateOk h t = true) : (two h s).isSome := by
-  simp [two_eq_filesReplay h s hl hd hm hfill hwf hk hk1 hf ht]
+    (hf : filesOk h.reg h.ms l h.k = true) (ht : ∀ t < h.ms.length, templateOk h t = true)
+    (hsc : membersScoped h = true) (hw : wiringOk h = true) : (two h s).isSome := by
+  simp [two_eq_filesReplay h s hl hd hm hfill hwf hk hk1 hf ht hsc hw]
 
 end SpotFlock

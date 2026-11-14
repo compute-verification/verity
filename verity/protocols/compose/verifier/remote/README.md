@@ -32,16 +32,16 @@ overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a s
 - **The developer** (the prover) runs the datacenter. It registers, reports its advice, commits its values and proves the sampled
   proof blocks behind the ZK server. Nothing it runs or hosts is trusted, and neither is the audited hardware or its
   vendor.
-- **The auditor** has two parts, both on auditor hosts that the developer doesn't control: its **challenger** (the
+- **The auditor** has two parts, both on auditor devices that the developer doesn't control: its **challenger** (the
   live coins, which sample what must be proved) and its **verifier** (the Lean verifier: `flock-verify` for each sampled
   proof block, and `remote check` for the verdict). The challenger is the one auditor-trusted device remote relies on
-  (`trusted-host`); the verifier is the auditor's own check. The verifier may also use its own coins
+  (`trusted-device`); the verifier is the auditor's own check. The verifier may also use its own coins
   (`IO.getRandomBytes`) instead of the challenger's.
 - **How the coins reach the developer.** The challenger opens each coin only after the developer's commitment is
   recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`RemoteChallenger`).
-  Deployed, on an auditor host, that port is the far end of a coin link the auditor host opens to the
+  Deployed, on an auditor device, that port is the far end of a coin link the auditor device opens to the
   developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network certification's
-  code running on the auditor host (`verity/protocols/compose/device/live_challenger/coin_link.py`). No coin path of remote's own, with no
+  code running on the auditor device (`verity/protocols/compose/device/live_challenger/coin_link.py`). No coin path of remote's own, with no
   network certifier anywhere, is specified yet.
 - **No auditor devices at the site.** There are no network certifiers or memory challengers. So network certification,
   PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,
@@ -141,7 +141,7 @@ else is a theorem or a named gap.
 | Kind | Assumption | Lean | How it's tested, or why it's believed |
 |---|---|---|---|
 | Cryptography | SHA-512 is collision resistant, and the commitments hide their values. | `cr/sha-512`, `ecr/sha-512` (`SHA512CRStrict`, `SHA512CRExpected`, at the finders `TableCRZAt`, `LinkCRZCAt`); the hiding commitments' gap | Standard; no attack known. |
-| The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | `Verity.Assumptions.TrustedHost`, `RecordCustodyZKJPLaw`, `UniformRandomBytes`; `CoinsAfterCommitment` (prose only) | Inspect the deployment: where the challenger runs, and its coin path. |
+| The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | `Verity.Assumptions.TrustedDevice`, `RecordCustodyZKJPLaw`, `UniformRandomBytes`; `CoinsAfterCommitment` (prose only) | Inspect the deployment: where the challenger runs, and its coin path. |
 | The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `DampenerRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
 | Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
@@ -191,7 +191,7 @@ blocks that are proved. If every sampled block is proved, only the blocks the sa
 Pr[accept ∧ more incorrect proof blocks than the sample allows at δ] ≤ δ + ε_ks + ε_bind, ε_bind the binding error of the
 links between proof blocks.
 
-**Assumes.** Part 1's assumptions; the challenger is the auditor's device (`Verity.Assumptions.TrustedHost`, which `SampledKSLiveV3`
+**Assumes.** Part 1's assumptions; the challenger is the auditor's device (`Verity.Assumptions.TrustedDevice`, which `SampledKSLiveV3`
 doesn't read); its coins
 reach the developer only after the commitment (`CoinsAfterCommitment`, in prose only).
 
@@ -246,7 +246,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerThreaded` 
 
 - *By whom.* Not by remote yet: the policy isn't one of its subprotocols (Subprotocols, above). Its check runs on its
   own, as `nci-check` (`NciCheck.Baseline.check`, `verity/protocols/policy/inference_only/verifier/nci/lean`); once composed, the
-  verifier runs it on an auditor host in each verification phase.
+  verifier runs it on an auditor device in each verification phase.
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
 - *From which coins.* None. The check is deterministic, so it adds no failure probability of its own. What is to bind
@@ -415,7 +415,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - `ServiceSound` and `Nci.Assumptions.PouwSound` are undischarged premises.
   - `JointPooledLive` isn't instantiated with parts 2 and 3.
 - **The verifier's verdicts.** SPOT's one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
-  the proof check (`verity verify proof`, today's `flock-verify --zk`) itself; v1, which takes the verdicts as
+  the proof check (`verity verify proof verify --zk`) itself; v1, which takes the verdicts as
   evidence, and the recursive form, which SPOT's soundness doesn't cover, are refused. Where v2 accepts, its session
   is in V3's and V5's events (`Verity.Sampled.checkBlobs_event`); only V5's is coupled to it
   (`Verity.Sampled.CouplingTarget`).
@@ -464,10 +464,10 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 - `FlockSoundness.Assumptions.SHA512CRStrict` (`cr/sha-512`) and `FlockSoundness.Assumptions.SHA512CRExpected`
   (`ecr/sha-512`), in `Definitions/Assumptions/Flock.lean`: SHA-512 is collision resistant, taken at the prover's
   table and link finders as `TableCRZAt` and `LinkCRZCAt`.
-- `trusted-host` (`Verity.Assumptions.TrustedHost`, `Definitions/Core/Assumptions.lean`): the challenger is
+- `trusted-device` (`Verity.Assumptions.TrustedDevice`, `Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
-  on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost`.
-- `CoinsAfterCommitment`: the challenger's coins reach the developer's machine only over paths the auditor's hosts
+  on an auditor device too. In Lean, only onsite's guarantees (network certification's) read `TrustedDevice`.
+- `CoinsAfterCommitment`: the challenger's coins reach the developer's machine only over paths the auditor's devices
   control, and only after the commitment. Prose only: no guarantee takes it. Onsite's `CoinsConfidential`
   (`Pouw.Assumptions.CoinsConfidential`, which `Pouw.Guarantees.Dither.FleetSound` takes) is another premise: a
   replica's coins reach no machine outside its certifier's boundary before it has them.
