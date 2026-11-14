@@ -174,8 +174,8 @@ def prove(a: argparse.Namespace) -> int:
     sdir.mkdir(parents=True, exist_ok=True)
     sample = json.loads((window / f"session-m{k}" / A5.SAMPLE_FILE).read_text())
     (sdir / A5.SAMPLE_FILE).write_text(json.dumps(sample))
-    env = {**a0.prover_env(a.zk_server, st), "FC_PHASE_TIMES": "1"}
     devices = [a.device] if a.arm == "gpu" else None
+    env = {**A5.device_env(a0.prover_env(a.zk_server, st), devices), "FC_PHASE_TIMES": "1"}
     ps = ProofServer(a.bin, sdir / "proof-server", devices=devices, env=env, verify_ahead=0, verdicts=1,
                      challenger=a0.own_challenger(zk=True))
 
