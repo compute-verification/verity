@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Poub.ReadUnit.Check.Compose
+public import Proofs.Accounting.ReadUnit.Check.Compose
 
 /-!
 # Each call's part, read at the root
