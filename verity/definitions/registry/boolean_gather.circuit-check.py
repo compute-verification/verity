@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+#: the gathers' multiplexer levels, their Boolean versions and the bit selections this module makes only inside other
+#: bodies, which no id names alone (`circuit_check.sidecars.body_family`)
+BODY_FAMILIES = (r"Gather(?:Bf16|I32|F32)x\d+u\d+_v1", r"Gather(?:Bf16|I32|F32)x\d+_v2", r"BitAtx\d+_v2")
+
 
 def _boolean_gather_roots() -> list[Any]:
     """The Boolean embedding (`verity.definitions.registry.boolean_gather`) over gathers traced whole (V = 64), and a gather
