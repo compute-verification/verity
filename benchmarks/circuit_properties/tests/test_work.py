@@ -18,6 +18,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
 import pytest
 from circuit_properties import points as PT
 from circuit_properties import work as WK
@@ -692,6 +693,34 @@ def test_rows_of_one_value_that_are_inf_at_the_point_are_refused_as_equal():
     assert (e.value.definition, e.value.operand, e.value.rows) == ("SelfCancelInfStep_v1", "x", (0, 1))
 
 
+def _zero_signs(signs: bool) -> Program:
+    """W plus -1 times W, 0 in every word, times a stated S, ±1: with ``signs`` S is -1 at one word of each row past
+    the first, another word a row, so the rows are zeros whose signs differ; else S is 1 everywhere. W′ = W plus z;
+    u W′′^T, W′′ the product."""
+    one, neg = 0x3F800000, 0xBF800000
+
+    def step(B, c, z):
+        w, u = c
+        zero = _add(B, w, _mul(B, w, B.call(const(32, neg))))
+        s = concat([B.call(const(32, neg if signs and i >= 1 and j == i - 1 else one)).refs
+                    for i in range(N) for j in range(K)])
+        flat = Array(N * K, F32)
+        wp = B.batch(P.F32Mul, Coll(flat, zero.refs), Coll(flat, s), axes=(0, 0)).reshape(W_T)
+        return (_add(B, w, z), _add(B, u, z)), B.call(LIN, u, wp)
+
+    return _loop("ZeroSigns" if signs else "ZeroOnes", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step)
+
+
+@pytest.mark.parametrize("signs", [True, False], ids=["signs", "ones"])
+def test_rows_of_zeros_whose_signs_differ_are_refused_as_equal(signs):
+    """W plus -1 times W times a stated ±1 is 0 in every word, whatever W, which the reading's rules take as distinct
+    rows: compared as words with the two zeros one word, rows 0 and 1 are equal, the signs as S states them or not,
+    and the Program is refused."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_zero_signs(signs), KB)
+    assert (e.value.operand, e.value.rows) == ("w", (0, 1))
+
+
 def _swap(order: str, carried: bool) -> Program:
     """prev′ = the PN rows looked up by the iteration's tokens, plus M times M's rows in ``order`` ("swap": the other
     order; "same": its own), M carried and updated by an input (``carried``) or unchanged; and prev W^T."""
@@ -772,8 +801,10 @@ def test_what_the_point_never_meets_stays_a_premise():
     """Rows equal only at values the point never takes are charged, held as facts beside those of
     `test_what_the_carried_words_premise_leaves_held_as_facts` (a one-word multiplier that is 0) and
     `test_an_update_by_a_stated_zero_leaves_a_weight_thetas` (W plus z plus -1 times z): W plus an input's rows Z,
-    whose rows are equal where Z is fitted to W (Z0 - Z1 = W1 - W0), and M times W0 minus a stated c, a circuit that
-    tests its own weights, whose rows are all 0 where W0 is c."""
+    whose rows are equal where Z is fitted to W (Z0 - Z1 = W1 - W0), M times W0 minus a stated c, a circuit that
+    tests its own weights, whose rows are all 0 where W0 is c, and W times z0 plus max(z0, -z0), plus z, whose
+    multiplier is 0, and its rows z's, only where the input's word z0 is negative, which the point's positive
+    inputs never are."""
     def fitted(B, c, zr, z):
         w, u = c
         return (_add(B, w, zr), _add(B, u, z)), B.call(LIN, u, w)
@@ -788,6 +819,14 @@ def test_what_the_point_never_meets_stays_a_premise():
 
     w = WK.read(_loop("TestsItself", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, tests, shared=(("v", X_T),),
                       registered=("v",)), KB)
+    assert w.N == (T - 1) * K * N and {g.weight for g in w.groups} == {(True, True)}
+
+    def negative(B, c, z):
+        w, u = c
+        m = B.call(P.F32Add, z[0], B.call(P.F32Max, z[0], B.call(F32Neg, z[0])))
+        return (_add(B, _mul(B, w, m), z), _add(B, u, z)), B.call(LIN, u, w)
+
+    w = WK.read(_loop("Negative", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, negative), KB)
     assert w.N == (T - 1) * K * N and {g.weight for g in w.groups} == {(True, True)}
 
 
@@ -880,7 +919,7 @@ def test_a_claim_past_a_scan_the_point_does_not_run_whole_is_refused():
         "rather than out of a scan whose contexts repeat")
 
 
-def test_the_point_is_sampled_once_a_program_and_read_at_every_k():
+def test_the_point_is_sampled_once_a_program_and_read_at_every_k(monkeypatch):
     """Two walks of one Program sample one point (SHA-512 of its digest, nothing else), and its reads at two k make
     one pass."""
     p = carried_loop()
@@ -897,11 +936,8 @@ def test_the_point_is_sampled_once_a_program_and_read_at_every_k():
         return real(self)
 
     PT._MEMO.clear()
-    PT.Walk.run = counted
-    try:
-        WK.read(p, KB), WK.read(p, 4 * KB)
-    finally:
-        PT.Walk.run = real
+    monkeypatch.setattr(PT.Walk, "run", counted)
+    WK.read(p, KB), WK.read(p, 4 * KB)
     assert len(runs) == 1
 
 
@@ -1147,6 +1183,73 @@ def test_a_specific_operand_is_tested_at_the_point_too(monkeypatch):
     assert g.weight == (True, False) and w.N == (T - 1) * K * PN
 
 
+def _specific_alone(how: str) -> Program:
+    """`_attention_loop`'s O1 = P V1^T cancelled against itself, Q = O1 plus -1 times O1, whose rows the reading
+    shows specific and not distinct and which are 0 for every input; with ``how`` "nan" a NaN in every word (O1
+    squared and times 2^127 twice, an inf, before the cancel), and with "scan" Q's rows plus a stated 1 by a scan over
+    them, whose contexts repeat before its last iteration; and u Q^T, u carried."""
+    one, big, neg = const(32, 0x3F800000), const(32, 0x7F000000), const(32, 0xBF800000)
+    inner = _def("Inner" + how.title(), ((("acc", F32), ("q", X_T)), Tuple(F32, X_T)),
+                 lambda B, S, acc, q: tuple_of(acc, _add(B, q, B.call(one))))
+
+    def step(B, c, tok, z, zn):
+        table, w1, v1, u = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        s = B.batch(LIN_S, rows, w1, axes=(0, None))
+        mask = concat([B.call(const(32, 0 if j <= p else 0xFF800000)).refs for p in range(PN) for j in range(D)])
+        flat = Array(PN * D, F32)
+        h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0)).reshape(Array(PN, S_T))
+        o1 = B.batch(LIN_P, B.batch(SOFTMAX, h, axes=(0,)), v1, axes=(0, None))
+        if how == "nan":
+            o1 = _mul(B, _mul(B, _mul(B, o1, o1), B.call(big)), B.call(big))
+        q = _add(B, o1, _mul(B, o1, B.call(neg)))
+        if how == "scan":
+            q = Coll(ROWS_T, B.scan(bind(inner), B.call(const(32, 0)), xs=[q], shared=[])[1].refs)
+        return (_add(B, table, z), _add(B, w1, z), _add(B, v1, zn), _add(B, u, z)), B.call(LIN_A, u, q)
+
+    carry = (("table", TABLE_T), ("w1", Array(D, X_T)), ("v1", V_T), ("u", X_T))
+    name = "Specific" + how.title()
+    return _loop(name, carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN, F32), step)
+
+
+def test_specific_rows_cancelled_against_themselves_are_refused_at_the_word_by_word_point(monkeypatch):
+    """Q's rows are specific alone by the reading's rules and 0 for every input. The one-word point holds one token at
+    every position, which breaks `P_BATCH`, so it can't show a specific operand's rows distinct; the word-by-word
+    point, whose tokens are distinct rows of the table, meets it, and refuses Q, rows 0 and 1, as rows equal by an
+    identity of the circuit. Without the point u Q^T is charged."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_alone("cancel"), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows) == ("SpecificCancelStep_v1", "w", (0, 1))
+    monkeypatch.setattr(PT, "check", lambda *a: None)
+    w = WK.read(_specific_alone("cancel"), KB)
+    (g,) = w.groups
+    assert g.weight == (True, False) and w.N == (T - 1) * K * PN
+
+
+def test_the_word_by_word_point_refuses_a_nan_and_an_unrun_scan_as_the_one_word_point_does():
+    """A specific-alone operand that holds a NaN in every word, or reads the outputs of a scan the point runs 1 of its
+    PN iterations, is refused at the word-by-word point, by the same refusals a distinct one gets at the one-word
+    point."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_alone("nan"), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows, e.value.nan) == \
+        ("SpecificNanStep_v1", "w", None, (PN, PN))
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_alone("scan"), KB)
+    assert (e.value.scan.fn, e.value.scan.ran, e.value.scan.n, e.value.operand) == ("SpecificScanStep_v1", 1, PN, "w")
+
+
+def test_the_word_by_word_points_tokens_are_distinct_rows_of_every_table():
+    """Each lane's tokens are a permutation of the least table's rows, repeated, so any that many positions running
+    pick distinct rows of every table at least as long; with no table, distinct words a narrowing to i32 keeps."""
+    rng = np.random.default_rng(0)
+    t = PT.tokens(rng, (3, 40), 16)
+    assert all(len(set(row[i:i + 16].tolist())) == 16 for row in t for i in range(40 - 16 + 1))
+    assert all(len({int(x) % 24 for x in row[:16]}) == 16 for row in t)
+    free = PT.tokens(rng, (2, 50), None)
+    assert all(len(set(row.tolist())) == 50 for row in free) and 0 < free.min() and free.max() < 1 << 31
+
+
 #: a chain longer than Python's default recursion limit
 DEEP = 3000
 
@@ -1298,7 +1401,7 @@ def _reading_of(name: str) -> dict:
     try:
         return _reading(WK.read(CASES[name](), KB))
     except WK.RepeatedRows as e:
-        return {"refused": [e.definition, e.operand, list(e.rows)]}
+        return {"refused": [e.definition, e.operand, None if e.rows is None else list(e.rows)]}
 
 
 @pytest.mark.parametrize("name", sorted(CASES))

@@ -1,23 +1,41 @@
 """The reading's distinct rows, tested at a point (`check`).
 
-A charged product's operand that the reading takes as a weight with distinct rows (`Status.distinct`: `claims`) is
-claimed to have no two equal rows of its contraction's K words, for generic weights. `check` evaluates the Program once at a point and refuses it (`work.RepeatedRows`) where
+A charged product's operand whose rows the reading shows distinct (`Status.distinct`) or specific
+(`Status.specific`), `claims`, is claimed to have no two equal rows of its contraction's K words, for generic weights. `check` evaluates the Program once at a point and refuses it (`work.RepeatedRows`) where
 two rows of such an operand are equal there, naming the Definition, the node, the operand and the two rows. The point
-is the claim's own worst case: whoever submits the circuit also picks the data. So every word of an input
-(`Input<w>`) is one word, sampled generic, nonzero and, as a float, positive, repeated through every array it fills
-(all tokens are one token), and every word of `θ` and of a registered input is sampled on its own: a finite float at its width (four
+is one draw at which every input is one positive word repeated, as a submitter may choose: whoever submits the
+circuit also picks the data. So every word of an input (`Input<w>`) is one word, sampled generic, nonzero and, as a
+float, positive, repeated through every array it fills (all tokens are one token), and every word of `θ` and of a registered input is sampled on its own: a finite float at its width (four
 binades about 2^`CENTRE`, every sign and mantissa; `held` the bits that leaves it), or any nonzero word at a width no
 float has. An input's float is about 1 and positive, because an input is data or a state the step carries in, which an
 honest step reads under a square root, a logarithm or a divide: a positive word is inside each such domain, and one word repeated
 says nothing about rows by its sign. `θ` keeps every sign, the generic part of the point. A NaN and equal rows are
 refused, so the sign passes no claim; it decides only which honest circuits pass. The sample is seeded by SHA-512 of
-the Program's digest, with no other randomness, so two reads agree.
+the Program's digest, with no other randomness, so two reads agree. The seed is public: a submitter can try variants
+of a circuit until the point misses an identity that holds only on a thin set of values, which is a premise
+(below), not something the point tests.
+
+An operand that is specific and not distinct (`by_words`) is tested at a second point, the word-by-word point, whose
+`P` lanes the pass evaluates beside the first's (`Walk.lanes`): the first point holds one token at every position,
+which breaks `work`'s `P_BATCH` (past each row's first position, no two positions of the batch hold equal words), so
+a specific operand's rows may be equal there for an honest circuit. The second point's inputs are drawn word by word
+from SHA-512 of the Program's digest under its own label. `θ`'s and a registered input's words are drawn as at the
+first point. An input's float is drawn as `θ`'s are but positive, so a state the step carries in (a learning rate, a
+moment) is as small as a weight: about 1, one update moves training_slowdown's weights so far that its attention's
+softmax is one-hot, and rows that differ by their tokens come out equal.
+An input's word of a width no float has is a token a gather can look up (`tokens`): each lane a permutation of the
+least table's rows (`Walk.table_rows`), repeated, so that no two of that many positions running pick one row of any
+table. The second point meets `P_BATCH` by that construction wherever a batch holds no more positions than that
+table has rows, so it shows a specific operand's rows are not equal by an identity of the circuit (O1 plus -1 times
+O1 is 0 for every input). That the served data meets `P_BATCH` stays the premise it is today. A NaN and a scan's
+unevaluated outputs are refused there as at the first point.
 
 Rows are equal only where they agree at `points` points, enough to hold 64 sampled bits a row: P = ceil(64 / (K b)),
 b the bits its words hold at the point (`held`), at most those of the narrowest `θ` or registered input and of the
 narrowest rounding the Program holds, so a narrow row (an e2m1 word after a rounding, a one-word row) is not refused
-by chance. Rows are compared by their words, never by a difference (inf - inf is a NaN), so a row holding an inf is
-a row: two words of one value hold the same inf there. A row holding an f32 NaN is refused: no comparison shows it
+by chance. Rows are compared by their words, never by a difference (inf - inf is a NaN), with an f32 row's two zeros
+one word (-0 read as +0), so a row holding an inf is a row (two words of one value hold the same inf there) and an
+f32 row of zeros is one row whatever their signs. A row holding an f32 NaN is refused: no comparison shows it
 distinct, and whoever submits the circuit can make a NaN at the point. `CENTRE` is where the point makes no inf or NaN
 from finite operands in training_slowdown's step, nor a binade either side; a -inf the Program states as a value (a
 causal mask's) is not the point's doing, and stays at every centre through the mask's add and the softmax's subtraction
@@ -44,7 +62,8 @@ out of range).
 
 What the point doesn't meet stays a premise (`work`'s docstring): rows equal only at values the sample never takes (W
 plus z plus -1 times z, a one-word multiplier that is 0, inputs fitted to the weights, a circuit that tests its own
-weights against a stated constant, rows equal only where an input's word is negative).
+weights against a stated constant, rows equal only where an input's word is negative, and rows equal only at values
+a submitter found by trying circuits against the public seed, at either point).
 """
 from __future__ import annotations
 
@@ -72,6 +91,21 @@ CENTRE = -3
 #: the bits a word of each rounding's format holds at the point: its sign, its mantissa and two of its exponent
 ROUNDED = {"F32ToBf16Rn": 10, "F32ToF16Rn": 13, "F32ToE4m3Sat": 6, "F32ToE2m1Sat": 4}
 F32_NAN, F32_NAN_PTX = 0x7FC00000, 0x7FFFFFFF
+#: the widths the point samples as floats (f32, bf16, e4m3): exponent bits, mantissa bits, the least binade's exponent
+FLOAT_WIDTHS = {32: (8, 23, 125), 16: (8, 7, 125), 8: (4, 3, 6)}
+#: f32's -0, compared as +0: a row of zeros is one value whatever their signs
+F32_NEG_ZERO = 0x80000000
+
+
+def tokens(rng: np.random.Generator, shape, rows: int | None) -> np.ndarray:
+    """Words of a width no float has at the word-by-word point, ``shape`` (lanes, leaves): tokens a gather can look up,
+    each lane a permutation of the ``rows`` its least table holds (`Walk.table_rows`), repeated, so any ``rows``
+    positions running pick distinct rows of every table; with no table, distinct nonzero words below 2^31, which a
+    narrowing to i32 keeps."""
+    lanes, n = shape
+    if rows is None:
+        return np.stack([rng.choice((1 << 31) - 1, n, replace=False) + 1 for _ in range(lanes)]).astype(np.uint64)
+    return np.stack([rng.permutation(rows)[np.arange(n) % rows] for _ in range(lanes)]).astype(np.uint64)
 
 
 def held(w: int) -> int:
@@ -91,9 +125,8 @@ def sample(rng: np.random.Generator, w: int, shape, positive: bool = False, cent
     def bits(n: int) -> np.ndarray:
         return rng.integers(0, 1 << n, size=shape, dtype=np.uint64)
 
-    floats = {32: (8, 23, 125), 16: (8, 7, 125), 8: (4, 3, 6)}
-    if w in floats:
-        e, m, lo = floats[w]
+    if w in FLOAT_WIDTHS:
+        e, m, lo = FLOAT_WIDTHS[w]
         exp = rng.integers(lo + centre, lo + centre + 4, size=shape, dtype=np.uint64)
         sign = bits(1) * np.uint64(not positive)
         return (sign << np.uint64(e + m)) | (exp << np.uint64(m)) | bits(m)
@@ -212,27 +245,34 @@ class Unrun:
 
 @dataclass
 class Tally:
-    """What a pass evaluated: primitive words at one point, the points, each primitive's words the reference
-    computed, the claims tested, and the claims that read values a scan left unevaluated."""
+    """What a pass evaluated: primitive words at one point, the points, the word-by-word points (`Walk.lanes`; 0
+    where no claim is specific alone), each primitive's words the reference computed, the claims tested, and the claims
+    that read values a scan left unevaluated."""
 
     words: int = 0
     points: int = 1
+    word_points: int = 0
     reference: Counter = field(default_factory=Counter)
     claims: int = 0
     unrun: list = field(default_factory=list)
 
 
 def claimed(st) -> bool:
-    """Whether a charged operand of status ``st`` is claimed to have distinct rows: `Status.distinct`, specific or
-    not, since a specific operand's rows differ at the point unless it overflows there. A charged operand carries no
-    gather's rows and, unless it is specific, reads no current input (`work.may_repeat`), so those need no test
-    here."""
-    return st.distinct
+    """Whether a charged operand of status ``st`` is claimed to have distinct rows: `Status.distinct` or
+    `Status.specific`. A charged operand carries no gather's rows (`work.may_repeat`), so those need no test here."""
+    return st.distinct or st.specific
+
+
+def by_words(st) -> bool:
+    """Whether a claimed operand is tested at the word-by-word point (`Walk.lanes`): specific and not shown distinct,
+    so its rows differ only where the inputs' positions hold different words (`work`'s `P_BATCH`), which the one-word
+    point's inputs never do."""
+    return st.specific and not st.distinct
 
 
 def claims(R, root, reasons) -> dict:
     """The charged products' operands whose rows the reading shows distinct (`claimed`), by summary and node:
-    (argument, its parameter's name, K)."""
+    (argument, its parameter's name, K, whether it is tested at the word-by-word point (`by_words`))."""
     out: dict = {}
     order = sorted(R.memo.values(), key=lambda s: -s.sid)
     count = {root.sid: 1}
@@ -248,7 +288,8 @@ def claims(R, root, reasons) -> dict:
             names = [n for n, _t in nd.fn.signature()[0]]
             for st, name in ((site.x, site.product.x), (site.w, site.product.w)):
                 if claimed(st):
-                    out.setdefault(s.sid, {}).setdefault(site.node, []).append((names.index(name), name, site.k_dim))
+                    out.setdefault(s.sid, {}).setdefault(site.node, []).append(
+                        (names.index(name), name, site.k_dim, by_words(st)))
     return out
 
 
@@ -278,8 +319,8 @@ def check(program, R, root, reasons) -> Tally:
     from verity.circuits.codec import program_digest
     digest = program_digest(program)
     fns = _bodies(root, R)
-    key = (digest, frozenset((fns[sid].id, node, i, K) for sid, nodes in cl.items() for node, cs in nodes.items()
-                             for i, _n, K in cs))
+    key = (digest, frozenset((fns[sid].id, node, i, K, wb) for sid, nodes in cl.items() for node, cs in nodes.items()
+                             for i, _n, K, wb in cs))
     hit = _MEMO.get(key)
     if hit is None:
         try:
@@ -296,34 +337,64 @@ class Walk:
     def __init__(self, program, R, root, cl: dict, digest: str) -> None:
         self.program, self.R, self.root, self.claims = program, R, root, cl
         self.tally = Tally()
-        self.seed = int.from_bytes(hashlib.sha512(b"circuit_properties/points\0" + bytes.fromhex(digest)).digest(), "big")
+        self.seed, self.word_seed = (int.from_bytes(hashlib.sha512(label + bytes.fromhex(digest)).digest(), "big")
+                                     for label in (b"circuit_properties/points\0", b"circuit_properties/points/words\0"))
         self.fns = _bodies(root, R)
         theta = set(program.root.theta)
         b = min((held(_leaf_width(nd)) for k, nd in enumerate(program.root.body.nodes)
                  if is_input(nd.fn) and (is_registered(nd.fn) or k in theta)), default=64)
         b = min([b, *(ROUNDED[n] for n in _roundings(program.root))])
         self.P = max(points(K, min(b, held(_operand_width(self.fns[sid].body.nodes[node], i))))
-                     for sid, nodes in cl.items() for node, cs in nodes.items() for i, _n, K in cs)
-        self.tally.points = self.P
+                     for sid, nodes in cl.items() for node, cs in nodes.items() for i, _n, K, _wb in cs)
+        self.words = any(wb for nodes in cl.values() for cs in nodes.values() for *_c, wb in cs)
+        self.lanes = 2 * self.P if self.words else self.P
+        self.tally.points, self.tally.word_points = self.P, self.P if self.words else 0
         self.last: dict = {}
 
     def inputs(self) -> dict:
-        """The point: each input node's words at each point, (points, leaves), by ("n", node)."""
+        """The point: each input node's words at each lane, (lanes, leaves), by ("n", node). The first `P` lanes are
+        the one-word point; where a claim is tested by words (`by_words`), `P` more are the word-by-word point, drawn
+        from its own seed: `θ`'s and a registered input's words as at the first, an input's float as `θ`'s are but
+        positive, and an input's word of a width no float has a token (`tokens`)."""
         env: dict = {}
         rng = np.random.default_rng(self.seed)
+        word_rng = np.random.default_rng(self.word_seed) if self.words else None
         theta = set(self.program.root.theta)
         for k, nd in enumerate(self.program.root.body.nodes):
             if is_input(nd.fn):
-                w = _leaf_width(nd)
+                w, shape = _leaf_width(nd), (self.P, nd.out.leaves)
                 if is_registered(nd.fn) or k in theta:
-                    env["n", k] = sample(rng, w, (self.P, nd.out.leaves), centre=CENTRE)
+                    v = sample(rng, w, shape, centre=CENTRE)
+                    extra = None if word_rng is None else sample(word_rng, w, shape, centre=CENTRE)
                 else:
-                    env["n", k] = np.repeat(sample(rng, w, (self.P, 1), positive=True), nd.out.leaves, axis=1)
+                    v = np.repeat(sample(rng, w, (self.P, 1), positive=True), nd.out.leaves, axis=1)
+                    extra = None if word_rng is None else (
+                        sample(word_rng, w, shape, positive=True, centre=CENTRE) if w in FLOAT_WIDTHS
+                        else tokens(word_rng, shape, self.table_rows()))
+                env["n", k] = v if extra is None else np.concatenate([v, extra])
         return env
+
+    def table_rows(self) -> int | None:
+        """The fewest rows a lookup's table (`work.LOOKUPS`) holds in the Program, or None where it has no lookup."""
+        if not hasattr(self, "_rows"):
+            seen, todo, out = set(), [self.program.root], []
+            while todo:
+                for nd in todo.pop().body.nodes:
+                    f = nd.fn
+                    if f.id in seen:
+                        continue
+                    seen.add(f.id)
+                    lk = self.R.lookup(f) if isinstance(f, PrimitiveDefinition) else None
+                    if lk is not None:
+                        out.append(dict(f.params)[lk.table].leaves)
+                    elif not isinstance(f, PrimitiveDefinition):
+                        todo.append(f)
+            self._rows = min(out, default=None)
+        return self._rows
 
     def run(self) -> Tally:
         self.scans: list[Unrun] = []
-        self.body(self.program.root, self.root, [], {k: (v, None) for k, v in self.inputs().items()}, self.P)
+        self.body(self.program.root, self.root, [], {k: (v, None) for k, v in self.inputs().items()}, self.lanes)
         if self.tally.unrun:
             sid, node, name, u = self.tally.unrun[0]
             raise WK.RepeatedRows(self.fns[sid].id, node, name, None, scan=u)
@@ -399,8 +470,8 @@ class Walk:
                 env["n", k] = self.batch(f, nd, args, kids[k][0][0] if k in kids else None, L)
             else:
                 env["n", k] = self.scan(fn, k, nd, args, kids.get(k), L)
-            for i, name, K in mine.get(k, ()):
-                self.rows(S, k, nd, i, name, K, args[i], L)
+            for i, name, K, wb in mine.get(k, ()):
+                self.rows(S, k, nd, i, name, K, args[i], L, wb)
             for a in nd.args:
                 for s in _sources(a.refs):
                     if s[0] == "n" and last.get(s[1], -1) == k:
@@ -409,7 +480,7 @@ class Walk:
 
     def primitive(self, f, nd, args: list, L: int):
         n = nd.n if nd.form == "batch" else 1
-        self.tally.words += nd.out.leaves * (L // self.P)
+        self.tally.words += nd.out.leaves * (L // self.lanes)
         if not nd.args:
             return np.full((L, nd.out.leaves), WK._const(f), np.uint64), None
         params = [t for _n, t in f.signature()[0]]
@@ -435,7 +506,7 @@ class Walk:
             out = twin(*np.broadcast_arrays(*(s[..., 0] for s in shaped)))
             return np.broadcast_to(out, (L, n)).reshape(L, n).astype(np.uint64), gone
         if "numpy" not in kernels(f):
-            self.tally.reference[f.id] += nd.out.leaves * (L // self.P)
+            self.tally.reference[f.id] += nd.out.leaves * (L // self.lanes)
         flat = [np.broadcast_to(s, (L, n, s.shape[-1])).reshape(L * n, s.shape[-1]) for s in shaped]
         try:
             out = evaluate_batch(f, *flat)
@@ -448,7 +519,7 @@ class Walk:
         as they are, never a batch's shared operand repeated a member; its words are its body's."""
         n = nd.n if nd.form == "batch" else 1
         rows, K = _rows_of(f), f.signature()[0][0][1].leaves
-        self.tally.words += self.flat(f) * n * (L // self.P)
+        self.tally.words += self.flat(f) * n * (L // self.lanes)
         m = [n if nd.form == "batch" and nd.axes[i] is not None else 1 for i in (0, 1)]
         x, w = args[0][0].reshape(L, m[0], 1, K), args[1][0].reshape(L, m[1], rows, K)
         out = dot(x, w).reshape(L, n * rows)
@@ -512,9 +583,10 @@ class Walk:
 
     # -- the check ---------------------------------------------------------------------------------------------------
 
-    def rows(self, S, k: int, nd, i: int, name: str, K: int, value, L: int) -> None:
+    def rows(self, S, k: int, nd, i: int, name: str, K: int, value, L: int, by_words: bool = False) -> None:
         """Refuse where two rows of ``K`` words of argument ``i`` of product node ``k`` are equal at every point, in
-        one activation, or where a row holds an f32 NaN, which no comparison can show distinct."""
+        one activation, or where a row holds an f32 NaN, which no comparison can show distinct: at the word-by-word
+        point's lanes where ``by_words``, else at the one-word point's."""
         words, gone = value
         if gone is not None and gone.any():
             self.tally.unrun.append((S.sid, k, name, self.scans[int(gone[gone > 0][0]) - 1]))
@@ -523,9 +595,11 @@ class Walk:
         W = words.shape[1]
         if not K or W % K or W // K < 2:
             return
-        P, A, R = self.P, L // self.P, W // K
-        v = words.reshape(P, A, R, K).transpose(1, 2, 0, 3).reshape(A * R, P * K)
+        P, A, R = self.P, L // self.lanes, W // K
+        v = words.reshape(self.lanes, A, R, K)
+        v = (v[P:] if by_words else v[:P]).transpose(1, 2, 0, 3).reshape(A * R, P * K)
         if _operand_width(nd, i) == 32:
+            v = np.where(v == F32_NEG_ZERO, np.uint64(0), v)
             bad = _nan(v).any(axis=1).reshape(A, R)
             if bad.any():
                 a = int(np.flatnonzero(bad.any(axis=1))[0])

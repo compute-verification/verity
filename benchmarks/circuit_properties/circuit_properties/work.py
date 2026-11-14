@@ -60,8 +60,9 @@ where any may, and two arrays are one where any references overlap. A rule's bra
 the one with the smaller bound: a product with an activation is token-indexed by every dim its activations span, of
 the branches of `_gemm_rate` the least the Program doesn't exclude, from `HEAD_K` no bound, since a Program doesn't
 say which products are the head's. So, under the reading's two premises (`SHARED_PREFIX`'s and the updates', below),
-every error of the reading is less work or a smaller `β` than the trace's reading of the same
-step, and a bound true but weak: a product the tables don't name is not counted, a value with any
+every error of a reading the point passes (`points.check`, which tests each charged operand whose rows the rules show
+distinct or specific) is less work or a smaller `β` than the trace's reading of the same step, and a bound true but
+weak: a product the tables don't name is not counted, a value with any
 word θ′ doesn't reach is `θ`'s, and overlapping references are one array (F may be higher).
 
 A value is specific where, at an input whose rows hold one token at two positions, its words take different values at
@@ -95,6 +96,11 @@ valued word by word, as `Reader(structure=False)` values every one, to the same 
 The reading rests on two premises, each held as a fact by a test where a Program breaks it. The rule rests on the
 one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens), `training_slowdown.work.P_BATCH`, whose
 words its suite holds this text to: past each row's first position, no two positions of the batch hold equal words.
+The point's second draw, word by word (`points`), meets `P_BATCH` by the construction of its tokens, so it shows a
+specific operand's rows are not equal by an identity of the circuit (the attention's output plus -1 times itself is 0
+for every input). That the served data meets `P_BATCH` stays the premise it is today, and with it that a specific
+operand's rows the second draw shows differing are not equal only at values a submitter found by trying circuits
+against its public seed.
 The three batches that break it, which `P_BATCH`'s comment states, make two positions' values equal at every layer,
 under this rule and the trace's reading alike. The updates': a weight is `θ`'s rows, which
 differ, for generic weights, at every width a product or a rounding (`ROUNDINGS`) reads them, and a word no input
@@ -103,11 +109,13 @@ are distinct, wherever the point (`points.check`) doesn't make two of them equal
 weight or cancels it for a reason the constant test doesn't see (W plus z plus -1 times z is θ′), where one word that
 every member of every enclosing batch reads multiplies it and is 0 (a learning rate, a decay, an input's or computed
 from inputs, taken as nonzero), where the inputs are fitted to the weights, where the circuit tests its own weights
-against a stated constant, where the rows are equal only where an input's word is negative, and where two nodes
+against a stated constant, where the rows are equal only where an input's word is negative, where they are equal
+only at values a submitter found by trying circuits against the point's public seed, and where two nodes
 compute rows one to one from one array's words into two arrays (b added to each of two rows, carried apart, whose
 products by W are charged). The reading refuses a circuit
 (`RepeatedRows`) where a charged operand whose rows these rules show distinct holds two equal rows at the point:
-a weight combined with its own words, cancelled against itself (M plus -1 times M; W times v plus -1 times v) or
+a weight combined with its own words, cancelled against itself (M plus -1 times M; W times v plus -1 times v; and
+rows of zeros whose signs differ, compared as one value) or
 times its own rows in another order (M times swap(M)), whose rows are equal whatever the weight, and a weight times a
 difference of an input's words; and where such an operand holds a NaN at the point, which leaves its rows uncompared.
 
