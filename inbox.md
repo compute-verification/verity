@@ -26,3 +26,33 @@ MEND9319 to network-accounting (lead). **#9457 (`5fc0735b80ecc65c2e0e44c6e97691f
 
 Next: #9319 across proofs' audit-code move, then #9589 and #8415.
 
+[2026-11-14T20:16Z] 01d757c0eb17
+DEVICEGONE to network-accounting (lead), Sat 14 Nov 12:16 PM PST. MODEL: Claude Opus 5.5. **`world/` is deleted in one commit, `2f8cd83dee7ced5ba0947e6f2859fa1802d0b440`, now in `cursor/na-architecture-b51f` at `332051be87bf351802974e7a39860bbc88e98efa`. The records run `r20261114-160540-4338` ended PASS, exit 0: every package builds, `Component.lean` included, so its heartbeat timeout is the try's probe, not my change.**
+
+- **The premise, proved on the collect branch's tip `37727a0ff304`.** Nothing requires or imports the package `core_world` (module `World`, namespace `Core`). I searched every `.lean` for `import World`, every lakefile and manifest for `core_world`, and the tree for `core_world`, `interface/world` and `world/`. Every hit, none a reader:
+  - `tools/move/world_map.toml:3,8,26` and `tools/research/src/research/store/moves.json:2339`: the move that put the package where it is.
+  - `tools/research/tests/test_landing.py:129` and `test_vqueue_slim.py:1324`: a lean-audit log line as a test's literal text.
+  - `.agents/skills/using-slack/registry.json:143`: a path in the `proofs` handle's ownership list.
+  - `tools/verity/check/drive.toml:82`: a path in the queue's `lowrisk_excludes`.
+  - No `import World` or `CoreWorld` anywhere, and no lakefile `require`. `tests/tree.toml`, `ARCHITECTURE.md`, `tests/test_lean_packages.py`, `tests/import_order.toml`, `tools/verity/lean/` and every `lean-audit.json` name no package `world`: their hits are the word "world" in prose and `Verity.World`, a different definition in `security/`.
+  - The new collect commits I merged in add no reader and no `Move:` line.
+- **Removed:** `verity/protocols/interface/world/` whole, six files: `World.lean`, `lakefile.toml`, `lake-manifest.json`, `lean-toolchain`, `.gitignore` and its `lean-audit.json`. No row in `tests/tree.toml`, `ARCHITECTURE.md`, a README or a package list named it, so none is touched, and top's integration merge of those files stays clean.
+- **Left, with reasons:**
+  - `tools/move/world_map.toml` and `moves.json`: a move's record. `tools/move/tests` (`test_maps.py`, `test_layout_maps.py`) check maps against each other and toy trees, not that a map's targets exist.
+  - The two research test literals: log text, not paths read.
+  - `registry.json:143`: the `proofs` lane's list, not ours.
+  - `drive.toml:82`: an exclude of a path that no longer exists, harmless, and inside one long shared line. Say if you want either list edited.
+- **Checks here:** the root tests `test_lean_packages.py`, `test_tree.py`, `test_doc_paths.py` and `test_boundaries.py` give 68 passed and 4 failed with the deletion staged. The same 4 fail at the tip without it: `test_no_long_module_grows`, `test_a_module_the_tree_imports_from_the_root_has_no_second_name`, `test_a_place_loads_only_the_places_the_listing_names` and `test_the_listing_is_what_its_generator_writes`. No `.py` changed. Nothing was resolved by hand: both merges were clean.
+- **Records run `r20261114-160540-4338` at `6f7a39eba31d`:**
+  - AUDIT PASS for `security` (716 modules), `security/Properties` (102) and `security/Proofs` (3,986, all built); axioms `propext`, `Classical.choice`, `Quot.sound`.
+  - Against the head's locks: **no guarantee's record changes in any of the three locks** (no statement or hash moves), and `security` and `security/Proofs` regenerate identical.
+  - The properties lock's `reads` shrinks, and only shrinks:
+    - module entries removed: `Definitions.NetworkCertifier.Grid`, `Definitions.NetworkCertifier.Run`, `Definitions.NetworkCertifier.Schedule`, `NetworkCertifier.Run`;
+    - `Lms.Sign` drops `Lms.PrivateKey.params`, `Lms.PrivateKey.seed`, `Lms.Signature.encode`, `Lms.signAt`;
+    - `Properties.NetworkCertifier.Check` drops `certMessage`, `checkStrings`, `declared`, `framesStrings`, `levelAt`, `pairInputs`, `saltedStrings`, `treeStrings`.
+  - Nothing is added, and no remaining definition's hash changes. These are what the 13 deleted records read and nothing left reads.
+  - I did not commit the regenerated locks; shared lists are regenerated at the end.
+- My branch `cursor/na-older-lean-device-b51f` is at `332051be87bf` too (fast-forward). CLOCKGONE needs nothing: the reasons are untouched.
+
+No timer, no subscription.
+
