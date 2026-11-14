@@ -642,11 +642,14 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     assert not any(p.is_file() for p in hold.rglob("*"))
 
 
-def _v3c(serve: Path, period: dict | None = None, committed: bool = True) -> Path:
+def _v3c(serve: Path, period: dict | None = None, committed: bool = True, circuit: bool = True) -> Path:
     """V3c's directory beside the window (`served_verdicts.sh`'s ``$D/v3c-w<K>-<class>``): its committed window (only
-    its registration, which the chain step looks for) and, given, its period.json."""
+    its registration, which the chain step looks for) and, given, its period.json; beside it the verifier's own
+    window-circuit record at its class (``$D/window-circuit-w<K>-<class>.json``, `CIRCUIT`)."""
     v3c = serve / "v3c-w3-8-32-4-4-16"
     (v3c / "window").mkdir(parents=True)
+    if circuit:
+        (serve / "window-circuit-w3-8-32-4-4-16.json").write_text(json.dumps(CIRCUIT))
     if committed:
         (v3c / "window" / "registration.json").write_text("{}")
     if period is not None:
@@ -681,16 +684,18 @@ def _lean(tmp_path: Path, answer: dict) -> list[str]:
 
 #: V3c's period.json as `records_audit.py period` writes it (its values stand-ins: the period check here is a stub)
 PERIOD = {"answer": {"verdict": "accept"}, "free": 5, "program": {"v3c": 1}, "registration": {"v3c": 2}, "steps": 0}
+#: the verifier's own window-circuit record at V3c's class, the fields `scan_period.circuit_of_record` reads
+CIRCUIT = {"format": "verity/window-circuit/v1", "program": "c3" * 64}
 
 
 def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_path, warden, period, capsys,
                                                                             monkeypatch):
     """The chain step runs the chain with its scan on V3c's window (``--class w63k4 --v3c V3C/window`` first in
     CR_SCAN_ARGS) and marks DIR/chain.json; the period step reads that chain's report again, without running it, and
-    checks the rows case whose one compute audit is V3c's period.json, its answer the one `pieces` reads (with
-    CERTIFIER_CMD ``true``, as `served_verdicts.sh` sets it) into the block record, its case written in the serve
-    dir's private (the chain step first removing the one an earlier run left), its certificates beside the answer and
-    both steps' logs kept."""
+    checks the rows case whose one compute audit is V3c's period.json, held to the class circuit of the verifier's own
+    window-circuit record beside V3c, its answer the one `pieces` reads (with CERTIFIER_CMD ``true``, as
+    `served_verdicts.sh` sets it) into the block record, its case written in the serve dir's private (the chain step
+    first removing the one an earlier run left), its certificates beside the answer and both steps' logs kept."""
     accept = period.reference(period.case("accept", 1, "clock"))
     d = _serve_dir(tmp_path / "serve", warden)
     v3c, piece = _v3c(d), tmp_path / "pieces" / "certifier"
@@ -707,6 +712,7 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     assert _hook("period", d, piece, v3c, *_lean(tmp_path, accept)) == 0, (piece / "period.log").read_text()
     params = json.loads((tmp_path / "seen" / "params.json").read_text())
     assert params["audits"] == [{k: PERIOD[k] for k in ("free", "program", "steps")}]
+    assert params["circuit"] == CIRCUIT["program"]
     case = d / CP.CASES / CP.CASE
     assert json.loads(bytes.fromhex(json.loads(case.read_text())["commitment"]))["audits"] == [PERIOD["registration"]]
     assert _named(tmp_path, CP.CASE) == [case] and case.stat().st_mode & 0o777 == 0o600
@@ -757,15 +763,17 @@ def test_any_other_word_of_the_chains_report_is_a_reject_and_the_period_check_is
     assert a["verdict"] == "reject" and a["reason"].startswith(f"the chain {word}: ")
 
 
-@pytest.mark.parametrize("case", ["no v3c window", "time limit", "no chain step", "a scan of no v3c", "no period.json"])
+@pytest.mark.parametrize("case", ["no v3c window", "time limit", "no chain step", "a scan of no v3c", "no period.json",
+                                  "no window-circuit record"])
 def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, warden):
     """The chain step refuses without V3c's committed window, which its scan reads, and when its limit
     (CERTIFIER_TIMEOUT) ends it; the period step then refuses too, naming the chain's refusal. The period step refuses
-    where no chain step accepted in DIR, where the chain's scan read no V3c window, and where V3c wrote no period.json:
-    DIR keeps its logs and refused.txt, and the certifier is missing."""
+    where no chain step accepted in DIR, where the chain's scan read no V3c window, where V3c wrote no period.json, and
+    where the verifier kept no window-circuit record beside V3c, whose class circuit V3c's audit is held to: DIR keeps
+    its logs and refused.txt, and the certifier is missing."""
     d = _serve_dir(tmp_path / "serve", warden)
-    v3c, piece = _v3c(d, None if case == "no period.json" else PERIOD, committed=case != "no v3c window"), \
-        tmp_path / "pieces" / "certifier"
+    v3c, piece = _v3c(d, None if case == "no period.json" else PERIOD, committed=case != "no v3c window",
+                      circuit=case != "no window-circuit record"), tmp_path / "pieces" / "certifier"
     args = _chained(tmp_path, None if case == "a scan of no v3c" else v3c, w=warden["w"])
     if case == "time limit":
         args = ["--chain-cmd", 'kill -TERM "$PPID"; while :; do :; done']
@@ -777,7 +785,8 @@ def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, wa
             "time limit": "SIGTERM: the piece's time limit (CERTIFIER_TIMEOUT)",
             "no chain step": "no chain.json in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run",
             "a scan of no v3c": f"the chain's scan read no V3c window, not {v3c / 'window'}",
-            "no period.json": "the period's rows case: FileNotFoundError"}[case] in why, why
+            "no period.json": "the period's rows case: FileNotFoundError",
+            "no window-circuit record": "the verifier's window-circuit record: FileNotFoundError"}[case] in why, why
     logs = {"chain.log", "period.log"} - ({"chain.log"} if case == "no chain step" else set())
     assert {p.name for p in piece.iterdir()} == {CP.REFUSED, *logs}
     said = (piece / "period.log").read_text()
