@@ -214,7 +214,9 @@ def _git_root(where: Path) -> Path | None:
     try:
         p = subprocess.run(["git", "-C", str(where), "rev-parse", "--show-toplevel"], capture_output=True, text=True,
                            timeout=_left(LOCAL_TIMEOUT_S), check=False)
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"research doctor: `git rev-parse` in {where} did not run, so it is no checkout here ({type(e).__name__})",
+              file=sys.stderr)
         return None
     return Path(p.stdout.strip()) if p.returncode == 0 and p.stdout.strip() else None
 
