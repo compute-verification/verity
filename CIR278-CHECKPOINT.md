@@ -67,3 +67,6 @@ TOP-424: I cancelled every run that served a mark on main (7860, fd54, 1fdd, 060
 
 ## 2026-11-14T18:49Z renames
 program/ (my only directory since the lead cut it at 18:49Z) done: architecture commit afba5ef592b0, pushed in 8300f551a1e3. 14 files, 27 uses removed, 49 left (25 RNG draws, 13 the production interface, 4 compute capability, 3 descriptor_record cap, 2 sampled-proofs:, 1 record string, 1 warden_rows). 17 line files (96 uses) skipped. CIR-278 line posted.
+
+## 2026-11-14T18:57Z
+Job 1: program/ reconciled and posted. Job 2: tests/program share done, d9f68d1c702 and 7a35339d777 on architecture (merge-base yes), 56 removed, 19 left, 84 in line files skipped. production list posted for vllm.
