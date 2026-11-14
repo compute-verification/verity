@@ -101,12 +101,17 @@ sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import active_replay as ar  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.blob_files import read_blobs  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
 from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import audit as host_audit, head_check as HC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES, compact_finish_violations, compact_record_data, decode_frame, encode_frame, id_event_data  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.active import (CANONICAL_STREAM,  # noqa: E402
+                                                                   compact_finish_violations, compact_record_data,
+                                                                   id_event_data)
+from verity.protocols.accounting.certifier.verifier.link_frame import (DATA, HEADER, decode_frame,  # noqa: E402
+                                                                       encode_frame)
+from verity.protocols.accounting.certifier.verifier.id_form import ID_NAME_BYTES, id_request  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import (CertifiedRecord, Direction, frames_root,  # noqa: E402
                                                           real_frames)
 from verity.protocols.accounting.certifier.verifier import tie_service as TS, warden as W  # noqa: E402
@@ -1304,8 +1309,8 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
     e, i = setup.egress_params, setup.ingress_params
     key, session, link = RF.read_public(dep["certifier_key"]), bytes.fromhex(dep["session"]), dep["links"]["n2"]
     certified, _ = cs.read_certified(run / "certified.jsonl")
-    ins = [RF.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
-    outs = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    ins = [RF.unpack_record(b, i.frame_bytes) for b in read_blobs(run / "requests.records")]
+    outs = [RF.unpack_record(b, e.frame_bytes) for b in read_blobs(run / "responses.records")]
     windows, egress = plan["windows"], {r.window: r for r in outs}
     ends = {Direction.EGRESS: (egress, e), Direction.INGRESS: ({r.window: r for r in ins}, i)}
     held = {d.value: [w for w in range(windows)

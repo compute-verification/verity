@@ -19,9 +19,10 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import active
+from verity.protocols.accounting.certifier.verifier.id_form import ID_REQUEST_HEAD
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import DATA, VirtualClock
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer
 from verity.protocols.accounting.certifier.verifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, cells, read_cell
 from verity.protocols.accounting.certifier.verifier import relay_check as RC
@@ -172,7 +173,7 @@ def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[by
         shim.outcome = ("refused" if REFUSED in kinds else "end" if END in kinds else "fail" if FAIL in kinds
                         else "cut")
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0,
-                                     params.payload if request.startswith(active.ID_REQUEST_HEAD) else None))
+                                     params.payload if request.startswith(ID_REQUEST_HEAD) else None))
     (out / "client.json").write_text(json.dumps({"connections": log}))
     marks = _watermark_log(warden) if watermark else {}
     (out / dv.RELAY_LOG).write_text(json.dumps({"connections": warden.log} | marks))

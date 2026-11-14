@@ -26,7 +26,7 @@ from verity.commitments.gates.frame_v3 import _part, opens
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import row_leaf
 from verity.protocols.accounting.certifier.verifier import head_check as HC, io_tie as IT, warden as W, warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.accounting.certifier.verifier.grid import Certifier
 

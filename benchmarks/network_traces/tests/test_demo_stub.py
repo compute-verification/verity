@@ -14,8 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import active as A, id_form as IDF, io_tie as IT
-from verity.protocols.accounting.certifier.verifier.release import with_release
+from verity.protocols.accounting.certifier.verifier import id_form as IDF, io_tie as IT
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
+from verity.protocols.accounting.certifier.verifier.release import RUN_ID_BYTES, with_release
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -59,7 +60,7 @@ def respond(request: bytes, shape: S.Shape = S.Shape()) -> bytes:
 def ids_request(**kw) -> bytes:
     fields = {"model": NAME, "user": "user-0", "prompt": PROMPT, "max_tokens": 24, "temperature": 0.0, "top_p": 1.0,
               "seed": 12345} | kw
-    return IDF.id_request(**fields, frame_bytes=P + A.HEADER.size, offset=0)
+    return IDF.id_request(**fields, frame_bytes=P + HEADER.size, offset=0)
 
 
 def refused(data: bytes) -> str:
@@ -71,7 +72,7 @@ def refused(data: bytes) -> str:
 def test_the_class_is_eight_byte_ids_in_and_twenty_four_out_and_its_model_says_so():
     assert (S.PROMPT_IDS, S.TOKENS, S.VOCAB, S.ID_PAYLOAD) == (8, 24, 256, 503)
     assert NAME == "demo-stub/p8-g24-v256"
-    assert P == G.SCAN["--cell-bytes"] - A.HEADER.size
+    assert P == G.SCAN["--cell-bytes"] - HEADER.size
     for bad in ({"prompt_ids": 0}, {"tokens": 0}, {"vocab": 1}, {"vocab": 257}, {"payload": IT.ID_EVENT_BYTES - 1}):
         with pytest.raises(ValueError):
             S.Shape(**bad)
@@ -88,12 +89,12 @@ def test_a_wardens_id_request_of_the_class_is_answered_id_form_its_ids_below_the
     assert S.answer(PROMPT) == want and len(want) == 24 * P + len(IT.TRAILER)
     assert want == ws.id_response(ids, P)
     assert ws.parse_id_response(want, P)["complete"] and ws.parse_id_response(want, P)["ids"] == 24
-    for request in (ids_request(), with_release(ids_request(), 7, b"\x5a" * A.RUN_ID_BYTES),
+    for request in (ids_request(), with_release(ids_request(), 7, b"\x5a" * RUN_ID_BYTES),
                     with_release(ids_request(), 0)):
         assert respond(request) == want
     assert respond(ids_request(seed=1, user="user-9")) == want
     assert S.outputs(list(b"hello wp")) != ids
-    cells = [IT.data_cell(t, 1, P + A.HEADER.size)[A.HEADER.size:] for t in ids]
+    cells = [IT.data_cell(t, 1, P + HEADER.size)[HEADER.size:] for t in ids]
     assert b"".join(cells) == want[:24 * P]
 
 
@@ -147,7 +148,7 @@ def test_serve_prints_where_it_listens_and_answers_over_loopback(capsys):
         server = await asyncio.start_server(S.Endpoint(), "127.0.0.1", 0)
         host, port = server.sockets[0].getsockname()[:2]
         got = []
-        for request in (with_release(ids_request(), 2, b"\x01" * A.RUN_ID_BYTES), ids_request(max_tokens=2)):
+        for request in (with_release(ids_request(), 2, b"\x01" * RUN_ID_BYTES), ids_request(max_tokens=2)):
             reader, writer = await asyncio.open_connection(host, port)
             writer.write(request)
             await writer.drain()
@@ -166,7 +167,7 @@ def test_serve_prints_where_it_listens_and_answers_over_loopback(capsys):
 #: arriving together, one while they decode, two out of their ingress order, a Commit window cut at --window-steps
 #: with requests running (carried into the next) and one closed at idle, then one on an idle engine
 PLAN = [([0, 1], 3), ([2], 30), ([4, 3], 5), ([5], None), ([6], None)]
-RUN = b"\x5a" * A.RUN_ID_BYTES
+RUN = b"\x5a" * RUN_ID_BYTES
 
 
 def _served_with_records(out: Path, window_steps: int) -> tuple[dict[int, bytes], S.Endpoint]:

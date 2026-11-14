@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import HEADER
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
 from verity.commitments.windows import rows as SR
 

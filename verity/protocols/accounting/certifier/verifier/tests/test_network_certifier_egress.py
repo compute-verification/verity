@@ -15,7 +15,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.accounting.certifier.prover import egress as EG
 from verity.protocols.accounting.certifier.verifier import head_check as HC, io_tie as IT, warden as W, warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import DATA, PAD
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 
 #: the network certifier's schedule the tests serve: T = 6 buckets of 4 lanes of r = 2 slots, D = 2

@@ -200,7 +200,7 @@ from verity.commitments.crypto import lms  # noqa: E402
 from verity.protocols.accounting.certifier.prover import egress as EG, ingress_scan as IS  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden as W  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import DATA  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402

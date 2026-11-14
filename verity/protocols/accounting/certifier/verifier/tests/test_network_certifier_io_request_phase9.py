@@ -23,7 +23,7 @@ import pytest
 
 from verity.protocols.accounting.certifier.verifier import io_request as Q
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 
 B = 512

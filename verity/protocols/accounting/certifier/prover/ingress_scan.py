@@ -144,7 +144,8 @@ from verity.protocols.accounting.certifier.prover import egress as EG
 from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.prover import io_ids as II
 from verity.protocols.accounting.certifier.verifier import io_request as Q
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, ID_DIGITS, ID_FIELD_BYTES, PAD
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
+from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES
 from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams
 
 BIT, BYTE = HC.BIT, HC.BYTE

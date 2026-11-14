@@ -220,19 +220,23 @@ def custody(gates: Path) -> dict:
 # --- certificates -----------------------------------------------------------------------------------------------------
 
 def certs(run: Path, client: Path, deployed: bool = False) -> dict:
+    import active_replay as ar
     from benchmarks.network_traces import certifier_serve as cs
+    from verity.protocols.accounting.certifier.verifier.certificate import Direction
+    from verity.protocols.accounting.certifier.verifier.schedule import ClockSync
+    from verity.protocols.accounting.certifier.verifier.service import LinkWindows
     from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
     from verity.commitments.crypto import lms
     from verity.protocols.accounting.certifier.verifier import lean_audit
 
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json",
                                                                     "deployment.json"))
-    setup, key = cs.ar.Setup(report), RF.read_public(dep["certifier_key"])
+    setup, key = ar.Setup(report), RF.read_public(dep["certifier_key"])
     session, windows = bytes.fromhex(dep["session"]), plan["windows"]
     profile = plan.get("occupancy") or {}
-    lw = cs.LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, key, dep["run_id"], session,
-                        ingress=setup.ingress_params, proof_deadline=RC.PROOF_DEADLINE_S,
-                        occupancy=(profile.get("egress"), profile.get("ingress")), served=cs.served_profile(plan))
+    lw = LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, key, dep["run_id"], session,
+                     ingress=setup.ingress_params, proof_deadline=RC.PROOF_DEADLINE_S,
+                     occupancy=(profile.get("egress"), profile.get("ingress")), served=cs.served_profile(plan))
     kept, kept_clocks = client / "certificates.jsonl", client / "clocks.jsonl"
     records = next((d / "certified.jsonl" for d in (run, client) if (d / "certified.jsonl").is_file()), None)
     clocks_file = run / "clocks.jsonl"
@@ -260,10 +264,10 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
         "clocks_are_the_clients": sorted(public(c.certificate) for c in clocks) == sorted(held["clocks"])}
     syncs, opened = lean_audit.signed_clocks(key, session, lw.link, clocks)
     signed, disagree = list(syncs), lean_audit.DISAGREEMENT in opened
-    declared = [cs.ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
+    declared = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     rows = []
     for w in range(windows):
-        pair = certified.get((cs.Direction.EGRESS, w)), certified.get((cs.Direction.INGRESS, w))
+        pair = certified.get((Direction.EGRESS, w)), certified.get((Direction.INGRESS, w))
         if None in pair:
             rows.append({"window": w, "certified": False, "why": "no certified record"})
         elif w >= len(signed):

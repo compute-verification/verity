@@ -124,14 +124,14 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
+from runner_cli import _address, _announce  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 import negatives as N  # noqa: E402
 from benchmarks.network_traces import warden_serve as ws  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import io_tie as IT  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import release as REL  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import DATA, PAD  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import END, FAIL, WardenParams, read_cell  # noqa: E402
 
@@ -330,7 +330,7 @@ async def deviate(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, *,
 
 
 async def serve(listen: tuple[str, int], *, front: tuple[str, int], cls: str, payload: int, bit: Callable[[], int],
-                hold_s: float, log: Callable[[dict], None], announce=cs._announce) -> None:
+                hold_s: float, log: Callable[[dict], None], announce=_announce) -> None:
     """The deviating process: `deviate` on every connection to `listen`, until SIGTERM or SIGINT."""
     server = await asyncio.start_server(
         lambda r, w: deviate(r, w, front=front, cls=cls, payload=payload, bit=bit, hold_s=hold_s, log=log), *listen)
@@ -873,7 +873,7 @@ def parser() -> argparse.ArgumentParser:
                         "--window 60 --lanes 64)")
     r.add_argument("--class", dest="cls", choices=CLASSES, required=True)
     r.add_argument("--payload", type=int, required=True, help="an id event's bytes, the network certifier's B - 9")
-    r.add_argument("--listen", type=cs._address, default=("127.0.0.1", 0), help="HOST:PORT (port 0: any)")
+    r.add_argument("--listen", type=_address, default=("127.0.0.1", 0), help="HOST:PORT (port 0: any)")
     r.add_argument("--log", type=Path, help="one JSON line an id request, when its connection ends")
     return ap
 

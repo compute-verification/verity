@@ -82,6 +82,8 @@ sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
+import active_replay as ar  # noqa: E402
+from certifier_key import signer  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
 import leak_scan as LS  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import head_check as HC  # noqa: E402
@@ -132,7 +134,7 @@ def _record_lean_runs(PF) -> None:
 def link(run: Path) -> tuple[LinkWindows, dict]:
     """The run's link and its plan, as `certifier_serve.check` builds them."""
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json", "deployment.json"))
-    setup = cs.ar.Setup(report)
+    setup = ar.Setup(report)
     profile = plan.get("occupancy") or {}
     lw = LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, RF.read_public(dep["certifier_key"]),
                      dep["run_id"], bytes.fromhex(dep["session"]), ingress=setup.ingress_params,
@@ -296,11 +298,11 @@ async def _endpoint(reader, writer):
 
 def _virtual_run(run: Path, plan: dict, report: dict, url: str, upstream: tuple, certifier, challenger, session: bytes,
                  strategy: str) -> None:
-    setup = cs.ar.Setup(report)
+    setup = ar.Setup(report)
     run.mkdir(parents=True)
     (run / "plan.json").write_text(json.dumps(plan))
     (run / "calibration.json").write_text(json.dumps(report))
-    shim = plan if strategy == "honest" else cs.ar.adversary_plan(plan, setup, strategy)
+    shim = plan if strategy == "honest" else ar.adversary_plan(plan, setup, strategy)
 
     async def after(proxies, clock):
         record = cs.deployment(proxies[0], setup, plan["windows"], session=session, n2_link=cs.N2_LINK,
@@ -308,8 +310,8 @@ def _virtual_run(run: Path, plan: dict, report: dict, url: str, upstream: tuple,
         (run / "deployment.json").write_text(json.dumps(record, indent=1))
 
     publish = cs.CertifyingPublisher(run, setup, Issuer(certifier, session), cs.N2_LINK, threaded=False)
-    cs.ar.run_virtual(shim, report, run, upstream, salt=True, publish=publish, after=after,
-                      proxy_args={"challenger_key": challenger.public_key(), "signer": certifier})
+    ar.run_virtual(shim, report, run, upstream, salt=True, publish=publish, after=after,
+                   proxy_args={"challenger_key": challenger.public_key(), "signer": certifier})
 
 
 def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest", "extra", "late"),
@@ -317,7 +319,7 @@ def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest"
     """certifier-serve's run on an injected clock against `_endpoint`, one per strategy under `out`, with fresh LMS keys
     of `height` in a scratch directory that is removed. Returns the plan."""
     keys = Path(tempfile.mkdtemp(prefix="n2-zk-keys-"))
-    challenger = cs.signer(keys / "challenger", height)
+    challenger = signer(keys / "challenger", height)
     session = secrets.token_bytes(32)
 
     async def go():
@@ -327,7 +329,7 @@ def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest"
         probed = await asyncio.to_thread(cs.probe, url, cs.request_body("stub", tokens), 2, clock=lambda: 0.0)
         report, plan = cs.served_plan(probed, requests)
         for strategy in strategies:
-            certifier = cs.signer(keys / strategy, height)
+            certifier = signer(keys / strategy, height)
             try:
                 await asyncio.to_thread(_virtual_run, out / strategy, plan, report, url, upstream, certifier, challenger,
                                         session, strategy)
