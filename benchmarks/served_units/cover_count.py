@@ -47,9 +47,9 @@ def fetch(art: str, into: Path) -> Path:
     """The record an `art:` id names, fetched into ``into``."""
     research = shutil.which("research")
     cmd = [research] if research else ["uv", "run", "-q", "--project", str(ROOT / "tools" / "research"), "research"]
-    done = subprocess.run([*cmd, "data", "fetch", art, "--to", str(into)])
+    done = subprocess.run([*cmd, "data", "fetch", art, "--to", str(into)], capture_output=True, text=True)
     if done.returncode != 0:
-        raise RecordError(f"research data fetch {art} exited {done.returncode}")
+        raise RecordError(f"research data fetch {art} exited {done.returncode}: {done.stderr.strip()[-2000:]}")
     found = sorted(into.rglob("cover.json"))
     if len(found) != 1:
         raise RecordError(f"{art} holds {len(found)} cover.json files, not one")

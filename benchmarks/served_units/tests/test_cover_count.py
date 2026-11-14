@@ -178,9 +178,16 @@ def test_an_art_id_is_fetched_with_research_data_fetch(cc, monkeypatch, capsys):
 
     class Done:
         returncode = 0
+        stderr = ""
 
-    def fake_run(argv):
+    class Failed:
+        returncode = 1
+        stderr = "no such artifact"
+
+    def fake_run(argv, **kw):
         calls.append(argv)
+        if "art:" + "cd" * 32 in argv:
+            return Failed()
         to = argv[argv.index("--to") + 1]
         (cc.Path(to) / "cover.json").write_text(json.dumps(RECORD))
         return Done()
@@ -190,4 +197,7 @@ def test_an_art_id_is_fetched_with_research_data_fetch(cc, monkeypatch, capsys):
     assert cc.main(["art:" + "ab" * 32]) == 0
     assert len(calls) == 1 and len(calls[0]) == 6
     assert calls[0][:5] == ["/bin/research", "data", "fetch", "art:" + "ab" * 32, "--to"]
-    assert capsys.readouterr().out.splitlines()[-1].startswith("3 of 6 block types")
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].startswith("record: ") and out[-1].startswith("3 of 6 block types")
+    assert cc.main(["art:" + "cd" * 32]) == 2
+    assert "exited 1: no such artifact" in capsys.readouterr().err
