@@ -157,6 +157,10 @@ OUT_OF_ORDER = "keys: out of order"
 OVERLAP = "their stretches overlap"
 TWICE = "keys: one session listed twice"
 TWO_KEYS = "keys: two keys with one key identifier"
+#: What the check says of the same two of any parameters, before the starts (`entriesOrderRefusal`,
+#: `entriesKeyRefusal`): entries whose starts do not strictly increase, and two keys with one key identifier
+ENTRIES_OUT_OF_ORDER = "entries: out of order"
+ENTRIES_ONE_ID = "entries: two keys with one key identifier"
 BEFORE = "is before the first listed entry's stretch"
 NO_ENTRY = "keys: an entry is not an object"
 KEY_NOT_KEYS = 'key: write "keys"'
@@ -979,9 +983,28 @@ def _start_check(p: Params, starts: list[CertifiedStart], i: int, e: Entry, x: C
     return None
 
 
+def _entries_refusal(p: Params) -> str | None:
+    """`entriesOrderRefusal`, then `entriesKeyRefusal`: the first entry whose start is not after the one listed before
+    it, else the first two listed entries with one key identifier and different keys. The decoder refuses both
+    (`_listed`); the check refuses them of any parameters."""
+    for i, (x, y) in enumerate(zip(p.entries, p.entries[1:])):
+        if y.start <= x.start:
+            return (f"{ENTRIES_OUT_OF_ORDER}: entry {i + 1} starts at {y.start}, not after entry {i}'s {x.start}: list "
+                    f"the entries by their stretches' starts, no two at one")
+    for i, a in enumerate(p.entries):
+        for j, b in enumerate(p.entries[i + 1:], start=i + 1):
+            if a.key.key_id == b.key.key_id and a.key.public != b.key.public:
+                return (f"{ENTRIES_ONE_ID} (a key's first 16 bytes), entries {i} and {j}: an identifier names one "
+                        f"key")
+    return None
+
+
 def _start_checks(p: Params, starts: list[CertifiedStart]) -> list[Finding]:
-    """`startChecks`: the listed entries' starts' findings: each entry's (`_start_check`), or the one finding that the
-    evidence does not show a start for each."""
+    """`startChecks`: the listed entries' starts' findings: the one finding that the entries are out of order or that
+    two have one key identifier and different keys (`_entries_refusal`), else the one finding that the evidence does
+    not show a start for each, else each entry's (`_start_check`)."""
+    if (why := _entries_refusal(p)) is not None:
+        return [Finding(REJECT, why)]
     if len(starts) != len(p.entries):
         return [Finding(REJECT, f"starts: {len(starts)} shown for {len(p.entries)} {STARTS_COUNT}")]
     return [f for i, (e, x) in enumerate(zip(p.entries, starts)) if (f := _start_check(p, starts, i, e, x))]
