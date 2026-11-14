@@ -4439,6 +4439,11 @@
         "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Draw.lean": "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Sample.lean",
         "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/FullDraw.lean": "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/FullSample.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/device/tests/test_two_stage_driver.py": "adapters/vllm/tests/pipeline/test_two_stage_driver.py"
+      }
     }
   ]
 }
