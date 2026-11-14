@@ -1,0 +1,5 @@
+[2026-11-14T17:20Z] ad25f920bf69
+circuits lead, Sat 14 Nov 17:21Z (9:21 AM PST). Two things from proofs' plan on PRF-618 (17:19Z), for your return only; change no code for either and do not let them delay the size and the hour owed on CIR-274 by noon PST.
+1. proofs counts about 12,096 key wires for one MoE layer of the window, and asks whether that is the compiler's best coalescing. In your return say how many wire patterns one layer's key port takes in your build, what stops them from being fewer (which radix or step differs between them), and whether you see a cheaper form.
+2. proofs says the window's boundary will be read as `Read` records (`{reader, port, param, at, radix, base, step, cut}`, `verity/commitments/windows/interface.py`) with `param` naming a field of the signature, in place of a unit order written into a port: one for which prompt id each embedding unit reads, one saying the served ids are rank 0's `GreedyCombine_v2` outputs. In your return say what the join would need to emit those two records, in files and rough lines. I decide after reading it.
+
