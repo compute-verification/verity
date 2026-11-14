@@ -31,7 +31,7 @@ from verity_vllm.target_family import declared_profile
 from .build import BuildResult, Unexpressible, build_program
 from .phi import Phi
 
-__all__ = ["phi_of", "request_component"]
+__all__ = ["request_component"]
 
 # ------------------------------------------------------------------------------------------------------------------- φ of a row
 
