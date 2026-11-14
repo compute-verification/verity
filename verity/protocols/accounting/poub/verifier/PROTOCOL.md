@@ -403,7 +403,7 @@ first-parent line is refused.
 
 The verifier releases \(\text{chal}_0\) at the session's start (`AuditRun.start`). At window \(t\)'s end it sends the
 boundary message, which is \(\text{chal}_{t+1}\), or the close after the last window (`AuditRun.boundary`). Each is
-one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`Prover.run`). Pass \(i\) of
+one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`audit_prover.Prover.run`). Pass \(i\) of
 window \(t\) (`receipts.py`):
 
 ~~~text
@@ -471,7 +471,7 @@ verifier → prover   {"type": "appended", "first": j, "coin": hex(c_a)}      c_
 So each block's index, and with \(d_j\) and \(c_a\) its bound key and its encoding (§3), is fixed before any pass whose
 plan holds it: a plan received before the append that commits one of its blocks rejects with `plan`. Only then does
 the prover encode the append's blocks, each under its bound key \(b_j(c_a)\), keeping \(d_j\) beside it
-(`Store.append` commits, `Store.encode` encodes under the coin). The timing follows the free convention (§8, "The
+(`audit_prover.Store.append` commits, `audit_prover.Store.encode` encodes under the coin). The timing follows the free convention (§8, "The
 pass and its step"), with residency deferred to the encode, so the coin's round trip is off serving's critical path.
 A block completed at step \(s\) is appended once it is complete, and stays plaintext in its slot, which serving reads
 in the clear, until its coin arrives and the device encodes it in place. Its write is recorded at the step before the
@@ -510,7 +510,7 @@ sketches of other blocks (64 bytes a block at 16 rows, 64 blocks a page), and th
 page's bytes without reading them, a red-team finding whose
 test is `test_append_order.py`. A page that relayed any receipt of a pass whose seed binds it would be a fixed point
 of SHA-512. The prover therefore sends a pass's appends before its root and computes the seed after they're sent
-(`Store.head`, `Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
+(`audit_prover.Store.head`, `audit_prover.Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
 fails every receipt of the pass. While a session has no appends the seeds are unchanged, so the GPU passes, which
 append nothing, derive them as before.
 
@@ -857,7 +857,7 @@ It would also void the horizon reading (§10), whose proof takes each window's s
 prover did in that window, unless that is re-proved for a grinding prover. The coin costs one message a window, sent
 after the roots, which the verifier is waiting for anyway. So the protocol keeps it.
 
-The prover opens each sample (`Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
+The prover opens each sample (`audit_prover.Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
 leaf's receipts \(v_c\) with the leaf's salt and path to \(\text{root}_{(t,i)}\), the payload's salt and path to the
 payload root (to its append's root, for a block appended after the seed, which also carries its payload's digest
 \(d_j\)), and under a registration that binds \(z\), PoUW's evidence for \(z_{(i,j)}\). Openings aren't timed,
@@ -1629,7 +1629,7 @@ y_g        SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ σ_
            one compression after the pass's 128-byte prefix, whose midstate every unit shares
 ~~~
 
-The host commits the \(y_g\) in plan order as §4's tree (`p2.Prover.commit`). The partial is a function of the bytes
+The host commits the \(y_g\) in plan order as §4's tree (`p2_prover.Prover.commit`). The partial is a function of the bytes
 the decode read, so the receipt binds the read the decode made; computing it from the decoded `W`, or from a second
 read, is another protocol. Per block it is \(16 \times 2056\) sign-and-add steps beside the decode's two 16,448-bit
 squarings. The fixture kernels build against comes from the serving loop over the toy `C*` (`serve.py fixture`,
