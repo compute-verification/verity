@@ -46,15 +46,14 @@ def test_each_kind_names_its_goal_and_its_fix():
     assert leads["ci"] == {"open": 2, "off_track": 0, "findings": []}
     assert (leads["lean"]["open"], leads["lean"]["off_track"]) == (3, 1)
     assert kinds(leads["lean"]) == [("overdue", "lean/audit"), ("unplaced", "lean/audit"), ("order", "lean/first"),
-                                    ("order", "lean/first"), ("title", "lean/audit"), ("no-step", None)]
+                                    ("order", "lean/first"), ("title", "lean/audit")]
     text = {(f["kind"], f["text"].split("`")[3] if f["kind"] == "order" else None): f["text"] for f in leads["lean"]["findings"]}
     assert "was due Tue 10 Nov, 6:00 PM" in text["overdue", None] and "research goals done lean/audit" in text["overdue", None]
     assert "research goals set PROJECT --wait goal:lean/audit" in text["unplaced", None] and "--tier 1" in text["unplaced", None]
     assert "(due Thu 12 Nov, end of day) waits on `lean/later` (due Sat 14 Nov, end of day)" in text["order", "lean/later"]
     assert "waits on `lean/gone`, which the page doesn't hold" in text["order", "lean/gone"]
     assert "has 12 words" in text["title", None] and "--title T" in text["title", None]
-    assert "due in the next 12 hours" in text["no-step", None] and "--wait goal:STEP" in text["no-step", None]
-    assert goals_audit.tally(leads) == {"overdue": 1, "unplaced": 1, "order": 2, "title": 1, "no-step": 1}
+    assert goals_audit.tally(leads) == {"overdue": 1, "unplaced": 1, "order": 2, "title": 1}
 
 
 def test_a_day_is_due_at_its_end_in_pacific_time_and_a_set_tier_or_a_link_places_a_goal():
@@ -62,7 +61,7 @@ def test_a_day_is_due_at_its_end_in_pacific_time_and_a_set_tier_or_a_link_places
             goal("a/project", "a", "2026-11-13", waitingOn=[{"goal": "a/piece"}])]
     assert goals_audit.findings(page, datetime.fromisoformat("2026-11-10T23:00-08:00"))["a"]["findings"] == []
     late = goals_audit.findings(page, datetime.fromisoformat("2026-11-11T00:30-08:00"))["a"]
-    assert kinds(late) == [("overdue", "a/day"), ("no-step", None)]
+    assert kinds(late) == [("overdue", "a/day")]
 
 
 def test_an_off_track_goal_a_day_old_and_a_goal_not_written_in_its_last_day_are_named_unless_parked():
@@ -99,7 +98,7 @@ def test_the_command_prints_each_lead_and_exits_1_when_anything_is_found(capsys)
     out = capsys.readouterr().out.splitlines()
     assert out[0] == "ci: 2 open, 0 off track: nothing found" and out[1] == "lean: 3 open, 1 off track"
     assert out[2].startswith("  overdue   `lean/audit` was due")
-    assert out[-1] == "research goals audit: 6 finding(s) on 1 of 2 lead(s): overdue 1, unplaced 1, order 2, title 1, no-step 1"
+    assert out[-1] == "research goals audit: 5 finding(s) on 1 of 2 lead(s): overdue 1, unplaced 1, order 2, title 1"
     assert goals.main(["audit", "--now", NOW, "--owner", "ci"], Page()) == 0
     assert capsys.readouterr().out.splitlines() == ["ci: 2 open, 0 off track: nothing found",
                                                     "research goals audit: 0 finding(s) on 0 of 1 lead(s)"]

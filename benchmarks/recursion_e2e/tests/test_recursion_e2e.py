@@ -424,8 +424,8 @@ RETRIED = "a forced retry of L0 (RETRY=L0): part 0: 2 sessions opened in the run
 
 @pytest.mark.parametrize("left", [
     {"composed": True, "accepted": False, "why": RETRIED},
-    'lean compose (RETRY=L0, part 0: refused as retried, a negative control): REC-COMPOSE {"accepted": false, "why": '
-    '"part 0: 2 sessions opened in the run record: a part is never retried", "parts": 3}',
+    ('lean compose (RETRY=L0, part 0: refused as retried, a negative control): REC-COMPOSE {"accepted": false, "why": '
+     '"part 0: 2 sessions opened in the run record: a part is never retried", "parts": 3}'),
 ], ids=["the step's record", "a step log from before the record"])
 def test_a_forced_retry_is_not_accepted_and_the_table_names_the_retry(tmp_path: Path, left) -> None:
     """85's RETRY proves a part again on purpose and Lean refuses the composition for it: the lean step exits 0 and the
@@ -478,11 +478,11 @@ def test_a_record_lean_gave_no_answer_in_is_no_accepted_run(tmp_path: Path) -> N
 @pytest.mark.parametrize("line, composed, accepted", [
     ('lean compose: REC-COMPOSE {"accepted": true, "why": "", "parts": 3}', True, True),
     ('lean compose: REC-COMPOSE {"accepted": false, "why": "part 1: x", "parts": 3}  <- FAILS', True, False),
-    ('lean compose (RETRY=L0, part 0: refused as retried, a negative control): REC-COMPOSE {"accepted": false, "why": '
-     '"part 0: 2 sessions opened in the run record: a part is never retried", "parts": 3}', True, False),
+    (('lean compose (RETRY=L0, part 0: refused as retried, a negative control): REC-COMPOSE {"accepted": false, "why": '
+      '"part 0: 2 sessions opened in the run record: a part is never retried", "parts": 3}'), True, False),
     ("lean compose: 1 of V*'s 3 parts run, so the recursive statement is not composed", False, None),
-    ("lean compose: no interactive-run record (rec-run.json), so the recursive statement is not composed: its parts are "
-     "not shown to be one run (C10 OneRun)", False, None),
+    (("lean compose: no interactive-run record (rec-run.json), so the recursive statement is not composed: its parts are "
+      "not shown to be one run (C10 OneRun)"), False, None),
     ("lean compose: exit 2: 'usage'  <- FAILS", True, None),
     ('lean compose forged-top-L0: REC-COMPOSE {"accepted": false, "why": "x", "parts": 3}', None, None),
 ])
