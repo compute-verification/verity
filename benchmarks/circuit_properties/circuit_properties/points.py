@@ -20,22 +20,25 @@ An operand that is specific and not distinct (`by_words`) is tested at a second 
 which breaks `work`'s `P_BATCH` (past each row's first position, no two positions of the batch hold equal words), so
 a specific operand's rows may be equal there for an honest circuit. The second point's inputs are drawn word by word
 from SHA-512 of the Program's digest under its own label. `θ`'s and a registered input's words are drawn as at the
-first point. An input's float is drawn as `θ`'s are but positive, so a state the step carries in (a learning rate, a
-moment) is as small as a weight: about 1, one update moves training_slowdown's weights so far that its attention's
-softmax is one-hot, and rows that differ by their tokens come out equal.
-An input's word of a width no float has is a token a gather can look up (`tokens`): each lane a permutation of the
-least table's rows (`Walk.table_rows`), repeated, so that no two of that many positions running pick one row of any
-table. The second point meets `P_BATCH` by that construction wherever a batch holds no more positions than that
-table has rows, so it shows a specific operand's rows are not equal by an identity of the circuit (O1 plus -1 times
-O1 is 0 for every input). That the served data meets `P_BATCH` stays the premise it is today. A NaN and a scan's
-unevaluated outputs are refused there as at the first point.
+first point. An input whose words reach a lookup's token (`Walk.token_inputs`) is found by that use, since a type has
+a width only (a 32-bit token is an f32 by its type), and drawn as tokens (`tokens`) at any width: each lane a
+permutation of the least table's rows (`Walk.table_rows`), repeated, so that no two of that many positions running
+pick one row of any table. Every other input's word is drawn as `θ`'s are but positive, so a state the step carries in
+(a learning rate, a moment) is as small as a weight: about 1, one update moves training_slowdown's weights so far that
+its attention's softmax is one-hot, and rows that differ by their tokens come out equal. The second point meets
+`P_BATCH` by that construction wherever a batch holds no more positions than that table has rows, so it shows a
+specific operand's rows are not equal by an identity of the circuit (O1 plus -1 times O1 is 0 for every input). There
+a specific operand's rows are compared across every activation whose other operand's words are the same at that
+point, so a row repeated a member against one shared operand is refused; at the first point every member is equal,
+so rows are compared within one activation. That the served data meets `P_BATCH` stays the premise it is today. A
+NaN and a scan's unevaluated outputs are refused there as at the first point.
 
 Rows are equal only where they agree at `points` points, enough to hold 64 sampled bits a row: P = ceil(64 / (K b)),
 b the bits its words hold at the point (`held`), at most those of the narrowest `θ` or registered input and of the
 narrowest rounding the Program holds, so a narrow row (an e2m1 word after a rounding, a one-word row) is not refused
-by chance. Rows are compared by their words, never by a difference (inf - inf is a NaN), with an f32 row's two zeros
-one word (-0 read as +0), so a row holding an inf is a row (two words of one value hold the same inf there) and an
-f32 row of zeros is one row whatever their signs. A row holding an f32 NaN is refused: no comparison shows it
+by chance. Rows are compared by their words, never by a difference (inf - inf is a NaN), with a row's two zeros one
+word at every width (-0 read as +0), so a row holding an inf is a row (two words of one value hold the same inf there)
+and a row of zeros is one row whatever their signs. A row holding an f32 NaN is refused: no comparison shows it
 distinct, and whoever submits the circuit can make a NaN at the point. `CENTRE` is where the point makes no inf or NaN
 from finite operands in training_slowdown's step, nor a binade either side; a -inf the Program states as a value (a
 causal mask's) is not the point's doing, and stays at every centre through the mask's add and the softmax's subtraction
@@ -91,20 +94,16 @@ CENTRE = -3
 #: the bits a word of each rounding's format holds at the point: its sign, its mantissa and two of its exponent
 ROUNDED = {"F32ToBf16Rn": 10, "F32ToF16Rn": 13, "F32ToE4m3Sat": 6, "F32ToE2m1Sat": 4}
 F32_NAN, F32_NAN_PTX = 0x7FC00000, 0x7FFFFFFF
-#: the widths the point samples as floats (f32, bf16, e4m3): exponent bits, mantissa bits, the least binade's exponent
+#: the widths the point samples as floats (f32, bf16, e4m3): exponent bits, mantissa bits, the least binade's exponent;
+#: rows at these widths are compared with -0 read as +0
 FLOAT_WIDTHS = {32: (8, 23, 125), 16: (8, 7, 125), 8: (4, 3, 6)}
-#: f32's -0, compared as +0: a row of zeros is one value whatever their signs
-F32_NEG_ZERO = 0x80000000
 
 
-def tokens(rng: np.random.Generator, shape, rows: int | None) -> np.ndarray:
-    """Words of a width no float has at the word-by-word point, ``shape`` (lanes, leaves): tokens a gather can look up,
-    each lane a permutation of the ``rows`` its least table holds (`Walk.table_rows`), repeated, so any ``rows``
-    positions running pick distinct rows of every table; with no table, distinct nonzero words below 2^31, which a
-    narrowing to i32 keeps."""
+def tokens(rng: np.random.Generator, shape, rows: int) -> np.ndarray:
+    """A token input's words at the word-by-word point, ``shape`` (lanes, leaves), at any width: each lane a
+    permutation of the ``rows`` its least table holds (`Walk.table_rows`), repeated, so any ``rows`` positions running
+    pick distinct rows of every table."""
     lanes, n = shape
-    if rows is None:
-        return np.stack([rng.choice((1 << 31) - 1, n, replace=False) + 1 for _ in range(lanes)]).astype(np.uint64)
     return np.stack([rng.permutation(rows)[np.arange(n) % rows] for _ in range(lanes)]).astype(np.uint64)
 
 
@@ -272,7 +271,8 @@ def by_words(st) -> bool:
 
 def claims(R, root, reasons) -> dict:
     """The charged products' operands whose rows the reading shows distinct (`claimed`), by summary and node:
-    (argument, its parameter's name, K, whether it is tested at the word-by-word point (`by_words`))."""
+    (argument, its parameter's name, K, whether it is tested at the word-by-word point (`by_words`), the other
+    operand's argument)."""
     out: dict = {}
     order = sorted(R.memo.values(), key=lambda s: -s.sid)
     count = {root.sid: 1}
@@ -286,10 +286,10 @@ def claims(R, root, reasons) -> dict:
                 continue
             nd = bodies[s.sid].body.nodes[site.node]
             names = [n for n, _t in nd.fn.signature()[0]]
-            for st, name in ((site.x, site.product.x), (site.w, site.product.w)):
+            for st, name, other in ((site.x, site.product.x, site.product.w), (site.w, site.product.w, site.product.x)):
                 if claimed(st):
                     out.setdefault(s.sid, {}).setdefault(site.node, []).append(
-                        (names.index(name), name, site.k_dim, by_words(st)))
+                        (names.index(name), name, site.k_dim, by_words(st), names.index(other)))
     return out
 
 
@@ -320,7 +320,7 @@ def check(program, R, root, reasons) -> Tally:
     digest = program_digest(program)
     fns = _bodies(root, R)
     key = (digest, frozenset((fns[sid].id, node, i, K, wb) for sid, nodes in cl.items() for node, cs in nodes.items()
-                             for i, _n, K, wb in cs))
+                             for i, _n, K, wb, _o in cs))
     hit = _MEMO.get(key)
     if hit is None:
         try:
@@ -345,8 +345,8 @@ class Walk:
                  if is_input(nd.fn) and (is_registered(nd.fn) or k in theta)), default=64)
         b = min([b, *(ROUNDED[n] for n in _roundings(program.root))])
         self.P = max(points(K, min(b, held(_operand_width(self.fns[sid].body.nodes[node], i))))
-                     for sid, nodes in cl.items() for node, cs in nodes.items() for i, _n, K, _wb in cs)
-        self.words = any(wb for nodes in cl.values() for cs in nodes.values() for *_c, wb in cs)
+                     for sid, nodes in cl.items() for node, cs in nodes.items() for i, _n, K, _wb, _o in cs)
+        self.words = any(wb for nodes in cl.values() for cs in nodes.values() for _i, _n, _K, wb, _o in cs)
         self.lanes = 2 * self.P if self.words else self.P
         self.tally.points, self.tally.word_points = self.P, self.P if self.words else 0
         self.last: dict = {}
@@ -354,12 +354,13 @@ class Walk:
     def inputs(self) -> dict:
         """The point: each input node's words at each lane, (lanes, leaves), by ("n", node). The first `P` lanes are
         the one-word point; where a claim is tested by words (`by_words`), `P` more are the word-by-word point, drawn
-        from its own seed: `θ`'s and a registered input's words as at the first, an input's float as `θ`'s are but
-        positive, and an input's word of a width no float has a token (`tokens`)."""
+        from its own seed: `θ`'s and a registered input's words as at the first, a token input's (`token_inputs`) as
+        tokens (`tokens`) at any width, and every other input's as `θ`'s are but positive."""
         env: dict = {}
         rng = np.random.default_rng(self.seed)
         word_rng = np.random.default_rng(self.word_seed) if self.words else None
         theta = set(self.program.root.theta)
+        toks = self.token_inputs() if self.words else set()
         for k, nd in enumerate(self.program.root.body.nodes):
             if is_input(nd.fn):
                 w, shape = _leaf_width(nd), (self.P, nd.out.leaves)
@@ -369,10 +370,36 @@ class Walk:
                 else:
                     v = np.repeat(sample(rng, w, (self.P, 1), positive=True), nd.out.leaves, axis=1)
                     extra = None if word_rng is None else (
-                        sample(word_rng, w, shape, positive=True, centre=CENTRE) if w in FLOAT_WIDTHS
-                        else tokens(word_rng, shape, self.table_rows()))
+                        tokens(word_rng, shape, self.table_rows()) if k in toks
+                        else sample(word_rng, w, shape, positive=True, centre=CENTRE))
                 env["n", k] = v if extra is None else np.concatenate([v, extra])
         return env
+
+    def token_inputs(self) -> set:
+        """The root's input nodes whose words reach a lookup's token (`work.LOOKUPS`) through its calls, batches and
+        scans, found by use: a type has a width only, so a 32-bit token is an f32 by its type. A node whose output
+        reaches a token has every argument reach it."""
+        reach: dict = {}
+
+        def to_token(fn) -> set:
+            if fn.id not in reach:
+                reach[fn.id], out = set(), set()
+                for k in range(len(fn.body.nodes) - 1, -1, -1):
+                    nd, hit = fn.body.nodes[k], ("n", k) in out
+                    if isinstance(nd.fn, PrimitiveDefinition):
+                        lk = self.R.lookup(nd.fn)
+                        at = [hit or (lk is not None and n == lk.index) for n, _t in nd.fn.params]
+                    else:
+                        inner = to_token(nd.fn)
+                        at = [hit or ("p", j) in inner for j in range(len(nd.args))]
+                    for a, h in zip(nd.args, at, strict=True):
+                        if h:
+                            out |= _sources(a.refs)
+                reach[fn.id] = out
+            return reach[fn.id]
+
+        nodes = self.program.root.body.nodes
+        return {k for s, k in to_token(self.program.root) if s == "n" and is_input(nodes[k].fn)}
 
     def table_rows(self) -> int | None:
         """The fewest rows a lookup's table (`work.LOOKUPS`) holds in the Program, or None where it has no lookup."""
@@ -396,8 +423,8 @@ class Walk:
         self.scans: list[Unrun] = []
         self.body(self.program.root, self.root, [], {k: (v, None) for k, v in self.inputs().items()}, self.lanes)
         if self.tally.unrun:
-            sid, node, name, u = self.tally.unrun[0]
-            raise WK.RepeatedRows(self.fns[sid].id, node, name, None, scan=u)
+            sid, node, name, u, wb = self.tally.unrun[0]
+            raise WK.RepeatedRows(self.fns[sid].id, node, name, None, scan=u, by_words=wb)
         return self.tally
 
     # -- references --------------------------------------------------------------------------------------------------
@@ -470,8 +497,8 @@ class Walk:
                 env["n", k] = self.batch(f, nd, args, kids[k][0][0] if k in kids else None, L)
             else:
                 env["n", k] = self.scan(fn, k, nd, args, kids.get(k), L)
-            for i, name, K, wb in mine.get(k, ()):
-                self.rows(S, k, nd, i, name, K, args[i], L, wb)
+            for i, name, K, wb, o in mine.get(k, ()):
+                self.rows(S, k, nd, i, name, K, args[i], L, wb, args[o][0])
             for a in nd.args:
                 for s in _sources(a.refs):
                     if s[0] == "n" and last.get(s[1], -1) == k:
@@ -583,35 +610,46 @@ class Walk:
 
     # -- the check ---------------------------------------------------------------------------------------------------
 
-    def rows(self, S, k: int, nd, i: int, name: str, K: int, value, L: int, by_words: bool = False) -> None:
-        """Refuse where two rows of ``K`` words of argument ``i`` of product node ``k`` are equal at every point, in
-        one activation, or where a row holds an f32 NaN, which no comparison can show distinct: at the word-by-word
-        point's lanes where ``by_words``, else at the one-word point's."""
+    def rows(self, S, k: int, nd, i: int, name: str, K: int, value, L: int, by_words: bool = False,
+             other=None) -> None:
+        """Refuse where two rows of ``K`` words of argument ``i`` of product node ``k`` are equal at every point or
+        where a row holds an f32 NaN, which no comparison can show distinct. At the one-word point's lanes rows are
+        compared within one activation, whose members are equal there; where ``by_words``, at the word-by-word point's
+        lanes, across every activation whose ``other`` operand's words are the same there, so a row repeated a
+        member against one shared operand is refused."""
         words, gone = value
         if gone is not None and gone.any():
-            self.tally.unrun.append((S.sid, k, name, self.scans[int(gone[gone > 0][0]) - 1]))
+            self.tally.unrun.append((S.sid, k, name, self.scans[int(gone[gone > 0][0]) - 1], by_words))
             return
         self.tally.claims += 1
         W = words.shape[1]
-        if not K or W % K or W // K < 2:
+        P, A = self.P, L // self.lanes
+        if not K or W % K or (W // K) * (A if by_words else 1) < 2:
             return
-        P, A, R = self.P, L // self.lanes, W // K
+        R = W // K
         v = words.reshape(self.lanes, A, R, K)
         v = (v[P:] if by_words else v[:P]).transpose(1, 2, 0, 3).reshape(A * R, P * K)
-        if _operand_width(nd, i) == 32:
-            v = np.where(v == F32_NEG_ZERO, np.uint64(0), v)
+        w = _operand_width(nd, i)
+        if w in FLOAT_WIDTHS:
+            v = np.where(v == np.uint64(1 << (w - 1)), np.uint64(0), v)
+        if w == 32:
             bad = _nan(v).any(axis=1).reshape(A, R)
             if bad.any():
                 a = int(np.flatnonzero(bad.any(axis=1))[0])
                 raise WK.RepeatedRows(self.fns[S.sid].id, k, name, None, member=a if A > 1 else None,
-                                      nan=(int(bad[a].sum()), R))
-        keys = np.concatenate([np.repeat(np.arange(A, dtype=np.uint64), R)[:, None], v], axis=1)
+                                      nan=(int(bad[a].sum()), R), by_words=by_words)
+        member = np.arange(A, dtype=np.uint64)
+        if by_words and A > 1:
+            o = other.reshape(self.lanes, A, -1)[P:].transpose(1, 0, 2).reshape(A, -1)
+            member = np.unique(o, axis=0, return_inverse=True)[1].reshape(-1).astype(np.uint64)
+        keys = np.concatenate([np.repeat(member, R)[:, None], v], axis=1)
         _keys, inv, cnt = np.unique(keys, axis=0, return_inverse=True, return_counts=True)
         dup = np.flatnonzero(cnt > 1)
         if dup.size:
             r1, r2 = np.flatnonzero(inv.reshape(-1) == dup[0])[:2]
-            a, (q1, q2) = int(r1 // R), (int(r1 % R), int(r2 % R))
-            raise WK.RepeatedRows(self.fns[S.sid].id, k, name, (q1, q2), member=a if A > 1 else None)
+            (a1, a2), (q1, q2) = (int(r1 // R), int(r2 // R)), (int(r1 % R), int(r2 % R))
+            raise WK.RepeatedRows(self.fns[S.sid].id, k, name, (q1, q2), by_words=by_words,
+                                  member=None if A == 1 else a1 if a1 == a2 else (a1, a2))
 
 
 def _rows_of(fn) -> int | None:
