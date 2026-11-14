@@ -426,7 +426,8 @@ class Inputs:
     `params`, the registered parameters' leaves; `tables`, by name, each over its `param`: the entries of
     `registered.tables`, then the history tables (`histories_of`), each over a parameter of its own name, which is no
     registered parameter's; `reads`, the registered reads; `roots`, the table reads; `openings`, each with the `row`
-    it declares, if any, an output of its reader as its verdict is, by which nothing is filled; and `fill`, by
+    it declares, if any: the first of its reader's two outputs, the second its verdict, where the reader has six input
+    rows (a table read's shape), by which nothing is filled; and `fill`, by
     `(template, port)`, each filled `(unit, row)` with what fills it: `("wire", index)`, `("read", parameter)`,
     `("root", table, what it reads of it)`, `("opening", index)` or `("ingress",)`."""
 
@@ -502,7 +503,8 @@ class Inputs:
             port(o["reader"], o["key"])
             if o["table"] not in self.tables or o["verdict"] not in dict(by[o["reader"]].outs):
                 raise Malformed("inputs")
-            if "row" in o and o["row"] not in dict(by[o["reader"]].outs):
+            t = by[o["reader"]]
+            if "row" in o and not (len(t.rows) == 6 and [q for q, _ in t.outs] == [o["row"], o["verdict"]]):
                 raise Malformed("inputs")
             for p in o["ports"]:
                 k = port(o["reader"], p)[1]

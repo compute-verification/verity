@@ -36,6 +36,8 @@ from test_connection_rows_run import ANSWERS, CR, ENDS, PROMPTS, T, device_key, 
 from test_scan_zk import published, sz  # noqa: E402
 
 from benchmarks.network_traces import warden_chain as WC  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import blob_files as bf  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
 
 
 def _load(name: str):
@@ -88,7 +90,7 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
     assert not [r["value"] for r in regs if r["wiring"].encode() in out] and b"wiring" not in out
     assert b"commit_ms" not in out and b'"cost"' not in out
     assert all(r[k].encode() in out for r in regs for k in ("root", "domain"))
-    assert WC.WS.check(WC.witness(run))["summary"]["cell_rows"]["registered"] == len(regs)
+    assert WC.RC.check(WC.witness(run))["summary"]["cell_rows"]["registered"] == len(regs)
     certified = (run / "witness" / "certified.jsonl").read_text().splitlines()
     certificates = (run / "out" / "certificates.jsonl").read_text().splitlines()
     assert len(certified) == len(certificates) == 3 * sz.W63.windows
@@ -151,15 +153,15 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
                                                          "certificates"
     run = gate_run(tmp_path / "cell")
     path = run / "witness" / "responses.records"
-    blobs = WC.WS.ar.read_blobs(path)
-    rec = WC.WS.ar.unpack_record(blobs[0], sz.PARAMS.cell_bytes)
+    blobs = bf.read_blobs(path)
+    rec = RF.unpack_record(blobs[0], sz.PARAMS.cell_bytes)
     t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)
     grid = [list(row) for row in rec.grid]
     grid[t][j] = bytes([grid[t][j][0]]) + bytes(len(grid[t][j]) - 1)
     path.unlink()
-    for b in [WC.WS.ar.pack_record(type(rec)(rec.link, rec.window, tuple(map(tuple, grid)), rec.status)), *blobs[1:]]:
-        WC.WS.ar.write_blobs(path, b)
-    got, check = WC.certificates(run), WC.WS.check(run / "witness")
+    for b in [RF.pack_record(type(rec)(rec.link, rec.window, tuple(map(tuple, grid)), rec.status)), *blobs[1:]]:
+        bf.write_blobs(path, b)
+    got, check = WC.certificates(run), WC.RC.check(run / "witness")
     assert got["verdict"] == "refused" and got["rows"][0]["certified"] is False
     assert any("responses window 0 isn't certified" in p for p in check["problems"])
     assert got["warden_check"]["problems"] == len(check["problems"]) and f"{len(check['problems'])} problems" in got["why"]
@@ -177,7 +179,7 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
         "warden_chain.COUNTS is the gate's list of published counts: rule a key public in auditor.WARDEN_COUNTS "
         "first, then write it here")
     run = gate_run(tmp_path)
-    check = WC.WS.check(run / "witness")
+    check = WC.RC.check(run / "witness")
     got = WC.certificates(run)["warden_check"]
     assert set(got) <= {"accepted", "problems", *G.WARDEN_COUNTS} and set(got["cell_rows"]) <= set(G.CELL_ROWS)
     assert {"data_bytes", "completion_tokens", "prompt_tokens", "finish_reasons", "arrival_lag_ms", "clocks",
@@ -221,10 +223,15 @@ def test_a_runs_deployment_is_the_auditors_record_or_refused_naming_its_copy_and
 
 @pytest.fixture(scope="module")
 def certifier_run(tmp_path_factory):
-    """A certifier rehearsal's run (`n2_zk.virtual`: certifier-serve's records through its proxy)."""
-    out = tmp_path_factory.mktemp("certifier")
-    n2.virtual(out, requests=4, tokens=2, strategies=("honest",))
-    return out / "honest"
+    """A certifier rehearsal's run as a fetched one holds it: its plan and calibration, and a deployment.json naming the
+    certifier's key and links, which no active network certifier's does."""
+    run = tmp_path_factory.mktemp("certifier") / "honest"
+    run.mkdir()
+    docs = {"plan.json": {"windows": 2}, "calibration.json": {"grid": {}},
+            "deployment.json": {"certifier_key": "00", "links": {"n2": "served"}, "session": "00" * 32, "run_id": "r"}}
+    for name, doc in docs.items():
+        (run / name).write_text(json.dumps(doc))
+    return run
 
 
 def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path, certifier_run):
@@ -241,10 +248,6 @@ def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path,
     shutil.copyfile(certifier_run / "deployment.json", run / "witness" / "deployment.json")
     with pytest.raises(SystemExit, match=f"{proxy}.*its deployment.json isn't a warden's"):
         WC.certificates(run)
-    run = gate_run(tmp_path / "extra")
-    with pytest.raises(SystemExit, match="--extra and --late are certifier-serve's runs"):
-        n2.main(["prove", "--warden-run", str(run), "--extra", str(certifier_run), "--dry", "--out",
-                 str(tmp_path / "n2x")])
 
 
 def test_the_gate_publishes_the_word_that_an_execution_phase_has_no_head_and_a_reader_checks_it(tmp_path):
@@ -266,7 +269,7 @@ def test_the_gate_publishes_the_word_that_an_execution_phase_has_no_head_and_a_r
         c = public["certificate"]
         assert sorted(public) == ["certificate"]
         assert sorted(c) == ["digest", "direction", "key_id", "link", "signature", "window"]
-        assert (c["link"], c["direction"], c["window"]) == (WC.WS.LINK, G.ROWS_DIRECTION, w)
+        assert (c["link"], c["direction"], c["window"]) == (WC.RC.LINK, G.ROWS_DIRECTION, w)
         word = {"format": CR.NO_HEAD, "link": c["link"], "window": c["window"], "parameters": params.digest.hex(),
                 "certificate": {"key": c["key_id"], "digest": c["digest"], "signature": c["signature"]}}
         if G.ROWS_NO_HEAD in line:
@@ -367,8 +370,8 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
     refused("endpoint", lambda d: d | {"io": {"accepted": False, "violations": [[3, "x"]]}}, "read whole off its cells")
     refused("endpoint", lambda d: {k: v for k, v in d.items() if k != "warden_run"},
             f"the endpoint's report names no warden run: {proxy}")
-    certifier_certs = cr.certs(certifier_run, certifier_run)
-    refused("certs", lambda d: certifier_certs, f"the certificates step's input names no warden run: {proxy}")
+    refused("certs", lambda d: {k: v for k, v in d.items() if k != "warden_run"},
+            f"the certificates step's input names no warden run: {proxy}")
     steps.endpoint = steps.tie = None
     r = cr.report(steps)
     assert r["verdict"] == "refused" and r["steps"]["endpoint"]["verdict"] == "not run"

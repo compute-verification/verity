@@ -16,10 +16,8 @@ blocks' boundaries.
     run        build, place, run every block (in one process or one process each over TCP) and check the answers
     accounting the hardware and placement as `benchmarks/datacenter`'s objects, whose audit and account read the
                Program itself
-    lab        the Program as the network certifier's sessions and server-sent events, for the mock datacenter
-               (`../mockdc.py`)
-    lab_run    serve a workload on the mock datacenter, each block behind the real certifier's proxy on its uplink, then
-               the certifier's audit, N2's served verdict and the answers
+    lab        the Program as the network certifier's sessions and server-sent events, each block a server behind the
+               certifier's proxy on its uplink
 
 The circuit stays untimed (the MLP Boolean, the served Program's values words). Transfers are derived, not gates: a
 crossing edge is a value read by a gate placed in another unit, and the frames that carry it are fixed by φ.

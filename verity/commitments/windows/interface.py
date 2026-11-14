@@ -673,7 +673,8 @@ class TableOpening:
     when they open to the table's root (`gates.embedding`'s ``ok``). On a verdict of 1 the opening is the table's row, salt
     and path at the key, under the binding of the row's hm96 leaf and frame-v3 tree: not free where the window's root for
     the table's parameter is the pinned root (`input_count`). ``row``, where the opening declares one: the output row that
-    returns the row opened; nothing is filled by it, and a record names it only where it is declared."""
+    returns the row opened, the first of the reader's two outputs, the second the verdict, of a reader of six input
+    rows; nothing is filled by it, and a record names it only where it is declared."""
     reader: str
     table: str
     key: str
@@ -1048,8 +1049,10 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
         units(o.reader, o.at, o.units, o.doc())
         if o.table not in tables or o.verdict not in dict(templates[o.reader][0].outs) or not o.ports:
             raise ValueError(f"opening {o.doc()}: a declared table's row at its key, with a verdict output")
-        if o.row is not None and o.row not in dict(templates[o.reader][0].outs):
-            raise ValueError(f"opening {o.doc()}: the row it declares is an output of its reader")
+        lay = templates[o.reader][0]
+        if o.row is not None and not (len(lay.rows) == 6 and [q for q, _ in lay.outs] == [o.row, o.verdict]):
+            raise ValueError(f"opening {o.doc()}: the row it declares is the first of its reader's two outputs, the "
+                             "second its verdict, of a reader of six input rows")
         for p in o.ports:
             rects.append((o.reader, p, o.at, o.at + o.units, 0, port(o.reader, p, o.doc())[1], o.doc()))
     for g in ingress:
@@ -1924,8 +1927,9 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
             if o.key not in dict(m.rows) or o.verdict not in dict(m.outs):
                 raise ValueError(f"{what}: {m.key} has no input row {o.key} or no output {o.verdict}; an opening's key is "
                                  "an input row and its verdict an output")
-            if o.row is not None and o.row not in dict(m.outs):
-                raise ValueError(f"{what}: {m.key} has no output {o.row}; the row an opening declares is an output")
+            if o.row is not None and not (len(m.rows) == 6 and [q for q, _ in m.outs] == [o.row, o.verdict]):
+                raise ValueError(f"{what}: {m.key}'s outputs are not {o.row} then {o.verdict} over six input rows; the "
+                                 "row an opening declares is a table read's row returned")
             for p in o.ports:
                 unfilled(i, p, what)
                 out[(i, p)] = tables[o.table].param

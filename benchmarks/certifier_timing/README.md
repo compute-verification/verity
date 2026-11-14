@@ -174,7 +174,5 @@ only that the schedule holds the certifier's bytes and what a software gate leav
 
 ## Why a directory of its own
 
-`network_traces/tick_load.py --secret-bit` asks the same question of a whole rehearsal: a served endpoint, the
-certifier's records and their check, at a served workload's traffic. Here the certifier runs alone and every
-interval carries a bit, so the number moves only with the certifier's release path, comes with its guard, and is
-measured the same way on any checkout's certifier.
+Here the certifier runs alone and every interval carries a bit, so the number moves only with the certifier's release
+path, comes with its guard, and is measured the same way on any checkout's certifier.

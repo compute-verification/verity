@@ -126,7 +126,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.randomness import Key, derive
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.protocols.accounting.certifier.verifier.active import RUN_ID_BYTES
+from verity.protocols.accounting.certifier.verifier.release import RUN_ID_BYTES
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
 from verity.protocols.accounting.pouw.prover.circuit import pc8
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
