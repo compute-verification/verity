@@ -7,7 +7,7 @@ public import Proofs.Properties.Spot.Pinned
 public import Proofs.Core.QSort
 import all Init.Data.Array.QSort.Basic
 
-/-! # Proofs of sampled proofs' one-stage property (`Properties.Spot`)
+/-! # Proofs of SPOT's one-stage property (`Properties.Spot`)
 
 Each check of `OneStage.check` is a pipeline of failure codes (`addCode`, `push`) written with `let mut` and `if`, which
 `do` elaborates into join points. A proof lifts the join points out (`extract_lets`), moves each `if` into the argument of

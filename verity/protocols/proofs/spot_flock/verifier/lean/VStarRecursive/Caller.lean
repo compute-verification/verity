@@ -17,7 +17,7 @@ entry for the pool's `pin` is the pool its window opens (`R7-pool-chain`), and n
 the verifier's verdict log names refused (`verdicts`; `Registration.portsAccepted`, `R7-output-refused`).
 
 Each step is one term (`Spot.Registration.kept`), so the check is one composition with no join point. `gate` runs it
-after SPOT's check accepts: sampled proofs' one-stage form (`VStar.Recursive.Sampled.checkBlobs`) and the recursive
+after SPOT's check accepts: SPOT's one-stage form (`VStar.Recursive.Sampled.checkBlobs`) and the recursive
 audit (`VStar.Recursive.checkBlobs`) both read SPOT's acceptance through it. What its emptiness means is
 `Properties.Remote.CallerCheckMeans`.
 -/

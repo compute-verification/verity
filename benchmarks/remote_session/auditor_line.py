@@ -158,10 +158,15 @@ from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E
 from verity.protocols.proofs.spot.device import challenger as Ch  # noqa: E402
 from verity.protocols.proofs.spot.device import remote  # noqa: E402
 
-RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}
-"""The node's ceilings a gate run's line is read at, bytes a second (`line.Rates`): the node's NICs into its memory,
-which Identity leaves in, charged in both forms as `ledger.Node`'s disks are, and its boundary links beyond them,
-link-charged (54.4e9 in all)."""
+import sheets  # noqa: E402
+
+FIGURES = sheets.figures()
+"""The node's figures, from its data sheets (`sheets.figures`)."""
+
+RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": 5e10}
+"""The node's rates a gate run's line is read at, bytes a second (`line.Rates`): its disks' measured read
+(the host card's `disk.read`, `Disks`' β), which Identity leaves in, charged in both forms, and its boundary links beyond
+them, link-charged (54.311e9 in all)."""
 BURSTS = ("stated", "none")
 """What the line charges beyond the rates (`rates_at`): `ledger.Node.stated`'s bursts, the line of record's
 (`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces at the S_chip
@@ -343,7 +348,8 @@ def rates_at(disk_bytes_per_s: float = RATES["disk_bytes_per_s"],
         raise ValueError(f"bursts are one of {', '.join(BURSTS)}, not {bursts}")
     out = {"disk_bytes_per_s": disk_bytes_per_s, "link_bytes_per_s": link_bytes_per_s}
     if bursts == "stated":
-        node = ledger.Node.stated(disk_bytes_per_s=disk_bytes_per_s, link_bytes_per_s=link_bytes_per_s)
+        node = ledger.Node.stated(FIGURES, disk_bytes_per_s=disk_bytes_per_s,
+                                  link_bytes_per_s=link_bytes_per_s)
         out |= {"rebuild_burst_bytes": node.rebuild_burst_bytes, "disk_burst_bytes": node.disk_burst_bytes,
                 "link_burst_bytes": node.link_burst_bytes}
     return out
@@ -412,7 +418,8 @@ def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean
     """A session's shares of the node in each form at `rates` (`rates_at`), on the clock its `windows_seen` read
     (`clock`: the record's, which holds its times, or another, `line.CLOCKS`), from its line (`line_of_record`, the
     Lean's with `lean`, off the record `Session.run` makes of `transcript` where given; `shares_of`)."""
-    return shares_of(line_of_record(V.recorded_inputs(session, registration, host_bytes=host_bytes,
+    return shares_of(line_of_record(V.recorded_inputs(session, registration, figures=FIGURES,
+                                                      host_bytes=host_bytes,
                                                       rates=V.recorded_rates(session, registration, **rates),
                                                       clock=clock, transcript=transcript), lean))
 
@@ -1116,7 +1123,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--peer", help="override the gate sessions' challenger peer, which is otherwise the run's record's "
                     "(`peer_of`: verifier.json's, else a host run's request.json beside OUT)")
     ap.add_argument("--disk-bytes-per-s", type=float, default=RATES["disk_bytes_per_s"], metavar="B/S",
-                    help="the ceiling into node memory both forms charge (default: the NICs', `RATES`)")
+                    help="the disks' rate into node memory both forms charge (default: their measured read, `RATES`)")
     ap.add_argument("--link-bytes-per-s", type=float, default=RATES["link_bytes_per_s"], metavar="B/S",
                     help="the boundary links' ceiling the link-charged form adds (default: 400 Gb/s, `RATES`)")
     ap.add_argument("--bursts", choices=BURSTS, default="stated",
