@@ -38,14 +38,15 @@ def sha256(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
-def tokens(rng: np.random.Generator, n: int) -> np.ndarray:
-    """`n` token ids, a document starting at every 97th."""
-    t = rng.integers(1, VOCAB, n).astype(np.uint16)
+def tokens(rng: np.random.Generator, n: int, alphabet: int | None = None) -> np.ndarray:
+    """`n` token ids, a document starting at every 97th: of the whole vocabulary, or of its first `alphabet` bytes,
+    which a few steps learn to predict."""
+    t = rng.integers(1, 1 + alphabet if alphabet else VOCAB, n).astype(np.uint16)
     t[::97] = EOT
     return t
 
 
-def tiny_data(root: Path) -> Data:
+def tiny_data(root: Path, alphabet: int | None = None) -> Data:
     rng = np.random.default_rng(0)
     train = root / "train"
     (train / "parts").mkdir(parents=True)
@@ -58,7 +59,7 @@ def tiny_data(root: Path) -> Data:
     man = {"tokenizer": "tiny", "vocab": VOCAB, "selection": {"file": "selection.json", "sha256": sha256(selection)},
            "parts": []}
     for i, n in enumerate(PARTS):
-        part = tokens(rng, n).tobytes()
+        part = tokens(rng, n, alphabet).tobytes()
         (train / "parts" / f"{i:03d}.bin").write_bytes(part)
         man["parts"].append({"index": i, "tokens": n, "sha256": sha256(part)})
     raw = json.dumps(man).encode()
@@ -67,7 +68,7 @@ def tiny_data(root: Path) -> Data:
     for split, n in SETS.items():
         d = root / split
         d.mkdir()
-        t = tokens(rng, n)
+        t = tokens(rng, n, alphabet)
         (d / "tiny.bin").write_bytes(t.tobytes())
         pins[split] = sha256(t.tobytes())
         (d / "manifest.json").write_text(json.dumps({"tokenizers": {"tiny": {"sha256": pins[split], "tokens": n}},
@@ -115,11 +116,11 @@ def _toml(v) -> str:
     return json.dumps(str(v) if isinstance(v, Path) else v)
 
 
-def tiny_registry(root: Path, read: tuple[int, ...] | list[dict] | None = None) -> Path:
+def tiny_registry(root: Path, read: tuple[int, ...] | list[dict] | None = None, alphabet: int | None = None) -> Path:
     """`root/starts.toml`, naming the tiny data and start built under `root`. `read` is what the start names as read
     by its own training: parts of the tiny stream by index, each as the stream's manifest lists it, or the entries
-    as given."""
-    data = tiny_data(root / "data")
+    as given; `alphabet` is `tokens`'."""
+    data = tiny_data(root / "data", alphabet)
     parts = data.manifest()["parts"]
     s, _ = tiny_start(root / "starts", read=read and [parts[q] if isinstance(q, int) else q for q in read])
     d = {"tokenizer": data.tokenizer, "vocab": data.vocab, "eot": data.eot, "train": data.train,
@@ -131,6 +132,26 @@ def tiny_registry(root: Path, read: tuple[int, ...] | list[dict] | None = None) 
              "", f"[starts.{s.name}]", *(f"{k} = {_toml(v)}" for k, v in entry.items())]
     (root / "starts.toml").write_text("\n".join(lines) + "\n")
     return root / "starts.toml"
+
+
+#: the tiny data's alphabet where a config is graded: training on it reaches the gain in a few steps
+ALPHABET = 8
+#: the frontier the grade's fit reads where a config is graded, L(C) = E + A·C^(−γ): the tiny start's point, and
+#: `FRONTIER` more starts on its data at ten, a hundred and a thousand times its compute. Its E and γ put the gain's
+#: target a few thousandths of a bit per byte under the tiny start's own loss on the data of `ALPHABET`
+E, GAMMA, FRONTIER = 7.0, 0.08, 3
+
+
+def graded_registry(root: Path) -> Path:
+    """`tiny_registry` on data of `ALPHABET`, with the starts of the made frontier beside the tiny start (registry
+    entries alone: no job reads them, and the grade's fit reads each one's C0 and loss)."""
+    path = tiny_registry(root, alphabet=ALPHABET)
+    tiny = starts.registry(path)["starts"]["tiny"]
+    lines = [line for k in range(1, FRONTIER + 1) for line in (
+        "", f"[starts.tiny-{k}]", *(f"{n} = {_toml(v)}" for n, v in (tiny | {
+            "c0_macs": tiny["c0_macs"] * 10.0**k, "l0_bpb": E + (tiny["l0_bpb"] - E) * 10.0 ** (-GAMMA * k)}).items()))]
+    path.write_text(path.read_text() + "\n".join(lines) + "\n")
+    return path
 
 
 def write_config(path: Path, **over) -> Path:

@@ -301,7 +301,8 @@ def test_a_workers_lean_process_that_ends_without_an_answer_ends_the_run_and_ref
 
 def test_a_refusal_that_is_leans_own_answer_is_still_a_refusal_in_a_worker(tmp_path):
     """Lean's refusal is an answer, so a worker records it as a5 does in its own process: the history root's negative
-    as a5's ``history_root`` task records it (refused where the codes are `registration.HISTORY` alone), on a window
+    as a5's ``history_root`` task records it (`a0.history_negative`: refused where the codes are `registration.HISTORY`
+    alone and Lean's reason is the Python's), on a window
     whose registered history root has a bit flipped, by each of two workers, is refused, with Lean's side its own
     reason and no worker error. Needs the Lean verifier built."""
     mine, doc, rec, publics, _table = TH._window(tmp_path / "w")
@@ -314,7 +315,7 @@ def test_a_refusal_that_is_leans_own_answer_is_still_a_refusal_in_a_worker(tmp_p
     def history_root(name: str) -> dict[str, dict]:
         v = V.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, want, leaf_layer=leaf, work_table=mine.work_table,
                     history=wrong)
-        return {name: {"refused": v.codes == (R.HISTORY,), "codes": list(v.codes), "lean": v.verifiers["lean"]}}
+        return {name: {**a0.history_negative(v), "lean": v.verifiers["lean"]}}
 
     w = workers(2)
     got = w.entries([w.submit(n, functools.partial(history_root, n)) for n in ("history-a", "history-b")])

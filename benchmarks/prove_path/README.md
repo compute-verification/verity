@@ -248,12 +248,14 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
   what an integration hands Verity (`verity.commitments.windows.interface`): the window's `circuit.json`, which its registration binds
   by SHA-512; the registered compiler and the advice's root and length; the registration and the committed values; and the
-  advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition from Verity's
-  catalog or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
+  advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition one a
+  catalog registers or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
   table names for it (`prove_path.py circuit` for a served window, which takes no row dir and compiles over its own Build of
   each Program), on advice that opens the registered root, and holds its output to the circuit record (less the run root and
   the coins' context) and its charged length to the registered one, so a row dir whose names make another circuit under
-  unchanged digests is refused (`circuit`). It imports no `verity_vllm` code. Its sampled members' sessions run one at a time
+  unchanged digests is refused (`circuit`). Of `verity_vllm` it loads only a catalog package
+  (`verity.circuits.defs.catalog_package`), where a served template's Definition is registered, and nothing else of the
+  adapter. Its sampled members' sessions run one at a time
   (`a5.ONE_AT_A_TIME`), and Lean's checks of finished members run beside them, `--lean-workers` at a time (default 1), each starting
   only while its memory estimate fits within `--audit-mem-gb` beside the running session's and checks' (`a5.LeanPool`), an
   estimate that admits a start and limits nothing a running check holds;
