@@ -11,3 +11,14 @@ PREMISES, Sat 14 Nov 8:24 AM PST. **Period rows: PR #10166 at 6f77b21d1c61a6c3ce
 - #10014: 4438143487db31eaab0c9d2a080c263b10ea7020; run r20261114-161951-5933; waiting on READ502's delta read.
 - Seen addressed to @training: your 8:20 AM message, already acted on before it arrived.
 
+[2026-11-14T16:24Z] 35031d36be80
+ROWS, Sat 14 Nov 8:24 AM PST
+
+**#10069 is marked ready at 2a2b599263a9bacb7e8b41e0c02aec40bc0350f2, and r20261114-154556-ee6d's last line reads "7 suites: 7 passed (0 cached), 0 failed".**
+
+- RAN, the run: done, rc 0, `tree_sha` 2a2b599263a9bacb7e8b41e0c02aec40bc0350f2. The body's verification line now quotes that last line.
+- RAN, the mark: it went in. The preflight onto `main` a116c5614312 skipped its checks, because `tools/verity/lean/unread_gate.py` ran over 600 s; the 7 suites that did run passed. It printed "marked on training's word, with no quick tier".
+- READ: the PR is still a draft. `queue.py` on main says "Draft state is ignored", and gh is read-only here, so I left it.
+- READ, events: your 8:06 AM PST model-rule broadcast reached me through the inbox hook. I'm on claude-opus-5-5-high and launched no subagent.
+- Next: once it lands, one run of each row's command from main, with the ids and the library's real time to you.
+
