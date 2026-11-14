@@ -50,7 +50,7 @@ def test_the_red_team_sessions_agree_word_for_word():
     """`difftest_vectors.redteam_audits` (a store whose payloads are not all below p, 2^79 blocks, a beacon round named
     twice, manifest floats), held to `wire.py` with every message, which the difftest's codes alone don't compare."""
     gen = interop._generator()
-    py = gen._python(interop.ROOT)
+    py = gen._python()
     insts = gen.redteam_audits(py)
     with interop.Server([str(interop.build(interop.HERE, "pous-audit-difftest")), "serve"]) as lean:
         results = [{"id": i["name"], "kind": "transcript", "python": interop._python_side(interop.transcript, gen, py[1], i),

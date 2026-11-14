@@ -18,7 +18,7 @@ def _scale():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     sys.path.insert(0, str(BENCH))
-    from p2_v1 import reference
+    from verity.protocols.accounting.pous.verifier.p2_v1 import reference
     return mod, reference
 
 
