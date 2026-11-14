@@ -37,7 +37,7 @@
   },
   "registered_reads": {
    "what": "each session's Lean verdict reports the registered values and roots the verifier's own file names",
-   "verifier": "verity/commitments/windows/tables.py",
+   "verifier": "verity/commitments/periods/tables.py",
    "decided_by": "python"
   },
   "complete": {
