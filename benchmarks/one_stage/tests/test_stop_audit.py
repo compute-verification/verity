@@ -193,7 +193,7 @@ def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
     """`answer_of` on outcomes written by hand, of a stream that holds only its δ and its docket's digest: a
     record that did not accept for a verdict alone names the verdict; an outcome the stream refused, which has no
     audit record, says so; an outcome that did not accept beside a record that did is a reject."""
-    r = NS(stream=NS(delta=0.5), registration=NS(digest="ab" * 64))
+    r = NS(stream=NS(delta=0.5), docket=NS(digest="ab" * 64))
     entry = {"accepted": False, "checks": {"proved": {"ok": True}},
              "verdicts": {SA.LEAN: {"accepted": True}, SA.BOUNDARY_AUDIT: {"accepted": False}, SA.STOP_RULE: {"accepted": None}}}
     reject = {"commitment": "ab" * 64, "profile": None, "protocol": SA.R.PROTOCOL, "public": None, "verdict": "reject"}
