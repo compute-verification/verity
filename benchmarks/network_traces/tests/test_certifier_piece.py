@@ -203,7 +203,7 @@ def _record(monkeypatch, capsys, serve: Path, pieces: Path) -> tuple[dict | None
 def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_the_block_record(tmp_path, warden,
                                                                                                 period, capsys,
                                                                                                 monkeypatch):
-    accept = period.reference(period.case("accept", 1, "clock"))
+    accept = period.reference(period.case("accept", 1))
     assert accept["verdict"] == "accept" and accept["protocol"] == CP.PROTOCOL
     d = _serve_dir(tmp_path / "serve", warden)
     chain = _chain_out(tmp_path / "chain", "accepted", warden["w"], warden["registrations"])
@@ -691,7 +691,7 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     CERTIFIER_CMD ``true``, as `served_verdicts.sh` sets it) into the block record, its case written in the serve
     dir's private (the chain step first removing the one an earlier run left), its certificates beside the answer and
     both steps' logs kept."""
-    accept = period.reference(period.case("accept", 1, "clock"))
+    accept = period.reference(period.case("accept", 1))
     d = _serve_dir(tmp_path / "serve", warden)
     v3c, piece = _v3c(d), tmp_path / "pieces" / "certifier"
     (d / CP.CASES).mkdir(parents=True)
@@ -744,7 +744,7 @@ def test_a_chain_accepted_on_the_period_check_goes_on_to_that_check_whose_answer
     v3c, piece = _v3c(d, PERIOD), tmp_path / "pieces" / "certifier"
     assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, CR.RESTS, warden["w"])) == 0
     assert (piece / CP.CHAINED).is_file() and not (piece / "answer.json").exists()
-    answer = period.reference(period.case("accept", 1, "clock"))
+    answer = period.reference(period.case("accept", 1))
     assert _hook("period", d, piece, v3c, *_lean(tmp_path, answer)) == 0, (piece / "period.log").read_text()
     assert json.loads((piece / "answer.json").read_text())["verdict"] == "accept" and (tmp_path / "seen").is_dir()
 
