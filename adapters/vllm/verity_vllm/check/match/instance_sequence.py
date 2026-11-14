@@ -118,7 +118,7 @@ class RootView(PeerReads, PX.PrefixInput):
                 self.inst.append({"k": k, "spec": fid if n.form != "batch" else f"batch:{fid}", "form": n.form,
                                   "args": [runs(a.refs) for a in n.args], "out": str(n.out)})
             # the decoded IR (node objects + Refs trees, O(LP^2) leaves for a long prefill's K/V gathers) is not retained: comparisons read
-            # `inst` only, and keeping it doubled the resident Program (GM-01 > 351 GiB at LP 4096).  `n_nodes` keeps the count.
+            # `inst` only, and keeping it doubled the resident Program.  `n_nodes` keeps the count.
             self.n_nodes = len(body.nodes)
             self.nodes = None
             self.param_names = [n for n, _ in getattr(body, "params", ())]   # empty for a lowered root; kept for callers that inspect it
@@ -175,7 +175,7 @@ class RootView(PeerReads, PX.PrefixInput):
         else:
             # Only the reader counts of the CANDIDATE constants are consulted below (a Const32 instance read as a select's splits
             # operand), so count per progression: a progression over one node (dI == 0) is `count` reads of it; a node-index progression
-            # (dI != 0: the gathers, 97 % of all runs) is one read of every candidate it visits -- found by bisection in the sorted
+            # (dI != 0: the gathers, most runs) is one read of every candidate it visits -- found by bisection in the sorted
             # candidates instead of enumerating its runs.  Exactly the record's per-run count on every consulted key.
             cands: set[int] = set()
             for r in self.inst:

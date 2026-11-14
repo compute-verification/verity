@@ -27,7 +27,7 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   transcript's returns must agree. A kind the table lowers through its Boolean version (``boolean``: MoeSum_v1 as
   MoeSum_v3's 64-column members, TokenSelect_v1 as TokenSelect_v2's argmax leaves) evaluates that version bit-sliced on the
   same operands (`boolean_units`), holds its returns to the snapshot as words, and stages its unit's bits.
-* **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one registration before the
+* **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one docket before the
   sample; the verifier's Lean stratified sample over its own program and partition; each member serves its share
   (``serve --zk --draw-file``) and Lean ``verify --zk --partition --program`` holds each session; the audit record and
   a6's negatives. A tampered copy of one kind's member (bit 0 of every instance's first output word flipped before it is
@@ -919,7 +919,7 @@ def main() -> int:
                            "k_log": m["st"]["meta"].get("k_log"), "pin": m["st"]["pin"], "class": m["st"]["class"],
                            "twin": m["st"]["twin"], "stage_s": m["st"]["seconds"]} for m in members]
 
-    # one registration, before the sample
+    # one docket, before the sample
     want, roots, publics = {}, [], {}
     for m in members:
         fv = m["header"]["frame_v3"]

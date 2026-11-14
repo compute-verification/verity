@@ -518,7 +518,7 @@ def test_attn_block_first_v2_reads_a_value_slice_a_row_at_4_32_4():
     """At 4,32,4 (35 positions: a head's one key block of kBlockN 128 holds 1 ... 35 keys) a Llama-3.2-1B head's first block
     reads q as RoPE's one row, k as RoPE's row a key, and v as the value projection's `Gemm_v2{2048, n}` slices at the window's
     grain, 64 / n a key.  v2's v cut once an element is those rows, n words each, where v1's v has only NVIS elements to cut; with
-    its 3 outputs a unit is 5·NVIS + 4 rows in and out, within the grain's cap.  q's row and each k row (128 B) hash past one
+    its 3 outputs a unit is 5·NVIS + 4 rows in and out, within the grain's row limit.  q's row and each k row (128 B) hash past one
     SHA-512 block, which Flock's compose needs of some row of a unit; the value slices (32 B) don't."""
     from verity.commitments.windows import interface as IF
     from verity_flock.circuit import Port

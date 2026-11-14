@@ -316,8 +316,8 @@ def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_h
     assert S.default_jobs(meminfo) == 4
 
 
-def test_a_research_run_reservation_bounds_the_run_where_no_cgroup_caps_it(tmp_path, monkeypatch):
-    """On a node with no cgroup cap, a `research run --mem-gb 32` is a reservation, not a cgroup cap; the quick tier sized itself to the node."""
+def test_a_research_run_reservation_bounds_the_run_where_no_cgroup_limits_it(tmp_path, monkeypatch):
+    """On a node with no cgroup limit, a `research run --mem-gb 32` is a reservation, not a cgroup limit; the quick tier sized itself to the node."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
     monkeypatch.delenv(S.SLOT_MEM_ENV, raising=False)
@@ -1123,15 +1123,15 @@ def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_p
 
 
 def test_each_test_process_starts_with_onednn_held_off_amx_unless_the_caller_names_the_variable(tmp_path, monkeypatch):
-    """oneDNN reads its ISA cap once, at a process's first primitive, so a cap set by a suite's own code comes too late for
+    """oneDNN reads its ISA limit once, at a process's first primitive, so a limit set by a suite's own code comes too late for
     whatever ran a primitive before it. The runner puts it in the environment the suite's process starts with: the suite's
     conftest sees it as it is imported, ahead of every test module, and a test sees the same. A value the caller's environment
     names stays, and `research run` gives its jobs the same name and value."""
     from research import result
 
     S = _suites(monkeypatch, tmp_path)
-    name, cap = S.ONEDNN_ISA
-    assert (name, cap) == result.ONEDNN_ISA == ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
+    name, isa = S.ONEDNN_ISA
+    assert (name, isa) == result.ONEDNN_ISA == ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
     root = tmp_path / "tree"
     _env_workspace(root, {"pkg": f"import os\n\nAT_IMPORT = os.environ.get({name!r})\n\n\ndef test_env(conftest_saw):\n"
                                  f"    now, want = os.environ.get({name!r}), os.environ['WANT']\n"
@@ -1141,7 +1141,7 @@ def test_each_test_process_starts_with_onednn_held_off_amx_unless_the_caller_nam
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "conftest")
     monkeypatch.delenv(name, raising=False)
-    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": cap})
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": isa})
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
     p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": "AVX2", name: "AVX2"})
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr

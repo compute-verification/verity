@@ -2,7 +2,7 @@
 (the weights'), ``value`` (a per-window registered value's, such as the scan state rows), ``table_root``, ``opening``, else
 ``free``) and their bytes, its output rows and their bytes, and the SHA-512
 compressions a by-reference commit spends on them: every output row hashed fresh, every input row only re-leafed in its
-port's tree, since a wired row's b||c is its writer's and a registered row's the registration's.
+port's tree, since a wired row's b||c is its writer's and a registered row's the docket's.
 
     python class_rows.py --tiny [--slots]                                 # TINY, locally
     python class_rows.py --llama1b [--int8] --probe 1,2,2                 # one Program at a probe class, ~2 s

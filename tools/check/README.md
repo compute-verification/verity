@@ -83,10 +83,10 @@ follows.
 | `pod_setup.sh` | prepares a check pod once, so every pod of the pool computes the same verdict keys |
 | `slot.py`, `lean_slot.py` | a command in one of a node's merge-check or Lean check slots |
 | `train.sh` | the verified queue's recorded check of a candidate, and its records run |
-| `post_train.py` | the vLLM reference regression's manifest rebuilds and the fast rows of record's neutrality after a landing |
+| `post_train.py` | the vLLM reference regression's manifest rebuilds and the fast workloads of record's neutrality after a landing |
 | `lean_prebuild.py` | a Lean change built before the candidate that holds it: the audit of a ready mark's merge (`tools/verity/lean/warm.py`) as a `research run` in a machine's research pool, off the check slots |
 | `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
-| `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its cap |
+| `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its size limit |
 | `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
 | `merge_map.py` | git's merge driver for `artifacts.json` |
 | `merge_rows.py` | git's merge driver for Markdown: two changes to one table's rows merge row by row |

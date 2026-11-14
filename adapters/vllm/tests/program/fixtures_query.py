@@ -43,16 +43,16 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from functools import cache
 
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits import query_ast as QA
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.layout import Scope
 from verity.circuits.parts import Item, Part, n_members
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.prims import BF16, F32, I32
-from verity.circuits.types import Array, Tuple
+from verity_vllm.definitions.registry.prims import F32
 
 # ---------------------------------------------------------------------------------------------------------
 # registry programs (small statics)

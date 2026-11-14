@@ -19,7 +19,7 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
                                                             a regenerated record (drive's after-landing run)
     ... --bookkeeping-warn                                  with --deferred and without --no-regenerate (drive's lock run):
-                                                            lean-audit repairs a lock's bookkeeping and the caps it breaks and
+                                                            lean-audit repairs a lock's bookkeeping and the limits it breaks and
                                                             warns rather than failing (`lean_audit.py --bookkeeping warn`)
     ... --no-cache [--circuit-cache]                        reuse no pass, build with Lake's local artifact cache off, and run
                                                             every job, those off the gate too (the nightly `audit-main`, which
@@ -135,7 +135,7 @@ each shard runs `suites.py SUITE:K/M@DIGEST --timings` of the planner's partitio
 part of a suite runs it whole (`suites.py`), and that pass is its verdict.
 
 First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
-tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
+tree's own tests (`LINTS`: Markdown size limits, report-genre names, secret-like literals, blob and data budgets). The groups start only
 once it passes, so a check that one of them fails ends in seconds, not hours.
 
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
@@ -660,7 +660,7 @@ def placement(doc: dict, priority: bool = False, min_mem: int | None = None) -> 
         why = "check slots: " + ", ".join(f"{s['name']} " + ("held" if s["holder"] else "blocked" if s["blocked"] else "free")
                                           for s in mine) + f"; {waiting}"
     if lean["pools"] is None:
-        return room, ahead, f"{why}; no Lean audit cap"
+        return room, ahead, f"{why}; no Lean audit limit"
     pool = next((p for p in ("check", "any") if p in lean["pools"]), None)
     if pool is None:
         raise ValueError(f"{lean['file']} lists neither pool check nor any, so check's Lean audit would be refused")
@@ -779,7 +779,7 @@ def slots_block(name: str, doc: dict | str) -> list[str]:
     if "error" in lean:
         out.append(f"  Lean audit slots: can't be read: {lean['error']}")
     elif lean.get("pools") is None:
-        out.append(f"  Lean audit slots: no cap ({lean.get('file')}): audits run unslotted")
+        out.append(f"  Lean audit slots: no limit ({lean.get('file')}): audits run unslotted")
     else:
         for pool, p in lean["pools"].items():
             free = len([s for s in p["slots"] if s["holder"] is None and not s["past_n"]])
@@ -1891,7 +1891,7 @@ def opt_in(out: Path, step: str, args: list[str]) -> int:
 
 
 #: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: pytest and lean-audit have held 160 to 350
-#: between them, and circuit-check, given the slot's whole mem=, took the run's scope to its cap (an OOM kill)
+#: between them, and circuit-check, given the slot's whole mem=, took the run's scope to its limit (an OOM kill)
 SIBLINGS_GB = 350
 
 
@@ -3053,7 +3053,7 @@ class Packs:
 
 #: the reused pack is left out above this, in bytes (custody's line for undeclared files; it is declared, but a pack this big would
 #: hold far more than one tree's passes)
-REUSED_CAP = 256 << 20
+REUSED_MAX = 256 << 20
 #: the longest its plan may take, in seconds: the check's end waits for it (`Reused.close`), so a plan that hangs packs nothing
 REUSED_PLAN_S = 1200
 
@@ -3111,9 +3111,9 @@ class Reused:
                          for x in f.get("paths") or [] if x in self.before and (self.only is None or x.startswith(self.only))}
                 n = VERDICTS.export_paths(self.out, paths, xz=True)
                 size = self.out.stat().st_size
-                if size > REUSED_CAP:
+                if size > REUSED_MAX:
                     self.out.unlink()
-                    print(f"check: verdicts: {REUSED_PACK} left out: {n} entries packed to {size >> 20} MiB, past {REUSED_CAP >> 20} MiB",
+                    print(f"check: verdicts: {REUSED_PACK} left out: {n} entries packed to {size >> 20} MiB, past {REUSED_MAX >> 20} MiB",
                           flush=True)
                     return
                 self.entries = n

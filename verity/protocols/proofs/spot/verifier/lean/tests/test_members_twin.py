@@ -81,7 +81,7 @@ def _never(_):
 
 
 class Audit:
-    """A window of the members `A` and `B` (two instances of `PAIR`, three of `TRIPLE`), its registration's two roots
+    """A window of the members `A` and `B` (two instances of `PAIR`, three of `TRIPLE`), its docket's two roots
     named `ports`, audited on a challenger session that releases the sample and then opens one coin tree a member of
     `opened`, in that order (a member it leaves out has no session and no statement), each tree's link, its rounds and
     its closing round after its session's evidence (its record and one proof file) before the next tree's first round:
@@ -335,7 +335,7 @@ def test_a_member_no_statement_names_is_held_to_its_own_circuits_lookup_tables(t
 
 def test_the_twin_answers_leans_reason_on_the_logs_order_and_the_registrations_roots(tmp_path):
     """A release log that opens the second statement's tree first is refused by both as `MEMBERS_ORDER`, the statements
-    being in the members' order; and a registration with a root that is no member's is refused by both, the trees'
+    being in the members' order; and a docket with a root that is no member's is refused by both, the trees'
     check passed."""
     late = Audit("members-twin-order", opened=(B, A))
     why, (run, refused) = late.ask(tmp_path / "order")

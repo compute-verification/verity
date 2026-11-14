@@ -2806,6 +2806,11 @@
     },
     {
       "paths": {
+        "demos/onsite_served/config.toml": "demos/onsite_full.toml"
+      }
+    },
+    {
+      "paths": {
         "verity/definitions/registry/": "adapters/vllm/verity_vllm/definitions/registry/",
         "verity/definitions/numerics/": "adapters/vllm/verity_vllm/definitions/numerics/",
         "verity/definitions/tests/": "adapters/vllm/verity_vllm/definitions/tests/",

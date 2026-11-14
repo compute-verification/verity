@@ -105,7 +105,7 @@ class Rewrites:
     """The fields the record composes through the load-time rewrite: `raw(field)` is the checkpoint's composition of a Program field
     (shard included), `config` the checkpoint's config.json."""
 
-    def __init__(self, fields: list[str], roles: dict[str, dict[str, Any]], raw: Callable[[str], tuple[np.ndarray, dict]], config: dict):
+    def __init__(self, fields: list[str], roles: dict[str, dict[str, Any]], raw: Callable[[str], tuple[np.ndarray, dict]], config: dict) -> None:
         self.raw, self.config = raw, config
         self._pair: dict[str, tuple[np.ndarray, np.ndarray, dict]] = {}
         quant = config.get("quantization_config")   # config.json of a checkpoint that is not quantized has none: G = 0, no field rewritten

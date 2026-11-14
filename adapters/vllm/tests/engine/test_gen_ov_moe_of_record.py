@@ -10,10 +10,10 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
-
-from tests.engine.test_gen_ov_moe import OV, TOPK, C, E, H, I, _eval
-from verity_vllm.observe.fold.resolver import Compute, Unsupported
 from verity_vllm.definitions.registry import moe as Q
+
+from tests.engine.test_gen_ov_moe import INTER, OV, TOPK, C, E, H, _eval
+from verity_vllm.observe.fold.resolver import Compute, Unsupported
 
 REPO = Path(__file__).resolve().parents[2]
 W1_RUNS = REPO / "out" / "gen" / "lanes" / "moe" / "runs"
@@ -54,7 +54,7 @@ def test_real_capture_resolves_without_unsupported(name, steps):
         parts = [p for r in sr.resolutions for p in parts_of(r)]
         assert not [p for p in parts if isinstance(p, Unsupported)]
         specs = [p.spec.id for p in parts if isinstance(p, Compute)]
-        assert specs.count(f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}") == C["NL"] and specs.count(f"MoeSum_v1{{TOPK={TOPK},H={H}}}") == C["NL"]
+        assert specs.count(f"MoeExpertGemm_v1{{E={E},K={H},N={2 * INTER}}}") == C["NL"] and specs.count(f"MoeSum_v1{{TOPK={TOPK},H={H}}}") == C["NL"]
 
 
 def test_real_capture_folds_the_whole_prefill():

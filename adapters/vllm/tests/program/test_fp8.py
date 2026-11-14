@@ -122,7 +122,7 @@ def test_scaled_mm_fp8_matches_cutlass(group: str) -> None:
 
 
 @pytest.mark.parametrize("t", [0, 63, 130])
-def test_quant_linear_fp8_on_a_served_row(t: int) -> None:
+def test_quant_linear_fp8_on_served_row(t: int) -> None:
     d = np.load(DATA / "fp8_production_row_l0_qkv.npz")
     x, xq, sx, y = d[f"t{t}_x"], d[f"t{t}_xq"], d[f"t{t}_sx"], d[f"t{t}_y"]
     cols, w_rows, sw, b = d["cols"], d["w_rows"], d["sw"], d["b"]
