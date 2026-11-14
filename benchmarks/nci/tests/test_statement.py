@@ -35,7 +35,7 @@ def slowdown(over: dict, tier: str) -> float:
     return S.slowdown(P | over, tier)
 
 
-def test_the_slowdown_is_a_hardware_multiple_against_the_unconstrained_run():
+def test_the_slowdown_compares_with_the_unconstrained_run():
     """Unregistered compute trains like the unconstrained developer, and so do dark fragments of registered capacity
     (reference efficiency: ``evaluate`` at ``free_mfu`` = MFU_0); the rest are counted multiplications, so
     the slowdown is 1 / (s + rest / mfu): the slowdown calculator's ``multiple_bound`` in Lean's form, ``remoteSlowdown``, at tiers'
@@ -84,7 +84,7 @@ def test_the_ladder_is_evaluate_at_the_rungs():
             assert rows[name]["slowdown"][t] == pytest.approx(slowdown(STREAMED | {"unfilled_gb": gb - 0.17}, t), rel=0.005)
 
 
-def test_d_is_the_hardware_multiple_of_the_binding_terms():
+def test_the_slowdown_is_set_by_the_binding_terms():
     """The slowdown is 1 / (r + Delta/H + nu / MFU_0) where free compute binds (as at power removal's 1 GB, where
     mu > 1): free compute and the verdict lag train at MFU_0 (reference efficiency), nu is counted multiplications."""
     rows = {r["rung"]: r for r in S.ladder()}
