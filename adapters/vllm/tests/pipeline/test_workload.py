@@ -354,19 +354,76 @@ PLANNED = ("schema", "seed", "batch", "max_input", "max_output", "min_input", "m
            "input_lengths", MOST, "sampling_seeds", "arrival_offsets_s", "arrive_steps", "seed_rule")
 
 
-def test_every_stored_workload_made_under_the_generators_length_rule_states_its_row_ids_plan():
-    """The generator still plans the stored rows as it planned them: a row's file is what its Builds and Commits were made from."""
-    made = 0
+def _made_under_the_generators_length_rule():
+    """Each stored row the generator made under its length rule of today: its name, its file and its row id's plan."""
     for p in FILES:
-        sweep = json.loads(p.read_text()).get("sweep") or {}
+        stored = json.loads(p.read_text())
+        sweep = stored.get("sweep") or {}
         if "row_id" not in sweep:
             continue
         plan = W.plan(sweep["row_id"], sweep["batch"], sweep["max_input"], sweep["max_output"], sampling=sweep["sampling"],
                       arrivals=sweep["arrivals"], shared_prefix=sweep.get("shared_prefix", 0))
         if sweep["length_rule"] == plan["length_rule"]:                         # else a row written by hand, or under an earlier rule
-            assert {k: sweep[k] for k in PLANNED} == {k: plan[k] for k in PLANNED}, p.name
-            made += 1
+            yield p.name, stored, plan
+
+
+def test_every_stored_workload_made_under_the_generators_length_rule_states_its_row_ids_plan():
+    """The generator still plans the stored rows as it planned them: a row's file is what its Builds and Commits were made from."""
+    made = 0
+    for name, stored, plan in _made_under_the_generators_length_rule():
+        assert {k: stored["sweep"][k] for k in PLANNED} == {k: plan[k] for k in PLANNED}, name
+        made += 1
     assert made >= 50
+
+
+#: What a row's file states of its plan outside the sweep block: all but its prose, its engine and what its tokenizer gives.
+WRITTEN = ("schema", "model", "case", "seed", "variants", "seeds", "sampling", "serving_profile", "context_class", "length_seed",
+           "prompt_seed", "replicate", "length_rule", "expected_engine_steps", "prompt_lengths", "max_tokens")
+#: What the generator alone sets of a row's engine: the longest context, a TP row's world, and the prefix cache of a shared prefix.
+ENGINE = ("max_model_len", "tensor_parallel_size", "disable_custom_all_reduce", "enable_prefix_caching")
+TOKENIZED = ("prompt_token_ids", "prompt_text", "origin")
+
+
+def _origins(requests: list[dict], told: list[dict]) -> list[tuple[str, list[str], list[str]]]:
+    """Each prompt's corpus, its paragraphs and its shared prefix's, as far as ``told`` lists them: a tokenizer of fewer ids to a
+    paragraph changes only how many paragraphs a prompt of its length runs over."""
+    return [(r["origin"]["corpus"], r["origin"]["paragraphs"][:len(t["origin"]["paragraphs"])],
+             r["origin"].get("shared_prefix_paragraphs", [])[:len(t["origin"].get("shared_prefix_paragraphs", []))])
+            for r, t in zip(requests, told, strict=True)]
+
+
+def test_every_stored_workload_made_under_the_generators_length_rule_is_its_plan_as_the_generator_writes_it():
+    """The generator still writes the stored rows' plans as it wrote them: the file's own fields and each request's outside what a
+    tokenizer gives, a workload of record's requests done only at their public lengths; the context and the world its engine is
+    built for; and the paragraphs its prompts start at."""
+    made = of_record = worlds = shared = 0
+    for name, stored, plan in _made_under_the_generators_length_rule():
+        doc = W.workload_doc(plan, hf_repo=stored["model"], revision=stored["engine"]["revision"], case=stored["case"], tok=None)
+        assert {k: stored[k] for k in WRITTEN} == {k: doc[k] for k in WRITTEN}, name
+        assert [{k: v for k, v in r.items() if k not in TOKENIZED} for r in stored["requests"]] == doc["requests"], name
+        assert {k: stored["engine"]["args"].get(k) for k in ENGINE} == {k: doc["engine"]["args"].get(k) for k in ENGINE}, name
+        assert stored["sweep"].get("tp") == doc["sweep"].get("tp"), name
+        told = W.build_requests(_CharTok(), plan)                               # an id a character: the most ids a paragraph gives
+        assert _origins(stored["requests"], told) == _origins(told, told), name
+        made, of_record, worlds = made + 1, of_record + ("ignore_eos" in doc["sampling"]), worlds + ("tp" in doc["sweep"])
+        shared += any(prefix for *_, prefix in _origins(told, told))
+    assert made >= 50 and of_record and worlds and shared                       # each kind of row is among them
+
+
+def test_a_prompt_is_its_shared_prefix_then_the_corpus_from_its_paragraph_on_a_space_before_each_cut_at_its_length():
+    paras = W.corpus_paragraphs()
+    at = {f"{para['source']} \N{PILCROW SIGN}{para['index']}": j for j, para in enumerate(paras)}
+    text = {name: paras[j]["text"] for name, j in at.items()}
+    plan = W.plan("x__fp8__h200__tp8__b8__i4096__o32__prefix-arrivals__greedy__eager", 8, 4096, 32, sampling="greedy", arrivals="staggered",
+                  shared_prefix=600)
+    told = W.build_requests(_CharTok(), plan)
+    for r in told:
+        prefix, own = r["origin"].get("shared_prefix_paragraphs", []), r["origin"]["paragraphs"]
+        shared = " ".join(text[name] for name in prefix)[:r.get("shared_prefix_tokens", 0)]
+        assert r["prompt_text"] == " ".join([shared] * bool(shared) + [text[name] for name in own])[:r["prompt_len"]]
+        for names in (prefix, own):                                             # one paragraph after another, around the corpus's end
+            assert [at[name] for name in names] == [(at[names[0]] + k) % len(paras) for k in range(len(names))]
+    assert {len(r["origin"]["paragraphs"]) > 2 for r in told} == {"shared_prefix_tokens" in r for r in told} == {True, False}
 
 
 def test_a_batch_larger_than_the_corpus_starts_each_further_prompt_fourteen_paragraphs_after_the_one_it_wraps_to():

@@ -187,7 +187,7 @@ def cgroup_mem_current() -> dict[str, int | None]:
         for p in paths:
             try:
                 v = Path(p).read_text().strip()
-                if v.isdigit() and int(v) < (1 << 60):
+                if v.isdecimal() and int(v) < (1 << 60):
                     out[k] = int(v)
                     break
             except OSError:
@@ -320,7 +320,7 @@ def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, 
               f"scheduled steps != expected (executed prefix of record): {sorted(r for r, ok in count_eq.items() if not ok)[:4]}"))))
     return {"basis": "engine schedule of record: per-committed-step request rows (the scheduler's row order as the collector recorded it); "
                      "arrival = the first committed step the request ran in",
-            "declared_arrive_steps": dict(declared), "observed_arrive_steps": dict(sorted(observed.items(), key=lambda kv: int(kv[0][1:]) if kv[0][1:].isdigit() else 0)),
+            "declared_arrive_steps": dict(declared), "observed_arrive_steps": dict(sorted(observed.items(), key=lambda kv: int(kv[0][1:]) if kv[0][1:].isdecimal() else 0)),
             "equal_declared": {r: observed.get(r) == v for r, v in declared.items()} if observed else None,
             "all_equal_declared": bool(observed) and all(observed.get(r) == v for r, v in declared.items()),
             "scheduled_steps": {r: len(v) for r, v in steps_of.items()}, "contiguous": all(contiguous.values()) if contiguous else None,
@@ -1808,7 +1808,7 @@ def staging_host_limit(asz: dict[str, Any]) -> tuple[int | None, str | None]:
     for cg in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
         try:
             v = Path(cg).read_text().strip()
-            if v.isdigit() and int(v) < (1 << 60):
+            if v.isdecimal() and int(v) < (1 << 60):
                 host_limit = int(v)
                 host_limit_src = cg
                 asz["host_memory_cap_source"] = cg

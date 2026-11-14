@@ -11,7 +11,6 @@ from typing import Any
 
 from verity.definitions.numerics.rows import EVALUATORS
 
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.delegate import DELEGATES
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH
 from verity_vllm.check.replay.index import (
@@ -24,9 +23,10 @@ from verity_vllm.check.replay.index import (
     plane_copies,
 )
 from verity_vllm.check.replay.opening import CommittedStore, bound_identity
-from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records import replay_codes as RC
+from verity_vllm.records.replay_codes import NOT_YET, why_class
 from verity_vllm.records.schema_ids import MOE_PLANE_ALIAS_CHECK_SCHEMA
 
 __all__ = ["phase_anchor", "population", "split_not_executed"]

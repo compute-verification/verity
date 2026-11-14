@@ -15,6 +15,7 @@ import threading
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -38,6 +39,8 @@ from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, Coin
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.device.challenger import LiveCommitment, LiveOpening
+
+__all__ = ["joined"]
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024
@@ -348,7 +351,7 @@ class _Arena:
                 for ring in self.rings:
                     got = ring.take(size)
                     if got is not None:
-                        return (lambda: self._give(ring, got[0])), got[1]
+                        return partial(self._give, ring, got[0]), got[1]
                 self.cv.wait()
 
     def _give(self, ring: _Ring, region: list) -> None:
