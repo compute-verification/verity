@@ -19,7 +19,6 @@ from typing import Any
 import numpy as np
 from verity.commitments import history as HT
 from verity.commitments import hm96
-
 from verity.protocols.accounting.pouw.prover.serving import (
     ROW_TABLE_SEG_BYTES,
     hm_tables,

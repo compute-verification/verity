@@ -7,8 +7,8 @@ public import Mathlib.Data.Nat.Prime.Defs
 /-!
 # The deployed bound receipt's sketch: what a relay must exchange (trusted)
 
-The game is `Security/Definitions/Poub/BoundSketch.lean`; proofs are in
-`Security/Proofs/Poub/BoundReceipt/Sketch.lean`. No named assumption of its own: the two sides' inputs are
+The game is `security/Definitions/Poub/BoundSketch.lean`; proofs are in
+`security/Proofs/Poub/BoundReceipt/Sketch.lean`. No named assumption of its own: the two sides' inputs are
 independent with given guessing probabilities, which is the ideal tile and the ideal store, read in this model.
 
 * `InnerProductRelay`: a protocol of `c` bits that ends with either side knowing `⟨x, y⟩` over `𝔽_p^n`, for

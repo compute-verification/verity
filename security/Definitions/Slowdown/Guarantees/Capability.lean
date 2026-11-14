@@ -23,7 +23,7 @@ premises hold together there) and a nontrivial one (its conclusion fails there w
 
 A new premise, structure or kind of consumer is a new module or a new value of an existing type, consumed by the same
 steps. Improving the structure never strengthens a premise; a stronger premise is a new hypothesis, named as one. Each
-is proved (`Proofs.Slowdown.Capability`). The survey of all of it is `Security/Definitions/Slowdown/Capability/README.md`.
+is proved (`Proofs.Slowdown.Capability`). The survey of all of it is `security/Definitions/Slowdown/Capability/README.md`.
 -/
 
 @[expose] public section

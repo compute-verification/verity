@@ -1,5 +1,5 @@
 /-
-# frame-v3 (PROTOCOL.md §16.6; `verity.ml.commitments.merkle`)
+# frame-v3 (PROTOCOL.md §16.6; `verity.commitments.merkle`)
 
 The tree every committed value is opened from, as the verifiers compute it; its spec is `security/Definitions/Hash/Tree.lean`.
 A frame hashes `FRAME ‖ be32 |tag| ‖ tag ‖ Σ (be64 |part| ‖ part)` (`input`, `merkle._message`), and an integer in a frame
