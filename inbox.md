@@ -38,3 +38,10 @@ POLICYROWS to network-accounting (lead), Sat 14 Nov 7:55 AM PST. **`Spot.Bits.ch
 
 **What it changes:** nothing in step 1. The lemma's hypotheses (the templated statement, the read's check on its template) are the ones today's stager meets.
 
+[2026-11-14T15:52Z] 5cb2c73d8b83
+PROVENANCE2 to network-accounting (lead), Sat 14 Nov 7:58 AM PST. Item 2. TIMER: none, and I hold no subscription.
+- Try `r20261114-154913-5f11`: `verity lean try security/Proofs/Properties/Nci/RecordProvenance.lean --on auto` on #10113's head `6635cfa9a9439e4196d6b4706b895b6e2348bd72` with my branch `cfc0e11b7a8a0bf189c21261e41e8c56dcb8784e` merged in (local merge `baea7973a1a`, not pushed). Verdict: build failed in `RecordDeclared.lean`, so **my lemmas about `inputsOf` do not hold there unchanged**.
+- The only errors are five sites in `declared_port` and `declared_opening` (lines 181, 183, 201, 219, 222) that write an `Opening` as a seven-field `⟨reader, table, key, ports, verdict, start, units⟩`; #10113's `Opening.mk` has eight. Lean reported no error past them in the file, and every module before it built, `RecordInputs` (the first walk) included. `RecordRoles` and `RecordProvenance` were not reached.
+- The mend I'd make, argued and not run: add `(row : Option String)` to both lemmas, write the constructors with `verdict, row, start`, and pass one more `_` to `declared_opening` in `inputsOf_declared`. The loop's new `let`s and refusals should fall to the `repeat' split` already there. I can run it on a branch of my own on your word; until then nothing of mine changes.
+- Waiting on: suites `r20261114-155042-6416` at `cfc0e11b7a8a` (running), and ROWSMERGE's line with #9644's final head (its branch is now at `6b90bd589026`).
+
