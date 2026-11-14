@@ -8325,6 +8325,12 @@
    "type_hash": "8ddbe820be5ee526c6b0591abcd1fb70f4139afa78a498283c181ba91c461d99",
    "unfolded_hash": "c0d6bd0ffe2b6dd82831ce8b37d620c41ddd0e060b03119e8c80a716ea25bd7d"
   },
+  "Accounting.SecurityProofs.LeakParts": {
+   "owner": "@network-accounting"
+  },
+  "Accounting.SecurityProofs.LeakPartsRegistered": {
+   "owner": "@network-accounting"
+  },
   "Accounting.SecurityProofs.LengthCode": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.LengthCode : Accounting.Guarantees.LengthCode"],
@@ -8337,12 +8343,6 @@
    },
    "type_hash": "fd29b937301f7e15c35e5f75741a436e4d352970128213b20320c38ea8c02146",
    "unfolded_hash": "0b9ec73f5f55a42306b2d8baa2bd08550850ea8f84c584a233f487c9d1c9fcb5"
-  },
-  "Accounting.SecurityProofs.LeakParts": {
-   "owner": "@network-accounting"
-  },
-  "Accounting.SecurityProofs.LeakPartsRegistered": {
-   "owner": "@network-accounting"
   },
   "Accounting.SecurityProofs.Localization": {
    "owner": "@memory-accounting",
@@ -27979,6 +27979,10 @@
    },
    "NetTiming.SecurityProofs.ResponseCapped": {
     "function": "NetTiming.cappedCode",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.EgressRegistered": {
+    "function": ["Accounting.Placed.egress", "Accounting.linkCapacity"],
     "outcome": "none"
    }
   },
