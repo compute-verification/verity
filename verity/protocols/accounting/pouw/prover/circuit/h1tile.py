@@ -68,9 +68,10 @@ input to give it. `reference` is the unit on words (``stream=True``: v3's; with 
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Any, Sequence
+from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits import ports as _ports

@@ -4,7 +4,7 @@ process (a failed gate times nothing, exit 4):
     exact   the int8-exact profile's op bodies as served: `int8_exact.quantize_rows`, then `dequantize(int_mm(...))`
     stock   vLLM's W8A8 int8 on sm_120: `ops.scaled_int8_quant`, then `triton_scaled_mm` (not the exact statement; the
             speed reference)
-    fused   `exactlin.quant_rows`, then `exactlin.scaled_mm`, into caller-owned buffers
+    fused   `int8_fused.quant_rows`, then `int8_fused.scaled_mm` (the ops' CUDA kernels), into caller-owned buffers
 
 Each arm's linear is captured in a CUDA graph per shape, one call per weight copy (enough copies to pass 3x the L2, so the
 weights stream from DRAM as they do in a served step).  After a warm-up, each arm's replays per item are set so an item takes
@@ -29,9 +29,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
+from verity_vllm.engine import int8_fused as X
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import exactlin as X
 import kgate
 
 if TYPE_CHECKING:

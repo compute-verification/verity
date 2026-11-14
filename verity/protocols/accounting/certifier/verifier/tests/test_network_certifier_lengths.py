@@ -17,6 +17,7 @@ from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, 
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import EOF, reasons, records, request, run
 from verity.protocols.accounting.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, WardenParams,
                                                     audit, cells, read_reason, reason_frame)
+from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head
 
 #: a schedule whose cells hold an id request's head, and the same with lengths rows
 PLAIN = WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
@@ -378,6 +379,28 @@ def test_a_request_that_is_no_id_request_is_never_released_and_fails_as_its_clie
     assert scanned(plain, {1: out}) is None and plain.lengths == []
     assert audit(PLAIN, *records(plain))["windows"][0]["problems"] == \
         ["connection 2 failed closed (format) at egress cell 0"]
+
+
+def test_a_clients_request_to_the_watermarks_path_is_never_released_with_lengths_rows_or_without():
+    """Beside an honest request, a client's copy of the watermark stream: its head, the run's id on it, a line that
+    names release 0 lost. With lengths rows it has no cell, no place in the release order and no byte for the server,
+    and fails as its client's (malformed) at its first egress slot, failing no window of the audit, as every request
+    that is no id request does. Without them, where another such request is cut whole and released, it is refused in
+    the bucket after its first cell's bytes are read."""
+    run_id = bytes(range(32))
+    mine = watermark_head(run_id) + watermark_chunk(0, 1, (0,)) + WATERMARK_END
+    arrivals = {0: [cells(id_req(1, 3), B), cells(mine, B)]}
+    for params, ended in ((LEN, D), (PLAIN, 1)):
+        certifier, _, server = run([answer((7, 8)), []], arrivals, params=params, windows=2,
+                                   run_nonce=lambda n: run_id[:n])
+        log = {e["ordinal"]: e for e in certifier.log}
+        assert (log[2]["release"], log[2]["failed"], log[2]["failed_at"], log[2]["ended"]) == \
+            (None, "malformed", 0, ended)
+        assert server.conns[1].received == b"" and certifier.requests_released == 1
+        assert {k for _, k, _ in request_cells(certifier, 2)} == {PAD}
+        assert [(o, why) for _, o, why in reasons(certifier)] == [(2, "malformed")]
+        assert (log[1]["release"], log[1]["failed"], log[1]["egress_cells"]) == (0, None, 3)
+        assert audit(params, *records(certifier))["accepted"] == (params is LEN)
 
 
 def test_every_id_request_is_cut_and_released_as_without_lengths_rows():
