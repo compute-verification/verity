@@ -147,19 +147,31 @@ class Cfg(tuple):
                 + (f":k{splits}" if splits != 1 else ""))
 
 
-def auto_splits(units: int, kb: int, sms: int = 132) -> int:
+@functools.cache
+def h200_sms() -> int:
+    """The H200's SMs, its card's `sm.count`: what `sms` is where a caller names none."""
+    # imported on the call, so a launch that passes the device's SMs reads no card
+    from verity.device import load_card, number
+
+    return int(number(load_card("h200-sxm-141gb")["sm"]["count"]))
+
+
+def auto_splits(units: int, kb: int, sms: int | None = None) -> int:
     """Splits of K that put a unit on every SM when the tiles alone don't, each at least two 128-deep segments."""
+    sms = h200_sms() if sms is None else sms
     return max(1, min(sms // units, kb // 2))
 
 
-def splits_for(units: int, kb: int, splits: int, sms: int = 132) -> int:
+def splits_for(units: int, kb: int, splits: int, sms: int | None = None) -> int:
     """The splits a launch runs: none where the tiles alone give every SM one (so the workspace stays under a round of
     tiles, never [M, N] at prefill), else `splits` (0: `auto_splits`), at most one a 128-deep segment."""
+    sms = h200_sms() if sms is None else sms
     return 1 if units >= sms else min(splits or auto_splits(units, kb, sms), kb)
 
 
-def default_cfg(m: int, n: int, k: int, sms: int = 132) -> Cfg:
+def default_cfg(m: int, n: int, k: int, sms: int | None = None) -> Cfg:
     """64-row tiles up to M 64; 256 columns where that still gives every SM a tile, else 128 (64 for N under 128)."""
+    sms = h200_sms() if sms is None else sms
     tm = 64 if m <= 64 else 128
     bn = 256 if cdiv(m, tm) * cdiv(n, 256) >= sms else 128 if n >= 128 else 64
     return Cfg(tm, bn)

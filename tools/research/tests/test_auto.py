@@ -574,6 +574,29 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert failing == {m: "exit 1: no python here" for m in (N2, *NODES)}
 
 
+def test_a_pool_takes_runs_down_to_500000_free_inodes_and_none_under_it(tmp_path, monkeypatch):
+    """The pools' inode floor is 500,000 free inodes: one inode fewer and the pool takes no run, and the refusal names the floor. The probe is the launcher's own payload, run on a machine whose disk reports the free inodes set
+    here."""
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path))
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    src = tmp_path / "src"
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text("def status_doc(now):\n    return {'slots': [], 'waiters': []}\n")
+    machine = ("import os, sys\nreal = os.statvfs\n"
+               "def statvfs(p):\n    s = real(p)\n    if p != {disk!r}:\n        return s\n"
+               "    return os.statvfs_result((s.f_bsize, 4096, 10**9, 10**9, 10**9, 10**7, {free}, {free}, s.f_flag, s.f_namemax))\n"
+               "os.statvfs = statvfs\nexec(sys.stdin.read())\n")
+
+    def research_pool(free: int) -> dict:
+        probe = auto.payload(src, 4, None, ["research"])
+        r = subprocess.run([sys.executable, "-c", machine.format(disk=str(tmp_path), free=free)], input=probe,
+                           capture_output=True, check=True)
+        return json.loads(r.stdout)["research"]
+
+    assert research_pool(499_999) == {"error": f"disk: {tmp_path} has 499999 inodes free, under 500000"}
+    assert research_pool(500_000) == {"slots": [], "waiters": []}
+
+
 def test_the_probe_reads_a_pool_by_the_machines_own_slot_py_where_it_has_one(tmp_path, monkeypatch):
     """A pool's runs wait by the machine's own slot.py, so its line is read by that copy: a launcher's tree older or newer
     than the machine's copy would count the line by other rules than the ones that admit its waiters. A machine without a
@@ -597,11 +620,19 @@ def test_the_probe_reads_a_pool_by_the_machines_own_slot_py_where_it_has_one(tmp
     assert read()["copy"] == "the tree's", "a copy that can't be read is none"
 
 
+#: the probe as a machine whose every disk has room for bytes and no inode free runs it (`python3 -c FULL_DISKS`, the probe on stdin)
+FULL_DISKS = ("import os, sys\n"
+              "os.statvfs = lambda path: os.statvfs_result((4096, 4096, 1 << 30, 1 << 30, 1 << 30, 8_000_000, 0, 0, 0, 255))\n"
+              "exec(compile(sys.stdin.read(), '<probe>', 'exec'), {'__name__': '__main__'})\n")
+
+
 def test_the_probe_counts_a_pools_free_memory_as_its_slots_count_the_live_reservations(tmp_path, monkeypatch, node_2):
     """A pool's `free_gb` is what a lane run would find free there, which `choose` places by. Slots with peaks= count the
     live lane reservations as a crowd reaches them (slot.py's `reserved_gb`), so the probe counts them the same way, with the
     tree's own slot.py: counted whole, a pool whose slots would start the job reads as short of memory and the job goes to
-    wait elsewhere. Here the machine's memory is a stated 200 GiB and six live runs each reserved 30 GiB and reached none."""
+    wait elsewhere. Here the machine's memory is a stated 200 GiB and six live runs each reserved 30 GiB and reached none; its
+    disks are named ones that aren't there, and the probe runs where every disk is out of inodes, so a disk slot.py reads
+    that the test doesn't name blocks every slot every time, not only on a machine short of inodes."""
     slots, ramlock, src = tmp_path / "locks" / "research" / "slots", tmp_path / "ramlock", tmp_path / "src"
     slots.parent.mkdir(parents=True)
     ramlock.mkdir()
@@ -610,12 +641,18 @@ def test_the_probe_counts_a_pools_free_memory_as_its_slots_count_the_live_reserv
     monkeypatch.setenv("RESEARCH_RAMLOCK_DIR", str(ramlock))
     monkeypatch.setattr(slot_only, "POOLS", {**slot_only.POOLS, auto.SPILL_POOL: str(slots)})
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    git = tmp_path / "git"
+    git.write_text("#!/bin/sh\necho git version 0\n")
+    git.chmod(0o755)
+    monkeypatch.setattr(auto, "GIT", str(git))
     (src / auto.SLOT_PY).parent.mkdir(parents=True)
-    (src / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text() + "\n\ndef memory_gb(root=None):\n    return 200\n")
+    (src / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text() + "\n\ndef memory_gb(root=None):\n    return 200\n"
+                                    f"\n\nDISK = Path({str(tmp_path / 'no-disk')!r})\n\n\ndef cache_disk():\n    return DISK\n")
 
     def read(lines: str) -> dict:
         slots.write_text(lines)
-        return auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[CPU1]["research"]
+        return auto.read(src, 4, reach=lambda name: [sys.executable, "-c", FULL_DISKS],
+                         run=lambda argv, data: subprocess.run(argv, input=data, capture_output=True))[CPU1]["research"]
 
     whole = read("r0 0-3 mem=30\nr1 4-7 mem=30\n")
     assert whole["free_gb"] == 200 - 179 and all(s["blocked"].startswith("21 GB of memory free") for s in whole["slots"])
@@ -1661,3 +1698,11 @@ def test_the_probe_reads_the_machines_a_machine_reaches_only_when_asked(tmp_path
     (tmp_path / "peers").write_text(f"# name, ssh options\n{CPU5} -i /k research@10.0.0.5\n\n{CPU1} research@10.0.0.1 # itself\nbare\n")
     assert read(peers=True)["peers"] == [CPU1, CPU5]
     assert "peers" not in read()
+
+
+def test_a_description_that_does_not_parse_gives_no_share_and_says_so(tmp_path, capsys):
+    (tmp_path / auto.DESCRIPTION).parent.mkdir(parents=True)
+    (tmp_path / auto.DESCRIPTION).write_text("[shares\n")
+    assert auto.share_cpus(tmp_path) is None
+    assert f"research run: {tmp_path / auto.DESCRIPTION} unread, so verity has no share on vy-nebius-2 (TOMLDecodeError" in \
+        capsys.readouterr().err

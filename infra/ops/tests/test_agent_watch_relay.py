@@ -479,7 +479,6 @@ def test_a_silent_agent_and_an_ended_run_lead_with_the_records_handle_and_ring_i
         f"{proofs} *Agent watch:* run r20261019-040000-ef56 (slot --by proofs --) of lane proofs ended rc=0 after 30 s on "
         "vy-nebius-2."]
     assert [r["thread_ts"] for r in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 2, "the silent posts; run ends ring-run"
-    permalink = relay.slack.permalink(relay.REG, relay.ALERTS, "17600003.0")
     assert relay.ring_runs == [
         ["--run", "r20261019-040000-cd34", "--rc", "1", "--text", "lean build failed after 12 min on vy-nebius-2: "
          + relay.slack.permalink(relay.REG, relay.ALERTS, "17600004.0"), "--agent", co],
@@ -848,3 +847,10 @@ def test_an_outage_leads_with_top_names_daniel_and_lists_the_coordinators_down(r
     out = relay.text(rec)
     assert out.startswith(relay.slack.tag(relay.slack.entry(relay.REG, "top"))) and f"<@{daniel['slack_user']}>" in out
     assert "5 coordinators have been down" in out and "@kernels, @proofs" in out and "every 15 min" in out
+
+
+def test_a_sent_file_that_does_not_parse_counts_no_line_as_posted_and_says_so(relay, capsys):
+    assert relay.load_sent() == {} and capsys.readouterr().out == ""
+    relay.sent_path().write_text("{")
+    assert relay.load_sent() == {}
+    assert "unreadable, so no line counts as posted before (JSONDecodeError" in capsys.readouterr().out

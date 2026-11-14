@@ -949,12 +949,14 @@ def outputs(out: Path, replay_dir: Path) -> list[str]:
 def measurement(r: dict) -> dict | None:
     """The cost line as a measurement under its metric id (``metric``: `METRICS`), every figure in `UNIT`, where the
     cost stands (``stands``) and ours and stock were served at the same settings: else the figure is not our changes'
-    cost (`UNLIKE`). None otherwise. Its mark is at the head of its first input, ``measured:`` and what was timed."""
+    cost (`UNLIKE`). None otherwise. Its mark, ``measured``, is its ``mark`` and the head of its first input, before
+    what was timed."""
     c = r["cost"]
     if not (c.get("measured") and c.get("stands") and c.get("metric")) or c.get("settings_differ"):
         return None
     life = c["lifetimes"]
-    return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "better": "lower", "target": c["target"],
+    return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "mark": "measured", "better": "lower",
+            "target": c["target"],
             "ci95": life["ci95"] and [S._pct(x) for x in life["ci95"]], "verdict": c["verdict"], "load": r["load"],
             "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"], "commit": r["commit"],
             "run": r["run"],
@@ -968,18 +970,26 @@ def measurements(r: dict) -> list[dict]:
     (`given_back`), in `MATCH_UNIT`, where the tokens line is measured and the replay's record agrees with the tokens
     and steps it kept; and the advice of the pass it re-ran,
     the bits charged a request (`ADVICE_UNIT`), where the advice line is measured. A line's id (``metric``) is None
-    but for ours at vLLM's published settings on a model `MATCH` and `ADVICE` name."""
-    t, a, on = r["tokens"], r.get("advice") or {}, {"load": r["load"], "ours": r["arms"]["ours"], "commit": r["commit"],
-                                                       "run": r["run"]}
+    but for ours at vLLM's published settings on a model `MATCH` and `ADVICE` name. Each is read from the run's own
+    record, so each has the mark ``measured``, as its ``mark`` and at the head of its first input, where the Metrics tab
+    reads it (benchmarks/README.md, "Metrics")."""
+    t, a, ours, load = r["tokens"], r.get("advice") or {}, r["arms"]["ours"], r["load"]
+    on = {"load": load, "ours": ours, "commit": r["commit"], "run": r["run"]}
     out = [m] if (m := measurement(r)) else []
     if t.get("measured") and t.get("metric") and not t["record_disagrees"]:
-        given = t["tokens_before_first_difference"]
-        out.append({"name": t["metric"], "value": 100 * given / t["tokens_served"], "unit": MATCH_UNIT, "better": "higher",
-                    "tokens_served": t["tokens_served"], "tokens_before_first_difference": given, "requests": t["requests"], "requests_differing": t["requests_differing"],
-                    "reproduces": t["reproduces"], "rep": t["window"]["rep"], **on})
+        given, rep = t["tokens_before_first_difference"], t["window"]["rep"]
+        out.append({"name": t["metric"], "value": 100 * given / t["tokens_served"], "unit": MATCH_UNIT,
+                    "mark": "measured", "better": "higher", "tokens_served": t["tokens_served"],
+                    "tokens_before_first_difference": given, "requests": t["requests"],
+                    "requests_differing": t["requests_differing"], "reproduces": t["reproduces"], "rep": rep, **on,
+                    "inputs": [f"measured: {ours}'s served tokens on the {load} load's burst rep {rep} against its "
+                               "replay's, up to each request's first difference"]})
     if a.get("measured") and a.get("metric"):
-        out.append({"name": a["metric"], "value": a["bits_a_request"], "unit": ADVICE_UNIT, "better": "lower",
-                    "bits": a["bits"], "requests": a["requests"], "tick": a["tick"], "rep": a["window"]["rep"], **on})
+        rep = a["window"]["rep"]
+        out.append({"name": a["metric"], "value": a["bits_a_request"], "unit": ADVICE_UNIT, "mark": "measured",
+                    "better": "lower", "bits": a["bits"], "requests": a["requests"], "tick": a["tick"], "rep": rep, **on,
+                    "inputs": [f"measured: the advice {ours}'s record of the {load} load's burst rep {rep} charges, "
+                               f"over its {a['requests']} requests"]})
     return out
 
 

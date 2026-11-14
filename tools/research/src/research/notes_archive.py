@@ -47,7 +47,7 @@ def plan(root: Path, lane: str, now: dt.datetime, older_days: float = 3, by: str
     moves, kept = [], {k: [] for k in KEPT}
     for p in sorted(d.iterdir()) if d.is_dir() else []:
         rel, m = top + p.name, STAMP_RE.match(p.name)
-        t = dt.datetime.strptime(m[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.timezone.utc) if m else None
+        t = dt.datetime.strptime(m[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.UTC) if m else None
         sub = t and (f"{t:%Y-%m}" if by == "month" else f"{t:%Y-%m}/{t:%d}")
         why = ("dotfile" if p.name.startswith(".") else "directory" if p.is_dir() else "report" if "report" in p.name
                else "unstamped" if t is None else "untracked" if rel not in tracked else "changed" if rel in changed

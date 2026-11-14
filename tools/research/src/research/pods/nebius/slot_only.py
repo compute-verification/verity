@@ -27,7 +27,7 @@ import re
 import shlex
 import signal
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 MARKER = Path("/etc/vy/runs-via-slot")
@@ -131,9 +131,12 @@ def refusal(machine_marker: Path = MARKER, pools: dict[str, str] | None = None) 
 
 def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:
     """The commands an auditor host runs, one a line of its marker; none when the marker can't be read, so nothing runs."""
+    if not marker.exists():
+        return []
     try:
         lines = marker.read_text().splitlines()
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"slot_only: {marker} unread, so no auditor command runs ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     return [shlex.split(ln) for ln in lines if ln.strip() and not ln.lstrip().startswith("#")]
 
@@ -150,9 +153,12 @@ def auditor_refusal(marker: Path = AUDITOR) -> str:
 
 
 def _json(p: Path) -> dict:
+    if not p.exists():
+        return {}
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"slot_only: {p} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return d if isinstance(d, dict) else {}
 
@@ -213,7 +219,7 @@ def stop(o: dict, *, proc: Path = Path("/proc"), kill=os.kill, dry_run: bool = F
             sent.append(p)
         except ProcessLookupError:
             pass
-    return {"at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
+    return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
             "pgid": o["pgid"], "workload_group_seen": o["pgid"] in groups, "sigterm": sent, "dry_run": dry_run, "why": why}
 
 
@@ -226,9 +232,9 @@ def renice(o: dict, nice: int, *, proc: Path = Path("/proc"), dry_run: bool = Fa
                 if not dry_run:
                     os.setpriority(os.PRIO_PROCESS, p, nice)
                 moved.append(p)
-        except (ProcessLookupError, PermissionError):
-            pass
-    return {"at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
+        except (ProcessLookupError, PermissionError) as e:
+            print(f"slot_only: process {p} not reniced ({type(e).__name__})", file=sys.stderr, flush=True)
+    return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
             "reniced": moved, "nice": nice, "dry_run": dry_run, "why": "a direct run, not through a check slot (slot.py)"}
 
 

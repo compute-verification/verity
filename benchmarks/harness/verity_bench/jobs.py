@@ -12,7 +12,7 @@ import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -33,12 +33,14 @@ class Toolchain:
 @dataclass(frozen=True)
 class PlannedPoint:
     """A point of a spec with its identity and its passing run. `why`: for a point with none, why the runs that could
-    have been it aren't (a steady-state point's; a vLLM point's runs either passed or aren't found)."""
+    have been it aren't (a steady-state point's; a vLLM point's runs either passed or aren't found). `again`: named by
+    `--again` (`again`), so `run` launches it though a passing run stands for it."""
 
     point: SweepPoint | SteadyPoint
     identity: str
     passing_run: str | None
     why: str | None = None
+    again: bool = False
 
 
 @dataclass(frozen=True)
@@ -233,10 +235,24 @@ def plan_json(plan: Plan) -> dict[str, Any]:
         "toolchain": value(plan.toolchain),
         "points": [
             {"point": item.point.to_json(), "identity": item.identity, "passing_run": item.passing_run,
-             **({"why": item.why} if item.why else {})}
+             **({"why": item.why} if item.why else {}),
+             **({"again": f"passed by {item.passing_run}"} if item.again and item.passing_run else {})}
             for item in plan.points
         ],
     }
+
+
+def again(plan: Plan, names: Sequence[str]) -> Plan:
+    """The plan with the points `names` names (`--again`, each by its id) launched again by `run`, though a passing run
+    stands for one: a labelled row timed before the harness, or a run at another closure that the point's identity
+    doesn't tell apart. Only named points: there is no form that launches every passed point again. The new run labels
+    and supersedes nothing; the passing run stays the record until a run is labelled on purpose."""
+
+    ids = [item.point.id for item in plan.points]
+    if unknown := [name for name in names if name not in ids]:
+        raise ValueError(f"--again {', '.join(unknown)}: not a point of spec {plan.spec.id!r}, whose points are "
+                         f"{', '.join(ids)}")
+    return replace(plan, points=tuple(replace(item, again=item.point.id in names) for item in plan.points))
 
 
 def _relative_spec(source: str | Path, root: Path) -> str:
@@ -354,11 +370,13 @@ def direct_minutes(spec: ResolvedSpec | SteadySpec, node: str) -> float:
 
 
 def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign: str, tool: str,
-             env: Sequence[str], job: Sequence[str], store_read: bool = False) -> list[str]:
+             env: Sequence[str], job: Sequence[str], store_read: bool = False, cores: str | None = None) -> list[str]:
     """`job` as a recorded `research run --on NODE` through one of the node's GPU slots, for a node whose launcher takes
     only slot runs: the one form of a direct point's launch, whatever the point's spec. The spec's admission
     `max_minutes` bounds the run and its slot; `tool` records it; `env` is its `--env` flags; `store_read` gives the
-    job a read-only key to the store for the run's length (`research run --store-read`), for a job that fetches from it."""
+    job a read-only key to the store for the run's length (`research run --store-read`), for a job that fetches from it.
+    `cores` (`34-43`), a booked slot's: the slot taker runs under `taskset -c CORES`, and takes only a slot within its
+    own CPUs, so it takes that slot or waits for it; without it, the first free slot."""
 
     minutes = direct_minutes(spec, node)
     return [
@@ -374,6 +392,7 @@ def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign
         *(["--store-read"] if store_read else []),
         *env,
         "--",
+        *(["taskset", "-c", cores] if cores else []),
         "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
         "--run-max", f"{minutes * 60:g}",
         "--",
@@ -400,7 +419,8 @@ def _execute(command: Sequence[str], root: Path) -> int:
 
 def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execute: Executor = _execute,
              direct: str | None = None, command: DirectCommand = direct_command) -> int:
-    """Launch one recorded research run for each incomplete point, in the spec's order: queued, or with `direct` on that
+    """Launch one recorded research run for each incomplete point and each point named again (`again`), in the spec's
+    order: queued, or with `direct` on that
     node's GPU slots, each as `command` gives it (a vLLM point's `direct_command`; a steady-state point's is
     `steady_plan.direct_command`). Each launch returns once its run has started on the node, where the runs take the
     slots in turn. The first launch that fails stops the rest; its exit code, or 0."""
@@ -409,7 +429,7 @@ def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execut
     if direct is not None:
         direct_minutes(plan.spec, direct)
     for item in plan.points:
-        if item.passing_run is not None:
+        if item.passing_run is not None and not item.again:
             continue
         argv = research_command(plan, source, item, root) if direct is None else command(plan, source, item, root, direct)
         rc = execute(argv, root)

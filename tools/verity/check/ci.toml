@@ -118,19 +118,28 @@ group = 6
 # circuit-check, and its shard's slot holds them back; the 5-pod plan gives it a shard of its own. The suites in parts by test
 # id (`[tool.verity.tests] parts`) are split so that no shard runs one whole: verity-core-composition, verity-pouw-benchmarks
 # and the certifier verifier's put one part in each group (two parts of a one-process suite on one shard would run in one
-# process), and verity-vllm one beside the audit and two with the Rust build, whose shard holds no other parallel suite, so its
-# lean-suites lane's memory (`check.SHARD_ASKS_GIB`) holds their workers.
+# process), verity-vllm one beside the audit and two with the Rust build, whose shard holds no other parallel suite, so its
+# lean-suites lane's memory (`check.SHARD_ASKS_GIB`) holds their workers, and benchmarks/one_stage the part holding its
+# longest test beside the audit and the rest (`lean-suites:*`) with the Rust build.
 
-# 3 pods: the security analysis's audit beside pytest and the parallel suites; lean-build, the rest of the Lean and the Flock
-# suite; the Rust build and the circuits beside the rest of lean-suites.
+# 3 pods: the security analysis's audit beside the parallel suites and most of pytest (`pytest:*`); lean-build, the rest of
+# the Lean and the Flock suite beside seven of pytest's suites (three parallel ones and four of its longest one-process
+# ones); the Rust build and the circuits beside the rest of lean-suites. Whole beside the audit, pytest ran its parallel
+# suites one at a time and its one-process suites nine at a time, the first shard's longest test step. The second shard's
+# pytest takes no cores from a build (`check.groups`), and its ask (`check.SHARD_ASKS_GIB`'s pytest beside lean-suites)
+# gives the Flock suite's workers memory they lack beside lean-build alone. verity/definitions goes there: beside the audit
+# and vLLM's first part it would match the 5-pod plan's first shard's smaller ask.
 [[plan]]
 shards = [
-    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest", "lean-suites:verity-vllm:1/3",
+    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest:*", "lean-suites:verity-vllm:1/3",
      "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
      "lean-suites:verity/protocols/accounting/certifier/verifier:3/3", "lean-suites:verity-pouw-check-difftest",
-     "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
+     "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",
+     "lean-suites:benchmarks/one_stage:2/7"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
-     "lean-suites:verity-pouw-benchmarks:2/3", "lean-suites:verity/protocols/accounting/certifier/verifier:1/3", "lean-agreement"],
+     "lean-suites:verity-pouw-benchmarks:2/3", "lean-suites:verity/protocols/accounting/certifier/verifier:1/3", "lean-agreement",
+     "pytest:research", "pytest:verity/definitions", "pytest:verity/circuits/ops", "pytest:verity-graph",
+     "pytest:benchmarks/training_slowdown", "pytest:repository", "pytest:verity/protocols/accounting/pous/verifier"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3",
      "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity/protocols/accounting/certifier/verifier:2/3",
      "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*"],
@@ -143,7 +152,8 @@ shards = [
     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "circuit-check:1/4", "lean-suites:verity-vllm:1/3",
      "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
      "lean-suites:verity/protocols/accounting/certifier/verifier:3/3", "lean-suites:verity-pouw-check-difftest",
-     "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
+     "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",
+     "lean-suites:benchmarks/one_stage:2/7"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-suites:verity/protocols/accounting/certifier/verifier:1/3", "lean-agreement",
      "circuit-check:2/4"],
@@ -157,14 +167,15 @@ shards = [
 # its run or for its shard's slot (the vqueue loop gives a last shard of 5 on 9 machines a machine of its own,
 # `landing.shard_machines`). The rest of the audit, the Rust build and ratchet-gate go beside the rest of lean-suites.
 # pytest's verity/definitions, whose one served test bounds it whatever its workers, goes beside the security analysis's
-# audit, as all of pytest does in the 3-pod plan, so pytest's own shard (the rest of its suites) is no longer pytest's whole
+# audit, as it does in the 3-pod plan, so pytest's own shard (the rest of its suites) is no longer pytest's whole
 # run; beside the Rust build it would take half that shard's cores from the build (`check.groups`).
 [[plan]]
 shards = [
     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest:verity/definitions", "lean-suites:verity-vllm:1/3",
      "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
      "lean-suites:verity/protocols/accounting/certifier/verifier:3/3", "lean-suites:verity-pouw-check-difftest",
-     "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
+     "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",
+     "lean-suites:benchmarks/one_stage:2/7"],
     ["flock-circuit-build", "flock-rust-tests", "lean-audit:*", "lean-suites:verity-core-composition:2/3",
      "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity/protocols/accounting/certifier/verifier:2/3",
      "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*", "ratchet-gate"],
