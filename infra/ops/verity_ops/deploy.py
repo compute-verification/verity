@@ -82,8 +82,8 @@ An entry's `accept` is a public key on the node (`/home/research/.ssh/vy-cluster
 line grows (a line is added when the file has none; one with no `from=` already takes the key from anywhere); no address is ever
 taken out, with `--allow-shrink` or without, and every other line stays as it was.
 `roll` puts one such PATH on every node that lists it (every node but the admin-only ones, or those `--on` names), one node at a
-time: it reads every node first and changes nothing if one refuses; then each node accepts the key, so that no list ever names
-an address its machine isn't taken from; then each node's file is installed and read back, and the roll stops at the first node
+time: it reads every node first and changes nothing if one refuses; then each node accepts the key, so that a machine a list comes to name
+already takes the key from every node; then each node's file is installed and read back, and the roll stops at the first node
 whose file doesn't read `ok`. A node that can't be reached is passed by and named last, with the install that brings it up to
 date (exit 1); a staged node the register doesn't hold is passed by. So a machine joins the others in three steps: register it,
 copy the key to it, and `roll`.
