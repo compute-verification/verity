@@ -29,8 +29,9 @@ device memory's, and `default`, the name of the reading of `readings(card)`, `sm
 is stated at unless it names the other: the higher tensor ceiling, `sm` on every card (CMP-438)),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
 kernel can make shared memory, a part of `smem` that no store's size adds; `dram` is the device memory a program gets
-and `dram_installed` the memory on the board, a second reading at or above it; and, only where a run found them, the
-caches an SM serves code and constants from, `l15`, `l1i`, `l0i` and `const_l0`, which the RTX PRO 6000's card has),
+and `dram_installed` the memory on the board, a second reading at or above it, which a registered sheet and a Lean
+table take as device memory; and, only where a run found them, the caches an SM serves code and constants from, `l15`,
+`l1i`, `l0i` and `const_l0`, which the RTX PRO 6000's card has),
 `rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth, and `read`, the
 fastest read of it measured, which stands at the bandwidth as a placeholder where none is), `weight` (the tensor
 units a MAC of each format uses), `price` (what an operation costs in tensor units, each operation charged in seconds at
@@ -138,7 +139,7 @@ A file has `device` (`sku`, the GPU card, and `count`, how many of it the node c
 and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`), its
 `bytes` and its `rate`. DRAM's bytes are the memory the node's VM is given (`lsmem -b`), above `MemTotal`, which leaves
 out what the kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf with no read
-on record has no table. A GPU's own memory is not stated: it is its card's `store.dram`, whole.
+on record has no table. A GPU's own memory is not stated: it is its card's `store.dram_installed`, whole.
 
 A leaf's `rate` is the most its bytes are read back at, in `B/s`, marked `ceiling`: the tightest bound on record that
 holds whatever the node runs. The DRAM leaf's is the host card's `memory.bandwidth_max`, the server's channels. A
