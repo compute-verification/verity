@@ -55,7 +55,7 @@ def test_boolean_gemm_partitions(gemm):
 def test_no_configuration_states_a_shape_of_its_own():
     """Each configuration is a served one of b1's, or b1's Definitions at a shape benchmarks/slowdown states (`models.toml`,
     read through its loader), differing from the base only by that shape and what is no shape (the model's name, the
-    norm's epsilon, the QKV bias); and a served configuration whose model rho has a row for has that row's shape."""
+    norm's epsilon, the QKV bias); and a served configuration whose model the slowdown calculator has a row for has that row's shape."""
     from verity.definitions.registry import b1
     served = (b1.B0_CONFIG, b1.B1_CONFIG, b1.SMOL360_CONFIG)
     models = R.rho_models()
