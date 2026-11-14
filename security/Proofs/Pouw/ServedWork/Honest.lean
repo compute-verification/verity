@@ -42,7 +42,7 @@ import Proofs.Pouw.ServedWork
 # `ServedWork` is honest and nontrivial
 
 The honest and nontrivial lemmas of `Properties.Pouw.Served.ServedWork`, over `Proofs.Pouw.MonitoringPeriodJ10R.Honest`'s honest J10-R
-period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the executionPhases' inputs (`hacc`, `hsalt`, `hdraw`).
+period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the execution phases' inputs (`hacc`, `hsalt`, `hdraw`).
 
 * `fm`, `fa c`: a flat machine. A program is any function, and every run uses `c` units of one resource at rate 1 and
   exchanges nothing, so its cost at price 1 is `c` (`fa_cost`). It meets the device premises (`fa_G1`, `fa_G2`).
@@ -53,7 +53,7 @@ period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the execu
 * `served_rest`, `served_meets`: at any `c ≥ 0` and `p = 1` the honest inventory meets every premise `ServedWork` adds
   to `H1J10RCheckedCreditMonitoringPeriod`'s, which `j10r_meets` gives, but `SAKServed`, and at `c = N_p` that one too;
   `served_honest` is the conclusion there.
-* `served_nontrivial`: `ServedWork` is false without `SAKServed`. On the free machine (`fa 0`), at `n ≥ 17` executionPhases
+* `served_nontrivial`: `ServedWork` is false without `SAKServed`. On the free machine (`fa 0`), at `n ≥ 17` execution phases
   and `δ_s = e^{−1}`, every other premise holds, `SAKServed` fails (`not_sakServed_free`: the honest program gets
   every tile right at no cost), and every path is accepted and earns credit `(1 − ε(n))·N_p·n > 0` for no work, so the
   event has probability 1, past the bound `e^{−1}`.
@@ -246,7 +246,7 @@ theorem prob_true {Ω : Type} [Fintype Ω] [Nonempty Ω] {P : Ω → Prop} (h : 
   exact div_self (Nat.cast_pos.mpr Fintype.card_pos).ne'
 
 include hk in
-/-- **The credit of the honest period is positive** past `n ≥ 17` executionPhases at `δ_s = e^{−1}`: `ε(n) = Λ/n` with
+/-- **The credit of the honest period is positive** past `n ≥ 17` execution phases at `δ_s = e^{−1}`: `ε(n) = Λ/n` with
 `Λ = j10rRate (k s_T) 1 ≤ 16`. -/
 theorem creditPrefix_pos (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β)) (n : ℕ) (hn : 17 ≤ n)
     (x : Paths (Ω1 σ sT) n) :
@@ -304,7 +304,7 @@ theorem not_sakServed_free (hKd : 1 ≤ k sT) :
   linarith
 
 /-- **`ServedWork` is false without `SAKServed`.** On the free machine (`fa 0`: every program costs nothing), at the
-honest J10-R period of `n ≥ 17` executionPhases, `δ_s = e^{−1}`, price 1 a word, no luck allowance, no degenerate salts and
+honest J10-R period of `n ≥ 17` execution phases, `δ_s = e^{−1}`, price 1 a word, no luck allowance, no degenerate salts and
 the honest inventory, every other premise of `ServedWork` holds, in its order (`j10r_meets`, `served_rest`), and
 `SAKServed` fails (`not_sakServed_free`). The conclusion fails with it: every accepted path is in its event, with no
 work and positive credit (`creditPrefix_pos`), so its probability is 1, past the bound `e^{−1}`. -/

@@ -3,9 +3,9 @@ module
 public import NetworkCertifier.AdviceV1
 
 /-!
-# The certifier program: advice v1's whole executionPhase charged (`ChargeCount_v2`)
+# The certifier program: advice v1's whole execution phase charged (`ChargeCount_v2`)
 
-The executable forms of `Security/Definitions/Certifier/WindowCharge.lean` that the executionPhase charge's difftest
+The executable forms of `Security/Definitions/Certifier/WindowCharge.lean` that the execution phase charge's difftest
 runs, under the same names in `NetworkCertifier.WindowCharge`, on `NetworkCertifier.AdviceV1`'s counting encoder. Lean
 core only: a bin is `AdviceV1.bitlen` where the reference reads Mathlib's `Nat.size`, and `charges` takes the windows as
 a list where the reference takes them as a function on `Fin W`. `Proofs.Certifier.Code` (`CodeChargesWhole`)
@@ -72,7 +72,7 @@ def countHi (S : Nat) : Nat := 2 ^ bitlen S - 1
 /-- `zigzag(r − rank)`. -/
 def zigzag (r rank : Nat) : Nat := if rank ≤ r then 2 * (r - rank) else 2 * (rank - r) - 1
 
-/-- What the whole executionPhase's charge reads of the registered book (`WindowBook`, and `first_carry`). -/
+/-- What the whole execution phase's charge reads of the registered book (`WindowBook`, and `first_carry`). -/
 structure Book where
   arrived : Table
   nHits : Table
@@ -84,13 +84,13 @@ structure Book where
   lag : Table
   priors : List (Nat × Nat)
 
-/-- What a executionPhase carries to the next (`WindowCarry`). -/
+/-- What an execution phase carries to the next (`WindowCarry`). -/
 structure Carry where
   dec : AdviceV1.Carry
   pos : Nat
   rank : Nat
 
-/-- One executionPhase's advice: its decisions, its hits' values, its order entries `(p, r)` and its length terms
+/-- One execution phase's advice: its decisions, its hits' values, its order entries `(p, r)` and its length terms
 `(max_tokens, output_len)`, each of the slots that hold one, in order. -/
 structure Advice where
   ds : List Bool
@@ -122,7 +122,7 @@ def entrySyms (bk : Book) : Nat → Nat → List (Nat × Nat) → Option (List S
         (binned bk.gap GAP_CAP (e.1 - pos) ++ (binned bk.index ZIG_CAP (zigzag e.2 rank) ++ q.1), q.2)
     else none
 
-/-- The executionPhase's symbols in `window_code.code_executionPhase`'s order, and the carry after them. -/
+/-- The execution phase's symbols in `window_code.code_executionPhase`'s order, and the carry after them. -/
 def syms (bk : Book) (N H O : Nat) (cy : Carry) (x : Advice) : Option (List Sym × Carry) :=
   (decSyms cy.dec x.ds).bind fun d =>
     (hitSyms bk x.hits).bind fun hs =>
@@ -136,7 +136,7 @@ def tailBits : List (Nat × Nat) → Option Nat
   | [] => some 0
   | t :: ts => if t.1 ≤ MT_CAP ∧ t.2 < 2 ^ bitlen t.1 then (tailBits ts).map fun b => bitlen t.1 + 1 + b else none
 
-/-- One executionPhase's charge (`reference_window`, `ChargeCount_v2{N, H, O, L}`), and the next executionPhase's carry. -/
+/-- One execution phase's charge (`reference_window`, `ChargeCount_v2{N, H, O, L}`), and the next execution phase's carry. -/
 def executionPhase (bk : Book) (N H O L : Nat) (cy : Carry) (x : Advice) : Option (Nat × Carry) :=
   if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ x.lens.length ≤ L ∧ cy.dec.run < 3 ∧
       cy.rank ≤ INDEX_CAP + 1 then
@@ -144,7 +144,7 @@ def executionPhase (bk : Book) (N H O L : Nat) (cy : Carry) (x : Advice) : Optio
       (tailBits x.lens).bind fun t => if c + t < 2 ^ AdviceV1.CW then some (c + t, q.2) else none
   else none
 
-/-- A run's charges: each executionPhase's, the carry passed along. -/
+/-- A run's charges: each execution phase's, the carry passed along. -/
 def chargesFrom (bk : Book) (N H O L : Nat) : Carry → List Advice → Option (List Nat)
   | _, [] => some []
   | cy, x :: ws => (executionPhase bk N H O L cy x).bind fun p => (chargesFrom bk N H O L p.2 ws).map fun ls => p.1 :: ls
@@ -152,7 +152,7 @@ def chargesFrom (bk : Book) (N H O L : Nat) : Carry → List Advice → Option (
 /-- The session's first carry (`first_carry`). -/
 def Book.first (bk : Book) : Carry := ⟨⟨bk.priors, 0⟩, 0, 0⟩
 
-/-- The run's charges per executionPhase, from the session's first carry. -/
+/-- The run's charges per execution phase, from the session's first carry. -/
 def charges (bk : Book) (N H O L : Nat) (ws : List Advice) : Option (List Nat) :=
   chargesFrom bk N H O L bk.first ws
 
