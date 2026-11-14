@@ -56,7 +56,7 @@ sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "
 
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import window_audit as A5  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import records_audit as RA  # noqa: E402
 import zk_mutants as ZM  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402

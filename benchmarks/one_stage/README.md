@@ -15,7 +15,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it. A0's and A5's are SPOT's
   `template_audit.py` and `window_audit.py` (`verity/protocols/proofs/spot/prover/audit/`, its README).
 - `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`), as SPOT's
-  `verifier/one_stage/compose_circuit.py` does.
+  `prover/audit/compose_circuit.py` does.
 - `pod.sh`: the entry point on a CPU pod.
 - `a5_llama1b_h200.sh`: A5 over a GPU-served window, in one job on an H200 node, from a clone of the tree
   (`bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 row on one H200 under `gpu-lease`: its Build and
