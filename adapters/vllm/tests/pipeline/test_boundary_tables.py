@@ -2,13 +2,16 @@
 hook on a stand-in for vLLM's Model Runner V2 reading each MLA layer's rows at the step's slots, by request and position,
 across chunked prefill, decode, padding and a recompute after a preemption; the builder's tables over them under the
 class's names and domains, refused for a request whose rows don't match its lengths or after a step the hook couldn't
-read; a cache that doesn't hold bf16 latent rows refused; the channel between the two processes; and the window's boundary
-commitment (`boundary_windows.BoundaryWindows`) waiting for each class's tables' roots and listing them beside its values,
+read; over fp8_ds_mla caches, each row read as its 328 words and the tables and their domains at those words, while a bf16
+launch's layout is pinned as it was before any cache's layout was read; a cache that holds neither layout refused; the
+channel between the two processes; and the window's boundary commitment (`boundary_windows.BoundaryWindows`) waiting
+for each class's tables' roots and listing them beside its values,
 registered by both verifiers from public items alone; every table of a class filled to its C rows, so that no published
 string shows a request's length; and what round 2 opens, kept on the node, a served table loaded by its name."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import stat
 from types import SimpleNamespace as NS
@@ -25,12 +28,17 @@ from verity.commitments.windows import rows as CS
 from verity_vllm.commit import history_tables as H
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, boundary_windows as BW
-from verity_vllm.records.boundary_tables import ROOTS
+from verity_vllm.records.boundary_tables import ROOTS, TableRoots
 
 RUN = "a" * 128
 PROGRAM = "cd" * 64
 CAP = 16
 BLOCK = 4
+#: an fp8_ds_mla cache row's bytes: 512 e4m3 NoPE bytes, four f32 scales, 64 bf16 RoPE dims
+FP8_ROW = 656
+#: a bf16 class's layout (`test_a_bf16_launchs_hook_tables_domains_and_program_are_unchanged`) as it was before any cache's
+#: layout was read: a change to it changes what every bf16 launch commits
+BF16_LAYOUT = "c6406c32156291d13279096cc11a48ae9a2b88b52377e5d3ea3343b5bb9b130a"
 
 
 def test_a_tables_name_binds_the_run_the_class_the_slot_and_the_layer_and_nothing_else():
@@ -48,12 +56,19 @@ def test_a_key_is_refused_without_a_run_or_with_a_class_or_slot_that_isnt_a_natu
 
 
 class Mla(torch.nn.Module):
-    """A stand-in for an MLA layer the engine bound a KV cache to: [blocks, block size, 576] bf16."""
+    """A stand-in for an MLA layer the engine bound a KV cache to: [blocks, block size, 576] bf16, or (``row_bytes``) a
+    byte cache, fp8_ds_mla's [blocks, block size, 656] u8."""
 
-    def __init__(self, i: int, blocks: int = 16, dtype: str = "auto", words: int = H.WORDS) -> None:
+    def __init__(self, i: int, blocks: int = 16, dtype: str = "auto", words: int = H.WORDS, row_bytes: int = 0) -> None:
         super().__init__()
         self.layer_name, self.kv_lora_rank, self.qk_rope_head_dim = f"model.layers.{i}.self_attn.attn", words - 64, 64
-        self.kv_cache_dtype, self.kv_cache = dtype, torch.zeros(blocks, BLOCK, words, dtype=torch.bfloat16)
+        self.kv_cache_dtype = dtype
+        self.kv_cache = (torch.zeros(blocks, BLOCK, row_bytes, dtype=torch.uint8) if row_bytes else
+                         torch.zeros(blocks, BLOCK, words, dtype=torch.bfloat16))
+
+
+def fp8(i: int, dtype: str = "fp8_ds_mla", row_bytes: int = FP8_ROW) -> Mla:
+    return Mla(i, dtype=dtype, row_bytes=row_bytes)
 
 
 class IndexerCache(torch.nn.Module):
@@ -65,15 +80,19 @@ class IndexerCache(torch.nn.Module):
 
 
 class Model(torch.nn.Module):
-    def __init__(self, layers: tuple[int, ...] = (0, 3)) -> None:
+    def __init__(self, layers: tuple[int, ...] = (0, 3), cache: bool = False) -> None:
         super().__init__()
-        self.layers = torch.nn.ModuleList([Mla(i) for i in layers] + [IndexerCache()])
+        self.layers = torch.nn.ModuleList([fp8(i) if cache else Mla(i) for i in layers] + [IndexerCache()])
 
 
-def row(request: str, position: int, layer: int, gen: int = 0) -> np.ndarray:
+def row_words(m: Mla) -> int:
+    return m.kv_cache.shape[-1] * m.kv_cache.element_size() // 2
+
+
+def row(request: str, position: int, layer: int, gen: int = 0, words: int = H.WORDS) -> np.ndarray:
     """The stand-in's latent row: finite bf16 bit patterns that differ by request, position, layer and computation."""
     seed = (sum(map(ord, request)) * 131 + position * 17 + layer * 7 + gen * 3) % 200
-    return (0x3F00 + (seed + np.arange(H.WORDS)) % 256).astype(np.uint16)
+    return (0x3F00 + (seed + np.arange(words)) % 256).astype(np.uint16)
 
 
 class Runner:
@@ -101,8 +120,8 @@ class Runner:
                 for m in self.model.layers:
                     if isinstance(m, Mla):
                         i = int(m.layer_name.split(".")[2])
-                        m.kv_cache.view(torch.int16).view(-1, H.WORDS)[slot] = torch.from_numpy(
-                            row(rid, p, i, self.gen.get(rid, 0)).view(np.int16))
+                        m.kv_cache.view(torch.int16).view(-1, row_words(m))[slot] = torch.from_numpy(
+                            row(rid, p, i, self.gen.get(rid, 0), row_words(m)).view(np.int16))
                 slots.append(slot)
             qsl.append(qsl[-1] + n)
             nct.append(start)
@@ -121,10 +140,10 @@ def step(**sched: tuple[int, int]) -> NS:
               total_num_scheduled_tokens=sum(n for _s, n in sched.values()), scheduled_spec_decode_tokens={})
 
 
-def serve() -> tuple[Runner, BT.StepHook, Hooks]:
+def serve(cache: bool = False) -> tuple[Runner, BT.StepHook, Hooks]:
     """Request a: a 5-id prompt in two prefill chunks, then three decodes; b joins at a's second chunk, is preempted after
-    four positions and recomputed from 0."""
-    model, hooks = Model(), Hooks(tag="test")
+    four positions and recomputed from 0. ``cache``: over fp8_ds_mla caches."""
+    model, hooks = Model(cache=cache), Hooks(tag="test")
     runner = Runner(model)
     hook = BT.StepHook(model).install(runner, hooks)
     runner.execute_model(step(a=(0, 3)))
@@ -235,12 +254,76 @@ def test_the_builder_refuses_a_class_at_other_layers_than_rank_0_holds():
     assert "the class's tables are at layers [0], rank 0 holds [0, 3]" in out["error"]
 
 
-@pytest.mark.parametrize("layer", [Mla(0, dtype="fp8_ds_mla"), Mla(0, dtype="fp8"), Mla(0, words=512)])
-def test_a_cache_that_doesnt_hold_bf16_latent_rows_is_refused(layer):
+@pytest.mark.parametrize("layer", [Mla(0, dtype="fp8_ds_mla"), Mla(0, dtype="fp8"), Mla(0, words=512),
+                                   fp8(0, dtype="auto"), fp8(0, row_bytes=576), fp8(0, row_bytes=640), fp8(0, dtype="int8")])
+def test_a_cache_that_holds_neither_bf16_latent_rows_nor_fp8_ds_mla_rows_is_refused(layer):
+    """A bf16 cache named fp8, an fp8 cache of 576 bytes a row (FlashMLA's dense fp8 layout, not fp8_ds_mla's), one of 640,
+    a byte cache named bf16 or int8: each refused, so no table holds rows of a layout nothing reads."""
     model = Model()
     model.layers[0] = layer
-    with pytest.raises(ValueError, match="doesn't hold DsaLatentRow_v1's 576 bf16 words a row"):
+    with pytest.raises(ValueError, match="holds neither DsaLatentRow_v1's 576 bf16 words a row nor fp8_ds_mla's 656 bytes"):
         BT.StepHook(model)
+
+
+def test_layers_of_two_layouts_are_refused():
+    model = Model()
+    model.layers[1] = fp8(3)
+    with pytest.raises(ValueError, match=r"the model's MLA caches hold rows of two layouts: \{0: 'bf16', 3: 'fp8_ds_mla'\}"):
+        BT.StepHook(model)
+
+
+def test_over_fp8_ds_mla_caches_the_hook_reads_each_row_as_its_328_words_and_the_builder_builds_tables_of_them():
+    """The fp8_ds_mla row's 656 bytes, read as 328 u16 words in byte order (`history_tables.LAYOUT_WORDS`): each request's
+    rows at each layer by position as the bf16 hook reads them, across the recompute, and the class's tables at 328 words,
+    under the domain those words bind."""
+    runner, hook, hooks = serve(cache=True)
+    words = H.LAYOUT_WORDS["fp8_ds_mla"]
+    assert words == FP8_ROW // 2 == 328 and BT.layout(runner.model) == "fp8_ds_mla" and hook.latents.words == words
+    make, tables = built()
+    out = BT.Builder(hook.latents, make).build(BT.assignment(3, RUN, PROGRAM, 8, 4, [0, 3], CAP,
+                                                            [("b", 3, 3, "length"), ("a", 5, 4, "stop")]))
+    assert "error" not in out
+    for e, t in zip(out["tables"], tables, strict=True):
+        assert e["words"] == words and e["domain"] == HT.domain(PROGRAM, e["value"], words, CAP).domain_id.hex()
+        assert e["domain"] != HT.domain(PROGRAM, e["value"], H.WORDS, CAP).domain_id.hex()
+    assert np.array_equal(np.stack(tables[3].rows[:8]), np.stack([row("a", p, 3, 0, words) for p in range(8)]))
+    assert np.array_equal(np.stack(tables[1].rows[:5]), np.stack([row("b", p, 3, 1, words) for p in range(5)]))
+    with pytest.raises(ValueError, match="the tables' rows are 576 words, the caches' 328"):
+        BT.StepHook(runner.model, latents=BT.Latents([0, 3]))
+    hooks.uninstall()
+
+
+def test_a_bf16_launchs_hook_tables_domains_and_program_are_unchanged():
+    """A bf16 launch is unchanged by the fp8_ds_mla layout: its rows are 576 words, its layout's ports, domains, provenance
+    and program are the ones they were before the layout was read (`BF16_LAYOUT`), and its record names no words."""
+    _runner, hook, _hooks = serve()
+    assert hook.latents.words == H.WORDS == H.LAYOUT_WORDS["bf16"] == 576 and BT.layout(Model()) == "bf16"
+    L = BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=CAP)
+    doc = {"program": L.partition["program"], "ports": L.ports(), "provenance": L.provenance(),
+           "words": [L.words(t) for t in L.tables]}
+    assert hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest() == BF16_LAYOUT
+    assert "words" not in L.provenance()["tables"] and L == BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=CAP,
+                                                                      row_words=H.WORDS)
+
+
+def test_a_layout_of_fp8_ds_mla_rows_binds_its_words_in_its_tables_domains_and_its_record():
+    """A class whose tables hold fp8_ds_mla rows: each table at 328 words, under the domain that binds them, its record's
+    tables naming the words, the challenger's own layout from it the same; rank 0's answer at 576 words refused."""
+    words = H.LAYOUT_WORDS["fp8_ds_mla"]
+    L = BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=CAP, row_words=words)
+    bf = BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=CAP)
+    assert L.provenance()["tables"] == {"layers": [0, 3], "capacity": CAP, "words": words}
+    for t in L.tables:
+        assert L.words(t) == words and L.domain(t) == HT.domain(L.partition["program"], t, words, CAP)
+        assert L.ports()[t]["domain"] != bf.ports()[t]["domain"]
+    assert [L.words(v) for v in L.values] == [bf.words(v) for v in bf.values] and L.partition["program"] == bf.partition["program"]
+    entries = [HT.HistoryTable(L.partition["program"], n, words, CAP).entry() for n in L.tables]
+    assert BR.table_roots(TableRoots(0, RUN, 4, 4, tuple(entries), None).dump(), L).keys() == set(L.tables)
+    wide = [HT.HistoryTable(L.partition["program"], n, H.WORDS, CAP).entry() for n in L.tables]
+    with pytest.raises(ValueError, match="isn't at the class's leaves, words and domain"):
+        BR.table_roots(TableRoots(0, RUN, 4, 4, tuple(wide), None).dump(), L)
+    with pytest.raises(ValueError, match=r"a table's words are a layout's, \(576, 328\), not 300"):
+        BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=CAP, row_words=300)
 
 
 def test_the_step_hook_reads_only_the_layers_it_is_given_and_refuses_one_the_model_hasnt():
@@ -328,7 +411,7 @@ def windows(out, latents: BT.Latents, make, lines: list, keep: BT.Kept | None = 
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-tables")
     bw = BW.BoundaryWindows(out, check, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
                             tables=BT.LocalChannel(BT.Builder(latents, make, keep=keep)), layers=(0, 3), capacity=CAP,
-                            verdicts=verdicts)
+                            words=latents.words, verdicts=verdicts)
     return bw.install(sched, hooks), sched, hooks
 
 
@@ -343,12 +426,15 @@ def finish(sched: Scheduler) -> None:
     sched.update_from_output(None, None)
 
 
-def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_values(tmp_path):
+@pytest.mark.parametrize("cache", [False, True], ids=["bf16", "fp8_ds_mla"])
+def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_values(tmp_path, cache):
     """The window's two classes each get their span's tables from rank 0 once it closes, at slot 0 of the class, and list
     their roots after ``b.ingress`` and ``b.egress``; the challenger's copy of each class's layout from ``commit.json``
     alone names and places every table, and both verifiers accept the registration against it, which lists every root
-    before any coin. The class's files reopen to the same roots."""
-    _runner, hook, _hooks = serve()
+    before any coin. The class's files reopen to the same roots. Over fp8_ds_mla caches the tables are 328 words a row and
+    ``commit.json`` names them, and a registration checked against a bf16 layout of the class is refused."""
+    _runner, hook, _hooks = serve(cache)
+    words = hook.latents.words
     make, tables, lines = *built(), []
     bw, sched, hooks = windows(tmp_path, hook.latents, make, lines)
     try:
@@ -364,7 +450,8 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
         run, pub = BR.run_root("s", 0), json.loads((tmp_path / "w0" / f"p{p}-o{o}" / BR.COMMIT).read_text())
         assert pub["values"] == line["values"]
         names = [BT.name(run, p, o, 0, x) for x in (0, 3)]
-        assert list(pub["values"]) == [*BR.PORTS, *names] and pub["tables"] == {"layers": [0, 3], "capacity": CAP}
+        named = {"words": words} if cache else {}
+        assert list(pub["values"]) == [*BR.PORTS, *names] and pub["tables"] == {"layers": [0, 3], "capacity": CAP, **named}
         assert [pub["values"][n]["root"] for n in names] == [made[n].root.hex() for n in names]
         mine = BR.layout_of(pub, PAIR)
         assert mine.tables == tuple(names) and mine.ports()[names[1]] == {k: made[names[1]].entry()[k] for k in
@@ -375,6 +462,7 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
         assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
         bare = BR.Layout(PAIR, 0, 1, p, o, 1, run)
         assert R.check(rec, bare.program, bare.grain, DESIGN, CS.SCHEME, bare.ports()).codes != ()
+        assert mine.row_words == words and (mine.ports() == BR.Layout(PAIR, 0, 1, p, o, 1, run, layers=(0, 3), capacity=CAP).ports()) != cache
         assert BR.reopen(tmp_path / "w0" / f"p{p}-o{o}", PAIR).roots == {k: bytes.fromhex(v["root"])
                                                                           for k, v in pub["values"].items()}
     assert [len(made[BT.name(BR.run_root("s", 0), *k, 0, 3)].rows) for k in ((8, 4), (4, 4))] == [12, 8]

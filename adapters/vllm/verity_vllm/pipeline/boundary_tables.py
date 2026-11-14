@@ -8,8 +8,10 @@ derives every table's name and domain from the class's ``commit.json``, as it do
 **Rows.** On one rank (rank 0: the latent projections are replicated), `StepHook` follows the model runner's
 ``execute_model``: once a step's forward has written the KV cache, it reads each MLA layer's rows at the step's slots, the
 layer's entry of the step's ``slot_mapping`` (the one the layer's cache write read), and
-appends each request's to its rows in `Latents`, by layer, at the positions the step computed. Those rows are
-``DsaLatentRow_v1``'s output, ``[kv_c | k_pe]`` in bf16: the hook refuses a layer whose cache holds any other row.
+appends each request's to its rows in `Latents`, by layer, at the positions the step computed. Those rows are the cache's
+rows in one layout for every layer (`layout`): ``DsaLatentRow_v1``'s output, ``[kv_c | k_pe]`` in bf16, or under an fp8
+cache fp8_ds_mla's 656 bytes, read as u16 words in byte order (`history_tables.LAYOUT_WORDS`); the hook refuses a layer
+whose cache holds any other row, and the tables' words, which each table's domain binds, are the layout's.
 
 **Tables.** A table's domain binds its name, and its name its class and slot, which are fixed only once the request's
 window closes, so the tables are built then (`Builder.build`): the window's boundary commitment assigns each class's spans
@@ -52,15 +54,19 @@ from verity_vllm.records.boundary_tables import (
     TableRoots,
 )
 
-__all__ = ["ASSIGN", "CAPACITY", "KEY", "ROOTS", "WORDS", "Builder", "Channel", "Kept", "Latents", "LocalChannel", "Served",
-           "StepHook", "assignment", "class_rows", "computed", "fill", "key", "layers_of", "load", "mla_layers", "name",
+__all__ = ["ASSIGN", "CAPACITY", "KEY", "LAYOUT_WORDS", "ROOTS", "WORDS", "Builder", "Channel", "Kept", "Latents", "LocalChannel", "Served",
+           "StepHook", "assignment", "class_rows", "computed", "fill", "key", "layers_of", "layout", "load", "mla_layers", "name",
            "private", "private_root"]
 
 #: a span's key in its tables' names (`history_tables.name`): the window's run, the class and the slot
 KEY = "{run}/p{prompt}-o{outputs}/s{slot}"
-WORDS, CAPACITY = H.WORDS, HT.CAPACITY
+WORDS, LAYOUT_WORDS, CAPACITY = H.WORDS, H.LAYOUT_WORDS, HT.CAPACITY
 #: the KV cache dtypes under which an MLA layer's cache holds `WORDS` bf16 words a row (vLLM's ``fused_norm_rope``)
 BF16_CACHES = ("auto", "bfloat16")
+#: the KV cache dtypes under which a sparse MLA layer's byte cache holds fp8_ds_mla's rows (FlashMLA's sparse fp8)
+FP8_DS_MLA_CACHES = ("fp8", "fp8_e4m3", "fp8_ds_mla")
+#: an fp8_ds_mla row's bytes: 512 e4m3 NoPE bytes, four f32 scales, 64 bf16 RoPE dims
+FP8_DS_MLA_ROW = 656
 _LAYER = re.compile(r"(?:^|\.)layers\.(\d+)\.")
 _NAME = re.compile(r"history/(?P<run>[^/]+)/p(?P<prompt>\d+)-o(?P<outputs>\d+)/s(?P<slot>\d+)/"
                    r"model\.layers\.(?P<layer>\d+)\.self_attn\.latent")
@@ -133,27 +139,49 @@ def _kv_layers(model: Any) -> dict[str, Any]:
     return out
 
 
-def mla_layers(model: Any) -> dict[int, tuple[str, Any]]:
-    """Layer index -> (layer name, KV cache) of each MLA layer of ``model`` (the modules the engine bound a cache to,
-    `_kv_layers`, with an MLA latent), refused unless its cache holds `WORDS` bf16 words a row."""
+def _layout(lname: str, m: Any) -> str:
+    """The layout of MLA layer ``lname``'s cache rows (`history_tables.LAYOUT_WORDS`): bf16, `WORDS` bf16 words a row, or
+    fp8_ds_mla, `FP8_DS_MLA_ROW` bytes a row; refused for any other."""
+    cache, dtype = m.kv_cache, str(getattr(m, "kv_cache_dtype", "auto"))
+    width = int(m.kv_lora_rank) + int(getattr(m, "qk_rope_head_dim", 0))
+    if width == WORDS and cache.dim() == 3:
+        if dtype in BF16_CACHES and str(cache.dtype) == "torch.bfloat16" and cache.shape[-1] == WORDS:
+            return "bf16"
+        if dtype in FP8_DS_MLA_CACHES and str(cache.dtype) == "torch.uint8" and cache.shape[-1] == FP8_DS_MLA_ROW:
+            return "fp8_ds_mla"
+    raise ValueError(f"MLA layer {lname}: its cache ({dtype}, {cache.dtype}, {tuple(cache.shape)}) holds neither "
+                     f"DsaLatentRow_v1's {WORDS} bf16 words a row nor fp8_ds_mla's {FP8_DS_MLA_ROW} bytes")
+
+
+def _mla(model: Any) -> tuple[dict[int, tuple[str, Any]], str]:
     out: dict[int, tuple[str, Any]] = {}
+    layouts: dict[int, str] = {}
     for lname, m in _kv_layers(model).items():
         if getattr(m, "kv_lora_rank", None) is None:
             continue
-        layer, cache, dtype = _LAYER.search(lname), m.kv_cache, str(getattr(m, "kv_cache_dtype", "auto"))
-        width = int(m.kv_lora_rank) + int(getattr(m, "qk_rope_head_dim", 0))
+        layer = _LAYER.search(lname)
         if layer is None:
             raise ValueError(f"MLA layer {lname}: its name holds no layer index")
-        if dtype not in BF16_CACHES or str(cache.dtype) != "torch.bfloat16" or width != WORDS or cache.shape[-1] != WORDS \
-                or cache.dim() != 3:
-            raise ValueError(f"MLA layer {lname}: its cache ({dtype}, {cache.dtype}, {tuple(cache.shape)}) doesn't hold "
-                             f"DsaLatentRow_v1's {WORDS} bf16 words a row; serve with --kv-cache-dtype auto")
         if int(layer.group(1)) in out:
             raise ValueError(f"MLA layers {out[int(layer.group(1))][0]} and {lname} share layer {layer.group(1)}")
-        out[int(layer.group(1))] = (lname, cache)
+        layouts[int(layer.group(1))] = _layout(lname, m)
+        out[int(layer.group(1))] = (lname, m.kv_cache)
     if not out:
         raise ValueError("the model has no MLA layer with a bound KV cache")
-    return dict(sorted(out.items()))
+    if len(set(layouts.values())) > 1:
+        raise ValueError(f"the model's MLA caches hold rows of two layouts: {dict(sorted(layouts.items()))}")
+    return dict(sorted(out.items())), next(iter(layouts.values()))
+
+
+def mla_layers(model: Any) -> dict[int, tuple[str, Any]]:
+    """Layer index -> (layer name, KV cache) of each MLA layer of ``model`` (the modules the engine bound a cache to,
+    `_kv_layers`, with an MLA latent), refused unless every cache holds rows of one layout (`layout`)."""
+    return _mla(model)[0]
+
+
+def layout(model: Any) -> str:
+    """The one layout of ``model``'s MLA cache rows (`mla_layers`): bf16 or fp8_ds_mla (`history_tables.LAYOUT_WORDS`)."""
+    return _mla(model)[1]
 
 
 class Latents:
@@ -218,14 +246,16 @@ class StepHook:
     def __init__(self, model: Any, latents: Latents | None = None, layers: Sequence[int] | None = None) -> None:
         import torch
 
-        found = mla_layers(model)
+        found, rows = _mla(model)
         want = tuple(found) if layers is None else tuple(int(x) for x in layers)
         if missing := [x for x in want if x not in found]:
             raise ValueError(f"layers {missing} aren't MLA layers of the model, whose are {list(found)}")
-        self.torch, self.layers = torch, {x: found[x] for x in want}
-        self.latents = latents if latents is not None else Latents(self.layers)
+        self.torch, self.layers, words = torch, {x: found[x] for x in want}, H.LAYOUT_WORDS[rows]
+        self.latents = latents if latents is not None else Latents(self.layers, words)
         if tuple(self.layers) != self.latents.layers:
             raise ValueError(f"the model's MLA layers {list(self.layers)} are not the tables' {list(self.latents.layers)}")
+        if self.latents.words != words:
+            raise ValueError(f"the tables' rows are {self.latents.words} words, the caches' {words} ({rows})")
         self.steps = 0
 
     def after(self, runner: Any, scheduler_output: Any) -> None:
@@ -315,7 +345,7 @@ class Builder:
                 raise ValueError(f"slot {r}: rank 0 holds {n} positions of it, not the {lo} to {hi} its lengths and finish "
                                  f"({finish}) give")
             for x in self.latents.layers:
-                t = make(a.program, name(a.run, a.prompt, a.outputs, r, x), WORDS, a.capacity)
+                t = make(a.program, name(a.run, a.prompt, a.outputs, r, x), self.latents.words, a.capacity)
                 t.append(fill(rows[x], a.prompt, a.outputs, a.capacity))
                 if self.keep is not None:
                     self.keep.write(a.window, a.run, a.prompt, a.outputs, r, x, a.program, t)
