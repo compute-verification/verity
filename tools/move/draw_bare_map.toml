@@ -1,0 +1,60 @@
+# The retired word family DRAW, its bare words (`draw`, `drawn`, `draws`, `Draw`, `Drawn`) in memory accounting's Lean and
+# Python, which `draw_compound_map.toml` leaves to each owner: renamed to the Glossary's sample, sampled and samples.
+#
+# Two parts, namespaces first. `tools/move/rename.py --map tools/move/draw_bare_map.toml` renames the qualified names and
+# the paths of our `Draw` namespaces and modules, as whole words in every file that spells them (`[[words_in]]`, files
+# "*"): `Accounting.Remote.Draw` and `.Assumptions`, `Accounting.SecurityProofs.Remote.Draw` (`Remote.Draw`), the modules
+# `…/Remote/Draw`, `…/RemoteHeld/Draw` and `…/TS/Drawn`. Then `tools/move/draw_bare.py code` renames the unqualified bare
+# words in code and in backticked names alone, never in prose or a string literal, in the files `[code]` lists, which
+# `draw_bare.py plan` writes: the files of ours where no other owner's declaration of the word is reachable through the
+# file's imports (Lean) or imported (Python), and no record serializes a field by its name. Every other file of ours
+# that spells a bare word in code is `[code] by_hand`, renamed by hand and built. Prose is left for its own map.
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py"]
+
+[keep]
+strings = [
+  "\"draw\"",
+  "\"drawn\"",
+  "\"draws\"",
+  "\"unit_draw\"",
+  "'draw'",
+  "'drawn'",
+  "'draws'",
+  "draw/0",
+  "draw/second/0",
+]
+patterns = [
+  "draw: (?:coins: )?",
+]
+
+[words]
+
+[[words_in]]
+files = ["*"]
+
+[words_in.words]
+"Remote.Draw" = "Remote.Sample"
+"RemoteHeld.Draw" = "RemoteHeld.Sample"
+"TS.Drawn" = "TS.Sampled"
+"Remote/Draw" = "Remote/Sample"
+"RemoteHeld/Draw" = "RemoteHeld/Sample"
+"TS/Drawn" = "TS/Sampled"
+
+[code]
+# the words `draw_bare.py code` renames, in code and backticks only
+words = { Draw = "Sample", Drawn = "Sampled", draw = "sample", drawn = "sampled", draws = "samples" }
+# other owners' names our files spell, kept: Flock's and SPOT's `Draw` namespaces, Core's module and `Draw.Subset`, PoUW's
+# and SPOT's properties, Flock's sampling module, the game's `draw`
+keep = [
+  "Flock\\.Draw\\b",
+  "Spot\\.Draw\\b",
+  "Core\\.Draw\\b",
+  "Draw\\.Subset\\b",
+  "Pouw\\.Draw\\b",
+  "Sampling\\.Draws\\b",
+  "Game\\.draw\\b",
+]
+files = []
+by_hand = []
