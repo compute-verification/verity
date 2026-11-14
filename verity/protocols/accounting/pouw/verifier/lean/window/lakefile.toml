@@ -6,7 +6,7 @@
 # to the Python, run on the shared harness (`verity_difftest`), which nothing under the root `PouwWindow` imports.
 # `pouw-leaf-own` is the leaf verifier's check of a drawn-leaf statement's `--registered` file against the accepted
 # registration and produced record (`PouwWindow.RegFile`), and of each of its sessions' draws against the draw policy, every
-# unit (`PouwWindow.FullDraw`).
+# unit (`PouwWindow.FullSample`).
 name = "pouw_window"
 defaultTargets = ["PouwWindow", "pouw-window-difftest", "pouw-leaf-own"]
 

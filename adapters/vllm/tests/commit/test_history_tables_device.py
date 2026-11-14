@@ -20,6 +20,7 @@ from verity.commitments import history as HT
 from verity_vllm.commit import history_tables as H
 from verity_vllm.commit import history_tables_device as HD
 from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as K
+from verity_torch.pouw import row_table_device as RTL
 
 PROGRAM, VALUE = "ab" * 64, H.name("r0", 3)
 
@@ -271,7 +272,7 @@ def _stand_ins(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         empty=lambda n, dtype, device: _Tensor(np.zeros(n, dtype=dtype), device, held),
         device=lambda kind, index=None: SimpleNamespace(
             index=index if index is not None else int(kind.split(":")[1]) if ":" in kind else None)))
-    monkeypatch.setattr(K.DeviceLibrary, "of", staticmethod(of))
+    monkeypatch.setattr(RTL.DeviceLibrary, "of", staticmethod(of))
     return it
 
 

@@ -540,4 +540,4 @@ __all__ = ["CONFIG", "DISK", "DRAM", "LINK_KEYS", "NOT_DISKS", "Side", "Wipe", "
 
 if __name__ == "__main__":
     sys.exit(f"python -m {__spec__.name} runs no wipe, since it has no challenger's side to hand `main`: run "
-             "benchmarks/pous/streamed_wipe/wipe_on_node.py, which hands it the runtime's Side.of")
+             "verity/protocols/accounting/pous/prover/wipe_on_node.py, which hands it the runtime's Side.of")

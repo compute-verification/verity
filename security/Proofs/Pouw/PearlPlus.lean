@@ -11,7 +11,7 @@ public import Proofs.Pouw.PearlPlus.Peel
 public import Proofs.Pouw.PearlPlus.Factors
 public import Proofs.Pouw.PearlPlus.Semantics
 public import Proofs.Pouw.PearlPlus.Assembly
-public import Proofs.Pouw.PearlPlus.Draw
+public import Proofs.Pouw.PearlPlus.Sample
 public import Proofs.Pouw.PearlPlus.Debit
 public import Proofs.Pouw.PearlPlus.Cap
 
@@ -29,7 +29,7 @@ premise `TTOutTilePearlCH100Rev1` reads. Four parts:
   codes), and a passed tile is within the game's inert-work bound, its chain and its forming term (`Cap`).
 * (d) `Assembly`: a passed tile whose openings are its unit's commitment has good words, or SHA-512 collides.
 
-`Draw` reads the run's sample and acceptance as `TileDraw`'s game samples and audits: a passed tile's declaration is
+`Sample` reads the run's sample and acceptance as `TileSample`'s game samples and audits: a passed tile's declaration is
 consistent (`declOK`), the code's tickets are `drawTickets`, and an accepted run's samples are accepted by the tolerant
 audit over `goodDeclTiles ∪ blankTiles`, or SHA-512 collides.
 -/

@@ -1,0 +1,66 @@
+# The retired word DRAW in the names of PoUW's own Lean modules and namespace: what `tools/move/rename.py --map
+# tools/move/pouw_sample_map.toml` renames. GLOSSARY.md's term is the sample: `Draw` becomes `Sample` and `Draws`
+# `Samples`, as proofs' map spells its own (`Spot.Draw` to `Spot.Sample`). Each word is a whole dotted module or namespace
+# name (or its path), so a file moves with every import, `open`, qualified name, lakefile module list, lock module list and
+# path that names it:
+# - `PouwWindow.Draw` (K′ and ε at K, `pouw/verifier/lean/window/`) to `PouwWindow.Sample`;
+# - `PouwCommit.Draws` (the coins' keys and the weighted sample, `pouw/verifier/lean/commit/`) to `PouwCommit.Samples`;
+# - the namespace `Pouw.PearlPlus.Draw` and its module `Proofs.Pouw.PearlPlus.Draw` to `Pouw.PearlPlus.Sample`, which
+#   moves its properties' module `Proofs.Properties.Pouw.PearlPlus.Draw` with it (the same dotted tail);
+# - K′'s properties, `Proofs.Properties.Pouw.Draw`, to `Proofs.Properties.Pouw.Sample`;
+# - Pearl+'s sample's property statements, `Properties.Pouw.PearlPlusDraw`, to `Properties.Pouw.PearlPlusSample`;
+# - the window's full-sample lanes, `PouwWindow.FullDraw`, to `PouwWindow.FullSample`;
+# - Pearl-C's tile sample, `Definitions.Pouw.PearlC.TileDraw` and `Proofs.Pouw.PearlC.TileDrawGap`, to `TileSample` and
+#   `TileSampleGap` (whole words: they name these modules alone);
+# - the namespace's short name `Draw` where Pearl+'s own files name it relatively (`Draw.grid`, `open ... Draw`, in
+#   `PearlPlus/Draw.lean` and `PearlPlus/Cap.lean`) or as the module (`PearlPlus.lean`), where every `Draw` has this sense;
+#   the glob, not the file, so that a second run on the moved tree finds its files and changes nothing.
+# None of these modules' namespaces holds the word but `Pouw.PearlPlus.Draw`, so no other declaration's name changes.
+# H1's two Python modules are `pouw_sample_h1_map.toml`'s.
+#
+# What stays:
+# - every name these modules declare (`drawKey`, `weightedDraw`, `DRAW_DOMAIN`, `draw_misses`, `DrawIsOnItsStreams`, ...):
+#   not this map's, which renames modules and namespaces only;
+# - bytes a record, a wire format, a hash, a domain tag or a signature takes in ([keep]: format ids such as
+#   `verity/pouw/h1/draw/v1`, notes, artifacts, branches);
+# - in a `lean-audit.json`, the records `--update` writes (`reads` keyed by `PouwCommit.Draws`, `PouwWindow.Draw`,
+#   `PouwWindow.FullDraw` and `Properties.Pouw.PearlPlusDraw`): `rename.py` leaves them under their old names for the
+#   records run, `tools/verity/lean/check.py --update` (no declaration is renamed, so `rename.py --moves` prints `{}`);
+# - `Window.Draw` (the sampled proofs' namespace), Dither's coin `Draw`, `Flock.Test.FullDraw` and every other `Draw` of
+#   the tree;
+# - records of what was: the move tool's maps and tests, research's `moves.json`, GLOSSARY.md.
+
+[words]
+
+[[words_in]]
+files = ["*"]
+
+[words_in.words]
+"PouwWindow.Draw" = "PouwWindow.Sample"
+"PouwWindow/Draw" = "PouwWindow/Sample"
+"PouwCommit.Draws" = "PouwCommit.Samples"
+"PouwCommit/Draws" = "PouwCommit/Samples"
+"Pouw.PearlPlus.Draw" = "Pouw.PearlPlus.Sample"
+"Pouw/PearlPlus/Draw" = "Pouw/PearlPlus/Sample"
+"Properties.Pouw.Draw" = "Properties.Pouw.Sample"
+"Properties/Pouw/Draw" = "Properties/Pouw/Sample"
+"Properties.Pouw.PearlPlusDraw" = "Properties.Pouw.PearlPlusSample"
+"Properties/Pouw/PearlPlusDraw" = "Properties/Pouw/PearlPlusSample"
+"PouwWindow.FullDraw" = "PouwWindow.FullSample"
+"PouwWindow/FullDraw" = "PouwWindow/FullSample"
+"TileDraw" = "TileSample"
+"TileDrawGap" = "TileSampleGap"
+
+[[words_in]]
+files = ["security/Proofs/Pouw/PearlPlus.lean", "security/Proofs/Pouw/PearlPlus/*.lean"]
+
+[words_in.words]
+"Draw" = "Sample"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "GLOSSARY.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []

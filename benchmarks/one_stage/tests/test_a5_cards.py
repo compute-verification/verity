@@ -79,11 +79,13 @@ def test_an_audits_cards_go_to_the_proof_server_numbered_as_nvidia_smi_numbers_t
 
 def test_behind_the_zk_server_the_cards_go_to_its_kept_prover_numbered_as_nvidia_smi_numbers_them(tmp_path, made):
     """Behind the ZK server the proof server's kept prover proves on the cards too (`prove --zk --gpu --stream`), in
-    the members' one environment with the cards numbered by PCI bus; without cards it is that environment alone."""
+    the members' one environment with the cards numbered by PCI bus and the witness the host's (the ZK server refuses
+    one the device builds); without cards it is that environment alone."""
     window = {"partition_file": tmp_path / "partition.json", "program_file": tmp_path / "program.json"}
     want = a0.prover_env("loop", window)
     a5.proof_server(_args(zk_server="loop", gpus=[1, 4]), tmp_path, [dict(window)])
-    assert made[-1]["devices"] == [1, 4] and made[-1]["env"] == {**want, "CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
+    assert made[-1]["devices"] == [1, 4]
+    assert made[-1]["env"] == {**want, "FC_HOST_WITNESS": "1", "CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
     assert a5.devices_refusal(_args(zk_server="loop", gpus=[1, 4])) is None
     a5.proof_server(_args(zk_server="loop"), tmp_path, [dict(window)])
     assert made[-1]["devices"] is None and made[-1]["env"] == want

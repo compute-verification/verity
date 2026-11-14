@@ -422,7 +422,7 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
                    **({"round_coins": rounds.challenger.commitment.to_json()} if rounds is not None else {})}
     source = H1_CHALLENGER if opener is not None else "in-process"
     run = H1Run(entry, salt, modules, shapes, rows, steps, transcript_dir=transcript_dir, rounds=rounds, key=key,
-                   draw=draw, admission=admission, coin_source=source, opener=opener, served=served)
+                   draw=draw, admission=admission, coins_from=source, opener=opener, served=served)
     if commit is not None:
         ports = {o["port"] for o in executor.collective_rpc("h1rank_commit", kwargs=dict(commit))}
         if len(ports) != 1:

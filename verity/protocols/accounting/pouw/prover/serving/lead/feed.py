@@ -148,7 +148,7 @@ class Call:
 def _bytes(rand: Rand, count: int) -> np.ndarray:
     got = rand(count)
     if len(got) != count:
-        raise FeedError(f"the coin source gave {len(got)} bytes for {count}")
+        raise FeedError(f"`rand` gave {len(got)} bytes for {count}")
     return np.frombuffer(got, dtype=np.uint8)
 
 
