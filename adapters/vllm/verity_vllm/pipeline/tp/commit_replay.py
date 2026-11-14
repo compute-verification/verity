@@ -19,9 +19,9 @@ checkpoint (`weights_of_record.compose` at the rank's (world, rank)) and opened 
 records go to `sampled_replay_p<pair>_rank<r>.json`, so a rank replayed is never replayed again and the ranks may replay on
 different hosts.  Once every rank's record is there, `fold` decides the Commit as the in-process Commit would have: each rank's
 gates after its pre-replay verdict (`c2.replay_gates`), the row's verdict, `finalize_pair<k>.json`, coverage, `sampled_replay.json`,
-`summary.json` and `runs.jsonl`.  Exit 0 PASS, 3 FAIL, 4 ranks remain, 2 refused (a bundle that is not this record's, a pick too
-large for this host's memory).  Like the single-GPU replay (`pipeline.cpu_replay`), it's the prover's pre-flight check, and it
-leaves no keep.
+`summary.json` and `runs.jsonl`.  Exit 0 PASS, 3 FAIL, 4 ranks remain, 2 refused (a bundle that is not this record's, a
+`summary.json` that is not its Commit's, a pick too large for this host's memory).  Like the single-GPU replay
+(`pipeline.cpu_replay`), it's the prover's pre-flight check, and it leaves no keep.
 """
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ def _rows(out: Path) -> list[dict[str, Any]]:
 
 
 def result_path(out: str | os.PathLike, pair: int, rank: int) -> Path:
-    return Path(out) / f"sampled_replay_p{pair}_rank{rank}.json"
+    return Path(out) / C2.RANK_RESULT.format(pair=pair, rank=rank)
 
 
 # ------------------------------------------------------------------------------------------------ one rank, on CPU
@@ -215,11 +215,25 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
 
 # ------------------------------------------------------------------------------------------------ the record, decided
 
+def _summary(out: Path) -> dict[str, Any]:
+    """The `summary.json` beside a deferred record, where it is that record's Commit's: it names the record.  Else Refused: a Commit
+    refused before its `versions.json` (at its served switches) writes its own failing summary and leaves an earlier Commit's record,
+    which then has no summary to decide."""
+    sp = out / "summary.json"
+    summ = json.loads(sp.read_text()) if sp.is_file() else {}
+    named = summ.get("replay_deferred")                 # what a Commit's summary says of the replay it deferred; a refusal's says nothing
+    if not named or named.get("record") != C2.DEFERRED:
+        raise Refused(f"{sp} names no deferred record, so it is not the summary of the Commit {out / C2.DEFERRED} is of: run the Commit again")
+    return summ
+
+
 def fold(out: Path) -> bool | None:
     """The Commit decided from every rank's replay on the record (None, nothing written, while a rank's is missing): each rank's
-    gates after its pre-replay verdict, then everything the in-process Commit derives from them."""
+    gates after its pre-replay verdict, then everything the in-process Commit derives from them.  Refused, nothing written, where the
+    summary there is not the record's Commit's (`_summary`)."""
 
     dd = json.loads((out / C2.DEFERRED).read_text())
+    summ = _summary(out)
     results: dict[tuple[int, int], dict] = {}
     for b in dd["bundles"]:
         rp = result_path(out, b["pair"], b["rank"])
@@ -288,7 +302,6 @@ def fold(out: Path) -> bool | None:
         sj["sampled_replay"], sj["boundary_linkage"] = sr_comp, lk_comp
         C2.write_atomic(srp, json.dumps(sj, indent=1, default=str) + "\n")
     trt = [r for r in rows if r["arm"] != "control"]
-    summ = json.loads((out / "summary.json").read_text())
     summ["commit_pass"] = [r["commit"].get("commit_pass") if r.get("commit") else None for r in trt]   # None too for a run that never reached its commit
     summ["sampled_replay"] = {k: sr_comp.get(k) for k in C2.SR_SUMMARY_KEYS}
     summ["boundary_linkage"], summ["query_population"] = lk_comp, qp_comp
@@ -298,7 +311,7 @@ def fold(out: Path) -> bool | None:
         summ.update(TPC.only_arm_summary(summ["only_arm"], rows, trt, summ["commit_pass"]))
     replayed = [{k: res.get(k) for k in ("pair", "rank", "bundle", "manifest_sha256", "where", "host", "wall_s", "peak_rss_bytes", "utc")}
                 for _k, res in sorted(results.items())]
-    summ.setdefault("replay_deferred", {}).update(pending_pairs=[], replayed=replayed)
+    summ["replay_deferred"].update(pending_pairs=[], replayed=replayed)
     C2.write_atomic(out / "runs.jsonl", "".join(json.dumps(r, default=str) + "\n" for r in rows))
     C2.write_atomic(out / "summary.json", json.dumps(summ, indent=1, default=str) + "\n")
     dd.update(pending_pairs=[], replayed=replayed, decided={"pass": summ["pass"], "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
@@ -316,6 +329,7 @@ def main(o: Options) -> int:
         if not (out / C2.DEFERRED).is_file():
             raise Refused(f"{out / C2.DEFERRED}: not a deferred TP Commit (tp-commit --replay-deferred) or decided in the Commit")
         dd = json.loads((out / C2.DEFERRED).read_text())
+        _summary(out)                                   # before a rank replays or a verdict is read off the record
         if dd.get("decided"):
             logger.info("[tp-replay] already decided: pass %s (%s)", dd["decided"].get("pass"), dd["decided"].get("utc"))
             return 0 if dd["decided"].get("pass") else 3

@@ -449,7 +449,7 @@ def probability(p) -> bool:
 
 
 def rule(law) -> dict:
-    """`OneStage.rule`: the agreed law, `{"law": "bernoulli", "p"}` or `{"law": "subset" | "stratified" | "work", "k"}`."""
+    """`OneStage.rule`: the agreed sampling design, `{"law": "bernoulli", "p"}` or `{"law": "subset" | "stratified" | "work", "k"}`."""
     kind = law.get("law") if isinstance(law, dict) else None
     if kind == "bernoulli":
         _exactly(law, {"law", "p"}, "the law")
@@ -721,7 +721,8 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
     """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject when the sample's coins don't read
     (`_coins_of`), on R1-R7, the sample's checks (with coins, that they sample it: `_coins_problem`), the record's checks or a
     verdict that ran and did not accept; undecided when only the verifier is missing or has not run; accept
-    exactly when `audit_record` accepts, with the sampled and proved units, the bounds and the profile."""
+    exactly when `audit_record` accepts, with the sampled and proved units, the bounds, whether every verdict ran (the
+    record's ``complete``) and the profile."""
     rec, _ = c
     try:
         coins = _coins_of(p, c, e)
@@ -744,7 +745,7 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return ("undecided", "verifier of record") if all(v["accepted"] is True for v in ran) else ("reject", "verdict")
     profile = audit.profile(rec, e["draw"], p["delta"]).to_json()
     wrong = out["wrong_units"]
-    public = {"bound": wrong["bound"], "drawn": list(e["draw"]["units"]),
+    public = {"bound": wrong["bound"], audit.COMPLETE: out["complete"], "drawn": list(e["draw"]["units"]),
               "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"])}
     return "accept", public, {**profile, "delta": str(profile["delta"])}
 
@@ -761,7 +762,7 @@ def _ran_out(p: dict, rec: dict, src: bytes) -> bool:
 
 
 def covered_params(j) -> dict:
-    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and every bernoulli law refused, at any p
+    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and every bernoulli sampling design refused, at any p
     (`service.bernoulli`)."""
     p = decode_params(j)
     if service.bernoulli(p["law"]):
@@ -1211,10 +1212,9 @@ def file_population(j):
     return {"why": PF.population_why(indices, strata)}
 
 
-def tables_held(j):
-    """`OneStageZk.tablesPiece` (`proofs.tables_why`): v2's refusal of blobs under `digests` (even-length lowercase hex)
-    whose pinned MUFU tables are not the lookups of a circuit whose META is ``{"lookups": lookups}`` (`proofs.lookups_of`;
-    ``{}`` without ``lookups``)."""
+def _tables_case(j):
+    """`OneStageZk.tablesCase`: the blobs' `digests` (even-length lowercase hex) and the lookups of a circuit whose META
+    is ``{"lookups": lookups}`` (`proofs.lookups_of`; ``{}`` without ``lookups``), or the ValueError they read with."""
     j = _json(j)
     ds = j.get("digests") if isinstance(j, dict) else None
     if not isinstance(ds, list):
@@ -1224,10 +1224,28 @@ def tables_held(j):
     if not all(len(d) % 2 == 0 and HEX_DIGITS.fullmatch(d) for d in ds):
         raise D.Reject("not lowercase hex")
     try:
-        lookups = PF.lookups_of({"lookups": j["lookups"]} if "lookups" in j else {})
+        return ds, PF.lookups_of({"lookups": j["lookups"]} if "lookups" in j else {})
     except ValueError as e:
-        return {"why": str(e)}
+        return ds, e
+
+
+def tables_held(j):
+    """`OneStageZk.tablesPiece` (`proofs.tables_why`): v2's refusal of blobs under `digests` whose pinned MUFU tables
+    are not the circuit's lookups (`_tables_case`)."""
+    ds, lookups = _tables_case(j)
+    if isinstance(lookups, ValueError):
+        return {"why": str(lookups)}
     return {"why": PF.tables_why(lookups, ds)}
+
+
+def own_tables(j):
+    """`OneStageZk.ownTablesPiece` (`proofs.own_tables`, `proofs.tables_match_why`): a member's own lookup tables among
+    the blobs under `digests`, by name, and their refusal against the circuit's lookups (`_tables_case`)."""
+    ds, lookups = _tables_case(j)
+    if isinstance(lookups, ValueError):
+        return {"tables": None, "why": str(lookups)}
+    tables = PF.own_tables(lookups, ds)
+    return {"tables": tables, "why": PF.tables_match_why(tables, lookups)}
 
 
 def bound(j):
@@ -1787,7 +1805,7 @@ def agreed_laws(draw, n: int):
 
 
 def _worked(law) -> bool:
-    """Whether an agreed law is expanded over a work table: `work` or a work rate."""
+    """Whether an agreed sampling design is expanded over a work table: `work` or a work rate."""
     return (law.get("law") == "work") if isinstance(law, dict) else str(law).startswith("work-rate:")
 
 
@@ -1806,7 +1824,7 @@ def work_tables(draw, s: Setup):
 
 
 def drawn(draw, law: dict, n: int) -> dict:
-    """The verifier's sample under its expanded law; a work sample's closure, which the audit refuses, one time in four."""
+    """The verifier's sample under its expanded sampling design; a work sample's closure, which the audit refuses, one time in four."""
     kind = law["law"]
     if kind == "subset":
         return {"k": law["k"], "law": "subset", "population": n, "units": sorted(draw(st.permutations(range(n)))[:law["k"]])}
@@ -2451,6 +2469,31 @@ def test_an_accepted_case_is_compared_whole(server):
         case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         verdict_, line = D.replay(ONE_STAGE, case, server)
         assert verdict_ == "accept" and json.loads(line) == answer(case) | {"reason": None}, (law, line)
+
+
+def test_an_accept_says_whether_every_verdict_ran(server):
+    """An accept's public ``complete``, Lean's and the Python's alike: true when every verdict ran, and false beside
+    one that is not of record and did not run (its ``accepted`` null or absent), which the accept does not wait on."""
+    s, design = SETUPS[3], {"k": 2, "law": "subset"}
+    mine = DR.derive(s.program, s.query, design, None)
+    rec = R.record(s.program, s.query, design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF, work_table=None)
+    d = {**mine, "population": s.population, "units": [0, 3]}
+    params = {"anchors": [], "delta": "1/20", "law": design, "leaf_layer": LEAF, "log": [], "partition": None,
+              "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+              "work_table": None}
+    for other, complete in (({}, True), ({"upstream": {"accepted": True, "of_record": False}}, True),
+                            ({"upstream": {"accepted": None, "of_record": False}}, False),
+                            ({"upstream": {"of_record": False}}, False)):
+        evidence = {"draw": d, "instances": 2, "proved_units": DR.proved(d),
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "sessions": [], "statement": {},
+                    "verdicts": {"lean": {"accepted": True, "of_record": True}, **other}}
+        case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+        verdict_, line = D.replay(ONE_STAGE, case, server)
+        got = json.loads(line)
+        assert verdict_ == "accept" and got == answer(case) | {"reason": None}, (other, line)
+        assert got["public"]["complete"] is complete and audit.answer_complete(got) is complete, (other, line)
 
 
 ONE_STAGE_V2 = D.ProtocolPort("sampled-proofs-one-stage-zk", answer, CASES, package=PACKAGE)
@@ -3736,13 +3779,15 @@ TABLE_DIGEST = st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512.values())), st.bi
 LOOKUPS = st.one_of(st.dictionaries(st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512)), st.text("abx", max_size=4)),
                                     st.just({}), max_size=5),
                     st.none(), st.integers(-9, 9), st.text("abx", max_size=4), st.lists(st.sampled_from(sorted(PF.MUFU_SHA512))))
-TABLES_HELD = D.Port(PIECES, "tables_held", tables_held, st.one_of(
+TABLES_CASES = st.one_of(
     st.builds(lambda ds, lk: {"digests": ds, "lookups": lk}, st.lists(TABLE_DIGEST, max_size=5), LOOKUPS),
     st.builds(lambda ds, lk: {"digests": ds, "lookups": lk}, st.lists(TABLE_DIGEST, max_size=5), LOOKUPS),
     st.lists(TABLE_DIGEST, max_size=5).map(lambda ds: {"digests": ds}),
     st.lists(st.one_of(TABLE_DIGEST, st.sampled_from(["0", "AB", "0g", PF.MUFU_SHA512["rcp"].upper()]), st.integers(0, 3)),
              min_size=1, max_size=4).map(lambda ds: {"digests": ds}),
-    JSON), package=PACKAGE)
+    JSON)
+TABLES_HELD = D.Port(PIECES, "tables_held", tables_held, TABLES_CASES, package=PACKAGE)
+OWN_TABLES = D.Port(PIECES, "own_tables", own_tables, TABLES_CASES, package=PACKAGE)
 
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
@@ -5939,7 +5984,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
-              (FILE_POPULATION, 400), (TABLES_HELD, 300), (CHECK_PROVED, 300), (BOUND, 500),
+              (FILE_POPULATION, 400), (TABLES_HELD, 300), (OWN_TABLES, 300), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),

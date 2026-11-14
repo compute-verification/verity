@@ -53,8 +53,8 @@ invariant (`bi-eager`, `bi-compiled`).
 
 ## Arms
 
-A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, `sampled-proofs:SCHEME`) runs the preset's precision with stock FP8 as its
-control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
+A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, or SPOT's under the vLLM adapter's key, `sampled-proofs:SCHEME`) runs
+the preset's precision with stock FP8 as its control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
 checkpoint and quantizes it itself), its `control` (another arm of the spec, or `"none"`), and its `protocols_config`,
 which `verity_vllm.LLM` takes as it is, `{protocol: {...}}`, except that a string `"$NAME"` is the point's environment
 variable NAME (the cubin the spec's setup builds, say). The harness gives an arm with PoUW an in-process challenger as
@@ -317,7 +317,8 @@ Every environment variable the harness reads is declared once in `verity_bench.s
 how long things run) or `debug` (refused on a point, which is always a run of record). A point writes the value settings
 in force, with their SHA-512 digest, to `out/settings.json` beside its result. `verity-bench` refuses a `VERITY_BENCH_*`
 variable that nothing in the tree reads, naming it. A variable the vLLM integration declares is never declared here: the
-harness writes one through `verity_vllm.engine.env`. `benchmarks/harness/tests/test_settings.py` holds the harness's
+harness writes one through `verity_vllm.engine.env`, which it reaches through `verity_bench.adapter`, the one file of the
+benchmarks that imports the vLLM adapter past its public interface. `benchmarks/harness/tests/test_settings.py` holds the harness's
 other direct uses of `os.environ` to a shrink-only baseline.
 
 ## The served table

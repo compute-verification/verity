@@ -52,7 +52,7 @@ theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed
   obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, cap, hz0, hv0, hv1⟩ := hall j.val (by simpa using hj)
   simp only [Array.getElem_map] at hz0 hv0 hv1
-  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ ht j.val
   obtain ⟨pi', pop, -, -, hdr⟩ := Hidden.setupHidden_drawnP hst

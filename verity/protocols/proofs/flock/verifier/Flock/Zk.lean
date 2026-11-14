@@ -7,6 +7,7 @@ constraint at once (`verifyInner`). The session around the reps is `Flock.verify
 module
 
 public import Flock.Verify
+public import Flock.WideLeaf
 public import Flock.ZkLigerito
 
 @[expose] public section
@@ -36,20 +37,27 @@ def SLOT_LOG_MIN : Nat := 13
 
 /-- Level 0's query count `q_0` (live PROTOCOL.md §7, upstream's `zk_queries0`): 277, 242, 229 at `m = 25, 26, 27`, else the
 least `q_0 ≥ 218` (fast100's) with `q_0 log2(1/(√ρ' + 1/50)) ≥ 100`, `ρ' = (L + 2 q_0) / 2L`, `L = 2^{m − 7 − k_0}` (219 at
-`m = 28..31`, 218 at `32..35`, each at least 0.02 bits from the threshold, so the table is exact); none at `m ≤ 24`. -/
-def queries0 (m : Nat) : V Nat :=
+`m = 28..31`, 218 at `32..35`, each at least 0.02 bits from the threshold, so the table is exact); none at `m ≤ 24`.
+
+`wide`: the statement is a wide-leaf one (`Tags.wideLeaf`), whose level 0 is `fast100Wide`'s. The rule is the same and
+only `32..35` differ: there `L = 2^18` as at `m = 31`, so `q_0 = 219` (0.43 bits over the threshold; 218 is 0.03
+under). -/
+def queries0 (wide : Bool) (m : Nat) : V Nat :=
   if m ≤ 24 then throw s!"m = {m}: --zk needs m >= 25 (Ligerito level 0's padding outgrows its lanes at rate 1/2)"
   else if m == 25 then pure 277
   else if m == 26 then pure 242
   else if m == 27 then pure 229
   else if m ≤ 31 then pure 219
-  else if m ≤ 35 then pure 218
+  else if m ≤ 35 then pure (if wide then 219 else 218)
   else throw s!"m = {m}: no fast100 schedule"
 
-/-- The `--zk` schedule: fast100's with level 0's `q_0` queries (restratified, its cap the first stratum), and `t_pad = 2 q_0`. -/
-def schedule (m : Nat) : V (Schedule × Nat) := do
-  let q0 ← queries0 m
-  let some sch := fast100 m | throw s!"m = {m}: no fast100 schedule"
+/-- The `--zk` schedule: the statement version's (`fast100At`: fast100's, a wide-leaf statement's `fast100Wide`'s) with
+level 0's `q_0` queries (restratified, its cap the first stratum), and `t_pad = 2 q_0`. The two statement versions'
+schedules are one at `m ≤ 31`; which one a table's proofs follow is its statement's (`Setup.wideLeaf`), never the
+proof's. -/
+def schedule (wide : Bool) (m : Nat) : V (Schedule × Nat) := do
+  let q0 ← queries0 wide m
+  let some sch := fast100At wide m | throw s!"m = {m}: no fast100 schedule"
   let l0 := sch.levels[0]!
   let strata := decompose q0 l0.d
   return ({ sch with levels := sch.levels.set! 0 { l0 with q := q0, strata, cap := strata.getD 0 0 } }, 2 * q0)
@@ -326,7 +334,7 @@ def verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs :
   if spec.coinTree.isNone then throw "zk: the session's coins are not the keyed coin tree"
   let sess ← Record.decode spec record
   for (st, p) in tabs.zip sess.publics do st.publics p
-  let schs ← tabs.mapM fun st => schedule st.m
+  let schs ← tabs.mapM fun st => schedule st.wideLeaf st.m
   let want := spec.repStreams
   if proofs.size != want.size then throw s!"{want.size} proofs expected"
   if sess.proofSha.size != want.size || !want.all (fun (_, _, w) => sess.proofSha.any (·.1 == w)) then
@@ -357,7 +365,7 @@ def maskFree (st : Stmt) (r : Range) : Bool :=
 when the statement is set up, as upstream does before `Hello`. And, which upstream does not check, Δ and the regions
 avoid the mask slot (`maskFree`, D12). -/
 def shapeOk (st : Stmt) : V Unit := do
-  let _ ← queries0 st.m
+  let _ ← queries0 st.wideLeaf st.m
   let some r := st.c.ranges.find? (·.kind == Kind.mask) | throw "zk: the circuit has no mask slot"
   if r.slotLog < SLOT_LOG_MIN then
     throw s!"slot_log = {r.slotLog}: --zk needs a mask slot of slot_log >= {SLOT_LOG_MIN}"
@@ -386,9 +394,12 @@ private def s (x : String) : Json := Json.str x
 
 /-- The identity's `hooks` for a `--zk` statement (upstream's `zk_identity`): what is masked, and how; `tables` for a session
 of several tables; `os` when the prover's every random value is the OS's bytes (`Tags.osMasks`), else its pads and every
-table's draws are ChaCha20 streams of its seed. -/
-def hooks (maskLog : Nat) (tables : Bool) (os : Bool := false) : Json :=
+table's draws are ChaCha20 streams of its seed; `wide` for a wide-leaf statement (`Tags.wideLeaf`), whose level 0 the
+query rule's text names. -/
+def hooks (maskLog : Nat) (tables : Bool) (os : Bool := false) (wide : Bool := false) : Json :=
   let pads := if os then "os bytes, getrandom" else "prover ChaCha20 stream 4"
+  let q0Text := "q_0 = 277, 242, 229 at m = 25, 26, 27, else the least q_0 >= fast100's with q_0 log2(1/(sqrt(rho') + 1/50)) >= 100; rho' = (L + 2 q_0) / 2L; refused below 100 bits and at m <= 24"
+  let q0Text := if wide then q0Text ++ "; wide leaf: level 0 of 2^19 symbols at m = 32..35 (k_0 = m - 25, L = 2^18), where q_0 = 219" else q0Text
   let draws := if os then "os bytes of its own (getrandom)" else "ChaCha20 streams at purpose | j << 32"
   let base := [("zk", Json.bool true), ("stage", s "m2-prototype (committed verifier coins, CPU)"),
     ("compiler", s "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)"),
@@ -399,16 +410,17 @@ def hooks (maskLog : Nat) (tables : Bool) (os : Bool := false) : Json :=
     ("inner_proof", s "one batched <c, h> = t by a masked dot product (tau = <c, mu> committed by an hm96 leaf, opened after the last coin; Y = h + beta mu)"),
     ("ring_switch", s s!"non-region s_hat_v hidden by the mask slot's uniform words (2^{maskLog} bits per block); the prover refuses coins whose weights do not span"),
     ("ligerito_level0", s "veil figs. 8-9: every lane padded by (W_n + c) mu with t_pad = 2 q_0 uniform coefficients (c = x); four padded uniform lanes, rep r folding its own pair 2r, 2r + 1 after its lane rounds (rho_0, rho_1 F128-independent); the ood value, the lane-round messages and the pair's sums padded; T' and ybar sent (uniform)"),
-    ("ligerito_level0_queries", s "q_0 = 277, 242, 229 at m = 25, 26, 27, else the least q_0 >= fast100's with q_0 log2(1/(sqrt(rho') + 1/50)) >= 100; rho' = (L + 2 q_0) / 2L; refused below 100 bits and at m <= 24"),
+    ("ligerito_level0_queries", s q0Text),
     ("refused_coins", Json.arr #[s "beta = 0", s "mask-slot weights of rank < 128 k over the claims so far", s "rho_0, rho_1 dependent over F128",
       s "a zerocheck outer coin r_j = 1"]),
     ("not_yet_masked", Json.arr #[])]
   Json.mkObj (if tables then base ++ [("tables", s s!"per table: {draws} and hm96 salt trees from id j << 32 (table 0's are a one-table session's); a rank check per table; every table's level-0 root in one commit; every proof after the last coin of every stream (the barrier)")] else base)
 
 /-- A statement's tags under `--zk` in a session of `count` tables: the identity's `hooks` are `hooks` (naming the prover's
-randomness as `t.osMasks` says); its `proof_class` stays upstream's (`NON_ZK_PROOF`). -/
+randomness as `t.osMasks` says, and a wide-leaf statement's level 0); its `proof_class` stays upstream's
+(`NON_ZK_PROOF`). -/
 def tags (t : Tags) (maskLog count : Nat) : Tags :=
-  { t with identity := t.identity.setObjVal! "hooks" (hooks maskLog (count > 1) t.osMasks) }
+  { t with identity := t.identity.setObjVal! "hooks" (hooks maskLog (count > 1) t.osMasks t.wideLeaf) }
 
 /-- M2's committed coin schedule for a session's tables (upstream's `coin_spec_of`): the session's stream, then every table's
 two reps, 512 rounds of at most 512 coins each. -/

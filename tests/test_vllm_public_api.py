@@ -204,7 +204,7 @@ PUBLIC = {
                                           "benchmarks/served_commit's granularity reads",
     "verity_vllm.llm": "I1: the pinned engine's own module: LLM, the protocol options it resolves and the context it hands them "
                        "(resolve_options, protocol_context), which the harness's tests hold its engine to",
-    "verity_vllm.pipeline.commit_coins": "I1: the Commit's coins from the auditor host's challenger, one challenge phase a Commit "
+    "verity_vllm.pipeline.commit_coins": "I1: the Commit's coins from the auditor device's challenger, one challenge phase a Commit "
                                          "(ChallengerGate), which benchmarks/one_stage's local Pearl+ run and benchmarks/pouw's "
                                          "Pearl-C arm take their coins from",
     "verity_vllm.pipeline.replay_bundle": "I1: the replay bundle a Commit with --replay-deferred leaves for its C2 replay on CPU "

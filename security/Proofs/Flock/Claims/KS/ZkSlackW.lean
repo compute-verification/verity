@@ -340,10 +340,10 @@ roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's
 (`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
 theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
-    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
-        (Claims.Flock.zkSched (st j).m).1.k0))
+        (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
     (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ()) (r₀ : Fin ((deployZk rel).V.k x)) (hr₀ : r₀.val = 0) :
     2 * ((deployZk rel).k x : ℝ) + Claims.Flock.joinCW (tables true x).length sch Np rd r₀ +
@@ -392,10 +392,10 @@ roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's
 (`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
 theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
-    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
-        (Claims.Flock.zkSched (st j).m).1.k0))
+        (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
     (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ()) (r₀ : Fin ((deployZk rel).V.k x)) (hr₀ : r₀.val = 0) :
     2 * ((deployZk rel).k x : ℝ) + Claims.Flock.joinCW (tables true x).length sch Np rd r₀ +
@@ -416,10 +416,10 @@ only level 0's event of a table is at round `0` and the slack fits the room (`zk
 theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
-    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
-        (Claims.Flock.zkSched (st j).m).1.k0))
+        (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
     (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ())
     (ev : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
@@ -444,10 +444,10 @@ only level 0's event of a table is at round `0` and the slack fits the room (`zk
 theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
-    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
-        (Claims.Flock.zkSched (st j).m).1.k0))
+        (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
     (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ())
     (ev : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →

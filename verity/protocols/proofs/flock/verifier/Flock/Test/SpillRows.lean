@@ -1,15 +1,16 @@
-/-
+module
+
+public import Flock.Circuit
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+/-!
 `ProvedScope.v2Row` is exactly the `sha512/row/v2` rows the parser takes: a row of `w` leaves (`16 w` bits) is in scope at
 the compressions `HmRow` derives from its length (`⌈(2 w + 17) / 128⌉ − 1`), input row or output row, and at one more or
 one fewer it is not. That includes a row whose bytes mod 128 are at least 112, whose last compression's block holds its
 bytes' end and the padding's start, the `hm96` block only padding: H1's tile receipt at K = 384 (8 (KS + m) = 8 · 14 =
 112 bytes) and its lanes' partials row there. `proved_scope.rs`'s `v2_rows_are_the_parsers` runs the same rows.
 -/
-module
-
-public import Flock.Circuit
-public import Flock.ProvedScope
-meta import Flock.ProvedScope
 
 @[expose] public section
 
