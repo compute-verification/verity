@@ -1,6 +1,6 @@
 module
 
-public import Properties.Accounting.JointBridge.ServiceSoundOfSessions
+public import Properties.Certifier.JointBridge.ServiceSoundOfSessions
 public import Proofs.Pouw.TS.SessionSound
 public import Proofs.Pouw.FillerLuck
 public import Proofs.Pouw.Period.Honest
@@ -27,7 +27,7 @@ imports it and no theorem here binds `X`.
 
 namespace Accounting.SecurityProofs.Bridge
 
-open Pouw.RelativeSecurity Properties.Accounting.JointBridge Properties.Accounting.JointBridge.Sessions
+open Pouw.RelativeSecurity Properties.Certifier.JointBridge Properties.Certifier.JointBridge.Sessions
 
 /-- **A window's drawn-unit failures are a union of its unsound sessions**: the window is accepted and some sampled proof block
 fails its relation with probability at most `n_π · δ` when each session of the layer is unsound with probability at
@@ -49,9 +49,9 @@ theorem prob_drawn_le {Ω U V : Type} [Fintype Ω] {n nπ : ℕ} (acc : Paths Ω
     _ = nπ * δ := by simp
 
 /-- **PoUW's proof system is sound against its check, from its sessions' soundness**
-(`Properties.Accounting.JointBridge.CheckProofSystemSound`): `prob_drawn_le` at the check's layer, whose verdict is the
+(`Properties.Certifier.JointBridge.CheckProofSystemSound`): `prob_drawn_le` at the check's layer, whose verdict is the
 check's acceptance and whose sampled proof blocks are the units it publishes. -/
-theorem CheckProofSystemSound : Properties.Accounting.JointBridge.CheckProofSystemSound := by
+theorem CheckProofSystemSound : Properties.Certifier.JointBridge.CheckProofSystemSound := by
   intro C Ξ V _ _ m Np n nπ p ws opened rel sessOf δ h w
   refine (prob_mono fun x hx => ?_).trans (prob_drawn_le _ _ Fin.val opened rel sessOf h w)
   obtain ⟨pub, prof, hc, u, hu, hr⟩ := hx

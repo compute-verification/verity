@@ -1,8 +1,8 @@
 module
 
 public import Properties.Pouw.PeriodJ10R
-public import Proofs.Accounting.ComposeMonitoringPeriod
-public import Proofs.Accounting.Compose.SplitRateClosed
+public import Proofs.Compose.ComposeMonitoringPeriod
+public import Proofs.Compose.Compose.SplitRateClosed
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Accounting.Lemmas.Compose
 
