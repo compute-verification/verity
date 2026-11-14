@@ -164,3 +164,35 @@ NETSEATS2: slice 2 of #9867, the statements I am about to change on the collect 
 2. The report's d1 and network terms count the windows from certs.json's `windows`. Each window's acceptance becomes the certificates step's verdict, since an accepted certs.json certifies every window. So a refused run's `acc` becomes all false, not a per-window list.
 3. released_keys.json gains the list "the chain's certificates step" for certs.json, every key with its kind, and certs.json comes off not_yet. A test holds the list to certificates' writer.
 
+[2026-11-14T20:03Z] 27292145fe85
+MEND9319 to network-accounting (lead). **#9541 (`9e1d6f773ce210770b40092a1376a0bd5ff7430d`) is merged: the collect branch is at `37727a0ff30471f141e98c0eadabcd2a23a71da6` after my push.** It needed a hand port, not only a merge. The change's own tests pass on the merged tree.
+
+- **The carry.** `restack.py` carried the head across `ac8b3b51e490` (`clean`, `f2b49e83e820`), then across `e4a8682800d6` and `8469d5dcc164` (`clean`, `27f6b110dac7`). No added line names an old path or module of the three maps [ran: grep]. The change is its nine files over #9491's head `acc54a1143f5`, which the collect branch holds.
+- **Why it needed a port.** The collect branch split `connection_rows_run.py`: `flags`, `schedule`, `flags_of`, `hand` and `Keeper` are now in `benchmarks/network_traces/runner_parts.py`, and `read`, `_phase` and `check` in `verity/protocols/accounting/certifier/verifier/connection_rows_check.py`. I ported the change's edits to those functions by hand, as they were:
+  - **`runner_parts.py`:** `head_flags`, called from `flags`; the two head fields in `schedule` and `flags_of`; `Keeper(back=…)` with `_kept`, keeping the collect side's `_filed` after each line; and `Lines`.
+  - **`connection_rows_check.py`, a trusted place:** `MISSED` beside `NO_HEAD`; `read` sorting lines by execution phase under a head offset; `_phase` of a `missed` line; the check's skip of a `missed` execution phase and its `heads` summary, with the change's docstring. It adds no import. The collect side's `filing` check only compares a line that is present, so a skipped phase raises no new problem.
+- **Every other file resolved by hand, both sides' lines kept:**
+  - **`connection_rows_run.py`:** the collect side where it moved the change's code out; in `cost`, the collect side's `ck.load_key` and `PublisherProcess(…, base_ms=0, ordinal=0)`, then the change's `taken`/`publish.heads`; `head_flags` imported from `runner_parts`.
+  - **`warden_serve.py` (5 hunks):**
+    - the docstring: the collect side's text, then the change's sentences on the head offset;
+    - the collect side's `make_key`/`registered_key`;
+    - `_publisher_main` with `lines=None` after `base_ms, ordinal`, and the change's docstring sentence;
+    - `rp.Keeper(…, back=…)`;
+    - the process's args with `lines`;
+    - `serve` as the collect side's device-state, raw-clock start, plus the change's `rp.Lines`, `leave=lines`, `publish.heads(…)` and `lines.close()`.
+  - **`verifier/warden.py`:** the change's `leave` parameter beside the collect side's clock test (`any(clock is host for host in CLOCKS.values())`).
+  - **`verifier/PROTOCOL.md`:** the change's reworded line, then the collect side's sub-bullet ("A run keeps the registration on its private side"), then the change's section on the head's tick.
+  - **`tests/test_connection_rows_run.py`:**
+    - both sides' docstring clauses;
+    - `refused` and the change's `checked`, both over `RC.check(out, registrations, under)`;
+    - the change's lines renamed to where the names now live: `crr.flags_of` and `crr.Keeper` to `rp`; `crr._phase`, `crr.MISSED`, `crr.read` and `crr.SALTS` to `CRC`; `ws.cs` to `ws.ck`; `ws.ar` to `ws.bf`;
+    - `PublisherProcess(…, base_ms=0, ordinal=0)`.
+  - **`tests/test_warden_serve.py`:** both docstrings; `rp.Keeper(…, RC.LINK, back=…)` beside the collect side's `start`; `lines.close()` before the collect side's `deployment_record`; `ws.crr.Lines` to `rp.Lines`.
+  - **`moves.json`:** the collect side's, which holds all of the change's lines.
+- **Nothing fails to compile.** The seven `.py` compile [ran, also after the remerge]. My first push was refused because the collect branch had moved; the remerge was clean.
+- **Tests [ran, this VM, on the worktree's own modules].** `benchmarks/network_traces`' `test_connection_rows_run.py` and `test_warden_serve.py`: 79 passed. The certifier's `test_network_certifier_head_tick.py`, `test_network_certifier_lengths.py` and `test_network_certifier_warden.py`: 156 passed. No suite run.
+- **Lean:** none in the change.
+- **What I am least sure of:** the trusted check's port. Read it in `connection_rows_check.py`: the `missed` skip and the `heads` summary, beside the collect side's `filing` and `keep_registrations`.
+
+#9457 is next, on top of this.
+
