@@ -14,7 +14,7 @@
                                                  # a machine that can start no run is passed over, and the launch says which and why;
                                                  # where it went and why is kept with the run: `inspect` prints it on the VM that launched
                                                  # it, and the machine's request.json holds it (`auto`)
-  research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
+  research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--env-host MACHINE ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
@@ -38,7 +38,7 @@
                                                  # --mem-limit-gb N --as WHO` states that limit; nothing is limited by it
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json | --py-spy]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
-                                                 # each ssh machine but the auditor hosts, and its records fetched here (remote.adopt)
+                                                 # each ssh machine but the auditor devices, and its records fetched here (remote.adopt)
   research keeper set NAME --on NODE --project P --n N --until UTC [--gpus G] [--max-min M] [--source GITDIR] [...] -- CMD... {seed}
   research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
                                                  # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
@@ -243,7 +243,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="with --on: ship this file to $RESEARCH_RUN_DIR/inputs/")
     ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or, with --on, on the machine), recorded as "
-                                                                                 "the attempt's params.env (values of secret-named keys redacted)")
+                                                                                 "the attempt's params.env (values of secret-named keys, "
+                                                                                 "of keys ending in _HOST and of FLEET_JUMP redacted)")
+    ap.add_argument("--env-host", action="append", default=[], metavar="MACHINE",
+                    help="an --env <MACHINE>_HOST=<its host> read here from the register (`research pods env MACHINE`), so the "
+                         "launch names the machine and never its address; repeatable, and an --env of the same key decides")
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--wait", action="store_true",
                     help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused), for at most "
@@ -364,6 +368,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                   "attempt, so nothing the run writes, its coins included, would be preserved; omit --id to get one",
                   file=sys.stderr)
             return 2
+    if ns.env_host:
+        from .pods import registry
+
+        try:
+            hosts = registry.host_env(ns.env_host)
+        except remote.Refused as e:
+            print(f"research run: --env-host: {e}", file=sys.stderr)
+            return 2
+        ns.env = [*(f"{k}={v}" for k, v in hosts.items()), *ns.env]
     if ns.job_namespaces is None:
         ns.job_namespaces = ()
     else:

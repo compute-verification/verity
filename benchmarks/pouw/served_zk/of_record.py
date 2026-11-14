@@ -12,7 +12,7 @@ challenger's path runs its Lean and its Python reference on one input:
   certified (`pouw-check-difftest draw`, `core_check.draw`);
 * ``opening``: a sampled proof block's opening (`pouw-check-difftest opening`, `core_check.opening`), with ``prelude``,
   `served_commit.check`'s reading of the registration before it, which may refuse only what the opening refuses;
-* ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case`).
+* ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case_twin` its Python).
 
 Lean's verdict is the record's, and Python's goes beside it in the witness (`Record.witness`, one entry per check). The
 two agree when their outputs are the same canonical JSON (an `answer`'s reason included), or when both refuse the input.
@@ -25,15 +25,16 @@ from __future__ import annotations
 
 import copy
 import json
+from collections.abc import Callable, Mapping
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import verity_difftest as D
 
+from verity.circuits import codec
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import verifier as V
-from verity.circuits import codec
 
 REPO = Path(__file__).resolve().parents[3]
 POUW = REPO / "verity/protocols/accounting/pouw/verifier/lean/check"
@@ -197,7 +198,7 @@ class Record:
         `Verdict`, whose fan-out and tied values are held to Lean's with its codes (`registration_answer`)."""
         out = self._piece("registration", "sampled-proofs-difftest", PIECES, "registration",
                           {"params": params, "record": record}, lambda _: registration_answer(python()))
-        return out["codes"] if "codes" in out else ["registration"]
+        return out.get("codes", ["registration"])
 
     def public(self, x: dict, python: Callable[[], dict]) -> dict:
         """The service's public-items rule's ``{"ok", "codes", "detail"}`` on `x` (`public_params`), or ``{"refused"}``
@@ -226,7 +227,7 @@ class Record:
 
     def answer(self, case: dict) -> dict:
         """PoUW's outcome (`Core.Answer`) of a `serve` case, the whole outcome compared, reason included."""
-        py = CC.case(copy.deepcopy(case))
+        py = CC.case_twin(copy.deepcopy(case))
         if not self.lean:
             self._note("answer", py, None, None)
             return py

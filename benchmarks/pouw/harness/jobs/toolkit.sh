@@ -1,7 +1,7 @@
 # Sourced before build.sh on a machine without CUDA 12.9 (the RTX PRO 6000 node has 13.0), so every build uses the one
 # nvcc the baselines were measured with:
 #
-#   . benchmarks/pouw/harness/jobs/toolkit.sh && benchmarks/pouw/harness/native/build.sh
+#   . benchmarks/pouw/harness/jobs/toolkit.sh && verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh
 #
 # Assembles, once and under a lock, CUDA 12.9.1's nvcc, cudart, cccl, cuobjdump, nvdisasm, NVTX and profiler API from
 # NVIDIA's redistributable archives (each pinned by sha256) and the cuBLASLt headers and library from the wheel env.sh pins, into POUW_HARNESS_TOOLKIT

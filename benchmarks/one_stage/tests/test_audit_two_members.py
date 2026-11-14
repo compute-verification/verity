@@ -10,7 +10,7 @@ stops included (`_kept_prover`).
   through the interface as serving writes one, under ``stratified:1``, the design the audit's rule (`RULE`, a stratified
   rate) names over its two proof blocks. A template is a stratum, so the sample always holds both proof blocks, one a
   member, and the audit runs two sessions.
-* **The coins** are a challenger's: ``--challenger local`` starts a development session of the auditor host's own
+* **The coins** are a challenger's: ``--challenger local`` starts a development session of the auditor device's own
   service on this machine (`a5_coins.Local`: `live_challenger`'s reserve, admit, run and `serve.py`), pinned on
   this checkout's first-parent line. `test_a5_reserve` opens one the same way under a stub of the Lean verifier's coins;
   here its `serve.py` runs SPOT's Lean verifier itself. Its key is the session's own, so its coins show the path and
@@ -293,13 +293,22 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
 
 def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
     """One bit of one member's committed output flipped, committed as consistently as an honest window (the prover's
-    self-check off, ``--forged``): every check before the sample passes, both members are sampled, the changed member's
-    session ends with no proof and each of its verdicts refuses, the other member's accept, and the audit record
-    rejects."""
+    self-check off, ``--forged``): every check before the sample passes, both members are sampled, the ZK server releases
+    no proof of the changed member, so its session ends with none and each of its verdicts refuses, the other member's
+    accept, and the audit record rejects. Lean refuses the changed member's session for want of its proof file, a
+    verdict on no proof, so the audit passes on the proof held back and ``lean_refused`` has no value. No registered read
+    is refused, so ``read_refused`` is false."""
     window = _window(tmp_path / "window", flipped=True)
     rc, row, out, said = _audit(tmp_path, window, binaries, "--forged")
     assert rc == 0 and row.get("ok") is True, said
-    assert row["forged"]["checks"] == {"checks_before_draw": True, "rejected": True, "lean_refused": True}, row["forged"]
+    forged = row["forged"]
+    assert forged["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": True,
+                                "lean_refused": None, "read_refused": False}, forged
+    assert forged["passes_on"] == "no_proof_released" and forged["sessions"]["m0"]["prover_stopped"] is None, forged
+    assert forged["sessions"]["m1"]["proofs"] == 0, forged
+    assert forged["sessions"]["m1"]["prover_stopped"].startswith(RA.zk_server_refused()), forged
+    assert forged["no_value"]["lean_refused"].startswith(
+        f"the Lean verifier read no proof: lean-verify/m1: {RA.NO_SESSION_FILES}"), forged
     assert row["draw"] == [0, 1] and row["audit"]["accepted"] is False
     assert _answer(out)["verdict"] == "reject"
     assert row["audit"]["verdicts"] == {f"{v}/m{k}": k == 0 for v in VERDICTS for k in (0, 1)}, row["audit"]

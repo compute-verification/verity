@@ -44,7 +44,7 @@ certified execution phase, whose verifier holds the network certifier's reveal f
 before it sampled that salt (`salt.committed`).  `recorded_reason` is that last rule alone, which needs no reveal: the
 challenger runs it before it asks the certifier for one, since the certifier reveals an execution phase once.  A live Pearl-C
 pass (`pouw_pearl_c_host.epoch_of`), whose manifest's coins are a live session's, took its salt coin from a
-salt-only session of the auditor host's challenger opened on its salt execution phase's root (`salt.epoch_open_root` of its
+salt-only session of the auditor device's challenger opened on its salt execution phase's root (`salt.epoch_open_root` of its
 weights' root and its ``pass_index``): its verifier holds the auditor's ledger and that session's files as `rounds`
 reads them (`LIVE`), and the pass passes `live_salt` under them.
 `draw` is the rule on the execution phase's sample (`Challenger.select`'s): the execution phase's sampling coin opens after the registration,
@@ -83,6 +83,7 @@ from typing import Any, NamedTuple
 
 from verity.protocols.accounting.pouw.verifier import coins as Co
 from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import verifier as V
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 from verity.protocols.proofs.spot.device import challenger as Ch
@@ -100,6 +101,8 @@ from verity.commitments.crypto import lms
 from verity.commitments.randomness import derive, frame
 
 ID = domains.POUW_PROTOCOL
+#: the Lean core protocol whose `serve` gives an execution phase's verdict of record
+EXE = "pouw-check"
 ONE_STAGE = domains.ONE_STAGE_PROTOCOL
 SCHEME = "frame-v3-sha512/hm96-sha512"
 FORMATS = (domains.REGISTRATION_V1, domains.REGISTRATION)
@@ -636,8 +639,8 @@ def registered(p: dict, c: dict) -> str | None:
     return _registered(p, c)[0]
 
 
-def check(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
-    """(verdict, reason, (public, profile) on acceptance)."""
+def check_twin(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
+    """The Python twin of `PouwCheck.check`, for the difftest: (verdict, reason, (public, profile) on acceptance)."""
     rec = c["record"]
     why, fixed = _registered(p, c)
     if why is not None:
@@ -1774,6 +1777,17 @@ def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any,
     return None if why is None else ("coin", f"the salt's {why}")
 
 
+def salt_of_record(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any,
+                   requests_root: Any, opening: Any, verify: Ch.Verify) -> tuple[str, str] | None:
+    """`salt`'s verdict of record: the Lean `PouwCheck.saltCheck`'s (`verifier.of_record`, which checks the challenger's
+    signatures itself), with `salt` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
+    python = salt(key, ledger, pins, main, window, session, weights_root, requests_root, opening, verify)
+    got = V.of_record("salt", {"key": key, "ledger": ledger, "pins": pins, "main": main, "window": window,
+                               "session": session, "weights": weights_root, "requests": requests_root,
+                               "opening": opening}, None if python is None else {"refused": list(python)})
+    return None if got is None else tuple(got["refused"])
+
+
 def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, roots: Any, openings: Any,
            verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `openings` are a live execution phase's round coins, read through the challenger's own session and never a
@@ -1812,8 +1826,8 @@ def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
     return None
 
 
-def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
-    """`Core.Protocol.answer`: every input gets a verdict, a decoding failure being a rejection naming its input."""
+def answer_twin(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
+    """The Python twin of `Core.Protocol.answer`, for the difftest: every input gets a verdict, a decoding failure being a rejection naming its input."""
     def out(verdict: str, reason: str | None, d: bytes | None, pub: Any = None, prof: Any = None) -> dict:
         return {"protocol": ID, "verdict": verdict, "reason": reason, "commitment": None if d is None else d.hex(),
                 "public": pub, "profile": prof}
@@ -1830,12 +1844,12 @@ def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
         ev = evidence(evidence_b)
     except Refused as e:
         return out("reject", f"evidence: {e}", d)
-    verdict, reason, acc = check(p, c, ev)
+    verdict, reason, acc = check_twin(p, c, ev)
     return out(verdict, reason, d, *(acc or (None, None)))
 
 
-def case(j: Any) -> dict:
-    """`Core.Protocol.case` on one `serve` case, ``{"commitment": hex, "evidence": hex, "params": JSON}``: a malformed one
+def case_twin(j: Any) -> dict:
+    """The Python twin of `Core.Protocol.case`, for the difftest, on one `serve` case, ``{"commitment": hex, "evidence": hex, "params": JSON}``: a malformed one
     is rejected with no commitment."""
     try:
         params_j = _get(j, "params", "the case")
@@ -1845,7 +1859,30 @@ def case(j: Any) -> dict:
     except Refused as err:
         return {"protocol": ID, "verdict": "reject", "reason": f"case: {err}", "commitment": None, "public": None,
                 "profile": None}
-    return answer(params_b, bytes.fromhex(c), bytes.fromhex(e))
+    return answer_twin(params_b, bytes.fromhex(c), bytes.fromhex(e))
+
+
+def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
+    """`Core.Protocol.answer`, the Lean's (`pouw-check serve`, through `verifier.serve_of_record`) on the case of these
+    bytes, with `answer_twin` its twin: a disagreement is a rejection."""
+    return V.serve_of_record(EXE, serve_case(params_b, commitment_b, evidence_b),
+                             answer_twin(params_b, commitment_b, evidence_b))
+
+
+def case(j: Any) -> dict:
+    """`Core.Protocol.case` on one `serve` case, the Lean's (`pouw-check serve`, through `verifier.serve_of_record`),
+    with `case_twin` its twin: a disagreement is a rejection."""
+    return V.serve_of_record(EXE, j, case_twin(j))
+
+
+def serve_case(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
+    """The `serve` case of a case's three inputs: its parameters as JSON (as text where they aren't JSON, which the
+    Lean rejects), its commitment and evidence as hex."""
+    try:
+        params_j: Any = json.loads(params_b)
+    except ValueError as e:
+        params_j = f"{params_b.decode('utf-8', 'replace')} ({e})"
+    return {"commitment": commitment_b.hex(), "evidence": evidence_b.hex(), "params": params_j}
 
 
 def line(a: dict) -> str:
@@ -1853,8 +1890,8 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE",
-           "VALUES_TAG", "WINDOW_VALUES", "answer", "answer_of", "canonical", "case", "check", "commitment", "digest",
+__all__ = ["ANSWER_KEYS", "COIN_KEY", "EXE", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE",
+           "VALUES_TAG", "WINDOW_VALUES", "answer", "answer_of", "answer_twin", "canonical", "case", "case_twin", "check_twin", "commitment", "digest",
            "draw", "evidence", "integrity", "integrity_json", "law_name", "line", "live_epoch", "live_salt", "lms_verify",
-           "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered", "rounds", "salt", "unit_draw",
+           "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered", "rounds", "salt", "salt_of_record", "serve_case", "unit_draw",
            "values_root", "verify_path", "window_anchors", "window_domain", "window_salt", "work_k", "work_units"]

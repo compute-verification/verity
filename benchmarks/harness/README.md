@@ -195,8 +195,9 @@ find it the same way, and its command takes one of the node's GPU slots (`/works
 through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
 `max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
 GPU nodes in `verity_bench.jobs.DIRECT_NODES` (multi-GPU nodes, and single-GPU VMs whose one GPU kernels' leases
-share): a node joins the tuple once it has that slots file, so a node without one is refused here, before any run, and
-not by the slot at a point's start. A preempted direct point is a failed run, which the
+share), before any run. A node joins the tuple once it has that slots file; a node in the tuple whose file is gone starts
+each point's run and is refused there by the slot (`slot.py` exits 75, naming the pools the node has), with nothing
+timed. A preempted direct point is a failed run, which the
 next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
 
 `verity-bench run` launches each missing point as one queued, preemptible job of the kind registered for the spec's GPU
@@ -208,7 +209,9 @@ benchmark's own launcher sources too): `VERITY_BENCH_VENV`, which the dispatcher
 (`served_commit.prof_arm:SERVED_COMMIT_ROWS`). A point's identity hashes the resolved spec, the commit, `uv.lock`, the
 vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it as the run's key param,
 and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation passed, exit code 0 and a
-clean source tree. A requeued point first deletes its run's old `result.json`. The lookup asks the machine's catalog of
+clean source tree. A requeued point first deletes its run's old `result.json`. A passed point's result holds its
+numbers as measurements, appended by the kit's writer (`verity_bench.vllm.result.record`): each arm's mean of each
+metric, `ARM.METRIC`, with its 95% interval, and each arm's paired ratio over the baseline's reps, `ARM.METRIC.ratio`. The lookup asks the machine's catalog of
 the evidence store for an attempt of the tool `verity_bench.tool:VLLM_BENCH_POINT` with the point's `identity` param, at
 the commit's source tree (git must know the commit), and when a point isn't there, the store's remote: once per commit it fetches and indexes the
 attempts this store lacks among those started since a day before the commit's committer date (a point's runs can't start
@@ -222,11 +225,12 @@ ran. Without a usable remote it refuses rather than report them missing; `--loca
 staged block type at K provers with C cores on one card, timed by `benchmarks/one_stage/server_rate.py`. The spec says
 the `workload` whose steady-state record its rows belong to, the `card`, the `cores` (C), the timed `sessions` and the
 sessions a prover runs `ahead`, the GPU `driver`'s version and the CUDA toolkit's (`cuda_toolkit`), a `setup` script,
-`[env]` and `[admission]` (`max_minutes`, `mem_gb`); each `[[row]]` is a block type: the stager's `type`
-(`benchmarks/served_units/stage.py`), its units `n`, the `pin` (the SHA-512 of the statement's circuit), the `provers`
-counts (a point each), the `warm` sessions a prover and, optionally, `period` and `staged`, a statement staged
-already: a directory on the node, or one of an artifact in the store (`art:ID/DIR`). Loading is as strict as a vLLM
-spec's.
+`[env]` and `[admission]` (`max_minutes`, `mem_gb`); each `[[row]]` is a block type at one statement size: the
+stager's `type` (`benchmarks/served_units/stage.py`), its statement's units `n` (its proof blocks), the `pin` (the
+SHA-512 of the block's circuit), the `provers` counts (a point each), the `warm` sessions a prover and, optionally,
+`period` and `staged`, a statement staged already: a directory on the node, or one of an artifact in the store
+(`art:ID/DIR`). Loading is as strict as a vLLM spec's. Two rows may name one type at two `n` (a full statement and a
+quarter of one, which share the `pin`); each point of such a type is `NAME-nN-kK`, and every other point `NAME-kK`.
 
 **Timed sessions.** A point times the spec's `sessions`, and at least eight a prover, the fewest the timing script
 times. Where a row's sessions file in bursts, its `period` says the
@@ -246,7 +250,8 @@ the node can't be asked before the run: the node side reads both on the node, re
 spec's, and writes what it read in the row (`versions`). The toolkit's version is `cuda_toolkit`, in the spec and in the
 row: `cuda` is the kit's name, in its host stamp, for the newest CUDA the driver serves, which is another number.
 
-**A passed point** is a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and that passes the
+**A passed point** is a row whose `pin`, statement blocks (its `n` and `stage.blocks`), `provers` and `cores.count`
+are the point's and its spec's, and that passes the
 ten checks of `verity_bench.steady` against the files of the run that measured it (`steady_spec.point_why`); a row
 of a run of the point itself also holds the point's timed and warm sessions, its period and the versions. `plan` and
 `check` recompute that from each run's files in the store, by the rules of the checkout they run from; a verdict a
@@ -347,6 +352,12 @@ and a target's latest label names its record. The command first pulls the remote
 
 The caveat column is the newest `label` and `note` on the result's artifact, its run and the record art that named it
 (and a live run's `row` label).
+
+`served_overhead.py` beside this README runs `served-table` with the numbers `metrics.toml` holds it to (`METRICS`,
+each a served row's `SPEC/POINT`): the Commit on the H200 and PoUS's bandwidth audit, each at batch 32, as a percent
+over stock FP8's time per output token. Under a research run it writes them into the run's result
+(`served_render.record`), measured, each with its interval, its run and result art, and its caveats; a row with no
+ratio has no value and says why, and the run's validation then fails.
 
 ## The bandwidth breakdown
 
