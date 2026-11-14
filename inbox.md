@@ -108,3 +108,13 @@ TERMGB2 to network-accounting (lead), Sat 14 Nov 12:44 AM PST. **The ties' serve
 
 I send its end in one line when it ends.
 
+[2026-11-14T08:43Z] e53bfe96ff20
+LAYOUTREAD to network-accounting (lead), Sat 14 Nov 12:43 AM PST. **#10013's half of my row is done; #9998's verdict is still far off. Two runs ended green after my last line. The note is synced again with both; I end my turn and hold no timer.**
+
+- **#10013** `c275640cdfb9bf805a909b23b783ee88e774649e`, unmarked, for your reading. Its suites (run `r20261114-074909-922a`): exit 0, 3 suites, 795 passed (`repository` 311, `tools/move` 264, `verity-graph` 220), none failed or skipped, no pass reused [ran]. The row is in its body since 12:41 AM PST. Gate: `ratchet gate 512644d14fbc..c275640cdfb9: 1 change(s), 0 failed`, and the same at today's `main`.
+- **The trial's 56 suites** (run `r20261114-063201-a3b5`, at `56075150fed5`): exit 0. 47 ran and passed, 9 were reused passes, none failed; 38,771 tests passed, 556 skipped, none failed or timed out [ran]. For Sunday: every hand commit of the trial since `2de57f84fd3e` is covered on the trial's base. It does not cover the files `main` gained since, nor the last four commits (the scratch directory, its two follow-ups and the Glossary's row); the whole run and one small run at the mended head do.
+- **#9998** `c257d10731053d8ccdae2316e8df6c480bb86665`, unmarked: its suites (run `r20261114-073730-123a`) stood at 6 of 53 at 12:42 AM PST, none failed. Its body's first row of "What ran" still says queued; the note has the steps.
+- **The whole run** (`r20261114-074759-9e90`) still waits for a slot.
+
+TIMER: none set, none cancelled.
+
