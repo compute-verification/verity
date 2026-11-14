@@ -3,7 +3,7 @@
 # record: the audit's definition, which `verity/protocols/proofs/spot/verifier/one_stage` mirrors and its difftest holds to
 # it. `spot-verifier` is the verifier of record the Python calls (`one_stage.verifier`): the audit's checks, the
 # stream's and fleet's rules, and the challenger's ledger and session checks (`Spot.Pieces.verifier`). Code, not
-# analysis: Lean core, C-Flock and the interface.
+# analysis: Lean core, Flock and the interface.
 name = "core_spot"
 defaultTargets = ["Spot", "spot-one-stage", "spot-one-stage-zk", "spot-monitoring-period",
   "spot-difftest", "spot-verifier", "spot-wired-key-dev",

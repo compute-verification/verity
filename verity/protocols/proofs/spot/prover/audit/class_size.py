@@ -250,7 +250,7 @@ def size(units: Mapping[str, int], times: int = 1) -> dict[str, Any]:
     rows = [(lab, n * times, *measured(lab)) for lab, n in units.items()]
     past = [f"{lab} (2^{k})" for lab, _, _, k, _ in rows if k > K_MAX]
     if past:
-        raise ValueError(f"{', '.join(past)}: an instance needs a block past 2^{K_MAX} bits, C-Flock's most; cut it finer")
+        raise ValueError(f"{', '.join(past)}: an instance needs a block past 2^{K_MAX} bits, Flock's most; cut it finer")
     cells = sum(n << k for _, n, _, k, _ in rows)
     return {"units": sum(n for _, n, *_ in rows), "ands": sum(n * a for _, n, a, _, _ in rows), "m": math.ceil(math.log2(cells)),
             "templates": [{"template": lab, "units": n, "ands": a, "k_log": k, "source": src}
