@@ -8,14 +8,17 @@ id-form server's cells and fails any other at its first cell (format), none of w
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import dataclasses
 import hashlib
+import inspect
 import socket
+from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import id_form as IDF, io_tie as IT, pacer, warden as device_module
+from verity.protocols.accounting.certifier.verifier import active, id_form as IDF, io_tie as IT, pacer, warden as device_module
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD, encode_frame
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.grid import Reason
@@ -246,6 +249,61 @@ def expected_egress(s: int, n: int, last: int = END) -> list[tuple[int, int]]:
     kinds = [PAD] * (D * R) + [DATA] * (n - 1) + [last]
     kinds += [PAD] * (-len(kinds) % R)
     return [(s + i // R, k) for i, k in enumerate(kinds)]
+
+
+# --- the relay's files and the older form's --------------------------------------------------------------------------
+
+#: what a file of the relay still imports from the older form's file, by the file: the relay's own its sleep. It leaves
+#: that file in a change of its own, so this only shrinks.
+OLDER_FORM_READS = {Path(inspect.getfile(audit)).stem: {"precise_sleep"}}
+
+
+def package_imports(path: Path, package: str) -> dict[str, set[str]]:
+    """{a module of `package`: the names `path` imports from it, "*" for the module itself}, the imports inside its
+    functions included."""
+    out: dict[str, set[str]] = {}
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.ImportFrom):
+            module = ".".join(filter(None, (package, node.module))) if node.level == 1 else node.module or ""
+            if module == package:
+                for a in node.names:
+                    out.setdefault(a.name, set()).add("*")
+            elif module.startswith(package + "."):
+                out.setdefault(module[len(package) + 1:].partition(".")[0], set()).update(a.name for a in node.names)
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if a.name.startswith(package + "."):
+                    out.setdefault(a.name[len(package) + 1:].partition(".")[0], set()).add("*")
+    return out
+
+
+def test_a_file_of_the_relay_imports_from_the_older_forms_file_only_what_is_listed():
+    """A file of the relay is a module of this package that reaches the relay's by its imports, or one such a module
+    reaches, the older form's file left out. Of the older form's file they import `OLDER_FORM_READS` and no more, so
+    once that is empty the older form can go without the relay; and the list names nothing they no longer import."""
+    older, relay = Path(active.__file__), Path(inspect.getfile(audit))
+    imports = {p.stem: package_imports(p, active.__package__) for p in older.parent.glob("*.py") if p != older}
+
+    def reached(start: str) -> set[str]:
+        seen, todo = set(), [start]
+        while todo:
+            if (m := todo.pop()) in imports and m not in seen:
+                seen.add(m)
+                todo += imports[m]
+        return seen
+
+    files = set().union(*(r for m in imports if relay.stem in (r := reached(m))))
+    assert {relay.stem, *OLDER_FORM_READS} <= files, sorted(files)
+    found = {m: imports[m].get(older.stem, set()) for m in files}
+    more = {m: sorted(names - OLDER_FORM_READS.get(m, set())) for m, names in found.items()}
+    assert not any(more.values()), (
+        "\n".join(f"{m}.py imports {', '.join(names)} from {older.name}" for m, names in sorted(more.items()) if names)
+        + f"\nA file of the relay reads nothing of the older form's file. Move the definition to a module of the relay's "
+          f"own, or to one named for what it holds, beside {relay.name}, and have {older.name} import it from there, so "
+          f"that it keeps one definition.")
+    stale = {m: sorted(names - found[m]) for m, names in OLDER_FORM_READS.items() if names - found[m]}
+    assert not stale, (f"OLDER_FORM_READS lists what its file no longer imports from {older.name}: {stale}. Delete it "
+                       f"from the list, which only shrinks.")
 
 
 # --- the schedule ----------------------------------------------------------------------------------------------------
@@ -630,9 +688,7 @@ def test_an_honest_id_form_server_leaves_one_event_a_cell_and_its_end_holds_the_
 def departures() -> dict[str, tuple[bytes, int]]:
     """Responses out of the id form, each with the egress cell it first leaves the form at."""
     e = [IT.id_event(x, GP) for x in (3, 4, 5)]
-    head = IDF.EVENT_HEAD[:IDF.EVENT_HEAD.index(b'"delta"')]
-    ordinal = (head + b'"request":' + IDF._u32_field(1, "an ordinal") + b',"token_id":' + IDF._u32_field(4, "a token id")
-               + b',"finish_reason":null}]}' + IDF.EVENT_END)
+    ordinal = active.id_event(1, 4)
     spaced = e[1].replace(b'"token_id":', b'"token_id": ')
     named = b'"id":"cmpl-1",'
     error = b'data: {"error":{"message":"overloaded","type":"server_error","code":503}}\n\n'
@@ -767,7 +823,7 @@ def test_a_request_of_max_tokens_0_is_refused_at_ingress_under_a_response_limit_
     """Under a response limit a request that asks for no token is refused as one past the limit is, by the same
     reason: none of its bytes is cut into a cell or reaches the server. The least a released request asks for is
     1. A schedule without one reads no request's `max_tokens`, and releases the same request."""
-    assert IDF.id_request_max_tokens(id_req(0)[:GP]) == 0
+    assert active.id_request_max_tokens(id_req(0)[:GP]) == 0
     refused(id_req(0))
     _, _, server, e = capped(id_req(1), id_answer([7]))
     assert (e["failed"], e["max_tokens"], e["release"]) == (None, 1, 0) and server.conns[0].received

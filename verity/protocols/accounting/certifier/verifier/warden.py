@@ -19,8 +19,8 @@ they were read. The client speaks cells both ways through a thin, workload-blind
 gets the ingress payloads as bytes (co-located in the demo; deployed, its own shim strips the cells as the client's
 does).
 
-**Admission.** The k-th connection to arrive, from 0, has ordinal k + 1: ordinal 0 is no
-connection's. At most `lanes` connections are served at once; one that arrives with every lane
+**Admission.** The k-th connection to arrive, from 0, has ordinal k + 1, as the active certifier's `Requests` streams
+it: ordinal 0 is no connection's. At most `lanes` connections are served at once; one that arrives with every lane
 taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell, on ordinal 0, and is closed.
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
 until its last bucket. Nothing admitted is dropped or reordered. A refusal is traffic past what the window's Programs
@@ -151,7 +151,7 @@ Every `FAIL` is the same bytes: the reason is a frame of the network certifier's
 witness the client never sees. The server's four reasons show only at an egress slot, so the server, which controls
 whether and where a connection fails, chooses one of at most (cells + 1) outcomes; the client's three fail at once
 (with lengths rows at the connection's first egress slot), and are the client's own doing. A tick that runs more than `slack` past its boundary faults every grid's window
-(`monitor-unavailable`).
+(`monitor-unavailable`), as the active certifier's do.
 
 **The clock.** The network certifier has one clock, the host's raw monotonic clock (`pacer.raw_clock`), which no time
 service steers: `origin` is a reading of it, a tick runs once it reads the tick's boundary and never before, a tick's
@@ -229,6 +229,7 @@ from functools import cached_property
 from typing import Any, NamedTuple
 
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.protocols.accounting.certifier.verifier.active import precise_sleep
 from verity.protocols.accounting.certifier.verifier.grid import Certifier, GridParams, Reason, BlockGrid, Row, Status, row_count
 from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, MAX_TOKENS_AT, id_request_max_tokens
 from verity.protocols.accounting.certifier.verifier.io_tie import parse_cell
@@ -238,7 +239,7 @@ from verity.protocols.accounting.certifier.verifier.release import RUN_ID_BYTES,
 from verity.protocols.accounting.certifier.verifier.release import one_request, to_watermark
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v3"
-#: the network certifier's cell kinds, beside `link_frame`'s PAD and DATA
+#: the network certifier's cell kinds, beside `active`'s PAD and DATA
 END, FAIL, REFUSED = 0x20, 0x21, 0x22
 KIND_NAMES = {PAD: "pad", DATA: "data", END: "end", FAIL: "fail", REFUSED: "refused"}
 #: why a connection failed: the server's three, the client's two, the server's out-of-form cell, then the client's
@@ -253,28 +254,6 @@ EGRESS_FORMS = ("id", "bytes")
 READ_BYTES = 1 << 16
 #: the most a client connection may hold unwritten before the network certifier stops writing to it
 WRITE_BACKLOG = 1 << 22
-#: the longest a ticker waits at once. Linux lets an epoll wait end late by 0.1 % of its timeout, 0.5 % in a niced
-#: process, up to 100 ms (`select_estimate_accuracy`), so one wait for an origin 10 s off woke the first tick 48 ms
-#: late at nice 19, past the slack, and faulted window 0. A wait of at most this ends at most 0.5 ms late
-MAX_WAIT_S = 0.1
-
-
-async def wait_until(deadline: float, clock: Callable[[], float],
-                     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep) -> None:
-    """Sleep until `clock()` reaches `deadline`, in waits of at most `MAX_WAIT_S`, so that a far deadline is met as
-    closely as a near one."""
-    while deadline - clock() > MAX_WAIT_S:
-        await sleep(MAX_WAIT_S)
-    await sleep(deadline - clock())
-
-
-async def precise_sleep(delay: float, clock: Callable[[], float] | None = None) -> None:
-    """`asyncio.sleep(delay)` in waits of at most `MAX_WAIT_S` against `clock`, the loop's unless one is given: the
-    network certifier's sleep against its own clock unless its caller injects one. An injected sleep (a `VirtualClock`)
-    gets one wait a tick."""
-    if clock is None:
-        clock = asyncio.get_running_loop().time
-    await wait_until(clock() + delay, clock)
 
 
 @dataclass(frozen=True)
