@@ -941,37 +941,47 @@ def test_under_vllms_server_a_lost_releases_request_is_given_its_disconnect_and_
 
 
 def test_under_vllms_server_a_request_after_its_lost_line_is_refused_until_the_watermark_breaks(tmp_path, monkeypatch):
-    """The network certifier's stream stays open. Once a line of it names releases 0 and 1 lost, release 0's request is
-    refused with the sentence serve-openai's frontend says, each time it comes, and reaches neither the server nor the
-    feed. Then a line the reader refuses breaks the stream: the gate is open and adds every request at once, so the
-    middleware forgets the run's lost releases, and release 1's request comes in."""
+    """The network certifier's stream stays open. Its line names releases 0 and 1 lost while release 1's request is
+    still sending its body, and before release 0's comes. Each is refused with the sentence serve-openai's frontend
+    says, release 0's each time it comes, and reaches neither the server nor the feed. Then a line the reader refuses
+    breaks the stream: the gate is open and adds every request at once, so the middleware forgets the run's lost
+    releases, and release 1's request comes in."""
     for k, v in config(tmp_path).items():
         monkeypatch.setenv(k, v)
     app = App()
     feed, read = tp.TickFeed(app), tp.FeedReader(tmp_path / "feed.jsonl")
 
+    def into(sent: list[dict]) -> Any:
+        async def send(m: dict) -> None:
+            sent.append(m)
+        return send
+
     async def run() -> tuple[list[list[dict]], list[dict], int, list[dict], list[dict]]:
         lines: asyncio.Queue[dict] = asyncio.Queue()
+        parts: asyncio.Queue[dict] = asyncio.Queue()
         answer: list[dict] = []
-
-        async def send(m: dict) -> None:
-            answer.append(m)
-
-        stream = asyncio.ensure_future(feed(scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": RUN}), lines.get, send))
+        refused: list[list[dict]] = [[]]
+        stream = asyncio.ensure_future(feed(scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": RUN}), lines.get, into(answer)))
+        slow = asyncio.ensure_future(feed(numbered(1), parts.get, into(refused[0])))
+        parts.put_nowait({"type": "http.request", "body": GREEDY[:9], "more_body": True})
+        await turns()
         lines.put_nowait({"type": "http.request", "body": line(0, 2, [0, 1]), "more_body": True})
         await turns()
-        refused = [await request_of(feed, numbered(0), [GREEDY]) for _ in range(2)]
+        parts.put_nowait({"type": "http.request", "body": GREEDY[9:], "more_body": False})
+        await turns()
+        refused += [await request_of(feed, numbered(0), [GREEDY]) for _ in range(2)]
         fed, reached = read(), len(app.seen)
         lines.put_nowait({"type": "http.request", "body": line(1, 3, [1]), "more_body": True})
         await turns()
         after = await request_of(feed, numbered(1), [GREEDY])
-        stream.cancel()
-        await asyncio.wait({stream})
+        for task in (stream, slow):
+            task.cancel()
+        await asyncio.wait({stream, slow})
         return refused, fed, reached, answer, after
 
     refused, fed, reached, answer, after = asyncio.run(run())
-    assert [[m.get("status") for m in r] for r in refused] == [[400, None]] * 2
-    assert {r[1]["body"] for r in refused} == {LOST_SAID.format(n=0).encode()}
+    assert [[m.get("status") for m in r] for r in refused] == [[400, None]] * 3
+    assert [r[1]["body"] for r in refused] == [LOST_SAID.format(n=n).encode() for n in (1, 0, 0)]
     assert fed == [{"run": RUN, "t": 0, "n": 2, "lost": [0, 1]}] and reached == 0
     assert answer[0]["status"] == 400 and after[0]["status"] == 200 and len(app.seen) == 1     # release 1 is bucket 0's
     assert read() == [{"run": RUN, "error": "watermark (1, 3) after (0, 2): its lost releases [1] rise from 2 below n"},

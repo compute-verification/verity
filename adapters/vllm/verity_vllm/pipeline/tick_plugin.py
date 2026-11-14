@@ -142,10 +142,10 @@ class TickFeed:
     message its ``receive`` returns, on which vLLM's server aborts it as it does on its connection's close. Nothing the
     server sends after that goes on, and once its call returns the middleware answers: 400 with `serve_admit.LOST` where
     the server had begun no response, and where it had, the response's end with no body, since a middleware writes no
-    event in the server's stream. One that comes after its line is answered 400 with that sentence, and reaches
-    neither the server nor the feed. A watermark that breaks forgets its run's lost releases: the gate is open then, and
-    adds every request at once. Both are this process's: among several API server processes, a line ends only the
-    requests of the process its stream reached."""
+    event in the server's stream. One whose line has come by the time its body is read, so every one that comes after
+    its line, is answered 400 with that sentence, and reaches neither the server nor the feed. A watermark that breaks
+    forgets its run's lost releases: the gate is open then, and adds every request at once. Both are this process's:
+    among several API server processes, a line ends only the requests of the process its stream reached."""
 
     def __init__(self, app: Any) -> None:
         self.app = app
@@ -184,8 +184,6 @@ class TickFeed:
         route = route_of(scope)
         try:
             rel = release_of(headers)
-            if rel is not None and rel[1] in self.lost.get(rel[0], ()):
-                raise ValueError(LOST.format(n=rel[1], run=rel[0]))
             if rel is not None and rel[1] in self.seen.setdefault(rel[0], set()):
                 raise ValueError(f"{RELEASE_HEADER}: {rel[1]} came twice in run {rel[0]!r}")
         except ValueError as e:
@@ -204,6 +202,8 @@ class TickFeed:
         elif route not in OTHER_PATHS:
             why = (f"under the certified tick this server serves only {', '.join(sorted(SAMPLED_PATHS | OTHER_PATHS))}, "
                    f"not {route[:80]!r}")
+        if rel is not None and rel[1] in self.lost.get(rel[0], ()):      # read here: its line may come while its body does
+            return await _answer(send, 400, LOST.format(n=rel[1], run=rel[0]))
         if why is not None:
             if rel is not None:
                 self.seen[rel[0]].add(rel[1])
