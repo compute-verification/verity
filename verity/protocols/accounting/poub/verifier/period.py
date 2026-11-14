@@ -25,8 +25,8 @@ receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `B
 them: the bound `Properties.RemoteAudit.Component.LineHeldAtComponent` proves (`PublishedEps`), not the draws a session
 made, min(s, U) of a draw's U receipts, which can be fewer.
 
-`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records
-(`pous.period.records`, every copy of the auditor's ledger in them cut to the entries their window cites). The
+`leg(period_dir, node, out, side_of=...)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's
+records (`pous.period.records`, every copy of the auditor's ledger in them cut to the entries their window cites). The
 verifier and its challenger are a party of their own (`verifier_party`) on `period.json`'s `challenger_host`, with coins
 fresh from that host's OS, and the prover runs on the node. `trusted-device`'s premise, that they run on a machine
 the developer doesn't control, holds only when the challenger host isn't the node, and the leg says which
@@ -303,20 +303,20 @@ def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str,
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 
-def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """Bandwidth's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): the session on the
-    period's records, the verifier and its challenger a party of their own on `period.json`'s `challenger_host`
-    (`verifier_party.side_of`; on this node by default, as a process of its own, with its own coins) and the prover
-    here. With `remote-audit-protocol` among the period's tools the Lean verifier answers and must agree
-    with the Python; it writes `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host
-    ran each party, and whether `trusted-device`'s premise holds (`verifier_party.placement`), go in
-    `bandwidth.json` and in an accepted answer's profile (`placement`); `bandwidth.json` names the term its `eps`
-    leaves out beside it (`ledger.NAMED_TERMS`)."""
+def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Any]) -> dict[str, Any]:
+    """Bandwidth's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out, side_of=...) -> answer`): the session
+    on the period's records, the verifier and its challenger a party of their own on `period.json`'s `challenger_host`
+    (`side_of(period, node, key, local)`, which the caller that starts the run hands in, the runtime's `Side.of`; on
+    this node by default, as a process of its own, with its own coins) and the prover here. With `remote-audit-protocol`
+    among the period's tools the Lean verifier answers and must agree with the Python; it writes
+    `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host ran each party, and whether
+    `trusted-device`'s premise holds (`verifier_party.placement`), go in `bandwidth.json` and in an accepted answer's
+    profile (`placement`); `bandwidth.json` names the term its `eps` leaves out beside it (`ledger.NAMED_TERMS`)."""
     from . import ledger, verifier_party  # here: the party imports this module, and this function alone reads the ledger
 
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools = doc.get("tools") or {}
-    party = verifier_party.side_of(doc, node)
+    party = side_of(doc, node, "bandwidth", verifier_party.command())
     store = records(period_dir)
     t = time.monotonic()
     period, side = verifier_party.period_with(party, verifier_party.request_of(node), store)
