@@ -25,3 +25,20 @@ CROSSTICK2 to network-accounting (lead), Sat 14 Nov 10:13 AM PST. MODEL: Claude 
 
 Waiting on `r20261114-180605-813f` and `r20261114-180955-68a6` (their verdicts decide #10159's re-mark at `61cb0137680c`), and on `r20261114-155956-4687` (its moved records are the list you read before the account opens). TIMER: none.
 
+[2026-11-14T18:17Z] fa4c61239cf4
+MODEL: Claude Opus 5.5. PERIODPROOF2, #10103's five conditions, head d6430eb02f335a0f2be12da7d6c5b126ae9a9bca (pushed; before it 64603635f249397478003df3e588f5951030666b, e6e871f33d2d4f85e22f522ca7e8f1de5b933bba). Body edited.
+
+1. Done (64603635): `RowsOkHeldAt`'s and `RowsOkHeld`'s docstrings say the one exempt port leans on the check's guard, `ScanOk.held` through `ScanOk.entryHeld`, as `ScanOk.lean`'s last `#guard` holds (`other/o0` refused, `START` held). Docstring only; no records run launched.
+2. None needs the tie [read: every statement and proof of security/ naming START, startEmpty, stateRead, stateTied, startCheck, scan.start or start/o0, at this head and origin/main]. The list, one line each, is under the limit in "Statements changed". One correction to what I told you before: `main` does read the state's registration, in `RowsStateTied` through `stateTied` (`scan/state` entries). `main` has no start unit, so nothing there reads `start/o0`.
+3. 145,568 is wrong: no class gives it [ran: `ingress_scan.state_bits`]. At leak_bounds' served class (KO 4,096 × IDB 18, T 1280, on w63's cells B 512 / C 47 / K 45 / CB 6, at the 36 lanes its `counted` takes), the state is 4,037,216 bits: 36 slots of 112,142 (fixed fields 344, `out` 73,728, `ids` 38,070) plus a 96-bit head, rounded to 16. The field table is in the body. At w63 itself (4 lanes, KO 64, IDB 17) it is 149,648. Pooled table corrected [ran]: datacenter 2.38e14 bits a week (79 FP4 copies of GLM-5.3), 1.02e15 a month, 1.24e16 a year; world 8.94e17, 3.83e18, 4.66e19. Until NET-446, the start's charge outweighs every other term of the pooled bound. The tree's guard said 145,568; it now takes 149,648, w63's width from the code (d6430eb) [ran: local `lake build NetworkCheck.Period`, exit 0].
+4. Done: NET-445 is named at the limit and NET-446 at the charge, in the body only.
+5. It waits. leak_bounds transcribes the rows terms, and test_leak_bounds holds the transcription, but it counts a monitoring period as one period of many execution phases, which `startCheck` now refuses. A start term means each execution phase counted as its own period, which changes every figure. Its `Assumed` class has no lanes or cells for the width without the choice above. The reason is in the body.
+
+Records: `r20261114-174333-79c6` (at b8c7a6ee5cad0789ae834adb59bda79eaa8b06d8, machine 14) is still waiting on the audit pool's one Lean slot, with none ahead. I'll send its list, old and new, when it ends. After b8c7a6ee, the queue's records run will still regenerate:
+- the records whose definitions read `startCarriedRefusal` (e6e871f's string), that is `startCheck` and so the check;
+- `RowsOkHeld`'s (64603635's docstring);
+- none for d6430eb, a `#guard` only [argued].
+Suites (`r20261114-174638-1a89`) and #8829's records (`r20261114-180132-a756`) have no verdict yet. My words on #9350, #9641 and #8829 stand as sent.
+
+Question: should leak_bounds count each execution phase as its own period, with the start term, now rather than after NET-446? I take NO.
+
