@@ -184,7 +184,7 @@ doesn't name:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`verity/protocols/flock/verifier`), then its partition check against
                     `verity.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
-                    the upstream build stored once and pinned by hash (`verity/protocols/flock/agreement/upstream.json`), which the step
+                    the upstream build stored once and pinned by hash (`verity/protocols/flock/prover/agreement/upstream.json`), which the step
                     fetches when the run was sent its presigned URLs (`agreement_url_file`); skipped by name without them.
                     `research merge` requires it for a change under verity/protocols/flock/ or a Lean package the verifier
                     requires by path (but sigma/, a README.md or PROTOCOL.md; `tool.py`)
@@ -224,7 +224,7 @@ local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical i
                     package first waits for one of the node's Lean audit slots (`lean_slot.py`). The step fails on a fast-path
                     result in its `audit.json`, cached or not (`lean_fast`): no merge check accepts an audit without the kernel
                     replay
-    lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: verity/protocols/flock/agreement/'s
+    lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: verity/protocols/flock/prover/agreement/'s
                     tracked files but its Markdown, which pin the upstream build and inputs, the verifier's Lean packages, the
                     interpreter, the platform, the environment)
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
@@ -298,7 +298,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 #: `ci.py`, the agreement job of the Lean verifier against upstream's Rust verifier, and its other scripts
-FLOCK_VERIFIER = ROOT / "verity" / "protocols" / "flock" / "agreement"
+FLOCK_VERIFIER = ROOT / "verity" / "protocols" / "flock" / "prover" / "agreement"
 #: the Lean verifier, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
 #: the Lean package away from the scripts rewrites it)
 FLOCK_LEAN = ROOT / "verity" / "protocols" / "flock" / "verifier"
@@ -1080,7 +1080,7 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
     need, have = pin["upstream"].get("glibc"), os.confstr("CS_GNU_LIBC_VERSION") or ""
     if need and _version(have) < _version(need):
         return (f"the pinned upstream build needs glibc {need}; this machine has {have or 'none'}: record check on a newer "
-                f"machine, or rebuild on this glibc (verity/protocols/flock/agreement/upstream-build.sh) and re-pin")
+                f"machine, or rebuild on this glibc (verity/protocols/flock/prover/agreement/upstream-build.sh) and re-pin")
     for b in bins:
         try:
             r = subprocess.run([str(b)], capture_output=True, text=True, timeout=60)
@@ -2594,7 +2594,7 @@ def _env_key(e: dict[str, str]) -> dict[str, str]:
 
 
 def agreement_key(e: dict[str, str]) -> str | None:
-    """What the agreement job reads: the tracked files `agreement_closure` names (verity/protocols/flock/agreement/: `ci.py` and the scripts
+    """What the agreement job reads: the tracked files `agreement_closure` names (verity/protocols/flock/prover/agreement/: `ci.py` and the scripts
     it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
     the inputs and the job's settings; and the Lean packages `flock-verify` is built from, verity/protocols/flock/verifier/ and
     the packages of the tree it requires by path, their sources and toolchain pins), the interpreter and the platform.  None
@@ -2661,7 +2661,7 @@ STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key
 
 
 def agreement_closure(files: list[str]) -> list[str]:
-    """The tracked files the agreement job can read: verity/protocols/flock/agreement/, the verifier's Lean package and the
+    """The tracked files the agreement job can read: verity/protocols/flock/prover/agreement/, the verifier's Lean package and the
     packages of the tree it requires by path (`required_in_tree`), which its executable is built from; less any Lake package
     nested in the verifier's (Flock's proofs are under `security/Proofs/`), which it is not built from as long as the Lean
     package requires nothing (a `require` in its lakefile keeps them all in), less each of those packages'
@@ -2669,7 +2669,7 @@ def agreement_closure(files: list[str]) -> list[str]:
     verifier's lakefile mention it), and less their Markdown, which neither Lake nor a script of the agreement reads (a
     test fails if a file this keeps names a doc but to cite it, or a Lean file of it has an `include_str`), so a doc edit
     keeps the agreement's pass."""
-    pre, lean = "verity/protocols/flock/agreement/", "verity/protocols/flock/verifier/"
+    pre, lean = "verity/protocols/flock/prover/agreement/", "verity/protocols/flock/verifier/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
     nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in root)
