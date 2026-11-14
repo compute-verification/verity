@@ -213,8 +213,9 @@ REG = {"workspace": "w.slack.com", "channels": {"agent-coordination": {"id": "C1
 
 def test_an_unanswered_ask_rings_each_addressee_once_and_a_machines_none():
     state, ring = {}, Ring()
-    traffic = lambda: {"unanswered": [{"ts": "1.1", "by": "proofs", "to": ["top", "infra"]}, {"ts": "2.2", "by": "vy-monitors",
-                                                                                               "to": ["ci"]}]}
+    def traffic():
+        return {"unanswered": [{"ts": "1.1", "by": "proofs", "to": ["top", "infra"]},
+                               {"ts": "2.2", "by": "vy-monitors", "to": ["ci"]}]}
     T.unanswered(state, ring, REG, NOW, traffic)
     T.unanswered(state, ring, REG, NOW + 3600, traffic)
     assert [to for to, _, _ in ring.rings] == ["top", "infra"] and "https://w.slack.com/archives/C1/p11" in ring.rings[0][1]
@@ -222,8 +223,9 @@ def test_an_unanswered_ask_rings_each_addressee_once_and_a_machines_none():
 
 def test_an_active_agent_with_no_handle_rings_top_once():
     state, ring = {}, Ring()
-    agents = lambda: [{"id": "bc-a", "status": "ACTIVE", "name": "x"}, {"id": "bc-b", "status": "ACTIVE"},
-                      {"id": "bc-c", "status": "IDLE"}]
+    def agents():
+        return [{"id": "bc-a", "status": "ACTIVE", "name": "x"}, {"id": "bc-b", "status": "ACTIVE"},
+                {"id": "bc-c", "status": "IDLE"}]
     T.holderless(state, ring, NOW, agents, {"bc-b"})
     T.holderless(state, ring, NOW + 3600, agents, {"bc-b"})
     assert [(to, "x (bc-a)" in body) for to, body, _ in ring.rings] == [("top", True)]

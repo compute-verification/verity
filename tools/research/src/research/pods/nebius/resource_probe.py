@@ -186,8 +186,10 @@ def pool_flagged(path: Path, now: float, max_age_s: float = 900.0) -> set[int]:
 
 def idle_gpus_prometheus(window_s: float, gib: float) -> list[dict[str, Any]]:
     def by_series(q: str) -> dict[tuple[int, str], float]:
+        if (scheme := urllib.parse.urlsplit(PROMETHEUS).scheme) not in ("http", "https"):
+            raise ValueError(f"VY_PROMETHEUS is not an http or https URL (scheme {scheme!r})")
         url = f"{PROMETHEUS}/api/v1/query?" + urllib.parse.urlencode({"query": q})
-        with urllib.request.urlopen(url, timeout=10) as r:
+        with urllib.request.urlopen(url, timeout=10) as r:  # noqa: S310 (http or https, checked above)
             return {(int(x["metric"]["gpu"]), x["metric"].get("pod", "")): float(x["value"][1]) for x in json.load(r)["data"]["result"]}
     w = f"{int(window_s)}s"
     return idle_from_series(by_series(f"max by (gpu, pod) (max_over_time(DCGM_FI_DEV_GPU_UTIL{{{DCGM}}}[{w}]))"),

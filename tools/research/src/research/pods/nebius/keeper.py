@@ -61,7 +61,7 @@ import sys
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -95,7 +95,7 @@ clock = time.time
 
 
 def iso(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def utc(s: Any, what: str) -> float:
@@ -270,7 +270,7 @@ def daily(spec: str, t: float) -> list[tuple[float, float]]:
     if not m:
         raise ValueError(f"KEEPER_DAILY_HOLD {spec!r} is not HH:MM-HH:MM")
     h0, m0, h1, m1 = map(int, m.groups())
-    day = datetime.fromtimestamp(t, timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    day = datetime.fromtimestamp(t, UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     out = []
     for d in range(-1, 4):
         s, e = day + timedelta(days=d, hours=h0, minutes=m0), day + timedelta(days=d, hours=h1, minutes=m1)
@@ -478,7 +478,7 @@ def stop_overruns(name: str, st: dict[str, Any], spans: list[tuple[str, float, f
 def new_run_id(now: float) -> str:
     """`research run`'s id format (runs.new_run_id), unused under the runs root and the requests."""
     while True:
-        rid = f"r{datetime.fromtimestamp(now, timezone.utc):%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
+        rid = f"r{datetime.fromtimestamp(now, UTC):%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
         if not (ROOT / "runs" / rid).exists() and not (ROOT / "requests" / rid).exists():
             return rid
 

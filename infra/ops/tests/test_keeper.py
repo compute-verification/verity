@@ -13,7 +13,7 @@ import shutil
 import signal
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -29,7 +29,7 @@ needs_flock = pytest.mark.skipif(shutil.which("flock") is None or shutil.which("
 
 
 def t(s: str) -> float:
-    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc).timestamp()
+    return datetime.fromisoformat(s).replace(tzinfo=UTC).timestamp()
 
 
 class Systemd:

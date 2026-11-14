@@ -1163,7 +1163,8 @@ class Api:
         h = {"Authorization": self.auth, "Accept": "application/json", **(headers or {})}
         if data is not None:
             h["Content-Type"] = "application/json"
-        return urllib.request.Request(self.base + path, data=data, method=method, headers=h)
+        return urllib.request.Request(self.base + path, data=data, method=method,  # noqa: S310 (self.base is API, a literal https URL)
+                                      headers=h)
 
     def get(self, path: str, timeout: float | None = None, **params) -> dict:
         q = ("?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})) if params else ""
@@ -1171,11 +1172,12 @@ class Api:
         if self.reads_until is not None:
             if (timeout := min(timeout, self.reads_until - self.clock())) <= 0:
                 raise TimeoutError(f"this sweep's reads are spent ({SWEEP_READS_S // 60} min); the next sweep reads again")
-        with urllib.request.urlopen(self._req("GET", path + q), timeout=timeout) as r:
+        with urllib.request.urlopen(self._req("GET", path + q), timeout=timeout) as r:  # noqa: S310 (self.base is API, a literal https URL)
             return json.load(r)
 
     def post(self, path: str, body: dict | None = None) -> dict:
-        with urllib.request.urlopen(self._req("POST", path, body if body is not None else {}), timeout=self.timeout) as r:
+        req = self._req("POST", path, body if body is not None else {})
+        with urllib.request.urlopen(req, timeout=self.timeout) as r:  # noqa: S310 (self.base is API, a literal https URL)
             return json.load(r)
 
     def agents(self) -> Iterator[dict]:
@@ -1201,8 +1203,8 @@ class Api:
         while not stop():
             headers = {"Accept": "text/event-stream", **({"Last-Event-ID": last_id} if last_id else {})}
             try:
-                with urllib.request.urlopen(self._req("GET", f"/v1/agents/{agent}/runs/{run}/stream", headers=headers),
-                                            timeout=10 * 60) as r:
+                req = self._req("GET", f"/v1/agents/{agent}/runs/{run}/stream", headers=headers)
+                with urllib.request.urlopen(req, timeout=10 * 60) as r:  # noqa: S310 (self.base is API, a literal https URL)
                     event, data = "message", []
                     for raw in r:
                         line = raw.decode("utf-8", "replace").rstrip("\r\n")

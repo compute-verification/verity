@@ -36,7 +36,7 @@ import signal
 import sys
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -138,7 +138,7 @@ class Executor:
 
 
 def stamp(t: int) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 ROLL_BYTES = 256 << 20
@@ -146,7 +146,7 @@ ROLL_BYTES = 256 << 20
 
 def segment(root: Path, t: float) -> Path:
     """A new segment directory under `root`, named by `t` (UTC)."""
-    name = datetime.fromtimestamp(t, timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    name = datetime.fromtimestamp(t, UTC).strftime("%Y%m%dT%H%M%SZ")
     path, k = root / name, 1
     while path.exists():
         k += 1
@@ -155,7 +155,7 @@ def segment(root: Path, t: float) -> Path:
 
 
 def _day(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%d")
 
 
 def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[], float], sleep: Callable[[float], None],

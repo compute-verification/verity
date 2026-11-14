@@ -179,7 +179,7 @@ def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | 
     if d is None:
         return toml_machines
     if REGISTRY_ENV not in (os.environ if environ is None else environ):
-        from ..notes_sync import ensure_clone  # noqa: PLC0415
+        from ..notes_sync import ensure_clone
 
         if line := ensure_clone(notes_root(environ)):
             print(line, file=sys.stderr)
@@ -309,7 +309,7 @@ def _write_checked(name: str, entry: dict[str, Any], mt: Path, *, replace: bool,
     same = old is not None and all(old.get(k) == entry.get(k) for k in KNOWN_KEYS)
     if same:
         return p, "unchanged"
-    now = now or dt.datetime.now(dt.timezone.utc)
+    now = now or dt.datetime.now(dt.UTC)
     entry["registered_by"] = os.environ.get("RESEARCH_AGENT") or socket.gethostname()
     entry["registered_at"] = f"{now:%Y-%m-%dT%H:%MZ}"
     write_entry(d, name, entry)
@@ -477,7 +477,7 @@ def main(argv: list[str]) -> int:
             d = write_dir(mt)
             running = None
             if not ns.all:
-                from .connect import _list_pods  # noqa: PLC0415
+                from .connect import _list_pods
 
                 running = {p.get("id") for p in _list_pods() if (p.get("desiredStatus") or "").upper() == "RUNNING"}
             plan = plan_import(mt, d, running)
