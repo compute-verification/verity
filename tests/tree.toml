@@ -179,7 +179,7 @@ means = "a suite's configuration, where it has one"
 
 [[tree]]
 path = "verity/protocols/proofs/"
-means = "flock, with spot and recursion on it: what the other protocols call to prove; it uses neither layer"
+means = "flock, with spot and recursion on it, spot_flock on those and spot_flock_recursion on top: what the other protocols call to prove; it uses neither layer"
 
 [[tree]]
 path = "verity/protocols/accounting/"
@@ -206,8 +206,15 @@ protocol = true
 
 [[tree]]
 path = "verity/protocols/proofs/spot_flock/"
-means = "SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's lists for the proofs, with the recursive audit"
+means = "SPOT[Flock], the argument SPOT builds over Flock: the caller's check and the one-stage and two-stage forms; what stands on compose's lists for the proofs"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/proofs/spot_flock_recursion/"
+means = "SPOT[Flock] composed with recursion: the recursive audit, on spot_flock and recursion; nothing below uses it"
+protocol = true
+owner = "proofs"
+day = "2026-11-15"
 
 [[tree]]
 path = "verity/protocols/accounting/pouw/"
@@ -250,7 +257,7 @@ means = "experimental/NAME/, a whole directory no configuration lists; made with
 
 [[tree]]
 path = "verity/protocols/interface/"
-means = "the Lean interface each protocol's check implements"
+means = "the shape every protocol's check has in Lean (Core.Protocol, its command line and its outcome), with the registered hardware's type, the account and the periods, which every protocol's package reads"
 
 [[tree]]
 path = "verity/protocols/__init__.py"
@@ -305,6 +312,12 @@ path = "verity/protocols/NAME/tests/"
 means = "its tests, a suite of its own"
 
 # ---- not in the tree yet -------------------------------------------------------------------------------------------
+
+[[not_yet]]
+path = "verity/hardware/"
+to = "its tests to verity/tests/, the flat files' suite, where device.py's tests go; its README to hardware/README.md"
+owner = "compute-research"
+day = "2026-11-15"
 
 [[not_yet]]
 path = "verity/claims/"

@@ -378,7 +378,8 @@ WIPE = Session(("verity.protocols.accounting.pous.device.wipe_challenger:PROTOCO
                MEMORY_CHALLENGER, before=True)
 #: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the challenger's header names the
 #: monotonic clock
-POUS = Session(("verity.protocols.accounting.pous.device.challenger_party:PROTOCOL",),
+POUS = Session(("verity.protocols.accounting.pous.device.challenger_party:PROTOCOL",
+                "verity.protocols.accounting.pous.prover.challenger_prover:PROTOCOL"),
                {MEMORY_CHALLENGER: CS.CHALLENGER, PROVER: CS.PROVER}, {CS.CHALLENGER: (time.monotonic_ns, MONOTONIC)},
                MEMORY_CHALLENGER)
 #: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
