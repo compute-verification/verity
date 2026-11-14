@@ -420,14 +420,33 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
 def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[str], clones: list[Path]) -> int:
     """`research run` once its place is settled: here, on --on's machine, on the queue's, or where `--on auto` sent it. A run dir
     it took (`_take_run_dir`) that no run wrote in is removed as it returns. A run not claimed takes SIGTERM as SystemExit (exit
-    143) until then, so a launcher stopped that way removes it too; the handler it had before is put back. SIGKILL leaves it."""
+    143) until then, so a launcher stopped that way removes it too; the handler it had before is put back. SIGKILL leaves it.
+    A machine whose request or run dir of the id is another launch's (remote.RunIdTaken) has the run dir here removed; a launch
+    that picked its id and was not booked under it by the queue then starts over from where it began with a new id, at most
+    FRESH_ID_TRIES times, and any other is refused (exit 3)."""
     import signal
     import threading
 
     own = not ns.claimed and threading.current_thread() is threading.main_thread()
     before = signal.signal(signal.SIGTERM, _exit_on_sigterm) if own else None
+    start = None if ns.claimed or ns.id or ns.queue else copy.deepcopy(ns)
+    tried = 0
     try:
-        return _run_placed_in(ns, harness_opts, command, clones)
+        while True:
+            try:
+                return _run_placed_in(ns, list(harness_opts), list(command), clones)
+            except remote.RunIdTaken as e:
+                tried += 1
+                if (taken := getattr(ns, "taken_dir", None)) is not None:
+                    (taken / "remote.json").unlink(missing_ok=True)
+                    R.drop_run_dir(taken)
+                if start is None or tried >= R.FRESH_ID_TRIES:
+                    print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
+                    return 3
+                print(f"research run --on {ns.on}: run id {ns.id} is another launch's there; launching again with a new id",
+                      file=sys.stderr)
+                vars(ns).clear()
+                vars(ns).update(vars(copy.deepcopy(start)))
     except R.RunDirTaken as e:
         print(f"research run: {e}", file=sys.stderr)
         return 2
@@ -1537,6 +1556,8 @@ def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], com
     try:
         rec = remote.launch(run_id=run_id, local_dir=run_dir, taken=True, machine_name=ns.on, source=source,
                             sends=[*sends, *([urls] if urls else [])], queue=queue, auto=getattr(ns, "placed", None), **what)
+    except remote.RunIdTaken:
+        raise
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         ns.cannot_start = str(e) if isinstance(e, remote.CannotStart) else None
