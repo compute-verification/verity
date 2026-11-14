@@ -19,7 +19,7 @@ by its unit (Replace), PoUW's own Program and not the served one.
   salt, position, roots) -> {z: its cells' exact products, receipt}``. The unit derives its seed in its own proof from the
   salt, its position and its seed group's roots (`seeds.PouwSeed`, or `seeds.PouwUnitSeeds` for a unit whose
   receipt folds take keys: seed_j and σ_R), and its noise from the seed; nothing else reads the salt. The
-  salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree); unit u reads position slot
+  salt `pouw.salt` is the Program's one coin (`In(kind="coin")`); unit u reads position slot
   u (`Compiled.positions`) and its seed group's (root(A), root(B)). The three seed inputs are registered values the
   one-stage verifier fills itself, so the prover chooses none of them (`spot.one_stage.registered`'s
   `supplied_rows` and `supplied_root`): `pouw.roots` from the roots the record names for each group's operands (a served
@@ -60,12 +60,15 @@ placed at, is `Compiled.floor`.
 from __future__ import annotations
 
 import bisect
+import importlib
 import re
 from collections import Counter
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from functools import cached_property, lru_cache
-from typing import Any, Callable, Iterator, Mapping, Sequence
+from functools import cache, cached_property, lru_cache
+from typing import Any
 
+from verity.circuits import ports as _ports
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.circuits.program import REGISTRATION, Program, is_input
@@ -76,11 +79,6 @@ from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.accounting.pouw.verifier import grind as GR
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 from . import seeds as SD
-
-try:
-    from verity.circuits import ports as _ports
-except ImportError:  # port types (circuits PROTOCOL.md §12) are not on this tree
-    _ports = None
 
 SALT = "pouw.salt"
 POSITIONS = "pouw.positions"
@@ -177,7 +175,7 @@ def _registered(fn: Any) -> Matmul | None:
     return e
 
 
-@lru_cache(maxsize=None)
+@cache
 def _dot(fn: Any) -> Dot:
     e = MATMULS[fn.base_id]
     params, ret = fn.signature()
@@ -283,7 +281,7 @@ class Scheme:
                                          f"it covers {', '.join(sorted(self.units))}")
         return f(dot, tile)
 
-    def plug(self, kind: str, unit: Callable[[Dot, Tile], Any], name: str, rows: RowNoise | None = None) -> "Scheme":
+    def plug(self, kind: str, unit: Callable[[Dot, Tile], Any], name: str, rows: RowNoise | None = None) -> Scheme:
         """This scheme with `unit` as kind's factory (its noise form), under its own name (register it); `rows`, the form's
         `RowNoise` (`PV_ROWS` for P·V), where a matched row is visible."""
         return Scheme(name, self.tile, {**self.units, kind: unit}, self.cover,
@@ -300,8 +298,6 @@ BUILTIN = ("h1tile",)
 
 def _scheme(name: str) -> Scheme:
     if name not in SCHEMES:
-        import importlib
-
         for m in BUILTIN:
             importlib.import_module(f"{__package__}.{m}")
     if name not in SCHEMES:
@@ -377,7 +373,7 @@ def _node_runs(owner: Any, k: int, nd: Any, nested: bool) -> tuple[tuple[Dot, in
     return tuple(_merge([], list(inner) * _members(nd)))
 
 
-@lru_cache(maxsize=None)
+@cache
 def _runs(G: Any) -> tuple[tuple[Dot, int], ...]:
     out: list = []
     for k, nd in enumerate(G.body.nodes):
@@ -385,7 +381,7 @@ def _runs(G: Any) -> tuple[tuple[Dot, int], ...]:
     return tuple(out)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _dot_params(G: Any) -> frozenset[int]:
     """G's parameters a dot inside G reads as an operand."""
     out: set[int] = set()
@@ -401,7 +397,7 @@ def _holds(nd: Any) -> bool:
     return not isinstance(nd.fn, PrimitiveDefinition) and _entry(nd.fn) is None and bool(_runs(nd.fn))
 
 
-@lru_cache(maxsize=None)
+@cache
 def _zt(G: Any) -> TupleT:
     """`pouw.z`'s type in `PouwRest_v1{FN=G}`: per node of G holding dots, its z leaves (an Array over its dots, or its members)."""
     fields = []
@@ -498,7 +494,7 @@ class _Rest:
     kept: tuple[int, ...]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _rest(G: Any) -> _Rest:
     used: set[int] = set()
 
@@ -603,8 +599,8 @@ def _rest_body(B: Any, S: Any, *args: Coll) -> Coll:
 
 def _composite(name: str, statics: tuple[str, ...], signature: Callable, body: Callable, ports: Callable | None,
                doc: str) -> CompositeDefinition:
-    kw = {"ports": ports} if _ports is not None else {}
-    return CompositeDefinition(name, 1, statics, signature, body, doc=doc, conformance="protocol-defined", register=False, **kw)
+    return CompositeDefinition(name, 1, statics, signature, body, doc=doc, conformance="protocol-defined", register=False,
+                               ports=ports)
 
 
 PouwRest = _composite(
@@ -838,8 +834,8 @@ def _compiled_body(B: Any, S: Any, *args: Coll) -> Coll:
 
 
 def _compiled_ports(S: Any) -> Any:
-    positions = {POSITIONS: _ports.In(kind="position")} if "position" in _ports.KINDS else {}
-    return _ports.Ports(params={SALT: _ports.In(kind="coin"), **positions}, ret={"receipts": _ports.Out(sink=True)})
+    return _ports.Ports(params={SALT: _ports.In(kind="coin"), POSITIONS: _ports.In(kind="position")},
+                        ret={"receipts": _ports.Out(sink=True)})
 
 
 PouwCompiled = _composite(
@@ -1130,13 +1126,16 @@ class Compiled(Tiles):
 
     def check_descriptor(self, descriptor: dict) -> None:
         """Refuse a descriptor that is not the verifier's own compiled Program."""
+        def refusal() -> DomainError:
+            return DomainError(f"{self.scheme.name}: the descriptor is not the verifier's compiled Program of "
+                               f"{self.served.fn.id}")
+
         try:
             ok = program_digest(descriptor) == self.digest
-        except (TypeError, ValueError):
-            ok = False
+        except (TypeError, ValueError) as e:
+            raise refusal() from e
         if not ok:
-            raise DomainError(f"{self.scheme.name}: the descriptor is not the verifier's compiled Program of "
-                              f"{self.served.fn.id}")
+            raise refusal()
 
     def check_gates(self) -> GateCheck:
         """The gate-level checks, on the flattened Program: for one small enough to flatten (a test's, a reduced layer)."""
@@ -1202,7 +1201,7 @@ class Compiled(Tiles):
 # -- checks ------------------------------------------------------------------------------------------------------------------
 
 def _coin_ports(fn: Any) -> bool:
-    pt = _ports.port_types(fn) if _ports is not None else None
+    pt = _ports.port_types(fn)
     return pt is not None and any(p.kind == "coin" for rs in pt.params for _lo, _hi, p, _w in rs)
 
 
@@ -1250,7 +1249,7 @@ def _reads(r: Refs, space: str, idx: int) -> bool:
     return any(s == space and i == idx for s, i, _lo, _hi in runs(r))
 
 
-@lru_cache(maxsize=None)
+@cache
 def _check_unit(U: Any, boolean: bool, stream: tuple[Any, ...] = ()) -> None:
     """One unit Definition: one seed, on its salt, position and roots parameters whole; the salt read by nothing else; and its
     z reached from no node the seed reaches, or for a one-stream scheme (`stream`) recombined from words its receipt folds
@@ -1483,7 +1482,7 @@ def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Seque
     try:
         compiled = Program(fn, registered=registered)
     except ValueError as e:
-        if _ports is not None and isinstance(e, _ports.PortError):
+        if isinstance(e, _ports.PortError):
             raise CompileError(e.code, str(e).removeprefix(f"{e.code}: ")) from e
         raise
     c = Compiled(program, SCHEMES[scheme], plan, group_of, compiled)
