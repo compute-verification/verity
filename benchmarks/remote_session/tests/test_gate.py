@@ -20,6 +20,8 @@ from pathlib import Path
 import pytest
 
 GATE = Path(__file__).resolve().parents[1] / "gate.sh"
+AUDITOR, WHATIF, MAIN_LINE = (GATE.parent / n for n in ("auditor.sh", "gate_whatif.sh", "main_line.sh"))
+URL = "https://user:tok@127.0.0.1:9/x.git"
 FP = "SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs"
 PUBLIC = bytes(range(80))
 PIN = hashlib.sha512(PUBLIC).hexdigest()
@@ -151,32 +153,40 @@ def test_no_main_line_to_check_commit_on_refuses_before_any_request(tmp_path, re
     assert calls == []
 
 
-def test_a_refused_fetch_prints_no_userinfo_of_origins_url_anywhere(tmp_path, repo, monkeypatch):
-    """On an agent's VM origin's URL carries a credential as its userinfo: neither the refusal nor any file under $OUT
-    holds it, while the refusal still names the URL without it. A git on PATH ahead of the real one answers origin's URL
-    and fails the fetch from it naming the URL whole, as a git that doesn't redact it would: no git config holds the URL
-    (an agent's VM refuses a remote URL with a credential in it)."""
-    url = "https://user:tok@127.0.0.1:9/x.git"
+def userinfo_origin(tmp_path: Path, monkeypatch) -> None:
+    """A git on PATH ahead of the real one that answers origin's URL with URL, a credential as its userinfo, and fails
+    the fetch from it naming the URL whole, as a git that doesn't redact it would: no git config holds the URL (an
+    agent's VM refuses a remote URL with a credential in it)."""
     stub = tmp_path / "git-stub"
     stub.mkdir()
     (stub / "git").write_text(
-        f'#!/bin/sh\n[ "$1 $2 $3" = "remote get-url origin" ] && {{ echo "{url}"; exit 0; }}\n'
-        f'for a; do [ "$a" = "{url}" ] && {{ echo "fatal: unable to access \'{url}/\': refused" >&2; exit 128; }}; done\n'
+        f'#!/bin/sh\n[ "$1 $2 $3" = "remote get-url origin" ] && {{ echo "{URL}"; exit 0; }}\n'
+        f'for a; do [ "$a" = "{URL}" ] && {{ echo "fatal: unable to access \'{URL}/\': refused" >&2; exit 128; }}; done\n'
         f'exec {shutil.which("git")} "$@"\n')
     (stub / "git").chmod(0o755)
     monkeypatch.setenv("PATH", str(stub), prepend=os.pathsep)
+
+
+def holds_no_userinfo(p: subprocess.CompletedProcess, out: Path) -> bool:
+    texts = (p.stdout, p.stderr, *(f.read_text(errors="replace") for f in out.rglob("*") if f.is_file()))
+    return not any("user" in t or "tok" in t for t in texts)
+
+
+def test_a_refused_fetch_prints_no_userinfo_of_origins_url_anywhere(tmp_path, repo, monkeypatch):
+    """On an agent's VM origin's URL carries a credential as its userinfo: neither the refusal nor any file under $OUT
+    holds it, while the refusal still names the URL without it."""
+    userinfo_origin(tmp_path, monkeypatch)
     p, out, calls = probe(tmp_path, repo)
     assert p.returncode == 3, p.stdout + p.stderr
     assert "can't fetch main's first-parent history from https://127.0.0.1:9/x.git (fetch.probe.log)" in p.stdout
     assert (out / "fetch.probe.log").exists() and calls == []
-    for text in (p.stdout, p.stderr, *(f.read_text(errors="replace") for f in out.rglob("*") if f.is_file())):
-        assert "user" not in text and "tok" not in text
+    assert holds_no_userinfo(p, out)
 
 
 def test_unauth_takes_out_every_urls_userinfo_and_nothing_else(tmp_path):
     """The log is stripped too, whatever git writes into it, for any git version that names the URL whole."""
     lines = "fatal: unable to access 'https://user:tok@h/x.git/': no\nfrom ssh://git@h:22/x and /srv/git/verity.git\n"
-    p = subprocess.run(["bash", "-c", f'source <(sed -n "/^unauth() {{/,/^}}/p" {GATE}); unauth'], input=lines,
+    p = subprocess.run(["bash", "-c", f'source {MAIN_LINE}; unauth'], input=lines,
                        capture_output=True, text=True, check=True)
     assert p.stdout == "fatal: unable to access 'https://h/x.git/': no\nfrom ssh://h:22/x and /srv/git/verity.git\n"
 
@@ -220,6 +230,58 @@ def test_a_run_clone_whose_bare_repository_cant_be_reached_refuses_and_never_rea
     assert f"can't fetch main's first-parent history from {gone} (fetch.probe.log)" in p.stdout
     assert "relaunch from a checkout fetched just before (git fetch origin main)" in p.stdout
     assert calls == [] and not (out / "main.probe.txt").exists()
+
+
+def audit(tmp_path: Path, r: Path, script: Path = AUDITOR) -> tuple[subprocess.CompletedProcess, Path, Path]:
+    """auditor.sh (or gate_whatif.sh) from the clone r's root, as gate.sh's audit and gate_run.sh's whatif run them,
+    against a gate serving an empty ledger and pins log and a uv standing in for the store and auditor_line.py; its
+    result, $OUT and the file of the commands uv got (absent where it got none)."""
+    run, out, bin_, uv = tmp_path / "host-run", tmp_path / "aud-out", tmp_path / "aud-bin", tmp_path / "uv.calls"
+    for d in (run / "out", out, bin_):
+        d.mkdir(parents=True)
+    (bin_ / "ssh").write_text("#!/bin/sh\nexit 0\n")
+    (bin_ / "uv").write_text(f'#!/bin/sh\necho "$*" >> {uv}\necho "--main FILE"\n')
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, "OUT": str(out), "RUN": str(run), "GATE": "research@192.0.2.8", "GATE_KEY": str(tmp_path / "k"),
+           "PERIOD": "ma-remote-coins-8", "PIN": PIN, "COMMIT": git(r, "rev-parse", "HEAD"), "RUN_ART": "art:r",
+           "AUDITOR_ART": "art:a", "PROVER_ART": "art:p"}
+    env["PATH"] = f"{bin_}{os.pathsep}{env['PATH']}"
+    return subprocess.run(["bash", str(script)], cwd=r, env=env, capture_output=True, text=True), out, uv
+
+
+def test_the_auditor_reads_main_from_the_bare_repository_not_its_source_roots_frozen_copy(tmp_path, repo):
+    """The fire's audit runs auditor.sh in the run's clone: its --main is the bare's main, as the probe's is."""
+    parent = git(repo[0], "rev-parse", "HEAD~1")
+    _, clone = run_clone(tmp_path, repo, at=parent)
+    p, out, uv = audit(tmp_path, clone)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert (out / "main.txt").read_text().split() == [repo[1], parent]
+    assert f"main from {tmp_path / 'origin.git'}, 2 first-parent commits" in (out / "fetch.log").read_text()
+    assert f"--main {out / 'main.txt'}" in uv.read_text()
+
+
+def test_an_auditor_whose_bare_repository_cant_be_reached_refuses_and_writes_no_line(tmp_path, repo):
+    """The source root's frozen origin/main holds COMMIT: the auditor refuses rather than check pins against it."""
+    root, clone = run_clone(tmp_path, repo, at=repo[1])
+    gone = tmp_path / "gone.git"
+    git(root, "remote", "set-url", "origin", str(gone))
+    p, out, uv = audit(tmp_path, clone)
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert (f"can't fetch main's first-parent history from {gone} (fetch.log), so no session's pin can be checked on "
+            "it: no line was written") in p.stdout
+    assert not uv.exists() and not (out / "main.txt").exists() and not (out / "auditor_line.json").exists()
+
+
+@pytest.mark.parametrize("script", [AUDITOR, WHATIF], ids=["auditor", "whatif"])
+def test_a_refused_fetch_of_main_by_the_auditor_or_the_whatif_prints_no_userinfo_anywhere(tmp_path, repo, monkeypatch,
+                                                                                            script):
+    userinfo_origin(tmp_path, monkeypatch)
+    p, out, uv = audit(tmp_path, repo[0], script)
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert "can't fetch main's first-parent history from https://127.0.0.1:9/x.git (fetch.log)" in p.stdout
+    assert "--host-bytes" not in (uv.read_text() if uv.exists() else "") and not (out / "main.txt").exists()
+    assert holds_no_userinfo(p, out)
 
 
 def test_a_dry_probe_sends_nothing(tmp_path, repo):
