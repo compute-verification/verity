@@ -1,6 +1,6 @@
 """A `match --run-dir` re-run (`verity_vllm.pipeline.match`) takes what its run.json records, the tier-b steps of a `--full-replay`
-run among them unless `--tier-b-steps` names others.  `--no-verify-weights`, `--keep-traces` and `--chains` reach the capture's
-command, the census's and the manifest.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the
+run among them unless `--tier-b-steps` names others.  `--no-verify-weights` and `--chains` reach the capture's command and the
+manifest, and `--keep-traces` no stage's.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the
 realized shape of its capture.  What the driver says of a run goes to the log: a stage's command and status, and each record it
 could not write.  The phase's last word on the realized shape, the shape or that it was not written, is a line on stderr as it is
 written, which a pod's script shows.  A run directory with no run.json, and a recorded workload this checkout lacks, are refused
@@ -93,7 +93,7 @@ def test_a_first_run_s_tier_b_steps_are_the_flag_s_else_step_0_and_three_decode_
     assert (steps(), steps("--tier-b-steps", "4"), steps("--tier-b-steps", "")) == ([0, 1, 2, 3], [0, 4], [0, 1, 2, 3, 4])
 
 
-def test_the_capture_verifies_the_weights_and_the_census_keeps_no_trace_unless_a_flag_says_otherwise(tmp_path):
+def test_the_capture_verifies_the_weights_unless_a_flag_says_otherwise_and_keeping_traces_changes_no_command(tmp_path):
     (tmp_path / "wl.json").write_text(json.dumps({"requests": [{"request_id": "r0", "prompt_len": 5, "max_tokens": 4}]}))
     run = _run_dir(tmp_path, snapshot_steps=[0, 1])
 
@@ -102,10 +102,9 @@ def test_the_capture_verifies_the_weights_and_the_census_keeps_no_trace_unless_a
         RC._defaults_from_run_dir(a)
         return RC.Plan(a).cmd(stage)
 
-    unverified, kept = cmd("capture", "--no-verify-weights"), cmd("census", "--keep-traces")
+    unverified = cmd("capture", "--no-verify-weights")
     assert "--verify-weights" not in unverified and cmd("capture") == [*unverified, "--verify-weights"]
-    assert "--no-traces" not in kept and cmd("census") == [*kept, "--no-traces"]
-    assert cmd("capture", "--keep-traces") == cmd("capture") and cmd("census", "--no-verify-weights") == cmd("census")
+    assert cmd("capture", "--keep-traces") == cmd("capture") and cmd("census", "--keep-traces") is None
 
 
 CPU_STAGES = ("resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "root_policy", "golden", "wiring",
@@ -152,6 +151,27 @@ def test_a_cpu_phase_with_every_stage_skipped_writes_the_manifest_the_spec_and_t
     assert _cpu_phase(run, "--no-verify-weights", "--chains", "5") == 0
     man = json.loads((run / "run.json").read_text())
     assert (man["verify_weights"], man["sampling"]["chains"]) == (False, 5)
+
+
+@pytest.mark.parametrize("kept, steps", [({"snapshot_steps": [2, 0, 2]}, [0, 2]), ({"steps": [2, 0, 2]}, [0, 2]), ({"steps": []}, None)])
+def test_the_realized_shape_is_each_request_as_its_capture_states_it_and_the_kept_steps_under_either_name(tmp_path, monkeypatch, kept, steps):
+    """A request's lengths are its stated ones, else its token ids' counts; its arrival step is 0 unless stated.  The capture's
+    engine steps may sit under its `timing`, and its kept steps under `steps` or `snapshot_steps`."""
+    run = _one_request_run(tmp_path, monkeypatch)
+    r0 = {"request_id": "r0", "prompt_token_ids": [1, 2, 3], "generated_token_ids": [4, 5], "max_tokens": 4, "arrive_step": 2,
+          "arrive_step_realized": 3, "first_step": 3, "finish_step": 4, "finish_reason": "eos"}
+    r1 = {"request_id": "r1", "prompt_len": 6, "n_generated": 1, "max_tokens": 1, "first_step": 0, "finish_step": 0, "finish_reason": "length"}
+    _capture(run, [r0, r1], timing={"engine_steps": 5}, expected_engine_steps=7, serving_profile="sp", context_class="short")
+    (run / "capture" / "snapshots.json").write_text(json.dumps(kept))
+    assert _cpu_phase(run) == 0
+    assert json.loads((run / "run.json").read_text())["realized"] == {
+        "requests": [{"request_id": "r0", "prompt_len": 3, "max_tokens": 4, "n_generated": 2, "arrive_step": 2, "arrive_step_realized": 3,
+                      "first_step": 3, "finish_step": 4, "finish_reason": "eos"},
+                     {"request_id": "r1", "prompt_len": 6, "max_tokens": 1, "n_generated": 1, "arrive_step": 0, "arrive_step_realized": None,
+                      "first_step": 0, "finish_step": 0, "finish_reason": "length"}],
+        "prompt_lens": [3, 6], "n_generated": [2, 1], "engine_steps_capture": 5, "engine_steps_control": None,
+        "expected_engine_steps_declared": 7, "serving_profile": "sp", "context_class": "short", "snapshot_steps_realized": steps,
+        "max_concurrent_requests": 1}
 
 
 def test_a_request_that_never_ran_leaves_no_peak_and_no_capture_leaves_no_realized_shape(tmp_path, monkeypatch):

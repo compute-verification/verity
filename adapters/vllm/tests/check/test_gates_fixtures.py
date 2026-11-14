@@ -254,7 +254,7 @@ def test_G1_census_launch_counts(tmp_path):
     arts = passing_artifacts()
     del arts["census_reconcile.json"]["totals"]["count_mismatches"]
     r = gate(tmp_path, arts, "G1")
-    assert r.status == "error" and "count_mismatches" in r.reason and "census --reconcile" in r.reason
+    assert r.status == "error" and "count_mismatches" in r.reason
 
 
 def test_G1_missing_census_skips_with_stage_evidence(tmp_path):

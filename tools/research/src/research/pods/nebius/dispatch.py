@@ -66,7 +66,7 @@ PACK_MODELS, batch <= 8, a tree with the deferred replay; never TP2, Gemma-2, Py
 be, to `$PACK_SPOOL/queue/` (default <root>/pack) instead of submitted, and still-suspended gpu Jobs of eligible items are taken
 off Kueue into the spool (PACK_ADOPT, default 1). At most PACK_PODS (1 while node 1's storage is short)
 `commit-pack` Jobs run at once (sky/jobs/commit-pack.yaml, its pilot sky/commit_pack.py), each running up to 3 spooled Commits on its
-one GPU under MPS; one starts only when a queued entry passes the pilot's replay-bundle cap with every claimed entry counted as
+one GPU under MPS; one starts only when a queued entry passes the pilot's replay-bundle limit with every claimed entry counted as
 running, since a pod that can claim nothing idles 3 min and exits having run no Commit. With /workspace at
 PACK_DISK_PAUSE (80%) or fuller, nothing new is spooled, adopted or started (the Commit goes
 out as a normal Job), and the pilot claims nothing. Their `results/` come back into the
@@ -868,7 +868,7 @@ def pack_pods(jobs: list[dict], dry: bool = False) -> None:
     if queued and len(active) < PACK_PODS and queued > PACK_SLOTS * len(active) - claimed:
         if not pack_fits():
             if dry:
-                print("would start no pack pod: no queued entry fits the replay-bundle cap")
+                print("would start no pack pod: no queued entry fits the replay-bundle limit")
             return
         submit_pack_pod(dry=dry)
 
@@ -994,7 +994,7 @@ def n2_block(item: dict) -> dict:
     if b["gpus"] != 1:
         raise ValueError(f"n2.gpus {b['gpus']}: a node-2 fill job other than a Commit holds 1 GPU")
     if not 1 <= b.get("max_min", 0) <= 30:
-        raise ValueError(f"n2.max_min {b.get('max_min')}: 1-30, the fill runner's cap")
+        raise ValueError(f"n2.max_min {b.get('max_min')}: 1-30, the fill runner's limit")
     if b.get("pool") not in (None, "provers"):
         raise ValueError(f"n2.pool {b['pool']!r}: provers or none")
     for k in ("owner", "on", "cpuset"):

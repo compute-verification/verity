@@ -32,7 +32,7 @@ untraced = [
     "tests/test_a5_tp_store.py",
     "tests/test_a5_warden.py",
     "tests/test_commit_records.py",
-    "tests/test_member_seconds.py",
+    "tests/test_member_seconds.py", "tests/test_members_tables.py",
     "tests/test_served_bandwidth.py",
     "tests/test_served_overhead.py",
     "tests/test_served_verdicts.py",
@@ -78,7 +78,7 @@ worker_gb = 6
 # circuit under a φ (`prove_path.registered_of_serve`), which refuses a BF16 checkpoint under the int8 serve's.
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
-inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover/clear", "benchmarks/pouw/pearl_c",
+inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover/clear", "verity/protocols/accounting/pouw/prover/kernels/pearl_c",
           "benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm",
           "benchmarks/pouw/tests/test_pearl_c_vllm.py", "benchmarks/pouw/tests/test_pearl_c_hash_decode.py",
           "benchmarks/pouw/tests/test_pearl_c_sm90_prefill.py", "benchmarks/pouw/run_result.py",
