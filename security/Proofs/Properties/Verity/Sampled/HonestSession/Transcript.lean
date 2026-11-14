@@ -73,22 +73,24 @@ theorem inspection_ok : inspectionOk = true := by
   decide +kernel
 
 theorem record_draw_some : (Exec.recordDraw transcript.record).isSome = true := by
-  unfold inspectionOk at inspection_ok
-  generalize h : Exec.recordDraw transcript.record = o at inspection_ok ⊢
+  have hio := inspection_ok
+  unfold inspectionOk at hio
+  generalize h : Exec.recordDraw transcript.record = o at hio ⊢
   cases o <;> simp_all
 
 /-- The subset draw's decoded value. -/
 def unitDraw : Flock.Draw.UnitDraw :=
   (Flock.Draw.UnitDraw.ofJson draw).toOption.get
     (by
-      unfold inspectionOk at inspection_ok
-      generalize hr : Exec.recordDraw transcript.record = o at inspection_ok
+      have hio := inspection_ok
+      unfold inspectionOk at hio
+      generalize hr : Exec.recordDraw transcript.record = o at hio
       cases o with
-      | none => simp at inspection_ok
+      | none => simp at hio
       | some d =>
         have hd : draw = d := by simp [draw, hr]
         rw [hd]
-        generalize hu : Flock.Draw.UnitDraw.ofJson d = u at inspection_ok
+        generalize hu : Flock.Draw.UnitDraw.ofJson d = u at hio
         cases u <;> simp_all)
 
 /-- The concrete draw's units. -/
@@ -96,32 +98,35 @@ def units : Array ℕ := unitDraw.units
 
 /-- **The concrete record carries its non-null subset draw**, checked by kernel reduction. -/
 theorem record_draw : Exec.recordDraw transcript.record = some draw := by
-  generalize h : Exec.recordDraw transcript.record = o at record_draw_some ⊢
+  have hrs := record_draw_some
+  generalize h : Exec.recordDraw transcript.record = o at hrs ⊢
   cases o with
-  | none => simp at record_draw_some
+  | none => simp at hrs
   | some d => rfl
 
 /-- **The concrete record's draw decodes to its subset of its population**, checked by kernel reduction. -/
 theorem draw_decodes : Flock.Draw.UnitDraw.ofJson draw = .ok unitDraw := by
-  unfold inspectionOk at inspection_ok
-  generalize hr : Exec.recordDraw transcript.record = o at inspection_ok
+  have hio := inspection_ok
+  unfold inspectionOk at hio
+  generalize hr : Exec.recordDraw transcript.record = o at hio
   cases o with
-  | none => simp at inspection_ok
+  | none => simp at hio
   | some d =>
     have hd : draw = d := by simp [draw, hr]
     rw [hd]
-    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at inspection_ok ⊢
+    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at hio ⊢
     cases u <;> simp_all [unitDraw, hd, hu]
 
 theorem unit_law : unitDraw.law = .subset 16 := by
-  unfold inspectionOk at inspection_ok
-  generalize hr : Exec.recordDraw transcript.record = o at inspection_ok
+  have hio := inspection_ok
+  unfold inspectionOk at hio
+  generalize hr : Exec.recordDraw transcript.record = o at hio
   cases o with
-  | none => simp at inspection_ok
+  | none => simp at hio
   | some d =>
-    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at inspection_ok
+    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at hio
     cases u with
-    | error msg => simp at inspection_ok
+    | error msg => simp at hio
     | ok v =>
       have hd : draw = d := by simp [draw, hr]
       have hv : unitDraw = v := by simp [unitDraw, hd, hu]
@@ -129,14 +134,15 @@ theorem unit_law : unitDraw.law = .subset 16 := by
       cases hl : v.law <;> simp_all
 
 theorem unit_population : unitDraw.population = 32 := by
-  unfold inspectionOk at inspection_ok
-  generalize hr : Exec.recordDraw transcript.record = o at inspection_ok
+  have hio := inspection_ok
+  unfold inspectionOk at hio
+  generalize hr : Exec.recordDraw transcript.record = o at hio
   cases o with
-  | none => simp at inspection_ok
+  | none => simp at hio
   | some d =>
-    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at inspection_ok
+    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at hio
     cases u with
-    | error msg => simp at inspection_ok
+    | error msg => simp at hio
     | ok v =>
       have hd : draw = d := by simp [draw, hr]
       have hv : unitDraw = v := by simp [unitDraw, hd, hu]
@@ -144,14 +150,15 @@ theorem unit_population : unitDraw.population = 32 := by
       cases hl : v.law <;> simp_all
 
 theorem unit_count : units.size = 16 := by
-  unfold inspectionOk at inspection_ok
-  generalize hr : Exec.recordDraw transcript.record = o at inspection_ok
+  have hio := inspection_ok
+  unfold inspectionOk at hio
+  generalize hr : Exec.recordDraw transcript.record = o at hio
   cases o with
-  | none => simp at inspection_ok
+  | none => simp at hio
   | some d =>
-    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at inspection_ok
+    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at hio
     cases u with
-    | error msg => simp at inspection_ok
+    | error msg => simp at hio
     | ok v =>
       have hd : draw = d := by simp [draw, hr]
       have hv : unitDraw = v := by simp [unitDraw, hd, hu]

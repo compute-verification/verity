@@ -36,8 +36,9 @@ theorem verifier_ok : verifierOk = true := by
 
 /-- The compiled verifier's setup computation succeeds. -/
 theorem setup_some : setupResult.toOption.isSome = true := by
-  unfold verifierOk at verifier_ok
-  generalize h : setupResult = r at verifier_ok ⊢
+  have hvo := verifier_ok
+  unfold verifierOk at hvo
+  generalize h : setupResult = r at hvo ⊢
   cases r <;> simp_all
 
 /-- The compiled verifier's setup result on the honest session. -/
@@ -48,14 +49,16 @@ def setup : Flock.SessionSpec × Array Flock.Stmt :=
 theorem setup_ok :
     Exec.setupOfP (ZkExec.zkInputs inputs) none transcript.record = .ok setup := by
   change setupResult = .ok setup
-  generalize h : setupResult = r at setup_some ⊢
+  have hso := setup_some
+  generalize h : setupResult = r at hso ⊢
   cases r <;> simp_all [setup]
 
 /-- Every table in the honest session has the shape required by the ZK verifier. -/
 theorem shape_ok : setup.2.forM Flock.Zk.shapeOk = .ok () := by
-  unfold verifierOk at verifier_ok
-  rw [setup_ok] at verifier_ok
-  have h := (Bool.and_eq_true.mp verifier_ok).1
+  have hvo := verifier_ok
+  unfold verifierOk at hvo
+  rw [setup_ok] at hvo
+  have h := (Bool.and_eq_true.mp hvo).1
   generalize he : setup.2.forM Flock.Zk.shapeOk = e at h ⊢
   cases e with
   | error msg => simp at h
@@ -64,9 +67,10 @@ theorem shape_ok : setup.2.forM Flock.Zk.shapeOk = .ok () := by
 /-- The compiled ZK verifier accepts the honest session's proofs. -/
 theorem verify_ok :
     Flock.Zk.verify setup.1 (setup.2.map Flock.Setup.ofCircuit) transcript.record transcript.proofs = .ok () := by
-  unfold verifierOk at verifier_ok
-  rw [setup_ok] at verifier_ok
-  have h := (Bool.and_eq_true.mp verifier_ok).2
+  have hvo := verifier_ok
+  unfold verifierOk at hvo
+  rw [setup_ok] at hvo
+  have h := (Bool.and_eq_true.mp hvo).2
   generalize he :
       Flock.Zk.verify setup.1 (setup.2.map Flock.Setup.ofCircuit) transcript.record transcript.proofs = e at h ⊢
   cases e with

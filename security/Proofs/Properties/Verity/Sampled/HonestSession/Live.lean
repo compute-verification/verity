@@ -72,7 +72,8 @@ theorem public_some : publicResult.toOption.isSome = true := by decide +kernel
 def pubO : Flock.Public := publicResult.toOption.get public_some
 
 theorem public_ok : publicResult = .ok pubO := by
-  generalize h : publicResult = r at public_some ⊢
+  have hps := public_some
+  generalize h : publicResult = r at hps ⊢
   cases r <;> simp_all [pubO]
 
 set_option maxHeartbeats 0 in

@@ -27,7 +27,8 @@ theorem decoded_some : decodedResult.toOption.isSome := by decide +kernel
 def decoded : List _root_.Core.Composition.Named := decodedResult.toOption.get decoded_some
 
 theorem decoded_ok : decodedResult = .ok decoded := by
-  generalize h : decodedResult = r at decoded_some ⊢
+  have hds := decoded_some
+  generalize h : decodedResult = r at hds ⊢
   cases r <;> simp_all [decoded]
 
 set_option maxHeartbeats 0 in
@@ -40,7 +41,8 @@ def member : _root_.Core.Composition.Named :=
 
 theorem member_ok :
     decoded.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = some member := by
-  generalize h : decoded.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = x at member_some ⊢
+  have hms := member_some
+  generalize h : decoded.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = x at hms ⊢
   cases x <;> simp_all [member]
 
 def innerResult :=
@@ -65,13 +67,15 @@ def params : _root_.Spot.OneStageZk.Params :=
     | .inr _ => none).get left_some
 
 theorem inner_ok : innerResult = .ok (.inl params) := by
-  generalize h : innerResult = r at inner_some ⊢
+  have his := inner_some
+  have hls := left_some
+  generalize h : innerResult = r at his ⊢
   cases r with
-  | error e => simp at inner_some
+  | error e => simp at his
   | ok x =>
     cases x with
     | inl p => simp [params, inner, h]
-    | inr p => simp [inner, h] at left_some
+    | inr p => simp [inner, h] at hls
 
 /-- The concrete parameters contain one-stage-v2's parameters. -/
 theorem params_at : ParamsAt θ params :=
