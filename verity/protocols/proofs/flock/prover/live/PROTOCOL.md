@@ -851,7 +851,7 @@ recheck's name before anything of its table leaves, with the device's level walk
 it, and whether the device or the host would have built its witness (a typed template's statement is the host's
 either way). The refusal is decided from the session's witness mode before the session builds a witness; one the
 pipeline built ahead for it is waited for and dropped. It leaves after `Hello` (the selftest's `zk_firewall_refuses_device_witness`, in a device build and in a build without the device, on
-a session asked for the device). It is stricter than
+a session asked for the device, with `FC_UNIT_WALK=1` and without it). It is stricter than
 §10.1 in one place: the session loop recomputes the whole opening, level 0's lane rounds included, in lock step with the
 device (`Drive.openStep`, below). Each of the device's opening rounds must equal the loop's byte for byte, and the opening
 that leaves is the loop's. The lincheck's folded comb is the ZK server's (the Lean finish folds it), and `final_c'` is

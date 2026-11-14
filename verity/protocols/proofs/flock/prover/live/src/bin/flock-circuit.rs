@@ -6110,8 +6110,8 @@ fn worker_subsession_on(instances: &str, extra: &[String], env: &[(&str, String)
 }
 
 /// [`worker_subsession_on`] with the session's witness the host's (`host_witness`, `FC_HOST_WITNESS=1`), or left to the
-/// session's device: with `--gpu` among `extra` the device builds it, its units as the session's own switches say (neither
-/// `FC_HOST_WITNESS` nor `FC_HOST_UNITS` reaches the session from this process's environment).
+/// session's device: with `--gpu` among `extra` the device builds it, its units as the session's own switches say (none of
+/// `FC_HOST_WITNESS`, `FC_HOST_UNITS` and `FC_UNIT_WALK` reaches the session from this process's environment; `env` gives them).
 fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, String)], host_witness: bool) -> Value {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
     cmd.arg("selftest").args(if zk_mode() { &["--zk"][..] } else { &[] })
@@ -6125,7 +6125,7 @@ fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, Strin
     if host_witness {
         cmd.env("FC_HOST_WITNESS", "1");
     } else {
-        cmd.env_remove("FC_HOST_WITNESS").env_remove("FC_HOST_UNITS");
+        cmd.env_remove("FC_HOST_WITNESS").env_remove("FC_HOST_UNITS").env_remove("FC_UNIT_WALK");
     }
     // the verifier's sample, as this process's server has it ([`serving`])
     for flag in ["--draw", "--draw-law", "--draw-file"] {
@@ -6147,8 +6147,9 @@ fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, Strin
 
 /// `zk_firewall_refuses_device_witness` (live PROTOCOL.md §10.2, §10.4): the ZK server rechecks a host witness, so a
 /// session whose witness the device builds is refused by name before anything of its table leaves, with the device's level
-/// walk asked for (`FC_UNIT_WALK=1`, under which a deep unit's words are the device's and no host slots) as without it. One
-/// ZK server session asked for the device (`--gpu`) in a process of its own, with no `FC_HOST_WITNESS`: the prover stops with
+/// walk asked for (`FC_UNIT_WALK=1`, under which a deep unit's words are the device's and no host slots) as without it. Two
+/// ZK server sessions asked for the device (`--gpu`), each in a process of its own, with no `FC_HOST_WITNESS`, one with
+/// `FC_UNIT_WALK=1` (the record's own fields) and one with it unset (`without_walk`); in each the prover stops with
 /// the recheck's own refusal, the verifier gets no `Commit`, round or proof, and does not accept. The refusal is decided
 /// from the session's witness mode before the session builds a witness; one the pipeline built ahead for it is waited for
 /// and dropped. So a build without the device holds it too (`device_build` false:
@@ -6163,16 +6164,27 @@ fn firewall_device_witness_case(gpu: bool) -> Value {
         return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
     }
     let want = "FIREWALL-REFUSED: the firewall rechecks a host witness (FC_HOST_WITNESS=1)";
-    let v = worker_subsession_with(&arg("--instances", ""), &["--gpu".to_string()], &[("FC_UNIT_WALK", "1".to_string())], false);
-    let s = v["seen"].as_array().cloned().unwrap_or_default();
     let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
-    let left: Vec<String> = s.iter().map(kind).filter(|k| ["commit", "open", "round", "proof"].contains(&k.as_str())).collect();
-    let stopped = v["prover_stopped"].as_str().unwrap_or("");
-    json!({"case": name, "expect": "the session refused by the recheck's own name, nothing of the table sent, not accepted",
-           "gpu": gpu, "device_build": cfg!(feature = "gpu"), "unit_walk_asked": "FC_UNIT_WALK=1", "accepted": v["accepted"],
-           "prover_stopped": stopped, "why": v["why"],
-           "error": v["error"], "requests": s.iter().map(kind).collect::<Vec<_>>(), "sent_of_the_table": left,
-           "pass": v["accepted"] == false && stopped == want && left.is_empty()})
+    // one session with the walk asked for, one with FC_UNIT_WALK unset; the first's record is the case's own, the second's beside it
+    let one = |env: &[(&str, String)], asked: &str| {
+        let v = worker_subsession_with(&arg("--instances", ""), &["--gpu".to_string()], env, false);
+        let s = v["seen"].as_array().cloned().unwrap_or_default();
+        let left: Vec<String> = s.iter().map(kind).filter(|k| ["commit", "open", "round", "proof"].contains(&k.as_str())).collect();
+        let stopped = v["prover_stopped"].as_str().unwrap_or("").to_string();
+        let pass = v["accepted"] == false && stopped == want && left.is_empty();
+        json!({"unit_walk_asked": asked, "accepted": v["accepted"], "prover_stopped": stopped, "why": v["why"], "error": v["error"],
+               "requests": s.iter().map(kind).collect::<Vec<_>>(), "sent_of_the_table": left, "pass": pass})
+    };
+    let mut r = one(&[("FC_UNIT_WALK", "1".to_string())], "FC_UNIT_WALK=1");
+    let without = one(&[], "unset");
+    let pass = r["pass"] == true && without["pass"] == true;
+    r["case"] = json!(name);
+    r["expect"] = json!("each session, the walk asked for and not, refused by the recheck's own name, nothing of the table sent, not accepted");
+    r["gpu"] = json!(gpu);
+    r["device_build"] = json!(cfg!(feature = "gpu"));
+    r["without_walk"] = without;
+    r["pass"] = json!(pass);
+    r
 }
 
 /// `zk_worker_wire` (live PROTOCOL.md §10.4): every frame that reaches the verifier through the ZK server's session loop is
