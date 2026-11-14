@@ -52,8 +52,8 @@ invariant (`bi-eager`, `bi-compiled`).
 
 ## Arms
 
-A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, `sampled-proofs:SCHEME`) runs the preset's precision with stock FP8 as its
-control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
+A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, or SPOT's under the vLLM adapter's key, `sampled-proofs:SCHEME`) runs
+the preset's precision with stock FP8 as its control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
 checkpoint and quantizes it itself), its `control` (another arm of the spec, or `"none"`), and its `protocols_config`,
 which `verity_vllm.LLM` takes as it is, `{protocol: {...}}`, except that a string `"$NAME"` is the point's environment
 variable NAME (the cubin the spec's setup builds, say). The harness gives an arm with PoUW an in-process challenger as
@@ -195,8 +195,9 @@ find it the same way, and its command takes one of the node's GPU slots (`/works
 through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
 `max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
 GPU nodes in `verity_bench.jobs.DIRECT_NODES` (multi-GPU nodes, and single-GPU VMs whose one GPU kernels' leases
-share): a node joins the tuple once it has that slots file, so a node without one is refused here, before any run, and
-not by the slot at a point's start. A preempted direct point is a failed run, which the
+share), before any run. A node joins the tuple once it has that slots file; a node in the tuple whose file is gone starts
+each point's run and is refused there by the slot (`slot.py` exits 75, naming the pools the node has), with nothing
+timed. A preempted direct point is a failed run, which the
 next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
 
 `verity-bench run` launches each missing point as one queued, preemptible job of the kind registered for the spec's GPU
@@ -314,7 +315,8 @@ Every environment variable the harness reads is declared once in `verity_bench.s
 how long things run) or `debug` (refused on a point, which is always a run of record). A point writes the value settings
 in force, with their SHA-512 digest, to `out/settings.json` beside its result. `verity-bench` refuses a `VERITY_BENCH_*`
 variable that nothing in the tree reads, naming it. A variable the vLLM integration declares is never declared here: the
-harness writes one through `verity_vllm.engine.env`. `benchmarks/harness/tests/test_settings.py` holds the harness's
+harness writes one through `verity_vllm.engine.env`, which it reaches through `verity_bench.adapter`, the one file of the
+benchmarks that imports the vLLM adapter past its public interface. `benchmarks/harness/tests/test_settings.py` holds the harness's
 other direct uses of `os.environ` to a shrink-only baseline.
 
 ## The served table

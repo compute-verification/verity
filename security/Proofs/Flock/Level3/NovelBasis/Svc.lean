@@ -1,9 +1,10 @@
-/-
-`NovelBasis`'s table `svC` of `s_i(β_i)`, apart from the checks of its entries so they build in parallel.
--/
 module
 
 public import Flock.Field
+
+/-!
+`NovelBasis`'s table `svC` of `s_i(β_i)`, apart from the checks of its entries so they build in parallel.
+-/
 
 @[expose] public section
 

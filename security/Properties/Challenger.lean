@@ -52,7 +52,7 @@ and `Break` is that it outputs a valid one (`Finding.Valid`):
   (`deviceHashed`), with one SHA-512 digest (`ecr/sha-512` asked of the finder).
 
 Nothing is assumed of SHA-512 or LMS here. What the device releases when, and that it opens each window once, are the
-device's behaviour on `trusted-host`, which these properties don't take: a soundness argument reads them off the device
+device's behaviour on `trusted-device`, which these properties don't take: a soundness argument reads them off the device
 model.
 -/
 
@@ -415,7 +415,7 @@ verifier's (its parameters' family and the registration's digest):
 
 That the digest is fixed before the family's first coin exists is then the device's, and this property does not take
 it: the challenger flips a coin only after the 64 bytes it answers are recorded (`flips-after-recorded`, of the device
-on `trusted-host`), which a statement over the plays takes by that name. -/
+on `trusted-device`), which a statement over the plays takes by that name. -/
 def FamilyOneCommitment : Prop :=
   ∀ (dev : History) (key : ChallengerKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
     drawCoins key w label after coins = .ok ξ →

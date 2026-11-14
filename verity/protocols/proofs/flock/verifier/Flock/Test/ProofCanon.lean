@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.ZkProof
+meta import Flock.ZkProof
+
+/-!
 A proof file is the one encoding of what it decodes to (`Flock.Proof`, D17 and D18 of `verity/ml/flock/verifier/README.md`): `decodeProof` and `Zk.decode` accept a
 file written field by field at a small shape (two levels, one query each, one-byte digests, no salts). `decodeProof`
 accepts the plain file in the deployed form, with the zk patch's `zk_level0 = None` after the pair; a file is read
@@ -7,10 +12,6 @@ which only `flock-verify agree` takes (`verify` refuses it before it reads a fil
 Each form is refused where the other is pinned, and so is every other byte after the end, a plain file whose
 `matrix_evals` holds one pair, and a query, claim or consistency grinding nonce other than 0 (R4), each with its reason.
 -/
-module
-
-public import Flock.ZkProof
-meta import Flock.ZkProof
 
 @[expose] public section
 

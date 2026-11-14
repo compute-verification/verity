@@ -1,20 +1,25 @@
 """The period protocol's difftest cases: each of `pouw_credit_cases.period_instance`'s periods (honest, or with one mutation
 aimed at a refusal of `credit.period_credit`) as a `serve` case of ``verity/pouw/period/v1`` (`serve`: the verifier's
-``{key, main, name}`` its parameters, the auditor's ledger its commitment, ``{pins, windows}`` its evidence), its windows
-in the one form the period's guarantee covers (`COVERED`: J10-R's per-call unit over ``PouwH1Tile_v5``, at one K); one
-mutation each of the protocol's own framing (`FRAMING`): a parameter dropped or added, the ledger not a list, the
-evidence's keys other or the evidence a bare list; and one period in each form the guarantee doesn't cover (`FORMS`): a
-Pearl-C pass among its windows, a circuit that is not an H1 window (a per-tile protocol's H1 tile), today's per-unit
+``{key, main, name, sessions}`` its parameters, the sessions those its ledger's close lists, the auditor's ledger its
+commitment, ``{pins, windows}`` its evidence), its windows in the one form the period's guarantee covers (`COVERED`:
+J10-R's per-call unit over ``PouwH1Tile_v5``, at one K); one mutation each of the protocol's own framing (`FRAMING`): a
+parameter dropped, added (a device's head or place among them) or out of its form, a session of the close the
+parameters don't list, the ledger not a list, the evidence's keys other or the evidence a bare list; and one period in
+each form the guarantee doesn't cover (`FORMS`): a Pearl-C pass among its windows, a circuit that is not an H1 window (a per-tile protocol's H1 tile), today's per-unit
 noise, J10-R's v6 and units at two K."""
 from __future__ import annotations
 
+import hashlib
+import json
 import random
 
 import pouw_credit_cases as credit_cases
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import period_check as PC
+from verity.protocols.accounting.pouw.verifier import salt as PS
 
-FRAMING = ["params-missing", "params-extra", "ledger-object", "evidence-missing", "evidence-extra", "evidence-list"]
+FRAMING = ["params-missing", "params-extra", "params-device", "params-sessions", "alone",
+           "sessions-unlisted", "ledger-object", "evidence-missing", "evidence-extra", "evidence-list"]
 FORMS = ["form-pass", "form-not-h1", "form-per-unit", "form-v6", "form-strata"]
 NAMES = credit_cases.PERIOD_NAMES + FRAMING + FORMS
 COVERED = {"j10r": True, "nks": 1, "tile": 5}
@@ -28,10 +33,26 @@ def _hex(x: object) -> str:
     return CC._canon(x).encode().hex()
 
 
+def listed(ledger: list, name: str) -> list[str]:
+    """The session ids the close of period `name` lists in `ledger`: what the auditor's parameters list for an honest
+    period. Every ledger `period_instance` makes is lines of JSON, so one that isn't raises."""
+    for line in ledger if type(ledger) is list else []:
+        e = json.loads(line)
+        if not isinstance(e, dict):
+            continue
+        body = e.get("body")
+        if e.get("kind") == "period-close" and isinstance(body, dict) and body.get("period") == name:
+            ws = body.get("windows") if type(body.get("windows")) is list else []
+            return [w["session"] for w in ws if isinstance(w, dict) and type(w.get("session")) is str
+                    and PS.SESSION.fullmatch(w["session"])]
+    return []
+
+
 def serve(d: dict) -> dict:
     """`period_instance`'s period `d` as the protocol's `serve` case."""
     return {"commitment": _hex(d["ledger"]), "evidence": _hex({"pins": d["pins"], "windows": d["windows"]}),
-            "params": {"key": d["key"], "main": d["main"], "name": d["name"]}}
+            "params": {"key": d["key"], "main": d["main"], "name": d["name"],
+                       "sessions": listed(d["ledger"], d["name"])}}
 
 
 def instance(rng: random.Random, name: str = "honest") -> dict:
@@ -45,9 +66,19 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
     case = serve(d)
     match name:
         case "params-missing":
-            del case["params"][rng.choice(PC.PARAMS_KEYS)]
+            del case["params"][rng.choice(PC.ALONE_KEYS)]
         case "params-extra":
             case["params"]["ledger"] = d["ledger"]
+        case "params-device":
+            case["params"] |= rng.choice([{"head": hashlib.sha512(b"head").hexdigest()}, {"place": "gpu0"},
+                                          {"head": hashlib.sha512(b"head").hexdigest(), "place": "gpu0"}])
+        case "params-sessions":
+            case["params"]["sessions"] = rng.choice([None, "s0", ["-s0"], ["s" * 65], [1]])
+        case "alone":
+            del case["params"]["sessions"]
+        case "sessions-unlisted":
+            ss = case["params"]["sessions"]
+            del ss[rng.randrange(len(ss))]
         case "ledger-object":
             case["commitment"] = _hex({"lines": d["ledger"]})
         case "evidence-missing":

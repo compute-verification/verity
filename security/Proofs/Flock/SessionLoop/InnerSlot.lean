@@ -217,7 +217,7 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
   have hj : k / 2 < (Masked.stsOf x).size := by omega
   obtain ⟨y⟩ := hx.2 (k / 2) hj
   have hst : (Masked.stsOf x)[k / 2]! = (Masked.stsOf x)[k / 2] := getElem!_pos _ (k / 2) hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.wideLeaf (Masked.stsOf x)[k / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]
     exact y.hz
   have hk6 : 6 ≤ (Masked.stsOf x)[k / 2]!.c.kLog := by
@@ -239,7 +239,7 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
   obtain ⟨g, d, l, hl, htr⟩ := hR k tr hr hreal
   obtain ⟨hts, hsch⟩ := Count.tabOfLevel0_sched htr
   have htsch : tr.sch = y.sch := by
-    have e : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.m = .ok (tr.sch, tr.tPad) := hsch
+    have e : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.wideLeaf (Masked.stsOf x)[k / 2]!.m = .ok (tr.sch, tr.tPad) := hsch
     rw [hz, Except.ok.injEq, Prod.mk.injEq] at e
     exact e.1.symm
   have hcn : (_root_.Flock.Firewall.Finish.flat tr.cm0.cap).size < 2 ^ 64 := by
@@ -290,7 +290,7 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
     have e := congrArg List.length (Count.rounds_counts hmb hal)
     rw [Count.piop_counts, hts, List.length_map, Array.length_toList] at e
     exact e
-  have hz' : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.m = .ok (tr.sch, y.tPad) := by
+  have hz' : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.wideLeaf (Masked.stsOf x)[k / 2]!.m = .ok (tr.sch, y.tPad) := by
     rw [htsch]
     exact hz
   have hplan := congrArg List.length (Count.repPlan_list (spec := spec) hz')
