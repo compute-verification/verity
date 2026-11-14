@@ -30,3 +30,14 @@ name = "VStarRecursive"
 [[lean_exe]]
 name = "vstar-recursive"
 root = "VStarRecursiveMain"
+
+# The two-stage form (`VStar.Recursive.SampledTwo`, `id | check | serve`), which nothing dispatches to: its difftest drives it.
+[[lean_exe]]
+name = "sampled-two"
+root = "SampledTwoMain"
+
+# A test's executable: the two-stage form's check with its switch on (`SampledTwoOnMain`), which the form's accept test
+# drives on one honest play. No party runs it.
+[[lean_exe]]
+name = "sampled-two-on"
+root = "SampledTwoOnMain"

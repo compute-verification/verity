@@ -215,7 +215,7 @@ def coinsCode (key : Option Challenger.ChallengerKey) (main coins record : Json)
 
 /-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, taking reads of
 the registration's own ports at their own roots under a two-stage rule. -/
-private def audit (i : Input) (record receipt draw law : Json) (proved : Array Int) (instances : Int)
+def audit (i : Input) (record receipt draw law : Json) (proved : Array Int) (instances : Int)
     (served sessionRoots : Json) : V Json :=
   do Record.record (← Record.inputOf (Json.mkObj [("registration", record), ("receipt", receipt),
     ("draw", draw), ("law", law), ("proved_units", Json.arr (proved.map Lean.toJson)),
@@ -240,7 +240,7 @@ def interiorWindowOk (boundary interior : Option String) (digest : String) (samp
 /-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
 in each cell: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step
 and codes. -/
-private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Array Nat) :
+def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Array Nat) :
     V (Except (String × Array String) (Interior × Json × Json × Json × Nat)) := do
   let v := it.params.verifier
   let pub ← Service.checkPublic it.record (Json.str v.scheme) (← Registration.queryDigest v.query) it.values i.declared
@@ -264,7 +264,7 @@ private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sampl
 
 /-- The second stage, under a two-stage rule, over the first stage's replay sample `sample`; none under a one-stage
 rule. -/
-private def secondStage (i : Input) (sample : Array Nat) :
+def secondStage (i : Input) (sample : Array Nat) :
     V (Except (String × Array String) (Option (Interior × Json × Json × Json × Nat))) :=
   match i.rule, i.interior with
   | .twoStage _ _ k, some it => return (← interiorSteps i it k sample).map some
