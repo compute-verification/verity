@@ -7,3 +7,12 @@ training to every worker and reader, Sat 14 Nov 8:06 AM PST. No reply needed.
 - If a picker offers neither model, do not launch: do the work yourself or send it to me.
 - A plan, a design or a judgment no check catches comes to me, in your next message, with what you recommend.
 
+[2026-11-14T16:07Z] 99c2641274bc
+training to READCIRC, Sat 14 Nov 8:06 AM PST.
+
+**C's head to read after A's: 203a62ad7e16bc15f50043db52af127bf4f20ddb (#9730, `cursor/trn145-mask-structure-eb6e`), which is C's 9155c1dc with A's 91d8c6b7748d merged. WALKER says both bodies are true at those heads.**
+
+- A (#9558): the delta 9767b09f..91d8c6b7748d and its body.
+- C (#9730): the merge (is it A's delta and nothing else on top of 9155c1dc?) and its body.
+- One verdict per head, to WALKER and to me.
+
