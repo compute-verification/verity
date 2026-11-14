@@ -296,6 +296,11 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
     return Period(answer(s), case_of(s, events))
 
 
+#: why a period no `remote-audit-protocol` answered is undecided where the Python accepted (`leg`)
+NO_JUDGE = ("no remote-audit-protocol among the period's tools: the Lean decides the bandwidth period, and the Python's "
+            "accept decides nothing alone")
+
+
 def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """`EXE serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI)."""
     lines = "".join(canonical_json_bytes(c).decode() + "\n" for c in cases)
@@ -308,7 +313,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     period's records, the verifier and its challenger a party of their own on `period.json`'s `challenger_host`
     (`verifier_party.side_of`; on this node by default, as a process of its own, with its own coins) and the prover
     here. With `remote-audit-protocol` among the period's tools the Lean verifier answers and must agree
-    with the Python; it writes `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host
+    with the Python; without it the Python's reject or undecided stands and its accept is undecided (`NO_JUDGE`). It
+    writes `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host
     ran each party, and whether `trusted-device`'s premise holds (`verifier_party.placement`), go in
     `bandwidth.json` and in an accepted answer's profile (`placement`); `bandwidth.json` names the term its `eps`
     leaves out beside it (`ledger.NAMED_TERMS`)."""
@@ -328,6 +334,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         if {k: v for k, v in lean.items() if k != "reason"} != {k: v for k, v in answer_.items() if k != "reason"}:
             raise RuntimeError(f"remote-audit-protocol answered {lean}, the Python {answer_}")
         answer_ = lean
+    elif answer_["verdict"] == "accept":
+        answer_ = answer_ | {"profile": None, "public": None, "reason": NO_JUDGE, "verdict": "undecided"}
     if answer_["profile"] is not None:
         answer_ = answer_ | {"profile": answer_["profile"] | {"placement": where}}
     out.mkdir(parents=True, exist_ok=True)
@@ -340,5 +348,5 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer_
 
 
-__all__ = ["DELTA", "PROTOCOL", "Local", "Period", "Prover", "answer", "case_of", "certified", "leg", "opened", "payloads",
+__all__ = ["DELTA", "NO_JUDGE", "PROTOCOL", "Local", "Period", "Prover", "answer", "case_of", "certified", "leg", "opened", "payloads",
            "records", "registration_json", "registration_of", "run", "serve", "session"]
