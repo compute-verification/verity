@@ -69,7 +69,7 @@ def test_units_are_grain_lowers(window):
     combines: dict[str, int] = {}
     for j, node in sites:
         size = int(node.fn.bindings["SIZE"])
-        low = GR.lower(node.fn, [NM._own(w, j, node, size)] * WORLD, NM.reads(w, j), "test")
+        low = GR.lower(node.fn, [NM._own(w, j, node, size, NM.mine(w, j, node, size, WORLD))] * WORLD, NM.reads(w, j), "test")
         assert low.grain == GR.COORD and (low.row, low.chunk) == (WIDTH, 96)
         (fn, n), = low.combines
         assert n == size // low.chunk and descriptor_id(low.output) in ids and descriptor_id(low.gather) in ids

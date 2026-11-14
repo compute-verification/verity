@@ -1,6 +1,7 @@
 module
 
 public import PouwPearlPlus.Check
+public import PouwPearlPlus.Grid
 public import Flock.Bytes
 
 /-!
@@ -9,7 +10,7 @@ public import Flock.Bytes
 `opening` reads each opened tile's rows, leaf and y rows from the pass's files as `verify_run.Opened` does: each file is
 held to its manifest entry's size and, where the entry has one, its SHA-256 (`verify_run.Files`); rows are BF16
 widened to the committed FP32 words, each followed by its hm96 salt under the manifest's salt key (nonces: the call's
-index for A, 2^62 + the weight for B, 2^63 for the transcript, 2^61 + the call's index for y), and a path is read from a
+index for A, 2^62 + the fixed operand's id for B, 2^63 for the transcript, 2^61 + the call's index for y), and a path is read from a
 tree file laid out as the device writes it (level 0 padded to a power of two, then each level above it, 64 bytes a node).
 A y file that fails is the y opening's failure (`Opened.open_y`), met only once the tile has passed. A y row is the words
 its file holds of it (`f32Slice`, `f32_row`'s slice): a file that ends inside a row opens a row shorter than the call's
@@ -127,7 +128,10 @@ def opening (man : Json) (p : Pass) (file : Json → Except String ByteArray) (t
 def jstr (s : String) : Json := .str s
 def jopt (s : Option String) : Json := s.map jstr |>.getD .null
 
-def output (ans : RunAnswer) : Json :=
+/-- The verdict as `pouw-pearlplus` prints it: `pub` is the accepted run's work as printed (`published`; by default
+`check`'s work as it is), `work` with its `give_up` in the grid form, and `exact_work` the exact credit that form
+replaces (its credit, credited tiles and MACs), null where the work is the exact one. -/
+def output (ans : RunAnswer) (pub : Option Published := ans.work.map fun w => { work := w }) : Json :=
   Json.mkObj [
     ("verdict", jstr (if ans.accept then "accept" else "reject")),
     ("reason", jopt ans.reason),
@@ -138,14 +142,22 @@ def output (ans : RunAnswer) : Json :=
     ("over_cap", jstr ans.overCap.name),
     ("verdicts", .arr (ans.verdicts.map fun v => Json.mkObj [("pass", (v.pass : Nat)), ("tile", (v.tile : Nat)),
       ("ok", .bool (v.ok ans.overCap)), ("reason", jopt v.reason)]).toArray),
-    ("work", match ans.work with
-      | some c => Json.mkObj [("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
+    ("work", match pub with
+      | some p =>
+        let c := p.work
+        Json.mkObj (([("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
           ("macs", (c.macs : Nat)), ("rho", jstr (toString c.rho)), ("epsilon", jstr (toString c.epsilon)),
-          ("over_cap_draws", (c.overCapDraws : Nat))]
+          ("over_cap_draws", (c.overCapDraws : Nat))] : List (String × Json)) ++
+          (p.giveUp.map fun g => [("give_up", Json.num ⟨g, 0⟩)]).getD [])
+      | none => .null),
+    ("exact_work", match pub.bind (·.exact) with
+      | some c => Json.mkObj [("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
+          ("macs", (c.macs : Nat))]
       | none => .null),
     ("tie", match ans.tie with
       | some t => Json.mkObj (([("record", jstr t.record), ("tables", (t.tables : Nat))] : List (String × Json)) ++
-          (t.weights.map fun u => [("weights", jstr u)]).getD [])
+          (t.weights.map fun u => [("weights", jstr u)]).getD [] ++
+          (t.load.map fun c => [("load", Json.arr #[.num ⟨c.slots, 0⟩, .num ⟨c.prompt, 0⟩, .num ⟨c.outputs, 0⟩])]).getD [])
       | none => .null)]
 
 end PouwCheck.PearlPlus

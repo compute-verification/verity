@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.NetAt
+public import Flock.TmplUnroll
+
+/-!
 A templated unit's committed net, checked on its description: `Tmpl.unrollAt` (the rows, `Net.ofRows`' checks,
 then `Net.ofRowsAt`'s at `Tmpl.posMap`'s positions) refuses nothing that passes `Tmpl.unrollOk` at `layoutM`'s layouts
 (`FlockSoundness.TmplFold.unrollAt_ok`). Beyond `Tmpl.unroll`'s checks (`Flock.TmplUnroll.unroll_ok`) it checks, once per
@@ -12,10 +17,6 @@ Definition's layout, what `posOk`, `outsOk`, the placed rows' widths and D11 rea
   input rows keep their columns;
 - `Tmpl.outsAt`: each output group inside the root's columns, and inside the committed slot at its committed word (D11).
 -/
-module
-
-public import Flock.NetAt
-public import Flock.TmplUnroll
 
 @[expose] public section
 

@@ -73,14 +73,14 @@ certifiers on every uplink, the gaps left:
   addresses, and its management plane;
 * a GPU cluster's fabric between hosts and a shared filesystem the node mounts, unless a certifier sits on each;
 * the verifier taking the session's messages from the node alone, over the session's channel, and the certifiers and
-  the verifier being the auditor's devices (`trusted-host`). -/
+  the verifier being the auditor's devices (`trusted-device`). -/
 def Covered (T : Trace Ω) (O : Outside T) (I : Ingress Ω) : Prop :=
   ∀ ω, T.accepts ω → Quiet T I.entered ω → ∀ p < T.passes, ∀ t, T.tick ω p ≤ t → t < T.tick ω (p + 1) →
     O.blocks ω t = ∅ ∧ O.receipts ω t = ∅
 
 variable [Fintype Ω]
 
-/-- **The certifiers' count of what enters, at δ_net** (`trusted-host`: each certifier is the auditor's device, running
+/-- **The certifiers' count of what enters, at δ_net** (`trusted-device`: each certifier is the auditor's device, running
 its stated code): except with probability `δ` when the audit accepts, where the network certifiers on the node's uplinks
 sign nothing but the verifier's messages entering it over the credited passes, nothing else entered over them. `δ` is
 δ_net, the certifiers' error at the session's boundary: their sampled audit's `δ + ε_ks + ε_bind`
