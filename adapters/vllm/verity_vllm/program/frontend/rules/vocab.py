@@ -20,6 +20,7 @@ from verity.definitions.registry import cublas_bf16 as _cublas_bf16
 from verity.definitions.registry import cuda_rmsnorm as _cuda_rmsnorm
 from verity.definitions.registry import deepgemm as _deepgemm
 from verity.definitions.registry import dsa as _dsa
+from verity.definitions.registry import dsa_ds_mla as _dsa_ds_mla
 from verity.definitions.registry import dsa_norm as _dsa_norm
 from verity.definitions.registry import dsa_topk_mask as _dsa_topk_mask
 from verity.definitions.registry import dsv4_compressor as _dsv4_compressor
@@ -30,8 +31,10 @@ from verity.definitions.registry import fa2_check_inf as _f2
 from verity.definitions.registry import fa2_softcap as _f2s
 from verity.definitions.registry import fa3_check_inf as _f3
 from verity.definitions.registry import flashmla as _flashmla
+from verity.definitions.registry import flashmla_dsv32 as _flashmla_dsv32
 from verity.definitions.registry import flashmla_prefill as _flashmla_prefill
 from verity.definitions.registry import fp8 as _fp8
+from verity.definitions.registry import fp8_ds_mla_upconvert as _fp8_ds_mla_upconvert
 from verity.definitions.registry import fp8_moe as _fm
 from verity.definitions.registry import fp8_moe_experts as _x
 from verity.definitions.registry import fp8_vocab as _fp8_vocab
@@ -499,6 +502,12 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # latent cache row [kv_c | k_pe] as one Definition
            "dsa_topk_mask_counted": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=TOPK),
            "dsa_latent_row": lambda KVL, R, EPS: ir_bind(_dsa_norm.DsaLatentRow, KVL=KVL, R=R, EPS=EPS),
+           # an fp8_ds_mla KV cache (FLASHMLA_SPARSE, `phi.STATED_KV_LAYOUT`): a token's latent row with its 656-byte cache row, the
+           # sparse rows' FlashMLA fp8 decode, and a dense-MHA prefill's context row upconverted to bf16. `predict.dsa` asks for them.
+           "dsa_latent_row_ds_mla": lambda KVL, R, TILE, EPS: ir_bind(_dsa_ds_mla.DsaLatentRowDsMla, KVL=KVL, R=R, TILE=TILE, EPS=EPS),
+           "flashmla_v32_decode": lambda NH, SPLITS, DN, DR, QT, BN, DOT, SCALE:
+               ir_bind(_flashmla_dsv32.FlashMlaV32Decode, NH=NH, SPLITS=SPLITS, DN=DN, DR=DR, QT=QT, BN=BN, DOT=DOT, SCALE=SCALE),
+           "fp8_ds_mla_upconvert_row": lambda DN, DR: ir_bind(_fp8_ds_mla_upconvert.Fp8DsMlaUpconvertRow, DN=DN, DR=DR),
            # the table-read form's long rows (`Registered.dsa_table_reads`, `program.dsa_table`): a row's top-TOPK positions, and
            # the TOPK history rows read at them
            "dsa_topk_index": lambda N, TOPK: ir_bind(_dsa_table.DsaTopKIndex, N=N, TOPK=TOPK),
@@ -663,6 +672,12 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                     "argument, so the rows of a block of the batched form share one N",
            "dsa_latent_row": "DsaLatentRow_v1{KVL,R,EPS}: a token's latent cache row, DsaRMSNorm_v1{KVL,EPS} of kv_c then "
                              "RoPEHeadGptJ_v2{R} of k_pe (_fused_norm_rope_kernel), one Definition per row",
+           "dsa_latent_row_ds_mla": "DsaLatentRowDsMla_v1{KVL,R,TILE,EPS}: _fused_norm_rope_kernel's row under fp8_ds_mla -- the latent "
+                                    "row [kv_c | k_pe] and the cache row's KVL e4m3 and KVL/TILE f32 scales (DsMlaFp8Tile_v1{TILE})",
+           "flashmla_v32_decode": "FlashMlaV32Decode_v1{NH,SPLITS,DN,DR,QT,BN,DOT,SCALE}: FlashMLA's sparse fp8 decode of one token's NH "
+                                  "heads over its INDEX_TOPK fp8_ds_mla rows in index order, index -1 a pad, at the planner's splits",
+           "fp8_ds_mla_upconvert_row": "Fp8DsMlaUpconvertRow_v1{DN,DR}: cp_gather_and_upconvert_fp8_kv_cache of one fp8_ds_mla row to "
+                                       "its DN + DR bf16 words",
            "dsa_topk_index": "DsaTopKIndex_v1{N,TOPK}: a counted mask's TOPK members' positions in ascending index order, the slots "
                              "the concentrator gives their rows",
            "dsa_history_reads": "DsaHistoryReads_v1{V,TOPK,H}: the TOPK history rows at those positions, one read each of the "
