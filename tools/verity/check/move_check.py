@@ -144,6 +144,8 @@ from pathlib import Path
 
 #: research's record of the moves, to which a move appends its own (`moves_change`)
 MOVES = "tools/research/src/research/store/moves.json"
+#: where the record is on either side of the move that takes research into the platform's `infra/`, which renames it too
+MOVES_AT = frozenset({MOVES, "infra/research/src/research/store/moves.json"})
 #: the files where a new package is registered by an added line (`registration`)
 REGISTRIES = {"pyproject.toml": "workspace", "tests/test_lean_packages.py": "lean"}
 #: files whose quoted relative paths name another directory of the tree (a Lake `require`, a manifest's `dir`, a uv source)
@@ -216,7 +218,7 @@ def kind(path: str) -> str:
     name = posixpath.basename(path)
     if name == "lean-audit.json":
         return "lock"
-    if path == MOVES:
+    if path in MOVES_AT:
         return "moves"
     if name in RELATIVE_NAMES:
         return "path"
@@ -1601,12 +1603,17 @@ def moves_change(old: str, new: str, pmap: dict[str, str], base: Tree) -> tuple[
     return None
 
 
+def moves_in(tree: Tree) -> str:
+    """The path of research's record of the moves in ``tree``."""
+    return next((p for p in sorted(MOVES_AT) if p in tree.set), MOVES)
+
+
 def declared(base: Tree, head: Tree) -> dict[str, str]:
     """The paths of the entry the range appends to `moves.json` that the range bears out without them: each names a file or
     directory of BASE, and every BASE file below it (and below no longer path of the entry) is gone at HEAD, with its place
     below the entry's new path new at HEAD. Whether its content moved unchanged is then judged like any pair's. A range
     that appends no such entry declares nothing, and `moves_change` refuses its `moves.json` edit, if any, by name."""
-    decl, _ = appended(base.text(MOVES) or "{}", head.text(MOVES) or "{}")
+    decl, _ = appended(base.text(moves_in(base)) or "{}", head.text(moves_in(head)) or "{}")
     out: dict[str, str] = {}
     if decl is None:
         return out
@@ -1905,7 +1912,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             a, covered = cover(a, b, old, new)
             took |= covered
         at_base = a.splitlines()
-        if not same and not pins and old != MOVES:
+        if not same and not pins and old not in MOVES_AT:
             a, unworded = worded(a, old, maps, lock=k == "lock"), a
             if not took and b in (a, merged(unworded, a)):
                 report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": "words"})
