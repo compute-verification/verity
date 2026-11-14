@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Callable
 
@@ -42,7 +43,7 @@ def machine(reg: Path, name: str, host: str | None, **more: str) -> None:
 def node(tmp: Path, name: str, key: bool = True) -> None:
     """A node, as a directory: its /etc, and its login's ssh directory with another key's line and, with `key`, the list's key."""
     (tmp / name / "etc").mkdir(parents=True)
-    (tmp / name / "ssh").mkdir()
+    (tmp / name / "ssh").mkdir(mode=0o700)
     (tmp / name / "ssh" / "authorized_keys").write_text(OTHER + "\n")
     if key:
         (tmp / name / "ssh" / "k.pub").write_text(KEY + "\n")
@@ -343,7 +344,7 @@ def test_the_lists_key_is_taken_from_every_machine_it_names_and_no_other_line_ch
             assert _main(fleet, "install", "a", "--by", "lane-x", "/NODE/etc/peers") == 0
         finally:
             ak.parent.chmod(0o700)
-        assert "its key can't be read here (PermissionError: --apply reads it as root)" in capsys.readouterr().out
+        assert "its key can't be read here (PermissionError: --apply reads it as its owner)" in capsys.readouterr().out
 
     (ak.parent / "k.pub").unlink()                          # no key here: refused before the list is touched
     (fleet["tmp"] / "a" / "etc" / "peers").write_text("by hand\n")
@@ -351,6 +352,97 @@ def test_the_lists_key_is_taken_from_every_machine_it_names_and_no_other_line_ch
         with pytest.raises(deploy.Refused, match="a: no public key at /NODE/ssh/k.pub"):
             _install(fleet, apply=apply, allow_shrink=True)
     assert (fleet["tmp"] / "a" / "etc" / "peers").read_text() == "by hand\n"
+
+
+# Put before ACCEPT: records each open, and each id call a root process makes, stood in for so the script runs as any user.
+SPY = r'''
+import builtins, json, os
+_log = os.open(os.environ["SPY_LOG"], os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+def _say(*what):
+    os.write(_log, (json.dumps([os.getpid(), *what]) + "\n").encode())
+_os_open, _open = os.open, builtins.open
+def _spy_os_open(path, flags, mode=0o777, *, dir_fd=None):
+    _say("open", os.fspath(path), flags, mode, dir_fd is not None)
+    return _os_open(path, flags, mode, dir_fd=dir_fd)
+def _spy_open(file, *args, **kwargs):
+    if not isinstance(file, int):
+        _say("open", os.fspath(file), None, None, False)
+    return _open(file, *args, **kwargs)
+os.open, builtins.open = _spy_os_open, _spy_open
+os.geteuid = os.getuid = lambda: 0
+os.setgroups = lambda groups: _say("setgroups", list(groups))
+os.setgid = lambda gid: _say("setgid", gid)
+os.setuid = lambda uid: _say("setuid", uid)
+'''
+
+
+def test_the_keys_line_is_written_by_the_directorys_owner_and_root_appends_only_the_record(fleet, tmp_path):
+    """ACCEPT as root runs it under --apply: the child takes the directory's groups, gid and uid before it opens anything,
+    root opens nothing in the directory but the directory itself, the temporary file is made new with mode 0600 and never
+    through a link, and the record's line is root's alone."""
+    ssh, log = fleet["tmp"] / "a" / "ssh", tmp_path / "spy.jsonl"
+    record = fleet["tmp"] / "a" / "research" / "deploy" / "record.jsonl"
+    req = {"key": str(ssh / "k.pub"), "authorized": str(ssh / "authorized_keys"), "sources": ["192.0.2.11"], "apply": True,
+           "record": str(record), "commit": "c" * 40, "ref": "origin/main", "by": "lane-x"}
+    r = subprocess.run([sys.executable, "-c", SPY + deploy.ACCEPT], input=json.dumps(req).encode(), capture_output=True,
+                       env={**os.environ, "SPY_LOG": str(log)})
+    assert (r.returncode, r.stderr) == (0, b"")
+    assert json.loads(r.stdout) == {"line": "new", "added": 1, "sources": 1, "anywhere": False}
+    assert _keys(fleet) == [OTHER, f'from="192.0.2.11" {KEY}']
+    calls = [json.loads(ln) for ln in log.read_text().splitlines()]
+    root = calls[0][0]
+    child = [c[1:] for c in calls if c[0] != root]
+    own = ssh.stat()
+    assert child[:3] == [["setgroups", []], ["setgid", own.st_gid], ["setuid", own.st_uid]]
+    assert [c for c in child if c[1] == ".authorized_keys.deploy-tmp"] == [
+        ["open", ".authorized_keys.deploy-tmp", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, True]]
+    assert [c[1:] for c in calls if c[0] == root] == [["open", str(ssh), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, 0o777, False],
+                                                      ["open", str(record), None, None, False]]
+    assert [json.loads(ln)["added"] for ln in record.read_text().splitlines()] == [1]
+
+
+def _entries(*tops: Path) -> dict[str, tuple]:
+    """Every entry under `tops`, links never followed: a link as its target, a directory as its mode, a file as its bytes too."""
+    out = {}
+    for top in tops:
+        for d, dirs, files in os.walk(top):
+            for p in (Path(d) / n for n in dirs + files):
+                out[str(p)] = (("link", os.readlink(p)) if p.is_symlink() else ("dir", p.stat().st_mode) if p.is_dir()
+                               else ("file", p.read_bytes(), p.stat().st_mode))
+    return out
+
+
+def _move_away(ssh: Path, away: Path) -> None:
+    ssh.rename(away / "ssh")
+    ssh.symlink_to(away / "ssh")
+
+
+LINKED = {   # what the directory's owner puts there, and the refusal
+    "authorized_keys is a link": (lambda ssh, away: ((ssh / "authorized_keys").unlink(), (ssh / "authorized_keys").symlink_to(away / "f")),
+                                  "/NODE/ssh/authorized_keys is a link"),
+    "a link at the temporary name": (lambda ssh, away: (ssh / ".authorized_keys.deploy-tmp").symlink_to(away / "f"),
+                                     "/NODE/ssh/.authorized_keys.deploy-tmp is there already"),
+    ".deploy-prev is a link": (lambda ssh, away: ((away / "prev").mkdir(), (ssh / ".deploy-prev").symlink_to(away / "prev")),
+                               "/NODE/ssh/.deploy-prev is a link or no directory"),
+    "the directory is a link": (_move_away, "/NODE/ssh is a link or no directory: nothing in it is written"),
+    "the group can write the directory": (lambda ssh, away: ssh.chmod(0o770), "/NODE/ssh is writable by group or others (mode 770)"),
+    "others can write the directory": (lambda ssh, away: ssh.chmod(0o702), "/NODE/ssh is writable by group or others (mode 702)"),
+}
+
+
+@pytest.mark.parametrize("case", LINKED)
+def test_a_link_in_the_keys_directory_or_a_directory_others_can_write_is_refused_and_nothing_is_written(fleet, capsys, case):
+    """A link the directory's user puts there would have root's write land on a file of its choosing; a directory others can
+    write is one ssh refuses and one whose files another user can swap."""
+    ssh, away = fleet["tmp"] / "a" / "ssh", fleet["tmp"] / "away"
+    away.mkdir()
+    (away / "f").write_text("another file\n")
+    spoil, why = LINKED[case]
+    spoil(ssh, away)
+    before = _entries(fleet["tmp"] / "a", away)
+    assert _main(fleet, "install", "a", "--by", "lane-x", "--apply", "/NODE/etc/peers") == 3
+    assert f"research deploy: a: {why}" in capsys.readouterr().err
+    assert _entries(fleet["tmp"] / "a", away) == before
 
 
 def test_a_roll_brings_a_new_machine_into_every_nodes_list_one_node_at_a_time_keys_first(fleet, capsys):

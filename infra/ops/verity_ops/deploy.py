@@ -84,7 +84,10 @@ a machine out of, as it is, says why, and installs the node's other files; namin
 An entry's `accept` is a public key on the node (`/home/research/.ssh/vy-cluster.pub`): before the list is written, the
 `authorized_keys` beside the key takes it from the address of every machine the list names. Only the `from=` of the key's own
 line grows (a line is added when the file has none; one with no `from=` already takes the key from anywhere); no address is ever
-taken out, with `--allow-shrink` or without, and every other line stays as it was.
+taken out, with `--allow-shrink` or without, and every other line stays as it was. The line is written as the directory's owner,
+never as root: root opens the directory and hands it to a child that takes its uid and gid before it reads or writes anything
+there, and appends the record's line once the child has written. A directory that is a link or that group or others can write,
+and a link at `authorized_keys`, at its temporary name or at `.deploy-prev`, are refused (exit 3), with nothing written.
 `roll` puts one such PATH on every node that lists it (every node but the admin-only ones, or those `--on` names), one node at a
 time: it reads every node first and changes nothing if one refuses; then each node accepts the key, so that a machine a list comes to name
 already takes the key from every node; then each node's file is installed and read back, and the roll stops at the first node
@@ -385,77 +388,142 @@ append(req["record"], [{"at": stamp, **ln} for ln in req["lines"]])
 # when none holds the key, and a line with no from= takes it from anywhere already. No source is ever taken out, and every
 # other line is written back as it was, the old file linked under .deploy-prev/. It prints counts, never an address. Exit 3
 # is a refusal, before anything changed.
+# The directory is its user's, so nothing in it is read or written as root: root opens the directory once, never through a
+# link and refusing one that group or others can write, and a child that has taken the directory's uid and gid does the rest
+# through that descriptor. A link at authorized_keys, at its temporary name or at .deploy-prev is refused, and the temporary
+# file is made new. Root appends the record's line once the child has written.
 ACCEPT = APPEND + r'''
-import re, stat
+import errno, re, stat
 req = json.load(sys.stdin)
 key, ak, want = req["key"], req["authorized"], req["sources"]
+d, name = os.path.split(ak)
+tmp, prev = f".{name}.deploy-tmp", ".deploy-prev"
 stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-def refuse(why):
-    print(why, file=sys.stderr)
-    sys.exit(3)
+class Refusal(Exception):
+    pass
 def unread(path, e):
     if req["apply"]:
-        refuse(f"{path} can't be read ({type(e).__name__})")
-    print(json.dumps({"unread": f"{type(e).__name__}: --apply reads it as root"}))
-    sys.exit(0)
-if not want:
-    refuse(f"no machine to take the key at {key} from")
-try:
-    with open(key) as f:
-        kind, body, *comment = f.read().split()
-except PermissionError as e:
-    unread(key, e)
-except (OSError, ValueError) as e:
-    refuse(f"no public key at {key} ({type(e).__name__}): copy the key and its public half to this machine first")
-try:
-    with open(ak) as f:
-        lines = f.read().splitlines()
-    st = os.stat(ak)
-except FileNotFoundError:
-    lines, st = [], None
-except OSError as e:
-    unread(ak, e)
-FROM = re.compile(r'(?:^|,)from="([^"]*)"')
-def parts(line):
-    """(its options, the key and what follows it) for a line that holds the key, else None."""
-    at = line.find(f"{kind} {body}")
-    end = at + len(kind) + 1 + len(body)
-    if at < 0 or line.lstrip().startswith("#") or (at and not line[at - 1].isspace()) or not (line[end:end + 1] or " ").isspace():
-        return None
-    return line[:at].strip(), line[at:]
-mine = [(i, *p) for i, p in ((i, parts(ln)) for i, ln in enumerate(lines)) if p]
-lists = [FROM.search(o) for _, o, _ in mine]
-have = {s for m in lists if m for s in m.group(1).split(",")}
-add = [] if any(m is None for m in lists) else [s for s in want if s not in have]
-if not mine:
-    how = "new"
-    lines.append(f'from="{",".join(want)}" {kind} {body} {" ".join(comment) or os.path.basename(key)}')
-elif add:
-    how = "extended"
-    (i, o, rest), m = mine[0], lists[0]
-    lines[i] = f'{o[:m.start(1)]}{",".join(filter(None, [m.group(1), *add]))}{o[m.end(1):]} {rest}'
-else:
-    how = "kept"
-if how != "kept" and req["apply"]:
-    d = os.path.dirname(ak)
-    own = st or os.stat(d)
-    tmp = os.path.join(d, f".{os.path.basename(ak)}.deploy-tmp")
-    with open(tmp, "w") as fh:
-        fh.write("\n".join(lines) + "\n")
-    os.chmod(tmp, stat.S_IMODE(st.st_mode) if st else 0o600)
-    os.chown(tmp, own.st_uid, own.st_gid)
+        raise Refusal(f"{path} can't be read ({type(e).__name__})")
+    return {"unread": f"{type(e).__name__}: --apply reads it as its owner"}
+def nolink(n, flags, mode=0o600):
+    """`n` in the directory, opened never through a link; a link there, or a new file's name already taken, is refused."""
+    try:
+        return os.open(n, flags | os.O_NOFOLLOW, mode, dir_fd=dfd)
+    except OSError as e:
+        is_ = {errno.ELOOP: "a link", errno.ENOTDIR: "a link or no directory", errno.EEXIST: "there already"}.get(e.errno)
+        if is_ is None:
+            raise
+        raise Refusal(f"{os.path.join(d, n)} is {is_}: nothing is written through a link or over a file this step didn't make; "
+                      "remove it") from None
+def work():
+    try:
+        with open(key) as f:
+            kind, body, *comment = f.read().split()
+    except PermissionError as e:
+        return unread(key, e)
+    except (OSError, ValueError) as e:
+        raise Refusal(f"no public key at {key} ({type(e).__name__}): copy the key and its public half to this machine first")
+    try:
+        with os.fdopen(nolink(name, os.O_RDONLY)) as f:
+            lines, st = f.read().splitlines(), os.fstat(f.fileno())
+    except FileNotFoundError:
+        lines, st = [], None
+    except PermissionError as e:
+        return unread(ak, e)
+    FROM = re.compile(r'(?:^|,)from="([^"]*)"')
+    def parts(line):
+        """(its options, the key and what follows it) for a line that holds the key, else None."""
+        at = line.find(f"{kind} {body}")
+        end = at + len(kind) + 1 + len(body)
+        if at < 0 or line.lstrip().startswith("#") or (at and not line[at - 1].isspace()) or not (line[end:end + 1] or " ").isspace():
+            return None
+        return line[:at].strip(), line[at:]
+    mine = [(i, *p) for i, p in ((i, parts(ln)) for i, ln in enumerate(lines)) if p]
+    lists = [FROM.search(o) for _, o, _ in mine]
+    have = {s for m in lists if m for s in m.group(1).split(",")}
+    add = [] if any(m is None for m in lists) else [s for s in want if s not in have]
+    if not mine:
+        how = "new"
+        lines.append(f'from="{",".join(want)}" {kind} {body} {" ".join(comment) or os.path.basename(key)}')
+    elif add:
+        how = "extended"
+        (i, o, rest), m = mine[0], lists[0]
+        lines[i] = f'{o[:m.start(1)]}{",".join(filter(None, [m.group(1), *add]))}{o[m.end(1):]} {rest}'
+    else:
+        how = "kept"
+    out = {"line": how, "added": len(add), "sources": len(have | set(add)), "anywhere": any(m is None for m in lists)}
+    if how == "kept" or not req["apply"]:
+        return out
+    keep = None
     if st is not None:
-        prev = os.path.join(d, ".deploy-prev")
-        os.makedirs(prev, mode=0o700, exist_ok=True)
-        os.chown(prev, own.st_uid, own.st_gid)
         try:
-            os.link(ak, os.path.join(prev, f"{os.path.basename(ak)}.{stamp}"))
+            keep = nolink(prev, os.O_RDONLY | os.O_DIRECTORY)
+        except FileNotFoundError:
+            pass
+    with os.fdopen(nolink(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+        os.fchmod(fh.fileno(), stat.S_IMODE(st.st_mode) if st else 0o600)
+    if st is not None:
+        if keep is None:
+            os.mkdir(prev, 0o700, dir_fd=dfd)
+            keep = nolink(prev, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.link(name, f"{name}.{stamp}", src_dir_fd=dfd, dst_dir_fd=keep, follow_symlinks=False)
         except FileExistsError:
             pass
-    os.replace(tmp, ak)
-    append(req["record"], [{"at": stamp, "path": ak, "accept": key, "added": len(add), "commit": req["commit"], "ref": req["ref"],
+    os.replace(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd)
+    return {**out, "wrote": True}
+try:
+    if not want:
+        raise Refusal(f"no machine to take the key at {key} from")
+    try:
+        dfd = os.open(d, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        raise Refusal(f"no public key at {key} (no directory {d}): copy the key and its public half to this machine first") from None
+    except PermissionError as e:
+        print(json.dumps(unread(d, e)))
+        sys.exit(0)
+    except OSError:
+        raise Refusal(f"{d} is a link or no directory: nothing in it is written") from None
+    own = os.fstat(dfd)
+    if own.st_mode & 0o022:
+        raise Refusal(f"{d} is writable by group or others (mode {stat.S_IMODE(own.st_mode):o}): nothing in it is written")
+except Refusal as e:
+    print(e, file=sys.stderr)
+    sys.exit(3)
+sys.stdout.flush()
+sys.stderr.flush()
+r, w = os.pipe()
+pid = os.fork()
+if pid == 0:
+    os.close(r)
+    rc = 0
+    try:
+        if os.geteuid() == 0:
+            os.setgroups([])
+            os.setgid(own.st_gid)
+            os.setuid(own.st_uid)
+        with os.fdopen(w, "w") as fh:
+            fh.write(json.dumps(work()))
+    except Refusal as e:
+        print(e, file=sys.stderr)
+        rc = 3
+    except BaseException as e:
+        print(f"{type(e).__name__}: {e}", file=sys.stderr)
+        rc = 1
+    sys.stderr.flush()
+    os._exit(rc)
+os.close(w)
+with os.fdopen(r) as fh:
+    got = fh.read()
+rc = os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1])
+if rc:
+    sys.exit(rc if rc > 0 else 1)
+out = json.loads(got)
+if out.pop("wrote", False):
+    append(req["record"], [{"at": stamp, "path": ak, "accept": key, "added": out["added"], "commit": req["commit"], "ref": req["ref"],
                             "by": req["by"]}])
-print(json.dumps({"line": how, "added": len(add), "sources": len(have | set(add)), "anywhere": any(m is None for m in lists)}))
+print(json.dumps(out))
 '''
 BACKUP = re.compile(r"\.(bak|prev|orig)([-.\d_]|$)")       # a hand deploy's copy: x.py.bak-20261001T0611Z, x.sh.prev, x.orig
 SUFFIX = re.compile(r"\.(service|timer|socket|path|target|mount|slice|scope)$")
