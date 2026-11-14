@@ -13,7 +13,7 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_call
 from verity.circuits.evaluation.reference import standalone_call
-from verity.definitions import word as W_
+from verity.circuits import word as W_
 from verity.definitions.numerics import fp8_twins
 from verity.definitions.registry import fp8
 

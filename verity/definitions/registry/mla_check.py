@@ -28,9 +28,9 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.definitions.kernels import tc as CK
-from verity.definitions.ops import mufu as MU
-from verity.definitions.silicon.total import HOPPER_BF16_WGMMA_K16
+from verity.circuits.kernels import tc as CK
+from verity.circuits.ops import mufu as MU
+from verity.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
 from verity.definitions.numerics import dense_rows as DRW
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics.libdevice import nv_logf

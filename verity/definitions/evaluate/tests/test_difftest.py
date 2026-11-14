@@ -61,13 +61,13 @@ from verity.circuits import partition_object as PO
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import reference
-from verity.definitions.ops import fp32 as FP
-from verity.definitions.ops import mufu as MU
-from verity.definitions.ops import prims as P
-from verity.definitions.ops import scalar as SC
-from verity.definitions.ops.boolean import cast as BC
-from verity.definitions.ops.boolean import elementwise as BE
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import fp32 as FP
+from verity.circuits.ops import mufu as MU
+from verity.circuits.ops import prims as P
+from verity.circuits.ops import scalar as SC
+from verity.circuits.ops.boolean import cast as BC
+from verity.circuits.ops.boolean import elementwise as BE
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.program import REGISTRATION, Program, input_id
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple, type_from_json
@@ -915,7 +915,7 @@ def test_float_words_out_of_range_are_refused(server):
     assert agree(server, cases) == (0, len(cases)) == (0, 3 * 80)
 
 
-FIXTURES = Path(__file__).resolve().parents[4] / "verity/definitions/ops/tests/fixtures"
+FIXTURES = Path(__file__).resolve().parents[4] / "verity/circuits/ops/tests/fixtures"
 #: the GPU NaN probe's instructions (its `fp32_ops.json`) by the `_v2` primitive each is
 GPU_OPS = {"add.rn.f32": FP.F32AddV2, "add.rn.ftz.f32": FP.F32AddFtzV2, "sub.rn.f32": VP.F32SubV2, "sub.rn.ftz.f32": FP.F32SubFtzV2,
            "mul.rn.f32": FP.F32MulV2, "mul.rn.ftz.f32": FP.F32MulFtzV2, "div.rn.f32": FP.F32DivV2, "fma.rn.f32": FP.F32FmaV2,
@@ -1285,7 +1285,7 @@ def test_the_sm120_captures(server):
     assert total == 38_912 + 73_728
 
 
-AUTOPROOF = Path(__file__).resolve().parents[4] / "verity/definitions/silicon/captures/autoproof-probe-vectors.json"
+AUTOPROOF = Path(__file__).resolve().parents[4] / "verity/circuits/silicon/captures/autoproof-probe-vectors.json"
 
 
 @pytest.mark.skipif(not AUTOPROOF.exists(), reason="autoproof's RTX 5090 vectors are a fetched fixture")
@@ -1308,7 +1308,7 @@ def test_the_rtx5090_nvfp4_vectors(server):
 
 # ---- E3: the traced Boolean steps ---------------------------------------------------------------------------------------
 
-#: the traced Boolean Definition of each dot step (`verity.definitions.ops.boolean.gemm`, 19,156 to 28,099 gates)
+#: the traced Boolean Definition of each dot step (`verity.circuits.ops.boolean.gemm`, 19,156 to 28,099 gates)
 TRACED = {P.AmpereBF16TcDot16: BG.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16: BG.HopperBF16WgmmaDot16,
           P.HopperE4m3QgmmaDot32: BG.HopperE4m3QgmmaDot32, P.BlackwellE4m3QmmaDot32: BG.BlackwellE4m3QmmaDot32,
           P.BlackwellE5m2QmmaDot32: BG.BlackwellE5m2QmmaDot32, P.BlackwellNvf4OmmaDot64: BG.BlackwellNvf4OmmaDot64,
@@ -1718,7 +1718,7 @@ MUFU_SWEEP = tuple(sorted({*F32_SWEEP, *(s | ((e << 23) + (k << j) + d) & 0x7FFF
                                         for s in (0, 1 << 31)),
                            *(struct.unpack("<I", struct.pack("<f", float(n)))[0] + d & 0xFFFFFFFF for n in range(-160, 161)
                              for d in (-1, 0, 1))}))
-TEST_MUFU = Path(__file__).resolve().parents[4] / "verity/definitions/ops/tests/test_mufu.py"
+TEST_MUFU = Path(__file__).resolve().parents[4] / "verity/circuits/ops/tests/test_mufu.py"
 
 
 def _test_mufu_literals(*names: str) -> dict:

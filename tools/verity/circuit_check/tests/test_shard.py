@@ -293,7 +293,7 @@ def test_the_modules_whose_source_inspect_looked_for_are_every_binding_s_loaded_
 
 
 def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
-    m = "verity.definitions.ops.boolean.gf2k.circuit-check#"
+    m = "verity.circuits.ops.boolean.gf2k.circuit-check#"
     assert [SH.binding(u) for u in ((f"{m}_gf2k_roots",), (f"{m}_x_roots", f"{m}_x_bindings"), ("_kernel_roots",),
                                     ("_vocabulary_roots", "_vocabulary_bindings"), (f"{m}_model_roots:Gf2kMul_v1",),
                                     ("_model_roots:SynOther_v1",), (f"{m}TEMPLATE_PARAMS:token-select-combine",),
@@ -328,8 +328,8 @@ def test_the_shard_module_is_outside_the_checker_s_version(tmp_path, monkeypatch
 
 #: a small sidecar set: argmax's chunks and combines and the Boolean scalars, each checked as a Call (`--as-call`), so neither
 #: builds the catalog
-SIDECARS = [str(TG.REPO / "verity/definitions/ops/argmax.circuit-check.py"),
-            str(TG.REPO / "verity/definitions/ops/boolean/scalar.circuit-check.py")]
+SIDECARS = [str(TG.REPO / "verity/circuits/ops/argmax.circuit-check.py"),
+            str(TG.REPO / "verity/circuits/ops/boolean/scalar.circuit-check.py")]
 
 
 def test_three_shards_of_a_sidecar_set_combine_to_the_unsharded_run(tmp_path, capsys):
