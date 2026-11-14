@@ -1,0 +1,855 @@
+# The retired word "law" in the Lean's names, in the Glossary's words: what `tools/move/rename.py --map
+# tools/move/lean_words_law_map.toml` renames. GLOSSARY.md: "law", "draw law", the Lean's `Law` -> the sampling design.
+# It runs after `lean_names_map.toml` and the firewall and draw maps in the chain, so its olds are spelled as those maps
+# leave them. A name that holds the word and more is renamed by word ([words]), or in the files that spell it where its
+# new name stands elsewhere ([[words_in]]); the word alone (`Law`, `law`) only in the `.lean` files that spell it and
+# not its new word, as a whole word. Names on "law" in another sense, a probability law, take `dist` (`piLaw`,
+# `prodLaw`, `prCoin_law`, the two `RealizesIntegrity...` fields `law`), and the coins' laws of an execution phase and
+# of a session `CoinsUniform`. Record keys, reason codes and other one-token string literals keep their bytes ([keep]).
+# Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that `check.py --update
+# --moved` takes.
+# Left by this map: the bare word in the files that spell its new word (`Verity.Law` -> `Verity.Design` among them: in a
+# commit of their own, by hand, with a build); prose outside the Lean (a prose map's).
+
+[words]
+"Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Laws" = "Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Designs"
+"Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Laws" = "Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Designs"
+"Proofs.Flock.Soundness.Discharge.Exec.LawSample" = "Proofs.Flock.Soundness.Discharge.Exec.DesignSample"
+"Proofs/Flock/Soundness/Discharge/Exec/LawSample" = "Proofs/Flock/Soundness/Discharge/Exec/DesignSample"
+"Proofs.Flock.Claims.Sampling.Select.SampleLaw" = "Proofs.Flock.Claims.Sampling.Select.SampleDesign"
+"Proofs/Flock/Claims/Sampling/Select/SampleLaw" = "Proofs/Flock/Claims/Sampling/Select/SampleDesign"
+"Proofs.Properties.Verity.Sampled.Record.Law" = "Proofs.Properties.Verity.Sampled.Record.Design"
+"Proofs/Properties/Verity/Sampled/Record/Law" = "Proofs/Properties/Verity/Sampled/Record/Design"
+"Proofs.Flock.Soundness.Audit.Law" = "Proofs.Flock.Soundness.Audit.Design"
+"Proofs/Flock/Soundness/Audit/Law" = "Proofs/Flock/Soundness/Audit/Design"
+"Proofs.Flock.Bridge.SampledLaw" = "Proofs.Flock.Bridge.SampledDesign"
+"Proofs/Flock/Bridge/SampledLaw" = "Proofs/Flock/Bridge/SampledDesign"
+"sampleFileZK_printedSample_law" = "sampleFileZK_printedSample_design"
+"recordCustodyZKJPLaw_deployed" = "recordCustodyZKJPDesign_deployed"
+"recordCustodyZKJPLaw_designAt" = "recordCustodyZKJPDesign_designAt"
+"recordCustodyZKJPLaw_printed" = "recordCustodyZKJPDesign_printed"
+"Definitions.Flock.Audit.Law" = "Definitions.Flock.Audit.Design"
+"Definitions/Flock/Audit/Law" = "Definitions/Flock/Audit/Design"
+"recordCustodyZKJPLaw_subset" = "recordCustodyZKJPDesign_subset"
+"recordCustodyZKJPLaw_const" = "recordCustodyZKJPDesign_const"
+"sampleFileZK_of_toJson_law" = "sampleFileZK_of_toJson_design"
+"recordCustodyZKJPLaw_part" = "recordCustodyZKJPDesign_part"
+"flockLaw_bernoulli_text" = "flockDesign_bernoulli_text"
+"sampledFrom_sampledLaw" = "sampledFrom_sampledDesign"
+"exists_certifying_law" = "exists_certifying_design"
+"getD_secondLaw_strata" = "getD_secondDesign_strata"
+"lawSized_samplesUnder" = "designSized_samplesUnder"
+"stratifiedLawWith_sim" = "stratifiedDesignWith_sim"
+"stratifiedLawWith_std" = "stratifiedDesignWith_std"
+"RecordCustodyZKHJLaw" = "RecordCustodyZKHJDesign"
+"RecordCustodyZKJPLaw" = "RecordCustodyZKJPDesign"
+"flockLaw_subset_text" = "flockDesign_subset_text"
+"RecordCustodyZKHLaw" = "RecordCustodyZKHDesign"
+"RecordCustodyZKJLaw" = "RecordCustodyZKJDesign"
+"lawSized_sampledLaw" = "designSized_sampledDesign"
+"proved_of_sampleLaw" = "proved_of_sampleDesign"
+"readShare_memberLaw" = "readShare_memberDesign"
+"wellFormed_of_lawOn" = "wellFormed_of_designOn"
+"RecordCustodyZKLaw" = "RecordCustodyZKDesign"
+"getD_law_of_kindOf" = "getD_design_of_kindOf"
+"getD_secondLaw_law" = "getD_secondDesign_design"
+"lawOn_samplesUnder" = "designOn_samplesUnder"
+"oneClass_memberLaw" = "oneClass_memberDesign"
+"sampleLaw_deployOf" = "sampleDesign_deployOf"
+"sampleLaw_of_slots" = "sampleDesign_of_slots"
+"slotDesign_lawText" = "slotDesign_designText"
+"stratifiedLaw_cost" = "stratifiedDesign_cost"
+"ExecutionPhaseLaw" = "ExecutionPhaseCoinsUniform"
+"lawSized_of_lawOn" = "designSized_of_designOn"
+"pa_empty_of_lawOn" = "pa_empty_of_designOn"
+"setupAt_sampleLaw" = "setupAt_sampleDesign"
+"stratifiedLawWith" = "stratifiedDesignWith"
+"deriveLaw_subset" = "deriveDesign_subset"
+"getD_secondLaw_k" = "getD_secondDesign_k"
+"lawOn_sampledLaw" = "designOn_sampledDesign"
+"sampledLaw_cases" = "sampledDesign_cases"
+"deriveLaw_cases" = "deriveDesign_cases"
+"deriveLaw_congr" = "deriveDesign_congr"
+"epsKs_memberLaw" = "epsKs_memberDesign"
+"flockLaw_second" = "flockDesign_second"
+"flockLaw_subset" = "flockDesign_subset"
+"laws_ofBindPlay" = "designs_ofBindPlay"
+"setup_sampleLaw" = "setup_sampleDesign"
+"workLawWith_sim" = "workDesignWith_sim"
+"workLawWith_std" = "workDesignWith_std"
+"deriveLaw_none" = "deriveDesign_none"
+"deriveLaw_some" = "deriveDesign_some"
+"flockLaw_cases" = "flockDesign_cases"
+"kd_le_of_lawOn" = "kd_le_of_designOn"
+"lawAt_of_lawOf" = "designOn_of_designOf"
+"lawOn_designAt" = "designOn_designAt"
+"laws_roundPlay" = "designs_roundPlay"
+"laws_stagePlay" = "designs_stagePlay"
+"link_memberLaw" = "link_memberDesign"
+"prodLaw_toReal" = "prodDist_toReal"
+"registered_law" = "registered_design"
+"avg_memberLaw" = "avg_memberDesign"
+"getElem_lawOf" = "getElem_designOf"
+"lawSized_size" = "designSized_size"
+"law_of_lawWhy" = "design_of_designWhy"
+"law_of_setsUp" = "design_of_setsUp"
+"laws_contPlay" = "designs_contPlay"
+"laws_lifePlay" = "designs_lifePlay"
+"registeredLaw" = "registeredDesign"
+"sampledLaw_ok" = "sampledDesign_ok"
+"workLaw_cost'" = "workDesign_cost'"
+"lawOf_unique" = "designOf_unique"
+"oneShot_laws" = "oneShot_designs"
+"piLaw_toReal" = "piDist_toReal"
+"sampleLaw_ok" = "sampleDesign_ok"
+"workLaw_cost" = "workDesign_cost"
+"laws_goPlay" = "designs_goPlay"
+"piLaw_apply" = "piDist_apply"
+"root_law_le" = "root_design_le"
+"workLawWith" = "workDesignWith"
+"SessionLaw" = "SessionCoinsUniform"
+"TABLES_LAW" = "TABLES_DESIGN"
+"lawOn_size" = "designOn_size"
+"prCoin_law" = "prCoin_dist"
+"replayLaw?" = "replayDesign?"
+"sample_law" = "sample_design"
+"serviceLaw" = "serviceDesign"
+"sessionLaw" = "sessionDesign"
+"sort_law_k" = "sort_design_k"
+"deriveLaw" = "deriveDesign"
+"lawOn_all" = "designOn_all"
+"lawStages" = "designStages"
+"lawWhy_zk" = "designWhy_zk"
+"law_bound" = "design_bound"
+"law_lanes" = "design_lanes"
+"memberLaw" = "memberDesign"
+"sampleLaw" = "sampleDesign"
+"secondLaw" = "secondDesign"
+"LawSized" = "DesignSized"
+"flockLaw" = "flockDesign"
+"lanesLaw" = "lanesDesign"
+"lawAt_ok" = "designOn_ok"
+"idleLaw" = "idleDesign"
+"lawKeys" = "designKeys"
+"lawName" = "designName"
+"lawOver" = "designOver"
+"lawText" = "designText"
+"liveLaw" = "liveDesign"
+"prodLaw" = "prodDist"
+"sameLaw" = "sameDesign"
+"sub_law" = "sub_design"
+"lawObj" = "designObj"
+"lawWhy" = "designWhy"
+"law_ok" = "design_ok"
+"ownLaw" = "ownDesign"
+"LawOf" = "DesignOf"
+"LawOn" = "DesignOn"
+"lawAt" = "designOn"
+"piLaw" = "piDist"
+"VLaw" = "VDesign"
+"hlaw" = "hdesign"
+"lawK" = "designK"
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Claims/Sampling/Select/Misses.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Steps.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Reg.lean",
+]
+words = { "slotDesign_law" = "slotDesign_design" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean",
+    "security/Proofs/Properties/Verity/Recursive/Names.lean",
+    "security/Proofs/Properties/Verity/Recursive/Refusals.lean",
+    "security/Properties/lean-audit.json",
+    "security/lean-audit.json",
+    "verity/protocols/proofs/flock/prover/agreement/README.md",
+    "verity/protocols/proofs/flock/prover/live/src/lib.rs",
+    "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/SetupEq.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+    "verity/protocols/proofs/recursion/verifier/recursive/VStarRecursive/Protocol.lean",
+]
+words = { "stratifiedLaw" = "stratifiedDesign" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Bridge/SampledLaw.lean",
+    "security/lean-audit.json",
+]
+words = { "sampledLaw" = "sampledDesign" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Bridge/Sample.lean",
+    "security/Proofs/Flock/Claims/Sampling/KS.lean",
+    "security/Proofs/Flock/Claims/Sampling/Reference/Complete.lean",
+    "security/Proofs/Flock/Claims/Sampling/Reg.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/SampleLaw.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Scope.lean",
+    "security/Proofs/Flock/SamplingGeneric.lean",
+    "security/Proofs/Flock/SamplingGeneric/Deployed.lean",
+    "security/Proofs/Flock/SamplingGeneric/Masked.lean",
+    "security/Proofs/Flock/SamplingGeneric/MaskedTrunc.lean",
+    "security/Proofs/NetworkCertifier/SampledLeakRegPlain.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Law.lean",
+    "tests/lint/allowlists/repo_retired_terms.json",
+]
+words = { "SampleLaw" = "SampleDesign" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Pouw/MonitoringPeriod/Accept.lean",
+    "security/Proofs/Properties/Pouw/Check.lean",
+    "security/Properties/Pouw/Check.lean",
+    "security/Properties/lean-audit.json",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Check.lean",
+]
+words = { "subsetLaw" = "subsetDesign" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/SampleOkJson.lean",
+    "verity/protocols/proofs/spot/prover/optimize.py",
+    "verity/protocols/proofs/spot/verifier/README.md",
+    "verity/protocols/proofs/spot/verifier/tests/test_optimize.py",
+]
+words = { "work_law" = "work_design" }
+
+[[words_in]]
+files = [
+    "security/Properties/lean-audit.json",
+    "security/lean-audit.json",
+    "verity/protocols/proofs/flock/prover/agreement/README.md",
+    "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/SetupEq.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+]
+words = { "workLaw" = "workDesign" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Claims/Sampling/Select/SecondWitness.lean",
+    "security/Proofs/Pouw/Credit.lean",
+    "security/Proofs/Properties/Pouw/Strata.lean",
+    "security/Proofs/Properties/Spot.lean",
+    "security/Properties/Spot.lean",
+    "tests/lint/test_repo_retired_terms.py",
+    "tests/test_retired_terms.py",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Hello.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/LinkPoints.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Record.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Registration.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Sampling.lean",
+]
+words = { "lawOf" = "designOf" }
+
+# the bare word `Law`, in every `.lean` file that spells it and not `Design`
+[[words_in]]
+files = [
+    "security/Definitions/Core/Guarantees/Challenger.lean",
+    "security/Definitions/Core/Sample.lean",
+    "security/Definitions/Flock.lean",
+    "security/Definitions/Flock/Audit/Harm.lean",
+    "security/Definitions/Flock/Audit/Law.lean",
+    "security/Definitions/Flock/Audit/Partitioning.lean",
+    "security/Definitions/Pouw/Guarantees/Window.lean",
+    "security/Definitions/Pouw/Window.lean",
+    "security/Proofs/Accounting/TS/CheckedSound.lean",
+    "security/Proofs/Accounting/TS/GroupSound.lean",
+    "security/Proofs/Core/Challenger.lean",
+    "security/Proofs/Flock/Bridge/Canon.lean",
+    "security/Proofs/Flock/Bridge/EndToEndHiddenC.lean",
+    "security/Proofs/Flock/Bridge/LeafMap.lean",
+    "security/Proofs/Flock/Bridge/Public.lean",
+    "security/Proofs/Flock/Bridge/PublicRows.lean",
+    "security/Proofs/Flock/Bridge/QsRows.lean",
+    "security/Proofs/Flock/Bridge/QsRows/FirstReads.lean",
+    "security/Proofs/Flock/Bridge/QsRows/RunsOut.lean",
+    "security/Proofs/Flock/Bridge/QsRows/Split.lean",
+    "security/Proofs/Flock/Bridge/Refused.lean",
+    "security/Proofs/Flock/Bridge/RightRegZc.lean",
+    "security/Proofs/Flock/Bridge/ScopeGate.lean",
+    "security/Proofs/Flock/Bridge/Statement.lean",
+    "security/Proofs/Flock/Bridge/Transports.lean",
+    "security/Proofs/Flock/Bridge/V5/Accepted.lean",
+    "security/Proofs/Flock/Bridge/V5/EndToEndHidden.lean",
+    "security/Proofs/Flock/Bridge/V5/QsRows.lean",
+    "security/Proofs/Flock/Bridge/V5/Statement.lean",
+    "security/Proofs/Flock/C3/Compose/DecodeFix.lean",
+    "security/Proofs/Flock/C3/Compose/Decoder.lean",
+    "security/Proofs/Flock/C3/Compose/Family.lean",
+    "security/Proofs/Flock/C3/Compose/HoloStageCoins.lean",
+    "security/Proofs/Flock/C3/Compose/Honest.lean",
+    "security/Proofs/Flock/C3/Compose/LastRead.lean",
+    "security/Proofs/Flock/C3/Compose/LaterHeld.lean",
+    "security/Proofs/Flock/C3/Compose/LaterHolo.lean",
+    "security/Proofs/Flock/C3/Compose/PartRead.lean",
+    "security/Proofs/Flock/C3/Compose/RowsReg.lean",
+    "security/Proofs/Flock/C3/Compose/RsFacts.lean",
+    "security/Proofs/Flock/C3/Compose/SparseEnds.lean",
+    "security/Proofs/Flock/C3/Compose/SrcClauses.lean",
+    "security/Proofs/Flock/C3/Compose/Tied.lean",
+    "security/Proofs/Flock/C3/Fork/Extract.lean",
+    "security/Proofs/Flock/C3/HoloValues/Read.lean",
+    "security/Proofs/Flock/C3/HoloValues/Reps.lean",
+    "security/Proofs/Flock/C3/Opening/Algebra.lean",
+    "security/Proofs/Flock/C3/Opening/ClaimTie.lean",
+    "security/Proofs/Flock/C3/Opening/Read.lean",
+    "security/Proofs/Flock/C3/Opening/Rows.lean",
+    "security/Proofs/Flock/C3/Opening/Session.lean",
+    "security/Proofs/Flock/C3/Opening/SessionParts.lean",
+    "security/Proofs/Flock/C3/Opening/SessionPartsL.lean",
+    "security/Proofs/Flock/C3/Opening/SrcLayer.lean",
+    "security/Proofs/Flock/C3/Opening/SrcOpening.lean",
+    "security/Proofs/Flock/C3/PubRows/Check.lean",
+    "security/Proofs/Flock/C3/PubRows/Frame.lean",
+    "security/Proofs/Flock/C3/PubRows/Honest.lean",
+    "security/Proofs/Flock/C3/PubRows/Prefix.lean",
+    "security/Proofs/Flock/C3/PubRows/Shape.lean",
+    "security/Proofs/Flock/C3/RegLevels/AccReads.lean",
+    "security/Proofs/Flock/C3/RegLevels/Chain.lean",
+    "security/Proofs/Flock/C3/RegLevels/LevelsChecked.lean",
+    "security/Proofs/Flock/C3/RegLevels/LigWhole.lean",
+    "security/Proofs/Flock/C3/RegLevels/OpensRegs.lean",
+    "security/Proofs/Flock/C3/RegLevels/OutRegs.lean",
+    "security/Proofs/Flock/C3/RegLevels/ROpens.lean",
+    "security/Proofs/Flock/C3/RegLevels/ROpensPR.lean",
+    "security/Proofs/Flock/C3/RegLevels/Read.lean",
+    "security/Proofs/Flock/C3/RegLevels/SharedRows.lean",
+    "security/Proofs/Flock/C3/RegLevels/SrcMaps.lean",
+    "security/Proofs/Flock/C3/RegLevels/SrcOpened.lean",
+    "security/Proofs/Flock/C3/RegLevels/SrcTie.lean",
+    "security/Proofs/Flock/C3/RegLevels/TopLeaf.lean",
+    "security/Proofs/Flock/C3/RegLevels/TopRead.lean",
+    "security/Proofs/Flock/C3/RegLevels/TopTie.lean",
+    "security/Proofs/Flock/C3/RegLevels/ValueTie.lean",
+    "security/Proofs/Flock/C3/Reps/AlgL.lean",
+    "security/Proofs/Flock/C3/Reps/AtList.lean",
+    "security/Proofs/Flock/C3/Reps/HAlgRows.lean",
+    "security/Proofs/Flock/C3/Reps/Maps.lean",
+    "security/Proofs/Flock/C3/Reps/OpensRead.lean",
+    "security/Proofs/Flock/C3/Reps/RepCoins.lean",
+    "security/Proofs/Flock/C3/Reps/RepsRead.lean",
+    "security/Proofs/Flock/C3/Reps/RoundLinks.lean",
+    "security/Proofs/Flock/C3/Reps/RoundReads.lean",
+    "security/Proofs/Flock/C3/Reps/SentKeys.lean",
+    "security/Proofs/Flock/C3/Reps/SrcOK.lean",
+    "security/Proofs/Flock/C3/Reps/SrcOpens.lean",
+    "security/Proofs/Flock/C3/Reps/Steps.lean",
+    "security/Proofs/Flock/C3/Reps/StepsTie.lean",
+    "security/Proofs/Flock/C3/Reps/Tie.lean",
+    "security/Proofs/Flock/C3/Reps/TsRead.lean",
+    "security/Proofs/Flock/C3/Reps/Vals.lean",
+    "security/Proofs/Flock/C3/Reps/WRead.lean",
+    "security/Proofs/Flock/C3/Reps/WithReads.lean",
+    "security/Proofs/Flock/C3/Sparse/MsgsLayers.lean",
+    "security/Proofs/Flock/C3/Sparse/MsgsRead.lean",
+    "security/Proofs/Flock/C3/Sparse/PubChecked.lean",
+    "security/Proofs/Flock/C3/Sparse/PubLift.lean",
+    "security/Proofs/Flock/C3/Sparse/Read.lean",
+    "security/Proofs/Flock/C3/Sparse/Session.lean",
+    "security/Proofs/Flock/C3/Sparse/SessionReg.lean",
+    "security/Proofs/Flock/C3/Sparse/Src.lean",
+    "security/Proofs/Flock/C3/Sparse/SrcLayer.lean",
+    "security/Proofs/Flock/C3/Sparse/SrcSessions.lean",
+    "security/Proofs/Flock/C3/Sparse/SrcTie.lean",
+    "security/Proofs/Flock/Claims/Bridge/Custody.lean",
+    "security/Proofs/Flock/Claims/Complete/Json/Stmt.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Stmt.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/StmtOne.lean",
+    "security/Proofs/Flock/Claims/KS/ZkDecodeW.lean",
+    "security/Proofs/Flock/Claims/KS/ZkRows.lean",
+    "security/Proofs/Flock/Claims/KS/ZkSampleJ.lean",
+    "security/Proofs/Flock/Claims/Sampling/ExecBernoulli.lean",
+    "security/Proofs/Flock/Claims/Sampling/Samples.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Bounds.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/OS.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Prefix.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Seq.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Size.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Steps.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Take.lean",
+    "security/Proofs/Flock/Claims/ZK/Os.lean",
+    "security/Proofs/Flock/EndToEnd.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Sample.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Sampled.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Sampled.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Member.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Session.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Period.lean",
+    "security/Proofs/Flock/EndToEnd/Period/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Statement.lean",
+    "security/Proofs/Flock/EndToEndHidden.lean",
+    "security/Proofs/Flock/EndToEndHidden/Statement.lean",
+    "security/Proofs/Flock/EndToEndRegistered.lean",
+    "security/Proofs/Flock/EndToEndRegistered/Honest.lean",
+    "security/Proofs/Flock/EndToEndRegistered/Statement.lean",
+    "security/Proofs/Flock/EndToEndRegisteredRows/Reduce.lean",
+    "security/Proofs/Flock/EndToEndRegisteredRows/Statement.lean",
+    "security/Proofs/Flock/EndToEndSampled/Statement.lean",
+    "security/Proofs/Flock/Lemmas/Audit.lean",
+    "security/Proofs/Flock/RecGeneric/Sampled.lean",
+    "security/Proofs/Flock/Recursive/AuditC3.lean",
+    "security/Proofs/Flock/Recursive/AuditC3Proof.lean",
+    "security/Proofs/Flock/Recursive/Compile.lean",
+    "security/Proofs/Flock/Recursive/Compose.lean",
+    "security/Proofs/Flock/Recursive/Defs.lean",
+    "security/Proofs/Flock/Recursive/Finds.lean",
+    "security/Proofs/Flock/Recursive/Flock.lean",
+    "security/Proofs/Flock/Recursive/ForkInner.lean",
+    "security/Proofs/Flock/Recursive/ForkInnerC.lean",
+    "security/Proofs/Flock/Recursive/ForkLast.lean",
+    "security/Proofs/Flock/Recursive/HPortTie.lean",
+    "security/Proofs/Flock/Recursive/LeafFinder.lean",
+    "security/Proofs/Flock/Recursive/Loads.lean",
+    "security/Proofs/Flock/Recursive/LoopAny.lean",
+    "security/Proofs/Flock/Recursive/LoopZK.lean",
+    "security/Proofs/Flock/Recursive/OsSalts.lean",
+    "security/Proofs/Flock/Recursive/PartTie.lean",
+    "security/Proofs/Flock/Recursive/Premises.lean",
+    "security/Proofs/Flock/Recursive/Property.lean",
+    "security/Proofs/Flock/Recursive/PublicAuditProof.lean",
+    "security/Proofs/Flock/Recursive/Raw.lean",
+    "security/Proofs/Flock/Recursive/RegExtract.lean",
+    "security/Proofs/Flock/Recursive/Registrants.lean",
+    "security/Proofs/Flock/Recursive/SaltFinder.lean",
+    "security/Proofs/Flock/Recursive/Sound.lean",
+    "security/Proofs/Flock/Recursive/SoundExec.lean",
+    "security/Proofs/Flock/Recursive/Stage.lean",
+    "security/Proofs/Flock/Recursive/StageRead.lean",
+    "security/Proofs/Flock/Recursive/Statements.lean",
+    "security/Proofs/Flock/Recursive/TopFinder.lean",
+    "security/Proofs/Flock/Recursive/Transfer.lean",
+    "security/Proofs/Flock/Recursive/ValueBridge.lean",
+    "security/Proofs/Flock/Recursive/ValueChecked.lean",
+    "security/Proofs/Flock/Recursive/ValueFinder.lean",
+    "security/Proofs/Flock/Recursive/ValueInner.lean",
+    "security/Proofs/Flock/Recursive/ValueSource.lean",
+    "security/Proofs/Flock/Recursive/ValueSrc.lean",
+    "security/Proofs/Flock/Recursive/Written.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/Off.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/RegLink.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/SampledRefines.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/Vals.lean",
+    "security/Proofs/Flock/Recursive/ZkServer.lean",
+    "security/Proofs/Flock/Recursive/ZkServerZK.lean",
+    "security/Proofs/Flock/Sampled/Defs.lean",
+    "security/Proofs/Flock/Sampled/NonVacuity.lean",
+    "security/Proofs/Flock/Sampled/Proofs.lean",
+    "security/Proofs/Flock/Sampled/Statements.lean",
+    "security/Proofs/Flock/SampledGeneric/Compose.lean",
+    "security/Proofs/Flock/SampledGeneric/Defs.lean",
+    "security/Proofs/Flock/SampledGeneric/Flock.lean",
+    "security/Proofs/Flock/SampledGeneric/Joint.lean",
+    "security/Proofs/Flock/SampledGeneric/JointTransfers.lean",
+    "security/Proofs/Flock/SampledGeneric/Statements.lean",
+    "security/Proofs/Flock/SoundAtBridge/Session.lean",
+    "security/Proofs/Flock/Soundness.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/Custody.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/Recursive.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/Registrant.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/Zk.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/ZkP.lean",
+    "security/Proofs/Flock/Soundness/Audit/Closure.lean",
+    "security/Proofs/Flock/Soundness/Audit/Delivered.lean",
+    "security/Proofs/Flock/Soundness/Audit/Extraction.lean",
+    "security/Proofs/Flock/Soundness/Audit/Flock.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockBatched.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockBatchedAcc.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockCompiled.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockLink.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockLinked.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockPublic.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockWork.lean",
+    "security/Proofs/Flock/Soundness/Audit/Harm.lean",
+    "security/Proofs/Flock/Soundness/Audit/HarmBound.lean",
+    "security/Proofs/Flock/Soundness/Audit/Influence.lean",
+    "security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean",
+    "security/Proofs/Flock/Soundness/Audit/Law.lean",
+    "security/Proofs/Flock/Soundness/Audit/OneStage.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/Guarantees.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/Model.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Exfil/Bernoulli.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Exfil/Rungs.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Exfil/Witnesses.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/FreeCompute.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/TwoStage.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Bounds.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Laws.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Witnesses.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/Witness.lean",
+    "security/Proofs/Flock/Soundness/Audit/Pooled.lean",
+    "security/Proofs/Flock/Soundness/Audit/RegSample.lean",
+    "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
+    "security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean",
+    "security/Proofs/Flock/Soundness/Audit/StratifiedProj.lean",
+    "security/Proofs/Flock/Soundness/Audit/Window.lean",
+    "security/Proofs/Flock/Soundness/Audit/Work.lean",
+    "security/Proofs/Flock/Soundness/Binding/E2E.lean",
+    "security/Proofs/Flock/Soundness/Binding/Weights.lean",
+    "security/Proofs/Flock/Soundness/CROnly/Defs.lean",
+    "security/Proofs/Flock/Soundness/CROnly/E2E.lean",
+    "security/Proofs/Flock/Soundness/CROnly/E2EMore.lean",
+    "security/Proofs/Flock/Soundness/CROnly/Link.lean",
+    "security/Proofs/Flock/Soundness/CROnly/Registered.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Custody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/CustodyJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/CustodyJJson.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/DefsJA.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/PublicJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/SampledJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/SoundJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZL/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZLJ/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/BindingE2EL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/E2EL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Event.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedAccL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockLinkL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockLinkedL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockPublicL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/HeadlineL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/LawSample.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Live.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/LiveOn.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/SessionLDecisive.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/StrictCRL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Composed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Design.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Exec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/General.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Numeric.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkHidden.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkHiddenM1.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkRegistered.lean",
+    "security/Proofs/Flock/Soundness/Discharge/General/Hidden.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HdecCor/Headlines.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenDec/Assemble.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenDec/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExecP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/LiveOnP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Integrate/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainHJ/Decode.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainHJ/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainJ/Decode.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainJ/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlaysCoin/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Session.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/At.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/AtM1.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/BindX.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Coin.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Compiled.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Live.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/LiveStatements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Refines.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/BindInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Count.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJJson.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/PublicJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/RunsJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundBind.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundCustody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundDefs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundRuns.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundSampleOk.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/View.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/CompiledLink.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Count.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Link.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Public.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Rows.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/RowsSound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/SampleOk.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/SampleOkJson.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/StrictZ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Bind.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/BindH.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Guarded.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/PublicHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/PublicHJSt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/PublicInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJCustody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJSt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Numbers.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Session.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkView/OsSalts.lean",
+    "security/Proofs/Flock/Soundness/E2E.lean",
+    "security/Proofs/Flock/Soundness/ExecSample.lean",
+    "security/Proofs/Flock/Soundness/ExecSampleOS.lean",
+    "security/Proofs/Flock/Soundness/ExecStrataOf.lean",
+    "security/Proofs/Flock/Soundness/ExecStratified.lean",
+    "security/Proofs/Flock/Soundness/Headline.lean",
+    "security/Proofs/Flock/Soundness/KeyedSample.lean",
+    "security/Proofs/Flock/Soundness/Registered/E2E.lean",
+    "security/Proofs/Flock/Soundness/StrictCR.lean",
+    "security/Proofs/Flock/Soundness/Types/ProgramE2E.lean",
+    "security/Proofs/Flock/VBridge/AccChain.lean",
+    "security/Proofs/Flock/VBridge/AccUnits.lean",
+    "security/Proofs/Flock/VBridge/AlgHolds.lean",
+    "security/Proofs/Flock/VBridge/Compiled.lean",
+    "security/Proofs/Flock/VBridge/Decode.lean",
+    "security/Proofs/Flock/VBridge/Family.lean",
+    "security/Proofs/Flock/VBridge/Family/AccRows.lean",
+    "security/Proofs/Flock/VBridge/Family/Assembly.lean",
+    "security/Proofs/Flock/VBridge/Family/Commits.lean",
+    "security/Proofs/Flock/VBridge/Family/Encode.lean",
+    "security/Proofs/Flock/VBridge/Family/Ends.lean",
+    "security/Proofs/Flock/VBridge/Family/Files.lean",
+    "security/Proofs/Flock/VBridge/Family/Join.lean",
+    "security/Proofs/Flock/VBridge/Family/Lig.lean",
+    "security/Proofs/Flock/VBridge/Family/Opened.lean",
+    "security/Proofs/Flock/VBridge/Family/Openings.lean",
+    "security/Proofs/Flock/VBridge/Family/OutCols.lean",
+    "security/Proofs/Flock/VBridge/Family/PartKeys.lean",
+    "security/Proofs/Flock/VBridge/Family/PartReads.lean",
+    "security/Proofs/Flock/VBridge/Family/Pub.lean",
+    "security/Proofs/Flock/VBridge/Family/ReadTransfer.lean",
+    "security/Proofs/Flock/VBridge/Family/Registered.lean",
+    "security/Proofs/Flock/VBridge/Family/Registrants.lean",
+    "security/Proofs/Flock/VBridge/Family/Rep.lean",
+    "security/Proofs/Flock/VBridge/Family/Rounds.lean",
+    "security/Proofs/Flock/VBridge/Family/Runs.lean",
+    "security/Proofs/Flock/VBridge/Family/Setup.lean",
+    "security/Proofs/Flock/VBridge/Family/Structure.lean",
+    "security/Proofs/Flock/VBridge/Family/Transcript.lean",
+    "security/Proofs/Flock/VBridge/Family/UnitName.lean",
+    "security/Proofs/Flock/VBridge/OpeningUnit.lean",
+    "security/Proofs/Flock/VBridge/ResLayer.lean",
+    "security/Proofs/Flock/VBridge/ResUnit.lean",
+    "security/Proofs/Flock/VBridge/Stages.lean",
+    "security/Proofs/Flock/VBridge/Top.lean",
+    "security/Proofs/Pous/EndToEndAt.lean",
+    "security/Proofs/Pouw/Credit.lean",
+    "security/Proofs/Pouw/EndToEndExecutionPhase/Statement.lean",
+    "security/Proofs/Pouw/MonitoringPeriodJ10R/Stratum.lean",
+    "security/Proofs/Pouw/Window/Flock.lean",
+    "security/Proofs/Pouw/Window/Served.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Sample.lean",
+    "security/Proofs/Properties/Spot/PlanCheck.lean",
+    "security/Proofs/Properties/Verity/Sampled.lean",
+    "security/Proofs/Properties/Verity/Sampled/Deployed.lean",
+    "security/Proofs/Properties/Verity/Sampled/Held.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/KS.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Law.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Pass.lean",
+    "security/Proofs/Properties/Verity/Sampled/RecordSample.lean",
+    "security/Proofs/Properties/Verity/Sampled/Target.lean",
+    "security/Proofs/Properties/Verity/SampledCoins.lean",
+    "security/Proofs/Properties/Verity/SampledRead.lean",
+    "security/Proofs/Properties/Verity/SampledSample.lean",
+    "security/Proofs/WeightSecurity/Pressure.lean",
+    "security/Properties/Spot/PlanCheck.lean",
+    "verity/commitments/lean/Commitments/Sample.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean",
+    "verity/protocols/interface/CoreProtocol/Profile.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ProgramRead.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/Setup.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/LinkPoints.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/OneStage.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Sampling.lean",
+    "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+]
+words = { "Law" = "Design" }
+
+# the bare word `law`, in every `.lean` file that spells it and not `design`
+[[words_in]]
+files = [
+    "benchmarks/two_stage/tests/TwoGuard.lean",
+    "benchmarks/verifier_cost/whole_run/Main.lean",
+    "security/Definitions/Core/Sample.lean",
+    "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityBlock.lean",
+    "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityMonitoringPeriod.lean",
+    "security/Proofs/Flock/Bridge/QsRows/FirstReads.lean",
+    "security/Proofs/Flock/Bridge/Sample.lean",
+    "security/Proofs/Flock/Bridge/SampledLaw.lean",
+    "security/Proofs/Flock/Bridge/V5/Accepted.lean",
+    "security/Proofs/Flock/Bridge/V5/Assembly.lean",
+    "security/Proofs/Flock/Bridge/V5/EndToEndHidden.lean",
+    "security/Proofs/Flock/Bridge/V5/KSLive.lean",
+    "security/Proofs/Flock/Bridge/V5/QsRows.lean",
+    "security/Proofs/Flock/Bridge/V5/Rows.lean",
+    "security/Proofs/Flock/Bridge/V5/Statement.lean",
+    "security/Proofs/Flock/Bridge/V5/Transports.lean",
+    "security/Proofs/Flock/C3/PubRows/Check.lean",
+    "security/Proofs/Flock/C3/RegLevels/AccReads.lean",
+    "security/Proofs/Flock/C3/VStarList/Statements.lean",
+    "security/Proofs/Flock/Claims/Complete/Json/Stmt.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Stmt.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/StmtOne.lean",
+    "security/Proofs/Flock/Claims/Recursion/Scope.lean",
+    "security/Proofs/Flock/Claims/Recursion/SetupCount.lean",
+    "security/Proofs/Flock/Claims/Sampling/ExecBernoulli.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Bounds.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Code.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Design.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Misses.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/OS.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Prefix.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Second.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Size.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Steps.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Take.lean",
+    "security/Proofs/Flock/EndToEndRegistered/Nontrivial.lean",
+    "security/Proofs/Flock/Recursive/AuditC3.lean",
+    "security/Proofs/Flock/Recursive/Compile.lean",
+    "security/Proofs/Flock/Recursive/Flock.lean",
+    "security/Proofs/Flock/Recursive/ForkInner.lean",
+    "security/Proofs/Flock/Recursive/ForkInnerC.lean",
+    "security/Proofs/Flock/Recursive/HPortTie.lean",
+    "security/Proofs/Flock/Recursive/Loads.lean",
+    "security/Proofs/Flock/Recursive/Premises.lean",
+    "security/Proofs/Flock/Recursive/Property.lean",
+    "security/Proofs/Flock/Recursive/PublicAudit.lean",
+    "security/Proofs/Flock/Recursive/Raw.lean",
+    "security/Proofs/Flock/Recursive/RegExtract.lean",
+    "security/Proofs/Flock/Recursive/Registrants.lean",
+    "security/Proofs/Flock/Recursive/SoundExec.lean",
+    "security/Proofs/Flock/Recursive/Stage.lean",
+    "security/Proofs/Flock/Recursive/StageRead.lean",
+    "security/Proofs/Flock/Recursive/Statements.lean",
+    "security/Proofs/Flock/Recursive/ValueBridge.lean",
+    "security/Proofs/Flock/Recursive/Witness.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/Zk.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/ZkP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/CustodyJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Design.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Numeric.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/PlainRegistered.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Accepts.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/SampleOk.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/SampleOkJson.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Guarded.lean",
+    "security/Proofs/Flock/Soundness/ExecSampleOS.lean",
+    "security/Proofs/Flock/Soundness/ExecStrataOf.lean",
+    "security/Proofs/Flock/SpotFlock/Cap.lean",
+    "security/Proofs/Flock/VBridge/Family/AccRows.lean",
+    "security/Proofs/Flock/VBridge/Full.lean",
+    "security/Proofs/Pouw/Credit.lean",
+    "security/Proofs/Pouw/Credit/Lanes.lean",
+    "security/Proofs/Pouw/MonitoringPeriod/Accept.lean",
+    "security/Proofs/Properties/Pouw/Check.lean",
+    "security/Proofs/Properties/Pouw/Strata.lean",
+    "security/Proofs/Properties/Remote.lean",
+    "security/Proofs/Properties/Spot.lean",
+    "security/Proofs/Properties/Spot/Credited.lean",
+    "security/Proofs/Properties/Verity/Recursive/Compiled.lean",
+    "security/Proofs/Properties/Verity/Recursive/SetupChecks.lean",
+    "security/Proofs/Properties/Verity/Sampled/Deployed.lean",
+    "security/Proofs/Properties/Verity/Sampled/Held.lean",
+    "security/Proofs/WeightSecurity/Pressure.lean",
+    "security/Properties/Accounting/Compose.lean",
+    "security/Properties/Pouw/Check.lean",
+    "security/Properties/Pouw/Credit.lean",
+    "security/Properties/Spot.lean",
+    "verity/commitments/lean/Commitments/Sample.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Check.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Pass.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/FullSample.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Inputs.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Json.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Public.lean",
+    "verity/protocols/compose/verifier/onsite/CoreOnsite.lean",
+    "verity/protocols/compose/verifier/remote/CoreRemote.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/KsScope.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ProgramRead.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ProvedScope.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Registered.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/CoinsTree.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/Full.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/FullSample.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/KsScope.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/Labels.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/PlainHidden.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/TableCap.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/Setup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/SimSetup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Witness.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+    "verity/protocols/proofs/recursion/verifier/recursive/VStarRecursive/Protocol.lean",
+    "verity/protocols/proofs/recursion/verifier/recursive/VStarRecursive/Sampled.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/LinkPoints.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Record.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Registration.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Run.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Sampling.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/SecondStage.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/SecondStageExamples.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Service.lean",
+]
+words = { "law" = "design" }
+
+# the bare word `Laws`, in every `.lean` file that spells it and not `Designs`
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Claims/KS/Joint.lean",
+    "security/Proofs/Flock/Soundness/Audit/HarmBudget.lean",
+    "security/Proofs/Flock/Soundness/Audit/HarmBudgetLife.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Bounds.lean",
+    "security/Proofs/Properties/Spot/PlanCheck.lean",
+]
+words = { "Laws" = "Designs" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
+    "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityMonitoringPeriod.lean",
+]
+words = { "law" = "dist" }
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "GLOSSARY.md", ".agents/skills/friction/SKILL.md"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b',
+            'note:[\w./-]+',
+            'art:[0-9a-f]+',
+            'cursor/[\w./-]+',
+            'lanes/[\w.-]+',
+            '_@\.[\w.]+',
+            '"[a-z0-9_./-]*laws?[a-z0-9_./-]*"']
