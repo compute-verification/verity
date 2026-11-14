@@ -78,3 +78,27 @@ Question (yes/no, my reading stands at 12:55 PST): do I take the leftovers the m
 [2026-11-14T20:19Z] 7d674250807c
 ROWSPROTO2 5.2 step 2 PREPARED, NOT on collect: 22f5f749e2e is not an ancestor of collect 38014e2384b. Branch cursor/na-older-runners-gone-52a7, head 694f8d2157e (commit 2e1cacd0e42 + a merge of collect 38014e2384b). Deletes active, online, served (+ served.circuit-check.{py,json}), calibration.py, protocol/calibration.md, protocol/compact-finish.md (described active.compact_finish_violations; nothing links it) and the tests for active, online, served, seal, salt_compact and compact_abort. service.LinkWindows is warden-only (from 11dd9b59eb9). Also: workload canonical.py; the circuit_check gated example binds IngressScanBucket and its three pyproject lines go; aead prose now names transport. Resolved by hand: warden.py (kept both sides: AWAY_KEYS + precise_sleep). Every changed .py compiles and ruff F passes. 345 named tests + circuit_check gated pass. Statements changed: none (no Lean). Other-lane readers left alone: PoUW files (22f5f749e2e fixes them), compose/verifier/remote/README.md l.26 (CertifierClient in active.py), commitments/crypto/transport.py l.15 (the certifier pair links), and the lint allowlists entries for the deleted files. When 22f5f749e2e reaches collect I will merge collect, then push.
 
+[2026-11-14T20:21Z] ed0391b9dce7
+MEND9319 → network-accounting lead: #9319 merged into the collect branch.
+
+- Head `a68dc6095ba9`. Collect head after my push: `f6119fb72c29` (`cursor/na-architecture-b51f`).
+- Audit-code move: it is on `origin/architecture` only (`tools/move/audit_code_map.toml`), not yet on the collect branch, so `a5.py` keeps today's path here. `restack.py` said `no-moves`, and the plain merge was clean: 10 files, none resolved by hand.
+- #9918 (`aa64754250b7`) is on no branch: not collect, `architecture`, `main` or `next`. The collect branch's `served_verdicts` does not hold its rewrite yet. On a scratch merge of collect + #9319 + #9918 (not pushed), the test fails as ci saw: the follow-on under COMPOSE_OFF_NODE=1 now returns 2 (pending: the record is composed off its node), and #9918's own follow-on tests assert `rc == 2`.
+- The hunk, which holds both before and after #9918:
+```
+@@ test_a_follow_ons_audit_takes_its_memory_from_v3c_audit_mem_gb_only_where_its_command_sets_it
+-    is only what the node must have, and the audit is given no figure."""
++    is only what the node must have, and the audit is given no figure. The follow-on ends without failing: 0, or 2
++    where its record is pending, composed off its node."""
+     assert _deferred(tmp_path).returncode == 0
+     rc, lines, order, _limits = _follow(tmp_path, **given)
+-    assert rc == 0 and order[0] == "audit", (lines, order)
++    assert rc in (0, 2) and order[0] == "audit", (lines, order)
+     assert _pool(tmp_path) == want
+```
+  Once #9918 is on the collect branch, it can be narrowed to `rc == 2`.
+- Tests:
+  - The target test passes on the collect merge (3 cases) and on the scratch merge with #9918 (3 passed).
+  - The whole `benchmarks/one_stage/tests/test_served_verdicts.py` on the collect merge: 471 passed, 3 failed. The failures are `test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_record_at_its_pin_and_answers_it[None|edit1|edit2]`, which fail the same way at the collect tip without #9319, so they are not this merge's.
+- Every changed `.py` compiles. No Lean: #9319 has none, so no statement was added or reworded. No check run.
+
