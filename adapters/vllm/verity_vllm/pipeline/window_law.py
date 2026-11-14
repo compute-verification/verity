@@ -1,4 +1,4 @@
-"""The serving rows' window law: the partition file's law as one-stage's law object (`law_of`), a rate resolved over the
+"""The serving rows' window law: the partition file's law as one-stage's law object (`sampling_design_of`), a rate resolved over the
 window's population by `serving_rows.population` (`service.params_sampling_design`), and the verifier's work table for a window under
 the work sampling design (`work_table_of`), from the registered compiler's transfer-gate templates (`pipeline.advice_windows`)."""
 
@@ -10,7 +10,7 @@ from typing import Any
 from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
 
 
-def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
+def sampling_design_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
     """The partition file's law as one-stage's law object; a rate's is its kind and ``rate`` until `population` resolves it."""
     kind = (s := DR.parse_strata_rate(law)) and ("work" if s[0] else "stratified") or DR.parse_rate(law) and "subset"
     return {"law": kind, "rate": law} if kind else DR.parse_design(law) if isinstance(law, str) else dict(law)
