@@ -474,7 +474,7 @@ theorem afterLinkPZk_agree (h : ByteArray → ByteArray) (spec : SessionSpec) (s
     (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = sts.size)
     (hp : spec.points = 2) (hm : ∀ j (hj : j < sts.size), 25 ≤ sts[j].m ∧ sts[j].m ≤ 35)
     (hreg : ∀ j (hj : j < sts.size), sts[j].regions.size ≤ 1024)
-    (hschs : ∀ j (hj : j < sts.size), Zk.schedule sts[j].m = .ok schs[j]!) :
+    (hschs : ∀ j (hj : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok schs[j]!) :
     (agreeS n).R (afterLinkPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape schs tbls cms c1)
       (afterLinkPZk (asksCut coin n) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape schs tbls cms c1) := by
   unfold afterLinkPZk
@@ -542,11 +542,11 @@ theorem sessionPZk_agree (h : ByteArray → ByteArray) (spec : SessionSpec) (sts
     dsimp only
     have htabs : (tabsOf sts).size = sts.size := ZkTables.tabsOf_size sts
     obtain ⟨hssz, hsf⟩ : schs.size = (tabsOf sts).size ∧ ∀ i (h₁ : i < (tabsOf sts).size) (h₂ : i < schs.size),
-        Zk.schedule (tabsOf sts)[i].m = .ok schs[i] := by
+        Zk.schedule (tabsOf sts)[i].wideLeaf (tabsOf sts)[i].m = .ok schs[i] := by
       have hA : (schedsPZk (tabsOf sts) : PS _).go #[] = (.ok schs, #[]) := by rw [schedsPZk_quiet, hs]
-      exact Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.m = .ok v) _ fun a _ =>
-        Ret.monadLift (Zk.schedule a.m)) hA
-    have hschs : ∀ i (hi : i < sts.size), Zk.schedule sts[i].m = .ok schs[i]! := fun i hi => by
+      exact Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.wideLeaf st'.m = .ok v) _ fun a _ =>
+        Ret.monadLift (Zk.schedule a.wideLeaf a.m)) hA
+    have hschs : ∀ i (hi : i < sts.size), Zk.schedule sts[i].wideLeaf sts[i].m = .ok schs[i]! := fun i hi => by
       have := hsf i (by omega) (by omega)
       rw [← getElem!_pos schs i (by omega)] at this
       simp only [tabsOf, Array.getElem_map] at this
@@ -579,15 +579,15 @@ theorem sessionPZk_size (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
     L.size = repStartZk spec sts (2 * sts.size) := by
   unfold sessionPZk at hrun
   obtain ⟨schs, l1, hA, hrun⟩ := go_bind_ok hrun
-  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.m = .ok v) _ fun a _ =>
-    Ret.monadLift (Zk.schedule a.m)) hA
+  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.wideLeaf st'.m = .ok v) _ fun a _ =>
+    Ret.monadLift (Zk.schedule a.wideLeaf a.m)) hA
   have hl1 := Still.go (Still.mapM_array (fun a l => by rw [monadLift_go]) _) hA
   subst hl1
   have htabs : (tabsOf sts).size = sts.size := tabsOf_size sts
   have htab : ∀ i (hi : i < sts.size), (tabsOf sts)[i]! = Setup.ofCircuit sts[i]! := fun i hi => by
     rw [getElem!_pos (tabsOf sts) i (by omega), getElem!_pos sts i hi]
     simp [tabsOf]
-  have hv : ∀ i (hi : i < sts.size), Zk.schedule sts[i]!.m = .ok schs[i]! := fun i hi => by
+  have hv : ∀ i (hi : i < sts.size), Zk.schedule sts[i]!.wideLeaf sts[i]!.m = .ok schs[i]! := fun i hi => by
     have := hsf i (by omega) (by omega)
     rw [← getElem!_pos (tabsOf sts) i (by omega), htab i hi, ← getElem!_pos schs i (by omega)] at this
     exact this
@@ -622,7 +622,7 @@ theorem sessionPZk_size (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
     have hm := hsts (k / 2) hi
     rw [← getElem!_pos sts (k / 2) hi] at hm
     obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ :=
-      FlockSoundness.Discharge.ZkExec.zk_schedule_seams sts[k / 2]!.m schs[k / 2]!.1 schs[k / 2]!.2 (hv _ hi)
+      FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ sts[k / 2]!.m schs[k / 2]!.1 schs[k / 2]!.2 (hv _ hi)
     obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
     obtain ⟨hl₂, -⟩ := repPZk_exact (sch := schs[k / 2]!.1) (hm := hm) (hn := by rw [hn7, hsm]; omega)
       (hk0 := hk0) (hL := h2) (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e2)

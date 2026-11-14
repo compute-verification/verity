@@ -198,7 +198,8 @@ def plain(rope, program, tmp_path_factory):
 
 #: the fixture's statement, a selftest build's on seed coins: `verify` refuses it once every check has passed
 SELFTEST = (f"refused: {STATEMENT}, a selftest build's statement, whose coins the prover injected: verify takes only "
-            "verity/flock-circuit, verity/flock-circuit+plain-leaves and verity/flock-circuit/tmpl")
+            "verity/flock-circuit, verity/flock-circuit+plain-leaves, verity/flock-circuit+wide-leaf, "
+            "verity/flock-circuit/tmpl and verity/flock-circuit/tmpl+wide-leaf")
 
 
 @pytest.mark.slow

@@ -549,7 +549,7 @@ theorem sched_l0Run {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.
     (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hm14 : 14 ≤ t.st.m) (hdg : t.st.digest.size < 2 ^ 64)
     (hcap : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) {tp : ℕ}
-    (hz : _root_.Flock.Zk.schedule t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout} {d : Draws}
+    (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout} {d : Draws}
     {mk : Option MaskSlot} (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
     (hcd : c = Cfg.ofDraws lay d mk) {j : ℕ} (hj : j ≤ t.sch.k0 + 3)
     (hcr : cr.pop.size = alg.size + (xs.size + 2) + 1 + j) (P : Array F128) :
@@ -636,7 +636,7 @@ theorem repState_rho {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]!
     (hm14 : 14 ≤ t.st.m) (hdg : t.st.digest.size < 2 ^ 64)
     (hcap : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) {tp : ℕ}
-    (hz : _root_.Flock.Zk.schedule t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout} {d : Draws}
+    (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout} {d : Draws}
     {mk : Option MaskSlot} (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
     (hcd : c = Cfg.ofDraws lay d mk) (hord : c''.order.size = c.order.size)
     (hcr : cr.size = alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 3) + 1) {cs : Array F128} {m : Masker}
@@ -740,7 +740,7 @@ theorem rho_unrefused_sched_pf (T : ZKMal.CoinLayer.TableData)
     exact getElem!_pos _ j hj
   have hstj : (Masked.stsOf x)[j]! = (Masked.stsOf x)[j] := getElem!_pos _ j hj
   have hm14 : 14 ≤ (Masked.stsOf x)[j].m := by have := (hall j hj).1; omega
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]; exact y.hz
   have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
   obtain ⟨N, hNd⟩ : ∃ N, N = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! +
@@ -818,7 +818,7 @@ theorem rho_unrefused_sched_pf (T : ZKMal.CoinLayer.TableData)
   obtain ⟨hts', ⟨tp, htp⟩, hxs⟩ := Count.placeholder_tab hph
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
-  have hzt : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (t.sch, y.tPad) := htsch ▸ hz
+  have hzt : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (t.sch, y.tPad) := htsch ▸ hz
   obtain ⟨hm36, -, -, -⟩ := Count.sched_facts hzt
   obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
@@ -884,7 +884,7 @@ theorem rho_unrefused_sched_pf (T : ZKMal.CoinLayer.TableData)
     exact (hall j hj).2.2
   have htm : t.st.m = (Masked.stsOf x)[j]!.m := by rw [hts', hst, hstj]; rfl
   have hm14t : 14 ≤ t.st.m := by rw [htm, hstj]; exact hm14
-  have hzT : _root_.Flock.Zk.schedule t.st.m = .ok (t.sch, y.tPad) := by rw [hts']; exact hzt
+  have hzT : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, y.tPad) := by rw [hts']; exact hzt
   obtain ⟨sch', tp', hz', hlay0, -⟩ := start_eq hds
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at hz'
   have hlayT : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0 := by
