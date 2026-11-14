@@ -8,7 +8,8 @@ builds' of a compiler neither the toolchain nor the path gives.  Pearl-C's of
 a scheme its path doesn't run or that a test instance names otherwise, of a kernel directory without one cubin, of a
 pass whose coins don't parse or are no object, of a live salt over other weights than its workload's, of a group of
 experts that repeat, are another group's, differ in shape or whose bytes are not the kernel's size for them, of a
-grouped call under a schedule with other side steps or with counts that aren't its rows, and of B̃'s prefetch and the
+grouped call under a schedule with other side steps, with counts that aren't its rows, past its pass's capacity or
+under a CUDA graph capture, and of B̃'s prefetch and the
 shared-memory split of pd_commit and pd_tree on a kernel without them, and the in-process certifier's of fewer coin
 bytes than it asks for."""
 from __future__ import annotations
@@ -479,6 +480,52 @@ def test_a_grouped_call_is_refused_unless_its_counts_are_its_experts_rows_of_x_a
         out = PG.gemm_grouped(run, (0, 1), torch.zeros(0, 4), (0, 0), bias)
         assert (out.shape, out.dtype) == ((0, 8), dtype)
     assert asked == [(1, 2), (0, 0), (0, 0)]
+
+
+def test_a_grouped_call_is_refused_past_its_passs_capacity_and_under_a_cuda_graph_capture(monkeypatch):
+    """A hashed grouped call fits its pass's tiles, calls and screened rows, each to the last; past any one it is refused,
+    and an unhashed call is not held to them.  A call on a CUDA device is refused while its stream is being captured, as
+    its counts are the host's.  Each refusal comes before the call's side lanes are read."""
+    import torch
+
+    class Reached(Exception):
+        pass
+
+    def side(run, G):
+        raise Reached
+
+    unit = SimpleNamespace(seg=16, tiles=2)
+    monkeypatch.setattr(PG, "group", lambda run, ws: SimpleNamespace(G=None, n=8, k=4, units=lambda counts: [unit] * 2))
+    monkeypatch.setattr(PG, "_side", side)
+
+    def call(tiles: int, calls: int, flag_rows: int, hashing: bool = True, device: str = "cpu") -> None:
+        cur = SimpleNamespace(tiles=tiles, matmuls=[None] * calls, flag_rows=flag_rows, base=0)
+        run = SimpleNamespace(entry="e", schedule=SimpleNamespace(name="s", side=()), cur=cur, _used=0,
+                              kernel=SimpleNamespace(run=None), hashing=hashing, capacity=10, flag_buf=[0] * 8,
+                              device=SimpleNamespace(type=device))
+        PG.gemm_grouped(run, (0, 1), torch.zeros(3, 4), (1, 2))
+
+    said = (f"e: the pass is over its capacity (10 tiles, {PPD.CALL_CAPACITY} calls, 8 screened rows); end it and begin "
+            "another")
+    last = PPD.CALL_CAPACITY - 2
+    overs: tuple[tuple[int, int, int], ...] = ((7, 0, 0), (0, last + 1, 0), (0, 0, 6))
+    for tiles, calls, rows in overs:
+        with pytest.raises(RuntimeError, match=f"^{re.escape(said)}$"):
+            call(tiles, calls, rows)
+        with pytest.raises(Reached):
+            call(tiles, calls, rows, hashing=False)
+    with pytest.raises(Reached):
+        call(6, last, 5)
+    capturing = [True]
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: capturing[0])
+    said = "e: a grouped call's counts are the host's, so a CUDA graph capture can't take it"
+    with pytest.raises(RuntimeError, match=f"^{re.escape(said)}$"):
+        call(0, 0, 0, device="cuda")
+    with pytest.raises(Reached):
+        call(0, 0, 0)
+    capturing[0] = False
+    with pytest.raises(Reached):
+        call(0, 0, 0, device="cuda")
 
 
 def test_a_prefetch_of_b_is_refused_on_a_kernel_whose_pipeline_lacks_it():
