@@ -25,16 +25,16 @@
   "Properties.Nci.Desc",
   "Properties.Nci.Desc.Verdict",
   "Properties.Nci.Desc.Cover",
-  "Properties.NetworkCertifier.Device",
+  "Properties.Certifier.Device",
   "Properties.Pous",
-  "Properties.NetworkCertifier.Check",
-  "Properties.NetworkCertifier.Check.TransferBlocks",
-  "Properties.NetworkCertifier.DeviceOutput",
-  "Properties.NetworkCertifier.DeviceOutput.Runs",
+  "Properties.Certifier.Check",
+  "Properties.Certifier.Check.TransferBlocks",
+  "Properties.Certifier.DeviceOutput",
+  "Properties.Certifier.DeviceOutput.Runs",
   "Properties.Hash.Identity",
   "Properties.Annot",
   "Properties.Core.Evaluate",
-  "Properties.NetworkCertifier.Records",
+  "Properties.Certifier.Records",
   "Properties.NetworkPeriod",
   "Properties.Core.Period",
   "Properties.NetworkScan",
@@ -706,19 +706,19 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Properties.NetworkCertifier.Declares": {
+  "Properties.Certifier.Declares": {
    "owner": "@network-accounting",
    "digest": "9f207f097f42f82988588a3fd4a704f5f2a54deaba372c9a193e93b8df37587e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Properties.NetworkCertifier.Observes": {
+  "Properties.Certifier.Observes": {
    "owner": "@network-accounting",
    "digest": "d92d4a950294ff745f05bb5221187f8348e3c61db2f865425adcdc7dc655d605",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Properties.NetworkCertifier.OpensFrames": {
+  "Properties.Certifier.OpensFrames": {
    "owner": "@network-accounting",
    "digest": "a31edfd11ee10f10f56befb43637d44e98cc1bb0e4252878e82324e714d2b3ef",
    "issue": "LEAN-186",
@@ -1044,15 +1044,15 @@
   "Base",
   "Circuits",
   "Commitments",
-  "Properties.NetworkCertifier.Device",
+  "Properties.Certifier.Device",
   "CertifierDevice",
   "NetworkCertifier",
   "NetworkCheck",
   "Lms",
   "Properties.Hash.Identity",
-  "Properties.NetworkCertifier.Check",
-  "Definitions.NetworkCertifier",
-  "Properties.NetworkCertifier.DeviceOutput",
+  "Properties.Certifier.Check",
+  "Definitions.Certifier",
+  "Properties.Certifier.DeviceOutput",
   "Properties.Pous",
   "PousCheck.P2",
   "PousCheck.Params",
@@ -1071,7 +1071,7 @@
   "Definitions.Core.Prims",
   "Definitions.Core.TC.Pipeline",
   "Definitions.Core.TC.Spec",
-  "Properties.NetworkCertifier.Records",
+  "Properties.Certifier.Records",
   "Properties.NetworkPeriod",
   "Properties.NetworkScan",
   "Properties.Spot",
@@ -1369,9 +1369,9 @@
    "honest": ["Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest"],
    "nontrivial": "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial"
   },
-  "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
-   "honest": ["Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest"],
-   "nontrivial": "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial"
+  "Proofs.Certifier.encardProgramRunsLeWindows": {
+   "honest": ["Proofs.Certifier.encardProgramRunsLeWindows_honest"],
+   "nontrivial": "Proofs.Certifier.encardProgramRunsLeWindows_nontrivial"
   },
   "Pous.Period.SecurityProofs.periodHeldCoins": {
    "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
@@ -1649,11 +1649,11 @@
    "type_hash": "0f53ba049259791adadc5f1d70c663732dd8fd92cf36ccfdd2d5758122d1bbd4",
    "unfolded_hash": "d16e8f3e2a6ff3d2bdabdc2709488831ff94bcef0fb55bbf9dd6fdfd9e1c7837"
   },
-  "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": {
+  "Proofs.Certifier.acceptedRunsAreProgramRuns": {
    "type_hash": "c149bb063996cfd7747078d73e0e18672f15cd3c9580fec061994328bb9d7f9b",
    "unfolded_hash": "f0c9716126c9cf8ceed6f3ff5cf74b044a53c656ce5616e12a2174c2f39c66da"
   },
-  "Proofs.NetworkCertifier.encardAcceptedObservationsLe": {
+  "Proofs.Certifier.encardAcceptedObservationsLe": {
    "type_hash": "e6864860dcc529afba634806f512b5d695318aac5fc33da7bcbd8452570ec5dd",
    "unfolded_hash": "f4e495414acf85516695966cd01d342c99755c914894a213e7ae8466dbd3690b"
   },
@@ -1681,39 +1681,39 @@
    "type_hash": "9ef48444197e3ddf011a98db92e86110363c2cf80dde2491249648d8fe97dbc2",
    "unfolded_hash": "ebead3d3a7cd6fbca6d2fb92fe755ce3605dbd93c81c73ae6501d2fcbd37e6d9"
   },
-  "Properties.NetworkCertifier.acceptedRowsAreProgramRows": {
+  "Properties.Certifier.acceptedRowsAreProgramRows": {
    "type_hash": "c8aafb7a6a13db849ae25237b62ea987e1165cc75c194b0ad265b5908068c101",
    "unfolded_hash": "194fa267bd2fc2b3e80f13bb9c4e57dd8c3574164a7a958fbc75504bbd881b41"
   },
-  "Properties.NetworkCertifier.acceptsOneRecordEach": {
+  "Properties.Certifier.acceptsOneRecordEach": {
    "type_hash": "d42de92f7820044006cc71b9e70572f5e891cf1517633894a1af4134899c7cf5",
    "unfolded_hash": "6b919c197f7081a2be61bd3a33f14b4e046ce8ddadfb029c2a0eb93d55763d4c"
   },
-  "Properties.NetworkCertifier.acceptsTransferBlocks": {
+  "Properties.Certifier.acceptsTransferBlocks": {
    "type_hash": "d7df8e35c4d84089af9af739a93dfaf78de86ad9c8122b0a413f586326464d77",
    "unfolded_hash": "7cd03851270e9ee04156e26466c6a0523e0de56cdc9eb4068617167e667b9da9"
   },
-  "Properties.NetworkCertifier.answerAccepts": {
+  "Properties.Certifier.answerAccepts": {
    "type_hash": "ccee8d59f116f6aff96f10a3791ea371bd9e98f7fd0f39ca6aa03076a266a384",
    "unfolded_hash": "920837472ece4d361bcca640165a39d105e807da48a3de894ba6400969ce8f98"
   },
-  "Properties.NetworkCertifier.decodeRefusals": {
+  "Properties.Certifier.decodeRefusals": {
    "type_hash": "64c07fa7fcc1d56eab150448fadaa807e4fa0e131405d72cb77939aa6598c9df",
    "unfolded_hash": "9e71dbf157525c8bb02ff26c0cf86249fc1098f437d734e7e0ab221a39b5fc40"
   },
-  "Properties.NetworkCertifier.malformedEvidenceRejects": {
+  "Properties.Certifier.malformedEvidenceRejects": {
    "type_hash": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953",
    "unfolded_hash": "7e564bda58091e63d05a30156dff3a99e61870896ce4b630224f0c2a88c009f2"
   },
-  "Properties.NetworkCertifier.transferBlocksAcceptMeans": {
+  "Properties.Certifier.transferBlocksAcceptMeans": {
    "type_hash": "587496bb3c1ed7302c7f35e5c83fafcbd66278c025ed147a18a845226192fe7f",
    "unfolded_hash": "35f51ec86317e8665e32282530f8334c66810ca6149d266cdac2c10b9e0fb8e0"
   },
-  "Properties.NetworkCertifier.undecidedPending": {
+  "Properties.Certifier.undecidedPending": {
    "type_hash": "a05ea3c29485b57f1351694086727a7e589280465cbb3946d268bc09227a7edb",
    "unfolded_hash": "099a0acaa138dfe0ee6f1e400171fc2a754d470d1da1eba0b63a012219844140"
   },
-  "Properties.NetworkCertifier.undigestedParamsReject": {
+  "Properties.Certifier.undigestedParamsReject": {
    "type_hash": "3336933546d64f572ec7438b455edf45e362bad2977349e223b6eaa67961b9e5",
    "unfolded_hash": "8843b33179644d14aa9e20e468ed189ca570c84fb2345ac01e322c7a020edb25"
   },
@@ -2221,7 +2221,7 @@
    "why": "the description-sized check's properties are stated over the code they are about (NciCheck.Desc, and NciCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.Nci.Assumptions), never over a proof",
    "sealed": true
   },
-  "Properties.NetworkCertifier.Device": {
+  "Properties.Certifier.Device": {
    "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
    "except": [],
    "why": "the properties are stated against the device's own step and issuer, on Lean core: nothing of Mathlib or of `security`"
@@ -2258,7 +2258,7 @@
    "except": [],
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.NetworkCertifier.Check": {
+  "Properties.Certifier.Check": {
    "imports": ["NetworkCheck.Check", "NetworkCheck.TransferBlocks", "Properties.Hash.Identity", "Lms.Sign"],
    "except": [],
    "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
@@ -2269,8 +2269,8 @@
    "why": "the evaluator's equalities are stated against its functions and the `Definitions.Core` modules they copy, which import nothing of Mathlib",
    "sealed": true
   },
-  "Properties.NetworkCertifier.Records": {
-   "imports": ["NetworkCheck.RecordsGrid", "Properties.NetworkCertifier.Check"],
+  "Properties.Certifier.Records": {
+   "imports": ["NetworkCheck.RecordsGrid", "Properties.Certifier.Check"],
    "except": [],
    "why": "what the records check's acceptance means is stated against its own functions and the reference Program's grid, with v2's statements of the evidence, the syncs and the heads, never a proof"
   },
@@ -2291,16 +2291,16 @@
    ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.NetworkCertifier.DeviceOutput": {
+  "Properties.Certifier.DeviceOutput": {
    "imports": [
-    "Properties.NetworkCertifier.Device",
-    "Properties.NetworkCertifier.Check",
-    "Properties.NetworkCertifier.DeviceOutput",
-    "Definitions.NetworkCertifier",
+    "Properties.Certifier.Device",
+    "Properties.Certifier.Check",
+    "Properties.Certifier.DeviceOutput",
+    "Definitions.Certifier",
     "Mathlib.Data.Set.Card"
    ],
    "except": [],
-   "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.NetworkCertifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
+   "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.Certifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
   },
   "Properties.Accounting.Remote": {
    "imports": ["RemoteAudit", "Properties.Accounting.Remote"],
@@ -2431,7 +2431,7 @@
    "why": "the served protocol's onsite freed compute is stated over its remote work guarantee (`Properties.Pouw.ServedWork`) and the accelerator model's period and freed compute (`Definitions.Pouw.Dither`), never a proof"
   },
   "Properties.NetworkScan": {
-   "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit", "Properties.NetworkScan"],
+   "imports": ["NetworkCheck.Period", "Definitions.Certifier.SampledAudit", "Properties.NetworkScan"],
    "except": [],
    "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premises (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
   },
@@ -12273,7 +12273,7 @@
  },
  "shape": {
   "premises": [
-   "Definitions.NetworkCertifier.Premises",
+   "Definitions.Certifier.Premises",
    "Definitions.Accounting.Assumptions",
    "Properties.Accounting.Remote.Line.Premises",
    "Properties.Accounting.Remote.Schedule"
@@ -12324,11 +12324,11 @@
     "function": "PousCheck.TimedAudit.verdict",
     "outcome": "accept"
    },
-   "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": {
+   "Proofs.Certifier.acceptedRunsAreProgramRuns": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
    },
-   "Proofs.NetworkCertifier.encardAcceptedObservationsLe": {
+   "Proofs.Certifier.encardAcceptedObservationsLe": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "none"
    },
@@ -12712,27 +12712,27 @@
     "function": "Identity.taggedSha512",
     "outcome": "none"
    },
-   "Properties.NetworkCertifier.acceptedRowsAreProgramRows": {
+   "Properties.Certifier.acceptedRowsAreProgramRows": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.acceptsOneRecordEach": {
+   "Properties.Certifier.acceptsOneRecordEach": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.answerAccepts": {
+   "Properties.Certifier.answerAccepts": {
     "function": "NetworkCheck.Check.protocol.answer",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.decodeRefusals": {
+   "Properties.Certifier.decodeRefusals": {
     "function": "NetworkCheck.Check.protocol.answer",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.malformedEvidenceRejects": {
+   "Properties.Certifier.malformedEvidenceRejects": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.undigestedParamsReject": {
+   "Properties.Certifier.undigestedParamsReject": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
    },
@@ -12970,11 +12970,11 @@
     "function": "PousCheck.Run.check",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.acceptsTransferBlocks": {
+   "Properties.Certifier.acceptsTransferBlocks": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.undecidedPending": {
+   "Properties.Certifier.undecidedPending": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "undecided"
    },
@@ -13286,7 +13286,7 @@
     "function": "NciCheck.Baseline.evaluate",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.transferBlocksAcceptMeans": {
+   "Properties.Certifier.transferBlocksAcceptMeans": {
     "function": "NetworkCheck.TransferBlocks.verdict",
     "outcome": "accept"
    },
@@ -13738,11 +13738,11 @@
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
    },
-   "Proofs.NetworkCertifier.expectedGridCausal": {
+   "Proofs.Certifier.expectedGridCausal": {
     "function": "NetworkCheck.Check.expectedGrid",
     "outcome": "none"
    },
-   "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
+   "Proofs.Certifier.encardProgramRunsLeWindows": {
     "function": "NetworkCertifier.handingBuckets",
     "outcome": "none"
    },

@@ -80,7 +80,7 @@ NOT_PATHS = {
 #: file a demo branch edits isn't rewritten until it lands. Unlike `NOT_PATHS` it has no currency check, so the demo
 #: branch's landing, which drops the mention, needs no edit here; the entry leaves after it.
 WAITING = {
-    ("security/Definitions/NetworkCertifier/Schedule.lean", "verity/protocols/accounting/communication/certifier/schedule.py"):
+    ("security/Definitions/Certifier/Schedule.lean", "verity/protocols/accounting/communication/certifier/schedule.py"):
         "the `remote` demo branch rewrites this docstring",
     ("security/Definitions/Accounting/Guarantees/Headline.lean", "fixtures/fold_bulk_loops.json"): "both demo branches edit the file",
     ("security/Definitions/Accounting/Guarantees/Headline.lean", "fold_bulk.cu"): "both demo branches edit the file",

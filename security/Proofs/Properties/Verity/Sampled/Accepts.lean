@@ -6,7 +6,7 @@ public import Proofs.Flock.Recursive.Witness
 public import Proofs.Flock.Soundness.Refine.Walk
 public import Proofs.Flock.Soundness.Refine.Lookups
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-public import Proofs.Properties.NetworkCertifier.Check.Bytes
+public import Proofs.Properties.Certifier.Check.Bytes
 public import Proofs.Properties.Spot.Tables
 
 /-!
@@ -284,7 +284,7 @@ theorem get_named {F B : Array ByteArray} {s what : String} {h : Option Hash.Dig
     · rintro rfl
       rfl
     · intro e
-      exact (getD_inj h64 (Properties.NetworkCertifier.Bytes.hash_size f) e).symm
+      exact (getD_inj h64 (Properties.Certifier.Bytes.hash_size f) e).symm
   · obtain ⟨f, hf, hfh⟩ := hreg
     exact ⟨f, hf, decide_eq_true hfh⟩
 

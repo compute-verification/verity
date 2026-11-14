@@ -45,7 +45,7 @@ overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a s
   network certifier anywhere, is specified yet.
 - **No auditor devices at the site.** There are no network certifiers or memory challengers. So network certification,
   PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,
-  see `security/Definitions/NetworkCertifier` and its `Guarantees`.
+  see `security/Definitions/Certifier` and its `Guarantees`.
 
 ## Subprotocols
 

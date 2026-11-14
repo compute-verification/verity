@@ -468,7 +468,7 @@ def test_a_spot_import_of_the_certifier_is_found() -> None:
     parent = _lean_reach(["s/A.lean"], lambda f: imports.get(f, ()), files_of)
     found = [_chain(parent, f) for f in sorted(parent) if _covered(f, CERTIFIER_LEAN)]
     assert found == ["verity/protocols/accounting/certifier/device/program/lean/C.lean <- s/B.lean <- s/A.lean"], found
-    assert _covered("security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean", CERTIFIER_LEAN)
+    assert _covered("security/Proofs/Properties/Certifier/Check/Bytes.lean", CERTIFIER_LEAN)
     assert not _covered("security/Proofs/Flock/Bytes.lean", CERTIFIER_LEAN)
     modules = _lean_modules(["security/Proofs/Flock/Bytes.lean", "verity/protocols/proofs/flock/verifier/Flock/Bytes.lean"],
                             ["security/Proofs/lakefile.toml", "verity/protocols/proofs/flock/verifier/lakefile.toml"])
