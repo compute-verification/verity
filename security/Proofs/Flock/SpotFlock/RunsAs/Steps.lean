@@ -4,7 +4,7 @@ public import Proofs.Flock.SpotFlock.RunsAs.Outcome
 import all Lean.Data.Json.Basic
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
-public import Spot.Run
+public import all Spot.Run
 public import Spot.Record
 import Proofs.Flock.Claims.Sampling.Select.Code
 
@@ -27,21 +27,6 @@ The walks are public: `run_path` over `Run.run` at either switch, `interiorSteps
 namespace SpotFlock.RunsAs
 
 open Lean (Json)
-
-/-- **What the verifier holds of the run as `Run.run` builds it** for round 2's check (`interiorAudit`), over the replay
-sample `sample`, the interior's strata and the second stage's sample. -/
-def runOwn (i : Spot.Run.Input) (it : Spot.Run.Interior) (sample : Array ℕ)
-    (strata : Array (String × Array (ℕ × ℕ))) (draw : Json) : Spot.SecondStage.Own :=
-  { sample, parts := Spot.SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
-    drawn := (Spot.Draw.proved draw).map Int.toNat,
-    links := Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
-    reported := Spot.Record.sessionRegistered i.verdicts, verified := Spot.SecondStage.verifiedOf i.verdicts,
-    refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
-    wires := Spot.SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
-    rows := Spot.SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
-    returns := Spot.SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
-    supplied := it.params.verifier.supplied,
-    fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1), reads := it.reads }
 
 /-- An object `Json.mkObj` builds is a well-formed map. -/
 theorem mkObj_wf (l : List (String × Json)) : ∃ m : Std.TreeMap.Raw String Json compare,
@@ -194,7 +179,7 @@ private theorem interiorAudit_some {form : Bool} {i : Spot.Run.Input} {sample : 
           .ok rec_ ∧
       Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata ∧
       acc = Spot.jeq (Spot.getD (Spot.SecondStage.attach rec_
-        (Spot.SecondStage.check form (runOwn i it sample strata draw) it.statements)
+        (Spot.SecondStage.checkAny form (runOwn i it sample strata draw) it.statements)
         (Spot.SecondStage.interiorReads (runOwn i it sample strata draw) ((it.statements.getD #[]).toList)))
         "accepted") (.bool true) := by
   unfold Spot.Run.interiorAudit at h
@@ -272,6 +257,7 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
     have hacc₂ : acc₂ = true := (Bool.and_eq_true_iff.1 hboth).2
     obtain ⟨m, hm, hwf⟩ := audit_wf haud
     rw [hacc₂, hm] at hacc
+    rw [Spot.SecondStage.checkAny_eq_check (ha.sampledNone _ _ _)] at hacc
     refine ⟨Option.not_isSome_iff_eq_none.1 hc, workTable, resolved, draw, rest, read, ht, hres, hsel,
       none_of_forall hcoins, grain, replay, k, ns, ids, ks, draw₂, read₂, strata, hr, hns, hids, hks, hss,
       none_of_forall hcoins₂, hstrata, ?_⟩

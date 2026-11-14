@@ -280,7 +280,7 @@ theorem closure_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.
 Where the held first-stage registration has no closure map, `readsWithin` gives the premise. Where it has one, no play
 is accepted: an accepted play's run has none (`closure_of_formAccepts`) and the held copies carry the run's
 (`closure_of_held`). -/
-theorem playAccepts_of_run' (A : Live₂) (C : CaseOf) (S : SessionReading)
+theorem playAccepts_of_run' (A : Live₂) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (hrule : RuleIsTwo C) (hheld : HeldAt A C)
     (htwo : TwoHolds A.h) (hnd : NamesDistinct A.h) (hrec : RecordsAt A C) (hread : RecordsRead C)
     (hr2 : RoundTwo A.h) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S)

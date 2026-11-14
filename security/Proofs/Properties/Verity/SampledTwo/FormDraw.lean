@@ -221,7 +221,8 @@ two-stage run (`acceptedTwo_of_formAccepts`) at the held copies (`heldAt_of_part
 (`recordsRead`) and name their registrations' names (`recordsAt_of_held`), and the reading's statements are the run's,
 each with its template's rounds, in scope and its reference statement but for the run's fields
 (`SpotFlock.RunsAs.stmtOk_of_accepted`). -/
-theorem stmtOk_form {A : Live₂} {C : CaseOf} {S : SessionReading} (hparts : PartsHeldAt A C) (hof : HeldOfAt A C)
+theorem stmtOk_form {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading} (hparts : PartsHeldAt A C)
+    (hof : HeldOfAt A C)
     (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
     {o : Verity.Exchange} {i : Spot.Run.Input} {it : Spot.Run.Interior} {x m₁ m₂ : Msg} (hA : FormAccepts C o)
     (hi : inputOn C o = some i) (hit : i.interior = some it) (hx : recordMsg i.record = some x)
@@ -251,7 +252,8 @@ def PlayCoinsOne (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Prop) (L
 
 /-- **`StageCoinsOne` from the plays' coins** (`PlayCoinsOne`): each play's statements pass the model's check at the
 coins that carry what its samples read (`stmtOk_form`), at its own records' messages (`records_of_accepts`). -/
-theorem stageCoinsOne_of_play {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
+theorem stageCoinsOne_of_play {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
+    {Good : Verity.Exchange → Prop}
     {L : CoinMap.Locate} (hparts : PartsHeldAt A C) (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
     (hcoins : PlayCoinsOne A C Good L) : StageCoinsOne A C S Good L := by

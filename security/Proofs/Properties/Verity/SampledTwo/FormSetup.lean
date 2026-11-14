@@ -321,7 +321,8 @@ member's files (`verified_at`), which are that statement's fields (`stmtAtCase_o
 statement sets up is the one the check verified (`setupOf_of_fields`), of one table, `Flock.Tags.circuit.table`
 (`setupAt_oneTable`), under SHA-512 digests (`setupAt_sha512`). It retains rounds (`setupAt_retains`), so the session
 the verdict accepted has messages (`SessionLive.sessionMsgs_of_verify`). -/
-theorem verdictsAt_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
+theorem verdictsAt_of {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
+    {Good : Verity.Exchange → Prop}
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg) (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hcount : StmtsCount A C Good)
     (hprint : StmtsPrint C Good) (hfit : StmtsFit C Good) :
@@ -390,7 +391,8 @@ theorem verdictsAt_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Ve
 
 /-- **`MsgsOfRecords` at the form's reading**, at the table `Flock.Tags.circuit.table`: `msgsOfRecords_of` at
 `verdictsAt_of`, where the reading's statements and messages are the case's. -/
-theorem msgsOfRecords_form {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
+theorem msgsOfRecords_form {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
+    {Good : Verity.Exchange → Prop}
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j) (hof : HeldOfAt A C)
     (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S)

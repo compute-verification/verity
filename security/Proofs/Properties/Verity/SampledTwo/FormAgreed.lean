@@ -71,7 +71,7 @@ accept, its sessions' messages and the held copies' (`PlayAccepts`, `SessionMsgs
 commitment carries). `hR` is `Messages.messagesFixedAgreed_of_readAt`'s: a run on agreeing coins whose messages are
 the check's at every round it reaches has all the verifier's messages. -/
 theorem agreed_form (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading)
+    (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate)
     (hL : L = SessionCoins.runLocate A (CoinMap.stageLocate ℓ₁ ℓ₂) tab) (q : ℕ) (hne : ℓ₁ ≠ ℓ₂)
