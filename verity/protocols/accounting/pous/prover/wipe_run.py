@@ -50,6 +50,7 @@ from typing import Any, BinaryIO, Protocol, TypeVar
 
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.verifier import wipe_party
 from verity.protocols.accounting.pous.verifier import wipe_period as W
 from verity.protocols.accounting.pous.verifier.period import decided_by, deployment, serve
@@ -163,13 +164,18 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
     which with `stop_after` leaves after that many reads. `egress_mib` is the evidence's egress count, which the
     verifier's check takes beside the signed session (`egress_of`); the challenger never holds it. `trusted_sha512` is the verifier's pin, the SHA-512 in hex of
     the one memory-challenger key it trusts: a session signed under another key is rejected. With none it trusts the key
-    the session came with, which only a challenger whose key this run made may be given (never one on its own host).
+    the session came with, which only a challenger whose key this run made may be given: a `party` on another host than
+    `node` with none pinned is refused (ValueError) before its session.
     `schemes` are the signature schemes it accepts and `protocol` the id it answers under."""
+    if party is not None and party.host != node and trusted_sha512 is None:
+        raise ValueError(f"no key is pinned (trusted_sha512) with the memory challenger on {party.host}: the verifier "
+                         "trusts a challenger on its own host only under its pinned key (the SHA-512 of its public "
+                         "key, as its host gives it)")
     params = params_for() if params is None else params
     server = node.encode()
     if party is None:
         assert signer is not None and log is not None, "an in-process wipe needs the challenger's signer and log"
-        c = sw.WipeMemoryChallenger(secrets.token_bytes(32) if secret is None else secret, server,
+        c = WC.WipeMemoryChallenger(secrets.token_bytes(32) if secret is None else secret, server,
                                     secrets.token_bytes(32) if session_id is None else session_id, params, signer,
                                     log=log, clock=clock, coin_secret=coin_secret)
         p = prover(params)

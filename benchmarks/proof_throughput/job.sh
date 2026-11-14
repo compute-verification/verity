@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # proof_throughput's prover point: sessions that each prove B coordinates of one workload's population, the B its loopback
-# `flock-circuit serve` samples at the session's Register by the stratified sampling design (`serve --draw-law`, the sampling design verify.sh's Lean
+# `flock-circuit serve` samples at the session's Register by the stratified sampling design (`serve --sample-design`, the sampling design verify.sh's Lean
 # verifier derives for itself), proved by Flock's native prover (ZK off) on one leased GPU with live coins, WARM warm and RUNS
 # timed sessions. The coins are the challenger's keyed coin tree's (FC_COINS=tree: 70-class-sweep.sh gives the loopback verifier
 # its own challenger, pod/challenger.sh, and holds every session's record to the challenger's release log). The population (n_max instances) is staged once, whatever B (FLOCK_STAGE_CACHE). Build, staging and the
@@ -109,7 +109,7 @@ flock "$FLOCK_WORK/sessions.lock" "${LEASE[@]}" 1 --wait --max-min "${LEASE_MAX_
   "$@"; rc=$?
   kill $SM_ 2>/dev/null; wait $SM_ 2>/dev/null
   printf "lease\tend\t%s\n" "$(date +%s.%N)" >> "$O/phases.tsv"
-  exit $rc' _ "$O" env OUT="$S/prove" RESEARCH_RUN_DIR="$S/prove" bash $SWEEP "${ARGS[@]}" GPU=1 FLOCK_DRAW_LAW="$O/law.json" > "$O/prove.txt" 2>&1
+  exit $rc' _ "$O" env OUT="$S/prove" RESEARCH_RUN_DIR="$S/prove" bash $SWEEP "${ARGS[@]}" GPU=1 FLOCK_SAMPLE_DESIGN="$O/law.json" > "$O/prove.txt" 2>&1
 rc=$?
 log "sessions: exit $rc"
 D=$(ls -d "$S"/prove/classes/*/ 2>/dev/null | head -1)

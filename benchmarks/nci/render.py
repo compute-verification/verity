@@ -14,7 +14,7 @@ sys.path.insert(0, str(HERE))
 
 import arguments  # noqa: E402
 import catalog  # noqa: E402
-import slowdown  # noqa: E402
+import bracket  # noqa: E402
 
 
 def _num(x: float) -> str:
@@ -48,9 +48,9 @@ def render() -> str:
         out += [f"### Calibration `{c['id']}`: K = {_num(c['K'])} bits, Gamma = {_num(c['Gamma'])} gates, "
                 f"b_tok = {_num(c['b_tok'])}", "", c["description"], "",
                 "| Row | Thread theorem | Upper (construction) |", "|---|---|---|"]
-        for b in slowdown.brackets(rows, [c], parameters):
+        for b in bracket.brackets(rows, [c], parameters):
             out.append(f"| `{b['row']}` | {_num(b['lower'])} | {_num(b['upper'])} ({b['upper_basis']}) |")
-        out += ["", f"The lower bound is proven: `{slowdown.THREAD_THEOREM}`.", ""]
+        out += ["", f"The lower bound is proven: `{bracket.THREAD_THEOREM}`.", ""]
     for r in rows:
         out += [f"- **`{r['id']}`**: {r['method']}, {r['configuration']}. State: {r['state']}."
                 + (f" Sources: {', '.join(r['sources'])}." if r.get("sources") else "")]

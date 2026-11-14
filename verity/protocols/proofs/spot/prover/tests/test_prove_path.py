@@ -689,9 +689,9 @@ def test_a_plain_audit_takes_the_stand_ins_window_under_a_stratified_rate_only_i
     compiler, requests, bound, _o = PP.compiled(tp["args"]["honest"])
     _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
 
-    def rated(law: str):
-        pf = tp["root"] / f"partition-{law.split(':')[0]}.json"
-        pf.write_text(json.dumps({"templates": ["SiluMul_v2{I=256}"], "law": law}))
+    def rated(sampling_design: str):
+        pf = tp["root"] / f"partition-{sampling_design.split(':')[0]}.json"
+        pf.write_text(json.dumps({"templates": ["SiluMul_v2{I=256}"], "law": sampling_design}))
         return AW.window_of_advice(tp["commit"], 0, pf, compiler, requests, bound)[0]
 
     stratified, subset, work = (rated(f"{kind}rate:1/2") for kind in ("stratified-", "", "work-"))
@@ -718,9 +718,9 @@ def test_a_plain_audit_takes_the_stand_ins_window_under_a_stratified_rate_only_i
     assert A5.plain_refusal(zk, mine, None) is None
 
 
-def _accepted(law: dict, delta: float = 0.5) -> dict:
+def _accepted(sampling_design: dict, delta: float = 0.5) -> dict:
     reg = {"population": 8, "partition": "ab" * 64, "program": "cd" * 64}
-    draw = {**law, "population": 8, "units": [0, 2, 5, 7]}
+    draw = {**sampling_design, "population": 8, "units": [0, 2, 5, 7]}
     return {"accepted": True, "registration": reg, "draw": draw,
             "wrong_units": AU.wrong_units(reg, draw, delta)}
 
@@ -731,14 +731,14 @@ def test_the_charge_terms_are_the_accepted_profiles_location_and_committed_bits_
     the sampling design's strata aren't the templates), and `exfiltration_bound` their sum; a refused audit's record bounds nothing."""
     stratified = {"law": "stratified", "k": 4, "strata": [{"template": "T", "units": [[0, 8]], "k": 4}]}
     within = {"other_inputs": 169, "bound": "within the charge"}
-    for law, bits in ((stratified, {"T": 40}), ({"law": "subset", "k": 4}, {"T": 40, "U": 24})):
-        rec = _accepted(law)
+    for sampling_design, bits in ((stratified, {"T": 40}), ({"law": "subset", "k": 4}, {"T": 40, "U": 24})):
+        rec = _accepted(sampling_design)
         p = AU.profile(rec["registration"], rec["draw"], 0.5)
         got = PP.charge_terms(rec, bits, 169, 0.5, within)
-        weight = {"T": 40.0} if law is stratified else 40
+        weight = {"T": 40.0} if sampling_design is stratified else 40
         assert got == {"advice_bits": 169, "c": 169, "other_inputs": 169, "bound": "within the charge", "delta": 0.5,
                        "wrong_units": rec["wrong_units"], "template_bits": bits, "location_bits": location_bits(p),
-                       "harm_bound": p.harm_bound(weight), "exfiltration_bound": exfiltration_bound(p, weight)}, law
+                       "harm_bound": p.harm_bound(weight), "exfiltration_bound": exfiltration_bound(p, weight)}, sampling_design
         assert got["exfiltration_bound"] == got["harm_bound"] + got["location_bits"] and got["location_bits"] > 0
     assert PP.charge_terms({**_accepted(stratified), "accepted": False}, {"T": 40}, 169, 0.5, within) is None
     assert PP.charge_terms({}, {"T": 40}, 169, 0.5, within) is None
@@ -1904,7 +1904,7 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
                  str(tmp_path / "advice.bin"), "--key", str(tmp_path / "private" / "key"), "--registration", "unread",
-                 "--checkpoint-dir", "unread", "--law", "rate:1/4", "--out", str(out)])
+                 "--checkpoint-dir", "unread", "--sampling-design", "rate:1/4", "--out", str(out)])
     assert seen["root"].parent == out.parent and seen["held"] == {seen["root"]} and not seen["root"].exists()
     assert seen["digs"] == {u.id: u.digest for u in s.units} and s.compiles == [True, False]
     assert not list(Path(s.a.row_dir).glob("build_request*"))
@@ -1994,7 +1994,7 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
 
 
 def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_fixed_count_is_refused():
-    """`window_design`: window-commit's ``--law`` is the rate the window's audit states to its stream, and the window is
+    """`window_design`: window-commit's ``--sampling-design`` is the rate the window's audit states to its stream, and the window is
     committed under the sampling design that rate names over the circuit's own proof blocks, so its docket is under
     the design the stream holds it to: a subset design under a rate, one K for every stratum under a stratified rate, at
     1 where the rate's denominator is no smaller than the largest stratum. A fixed count, which no stream takes, is
@@ -2010,7 +2010,7 @@ def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_
     assert PP.window_design("rate:1/8", circuit) == {"law": "subset", "k": 5}
     assert PP.window_design("stratified-rate:1/40", circuit) == {"law": "stratified", "k": 1}
     dense = PP.window_design("stratified-rate:1/8", circuit)
-    assert dense["law"] == "stratified" and dense["k"] > 1 and dense == S.params_law("stratified-rate:1/8", program, query, None)[0]
+    assert dense["law"] == "stratified" and dense["k"] > 1 and dense == S.params_sampling_design("stratified-rate:1/8", program, query, None)[0]
     for fixed in ("subset:1", "stratified:1", "work:1"):
         with pytest.raises(ValueError, match="a fixed count") as e:
             PP.window_design(fixed, circuit)

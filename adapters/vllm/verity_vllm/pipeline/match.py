@@ -50,6 +50,7 @@ from verity_vllm.config import RowEngine, UsageError, option, workload_arg
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.match_fold import (
     _jsonable,
     fold_summary_result,
@@ -450,8 +451,8 @@ def gates_stage(plan: Plan, a: Options) -> dict:
     (run / "CARD.md").write_text(CARD.summarize_md(card))
     dest = Path(a.cards_dir) / f"{a.config_id}.json"
     CARD.write_card(card, dest)
-    print(CARD.top_section(card))
-    print(G.gates_markdown(results))
+    write(CARD.top_section(card))
+    write(G.gates_markdown(results))
     return {"stage": "gates", "status": "ok", "returncode": 0, "seconds": round(time.time() - t0, 3), "log": None, "cmd": "in-process",
             "reason": None, "verdict": card.verdict, "card": str(dest)}
 
@@ -540,21 +541,21 @@ def main(a: Options) -> int:
     timeout = a.stage_timeout if a.stage_timeout is not None else (LAPTOP_STAGE_TIMEOUT_S if plan.laptop else None)
 
     if a.dry_run:
-        print(f"# run_config --dry-run  RUN_DIR={plan.run}  phase={a.phase}  snapshot_steps={plan.steps}  laptop={plan.laptop}")
+        write(f"# run_config --dry-run  RUN_DIR={plan.run}  phase={a.phase}  snapshot_steps={plan.steps}  laptop={plan.laptop}")
         for st in stages:
             if plan.skipped(st):
-                print(f"[{st}] SKIP (--skip)")
+                write(f"[{st}] SKIP (--skip)")
                 continue
             if st == "gates":
-                print(f"[gates] in-process: gates.evaluate_gates({plan.run}) -> {plan.p('gates')}; card -> {plan.p('card')}, {plan.run / 'CARD.md'}, "
+                write(f"[gates] in-process: gates.evaluate_gates({plan.run}) -> {plan.p('gates')}; card -> {plan.p('card')}, {plan.run / 'CARD.md'}, "
                       f"{Path(a.cards_dir) / (required(a, 'config_id') + '.json')}")
                 continue
             cmd = plan.cmd(st)
             if cmd is None:
                 continue
-            print(f"[{st}] {shlex.join(cmd)}")
+            write(f"[{st}] {shlex.join(cmd)}")
         if a.phase in ("gpu", "all"):
-            print(f"[gpu_done] write {plan.p('gpu_done')} with per-stage timings")
+            write(f"[gpu_done] write {plan.p('gpu_done')} with per-stage timings")
         return 0
 
     man = write_manifest(plan, a)

@@ -3217,6 +3217,141 @@
     },
     {
       "paths": {
+        "verity/hardware/README.md": "hardware/README.md",
+        "verity/hardware/tests/test_cards.py": "verity/tests/tests/test_cards.py",
+        "verity/hardware/tests/test_nodes.py": "verity/tests/tests/test_nodes.py",
+        "verity/hardware/tests/test_package.py": "verity/tests/tests/test_imports.py",
+        "verity/hardware/tests/test_sheet_lean.py": "verity/tests/tests/test_sheet_lean.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/nci/slowdown.py": "benchmarks/nci/bracket.py",
+        "benchmarks/nci/tests/test_slowdown.py": "benchmarks/nci/tests/test_bracket.py"
+      }
+    },
+    {
+      "paths": {
+        "security/Proofs/Properties/Nci/Novel.lean": "security/Proofs/Properties/Nci/Fresh.lean"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/Nci/Assumptions/Baseline.lean": "security/Definitions/Nci/Assumptions/Theta.lean",
+        "security/Proofs/Properties/Nci/Baseline.lean": "security/Proofs/Properties/Nci/Theta.lean",
+        "security/Proofs/Properties/Nci/BaselineSteps.lean": "security/Proofs/Properties/Nci/ThetaSteps.lean",
+        "security/Properties/Nci/Baseline.lean": "security/Properties/Nci/Theta.lean",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_baseline_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_theta_difftest.py",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Baseline.lean": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Theta.lean",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/BaselineDifftest.lean": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/ThetaDifftest.lean",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/BaselineDifftestMain.lean": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/ThetaDifftestMain.lean",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/baseline_difftest_vectors.py": "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/theta_difftest_vectors.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/verifier_cost/nci_cost.py": "benchmarks/verifier_cost/inference_only_cost.py",
+        "benchmarks/verifier_cost/nci_cost.sh": "benchmarks/verifier_cost/inference_only_cost.sh",
+        "benchmarks/verifier_cost/nci_glm.py": "benchmarks/verifier_cost/inference_only_glm.py",
+        "benchmarks/verifier_cost/nci_glm.sh": "benchmarks/verifier_cost/inference_only_glm.sh",
+        "benchmarks/verifier_cost/nci_phases/": "benchmarks/verifier_cost/inference_only_phases/",
+        "security/Definitions/Nci.lean": "security/Definitions/InferenceOnly.lean",
+        "security/Definitions/Nci/": "security/Definitions/InferenceOnly/",
+        "security/Proofs/Nci.lean": "security/Proofs/InferenceOnly.lean",
+        "security/Proofs/Nci/": "security/Proofs/InferenceOnly/",
+        "security/Proofs/Properties/Nci.lean": "security/Proofs/Properties/InferenceOnly.lean",
+        "security/Proofs/Properties/Nci/": "security/Proofs/Properties/InferenceOnly/",
+        "security/Properties/Nci.lean": "security/Properties/InferenceOnly.lean",
+        "security/Properties/Nci/": "security/Properties/InferenceOnly/",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_count_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_count_difftest.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_desc_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_desc_difftest.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_desc_fuzz.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_desc_fuzz.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_desc_liveness.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_desc_liveness.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_lean_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_lean_difftest.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_record_check.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_record_check.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_record_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_record_difftest.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_theta_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_theta_difftest.py",
+        "verity/protocols/policy/inference_only/verifier/nci/": "verity/protocols/policy/inference_only/verifier/inference_only/",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck.lean": "verity/protocols/policy/inference_only/verifier/inference_only/lean/InferenceOnlyCheck.lean",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/": "verity/protocols/policy/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_record_reference.py": "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/inference_only_record_reference.py",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py": "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/inference_only_reference.py"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/Accounting/Guarantees/Actual/Dampener.lean": "security/Definitions/Accounting/Guarantees/Actual/Slowdown.lean",
+        "security/Definitions/InferenceOnly/Assumptions/Dampener.lean": "security/Definitions/InferenceOnly/Assumptions/Slowdown.lean",
+        "security/Definitions/InferenceOnly/Dampener.lean": "security/Definitions/InferenceOnly/Slowdown.lean",
+        "security/Definitions/InferenceOnly/Guarantees/Dampener.lean": "security/Definitions/InferenceOnly/Guarantees/Slowdown.lean",
+        "security/Proofs/Accounting/Actual/Dampener.lean": "security/Proofs/Accounting/Actual/Slowdown.lean",
+        "security/Proofs/InferenceOnly/Dampener.lean": "security/Proofs/InferenceOnly/Slowdown.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/rho/": "benchmarks/slowdown/",
+        "benchmarks/rho/rho/": "benchmarks/slowdown/slowdown/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/policy/inference_only/verifier/inference_only/": "verity/protocols/policy/inference_only/verifier/"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/program/dsa_table.circuit-check.py": "adapters/torch/verity_torch/dsa_table.circuit-check.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursiveMain.lean": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursiveMain.lean"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/pipeline/m1_capture.py": "adapters/vllm/verity_vllm/pipeline/match_capture.py",
+        "adapters/vllm/tests/pipeline/test_m1_capture_main.py": "adapters/vllm/tests/pipeline/test_match_capture_main.py"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_registry.py": "verity/protocols/accounting/poub/tests/test_registry.py",
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_memory_map.py": "verity/protocols/accounting/poub/tests/test_memory_map.py",
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py": "verity/protocols/accounting/poub/tests/test_remote_session.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/prover/tests/test_lean_draw_laws.py": "verity/protocols/proofs/flock/prover/tests/test_lean_sample_designs.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pous/verifier/wipe_stream.py": "verity/protocols/accounting/pous/device/wipe_stream.py",
+        "verity/protocols/accounting/pous/verifier/wipe_stream.c": "verity/protocols/accounting/pous/device/wipe_stream.c"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/program/test_harden_moe.py": "adapters/torch/tests/frontend/test_harden_moe.py",
+        "adapters/vllm/tests/program/test_derive_hf5.py": "adapters/torch/tests/frontend/test_derive_hf5.py"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/correspondence/test_descriptor_annotation_stream.py": "adapters/torch/tests/correspondence/test_descriptor_annotation_stream.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/filler/pfill_ref.py": "benchmarks/pouw/filler/pfill_ref.py",
+        "verity/protocols/accounting/pouw/prover/kernels/filler/dfill_ref.py": "benchmarks/pouw/filler/dfill_ref.py"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/accounting/pouw/prover/circuit/pc4.py": "verity/protocols/experimental/pearl_c4/prover/pc4.py",
         "verity/protocols/accounting/pouw/prover/circuit/pc4.circuit-check.py": "verity/protocols/experimental/pearl_c4/prover/pc4.circuit-check.py",
         "verity/protocols/accounting/pouw/prover/circuit/pc4_rowk.py": "verity/protocols/experimental/pearl_c4/prover/pc4_rowk.py",

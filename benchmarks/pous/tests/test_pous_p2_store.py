@@ -5,7 +5,7 @@ passes the public-encoder setup with the pinned root, and refuses each negative 
 decode at the real store's indices. The driver (`commit`, `encode`, `finish`, `verify`, `spot`, `tie`) runs on the CPU at a
 128-bit width with 16-block segments and the scheme's own codec in the GPU's place, over a small generator with the real
 one's tensors and names: the store it writes is the registered scheme's encoding of `W` in the layout (the public-encoder
-check accepts it, and `decode_layer` gives each layer's tensors), its roots are `setup.server_root`'s tree, `verify`
+check accepts it, and `decode_layer` gives each layer's tensors), its roots are `responder.server_root`'s tree, `verify`
 catches a changed byte, a rerun resumes to the same store, and two parts join to it. The store's default generator
 itself gives `W` at the real shape, and `commit` takes its manifest."""
 from __future__ import annotations
