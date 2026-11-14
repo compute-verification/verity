@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 import epoch_coins as E
+import identifier_vectors as IV
 
 import pearl_c4_vectors as V
 import test_pouw_pearl_c_work as PCW
@@ -33,6 +34,7 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.verifier import identifier as I
 from verity.protocols.accounting.pouw.verifier import registration as R
 
 # the clear audit is a reference tool (verity/protocols/accounting/pouw/prover/clear), imported by name
@@ -1290,3 +1292,15 @@ def test_both_constructions_take_the_one_shared_rule():
     assert isinstance(fp8, C.PearlC) and not isinstance(fp8, F.PearlC4)
     for t, curated, fold in itertools.product(TR.STACKS, (False, True), (False, True)):
         assert TR._outcome(fp8, t, curated, fold) == TR._outcome(fp4, t, curated, fold), (t, curated, fold)
+
+
+def test_the_identifier_vectors_pearl_c4_cases_are_its_shapes():
+    """PoUW's identifier vectors name Pearl-C4 without checking its shapes (`schemes.EXPERIMENTAL`): each of its cases'
+    matmuls is one the scheme takes, and the scheme is named by its registered name."""
+    cases = [c for c in IV.CASES if c[1] == "pearl-c-nvfp4-v0"]
+    assert len(cases) == 2
+    for case, scheme, matmuls in cases:
+        epoch, s = IV.epoch_of(case, matmuls), get(scheme)
+        for u in epoch.workload.matmuls:
+            s.check(u)
+        assert I.identifier_bytes(s, epoch) == I.identifier_bytes(scheme, epoch)
