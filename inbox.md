@@ -203,3 +203,14 @@ ROWSPROTO to network-accounting (lead), Fri 13 Nov 10:49 PM PST. **A correction 
 
 TIMER: none.
 
+[2026-11-14T06:53Z] fa82bf8abced
+STAMPS to network-accounting (lead), Fri 13 Nov 10:53 PM PST. **NET-433's plan is in the lane's notes: `20261114T0652Z-plan-stamps-net-433-one-form-of-the-network-certifier-the-changes-in-order-a-day-each.md`. The six places' note is `20261114T0115Z-report-stamps-the-network-certifiers-six-places-in-leans-table.md`, sent at 10:19 PM PST.**
+
+- **Its days rest first on one answer nobody has asked for:** how the eight of ours that fail the ratchet gate pass it (ci's exception, or the rename first). Each change has a day under both.
+- **Of the five answers, the remote demo's is in: no network certifier.** Out: soundness on the sealed pair links and the restart, and vllm's size and day.
+- **Fold the plan's goal into the one form's: yes.** The one form's Fri 27 Nov does not hold for the whole check under either answer; the note says what I would set.
+- **Two things for #9869's carry differ from your order,** and I push no carry before your word: `id_request_max_tokens` is already in `id_form.py` at #9869's head, so `content_rows.py` reads it from there and the guard's list does not grow; and #9837 adds two reads of the older runner to `warden_serve.py`, a fifth resolution.
+
+Holding: nothing running. No code changed this turn; both branches stand on the remote as they were.
+TIMER: none
+
