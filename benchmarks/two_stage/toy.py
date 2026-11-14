@@ -178,11 +178,10 @@ def boundary_ports(window: CS.Binding) -> dict[str, str]:
 def spec(n: int, q: int, k: int | Mapping[str, int], proof_deadline: float = 3600.0) -> S.Spec:
     """The challenger's two-stage design over ``n`` spans: the first stage samples ``q`` of them, the second ``k`` proof
     blocks in each (replay block, template) cell (an int, or one count a template id), each proof by ``proof_deadline``
-    seconds after its sample. Its values are every row port of every member, as the windows' layout names them
-    (`rows.expected_ports`): a wired port of the interior, which has no tree of its own, under its reader too."""
+    seconds after its sample."""
     names = {}
     for phase, w in (("serve", boundary_window(n, q)), ("interior", interior_window("00" * 64, range(q)))):
-        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p, _w in m.all_rows}
+        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: the two-stage toy"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
@@ -230,10 +229,10 @@ def wires(q: int) -> list[tuple[tuple[str, str, tuple[int, ...]], ...]]:
             for t, w in enumerate(WRITERS)]
 
 
-def interior_window(boundary_digest: str, sample: Sequence[int], law: Mapping | None = None) -> CS.Binding:
+def interior_window(boundary_digest: str, sample: Sequence[int], sampling_design: Mapping | None = None) -> CS.Binding:
     """The interior window of the replay sample ``sample`` after the boundary registration ``boundary_digest``: one member a
     template, template-major, each wired port its writer's output value with no tree of its own (`rows.Binding.held`), its
-    table the writer's Q·n_w output rows; ``law`` the interior registration's (default: every unit, ``subset:Q·n_rho``)."""
+    table the writer's Q·n_w output rows; ``sampling_design`` the interior registration's (default: every unit, ``subset:Q·n_rho``)."""
     q = len(sample)
     program, query = CS.population_program([(t, q * n) for t, n in zip(TEMPLATES, N_T)])
     ids = [tid for tid, _, _ in P.ranges(program, query)]
@@ -242,7 +241,7 @@ def interior_window(boundary_digest: str, sample: Sequence[int], law: Mapping | 
         table = q * (n_t if w is None else N_T[w])
         members.append(CS.Member(tid, rows=rows, outs=outs, n=q * n_t, base=base, wired=wired, wired_trees=False,
                                  tables=tuple((p, table) for p, _ in rows), schemas=tuple((p, V2) for p, _ in rows + outs)))
-    return CS.Binding(program, query, dict(law or {"law": "subset", "k": q * N_RHO}), interior_run(boundary_digest, sample),
+    return CS.Binding(program, query, dict(sampling_design or {"law": "subset", "k": q * N_RHO}), interior_run(boundary_digest, sample),
                       tuple(members))
 
 
@@ -262,14 +261,14 @@ class Interior:
     registered: dict[str, dict[str, dict]]
 
 
-def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], law: Mapping | None = None, *,
+def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], sampling_design: Mapping | None = None, *,
              salt_key: bytes | None = None, replayed: np.ndarray | None = None) -> Interior:
     """The proof server's interior of the replay sample ``sample``: each span replayed from its ingress, the boundary record's
     row (``bc``, the boundary's commitment), and committed, each link member's boundary port under the boundary's salts at the
     sample's leaves. ``replayed``: the ingress replayed instead, ``(Q, 2H/16)`` u16: a prover's whose link rows don't open the
     boundary record (tests and refused runs)."""
     at = [int(s) for s in sample]
-    win = interior_window(boundary_digest, at, law)
+    win = interior_window(boundary_digest, at, sampling_design)
     names = boundary_ports(bc.window)
     ports = {win.members[t].key: LK.Port.of(bc, names[b]) for t, (_p, b) in LINKS.items()}
     r = replay(ports[win.members[0].key].rows_at(at) if replayed is None else replayed)

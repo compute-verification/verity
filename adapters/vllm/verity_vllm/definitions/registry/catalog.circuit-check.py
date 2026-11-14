@@ -172,18 +172,21 @@ def row_families() -> set[str]:
 
 def boolean_table() -> tuple[dict[str, list], dict[str, list], list[str]]:
     from verity_vllm.definitions.boolean import _load
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     return _load()
 
 
 def made_on_demand(fid: str) -> Any:
     from verity_vllm.definitions.boolean import made_on_demand
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     return made_on_demand(fid)
 
 
 def boolean_version() -> tuple[Any, type[Exception]]:
     from verity_vllm.definitions.boolean import NoBooleanVersion, boolean_version
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     return boolean_version, NoBooleanVersion
 

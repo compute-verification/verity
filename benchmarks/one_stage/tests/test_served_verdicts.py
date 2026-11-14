@@ -2927,19 +2927,19 @@ def test_a_tie_whose_advice_is_pending_or_whose_commit_is_refused_writes_no_reco
 
 
 #: R's sample in `_tied_commit`: the design a stratified rate names over three tables' readers, a proof block of each
-TIED_LAW = {"law": "stratified", "k": 1, "strata": [{"template": t, "units": [[3 * i, 3 * i + 3]], "k": 1}
+TIED_SAMPLING_DESIGN = {"law": "stratified", "k": 1, "strata": [{"template": t, "units": [[3 * i, 3 * i + 3]], "k": 1}
                                                    for i, t in enumerate(("a@0", "ids@0", "ids@1"))]}
 
 
-def _tied_commit(tmp_path: Path, bound: str | None, law: dict | None = TIED_LAW) -> None:
-    """Window 7's commit as the tie left it in the toy serve dir: its docket R (its sample ``law``; None, none) and
+def _tied_commit(tmp_path: Path, bound: str | None, sampling_design: dict | None = TIED_SAMPLING_DESIGN) -> None:
+    """Window 7's commit as the tie left it in the toy serve dir: its docket R (its sample ``sampling_design``; None, none) and
     circuit, which reads H1's tables, its answer, and H1's log naming W and, unless ``bound`` is None, the record H1 bound
     (``same``: R; ``other``: another)."""
     d = tmp_path / "serve"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     vw.mkdir(parents=True)
     (d / "h1" / "w7").mkdir(parents=True)
-    r = {"format": "toy", "after": W_OF_7, **({"law": law} if law else {})}
+    r = {"format": "toy", "after": W_OF_7, **({"law": sampling_design} if sampling_design else {})}
     (vw / "registration.json").write_text(json.dumps(r))
     (vw / "circuit.json").write_text(json.dumps({"run": "ab", "tables": "h1"}))
     (d / "h1" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
@@ -2974,7 +2974,7 @@ def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(t
 COIN_FLAGS = ("--challenger", "--peer", "--challenger-key", "--gate-key")
 
 
-def _audited(tmp_path: Path, flags: tuple[str, ...] = ("--law", "--tie", "--tie-prefix", "--ports")) -> dict[str, str | None]:
+def _audited(tmp_path: Path, flags: tuple[str, ...] = ("--sampling-design", "--tie", "--tie-prefix", "--ports")) -> dict[str, str | None]:
     """The flags `flags` the toy records_audit.py's audit got (by default the sampling design's, the tie's and the ports')."""
     a = json.loads((tmp_path / "order.audit").read_text())
     return {f: a[a.index(f) + 1] if f in a else None for f in flags}
@@ -2992,8 +2992,8 @@ def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_re
     rc, lines, order, _limits = _v3c(tmp_path, **({"H1_TIE": "1"} if tied else {}), **extra)
     assert rc == 0 and "audit" in order, (lines, order)
     w = str(tmp_path / "serve" / "h1" / "w7" / "registration.json")
-    assert _audited(tmp_path) == ({"--law": TIED_RULE, "--tie": w, "--tie-prefix": "h1/", "--ports": ports} if tied
-                                  else {"--law": RULE, "--tie": None, "--tie-prefix": None, "--ports": ports})
+    assert _audited(tmp_path) == ({"--sampling-design": TIED_RULE, "--tie": w, "--tie-prefix": "h1/", "--ports": ports} if tied
+                                  else {"--sampling-design": RULE, "--tie": None, "--tie-prefix": None, "--ports": ports})
     assert tied or (tmp_path / "order.law").read_text() == RULE
 
 
@@ -3038,14 +3038,14 @@ def test_the_preflight_refuses_a_day_it_cant_declare_or_audit(tmp_path, extra, t
     assert (rc, lines, order) == (3, [line], [])
 
 
-@pytest.mark.parametrize("extra, law", [({}, RULE), ({"V3C_LAW": TIED_RULE}, TIED_RULE)])
-def test_an_untied_v3c_registers_its_window_at_the_sampling_design_its_audit_samples_by(tmp_path, extra, law):
+@pytest.mark.parametrize("extra, sampling_design", [({}, RULE), ({"V3C_LAW": TIED_RULE}, TIED_RULE)])
+def test_an_untied_v3c_registers_its_window_at_the_sampling_design_its_audit_samples_by(tmp_path, extra, sampling_design):
     """Untied, window-commit registers the window at the sampling design V3C_LAW's rate names and the audit samples by that
     one: R1 holds a sample to the docket's design, so a commit at one rate under another's audit is refused before
     its sample."""
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
     assert rc == 0 and order.index("window-commit") < order.index("audit"), (lines, order)
-    assert (tmp_path / "order.law").read_text() == law and _audited(tmp_path, ("--law",)) == {"--law": law}
+    assert (tmp_path / "order.law").read_text() == sampling_design and _audited(tmp_path, ("--sampling-design",)) == {"--sampling-design": sampling_design}
 
 
 def test_v3c_on_an_existing_serve_dir_needs_no_row_dir_taps_or_gpu_lease(tmp_path):
@@ -3078,7 +3078,7 @@ def test_v3c_warm_composes_the_windows_templates_before_its_audit_which_then_tak
     vw, jobs = tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}", extra["V3C_WARM_JOBS"]
     assert order.count("warm") == 1 and order.index("warm") < order.index("audit"), order
     assert json.loads((tmp_path / "order.warm").read_text()) == [
-        "warm", "--window", str(vw / "window"), "--law", TIED_RULE if tied else RULE,
+        "warm", "--window", str(vw / "window"), "--sampling-design", TIED_RULE if tied else RULE,
         "--compose-cache", str(vw / "compose-cache"), "--jobs", jobs]
     assert audit[audit.index("--compose-cache") + 1] == str(vw / "compose-cache")
     assert limits.count(limit) == 1 + (limit == "180m"), limits
@@ -3442,7 +3442,7 @@ def test_the_script_parses_whole():
 
 def test_under_h1_tie_v3c_runs_no_audit_whose_ports_rs_sample_cannot_size(tmp_path):
     """A tied audit's ports default to the size of R's sample, so an R with no strata gets no audit, and V3c says why."""
-    _tied_commit(tmp_path, "same", law=None)
+    _tied_commit(tmp_path, "same", sampling_design=None)
     rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1")
     assert rc == 1 and "audit" not in order, (lines, order)
     assert "V3C-AUDIT: R, the window's registration, has no strata to size the audit's ports by: set V3C_PORTS" in lines
@@ -3687,7 +3687,7 @@ def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
     (d / "pearlplus" / "w7").mkdir(parents=True)
     (d / "pearlplus" / "w7" / "registration.json").write_text(json.dumps(PEARL_WREC))
     (d / "pearlplus" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
-    r = {"format": "toy", "previous": REG.digest(PEARL_WREC) if chained else "ef" * 64, "law": TIED_LAW}
+    r = {"format": "toy", "previous": REG.digest(PEARL_WREC) if chained else "ef" * 64, "law": TIED_SAMPLING_DESIGN}
     (vw / "registration.json").write_text(json.dumps(r))
     (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
 
@@ -3706,7 +3706,7 @@ def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records
     w = REG.digest(PEARL_WREC)
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} in Pearl+'s piece, its registration chained right after "
                                f"Pearl+'s window record W before Pearl+'s coin (W {w[:16]}…, R "), lines
-    assert _audited(tmp_path) == {"--law": TIED_RULE, "--tie": str(tmp_path / "serve" / "pearlplus" / "w7" / "registration.json"),
+    assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(tmp_path / "serve" / "pearlplus" / "w7" / "registration.json"),
                                   "--tie-prefix": None, "--ports": "3"}
     assert f"V3C-TIE: the audit read its records tied to W {'cd' * 8}…, R chained right after it: PASS" in lines
     d, tag = tmp_path / "serve", W63K4.replace(",", "-")
@@ -3781,13 +3781,13 @@ def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_state
     _pearl_tied_commit(tmp_path)
     rc, lines, order, _limits = _v3c(tmp_path, **{**PEARL_TIED, "V3C_LAW": stated})
     assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
-    assert _audited(tmp_path, ("--law",)) == {"--law": stated}
+    assert _audited(tmp_path, ("--sampling-design",)) == {"--sampling-design": stated}
 
 
-def _no_transfer_gates(part: str, law: str, templates: list[str]) -> str:
+def _no_transfer_gates(part: str, sampling_design: str, templates: list[str]) -> str:
     return (f"PREFLIGHT: unsloth/Llama-3.2-1B's compiler of record lists ['RoPEHead_v1{{D=64}}'] as transfer gates "
             f"(prove_path.GATES_OF_RECORD), every unit of which step 3 proves beside work:K of the rest, and PP_PARTITION "
-            f"{part} is {law} over {templates}: give a work:K partition that holds them, and in PP_SETS their input sets")
+            f"{part} is {sampling_design} over {templates}: give a work:K partition that holds them, and in PP_SETS their input sets")
 
 
 def _partition_preflight(tmp_path: Path, tie: bool, **extra: str) -> tuple[int, list[str], list[str], list[str]]:
@@ -3973,9 +3973,9 @@ NO_TIE = ("PREFLIGHT: under H1_TIE V3c's audit is tied to H1's W, whose tables t
           "--tie, which this tree's records_audit.py doesn't take")
 
 
-def _no_reader(law: str) -> str:
+def _no_reader(sampling_design: str) -> str:
     return ("PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, which only a stratified rate "
-            f"(stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is {law}")
+            f"(stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is {sampling_design}")
 
 
 @pytest.mark.parametrize("args, extra, records_audit, line", [
@@ -4157,7 +4157,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close") and lines[3].endswith("PASS")
     assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "RECORD", "COMPOSITE:"]
     assert lines[-1] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
-    assert _audited(tmp_path) == {"--law": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
+    assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
     argv = json.loads((tmp_path / "order.record").read_text())
     assert argv[:-4] == [
