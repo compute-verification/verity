@@ -49,6 +49,13 @@ ROWS = [
     # a whole step: its linears (4 ms), its attention as measured, and 0.7 ms and 0.1 ms more
     _at("step", 2003, 2048, 9.3), _at("step", 2004, 8192, 20.7),
 ]
+# a split's arms: the split, and the whole GPU twice; split only is 9 ms over their mean of 6, and 7.5 over 6
+ARMS = {60: {"split": {"ms": 9.0}, "full": {"ms": 4.0}, "full2": {"ms": 8.0}},
+        92: {"split": {"ms": 7.5}, "full": {"ms": 5.0}, "full2": {"ms": 7.0}}}
+# a fill run, 92 SMs first: shares beside decode of 0.327 and 0.218, which are 0.3 and 0.2 times COMMIT
+FILL = [{"shape": "big", "m": 8192, "n": 8192, "k": 8192, "fill_sms": sms, "B": 32, "L": 2048, "alone": {"share": a},
+         "window": {"fill_share": w, "fill_gb_per_s": gb}, "slowdown": s, "arms": ARMS[sms]}
+        for sms, a, w, gb, s in [(92, 0.45, 0.327, 12.0, 1.1), (60, 0.3, 0.218, 9.0, 1.04)]]
 
 
 @pytest.fixture(scope="module")
@@ -69,6 +76,20 @@ def _chat(m, batch=32):
     n = 1024 * S.LIN_TOK + S.LM_TOK + S.causal(1024) + 256 * S.decode_n(1, 1152)
     step = {32: 4 * 2 ** 0.5 + 5.0 + 0.4 + 1.09, 256: 16.0 + 36.5 + 0.4 + 38.37 / 32}[batch]
     return n, m.prefill_ms(1024, m.eta_fa2), step
+
+
+def _run(tmp_path, monkeypatch, capsys, flag, rows):
+    """`main` on a run of ROWS and, after `flag`, a filler's run of `rows` in its own directory, in the file the flag
+    reads (`--fill` reads `fill.jsonl`): its printed blocks and its JSON."""
+    run, filler = tmp_path / "dcap", tmp_path / "filler"
+    for d, name, rs in ((run, "dcap", ROWS), (filler, flag[2:], rows)):
+        d.mkdir()
+        (d / f"{name}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rs))
+    monkeypatch.setattr(S, "FILLER", {**S.FILLER, "dfree-other": QUARTER, TUNED: QUARTER})
+    monkeypatch.setattr(sys, "argv", ["share.py", str(run), flag, str(filler), "--json", str(tmp_path / "share.json")])
+    S.main()
+    blocks = [b.splitlines() for b in capsys.readouterr().out.rstrip("\n").split("\n\n")]
+    return blocks, json.loads((tmp_path / "share.json").read_text())
 
 
 def test_the_fit_of_a_runs_lines(m):
@@ -374,4 +395,22 @@ def test_main_prints_the_fit_and_each_table_and_writes_them_as_json(m, tmp_path,
     a = 256 / 300.08
     assert res["tau_ladder"][0]["product routes only, A = 256/R*"] == pytest.approx(
         {"tau": a * top, "hidden": (1 - 0.99 * a * top) / a})
+
+
+def test_main_with_a_fill_run_prints_its_table_and_its_two_fillers_replace_the_modules(tmp_path, monkeypatch, capsys):
+    """`--fill DIR` reads `DIR/fill.jsonl`: its table, a line a run of the chain in order of SMs, and its fillers at
+    L = 2,048, each its share beside decode over COMMIT, in place of every filler the module had."""
+    blocks, res = _run(tmp_path, monkeypatch, capsys, "--fill", FILL)
+    fill, _, head, filler = blocks[1:5]
+    assert fill[0] == ("| chain | filler SMs | B | L | alone share | share beside decode | certified (÷ COMMIT) | "
+                       "decode slowdown | split only | filler GB/s |")
+    assert fill[2:] == ["| big 8192×8192×8192 | 60 | 32 | 2048 | 0.300 | 0.218 | 0.200 | 1.040 | 1.500 | 9 |",
+                        "| big 8192×8192×8192 | 92 | 32 | 2048 | 0.450 | 0.327 | 0.300 | 1.100 | 1.250 | 12 |"]
+    assert list(S.FILLER) == ["60 SMs", "92 SMs"]
+    assert S.FILLER["60 SMs"].at(256) == pytest.approx((0.2, 1.04))
+    assert head[0] == "| phase or mix | N/C | cert/C | 60 SMs: N/C, cert/C, time | 92 SMs: N/C, cert/C, time |"
+    # 0.065 alone, as without a fill run; beside the 60-SM filler 0.065 / 1.04 + 0.2, beside the 92's 0.065 / 1.1 + 0.3
+    assert head[5] == "| decode B = 256, L = 2K | 0.065 | 0.064 | 0.263, 0.260, 1.040 | 0.359, 0.356, 1.100 |"
+    assert filler == ["filler: measured (--fill)"]
+    assert (res["filler"], res["fill"], res["dfill"], res["fstep"]) == ("measured (--fill)", FILL, [], [])
 
