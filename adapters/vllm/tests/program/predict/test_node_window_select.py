@@ -132,14 +132,18 @@ def test_select_stand_ins(program, window):
 @pytest.mark.slow
 def test_joined_with_select():
     """Every family set (`node_window`, `_dense`, `_sparse`, `_multimem`, `_embed`, `_select`) at a 43-id prompt, 2 outputs and
-    one decoder layer: only the stop check is unlowered; no row is free of the token select, the decode's 32 shard reads taking
-    ``tok`` by one wire from the prefill select's combine unit, the prefill's taking it as the request's ingress (the prompt);
-    the prefill's 1,376 reads are still row 0 of the ``SIZE=192``
-    combine's ``parts``, which `node_window_multimem` combines as rows of 192 words. The only test that builds the window with
-    the select beside the other five sets."""
+    one decoder layer: nothing is unlowered, the stop check one unit reading the two selects' tokens through one gather of
+    their combines' rows; no row is free of the token select, the decode's 32 shard reads taking ``tok`` by one wire from
+    the prefill select's combine unit, the prefill's taking it as the request's ingress (the prompt); the prefill's 1,376
+    reads are still row 0 of the ``SIZE=192`` combine's ``parts``, which `node_window_multimem` combines as rows of 192
+    words. The only test that builds the window with the select beside the other five sets."""
     families = {**FAMILIES, **NS.FAMILIES, **NM.FAMILIES, **NE.FAMILIES}
     circuit, w = NW.node_window(glm_request(IDS, 1).program.fn, families=families)
-    assert w.census(circuit)["unlowered"] == {"StopCheck": 1}
+    assert w.census(circuit)["unlowered"] == {}
+    (stop,) = [t for t in circuit.units if t.startswith("StopCheck_v1{")]
+    (ids,) = [x for x in circuit.wires if x.reader == stop]
+    assert circuit.units[stop] == 1 and ids.port == "ids" and ids.writer.startswith("AllGather_v1{WORLD=2,N=2}")
+    assert {x.writer for x in circuit.wires if x.reader == ids.writer} == {descriptor_id(G.plan(V)[-1].defn)}
     assert not [f for f in w.free if f.family == "TokenSelect"]
     (read,) = [t for t in circuit.units if t.startswith("EmbeddingRead_v1{")]
     combine = descriptor_id(G.plan(V)[-1].defn)
