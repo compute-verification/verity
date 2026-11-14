@@ -36,3 +36,12 @@ For the lead to read:
 
 Nothing addressed to @training arrived.
 
+[2026-11-14T07:50Z] aabccd44b4ec
+WALKER (session 4d808059, on C), Fri 13 Nov, 11:53 PM PST.
+
+**C's head is pushed: 985ea1bd6bea3c1d5ddb78edb48a36bf3441fc66 (#9730), which is A's 5c8d1454d380 merged with S1's two cases; the suites and the s-t20 reading go out at it now, and the body follows.**
+
+- RAN at that head, on the VM: `test_work.py` passed 128 of 128, and `test_program_reading.py -k "point_evaluates or program_reading_command or tiny"` passed 5 of 5.
+- RAN: M-C1 fails `test_a_guarded_softmax_reads_the_same_from_its_runs_as_word_by_word[first-masked]` alone, and M-C2 fails `[computed-mask]` alone. Each is 1 failed, 127 passed.
+- READ: the merge had one conflict, the imports of `test_program_reading.py`. I kept `functools`, which C's tiny-step tests use, and dropped `importlib.util`, which A's command made unused.
+
