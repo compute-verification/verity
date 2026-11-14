@@ -63,7 +63,7 @@ def _session_sig(S):
 
 def _session_body(B, S, key, m, sig):
     p, n = _lms_params(S), S.N
-    X = _Wires(B)
+    X = _Wires
     kb, mb, sb = (_group(X.refs(c), 8) for c in (key, m, sig))
 
     def words(t, data):
@@ -74,7 +74,7 @@ def _session_body(B, S, key, m, sig):
     ok = B.call(verifier(n, S.W, S.H), words(IDENT, kb[:16]), words(_value(n), kb[16:]), words(DIGEST, mb),
                 X.coll(bits(S.H), q[:S.H]), words(_value(n), C), words(Array(p.P, _value(n)), y),
                 words(Array(S.H, _value(n)), path))
-    top = B.call(bind(PousEqual, N=32 - S.H), X.coll(bits(32 - S.H), q[S.H:]), X.coll(bits(32 - S.H), X.const(0, 32 - S.H)))
+    top = B.call(bind(PousEqual, N=32 - S.H), X.coll(bits(32 - S.H), q[S.H:]), X.coll(bits(32 - S.H), [B.call(BL.constant(0)).refs[0]] * (32 - S.H)))
     return X.coll(bits(1), X.refs(B.call(BL.AND, BL.operands(ok, top[0]))))
 
 
@@ -94,7 +94,7 @@ def _round_sig(S):
 
 
 def _round_body(B, S, row, records, j, i):
-    X = _Wires(B)
+    X = _Wires
     rec = _group(X.refs(records), 8)[RECORD_BYTES * S.SLOT:RECORD_BYTES * (S.SLOT + 1)]
 
     def integer(lo, hi):
