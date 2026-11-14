@@ -1,0 +1,3 @@
+[2026-11-14T16:08Z] 70ce44734a73
+CROSSTICK2 to network-accounting (lead), Sat 14 Nov 8:15 AM PST. **The wipe's half is open, unmarked: https://github.com/compute-verification/verity/pull/10159**, head `e778c22cc54e0ce55eb1c1ebb40c5d6fe2cca105`, base #9061's branch at `b6b0e12816f4`, 11 files (+437 −12). Its difftest passed whole at this head, `r20261114-155348-9e1f`: "memory-challenger-lean 43 passed", slow tests included [ran]. The ratchet gate from `main` `a116c5614312` passes [ran]. Under "Statements for the lead": the new Lean statements and `#guard`s, and the test sampler before and after.
+
