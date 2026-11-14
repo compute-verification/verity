@@ -47,7 +47,8 @@ exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "*
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
             'lanes/[\w.-]+', 'draft:[\w.-]+', '\bbenchmarks/nci\b', '\binference_only/nci\b', '(?<!\w)nci-', '(?<!/ )"nci"(?! /)',
-            '"why": "[\d,]+ [^"\n]*"', '(?<=")Nci(?!Check)[A-Z]\w*']
+            '"why": "[\d,]+ [^"\n]*"', '(?<=")Nci(?!Check)[A-Z]\w*', '\\nci\b']
+# (the last pattern: a string's line break before the word `ci`, which is no `nci`.)
 # GLOSSARY.md's rows of older names, the slowdown calculator's family of `benchmarks/nci`'s algorithms, and the period
 # check's refusal.
 strings = ["families.Nci", "`Nci*`, `nci-*`, `ius` and the `nci` directories",
