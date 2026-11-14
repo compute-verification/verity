@@ -25,8 +25,8 @@ from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, sal
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
 from verity.protocols.proofs.spot.device import challenger as Ch
 
-# the clear audit is a reference tool (verity/protocols/accounting/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
+# the clear audit is a reference tool (verity/protocols/accounting/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "prover" / "clear"))
 from clear_audit import Prover, Sampled, Verifier
 
 PINNED = json.loads(V.OUT.read_text())

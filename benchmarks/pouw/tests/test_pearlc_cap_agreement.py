@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "tests"))
 import clear_work as CW  # noqa: E402
 import test_circuit_cap as T  # noqa: E402

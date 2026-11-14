@@ -45,7 +45,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "clear"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
 import fast_tile as FT  # noqa: E402
 import verify_run as VR  # noqa: E402
 import clear_work as CW  # noqa: E402
