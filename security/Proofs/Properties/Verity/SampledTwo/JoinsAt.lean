@@ -19,7 +19,7 @@ public import Proofs.Properties.Verity.SampledTwo.BlobFinder
 public import Proofs.Properties.Verity.SampledTwo.FormDraw
 
 /-!
-# The two-stage leg's projection at the form's accept, from the coin map's distribution
+# The two-stage subprotocol's projection at the form's accept, from the coin map's distribution
 
 `joined` (`Joined.lean`) is the projection's bound over any acceptance. This module is the one place the two-stage
 form's check comes in: the acceptance is the form's (`FormAccepts C`), the check read a log of both sessions, the log

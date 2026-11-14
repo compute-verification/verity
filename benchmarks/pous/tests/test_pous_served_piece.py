@@ -6,7 +6,7 @@ model in the BF16 pin's form, each linear bf16 [N, K] with no scale. P2 runs at 
 1,024-bit blocks, 8 a segment (`weight_store.geometry`), so the adapter encodes it in milliseconds. The memory challenger's side is
 `challenger_party.serve` in a thread, signed by the PoUS tests' test signer on a counter clock, and the prover answers it
 over a socket pair, as `challenger_prover.session` would across hosts. The answer is read back as the composed run reads it
-(`served_verdicts.piece_row`, `block_record.leg`).
+(`served_verdicts.piece_row`, `block_record.subprotocol`).
 """
 from __future__ import annotations
 
@@ -321,8 +321,8 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     row = SV.piece_row("space", served.out.parent)
     assert row["verdict"] == "accept" and row["owner"] == "memory-accounting" and row["protocol"] == TEST_PROTOCOL
     assert row["quantity"] == answer["public"] == {"certified": False, "eps": "0", "s_bits": 0}
-    leg = BR.leg("pous", row, server=NODE, runs=[])
-    assert leg["quantity"] == {"symbol": "S0", "value": 0, "unit": "bits", "certified": False}
+    subprotocol = BR.subprotocol("pous", row, server=NODE, runs=[])
+    assert subprotocol["quantity"] == {"symbol": "S0", "value": 0, "unit": "bits", "certified": False}
 
     prof = answer["profile"]
     w_bytes = sum(n * k for n, k in SHAPES.values()) * LAYERS

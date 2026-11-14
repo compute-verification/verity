@@ -4,20 +4,20 @@ public import Proofs.Properties.Verity.Sampled.Window.Logged
 public import Proofs.Properties.Verity.Sampled.Window.Charge
 
 /-!
-# SPOT's leg over a window: the leg from the walk's premises
+# SPOT's subprotocol over a window: the subprotocol from the walk's premises
 
 `spotSound_of_executionPhase` gives SPOT's target at a window of several members from the coupling at each window
 (`ExecutionPhaseCouplingTarget`); the projection through the members' sessions in order gives the coupling from the coin map's
 premise and the decoders' (`executionPhaseCouplingTarget_of_logged`), and the decoders' premise holds a member at a time
 (`executionPhaseDecodes_of_members`). Put together:
 
-* **The leg from the two premises** (`executionPhaseSpotSound_of_logged`): at the constructions with the window's projection
+* **The subprotocol from the two premises** (`executionPhaseSpotSound_of_logged`): at the constructions with the window's projection
   and the messages' finders, from the coin map's premise (`ExecutionPhaseCouples`) and the decoders' (`ExecutionPhaseDecodes`) at
   every strategy.
-* **The leg, a member at a time** (`executionPhaseSpotSound_of_members`): the decoders' premise at each member's session
+* **The subprotocol, a member at a time** (`executionPhaseSpotSound_of_members`): the decoders' premise at each member's session
   (`MemberDecodes`): each member's session's trace, in the members' order, writes a transcript verity-verify-proof `--zk`
   accepts wherever the play v2 accepts is on a tape through the trace's end.
-* **The leg at the window's one sample** (`executionPhaseSpotSound_of_sample`): the walk, the sample and the members' steps
+* **The subprotocol at the window's one sample** (`executionPhaseSpotSound_of_sample`): the walk, the sample and the members' steps
   in one statement. The coin maps are the sample-coupled ones (`executionPhaseSampleMaps`), whose premise holds off the
   openings' empty classes at their counts, within the hiding term at every strategy, wherever the window's coins are
   uniform (`executionPhaseCouplingTarget_of_sample_at`), so nothing is left of the coin map; and each member's step is taken
@@ -39,7 +39,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (k : Verity.Registration.Composite)
 
-/-- **SPOT's leg over a window of several members, from the walk's two premises**: soundness's vocabulary at
+/-- **SPOT's subprotocol over a window of several members, from the walk's two premises**: soundness's vocabulary at
 `.sampled` reading, at the deployment's windows `S`, the constructions with the window's projection and the messages'
 finders at the readings `rd`, the members' decoders `D` and the coin maps `M` (`ExecutionPhaseDeployed`), with `S` covering
 the one-stage form (`ExecutionPhaseCovers`), meets SPOT's target at composite `k` wherever, at each window of `S`, (a) an
@@ -74,7 +74,7 @@ theorem executionPhaseSpotSound_of_logged (rd : ExecutionPhaseReadings) (K : Exe
     executionPhaseCouplingTarget_of_logged V k rd K D M W P θ F (Q θ F) (BL θ F) (B θ F) (ha θ F) (hq θ F W hW)
       (hC θ F W hW) (hDec θ F W hW)
 
-/-- **SPOT's leg over a window of several members, a member at a time**: `executionPhaseSpotSound_of_logged` with the
+/-- **SPOT's subprotocol over a window of several members, a member at a time**: `executionPhaseSpotSound_of_logged` with the
 decoders' premise at each member's session (`MemberDecodes`), at any invariant `I` of the position the members'
 traces end at and the position a member's session starts at. At each window of `S`, each commitment and each strategy: the coin map's premise over the window
 (`ExecutionPhaseCouples`), and for each member with a proof block in the sample, in the members' order, its session's trace
@@ -114,7 +114,7 @@ theorem executionPhaseSpotSound_of_members (rd : ExecutionPhaseReadings) (K : Ex
     executionPhaseDecodes_of_members V θ F c k (fun o => P o ∧ Q θ F c σ o) W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
       (M W θ F c σ) (BL θ F c σ) (B θ F c σ) (I W θ F c σ) (hm θ F W hW c σ)
 
-/-- **SPOT's leg over a window of several members, at the window's one sample**: the walk through the members'
+/-- **SPOT's subprotocol over a window of several members, at the window's one sample**: the walk through the members'
 sessions in order, the one sample's coins and each member's step, composed onto `JointShareV5`'s bound
 (`spotSound_of_executionPhase`). Soundness's vocabulary at `.sampled` reading, at the deployment's windows `S`, the
 constructions with the window's projection at the readings `rd`, the members' decoders `D` and the sample-coupled

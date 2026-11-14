@@ -30,7 +30,7 @@ sessions), adaptively, so a block's sessions may depend on everything the prover
   played the blocks before it. It is a lemma: the listed guarantee of the per-block reading is `IntegrityBlockCarried`,
   which also covers carried state and is `IntegrityBlock` with no carried leaf.
 * `IntegrityBlocks`: the probability that some block is accepted with at least `ln(1/δ)/q` incorrect proof blocks is at most
-  `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t))`: the per-block form a joint horizon over blocks sums with the other legs.
+  `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t))`: the per-block form a joint horizon over blocks sums with the other subprotocols.
 * `IntegrityPooledBlocks`: the probability that every session of every block is accepted and the incorrect proof blocks over the
   horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading. It is a
   lemma: the listed guarantee of the pooled reading is `IntegrityPooledCarried`, which also covers carried state.

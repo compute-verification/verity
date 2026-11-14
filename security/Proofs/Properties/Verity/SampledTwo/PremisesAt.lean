@@ -20,9 +20,9 @@ the addresses are connected (`SpotFlock.Honest.Premises`). Where each accepted p
   (`PlayAccepts`) and some coins are ones the check read (`SeqCoinsRead`);
 * `honest_of_formAccepts`: so the two-stage guarantees are not vacuous (`SpotFlock.Honest.HonestExists`) where the
   form accepts one play;
-* `ks_of_formAccepts`: the knowledge soundness the session's leg takes as a hypothesis (`Live₂.KS`), from the
+* `ks_of_formAccepts`: the knowledge soundness the session's subprotocol takes as a hypothesis (`Live₂.KS`), from the
   premises (`Live₂.ks_of_connected`);
-* `scope_of_accept`: the statement of a play the session's verifier accepts is in the scope the leg's error is
+* `scope_of_accept`: the statement of a play the session's verifier accepts is in the scope the subprotocol's error is
   bounded at (`Live₂.L`'s);
 * `template_of_formAccepts`: the session's held copies have a template, since the accepted run's second stage drew
   over the replay block's cells (`RunsAs.accepted_steps`), which are the held copies' (`cells_heldOf`), one per
@@ -99,7 +99,7 @@ theorem honest_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)
   have hP := acceptsPlay_of_playAccepts hplay hA hi hit hx hm hc
   exact ⟨A.h, premises_of_formAccepts hof hA hi hit hWf hwc, SpotFlock.Honest.inScope_of_play hP, hP⟩
 
-/-- **The session's knowledge soundness, from one accepted play** (`Live₂.KS`, the hypothesis the leg takes): the
+/-- **The session's knowledge soundness, from one accepted play** (`Live₂.KS`, the hypothesis the subprotocol takes): the
 session's held copies meet the two premises `Flock.Guarantees.SpotKSTwo` takes (`premises_of_formAccepts`), which give
 it at the connected program (`Live₂.ks_of_connected`). -/
 theorem ks_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C) {o : Verity.Exchange}

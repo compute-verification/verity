@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Members.Draw
 public import Proofs.Properties.Verity.Sampled.Members.Widen
 
 /-!
-# The sampled leg at a window of member sessions
+# The sampled subprotocol at a window of member sessions
 
 The period's one sample read member by member, behind the window's audit (`Flock.Guarantees.JointAuditV5`) under its
 registered member layout (`JointAuditV5.Laid`):
