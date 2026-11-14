@@ -221,6 +221,8 @@ each with its repository file and owner (a Slack handle), and goes there only th
 [PATH ...] --apply` (else a dry run) from a pushed commit (`main`, or a PR's head for a hotfix). Each loop is a systemd unit
 (`units/` beside the manifest, settings in `env/`), never tmux; `install` restarts a running service whose unit, env file
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
+A file of machines' addresses (`/etc/vy/peers`) is a template the register of machines fills at install time (`register =
+true`; `infra/ops/verity_ops/deploy.py`), and `research deploy roll PATH --by WHO [--apply]` puts it on every node, one at a time.
 `research deploy drift` (`ops deploy`) reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process running a file replaced since it started (`restart`, unless its entry says `no_restart`),
 and every file in a managed directory that no entry lists (`stray`); the monitors relay's hourly `drift` monitor opens
