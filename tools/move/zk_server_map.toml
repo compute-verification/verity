@@ -71,6 +71,7 @@
 # --- refusal and line words, then environment names and constants
 "FIREWALL-REFUSED" = "ZK-SERVER-REFUSED"
 "FIREWALL-TIMES" = "ZK-SERVER-TIMES"
+"H1S_UNFIREWALLED" = "H1S_NO_ZK_SERVER"
 "UNFIREWALLED" = "UNSERVED"
 "FIREWALLED" = "ZK_SERVED"
 "FIREWALL" = "ZK_SERVER"
