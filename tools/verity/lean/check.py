@@ -401,8 +401,8 @@ def ask_lines(pins_of: dict[str, frozenset[str]], steps=STEPS) -> tuple[int, str
 
 
 def print_ask(gb: int, line: str) -> None:
-    """`--ask`'s output, both tools': one line on stdout, the ask in GB as a whole number, which the records gate reads
-    (`research queue`), and nothing else there; the line in GiB goes to stderr."""
+    """`--ask`'s output, both tools': one line on stdout, the ask in GB as a whole number, which a launch line reads as
+    `research run --mem-gb "$(... --ask ...)"`, and nothing else there; the line in GiB goes to stderr."""
     print(gb, flush=True)
     print(f"research run --mem-gb {gb}: {line}", file=sys.stderr, flush=True)
 
