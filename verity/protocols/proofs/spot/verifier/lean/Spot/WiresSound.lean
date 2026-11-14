@@ -134,11 +134,6 @@ theorem entries_disjoint {a b : Wire} (hca : 1 ≤ a.cuts) (ha : a.units % a.cut
     generalize j % b.cuts = y' at *
     omega
 
-theorem pairwiseDisjoint_iff : ∀ ws : List Wire, pairwiseDisjoint ws = true ↔ ws.Pairwise (fun a b => disjoint a b = true)
-  | [] => by simp [pairwiseDisjoint]
-  | w :: ws => by
-    simp [pairwiseDisjoint, List.pairwise_cons, List.all_eq_true, pairwiseDisjoint_iff ws]
-
 theorem distinctRows_of {ws : List Wire} (hw : ∀ w ∈ ws, 1 ≤ w.cuts ∧ w.units % w.cuts = 0)
     (h : pairwiseDisjoint ws = true) : distinctRows (ws.flatMap Wire.entries) = true := by
   simp only [distinctRows, decide_eq_true_eq]

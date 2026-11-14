@@ -16,7 +16,9 @@ template `reader`'s units read rows of their parameter `port` whole as row `out`
 `check` decides a circuit's wires in work proportional to its templates and wires, never to the units they cover (AGENTS.md
 "Design rules"): each wire's writers lie in `span`, the least and greatest writer in closed
 form; and two wires wire no reader row twice exactly when they read different ports or their rectangles (reader units ×
-rows) are disjoint, compared pair by pair (#wires² comparisons, each of a few fields). Its summary gives each reader row's writer (`Summary.writerOf`, by the
+rows) are disjoint, stated pair by pair (`pairwiseDisjoint`) and run as a sweep over the wires sorted by reader, port and
+first unit (`overlapFree`), each wire against the wires of its port that start inside its reader units. Its summary gives
+each reader row's writer (`Summary.writerOf`, by the
 wires alone) and the wired rows and bits multiplied through (`wiredRows`, `wiredBits`), the wired term of the count of a
 window's free inputs.
 
@@ -192,6 +194,147 @@ def disjoint (a b : Wire) : Bool :=
 def pairwiseDisjoint : List Wire → Bool
   | [] => true
   | w :: ws => ws.all (disjoint w) && pairwiseDisjoint ws
+
+/-! ## The overlap check in `O(n log n)`
+
+`pairwiseDisjoint` compares every pair. Two wires that meet share their reader and port, and each starts before the
+other's reader units end; so with the wires sorted by reader, port and first reader unit (`sweepLe`), a wire need only be
+compared with the wires after it of its port that start before its reader units end (`sweepFrom`): every wire between
+two that meet is of their port and starts before the earlier one ends. `overlapFree` is that sweep, and the compiled code
+runs it wherever `pairwiseDisjoint` is called (`pairwiseDisjoint_eq_overlapFree`). Its comparisons are the sort's and,
+per wire, the wires of its port that start inside its reader units. -/
+
+/-- The sweep's order: by reader, then port, then first reader unit. -/
+def sweepLe (a b : Wire) : Bool :=
+  a.reader < b.reader || (a.reader == b.reader && (a.port < b.port || (a.port == b.port && a.start ≤ b.start)))
+
+/-- `w` against the wires after it of its port that start before its reader units end. -/
+def sweepFrom (w : Wire) : List Wire → Bool
+  | [] => true
+  | v :: vs =>
+    if v.reader == w.reader && v.port == w.port && v.start < w.start + w.readerUnits then disjoint w v && sweepFrom w vs
+    else true
+
+/-- Each wire of a list sorted by `sweepLe` against the wires `sweepFrom` reaches. -/
+def sweep : List Wire → Bool
+  | [] => true
+  | w :: ws => sweepFrom w ws && sweep ws
+
+/-- **The overlap check as a sweep**: `pairwiseDisjoint` (`overlapFree_eq`). -/
+def overlapFree (ws : List Wire) : Bool := sweep (ws.mergeSort sweepLe)
+
+theorem pairwiseDisjoint_iff : ∀ ws : List Wire, pairwiseDisjoint ws = true ↔ ws.Pairwise (fun a b => disjoint a b = true)
+  | [] => by simp [pairwiseDisjoint]
+  | w :: ws => by
+    simp [pairwiseDisjoint, List.pairwise_cons, List.all_eq_true, pairwiseDisjoint_iff ws]
+
+theorem disjoint_comm (a b : Wire) : disjoint a b = disjoint b a := by
+  rw [Bool.eq_iff_iff]
+  simp only [disjoint, Bool.or_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq]
+  constructor <;> rintro (((((h | h) | h) | h) | h) | h)
+  all_goals first
+    | exact .inl (.inl (.inl (.inl (.inl (Ne.symm h)))))
+    | exact .inl (.inl (.inl (.inl (.inr (Ne.symm h)))))
+    | exact .inl (.inl (.inl (.inr h)))
+    | exact .inl (.inl (.inr h))
+    | exact .inl (.inr h)
+    | exact .inr h
+
+theorem sweepLe_iff {a b : Wire} : sweepLe a b = true ↔
+    a.reader < b.reader ∨ (a.reader = b.reader ∧ (a.port < b.port ∨ (a.port = b.port ∧ a.start ≤ b.start))) := by
+  simp [sweepLe]
+
+theorem sweepLe_trans (a b c : Wire) (h1 : sweepLe a b = true) (h2 : sweepLe b c = true) : sweepLe a c = true := by
+  rw [sweepLe_iff] at *
+  rcases h1 with h1 | ⟨e1, h1 | ⟨f1, h1⟩⟩ <;> rcases h2 with h2 | ⟨e2, h2 | ⟨f2, h2⟩⟩
+  · exact .inl (String.lt_trans h1 h2)
+  · exact .inl (e2 ▸ h1)
+  · exact .inl (e2 ▸ h1)
+  · exact .inl (e1 ▸ h2)
+  · exact .inr ⟨e1.trans e2, .inl (String.lt_trans h1 h2)⟩
+  · exact .inr ⟨e1.trans e2, .inl (f2 ▸ h1)⟩
+  · exact .inl (e1 ▸ h2)
+  · exact .inr ⟨e1.trans e2, .inl (f1 ▸ h2)⟩
+  · exact .inr ⟨e1.trans e2, .inr ⟨f1.trans f2, Nat.le_trans h1 h2⟩⟩
+
+theorem string_lt_of_le_of_ne {s t : String} (h : s ≤ t) (e : s ≠ t) : s < t :=
+  Decidable.byContradiction fun h' => e (String.le_antisymm h (String.not_lt.1 h'))
+
+theorem sweepLe_total (a b : Wire) : (sweepLe a b || sweepLe b a) = true := by
+  rw [Bool.or_eq_true, sweepLe_iff, sweepLe_iff]
+  by_cases e : a.reader = b.reader
+  · by_cases f : a.port = b.port
+    · rcases Nat.le_total a.start b.start with k | k
+      · exact .inl (.inr ⟨e, .inr ⟨f, k⟩⟩)
+      · exact .inr (.inr ⟨e.symm, .inr ⟨f.symm, k⟩⟩)
+    · rcases String.le_total a.port b.port with g | g
+      · exact .inl (.inr ⟨e, .inl (string_lt_of_le_of_ne g f)⟩)
+      · exact .inr (.inr ⟨e.symm, .inl (string_lt_of_le_of_ne g (Ne.symm f))⟩)
+  · rcases String.le_total a.reader b.reader with g | g
+    · exact .inl (.inl (string_lt_of_le_of_ne g e))
+    · exact .inr (.inl (string_lt_of_le_of_ne g (Ne.symm e)))
+
+/-- Past a wire `sweepFrom` stops at, in the sweep's order, no wire of `w`'s port starts inside `w`'s reader units. -/
+theorem sweepLe_far {w v u : Wire} (hwv : sweepLe w v = true) (hvu : sweepLe v u = true)
+    (hv : ¬ (v.reader = w.reader ∧ v.port = w.port ∧ v.start < w.start + w.readerUnits)) :
+    ¬ (u.reader = w.reader ∧ u.port = w.port ∧ u.start < w.start + w.readerUnits) := by
+  rintro ⟨hr, hp, hs⟩
+  apply hv
+  rw [sweepLe_iff] at hwv hvu
+  rw [hr, hp] at hvu
+  rcases hwv with h1 | ⟨e1, h1 | ⟨f1, h1⟩⟩ <;> rcases hvu with h2 | ⟨e2, h2 | ⟨f2, h2⟩⟩
+  · exact absurd (String.lt_trans h1 h2) (String.lt_irrefl _)
+  · rw [e2] at h1; exact absurd h1 (String.lt_irrefl _)
+  · rw [e2] at h1; exact absurd h1 (String.lt_irrefl _)
+  · rw [e1] at h2; exact absurd h2 (String.lt_irrefl _)
+  · exact absurd (String.lt_trans h1 h2) (String.lt_irrefl _)
+  · rw [f2] at h1; exact absurd h1 (String.lt_irrefl _)
+  · rw [e1] at h2; exact absurd h2 (String.lt_irrefl _)
+  · rw [f1] at h2; exact absurd h2 (String.lt_irrefl _)
+  · exact ⟨e2, f2, by omega⟩
+
+theorem disjoint_of_far {w v : Wire} (h : ¬ (v.reader = w.reader ∧ v.port = w.port ∧ v.start < w.start + w.readerUnits)) :
+    disjoint w v = true := by
+  simp only [disjoint, Bool.or_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq]
+  by_cases hr : v.reader = w.reader
+  · by_cases hp : v.port = w.port
+    · have : ¬ v.start < w.start + w.readerUnits := fun hs => h ⟨hr, hp, hs⟩
+      exact .inl (.inl (.inl (.inr (by omega))))
+    · exact .inl (.inl (.inl (.inl (.inr (Ne.symm hp)))))
+  · exact .inl (.inl (.inl (.inl (.inl (Ne.symm hr)))))
+
+theorem sweepFrom_iff {w : Wire} : ∀ {l : List Wire}, (∀ v ∈ l, sweepLe w v = true) → l.Pairwise (sweepLe · · = true) →
+    (sweepFrom w l = true ↔ ∀ v ∈ l, disjoint w v = true)
+  | [], _, _ => by simp [sweepFrom]
+  | v :: vs, hw, hl => by
+    have ih := sweepFrom_iff (l := vs) (fun u hu => hw u (List.mem_cons_of_mem _ hu)) (List.pairwise_cons.1 hl).2
+    unfold sweepFrom
+    split
+    · rename_i hc
+      rw [Bool.and_eq_true, ih, List.forall_mem_cons]
+    · rename_i hc
+      have hc' : ¬ (v.reader = w.reader ∧ v.port = w.port ∧ v.start < w.start + w.readerUnits) := by
+        simpa [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, and_assoc] using hc
+      simp only [true_iff, List.forall_mem_cons]
+      refine ⟨disjoint_of_far hc', fun u hu => disjoint_of_far ?_⟩
+      exact sweepLe_far (hw v List.mem_cons_self) ((List.pairwise_cons.1 hl).1 u hu) hc'
+
+theorem sweep_iff : ∀ {l : List Wire}, l.Pairwise (sweepLe · · = true) →
+    (sweep l = true ↔ l.Pairwise (fun a b => disjoint a b = true))
+  | [], _ => by simp [sweep]
+  | w :: ws, hl => by
+    rw [sweep, Bool.and_eq_true, sweepFrom_iff (List.pairwise_cons.1 hl).1 (List.pairwise_cons.1 hl).2,
+      sweep_iff (List.pairwise_cons.1 hl).2, List.pairwise_cons]
+
+/-- **The sweep is the pairwise check.** -/
+theorem overlapFree_eq (ws : List Wire) : overlapFree ws = pairwiseDisjoint ws := by
+  rw [Bool.eq_iff_iff, overlapFree, sweep_iff (List.pairwise_mergeSort sweepLe_trans sweepLe_total ws),
+    pairwiseDisjoint_iff, (List.mergeSort_perm ws sweepLe).pairwise_iff fun {a b} h => (disjoint_comm b a).trans h]
+
+/-- The compiled code runs `overlapFree` for `pairwiseDisjoint`, here above `check` so that `check` is compiled with it,
+and in every module that imports this one. -/
+@[csimp] theorem pairwiseDisjoint_eq_overlapFree : @pairwiseDisjoint = @overlapFree :=
+  funext fun ws => (overlapFree_eq ws).symm
 
 /-- What `check` establishes: the wires, in order. -/
 structure Summary where
