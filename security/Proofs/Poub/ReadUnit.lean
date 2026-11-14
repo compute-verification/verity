@@ -46,11 +46,11 @@ The binding of table reads at a picked index (`Definitions.Poub.ReadUnit`), each
   row at its index in its local evaluation, or SHA-512 collides on what the two checks hashed
   (`Hash.SecurityProofs.EmbeddingReadBinding`). The local evaluation is the row the unit's own gates consume, and the
   transcript's where the row's gates are committed (`localEval_of_committed`).
-* `readUnitDrawn`: over a run's coins, the run accepts with a sampled read that returns another row than its table's at
+* `readUnitSampled`: over a run's coins, the run accepts with a sampled read that returns another row than its table's at
   its index, where nothing its check and the table's check hashed collides, with probability at most the layer below's
   bound: that the run accepts with a sampled read's unit wrong, or the read's registered rows failing, in the extractor's
   transcript. A unit may hold several reads, and a read is sampled when its unit is.
-* `readUnitDrawnCR`: the same with the collision priced through `Claims.ExpectedCR` at the reads' collision finder
+* `readUnitSampledCR`: the same with the collision priced through `Claims.ExpectedCR` at the reads' collision finder
   (`Accounting.ReadUnit.Reads.finder`): the layer below's bound plus the finder's expected SHA-512 calls over `2^256`.
 -/
 
@@ -134,7 +134,7 @@ with a sampled read's unit wrong or the read's registered rows failing in `X` wi
 with a sampled read that returns, in its unit's local evaluation of `X`, another row than its table's at its index, where
 no two messages the read's check and the table's check hashed collide under `H`, with probability at most `ε`. A read
 is sampled when its unit is. -/
-theorem readUnitDrawn {Ω : Type} [Fintype Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
+theorem readUnitSampled {Ω : Type} [Fintype Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
     (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ε : ℝ)
     (hgates : ∀ i ∈ R.reads, GatesRefine H H key consts P (R.unit i) (R.port i)) (hcommitted : R.Committed H H key)
@@ -162,7 +162,7 @@ the extractor's transcript, but with probability at most the layer below's bound
 (`Reads.finder`) expected SHA-512 calls over `2^256`, at a finder that meets `Claims.ExpectedCR` (`ecr/sha-512`). The
 finder outputs two messages the sampled reads hashed that collide under `H`, if there are two; its cost `cost` is the
 reader's to state from the adversary it runs. -/
-theorem readUnitDrawnCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
+theorem readUnitSampledCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
     (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (cost : Ω → ℕ) (ε : ℝ)
     (hgates : ∀ i ∈ R.reads, GatesRefine H H key consts P (R.unit i) (R.port i)) (hcommitted : R.Committed H H key)
@@ -202,6 +202,6 @@ theorem readUnitDrawnCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg →
     refine ⟨h'.choose, h'.choose_spec.2.choose, ?_, h'.choose_spec.2.choose_spec.2⟩
     simp [Reads.finder, h']
   exact (Claims.Pr_mono hsplit).trans ((pr_or_le _ _).trans
-    (add_le_add (readUnitDrawn H key consts P R acc drawn X ε hgates hcommitted below) (hfind.trans hcr)))
+    (add_le_add (readUnitSampled H key consts P R acc drawn X ε hgates hcommitted below) (hfind.trans hcr)))
 
 end Accounting.SecurityProofs
