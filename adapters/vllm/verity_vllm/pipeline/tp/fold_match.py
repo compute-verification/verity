@@ -9,7 +9,7 @@ cross-rank check; the record is assembled in rank order.
 
     verity-vllm tp-fold-match --capture <tp2_capture --record-collectives out> --profile derived_LLAMA32_1B_tp2 \\
         --build-rank0 <build_request_r0> --build-rank1 <build_request_r1> [--gprog-rank0 <build_workload_r0/workload_program.json> --gprog-rank1 ...] \\
-        --workload WL [--tp2-match <run>/tp2_match.json] --out <D/fold_match> [--python PY]
+        [--derived-rank0 DIR ... --derived-rank1 DIR ...] --workload WL [--tp2-match <run>/tp2_match.json] --out <D/fold_match> [--python PY]
 
 Verdict (`<out>/tp2_fold_match.json`): PASS iff BOTH ranks fold with 0 errors / 0 unresolved, BOTH rank compares PASS (the TP1 rule:
 canonical-equal, same steps, no differing operand; X-09 verdict at B>1), GM-01 PASS on EVERY rank (required: no --gprog = FAIL), and the cross-rank check PASSes.  A
@@ -63,11 +63,13 @@ def _run_unless(reuse: bool, out: Path, cmd: list[str], log: Path, timeout: int 
 
 
 def _load(p: Path) -> dict | None:
-    """The JSON document at ``p``; None when the file is missing or does not parse."""
+    """The JSON document at ``p``; None when the file is missing, does not parse (one nested past the parser's depth does not) or
+    is not a mapping, which every stage's document is."""
     try:
-        return json.loads(p.read_text())
-    except (OSError, ValueError):
+        doc = json.loads(p.read_text())
+    except (OSError, ValueError, RecursionError):
         return None
+    return doc if isinstance(doc, dict) else None
 
 
 def _block(doc: dict, name: str) -> dict:
@@ -87,10 +89,11 @@ def _listed(doc: dict, name: str) -> list:
 
 def _load_links(p: Path) -> dict | None:
     """a rank's tp_links.json through `read_tp_links` (v1 -> v2 in memory; every link carries `peers` and `module`, the
-    recorder-vocabulary module path from the derive's recorded model root); None when the file is missing or is not one."""
+    recorder-vocabulary module path from the derive's recorded model root); None when the file is missing or is not one (a document
+    nested past the parser's depth, or one that counts a world, a rank or a collective with an infinite number, is not)."""
     try:
         return read_tp_links(str(p))
-    except (OSError, ValueError, TypeError, AttributeError):
+    except (OSError, ValueError, TypeError, AttributeError, RecursionError, OverflowError):
         return None
 
 
@@ -221,6 +224,9 @@ class Options:
                           help="rank profile module (verity_vllm.observe.fold.profiles.<name>), e.g. derived_<ROLE>_tp<W> (profiles.generic, world = W)")
     build_rank0: str | None = option("--build-rank0", default=None)
     build_rank1: str | None = option("--build-rank1", default=None)
+    derived_rank0: list[str] = option("--derived-rank0", action="append", default=[],
+                                      help="B>1: further request Programs of rank 0 (per served (LP, T))")
+    derived_rank1: list[str] = option("--derived-rank1", action="append", default=[])
     gprog_rank0: str | None = option("--gprog-rank0", default=None, help="rank 0's GP-01 workload_program.json (GM-01 stage)")
     gprog_rank1: str | None = option("--gprog-rank1", default=None)
     build_rank: list[str] = option("--build-rank", action="append", default=[],
@@ -232,6 +238,7 @@ class Options:
     workload: str | None = option("--workload", type=workload_arg, default=None)
     tp2_match: str | None = option("--tp2-match", default=None,
                                    help="tp2_match.json of the same run (its `provenance` = the stored-step value check); REQUIRED for PASS")
+    coll_dir: str | None = option("--coll-dir", default=None, help="dir of coll.rank<r>.jsonl (default: --capture)")
     out: str = option("--out")
     python: str = option("--python", default=sys.executable,
                          help="interpreter for the fold / compare subprocesses (row_pod's PY312)")
@@ -302,6 +309,7 @@ def _rank_legs(a: Options, r: int, rd: Path, build: Path, derived: list[str], gp
 def main(a: Options) -> int:
     cap, out = Path(a.capture), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    coll_dir = Path(a.coll_dir) if a.coll_dir else cap
     derived: dict[int, list[str]]
     if a.build_rank:
         if a.build_rank0 or a.build_rank1:
@@ -320,7 +328,7 @@ def main(a: Options) -> int:
         if not (a.build_rank0 and a.build_rank1):
             raise UsageError("--build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
         builds = {0: Path(a.build_rank0), 1: Path(a.build_rank1)}
-        derived = {0: [], 1: []}
+        derived = {0: a.derived_rank0, 1: a.derived_rank1}
         gprog = {0: a.gprog_rank0, 1: a.gprog_rank1}
     if a.world < 2 or a.world != len(builds):
         raise UsageError(f"world {a.world} vs {len(builds)} rank Builds")
@@ -389,7 +397,7 @@ def main(a: Options) -> int:
             colls[rank] = list(_listed(_block(fs, "fold"), "collectives"))
             producers[rank] = RM.own_producers_from_record(rd / "instances.jsonl")
             ferr[rank] = int(fs.get("errors") or 0)
-            p = cap / f"coll.rank{rank}.jsonl"
+            p = coll_dir / f"coll.rank{rank}.jsonl"
             if p.exists():
                 rec[rank] = RM.load_recorder(p)
                 rec_sha[rank] = hashlib.sha256(p.read_bytes()).hexdigest()      # binds the provenance record to THESE rows
@@ -404,6 +412,7 @@ def main(a: Options) -> int:
         if a.tp2_match:
             tm = _load(Path(a.tp2_match))
             prov = (tm or {}).get("provenance")
+            prov = prov if isinstance(prov, dict) else None       # the check reads a provenance record's fields by name: no mapping, no record
             # the consumed record, by digest: tp2_fold_match.json names WHICH tp2_match.json its provenance check read
             try:
                 res["tp2_match"] = {"path": str(a.tp2_match), "sha256": hashlib.sha256(Path(a.tp2_match).read_bytes()).hexdigest(),

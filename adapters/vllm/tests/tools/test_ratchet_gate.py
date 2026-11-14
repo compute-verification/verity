@@ -17,7 +17,8 @@ the silent-except check beside that (a new swallowing handler, typed or broad, f
 re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
 counted lints counting one change), the retired-terms check (a new use refused with the term the checkout's glossary gives),
 a site the base's tree holds compared by its file and what it is, with a count, and never by its line (one an edit above it
-moves is the base's, one more of its kind is the change's, a file's count that a mended site lowers is no new violation),
+moves is the base's, one more of its kind is the change's, a file's count that a mended site lowers is no new violation, a
+renamed file's are its old path's),
 a repository list (ruff's, a counted lint's) catching up to what its base holds and no
 further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
 counted or ruff lint's violations in a lint module the gate runs as the base has it judged on the change's own copy
@@ -26,7 +27,9 @@ public command P16's list gains (passing when the file it names runs it, failing
 there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
-(a revert, a pure move the base's move_check certifies), and its command line."""
+(a revert, a pure move the base's move_check certifies), each rule a change breaks named (those that read no lint
+together; the base's lints and the source checks on a change another rule fails only under `--every-rule`, at the same
+verdict and exit, and named when they can't run), and its command line."""
 from __future__ import annotations
 
 import fcntl
@@ -51,6 +54,8 @@ P02 = "adapters/vllm/tests/lint/allowlists/p02_more.json"
 LINT = "adapters/vllm/tests/lint/test_p01_core.py"
 REPO_RUFF_LINT = "tests/lint/test_repo_ruff.py"
 REPO_RUFF_JSON = "tests/lint/allowlists/repo_ruff.json"
+#: a toy file's line whose finding its comment suppresses, as a fix names it
+SUPPRESSED = "import sys  # noqa: F401"
 #: a stand-in for move_check: certified when every change is a 100% rename. Like move_check, it finds the root by where its
 #: own file is and loads the move script and the pins list from there
 MOVE_CHECK = """\
@@ -334,7 +339,8 @@ def test_a_counted_kind_keyed_anew_at_its_total_is_compared_in_the_bases_form(re
     assert (c["verdict"], c["fix"]) == ("failed", ["typed_records: verity_vllm/check: [or-empty] (3 found, 0 allowed)",
                                                    "typed_records: verity_vllm/commit: [or-empty] (1 found, 0 allowed)"]), c["why"]
     assert c["why"].endswith(f"; {TYPED} or-empty is keyed anew and its total goes 4 -> 3: a kind keyed anew is compared in the "
-                             "base's form only at the base's total, so change its keys in one change and its counts in another")
+                             "base's form only at the base's total, so change its keys in one change and its counts in another"
+                             + G.STOPPED)
 
 
 IMPORTS = "adapters/vllm/tests/lint/_imports.py"
@@ -398,7 +404,7 @@ def test_a_placing_tables_edit_judges_the_edges_of_the_modules_a_change_adds_and
     assert (c["verdict"], c["fix"]) == ("failed", ["p09_layering: program.old -> engine.seed"]), c["why"]
     assert c["why"].endswith(f"; the change edits {IMPORTS}'s LAYER, which judge(s) the edges of the modules it adds: between "
                              "modules its base holds the base's tables judge, so the row lands in one change and that import in "
-                             "the next")
+                             "the next" + G.STOPPED)
     repo.git("checkout", "-q", "-b", "refused", "main")
     repo.commit("another row, and a new module's import neither table admits", {**core("program.old"), rule: uses})
     [c] = G.gate("main", "refused")["changes"]
@@ -446,9 +452,9 @@ def test_a_branch_with_two_merge_bases_is_judged_against_their_merge(repo):
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["noqa_added"], c["touched"]) == ("untouched", 0, [])
     repo.git("checkout", "-q", "pr")
-    repo.commit("pr's own noqa", {"adapters/vllm/verity_vllm/e.py": "import sys  # noqa: F401\n"})
+    repo.commit("pr's own noqa", {"adapters/vllm/verity_vllm/e.py": f"{SUPPRESSED}\n"})
     [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["fix"]) == ("failed", ["verity_vllm/e.py:1: import sys  # noqa: F401"])
+    assert (c["verdict"], c["fix"]) == ("failed", [f"verity_vllm/e.py:1: {SUPPRESSED}"])
 
 
 def test_merge_bases_that_conflict_are_refused_with_how_to_leave_one(repo):
@@ -508,7 +514,7 @@ def test_runs_over_a_growing_train_judge_each_change_once_and_a_cached_verdict_i
     fresh = [G.gate("main", t) for t in tops]
     monkeypatch.setenv("RATCHET_GATE_CACHE", str(verdict_cache))
     judged: list[str] = []
-    monkeypatch.setattr(G, "judge", _noting(judged, lambda c, b: c.hi, G.judge))
+    monkeypatch.setattr(G, "judge", _noting(judged, lambda c, *_: c.hi, G.judge))
     assert [G.gate("main", t) for t in tops] == fresh
     assert judged == tops
     assert [G.gate("main", t) for t in tops] == fresh and judged == tops
@@ -520,7 +526,8 @@ def test_runs_over_a_growing_train_judge_each_change_once_and_a_cached_verdict_i
 
 def test_changes_judged_at_once_report_what_changes_judged_in_turn_report(linted, verdict_cache, monkeypatch, capsys):
     """A train's merges are judged by a pool of processes, each with its own worktree for the base's lints: the report, its
-    order and the exit status are the ones judging them in turn gives, failures included, cached or not."""
+    order and the exit status are the ones judging them in turn gives, failures included, cached or not, and with every
+    rule as without."""
     linted.git("checkout", "-q", "-b", "next", "main")
     for pr, files in enumerate([
             {"adapters/vllm/verity_vllm/a.py": "A = 'ok'\n", P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
@@ -539,17 +546,28 @@ def test_changes_judged_at_once_report_what_changes_judged_in_turn_report(linted
     def report(jobs: str, cache: str = "") -> list[tuple[int, str]]:
         monkeypatch.setenv("RATCHET_GATE_JOBS", jobs)
         monkeypatch.setenv("RATCHET_GATE_CACHE", cache)
-        return [(G.main(["main", "next", *flag]), capsys.readouterr().out) for flag in ([], ["--json"])]
+        return [(G.main(["main", "next", *flag]), capsys.readouterr().out)
+                for flag in ([], ["--json"], ["--json", "--every-rule"])]
 
     serial = report("1")
     assert pools == [] and [v for _, v in _verdicts(json.loads(serial[1][1]))] == [
         "passed", "failed", "untouched", "failed", "failed", "untouched"]
-    assert [code for code, _ in serial] == [1, 1] and "#2 (" in serial[0][1] and "p01_core: verity_vllm/b.py [k]" in serial[0][1]
-    assert report("4") == serial and pools == [4, 4]
-    assert report("4", str(verdict_cache)) == serial and report("1", str(verdict_cache)) == serial and pools == [4, 4, 4]
+    assert [code for code, _ in serial] == [1, 1, 1] and "#2 (" in serial[0][1] and "p01_core: verity_vllm/b.py [k]" in serial[0][1]
+    assert [[c["why"].endswith(G.STOPPED) for c in json.loads(out)["changes"]] for _, out in serial[1:]] == [
+        [False, False, False, True, False, False], [False] * 6]
+    assert report("4") == serial and pools == [4, 4, 4]
+    assert report("4", str(verdict_cache)) == serial and report("1", str(verdict_cache)) == serial and pools == [4, 4, 4, 4, 3]
     assert len(linted.git("worktree", "list").splitlines()) == 1
     monkeypatch.setenv("RATCHET_GATE_JOBS", "none")
     assert G.main(["main", "next"]) == 2 and "RATCHET_GATE_JOBS is 'none'" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("raw", ["none", "0", "-1", "1.5", " 4", "²"])
+def test_a_job_count_that_is_no_number_from_one_up_is_refused_in_the_gates_own_words(monkeypatch, raw):
+    """`²` is a digit to `str.isdigit` and no number to `int`, whose own error names no variable."""
+    monkeypatch.setenv("RATCHET_GATE_JOBS", raw)
+    with pytest.raises(G.GitError, match=f"RATCHET_GATE_JOBS is {raw!r}"):
+        G.jobs()
 
 
 def test_a_new_ratchet_is_its_own_baseline_and_a_moved_or_renamed_one_is_still_compared(repo):
@@ -621,7 +639,7 @@ def test_once_the_base_moves_a_passed_change_is_not_judged_again_and_a_failed_on
                                     P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"),
                                                     _entry("verity_vllm/c.py", "C"))})
     judged: list[str] = []
-    monkeypatch.setattr(G, "judge", _noting(judged, lambda c, b: c.hi, G.judge))
+    monkeypatch.setattr(G, "judge", _noting(judged, lambda c, *_: c.hi, G.judge))
     first = [G.gate("main", t) for t in ("ok", "bad")]
     repo.git("checkout", "-q", "main")
     repo.commit("main moves on", {"adapters/vllm/verity_vllm/d.py": "D = 1\n"})
@@ -787,6 +805,25 @@ def test_shared_lint_code_runs_every_lint_and_an_error_is_named(linted):
     assert G.violations([{"lint": "p10_size", "test": "test_no_new_x", "error": True,
                           "message": "Traceback:\n  File x\nFileNotFoundError: gone.py\n"}]) == [
         "p10_size: test_no_new_x raised FileNotFoundError: gone.py"]
+
+
+@pytest.mark.parametrize("runner, wrote, error", [
+    ("import sys\nsys.exit('the runner broke')\n", "the runner broke", ValueError),
+    ("import sys\nprint('half a document')\nsys.exit('the runner broke')\n", "the runner broke", ValueError),
+    ("print('{}')\n", "{}", KeyError),
+    ("print('null')\n", "null", TypeError)])
+def test_a_base_lint_run_that_ends_without_its_document_decides_no_verdict_and_names_what_it_wrote(linted, monkeypatch, runner,
+                                                                                                  wrote, error):
+    """The runner's process printing no JSON, or JSON that isn't its document, is the gate unable to judge: a `GitError`
+    naming both ends of the change and the end of what the process wrote (its stderr first), with the reading's own error
+    behind it, and never a verdict."""
+    top = linted.commit("a helper", {"adapters/vllm/tests/lint/_helper.py": "X = 1\n"})
+    base = linted.git("rev-parse", "main")
+    monkeypatch.setattr(G, "RUNNER", runner)
+    with pytest.raises(G.GitError) as e:
+        G.gate("main", "pr")
+    assert str(e.value) == f"the base's lints at {base[:12]} didn't run on {top[:12]}: {wrote}"
+    assert isinstance(e.value.__cause__ or e.value.__context__, error)
 
 
 REAL_LINT = SCRIPT.parents[1] / "tests" / "lint"
@@ -1368,9 +1405,9 @@ def test_the_silent_except_list_may_not_grow_and_loosening_its_lint_fails_naming
         "repo_silent_excepts: tools/s.py:4 except OSError: return None"]), c["why"]
 
 
-def _caught_up(listed: str, total: str, n: int) -> str:
-    return (f"{listed} {total} in total, {n} of it in {n} key(s) catching up to what its lint finds in the base's tree (a list "
-            f"that records its base's findings adds none)")
+def _caught_up(listed: str, total: str, n: int, keys: int | None = None) -> str:
+    return (f"{listed} {total} in total, {n} of it in {n if keys is None else keys} key(s) catching up to what its lint finds "
+            f"in the base's tree (a list that records its base's findings adds none)")
 
 
 def test_a_counted_lint_s_list_catches_up_to_what_its_base_holds_and_no_further(silent_linted):
@@ -1535,6 +1572,118 @@ def test_a_noqa_outside_the_integration_or_in_a_revert_is_not_held(repo):
     assert _verdicts(G.gate("main", "revert"))[0][1] == "exempt"
 
 
+P01_WITH_C = _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"), _entry("verity_vllm/c.py", "C"))
+NEW_C = f'{P01}: new {G.key(_entry("verity_vllm/c.py", "C"))}'
+
+
+def test_a_change_fails_by_each_rule_it_breaks_that_reads_no_lint(repo):
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("a new entry and a suppressed finding", {"adapters/vllm/verity_vllm/c.py": f"{SUPPRESSED}\n", P01: P01_WITH_C})
+    [c] = G.gate("main", "pr")["changes"]
+    first, second = c["why"].split("; and ")
+    assert c["verdict"] == "failed" and first.startswith(f"grows {P01} 2 -> 3 entries: no change adds"), c["why"]
+    assert second.startswith("adds 1 ") and " line(s) under adapters/vllm/ and removes 0: a noqa is an exception" in second, c["why"]
+    assert c["fix"] == [NEW_C, f"verity_vllm/c.py:1: {SUPPRESSED}"]
+    repo.git("checkout", "-q", "-b", "broken", "main")
+    repo.commit("an unreadable list and a suppressed finding", {P01: "{", A_PY: f"{SUPPRESSED}\n"})
+    [c] = G.gate("main", "broken")["changes"]
+    first, second = c["why"].split("; and ")
+    assert c["verdict"] == "failed" and first.startswith(f"leaves {P01} unreadable as an allowlist"), c["why"]
+    assert second.startswith("adds 1 ") and " line(s) under adapters/vllm/ and removes 0" in second, c["why"]
+    assert c["fix"] == [f"verity_vllm/a.py:1: {SUPPRESSED}"]
+
+
+def test_a_change_one_rule_fails_is_judged_no_further_and_every_rule_names_what_the_bases_lints_find(linted):
+    """A list that grows, and behind it a violation no entry covers.  The gate stops at the list and says it stopped; with
+    every rule it names the violation too, the verdict is the same, and neither run reads the other's kept verdict."""
+    linted.commit("a new entry, and a violation with none", {
+        "adapters/vllm/verity_vllm/c.py": "C = 'BAD'\n", "adapters/vllm/verity_vllm/d.py": "D = 'BAD'\n", P01: P01_WITH_C})
+    grows = f"grows {P01} 2 -> 3 entries: no change adds a ratchet exception"
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["fix"]) == ("failed", [], [NEW_C]), c["why"]
+    assert c["why"].startswith(grows) and c["why"].endswith(G.STOPPED) and c["why"].count(G.STOPPED) == 1, c["why"]
+    doc = G.gate("main", "pr", every=True)
+    [e] = doc["changes"]
+    assert (e["verdict"], e["lints"], e["fix"]) == ("failed", ["p01_core"], [NEW_C, "p01_core: verity_vllm/d.py [k]"]), e["why"]
+    assert e["why"].startswith(grows) and G.STOPPED not in e["why"], e["why"]
+    assert e["why"].endswith(f"; and the base's lint code ({e['base'][:12]}) finds 1 violation(s) on its tree that its allowlists "
+                             "don't cover: a change to a lint is judged like source, so fix the code or keep the lint and its "
+                             "entries"), e["why"]
+    assert doc["failures"] == [{"commit": e["commit"], "pr": None, "why": e["why"], "fix": e["fix"]}]
+    told = ("why", "fix", "lints")
+    assert {k: v for k, v in e.items() if k not in told} == {k: v for k, v in c.items() if k not in told}
+    assert G.gate("main", "pr")["changes"] == [c] and G.gate("main", "pr", every=True)["changes"] == [e]
+    linted.git("checkout", "-q", "-b", "revert", "main")
+    linted.commit('Revert "Queue: #9 retires an entry"', {"adapters/vllm/verity_vllm/c.py": "C = 'BAD'\n", P01: P01_WITH_C})
+    assert [v for _, v in _verdicts(G.gate("main", "revert", every=True))] == ["exempt"]
+
+
+def test_every_rule_runs_the_source_checks_on_a_top_change_another_rule_fails_and_on_no_member_below_it(both_ruffed):
+    b401 = {**TOOLS_F401, "file": "tools/b.py"}
+    head = both_ruffed.commit("a new finding, allowed, and one with no entry", {
+        "tools/b.py": "import sys\n", "tools/c.py": "import re\n", REPO_RUFF_JSON: _allowlist(TOOLS_F401, b401)})
+    listed = f"{REPO_RUFF_JSON}: {G.key(b401)} 0 -> 1"
+    uncovered = ["repo_ruff: tools/c.py [F401]: 1 found, 0 allowed", "repo_ruff: tools/c.py:1 `re` imported but unused"]
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["linted"], c["fix"]) == ("failed", [], None, [listed]), c["why"]
+    assert c["why"].startswith(f"grows {REPO_RUFF_JSON} F401 1 -> 2 in total") and c["why"].endswith(G.STOPPED), c["why"]
+    [e] = G.gate("main", "pr", every=True)["changes"]
+    assert (e["verdict"], e["lints"], e["linted"]) == ("failed", ["repo_ruff"], ["tools/b.py", "tools/c.py"]), e["why"]
+    assert e["fix"] == [listed, *uncovered, "tools/b.py:1 F401 `sys` imported but unused",
+                        "tools/c.py:1 F401 `re` imported but unused"], e["why"]
+    assert e["why"].startswith(f"grows {REPO_RUFF_JSON} F401 1 -> 2 in total") and G.STOPPED not in e["why"], e["why"]
+    assert "; and the base's lint code (" in e["why"] and "; and adds 2 ruff finding(s) to the Python it changes" in e["why"]
+    both_ruffed.git("checkout", "-q", "-b", "after", "main")
+    after = both_ruffed.commit("a constant", {"tools/d.py": "D = 1\n"})
+    both_ruffed.git("checkout", "-q", "-b", "next", "main")
+    both_ruffed.queue(1, "a new finding", head)
+    both_ruffed.queue(2, "a constant", after)
+    below, top = G.gate("main", "next")["changes"]
+    assert (below["verdict"], below["fix"], top["verdict"]) == ("failed", [listed], "passed"), below["why"]
+    assert below["why"].endswith(G.STOPPED) and below["why"].count(G.STOPPED) == 1, below["why"]
+    below, top = G.gate("main", "next", every=True)["changes"]
+    assert (below["verdict"], below["linted"], below["fix"]) == ("failed", None, [listed, *uncovered]), below["why"]
+    assert (top["name"], top["verdict"], top["linted"]) == ("#2", "passed", ["tools/d.py"]), top["why"]
+
+
+def test_every_rule_keeps_a_failed_changes_verdict_when_the_other_rules_find_nothing(both_ruffed):
+    b401 = {**TOOLS_F401, "file": "tools/b.py"}
+    both_ruffed.commit("an entry for no finding, and a constant", {"tools/d.py": "D = 1\n",
+                                                                   REPO_RUFF_JSON: _allowlist(TOOLS_F401, b401)})
+    docs = [G.gate("main", "pr", every=every) for every in (False, True)]
+    [c], [e] = (doc["changes"] for doc in docs)
+    assert (c["verdict"], e["verdict"]) == ("failed", "failed") and [len(doc["failures"]) for doc in docs] == [1, 1]
+    assert e["fix"] == c["fix"] == [f"{REPO_RUFF_JSON}: {G.key(b401)} 0 -> 1"]
+    assert (c["lints"], c["linted"], e["lints"], e["linted"]) == ([], None, ["repo_ruff"], ["tools/d.py"])
+    assert e["why"] == c["why"].removesuffix(G.STOPPED) + "; ruff finds nothing new in the 1 Python file(s) it changes", e["why"]
+
+
+def test_every_rule_exits_as_the_gate_does_without_it_when_a_later_rule_cant_run(linted, monkeypatch, capsys):
+    """Lints or checks that can't run are an error on a change nothing else fails, and the gate exits 2.  On a change
+    another rule has failed they are named in its why, and the gate exits 1, as it does without the flag."""
+    def cant(what: str):
+        def raises(*args, **kwargs):
+            raise G.GitError(f"no {what} on this host")
+        return raises
+
+    linted.commit("a new entry", {"adapters/vllm/verity_vllm/c.py": "C = 'BAD'\n", P01: P01_WITH_C})
+    monkeypatch.setattr(G, "base_lints", cant("lints"))
+    monkeypatch.setattr(G, "find", cant("checks"))
+    assert G.main(["main", "pr"]) == 1 and G.STOPPED in capsys.readouterr().out
+    assert G.main(["main", "pr", "--every-rule"]) == 1
+    out = capsys.readouterr().out
+    assert ("; the base's lints didn't run on it (no lints on this host); the source checks didn't run on it (no checks on "
+            "this host)\n") in out and G.STOPPED not in out, out
+    for branch, files, what in (
+            ("retires", {A_PY: "A = 1\n", P01: _allowlist(_entry("verity_vllm/b.py", "B"))}, "lints"),
+            ("constant", {A_PY: "A = 'BAD' or 1\n"}, "checks")):
+        linted.git("checkout", "-q", "-B", branch, "main")
+        linted.commit(branch, files)
+        for flags in ([], ["--every-rule"]):
+            assert G.main(["main", branch, *flags]) == 2, (branch, flags)
+            assert f"ratchet gate: no {what} on this host" in capsys.readouterr().err, (branch, flags)
+
+
 def test_the_command_line(repo):
     repo.git("checkout", "-q", "-b", "pr")
     repo.commit("feature", {"adapters/vllm/verity_vllm/c.py": "C = 1\n",
@@ -1545,6 +1694,9 @@ def test_the_command_line(repo):
 
     r = run("main", "pr")
     assert r.returncode == 1 and f"failed: grows {P01} 2 -> 3 entries" in r.stdout and "verity_vllm/c.py" in r.stdout, r.stdout
+    assert G.STOPPED in r.stdout, r.stdout
+    r = run("main", "pr", "--every-rule")
+    assert r.returncode == 1 and f"failed: grows {P01} 2 -> 3 entries" in r.stdout and G.STOPPED not in r.stdout, r.stdout
     r = run("main", "pr", "--json")
     assert r.returncode == 1 and json.loads(r.stdout)["kind"] == G.KIND
     assert run("main", "main").returncode == 0
@@ -1768,6 +1920,50 @@ def test_a_count_that_rises_past_its_bases_is_the_changes_whatever_its_list_allo
     assert c["fix"] == ["repo_retired_terms: docs/b.md: 5 found, 2 allowed", B_SITE.format(11)], c["why"]
 
 
+#: docs/b.md renamed and edited, so no pure move: a line above its four uses, which move down a line
+B_MOVED = {"docs/b.md": None, "docs/c/b.md": "# B\n\nMoved.\n" + B_USES.removeprefix("# B\n"),
+           REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, {"file": "docs/c/b.md", "count": 2})}
+
+
+def test_a_renamed_file_is_its_old_paths_file_so_the_sites_its_base_holds_past_its_list_are_no_new_ones(terms_behind):
+    """A change that renames and edits a file its base's list is behind in, and moves the file's entry with it: the sites
+    are the base's at the old path, so the change passes, each named where the base holds it, with the change that
+    wrote it."""
+    wrote = terms_behind.git("rev-parse", "main").strip()[:12]
+    terms_behind.commit("b.md moves to c/, a line longer, and its entry moves with it", B_MOVED)
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["repo_retired_terms"]), c["why"]
+    assert ("finds 5 violation(s) its own tree already holds, which aren't this change's: "
+            f"added by {wrote}: {', '.join(B_SITE.format(n) for n in (5, 7, 9, 3))}, "
+            "repo_retired_terms: docs/b.md: 4 found, 2 allowed") in c["why"], c["why"]
+
+
+def test_one_more_site_in_a_renamed_file_is_the_changes(terms_behind):
+    """The same rename with a fifth use of the term in the moved file: it holds one more site than its old path did, so
+    the change fails, naming the new path's count and the one new site."""
+    terms_behind.commit("b.md moves to c/ and uses the term a fifth time", {
+        **B_MOVED, "docs/c/b.md": B_MOVED["docs/c/b.md"] + "\nA teapot naps.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and "finds 2 violation(s) on its tree" in c["why"], c["why"]
+    moved = B_SITE.replace("docs/b.md", "docs/c/b.md")
+    assert c["fix"] == ["repo_retired_terms: docs/c/b.md: 5 found, 2 allowed", moved.format(13)], c["why"]
+
+
+def test_a_violation_at_a_renamed_file_is_named_at_its_new_path_by_the_lint_s_own_root():
+    """`at_paths`: a repository lint's violation names its file from the root, an integration lint's from the
+    integration, and each moves with its file; one at a file the change doesn't rename stays as it is."""
+    to = {"docs/b.md": "docs/c/b.md", f"{G.INTEGRATION}/verity_vllm/a.py": f"{G.INTEGRATION}/verity_vllm/z.py"}
+    repo = frozenset({"repo_retired_terms", "repo_ruff"})
+    assert G.at_paths(["repo_retired_terms: docs/b.md:3 x", "repo_retired_terms: docs/b.md: 4 found, 2 allowed",
+                       "repo_ruff: docs/b.md [E501]: 2 found, 0 allowed", "p01_core: verity_vllm/a.py:2 k",
+                       "ruff: verity_vllm/a.py:4 [F401] unused", "repo_retired_terms: verity_vllm/a.py:3 x",
+                       "repo_retired_terms: docs/a.md:3 x", "p01_core: something else"], to, repo) == [
+        "repo_retired_terms: docs/c/b.md:3 x", "repo_retired_terms: docs/c/b.md: 4 found, 2 allowed",
+        "repo_ruff: docs/c/b.md [E501]: 2 found, 0 allowed", "p01_core: verity_vllm/z.py:2 k",
+        "ruff: verity_vllm/z.py:4 [F401] unused", "repo_retired_terms: verity_vllm/a.py:3 x",
+        "repo_retired_terms: docs/a.md:3 x", "p01_core: something else"]
+
+
 def test_a_list_lowered_under_a_tree_its_bases_list_covered_fails(terms_behind):
     """A change that lowers the entry of a file whose uses its base's list covered, and mends none: the base names no
     violation there, so the file's count and each of its sites are the change's, and it fails."""
@@ -1882,3 +2078,173 @@ def test_a_lint_module_whose_own_prose_a_change_cleans_is_counted_on_its_own_cop
     assert (c["verdict"], c["fix"]) == ("failed", [f"repo_lane_text: {LINT}: 1 found, 0 allowed",
                                                    f"repo_lane_text: {LINT}:3 linear: VLLM-136"]), c["why"]
     assert f"{LINT}: 1 found, 0 allowed" in (_lane_lint(lane_linted) or "")
+
+
+def _terms_lint(repo: Repo) -> str | None:
+    """the repository's retired-terms lint, as the root suite runs it after landing, on ``repo``'s checkout"""
+    r = subprocess.run([sys.executable, "-c", ("import sys; sys.path.insert(0, 'tests/lint'); "
+                         "import test_repo_retired_terms as T; T.test_no_new_retired_terms()")],
+                       cwd=repo.root, capture_output=True, text=True)
+    return None if r.returncode == 0 else r.stderr
+
+
+def _queued(repo: Repo, pr: int, head: str) -> dict:
+    """the gate's one change for ``head`` as the queue merges it onto `main`, on a fresh `next`"""
+    repo.git("checkout", "-q", "-B", "next", "main")
+    repo.queue(pr, "a move", head)
+    [c] = G.gate("main", "next")["changes"]
+    return c
+
+
+def test_a_move_and_the_commit_that_carries_its_entries_pass_as_one_change_and_a_new_site_in_a_moved_file_fails(terms_linted):
+    """One queue merge of a mover's commit and the commit that records what the lint finds in the file it moved, where the
+    list is behind its tree: docs/b.md's two unlisted uses go to notes/b.md as they are, and the list takes them there.
+    The merge is no pure move, and it passes: a renamed file's key may rise to what the base's lint finds in the base's
+    file, read where the change puts it, so the two are the base's.  A mover's edit that adds no use passes too, and a
+    third use in the moved file, recorded, fails, naming the file's key."""
+    notes, b = {"file": "notes/b.md", "count": 2}, (terms_linted.root / "docs/b.md").read_text()
+    terms_linted.commit("the mover: docs/b.md goes to notes/ as it is", {"docs/b.md": None, "notes/b.md": b})
+    entries = terms_linted.commit("the moved file's entries", {REPO_TERMS_JSON: _allowlist(DOCS_A, notes)})
+    assert not G.is_pure_move(G.changes("main", "pr")[0], "main")
+    c = _queued(terms_linted, 7, entries)
+    assert (c["name"], c["verdict"], c["lints"], c["pooled"]) == (
+        "#7", "passed", ["repo_retired_terms"], [_caught_up(REPO_TERMS_JSON, "1 -> 3", 2, keys=1)]), c["why"]
+    assert _terms_lint(terms_linted) is None
+    terms_linted.git("checkout", "-q", "-B", "pr", entries)
+    edited = terms_linted.commit("the mover's edit, which adds no use", {"notes/b.md": b.replace("One.", "The first.")})
+    c = _queued(terms_linted, 8, edited)
+    assert (c["verdict"], c["pooled"]) == ("passed", [_caught_up(REPO_TERMS_JSON, "1 -> 3", 2, keys=1)]), c["why"]
+    terms_linted.git("checkout", "-q", "-B", "pr", entries)
+    more = terms_linted.commit("a third use in the moved file, recorded", {
+        "notes/b.md": b + "\nA teapot sings.\n", REPO_TERMS_JSON: _allowlist(DOCS_A, {**notes, "count": 3})})
+    c = _queued(terms_linted, 9, more)
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {REPO_TERMS_JSON} 1 -> 4 in total"), c["why"]
+    assert c["fix"] == [f"{REPO_TERMS_JSON}: {G.key(notes)} 0 -> 3"]
+
+
+def test_a_renamed_file_s_entry_is_compared_at_its_new_path_so_a_move_buys_no_room_and_its_old_path_holds_nothing(terms_behind):
+    """The base's list is read with a renamed file's entry at the file's new path: docs/b.md's entry of two is
+    notes/b.md's, which may rise there to the four uses the base's file holds and no further, each named as that key's
+    rise; and the entry left behind at the old path, where the base's tree holds the file and the change's holds none,
+    catches up to nothing, so a move buys no room."""
+    notes, b = {"file": "notes/b.md", "count": 4}, {"file": "docs/b.md", "count": 2}
+    mover = {"docs/b.md": None, "notes/b.md": B_USES}
+    up = terms_behind.commit("the mover, and the entry takes the file's four", {
+        **mover, REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, notes)})
+    c = _queued(terms_behind, 7, up)
+    assert (c["verdict"], c["pooled"]) == ("passed", [_caught_up(REPO_TERMS_JSON, "4 -> 6", 2, keys=1)]), c["why"]
+    past = terms_behind.commit("and one more", {REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, {**notes, "count": 5})})
+    c = _queued(terms_behind, 8, past)
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_TERMS_JSON}: {G.key(notes)} 2 -> 5"]), c["why"]
+    terms_behind.git("checkout", "-q", "-B", "pr", "main")
+    left = terms_behind.commit("the mover, the file's four at its new path, and its old entry left", {
+        **mover, REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, b, notes)})
+    c = _queued(terms_behind, 9, left)
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {REPO_TERMS_JSON} 4 -> 8 in total"), c["why"]
+    assert c["fix"] == [f"{REPO_TERMS_JSON}: {G.key(b)} 0 -> 2"]
+
+
+C_SITE = "docs/c.md:{} 'teapot' is retired; say kettle (GLOSSARY.md)"
+
+
+def test_a_file_moved_to_where_its_lint_counts_it_is_growth_named_at_the_file_s_key(terms_linted):
+    """fixtures/ is data the retired-terms lint leaves unread, so a file moved out of it comes to count by its path alone.
+    The base's lint finds nothing in it where the base holds it, so no list ever held its use: with the entry for it the
+    list grows, named at the file's key, and without the entry the use is a new site, as any other.  Such a move goes by
+    `move_check`'s certificate, or its author rewords the file first."""
+    c_md = {"file": "docs/c.md", "count": 1}
+    terms_linted.git("checkout", "-q", "main")
+    terms_linted.commit("data that uses the term", {"fixtures/c.md": "# C\n\nA teapot rests.\n"})
+    terms_linted.git("checkout", "-q", "-B", "pr")
+    terms_linted.git("mv", "fixtures/c.md", "docs/c.md")
+    terms_linted.commit("fixtures/c.md goes to docs/ as it is, with its entry", {REPO_TERMS_JSON: _allowlist(DOCS_A, c_md)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {REPO_TERMS_JSON} 1 -> 2 in total"), c["why"]
+    assert c["fix"] == [f"{REPO_TERMS_JSON}: {G.key(c_md)} 0 -> 1"]
+    terms_linted.git("checkout", "-q", "-B", "pr", "main")
+    terms_linted.git("mv", "fixtures/c.md", "docs/c.md")
+    terms_linted.commit("the same move with no entry, beside an edit", {"docs/a.md": "# A\n\nA teapot boils it now.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(
+        f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
+        f"(docs/c.md 0 -> 1)"), c["why"]
+    assert c["fix"] == [C_SITE.format(3)]
+
+
+def test_a_renamed_file_s_ruff_finding_is_the_bases_at_its_new_path_and_a_second_there_is_growth(both_ruffed):
+    """The repository's ruff list is read the same way, per (file, rule): tools/b.py's unlisted finding goes to
+    tools/sub/b.py as it is and the list takes it there, the base's finding where the change puts the file; a count of
+    two there is growth, named at that key."""
+    b401 = {**TOOLS_F401, "file": "tools/sub/b.py"}
+    both_ruffed.git("checkout", "-q", "main")
+    both_ruffed.commit("a finding with no entry", {"tools/b.py": "import sys\n"})
+    both_ruffed.git("checkout", "-q", "-B", "pr")
+    both_ruffed.commit("the mover: tools/b.py goes to tools/sub/ as it is", {"tools/b.py": None, "tools/sub/b.py": "import sys\n"})
+    entries = both_ruffed.commit("the moved file's entry", {REPO_RUFF_JSON: _allowlist(TOOLS_F401, b401)})
+    c = _queued(both_ruffed, 7, entries)
+    assert (c["verdict"], c["pooled"]) == ("passed", [_caught_up(REPO_RUFF_JSON + " F401", "1 -> 2", 1)]), c["why"]
+    assert _repo_lint(both_ruffed) is None
+    both_ruffed.git("checkout", "-q", "-B", "pr", entries)
+    past = both_ruffed.commit("past it", {REPO_RUFF_JSON: _allowlist(TOOLS_F401, {**b401, "count": 2})})
+    c = _queued(both_ruffed, 8, past)
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_RUFF_JSON}: {G.key(b401)} 0 -> 2"]), c["why"]
+
+
+TWO_TERMS = TOY_GLOSSARY + '| "samovar" | urn |\n'
+
+
+@pytest.fixture
+def terms_split(repo) -> Repo:
+    """``repo`` with the repository's real retired-terms lint, two retired terms, and docs/a.md's two uses of one, listed."""
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TWO_TERMS,
+                                  "docs/a.md": A_USES, REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2})})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+def test_a_site_moved_between_two_files_of_one_change_is_not_new_where_the_list_carries_it(terms_split):
+    """A change that splits a file: one of docs/a.md's two uses goes, as it is, to a new docs/c.md, and the list's count
+    with it.  Over the two files no count grows and the use is no new text, so the change passes, and the repository's
+    lint with it; with the entry left where it was, the use is refused, naming what the list doesn't record."""
+    split = {"docs/a.md": "# A\n\nA teapot boils it.\n", "docs/c.md": "# C\n\nA teapot cools.\n"}
+    terms_split.commit("docs/c.md takes one of a.md's uses, and the list's count with it", {
+        **split, REPO_TERMS_JSON: _allowlist(DOCS_A, {"file": "docs/c.md", "count": 1})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"].get("repo_retired_terms")) == ("passed", ["docs/a.md", "docs/c.md"]), c["why"]
+    assert "no retired-term site is new in the 2 file(s) it changes" in c["why"], c["why"]
+    assert _terms_lint(terms_split) is None
+    terms_split.git("checkout", "-q", "-B", "pr", "main")
+    terms_split.commit("the same split, the list as it was", split)
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(
+        f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
+        f"(docs/c.md 0 -> 1, 1 of them moved here, which {REPO_TERMS_JSON} doesn't record: it allows 0 of the file's)"), c["why"]
+    assert c["fix"] == [C_SITE.format(3)]
+    assert "docs/c.md: 1 found, 0 allowed" in (_terms_lint(terms_split) or "")
+
+
+def test_a_moved_site_pays_for_no_new_one_and_only_a_file_whose_count_falls_gives_one(terms_split):
+    """With a list that already allows docs/c.md two, so no change below touches it: the split with a second use in
+    docs/c.md adds one site, the one the split doesn't bring; and a file that says another retired term where it said
+    the first keeps its count, so the first term's use in docs/c.md is new text over the two files."""
+    terms_split.git("checkout", "-q", "main")
+    terms_split.commit("a list ahead of its tree", {
+        REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, {"file": "docs/c.md", "count": 2})})
+    terms_split.git("checkout", "-q", "-B", "pr")
+    terms_split.commit("docs/c.md takes one of a.md's uses", {
+        "docs/a.md": "# A\n\nA teapot boils it.\n", "docs/c.md": "# C\n\nA teapot cools.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["why"]) == ("passed", "no retired-term site is new in the 2 file(s) it changes"), c["why"]
+    terms_split.commit("and uses the term again", {"docs/c.md": "# C\n\nA teapot cools.\n\nA teapot naps.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(
+        f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
+        f"(docs/c.md 0 -> 2, 1 of them moved here)"), c["why"]
+    assert c["fix"] == [C_SITE.format(5)]
+    terms_split.git("checkout", "-q", "-B", "pr", "main")
+    terms_split.commit("a.md says another retired term, and c.md the first", {
+        "docs/a.md": A_USES.replace("teapot boils", "samovar boils"), "docs/c.md": "# C\n\nA teapot boils it.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(
+        f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
+        f"(docs/c.md 0 -> 1)"), c["why"]

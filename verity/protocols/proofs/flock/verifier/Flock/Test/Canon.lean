@@ -1,8 +1,3 @@
-/-
-`canon` escapes every character outside printable ASCII, so its text has no byte at or above `0x7f`: these are the bytes
-Python's `codec.canonical_json` writes for the same values (`json.dumps(..., ensure_ascii=True)` with DEL escaped), and
-each reads back to its value through the verifier's parser.
--/
 module
 
 public import Flock.Canon
@@ -10,6 +5,12 @@ public import Flock.JsonParse
 public import Lean.Data.Json.Basic
 meta import Flock.Canon
 meta import Flock.JsonParse
+
+/-!
+`canon` escapes every character outside printable ASCII, so its text has no byte at or above `0x7f`: these are the bytes
+Python's `codec.canonical_json` writes for the same values (`json.dumps(..., ensure_ascii=True)` with DEL escaped), and
+each reads back to its value through the verifier's parser.
+-/
 
 @[expose] public section
 

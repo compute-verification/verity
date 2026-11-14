@@ -4,6 +4,7 @@ import argparse
 import calendar
 import gc
 import json
+import logging
 import os
 import re
 import statistics
@@ -271,6 +272,16 @@ def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_q
                          execute=lambda command, cwd: commands.append((list(command), cwd)) or 0) == 0
     [(command, cwd)] = commands
     item = plan.points[1]
+    assert command == [
+        "research", "run", "--on", "vy-nebius-3", "--project", "verity", "--campaign", "vllm-bench", "--source", str(root),
+        "--cwd", "source", "--timeout", "120m", "--require-result", "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
+        "--env", "VERITY_BENCH_VENV=/workspace/jobs/venv312", "--",
+        "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
+        "--run-max", "7200", "--",
+        "gpu-lease", "1", "--wait", "--max-min", "120", "--preemptible", "--",
+        "bash", "benchmarks/harness/run_point.sh", "--spec", "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml",
+        "--point", "b32-p512-mixed", "--identity", item.identity,
+    ], "the whole launch: a changed token anywhere in it is a changed launch"
     queued = jobs.research_command(plan, "llama31-8b-fp8-1gpu", item, root)
     flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
     assert cwd == root and flags[:4] == ["research", "run", "--on", "vy-nebius-3"]
@@ -627,6 +638,13 @@ def test_graphs_are_refused_for_arms_bound_to_the_build():
     assert build_bound(resolve_arms("stock")[0]) == ()
     with pytest.raises(ValueError, match="Build"):
         ProcessEngineFactory(eager=False).create(bound_arm, load_spec("llama31-8b-fp8-1gpu").preset, resident=True)
+
+
+def test_a_protocol_entry_that_is_refused_binds_no_build_and_says_so(caplog):
+    unknown, _control = resolve_arms("no-such-protocol:x,stock-fp8")
+    with caplog.at_level(logging.INFO, logger="verity_bench.vllm.arms"):
+        assert build_bound(unknown) == ()
+    assert "'no-such-protocol:x' refused" in caplog.text and "the engine's build refuses it" in caplog.text
 
 
 def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
@@ -1493,6 +1511,35 @@ def test_result_schema_and_identity_strict_judge():
     assert judge(doc, other, ("git_commit",))["accepted"]
 
 
+def test_a_points_numbers_are_measurements_of_its_result(tmp_path, monkeypatch):
+    preset, points, arms = inputs()
+    doc = run_benchmark(preset, arms, points[:1], sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": "none"})
+    (tmp_path / "result.json").write_text(json.dumps({"schema": "research/result/v0.1", "kind": "verity-vllm-benchmark/v1",
+                                                     "run_id": "r1", "measurements": []}))
+    result_format.record(doc, tmp_path, "r1", "out/benchmark.json")
+    held = json.loads((tmp_path / "result.json").read_text())
+    assert held["kind"] == "verity-vllm-benchmark/v1"
+    got = {m["name"]: m for m in held["measurements"]}
+    (row,) = doc["points"]
+    other = next(a for a in row["arms"] if a != doc["baseline"])
+    tpot = row["arms"][other]["metrics"]["time_per_output_token_s"]
+    assert got[f"{other}.time_per_output_token_s"]["value"] == tpot["mean"]
+    assert got[f"{other}.time_per_output_token_s"]["ci95"] == tpot["ci95"]
+    assert got[f"{other}.time_per_output_token_s"]["unit"] == "s"
+    assert got[f"{other}.time_per_output_token_s.ratio"]["value"] == tpot["ratio_to_stock"]["mean"]
+    assert f"{doc['baseline']}.time_per_output_token_s.ratio" not in got
+    assert {m["mark"] for m in got.values()} == {"measured"}
+    assert {m["point"] for m in got.values()} == {row["point"]["id"]}
+    assert len(got) == sum(len(a["metrics"]) * (1 if arm == doc["baseline"] else 2) for arm, a in row["arms"].items())
+
+
+def test_every_metric_a_point_measures_has_a_unit():
+    """`record` reads each metric's unit from `UNITS`, so a metric the runner measures without one would fail the
+    record mid-write, after the run."""
+    assert set(result_format.UNITS) == {*METRICS, *OPTIONAL_METRICS}
+
+
 def test_ratio_table_puts_the_headline_cell_first():
     preset, points, arms = inputs()
     points = (replace(points[0], batch=8), points[0])
@@ -1895,6 +1942,43 @@ def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tm
     with pytest.raises(RuntimeError, match="preempted"):
         cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id, "--identity", item.identity])
     assert not (tmp_path / "result.json").exists()
+
+
+def test_a_timed_point_records_its_numbers_in_its_runs_result(tmp_path, monkeypatch):
+    """`_vllm-point` on one timed point, run on the fake engine at the test's preset and arms, writes its result and
+    then each of the point's numbers into it through the kit's writer (`result.record`), named ``ARM.METRIC``."""
+
+    root = Path(__file__).resolve().parents[3]
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    item = plan.points[0]
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
+    monkeypatch.delenv("OUT", raising=False)
+    monkeypatch.chdir(root)
+    preset, _, arms = inputs()
+    ran = []
+
+    def timed(_preset, _arms, points, **_kwargs):
+        ran.append(points)
+        return run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+
+    monkeypatch.setattr(cli, "run_benchmark", timed)
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": "none"})
+    assert cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id,
+                     "--identity", item.identity]) == 0
+    assert ran == [(item.point,)]
+    held = json.loads((tmp_path / "result.json").read_text())
+    assert held["run_id"] == "r20261114-000000-0000" and held["validation"]["status"] == "passed"
+    got = {m["name"]: m for m in held["measurements"]}
+    doc = json.loads((tmp_path / "out" / "benchmark.json").read_text())
+    (row,) = doc["points"]
+    assert got and {m["point"] for m in got.values()} == {item.point.id} == {row["point"]["id"]}
+    assert {m["mark"] for m in got.values()} == {"measured"}
+    for arm, a in row["arms"].items():
+        for metric, m in a["metrics"].items():
+            assert got[f"{arm}.{metric}"]["value"] == m["mean"]
+            assert (f"{arm}.{metric}.ratio" in got) == (arm != doc["baseline"])
 
 
 def test_the_readme_states_the_contract_the_code_keeps():

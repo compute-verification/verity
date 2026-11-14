@@ -29,14 +29,14 @@ first alone in a second (`<out>/solo/`). It records each window's step rows agai
 u (`H1Run.utilization`), the credit gate's verdict, each step's seconds (at linear 0 of the next) and tokens/s, and the
 static schedule's check (`engine.static_schedule.check`) of every request. Compile is `--compile-from` on each record.
 
-``--challenger HOST:PORT --session JSON --gate CMD`` takes the window's salt and round coins from the auditor host's
+``--challenger HOST:PORT --session JSON --gate CMD`` takes the window's salt and round coins from the auditor device's
 challenger, in the challenge phase the challenger gate reserved for the window (``--session``, the gate's reserve answer), which the
 window opens through ``CMD open --session S --root R`` on its window-open root once round 0 is admitted
 (`gate_command`; `pouw_h1_window.Window`; on PEER, the port the gate forwards), one challenge phase a window, so the fill
 workload serves only the 64's window. With ``--peer NAME`` in place of ``--session`` each window the run serves reserves
 a challenge phase of its own (`window_sessions`: ``CMD reserve --peer NAME``) just before it is installed, and the next is
 reserved only once that challenge phase's end entry is in the gate's ``status`` (`session_end`), so ``--commit``'s windows
-and the solo window all take the auditor host's coins. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger HEAD [--ledger HEAD
+and the solo window all take the auditor device's coins. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger HEAD [--ledger HEAD
 ...] --pins HEAD [--pins HEAD ...] --main FILE`` is the verifier's side on no GPU, ``--ledger`` given once per head
 the gate published, ``--pins`` once per head of the host's pins log the gate published and ``--main`` the auditor's ``git
 rev-list --first-parent origin/main`` (without them every window is refused). With ``--window WINDOW_JSON``
@@ -131,7 +131,11 @@ import torch
 from verity.protocols.accounting.pouw.verifier import verifier
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.audit import salt_of
-from verity.protocols.accounting.pouw.verifier.coins import Challenger, CoinCommitment, CoinOpening
+from verity.protocols.accounting.pouw.verifier.coins import (
+    Challenger,
+    CoinCommitment,
+    CoinOpening,
+)
 from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from tests.engine.int8_exact_gpu import PROMPTS as SERVE_H1_PROMPTS
@@ -250,7 +254,20 @@ def await_end(status: Any, polls: int = 300) -> dict[str, Any]:
     return status()
 
 
-def gate_command(argv: list[str]) -> Any:
+@dataclasses.dataclass(frozen=True, eq=False)
+class GateCommand:
+    """What `gate_command` answers. Called with a challenge phase and its root it is ``call``, the gate's open of it;
+    ``argv`` is the command its verbs run through, and ``reserve`` and ``ended`` are as `gate_command` says."""
+    call: Callable[..., dict[str, Any]]
+    argv: list[str]
+    reserve: Callable[[str, int | None], dict[str, Any]]
+    ended: Callable[[str], dict[str, Any]]
+
+    def __call__(self, session: str, root: str, withhold: bool = False) -> dict[str, Any]:
+        return self.call(session, root, withhold)
+
+
+def gate_command(argv: list[str]) -> GateCommand:
     """The `pouw_h1_window.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
     --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
     S``, and the answer returned once its ``port`` listens on this host (`await_listener`); with ``withhold`` (a sample's
@@ -294,8 +311,7 @@ def gate_command(argv: list[str]) -> Any:
             raise ValueError(f"the gate reserved draw challenge phase {answer.get('session')} plain: {PHW.WITHHELD_OPEN}")
         return answer
 
-    gate.argv, gate.reserve, gate.ended = argv, reserve, lambda session: await_end(lambda: verb("status", session))
-    return gate
+    return GateCommand(gate, argv, reserve, lambda session: await_end(lambda: verb("status", session)))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -312,7 +328,7 @@ class WindowSessions:
 
 def window_sessions(gate: Any, peer: str, steps: int) -> WindowSessions:
     """With ``--peer``: each window the run serves gets a challenge phase of its own, reserved at the gate (``gate.reserve``) just
-    before the window is installed, since the auditor host's challenger serves one window a challenge phase and a challenge phase opens
+    before the window is installed, since the auditor device's challenger serves one window a challenge phase and a challenge phase opens
     once; ``sessions(name)`` is window `name`'s reserve answer (`pouw_h1_window.reserved_of`), and a name asked for twice
     is refused (ValueError), as is a reserve the gate refuses. Each window's sample session is reserved with it
     (``gate.reserve(peer, None)``), ``sessions.draws[name]`` its answer. ``sessions.held`` maps each window to its
@@ -418,7 +434,7 @@ def model_key_of(gate: Any, model: str, circuit: str) -> Any:
 def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, session: Any = None, gate: Any = None,
                 draw_session: Any = None, **kw: Any) -> dict[str, Any]:
     """The option's settings for one served window: the engine's model runner (where the scheduler's admissions arrive) and
-    the window's coins, its salt coin and one live round coin a step: the auditor host's at `challenger` (``HOST:PORT``, one
+    the window's coins, its salt coin and one live round coin a step: the auditor device's at `challenger` (``HOST:PORT``, one
     challenge phase a window, `pouw_h1_challenger`) in the `session` the challenger gate reserved for it, which `gate`
     opens on the window's open root, and its sampling coin from the `draw_session` the gate reserved beside it, which `gate`
     opens withheld on the window's sample root; else held in this process, which no verifier trusts and which credits
@@ -959,7 +975,7 @@ def served_measures(got: list[dict[str, Any]], want: list[dict[str, Any]], cap: 
                     stamps: dict[int, float]) -> dict[str, Any]:
     """What only the serving process sees of a fill window: its rate, each step's seconds (at linear 0 of the next), its
     tokens against the plain run's and the static schedule's check."""
-    step_s = [round((stamps[s + 1] if s + 1 in stamps else end) - stamps[s], 4) for s in sorted(stamps)]
+    step_s = [round(stamps.get(s + 1, end) - stamps[s], 4) for s in sorted(stamps)]
     return {"serve": rate(got, end - t0, served_steps), "step_s": step_s, "served_end_unix": round(time.time(), 3),
             "decode_step_s_median": float(np.median(step_s[1:])) if len(step_s) > 1 else None,
             "same_tokens": [g["token_ids"] for g in got] == [g["token_ids"] for g in want], "tokens_digest": tokens_digest(got),
@@ -1128,7 +1144,19 @@ def negatives_of(layers: list[Any]) -> tuple[str, ...]:
     return NEGATIVES + ((EXPERT_NEGATIVE,) if PHK.expert_names(layers) else ())
 
 
-def editor(kind: str) -> Any:
+class Edit:
+    """An edit of the arm's codes, called as ``codes(layer, xq)`` is (`edited`); ``at`` names the expert site it zeroed,
+    None while it has zeroed none."""
+
+    def __init__(self, codes: Callable[[Any, Any], Any]) -> None:
+        self.codes = codes
+        self.at: str | None = None
+
+    def __call__(self, layer: Any, xq: Any) -> Any:
+        return self.codes(layer, xq)
+
+
+def editor(kind: str) -> Edit:
     """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the A = 0 probe),
     row 1's first code moved off by one in the first call of two rows or more (``a-row-off``), or the first routed
     expert down call with rows all zero (``a-zero-expert``: its K, the intermediate width, is the experts' alone). The
@@ -1136,7 +1164,7 @@ def editor(kind: str) -> Any:
     from verity_vllm.engine import int8_experts as X
     done = [False]
 
-    def edit(layer: Any, xq: Any) -> Any:
+    def codes(layer: Any, xq: Any) -> Any:
         if kind == "a-zero":
             return torch.zeros_like(xq)
         if kind == EXPERT_NEGATIVE:
@@ -1149,7 +1177,7 @@ def editor(kind: str) -> Any:
         done[0], xq = True, xq.clone()
         xq[1, 0] = 1 if int(xq[1, 0]) != 1 else 2
         return xq
-    edit.at = None
+    edit = Edit(codes)
     return edit
 
 
@@ -1226,7 +1254,7 @@ def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
     """A ``--commit`` run's coins, window by window (the Commit window, each negative, the fill window): its coin source,
     its challenge phase and how that ended, and its credit gate (`pouw_h1.H1Run.credit`): the gate-passed rows, the refused calls
     with each reason, and the credited share, gate-passed MACs over served MACs. ``ok`` without ``challenger``; with it,
-    when every window's coins are the auditor host's from a challenge phase of its own that ended closed and complete,
+    when every window's coins are the auditor device's from a challenge phase of its own that ended closed and complete,
     and the honest Commit window's gate passes rows and refuses none of its calls, its sample's challenge phase ended
     closed and complete too (a refused negative may never open its own)."""
     wins = {"commit": doc.get("h1_commit"), **{f"commit-{k}": v.get("window") for k, v in (doc.get("negatives") or {}).items()},
@@ -1325,6 +1353,7 @@ PRODUCER = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "served
 def producer() -> Any:
     """Kernels' producer module (`PRODUCER`), loaded by path: it is a benchmark's, outside this package."""
     spec = importlib.util.spec_from_file_location("served_h1_producer", PRODUCER)
+    assert spec is not None and spec.loader is not None, f"{PRODUCER} is not a file Python loads as a module"
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -1451,7 +1480,6 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     and its ``lean_answers`` says how many."""
     from verity.protocols.proofs.spot.device import remote
 
-    from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import answers as A
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
@@ -1538,7 +1566,7 @@ def main(argv: list[str] | None = None) -> int:
                          "hf_overrides={\"num_hidden_layers\": L} serves a model's first L layers")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
-    ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "
+    ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor device's "
                                                               "challenger (verity/protocols/compose/device/live_challenger/run.sh, SCHEME "
                                                               "verity/pouw/epoch-coins/live/v1, FAMILIES "
                                                               "pouw_h1_challenger.families(S)); else held in this process")
@@ -1706,7 +1734,8 @@ def main(argv: list[str] | None = None) -> int:
         main = None if a.main is None else remote.main_lines(a.main)
         statements = json.loads(Path(a.statements).read_text()) if a.statements else ()
         live = json.loads(Path(a.live_evidence).read_text()) if a.live_evidence else None
-        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
+        calls_file, directory = a.check_challenger
+        return 0 if check_challenger(calls_file, directory, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
                                      a.pins, main, statements, live, a.draw_dir, a.lean_answers)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")

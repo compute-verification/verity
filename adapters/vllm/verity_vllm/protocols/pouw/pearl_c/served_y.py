@@ -2,22 +2,35 @@
 to FP32, followed by its hm96 salt under the prover's key), in a ``frame-v3-sha512`` tree bound to the epoch's salt and the
 call's index, and retained beside A's (``y/<index>.rows.bf16``, ``y/<index>.tree``).  `verify_run` opens a sampled tile's
 real rows of it and holds each word to the unscale of the tile's checked U (`pearl_c_u.y`); the root is what a consumer of
-y (the sampled proofs' blocks after the linear) is tied to.  A served call's tree is built on its device by the kernel's
+y (SPOT's proof blocks after the linear) is tied to.  A served call's tree is built on its device by the kernel's
 own tree launches (`DeviceTrees`), `commit_y`'s bytes."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.protocols.accounting.pouw.verifier.audit import HM96, ROW_SCHEMA, hm96_salt, rows_domain
-from verity.protocols.accounting.pouw.verifier.protocol import tagged
 from verity.commitments import CommitmentDomain
 from verity.commitments.merkle import tree_levels
+from verity.protocols.accounting.pouw.verifier.audit import (
+    HM96,
+    ROW_SCHEMA,
+    hm96_salt,
+    rows_domain,
+)
+from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _put, _stream, _write, _zeros
+from verity_vllm.protocols.pouw.pearl_c.host import (
+    _bytes,
+    _put,
+    _stream,
+    _write,
+    _zeros,
+)
 
-__all__ = ["DeviceTrees", "HM96_Y", "Y_ROWS_TAG", "commit_y", "f32_rows", "retain_y", "y_binding", "y_domain"]
+__all__ = ["DeviceTrees", "HM96_Y", "Y_ROWS_TAG", "chunk_rows", "commit_y", "f32_rows", "retain_y", "tree_launches", "y_binding",
+           "y_domain"]
 
 Y_ROWS_TAG = "verity/pouw/pearl-plus/y-rows/v1"
 #: the hm96 salt stream's nonce of a call's y tree: this plus the call's index (A's trees take the index, below 2^61)
@@ -71,6 +84,27 @@ def y_tree(run: Any, y: Any, index: int) -> Any:
     return run._y_trees(y, index)
 
 
+def chunk_rows(m: int, n: int) -> int:
+    """The rows of y a device tree widens and digests at a time: `Y_CHUNK_BYTES` of FP32 words, at least one row."""
+    return max(1, min(m, Y_CHUNK_BYTES // (4 * n)))
+
+
+def tree_launches(R: Any, p: Any, tree: int, dig: int, seg: int, m: int, rows: int, index: int,
+                  words: Callable[[int, int], int]) -> None:
+    """Call `index`'s y tree over its `m` rows into `tree` (`commit_y`'s layout), launches only, on the device's stream:
+    the pads, the row digests `rows` rows at a time into `dig` through the chunk's scratch `seg`, each chunk's FP32 words at
+    the address `words(r, count)` returns once it has widened rows r to r + count - 1, then the hm96 leaves at nonce
+    `HM96_Y` + index and the frame leaves under p's ``dom_b`` (y's `y_domain`), and the levels.  `R` is p's run module."""
+    p.b["tree_b"] = tree
+    for _, f in p.tree_setup("b", m, "dom_b"):
+        f()
+    for r in range(0, m, rows):
+        count = min(rows, m - r)
+        p.row_digests(words(r, count), dig + 64 * r, seg, count)
+    R.Pipeline.hm_level0(p, "b", dig, m, "dom_b", nonce=R.nonce_args(HM96_Y + index))
+    p.levels("b", m, "dom_b")
+
+
 class DeviceTrees:
     """A run's y trees on its device, by its kernel's own tree launches, the ones B's weight trees run: the row digests
     (`run.Pipeline.row_digests`) over y's rows widened to FP32 a chunk at a time (exact, as `f32_rows`), the hm96 leaves at
@@ -79,17 +113,22 @@ class DeviceTrees:
     rows its rows of k = n words, so n is a k the kernels take; its first tree is held to `commit_y` over a fixed
     `Y_CHECK_ROWS`-row y."""
 
+    pipes: dict[int, Any]
+
     def __init__(self, run: Any) -> None:
         self.run, self.pipes = run, {}
         self.dom = _zeros(64, run.device)
 
     def __call__(self, y: Any, index: int) -> Any:
-        n = y.shape[1]
+        return self._tree(self.pipe(y.shape[1], index), y.contiguous(), index)
+
+    def pipe(self, n: int, index: int) -> Any:
+        """Width `n`'s pipeline, made and held to `commit_y` at its first use."""
         if n not in self.pipes:
             p = self._pipe(n)
             self._check(p, n, index)
             self.pipes[n] = p
-        return self._tree(self.pipes[n], y.contiguous(), index)
+        return self.pipes[n]
 
     def _pipe(self, n: int) -> Any:
         run, R = self.run, self.run.kernel.run
@@ -106,20 +145,18 @@ class DeviceTrees:
         size = R.NB * (2 * R.pow2(m) - 1)
         tree = (torch.empty(size, dtype=torch.uint8, device=y.device) if poison is None
                 else torch.full((size,), poison, dtype=torch.uint8, device=y.device))
-        rows = max(1, min(m, Y_CHUNK_BYTES // (4 * n)))
+        rows = chunk_rows(m, n)
         dig = torch.empty(64 * m, dtype=torch.uint8, device=y.device)
         seg = torch.empty(64 * (n // 256) * rows, dtype=torch.uint8, device=y.device)
         _put(self.dom, y_domain(self.run.salt, index, m).domain_id)
-        p.b["tree_b"] = tree.data_ptr()
+        held: list[Any] = []
+
+        def words(r: int, count: int) -> int:
+            held[:] = [y[r:r + count].float()]
+            return held[0].data_ptr()
         before, dev.stream = dev.stream, _stream(y.device)
         try:
-            for _, f in p.tree_setup("b", m, "dom_b"):
-                f()
-            for r in range(0, m, rows):
-                words = y[r:r + rows].float()
-                p.row_digests(words.data_ptr(), dig.data_ptr() + 64 * r, seg.data_ptr(), words.shape[0])
-            R.Pipeline.hm_level0(p, "b", dig.data_ptr(), m, "dom_b", nonce=R.nonce_args(HM96_Y + index))
-            p.levels("b", m, "dom_b")
+            tree_launches(R, p, tree.data_ptr(), dig.data_ptr(), seg.data_ptr(), m, rows, index, words)
         finally:
             dev.stream = before
         return tree

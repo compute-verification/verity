@@ -11,11 +11,15 @@ import types
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, transcript_domain
+from verity.protocols.accounting.pouw.verifier.audit import (
+    Epoch,
+    Workload,
+    transcript_domain,
+)
 from verity.protocols.accounting.pouw.verifier.core_check import MANIFEST_SCHEMA
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul
 from verity.protocols.accounting.pouw.verifier.serving import Schedule, SchemeId
@@ -40,6 +44,9 @@ from verity_vllm.protocols.pouw.pearl_c.kernel import Kernel
 from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, excluded_host
 
+#: a retained whole capture's stages (`whole_calls.WholeCalls._stages`): each (weight, m₁₆)'s A words, A tree and y
+_Stages = dict[tuple[int, int], tuple[Any, Any, Any]]
+
 
 @dataclass
 class _Pass:
@@ -58,15 +65,16 @@ class _Pass:
 
     @property
     def first(self) -> int:
-        """The index of the pass's first call: ``base``, which a pass has from its first call on."""
-        assert self.base is not None
-        return self.base
+        """The index of the pass's first call: ``base`` as it is, which a pass has from its first call on.  Before that it
+        is None, unchecked here: what reads it then fails on its own arithmetic."""
+        return cast(int, self.base)
 
 
 class _RunState:
     """What `PearlCDeviceRun.__init__` sets and its four base classes (`PassEnds`, `passes.EpochCalls`,
-    `graphs.GraphCalls`, `lanes.LaneCalls`) read of each other and of the run, declared once: annotations only, so the
-    class holds no value and ``hasattr`` on a run reads as before.  A tensor, a weight's side and a graph are ``Any``."""
+    `graphs.GraphCalls` with its base `whole_calls.WholeCalls`, `lanes.LaneCalls`) read of each other and of the run,
+    declared once: annotations only, so the class holds no value and ``hasattr`` on a run reads as before.  A tensor, a
+    shape, a weight's side and a graph are ``Any``."""
     scheme: C.PearlC
     entry: str
     kernel: Kernel
@@ -104,11 +112,14 @@ class _RunState:
     omit: frozenset[str]
     commits: dict[str, Any]
     details: dict[str, Any]
+    shapes: dict[tuple[int, int, int], Any]
     cur: _Pass
     _host_keys: Any
     _host_offs: Any
     _predicted: dict[int, tuple]
     _graphs: dict[tuple, Any]
+    _stages: _Stages | None
+    _stages_poisoned: int | None
     _side_turn: int
     _side_cache: dict[tuple, frozenset[str]]
     _lagged: Any
@@ -126,9 +137,12 @@ class _RunState:
     _defers_a: Callable[..., Any]
     _end_aside: Callable[..., Any]
     _ended: Callable[..., Any]
+    _graph_key: Callable[..., Any]
     _graphed: Callable[..., Any]
     _lane_graph: Callable[..., Any]
     _offsets: Callable[..., Any]
+    _retained: Callable[..., Any]
+    _unpoisoned: Callable[..., Any]
     _widen_later: Callable[..., Any]
 
 
@@ -173,8 +187,9 @@ class PassEnds(_RunState):
             units = len(cur.matmuls)
             flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0) if cur.flag_rows else torch.zeros(2, dtype=torch.int64)
             aside = lag and self.aside_ends and cur.retain is None and self.device.type == "cuda"
-            leaves, side, got = self._end_aside(count, self.roots_buf[:nb * units], flags) if aside else \
+            where: tuple[int, Any, Any] = self._end_aside(count, self.roots_buf[:nb * units], flags) if aside else \
                 (self.leaves.data_ptr(), None, None)
+            leaves, side, got = where
             K.dev.stream = side.cuda_stream if aside else self.stream()
             try:
                 for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
@@ -198,10 +213,10 @@ class PassEnds(_RunState):
                 done.record()
                 self._lagged = (out, done, got, units, count)
             else:
-                roots_a, root = _bytes(self.roots_buf[:nb * units]), _bytes(tree[-nb:])
-                self._ended(out, roots_a, root, flags.tolist(), units, count)
+                roots_a, root_t = _bytes(self.roots_buf[:nb * units]), _bytes(tree[-nb:])
+                self._ended(out, roots_a, root_t, flags.tolist(), units, count)
                 if cur.retain is not None:
-                    complete = self._write_retained(cur, epoch, roots_a, root, tree, count, out)
+                    complete = self._write_retained(cur, epoch, roots_a, root_t, tree, count, out)
                     if behind and self.retain_behind:
                         self._behind = (*self._behind, host_behind(complete))
                         deferred = True
@@ -227,36 +242,40 @@ class PassEnds(_RunState):
         self.begin(retain, run, schedule, stepped=step)
         return out
 
-    def _retained(self, cur: _Pass, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None) -> None:
+    def _retained(self, cur: _Pass, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None,
+                  y_tree: Any = None) -> None:
         """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree,
         and given its real rows of `y`, y's rows and its tree, `served_y.y_tree`, made on the call's device: all written
         behind the call, `write_behind`, joined by the pass's end).  On a device the call's buffers are copied as they are on
         its stream, and the rest runs behind it on the run's retain stream (`_retain_stream`): y's tree, the copies to the
-        host, and the record and y's root, decided from the bytes the writes land (`screen.excluded_host`)."""
+        host, and the record and y's root, decided from the bytes the writes land (`screen.excluded_host`).  With `y_tree`
+        (uint8, `commit_y`'s layout), y's tree is that one, as the caller's own launches wrote it, copied and never made
+        again here: a caller that wrote nothing into it retains what it holds."""
         import torch
-        d = cur.retain / "calls"
+        d = cast(Path, cur.retain) / "calls"
         for name in ("calls",) if y is None else ("calls", "y"):
             if name not in cur.dirs:
-                cur.retain.mkdir(mode=0o700, parents=True, exist_ok=True)
-                (cur.retain / name).mkdir(mode=0o700, exist_ok=True)
+                cast(Path, cur.retain).mkdir(mode=0o700, parents=True, exist_ok=True)
+                (cast(Path, cur.retain) / name).mkdir(mode=0o700, exist_ok=True)
                 cur.dirs.add(name)
         unit, ex, rec = (mm, m, mm.shape.k), self.weights[mm.weight].excluded, len(cur.records)
-        files = {"rows": None, "tree": None} | ({} if y is None else {"y": {"root": None, "rows": None, "tree": None}})
+        files: dict[str, Any] = {"rows": None, "tree": None} | ({} if y is None else {"y": {"root": None, "rows": None, "tree": None}})
         paths = (d / f"{mm.index}.rows.bf16", d / f"{mm.index}.tree",
-                 cur.retain / "y" / f"{mm.index}.rows.bf16", cur.retain / "y" / f"{mm.index}.tree")
+                 cast(Path, cur.retain) / "y" / f"{mm.index}.rows.bf16", cast(Path, cur.retain) / "y" / f"{mm.index}.tree")
 
         def y_root(host: Any) -> None:
             files["y"]["root"] = host[-self.nb:].numpy().tobytes().hex()
 
         if not xa.is_cuda:
             cur.records.append(PW.UnitRecord(*unit, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]), ex))
-            out = [(paths[0], xa.to(torch.bfloat16).view(torch.uint8), False), (paths[1], tree, True)]
+            out: list[tuple] = [(paths[0], xa.to(torch.bfloat16).view(torch.uint8), False), (paths[1], tree, True)]
             if y is not None:
-                out += [(paths[2], y, False), (paths[3], SY.y_tree(self, y, mm.index), True, y_root)]
+                out += [(paths[2], y, False), (paths[3], SY.y_tree(self, y, mm.index) if y_tree is None else y_tree, True, y_root)]
             got = write_behind(tuple(out), cur.writes)
         else:
             side = self._retain_stream(xa.device)
-            kept = [xa.to(torch.bfloat16, copy=True), tree.clone(), flags[:m].clone()] + ([] if y is None else [y.clone()])
+            kept = [xa.to(torch.bfloat16, copy=True), tree.clone(), flags[:m].clone()] + ([] if y is None else [y.clone()]) \
+                + ([] if y is None or y_tree is None else [y_tree.clone()])
             side.wait_stream(torch.cuda.current_stream(xa.device))
             cur.records.append(None)
             with torch.cuda.stream(side):
@@ -269,7 +288,8 @@ class PassEnds(_RunState):
                     cur.records[rec] = PW.UnitRecord(*unit, excluded_host(flags.numpy().reshape(-1, 2), words), ex)
                 out = [(paths[0], rows.view(torch.uint8), False, record, held), (paths[1], a_tree, True)]
                 if ys:
-                    out += [(paths[2], ys[0], False), (paths[3], SY.y_tree(self, ys[0], mm.index), True, y_root)]
+                    out += [(paths[2], ys[0], False),
+                            (paths[3], ys[1] if y_tree is not None else SY.y_tree(self, ys[0], mm.index), True, y_root)]
                 got = write_behind(tuple(out), cur.writes, fresh=True, here=True)
         files.update(rows=got[0], tree=got[1])
         if y is not None:
@@ -311,7 +331,7 @@ class PassEnds(_RunState):
         once every file is: its records, its weights' files and its manifest, ``out``'s ``excluded_rows`` and ``manifest``.
         A weight's files are written from the device by the first retained pass, on this thread, and hard-linked after."""
         import torch
-        d, nb = cur.retain, self.nb
+        d, nb = cast(Path, cur.retain), self.nb
         wd = d / "weights"
         wd.mkdir(mode=0o700, parents=True, exist_ok=True)
         last = write_behind(((d / "leaves", self.leaves[:nb * count], True), (d / "tree_t", tree, True)), cur.writes)
@@ -341,8 +361,8 @@ class PassEnds(_RunState):
                 **session_head(self.commits), "cubin_sha256": self.kernel.cubin_sha256,
                 "kernel_source_sha256": self.kernel.source_sha256, "kernel_files": dict(self.kernel.files),
                 "schedule": copy.deepcopy(self.details["schedule"]),
-                "records_root": None, "commitment": {"root": root.hex(), "count": count}, "hm96_salt_key": self.salt_key.hex(),
-                "leaves": last[0], "tree_t": last[1]}
+                "records_root": None, "commitment": {"root": root.hex(), "count": count},
+                "hm96_salt_key": cast(bytes, self.salt_key).hex(), "leaves": last[0], "tree_t": last[1]}
         splits = {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}
 
         def complete() -> None:

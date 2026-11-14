@@ -92,6 +92,45 @@ def test_an_own_partial_of_a_class_that_produces_no_partial_fails_producer():
     _only(res, "producer", "rank 0 (step 0, k 0): own partial produced by ['Softmax_v1{N=8}'], not an admitted partial producer")
 
 
+def _links(rank: int, world: int, classes: tuple[str, str]) -> list[dict]:
+    """One rank's Program links to the two collectives of `_colls`, each module path ending in its issuing module's class."""
+    return [{"k": k, "peer_collective_k": k, "kind": kind, "shape": [1, 8], "module": site, "module_path": f"{site} ({cls})",
+             "peers": [{"rank": p, "collective_k": k} for p in range(world) if p != rank]} for (k, kind, site), cls in zip(SITES, classes)]
+
+
+def test_an_own_partial_the_lm_heads_class_does_not_admit_fails_links():
+    """A link's module path names the class, and the class decides the producer: the LM head's all-gather takes a Gemm's rows.  An
+    embedding shard is a partial producer in general, so only the links check refuses it there."""
+    colls, _ = _world()
+    links: dict[int, list[dict] | dict[str, list[dict]]] = {r: _links(r, 2, ("RowParallelLinear", "ParallelLMHead")) for r in colls}
+    res = RM.cross_rank_check(colls, links=links, producers={r: {(0, 0): ["Gemm_v1{K=8}"], (0, 1): ["Gemm_v1{K=8}"]} for r in colls})
+    assert res["verdict"] == "PASS" and res["failed"] == [], res
+    res = RM.cross_rank_check(colls, links=links, producers={r: {(0, 0): ["Gemm_v1{K=8}"], (0, 1): ["EmbeddingShard_v1{V=8}"]} for r in colls})
+    _only(res, "links", "rank 0 link 1 (ParallelLMHead): own partial produced by ['EmbeddingShard_v1{V=8}'], "
+                        "the site class admits ('Gemm_v1', 'Gemm_v2', 'batch:Gemm') (wrong producer)")
+
+
+@pytest.mark.parametrize("module_path", ["lm_head", "lm_head (ParallelLMHead) of rank 0", "lm_head (ParallelLMHead]", "lm_head (SomeOtherHead)", None],
+                         ids=["the site alone", "a class not at the end", "a bracket that does not close", "a class with no rule", "no module path"])
+def test_a_link_whose_module_path_ends_in_no_class_with_a_rule_has_its_producer_asked_of_no_class(module_path):
+    """Today's answer, held as that: the class is what a link's `module_path` ends in, `<site> (<class>)`, and the producer rule is
+    the class's.  A link that states the site alone, a class elsewhere or in a bracket left open, a class no rule names, or no
+    `module_path`, names no class with a rule, so `links` asks nothing of its producer: the embedding shard that the LM head's class refuses passes, as the
+    partial producer it is in general."""
+    colls, _ = _world()
+    links: dict[int, list[dict] | dict[str, list[dict]]] = {}
+    for r in colls:
+        row, head = _links(r, 2, ("RowParallelLinear", "ParallelLMHead"))
+        if module_path is None:
+            del head["module_path"]
+        else:
+            head["module_path"] = module_path
+        links[r] = [row, head]
+    res = RM.cross_rank_check(colls, links=links, producers={r: {(0, 0): ["Gemm_v1{K=8}"], (0, 1): ["EmbeddingShard_v1{V=8}"]} for r in colls})
+    assert res["verdict"] == "PASS" and res["failed"] == [], res
+    assert "links" in [c["name"] for c in res["checks"]]
+
+
 def test_a_recorder_with_one_row_twice_fails_recorder():
     colls, recorder = _world()
     recorder[0].append(dict(recorder[0][0]))
@@ -152,6 +191,58 @@ def test_a_failed_provenance_counts_the_mismatches_it_lists_where_it_states_no_c
     res = RM.cross_rank_check(colls, recorder=recorder, provenance=stated, recorder_sha256=digests)
     assert _fails(res, "provenance") == ['provenance FAIL: 7 mismatches, first {"step": 0, "k": 1}',
                                          '9 stored tensors do not digest to their recorder rows, first {"rank": 1, "k": 0}']
+
+
+BOUND = {"pass": True, "collectives_checked": 2, "recorder_sha256": {"0": "h0", "1": "h1"}, "tensors_digested": 8}
+DIGESTS = {0: "h0", 1: "h1"}
+NO_MAPPING = [["pass"], "PASS", 1, True, [], "", 0]
+OTHER_TYPES = [   # (what the record states in place of a count or of its list of mismatches, the error the check raises)
+    ({"collectives_checked": "two"}, ValueError), ({"collectives_checked": [2]}, TypeError),
+    ({"fused_norm_unfused_left_to_commit": "none"}, ValueError), ({"tensors_digested": "eight"}, ValueError),
+    ({"pass": False, "mismatches": {"step": 0}}, KeyError), ({"pass": False, "mismatches": 3}, TypeError), ({"mismatches": 3}, TypeError),
+    ({"digest_mismatches": {"rank": 1}}, KeyError), ({"digest_mismatches": 3}, TypeError),
+    ({"n_mismatches": "many"}, ValueError), ({"n_digest_mismatches": "many"}, ValueError),
+]
+
+
+@pytest.mark.parametrize("provenance", NO_MAPPING, ids=[repr(p) for p in NO_MAPPING])
+def test_a_provenance_that_is_no_mapping_raises_and_is_never_a_pass(provenance):
+    """Today's answer, held and not judged: the check reads the record as a mapping, and only `None` is no record.  Any other
+    value, an empty one too, raises before a verdict is written."""
+    colls, recorder = _world()
+    with pytest.raises(AttributeError, match=f"'{type(provenance).__name__}' object has no attribute 'get'"):
+        RM.cross_rank_check(colls, recorder=recorder, provenance=provenance, recorder_sha256=DIGESTS)
+
+
+@pytest.mark.parametrize(("stated", "error"), OTHER_TYPES, ids=[repr(s) for s, _ in OTHER_TYPES])
+def test_a_provenance_whose_counts_are_no_numbers_or_whose_mismatches_are_no_list_raises(stated, error):
+    """Today's answer, held and not judged.  A count given as digits in text is read as the number."""
+    colls, recorder = _world()
+    with pytest.raises(error):
+        RM.cross_rank_check(colls, recorder=recorder, provenance={**BOUND, **stated}, recorder_sha256=DIGESTS)
+    as_text = dict(BOUND, collectives_checked="2", tensors_digested="8")
+    assert RM.cross_rank_check(colls, recorder=recorder, provenance=as_text, recorder_sha256=DIGESTS)["verdict"] == "PASS"
+
+
+def test_a_passing_provenance_whose_mismatches_are_a_mapping_passes_and_its_digest_mismatches_fail_by_their_count():
+    """Today's answer, held and not judged: the list of mismatches is read only for its length and its first item."""
+    colls, recorder = _world()
+    listed = dict(BOUND, mismatches={"step": 0})
+    assert RM.cross_rank_check(colls, recorder=recorder, provenance=listed, recorder_sha256=DIGESTS)["verdict"] == "PASS"
+    res = RM.cross_rank_check(colls, recorder=recorder, provenance=dict(BOUND, digest_mismatches=[{"rank": 1, "k": 0}]), recorder_sha256=DIGESTS)
+    _only(res, "provenance", '1 stored tensors do not digest to their recorder rows, first {"rank": 1, "k": 0}')
+
+
+def test_an_empty_provenance_record_fails_by_name_on_everything_it_does_not_state():
+    colls, recorder = _world()
+    res = RM.cross_rank_check(colls, recorder=recorder, provenance={}, recorder_sha256=DIGESTS)
+    assert res["failed"] == ["provenance"] and _fails(res, "provenance") == [
+        "provenance FAIL: 0 mismatches, first null",
+        "provenance checked 0 collectives (+0 unfused fused-norm calls left to the Commit), the folds state 2 (steps stored: None)",
+        "provenance record carries no recorder_sha256: not bound to any recorder rows (another run, a hand-written file, or an older tp2_match)",
+        "provenance digested 0 stored tensors, 8 required (part + out, every rank, every common (step, k))"]
+    res = RM.cross_rank_check(colls, recorder=recorder, provenance=dict(BOUND, recorder_sha256=["h0", "h1"]), recorder_sha256=DIGESTS)
+    _only(res, "provenance", "provenance record carries no recorder_sha256: not bound to any recorder rows")
 
 
 # --- commit_binding -----------------------------------------------------------------------------------------------------------

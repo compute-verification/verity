@@ -800,11 +800,11 @@ def test_a_withdrawn_run_is_refused_before_any_of_it_is_fetched(tmp_path, target
 
 @pytest.mark.parametrize("gamma, verdict", [(0.14, "within target"), (0.1401, "past target"), (0.199, "past target")])
 def test_the_metrics_tabs_row_holds_the_number_against_its_target(gamma, verdict):
-    """The Metrics tab's row is `benchmarks/memory/metrics.toml`'s, and its value is the printed number with the goal's
-    target beside it, a share at the target being within it."""
+    """The Metrics tab's row is `benchmarks/memory/metrics.toml`'s, its unit the short form of the measurement's, and its
+    value is the printed number with the goal's target beside it, a share at the target being within it."""
     rows = {m["id"]: m for m in tomllib.loads((ROOT / "benchmarks" / "memory" / "metrics.toml").read_text())["metric"]}
     row = rows[M.METRIC]
-    assert (row["owner"], row["unit"], row["better"]) == ("memory-accounting", M.UNIT, "lower")
+    assert (row["owner"], row["better"]) == ("memory-accounting", "lower") and M.UNIT.startswith(f"{row['unit']} ")
     assert "benchmarks/memory/run.py --from" in row["command"]
     within = {"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -100}}}}}
     doc = {"value": gamma, "unit": M.UNIT, "run": RUN, "bound": True}
@@ -848,7 +848,7 @@ def test_a_row_whose_error_is_above_2_to_the_minus_100_says_so_in_its_verdict(le
 
 
 def test_a_declared_error_at_the_bound_is_preferred_to_the_ledgers_own_and_holds_no_premise():
-    """The declared error (the ledger's with the sketch's and the draw's) decides where the record holds it: a ledger's
+    """The declared error (the ledger's with the sketch's and the sample's) decides where the record holds it: a ledger's
     own error above the bound beside a declared one at it adds nothing; the declared one above it, beside a ledger's own
     under it, does."""
     doc = {"value": 0.127, "unit": M.UNIT, "run": RUN, "bound": True}

@@ -1,4 +1,5 @@
-"""The integration's internal import graph and the layer map, for the P2/P4/P5/P9 lints.
+"""The integration's internal import graph and the layer map, for the P2/P4/P5/P9 lints; and which modules of ``verity``
+are core (``core``, ``core_less_definitions``), for P1, ``conftest.py``'s guard and the boundary tests of ``tests/program``.
 
 An edge is one import statement in a library module that names another library module (``verity_vllm``'s, or the
 Definitions that moved from its ``program`` layer to ``verity.definitions``, which keep that layer): module-level and
@@ -20,7 +21,8 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
+from typing import TypeGuard
 
 from . import _ratchet as R
 
@@ -71,7 +73,7 @@ PROPERTY_MODULES = ("verity_vllm.properties",)
 
 #: The replay drivers (check/replay/) and the determinism value checks.
 VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
-    "check.replay", "check.value_check", "check.oracle_compare"))
+    "check.replay", "check.value_check", "check.oracle_compare", "check.match_oracle", "check.producers"))
 
 #: The verdict and the rules it decides from (the per-run rules, the C2 rules, the Build gates).
 VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.verdict_names", "verity_vllm.check.commit_pass", "verity_vllm.check.commit_rules",
@@ -101,13 +103,13 @@ class Edge:
     symbol: str
 
 
-@lru_cache(maxsize=None)
+@cache
 def modules() -> dict[str, str]:
     """module name -> file (relative to adapters/vllm) for every library module."""
     return {R.module_name(p): R.rel(p) for p in R.library_files()}
 
 
-@lru_cache(maxsize=None)
+@cache
 def core_packages() -> tuple[str, ...]:
     """The packages of ``R.DEFINITIONS`` that aren't the library's (``R.in_library``): core's, so an import of one is no edge."""
     return tuple(R.module_name(init) for d in sorted(R.DEFINITIONS.iterdir())
@@ -123,7 +125,7 @@ def _resolve(target: str, known: dict[str, str]) -> str | None:
     return None
 
 
-@lru_cache(maxsize=None)
+@cache
 def edges() -> tuple[Edge, ...]:
     known = modules()
     out: list[Edge] = []
@@ -152,6 +154,7 @@ def edges() -> tuple[Edge, ...]:
                     continue
                 dst = _resolve(t, known)
                 if dst and dst != mod:
+                    assert isinstance(node, (ast.stmt, ast.expr)), "an edge is read from an import or a call"
                     out.append(Edge(mod, dst, f, node.lineno, symbol))
     return tuple(out)
 
@@ -211,3 +214,59 @@ def sccs(nodes: set[str], adj: dict[str, set[str]]) -> list[list[str]]:
                 if len(comp) > 1:
                     out.append(sorted(comp))
     return sorted(out)
+
+
+# Which modules of ``verity`` the integration's own guards and boundary tests call core.
+# Core is ``verity`` less three sets that sit under it: what was put there from outside core (the multiproofs, Flock, and
+# under ``verity.circuits`` the catalog, the silicon, the targets, the kernels and private circuits), the parties'
+# platform (a party, what a protocol declares, the configuration, the channel, the device, the runtime, the
+# attestations, the LMS scripts and the auditor's devices) and the measuring code that came from ``benchmarks/``.  A
+# protocol's verifier and prover are core, and so are the claims and the registered hardware's records.
+
+#: whether a module is core's, by the longest of these prefixes that covers its name
+SIDES: dict[str, bool] = {
+    "verity": True,
+    "verity.circuits.kernels": False,
+    "verity.circuits.ops": False,
+    "verity.circuits.private_circuits": False,
+    "verity.circuits.silicon": False,
+    "verity.circuits.targets": False,
+    "verity.commitments.multiproof": False,
+    "verity.protocols.proofs.flock": False,
+    "verity.channel": False,
+    "verity.commitments.attest": False,
+    "verity.commitments.lms": False,
+    "verity.config": False,
+    "verity.device": False,
+    "verity.party": False,
+    "verity.protocol": False,
+    "verity.protocols.accounting.certifier.device.lean": False,
+    "verity.protocols.accounting.pous.device": False,
+    "verity.protocols.accounting.pous.device.challenger_session": True,
+    "verity.protocols.accounting.pous.device.memory_challenger": True,
+    "verity.runtime": False,
+    "verity.protocols.accounting.poub.device": False,
+    "verity.protocols.accounting.poub.verifier.remote_session": False,
+    "verity.protocols.accounting.pouw.clear": False,
+    "verity.protocols.accounting.pouw.verifier.receipts": False,
+    "verity.protocols.compose": False,
+}
+#: the same for a test of what the Definitions import: the integration's Definitions are not core
+SIDES_LESS_DEFINITIONS: dict[str, bool] = {**SIDES, "verity.definitions": False}
+
+
+def _side(name: str | None, sides: dict[str, bool]) -> bool:
+    if not name:
+        return False
+    covering = [p for p in sides if name == p or name.startswith(p + ".")]
+    return bool(covering) and sides[max(covering, key=len)]
+
+
+def core(name: str | None) -> TypeGuard[str]:
+    """Whether ``name`` is a module of core (``SIDES``)."""
+    return _side(name, SIDES)
+
+
+def core_less_definitions(name: str | None) -> TypeGuard[str]:
+    """Whether ``name`` is a module of core, the integration's Definitions left out (``SIDES_LESS_DEFINITIONS``)."""
+    return _side(name, SIDES_LESS_DEFINITIONS)

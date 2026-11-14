@@ -1,4 +1,4 @@
-"""The auditor host's verifier service: PoUB's verifier
+"""The auditor device's verifier service: PoUB's verifier
 (`verity/protocols/accounting/poub/verifier/session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
 from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 
@@ -12,7 +12,10 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   which is this file's `gate` as root through one sudoers line, as on the challenger's host
   (`verity/protocols/compose/device/live_challenger/auditor.py`). A lane's own key is forced with the lane's name (`vy-verifier-gate LANE`,
   from `/etc/vy/verifier-gate-keys`, `vy-verifier-setup`), and only such a key starts, replays, stops a run or closes a
-  registration: the run records that name as `by`. A key forced with no name (`-`) reads only: `status`, `fetch`. A lane
+  registration: the run records that name as `by`. A key forced with no name (`-`) reads only: `status`, `fetch`. A party
+  verb (below) answers only a caller from a registered node: the wrapper passes the first word of `SSH_CONNECTION` as
+  `--from`, which sudo would otherwise drop, and the gate holds it to the `addresses` of `/etc/vy/verifier.json`'s
+  `peers` (`node_of`), so every answer of a party goes into a node. A lane
   names a run's parameters and gets a run; it never names code, a path, a host or a node's capacities. Infra's
   `vy-admin` runs the same gate (`sudo vy-verifier-gate VERB ...`, `by` vy-admin).
 - **What runs.** `/opt/vy-verifier/current` -> `/opt/vy-verifier/<commit>`, a root-owned `git archive` of that commit
@@ -75,8 +78,8 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   so a forced command that drops the caller's words can't hold a store the caller didn't name. `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
   `party_log wipe|pous|bw [LOG]`, to root on the host alone (`PARTY_LOG_REFUSED` over ssh, to every key), the sessions and each one's stdout as the host kept it (its signed t0 and
   t1). A lane
-  never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
-  count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
+  never names a path, an address or an egress count: a session signs no egress count and its party takes none (the
+  count is evidence the wipe's check takes beside the signed session). A session waits for no verifier unit to run, each party serves one session at a time, and the
   gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
 - **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` in the
   evidence store (a preserved tree of kind `verifier-run/v1`, by the pinned tree's store client) with the credential infra keeps in
@@ -113,6 +116,7 @@ import fcntl
 import fnmatch
 import gzip
 import hashlib
+import ipaddress
 import json
 import os
 import posixpath
@@ -184,7 +188,7 @@ COMPOSE_BYTES = 64 << 30
 """The most a hand-off may carry, in bytes, over all its files."""
 COMPOSE_ANSWER_BYTES = 64 << 20
 """The most of its $OUT a compose answers with, in bytes; a larger file is named with its size, not sent."""
-SAMPLED_EXE = Path("verity/protocols/proofs/recursion/verifier/recursive/.lake/build/bin/vstar-recursive")
+SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock/verifier/lean/.lake/build/bin/vstar-recursive")
 """Sampled proofs' Lean verifier in the pinned tree, as its pin built it: the record runs it rather than building one."""
 SUM_LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
@@ -637,7 +641,7 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
     `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, `bw_party`'s
     `--pous-session SID` (the registration the block challenger's record of PoUS session SID gives, read on this host)
     or `--fixture` (`PARTY_FIXED`'s), one of them, and nothing of `challenger_party`'s; never a path, an address or an egress count (the
-    session signs UNCOUNTED, which bounds nothing, until the network certifier's count reaches the host)."""
+    session signs none, and `wipe_party` takes none)."""
     name, module, port = PARTIES[verb]
     extra: list[str] = []
     args = list(rest)
@@ -697,6 +701,24 @@ def exec_party(argv: list[str], sink: BinaryIO, log: Path, minutes: int) -> int:
         if ran_out.is_set():
             out.write(json.dumps({"killed": f"the session's {minutes} min ran out"}).encode() + b"\n")
     return p.returncode
+
+
+CALLER_REFUSED = ("a party serves a registered node only: its ssh caller's address must be one of a peer's `addresses` in "
+                  "/etc/vy/verifier.json, so that every answer of a party goes into the node")
+
+
+def node_of(address: str | None, settings: dict) -> str:
+    """The registered node (`verifier.json`'s `peers`) one of whose `addresses` is `address`, a party's ssh caller's;
+    refused (`CALLER_REFUSED`) when none is, or when the forced command passed no address."""
+    try:
+        ip = ipaddress.ip_address(address or "")
+    except ValueError:
+        raise Refused(CALLER_REFUSED) from None
+    ip = getattr(ip, "ipv4_mapped", None) or ip
+    for name, peer in settings.get("peers", {}).items():
+        if any(ip == ipaddress.ip_address(a) for a in peer.get("addresses", [])):
+            return name
+    raise Refused(CALLER_REFUSED)
 
 
 def gate_party(verb: str, rest: list[str], host: Host, *, by: str, now: datetime, busy: Callable[[], list[str]],
@@ -1009,8 +1031,9 @@ PARTY_LOG_REFUSED = ("party_log is read on the host only (sudo vy-verifier-gate 
 
 def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **hooks: Any) -> int:
     """The gate's verbs, their answer on `sink` (stdout); the exit code. A refusal is exit 3 with {"refused": why}.
-    Over ssh (`--ssh WORDS --key NAME`, the forced command's) `by` is NAME, the lane the key was registered for, and a
-    key registered with no lane (`-`) reads only; run by root (vy-admin's sudo) `by` is the sudoer."""
+    Over ssh (`--ssh WORDS --key NAME [--from ADDRESS]`, the forced command's) `by` is NAME, the lane the key was
+    registered for, and a key registered with no lane (`-`) reads only; ADDRESS is the ssh caller's, which a party verb
+    holds to a registered node's (`node_of`). Run by root (vy-admin's sudo) `by` is the sudoer."""
     sink = sink if sink is not None else sys.stdout.buffer
 
     def answer(rc: int, doc: dict) -> int:
@@ -1019,13 +1042,14 @@ def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **h
 
     by = hooks.get("by") or os.environ.get("SUDO_USER") or "root"
     admin = argv[:1] != ["--ssh"]
+    caller = None
     if not admin:
-        if len(argv) == 4 and argv[2] == "--key":
-            key = argv[3]
+        if len(argv) in (4, 6) and argv[2] == "--key" and argv[4:5] in ([], ["--from"]):
+            key, caller = argv[3], (argv[5] if len(argv) == 6 else None)
         elif len(argv) == 2:
             key = READ_ONLY
         else:
-            return answer(3, {"refused": "the gate's forced command is --ssh WORDS --key NAME"})
+            return answer(3, {"refused": "the gate's forced command is --ssh WORDS --key NAME [--from ADDRESS]"})
         if key != READ_ONLY and (not NAME.fullmatch(key) or key in HOST_ACCOUNTS):
             return answer(3, {"refused": f"gate key name {key!r}"})
         by = None if key == READ_ONLY else key
@@ -1075,6 +1099,8 @@ def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **h
             doc = gate_close(rest, host, by=by, busy=busy, close=hooks.get("close") or as_auditor_close, now=now,
                              own=own)
         elif verb in PARTIES:
+            if not admin:
+                node_of(caller, host.settings())
             return gate_party(verb, rest, host, by=by, now=now, busy=busy, own=own, run=hooks.get("party") or exec_party,
                               sink=sink)
         elif verb == "party_log":
