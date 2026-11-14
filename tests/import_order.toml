@@ -68,7 +68,7 @@ directory = "verity/protocols/accounting/poub/device/live_verifier"
 owner = "memory-accounting"
 
 [[distribution]]
-directory = "verity/protocols/accounting/pouw/clear"
+directory = "verity/protocols/accounting/pouw/prover/clear"
 owner = "compute-accounting"
 
 [[distribution]]
@@ -578,8 +578,8 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
-    "verity/protocols/accounting/pouw/clear/clear_audit.py",
-    "verity/protocols/accounting/pouw/clear/clear_work.py",
+    "verity/protocols/accounting/pouw/prover/clear/clear_audit.py",
+    "verity/protocols/accounting/pouw/prover/clear/clear_work.py",
     "verity/protocols/accounting/pouw/prover/circuit/__init__.py",
     "verity/protocols/accounting/pouw/prover/circuit/anchors.py",
     "verity/protocols/accounting/pouw/prover/circuit/cap.circuit-check.py",

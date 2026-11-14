@@ -42,7 +42,7 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network
           # Pearl+'s verdict, whose W check (`verify_run.tie`) test_pearltie runs on its toy's passes: verify_run, what it
           # imports, and the settings registry it loads (`verity_config.settings.of`, which finds it beside pouw's pyproject)
           "benchmarks/pouw/pearl_c_vllm/verify_run.py", "benchmarks/pouw/pearl_c_vllm/fast_tile.py",
-          "verity/protocols/accounting/pouw/clear", "benchmarks/pouw/settings.py", "benchmarks/pouw/pyproject.toml",
+          "verity/protocols/accounting/pouw/prover/clear", "benchmarks/pouw/settings.py", "benchmarks/pouw/pyproject.toml",
           "tools/config/verity_config",
           # verity_difftest, which test_prove_path imports: under `verity` until the difftest map moved it
           "tools/difftest"]
