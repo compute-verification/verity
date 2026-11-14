@@ -2682,6 +2682,11 @@
     },
     {
       "paths": {
+        "benchmarks/one_stage/tests/test_two_stage_verdicts.py": "verity/protocols/proofs/spot/device/tests/test_two_stage_verdicts.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/pouw/served_zk/": "verity/protocols/accounting/pouw/prover/kernels/served_zk/"
       }
     },
