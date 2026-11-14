@@ -26,7 +26,8 @@
 # environment or a credential file says.
 #
 # The node's paths follow ci's args on the command line, so a flag of args naming another host's file never wins: the log, the
-# lock and the five lists (each read as empty while it is missing, as on any host; a tick names the missing ones in one line).
+# lock, the five lists (each read as empty while it is missing, as on any host; a tick names the missing ones in one line) and
+# --graph2, graph2.sh beside this script.
 #
 # Credentials, none in this file or its unit: VQ_CRED/*.env (root's, readable by the group: the store's key, the Slack token)
 # are sourced for each tick, and GH_TOKEN is the token vy-vqueue-token.timer keeps in VQ_TOKEN, which root mints from the App's
@@ -40,6 +41,7 @@ set -u
 H=${VQ_HOME:-/var/lib/vy-vqueue} CRED=${VQ_CRED:-/etc/vy/vqueue} TOKEN=${VQ_TOKEN:-/run/vy-vqueue/token}
 PY=${VQ_PYTHON:-python3.12} INTERVAL=${VQ_INTERVAL:-60}
 SELF=$(readlink -f "$0")
+LIB=$(dirname "$SELF")
 CLONE=$H/verity CODE=$H/src
 CONFIG=78     # what the node holds can't run a tick: the unit stays failed until it is put right (RestartPreventExitStatus)
 SKIP=75       # this tick can't run, the next may: the loop goes on
@@ -54,7 +56,7 @@ if [ "${1:-}" = git ]; then
   exit 0
 fi
 
-export HOME=$H PATH="$(dirname "$SELF")/bin:/usr/local/bin:/usr/bin:/bin" GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \
+export HOME=$H PATH="$LIB/bin:/usr/local/bin:/usr/bin:/bin" GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \
   PYTHONUNBUFFERED=1 RESEARCH_LANE=ci TMPDIR=$H/tmp TRAIN_TREES=$H/trains
 
 say() { echo "vy-vqueue: $*" >&2; }
@@ -119,7 +121,7 @@ tick() {
     # shellcheck disable=SC2046
     PYTHONPATH=$CODE/tools/research/src exec "$PY" -m research queue vqueue $(grep -v '^[[:space:]]*#' "$dir/args") \
       --repo "$CLONE" --log "$dir/decisions.jsonl" --state "$dir/state.json" --lock "$dir/vqueue.lock" \
-      --priority-file "$H/live/priority" --frozen "$dir/frozen" "${listed[@]}" --once $flag "$@"
+      --priority-file "$H/live/priority" --frozen "$dir/frozen" "${listed[@]}" --graph2 "$LIB/graph2.sh" --once $flag "$@"
   )
 }
 

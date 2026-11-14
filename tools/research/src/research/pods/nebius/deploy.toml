@@ -1819,6 +1819,13 @@ src = "tools/research/src/research/pods/nebius/vqueue/bin/gh"
 nodes = ["vy-nebius-cpu-13"]
 owner = "infra"
 
+# loop.sh runs it at each call to graph2's CLI: nothing to restart
+[[file]]
+path = "/usr/local/lib/vy-vqueue/graph2.sh"
+src = "tools/research/src/research/pods/nebius/vqueue/graph2.sh"
+nodes = ["vy-nebius-cpu-13"]
+owner = "infra"
+
 [[file]]
 path = "/usr/local/sbin/vy-vqueue-setup"
 src = "tools/research/src/research/pods/nebius/vqueue/setup.sh"

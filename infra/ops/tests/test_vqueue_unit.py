@@ -4,6 +4,7 @@ root's oneshot writes; and that deploy.toml installs every file the units name o
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -106,6 +107,7 @@ def test_with_no_mode_file_a_tick_is_a_dry_run_in_the_node_s_own_paths_as_the_ap
     assert env["PATH"].split(":")[0] == os.path.realpath(VQ / "bin") and (VQ / "bin" / "gh").is_file()
     assert (env["GH_TOKEN"], env["AWS_ACCESS_KEY_ID"], env["SLACK_BOT_TOKEN"]) == ("dummy-app", "dummy-r2", "dummy-slack")
     assert env["RESEARCH_AGENT_URL"] is None and env["RESEARCH_LANE"] == "ci" and env["GIT_TERMINAL_PROMPT"] == "0"
+    assert flag(argv, "--graph2") == os.path.realpath(VQ / "graph2.sh")
     helper = subprocess.run(["git", "-C", str(node.clone), "config", "--local", "--get", "credential.helper"],
                             capture_output=True, text=True).stdout.strip()
     assert helper == f"!{os.path.realpath(LOOP)} git"
@@ -179,7 +181,7 @@ def test_every_tick_reads_the_five_lists_at_the_node_s_paths_and_names_the_missi
     on the node each is its file under live/, in every mode and after ci's args, so a line of args naming the pod's never wins.
     A missing file reads as empty there, as it does on the pod, and the tick says which in one line and runs."""
     live = node.home / "live"
-    (live / "args").write_text("--gate check\n--pins-file /data/drive/pins\n")
+    (live / "args").write_text("--gate check\n--pins-file /data/drive/pins\n--graph2 /root/g2remote.sh\n")
     (live / "heavy").write_text("")
     r = node.loop("once")
     assert r.returncode == 0, r.stderr
@@ -194,6 +196,63 @@ def test_every_tick_reads_the_five_lists_at_the_node_s_paths_and_names_the_missi
     assert r.returncode == 0 and "reads each as empty" not in r.stderr
     for t in node.ticks():
         assert {o: flag(t["argv"], o) for o in LISTS} == {o: str(live / f) for o, f in LISTS.items()}
+        assert flag(t["argv"], "--graph2") == os.path.realpath(VQ / "graph2.sh")
+
+
+FAKE_MAIN = """import json, os, sys
+with open(os.environ["FAKE_CALLS"], "a") as f:
+    f.write(json.dumps(sys.argv[1:]) + "\\n")
+if sys.argv[1:3] == ["pods", "ssh"] and "--print" in sys.argv:
+    if sys.argv[3] != os.environ.get("FAKE_KNOWN", sys.argv[3]):
+        sys.exit(f"research pods ssh: no machine named {sys.argv[3]!r}")
+    print(os.environ["FAKE_SSH"])
+"""
+
+
+class Research:
+    """`python3.12 -m research` as the node's wrappers call it, stood in for under tmp: each call one JSON line in ``calls``;
+    `pods ssh NAME --print` prints FAKE_SSH for a name FAKE_KNOWN allows."""
+
+    def __init__(self, tmp: Path):
+        pkg, self.calls, self.home = tmp / "fake" / "research", tmp / "calls.jsonl", tmp / "home"
+        pkg.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        (pkg / "__main__.py").write_text(FAKE_MAIN)
+        (self.home / "live").mkdir(parents=True)
+        self.env = {"PATH": os.environ["PATH"], "HOME": str(self.home), "PYTHONPATH": str(pkg.parent),
+                    "VQ_PYTHON": sys.executable, "FAKE_CALLS": str(self.calls)}
+
+    def made(self) -> list[list[str]]:
+        return [json.loads(ln) for ln in self.calls.read_text().splitlines()] if self.calls.exists() else []
+
+
+GRAPH2 = ["sudo", "-n", "python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executor/graph2.db", "--events",
+          "/root/executor/events"]
+
+
+def test_graph2_s_wrapper_reaches_its_machine_by_name_with_each_argument_whole(tmp_path):
+    """The pod's wrapper writes graph2's machine as an address; the node's asks the register for the machine's ssh line by
+    name (VQ_GRAPH2_NODE, default vy-nebius-cpu-7) and runs graph2 there over one shared connection, each argument one word
+    to the remote shell however it is spelled, and the register's line taken as words, never run.  A name the register lacks
+    runs nothing."""
+    fake = Research(tmp_path)
+    ssh = script(tmp_path / "bin" / "ssh", f'#!{sys.executable}\nimport json, os, sys\n'
+                 'open(os.environ["SSH_OUT"], "a").write(json.dumps(sys.argv[1:]) + "\\n")\n')
+    out, odd = tmp_path / "ssh.jsonl", tmp_path / "ran"
+    env = {**fake.env, "PATH": f"{ssh.parent}:{fake.env['PATH']}", "SSH_OUT": str(out), "FAKE_KNOWN": "vy-nebius-cpu-7",
+           "FAKE_SSH": shlex.join(["ssh", "-i", "/k", "-p", "22", f"research@$(touch {odd})"])}
+
+    def graph2(*args: str, **more: str) -> subprocess.CompletedProcess:
+        return subprocess.run([str(VQ / "graph2.sh"), *args], env={**env, **more}, capture_output=True, text=True)
+
+    assert graph2("list", "a b;c $(id)", "--json").returncode == 0
+    [argv] = [json.loads(ln) for ln in out.read_text().splitlines()]
+    assert argv[:-1] == ["-i", "/k", "-p", "22", "-o", "ControlMaster=auto", "-o", f"ControlPath={fake.home}/.runpod/ssh/cm-g2-%C",
+                         "-o", "ControlPersist=600", f"research@$(touch {odd})"] and not odd.exists()
+    assert shlex.split(argv[-1]) == [*GRAPH2, "list", "a b;c $(id)", "--json"]
+    assert fake.made() == [["pods", "ssh", "vy-nebius-cpu-7", "--print"]]
+    r = graph2("list", VQ_GRAPH2_NODE="vy-nowhere")
+    assert r.returncode == 1 and "no machine named 'vy-nowhere'" in r.stderr and len(out.read_text().splitlines()) == 1
 
 
 def test_a_node_missing_the_clone_the_pin_or_the_args_says_which_and_runs_nothing(node):
