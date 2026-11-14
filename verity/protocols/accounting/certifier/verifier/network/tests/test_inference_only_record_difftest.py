@@ -1,7 +1,7 @@
 """The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/record_difftest_vectors.py` writes 670 cases (600 random circuits,
+`verity/protocols/policy/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 670 cases (600 random circuits,
 two in five broken in one way, and 70 shaped ones, most in the shape of a served class) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
@@ -55,7 +55,7 @@ import pytest
 
 from verity.circuits.program import input_id, is_input
 
-LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "inference_only" / "lean"
+LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "lean"
 
 
 def _load(name: str):

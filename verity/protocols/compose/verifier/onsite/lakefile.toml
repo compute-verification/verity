@@ -36,7 +36,7 @@ path = "../../../accounting/pouw/verifier/lean/check"
 # The inference-only policy: its check as a core protocol (`InferenceOnlyCheck.Protocol`).
 [[require]]
 name = "inference_only_check"
-path = "../../../policy/inference_only/verifier/inference_only/lean"
+path = "../../../policy/inference_only/verifier/lean"
 
 # Communication: the network certifier's period check (`NetworkCheck.Period`), with the certifier program and the LMS
 # verifier it reads certificates with.
