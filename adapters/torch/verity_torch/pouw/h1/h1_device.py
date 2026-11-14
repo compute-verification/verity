@@ -8,10 +8,10 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.accounting.pouw.prover.serving import credit_gate_device as CGD
-from verity.protocols.accounting.pouw.prover.serving.h1 import records_device as ZRD
-from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as RD
-from verity.protocols.accounting.pouw.prover.serving.h1 import tables_device as TD
+from verity_torch.pouw import credit_gate_device as CGD
+from verity_torch.pouw.h1 import records_device as ZRD
+from verity_torch.pouw.h1 import registered_device as RD
+from verity_torch.pouw.h1 import tables_device as TD
 
 
 class TorchH1Device:

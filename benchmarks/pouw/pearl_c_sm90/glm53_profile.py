@@ -127,7 +127,7 @@ def run_mode(a: argparse.Namespace) -> int:
     import torch
     import glm53_timing as T
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(SHAPES)
     schedule = (a.schedule or ["serial"])[0]
@@ -333,7 +333,7 @@ def grouped_mode(a: argparse.Namespace) -> int:
     import glm53_timing as T
     import grouped_check as GC
     import torch
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import grouped as PG
+    from verity_torch.pouw.pearl_c import grouped as PG
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(GC.SHAPES)
     schedules = a.schedule or list(GC.SCHEDULES)
