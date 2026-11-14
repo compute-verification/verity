@@ -1,4 +1,4 @@
-"""A window's audit from its records alone: what an integration hands Verity (`verity.commitments.windows.interface`), and nothing else.
+"""A window's audit from its records alone: what an integration hands Verity (`verity.commitments.periods.interface`), and nothing else.
 
 The records, every one in the window's directory but the advice's opening:
 
@@ -97,7 +97,7 @@ the cache's key covers both; the audit with ``--compose-cache`` then composes no
 quotes the warm's beside it.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
-        [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --firewall flock-firewall \\
+        [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
         [--compose-cache DIR] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER]
@@ -119,7 +119,7 @@ stated one (cuts, registered reads, ingress: `interface.Circuit.declared`) from 
 its members from them and the registered reads and window ingress it declares beside them (`interface.listed_reads`,
 `interface.listed_ingress`), the window figure printed beside the run figure with its premise. A registered read counts as
 registered only at a parameter ``--pin`` or ``--pins`` names (`pins_of`), with the root the verifier fixed before the run,
-and only where the window's docket (``--registration``) records that root for it (`registration_roots`,
+and only where the window's docket (``--registration``) records that root for it (`docket_roots`,
 `interface.held_params`), any other free. A pin names its parameter alone: for vLLM's window circuit, each weight's
 ``weights/<label>@<words>``, at the hiding root the committer registered for it once per model and key before the first
 window's coins (``--pins REGISTRATION``, the ``{program, values}`` the audit's ``--registered`` takes:
@@ -194,7 +194,7 @@ from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
-from verity.commitments.windows import history as HW, interface as IF  # noqa: E402
+from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
 #: which outbound connections take theirs
@@ -472,7 +472,7 @@ def window_roots(w: Mapping[str, Any]) -> dict[str, str]:
     return roots
 
 
-def registration_roots(rec: Mapping[str, Any]) -> dict[str, str]:
+def docket_roots(rec: Mapping[str, Any]) -> dict[str, str]:
     """The roots a window's docket records for its parameters (`window_roots`): core's docket's window's, or
     an integration's own window docket's, whose ``window`` is no mapping (vLLM's advice docket names the
     window's index there)."""
@@ -1189,7 +1189,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
-    p.add_argument("--firewall", required=True)
+    p.add_argument("--zk-server", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--delta", type=float, default=0.5)
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose --ports ports are "
@@ -1256,7 +1256,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a "
                    "registration of values {program, values} (vLLM's committer's weights registration, "
                    "window_weights.weights_registration), with --pin's (repeatable)")
-    p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
+    p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`docket_roots`) are held "
                    "to the pins (none: no root is the window's, and every registered read is free)")
     p = sub.add_parser("period", help="a window's audit as one compute audit of the network certifier's period (`period`)")
     p.add_argument("--window", required=True, type=Path, help="the window's directory: circuit.json, registration.json")
@@ -1284,7 +1284,7 @@ def main(argv: list[str] | None = None) -> int:
             pins = pins_of(a.pin, a.pins)
         except ValueError as e:
             ap.error(f"--pin/--pins: {e}")
-        roots = registration_roots(json.loads(Path(a.registration).read_text())) if a.registration else {}
+        roots = docket_roots(json.loads(Path(a.registration).read_text())) if a.registration else {}
         print(json.dumps(declared_count(json.loads(Path(a.circuit).read_text()), a.bits, pins=pins, roots=roots),
                          sort_keys=True))
         return 0

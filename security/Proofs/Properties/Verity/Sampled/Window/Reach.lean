@@ -282,12 +282,12 @@ inductive SeqChain : ℕ → List (Flock.Guarantees.MemberV5 Reg nJ) → Pos g �
   | nil (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)) : SeqChain i [] p [] p
   | cons (i : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (l : List (Flock.Guarantees.MemberV5 Reg nJ))
       (p q r : Pos g σ Claims.Msg (Fin R)) (out : LiveOutJ (memberTabs S Rg m) (memberPts m)) (ts : List Transcript)
-      (hd : memberDrawn S m = true) (hm : MemberReach D M BL B S Rg i m p q out)
+      (hd : memberSampled S m = true) (hm : MemberReach D M BL B S Rg i m p q out)
       (hl : SeqChain (i + 1) l q.toStop.consume ts r) :
       SeqChain i (m :: l) p (m.wr (m.part S) Rg out :: ts) r
   | skip (i : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (l : List (Flock.Guarantees.MemberV5 Reg nJ))
       (p r : Pos g σ Claims.Msg (Fin R)) (pts : Fin 2 → Fin (memberPts m) → 𝔽) (ts : List Transcript)
-      (hd : memberDrawn S m = false) (hl : SeqChain (i + 1) l p ts r) :
+      (hd : memberSampled S m = false) (hl : SeqChain (i + 1) l p ts r) :
       SeqChain i (m :: l) p (m.wr (m.part S) Rg (idleOut (memberTabs S Rg m) pts) :: ts) r
 
 /-- **The sessions' joint distribution's support off the held-off events is the members' traces in order**, beside the tape
@@ -303,8 +303,8 @@ theorem SeqReach.chain : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : 
     have hs : MemberReachK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (B i) (m.wr (m.part S) Rg)
         (BL i (memberPts m))
         (fun q a o' => ∃ ts, SeqReach D M BL B S Rg (i + 1) l q (ts, o'.2) ∧ o'.1 = a :: ts) m.N p o
-        (memberDrawn S m) := h
-    cases hd : memberDrawn S m with
+        (memberSampled S m) := h
+    cases hd : memberSampled S m with
     | true =>
       rw [hd] at hs
       obtain ⟨pts, hL, hr⟩ := hs
@@ -360,11 +360,11 @@ theorem SeqChain.forall₂ {Acc : Flock.Guarantees.MemberV5 Reg nJ → Transcrip
     {p r : Pos g σ Claims.Msg (Fin R)} {ts : List Transcript} (hc : SeqChain D M BL B S Rg i l p ts r) :
     I i p →
     (∀ (j k : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (p' q : Pos g σ Claims.Msg (Fin R))
-      (out : LiveOutJ (memberTabs S Rg m) (memberPts m)), j = i + k → l[k]? = some m → memberDrawn S m = true →
+      (out : LiveOutJ (memberTabs S Rg m) (memberPts m)), j = i + k → l[k]? = some m → memberSampled S m = true →
       I j p' → MemberReach D M BL B S Rg j m p' q out → q.Past r →
       I (j + 1) q.toStop.consume ∧ Acc m (m.wr (m.part S) Rg out)) →
     (∀ (j k : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (p' : Pos g σ Claims.Msg (Fin R))
-      (pts : Fin 2 → Fin (memberPts m) → 𝔽), j = i + k → l[k]? = some m → memberDrawn S m = false → I j p' →
+      (pts : Fin 2 → Fin (memberPts m) → 𝔽), j = i + k → l[k]? = some m → memberSampled S m = false → I j p' →
       I (j + 1) p' ∧ Acc m (m.wr (m.part S) Rg (idleOut (memberTabs S Rg m) pts))) →
     List.Forall₂ Acc l ts := by
   induction hc with
@@ -467,13 +467,13 @@ theorem windowDecodes_of_members (k : Verity.Registration.Composite) (P : Exchan
       (fun j k m p q out hj hk hd hI hmr hqr => by
         have e : k = j := by omega
         subst e
-        obtain ⟨hI', ha⟩ := h.step ω _ m p q r out hk (memberDrawn_iff.1 hd) hI hmr hqr hri hacc
+        obtain ⟨hI', ha⟩ := h.step ω _ m p q r out hk (memberSampled_iff.1 hd) hI hmr hqr hri hacc
         exact ⟨hI', fun _ => ha⟩)
       fun j k m p _ hj hk hd hI => by
         have e : k = j := by omega
         subst e
-        exact ⟨h.skip ω _ m p r hk (not_nonempty_of_memberDrawn hd) hI,
-          fun hne => absurd hne (not_nonempty_of_memberDrawn hd)⟩
+        exact ⟨h.skip ω _ m p r hk (not_nonempty_of_memberSampled hd) hI,
+          fun hne => absurd hne (not_nonempty_of_memberSampled hd)⟩
   have ho1 : o.1 = ((windowReg V θ F c W rd σ D, ((W.extend M.widening).joint t).ended ω),
       (W.extend M.widening).L.draw ω, o.1.2.2) := Prod.ext hR (Prod.ext hS rfl)
   rw [ho1]

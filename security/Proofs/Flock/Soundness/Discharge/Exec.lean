@@ -34,7 +34,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
 public import Proofs.Flock.Soundness.Discharge.Exec.Shape
 public import Proofs.Flock.Soundness.Discharge.Exec.Pts
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
-public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+public import Proofs.Flock.Soundness.Discharge.Exec.LawSample
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
 
 /-!
@@ -72,10 +72,10 @@ since with hidden outputs verity-verify-proof sets up its tables with `setupHidd
   knowledge term, at most `StrictCR.ksAvgStrict`, the unsalted closed form (`ksAvgBE_le_strictL`);
 * `FlockLinkL`, `FlockLinkedL`, `FlockPublicL`: the link theorem over the salted session
   (`flock_batched_linkSoundEL`), and with it the count curve and drawn-unit bound at the public transcript
-  (`flock_batched_count_publicL`, `flock_batched_drawn_publicL`); the binding (`ValueBinding`), the value layer's
+  (`flock_batched_count_publicL`, `flock_batched_sampled_publicL`); the binding (`ValueBinding`), the value layer's
   bound (`linkBoundE`) and the public wires' facts are the unsalted ones;
 * `E2EL`, `BindingE2EL`: the end-to-end theorems over the salted session (`flock_e2e_countL`, `Prog.flock_e2e_countL`,
-  `flock_e2e_count_hm96L`, `flock_e2e_drawn_hm96L`);
+  `flock_e2e_count_hm96L`, `flock_e2e_sampled_hm96L`);
 * `Headline`: the headline carried to the live audit through `ExecRefines` (`Prog.flock_headline_exec`,
   `flock_headline_exec_L`);
 * `HeadlineL`: the headline over the salted session (`Prog.flock_headline_L`, the bound of `Prog.flock_headline`), and
@@ -96,12 +96,12 @@ since with hidden outputs verity-verify-proof sets up its tables with `setupHidd
   off `m`, `k_log`, the number of claims and the schedule (`repShape`, `repC_spine`, `repC_kinds`), so two runs with the
   same messages and coins are runs on the same tape (`repC_tape`);
 * `Pts`: a `setupH` statement's link points, `mPtsOf` of the circuit's `g` and the units it proves (`setupH_facts`),
-  for a sampled session the sample's proved units (`setupH_mPts_drawn`, `setupH_mPts_of_proved`), so equal at two samples
+  for a sampled session the sample's proved units (`setupH_mPts_sampled`, `setupH_mPts_of_proved`), so equal at two samples
   that prove as many units (`setupH_mPts_eq`);
 * `LiveOn`: `Live`'s refinement and headline with the decoder right at the sampling design's samples only (`DecodesOn`,
   `execRefines_on`, `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
-* `LawDraw`: every sample of the live stratified sampling design has `∑ s, k s` units, or is every unit where the run reads past the
-  source's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a sample file with no closure sets up at
+* `LawSample`: every sample of the live stratified sampling design has `∑ s, k s` units, or is every unit where the run reads past the
+  source's bytes (`execOS_sample_card`, `execOS_sample_card_or`), so a sample file with no closure sets up at
   `mPtsOf c.g (∑ s, k s)` or `mPtsOf c.g n` (`setupH_mPts_execOS`, `setupH_mPts_execOS_or`);
 * `SessionLDecisive`: some run of the salted batched session accepts (the all-zero run) and, on a plan with a table,
   some run rejects, and every message type is inhabited, so the session and the audit over it are decisive

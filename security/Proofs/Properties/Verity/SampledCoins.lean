@@ -3,7 +3,7 @@ module
 public import Batteries.Data.ByteArray
 public import Definitions.Core.CoinBytes
 public import Proofs.Flock.Soundness.Assumptions
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 public import Proofs.Properties.Certifier.DeviceOutput.Frames
 public import Properties.Challenger
 import Mathlib.Algebra.Order.Floor.Extended

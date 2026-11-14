@@ -1,5 +1,5 @@
 """The audit from a window's records alone (`records_audit`), without proving, on a window written through the interface
-(`verity.commitments.windows.interface`) under core's docket:
+(`verity.commitments.periods.interface`) under core's docket:
 
 * the verifier's window is the circuit record's, each template a Definition a catalog registers, and the record must be the one
   the docket binds; a window with row tables is refused until its records carry their segment roots;
@@ -49,7 +49,7 @@ from verity.circuits.codec import canonical_json, descriptor_id, encode_program,
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
 from verity.circuits.ops import gemm as G
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))
@@ -74,7 +74,7 @@ def _audit_args(w: SimpleNamespace) -> list[str]:
     """`audit`'s arguments for written window ``w`` at the circuit it registers, on a development challenger's coins with
     the negatives skipped: all but ``--out``."""
     return ["audit", "--window", str(w.dir), "--law", _rate(w.dir), "--circuit", w.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--skip-negatives", "--challenger",
             "local", "--main", "m.txt"]
 
 
@@ -390,8 +390,8 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
     pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
             "registered": OP.block("test/model", {"b": b})}
     assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
-    assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.registration_roots({"window": 63})
-    assert RA.registration_roots({"window": w}) == RA.window_roots(w)
+    assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.docket_roots({"window": 63})
+    assert RA.docket_roots({"window": w}) == RA.window_roots(w)
     for bad, why in [({"registered": {"w": "cd" * 64}}, r"is \{program, values"), ({"activations": group(x=7)}, "hex digits"),
                      ({"activations": group(x="zz")}, "hex digits"), ({"registered": group(w=None)}, "hex digits"),
                      ({**w, "registered": group(x="cd" * 64)}, r"two roots for \['x'\]"),
@@ -562,7 +562,7 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     assert all(f["ports"]["wrow"]["root"] == got.value.root.hex() for f in files.values())
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     rec = json.loads((got.dir / "registration.json").read_text())
-    roots, pin = RA.registration_roots(rec), {v: e["root"] for v, e in pins.items()}
+    roots, pin = RA.docket_roots(rec), {v: e["root"] for v, e in pins.items()}
     assert roots == rec["window"]["registered_roots"] == pin == {"w": got.value.root.hex()}
     count = RA.declared_count(doc, 0, pins=pin, roots=roots)
     assert (count["inputs"], count["registered"], count["free"]) == (8 * per_unit, 8 * 8 * K, 8 * per_unit - 8 * 8 * K)
@@ -573,7 +573,7 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     with pytest.raises(ValueError, match="a pin is"):
         RA.pinned({"values": {}})
     base = ["audit", "--window", str(got.dir), "--law", _rate(got.dir), "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath", ".",
-            "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o"), "--challenger", "local", "--main", "m.txt"]
+            "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "o"), "--challenger", "local", "--main", "m.txt"]
     assert RA.main(base) == 1
     assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
     (tmp_path / "circuit.json").write_bytes((got.dir / "circuit.json").read_bytes())
@@ -624,7 +624,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     files = IF.registered_reads(ldoc, ml, pins, registered=REG)
     assert files == IF.registered_reads(sdoc, ms, pins, registered=REG) and len(files) == 2
     pin = RA.pin_roots(pins)
-    roots = RA.registration_roots(json.loads((listed.dir / "registration.json").read_text()))
+    roots = RA.docket_roots(json.loads((listed.dir / "registration.json").read_text()))
     count = RA.declared_count(ldoc, 0, pins=pin, roots=roots)
     assert roots == pin and count == {**RA.declared_count(sdoc, 0, pins=pin, roots=roots), IF.WINDOW_INGRESS: 0}
     assert count["registered"] == 8 * 8 * K and "unpinned" not in count
@@ -632,7 +632,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
         free = RA.declared_count(ldoc, 0, pins=p, roots=r)
         assert (free["registered"], free["free"], free["unpinned"]) == (0, count["free"] + 8 * 8 * K, ["w"])
     base = ["audit", "--window", str(listed.dir), "--law", _rate(listed.dir), "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath",
-            ".", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o"), "--challenger", "local",
+            ".", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "o"), "--challenger", "local",
             "--main", "m.txt"]
     assert RA.main(base) == 1
     assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
@@ -766,7 +766,7 @@ def test_the_audit_refuses_a_fixed_count_as_its_rule_by_name(written, tmp_path, 
         RA.verifier_window(written.dir, fixed, None)
     assert repr(fixed) in str(e.value)
     assert RA.main(["audit", "--window", str(written.dir), "--law", fixed, "--circuit", written.rec["window"]["circuit"],
-                    "--run", RUN, "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out",
+                    "--run", RUN, "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out",
                     str(tmp_path / "o"), "--challenger", "local", "--main", "m.txt"]) == 1
     why = json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
     assert "a fixed count" in why and repr(fixed) in why
@@ -1341,13 +1341,13 @@ def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segme
 
 def test_the_audit_needs_the_run_root_the_run_published(written, capsys):
     base = ["audit", "--window", str(written.dir), "--law", _rate(written.dir), "--circuit", "00" * 64, "--m0-pythonpath", ".", "--bin", "b",
-            "--lean", "l", "--firewall", "f", "--out", "o"]
+            "--lean", "l", "--zk-server", "f", "--out", "o"]
     with pytest.raises(SystemExit) as e:
         RA.main(base)
     assert e.value.code == 2 and "--run" in capsys.readouterr().err
 
 
-def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(written):
+def test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it(written):
     from verity.protocols.proofs.spot.prover.audit import window_audit as A5
 
     rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
@@ -1369,7 +1369,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
 
     args = ["audit", "--window", str(written.dir), "--law", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--port", "10000",
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"), "--main", "main.txt"]
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"), "--main", "main.txt"]
     for bad in (["--peer", "vy-nebius-1"], ["--challenger-key", "key.json"]):
         with pytest.raises(SystemExit, match="2"):
             RA.main([*args, "--challenger", "gate:research@gate", *bad])
@@ -1403,7 +1403,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
                     "key_record": None, "deployed": True}
 
 
-def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):
+def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_path, monkeypatch):
     """A session listens on one port a member with a proved unit (closure included), so 20 proved members need 20 ports:
     the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""
@@ -1437,7 +1437,7 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     args = ["audit", "--window", str(got.dir), "--law", _rate(got.dir), "--circuit", got.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"),
             "--challenger", "local", "--main", "m.txt"]
     for extra, want in (([], {"span": 20, "port": 20000, "ports": 20}), (["--port", "10000", "--ports", "16"],
                                                                          {"port": 10000, "ports": 16})):
@@ -1538,7 +1538,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     capsys.readouterr()
     assert RA.main(["audit", "--window", str(written.dir), "--law", _rate(written.dir), "--circuit", rec["window"]["circuit"], "--run", RUN,
-                    "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+                    "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"),
                     "--skip-negatives", "--challenger", "local", "--main", "m.txt"]) == 1
     rows = dict(IF.layout(COORD).rows)
     inputs, window = 5 * 16 * sum(rows.values()), 5 * 16 * (rows["x"] + rows["sx"])
@@ -1586,7 +1586,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     args = ["audit", "--window", str(written.dir), "--law", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"),
             "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
     for extra, want in ((["--compose-cache", cache], cache), ([], None)):
         with pytest.raises(Opened):

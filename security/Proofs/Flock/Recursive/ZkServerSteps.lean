@@ -120,20 +120,20 @@ theorem Draws.runs {α : Type} {m : Fw α} {rows : List (Array Nat)} {P : α →
   obtain ⟨a, hm, hp⟩ := h st hl
   exact ⟨a, _, hm, rfl, hp⟩
 
-theorem draws_salted (row : Array Nat) : Draws (salted row) [row] (fun c l => l = [c]) := by
+theorem samples_salted (row : Array Nat) : Draws (salted row) [row] (fun c l => l = [c]) := by
   intro st hl
   obtain ⟨sent, hello, committed, roots, linked, streams, rounds, stopped, finished, salts⟩ := st
   cases salts with
   | nil => exact absurd hl (by simp)
   | cons y rest => exact ⟨_, ZkServerRun.run_salted row _, rfl⟩
 
-theorem draws_lift {α : Type} {x : V α} {a : α} (hx : x = .ok a) :
+theorem samples_lift {α : Type} {x : V α} {a : α} (hx : x = .ok a) :
     Draws (liftM x : Fw α) [] (fun b l => b = a ∧ l = []) := by
   subst hx
   intro st _
   exact ⟨a, rfl, rfl, rfl⟩
 
-theorem draws_mapM {α β γ : Type} (f : α → Fw β) (R : α → List (Array Nat)) (Hs : β → List ByteArray) (K : β → γ)
+theorem samples_mapM {α β γ : Type} (f : α → Fw β) (R : α → List (Array Nat)) (Hs : β → List ByteArray) (K : β → γ)
     (k : α → γ) : ∀ (l : List α), (∀ a ∈ l, Draws (f a) (R a) (fun b c => Hs b = c ∧ K b = k a)) →
       Draws (l.mapM f) (l.flatMap R) (fun bs c => bs.flatMap Hs = c ∧ bs.map K = l.map k)
   | [], _ => fun st _ => ⟨[], rfl, rfl, rfl⟩
@@ -141,7 +141,7 @@ theorem draws_mapM {α β γ : Type} (f : α → Fw β) (R : α → List (Array 
     intro st hl
     rw [List.flatMap_cons, List.length_append] at hl
     obtain ⟨b, hb, hb1, hb2⟩ := hf a (List.mem_cons_self ..) st (by omega)
-    obtain ⟨bs, hbs, hbs1, hbs2⟩ := draws_mapM f R Hs K k l (fun a' ha' => hf a' (List.mem_cons_of_mem _ ha'))
+    obtain ⟨bs, hbs, hbs1, hbs2⟩ := samples_mapM f R Hs K k l (fun a' ha' => hf a' (List.mem_cons_of_mem _ ha'))
       { st with salts := st.salts.drop (R a).length } (by simp only [List.length_drop]; omega)
     refine ⟨b :: bs, ?_, ?_, ?_⟩
     · rw [List.mapM_cons, StateT.run_bind, hb, ok_bind', StateT.run_bind, hbs]
@@ -152,18 +152,18 @@ theorem draws_mapM {α β γ : Type} (f : α → Fw β) (R : α → List (Array 
 where
   ok_bind' {δ ε : Type} (a : δ) (g : δ → V ε) : (Except.ok a : V δ) >>= g = g a := rfl
 
-theorem draws_salteds (rows : List (Array Nat)) : Draws (rows.mapM salted) rows (fun l c => l = c) := by
-  have h := draws_mapM salted (fun row => [row]) (fun c => [c]) (fun _ => ()) (fun _ => ()) rows
+theorem samples_salteds (rows : List (Array Nat)) : Draws (rows.mapM salted) rows (fun l c => l = c) := by
+  have h := samples_mapM salted (fun row => [row]) (fun c => [c]) (fun _ => ()) (fun _ => ()) rows
     (fun row _ => fun st hl => by
-      obtain ⟨c, hc, hc1⟩ := draws_salted row st hl
+      obtain ⟨c, hc, hc1⟩ := samples_salted row st hl
       exact ⟨c, hc, hc1.symm, rfl⟩)
   rw [List.flatMap_singleton'] at h
   intro st hl
   obtain ⟨l, hm, hl1, _⟩ := h st hl
   exact ⟨l, hm, by rw [← hl1, List.flatMap_singleton']⟩
 
-theorem draws_saltedTop (top : ByteArray) : Draws (saltedTop top) (topRows top) (fun l c => l = c) :=
-  draws_salteds (topRows top)
+theorem samples_saltedTop (top : ByteArray) : Draws (saltedTop top) (topRows top) (fun l c => l = c) :=
+  samples_salteds (topRows top)
 
 /-! ## The ZK server's loop -/
 
@@ -318,10 +318,10 @@ theorem run_commit (s : Schedule) (rootF : ByteArray) (roots : List (String × B
     rintro ⟨n, v⟩ hv
     simp [hnat _ hv]
   refine Runs.ite_neg (by simp [hord]) ?_
-  refine Runs.bind ((draws_mapM (α := String × ByteArray) (β := String × List ByteArray) (γ := String) _
+  refine Runs.bind ((samples_mapM (α := String × ByteArray) (β := String × List ByteArray) (γ := String) _
     (fun e => topRows e.2) (fun b => b.2) (fun b => b.1) (fun e => e.1) roots ?_).runs hl) ?_
   · rintro ⟨n, v⟩ _ st' hl'
-    obtain ⟨l, hm, hl1⟩ := draws_saltedTop v st' hl'
+    obtain ⟨l, hm, hl1⟩ := samples_saltedTop v st' hl'
     refine ⟨(n, l), ?_, hl1, rfl⟩
     show (saltedTop v >>= fun l => Pure.pure (n, l) : Fw _).run st' = _
     rw [StateT.run_bind, hm]
@@ -451,9 +451,9 @@ theorem run_round (s : Schedule) (stream : String) (content : ByteArray) (n : Na
     refine Runs.ite_neg ?_ ?_
     · simp only [Bool.or_eq_true, decide_eq_true_eq, List.any_eq_true, not_or, not_exists, not_and]
       exact ⟨by omega, fun c hc => by rw [← hcopy c hc, some_bne_self]; simp⟩
-    refine Runs.bind ((draws_mapM (α := ByteArray) (β := List ByteArray) (γ := Unit) _ topRows id (fun _ => ())
+    refine Runs.bind ((samples_mapM (α := ByteArray) (β := List ByteArray) (γ := Unit) _ topRows id (fun _ => ())
       (fun _ => ()) _ fun c _ => fun st' hl' => ?_).runs (by omega)) ?_
-    · obtain ⟨l, hm, hl1⟩ := draws_saltedTop c st' hl'
+    · obtain ⟨l, hm, hl1⟩ := samples_saltedTop c st' hl'
       exact ⟨l, hm, hl1, rfl⟩
     rintro tops t ⟨rfl, hT, -⟩
     refine Runs.bind (Q := fun c t' => c = (sp.caps.toList.drop (copiesOf s t.rounds)).map
@@ -469,7 +469,7 @@ theorem run_round (s : Schedule) (stream : String) (content : ByteArray) (n : Na
       simp only [specJson, List.map_map]
       rfl
     refine Runs.ite_neg (fun h => h hspec) ?_
-    refine Runs.bind ((draws_salteds (messageRows sp.free)).runs (by simp only [List.length_drop]; omega)) ?_
+    refine Runs.bind ((samples_salteds (messageRows sp.free)).runs (by simp only [List.length_drop]; omega)) ?_
     rintro bcs t₂ ⟨ht₂, hB⟩
     subst ht₂
     refine Runs.get (Runs.ite_neg (by simp [hl]) ?_)

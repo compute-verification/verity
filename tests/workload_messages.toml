@@ -237,7 +237,7 @@ readers = [
 
 [[message]]
 type = "BoundaryCommitment"
-today = "the run commit (`v3c-w<K>-<class>/window/`: `circuit.json`, `registration.json`, `index.json` and the rows, `verity.commitments.windows`' four records)"
+today = "the run commit (`v3c-w<K>-<class>/window/`: `circuit.json`, `registration.json`, `index.json` and the rows, `verity.commitments.periods`' four records)"
 writers = [
     { lane = "proofs", file = "verity/protocols/proofs/spot/prover/audit/prove_path.py", find = "^def window_commit_of_advice|\\\"window-commit\\\": window_commit_of_advice" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "prove_path\\.py window-commit --serve-run" },
@@ -262,14 +262,14 @@ readers = [
 
 [[message]]
 type = "Values"
-today = "the adapter calls `verity.commitments.windows` (`rows`, `interface`, `links`: the run's circuit record, its registration, `Window.record/close/write`)"
+today = "the adapter calls `verity.commitments.periods` (`rows`, `interface`, `links`: the run's circuit record, its registration, `Window.record/close/write`)"
 writers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serving_rows.py", find = "verity\\.commitments\\.windows" },
 ]
 readers = [
-    { lane = "vllm", file = "verity/commitments/windows/interface.py", find = "^CIRCUIT = " },
-    { lane = "vllm", file = "verity/commitments/windows/interface.py", find = "^class Window|^    def (record|close|write)\\(" },
-    { lane = "vllm", file = "verity/commitments/windows/rows.py", find = "^def (commit|registration|write)\\(" },
+    { lane = "vllm", file = "verity/commitments/periods/interface.py", find = "^CIRCUIT = " },
+    { lane = "vllm", file = "verity/commitments/periods/interface.py", find = "^class Window|^    def (record|close|write)\\(" },
+    { lane = "vllm", file = "verity/commitments/periods/rows.py", find = "^def (commit|registration|write)\\(" },
 ]
 
 [[message]]

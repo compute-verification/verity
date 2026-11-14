@@ -78,7 +78,7 @@ from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))
@@ -257,7 +257,7 @@ def test_each_table_row_a_proof_block_holds_is_w_s_row_there_and_each_served_row
 
 
 @pytest.mark.slow
-def test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_drawn_and_off_its_definition(toy):
+def test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_sampled_and_off_its_definition(toy):
     """W' (round 1's o-projection row flipped in one bit) differs from W at that leaf alone, so the honest reader's row,
     committed under that leaf's salt, opens against no root W' registers, and `reuse` refuses W'. Its reader is the one
     proof block of its template (`Int8RowQuant_v5` at round 1 and the o-projection's R), a stratum of its own whose sample

@@ -502,7 +502,7 @@ public import Proofs.Flock.Claims.ZK.RepCons
   tables' tape read with fibers of one size on `A` (`Flock.zk_server_blind_deployed`).
 * `Release`: the deployed release (`LeanRelease`), the ZK server whose frame is the compiled Lean frame
   (`Masker.answer`, then `Flock.ZkServer.Frame.round`: `LeanRelease.release`, `refMsg_toSrv` by definition) at the
-  frame's own configuration from its samples on the server's tape (`LeanRelease.cfg`, `Cfg.ofDraws`: `cfg_pads`,
+  frame's own configuration from its samples on the server's tape (`LeanRelease.cfg`, `Cfg.ofSamples`: `cfg_pads`,
   `cfg_root`). Its coin stops are the frame's, all four of them (a zerocheck outer coin `1`, a mask slot short of full
   rank, level 0's `ρ` dependent, the inner proof's `β = 0`: `answer_rho_dependent`, `answer_beta_zero`), and where the
   frame refuses the coins the release is the stop (`LeanRelease.release_of_refusesCoins`). Its pass decision is the
@@ -606,7 +606,7 @@ public import Proofs.Flock.Claims.ZK.RepCons
   `Flock.ZkServer.Link` reads returns `commit0`'s (**`commitP_eq`**, **`commitPZk_eq`**, through `Commit.toC`), and
   their openings agree (`openP_eq`).
 * `FinishLevel0`: the commitment the session loop's finish reads off its `Level0` (`Flock.ZkServer.Finish.commitOf`)
-  is `commit0`'s at the `Level0`'s own level, `t_pad` and table, wherever `Level0.ofDraws` returned it
+  is `commit0`'s at the `Level0`'s own level, `t_pad` and table, wherever `Level0.ofSamples` returned it
   (**`commitOf_eq`**), so the loop's finish proves at the commitment the `table` path commits.
 * `FinishPiop`: the ZK server's transcript, zerocheck, lincheck and ring switch are the masked session's from its source,
   by unfolding through `Asks.toC`: **`Flock.ZkServer.Finish.zerocheckFw_eq`**, **`lincheckFw_eq`** (`zerocheckCut`,
@@ -723,7 +723,7 @@ public import Proofs.Flock.Claims.ZK.RepCons
   lane messages and pair's sums are `l0Clear` at the coins from the round its PIOP ends at, on its packed table and its
   PIOP's basis, plus the pads (**`Finish.repFwC_l0`**).
 * `FinishSwFrame`: those at the ZK server's own request. Where the passed values are the request's, its samples the
-  release's frame samples on the tape, and the session's tape has the pads of the tape of those samples (`tapeOfDraws`), the
+  release's frame samples on the tape, and the session's tape has the pads of the tape of those samples (`tapeOfSamples`), the
   session's pads are the request's below `h_ab` (`Masked.pads_frame`), so the masked values below `zp 64` are the
   request's `vals + padsOf draws` (**`Masked.swSrcE_hmk_frame`**), and up to `h_ab` the opening's values plus those pads
   (**`Masked.swSrcE_l0_frame`**).
@@ -861,15 +861,15 @@ public import Proofs.Flock.Claims.ZK.RepCons
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
   `opens_coinPass_zeros`), so the coins the frame takes there are its own.
-* `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `drawBytes` bytes for each rep's
-  frame and the tap's streams, one for one), the frame's read proved to be the release's samples (`frame_draws`, with a read
-  of any other length refused, `drawsWith_refuses`), and the step to a uniform tape beside independent randomness under
+* `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `sampleBytes` bytes for each rep's
+  frame and the tap's streams, one for one), the frame's read proved to be the release's samples (`frame_samples`, with a read
+  of any other length refused, `samplesWith_refuses`), and the step to a uniform tape beside independent randomness under
   A3 per test, up to its slack `η` (`Pr_os_prod`). `ZkDeferredOs`, `ZkServerBlindOs` and `ZkServerLeanOs` state the
   three theorems at those bytes, the bound plus `η`, proved as `zkDeferredOs`, `zkServerBlindOs` and `zkServerLeanOs`.
-* `FrameTape`: the frames' samples read as the masked prover's tape (`tapeOfDraws`: table `i`'s rep `r` reads frame rep
+* `FrameTape`: the frames' samples read as the masked prover's tape (`tapeOfSamples`: table `i`'s rep `r` reads frame rep
   `rep i r`'s bytes as its `h`, `μ`, their padding, `τ`'s salt and leaf salts), whose pads are the frame's
-  (`padsOf_tapeOfDraws`, `padsOf_drawsAt`, with `h_ab` and `w`), whose leaf salts are the frame's (`innerSalt_fit`), and
-  which the release's configuration carries at the rep's rounds (`cfg_tapeOfDraws`), at the operating system's bytes
+  (`padsOf_tapeOfSamples`, `padsOf_samplesAt`, with `h_ab` and `w`), whose leaf salts are the frame's (`innerSalt_fit`), and
+  which the release's configuration carries at the rep's rounds (`cfg_tapeOfSamples`), at the operating system's bytes
   too (`padsOf_os`).
 * `FrameParse`: the frame's round (`roundFree`) at the bytes of a round's frames (`encs fs` then the squeeze) is the fold
   of the frame's step over them (`stepAt`: labels through `Masker.label`, bytes copied, each observed value absorbed and
@@ -879,7 +879,7 @@ public import Proofs.Flock.Claims.ZK.RepCons
   following the zerocheck's label (`roundFree_zc`). The pads are taken in the absorbed order: every pad below `h_ab` but
   `final_c`'s, ascending (`absorbed_toList`), the indices the masked prover pads its sends under. A device that sends
   the masked prover's round with each pad added back, its plain values, has that round released but its domain frames
-  (`roundFree_honest`, `dropDoms`), under the masked prover's pads (`padAt_ofDraws_absPos`).
+  (`roundFree_honest`, `dropDoms`), under the masked prover's pads (`padAt_ofSamples_absPos`).
 * `FrameRounds`: the cut's zerocheck, answered by `asksCut`, sends the binding, `r_skip`'s and `r_outer`'s squeezes,
   `round1`'s and each residual round's masked values with their coins' squeezes (`zerocheckCut_bodies`, `zcBodies`),
   and the frame releases the device's zerocheck rounds as those bodies (`roundFree_zcBind`, `roundFree_zcOuter`,
@@ -960,7 +960,7 @@ public import Proofs.Flock.Claims.ZK.RepCons
   the placeholder at a link of `spec.points` points, each scheduled round squeezes the plan's count (`plan_sched`).
 * `FrameLinks`: at a `Live` statement every rep stream's table has the session's link points, nonzero and within
   `Frames.COIN_MAX` at its two points (`Masked.live_links`): `ofLoop_progChecks_of`'s `hP`.
-* `FrameReal`: where `real` answers the session loop's own tables (`RealTabs`: `tabOfLevel0` of a level 0 `ofDraws`
+* `FrameReal`: where `real` answers the session loop's own tables (`RealTabs`: `tabOfLevel0` of a level 0 `ofSamples`
   drew), the rep's own table is of the placeholder's shape (`real_tabAlike`) and within the bounds `schedSoFar_alike`
   reads (`real_bounds`, with `sched_bounds` by `decide +kernel`).
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and

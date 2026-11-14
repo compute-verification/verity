@@ -27,7 +27,8 @@ from typing import Any, Protocol
 _POUW = "verity.protocols.accounting.pouw"
 _PROVER = f"{_POUW}.prover"
 _SERVING = f"{_PROVER}.serving"
-#: each exported name's module and attribute, loaded when first read
+#: each exported name's module and attribute, read from it at every lookup (never cached here), so an import inside a
+#: function sees the module's current attribute
 _LAZY = {
     "NcpRun": (f"{_SERVING}.ncp", "NcpRun"),
     "NcpCircuitRun": (f"{_SERVING}.ncp", "NcpCircuitRun"),
@@ -113,6 +114,50 @@ _LAZY = {
     "weights_root": (f"{_POUW}.verifier.audit", "weights_root"),
     "window_refusals": (f"{_SERVING}.h1.window", "refusals"),
     "zy_host": (f"{_SERVING}.h1.records", "host"),
+    "CommitRecord": (f"{_SERVING}.h1.commit", "CommitRecord"),
+    "GateSessions": (f"{_SERVING}.h1.serve_gate", "GateSessions"),
+    "H1_COMMIT_SCHEME": (f"{_SERVING}.h1.commit", "SCHEME"),
+    "H1_PROGRAM": (f"{_SERVING}.h1", "PROGRAM"),
+    "H1_PROGRAM_META": (f"{_SERVING}.h1", "PROGRAM_META"),
+    "LISTEN_S": (f"{_SERVING}.h1.serve_gate", "LISTEN_S"),
+    "MARGIN": (f"{_SERVING}.h1.serve_gate", "MARGIN"),
+    "PEARL_C_ROW_ALIGN": (f"{_SERVING}.pearl_c", "ROW_ALIGN"),
+    "POLLS": (f"{_SERVING}.h1.serve_gate", "POLLS"),
+    "REPLY_FIELDS": (f"{_SERVING}.h1.challenger", "REPLY_FIELDS"),
+    "Receipts": (f"{_SERVING}.h1.receipts", "Receipts"),
+    "SESSION_FIELDS": (f"{_SERVING}.h1.challenger", "SESSION_FIELDS"),
+    "Sites": (f"{_SERVING}.h1.commit", "Sites"),
+    "Writer": (f"{_SERVING}.h1.prover", "Writer"),
+    "a_value": (f"{_SERVING}.pearl_c.window", "a_value"),
+    "b_value": (f"{_SERVING}.pearl_c.window", "b_value"),
+    "challenger_carried": (f"{_SERVING}.h1.challenger", "carried"),
+    "commit_registration": (f"{_SERVING}.h1.commit", "registration"),
+    "committed_k": (f"{_POUW}.verifier.credit", "committed_k"),
+    "connect_window": (f"{_SERVING}.h1.window", "connect"),
+    "declared_layout": (f"{_SERVING}.h1.served", "declared_layout"),
+    "descriptor": (f"{_SERVING}.h1.served", "descriptor"),
+    "draw_k": (f"{_SERVING}.h1.challenger", "draw_k"),
+    "drawn_reads": (f"{_SERVING}.h1.serve_draw", "drawn_reads"),
+    "drawn_units": (f"{_SERVING}.h1.serve_draw", "drawn_units"),
+    "dump_live": (f"{_SERVING}.h1.live", "dump"),
+    "h1_tables_available": (f"{_SERVING}.h1.tables_device", "available"),
+    "h1_units": (f"{_SERVING}.h1", "units"),
+    "kept_bytes": (f"{_SERVING}.h1.prover", "kept_bytes"),
+    "layout_of": (f"{_POUW}.verifier.credit", "layout_of"),
+    "listening": (f"{_SERVING}.h1.serve_gate", "listening"),
+    "lms_verify": (f"{_SERVING}.h1.challenger", "lms_verify"),
+    "pins_head": (f"{_SERVING}.h1.challenger", "pins_head"),
+    "prover_private": (f"{_SERVING}.h1.prover", "private"),
+    "register_weights": (f"{_SERVING}.h1.served", "register_weights"),
+    "registered_commit": (f"{_SERVING}.h1.registered", "commit"),
+    "registered_salts": (f"{_SERVING}.h1.registered", "salts"),
+    "served_declared": (f"{_SERVING}.h1.served", "declared"),
+    "session_of": (f"{_SERVING}.h1.challenger", "session_of"),
+    "unit_of": (f"{_SERVING}.h1.served", "unit_of"),
+    "weights_of": (f"{_SERVING}.h1.served", "weights_of"),
+    "window_units": (f"{_SERVING}.h1.serve_draw", "units"),
+    "write_program": (f"{_SERVING}.h1.served", "write_program"),
+    "y_value": (f"{_SERVING}.pearl_c.window", "y_value"),
 }
 
 
@@ -187,8 +232,7 @@ def __getattr__(name: str) -> Any:
     if name not in _LAZY:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module, attr = _LAZY[name]
-    value = globals()[name] = getattr(importlib.import_module(module), attr)
-    return value
+    return getattr(importlib.import_module(module), attr)
 
 
 def __dir__() -> list[str]:

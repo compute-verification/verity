@@ -10,7 +10,7 @@ dockets, samples from its own randomness and keeps the record (this module); the
 verifier, verifies offline, and reads coins only from the challenger's log.
 
 **The public-items rule.** Everything the auditor observes is a function of the Spec's public items. A docket is
-one-stage's record (`one_stage.registration`, v1 or v2), and `check_public` holds each of its observable items to the
+one-stage's record (`one_stage.docket`, v1 or v2), and `check_public` holds each of its observable items to the
 rule: it is the service's own, a salted root of a declared Value, or an item the Spec declares in `public`.
 
 * The service's own: `format`, `protocol` and `previous` (one-stage's tags and the log's chain), `scheme` (`SCHEME`: hm96
@@ -25,7 +25,7 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
   `words:<value>` and `word_bits:<value>` for a registered value.
 
 One-stage's record always shows N, each root's leaf count and domain, and the window's provenance, so a Spec over it
-declares them; hiding them waits on the hidden layout (`one_stage.hidden_draw`).
+declares them; hiding them waits on the hidden layout (`one_stage.hidden_sample`).
 The `Stream` runs `check_public` by the verifier before one-stage's R1 to R7, reading an entry's fields in key
 order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 
@@ -1107,18 +1107,18 @@ def _names_place(window: Any) -> bool:
     return True
 
 
-def _registration_token(r: WindowCommitmentRecord) -> str:
+def _docket_token(r: WindowCommitmentRecord) -> str:
     """The token `_Control` and `Spot.Stream` know a docket by: equal exactly when the dockets are."""
     return _sha512({"record": dict(r.record), "receipt": dict(r.receipt), "digest": r.digest, "order": r.order,
                     "salted_at": r.salted_at, "received_at": r.received_at})
 
 
 def _draw_token(d: Draw) -> str:
-    return _sha512({"registration": _registration_token(d.registration), "law": dict(d.law), "draw": dict(d.draw)})
+    return _sha512({"registration": _docket_token(d.registration), "law": dict(d.law), "draw": dict(d.draw)})
 
 
 def _covered(d: Draw) -> list[Any]:
-    return [_order(d.registration), _registration_token(d.registration), _draw_token(d)]
+    return [_order(d.registration), _docket_token(d.registration), _draw_token(d)]
 
 
 def _session_digests(sessions: Any) -> list[str | None] | None:
@@ -2032,7 +2032,7 @@ class Stream:
             salted_at = None if deadline is None else self._salted_at
             got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"),
                                                      v.fanout, v.rests_on_period_check, self._returned(got["program"]))
-            op["registration"] = _registration_token(got["registration"])
+            op["registration"] = _docket_token(got["registration"])
             return None
         d = self._decide(op, {"received_at": received, "checks": checks})
         if d.get("refused") == ["late-registration"]:
@@ -2155,7 +2155,7 @@ class Stream:
         Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
         `interior-registered` (it has one), or either check failing."""
         first = draw.replay_sample or draw
-        op: dict[str, Any] = {"op": "interiors", **self._drawn_op(first)}
+        op: dict[str, Any] = {"op": "interiors", **self._sampled_op(first)}
         got: dict[str, Any] = {}
         seed_salt = self._seed_salt_of(window_root)
 
@@ -2191,7 +2191,7 @@ class Stream:
             if not v.ok:
                 return list(v.codes)
             got["registration"] = self._registration(record, first.registration.order, fanout=v.fanout)
-            op["interior"] = _registration_token(got["registration"])
+            op["interior"] = _docket_token(got["registration"])
             return None
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
         reg, earlier = got["registration"], got["earlier"]
@@ -2217,11 +2217,11 @@ class Stream:
         return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
                                           values=self.values + spans)
 
-    def _drawn_op(self, draw: Draw) -> dict[str, Any]:
+    def _sampled_op(self, draw: Draw) -> dict[str, Any]:
         """What an op names a sample by: its docket's order and token and its token; for a two-stage design's
         second stage, the first stage's, with `second`, its own token."""
         first = draw.replay_sample or draw
-        op = {"order": _order(first.registration), "registration": _registration_token(first.registration),
+        op = {"order": _order(first.registration), "registration": _docket_token(first.registration),
               "draw": _draw_token(first)}
         if draw.replay_sample is not None:
             op["second"] = _draw_token(draw)
@@ -2248,7 +2248,7 @@ class Stream:
                 and self._entries[o].interior == registration:
             return self._select_second(self._entries[o])
         op: dict[str, Any] = {"op": "select", "order": _order(registration),
-                              "registration": _registration_token(registration)}
+                              "registration": _docket_token(registration)}
         got: dict[str, Any] = {}
 
         def checks() -> list[str] | None:
@@ -2317,7 +2317,7 @@ class Stream:
     def _select_second(self, e: _Entry) -> Draw:
         first, reg = e.draw, e.interior
         assert first is not None and reg is not None and isinstance(self.spec.selection, TwoStage)
-        op: dict[str, Any] = {"op": "second", **self._drawn_op(first), "interior": _registration_token(reg)}
+        op: dict[str, Any] = {"op": "second", **self._sampled_op(first), "interior": _docket_token(reg)}
         ns, ks, got = self.cells, self.counts, {}
 
         def checks() -> list[str] | None:
@@ -2386,7 +2386,7 @@ class Stream:
         after)."""
         if isinstance(draw, ProofRun):
             return self._deliver_session(draw, sessions)
-        d = self._held(self._decide({"op": "deliver", **self._drawn_op(draw), "sessions": _session_digests(sessions)},
+        d = self._held(self._decide({"op": "deliver", **self._sampled_op(draw), "sessions": _session_digests(sessions)},
                                     {"now": lambda: float(self._clock())}))
         e = self._entries[draw.registration.order]
         e.sessions = list(sessions)
@@ -2444,7 +2444,7 @@ class Stream:
                 template_circuits(proofs, self.spec.check.query)
             except ValueError as e:
                 raise _refuse("proofs", str(e)) from None
-        op: dict[str, Any] = {"op": "outcome", **{k: v for k, v in self._drawn_op(draw).items() if k != "second"}}
+        op: dict[str, Any] = {"op": "outcome", **{k: v for k, v in self._sampled_op(draw).items() if k != "second"}}
         got: dict[str, Any] = {}
         o = op["order"]
         held_entry = self._entries[o] if o is not None and o < len(self._entries) else None

@@ -120,13 +120,13 @@ public import Proofs.Flock.Soundness.Audit.Extraction
 public import Proofs.Flock.Soundness.Audit.FlockCompiled
 public import Proofs.Flock.Soundness.Audit.FlockBatched
 public import Proofs.Flock.Soundness.Audit.Stratified
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 public import Proofs.Flock.Soundness.ExecStratified
 public import Proofs.Flock.Soundness.ExecStrataOf
-public import Proofs.Flock.Soundness.ExecDrawOS
+public import Proofs.Flock.Soundness.ExecSampleOS
 public import Randomness
 public import Proofs.Flock.Soundness.PlanDraw
-public import Proofs.Flock.Soundness.KeyedDraw
+public import Proofs.Flock.Soundness.KeyedSample
 public import Proofs.Flock.Soundness.Audit.RegDraw
 public import Proofs.Flock.Soundness.Audit.StratifiedMiss
 public import Proofs.Flock.Soundness.Audit.Work
@@ -230,8 +230,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOk
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOkJson
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Place
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Bind

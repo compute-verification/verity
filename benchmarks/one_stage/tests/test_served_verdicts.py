@@ -119,7 +119,7 @@ REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256,
 def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path, capsys):
     """The advice docket's public form states no length of the advice but its compiler's cap, counts and refuses
     none of its requests, names no window, and keeps its roots, compiler and binding's root."""
-    got = S.public_registration(REGISTRATION)
+    got = S.public_docket(REGISTRATION)
     assert got["binding"]["advice"] == {"root": "ab" * 64, "bits": 8388608} and got["rows"] == 32768
     assert got["padded"] == list(S.PADDED) and got["commit"] == {"run_id": "r1/wK", "run_root": "ef" * 64}
     assert not {"requests", "compiled", "refused", "window", "bits_by_window"} & set(got) and "392" not in json.dumps(got)
@@ -430,7 +430,7 @@ def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference
         assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
 
-def test_the_spot_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
+def test_the_spot_line_names_the_partition_and_its_sample_and_no_advice_length_population_or_steps(tmp_path, capsys):
     row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
            "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
     part = {"templates": ["SiluMul_v2{I=8192}"], "law": "rate:2/4",
@@ -1435,7 +1435,7 @@ def _draw(after: str = "c1" * 64, seed: int = 7) -> dict:
 
 
 DRAW = _draw()
-DRAW_COIN = DRAW["opening"]["coin"]
+SAMPLE_COIN = DRAW["opening"]["coin"]
 NODE = {"from": "node", "claim": "uniform/io-getrandombytes"}
 
 
@@ -1465,7 +1465,7 @@ NODE_PUT = {True: (1, "", "Traceback (most recent call last):\nStoreError: no re
 
 
 @pytest.mark.parametrize("case", ["preserved", "node", "no store"])
-def test_coin_puts_the_verifiers_coin_record_in_the_store_the_moment_it_is_drawn(tmp_path, case):
+def test_coin_puts_the_verifiers_coin_record_in_the_store_the_moment_it_is_sampled(tmp_path, case):
     """`coin` copies the verifier's coin record out of the passes and puts it in the evidence store as its own kind, its
     meta the run and the run commitment: preserved where the put pushes it; on a node with no store write key, in the
     node's own store under the same content-addressed id, with what the preserving put said; and with no id where no put
@@ -1535,7 +1535,7 @@ def test_the_coin_names_the_runs_attempt_as_its_custody_off_the_node(tmp_path, c
     """Where no put preserves the coin (vy-dc-h200's workload shells hold no store key), ``coin-put.json`` names the run's
     Attempt, which carries ``out/``, and the coin's path in it: only for a valid run id and a copy under the run's
     ``out/``; the COIN line says so."""
-    (rec := tmp_path / "coin.json").write_bytes(_coin_record(DRAW_COIN, DRAW))
+    (rec := tmp_path / "coin.json").write_bytes(_coin_record(SAMPLE_COIN, DRAW))
     run_dir, run = tmp_path / "runs" / "r20261104-090000-ab12", "r20261104-090000-ab12"
     put = _put(NODE_PUT)[0]
     got = S.coin(rec, run_dir / "out" / "pieces" / "pouw", run, research=["research"], put=put, run_dir=run_dir)
@@ -1812,7 +1812,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
 
     served, verified = _pearlplus_run()
     draw = {"node draw": NODE, "draw off C": _draw("c2" * 64)}.get(case, DRAW)
-    source = {"node draw": "5e" * 32, "source not coin": "77" * 64}.get(case, DRAW_COIN)
+    source = {"node draw": "5e" * 32, "source not coin": "77" * 64}.get(case, SAMPLE_COIN)
     answer = {"protocol": S.PEARLPLUS_PROTOCOL, "verdict": "accept", "reason": None, "commitment": "c1" * 64,
               "public": {"work": verified["answer"]["public"]["work"], "unit": "MAC",
                          **({} if case == "untied" else {"tie": {"record": PEARL_W, "tables": 6}})},
@@ -1892,7 +1892,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     assert row["quantity"]["work"] == PEARL_LEAN_WORK and row["quantity"]["tie"]["record"] == PEARL_W
     profile = row["answer"]["profile"]
     assert (profile["lane"], profile["key_sha512"], profile["period"], profile["session"]) == ("vllm", pin, "p-pc", SID)
-    assert profile["draw_session"] == DSID and profile["source"] == DRAW_COIN
+    assert profile["draw_session"] == DSID and profile["source"] == SAMPLE_COIN
     assert profile["lean"]["work"] == PEARL_LEAN_WORK and row["piece"]["piece"] == "pearlplus" and "development" not in row
     assert row["answer_from"] == S.PEARLPLUS_FROM and "the prover side's" in S.PEARLPLUS_FROM
     (tmp_path / "serve").mkdir()
@@ -1959,7 +1959,7 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
     ("no period", "the live session joined no period of lane vllm"),
     ("H1 period", "the live session joined period p-h1, H1's (its open commits draw_k, rows): a Pearl-C salt session is "
                   "credited in a Pearl-C period alone"),
-    ("node draw", S.PEARLPLUS_NODE_DRAW),
+    ("node draw", S.PEARLPLUS_NODE_SAMPLE),
     ("draw refused", "the draw session's check refused it: ValueError: the record's draw coin: bad"),
     ("draw key", "the draw session's challenger key is not the compose's pin: the challenger key at "),
     ("period open", "the piece's ledger doesn't close the Pearl-C period p-pc, so no draw follows it"),
@@ -1984,7 +1984,7 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
                                   "circuit than the window served"),
     ("no Lean", f"no Lean PouwCheck.PearlPlus verdict ({S.PEARLPLUS_LEAN}: FileNotFoundError"),
     ("Lean rejects", "the Lean PouwCheck.PearlPlus verdict is reject: the live session's coins are out of scope"),
-    ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {DRAW_COIN[:16]}..., not Pearl+'s verdict's "
+    ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {SAMPLE_COIN[:16]}..., not Pearl+'s verdict's "
                        "run and source"),
     ("Lean untied", f"the Lean verdict doesn't hold the passes to Pearl+'s window record W {PEARL_W[:16]}..."),
     ("Lean credits nothing", "the Lean verdict credits 0 MACs over 40 tiles: nothing"),
@@ -2005,7 +2005,7 @@ def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_deve
     assert rec["legs"]["pouw"] is None
 
 
-def _draw_answers(calls: list, public: bytes = PUBLIC):
+def _sample_answers(calls: list, public: bytes = PUBLIC):
     """The gate's answers for the run's sample session, as `pearlplus_draw` asks them: its tree for ``fetch`` (its key),
     the ledger (its reserve and its open on the run's commitment) and the pins."""
     def ask(*words: str) -> bytes:
@@ -2041,7 +2041,7 @@ def _draw_answers(calls: list, public: bytes = PUBLIC):
     ("off C", "ValueError: the record's draw coin: "),
     ("other source", "ValueError: the record's source is not its draw session's coin"),
 ])
-def test_the_pearlplus_piece_holds_the_verifiers_draw_to_its_draw_session(tmp_path, monkeypatch, case, reason):
+def test_the_pearlplus_piece_holds_the_verifiers_sample_to_its_sample_session(tmp_path, monkeypatch, case, reason):
     """`pearlplus_draw`: a challenger sample's session fetched through the gate with the ledger and pins, its key held to
     the pin, the ledger opening it alone on the run's commitment C (`challenger.trusted_session_of`, its signed session),
     withheld, its signed commitment the record's, its log showing C as its coin's one root, and the record's opening its
@@ -2067,11 +2067,11 @@ def test_the_pearlplus_piece_holds_the_verifiers_draw_to_its_draw_session(tmp_pa
         return case != "not withheld"
     monkeypatch.setattr(Ch, "withheld_on", withheld_on)
     draw = {"off C": _draw("c2" * 64)}.get(case, DRAW)
-    (rec := tmp_path / "coin.json").write_bytes(_coin_record({"other source": "77" * 64}.get(case, DRAW_COIN),
+    (rec := tmp_path / "coin.json").write_bytes(_coin_record({"other source": "77" * 64}.get(case, SAMPLE_COIN),
                                                              NODE if case == "node" else draw))
     (main := tmp_path / "main.txt").write_text("aa" * 20 + "\n")
     calls = []
-    ask = _draw_answers(calls, public=bytes(80) if case == "other key" else PUBLIC)
+    ask = _sample_answers(calls, public=bytes(80) if case == "other key" else PUBLIC)
     out = tmp_path / "pieces" / "pouw"
     out.mkdir(parents=True)
     got = S.pearlplus_draw(rec, out, None if case == "no gate" else GATE, hashlib.sha512(PUBLIC).hexdigest(), main,
@@ -2086,7 +2086,7 @@ def test_the_pearlplus_piece_holds_the_verifiers_draw_to_its_draw_session(tmp_pa
     served, verified = _pearlplus_run()
     monkeypatch.setattr(S, "pearlplus_coins", lambda *a: {"session": SID, "closed": None, "passes": 4, "reason": None})
     monkeypatch.setattr(S, "_gate_out", lambda gate, *words: ask(*words))
-    answer = {**verified["answer"], "commitment": "c1" * 64, "profile": {"source": DRAW_COIN}}
+    answer = {**verified["answer"], "commitment": "c1" * 64, "profile": {"source": SAMPLE_COIN}}
     S.coin(rec, out, "r1", research=["research"], put=_put(NODE_PUT)[0])
     doc = S.pearlplus(out, served, {**verified, "answer": answer}, gate=GATE, key="00" * 64, main=main,
                       coin=out / S.COIN_PUT)
@@ -2095,7 +2095,7 @@ def test_the_pearlplus_piece_holds_the_verifiers_draw_to_its_draw_session(tmp_pa
     assert doc["coins"]["draws"] == S.PEARLPLUS_COINS["draws"]
 
 
-def test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_the_draw(tmp_path, monkeypatch, capsys):
+def test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_the_sample(tmp_path, monkeypatch, capsys):
     """``pearlplus-period open``: the lane's Pearl-C period opened at the gate with cap 1 (the serve's one salt session)
     and circuit the SHA-512 of the piece's descriptor (Pearl+'s protocol, the scheme and the cubin's SHA-512), its answer
     in ``period.json``; ``close`` closes it by that name. A gate that refuses is a PERIOD refused line, exit 1. With
@@ -2243,7 +2243,7 @@ def test_the_tied_close_waits_for_the_ledger_to_end_each_windows_salt_session(tm
 
 
 @pytest.mark.parametrize("case", ["held", "between", "open", "node"])
-def test_the_rule_line_reads_whether_the_draw_was_the_lanes_first_reserve_after_the_close(tmp_path, monkeypatch,
+def test_the_rule_line_reads_whether_the_sample_was_the_lanes_first_reserve_after_the_close(tmp_path, monkeypatch,
                                                                                           capsys, case):
     """``pearlplus-period rule``, once the coin is flipped: HELD where the coin record's sample session is the lane's first
     reserve after the period in DIR's period.json closed (`pouw_h1_window.after_close`), else BROKEN, exit 1, saying
@@ -2631,7 +2631,7 @@ def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_co
     `verity-vllm block-counts` against the policy at IO_POLICY's default: its line and its public judgment hold n and no
     count, and the exact count is in the serve dir's private/ alone (0600); with no policy it says so and judges nothing."""
     from verity.definitions.registry.catalog import load
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
 
     load()
     gemm = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'

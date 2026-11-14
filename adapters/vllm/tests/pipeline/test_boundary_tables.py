@@ -21,7 +21,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P, dock
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
 from verity.commitments import history as HT
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity_vllm.commit import history_tables as H
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, boundary_windows as BW

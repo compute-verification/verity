@@ -34,8 +34,8 @@ from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import embedding as EMB
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows.interface import digest_words
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods.interface import digest_words
 from verity.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.protocols.proofs.spot.verifier import service as S
