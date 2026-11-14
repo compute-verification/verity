@@ -2,7 +2,7 @@
 across it at each tier, elasticities d ln eta / d ln p in four scenarios, the values at which 1/eta falls below 100, 10
 and 2, and the closed forms of the memory cap mu, the inference-only policy's term nu and the cheating share chi checked against
 ``tiers.evaluate``. 1/eta is not the slowdown D (``statement.dampener``, the slowdown calculator's
-``rho.theorem.multiple_bound``): eta counts every term at peak, D the residual r at MFU_0 (reference efficiency), so at
+``slowdown.theorem.multiple_bound``): eta counts every term at peak, D the residual r at MFU_0 (reference efficiency), so at
 s = 0, g = 1 and no memory cap, D = 1 / (r + (eta - r) / MFU_0) wherever D > 1. ``statement.py`` gives the thresholds
 on D.
 
