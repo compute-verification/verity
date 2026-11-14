@@ -117,7 +117,7 @@ def test_the_readings_and_thresholds_the_protocol_states() -> None:
     assert [lg(timing.sign_rank_at_most(16, r)) for r in range(15, 10, -1)] == [-16.0, -34.59, -55.39, -78.3, -103.25]
     assert [lg(timing.sign_rank_at_most(64, r)) for r in range(31, 25, -1)] == [-32.0, -66.58, -103.39, -142.3, -183.25,
                                                                                 -226.23]
-    for rows, star, rate, c40, c64 in ((16, 12, -95.12, 55.12, 31.12), (64, 27, -215.85, 108.5, 96.5)):
+    for rows, star, rate, c40, c64 in ((16, 12, -95.12, 55.12, 31.12), (64, 27, -215.85, 175.85, 151.85)):
         r, f = timing.sketch_reading(rows)
         assert (r, lg(f)) == (star, rate)
         assert f == min(timing.sketch_rate(rows, x) for x in range(1, min(rows, timing.SECTOR_BYTES) + 1))
@@ -127,7 +127,8 @@ def test_the_readings_and_thresholds_the_protocol_states() -> None:
             assert (timing.sketch_failure(0, rows, queries=c) <= Fraction(1, 2 ** bits)
                     < timing.sketch_failure(0, rows, queries=c + 1))
             assert round(math.log2(c), 2) == want
-            assert (c == math.floor(Fraction(1, 2 ** bits) / f)) == (rows == 16), "64 rows: the keys' birthday binds"
+            gap = math.floor(Fraction(1, 2 ** bits) / f) - c
+            assert gap == 0 if rows == 16 else 0 < gap < c >> 100, "64 rows: the 512-bit keys' birthday moves c by a hair"
     assert timing.sketch_rate(16, 11) == Fraction(1, 2 ** 88) + 128 * timing.sign_rank_at_most(16, 10)
     node_day, passes = round(timing.SHA512_PER_S * 86400), 86400 * 50
     assert (timing.sketch_failure(passes, queries=node_day)
@@ -155,8 +156,8 @@ def one_pass_session(blocks: int, passes: int, span_ns: int, samples: int) -> au
 def test_the_sketch_charges_the_provers_budget() -> None:
     """Grinding reads no block, so `sketch_failure` charges the prover's budget, Q = 2^`audit.QUERIES_LOG2`
     compressions, whatever the node computes.  At a session of P = 2,118 one-pass windows over N = 97,517,568 blocks
-    in 226.9 s, 48 openings a window, 16 rows read 2^-15.12 at Q = 2^80, and 64 rows 2^-97.00, where the keys' distance
-    from uniform binds.  The memory line's δ of a record of those counts is the ledger's: every `Line.delta` of
+    in 226.9 s, 48 openings a window, 16 rows read 2^-15.12 at Q = 2^80, and 64 rows, under 512-bit sign keys,
+    2^-135.85.  The memory line's δ of a record of those counts is the ledger's: every `Line.delta` of
     `ledger.memory` is the sum of `ledger.delta_parts`, the windows' profile δ at `audit.DELTA`, AuditRO's slack at
     `audit.SLACK_LOG2` a pass and the sketch at Q, the largest."""
     p, n, span_ns, samples = 2118, 97_517_568, 226_932_412_222, 48
@@ -164,7 +165,7 @@ def test_the_sketch_charges_the_provers_budget() -> None:
     assert audit.QUERIES_LOG2 == 80
     assert timing.sketch_failure(p, blocks=n) == timing.sketch_failure(p, blocks=n, queries=q)
     assert timing.sketch_failure(p, blocks=n, queries=q // 2) < timing.sketch_failure(p, blocks=n)
-    assert [lg(timing.sketch_failure(p, rows=rows, blocks=n)) for rows in (16, 64)] == [-15.12, -97.0]
+    assert [lg(timing.sketch_failure(p, rows=rows, blocks=n)) for rows in (16, 64)] == [-15.12, -135.85]
     record, keys = one_pass_session(n, p, span_ns, samples), 64
     assert record.windows[0].profile.delta == audit.DELTA == 2.0 ** -101
     parts = ledger.delta_parts(record)
@@ -184,15 +185,20 @@ def test_the_sketch_charges_the_provers_budget() -> None:
 
 
 def test_the_keys_distance_from_uniform_is_charged() -> None:
-    """Two of the `Q + P` candidate seeds whose 256-bit sign keys collide share their signs, so the keys are
-    within `(Q + P)²/2^257` of uniform, not uniform (`SketchHashRandom`'s ε), and `sketch_failure` charges it: 2^-97.00
-    at the prover's budget of 2^80 compressions, 2^-169.94 at 12,708,215,084,432."""
+    """Two of the `Q + P` candidate seeds whose sign keys collide share their signs, so the keys are within
+    `(Q + P)²/2^(b+1)` of uniform, not uniform (`SketchHashRandom`'s ε), b the key's bits, and `sketch_failure` charges
+    it: 256-bit keys at 16 rows, 512-bit at 64 (`receipts.sign_key_bits`).  At 16 rows it is 2^-97.00 at the prover's
+    budget of 2^80 compressions and 2^-169.94 at 12,708,215,084,432; at 64 rows, 2^-353.00 at 2^80."""
     p, n = 2118, 97_517_568
-    for q in (12_708_215_084_432, 2 ** audit.QUERIES_LOG2):
-        rest = (q * Fraction(1, 2 ** 96)
-                + (q + p) * (128 * timing.sign_rank_at_most(16, 11) + Fraction(n, 2 ** 512)))
-        assert timing.sketch_failure(p, blocks=n, queries=q) - rest == Fraction((q + p) ** 2, 2 ** 257)
+    for rows, r, bits in ((16, 12, 256), (64, 27, 512)):
+        assert receipts.sign_key_bits(rows) == bits
+        for q in (12_708_215_084_432, 2 ** audit.QUERIES_LOG2):
+            rest = (q * Fraction(1, 2 ** (8 * r))
+                    + (q + p) * (128 * timing.sign_rank_at_most(rows, r - 1) + Fraction(n, 2 ** 512)))
+            assert (timing.sketch_failure(p, rows, blocks=n, queries=q) - rest
+                    == Fraction((q + p) ** 2, 2 ** (bits + 1)))
     assert [lg(Fraction((q + p) ** 2, 2 ** 257)) for q in (12_708_215_084_432, 2 ** 80)] == [-169.94, -97.0]
+    assert lg(Fraction((2 ** 80 + p) ** 2, 2 ** 513)) == -353.0
 
 
 class Counting:

@@ -1,5 +1,6 @@
-"""The wipe's memory challenger and prover as parties of the deployment layer (`wipe_parties`). On the coins, clock
-readings and key `wipe_party.serve` is given, the ported challenger signs the same bytes, whatever its fill frames' size;
+"""The wipe's memory challenger and prover as parties of the deployment layer (`wipe_challenger`, `wipe_prover`, over
+`wipe_parties`'s messages). On the coins, clock readings and key `wipe_party.serve` is given, the ported challenger
+signs the same bytes, whatever its fill frames' size;
 an honest prover keeping the fill in host memory (`wipe_store.StoreProver`) is accepted by `verity/wipe/v0`'s verdict, one
 keeping foreign content is rejected and one that leaves is undecided; the challenger's transcript keeps each large fill
 frame as its digest, and the challenger replays from it."""
@@ -17,9 +18,12 @@ import pytest
 import pous_test_signer as ts
 import settings
 from verity.runtime import sources as S
+from verity.protocol import ProtocolDef
 from verity.party import Finish
-from verity.runtime.runner import ProtocolDef, run
+from verity.runtime.runner import run
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.device import wipe_challenger as WC
+from verity.protocols.accounting.pous.prover import wipe_prover as WR
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WPS
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
@@ -80,9 +84,9 @@ def challenger_caps(secret: bytes, params: sw.WipeParams) -> dict:
 
 
 def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=sw.Prover,
-         prover=WPS.Prover, state=None, request=None):
+         prover=WR.Prover, state=None, request=None):
     caps = {C: challenger_caps(secret, params), P: {"store": store}}
-    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WPS.MemoryChallengerParty(chunk), P: prover})
+    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WC.MemoryChallengerParty(chunk), P: prover})
     given = {} if mode == "simulated" else {
         "sources": {C: {"clock": S.VirtualClock(S.VirtualTime(T0), STEP), "coins": S.SeededCoins(SEED)}}}
     return run({"protocol": WPS.ID, "params": request or WP.request_of("n0", params)}, BOTH, mode, state,
@@ -135,7 +139,7 @@ def test_parameters_that_name_the_reads_are_refused():
     assert not [e for e in r.transcripts[C] if e.dir == "out" and e.channel == P and e.kind == "private"]
 
 
-class Leaving(WPS.Prover):
+class Leaving(WR.Prover):
     def on(self, r):
         if r.message.type == "Read" and self.answered == 3:
             return [Finish({"answered": 3}, "left")]
@@ -159,7 +163,7 @@ def test_large_fill_frames_are_kept_as_digests_and_the_challenger_replays(tmp_pa
     assert [(e.elided, len(e.data)) for e in fills] == [(True, 64), (True, 64)]
     assert all(e.kind != "private" for e in t.public())
     caps = {C: challenger_caps(b"replay", params)}
-    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WPS.MemoryChallengerParty(1 << 11), P: WPS.Prover})
+    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WC.MemoryChallengerParty(1 << 11), P: WR.Prover})
     again = run({"protocol": WPS.ID, "params": WP.request_of("n0", params)}, [C], "replay", None,
                 protocols={WPS.ID: protocol}, capabilities=caps, replay_dir=tmp_path / "runs/1")
     assert (again.status, again.divergence) == ("completed", None)

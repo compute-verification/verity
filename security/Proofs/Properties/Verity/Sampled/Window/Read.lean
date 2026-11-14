@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Assembled
 public import Proofs.Properties.Verity.Sampled.RecordDraw
 
 /-!
-# Sampled proofs' leg over a window: the sessions of the window's one sample
+# SPOT's leg over a window: the sessions of the window's one sample
 
 `Window/Steps.lean` takes the window's sessions at the sample the coin map's coins give (`WindowSessions`, of every
 play on a tape through the coin map's first stop). Here that is what the verifier's acceptance gives of a play, read

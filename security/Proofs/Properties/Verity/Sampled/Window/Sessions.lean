@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Stops
 public import Proofs.Properties.Verity.Sampled.Layout
 
 /-!
-# Sampled proofs' coupling over a window: the readings, a session at a time
+# SPOT's coupling over a window: the readings, a session at a time
 
 A window's play holds one session for each member with a proof block in the sample, each on its own coin tree, held
 one after another. The readings here say which opening of the device's log is which session's round, by the order

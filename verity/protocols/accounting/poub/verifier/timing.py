@@ -39,7 +39,7 @@ from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subs
 
 from . import audit, codec
 from .codec import BLOCK_BYTES
-from .receipts import DEFAULT, DIGEST_BYTES, KINDS, PER_LEAF, SALT_BYTES, SKETCH_ROWS
+from .receipts import DEFAULT, DIGEST_BYTES, KINDS, PER_LEAF, SALT_BYTES, SKETCH_ROWS, sign_key_bits
 
 MS = 1_000_000
 US = 1_000
@@ -263,10 +263,12 @@ def sketch_failure(passes: int, rows: int = SKETCH_ROWS, r: int | None = None, b
     counts compressions on any hardware the prover reaches, not the node's alone.  Every key the prover sees is a seed
     it computed or one of the session's, so it sees at most `Q + passes`, ground or not, and every guess is a
     compression:
-    `Q · 2^-8r + (Q + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512) + (Q + P)² · 2^-257`, the third
-    term a key's 512-bit receipt of a block right without its hash, and the last the keys' distance from uniform
-    (`SketchHashRandom`'s ε): two of the `Q + P` seeds whose 256-bit sign keys collide share their signs.  At 16 rows
-    and r = 12 it is the δ at which `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`."""
+    `Q · 2^-8r + (Q + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512) + (Q + P)² · 2^-(b + 1)`, the
+    third term a key's 512-bit receipt of a block right without its hash, and the last the keys' distance from uniform
+    (`SketchHashRandom`'s ε): two of the `Q + P` seeds whose b-bit sign keys collide share their signs, b =
+    `receipts.sign_key_bits(rows)`, 256 at 16 rows and 512 at 64.  At 64 rows and r = 27 it is the δ at which
+    `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`; at 16 rows and r = 12 it is
+    `SketchBoundRun`'s at those parameters."""
     if type(queries) is not int or queries < 1:
         raise ValueError("the prover's budget Q is a positive integer of SHA-512 compressions")
     if r is None:
@@ -274,7 +276,7 @@ def sketch_failure(passes: int, rows: int = SKETCH_ROWS, r: int | None = None, b
     q = queries
     return (q * Fraction(1, 2 ** (8 * r))
             + (q + passes) * (SECTORS * sign_rank_at_most(rows, r - 1) + Fraction(blocks, 2 ** (8 * DIGEST_BYTES)))
-            + Fraction((q + passes) ** 2, 2 ** 257))
+            + Fraction((q + passes) ** 2, 2 ** (sign_key_bits(rows) + 1)))
 
 
 def grind_compressions(leaves: int) -> int:
