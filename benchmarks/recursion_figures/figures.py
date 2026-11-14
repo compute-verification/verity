@@ -46,7 +46,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import sys
 import tempfile
 from collections.abc import Callable
@@ -61,6 +60,7 @@ sys.path += [str(HERE.parent / "harness"), str(HERE.parents[1] / "tools" / "conf
 
 import rec_profile as RP  # noqa: E402
 from rec_profile import SESSION_STEPS  # noqa: E402
+from verity_bench import kit, settings  # noqa: E402
 
 from verity.protocol import MONITORING_PERIODS  # noqa: E402
 
@@ -283,9 +283,7 @@ def record(doc: dict[str, Any], fig: dict[str, Any]) -> None:
     """Write `METRICS` into this research run's result: each figure over each fleet's week, month and year, modeled from
     one session, the run that measured it its input. The validation passes only for figures of an accepted recursive run
     with every figure there."""
-    from verity_bench import kit
-
-    w = kit.writer(Path(os.environ["RESEARCH_RUN_DIR"]))
+    w = kit.writer(settings.RESEARCH_RUN_DIR)
     kept = w.out / KEPT
     kept.parent.mkdir(parents=True, exist_ok=True)
     kept.write_text(json.dumps(fig, indent=1) + "\n")
@@ -326,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         doc = json.loads(a.result.read_text())
     fig = of_result(doc)
     print(json.dumps(fig, indent=1) if a.json else markdown(fig), end="" if not a.json else "\n")
-    if os.environ.get("RESEARCH_RUN_DIR"):
+    if settings.is_set("RESEARCH_RUN_DIR"):
         record(doc, fig)
     return 0
 
