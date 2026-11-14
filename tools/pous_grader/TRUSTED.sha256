@@ -7,6 +7,7 @@ b4325d3d238395398ac9b0951e1fa7d3a44c5349625ebfef00ac3167481a23ef  Grader/Registr
 8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632  ../../security/lean-toolchain
 5a2e06a3f0ac3d9566d2296f5f9c725d81ac0ad7b59bf82bd6afffad6e069d6c  ../../security/lakefile.toml
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../security/lake-manifest.json
+8d51dd1a5b17c6c1c5e4eaf5f3bebefe69d226eacffc3c06f672b00df7072758  ../../security/Proofs/lakefile.toml
 83ba5a7a49ec3a0f1b911a2355dab1ef63892ac86ec7b1869f64a3efd658818a  ../../security/Proofs/lakefile.toml
 336f45ab618c978e775fb26fe04afcf878440bbdc268942e0a93aa54aa56b948  ../../security/Proofs/lakefile.toml
 818e1d7bf4d418d7efb8f745685cc36b82fb7a1e1a7cdf3f117f0186298fb3bc  ../../security/Proofs/lakefile.toml

@@ -434,3 +434,75 @@ def test_a_session_out_of_its_form_is_refused(session, part, coin_key):
 def test_a_staging_out_of_its_form_is_refused(rows, shared):
     with pytest.raises(C.CoinError, match="^a staging is"):
         C.RunRecord().stage(rows, shared)
+
+
+def _round(tree: str, stream: str, k: int = 0) -> str:
+    """A release log line opening round `k` of stream `stream` of the coin tree `tree`."""
+    return C.canonical_json_text({"after": "cd", "coins": "ef", "event": C.OPEN_EVENT, "n": 1, "round": k,
+                                  "stream": stream, "tree": tree})
+
+
+def _close(tree: str) -> str:
+    """The release log line of the coin tree `tree`'s closing round."""
+    return _round(tree, C.CT.SESSION, C.CLOSING_ROUND)
+
+
+def _tree(root: str) -> str:
+    """The release log line that samples the coin tree of root `root`."""
+    return C.canonical_json_text({"event": C.TREE_EVENT, "key": "02", "nonce": "03", "root": root, "spec": {}})
+
+
+def test_the_members_sessions_are_one_after_another():
+    """`members_order` lists the trees a release log's lines are of where each tree's lines, the one that samples it
+    and each opening a round of it, are together and end with its closing round, before the next tree's first; it
+    refuses a line of the next tree before a tree's closing round, the line that samples it too, and a line of a tree
+    after its own, and lists a tree again whose lines come after another's. A root's line and its coin's release, the
+    window's sample's, may come anywhere."""
+    s, rep = C.CT.SESSION, "circuit/rep0"
+    root = C.canonical_json_text({"event": "root", "index": 0, "label": "draw", "received_at": 0, "root": "ab"})
+    release = C.canonical_json_text({"after": "ab", "event": "release", "index": 0, "label": "draw", "released_at": 0})
+    assert C.member_line(_tree("01")) == ("01", False) and C.member_line(_close("01")) == ("01", True)
+    assert C.member_line(_round("01", s)) == ("01", False)
+    assert C.member_line(_round("01", rep, C.CLOSING_ROUND)) == ("01", False)
+    assert C.member_line(root) is None and C.member_line(release) is None and C.member_line("{") is None
+    assert C.members_order([root, release]) == []
+    assert C.members_order([_tree("01"), root, release]) == ["01"]
+    assert C.members_order([_tree("01"), _round("01", s), _round("01", rep), _close("01"), _tree("02"),
+                            _round("02", s), _close("02")]) == ["01", "02"]
+    assert C.members_order([_tree("01"), _round("01", s), root, _close("01"), release, _tree("02"),
+                            _round("02", s)]) == ["01", "02"]
+    assert C.members_order([_close("01"), _close("02"), _close("01")]) == ["01", "02", "01"]
+
+
+@pytest.mark.parametrize("log", [
+    [_tree("01"), _tree("02"), _round("01", C.CT.SESSION), _close("01"), _round("02", C.CT.SESSION), _close("02")],
+    [_tree("01"), _round("01", C.CT.SESSION), _tree("02"), _close("01"), _round("02", C.CT.SESSION), _close("02")],
+    [_tree("01"), _round("01", C.CT.SESSION), _round("01", "circuit/rep0"), _tree("02")],
+    [_tree("01"), _round("01", C.CT.SESSION), _round("02", C.CT.SESSION)],
+    [_tree("01"), _round("01", C.CT.SESSION), _round("01", "circuit/rep0", C.CLOSING_ROUND), _tree("02")],
+    [_tree("01"), _round("01", C.CT.SESSION), _close("01"), _round("01", "circuit/rep0")],
+    [_tree("01"), _close("01"), _tree("01")],
+    [_tree("01"), _close("01"), _round("02", "circuit/rep0"), _round("01", "circuit/rep0")]])
+def test_a_line_of_a_member_before_the_one_before_it_is_closed_is_refused(log):
+    """`members_order` refuses a release log that holds a line of a member's tree before the closing round of the
+    member's before it: the line that samples the next tree, a round of it, or a line of a tree after its own closing
+    round. A round that is not round `CLOSING_ROUND` of the ``session`` stream closes no tree."""
+    assert C.members_order(log) is None
+
+
+def test_each_trees_link_is_opened_before_its_other_rounds():
+    """`links_first` holds where the first round a release log opens of each tree is of the tree's ``session`` stream,
+    its link's, and refuses a round of another stream opened first, of the first tree or of a later one. It reads a
+    round after another tree's as a tree's first, so a tree whose rounds come again after another's is held to its
+    link's stream again; that order is `members_order`'s to refuse. The lines that open no round are read past."""
+    s, rep = C.CT.SESSION, "circuit/rep0"
+    root = C.canonical_json_text({"event": "root", "index": 0, "label": "sample", "received_at": 0, "root": "ab"})
+    release = C.canonical_json_text({"after": "ab", "event": "release", "index": 0, "label": "sample", "released_at": 0})
+    assert C.links_first([root, release])
+    assert C.links_first([_tree("01"), _round("01", s), _round("01", rep), _close("01"), root, _tree("02"),
+                          _round("02", s), _close("02")])
+    assert not C.links_first([_tree("01"), _round("01", rep), _round("01", s), _close("01")])
+    assert not C.links_first([_round("01", s), _close("01"), _tree("02"), _round("02", rep), _round("02", s),
+                              _close("02")])
+    assert C.links_first([_round("01", s), _round("02", s), _close("01")])
+    assert not C.links_first([_round("01", s), _round("02", s), _round("01", rep)])
