@@ -13,20 +13,22 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/protocols/`: the protocols in three group directories, two layers on the proofs: `proofs/` holds `flock`, with
-    `spot` and `recursion` on it, what the other protocols call to prove; `accounting/` holds `pouw`, `pous`, `poub` and
-    `certifier` (compute, memory and network) and `registration` (the registration log, checked once, before any
-    challenge; its Lean is still in `interface/`); `policy/` holds `inference_only`, on accounting. Both layers use the
-    proofs, and the proofs use neither. On top of the audits, `compose/` is a tenth protocol. Its `verifier/` holds its
-    Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an auditor with no devices at the
-    datacenter runs, and `onsite/` what an auditor with devices there runs. Its `device/` holds the auditor device's
-    challenger service. Target, not yet: `experimental/NAME/` for a whole directory
+    `spot` and `recursion` on it and `spot_flock` on those, what the other protocols call to prove; `accounting/` holds
+    `pouw`, `pous`, `poub` and `certifier` (compute, memory and network) and `registration` (the registration log,
+    checked once, before any challenge; its Lean is still in `interface/`); `policy/` holds `inference_only`, on
+    accounting. Both layers use the proofs, and the proofs use neither. On top of the audits, `compose/` is an eleventh
+    protocol. Its `verifier/` holds its Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an
+    auditor with no devices at the datacenter runs, and `onsite/` what an auditor with devices there runs. Its `device/`
+    holds the auditor device's challenger service. Target, not yet: `experimental/NAME/` for a whole directory
     no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
     its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `device/` is the
     auditor's device (the network certifier, the memory challenger, the challenger).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.Firewall`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
-    (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
-    policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only; the policy's Python is its
+    (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`).
+    `spot_flock/verifier/lean/` is SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's two lists
+    for the proofs, with the recursive audit. The inference-only policy's check (`inference_only/verifier/nci/`),
+    `spot_flock/`, `remote/` and `onsite/` are Lean only; the policy's Python is its
     manifest alone (`inference_only/verifier/parties.py`: the verifier, no channel). `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
     keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
@@ -97,8 +99,8 @@ require nothing above them (`BASE_LEAN`).
 or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a protocol uses reaches it through a card
 file citing an `art:` id. Target, not yet enforced: the layout's own rules. The runtime imports no protocol, and no
 protocol or adapter imports it; `circuits/` imports nothing and `commitments/` only `circuits/`; no code imports
-`security/` or the hardware data; inside `verity/protocols/`, flock is at the bottom, spot and recursion on it, the
-audits on those, and compose on top; no protocol imports a configuration.
+`security/` or the hardware data; inside `verity/protocols/`, flock is at the bottom, spot and recursion on it,
+spot_flock and the audits on those, and compose on top; no protocol imports a configuration.
 
 `verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity verify proof ARGS`,
 `verity --help`.
