@@ -114,11 +114,11 @@ def test_a_store_over_its_bound_defers_nothing_and_the_replay_runs_in_process(tm
 
 @pytest.mark.parametrize("tokens, kept", [({"a": [5, 6, 7], "b": [8]}, False), ({"a": [5, 6], "b": [8]}, True),
                                           ({"a": [5, 6, 7], "b": []}, True), ({"a": [5, 6, 7, 9], "b": [8]}, False)])
-def test_the_placed_identities_go_with_the_bundle_only_when_a_request_stopped_before_its_cap(tmp_path: Path, tokens: dict[str, list[int]],
-                                                                                             kept: bool) -> None:
+def test_the_placed_identities_go_with_the_bundle_only_when_a_request_stopped_early(tmp_path: Path, tokens: dict[str, list[int]],
+                                                                                    kept: bool) -> None:
     """The replay reconciles what was not executed against the identities at the steps they were placed at, and reads them only
-    for a run in which a request stopped early: one whose served tokens are fewer than its `max_tokens`.  A request at its cap,
-    or past it, is not one."""
+    for a run in which a request stopped early: one whose served tokens are fewer than its `max_tokens`.  A request that
+    served as many, or more, is not one."""
     site = Site(tmp_path, replay_deferred="full")
     reqs = [{"request_id": "a", "max_tokens": 3}, {"request_id": "b", "max_tokens": 1}]
     identities = [{"member": MEMBER, "engine_step": 0}]
