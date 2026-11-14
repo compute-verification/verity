@@ -211,12 +211,18 @@ def status(pid):
     except (OSError, KeyError, ValueError, IndexError):
         return None
 
+def check_file(tree, name):
+    """The check's file ``name`` in the checkout ``tree``: under `tools/check/`, or `tools/verity/check/` in a tree from before
+    the move that put it there."""
+    return next((p for p in (tree + "/tools/check/" + name, tree + "/tools/verity/check/" + name) if os.path.exists(p)),
+                tree + "/tools/check/" + name)
+
 def declared(tree, suite):
     """What a suite's pyproject.toml declares in the checkout ``tree``: whether its tests run in parallel, a worker's GB, and
     the GB the runner takes for a worker that declares none; None where it is no suite."""
     try:
         text = open(tree + "/" + suite + "/pyproject.toml").read()
-        runner = open(tree + "/tools/verity/check/suites.py").read()
+        runner = open(check_file(tree, "suites.py")).read()
     except OSError:
         return None
     sec = re.search(r"^\[tool\.verity\.tests\][ \t]*$(.*?)(?=^\[|\Z)", text, re.M | re.S)
@@ -369,13 +375,13 @@ def slot_status(slot_py, f, limit=30):
 
 slots, unread = [], []
 try:
-    trees = sorted((e.path for e in os.scandir(ROOT + "/src") if os.path.exists(e.path + "/tools/verity/check/slot.py")),
+    trees = sorted((e.path for e in os.scandir(ROOT + "/src") if os.path.exists(check_file(e.path, "slot.py"))),
                    key=os.path.getmtime)
 except OSError:
     trees = []
 for f in [ROOT + "/locks/slots"] + sorted(glob.glob(ROOT + "/locks/*/slots")):
     pool = "check" if f == ROOT + "/locks/slots" else f.split("/")[-2]
-    doc, why = slot_status(trees[-1] + "/tools/verity/check/slot.py", f) if trees else (None, "no shipped tree there has slot.py")
+    doc, why = slot_status(check_file(trees[-1], "slot.py"), f) if trees else (None, "no shipped tree there has slot.py")
     if doc is None:        # said, never dropped: a pool left out reads as slots the node doesn't have
         unread.append({"pool": pool, "why": why})
         continue
