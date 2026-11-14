@@ -11,7 +11,7 @@ untraced = [
 ]
 artifacts = [
     "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
-    "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-firewall",
+    "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-zk-server",
 ]
 # The scripts under `benchmarks/` the moved audit commands still load off `sys.path`, and what their `benchmarks/` suites read
 inputs = [

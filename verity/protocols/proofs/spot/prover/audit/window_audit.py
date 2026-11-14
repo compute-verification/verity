@@ -22,10 +22,10 @@ before the sample (`a5_tp.sh` with `A5_WINDOWS=bundles`).
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python verity/protocols/proofs/spot/prover/audit/window_audit.py --bundle DIR --row-dir DIR --window DIR \\
         --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
-        [--firewall flock-firewall] --out DIR [--delta 0.5]
+        [--zk-server flock-zk-server] --out DIR [--delta 0.5]
       python verity/protocols/proofs/spot/prover/audit/window_audit.py --tp-commit DIR --build-root DIR --workload F --windows DIR [--ranks 0,1,...] [--jobs N] \\
         --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
-        [--firewall flock-firewall] --out DIR [--delta 0.5]
+        [--zk-server flock-zk-server] --out DIR [--delta 0.5]
       python verity/protocols/proofs/spot/prover/audit/window_audit.py --tp-commit DIR --build-root DIR --advice-opening F \\
         [--other-advice-opening F --other-windows DIR] --windows DIR --challenger local --main FILE ...
 
@@ -90,8 +90,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   table, `Flock.ProvedScope`). They run on SPOT's proof server (`proof_server`, `verity_flock.proof_server`): one
   streaming `flock-circuit prove --zk` and one queued verifier a template for the whole audit, with no ZK server (`a0.DIRECT`:
   `zk_cost.py`'s `dev` arm, which Figure 1 prices), Lean's verify each session's verdict of record. A templated
-  statement's unit (`--tmpl-unit`) goes to both its sides there. Under ``--firewall`` (Lean's `flock-firewall`), the
-  core protocols' path, each runs behind the ZK server's send check instead (`FC_FIREWALL=1`, live PROTOCOL.md §10.4), its `Hello`
+  statement's unit (`--tmpl-unit`) goes to both its sides there. Under ``--zk-server`` (Lean's `flock-zk-server`), the
+  core protocols' path, each runs behind the ZK server's send check instead (`FC_ZK_SERVER=1`, live PROTOCOL.md §10.4), its `Hello`
   set up on the statement's partition and program. Lean `verify --zk` holds each session with `--partition` and `--program`
   (units derived). Behind the ZK server the window's members are verified by one kept process, Lean's ``verify-members``
   (`a0.VerifyMembers`), which reads the window's program once and is handed each member as its session ends; a member it
@@ -238,7 +238,7 @@ RANK_PORTS = 16
 PLAIN_SCOPE = ("plain covers one table (a window of one member, its one session) under a stratified draw, hidden outputs "
                "included (SoundExecH); J tables and the subset draw, hidden outputs past one table, and registered reads and "
                "shared rows wait for proofs' PRs A, B and C")
-PLAIN_FIREWALL = "none: C-Flock's firewall checks only a --zk statement's sends (flock-circuit `firewalled`)"
+PLAIN_ZK_SERVER = "none: C-Flock's ZK server checks only a --zk statement's sends (flock-circuit `zk_served`)"
 
 
 def template_sets(root: Path) -> dict[str, tuple[Path, object]]:
@@ -828,11 +828,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         print("A5 " + json.dumps(why))
         return summary, False
     want = CS.expected_ports(mine)
-    summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta, "firewall": a.firewall,
-                    "arm": "fw" if a.firewall else "dev",
+    summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta, "firewall": a.zk_server,
+                    "arm": "fw" if a.zk_server else "dev",
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
     if plain(a):
-        summary.update(firewall=None, arm=None, plain={"scope": PLAIN_SCOPE, "coins": "tree", "firewall": PLAIN_FIREWALL})
+        summary.update(zk_server=None, arm=None, plain={"scope": PLAIN_SCOPE, "coins": "tree", "firewall": PLAIN_ZK_SERVER})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
 
@@ -1047,7 +1047,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                               verdict=None if kept is not None else lambda _: a0.lean_verify(a.lean, st, m.n, sdir, zk=True))
             return {**s, "handle": h}
         t = time.time()
-        env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, mm["st"])
+        env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.zk_server, mm["st"])
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / SAMPLE_FILE,
                                   zk=not plain(a), env=env, prove_timeout=a.session_timeout,
                                   tree_from=None if relay is None else relay.flags)
@@ -1145,7 +1145,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             keys = a0.archive_put(a.lean, out / "lean-verify" / "archive",
                                   [f for s in statements for f in a0.archive_files(s["mm"]["st"], s["mm"]["m"].n)],
                                   out / "lean-verify" / "archive-put.log", archived)
-            if a.firewall and not plain(a):
+            if a.zk_server and not plain(a):
                 kept = a0.VerifyMembers(a.lean, out / "lean-verify" / "archive",
                                         keys.get(Path(statements[0]["mm"]["st"]["program_file"]), ""),
                                         out / "lean-verify" / "verify-members.log")
@@ -1621,11 +1621,11 @@ def streamed(a: argparse.Namespace) -> bool:
     return a.coins is not None
 
 
-FIREWALL_HELP = ("the core protocols' path, Lean's flock-firewall: every session's prover runs behind the ZK server's send check "
-                 "(FC_FIREWALL=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
+ZK_SERVER_HELP = ("the core protocols' path, Lean's flock-zk-server: every session's prover runs behind the ZK server's send check "
+                 "(FC_ZK_SERVER=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
                  "does (a0.DIRECT, zk_cost's dev arm)")
 #: the ZK server's Lean session loop's executable, beside Lean's verity-verify-proof in its package
-ZK_SERVER_LOOP = "flock-firewall"
+ZK_SERVER_LOOP = "flock-zk-server"
 #: the file an audit keeps a sample in: the window's (``out``) and each session's (``session-m<k>/``)
 SAMPLE_FILE = "draw.json"
 #: AGENTS.md's live-coins rule, which keeps an audit's sampled members' sessions one after another
@@ -1732,11 +1732,11 @@ def cards(text: str) -> list[int]:
 def devices_refusal(a: argparse.Namespace) -> str | None:
     """Why an audit given cards (`devices`) can't prove on them, or None: only the proof server's provers with no ZK
     server take a card. A plain session is a process pair of its own on the CPU, and behind the ZK server
-    (``--firewall``) the sessions are on the proof server's one kept prover, or each a process pair of its own, on the
+    (``--zk-server``) the sessions are on the proof server's one kept prover, or each a process pair of its own, on the
     CPU too (`proof_server`)."""
     if devices(a) is None or not (plain(a) or getattr(a, "firewall", None)):
         return None
-    return ("--devices names the proof server's cards, and a plain session or one behind the ZK server (--firewall) "
+    return ("--devices names the proof server's cards, and a plain session or one behind the ZK server (--zk-server) "
             "proves on the CPU: drop --devices, or run the sessions on the proof server with no ZK server")
 
 
@@ -1757,7 +1757,7 @@ def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = (), rel
         raise ValueError(why)
     if plain(a):
         return None
-    zk_server = a.firewall
+    zk_server = a.zk_server
     trees = ({"challenger": a0.own_challenger(zk=True)} if relay is None else
              {"verify_ahead": 0, "tree_from": relay.flags})
     if not zk_server:
@@ -1993,16 +1993,16 @@ def main() -> int:
                     "compose each chunked template once, every later rank taking that circuit with its own binding")
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", help=FIREWALL_HELP)
+    ap.add_argument("--zk-server", help=ZK_SERVER_HELP)
     ap.add_argument("--devices", type=cards,
                     help="the proof server's cards, their indices comma-separated (0,1): a prover a card; default the CPU. "
-                         "A plain session or one behind the ZK server (--firewall) proves on the CPU (`devices_refusal`)")
+                         "A plain session or one behind the ZK server (--zk-server) proves on the CPU (`devices_refusal`)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
     ap.add_argument("--session-jobs", type=one_session, default=1, help="1 only: the sessions run one at a time (ONE_AT_A_TIME)")
     ap.add_argument("--session-timeout", type=float, default=14400,
-                    help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
+                    help="each drawn member's prover limit in seconds, and each template's compose: one ZK server session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "
                          "machine, as does composing a 64-key SparseMlaHeadBlock_v1 in lookup slots")
     ap.add_argument("--challenger", help="with --tp-commit: draw each rank from the auditor's challenger's coins, one session on the TP "
