@@ -18,8 +18,8 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
-from verity.definitions.registry import pearl_c_tile as PT
 from verity.circuits.silicon import fp32
+from verity.definitions.registry import pearl_c_tile as PT
 from verity.protocols.accounting.pouw.prover.circuit import pc8
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as U

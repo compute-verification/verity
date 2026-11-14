@@ -49,6 +49,7 @@ from verity.protocols.accounting.pouw.verifier.coins import Challenger, CoinOpen
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile  # noqa: E402
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C  # noqa: E402
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c import keys_of, unit_block  # noqa: E402, F401 - the scheme's unit keys, re-exported
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import (  # noqa: E402
     DEVICES,
     SM120,
@@ -78,11 +79,6 @@ def test_challenger() -> Challenger:
     return Challenger(0, entropy)
 
 
-def unit_block(salt: bytes, root_b: bytes, index: int) -> bytes:
-    """s512_seeds' p3: salt ‖ root_B (64 bytes) ‖ u64 index."""
-    return salt + root_b + index.to_bytes(8, "little")
-
-
 def tree_bytes(domain, values: list[bytes], schema: str, salt_key: bytes, nonce: int) -> bytes:
     """An `audit.HM96` tree's levels as the kernels lay them out: level 0 (each value under its salt, then pads), then each
     level above."""
@@ -99,17 +95,6 @@ def epoch_of(matmul: Matmul, b_rows: list[bytes], coins: Challenger, salt_key: b
     roots = {matmul.weight: tree_b[-64:]}
     opening = coins.open("salt", weights_root(roots))
     return Epoch.start(Workload((matmul,)), roots, coins.commitment, opening), opening, tree_b, tree_b[-64:]
-
-
-def keys_of(scheme: C.PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict[str, bytes]:
-    """The pipeline's key inputs for a unit of `epoch` (run.Pipeline's `keys`) but the prover's salt key and the hm96
-    constants, which the caller adds: E_B's line key and the domains in the scheme's tree hash."""
-    s, salt, h = matmul.shape, epoch.salt, scheme.commitment_hash
-    return {"line_b": C.line_key(seed_b),
-            "dom_a": rows_domain(activation_binding(salt, matmul.index), matmul.index, s.m, h).domain_id,
-            "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, h).domain_id,
-            "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), h).domain_id,
-            "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}
 
 
 # ---- layouts and batched pieces -------------------------------------------------------------------------------------
