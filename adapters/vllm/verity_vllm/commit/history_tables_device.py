@@ -17,9 +17,9 @@ from functools import cache
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import history as HT
 from verity.commitments import hm96
+
 from verity_vllm.commit import row_tables_device as D
 
 __all__ = ["Hist", "Table"]
@@ -90,7 +90,7 @@ class Table:
         nodes = 8 * (2 * capacity - 1)
         if device is None:
             self._dev = None
-            self._tree = np.zeros(nodes, dtype=np.uint64)
+            self._tree: Any = np.zeros(nodes, dtype=np.uint64)  # an array here, a tensor on the device
             self._check("rt_hist_init_host", _host().rt_hist_init_host(ctypes.byref(h), self._tree))
         else:
             import torch

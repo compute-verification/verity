@@ -10,15 +10,15 @@ import copy
 import hashlib
 import json
 import sys
-import types
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
-
-from tests.properties import dsv4_decode_metadata_capture_gpu as X
 from verity.definitions.numerics import dsv4_decode_metadata_twin as T
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests import fake_vllm
+from tests.properties import dsv4_decode_metadata_capture_gpu as X
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 SMALL = {"swa": "swa-4096", "c128a": "c128-4096"}
 
@@ -324,17 +324,13 @@ def _stand_in_vllm(monkeypatch, calls: list) -> None:
                 c128_stores(gd, gstride, dl, pf, pstride, pos, R, W, nd, req, table, bs, slot)
             return run
 
-    sw = types.ModuleType("vllm.v1.attention.backends.mla.sparse_swa")
-    sw._COMPUTE_SWA_INDICES_AND_LENS_KERNEL = SwaLauncher()
-    sw._compute_swa_indices_and_lens_kernel = SwaKernel()
-    sm = types.ModuleType("vllm.models.deepseek_v4.sparse_mla")
-    sm.build_c128a_topk_metadata = c128_launcher
-    sm._build_c128a_topk_metadata_kernel = C128Kernel()
-    for name in ("vllm", "vllm.v1", "vllm.v1.attention", "vllm.v1.attention.backends", "vllm.v1.attention.backends.mla",
-                 "vllm.models", "vllm.models.deepseek_v4"):
-        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
-    monkeypatch.setitem(sys.modules, sw.__name__, sw)
-    monkeypatch.setitem(sys.modules, sm.__name__, sm)
+    sw, sm = "vllm.v1.attention.backends.mla.sparse_swa", "vllm.models.deepseek_v4.sparse_mla"
+    stood_in = {f"{sw}:_COMPUTE_SWA_INDICES_AND_LENS_KERNEL": SwaLauncher(),
+                f"{sw}:_compute_swa_indices_and_lens_kernel": SwaKernel(),
+                f"{sm}:build_c128a_topk_metadata": c128_launcher, f"{sm}:_build_c128a_topk_metadata_kernel": C128Kernel()}
+    fake = fake_vllm.install(monkeypatch, extra=stood_in)
+    for key, value in stood_in.items():
+        fake.set(key, value)
     monkeypatch.setattr(X, "DEVICE", "cpu")
     monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
 
@@ -580,11 +576,10 @@ def test_each_case_has_its_own_verdict() -> None:
 def _stub_config(monkeypatch) -> None:
     for k in ("TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
         monkeypatch.setenv(k, "")
-    vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     monkeypatch.setattr(X.G, "_environment", dict)
 
 
@@ -596,7 +591,7 @@ def test_main_end_to_end_on_stubbed_launches(observed, tmp_path, monkeypatch, ca
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
     monkeypatch.setattr(X, "ptx", lambda cache, outdir: {"ok": True})
-    by = {}
+    by: dict[str, dict] = {}
     for case in SMALL.values():
         for j in observed[case].jobs:
             by.setdefault(j["case"], j)
@@ -638,7 +633,5 @@ def test_a_failed_gate_writes_a_sealed_record_and_exits_3(tmp_path, monkeypatch,
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_decode_metadata_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

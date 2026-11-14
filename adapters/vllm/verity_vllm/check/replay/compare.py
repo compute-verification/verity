@@ -7,8 +7,8 @@ from typing import Any
 
 import numpy as np
 
+from verity_vllm.check.replay.opening import WordStore
 from verity_vllm.query.manifest import format as RM
-from verity_vllm.check.replay.opening import CommittedStore
 
 
 def _tp_member_alias(got: dict[str, Any], member: str) -> Any | None:
@@ -49,7 +49,7 @@ def _interior_slice(got: dict[str, np.ndarray], lo: int, hi: int) -> np.ndarray 
 _SLOT_MEMBER_RE = re.compile(r"^slot(?P<e>\d+)/(up|act|down|g)$")
 
 
-def padded_slot_enable(member: str, got: dict[str, np.ndarray], store: "CommittedStore", rid: str, step: int, op_path: str, row: int,
+def padded_slot_enable(member: str, got: dict[str, np.ndarray], store: WordStore, rid: str, step: int, op_path: str, row: int,
                        topk: int) -> tuple[bool | None, str]:
     """The enable a_e of a padded slot member of one token row, from the COMMITTED router_ids of that row (the block's
     enable is the step's run bit -> the router members are Active in every executed step; a_e = [e in ids]).  None + why when the committed

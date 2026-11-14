@@ -56,7 +56,8 @@ def test_allowlist_has_no_stale_entries() -> None:
     R.assert_no_stale(NAME, scan(), RULE)
 
 
-test_no_new_findings.__test__ = test_allowlist_has_no_stale_entries.__test__ = False
+for _check in (test_no_new_findings, test_allowlist_has_no_stale_entries):
+    vars(_check)["__test__"] = False                # run through test_the_list_matches_or_warns, never collected
 
 
 @pytest.mark.parametrize("check", [test_no_new_findings, test_allowlist_has_no_stale_entries], ids=["new", "stale"])
@@ -74,7 +75,9 @@ def _selected(config: dict) -> set[str]:
 def overlap(a: str, b: str) -> bool:
     """Whether ruff selectors ``a`` and ``b`` share a rule: one linter (its letters), and one's digits begin the other's
     (``B`` holds ``B006`` but not ``BLE001``)."""
-    (la, da), (lb, db) = (SELECTOR.fullmatch(s).groups() for s in (a, b))
+    ma, mb = SELECTOR.fullmatch(a), SELECTOR.fullmatch(b)
+    assert ma is not None and mb is not None, f"not ruff selectors: {a!r}, {b!r}"
+    (la, da), (lb, db) = ma.groups(), mb.groups()
     return la == lb and (da.startswith(db) or db.startswith(da))
 
 
