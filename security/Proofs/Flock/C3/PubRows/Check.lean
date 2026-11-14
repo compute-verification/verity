@@ -103,23 +103,8 @@ theorem checkPort_size {c : Flock.Circuit} {pub : Public} {t : Flock.Tables} {in
     {reg : Registered.Port} (h : Registered.checkPort c pub t indices reg = .ok ()) :
     ∃ p positions paths, (List.range c.ports.size).find? (fun p => c.ports[p]!.name == reg.name) = some p ∧
       Registered.entry pub reg = .ok (positions, paths) ∧ positions.size = t.counts.getD p 0 := by
-  unfold Registered.checkPort at h
-  simp only at h
-  split at h
-  · rename_i p hp
-    split at h
-    · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
-    · split at h
-      · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
-      · obtain ⟨⟨positions, paths⟩, hent, h⟩ := Registered.except_bind_ok h
-        simp only at h
-        split at h
-        · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
-        · rename_i hsz
-          refine ⟨p, positions, paths, hp, hent, ?_⟩
-          simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Classical.not_not] at hsz
-          exact hsz.1
-  · exact absurd h (Registered.throw_ne_ok _ _)
+  obtain ⟨p, positions, paths, hp, -, -, hent, hsize, -⟩ := Registered.checkPort_spec h
+  exact ⟨p, positions, paths, hp, hent, hsize⟩
 
 /-- **`checkPubRows` accepting**: at each port of the reads whose value `fixedRow` knows, the public file is a table,
 the port is the circuit's first of its name, and each table row is `fixedRow`'s row at the position the port's entry

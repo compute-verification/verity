@@ -37,15 +37,30 @@ theorem forM_ok {ε α : Type} {f : α → Except ε Unit} : ∀ {l : List α}, 
     | head => exact hu
     | tail _ hx => exact forM_ok hrest x hx
 
-/-- A port `checkPort` accepts is the circuit's port `p`, of the registration's leaf schema, whose rows are the
-registered rows, and every instance's row of its table opens the registered root at the position the verifier's program
-reads for the instance's unit. -/
-theorem checkPort_ok {c : Circuit} {pub : Public} {t : Tables} {indices : Array Nat} {reg : Port}
+/-- A row of its table that an entry gives (`gives`) is among the rows `checkPort` opens (`opened`). -/
+theorem mem_opened {sel : Option (Array Nat)} {rows r : Nat} (hr : r < rows) (hg : gives sel r = true) :
+    r ∈ opened sel rows := by
+  cases sel with
+  | none => exact List.mem_range.mpr hr
+  | some ls =>
+    simp only [gives, decide_eq_true_eq] at hg
+    obtain ⟨hk, he⟩ := Array.getElem?_eq_some_iff.mp hg
+    exact Array.mem_toList_iff.mpr (he ▸ Array.getElem_mem hk)
+
+/-- **What `checkPort` accepting establishes, with the entry it read**: the port is the circuit's first port `p` of its
+name, of the registration's leaf schema and rows; the header's entry gives `positions` and `paths` by table row
+(`entry`), one of each per row of the port's table; and every instance's ref names a row of its table which opens the
+registered root at the position the entry gives it, through the path the entry gives it, the position `reg` reads for the
+instance's unit. The rows no instance reads are in none of it. -/
+theorem checkPort_spec {c : Circuit} {pub : Public} {t : Tables} {indices : Array Nat} {reg : Port}
     (h : checkPort c pub t indices reg = .ok ()) :
-    ∃ p, p < c.ports.size ∧ c.ports[p]!.name = reg.name ∧ portSchema c.ports[p]! = reg.schema ∧
-      reg.fits c.ports[p]! = true ∧ ∀ i < pub.n,
-      ref t c.ports.size p i < t.counts.getD p 0 ∧ ∃ pos path, reg.reads[indices.getD i 0]? = some (some pos) ∧
-        opens reg (tableRow pub t p (ref t c.ports.size p i)) pos path = true := by
+    ∃ p positions paths, (List.range c.ports.size).find? (fun p => c.ports[p]!.name == reg.name) = some p ∧
+      portSchema c.ports[p]! = reg.schema ∧ reg.fits c.ports[p]! = true ∧
+      entry pub reg = .ok (positions, paths) ∧ positions.size = t.counts.getD p 0 ∧ ∀ i < pub.n,
+        ref t c.ports.size p i < t.counts.getD p 0 ∧
+        reg.reads[indices.getD i 0]? = some (some (positions.getD (ref t c.ports.size p i) 0)) ∧
+        opens reg (tableRow pub t p (ref t c.ports.size p i)) (positions.getD (ref t c.ports.size p i) 0)
+          (paths.getD (ref t c.ports.size p i) ByteArray.empty) = true := by
   unfold checkPort at h
   simp only at h
   split at h
@@ -56,27 +71,43 @@ theorem checkPort_ok {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
       split at h
       · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
       · rename_i hfit
-        obtain ⟨⟨positions, paths⟩, _, h⟩ := except_bind_ok h
-        simp only at h
+        obtain ⟨⟨positions, paths⟩, hent, h⟩ := except_bind_ok h
+        try simp only at h
+        obtain ⟨sel, -, h⟩ := except_bind_ok h
+        try simp only at h
         split at h
         · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
-        · split at h
+        · rename_i hsz
+          simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Classical.not_not] at hsz
+          split at h
           · exact absurd h (throw_ne_ok _ _)
           · rename_i hrow
             split at h
             · rename_i hinst
-              have hpn := List.find?_some hp
-              refine ⟨p, List.mem_range.mp (List.mem_of_find?_eq_some hp), by simpa using hpn, by simpa using hsch,
-                by simpa using hfit, fun i hi => ?_⟩
+              refine ⟨p, positions, paths, hp, by simpa using hsch, by simpa using hfit, hent, hsz.1, fun i hi => ?_⟩
               have hi' := List.find?_eq_none.mp hinst i (List.mem_range.mpr hi)
-              simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or, Classical.not_not] at hi'
-              obtain ⟨hr, hreads⟩ := hi'
-              have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
-              exact ⟨hr, _, _, (reg.readAt_eq _).symm.trans hreads, by simpa using ho⟩
-            · split at h
-              · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
-              · split at h <;> exact absurd h (throw_ne_ok _ _)
+              simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or, Classical.not_not,
+                Bool.not_eq_false] at hi'
+              obtain ⟨⟨hr, hg⟩, hreads⟩ := hi'
+              have ho := List.find?_eq_none.mp hrow _ (mem_opened hr hg)
+              exact ⟨hr, (reg.readAt_eq _).symm.trans hreads, by simpa using ho⟩
+            · exact absurd h (throw_ne_ok _ _)
   · exact absurd h (throw_ne_ok _ _)
+
+/-- A port `checkPort` accepts is the circuit's port `p`, of the registration's leaf schema, whose rows are the
+registered rows, and every instance's row of its table opens the registered root at the position the verifier's program
+reads for the instance's unit. -/
+theorem checkPort_ok {c : Circuit} {pub : Public} {t : Tables} {indices : Array Nat} {reg : Port}
+    (h : checkPort c pub t indices reg = .ok ()) :
+    ∃ p, p < c.ports.size ∧ c.ports[p]!.name = reg.name ∧ portSchema c.ports[p]! = reg.schema ∧
+      reg.fits c.ports[p]! = true ∧ ∀ i < pub.n,
+      ref t c.ports.size p i < t.counts.getD p 0 ∧ ∃ pos path, reg.reads[indices.getD i 0]? = some (some pos) ∧
+        opens reg (tableRow pub t p (ref t c.ports.size p i)) pos path = true := by
+  obtain ⟨p, positions, paths, hp, hsch, hfit, -, -, hall⟩ := checkPort_spec h
+  have hpn := List.find?_some hp
+  refine ⟨p, List.mem_range.mp (List.mem_of_find?_eq_some hp), by simpa using hpn, hsch, hfit, fun i hi => ?_⟩
+  obtain ⟨hr, hreads, ho⟩ := hall i hi
+  exact ⟨hr, _, _, hreads, ho⟩
 
 /-- **`Registered.check` accepting.** If the verifier holds registered roots (`own`) and `check` accepts the statement, the
 units were derived from the verifier's own program, and for each of the verifier's registered ports `reg` (the circuit's

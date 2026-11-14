@@ -236,7 +236,29 @@ def derived (partition : Json) : Bool := (partition.getObjValAs? String "units")
 def unitIndices (pub : Public) : V (Array Nat) := do
   (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
 
-/-- Port `reg`'s entry in the header's `registered`: the position and the path of each row of its table. -/
+/-- The key of a port's entry in the header's `registered` that names the rows of the port's table the entry gives
+(`listed`). -/
+def TABLE_ROWS_KEY : String := "table_rows"
+
+/-- The rows of port `reg`'s table its entry in the header's `registered` gives: none for an entry of every row, in table
+order (`positions[r]` and `paths[r]` table row `r`'s); else the entry's `table_rows` (`TABLE_ROWS_KEY`), strictly
+increasing, `positions[k]` and `paths[k]` table row `table_rows[k]`'s. -/
+def listed (pub : Public) (reg : Port) : V (Option (Array Nat)) := do
+  let .ok e := pub.header.getObjVal? "registered" >>= (·.getObjVal? reg.name)
+    | throw s!"registered reads: the statement commits port {reg.name}'s rows of {reg.value} afresh, with no path to its registered root"
+  if !J.has e TABLE_ROWS_KEY then return none
+  let rows ← (← J.arr e TABLE_ROWS_KEY "public file.registered").mapM (J.asNat · "a table row")
+  if (List.range rows.size).any fun k => k > 0 && rows[k - 1]! ≥ rows[k]! then
+    throw s!"registered reads: port {reg.name}: its {TABLE_ROWS_KEY} are not strictly increasing"
+  return some rows
+
+/-- An array of `n` entries, `xs[k]` at index `rows[k]` and `d` at every other index. -/
+def place {α : Type} (n : Nat) (rows : Array Nat) (xs : Array α) (d : α) : Array α :=
+  (rows.zip xs).foldl (fun acc (r, x) => acc.set! r x) (Array.replicate n d)
+
+/-- Port `reg`'s entry in the header's `registered`, by table row: the position and the path of each row of its table, or,
+for an entry that names its `table_rows` (`listed`), of each row it names, at that row's index of an array as long as the
+port's table (the header's `shared_rows`; `place`), position 0 and an empty path at every other index. -/
 def entry (pub : Public) (reg : Port) : V (Array Nat × Array ByteArray) := do
   let ctx := "public file.registered"
   let .ok e := pub.header.getObjVal? "registered" >>= (·.getObjVal? reg.name)
@@ -244,7 +266,16 @@ def entry (pub : Public) (reg : Port) : V (Array Nat × Array ByteArray) := do
   if (← J.str e "value" ctx) != reg.value then throw s!"registered reads: port {reg.name} reads {reg.value}, not another value"
   let positions ← (← J.arr e "positions" ctx).mapM (J.asNat · "a registered position")
   let paths ← (← J.arr e "paths" ctx).mapM fun x => do unhex (← J.asStr x "a registered path")
-  return (positions, paths)
+  match ← listed pub reg with
+  | none => return (positions, paths)
+  | some rows =>
+    if positions.size != rows.size || paths.size != rows.size then
+      throw s!"registered reads: port {reg.name}: one position and one path per row of its {TABLE_ROWS_KEY}"
+    let .ok s := pub.header.getObjVal? "shared_rows" | throw "registered reads: a registered port is a table of a shared-row file"
+    let n ← J.nat s reg.name "public file.shared_rows"
+    if rows.any (· ≥ n) then
+      throw s!"registered reads: port {reg.name}: its {TABLE_ROWS_KEY} name a row past its table's {n}"
+    return (place n rows positions 0, place n rows paths ByteArray.empty)
 
 /-- Row `r` of port `p`'s table: its `b ‖ c` among the file's row digests (`Public.digest` reads the same). -/
 def tableRow (pub : Public) (t : Tables) (p r : Nat) : ByteArray := pub.digests.getD (t.starts.getD p 0 + r) ByteArray.empty
@@ -252,21 +283,61 @@ def tableRow (pub : Public) (t : Tables) (p r : Nat) : ByteArray := pub.digests.
 /-- Instance `i`'s ref into port `p`'s table, among `np` ports. -/
 def ref (t : Tables) (np p i : Nat) : Nat := t.refs.getD (i * np + p) 0
 
-/-- The first of port `p`'s `rows` table rows that does not open `reg`'s registered root at its position through its path. -/
-def badRow (reg : Port) (pub : Public) (t : Tables) (p rows : Nat) (positions : Array Nat) (paths : Array ByteArray) :
-    Option Nat :=
-  (List.range rows).find? fun r => !opens reg (tableRow pub t p r) (positions.getD r 0) (paths.getD r ByteArray.empty)
+/-- The rows of a `rows`-row table an entry gives (`listed`): every row, or its `table_rows`. -/
+def opened (sel : Option (Array Nat)) (rows : Nat) : List Nat :=
+  match sel with
+  | none => List.range rows
+  | some ls => ls.toList
 
-/-- The first of `n` instances whose ref names no row of port `p`'s table, or whose row's position is not the one the
-verifier's program reads for the instance's unit. -/
-def badInstance (reg : Port) (t : Tables) (np p rows n : Nat) (positions indices : Array Nat) : Option Nat :=
+/-- The first index of the strictly increasing `ls` whose entry is at least `r` (`ls.size` when none is), by halving. -/
+def lowerBound (ls : Array Nat) (r : Nat) : Nat :=
+  go 0 ls.size
+where
+  go (lo hi : Nat) : Nat :=
+    if _ : lo < hi then
+      if ls[(lo + hi) / 2]! < r then go ((lo + hi) / 2 + 1) hi else go lo ((lo + hi) / 2)
+    else lo
+  termination_by hi - lo
+  decreasing_by all_goals omega
+
+/-- An entry gives table row `r`: it gives every row, or `r` is one of its `table_rows` (`opened`). -/
+def gives (sel : Option (Array Nat)) (r : Nat) : Bool :=
+  match sel with
+  | none => true
+  | some ls => decide (ls[lowerBound ls r]? = some r)
+
+/-- The first of the rows `rs` of port `p`'s table that does not open `reg`'s registered root at its position through its
+path. -/
+def badRow (reg : Port) (pub : Public) (t : Tables) (p : Nat) (rs : List Nat) (positions : Array Nat)
+    (paths : Array ByteArray) : Option Nat :=
+  rs.find? fun r => !opens reg (tableRow pub t p r) (positions.getD r 0) (paths.getD r ByteArray.empty)
+
+/-- The first of `n` instances whose ref names no row of port `p`'s table, or a row the entry gives no position and path
+for (`gives`), or whose row's position is not the one the verifier's program reads for the instance's unit. -/
+def badInstance (reg : Port) (t : Tables) (np p rows : Nat) (sel : Option (Array Nat)) (n : Nat)
+    (positions indices : Array Nat) : Option Nat :=
   (List.range n).find? fun i =>
-    !(decide (ref t np p i < rows) && decide (reg.readAt (indices.getD i 0) = some (some (positions.getD (ref t np p i) 0))))
+    !(decide (ref t np p i < rows) && gives sel (ref t np p i) &&
+      decide (reg.readAt (indices.getD i 0) = some (some (positions.getD (ref t np p i) 0))))
+
+/-- Why instance `i` is `badInstance`'s. -/
+def instanceWhy (reg : Port) (t : Tables) (np p rows : Nat) (sel : Option (Array Nat)) (positions indices : Array Nat)
+    (i : Nat) : String :=
+  let u := indices.getD i 0
+  let r := ref t np p i
+  if r ≥ rows then s!"registered reads: port {reg.name}: instance {i}'s ref names no row of its table"
+  else if !gives sel r then
+    s!"registered reads: port {reg.name}: instance {i} reads table row {r}, and the header gives no position and path for it"
+  else match reg.readAt u with
+    | some (some want) =>
+      s!"registered reads: port {reg.name}: unit {u} reads position {positions.getD r 0}, and the verifier's program reads {want}"
+    | _ => s!"registered reads: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
 
 /-- One port of the verifier's registered reads: a row of the circuit (an input port's, or a hidden-output statement's
 output row, `HmOut`, whose table is its instances' own rows, instance `i`'s ref `i`), whose leaf schema is the
-registration's (`portSchema`), whose rows are the registered rows (`Port.fits`), whose table rows all open the
-registered root, and whose instances each read the row at the position the verifier's program reads for their unit. -/
+registration's (`portSchema`), whose rows are the registered rows (`Port.fits`), whose table rows the header's entry gives
+(every row, or its `table_rows`: `listed`) all open the registered root, and whose instances each read a row the entry
+gives, at the position the verifier's program reads for their unit. A row no instance reads needs no position or path. -/
 def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (reg : Port) : V Unit := do
   let np := c.ports.size
   let some p := (List.range np).find? (fun p => c.ports[p]!.name == reg.name)
@@ -276,30 +347,25 @@ def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (r
   if !reg.fits c.ports[p]! then
     throw s!"registered reads: port {reg.name}'s rows are {c.ports[p]!.bits} bits ({c.ports[p]!.words} u16 words), not {reg.value}'s registered rows of {reg.words.getD 0} {reg.wordBits}-bit leaves"
   let (positions, paths) ← entry pub reg
+  let sel ← listed pub reg
   let rows := t.counts.getD p 0
   if positions.size != rows || paths.size != rows then
     throw s!"registered reads: port {reg.name}: one position and one path per table row"
-  match badRow reg pub t p rows positions paths with
+  match badRow reg pub t p (opened sel rows) positions paths with
   | some r =>
     throw s!"registered reads: port {reg.name}: table row {r} does not open {reg.value}'s registered root at position {positions.getD r 0}"
   | none =>
-    match badInstance reg t np p rows pub.n positions indices with
+    match badInstance reg t np p rows sel pub.n positions indices with
     | none => pure ()
-    | some i =>
-      let u := indices.getD i 0
-      if ref t np p i ≥ rows then throw s!"registered reads: port {reg.name}: instance {i}'s ref names no row of its table"
-      match reg.readAt u with
-      | some (some want) =>
-        throw s!"registered reads: port {reg.name}: unit {u} reads position {positions.getD (ref t np p i) 0}, and the verifier's program reads {want}"
-      | _ => throw s!"registered reads: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
+    | some i => throw (instanceWhy reg t np p rows sel positions indices i)
 
 /-- The statement's registered reads against the verifier's own `own` (`--registered`). The header's `registered` must
-name exactly `own`'s ports, each a port of the circuit and a table of a shared-row file: every table row's `b ‖ c`, as the
-value's row at its stated position, opens the registered root through its path, and every instance reads, by its ref,
-the position the verifier's program reads for its unit (`checkPort`; `FlockProofs.Registered`: `check_ok`). Without
-`own`, a statement that names registered reads is refused: its rows would be checked against no root. With `own`, the
-units must be `derived`: a unit's position is the verifier's, but which unit an instance is comes from its label, which
-binds nothing unless the verifier derived it. -/
+name exactly `own`'s ports, each a port of the circuit and a table of a shared-row file: every table row the port's entry
+gives (every row, or its `table_rows`), as the value's row at its stated position, opens the registered root through its
+path, and every instance reads, by its ref, a row the entry gives, at the position the verifier's program reads for its
+unit (`checkPort`; `FlockProofs.Registered`: `check_ok`). Without `own`, a statement that names registered reads is
+refused: its rows would be checked against no root. With `own`, the units must be `derived`: a unit's position is the
+verifier's, but which unit an instance is comes from its label, which binds nothing unless the verifier derived it. -/
 def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bool) : V Unit := do
   let hdr := pub.header.getObjVal? "registered"
   let some own := own
@@ -605,7 +671,7 @@ def checkDescriptionPort (c : Circuit) (pub : Public) (t : Tables) (reg : Port) 
   | some r =>
     throw s!"registered reads: port {reg.name}: table row {r} states position {positions.getD r 0}, and an inner statement's description table is its registration in order (row {r} at position {r})"
   | none =>
-    match badRow reg pub t p rows positions paths with
+    match badRow reg pub t p (List.range rows) positions paths with
     | some r =>
       throw s!"registered reads: port {reg.name}: table row {r} does not open {reg.value}'s registered root at position {r}"
     | none =>
@@ -654,9 +720,9 @@ def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : 
   | none => Registered.check st.c st.pub none (Registered.derived st.partition)
 
 /-- What a verdict reports of the rows its statements' registered ports opened: `{port: [[position, b ‖ c] ...]}`, each
-table row's stated position and its hiding commitment `b ‖ c` (the commit-time opening's digest), in table order across
-the statements; null without registered reads. A produced record holds every session's to its own
-(`Spot.Produced.shared`). -/
+table row the port's entry gives (every row, or its `table_rows`: `Registered.opened`), its stated position and its
+hiding commitment `b ‖ c` (the commit-time opening's digest), in table order across the statements; null without
+registered reads. A produced record holds every session's to its own (`Spot.Produced.shared`). -/
 def registeredOpenings (sts : Array Stmt) (registered : Option (Array Registered.Port)) : Lean.Json :=
   match registered with
   | none => Lean.Json.null
@@ -664,10 +730,10 @@ def registeredOpenings (sts : Array Stmt) (registered : Option (Array Registered
       (reg.name, Lean.Json.arr (sts.foldl (fun acc st => acc ++ rowsOf st reg) #[])))
 where
   rowsOf (st : Stmt) (reg : Registered.Port) : Array Lean.Json :=
-    match Registered.portOf st.c reg.name, st.pub.tables, Registered.entry st.pub reg with
-    | some p, some t, .ok (positions, _) =>
-      (Array.range (t.counts.getD p 0)).map fun r =>
-        Lean.Json.arr #[Lean.toJson (positions.getD r 0), Lean.Json.str (hexOf (Registered.tableRow st.pub t p r))]
-    | _, _, _ => #[]
+    match Registered.portOf st.c reg.name, st.pub.tables, Registered.entry st.pub reg, Registered.listed st.pub reg with
+    | some p, some t, .ok (positions, _), .ok sel =>
+      ((Registered.opened sel (t.counts.getD p 0)).map fun r =>
+        Lean.Json.arr #[Lean.toJson (positions.getD r 0), Lean.Json.str (hexOf (Registered.tableRow st.pub t p r))]).toArray
+    | _, _, _, _ => #[]
 
 end Flock
