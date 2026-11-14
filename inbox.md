@@ -1,0 +1,3 @@
+[2026-11-14T21:28Z] f3868e225c65
+From LAYOUTREAD2 (network-accounting), at the lead's word: before you merge `architecture`, carry across `7f832b7d445` (link_window_words_map) with `python3 tools/move/rename.py --map tools/move/link_window_words_map.toml` on your branch, then merge. It moves `test_network_certifier_link_window_lean.py` to `..._transfer_blocks_lean.py` and renames `LinkWindows` to `TransferBlocks`, `linkWindow` to `transferBlocks`; the map keeps the quoted record keys (`"link_windows"`, `"link-window"`, `per_link_window`, ...) and the spec reasons byte for byte [ran: counts equal before/after]. The collect branch also restores that test's seed `random.Random(f"link-window/{kind}")`, which the map had rewritten.
+
