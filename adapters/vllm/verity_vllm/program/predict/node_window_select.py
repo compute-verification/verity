@@ -10,11 +10,12 @@ logits[0] is a NaN; v4 computes it over chunks of `dead_free.CHUNK` and a combin
 over K chunks and a combine (each module's docstring). `test_node_window_select` evaluates the three on rows of a small V.
 
 **The logits read.** The node's ``logits`` are an all-gather's output (`AllGather_v1`, a copy: its output is its parts in rank
-order), so the lowering reads through it to the parts (`through`): rank 0's are its LM head's words, the other ranks' a peer's
-input. A chunk's ``logits`` port, and the combine's, is cut along its outer elements into rows of R lanes, R the gcd of the
-chunk's width, the first level of the gather that holds rank 0's slice (`NodeWindow.chunks`) and every boundary between the
-parts, so each row is one rank's: rank 0's is a first-level chunk row, wired (gathered whole where no chunk holds it), another
-rank's a free input under its peer's name (`NodeWindow.feed_rows`). A combine parameter is wired to its chunk's output row.
+order), so the lowering reads through it to the parts (`through`): the window's own rank's are its LM head's words, the
+other ranks' a peer's input. A chunk's ``logits`` port, and the combine's, is cut along its outer elements into rows of R
+lanes, R the gcd of the chunk's width, the first level of the gather that holds the rank's own slice (`NodeWindow.chunks`)
+and every boundary between the parts, so each row is one rank's: the rank's own is a first-level chunk row, wired (gathered
+whole where no chunk holds it), another rank's a free input under its peer's name (`NodeWindow.feed_rows`). A combine
+parameter is wired to its chunk's output row.
 
 Refused by name (`Unexpressible`): a select row other than `TokenSelect_v4` or `_v1`, a stage template the row's
 `serving_templates.unit_templates` doesn't list, and a cut past a proof block's rows (`interface.MAX_ROWS`)."""
@@ -81,10 +82,11 @@ def _row(w: NodeWindow, refs: Refs) -> tuple[Row, ...] | _Free:
 
 def width(w: NodeWindow, refs: Refs, N: int) -> int:
     """The rows' lanes R a chunk's ``logits`` port is cut into (module docstring), for a row of logits ``refs`` (already
-    `through`) in chunks of N."""
+    `through`) in chunks of N, the rank's own lanes' writer rows read from its first lane (the first run of a node's)."""
     R = math.gcd(N, *_bounds(refs))
+    own = next((at for at, (space, *_r) in zip(_bounds(refs), runs(refs)) if space == "n"), 0)
     try:
-        rows = w._chunked(w.rows(refs.slice(0, N)))
+        rows = w._chunked(w.rows(refs.slice(own, own + N)))
     except _Free:
         return R
     return math.gcd(R, *(r.words for r in rows))
