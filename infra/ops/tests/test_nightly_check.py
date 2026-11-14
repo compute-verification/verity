@@ -1042,7 +1042,7 @@ def test_the_clone_follows_origins_main_and_each_night_gets_a_worktree_of_its_ti
     origin.mkdir()
     git("init", "-q", "-b", "main", cwd=origin)
     (origin / "infra" / "research" / "src").mkdir(parents=True)
-    (origin / "tools" / "research" / "src" / "marker.py").write_text("FIRST = 1\n")
+    (origin / "infra" / "research" / "src" / "marker.py").write_text("FIRST = 1\n")
     git("add", "-A", cwd=origin)
     git("commit", "-q", "-m", "first", cwd=origin)
     first = git("rev-parse", "HEAD", cwd=origin)
@@ -1051,7 +1051,7 @@ def test_the_clone_follows_origins_main_and_each_night_gets_a_worktree_of_its_ti
 
     commit, tree = p.prepare("2026-10-19")
     assert commit == first and tree == tmp_path / "work" / "trees" / f"2026-10-19-{first[:12]}"
-    assert (tree / "tools" / "research" / "src" / "marker.py").read_text() == "FIRST = 1\n"
+    assert (tree / "infra" / "research" / "src" / "marker.py").read_text() == "FIRST = 1\n"
     assert git("status", "--porcelain", cwd=tree) == "" and git("rev-parse", "HEAD", cwd=tree) == first
     assert git("for-each-ref", "--format=%(refname)", cwd=p.repo) == "refs/remotes/origin/main", "main alone is fetched"
 
@@ -1068,11 +1068,11 @@ def test_the_clone_follows_origins_main_and_each_night_gets_a_worktree_of_its_ti
     assert p.launch_output() == "" and not p.cfg.launch_log.exists()
     p.forget_launch()                                # nothing to forget is no error
 
-    (origin / "tools" / "research" / "src" / "marker.py").write_text("SECOND = 2\n")
+    (origin / "infra" / "research" / "src" / "marker.py").write_text("SECOND = 2\n")
     git("commit", "-q", "-am", "second", cwd=origin)
     second = git("rev-parse", "HEAD", cwd=origin)
     commit, tree2 = p.prepare("2026-10-20")          # the 19th's tree was never removed: the next prepare removes it
-    assert commit == second and not tree.exists() and (tree2 / "tools" / "research" / "src" / "marker.py").read_text() == "SECOND = 2\n"
+    assert commit == second and not tree.exists() and (tree2 / "infra" / "research" / "src" / "marker.py").read_text() == "SECOND = 2\n"
     assert p.prepare("2026-10-20") == (second, tree2), "a night prepared twice (a restart before its launch) gets the tree anew"
     p.cleanup(tree2)
     assert not tree2.exists() and git("worktree", "list", "--porcelain", cwd=p.repo).count("worktree ") == 1

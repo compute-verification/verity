@@ -13,7 +13,7 @@ set -u
 [ $# = 1 ] || { echo "usage: lean_publish.sh SHA" >&2; exit 2; }
 node=${VQ_LEAN_NODE:-vy-nebius-cpu-4} py=${VQ_PYTHON:-python3.12} log=$HOME/live/lean-publish.log
 push_s=75 start_s=30
-export PYTHONPATH=${PYTHONPATH:-$HOME/src/tools/research/src}
+export PYTHONPATH=${PYTHONPATH:-$HOME/src/infra/research/src}
 
 publish() {
   echo "$(date -u +%FT%TZ) publish $1 on $node"

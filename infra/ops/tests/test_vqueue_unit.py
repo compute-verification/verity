@@ -57,7 +57,7 @@ class Node:
 
     def __init__(self, tmp: Path):
         self.home, self.cred, self.token, self.out = tmp / "home", tmp / "cred", tmp / "run" / "token", tmp / "ticks.jsonl"
-        for d in ("live", "shadow", "src/tools/research/src/research"):
+        for d in ("live", "shadow", "src/infra/research/src/research"):
             (self.home / d).mkdir(parents=True)
         self.clone = self.home / "verity"
         subprocess.run(["git", "init", "-q", str(self.clone)], check=True)
@@ -104,7 +104,7 @@ def test_with_no_mode_file_a_tick_is_a_dry_run_in_the_node_s_own_paths_as_the_ap
     assert flag(argv, "--log") == str(live / "decisions.jsonl") and "/data/vqueue/live/decisions.jsonl" in argv
     assert (flag(argv, "--repo"), flag(argv, "--lock"), flag(argv, "--state"), flag(argv, "--priority-file"), flag(argv, "--frozen")) \
         == (str(node.clone), str(live / "vqueue.lock"), str(live / "state.json"), str(live / "priority"), str(live / "frozen"))
-    assert t["cwd"] == str(node.clone) and env["PYTHONPATH"] == str(node.home / "src/tools/research/src")
+    assert t["cwd"] == str(node.clone) and env["PYTHONPATH"] == str(node.home / "src/infra/research/src")
     assert (env["HOME"], env["TMPDIR"], env["TRAIN_TREES"]) == (str(node.home), str(node.home / "tmp"), str(node.home / "trains"))
     assert env["PATH"].split(":")[0] == os.path.realpath(VQ / "bin") and (VQ / "bin" / "gh").is_file()
     assert (env["GH_TOKEN"], env["AWS_ACCESS_KEY_ID"], env["SLACK_BOT_TOKEN"]) == ("dummy-app", "dummy-r2", "dummy-slack")

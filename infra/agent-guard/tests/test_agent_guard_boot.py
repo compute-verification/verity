@@ -41,10 +41,10 @@ def test_boot_gives_a_checkout_that_tracks_no_hooks_file_a_fail_closed_one_and_l
     git("add", "a")
     git("commit", "-q", "-m", "old")
     git("push", "-q", "origin", "HEAD:old")
-    shutil.copytree(ROOT / "infra/agent-guard", tmp_path / "ws/tools/agent-guard",
+    shutil.copytree(ROOT / "infra/agent-guard", tmp_path / "ws/infra/agent-guard",
                     ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copytree(ROOT / ".cursor", tmp_path / "ws/.cursor")
-    git("add", "tools", ".cursor")
+    git("add", "infra", ".cursor")
     git("commit", "-q", "-m", "guard")
     git("push", "-q", "origin", "HEAD:main")
     git("checkout", "-q", "old")
@@ -102,7 +102,7 @@ def test_boot_writes_no_hooks_file_above_the_checkout(tmp_path):
     git("clone", "-q", str(tmp_path / "origin.git"), str(ws), cwd=tmp_path)
     shutil.copytree(ROOT / "infra/agent-guard", ws / "infra/agent-guard", ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copytree(ROOT / ".cursor", ws / ".cursor")
-    git("add", "tools", ".cursor")
+    git("add", "infra", ".cursor")
     git("commit", "-q", "-m", "guard")
     git("push", "-q", "origin", "HEAD:main")
 
