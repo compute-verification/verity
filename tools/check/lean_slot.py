@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """`python3 tools/check/lean_slot.py [--pool NAME] [--by NAME] -- CMD...`: CMD in one of this node's Lean audit slots.
 
-A Lean audit builds its packages against Mathlib on every core it gets, so a node runs only so many at once (a cap kept
-by hand is overrun). The steward sets the cap in SLOTS (`/workspace/research/locks/lean-slots`; LEAN_SLOTS
+A Lean audit builds its packages against Mathlib on every core it gets, so a node runs only so many at once (a limit kept
+by hand is overrun). The steward sets the limit in SLOTS (`/workspace/research/locks/lean-slots`; LEAN_SLOTS
 overrides), one pool per line, which it may rewrite at any time:
 
     NAME N      # e.g. `check 2` (check's lean-audit step), `audit 2` (`tools/verity/lean/check.py --build` run by
@@ -31,7 +31,7 @@ closed, with its comment; --json, the same as one JSON object (`status_doc`: the
 --slots` reads from every machine. Stdlib only: it runs before uv.
 
 From Python (`tools/verity/lean/check.py --build`, `lean_changed.py --records`): `hold(pool)` takes a slot for the calling
-process and returns its descriptor, which the process keeps open until it exits (None: no cap here, or a slot is held
+process and returns its descriptor, which the process keeps open until it exits (None: no limit here, or a slot is held
 already); `hold(pool, or_any=False)` never takes pool `any`'s, and `hold(pool, queue=False)` (`lean_changed.py --no-wait
 --build`, the preflight's Lean step on a node it can fall back from) is `Refused` rather than wait in line.
 """
@@ -250,7 +250,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         elif argv[1:]:
             sys.exit("usage: lean_slot.py --status [--json]")
         elif not SLOTS.exists():
-            print(f"no Lean audit cap on this machine ({SLOTS})")
+            print(f"no Lean audit limit on this machine ({SLOTS})")
         else:
             text = SLOTS.read_text()
             print("\n".join(status(parse(text), SLOTS.parent, now(), why=notes(text))))

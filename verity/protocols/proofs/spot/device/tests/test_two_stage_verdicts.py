@@ -163,7 +163,7 @@ def test_round_two_takes_a_fused_blocks_tables_from_the_auditors_pins():
     """`second-inputs` at round 2: a fused block's row, salt and path pass where its root and domain are the tables the
     auditor's params pin, round 1's record registering none of them. They are refused, with `second_stage.INPUTS_WHY`
     and the row named, where the params pin no table or one of the two, where the pin's root or domain id is another
-    than the one the verifier filled from the tables' registration, or where it pins the table at another count of
+    than the one the verifier filled from the tables' docket, or where it pins the table at another count of
     rows; the same entries registered by round 1's record instead pass as before. The run is refused either way: no
     statement is given here, so ``second-statements`` or the design's own codes refuse it before the form's."""
     own = _pinned_round_two(PINS)

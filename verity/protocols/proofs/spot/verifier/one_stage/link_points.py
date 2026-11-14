@@ -3,10 +3,10 @@
 A session of a member's statement opens its link at `PT_LOCAL + nbl(g, c)` points for its `c` proved units and its
 circuit's `g` units a proof block (META `vus_per_block`). A sample over several members samples a random count of each
 member's units. One that runs out of the verifier's public coins fails the window (`OneStageZk.RAN_OUT`); one that ends
-samples between the member's fewest and most units (`ended`, `bounds`). The registration of the per-member form refuses a
+samples between the member's fewest and most units (`ended`, `bounds`). The docket of the per-member form refuses a
 member whose fewest and most give different link points, a member whose fewest is none (some sample that ends misses
 it and gives it no statement, so the check sets up no session of its circuit), and a sampling design no sample of
-which ends (`refused`, `ends`, the registration's `link-points`).
+which ends (`refused`, `ends`, the docket's `link-points`).
 """
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ NEVER_ENDS = "link points: no draw under the law ends, so each of its windows fa
 
 
 def refused(law: Mapping[str, Any], population: int, members: Sequence[Member]) -> list[int]:
-    """The members the registration refuses, by index: one some sample that ends misses (its fewest sampled proof blocks
+    """The members the docket refuses, by index: one some sample that ends misses (its fewest sampled proof blocks
     is none), and one whose fewest and most sampled proof blocks, over the samples that end, give different link points
     (`bounds`); ValueError (`NEVER_ENDS`) when no sample under `law` ends."""
     bs = bounds(law, population, members)
