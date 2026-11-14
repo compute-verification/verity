@@ -127,6 +127,6 @@ of assumption enter beside them, by their lock names:
   the bytes they answer, is the challenger they describe. They are stated over the challenger's log
   (`security/Definitions/Core/Challenger.lean`), not over `Verity.Game`, and are not hypotheses of the theorem; what they
   give is `Verity.Guarantees.SampleAfterRecorded` (`security/Proofs/Core/Challenger.lean`). The challenger is an auditor
-  device (`trusted-host`, `Verity.Assumptions.TrustedHost`).
+  device (`trusted-host`, `Verity.Assumptions.TrustedDevice`).
 
 Each subprotocol's own proof of its target adds that subprotocol's named assumptions.
