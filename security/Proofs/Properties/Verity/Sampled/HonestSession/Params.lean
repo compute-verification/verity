@@ -140,12 +140,22 @@ private theorem canon_ascii_bytes {j : Json} {s : String} (hc : Flock.canon j = 
 hypothesis `hpp : ProgramPlain` by every lemma below that reads `programJ`. -/
 def ProgramPlain : Prop := Firewall.plain programJ = true
 
-/-- The parser's rebuild (`norm`) of these two plain, ascending-key JSON literals is the literal itself. `canonicalJson`
-returns `norm` of the parsed value, and the decoders must then read that value's fields as a concrete object; but `norm`
-is well-founded-recursive, so the kernel does not reduce it (`canon_norm` only gives `canon (norm j) = canon j`, not
-`norm j = j`). A concrete-JSON fact of this instance, taken as a hypothesis `hN : NormFacts` by `params_full` and the
-exports that depend on it. -/
+/-- The parser's rebuild (`norm`) of these two JSON literals is the literal itself. `canonicalJson` returns `norm` of the
+parsed value, and the decoders must then read that value's fields as a concrete object; but `norm` is
+well-founded-recursive, so the kernel does not reduce it (`canon_norm` only gives `canon (norm j) = canon j`, not
+`norm j = j`, and no `plain j → norm j = j` lemma exists).
+
+Unproved: taken as a hypothesis `hN : NormFacts` by `params_full` and the exports that depend on it. It is held, as
+*evaluated* evidence rather than kernel-checked proof, by the `#guard`s beside it. Caveat: `norm` rebuilds each object as
+the ascending-key insertion tree, so the *propositional* equality this states additionally needs that tree shape to match
+the literal's; `Json`'s `==` is *semantic* (per-key lookup), so the `==` guards attest value equality, not the tree-shape
+equality. The `.compress` guards attest the serialized text is equal. -/
 def NormFacts : Prop := jnorm θJ = θJ ∧ jnorm paramsJ = paramsJ
+
+#guard jnorm θJ == θJ
+#guard jnorm paramsJ == paramsJ
+#guard (jnorm θJ).compress == θJ.compress
+#guard (jnorm paramsJ).compress == paramsJ.compress
 
 /-- The session's query is plain. -/
 private theorem plain_query : Firewall.plain query = true := by
@@ -340,12 +350,14 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     show (Core.canonicalJson θ₀ >>= Core.Composition.decodeParams) = .ok
       [({ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ } : Core.Composition.Named)]
     rw [hA, hNθ]
+    unfold θJ
     fwd_walk [hBp] block [Flock.canon] shallow []
   case find => kernel_rfl'
   case pchain =>
     -- Likewise rewrite the outer `canonicalJson` by `hC`, then `norm paramsJ` to the literal `paramsJ`.
     show (Core.canonicalJson (Firewall.printJson paramsJ).toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = _
     rw [hC, hNp]
+    unfold paramsJ
     fwd_walk [hDp, hE, hU] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
   case f1 => kernel_rfl'            -- own.partition = partitionObj
   case f2 => rw [hpf]               -- own.program = programFile
