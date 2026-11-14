@@ -308,3 +308,15 @@ Keep, by kind (exclusion rows; the lint's other senses cover only `max_tokens_ca
 
 Composition with our rename: our three maps have no cap or debit row, so nothing of ours misses. The map should exclude `tools/move/warden_*map.toml` anyway, since `rename.py` rewrites maps that are not excluded. [ran the grep over our maps; read `rename.py`]
 
+[2026-11-14T19:14Z] 11a1a4e48472
+LAYOUTREAD2, Sat 14 Nov 11:15 AM PST, family leg (seat `prover`). **No map or post yet. The word is in 9 files of ours, all in `benchmarks/network_traces/`, and none in the certifier's code or Lean. Two sites are another sense and one is a schema key, all to keep.** [ran: `git grep` on collect `076b4fd59c8b`/`75e75c9033d0`; TOP-424 read to 19:10Z; no leg map on `origin/architecture` `85b4ae757c5d` or the `prover` seat's branches]
+
+Keep, by kind (exclusion rows):
+- (b) the block record's key `legs` (`legs.certifier`) and its schema's `"$ref": "#/$defs/leg"`. The record is `verity/block-record/v2`, whose schema and fixtures are in `benchmarks/one_stage/interfaces/`, so its owner renames it there with a format version. Our files write and read it: `block_certifier.py` (`block_leg`'s output), `tests/test_block_certifier.py:93-108` (`rec["legs"]`, `$defs/leg`), `tests/test_certifier_piece.py:290`, `tests/test_chain_record.py:379`. The function names `block_leg` and `block_record.leg` can be renamed together with their callers, but not the key. [ran]
+- Another sense, served bytes: the prompt `"How many legs does a spider have? …"` in `certifier_serve.py:277`. It is a request's text. [ran]
+- Another sense, in prose: `warden_serve.py:29`, "both legs are plain TCP" (a connection's two hops). [ran]
+- The path `benchmarks/one_stage/prove_leg.py` (named in `pyproject.toml:45,77` and imported in `scan_zk.py:1512`) follows whatever map moves that file. [ran]
+- Where I found nothing: (a) no domain tag, (c) no circuit, (d) no flag, (e) no lock key with Leg in the certifier's areas. [ran]
+
+Composition with our rename: our three maps have no leg row, so nothing of ours misses. As for the other families, the map should exclude `tools/move/warden_*map.toml`. [ran the grep over our maps]
+
