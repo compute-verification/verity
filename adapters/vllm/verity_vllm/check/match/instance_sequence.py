@@ -72,6 +72,11 @@ class RootView(PeerReads, PX.PrefixInput):
     _wlos: list[int]
     input_base: dict[int, int]
     tp: dict[str, Any] | None   # a TP rank's rank and world: a fold's from program.json, a rank Program's from tp_links.json
+    # what `program_compare._canon_step_relative` keeps on a view it has compared, declared and nothing more: each instance's
+    # position in one filtered step list, that list with whether the comparison unfolds, and whether the remap is the identity
+    _pos_cache: dict[int, tuple[int, int]]
+    _pos_cache_key: tuple[bool, list[list[int]]]
+    _pos_ident: bool
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
                  compact: bool = False, checks: Iterable[int] = ()):

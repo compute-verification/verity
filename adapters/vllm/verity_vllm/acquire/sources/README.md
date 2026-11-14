@@ -16,8 +16,7 @@ packages and the benchmarks import, module by module: from `taps`, `TapSources`,
 `call_boundary_plan`, `Plan`, `to_json` and `of_json`; from `call_boundary_source`, `FAMILY`, `manifest_sites`,
 `plan_of` and `unattached`; from `int8_source`, `Int8Source`; from `attention_source`, `AttentionSource`, `MLA_ROWS`,
 `INDEX_ROWS` and `INDEX_SCALE`; from `served_compiled_source`, `ServedCompiledSource` and `linkage`; from
-`inductor_hooks`, `FLUSH`; from `oracle_witness`, `SUMMARY_KEYS`; from `allreduce_norm`, `FUSED` and
-`REDUCED_MEMBER`. Two modules that other packages read state no `__all__`: `compiled_source`, for
-`CompiledGraphSource` and `compile_settings`, and `compiled_kernel_source`, for `CompiledKernelSource`. One private
-name is read from outside the package and is not declared: `_committed`, of `partial_source` and of
-`served_compiled_source`. No other package imports the remaining modules.
+`compiled_source`, `compile_settings`; from `inductor_hooks`, `FLUSH`; from `oracle_witness`, `SUMMARY_KEYS`; from
+`allreduce_norm`, `FUSED` and `REDUCED_MEMBER`. One private name is read from outside the package and is not
+declared: `_committed`, of `partial_source` and of `served_compiled_source`. No other package imports the remaining
+modules.

@@ -12,11 +12,10 @@
 #   debit/               debit_sm90.cubin: debit_sm90.cu (the words' debit counts, debit.py's) with the same flags, refused
 #                        unless ptxas reports no spill or stack frame and its every MMA is a QGMMA.64x32x32.F32.E4M3.E4M3
 #                        (debit_ptxas.txt, debit_mma.txt), in a directory of its own: one Kernel.load reads holds one cubin
-#   check/               fixture.py's inputs and expected buffers (needs verity and numpy)
-#   run.py, toolchain.txt (nvcc --version and the full nvcc command line), source.txt (the verity commit), MANIFEST.sha256
+#   ptxas.txt, toolchain.txt (nvcc --version and the full nvcc command line)
+# ship.sh adds the check and what the card runs it with.  Needs no uv.
 # Usage: bash benchmarks/pouw/pearl_c_sm90/build.sh [OUT]   (default /tmp/pearl-c-sm90-ship; CUDA names the toolkit, default
-#        /usr/local/cuda-13.0; CUBIN_ONLY=1 stops after the SASS gates, with the cubin, ptxas.txt and the gates' JSON, and
-#        needs no uv)
+#        /usr/local/cuda-13.0)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 CUDA=${CUDA:-/usr/local/cuda-13.0}; OUT=${1:-/tmp/pearl-c-sm90-ship}
@@ -38,10 +37,4 @@ awk '/stack frame/ && !/ 0 bytes stack frame, 0 bytes spill stores, 0 bytes spil
 "$CUDA/bin/cuobjdump" -sass "$B/debit_sm90.cubin" | grep -oE "[A-Z]*MMA[.A-Z0-9x]*" | sort | uniq -c > "$B/debit_mma.txt"
 awk '$2 != "QGMMA.64x32x32.F32.E4M3.E4M3" { bad = 1 } { n += $1 } END { exit bad || n < 36 }' "$B/debit_mma.txt" \
   || { echo "debit_sm90: an MMA other than QGMMA.64x32x32.F32.E4M3.E4M3, or fewer than its 36 atoms:" >&2; cat "$B/debit_mma.txt" >&2; exit 1; }
-[ -n "${CUBIN_ONLY:-}" ] && exit 0
-(cd "$ROOT" && uv run python benchmarks/pouw/pearl_c_sm90/fixture.py "$OUT/check")
-cp "$HERE/run.py" "$OUT/"
 { "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o pearl_c_sm90.cubin pearl_c_sm90.cu"; } > "$OUT/toolchain.txt"
-{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c_sm90 benchmarks/pouw/pearl_c_sm120 benchmarks/pouw/pearl_c verity/protocols/accounting/pouw/verifier verity; } > "$OUT/source.txt"
-(cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
-du -sh "$OUT" | cut -f1 | xargs echo "tree:"

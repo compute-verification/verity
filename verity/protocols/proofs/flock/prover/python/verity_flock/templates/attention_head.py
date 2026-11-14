@@ -5,8 +5,8 @@ the zero word the IR pads with, the query is a public port, and the softmax (run
 MUFU.RCP of the sum, the output cast) is the native tail the verifier evaluates on the public words.
 
 T is per instance: a statement covers the instances of one T (:func:`lowering` takes it; :func:`lowering_for_set` reads it
-off a set whose instances share it). The one unit netlist is the same for every T; the leaf maps and the tail (the CUT line)
-are T's, so the pin is per T."""
+off a set whose instances share it). The unit's one circuit description is the same for every T; the leaf maps and the tail (the
+CUT line) are T's, so the pin is per T."""
 TEMPLATE = "attention-head"
 UNIT = "attention-head/fa2-bf16/tc-step"
 FRAME_SCHEMES = ("frame-v3/blake3-keyed",)
@@ -73,8 +73,8 @@ def cached_lowering(subcircuit, T: int):
 
 
 def unit_rows_sha256(text: str) -> str:
-    """sha256 of a unit netlist without its name and its per-T lines: the header line minus the name token, then the matrix rows
-    up to ``LEAVES``. Every T's netlist has the same one, so one block circuit serves a class."""
+    """sha256 of a unit's circuit description without its name and its per-T lines: the header line minus the name token, then the
+    matrix rows up to ``LEAVES``. Every T's circuit description has the same one, so one block circuit serves a class."""
     import hashlib
 
     head, rest = text.split("\n", 1)
@@ -83,8 +83,8 @@ def unit_rows_sha256(text: str) -> str:
 
 
 def class_manifest(subcircuit, lo: int, hi: int) -> bytes:
-    """The class's manifest, canonical JSON: every T in [lo, hi] with the sha256 of its v3 netlist (``lowering(subcircuit, T)``),
-    and the unit rows they share. Its sha256 is the class pin."""
+    """The class's manifest, canonical JSON: every T in [lo, hi] with the sha256 of its v3 circuit description
+    (``lowering(subcircuit, T)``), and the unit rows they share. Its sha256 is the class pin."""
     import json
 
     nets, rows = {}, set()

@@ -1,7 +1,6 @@
 /-
 A sample's coins from one family of the auditor's challenger, as the verifier replays them from the record (`coins.py`'s
-`challenger_stream`, `read_reason` and `coins_reason`, which `tests/test_challenger_difftest.py` holds to this, the
-verifier).
+`challenger_stream` and `read_reason`, which `tests/test_challenger_difftest.py` holds to this, the verifier).
 
 The record of a sample's coins is its segment `{after, label, openings, start}` (`Segment.to_json`): family `label`'s coins
 `start`, `start` + 1, ..., each opened after `after`, the prover's commitment. `challengerStream` is `challenger_stream`:
@@ -11,20 +10,10 @@ signed release log shows it received them, every one of them is that commitment 
 one commitment, so a prover that reads a sample and commits again finds its second commitment's coins refused), and the
 openings are exactly the coins the family released, from its first, so the prover picked none of them and the segment's
 `start` is 0. `readReason` is `read_reason`: the bytes the sample read are the start of that stream, and they read every
-coin opened.
-
-`coinsReason` is `coins_reason`: the commitment and the roots come from the code that already trusts them,
-`trustedChallengePhaseOf` over the evidence `{key, ledger, main, pins, segment, session}` (the verifier's challenger key, the
-auditor's ledger, the verifier's copy of main's first-parent history, the host's pins log, the segment and the
-session's files) for the window the verifier holds (its open root R, `windowRoot`, which it reads from the challenger's
-signed open of the registration's window, never from the record or the evidence), so the record names neither, the
-prover picks no window, and the session counts only from a commit the pins log records on main's first-parent line
-(`pinnedChallengePhase`): coins a session of another window released after the registration's digest are refused. The family
-is the verifier's too (`label`, as `drawCoins`'s): a segment of another family is refused, so a prover that reserved
-several families picks none of them after reading. The session
-must be a withheld one (`withheldOn`: every ledger open of the window says `withheld: true`), whose challenger released
-no root, salt or path before it closed, as `drawCoins` requires. `Run.run` refuses a sample from the challenger whose evidence is missing or gives a
-reason (`select`, code `coins`, or `family` where the reason is `FAMILY_ROOT`), its `after` the registration's digest.
+coin opened (`startReason`). The commitment and the roots it is given come from the code that already trusts them
+(`trustedChallengePhaseOf`, through `drawCoins` and `coinsReason`, `ChallengerDraw.lean`). A session `withheldOn` passes is a
+withheld one: every ledger open of the window says `withheld: true`, so its challenger released no root, salt or path
+before it closed.
 
 `withinAt` is `coins_within`: the sizes of what the evidence holds, each within its `Limits` (`LIMITS`, which v2 reads
 before anything else of the evidence, `OneStageZk.evidenceOf`): the session's release log lines (`MAX_LOG_LINES`, as
@@ -33,9 +22,8 @@ own leaf of a key at the deployed parameters), the pins log's lines (`MAX_PINS`)
 each a coin of one layout) and each opening's path (`MAX_PATH`, a layout's depth). A value absent or not a list counts
 as none: what reads it refuses it.
 
-The difftest's pieces (`Pieces.table`): `challenger_read` (`read_reason`) and `challenger_draw_coins`
-(`coins_reason`), each `{"reason"}`, or `{"refused": why}` where Python raises; `challenger_within` (`coins_within`),
-`{"limits", "reason"}`.
+The difftest's pieces (`Pieces.table`): `challenger_read` (`read_reason`), `{"reason"}`, or `{"refused": why}` where
+Python raises; `challenger_within` (`coins_within`), `{"limits", "reason"}`.
 -/
 module
 
@@ -52,8 +40,6 @@ open Flock (V)
 
 def SEGMENT_FORM : String :=
   "a draw's coins are {after, label, openings, start}: the prover's commitment (64 bytes in lowercase hex), the challenger family, its coins' openings and the first one's index"
-def COINS_FORM : String :=
-  "a draw's coin evidence is {key, ledger, main, pins, segment, session}: the verifier's challenger key, the auditor's ledger, the verifier's copy of main's first-parent history, the host's pins log, the draw's coins (Segment.to_json) and the challenger session's files"
 
 /-- The refusal of a family whose roots, as the challenger's log shows them, are not all the prover's commitment. -/
 def FAMILY_ROOT : String :=
@@ -68,7 +54,7 @@ def challengerStream (c : LiveCommitment) (segment : Json) (after : ByteArray) (
   unless keys? segment == some #["after", "label", "openings", "start"] do throw SEGMENT_FORM
   let (.str label, some start, .arr openings) := (getD segment "label", nat? (getD segment "start"),
       getD segment "openings") | throw SEGMENT_FORM
-  unless getD segment "after" == Json.str (Flock.hexOf after) do
+  unless jsonStrIs (getD segment "after") (Flock.hexOf after) do
     throw "the draw's coins were not opened after the prover's commitment the verifier holds"
   let mut out := ByteArray.empty
   for (doc, i) in openings.toList.zipIdx do
@@ -83,17 +69,20 @@ def challengerStream (c : LiveCommitment) (segment : Json) (after : ByteArray) (
       throw s!"the draw's {label} coins are not the ones the challenger's log shows released after the prover's commitment"
   return out
 
+/-- Why `read` is not the start of the coins `stream` using every one of them; `none` when it is. -/
+def startReason (stream read : ByteArray) : Option String :=
+  if stream.extract 0 read.size != read then some "the bytes the draw read are not its coins'"
+  else if (read.size + COIN_BYTES - 1) / COIN_BYTES != stream.size / COIN_BYTES then
+    some s!"the draw read {read.size} bytes of {stream.size / COIN_BYTES} coins: a coin opened and not read"
+  else none
+
 /-- `read_reason` (module docstring): why `read` is not the start of the sample's coins using every coin opened; `none`
 when it is. -/
 def readReason (c : LiveCommitment) (segment : Json) (after read : ByteArray) (roots : Option (List ByteArray)) :
     Option String :=
   match challengerStream c segment after roots with
   | .error why => some why
-  | .ok stream =>
-    if stream.extract 0 read.size != read then some "the bytes the draw read are not its coins'"
-    else if (read.size + COIN_BYTES - 1) / COIN_BYTES != stream.size / COIN_BYTES then
-      some s!"the draw read {read.size} bytes of {stream.size / COIN_BYTES} coins: a coin opened and not read"
-    else none
+  | .ok stream => startReason stream read
 
 def WITHHELD : String :=
   "the session the auditor's ledger opens on the window does not withhold its coin commitment until it closes " ++
@@ -109,24 +98,6 @@ def withheldOn (ledger : Json) (window : String) : Bool :=
         e.kind == "open" && (match getD (getD e.body "window") "root" with | .str r => r == window | _ => false)
     | _ => []
   !opens.isEmpty && opens.all fun e => match getD e.body "withheld" with | .bool true => true | _ => false
-
-/-- `coins_reason` (module docstring): why `coins`, the evidence of a sample's coins, does not show `read` to be the coins
-of the verifier's family `label` that the session the auditor's ledger opens for window `window` (its open root)
-released after `after`; `none` when it does. The session must be a withheld one (`withheldOn`), as `drawCoins`'s, and
-the segment of family `label`, as `drawCoins`'s. -/
-def coinsReason (coins : Json) (window label : String) (after read : ByteArray) : Option String :=
-  if keys? coins != some #["key", "ledger", "main", "pins", "segment", "session"] then some COINS_FORM else
-  let trusted : V (LiveCommitment × Roots) := do
-    trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])
-      (← ChallengerKey.ofJson (getD coins "key")) (getD coins "pins") (getD coins "main") (getD coins "session")
-  match trusted with
-  | .error why => some why
-  | .ok (c, roots) =>
-    if !withheldOn (getD coins "ledger") window then some WITHHELD else
-    let segment := getD coins "segment"
-    if !jsonStrIs (getD segment "label") label then
-      some s!"the draw's coins are not the challenger's {label} family's"
-    else readReason c segment after read (some (((roots.find? (·.1 == label)).map (·.2)).getD []))
 
 /-- The most refused hellos a session's evidence holds. -/
 def MAX_HELLOS : Nat := 2 ^ 20
@@ -201,16 +172,6 @@ def readPiece (j : Json) : V Json := do
     | _ => throw "roots is not a list"
   pure <| refusing do
     return reasonJson (readReason (← LiveCommitment.ofJson (getD j "commitment")) (getD j "segment") after read roots)
-
-/-- `{"after", "coins", "label", "read", "window"}` to `coins_reason`'s, `window` the window's open root and `label` the
-verifier's family. -/
-def drawCoinsPiece (j : Json) : V Json := do
-  request j #["after", "coins", "label", "read", "window"]
-  let after ← lowerHex (getD j "after") "after"
-  let read ← lowerHex (getD j "read") "read"
-  let .str window := getD j "window" | throw "window is not a string"
-  let .str label := getD j "label" | throw "label is not a string"
-  return reasonJson (coinsReason (getD j "coins") window label after read)
 
 /-- `{"coins", "limits"}` to `coins_within`'s, `limits` `{hellos, ledger, log, openings, path, pins}` or null for
 `LIMITS`: the limits read and the refusal past them. -/
