@@ -3,7 +3,7 @@ module
 public import Flock.Zk
 public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Soundness.Discharge.Hidden.CanonOk
-public import Proofs.Flock.Soundness.Discharge.Hidden.EmptyDraw
+public import Proofs.Flock.Soundness.Discharge.Hidden.EmptySample
 public import Proofs.Flock.Soundness.Discharge.Hidden.OkWith
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
 public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
@@ -25,7 +25,7 @@ check reads only what siblings share (`shapeOk_sibling`).
 
 The proof walks the first setup with `walk_step` and builds the second with `ok_step` (`OkWith.lean`). The steps that
 read the public file are carried one by one: the load and its checks (`loadPublic_in`, `checkOwn_noPorts`), the sample
-(`drawn_okWith`), the roots (`checkPublic_drawn`), the unit indices of no unit (`drawn_units`), linking over no reader
+(`sampled_okWith`), the roots (`checkPublic_sampled`), the unit indices of no unit (`units_noUnit`), linking over no reader
 (`links_noUnit`), the regions of no unit (`regions_noUnit`) and the hello (`helloOf_isOk`).
 -/
 
@@ -111,17 +111,17 @@ theorem canonUtf8_unitsEntry (c : Circuit) (indices : Array Nat) :
 
 /-- The header of a sample over the population `pop`: the population's with the sample, its count of proved units,
 the population's size and the proved units' indices. -/
-def drawnHeader (c : Circuit) (pop : Public) (d : Json) (k : Nat) (indices : Array Nat) : Json :=
+def sampledHeader (c : Circuit) (pop : Public) (d : Json) (k : Nat) (indices : Array Nat) : Json :=
   ((pop.header.setObjVal! "unit_draw" d).setObjVal! "instances" (Lean.toJson k)
     |>.setObjVal! "population" (Lean.toJson pop.n)).setObjVal! "units" (HmRow.unitsEntry c indices)
 
 /-- `canonUtf8` prints a sample's header when it prints the population's and the sample. -/
-theorem canonUtf8_drawnHeader {c : Circuit} {pop : Public} {d : Json} {k : Nat} {indices : Array Nat}
+theorem canonUtf8_sampledHeader {c : Circuit} {pop : Public} {d : Json} {k : Nat} {indices : Array Nat}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
     (hh : (canonUtf8 pop.header).isOk = true) (hd : (canonUtf8 d).isOk = true) :
-    (canonUtf8 (drawnHeader c pop d k indices)).isOk = true := by
+    (canonUtf8 (sampledHeader c pop d k indices)).isOk = true := by
   rw [hp] at hh
-  unfold drawnHeader
+  unfold sampledHeader
   rw [hp]
   exact canonUtf8_insert hm.insert.insert.insert (canonUtf8_insert hm.insert.insert (canonUtf8_insert hm.insert
     (canonUtf8_insert hm hh hd) (canonUtf8_nat _)) (canonUtf8_nat _)) (canonUtf8_unitsEntry _ _)
@@ -131,20 +131,20 @@ set_option maxHeartbeats 2000000 in
 /-- **A sample over a loaded public file returns**, with the header, count, population and tables `HmRow.drawn`
 gives it: the sample decodes at the population's size, the header's unit indices were read, and `canonUtf8` prints the
 header and the sample. -/
-theorem drawn_okWith {c : Circuit} {pop : Public} {d : Json} {D : Draw.UnitDraw} {u : Json} {a : Array Json}
+theorem sampled_okWith {c : Circuit} {pop : Public} {d : Json} {D : Draw.UnitDraw} {u : Json} {a : Array Json}
     {idx : Array Nat} {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hn : D.population = pop.n) (hpn : pop.population = none)
     (hu : J.get pop.header "units" "public file" = .ok u) (ha : J.arr u "indices" "public file" = .ok a)
     (hi : a.mapM (fun x => J.asNat x "a unit index") = .ok idx)
     (hh : (canonUtf8 pop.header).isOk = true) (hd : (canonUtf8 d).isOk = true) :
     OkWith (HmRow.drawn c pop d) fun pub =>
-      pub.header = drawnHeader c pop d D.proved.size (D.proved.map fun u => idx.getD u 0) ∧ pub.n = D.proved.size ∧
+      pub.header = sampledHeader c pop d D.proved.size (D.proved.map fun u => idx.getD u 0) ∧ pub.n = D.proved.size ∧
       pub.population = some (pop.n, pop.digests, pop.outputs) ∧
       pub.tables = pop.tables.map (fun t => { t with refs := (D.proved.foldl
         (fun acc u => acc ++ t.refs.extract (u * c.ports.size) (u * c.ports.size + c.ports.size)) #[]) }) := by
   have hc : ¬(D.population != pop.n || pop.population.isSome) = true := by
     simp only [hn, bne_self_eq_false, hpn, Option.isSome_none, Bool.or_self, Bool.false_eq_true, not_false_eq_true]
-  have hcan := canonUtf8_drawnHeader (c := c) (k := D.proved.size) (indices := D.proved.map fun u => idx.getD u 0)
+  have hcan := canonUtf8_sampledHeader (c := c) (k := D.proved.size) (indices := D.proved.map fun u => idx.getD u 0)
     hm hp hh hd
   unfold HmRow.drawn
   dsimp only
@@ -165,13 +165,13 @@ theorem getObjVal?_obj (m : Std.TreeMap.Raw String Json compare) (k : String) :
   rfl
 
 /-- The fields `HmRow.drawn` sets in a sample's header, and `frame_v3`, which it keeps. -/
-theorem drawnHeader_reads {c : Circuit} {pop : Public} {d : Json} {k : Nat} {indices : Array Nat}
+theorem sampledHeader_reads {c : Circuit} {pop : Public} {d : Json} {k : Nat} {indices : Array Nat}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m) :
-    (drawnHeader c pop d k indices).getObjVal? "units" = .ok (HmRow.unitsEntry c indices) ∧
-    (drawnHeader c pop d k indices).getObjVal? "instances" = .ok (Lean.toJson k) ∧
-    (drawnHeader c pop d k indices).getObjVal? "unit_draw" = .ok d ∧
-    (drawnHeader c pop d k indices).getObjVal? "frame_v3" = pop.header.getObjVal? "frame_v3" := by
-  unfold drawnHeader
+    (sampledHeader c pop d k indices).getObjVal? "units" = .ok (HmRow.unitsEntry c indices) ∧
+    (sampledHeader c pop d k indices).getObjVal? "instances" = .ok (Lean.toJson k) ∧
+    (sampledHeader c pop d k indices).getObjVal? "unit_draw" = .ok d ∧
+    (sampledHeader c pop d k indices).getObjVal? "frame_v3" = pop.header.getObjVal? "frame_v3" := by
+  unfold sampledHeader
   rw [hp]
   simp only [Json.setObjVal!, getObjVal?_obj, Std.TreeMap.Raw.getElem?_insert hm.insert.insert.insert,
     Std.TreeMap.Raw.getElem?_insert hm.insert.insert, Std.TreeMap.Raw.getElem?_insert hm.insert,
@@ -185,14 +185,14 @@ set_option maxHeartbeats 2000000 in
 /-- **`HmOut.checkPublic` on a sample over a loaded public file** is the check on the file: the sample keeps the
 header's `frame_v3`, the tables' counts and starts and the population the roots are over, and its count is the
 sample's. -/
-theorem checkPublic_drawn {c c' : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitDraw} {idx : Array Nat}
+theorem checkPublic_sampled {c c' : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitDraw} {idx : Array Nat}
     {r : Tables → Array Nat} {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hpn : pop.population = none) (hnd : J.has pop.header "unit_draw" = false)
-    (hh : pub.header = drawnHeader c' pop d D.proved.size idx) (hn : pub.n = D.proved.size)
+    (hh : pub.header = sampledHeader c' pop d D.proved.size idx) (hn : pub.n = D.proved.size)
     (hpop : pub.population = some (pop.n, pop.digests, pop.outputs))
     (ht : pub.tables = pop.tables.map fun t => { t with refs := r t })
     (h : HmOut.checkPublic c pop = .ok ()) : HmOut.checkPublic c pub = .ok () := by
-  obtain ⟨-, hI, hud, hfv⟩ := drawnHeader_reads (c := c') (d := d) (k := D.proved.size) (indices := idx) hm hp
+  obtain ⟨-, hI, hud, hfv⟩ := sampledHeader_reads (c := c') (d := d) (k := D.proved.size) (indices := idx) hm hp
   rw [← hh] at hI hud hfv
   have hfr : pub.frameV3 = pop.frameV3 := by unfold Public.frameV3 J.get; rw [hfv]
   have hfb : ∀ k port, pub.fv3Bytes k port = pop.fv3Bytes k port := fun k port => by
@@ -287,7 +287,7 @@ theorem qwordFinding_congr {c : Circuit} {pub pub' : Public} {obj : Json} {prog 
 -- `walk_step` down `HmRow.drawn`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A sample that proves no unit has the header `units` of no index.** -/
-theorem drawn_units {c : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitDraw}
+theorem units_noUnit {c : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitDraw}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hpr : D.proved = #[]) (h : HmRow.drawn c pop d = .ok pub) :
     J.get pub.header "units" "public file" = .ok (HmRow.unitsEntry c #[]) := by
@@ -299,9 +299,9 @@ theorem drawn_units {c : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitDr
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     obtain rfl := Except.ok.inj (hD.symm.trans ‹Draw.UnitDraw.ofJson d = Except.ok _›)
-    have hr := (drawnHeader_reads (c := c) (d := d) (k := D.proved.size)
+    have hr := (sampledHeader_reads (c := c) (d := d) (k := D.proved.size)
       (indices := D.proved.map fun u => (‹Array Nat› : Array Nat).getD u 0) hm hp).1
-    unfold drawnHeader at hr
+    unfold sampledHeader at hr
     unfold J.get
     dsimp only
     rw [hr, hpr, Array.map_empty]
@@ -351,20 +351,20 @@ theorem sibling_core {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins} 
     have hn₁ : pub₁.n = 0 := hn₁
     have hpr₁ : D₁.proved = #[] := Array.eq_empty_of_size_eq_zero (hsz₁ ▸ hn₁)
     have hw₁ : ∀ w, J.get pub₁.header "units" "public file" = .ok w → HmRow.unitsEntry _ #[] = w := fun w hw =>
-      Except.ok.inj ((drawn_units hm₁ hp₁ hD₁ hpr₁ hdr₁).symm.trans hw)
+      Except.ok.inj ((units_noUnit hm₁ hp₁ hD₁ hpr₁ hdr₁).symm.trans hw)
     try obtain rfl := hw₁ _ ‹J.get pub₁.header "units" "public file" = Except.ok _›
-    have hu₁ := drawn_units hm₁ hp₁ hD₁ hpr₁ hdr₁
+    have hu₁ := units_noUnit hm₁ hp₁ hD₁ hpr₁ hdr₁
     have hl₂ := loadPublic_nil hpop
     obtain ⟨hpn, ⟨m, hp, hm⟩, ⟨u, a, idx, hu, ha, hi⟩, hnd, hh⟩ := loadPublic_reads hl₂
     have hpr₂ : (⟨.subset 0, pop.n, #[], #[]⟩ : Draw.UnitDraw).proved = #[] := rfl
     obtain ⟨pub₂, hdr₂, hh₂, hn₂, hpop₂, ht₂⟩ :=
-      drawn_okWith (c := { c with outPorts := #[] }) hm hp hd₂ rfl hpn hu ha hi hh hcan
-    have hu₂ := drawn_units hm hp hd₂ hpr₂ hdr₂
-    have hcp₂ := checkPublic_drawn (c := c) hm hp hd₂ hpn hnd hh₂ hn₂ hpop₂ ht₂ hpub
+      sampled_okWith (c := { c with outPorts := #[] }) hm hp hd₂ rfl hpn hu ha hi hh hcan
+    have hu₂ := units_noUnit hm hp hd₂ hpr₂ hdr₂
+    have hcp₂ := checkPublic_sampled (c := c) hm hp hd₂ hpn hnd hh₂ hn₂ hpop₂ ht₂ hpub
     have hn₂ : pub₂.n = 0 := hn₂
     have hlp₂ := loadPublic_in (pi := pi) he hkey hpop
     have hown₂ := checkOwn_noPorts (pop := pop) he
-    have hdrawn₂ : HmIn.drawn c pi pop d₂ = .ok pub₂ := by rw [drawn_noPorts he]; exact hdr₂
+    have hsampled₂ : HmIn.drawn c pi pop d₂ = .ok pub₂ := by rw [drawn_noPorts he]; exact hdr₂
     obtain rfl := regions_noPorts he ‹HmIn.regions c pi pub₁ = Except.ok _›
     have hir₂ := inRegions_noPorts (c := c) (pub := pub₂) he
     have hro₂ := (regions_noUnit (c := c) hn₂ hn₁).trans ‹HmOut.regions c pub₁ = Except.ok _›
@@ -411,8 +411,8 @@ theorem setupHidden_sibling {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : 
   obtain ⟨st₂, h₂, hs⟩ := sibling_core (setupHidden_spec' h).parse h hn₁ hpop hkey hpub hd₂ hcan
   exact ⟨st₂, h₂, hs, shapeOk_sibling hs⟩
 
-/-- **A setup at the sample of no unit, carried to another public file's sample of no unit** (`emptyDraw`):
-`setupHidden_sibling` at the sample `flock-verify draw` prints for no unit of `pf₂`'s population. -/
+/-- **A setup at the sample of no unit, carried to another public file's sample of no unit** (`emptySample`):
+`setupHidden_sibling` at the sample the verifier's executable prints for no unit of `pf₂`'s population. -/
 theorem setupHidden_noUnit {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d₁ : Json} {partition : Option Json} {program : Option ByteArray}
     {st₁ : Stmt} {pop : Public}
@@ -420,8 +420,8 @@ theorem setupHidden_noUnit {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : C
     (hpop : HmOut.loadPublic tags st₁.c pf₂ = .ok pop)
     (hkey : (pop.header.getObjVal? "public_inputs").toOption = none)
     (hpub : HmOut.checkPublic st₁.c pop = .ok ()) :
-    ∃ st₂, Stmt.setupHidden tags cf pf₂ coins tables (some (emptyDraw pop.n)) partition program none = .ok st₂ ∧
+    ∃ st₂, Stmt.setupHidden tags cf pf₂ coins tables (some (emptySample pop.n)) partition program none = .ok st₂ ∧
       Stmt.Sibling st₁ st₂ ∧ Zk.shapeOk st₂ = Zk.shapeOk st₁ :=
-  setupHidden_sibling h hn₁ hpop hkey hpub (ofJson_emptyDraw pop.n) (canonUtf8_emptyDraw pop.n)
+  setupHidden_sibling h hn₁ hpop hkey hpub (ofJson_emptySample pop.n) (canonUtf8_emptySample pop.n)
 
 end FlockSoundness.Discharge.Hidden

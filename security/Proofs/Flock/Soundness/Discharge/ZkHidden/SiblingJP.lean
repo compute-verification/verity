@@ -59,7 +59,7 @@ theorem drawSetupZHJP_subsingleton {n : ℕ} (I' : Inputs) (own : Option ByteArr
 /-- **The reference setup of a statement with no session**: at one table, a setup `verify --zk` makes at a sample
 of no unit on the public file `pf₁` (`hst₁`, `hn₁`), under the statement's own tags, circuit file, coins, tables,
 partition and program, that passes the `--zk` shape check, gives the statement a `--zk` table at the sample of no unit
-(`Hidden.emptyDraw`) and `mPtsOf g 0` points, when the statement's public file loads for that setup's circuit, is held
+(`Hidden.emptySample`) and `mPtsOf g 0` points, when the statement's public file loads for that setup's circuit, is held
 to its roots (`HmOut.checkPublic`) and names no `public_inputs` in its header. -/
 theorem y₀_of_sibling (n : ℕ) {I : Inputs} {D : Flock.Desc} {pf₁ : ByteArray} {d₁ : Json} {st₁ : Flock.Stmt}
     {pop : Flock.Public} (hc1 : I.count = 1) (ht : I.tags.typed = false)
@@ -87,10 +87,10 @@ theorem y₀_of_sibling (n : ℕ) {I : Inputs} {D : Flock.Desc} {pf₁ : ByteArr
     rw [Nat.zero_div]
     exact setupHidden_mPts_of_proved (Flock.Desc.parse_flat hD)
       (fun D' hD' => by
-        obtain rfl := Except.ok.inj ((Hidden.ofJson_emptyDraw pop.n).symm.trans hD')
+        obtain rfl := Except.ok.inj ((Hidden.ofJson_emptySample pop.n).symm.trans hD')
         rfl) hst'
   obtain ⟨xx, hxx⟩ := drawSetupHP_of_setupHiddenI (I := inputsJ I 0) (own := none) (S := (∅ : Finset (Fin n)))
-    (typedJ ht 0) hst₂ hf (Hidden.ofJson_emptyDraw pop.n) (fun v hv => by simp at hv) hmPts
+    (typedJ ht 0) hst₂ hf (Hidden.ofJson_emptySample pop.n) (fun v hv => by simp at hv) hmPts
   obtain ⟨y, -, -, -⟩ := drawSetupZHJP_of xx (by rw [hxx]; exact hshape) (sch := sch) (tPad := tPad)
     (by rw [hxx]; exact hz)
   exact ⟨∅, _, ⟨y⟩⟩
