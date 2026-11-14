@@ -10,7 +10,8 @@ import Proofs.Flock.Soundness.Game
 
 `StrictCR.lean`'s finders over a leaf scheme `Lf`: the rewinding finders (`twoRuns`, `forkFinder`) and the self-clash
 finder (`oneRun`) run the salted prover, and every pair they count is two verifying salted openings of one position to
-different rows, a collision of `H` (`op₀L_conflict_collision`, `opRL_conflict_collision`, `SelfClashL.collision`). So:
+different rows, whose pair (`op₀LPair`, `opRLPair`, `selfCandsL`) the finder outputs: a collision of `H`
+(`op₀L_conflict_collision`, `opRL_conflict_collision`, `selfCandsL_spec`). So:
 
 * `table_sound_compiled_strictL`: the salted compiled theorem at its finders' budgets;
 * `ksBoundAccB_le_strictL`: a salted table's knowledge bound in a session is at most `StrictCR.ksStrict`;
@@ -36,31 +37,33 @@ section Compiled
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 
-/-- **`Adv₀`'s finder**: two continuations after the prover's level-0 cap, and a level-0 position they open to different
-rows. -/
+/-- **`Adv₀`'s finder**: two continuations after the prover's level-0 cap, and the pair of their openings at the first
+level-0 position they open to different rows. -/
 noncomputable def adv₀FinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableCL A H E Lf S sch hm ptLocal mPts)) :
     Finder Pair :=
   twoRuns (tableCmpL A H E Lf S sch hm ptLocal mPts σ.1) σ.2
-    (conflictPick H (op₀L H E Lf sch σ.1) fun _ _ h => op₀L_conflict_collision h)
+    (conflictPick (op₀L H E Lf sch σ.1) (op₀LPair H E Lf sch σ.1))
 
-/-- **`Adv_{r,ℓ}`'s finder**: along the run, at rep `r`'s level-`ℓ` cap, two continuations, and a level-`ℓ` position
-they open to different rows. -/
+/-- **`Adv_{r,ℓ}`'s finder**: along the run, at rep `r`'s level-`ℓ` cap, two continuations, and the pair of their
+openings at the first level-`ℓ` position they open to different rows. -/
 noncomputable def advRFinderL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
     (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) : Finder Pair :=
   forkFinder (plurCL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (slotOf r ℓ)
-    (fun d => conflictPick H (opRL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d) fun _ _ h => opRL_conflict_collision h)
+    (fun d => conflictPick (opRL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d)
+      (opRLPair H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d))
     none
     (lockTableL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts
       (C0starL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) σ.1) σ.2
 
-/-- **The self-clash finder**: one run, and a position it opens two ways. -/
+/-- **The self-clash finder**: one run, and the pair of the first two of its openings that open a position two
+ways (`selfCandsL`). -/
 noncomputable def selfFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableCL A H E Lf S sch hm ptLocal mPts)) :
     Finder Pair :=
-  oneRun (tableCL A H E Lf S sch hm ptLocal mPts) σ (onePick H (SelfClashL H E Lf sch) fun _ h => h.collision)
+  oneRun (tableCL A H E Lf S sch hm ptLocal mPts) σ (onePick (selfCandsL H E Lf sch))
 
 /-- **`SHA512CRStrict` for the compiled theorem's finders**: the rewinding finders at budget `qF`, the self-clash finder at
 budget `qS`. -/
@@ -79,7 +82,7 @@ theorem adv₀_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc
     {q : ℝ} (h : (adv₀FinderL A H E Lf S sch hm ptLocal mPts σ).CR H q) :
     adv₀L A H E Lf S sch hm ptLocal mPts σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (expect₂_conflict_le H (tableCmpL A H E Lf S sch hm ptLocal mPts σ.1) σ.2 (op₀L H E Lf sch σ.1)
-    fun _ _ h => op₀L_conflict_collision h).trans h.le
+    (op₀LPair H E Lf sch σ.1) fun _ _ h => op₀L_conflict_collision h).trans h.le
 
 theorem advR_le_strictL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
@@ -88,7 +91,8 @@ theorem advR_le_strictL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List U
     (h : (advRFinderL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts r ℓ σ).CR H q) :
     advRL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts r ℓ σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (forkE_conflict_le H (plurCL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (slotOf r ℓ)
-    (opRL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ) (fun _ _ _ h => opRL_conflict_collision h)
+    (opRL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ) (opRLPair H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ)
+    (fun _ _ _ h => opRL_conflict_collision h)
     (lockTableL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts
       (C0starL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) σ.1) σ.2).trans h.le
 
@@ -97,7 +101,8 @@ theorem self_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableCL A H E Lf S sch hm ptLocal mPts))
     {q : ℝ} (h : (selfFinderL A H E Lf S sch hm ptLocal mPts σ).CR H q) :
     expect (ind (SelfClashL H E Lf sch)) (tableCL A H E Lf S sch hm ptLocal mPts) σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
-  (expect_one_le H _ σ (SelfClashL H E Lf sch) fun _ h => h.collision).trans h.le
+  (expect_one_le H _ σ (SelfClashL H E Lf sch) (selfCandsL H E Lf sch) (fun _ h => h.cand)
+    fun _ _ hc h => selfCandsL_spec hc h).trans h.le
 
 /-- **The compiled theorem under `SHA512CRStrict`** (`table_sound_compiledL` at its finders). If the rewinding finders
 each satisfy `SHA512CRStrict` at budget `qF` and the self-clash finder at `qS`, a compiled run accepts while the table
@@ -139,34 +144,35 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
   [Inhabited D] [Inhabited Sl] {mPts : ℕ}
 
 /-- **`Adv_{r,ℓ}`'s finder in a session**: along the session, at the table's rep `r`'s level-`ℓ` cap, two continuations,
-and a level-`ℓ` position they open to different rows. -/
+and the pair of their openings at the first level-`ℓ` position they open to different rows. -/
 noncomputable def advRSFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D) (r ℓ : ℕ)
     (σ : Strategy (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀)) :
     Finder Pair :=
   forkFinder (plurSL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length) (slotOf r ℓ)
-    (fun d => conflictPick H
+    (fun d => conflictPick
       (fun outs : List (OutCL F D Sl) => opRL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d (outs.getD pre.length dfltOutL))
-      fun x _ h => opRL_conflict_collision (x := (x.1.getD pre.length dfltOutL, x.2.getD pre.length dfltOutL)) h)
+      fun x p => opRLPair H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d
+        (x.1.getD pre.length dfltOutL, x.2.getD pre.length dfltOutL) p)
     none (lockSessL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post default cap₀) σ
 
-/-- **`Adv₀`'s finder in a session**: two runs after `Commit`, and a level-0 position of the table they open to different
-rows. -/
+/-- **`Adv₀`'s finder in a session**: two runs after `Commit`, and the pair of their openings at the first level-0
+position of the table they open to different rows. -/
 noncomputable def adv₀SFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl)))
     (cap₀ : Cap D) (σ : Strategy (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀)) : Finder Pair :=
   twoRuns (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀) σ
-    (conflictPick H (fun outs : List (OutCL F D Sl) => op₀L H E Lf sch cap₀ (outs.getD pre.length dfltOutL))
-      fun x _ h => op₀L_conflict_collision (x := (x.1.getD pre.length dfltOutL, x.2.getD pre.length dfltOutL)) h)
+    (conflictPick (fun outs : List (OutCL F D Sl) => op₀L H E Lf sch cap₀ (outs.getD pre.length dfltOutL))
+      fun x p => op₀LPair H E Lf sch cap₀ (x.1.getD pre.length dfltOutL, x.2.getD pre.length dfltOutL) p)
 
-/-- **The self-clash finder in a session**: one run after `Commit`, and a position of the table it opens two ways. -/
+/-- **The self-clash finder in a session**: one run after `Commit`, and the pair of the first two of the table's
+openings that open a position two ways. -/
 noncomputable def selfSFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl)))
     (cap₀ : Cap D) (σ : Strategy (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀)) : Finder Pair :=
   oneRun (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀) σ
-    (onePick H (fun outs : List (OutCL F D Sl) => SelfClashL H E Lf sch (outs.getD pre.length dfltOutL))
-      fun _ h => h.collision)
+    (onePick fun outs : List (OutCL F D Sl) => selfCandsL H E Lf sch (outs.getD pre.length dfltOutL))
 
 /-- **`SHA512CRStrict` for a table's finders in a session**: the rewinding finders at budget `qF`, the self-clash finder
 at budget `qS`. It is a conjunction of `StrictCR.Finder.CR`s, each `Assumptions.SHA512CRStrict` (`cr/sha-512`) at one
@@ -189,6 +195,8 @@ theorem advRS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     advRSL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post cap₀ r ℓ σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (forkE_conflict_le H (plurSL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length) (slotOf r ℓ)
     (fun d (outs : List (OutCL F D Sl)) => opRL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d (outs.getD pre.length dfltOutL))
+    (fun d x p => opRLPair H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d
+      (x.1.getD pre.length dfltOutL, x.2.getD pre.length dfltOutL) p)
     (fun _ x _ h => opRL_conflict_collision (x := (x.1.getD pre.length dfltOutL, x.2.getD pre.length dfltOutL)) h)
     (lockSessL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post default cap₀) σ).trans h.le
 
@@ -200,6 +208,7 @@ theorem adv₀S_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.En
     adv₀SL A H E Lf S sch hm ptLocal mPts pre post cap₀ σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (expect₂_conflict_le H (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀) σ
     (fun outs : List (OutCL F D Sl) => op₀L H E Lf sch cap₀ (outs.getD pre.length dfltOutL))
+    (fun x p => op₀LPair H E Lf sch cap₀ (x.1.getD pre.length dfltOutL, x.2.getD pre.length dfltOutL) p)
     fun x _ h => op₀L_conflict_collision (x := (x.1.getD pre.length dfltOutL, x.2.getD pre.length dfltOutL)) h).trans
     h.le
 
@@ -211,7 +220,8 @@ theorem selfS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     expect (ind fun outs : List (OutCL F D Sl) => SelfClashL H E Lf sch (outs.getD pre.length dfltOutL))
       (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀) σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (expect_one_le H _ σ (fun outs : List (OutCL F D Sl) => SelfClashL H E Lf sch (outs.getD pre.length dfltOutL))
-    fun _ h => h.collision).trans h.le
+    (fun outs : List (OutCL F D Sl) => selfCandsL H E Lf sch (outs.getD pre.length dfltOutL)) (fun _ h => h.cand)
+    fun _ _ hc h => selfCandsL_spec hc h).trans h.le
 
 /-- **`ε_c⁻` in the session under `SHA512CRStrict`.** -/
 theorem epsS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)

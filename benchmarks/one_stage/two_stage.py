@@ -330,9 +330,9 @@ def place(layout: BR.Layout, blocks: bool = False) -> int:
 
 def family_of(layout: BR.Layout, blocks: bool = False) -> str:
     """The family of its window's session that a class's sample reads its challenges from (``blocks``: its stop
-    blocks' sample): its place's (`window_place.family`), ``draw/<place>``, the family `a5_coins.family` gives the
-    rank of that number. The first stage reserves it and samples from it, and whoever reads the sample again names it
-    from the class's layout, never from a file the prover wrote."""
+    blocks' sample): its place's (`window_place.family`), the prefix `window_place.FAMILY` and the place, the family
+    `a5_coins.family` gives the rank of that number. The first stage reserves it and samples from it, and whoever
+    reads the sample again names it from the class's layout, never from a file the prover wrote."""
     return WP.family(place_window(layout, blocks))
 
 
@@ -1029,8 +1029,8 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequenc
     """The stream's outcome of the second stage's sample: the sessions delivered (`Stream.deliver`), then
     `Stream.outcome` on what the interior's audit record took (``handed``, a5's), each verdict of record naming the
     sessions, with both stages' coin evidence, the sessions' ``statements`` and the params ``proofs``: accepted, the
-    checks each stage's audit record failed (each record taking the sessions' reads of its registration's own ports,
-    `verifier.audit_record`'s ``own_reads``), the codes of round 2's check in the interior's (``statements``), and
+    checks each stage's audit record failed (each record taking the sessions' reads of its registration's own ports at
+    their own roots, `audit.less_own_reads`), the codes of round 2's check in the interior's (``statements``), and
     whether the outcome is complete (`second_stage.complete`): the two-stage form allowed, the replay block the
     registered request Definition (`REQUEST_DEFINITION`) and both audit records accepted and complete, so never
     here. A reader that wants a complete audit of the boundary stream reads that, never ``accepted`` alone."""

@@ -49,11 +49,11 @@ from verity_vllm.engine import int8_experts as X
 from verity_vllm.engine import int8_ops
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import commit as CT
-from verity_vllm.protocols.pouw.h1 import hooks as PHK
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+from verity_vllm.protocols.pouw import h1_hooks as PHK
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 K, ROWS, STEPS = 64, 32, 2
 ENTRY = f"pouw:{PH.SCHEME}"

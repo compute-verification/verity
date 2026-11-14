@@ -31,7 +31,7 @@ for t in "$IN"/src-*.tar; do
 done
 
 build() {
-  local tag=$1 arch=$2 src="$WORK/$1/benchmarks/pouw/edited_gemm/apv.cu" o="$OUT/$1/$2" c="$WORK/$1-$2"
+  local tag=$1 arch=$2 src="$WORK/$1/verity/protocols/accounting/pouw/prover/kernels/edited_gemm/apv.cu" o="$OUT/$1/$2" c="$WORK/$1-$2"
   mkdir -p "$o"
   local flags=(-O3 -std=c++17 --no-compress -gencode "arch=compute_${arch#sm_},code=$arch" -cubin)
   "$NVCC" "${flags[@]}" -lineinfo -Xptxas -v -o "$c.cubin" "$src" >"$o/build.log" 2>&1 || {

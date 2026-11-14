@@ -24,7 +24,7 @@ its round (`value_inj`, `rounds_inj`).
 namespace MemoryChallenger.Properties.SecurityProofs.Inputs
 
 open MemoryChallenger Flock
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size ofBytes ofBytes_be)
+open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size ofBytes ofBytes_be)
 
 theorem beN_ok {n x : Nat} {w : String} {b : ByteArray} (h : beN n x w = .ok b) :
     x < 2 ^ (8 * n) ∧ bs b = (List.range n).map fun i => (x >>> (8 * (n - 1 - i))).toUInt8 := by

@@ -831,6 +831,35 @@ private def exRowsPer (per : Nat) : Array Rows :=
 -- a key the block computes, a wire, is refused, and the reason says so
 #guard inputsFailure exOpeningWired == some "row"
 #guard inputsWhy exOpeningWired "row" == KEY_WHY && inputsWhy exOpeningUnkeyed "row" == INPUTS_WHY
+
+/-- `exOpeningWired` with the wired key's switch on: each unit's key its writer's unit 2 of 3, a row of the key's
+words. -/
+private def exKeyed : Own :=
+  { exOpeningWired with
+    wiredKey := true
+    rows := exTableRows.push ⟨exRead, "tok", 3, #[⟨0, 1, 2, 0⟩]⟩
+    widths := #[⟨exRead, "tok", 2, 2⟩] }
+
+-- the build of record holds the switch off, whatever else the run holds
+#guard !WIRED_KEY && !exOpeningWired.wiredKey && !({ exKeyed with wiredKey := WIRED_KEY } : Own).wiredKey
+#guard inputsFailure { exKeyed with wiredKey := false } == some "row"
+#guard inputsWhy { exKeyed with wiredKey := false } "row" == KEY_WHY
+-- with it on, a key one wire fills whole is taken
+#guard inputsFailure exKeyed == none && keyFailure exKeyed exRead == none
+-- and each other wired key is refused with its own reason
+#guard inputsFailure { exKeyed with wires := exKeyed.wires.map (·.push ⟨exRead, "tok", "Pair_v0", "o1"⟩) } ==
+  some "row"
+#guard inputsWhy { exKeyed with wires := exKeyed.wires.map (·.push ⟨exRead, "tok", "Pair_v0", "o1"⟩) } "row" ==
+  KEY_WIRES_WHY
+#guard inputsFailure { exKeyed with links := exOpeningLinked.links } == some "row"
+#guard inputsWhy { exKeyed with links := exOpeningLinked.links } "row" == KEY_LINKED_WHY
+#guard inputsWhy { exKeyed with widths := #[⟨exRead, "tok", 2, 4⟩] } "row" == KEY_WIDTH_WHY
+#guard inputsWhy { exKeyed with widths := #[] } "row" == KEY_WIDTH_WHY
+#guard inputsWhy { exKeyed with parts := some #[⟨exRead, 0, 1⟩, ⟨"Pair_v0", 1, 3⟩] } "row" == KEY_ORDER_WHY
+#guard inputsWhy { exKeyed with rows := exTableRows.push ⟨exRead, "tok", 3, #[⟨0, 1, 3, 0⟩]⟩ } "row" ==
+  KEY_BOUNDS_WHY
+#guard inputsWhy { exKeyed with rows := exTableRows } "row" == KEY_BOUNDS_WHY
+#guard inputsWhy { exKeyed with parts := some #[⟨"Pair_v0", 0, 2⟩] } "row" == KEY_BOUNDS_WHY
 -- the root and the domain are one table's of round 1's record, row by row and by their bytes
 #guard bytesOf #[("bytes", "0a")] == some "0a" && bytesOf #[("port", "0a")] == none
 #guard bytesOf #[("bytes", "0a"), ("bytes", "0a")] == none && bytesOf #[] == none

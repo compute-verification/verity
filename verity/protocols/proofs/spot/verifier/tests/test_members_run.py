@@ -340,8 +340,8 @@ def test_a_members_slice_outside_the_run_is_the_runs_own():
 
 
 def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
-    """Parameters or evidence the per-member parsers refuse, a program other than the parameters', and a registered
-    file whose port is no registered port's."""
+    """Parameters or evidence the per-member parsers refuse, a program other than the parameters', a registered
+    file whose port is no registered port's, and parameters naming the members' wiring."""
     w = Window(tmp_path)
     ms = w.params["proofs"]["members"]
     for params, evidence in ((w.params | {"proofs": {"circuit": "", "public": "", "registered": None}}, None),
@@ -354,3 +354,5 @@ def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
         w.run(program=P.population_program(PAIR, 5))
     with pytest.raises(M.Outside, match="registered port"):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"registered": {"ports": {"p": {}}}}, B: ms[B]}}})
+    with pytest.raises(M.Outside, match="wiring"):
+        w.run(params=w.params | {"proofs": {"members": ms, "wiring": {"templates": {}, "cuts": {}, "wires": []}}})

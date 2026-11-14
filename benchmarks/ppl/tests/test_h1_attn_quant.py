@@ -1,6 +1,6 @@
 """H1's attention quantizers (co32c-u16) are bit-exact against steps.int8_attention's dither arm.
 
-The GPU gates (benchmarks/pouw/edited_gemm/fattn.cu, apv.cu) tie the device's QK^T keys and queries and P.V's V to the
+The GPU gates (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn.cu, apv.cu) tie the device's QK^T keys and queries and P.V's V to the
 CPU references (fattn_ref.py, apv_ref.py); this test ties the numpy floor-quant formula those mirror to steps.floor_quant,
 the function int8_attention calls, so the served X equals steps' H1 attention arm. The H1 arm floors Q and K per
 (head, token) at top 111 and V per (KV head, channel) at top 127, each with one bit (dither_shift(1) = 0, added on the

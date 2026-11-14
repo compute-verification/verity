@@ -69,10 +69,10 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_class import Tables, WindowClass
 from verity_vllm.pipeline import serve_tie as TIE
-from verity_vllm.protocols.pouw.h1 import commit as CT
-from verity_vllm.protocols.pouw.h1 import registered as NR
-from verity_vllm.protocols.pouw.h1 import served as SV
-from verity_vllm.protocols.pouw.h1.words import chunk_words, ids_words
+from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving.h1.words import chunk_words, ids_words
 
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, registration as REG
