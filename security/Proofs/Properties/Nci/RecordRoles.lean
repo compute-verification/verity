@@ -240,7 +240,7 @@ theorem rolesOf_spec {P : Prog} {ts : List Tmpl} {pin : String → Option String
     rw [hrr, hl] at hs
     dsimp only at hs
     by_cases hc : (rd.port != if rd.root then l.root else l.domain) = true
-    · rw [if_pos hc] at hs
+    · rw [ite_eq_left hc] at hs
       cases hs
     · simpa using hc
 
@@ -351,7 +351,7 @@ theorem heldAt_opened {f : Front} {pin : String → Option String} {c : Case} (h
     rw [hf]
     simp only [Inputs.declares, ht', Option.map_some]
     simp only [paramOf] at hth
-    rw [if_pos hth]
+    rw [ite_eq_left hth]
   exact ⟨hpin, t, l, ht, hl, (hops o (List.mem_of_getElem? ho) hor).2.1 ▸ hport, key true hc1 _ rfl,
     key false hc2 _ rfl⟩
 
