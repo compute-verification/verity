@@ -125,6 +125,7 @@
   "Proofs.Properties.Verity.Sampled.Record.Reg",
   "Proofs.Flock.Claims.Sampling.Select.Prefix",
   "Proofs.Properties.Verity.Sampled.OpensAt",
+  "Proofs.Properties.Verity.Sampled.LiveDevice",
   "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Verity.Sampled.Members",
   "Proofs.Properties.Verity.Sampled.Window.Members",
