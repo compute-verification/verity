@@ -13,7 +13,7 @@ For each program (A4 P6's six-template population, as core's sample test builds 
 - on a small program, each unit's inclusion frequency over samples on fresh streams from the operating system against
   `k_s / n_s`; given no stream, Lean samples only a sampling design of every unit and refuses any other (the verifier has no coins of
   its own);
-- A4's law as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
+- A4's sampling design as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
 
 Needs core's stratified sample on PYTHONPATH (the repository root). Prints one JSON line; exit 0 iff
 everything agrees.

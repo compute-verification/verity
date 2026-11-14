@@ -379,7 +379,7 @@ def test_a_schedule_of_another_form_is_refused(lean_runs):
     `Flock.Firewall.Schedule.canonical`), is refused by the proxy, `flock-firewall` and its live mode before any request:
     v0's rounds, whose ``caps`` count level 0's copies as tops, a round without ``level0``, v0's kind, a round with another
     key, a round its stream does not number next, a stream with a round count not its rounds' or with none, and a Hello
-    naming coins or with a number that is not a natural or a string holding a ``"``. Lean's firewall, which holds no
+    naming coins or with a number that is not a natural or a string holding a ``"``. Lean's ZK server, which holds no
     registered top, also refuses a stream whose table has no root."""
     bad = _bad_schedules()
     rootless = {**SCHEDULE, "roots": {}}

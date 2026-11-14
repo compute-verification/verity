@@ -2,8 +2,8 @@
 session (the fetched fixture `hidden-outputs/flat/gemm-coordinate`: m = 25, k_log = 22, 8 claims). The reference's residuals
 are zero on both reps and its intermediates are the Lean verifier's (`fixtures/inner_claims.json`, which
 `tests/lean/InnerClaims.lean` dumps); the circuit's structure, verifier rows and witness give the reference's residuals,
-honest and with a message changed, through `GfResiduals`'s reference and through the IR evaluator; and a changed message
-moves a residual off zero exactly when the Lean verifier rejects the session, for the check that rejects it. And
+honest and with a message changed, through `GfResiduals`'s reference and through the circuits' reference evaluator; and a changed
+message moves a residual off zero exactly when the Lean verifier rejects the session, for the check that rejects it. And
 `Gf128Mul_v1` lowers to the rows rec-lean's Karatsuba lemma is about (`Recursion/Karatsuba.lean`).
 
 The set is a fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs, so a missing set
@@ -289,8 +289,8 @@ def _val(bs) -> int:
 
 
 def test_the_lincheck_through_the_ir_evaluator(ports):
-    """The lincheck's residual alone (98 products, 1.5M gates) on the IR evaluator: zero on the honest rep, the reference's
-    value on a changed z_partial."""
+    """The lincheck's residual alone (98 products, 1.5M gates) on the circuits' reference evaluator: zero on the honest rep, the
+    reference's value on a changed z_partial."""
     S, lay, V, W = ports
     sub = dict(S, res=[S["res"][1]])
     W2 = list(W)
@@ -301,9 +301,10 @@ def test_the_lincheck_through_the_ir_evaluator(ports):
 
 @pytest.mark.slow
 def test_every_check_through_the_ir_evaluator(session):
-    """The algebra whole (2,704 products) on the IR evaluator, both reps: zero on the honest witness, and on a changed message
-    the residuals the reference gives. It catches a fault in a residual the lincheck test does not build (the zerocheck's
-    product of messages, the transposed ring-switch blocks, Ligerito's K-valued check and its running sums); about 20 s."""
+    """The algebra whole (2,704 products) on the circuits' reference evaluator, both reps: zero on the honest witness, and on a
+    changed message the residuals the reference gives. It catches a fault in a residual the lincheck test does not build (the
+    zerocheck's product of messages, the transposed ring-switch blocks, Ligerito's K-valued check and its running sums);
+    about 20 s."""
     _, reps = session
     for rep in reps:
         S, lay, V, W = _ports(rep, seed=1)
