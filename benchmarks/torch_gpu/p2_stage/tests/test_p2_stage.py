@@ -25,8 +25,8 @@ import gemm as G  # noqa: E402
 import stage as S  # noqa: E402
 
 ROOT = HERE.parents[2]
-VECTORS = json.loads((ROOT / "benchmarks/pous/p2_v1/vectors.json").read_text())
-TOY = ROOT / "benchmarks/pous/p2_v1/store-toy"
+VECTORS = json.loads((ROOT / "verity/protocols/accounting/pous/verifier/p2_v1/vectors.json").read_text())
+TOY = ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/store-toy"
 PREFIX = L.registered_prefix(bytes(range(24)))
 # what a weights manifest written here names its weights, and a setup.json written here its store's
 NAME = "p2-stage-tests/weights"
@@ -131,7 +131,7 @@ def test_store_layout_reads_the_toy_doc_and_refuses_other_layouts() -> None:
         L.store_layout(doc, PREFIX[:-1])
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/accounting/pous/prover/p2/p2_store/store-toy) isn't here")
 def test_layout_doc_is_the_toys() -> None:
     toy = json.loads((TOY / "toy.json").read_text())["layout"]
     assert layout_doc(model(64, 2, 1, 64), per_segment=11) == {k: toy[k] for k in layout_doc([]).keys()}
@@ -266,7 +266,7 @@ def test_bf16_rn_is_round_to_nearest_even() -> None:
 
 
 class RefKernels:
-    """P2's reference (`reference.decode` under `reference.keys_after`) behind `p2_v1.gpu.Kernels`'s interface, on the
+    """P2's reference (`reference.decode` under `reference.keys_after`) behind `p2_store.gpu.Kernels`'s interface, on the
     CPU. A row at or above p decodes to zeros, so refusing it is left to the store's load's own screen."""
 
     def __init__(self, lib_dir: str, build_dir: str, params: L.R.Params, prefix: bytes) -> None:
@@ -286,7 +286,7 @@ class RefKernels:
         return 0
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/accounting/pous/prover/p2/p2_store/store-toy) isn't here")
 def test_toy_store_stages_as_the_fixture_says(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The toy's C* through `decode_layer` under P2's reference: each layer's load buffer by its digest, each negative
     block refused with its flag bit, another salt refused, and the spot vectors at the real store's indices."""
@@ -302,7 +302,7 @@ def test_toy_store_stages_as_the_fixture_says(tmp_path: Path, monkeypatch: pytes
 
 
 class XorKernels:
-    """A stand-in for `p2_v1.gpu.Kernels` on the CPU, its own inverse: block j's payload XOR a keystream of (prefix, j),
+    """A stand-in for `p2_store.gpu.Kernels` on the CPU, its own inverse: block j's payload XOR a keystream of (prefix, j),
     its two lead bytes XOR a hash of (prefix, j, the row's payload before and after), so a corrupt row or other keys
     decode wider than the payload, as P2's do. The driver's plumbing (store, scatter, screen, load, GEMM check) runs
     without the GPU library. Not P2."""
@@ -407,7 +407,7 @@ def test_layer_driver_stages_and_checks_on_a_stand_in_codec(tmp_path: Path, monk
 
 
 def encoded_store(root: Path, rows: np.ndarray, per_segment: int, setup: dict) -> None:
-    """An encoded store's directory as `p2_v1/store.py encode` writes it: `setup.json`, and each segment's rows in
+    """An encoded store's directory as `p2_store/store.py encode` writes it: `setup.json`, and each segment's rows in
     `seg/<s>.c` with their SHA-512 in `seg/<s>.json`."""
     (root / "seg").mkdir(parents=True)
     (root / "setup.json").write_text(json.dumps(setup))
@@ -417,7 +417,7 @@ def encoded_store(root: Path, rows: np.ndarray, per_segment: int, setup: dict) -
         L.segment_path(root, s, "json").write_text(json.dumps({"segment": s, "sha512": hashlib.sha512(data).hexdigest()}))
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/accounting/pous/prover/p2/p2_store/store-toy) isn't here")
 def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The toy's coin and commitment give its salt; its C* as an encoded store's segment files, opened with no weights
     manifest, loads each layer to toy.json's digest under P2's reference; a setup of another commitment, layout,
@@ -471,7 +471,7 @@ def test_an_encoded_store_is_held_to_the_generators_manifest(tmp_path: Path, mon
     and with none. Refused: another seed's manifest, the generator's manifest with no seed (it names nothing) and a
     `setup.json` with no `program`. The name under `program` in a manifest with no `model`, the pinned manifest's form,
     is held the same way: the store's own opens, another's is refused."""
-    from p2_v1 import store as ST
+    from p2_store import store as ST
 
     monkeypatch.syspath_prepend(str(ROOT))
     gen = importlib.import_module(ST.GENERATOR)
@@ -613,7 +613,7 @@ TOY_W = b"verity-pous/p2-store/toy/w/v1\0"
 
 
 def toy_stream(doc: dict) -> tuple[dict, bytes]:
-    """The toy's W (each tensor `p2.stream(TOY_W, name, size)` at its offset, as `p2_v1/store.py`'s `toy_plain` packs
+    """The toy's W (each tensor `p2.stream(TOY_W, name, size)` at its offset, as `p2_store/store.py`'s `toy_plain` packs
     it, held to toy.json's digest) and then each stream tensor's f32 scales: a weights stream, and its manifest, which
     names it `NAME`, with SHA-256s naming each store tensor's stream tensors (QKV as wq, wk and wv of 64 rows each but
     the query's) in W."""
@@ -637,7 +637,7 @@ def toy_stream(doc: dict) -> tuple[dict, bytes]:
     return {"model": NAME, "tensors": rows, "stream_bytes": len(w) + len(scales)}, bytes(w + scales)
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/accounting/pous/prover/p2/p2_store/store-toy) isn't here")
 def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The toy's C* as an encoded store through `full.py` under P2's reference: every tensor of every layer and the head
     loaded and held to the manifest's SHA-256, the step's decode summed over them, one layer's GEMM in chunks of output
