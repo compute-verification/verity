@@ -63,7 +63,7 @@ namespace SamplingDeploy
 open Claims Claims.Sampling
 open FlockSoundness.Refine FlockSoundness.Binding
 open FlockSoundness.Discharge.Layout (BitVal RowShaped rowEncP rowBytes widthOf padBits)
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 
 variable {W : ℕ} (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool) (o : Opening Bool)
 

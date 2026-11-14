@@ -533,9 +533,9 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.TC.Relation.Witness`: becomes one Core witness (lean)",
     "security/Definitions/Nci/Cover.lean::Nci.Cover.Circuit":
         "duplicate of `Verity.Circuit`: becomes it, with registered parameters (compute-accounting)",
-    "security/Definitions/NetworkCertifier/Run.lean::NetTiming.Program":
+    "security/Definitions/Certifier/Run.lean::NetTiming.Program":
         "homonym, a committed Program's egress prediction: rename (network-accounting)",
-    "security/Definitions/NetworkCertifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
+    "security/Definitions/Certifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
     "security/Definitions/Spot/Exfiltration.lean::Population.Exfil.Strategy":
         "homonym, an adaptive exfiltration strategy, each window's leak and escaping coins from the earlier coins: rename (lean)",

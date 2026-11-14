@@ -26,7 +26,7 @@ import all Init.Data.Array.Basic
 
 namespace Flock.Bridge.Spec
 
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length)
+open Properties.Certifier.Bytes (bs bs_append bs_length)
 
 /-- `HmRow.be64` is `Hash.be 8`. -/
 theorem bs_rowBe64 (x : ℕ) : bs (HmRow.be64 x) = Hash.be 8 x := by

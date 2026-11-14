@@ -65,7 +65,7 @@ refuses the registration (`Spot.Run.run`,
 
 namespace Flock.Bridge
 
-open Properties.NetworkCertifier.Bytes (bs bs_inj)
+open Properties.Certifier.Bytes (bs bs_inj)
 
 /-- **The verifier's published roots are `rootsOf`'s**: at a public file without shared rows, port `q`'s published
 root (`Flock.PortRoots.pubRoot`: its published domain, its population's rows, its schema) is `rootsOf`'s at the file's

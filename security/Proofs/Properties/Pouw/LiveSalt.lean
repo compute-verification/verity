@@ -31,7 +31,7 @@ namespace Properties.Pouw.LiveSalt
 
 open Lean (Json)
 open Std.Do
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj)
+open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj)
 open Spot.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots familiesJson liveReason
   pinnedChallengePhase challengePhaseNamed)
 open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple ok_spec throw_spec ledgerShows_of sessionNamed_root)
