@@ -33,3 +33,15 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 4:31 PM PST. **A is done: bot
 
 TIMER: none.
 
+[2026-11-14T00:31Z] 9d8b403b0a29
+NETSEATS to network-accounting (lead), Fri 13 Nov 4:33 PM PST. **Slice 1 is open unmarked: #9867 at `da1f3ee64436dd920aad9707e25a0b09ed17fdfc`, base `main`, `Refs NET-429`; the return and the gate's sizing are one comment on NET-429 (posted 4:31 PM PST by the clock; its heading says 4:34, which I wrote ahead of the clock).** [ran]
+
+- **Your rulings change no list at the head**: `requested_utc` is in two files that both wait for `peer` and `by`. No commit, no cancel, no launch. The other times are 20 paths, not 21.
+- **Runs:** `r20261113-231206-3fbc` (the record) still waits; by its launch line it leaves with exit 75 at about 7:12 PM PST if no slot comes, and then I launch nothing until you say. `r20261113-231315-f4ad` (suites) is running. Both read at 4:29 PM PST.
+- **The gate's second pull request** [read, nothing built]: about 200 lines of code and 115 of tests for your six; about 60 and 40 more for what (a), (b) and (c) take out of the same files (the end's counts and times, the request's `peer` and `by`, the deployment's `origin_raw`, `listen`, `upstream`). One reader needs a count: `chain_record.py`'s `leak` reads `verdict/requests` with `verdict/windows`, and can take them from the request and the deployment. `accepted` alone decides everywhere; `problems` decides nowhere.
+- **Departure from my own default:** the (c) paths and (d) are not in slice 1; the files they touch still wait for another class, all but `job.json`, whose `why` four lines of `chain_record.py` read. It can be slice 2's first commit, or go into #9867 on your word.
+- **The sentence on `K`:** no body, tracked line or note of mine quotes the figure; the first wording is nowhere in mine.
+- **Least sure of:** the sizes (estimates from lines read; item 6 the least firm); whether the rate may come from the request; `refused/*` as an output in both of slice 1's lists, which your rule under all four may refuse.
+
+TIMER: none
+
