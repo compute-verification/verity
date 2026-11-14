@@ -7,7 +7,8 @@ public import Mathlib.Data.Finset.Union
 /-!
 # A subtree of the Site: its places and its auditor's devices
 
-* `Site.mem_placesIn`: a place is among the places of a set of ids when its id is in the set.
+* `Site.mem_placesIn`, `Site.mem_under`: a place is among the places of a set of ids when its id is in the set, and
+  in a subtree when it is reached from the subtree's root.
 * `Site.mem_places`: the places are the ids the Site knows (`Site.Known`), as a finite set.
 * `Site.placesIn_under`: a subtree's places are its root, where that is a place, and its root's children's subtrees'
   places.
@@ -48,6 +49,13 @@ theorem place_outside : (S.place outside).1 = outside := by
   have h : outside ∈ S.places := Finset.mem_insert_self outside _
   rw [place, dif_pos h]
 
+/-- A place is in the subtree at `i` exactly when it is reached from `i` through the locations registered under
+one another. -/
+theorem mem_under {i j : String} : j ∈ S.under i ↔ j ∈ S.places ∧ Relation.ReflTransGen S.Child i j := by
+  unfold under
+  exact mem_filter
+
+
 /-- A location registered under another is a place. -/
 theorem mem_places_of_child {i c : String} (h : S.Child i c) : c ∈ S.places := by
   obtain ⟨x, hx, hxc, -⟩ := h
@@ -59,15 +67,20 @@ theorem placesIn_under (i : String) :
     S.placesIn (S.under i) =
       S.placesIn {i} ∪ (S.places.filter (S.Child i)).biUnion fun c => S.placesIn (S.under c) := by
   ext p
-  simp only [placesIn, under, mem_filter, mem_univ, true_and, mem_union, mem_singleton, mem_biUnion]
   constructor
-  · rintro ⟨-, h⟩
-    rcases Relation.ReflTransGen.cases_head h with h | ⟨c, hc, hcj⟩
-    · exact Or.inl h.symm
-    · exact Or.inr ⟨c, ⟨S.mem_places_of_child hc, hc⟩, p.2, hcj⟩
-  · rintro (rfl | ⟨c, ⟨-, hc⟩, hj, hcj⟩)
-    · exact ⟨p.2, Relation.ReflTransGen.refl⟩
-    · exact ⟨hj, Relation.ReflTransGen.head hc hcj⟩
+  · intro h
+    rcases Relation.ReflTransGen.cases_head (S.mem_under.1 (S.mem_placesIn.1 h)).2 with h | ⟨c, hc, hcj⟩
+    · exact mem_union_left _ (S.mem_placesIn.2 (mem_singleton.2 h.symm))
+    · exact mem_union_right _ (mem_biUnion.2
+        ⟨c, mem_filter.2 ⟨S.mem_places_of_child hc, hc⟩, S.mem_placesIn.2 (S.mem_under.2 ⟨p.2, hcj⟩)⟩)
+  · intro h
+    refine S.mem_placesIn.2 (S.mem_under.2 ⟨p.2, ?_⟩)
+    rcases mem_union.1 h with h | h
+    · have hp : p.1 = i := mem_singleton.1 (S.mem_placesIn.1 h)
+      subst hp
+      exact Relation.ReflTransGen.refl
+    · obtain ⟨c, hc, hj⟩ := mem_biUnion.1 h
+      exact Relation.ReflTransGen.head (mem_filter.1 hc).2 (S.mem_under.1 (S.mem_placesIn.1 hj)).2
 
 /-- **A subtree read off a Site given in full**: a set `T` of places that holds `i`, holds every location registered
 under one of its own, and each of whose places is reached from `i`, is the subtree at `i`. The first three are
