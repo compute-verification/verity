@@ -29,6 +29,10 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 import numpy as np
+from verity.device import load_card
+
+from verity_vllm.acquire import inductor_templates as T
+from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import fa3_model as FA3
 from verity_vllm.definitions.registry import attention_vocab
@@ -38,10 +42,6 @@ from verity_vllm.definitions.registry import fa3_check_inf as F3
 from verity_vllm.definitions.registry import inductor as IR
 from verity_vllm.definitions.registry.hopper import Fa3InvSum
 from verity_vllm.definitions.registry.prims import Fa2InvSum
-from verity.device import load_card
-
-from verity_vllm.acquire import inductor_templates as T
-from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.engine.profiles.devices import CARD, NO_CARD
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.gemm_targets import (

@@ -32,8 +32,11 @@ from tests.acquire.call_boundary_programs import (
 from verity_vllm.commit.binding import build_binding_map, logical_request
 from verity_vllm.query.compose import compose_global
 from verity_vllm.query.manifest.format import spec_family
-from verity_vllm.query.program_view import specialization
-from verity_vllm.query.program_view import definition_ports, spec_statics
+from verity_vllm.query.program_view import (
+    definition_ports,
+    spec_statics,
+    specialization,
+)
 
 if TYPE_CHECKING:
     import torch
