@@ -130,24 +130,28 @@ def load() -> list[str]:
     return list(_load()[2])
 
 
-_VERSIONS: dict[str, Any] = {}
+_VERSIONS: dict[tuple[str | None, str], Any] = {}
 
 
-def boolean_version(fn: FunctionDefinition) -> FunctionDefinition:
+def boolean_version(fn: FunctionDefinition, family: str | None = None) -> FunctionDefinition:
     """The Boolean Definition whose word is ``fn``: the one registered Boolean Definition linked to it, its newest version when
-    several versions of one name are, with ``bit_type`` of ``fn``'s signature as its own.  `NoBooleanVersion` otherwise."""
+    several versions of one name are, with ``bit_type`` of ``fn``'s signature as its own.  With ``family`` (`Name_vN`), that
+    version and not the newest: the one a Program names, for a reader of that Program, taken before any other name's is weighed,
+    since at most one registered Definition has that name and version.  Its function-valued statics are still the newest Boolean
+    versions of ``fn``'s.  `NoBooleanVersion` otherwise."""
     fid = descriptor_id(bind(fn) if isinstance(fn, CompositeDefinition) else fn)
-    hit = _VERSIONS.get(fid)
+    key = (family, fid)
+    hit = _VERSIONS.get(key)
     if hit is not None:
         if isinstance(hit, NoBooleanVersion):
             raise hit
         return hit
     try:
-        hit = _find(fn, fid)
+        hit = _find(fn, fid, family)
     except NoBooleanVersion as e:
-        _VERSIONS[fid] = e
+        _VERSIONS[key] = e
         raise
-    _VERSIONS[fid] = hit
+    _VERSIONS[key] = hit
     return hit
 
 
@@ -196,8 +200,10 @@ def made_on_demand(fid: str) -> FunctionDefinition | None:
     return None
 
 
-def _find(fn: FunctionDefinition, fid: str) -> FunctionDefinition:
+def _find(fn: FunctionDefinition, fid: str, family: str | None = None) -> FunctionDefinition:
     if isinstance(fn, PrimitiveDefinition) and BL.is_boolean(fn):
+        if family is not None and _base(fid) != family:
+            raise NoBooleanVersion({fid: f"a Boolean primitive is its own Boolean version, and it is no {family}"})
         return fn
     exact, by_name, errors = _load()
     cands = [bind(d) for d in exact.get(fid, ())]
@@ -228,8 +234,10 @@ def _find(fn: FunctionDefinition, fid: str) -> FunctionDefinition:
                         break
                 except (LookupError, TypeError, ValueError):
                     continue
+    if family is not None:
+        cands = [c for c in cands if _base(descriptor_id(c)) == family]
     if not cands:
-        why = "; ".join(notes) or "no registered Boolean Definition names it as its word"
+        why = "; ".join(notes) or f"no registered {family or 'Boolean Definition'} names it as its word"
         if errors:
             why += f" (registry modules that failed to import: {errors})"
         raise NoBooleanVersion({fid: why})

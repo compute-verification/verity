@@ -74,11 +74,11 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
 DEPENDENCIES = {"numpy"}
 #: Where ``verity``'s Python imports none of them either, only the standard library and ``verity``: every verifier's and
 #: device's directory (a protocol composes no third-party package into a verdict), and these: the scalar references,
-#: the hardware's cards, record and registration log, the Site's types, SPOT's planning beside its verifier, and the
-#: reporting grid.  Within them, what may use numpy.
+#: the hardware's cards, record and registration log, the Site's types, SPOT's planning beside its verifier, and a
+#: protocol's manifest with the monitoring periods.  Within them, what may use numpy.
 STDLIB_ONLY = ("verity/circuits", "verity/circuits/silicon", "verity/commitments/randomness",
                "verity/claims", "verity/hardware", "verity/device.py", "verity/protocols/proofs/spot",
-               "verity/protocols/reporting.py")
+               "verity/protocol.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: and the parts of the Definitions that use it, which are no scalar reference in `verity/circuits` either
 NUMPY_USERS += ("verity/circuits/cross_call.py", "verity/circuits/kernels", "verity/circuits/ops",
@@ -177,17 +177,13 @@ BENCHMARKS_IMPORTERS = {
 CIRCUIT_CHECK = "tools/verity/circuit_check/src"
 #: The files of circuit-check that still import another distribution of the workspace, each with the packages it imports:
 #: Flock's lowerings and templates, which its lowering and template checks hold each Definition's Boolean circuit to.  An
-#: entry that is a module (``verity.definitions.registry``) covers that module and the ones under it, not its package:
-#: the served circuits circuit-check checks, listed ahead of their move into the vLLM adapter, which makes them another
-#: distribution's; circuits' to remove, as circuit-check is handed them.  It only shrinks.
+#: entry that is a module (``verity_flock.x``) covers that module and the ones under it, not its package.  It only shrinks.
 CIRCUIT_CHECK_IMPORTS = {
     f"{CIRCUIT_CHECK}/circuit_check/ambient.py": {"verity_flock"},
     f"{CIRCUIT_CHECK}/circuit_check/checks.py": {"verity_flock"},
-    f"{CIRCUIT_CHECK}/circuit_check/sidecars.py": {"verity_flock", "verity.definitions.registry"},
+    f"{CIRCUIT_CHECK}/circuit_check/sidecars.py": {"verity_flock"},
     f"{CIRCUIT_CHECK}/circuit_check/structural.py": {"verity_flock"},
-    f"{CIRCUIT_CHECK}/circuit_check/targets.py": {"verity_flock", "verity.definitions.boolean", "verity.definitions.numerics",
-                                                  "verity.definitions.registry"},
-    f"{CIRCUIT_CHECK}/circuit_check/units.py": {"verity.definitions.boolean"},
+    f"{CIRCUIT_CHECK}/circuit_check/targets.py": {"verity_flock"},
 }
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
 #: with the file that defines it and why tests need it.

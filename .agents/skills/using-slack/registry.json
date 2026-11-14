@@ -141,7 +141,6 @@
         "security/Definitions/Hash/",
         "security/Proofs/Hash/",
         "verity/protocols/interface/world/",
-        "verity/hardware/record.py",
         "verity/hardware/registration.py",
         "benchmarks/flock_kernels/",
         "benchmarks/two_stage/",
@@ -493,9 +492,6 @@
       "usergroup": "S0CAAA80KGT",
       "retired_usergroups": [
         "S0C5LSDENA1"
-      ],
-      "owns": [
-        "benchmarks/metrics.toml"
       ]
     },
     {

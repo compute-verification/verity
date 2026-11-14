@@ -2,7 +2,7 @@
 
 `lean_changed.py --records --allow CODE:ENTRY` has a lane's fast path take a failure as known, which is no pass. Nothing
 that runs Lean's tools for the tree gives one: the check and its steps, the merge queue's loop, its records run and its
-Lean tasks, the ready mark's preflight and the records gate, the `verity` command, and the Lean tools beside the two.
+Lean tasks, the ready mark's preflight, the `verity` command, and the Lean tools beside the two.
 None of their sources so much as names the option, in a command it builds or in one it tells a lane to run. That
 `check.py` has no such option and that the fast path hands it none is the Lean suite's
 (`tools/verity/lean/tests/test_records_allow.py`)."""
