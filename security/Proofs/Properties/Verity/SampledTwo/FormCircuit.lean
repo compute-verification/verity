@@ -11,6 +11,7 @@ public import Proofs.Properties.Verity.SampledTwo.FormDraw
 public import Proofs.Properties.Verity.SampledTwo.FormBytes
 public import Proofs.Properties.Verity.SampledTwo.FormMember
 public import Proofs.Properties.Verity.SampledTwo.FirstEarly
+public import Proofs.Properties.Verity.SampledTwo.Reached
 
 /-!
 # The messages' piece at the form's reading, at the circuit statement's table
@@ -57,11 +58,14 @@ piece at that table, where the three are theorems, and with them the statements'
   (`SessionCoins.verdictsAt_of`) and each session's evidence on the case (`SessionCoins.logCloses_run`).
 * `LinkFixed` is `linkFixed_of` (`FormLink.lean`), from `StmtAtFixed`, the sessions the verdict accepted and the
   members' check on the log the check read (`SessionCoins.membersNamed`).
+* `agreed_form`'s `hR`, that the frame's run on agreeing coins has all the verifier's messages where its messages are
+  the check's wherever it has one, is `reaches_frame` (`Reached.lean`), from `PlayAccepts`, `SessionMsgs`
+  (`reachedAccepts`) and the frame's statement being the one the check reads (`stmtAt`).
 
 The reading's statements and messages are taken to be the case's (`hS`, `hM`), which holds by definition at
 `SessionMsgs.sessionReading`.
 
-**Not established here**: `StmtsRead`, `PartsHeldAt` and `PinHeldAt`, each a hypothesis, and `agreed_form`'s `hR`.
+**Not established here**: `StmtsRead`, `PartsHeldAt` and `PinHeldAt`, each a hypothesis.
 `SessionCoins.StmtsFit` is `SessionCoins.stmtsFit_of` (`FormSetup.lean`): the form refuses evidence of `2^64`
 statements or more, and a play one of whose sessions' statements is `2^64` bytes or more.
 -/
@@ -87,7 +91,8 @@ one pair of stage coins carries the bytes both plays' samples read (`memberAtFix
 `stageCoinsOne_of_play`), which one does where each stage's bytes start the coins the log shows before every
 opening (`playCoinsOne_of_shown`), as the first stage's do at the cut's read (`firstShownEarly`); and where its
 statement is fixed, a session's first message is fixed by the string shown at its first round (`linkFixed_of`) and
-its last by its evidence (`lastFixed_of`). -/
+its last by its evidence (`lastFixed_of`). The frame's run on agreeing coins, its messages the check's wherever it
+has one, has every message (`reaches_frame`), as the accepted play's own prover's run does. -/
 theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
@@ -102,16 +107,7 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j)
     (hplay : PlayAccepts A C S P') (hsess : SessionMsgs A C S P') (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S) (hparts : PartsHeldAt A C)
-    (hsent : CaseIsSent C) (hC : CaseCommits C) (hx : stmtOf c = some x)
-    (hR : ∀ (ω : TapeOf V θ F c σ) (r : Coins A x),
-      FormAccepts C ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
-      Good ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
-      ReadAgrees A x (formReading A C S dev) ((formFrame V A x θ F c σ C S dev Good L).out ω r) r →
-      (∀ i < (Claims.run FlockDeploy.sha512 (formFrame V A x θ F c σ C S dev Good L).P A.L.V x ω r).msgs.length,
-        (formReading A C S dev).msg ((formFrame V A x θ F c σ C S dev Good L).out ω r) i =
-          msgAt (Claims.run FlockDeploy.sha512 (formFrame V A x θ F c σ C S dev Good L).P A.L.V x ω r) i) →
-      A.L.V.k x ≤
-        (Claims.run FlockDeploy.sha512 (formFrame V A x θ F c σ C S dev Good L).P A.L.V x ω r).msgs.length) :
+    (hsent : CaseIsSent C) (hC : CaseCommits C) (hx : stmtOf c = some x) :
     MessagesFixedAgreed V A x θ F c σ (formFrame V A x θ F c σ C S dev Good L) (formReading A C S dev)
       (FormAccepts C) Good (formMiss V A x θ F c σ C S dev Good L q) := by
   have hcount : StmtsCount A C Good := stmtsCount_of Good hof hparts
@@ -140,6 +136,10 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     hcov
     (SessionCoins.msgsOfRecords_form hS hM hof hst hrounds hscope hcount hprint hfit) hplay hsess hof hst hrounds
     hscope
-    (stmtsFixed_of_each A C S Good L hS hsent hcount hfix) hLink hLast hC hx hR
+    (stmtsFixed_of_each A C S Good L hS hsent hcount hfix) hLink hLast hC hx
+    fun ω r hA _ hc hm =>
+      reaches_frame (formFrame V A x θ F c σ C S dev Good L)
+        (stmtAt V A x θ F c σ (formFrame V A x θ F c σ C S dev Good L) C S dev hC hx)
+        (reachedAccepts A x C S dev P' (sourcesFit A C) hplay hsess) ω r hA hc hm
 
 end Verity.SampledTwo
