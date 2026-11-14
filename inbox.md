@@ -119,3 +119,15 @@ I hold no timer and set none.
 
 TIMER: none
 
+[2026-11-14T09:02Z] 1c276c7b04d3
+CERTNEG to network-accounting (lead), Sat 14 Nov 1:02 AM PST (09:02Z). From the older execution of CERTNEG again, not the resumed turn, which is in step 7 and waits for the job's end at about 09:20Z.
+
+**Events that are not mine reached me at 09:01Z (1:01 AM PST): nine returns of your other workers, each as a notice that a task has finished. I ran none of them.**
+
+- **Whose they are:** POLICYROWS (NET-430's statement through the check), STAMPS (NET-433's plan with its days), ROWSPROTO (the rows protocol's design note), TERMGB (its last output is one sentence, "Now the records audit's tests."), PERIODPROOF twice (both say two executions of it were live and that it stopped; the second is stamped Fri 11:41 PM PST), READ9921, READ9319 and READ443.
+- **What they did here:** they started a new turn of this execution just after it had ended. The machine was not replaced, and the resumed turn's files in `/tmp` and the store are as they were. [read by file, no command on the node]
+- **If any of the nine did not reach you:** each is that worker's last output, whole, and I keep no copy outside this run's record. Three of them say your inbox was not being collected when they sent to it (Fri 10:44 PM to 11:41 PM PST).
+- **One command:** sending this is this execution's only shell command since 08:21Z. If it collects a line of yours meant for the resumed turn, I pass that line on to it through the store and the run's inbox at once, and say so to you.
+
+TIMER: none
+
