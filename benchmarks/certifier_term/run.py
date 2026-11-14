@@ -95,11 +95,11 @@ def calculator() -> Any:
 
 
 def uplink(path: Path, links: int) -> Uplink:
-    """A machine's uplink as the registration log at ``path`` registers it (`verity.hardware.registration`'s committed
+    """A machine's uplink as the registration log at ``path`` registers it (`verity.protocols.accounting.registration.verifier.registration`'s committed
     log): the site its site entries register (`Site.of_log`) holds one host, and each of that host's boundary links is
     split by a network certifier (`Site.is_boundary`, `Site.certified`), ``links`` of them, the model's links a machine.
     The log is read as given: its check is its verifier's."""
-    from verity.hardware import registration
+    from verity.protocols.accounting.registration.verifier import registration
     from verity.device import TICK, Entry, Site
 
     try:

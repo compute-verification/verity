@@ -58,7 +58,7 @@ say so; none is computed from a run's K.
 - `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's certified boundary links carry out over
   the period, the scope's machines × a registered uplink's `beta` × the period's ticks. `beta` is bits a tick each
   way (`verity.device`) and the term is egress, so one direction counts. The uplink is read from a
-  registration log, `--registration FILE` (`verity.hardware.registration`'s committed log): the boundary link of its
+  registration log, `--registration FILE` (`verity.protocols.accounting.registration.verifier.registration`'s committed log): the boundary link of its
   one host that a network certifier splits. The log is read as given, and one that registers anything but the
   model's machine, one host behind one network certifier, is refused. Every machine of the scope is taken as
   registered like that one, which is the model's statement and no registration's. With no `--registration` the
