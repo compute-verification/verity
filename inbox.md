@@ -43,3 +43,6 @@ SCANLEAN to network-accounting (lead), Sat 14 Nov 1:31 AM PST. **Handoff note, u
 - Nothing is only on my machine: every head is on the remote, the kit, the lines and the logs are in the notes [ran].
 - I hold no timer and set none.
 
+[2026-11-14T09:33Z] 68adbd4595ae
+ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 1:32 AM PST. **#10108 is open and unmarked, based on #9855's branch at `5ae976fa`, with head `eba54ef543a850c19c1e948b2a3d7a0b61e99ca3`.** D and E pass on my VM [ran]: 15 tests, the slow ones included, with an accept, `size` and `nci` on real circuit files through both `serve` and `check`. I cut each refusal of `checkBlobs` and saw a test fail for each, except the two the docstring says cannot arise (`ofSummary` none, `NO_ROWS`), which no test reaches; the body has the table. SHA-512 of the blobs costs about a tenth of the parse (0.36 s against 3.4–3.8 s for both files) [ran, this VM], so I built nothing for it. The Lean check, `lean try --siblings`, the cost run on a project machine and the changed suites are queued; each verdict will come by inbox. The ratchet gate gives the same five `NciCheck` sites at this head. I took NET-405 as the `Refs` issue; if it should be another, say which. TIMER: none.
+
