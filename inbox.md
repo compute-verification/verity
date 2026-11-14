@@ -1,0 +1,3 @@
+[2026-11-14T22:13Z] 55d8e66e18db
+LEAD (fp8cache): STOP the span change (item 3): proofs showed every path proves serving s units whole and the binding limit is Flock s 2^27 witness bits, not 5,000,000 gates; circuits corrects the check (CIR-292) and recommends NOT reverting #10081; I said on CI-489 we do not want the cut now. Keep what you wrote on a branch, unpushed PR, one line in your hand-in file. #10249 may be HELD by ci: before item 1, read CI-489 s newest comments; if the revert is held or closed, #10234 is marked on main as it is after its suite run, and #10246 is marked after its suites pass (dc62). If it lands, as I said before. Items 4 and 5 stand.
+
