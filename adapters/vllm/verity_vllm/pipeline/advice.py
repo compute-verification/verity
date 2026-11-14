@@ -68,6 +68,7 @@ from typing import Any
 import verity.protocols.accounting.certifier.verifier.advice as I1
 from verity.protocols.accounting.registration.verifier import registration as REG
 from verity.commitments.periods import interface as IF
+from verity_vllm import messages as M
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 
@@ -561,7 +562,7 @@ def stopped(run: Path) -> bool:
     """Whether ``run``'s server has stopped with every Commit record written: its ``summary.json`` says ``final`` (one without
     the key is from a server that wrote each window's records on its engine loop, before any summary)."""
     try:
-        return json.loads((run / "summary.json").read_text()).get("final", True) is True
+        return json.loads(M.read(run / "summary.json", "RunTotals")).get("final", True) is True
     except (OSError, ValueError):
         return False
 

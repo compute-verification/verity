@@ -135,7 +135,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import settings
+from verity_vllm import messages as M, settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_head as HD, serve_learn as SL,
@@ -758,7 +758,7 @@ def main(opts: Options) -> int:
                    "release": draws.summary() if draws is not None else None,
                    "mirror_errors": mirror.errors[:10] if mirror else None,
                    "remote_session": session.end() if session is not None else None}
-            (out / "summary.json").write_text(json.dumps(got, indent=1))
+            M.write(out / "summary.json", "RunTotals", json.dumps(got, indent=1).encode())
             if mirror is not None:
                 mirror()
             return got

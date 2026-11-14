@@ -1,0 +1,34 @@
+"""The messages the adapter hands the prover and takes from it, by their protocols' declarations (each protocol's
+`prover/workload.py`): a body is checked against its declared type as it is written and as it is read, and its bytes
+are left as they are. `tests/workload_messages.toml` lists each message's writers and readers.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from verity.channel import Message, MessageTypes
+from verity.protocols.accounting.certifier.prover import workload as certifier
+from verity.protocols.accounting.pous.prover import workload as pous
+from verity.protocols.accounting.pouw.prover import workload as pouw
+from verity.protocols.proofs.spot.prover import workload as spot
+
+__all__ = ["TYPES", "body", "read", "write"]
+
+TYPES = MessageTypes((*spot.MESSAGES, *pouw.MESSAGES, *pous.MESSAGES, *certifier.MESSAGES))
+
+
+def body(type_: str, data: bytes) -> bytes:
+    """``data`` as the body of a ``type_`` message, unchanged: `verity.channel.Refused` when its declaration refuses it."""
+    TYPES.encode(Message(type_, body=data))
+    return data
+
+
+def write(path: Path, type_: str, data: bytes) -> None:
+    """Write ``data`` to ``path`` as a ``type_`` message's body."""
+    path.write_bytes(body(type_, data))
+
+
+def read(path: Path, type_: str) -> bytes:
+    """``path``'s bytes, a ``type_`` message's body."""
+    return body(type_, path.read_bytes())
