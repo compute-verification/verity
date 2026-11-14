@@ -12,10 +12,13 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import importlib.util
+import io
 import json
 import math
 import os
+import socket
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -312,6 +315,49 @@ def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_
             for tokens in (1, 4, A.WARDEN_PROMPT_TOKENS[1]):
                 took = groups * ws.group_windows(params, tokens) * window_s + args.start_in + 30
                 assert took <= A.warden_group_minutes(groups, tokens, height, tick) * 60, (tick, groups, tokens)
+
+
+def test_the_gates_relay_session_is_session_at_the_scans_schedule_and_its_minutes_cover_its_length(tmp_path):
+    """`relay-session` runs `session` at the listener the gate gives it, for the request's execution phases, at the
+    schedule a scan rehearsal of its tick and class runs at, in the id egress form `serve` releases, and takes none
+    of `rehearse`'s traffic. For every tick the gate takes, in 100 ms steps, and every count of execution phases
+    that fits its minutes there, at the least height that signs them, `session_minutes` covers their span, the
+    origin's delay and 30 s for the key and the check."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    import scan_zk as sz
+    req = {"device": "warden", "client_port": 8012, "windows": 20, "height": 10, "scan": True}
+    argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001", listen=40002)
+    args = ws.parser().parse_args(argv[2:])
+    assert (args.command, args.upstream, args.listen, args.windows, args.height, args.out) == \
+        ("session", ("127.0.0.1", 40001), ("127.0.0.1", 40002), 20, 10, tmp_path)
+    assert args.ids and not args.fake and not args.watermark and args.egress == "id"
+    assert ws._params(args) == sz.PARAMS and sz.PARAMS.egress == "id"
+    for name in A.SCAN_CLASSES:
+        given = ws.parser().parse_args(A.warden_command(req | {"scan_class": name, "watermark": True}, tmp_path,
+                                                        "http://127.0.0.1:40001", listen=40002)[2:])
+        assert ws._params(given) == sz.SETUPS[name].params and given.watermark, name
+        rehearsal = {"device": "warden", "requests": 4, "scan": True, "scan_class": name, "prompts": {"count": 1}}
+        (tmp_path / A.PROMPTS).write_text("[[1]]")
+        assert ws._params(ws.parser().parse_args(A.warden_command(rehearsal, tmp_path, "http://h:1")[2:])) == \
+            ws._params(given), name
+    for flag in (["--requests", "4"], ["--rate", "1"], ["--seed", "1"], ["--prompts", "p.json"],
+                 ["--window-per-group"], ["--tail", "1"], ["--ids"], ["--model", "m"], ["--lengths", "1"]):
+        with pytest.raises(SystemExit):
+            ws.parser().parse_args(argv[2:] + flag)
+
+    lo, hi = A.SCAN_BUCKET_MS
+    for tick in range(lo, hi + 1, 100):
+        at = ws.parser().parse_args(A.warden_command(req | {"bucket_ms": tick}, tmp_path, "http://h:1", listen=1)[2:])
+        params = ws._params(at)
+        assert params == dataclasses.replace(sz.PARAMS, bucket_ms=tick), tick
+        window_ms = params.window * tick
+        for windows in range(A.SESSION_WINDOWS[0], A.SESSION_WINDOWS[1] + 1):
+            minutes = A.session_minutes(windows, A.warden_height(windows), window_ms)
+            if minutes > A.CERTIFIER_MINUTES[1]:
+                break
+            assert windows * window_ms / 1000 + at.start_in + 30 <= minutes * 60, (tick, windows)
 
 
 def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_groups_only_with_what_they_need(tmp_path):
@@ -825,6 +871,346 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
     assert {p for p in result["problems"] if "window" in p} == \
         {f"{name} window 0 isn't certified" for name in ws.CERTIFIED} | {
             f"{name} window 0's cells aren't registered" for name in ("requests", "responses")}
+
+
+def _session(tmp_path: Path, windows: int):
+    """The gate's `relay-session` command for `windows` execution phases at the scan's w63k4 schedule, parsed, with its
+    schedule, and a maker of `n` id requests of the class's most tokens with their id-form answers."""
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    req = {"device": "warden", "client_port": 8012, "windows": windows, "height": 5, "scan": True,
+           "scan_class": "w63k4"}
+    args = ws.parser().parse_args(A.warden_command(req, tmp_path / "run", "http://127.0.0.1:40001", listen=40002)[2:])
+    p = ws._params(args)
+    tokens = p.egress_cells - 1
+
+    def load(n: int) -> tuple[list[bytes], list[bytes]]:
+        return ([ws.id_request(model="m", user=f"user-{j}", prompt=[j + 1], max_tokens=tokens,
+                               frame_bytes=p.cell_bytes, offset=0) for j in range(n)],
+                [ws.id_response(list(range(tokens)), p.payload)] * n)
+    return args, p, load
+
+
+def test_a_session_serves_its_length_to_clients_not_its_own_and_its_check_accepts_the_records_alone(
+        tmp_path, monkeypatch):
+    """`session` as the gate's `relay-session` runs it: one `serve` at the gate's listener for the request's
+    execution phases and no other process, so no traffic and no client of its own. In `serve`'s place here, the
+    relay on a virtual clock takes a load from another party's clients, eight connections arriving across the
+    session's three execution phases, the last at the last bucket that still ends inside the run, and their log
+    stays with them. The run's own check, on the records alone, accepts: every execution phase certified and
+    registered and the audit, counting no connection. The clients' check is theirs, from their own log against the
+    run's records: every connection ended, its request and its answer the audited connection's, each cell of the
+    egress schedule."""
+    args, p, load = _session(tmp_path, 3)
+    last = args.windows * p.window - p.span - 1
+    arrive = [0, 0, 7, p.window - 1, p.window, p.window + 8, 2 * p.window, last]
+    requests, responses = load(len(arrive))
+    served, own = [], {}
+
+    class Serve:
+        """`serve` as a process: the relay for its `--windows` on a virtual clock, its clients' log kept apart."""
+
+        def __init__(self, argv, **kw):
+            a = ws.parser().parse_args(argv[2:])
+            assert a.command == "serve" and ws._params(a) == p
+            served.append((a, _run(a.out, a.key, requests, responses, windows=a.windows, params=p,
+                                   id_payload=p.payload, arrive=dict(enumerate(arrive)))))
+            own.update(json.loads((a.out / "client.json").read_text()))
+            (a.out / "client.json").unlink()
+            self.stdout = io.StringIO(json.dumps({"listening": list(a.listen)}) + "\n")
+
+        def wait(self) -> int:
+            return 0
+
+        poll = wait
+
+    monkeypatch.setattr(ws, "subprocess", types.SimpleNamespace(Popen=Serve, PIPE=None))
+    assert ws.rehearse(args) == 0
+    ((a, relay),) = served
+    out = args.out
+    assert (a.listen, a.upstream, a.windows) == (("127.0.0.1", 40002), ("127.0.0.1", 40001), 3)
+    assert {e["admitted"] // p.window for e in relay.log} == {0, 1, 2} and relay.log[-1]["admitted"] == last
+    assert not {"traffic.json", "client.json", "client.log", "groups.json"} & {f.name for f in out.iterdir()}
+    result = json.loads((out / "check.json").read_text())
+    assert result["accepted"] and result["problems"] == [] and result["connections"] == []
+    assert (result["model"], result["exit"]) == (None, {"serve": 0, "client": None})
+    s = result["summary"]
+    assert (s["requests"], s["ended"], s["cells_in_their_bucket"], s["windows"], s["certified_windows"]) == \
+        (0, 0, [0, 0], 3, 9)
+    assert (s["cell_rows"]["registered"], s["cell_rows"]["of"]) == (6, 6)
+    assert s["data_bytes"] == {"ingress": sum(map(len, requests)), "egress": sum(map(len, responses))}
+
+    records = ws.read_records(out, p)
+    audited = {c["ordinal"]: c for c in
+               ws.audit(p, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])["connections"]}
+    schedule = ws.egress_cells(records[ws.EGRESS], p)
+    assert len(own["connections"]) == len(audited) == len(arrive)
+    for conn in own["connections"]:
+        o = conn["ordinal"]
+        assert conn["outcome"] == "end" and audited[o]["ended"] is not None, o
+        assert (audited[o]["ingress_sha256"], audited[o]["egress_sha256"]) == \
+            (conn["request_sha256"], conn["data_sha256"]), o
+        assert "".join(ws.KIND_CHARS[k] for _, k in schedule[o]) == conn["kinds"], o
+    (out / "client.json").write_text(json.dumps(own))
+    theirs = ws.check(out)
+    assert theirs["accepted"] and (theirs["summary"]["requests"], theirs["summary"]["ended"]) == (8, 8)
+    assert theirs["summary"]["cells_in_their_bucket"][0] == theirs["summary"]["cells_in_their_bucket"][1] > 0
+
+
+def test_a_session_given_its_callers_listener_hands_it_to_serve_which_serves_on_it_and_leaves_it_listening(
+        tmp_path, monkeypatch):
+    """The gate's unit holds a session's listener and gives the runner its descriptor (`--listen-fd`). `session`
+    passes that descriptor on to `serve`'s process and names it there, and without one passes none. The relay's
+    server on a caller's socket binds nothing: a connection made to the caller's listener before the server starts
+    is the one its handler gets, and once the server has closed the caller's socket still listens, so a later
+    connection arrives there with nothing accepting it."""
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    req = {"device": "warden", "client_port": 8012, "windows": 1, "height": 5, "scan": True, "scan_class": "w63k4"}
+
+    class Started(Exception):
+        pass
+
+    def popen(argv, **kw):
+        raise Started(argv, kw)
+
+    monkeypatch.setattr(ws, "subprocess", types.SimpleNamespace(Popen=popen, PIPE=None))
+    for fd in (None, 9):
+        argv = A.warden_command(req, tmp_path / f"run-{fd}", "http://127.0.0.1:40001", listen=40002, listen_fd=fd)
+        with pytest.raises(Started) as started:
+            ws.rehearse(ws.parser().parse_args(argv[2:]))
+        serve, kw = started.value.args
+        a = ws.parser().parse_args(serve[2:])
+        assert (a.command, a.listen, a.listen_fd) == ("serve", ("127.0.0.1", 40002), fd)
+        assert kw["pass_fds"] == (() if fd is None else (fd,))
+
+    held = A.held_listener()
+    early = socket.create_connection(held.getsockname())
+    early.sendall(b"early")
+
+    async def relay() -> list[bytes]:
+        got, done = [], asyncio.Event()
+
+        async def handle(reader, writer):
+            got.append(await reader.readexactly(5))
+            writer.write(b"served")
+            await writer.drain()
+            writer.close()
+            done.set()
+
+        server = await ws.listening(handle, held.getsockname(), socket.socket(fileno=os.dup(held.fileno())))
+        assert [s.getsockname() for s in server.sockets] == [held.getsockname()]
+        await done.wait()
+        server.close()
+        await server.wait_closed()
+        return got
+
+    assert asyncio.run(relay()) == [b"early"] and early.recv(6) == b"served"
+    with socket.create_connection(held.getsockname()) as late:
+        late.sendall(b"late")
+        conn, _ = held.accept()
+        assert conn.recv(4) == b"late"
+        conn.close()
+    early.close()
+    held.close()
+
+
+def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_names_and_binds_none(
+        tmp_path, monkeypatch, capsys):
+    """`serve --listen-fd FD` through `main` and `serve` themselves, on the command `session` issues for a listener
+    its caller holds: `main` makes the socket FD names, and `serve` gives it to the relay's server. The relay, its
+    publisher, the stall probe and the process's preparation are stood in for, so nothing ticks: the relay here ends
+    once its handler has answered one connection. That connection is one made to the caller's listener before
+    `serve` started, the deployment and the line `serve` prints name the caller's port, and the caller's socket
+    still listens once `serve` has returned. With either link cut, the flag to the socket or the socket to the
+    server, `serve` binds `--listen`, which is the caller's own address and is taken."""
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    args, _, _ = _session(tmp_path, 1)
+    held = A.held_listener()
+    args.listen, args.listen_fd = held.getsockname(), os.dup(held.fileno())
+
+    class Started(Exception):
+        pass
+
+    def popen(argv, **kw):
+        raise Started(argv, kw)
+
+    monkeypatch.setattr(ws, "subprocess", types.SimpleNamespace(Popen=popen, PIPE=None))
+    with pytest.raises(Started) as started:
+        ws.rehearse(args)
+    serve, kw = started.value.args
+    assert kw["pass_fds"] == (args.listen_fd,)
+
+    public, got = ws.cs.signer(tmp_path / "key", 4).public_key(), []
+
+    class Publisher:
+        """`PublisherProcess` with no process: the key's public half, and nothing published."""
+
+        usage = feeder = None
+        process = types.SimpleNamespace(pid=None)
+
+        def __init__(self, *a, **kw) -> None:
+            self.key = public
+
+        def __call__(self, *a) -> None:
+            pass
+
+        withhold = release = lengths = __call__
+
+        def close(self) -> list:
+            return []
+
+    class Relay:
+        """The relay's stand-in: its run ends once its handler has answered one connection."""
+
+        run_id, lateness, log, ordinals, refused, refused_windows, ticks, releases = bytes(16), [], [], 0, 0, set(), 0, []
+
+        def __init__(self, *a, **kw) -> None:
+            self.answered = asyncio.Event()
+
+        async def handle(self, reader, writer) -> None:
+            got.append(await reader.readexactly(5))
+            writer.write(b"served")
+            await writer.drain()
+            writer.close()
+            self.answered.set()
+
+        async def run(self) -> None:
+            await self.answered.wait()
+
+    monkeypatch.setattr(ws, "PublisherProcess", Publisher)
+    monkeypatch.setattr(ws, "Warden", Relay)
+    monkeypatch.setattr(ws, "prepare_process", lambda params: {})
+    monkeypatch.setattr(ws, "stall_probe", types.SimpleNamespace(start=lambda *a: None, stop=lambda *a: None))
+    monkeypatch.setattr(ws.ar, "_quiet_runtime", lambda: None)
+    for name in ("PYTHONMALLOC", ws.C_ALLOCATOR):
+        monkeypatch.delenv(name, raising=False)
+    early = socket.create_connection(held.getsockname())
+    early.sendall(b"early")
+    capsys.readouterr()
+    assert ws.main(serve[2:]) == 0
+    assert got == [b"early"] and early.recv(6) == b"served"
+    a = ws.parser().parse_args(serve[2:])
+    said = json.loads(capsys.readouterr().out.splitlines()[0])
+    assert said["listening"] == list(held.getsockname())
+    assert json.loads((a.out / "deployment.json").read_text())["listen"] == list(held.getsockname())
+    with socket.create_connection(held.getsockname()) as late:
+        late.sendall(b"late")
+        conn, _ = held.accept()
+        assert conn.recv(4) == b"late"
+        conn.close()
+    early.close()
+    held.close()
+
+
+def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_which(tmp_path):
+    """A session stops at its last execution phase's end and cuts what is open, and the records say what each was. One
+    admitted at bucket s with s + D inside the run and no room to end (the first bucket past windows · T − span − 1)
+    has data and no `END` in the record: the audit refuses it in its admission's execution phase, and the check the
+    run, every execution phase still certified. Ones admitted later are cut before s + D: their requests are whole in
+    the ingress record, their egress is padding, the audit takes them and the check accepts, counting them as not
+    ended. One still in the queue then (it arrived behind four that hold the lanes) got no cell and is in no
+    record. The clients' own logs say `cut` for each."""
+    args, p, load = _session(tmp_path, 2)
+    end = args.windows * p.window
+    assert (p.lanes, p.queue, p.delay, p.span, end) == (4, 4, 27, 28, 64)
+
+    def run(name: str, arrive: list[int]):
+        out = tmp_path / name
+        out.mkdir()
+        relay = _run(out, tmp_path / f"key-{name}", *load(len(arrive)), windows=args.windows, params=p,
+                     id_payload=p.payload, arrive=dict(enumerate(arrive)))
+        own = json.loads((out / "client.json").read_text())["connections"]
+        (out / "client.json").unlink()
+        records = ws.read_records(out, p)
+        return relay, own, ws.check(out), ws.audit(p, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])
+
+    relay, own, result, audit_ = run("ends", [end - p.span - 1])
+    assert result["accepted"] and relay.log[0]["ended"] == end - 1 and not relay.log[0]["cut"]
+    assert [c["outcome"] for c in own] == ["end"] and audit_["connections"][0]["ended"] == end - 1
+
+    relay, own, result, audit_ = run("late", [end - p.span])
+    assert relay.log[0]["cut"] and relay.log[0]["ended"] is None and [c["outcome"] for c in own] == ["cut"]
+    assert own[0]["kinds"].count(ws.KIND_CHARS[DATA]) == p.slots and ws.KIND_CHARS[END] not in own[0]["kinds"]
+    assert not result["accepted"] and result["problems"] == [
+        "audit: connection 1: its egress isn't padding to s + D, data in every slot, one END or FAIL, padding"]
+    assert [(w["window"], w["accepted"]) for w in audit_["windows"]] == [(0, True), (1, False)]
+    assert result["summary"]["certified_windows"] == 6 and all(w["certified"] for w in result["windows"])
+
+    early = end - p.delay + 3
+    relay, own, result, audit_ = run("early", [early] * p.lanes + [early + 1])
+    assert result["accepted"] and result["problems"] == [] and audit_["accepted"]
+    assert [(e["admitted"], e["ended"], e["cut"], e["ingress_cells"], e["egress_cells"]) for e in relay.log] == \
+        [(early, None, True, 1, 0)] * p.lanes + [(None, None, True, 0, 0)]
+    assert [(c["ordinal"], c["admitted"], c["ended"], c["egress_bytes"]) for c in audit_["connections"]] == \
+        [(o, early, None, 0) for o in range(1, p.lanes + 1)]
+    assert all(c["ingress_bytes"] > 0 for c in audit_["connections"])
+    assert [c["outcome"] for c in own] == ["cut"] * (p.lanes + 1)
+    assert [set(c["kinds"]) for c in own] == [{ws.KIND_CHARS[ws.PAD]}] * p.lanes + [set()]
+    assert result["summary"]["data_bytes"] == {"ingress": sum(map(len, load(p.lanes)[0])), "egress": 0}
+    assert result["summary"]["certified_windows"] == 6
+
+
+def test_one_connection_failed_closed_refuses_a_sessions_whole_run_whichever_client_it_was(tmp_path):
+    """The check's verdict is the whole session's. Of four connections, three end and one's answer is out of the id
+    form, which the relay fails closed: every execution phase is still certified, the audit refuses the one the
+    failure is in and accepts the other, and the check refuses the run, whoever's the three that ended were."""
+    args, p, load = _session(tmp_path, 2)
+    requests, responses = load(4)
+    out = tmp_path / "run"
+    out.mkdir()
+    relay = _run(out, tmp_path / "key", requests, responses[:3] + [_response([" a"])], windows=args.windows,
+                 params=p, id_payload=p.payload, arrive=dict(enumerate([0, 0, 1, 2])))
+    (out / "client.json").unlink()
+    records = ws.read_records(out, p)
+    audit_ = ws.audit(p, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])
+    result = ws.check(out)
+    assert sorted(e["failed"] or "" for e in relay.log) == ["", "", "", "format"]
+    assert [(c["failed"], c["ended"] is not None) for c in audit_["connections"]] == \
+        [(None, True)] * 3 + [("format", True)]
+    assert sorted(w["accepted"] for w in audit_["windows"]) == [False, True]
+    assert not result["accepted"] and all(w["certified"] for w in result["windows"])
+    assert result["problems"] == ["audit: connection 4 failed closed (format) at egress cell 0"]
+
+
+def test_the_check_names_each_execution_phase_the_audit_refused_and_why_uncut(tmp_path, monkeypatch):
+    """`check.json`'s `audit_windows` is the audit's verdict of each execution phase, whole. Of a session's two, the
+    second, where a connection fails closed, is refused with that problem and the first accepted, while `problems`
+    gives the problem's text without its execution phase; a run the audit accepts has each one accepted, with no
+    problem. And where the audit has more problems than the 50 `problems` keeps, `audit_windows` has them all."""
+    args, p, load = _session(tmp_path, 2)
+    requests, responses = load(4)
+
+    def run(name: str, answers: list[bytes]) -> dict:
+        out = tmp_path / name
+        out.mkdir()
+        _run(out, tmp_path / f"key-{name}", requests, answers, windows=args.windows, params=p, id_payload=p.payload,
+             arrive=dict(enumerate([0, 0, 1, p.window])))
+        (out / "client.json").unlink()
+        return ws.check(out)
+
+    result = run("ends", responses)
+    assert result["accepted"] and result["audit_windows"] == [
+        {"window": 0, "accepted": True, "problems": []}, {"window": 1, "accepted": True, "problems": []}]
+
+    result = run("fails", responses[:3] + [_response([" a"])])
+    why = "connection 4 failed closed (format) at egress cell 0"
+    assert not result["accepted"] and result["problems"] == [f"audit: {why}"]
+    assert result["audit_windows"] == [
+        {"window": 0, "accepted": True, "problems": []}, {"window": 1, "accepted": False, "problems": [why]}]
+
+    audit = ws.audit
+
+    def many(*records) -> dict:
+        verdict = audit(*records)
+        verdict["windows"][1]["problems"] += [f"problem {i}" for i in range(60)]
+        return verdict
+
+    monkeypatch.setattr(ws, "audit", many)
+    result = ws.check(tmp_path / "fails")
+    assert len(result["problems"]) == 50 and result["problems"][:2] == [f"audit: {why}", "audit: problem 0"]
+    assert result["audit_windows"][1]["problems"] == [why] + [f"problem {i}" for i in range(60)]
 
 
 def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):

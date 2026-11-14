@@ -428,7 +428,8 @@ def test_the_node_sweeps_for_the_points_in_rounds_of_bench_py(tmp_path):
     assert {m["name"]: m["value"] for m in result["measurements"]} == {"C": want.c, "L": want.lat}
     for m in result["measurements"]:
         assert (m["unit"], m["run"], m["commit"], m["host"]) == ("m", "r20261104-020000-0001", SHA, STAMP)
-        assert m["inputs"] == ["out/points.json"] and m["ci95"] is None and m["verdict"] is None
+        assert m["inputs"] == ["measured", "out/points.json"] and m["mark"] == "measured"
+        assert m["ci95"] is None and m["verdict"] is None
 
 
 def test_the_node_refuses_a_sweep_without_every_library_the_card_chooses_among(tmp_path):
@@ -466,7 +467,7 @@ def test_the_result_holds_a_callers_whole_entries_as_given_and_its_own_through_t
                                measured=[{"name": "C", "value": 512, "unit": "m"}])
     held, own = json.loads((run_dir / "result.json").read_text())["measurements"]
     assert held == whole and (own["name"], own["value"], own["run"], own["host"]) == ("C", 512, "r1", STAMP)
-    assert own["inputs"] == ["out/record.json"]
+    assert (own["mark"], own["inputs"]) == ("measured", ["measured", "out/record.json"])
 
 
 def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_with_its_controls(tmp_path, scheme):
@@ -492,7 +493,7 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
         assert {v["stock_least_sm"]["kernel"] for v in p["linears"].values()} == {"k_lean"}
         assert all(v["accepted"] for v in p["verified"].values()) and len(p["verified"]) == len(LINEARS)
         assert p["epsilon"]["gate_up"] == {"epsilon": 2.0 ** -40 * 7, "delta": 1e-9, "basis": "stand-in"}
-        assert p["gate"] == {"cap": O.GAMMA_MAX, "passes": True} and p["perplexity"]["value"] is None
+        assert p["gate"] == {"gamma_max": O.GAMMA_MAX, "passes": True} and p["perplexity"]["value"] is None
         fast = p["linears"]["o"]["stock_fastest"]
         assert fast["sm_s"] == pytest.approx(pts[name.lower()] * 8192 * 8192 * 1e-12 * 1.02, rel=1e-3)
         assert fast["cpu_sm_s"] == pytest.approx(HOST * fast["sm_s"], rel=1e-3)
@@ -522,7 +523,8 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
     for name, p in doc["points"].items():
         m = written[f"gamma_{name}"]
         assert (m["value"], m["ci95"], m["unit"]) == (p["gamma"]["gamma"], p["gamma"]["ci95"], "ratio")
-        assert (m["target"], m["verdict"], m["inputs"]) == (None, None, ["out/overhead.json"])
+        assert (m["target"], m["verdict"], m["mark"]) == (None, None, "measured")
+        assert m["inputs"] == ["measured", "out/overhead.json"]
         assert (m["run"], m["commit"], m["host"]) == (run_dir.name, SHA, STAMP)
 
 
@@ -783,7 +785,8 @@ def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_
 
 
 def test_a_row_carries_the_note_of_its_own_run_and_the_same_numbers_with_it_or_without(tmp_path, scheme, monkeypatch, capsys):
-    """Made-up records of one stand-in arm under three entries. pearl-plus's entry commits no y, so its C and L rows carry
+    """Made-up records of one stand-in arm under three entries. The fixture's pearl-plus entry states no `commits_y`, so its
+    C and L rows carry
     `WITHOUT_Y` in both rendered tables and the JSON. A made-up scheme whose entry commits y carries no note, and every
     number of its rows is pearl-plus's. A run recorded before the field (its `arm` record without `commits_y`) carries the
     note whatever today's entry says: the note is the run's, not the entry's. stock, with no arm, carries none. The
@@ -910,6 +913,7 @@ def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_t
 def test_verity_bench_overhead_is_the_door_s_runner(tmp_path, monkeypatch, capsys):
     """`verity bench overhead` runs benchmarks/overhead/run.py, which is `verity-bench overhead`."""
 
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "empty"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(Store(tmp_path).config))
     monkeypatch.setattr(sys, "argv", ["run.py", "table", "--json", "--local-only"])
@@ -918,3 +922,62 @@ def test_verity_bench_overhead_is_the_door_s_runner(tmp_path, monkeypatch, capsy
     assert done.value.code == 0
     table = json.loads(capsys.readouterr().out)
     assert table["rows"] == [] and table["census"]["world_flop_per_year"] == 9.36e30
+
+
+def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(tmp_path, monkeypatch, capsys, scheme):
+    """Under a research run, `verity bench overhead table` writes run.py's metrics into the run's result through the kit:
+    each the γ of record of its row, measured, with its interval, the scheme gate as its target, its run and points' art,
+    and its note; with no γ of record, no value and why, and a failed validation naming it. What it prints is the same in
+    a run as outside one, where it writes nothing."""
+
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    run = timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0002")
+    capsys.readouterr()
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "producer"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
+    runner = REPO / "benchmarks" / "overhead" / "run.py"
+    metrics = runpy.run_path(str(runner))["METRICS"]
+    assert metrics == {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C",
+                       "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L"}
+
+    def table(within: Path | None = None) -> str:
+        if within is None:
+            monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+        else:
+            monkeypatch.setenv("RESEARCH_RUN_DIR", str(within))
+        monkeypatch.setattr(sys, "argv", ["run.py", "table", "--local-only"])
+        with pytest.raises(SystemExit) as done:
+            runpy.run_path(str(runner), run_name="__main__")
+        assert done.value.code == 0
+        return capsys.readouterr().out
+
+    def result(within: Path) -> dict:
+        return json.loads((within / kit.RESULT).read_text())
+
+    before = tmp_path / "run-1"
+    assert table(before) == table()
+    got = result(before)
+    assert [m["name"] for m in got["measurements"]] == list(metrics)
+    for m, point in zip(got["measurements"], O.POINTS):
+        assert m["value"] is None and m["mark"] == "measured" and m["target"] == O.GAMMA_MAX and m["verdict"] is None
+        assert m["why"] == f"no γ of record: no labelled run times pearl-plus at h200's {point} (`run_of_record=overhead`)"
+    assert got["validation"]["status"] == "failed" and got["validation"]["evidence"] == [R.TABLE]
+    assert got["validation"]["detail"].startswith("0 of 2 metrics have a γ of record")
+
+    assert R.record_run(s.store, run) == []
+    after = tmp_path / "run-2"
+    printed = table(after)
+    assert printed == table() and "| pearl-plus | h200 | C |" in printed
+    got, kept = result(after), json.loads((after / R.TABLE).read_text())
+    rows = {r["point"]: r for r in kept["rows"]}
+    assert got["workload_fingerprint"]["runs"] == [run] and got["measurement_files"] == [R.TABLE]
+    for m, point in zip(got["measurements"], O.POINTS):
+        g = rows[point]["gamma"]
+        assert (m["value"], m["ci95"], m["unit"], m["mark"]) == (g["gamma"], g["ci95"], R.GAMMA_UNIT, "measured")
+        assert m["verdict"] == "within target" and m["inputs"] == ["measured", run, art] and "why" not in m
+        assert m["note"] == O.WITHOUT_Y and m["covers"] == O.covers()
+    assert got["validation"] == {"status": "passed", "checker": "verity_bench.overhead_records.of_record",
+                                 "detail": "2 of 2 metrics have a γ of record (the source check, `of_record`)",
+                                 "evidence": [R.TABLE]}

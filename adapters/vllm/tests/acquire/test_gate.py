@@ -1,21 +1,30 @@
-"""The CPU gate and the committer adapter on a tiny module tree: the gate's plan and plan-vs-plan comparison, the REAL committer taking
+"""The CPU gate and the committer adapter on a tiny module tree: the gate's plan, the REAL committer taking
 its selection from the plan (`apply_plan_to_committer`), and VERITY_SKIP on that selection."""
 from __future__ import annotations
 
 import types
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
-nn = torch.nn
+if TYPE_CHECKING:
+    import torch
+    from torch import nn
+else:
+    torch = pytest.importorskip("torch")
+    nn = torch.nn
 
-from verity_vllm.query.manifest import format as MF  # noqa: E402
-from verity_vllm.query.manifest import format as RM  # noqa: E402
-from verity_vllm.commit.committer.native_host import NativeHostCommitter, SkipRefused  # noqa: E402
-from verity_vllm.acquire import gate as G  # noqa: E402
-from verity_vllm.correspondence.reader_for_acquire import RUNNER_PATH, AnnotationCorrespondence, runtime_tree_of  # noqa: E402
-from verity_vllm.acquire.install import apply_plan_to_committer  # noqa: E402
-from verity_vllm.acquire.plan import acquisition_plan  # noqa: E402
+from verity_vllm.acquire import gate as G
+from verity_vllm.acquire.install import apply_plan_to_committer
+from verity_vllm.acquire.plan import acquisition_plan
+from verity_vllm.commit.committer.native_host import NativeHostCommitter, SkipRefused
+from verity_vllm.correspondence.reader_for_acquire import (
+    RUNNER_PATH,
+    AcquireCorrespondence,
+    runtime_tree_of,
+)
+from verity_vllm.query.manifest import format as MF
+from verity_vllm.query.manifest import format as RM
 
 PD = "1" * 64
 
@@ -87,19 +96,18 @@ def offline_committer(model, runner, acquire_inputs=None):
     return c
 
 
-def test_gate_plan_and_plan_compare():
+def test_gate_plan():
     model, runner = Model(), Runner()
     rt = runtime_tree_of(model, runner, source="test")
     plan = G.run(manifest(rows_matching_v1()), rt)
     assert plan.complete and not plan.unsupported
     kinds = {k: len({m for m, _k, _s in v}) for k, v in plan.sites_by_kind().items()}
     assert kinds == {"producer_output": 11, "consumer_input": 1, "runner_return": 1, "registered_input": 1}
-    doc = plan.to_json()
-    assert G.compare_plans(doc, doc)["identical"]
     rows = [r for r in rows_matching_v1() if r["op_path"] != "norm"]
-    other = G.run(manifest(rows), rt).to_json()
-    cmp = G.compare_plans(doc, other)
-    assert not cmp["identical"] and cmp["only_a"] == ["norm/out"] and not cmp["differing"]
+    other = G.run(manifest(rows), rt)
+    assert other.complete and other.digest != plan.digest
+    assert {v.value_id for v in plan.values} - {v.value_id for v in other.values} == {"norm/out"}
+    assert {v.value_id for v in other.values} <= {v.value_id for v in plan.values}
 
 
 def test_apply_plan_to_committer_replaces_the_class_tables():
@@ -108,7 +116,7 @@ def test_apply_plan_to_committer_replaces_the_class_tables():
     rows = [r for r in rows_matching_v1() if r["op_path"] != "norm"]
     rows.append(row("instance_outputs", "layers.1.mixer", RM.PROMOTED_MEMBER, **RM.promoted_annotations({"rows": 1, "width": 4, "dtype": "bf16", "spec": "Add_v1", "consumers": ["layers.1.post"]})))
     man = manifest(rows)
-    plan = acquisition_plan(man, AnnotationCorrespondence(rt))
+    plan = acquisition_plan(man, AcquireCorrespondence(rt))
     assert plan.complete
     c = offline_committer(model, runner, acquire_inputs=MF.promoted_observation(man)["consumers"])
     before = [n for n, _m in c._modules]
@@ -133,7 +141,7 @@ def promoted_plan(model, runner):
     rows = [r for r in rows_matching_v1() if r["op_path"] != "norm"]
     rows.append(row("instance_outputs", "layers.1.mixer", RM.PROMOTED_MEMBER, **RM.promoted_annotations({"rows": 1, "width": 4, "dtype": "bf16", "spec": "Add_v1", "consumers": ["layers.1.post"]})))
     man = manifest(rows)
-    plan = acquisition_plan(man, AnnotationCorrespondence(runtime_tree_of(model, runner, source="test")))
+    plan = acquisition_plan(man, AcquireCorrespondence(runtime_tree_of(model, runner, source="test")))
     assert plan.complete
     return man, plan
 
