@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
+KERNEL = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 _spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", KERNEL / "run.py")
 R = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(R)

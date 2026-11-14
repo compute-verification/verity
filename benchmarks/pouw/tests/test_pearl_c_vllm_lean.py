@@ -39,7 +39,7 @@ def _module(name: str, path: Path):
 
 
 T = _module("test_pearl_c_vllm", HERE / "test_pearl_c_vllm.py")
-SP = T.load("pearl_c_vllm_served_passes", T.KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+SP = T.load("pearl_c_vllm_served_passes", T.POUW / "pearl_c_vllm" / "served_passes.py")
 H100 = "pearl-c-h100-v1-h3"
 SOURCE = b"verifier" * 4
 W = "d7" * 64

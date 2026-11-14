@@ -59,7 +59,7 @@ T = _module("test_pearl_c_vllm", ROOT / "benchmarks" / "pouw" / "tests" / "test_
 VR = T.VR
 Wd = T.Wd
 Ch = T.Ch
-VP = T.load("pearl_c_vllm_volunteer_pass", T.KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+VP = T.load("pearl_c_vllm_volunteer_pass", T.POUW / "pearl_c_vllm" / "volunteer_pass.py")
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
 
