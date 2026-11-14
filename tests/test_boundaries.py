@@ -1054,10 +1054,10 @@ def _source(path: str, listing: Listing) -> bool:
 
 
 @functools.cache
-def _public_boundary() -> Any:
-    """``tools/verity/check/public_boundary.py``, whose ``Tree`` resolves a Python import and a Lake package as the public
-    boundary reads them.  Loaded on first use, since it loads this file for ``_imports``."""
-    return _load_tool("public_boundary_of_the_order", ROOT / "tools/verity/check/public_boundary.py")
+def _tracked() -> Any:
+    """``tools/verity/check/tracked_tree.py``, whose ``Tree`` resolves a Python import and a Lake package among the tracked
+    files.  Loaded on first use."""
+    return _load_tool("tracked_tree_of_the_order", ROOT / "tools/verity/check/tracked_tree.py")
 
 
 def _path_roots(tree: Any, f: str, parsed: ast.AST, text: str) -> tuple[str, ...]:
@@ -1066,7 +1066,7 @@ def _path_roots(tree: Any, f: str, parsed: ast.AST, text: str) -> tuple[str, ...
     (``tools/verity/check/anchors.py``), whether or not that path is the one put there."""
     roots = {posixpath.dirname(f)}
     if "sys.path" in text and "__file__" in text:
-        anchors = _public_boundary().ANCHORS
+        anchors = _tracked().ANCHORS
         names = anchors.bindings(parsed, f)
         roots |= set(names.values())
         todo = [parsed]
@@ -1140,7 +1140,7 @@ def _python_loads(tree: Any, f: str) -> list[Load]:
 def _lake_sources(tree: Any) -> dict[str, tuple[str, ...]]:
     """By lakefile, where a Lean file of its package finds a module: the package's own source directory, then those of the
     packages it requires by path, directly or through one another."""
-    pb = _public_boundary()
+    tracked = _tracked()
     _, _, pkgs = tree.lake
     out = {}
     for lf in pkgs:
@@ -1150,7 +1150,7 @@ def _lake_sources(tree: Any) -> dict[str, tuple[str, ...]]:
                 if e.kind == "lake require" and e.target in pkgs and e.target not in reached:
                     reached.append(e.target)
                     todo.append(e.target)
-        out[lf] = tuple(dict.fromkeys(pb._rel(posixpath.relpath(pkgs[r].src, tree.root)) for r in reached))
+        out[lf] = tuple(dict.fromkeys(tracked._rel(posixpath.relpath(pkgs[r].src, tree.root)) for r in reached))
     return out
 
 
@@ -1160,7 +1160,7 @@ def _lean_module(tree: Any, lakefile: str | None, module: str) -> tuple[str, ...
     else under any tracked package's own source directory, test fixtures aside, since a file may be built against a
     package its own doesn't require (a benchmark's ``Main.lean``, a submission checked against the analysis)."""
     sources = _lake_sources(tree)
-    path = posixpath.join(*_public_boundary().HEADERS.parts(module)) + ".lean"
+    path = posixpath.join(*_tracked().HEADERS.parts(module)) + ".lean"
     found = [t for src in sources.get(lakefile, ()) if (t := posixpath.join(src, path)) in tree.files]
     found = found or [t for lf, srcs in sources.items() if not _is_test(lf) and (t := posixpath.join(srcs[0], path)) in tree.files]
     return tuple(dict.fromkeys(found))
@@ -1169,7 +1169,7 @@ def _lean_module(tree: Any, lakefile: str | None, module: str) -> tuple[str, ...
 def _lean_loads(tree: Any, f: str) -> list[Load]:
     """What the Lean file ``f`` imports among the tracked files: each module of its header that its own package or a
     package it requires by path holds; Mathlib's and the toolchain's are not tracked."""
-    headers = _public_boundary().HEADERS
+    headers = _tracked().HEADERS
     text = tree.text(f)
     header, starts = headers.header(text), headers.starts(text)
     assert header is not None and starts is not None, f"{f}: its header is cut off, so what it imports can't be read"
@@ -1206,7 +1206,7 @@ def _held(x: Load) -> bool:
 @functools.cache
 def _tree_loads() -> tuple[frozenset[str], tuple[Load, ...], frozenset[str]]:
     """The tracked tree's directories, its loads (``_all_loads``) and its files, read once for the tests below."""
-    tree = _public_boundary().Tree(ROOT)
+    tree = _tracked().Tree(ROOT)
     return frozenset(tree.dirs), _all_loads(tree), frozenset(tree.files)
 
 
@@ -1604,7 +1604,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     for f, text in ORDER_TREE.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text(text, encoding="utf-8")
-    tree = _public_boundary().Tree(tmp_path, files=ORDER_TREE)
+    tree = _tracked().Tree(tmp_path, files=ORDER_TREE)
     loads = _all_loads(tree)
     verifier, prover, device, check = (f"verity/protocols/accounting/pouw/{d}" for d in ("verifier", "prover", "device", "verifier/check"))
     own = {"verity/protocols/proofs/flock": {"owner": "proofs", "reason": "Flock's distribution"}, check: {"owner": "memory-accounting"}}
