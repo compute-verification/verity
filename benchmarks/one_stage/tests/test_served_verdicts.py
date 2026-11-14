@@ -170,7 +170,7 @@ LINES = [
      'THE NETWORK CERTIFIER {"rc": 1, "reason": "window K: the scan\'s prog is no audit\'s", "verdict": "reject"}'),
     ("SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [13, 19] (law rate:2/4), "
      'drawn members [5, 42]: RECORDS {"accepted": true}',
-     "SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps (sampling_design rate:2/N), "
+     "SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps (law rate:2/N), "
      'drawn members [5, 42]: RECORDS {"accepted": true}'),
     ('RECORD {"by": ["PoUS"], "composed": "reject", "node": "n", "steps": [13, 19], "window": 7}',
      'RECORD {"by": ["PoUS"], "composed": "reject", "node": "n"}'),
