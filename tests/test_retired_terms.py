@@ -22,6 +22,14 @@ names keeps it until it is renamed, and each word's count of names only falls (`
 sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
 (`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
 
+The slowdown's older name, "rho" and ρ, is held at zero by path (``SLOWDOWN_HOME``: the slowdown calculator, the benchmarks
+that read it and the two documents that state the slowdown bound), in each file's whole text: there the word only ever
+named the slowdown, while in the rest of the tree it is another quantity's (Flock's coins, Pearl-C's statistic, a clock
+sync's rate, SPOT's risk, the ACCEL model's resource rate) and stays. What may stay there is a stored key, renamed with
+its schema, and another quantity's symbol (``SLOWDOWN_KEPT``, one reason each). The calculator's directories before its
+moves, `inference_only/rho` and `benchmarks/rho`, are named nowhere but in the records of moves already made
+(``MOVE_RECORDS``), which a tool reads to map a stored old path to today's and which are exempt by path.
+
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
 their names, and "leg", the dampener, NCI, C-Flock, the netlist, M0, IR and the verifier of record are retired). Their code
@@ -466,6 +474,79 @@ def test_spot_s_older_name_only_falls():
     _held("SPOT_NAMES", SPOT_NAMES, spot_names(_tracked()), "SPOT's older name, sampled proofs,",
           "write SPOT in prose and strings, `spot` in a new path or Python name and `Spot` in a new Lean name (GLOSSARY.md, "
           "Older names): `git diff -U0 origin/main | grep -i -E 'sampled.?proofs'` shows it")
+
+
+#: Where "rho" and ρ only ever named the slowdown (GLOSSARY.md, Older names), so no file there says either.
+SLOWDOWN_HOME = ("benchmarks/slowdown/", "benchmarks/circuit_properties/", "benchmarks/inference_only/",
+                 "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
+#: the word alone or as one part of a name (`rho_worst`, `RHO_MODEL`, `Overhead.rho`, `rhos`), and the symbol
+_RHO = re.compile(r"(?<![A-Za-z])(?:rho|Rho|RHO)s?(?![A-Za-z])|ρ")
+#: What stays under SLOWDOWN_HOME, each spelling with its reason; an entry that matches nothing fails too.
+SLOWDOWN_KEPT: dict[str, str] = {
+    'search(*case)["rho"]': "the board's key (`nci.bracket.search`'s), which the calculator's test reads: renamed with its schema",
+    'the board\'s `"rho"`': "the calculator's README, naming that key",
+    'out["rho"]': "the key of the circuit properties' output, renamed with its schema",
+    "`ln(1/δ) / ρ(1)` blocks": "SPOT's risk ρ(m), the integrity profile's",
+    "`ρ(1) = -ln(1 - q)`": "SPOT's risk ρ(m), the integrity profile's",
+    "level.rho(1)": "SPOT's risk ρ(m): the integrity profile's method",
+}
+#: the calculator's directories before its moves
+_SLOWDOWN_OLD_PATH = re.compile(r"(?:inference_only|benchmarks)/rho(?![A-Za-z0-9_])")
+#: The records of moves already made: data a tool reads to map a stored old path to today's, so they keep the old paths.
+MOVE_RECORDS = (MAPS, "tools/move/layout_maps.json", "tools/research/src/research/store/moves.json")
+
+
+def slowdown_offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]], set[str]]:
+    """(file, line, what it says) for each "rho" or ρ in a file under SLOWDOWN_HOME and each mention of the calculator's old
+    path in any scanned file outside MOVE_RECORDS, and the SLOWDOWN_KEPT spellings used."""
+    out, used = [], set()
+    for f in scanned(files):
+        if f.startswith(MOVE_RECORDS) or (text := read(f)) is None:
+            continue
+        found = list(_SLOWDOWN_OLD_PATH.finditer(text))
+        if f.startswith(SLOWDOWN_HOME) and ("rho" in text.lower() or "ρ" in text):
+            kept = [(m.start(), m.end(), s) for s in SLOWDOWN_KEPT for m in re.finditer(re.escape(s), text)]
+            for m in _RHO.finditer(text):
+                if spelling := next((s for a, b, s in kept if a <= m.start() and m.end() <= b), None):
+                    used.add(spelling)
+                elif not any(o.start() <= m.start() < o.end() for o in found):
+                    found.append(m)
+        out += [(f, text.count("\n", 0, m.start()) + 1, m[0]) for m in sorted(found, key=lambda m: m.start())]
+    return out, used
+
+
+def test_the_slowdown_s_older_name_is_gone():
+    """The training-cost ratio is the slowdown: no "rho" or ρ where the word only ever named it, and no mention of the
+    calculator's old directory outside the records of moves already made."""
+    bad, used = slowdown_offenders(_tracked())
+    assert not bad, (
+        f'"rho", ρ or the calculator\'s older directory for the slowdown: under {", ".join(SLOWDOWN_HOME)} say "the slowdown" in prose '
+        "(the package is the slowdown calculator), `slowdown` in a name and in a formula (`slowdown >= ...`), and "
+        f"`{SLOWDOWN_HOME[0]}` for the calculator's directory ({GLOSSARY}, Older names). A stored key "
+        "that keeps the word until its schema changes, or another quantity's symbol, goes in SLOWDOWN_KEPT with its reason. "
+        f"The records of moves already made ({', '.join(MOVE_RECORDS)}) map stored old paths to today's: they keep the old "
+        "path and are exempt by path:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
+    unused = set(SLOWDOWN_KEPT) - used
+    assert not unused, f"SLOWDOWN_KEPT entries that match nothing any more: {sorted(unused)}"
+
+
+def test_the_slowdown_scan_reads_each_form():
+    """On toy files: under the calculator's directory the word counts alone, as a part of a name and as the symbol, a kept
+    spelling and a word that only holds the letters don't; outside it only the calculator's old path counts, and a record
+    of a move keeps it."""
+    home = SLOWDOWN_HOME[0]
+    # spelled from today's, so that the map that moved the directory, run again, leaves this file as it is
+    old = home.removesuffix("slowdown/") + "rho/"
+    toy = {home + "a.py": ('"""rho is ρ = m c / |C|; `Overhead.rho`."""\nrho_worst, RHO_MODEL, rhos = 1, 2, []\n'
+                           'x = search(*case)["rho"]  # a rhombus, a throw\n'),
+           "b.py": f"rho = coins()  # ρ, Flock's; see {old}README.md\n",
+           "c.py": f"# {old.rstrip('/')}_notes is another path\n",
+           "tools/move/old_map.toml": f'"{old}" = "{home}"\n',
+           MOVE_RECORDS[-1]: f'{{"{old}run.py": "{home}run.py"}}\n'}
+    found, used = slowdown_offenders(list(toy), read=toy.get)
+    assert found == [("b.py", 1, old.rstrip("/")), (home + "a.py", 1, "rho"), (home + "a.py", 1, "ρ"),
+                     (home + "a.py", 1, "rho"), (home + "a.py", 2, "rho"), (home + "a.py", 2, "RHO"), (home + "a.py", 2, "rhos")]
+    assert used == {'search(*case)["rho"]'}
 
 
 def test_the_spot_scan_reads_each_form():
