@@ -176,12 +176,14 @@ protocols = [
     "adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py",
     "adapters/vllm/tests/pipeline/test_registration_log.py",
     # the network certifier's advice code (advice v1), private with its protocol: the public compiler reads it only through
-    # a registration's `decode`, and its test of that is private with it, as are the difftest of its certified tick's step
-    # and the tick gate's lost-release test, which replays the run it serves under the advice code
+    # a registration's `decode`, and its test of that is private with it, as are the difftest of its certified tick's step,
+    # the tick gate's lost-release test, which replays the run it serves under the advice code, and the test of the code
+    # under a draft
     "adapters/vllm/verity_vllm/pipeline/advice_code",
     "adapters/vllm/tests/program/predict/test_steps_advice_code.py",
     "adapters/vllm/tests/pipeline/test_serve_tick_lost.py",
     "adapters/vllm/tests/pipeline/test_tick_step.py",
+    "adapters/vllm/tests/pipeline/test_advice_kept.py",
     # vLLM's PoUS option test runs the memory challenger's party in process
     "adapters/vllm/tests/protocols/test_pous_option.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
@@ -269,7 +271,7 @@ team = [
     ".cursor",
     "{inbox,notes,lanes}",
     # vLLM's pod scripts and tests that run or read the team's run and store tool (`research`)
-    "adapters/vllm/verity_vllm/ops/{epoch_row,pod_bootstrap}.sh",
+    "adapters/vllm/verity_vllm/ops/{epoch_row,epoch_store,pod_bootstrap,store_trees}.sh",
     "adapters/vllm/tools/topp_pin_gpu.sh",
     "adapters/vllm/tests/ops/test_{epoch_row,pod_bootstrap}.py",
     "adapters/vllm/tests/lint/test_merge_allowlist.py",
@@ -319,13 +321,14 @@ via = ["package"]
 
 [[needed]]
 why = "the errors and settings every unit of `verity` shares"
-paths = ["verity/{errors,settings}.py"]
+paths = ["verity/errors.py", "verity/settings.py"]
 from = "*"
 
 [[needed]]
 why = "the challenger and service code SPOT needs"
 paths = [
     "verity/{claims,commitments,configuration,definitions,difftest,hardware,protocols}",
+    "verity/{channel.py,config.py,device.py,party.py,protocol.py,runtime,tests}",
     "security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}",
 ]
 from = ["spot"]

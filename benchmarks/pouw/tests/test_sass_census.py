@@ -8,33 +8,17 @@ NVIDIA Instruction Set Reference tables the diff reads for the opcodes the corpu
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 import re
-import sys
 from pathlib import Path
+
+import diff_menu
+import sass_count
+import sass_semantics
 
 POUW = Path(__file__).resolve().parents[1]
 SC = POUW / "sass_census"
 FIX = Path(__file__).resolve().parent / "fixtures" / "sass_census_sample.sass"
-
-
-def _load(name: str, path: Path):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-# diff_menu imports `loads` and `sass_semantics` by bare name off the paths it inserts; load those first under the same
-# names so every module is the one diff_menu uses.
-sass_semantics = _load("sass_semantics", SC / "sass_semantics.py")
-loads = _load("loads", POUW / "facet_break" / "loads.py")
-sass_count = _load("sass_count", SC / "sass_count.py")
-diff_menu = _load("diff_menu", SC / "diff_menu.py")
 
 
 def census() -> dict:

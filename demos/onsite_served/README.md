@@ -114,3 +114,6 @@ The gate's and the auditor host's sides are started by their gates when the prov
 record, the onsite check and the period's verdict:
 
     verity run demos/onsite_served/config.toml --on auditor-host --state STATE
+
+A run of record launches each of the two commands under `research run`, and `minutes.py` reads the demo's minutes from
+those two runs (`vllm/onsite-demo-minutes` in `benchmarks/metrics.toml`).

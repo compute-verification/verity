@@ -46,7 +46,7 @@ selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
   Honest's time is measured when the design runs the profile's kernel; otherwise, when the profile is measured, the
   measured time plus the model's difference between the design and the profile's kernel, and else its fastest
   program's model time.
-- **ε_skip** is the ε_skip calculator's number for the design's noise (benchmarks/pouw/eps_budget.py, `design_skip`), which
+- **ε_skip** is the number `skip.design_skip` makes for the design's noise, which
   its `[skip.served]` records at the device's current vector, and at another vector V as `at = { V = … }` (♭ moves
   with Π); **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
 - **ε_adapt** is the proof block's (data/adapt.toml, Theorem D): what steering instances in unproved regions gains
@@ -98,7 +98,7 @@ NOISE = {                                          # how a product is noised and
     "pv": "P served with a fresh bit, V served, Ycum's base-128 digits committed: every product checked",
     "clean": "served plain, never proved",
 }
-SUMS = {                                           # the kernel forming a peel's sums DG, S and X(0) (eps_budget prices it)
+SUMS = {                                           # the kernel forming a peel's sums DG, S and X(0) (`skip` prices it)
     "vsum": "the linear vsum, 35 per-thread instructions an entry",
     "vfold": "the vfold, the V producers in one pass: 0.69–0.73 warp instructions an entry",
 }

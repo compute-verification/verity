@@ -10,7 +10,8 @@ optimizer alike. It counts, in multiply-accumulates (MACs):
   (`cdist`, `pdist`) at one MAC per coordinate pair, and `embedding_bag` at one per index and column;
 - a fused attention kernel as the ops the math kernel computes attention by, which are the ones a step's trace holds
   (`Counter._attention`): the forward's two scalings and two products, and in the backward the products and scalings
-  of the gradients the step asks for. A job's record is the same under either kernel;
+  of the gradients the step asks for. A job's record is the same under either kernel, but for the dtype its rows
+  name for those ops: the fused kernel's operands', where the math kernel casts half-width operands to float32;
 - elementwise multiplications (`mul`, `div`, `addcmul`, `addcdiv`, `lerp`, `add` with a scale, their in-place and
   `_foreach_` forms), one MAC per output element, so a matmul written as a broadcast product or quotient is counted
   too, and a fused optimizer step at a constant per parameter (`opnames.FUSED_OPTIMIZER_MACS`);
@@ -26,7 +27,11 @@ An op outside torch's own namespaces (a `torch.library` custom op, whose body ru
 read out of torch (`numpy`, `tolist`, DLPack: `guard_exits`) at one value or more per token of its step (`exited`), since
 what is computed on it outside torch isn't counted.
 
-|C| is their sum (`macs`). Each multiplication is a node classified by its operands' provenance, which the counter tracks
+|C| is their sum (`macs`). A step's op log (`Counter.record`) holds each counted op by its operands' shapes and the
+dtype it computed in, its result's (`dtype_of`), and training_slowdown.gates prices its MACs in that dtype: an
+optimizer's product cast to bf16 as a bf16 GEMM, a forward scaling autocast leaves in f32 as an f32 multiply.
+
+Each multiplication is a node classified by its operands' provenance, which the counter tracks
 per tensor through every op within a step:
 
 - *token-indexed*: computed from this step's token data (a batch from the start's data stream, `Counter.batch`, through
@@ -80,6 +85,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch._prims_common import ELEMENTWISE_TYPE_PROMOTION_KIND, elementwise_dtypes
 from torch.utils import flop_counter
 from torch.utils._python_dispatch import TorchDispatchMode
 from torch.utils._pytree import tree_flatten
@@ -231,6 +237,39 @@ def _work(func, args, kwargs, out) -> int:
 
 def _tensors(x) -> list[torch.Tensor]:
     return [t for t in tree_flatten(x)[0] if isinstance(t, torch.Tensor)]
+
+
+#: kernels that cast their result out of the dtype they compute in, their first operand's
+CAST_RESULTS = frozenset({"_scaled_mm"})
+
+
+def in_place(name: str) -> bool:
+    """Whether the op named `name` is an in-place form (`mul_`, `addcmul_`, `_foreach_lerp_`), which computes in its
+    tensor operands' promoted dtype and writes its first operand's: not a fused kernel (`_fused_adamw_`), which
+    computes in its own."""
+    return name.endswith("_") and not name.endswith("__") and not name.startswith("_fused_")
+
+
+def dtype_of(name: str, results: list, first: list, operands: list = ()) -> str:
+    """The dtype the op named `name` computes in, which its gates are priced in (`gates.kind_of`), by its result's
+    tensors, its first operand's and all its tensor operands (traced ones too): its result's. Its first operand's
+    where it returns none (an in-place `_foreach_` form and a fused optimizer step write it; an op inside a fused
+    kernel has a stand-in at the kernel's dtype) or casts its result (`CAST_RESULTS`). An in-place form (`in_place`)
+    computes in its operands' promoted dtype, torch's `result_type` over them, and writes its first operand's: it is
+    named the one it computes in (`bf16.mul_(f32)` float32). It is the name of their floating-point dtype (a
+    decomposition's pivots and flags beside it are not its work), or of the dtype they have where none is floating
+    (a comparison, an integer op). Tensors in more than one are named together ("bfloat16+float32"), which no price
+    reads: a trace holds a list op as one node at one price (`capture.structure`), so a row split by dtype would
+    have nothing to equal there."""
+    named = _named({t.dtype for t in (first if name in CAST_RESULTS or not results else results)})
+    if operands and in_place(name) and "+" not in named:
+        return _named({elementwise_dtypes(*operands, type_promotion_kind=ELEMENTWISE_TYPE_PROMOTION_KIND.DEFAULT)[1]})
+    return named
+
+
+def _named(dtypes: set) -> str:
+    names = {str(d).removeprefix("torch."): d.is_floating_point for d in dtypes}
+    return "+".join(sorted(n for n, floating in names.items() if floating or not any(names.values())))
 
 
 def _ptr(t: torch.Tensor) -> int:
@@ -385,7 +424,7 @@ class Step:
     approx_macs: int = 0
     by: dict = field(default_factory=dict)
     updated: list = field(default_factory=list)  # [per_row_macs, upstream_per_row, macs, rows, weight_bits]
-    log: dict = field(default_factory=dict)  # (phase, kind, op, shapes) -> [count, macs]
+    log: dict = field(default_factory=dict)  # (phase, kind, op, shapes, dtype) -> [count, macs]
     weights: dict = field(default_factory=dict)  # weight key -> [digest of each value used, in order]
     shapes: dict = field(default_factory=dict)  # weight key -> [dtype, shape]
     cpu_s: float = 0.0
@@ -828,13 +867,18 @@ class Counter(TorchDispatchMode):
             mixed = [g for t, g in zip(ins, tags) if id(t) not in src]
             if any(g.tok for g in mixed) and any(g.roots and not g.tok for g in mixed):
                 macs, cls = _work(func, args, kwargs, out), "elementwise"
-        return self._count(func, ins, tags, macs, cls, tag, bwd) if macs else tag
+        if not macs:
+            return tag
+        return self._count(func, ins, tags, macs, cls, tag, bwd,
+                           dtype_of(p.__name__, _tensors(out), _tensors(args[:1]), ins))
 
     def _attention(self, func, args, kwargs, tags: dict[int, Tag], bwd: bool) -> Tag:
         """A fused attention kernel, counted as the ops the math kernel computes attention by, each on its own operands'
         provenance: they are the ops a step's trace holds (`capture` traces under the math kernel), so a job's record
-        is one record under either kernel. With q [*b, L, E], k [.., S, E], v [.., S, Ev] and n the product of q's
-        batch dims (k and v counted at q's heads, as grouped-query attention repeats them):
+        is one record under either kernel in its ops, their shapes and their MACs. Each row names the dtype of the
+        kernel's operands, the one a fused kernel computes in; the math kernel casts half-width operands to float32
+        first, and its rows, and a trace's nodes, name that. With q [*b, L, E], k [.., S, E], v [.., S, Ev] and n the
+        product of q's batch dims (k and v counted at q's heads, as grouped-query attention repeats them):
 
         - forward: the scalings of q and of kᵀ (`mul`, each by the root of the scale); the scores (`bmm`, [n, L, E] by
           [n, E, S]); a mask added to them, where that combines token data with an updated weight (`add`, as any
@@ -896,7 +940,7 @@ class Counter(TorchDispatchMode):
         shapes = {tuple(t.shape) for t in [*self.held.values(), *self.new_tensors.values()] if t.dim() == 2}
         return shapes | {s[::-1] for s in shapes}
 
-    def _count(self, func, ins, tags, macs, cls, tag: Tag, bwd: bool) -> Tag:
+    def _count(self, func, ins, tags, macs, cls, tag: Tag, bwd: bool, dtype: str) -> Tag:
         s = self.cur
         s.macs += macs
         setattr(s, f"{cls}_macs", getattr(s, f"{cls}_macs") + macs)
@@ -920,7 +964,8 @@ class Counter(TorchDispatchMode):
         phase = "bwd" if bwd else ("fwd" if tok else "other")
         key = f"{phase}/{kind}"
         s.by[key] = s.by.get(key, 0) + macs
-        sig = (phase, kind, str(func.overloadpacket).removeprefix("aten."), json.dumps([list(t.shape) for t in ins]))
+        sig = (phase, kind, str(func.overloadpacket).removeprefix("aten."), json.dumps([list(t.shape) for t in ins]),
+               dtype)
         entry = s.log.setdefault(sig, [0, 0])
         entry[0] += 1
         entry[1] += macs
@@ -955,13 +1000,16 @@ class Counter(TorchDispatchMode):
         self._close(self.cur)
 
     def record(self) -> dict:
-        """The run's count: totals, per-step records with their structures deduplicated, timings and flags."""
+        """The run's count: totals, per-step records with their structures deduplicated, timings and flags. A
+        structure's `log`, the step's op log, holds one row [phase, kind, op, shapes, count, MACs, dtype] per counted
+        op by its operands' shapes and the dtype it computed in, its result's (`dtype_of`), which its gates are priced
+        in (`gates.of_log`)."""
         structures, steps = {}, []
         tail = self.cur if self.cur is not self.setup else Step(self.done)
         for s in [self.setup, *self.steps, tail]:
             self._resolve(s)
             struct = {"updated": sorted(s.updated, key=lambda u: (u[1], u[0])),
-                      "log": sorted([list(k) + v for k, v in s.log.items()])}
+                      "log": sorted([*k[:4], *v, k[4]] for k, v in s.log.items())}
             sid = structure_id(struct)
             structures[sid] = struct
             steps.append({"step": s.index, "tokens": s.tokens, "macs": s.macs, "matmul_macs": s.matmul_macs,

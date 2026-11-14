@@ -16,13 +16,13 @@ import pytest
 
 import epoch_coins as E
 import epoch_coins_vectors as V
+from verity.protocols.pouw.prover.schemes import ncp
 from verity.protocols.pouw.verifier import coins as EC
 from verity.protocols.pouw.verifier import verifier
 from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.spot.device import challenger as Ch
 from verity.protocols.pouw.verifier.audit import Epoch, Workload, salt_of, weights_root
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import ncp
+from verity.protocols.spot.device import challenger as Ch
 
 # the clear audit is a reference tool (verity/protocols/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
