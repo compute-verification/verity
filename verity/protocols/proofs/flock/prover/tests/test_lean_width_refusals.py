@@ -1,4 +1,4 @@
-"""The Lean decoder's width refusals against the codec's, on the NCI difftest's mistyped descriptors
+"""The Lean decoder's width refusals against the codec's, on the inference-only difftest's mistyped descriptors
 (`desc_difftest_vectors.mistyped`) and a PoUW window's shape (`_tile_window`)."""
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def _tile_window(bits: bool) -> str:
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_width_refusals_agree_with_the_codec(tmp_path):
-    """The NCI difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
+    """The inference-only difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
     their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
     template's bits and its bits as them (`_tile_window`): the Lean decoder, which Flock's verifier, `InferenceOnlyCheck` and
     PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message

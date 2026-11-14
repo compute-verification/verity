@@ -3,7 +3,7 @@ module
 public import InferenceOnlyCheck.Check
 
 /-!
-# The NCI check at the size of the description
+# The inference-only check at the size of the description
 
 `InferenceOnlyCheck.Desc.evaluate` decides what `InferenceOnlyCheck.evaluate` decides, for a division whose IUs are unions of the root's
 nodes (IUs aligned to Calls), without laying out the circuit: its cost grows with the descriptor, not with the unrolled
