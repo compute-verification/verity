@@ -106,7 +106,7 @@ def test_same_shape_twice_is_two_instances_of_one_specialization():
 def test_refusals():
     with pytest.raises(ValueError, match="duplicate request_id"):
         _wl([(3, 2), (5, 0)], ids=["r0", "r0"])
-    # T not cap-1: a Program rebuilt from a served length is refused
+    # T not max_tokens-1: a Program rebuilt from a served length is refused
     c = W.request_component(_desc(3, 2), REGISTRY, _WP(3))
     with pytest.raises(ValueError, match="never from a served length"):
         W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 5, 0, c, T=2)], lag=0)
@@ -239,7 +239,7 @@ def test_a_workload_without_registered_values_keeps_its_digest():
 
 
 def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_workload_digest():
-    """The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
+    """The inference-only check reads only registered inputs as θ (the inference-only policy's check `theta-not-registered`): `theta_registered` lowers the
     weights as `RegisteredInput<w>_v1`, still θ, and every other input as before. The components are the same Definitions, so
     their request digests stand and only the workload digest moves; off, it is the digest pinned above."""
     from verity.circuits.constants import REGISTRATION, RUN
@@ -396,13 +396,13 @@ def test_chronology_is_declared_and_bounded():
     assert rows["r2"]["programmed_steps"] == {"prefill": 3, "decode": [4, 6], "count": 4}
     assert rows["r2"]["output_interface"]["tokens_max"] == 4
     assert ch["programmed_horizon_steps"] == 7
-    # the programmed instance set of every engine step is defined by the declaration alone (M-ARRIVAL-ORDER lives here)
+    # the programmed input set of every engine step is defined by the declaration alone (M-ARRIVAL-ORDER lives here)
     es = {e["e"]: e for e in ch["engine_steps"]}
     assert [m["request_id"] for m in es[0]["members"]] == ["r0"] and es[0]["members"][0]["phase"] == "prefill"
     assert [(m["request_id"], m["s"], m["phase"]) for m in es[1]["members"]] == [("r0", 1, "decode"), ("r1", 0, "prefill")]
     assert es[1]["co_scheduled"] and es[1]["mixed_prefill_decode"]
     assert [(m["request_id"], m["s"]) for m in es[3]["members"]] == [("r2", 0)] and [(m["request_id"], m["s"]) for m in es[6]["members"]] == [("r2", 3)]
-    # segments: the toy has no TokenSelect, so one trailing segment (kept, never dropped); the real wrapper has cap segments
+    # segments: the toy has no TokenSelect, so one trailing segment (kept, never dropped); the real wrapper has max_tokens segments
     assert ch["component_steps_equal_cap"] is False
     m0 = es[0]["members"][0]
     assert m0["nodes"] == [0, 3] and m0["gates"] == [wl.address_map()["requests"][0]["gates"][0], wl.address_map()["requests"][0]["gates"][1]]
@@ -635,7 +635,7 @@ def _derived_like(LP: int, T: int, src: dict):
 
 
 def test_two_requests_with_one_root_id_over_different_bodies_compose_by_digest():
-    """A manifest with two requests of the same prompt length and different caps (LP11: T24 and T36, as in the llama B64 1024/128
+    """A manifest with two requests of the same prompt length and different max_tokens (LP11: T24 and T36, as in the llama B64 1024/128
     workload) derives two request Programs whose roots share derive's id `Root[Derived[vLLMRequest[..]]_v1{SRC=..}]` (SRC does not
     name T) with different bodies and different digests; comparing the ROOTS under that id would refuse the workload
     (E_IDENTITY). The root is never shared -- the component's identity is its program digest -- so it is exempt from the shared-definition

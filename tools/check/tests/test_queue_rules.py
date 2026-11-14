@@ -37,12 +37,12 @@ def test_drives_flags_parse_and_name_the_machines_its_checks_run_on():
     assert flags.on
 
 
-def test_drives_gates_are_in_the_tree_and_the_markdown_caps_only_warn():
+def test_drives_gates_are_in_the_tree_and_the_markdown_size_limits_only_warn():
     """Drive runs each from `main`, and a gate that isn't there can't judge, which leaves every PR off `next`.  A Markdown file
-    over its cap is a warning: the caps' gate is a warn gate, never a landing gate."""
+    over its size limit is a warning: the size gate is a warn gate, never a landing gate."""
     flags = DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS)
-    caps = "tools/check/gates/markdown_caps.py"
-    assert caps in flags.warn_gates and caps not in flags.landing_gates
+    size_gate = "tools/check/gates/markdown_caps.py"
+    assert size_gate in flags.warn_gates and size_gate not in flags.landing_gates
     assert all((ROOT / g).is_file() for g in flags.landing_gates + flags.warn_gates)
 
 

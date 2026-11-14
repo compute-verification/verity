@@ -13,7 +13,7 @@ Lean's own (`lean`).
 * `check`: R1-R8 (`registration.check`), compared on `ok`, the codes and the fan-out and tied values a template query's
   verdict publishes (`Verdict.fanout` and `Verdict.rests_on_period_check`, the Lean's `fanout` and
   `rests_on_period_check`); the details are Python's (the Lean reports codes).
-  History tables both refuse, the Lean's refusal its own answer, are the registration's refusal, `R.HISTORY`, with
+  History tables both refuse, the Lean's refusal its own answer, are the docket's refusal, `R.HISTORY`, with
   both reasons, which nothing holds to each other (the Lean's refusals carry no code); the Python refusing them alone,
   or a Lean that gave no answer, disagrees. Where R1-R8 pass, the caller's check (`caller.check`, its Lean
   `spot-flock-caller`'s `VStar.Recursive.Caller.check`), compared the same way, decides as `Caller.gate` does
@@ -26,10 +26,10 @@ Lean's own (`lean`).
   only the Lean reads from the operating system (`IO.getRandomBytes`, A3); there is no Python twin to compare, and a
   Lean that can't answer leaves no coins. The verifier reads none of it: its samples read the challenger's coins from its
   log (`run`'s `coins`);
-* `run`: the stream's run of one registration from its public check through its verdict (`Run.run`), which `Stream.outcome`
+* `run`: the stream's run of one docket from its public check through its verdict (`Run.run`), which `Stream.outcome`
   passes in with everything it read on the way: compared whole;
 * `audit_record`: the whole record, equal under `canonical_json`. The registered roots the record's `registered` check
-  reads are the verdicts' own on both sides, for the registration's own values (`audit.session_registered`), never an
+  reads are the verdicts' own on both sides, for the docket's own values (`audit.session_registered`), never an
   argument. Python's `delta` is a float, given to the Lean exactly (`str(Fraction(delta))`); the Lean writes it, and any
   float in the inputs, as Python's `repr` does. A float the Lean can't read back (`-0.0`, NaN, an infinity) makes the two
   disagree.
@@ -71,7 +71,7 @@ EXE = "sampled-proofs-verifier"
 CALLER_PACKAGE = ROOT / "verity/protocols/proofs/spot_flock/verifier/lean"
 CALLER_EXE = "spot-flock-caller"
 BUILD_LOCK = ROOT / "verity/circuits/difftest/.lake/harness-build.lock"
-#: The δ the Lean's registration parameters carry, which R1-R8 never read.
+#: The δ the Lean's docket parameters carry, which R1-R8 never read.
 REGISTRATION_DELTA = "1/2"
 
 
@@ -238,7 +238,7 @@ def _summary(v: Mapping[str, Any]) -> dict[str, Any]:
 
 def _decide(got: Mapping[str, Any], py: Verdict, whole: bool) -> Verdict:
     """The verdict of record from the Lean's answer `got` and Python's `py`: compared on `ok`, the codes and the fan-out
-    and tied values a registration verdict publishes, and with `whole` on the details too."""
+    and tied values a docket verdict publishes, and with `whole` on the details too."""
     mine = py.to_json()
     both = {"lean": _summary(got), "python": _summary(mine)}
     verifiers = {"of_record": RECORD_VERDICT, **both}
@@ -464,11 +464,11 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         history: Mapping[str, Any] | None = None, family: str | None = None,
         key: Mapping[str, Any] | None = None, main: Sequence[str] | None = None,
         certified: Mapping[str, Mapping[str, Any]] | None = None) -> Verdict:
-    """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
+    """The stream's run of one docket, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
     log registered first, ``seed_salt`` its window's seed salt, ``pool`` its pool, ``tied`` the tied values its check
-    let through, ``history`` its history tables, ``certified`` its certified entries, which an interior registration
+    let through, ``history`` its history tables, ``certified`` its certified entries, which an interior docket
     takes none of), `check_public`'s values and declared items, the receipt's challenger and
     place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
@@ -476,18 +476,18 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins of the challenger's
     family `family` (the one the stream read them from, never the evidence's) that the session the ledger
     opens for `window_root` under the challenger key `key` (`ChallengerKey.to_json`'s form), from a commit on `main`,
-    the verifier's copy of main's first-parent history, released after the registration's digest; `key` and `main` are
+    the verifier's copy of main's first-parent history, released after the docket's digest; `key` and `main` are
     the stream's own, and the evidence names neither. It refuses the select step where they aren't those coins or
     `coins`, `family` or `key` is missing (code `coins`), and where the family's log shows a root other than the
-    registration's digest (code `family`); for one that read none, `coins` must be None. Where the two differ,
+    docket's digest (code `family`); for one that read none, `coins` must be None. Where the two differ,
     or the Lean refuses a step, the verdict fails with `DISAGREE` alone.
 
-    Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
+    Under a two-stage design `interior` is the interior docket and the second stage (`Run.Interior`): its
     `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`, its window's `seed_salt`
     when it has one, and its `history` tables when it has any), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`), their evidence
     (`coins`, held to the run's `key` and `main`: a run has one challenger) and their family (`family`, the second
-    stage's own: a family's coins follow one registration), its
+    stage's own: a family's coins follow one docket), its
     `proved_units`, `instances`, `served` and `session_roots`, the second-stage sessions' `statements`,
     and `proofs`, the auditor's params naming each template's circuit file and reference header
     (`service.template_circuits`'s form, under the interior's params; None names none); the Lean derives the design's
@@ -605,10 +605,10 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None, *,
                  certified: Sequence[str] = ()) -> dict[str, Any]:
-    """`audit.audit_record` by the verifier, with `session_registered` the verdicts' own for the registration's
+    """`audit.audit_record` by the verifier, with `session_registered` the verdicts' own for the docket's
     values (`audit.session_registered(verdicts, registration)`) less the reads of its own ports at their own roots
     (`audit.less_own_reads`), and with `certified`, the names of the values the verifier holds certified entries for
-    (the registration check's `certified`), each held to have a reported read (`Record.certifiedCheck`): the record of
+    (the docket check's `certified`), each held to have a reported read (`Record.certifiedCheck`): the record of
     record, with `verifiers` (`{"of_record", "lean", "python", "agree"}`, each side's acceptance and failed checks)."""
     verdicts = {k: dict(verdicts[k]) for k in sorted(verdicts)}
     certified = sorted(certified)

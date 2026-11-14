@@ -310,7 +310,7 @@ def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None =
 THREAD_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 #: every test process's oneDNN is held off AMX, unless the environment already names the variable. On a CPU with AMX (the flags
 #: `amx_bf16 amx_tile`) oneDNN's AMX kernel now and then returns wrong values for a bf16 matrix product whose process is
-#: preempted, so a test that compares one with torch fails by chance on a loaded machine. Under this cap oneDNN runs the
+#: preempted, so a test that compares one with torch fails by chance on a loaded machine. Under this limit oneDNN runs the
 #: AVX-512 bf16 kernels instead, the ones a CPU with `avx512_bf16` and no AMX runs anyway. oneDNN reads the variable once, at
 #: the process's first primitive, so it is in the environment the process starts with, where no import order can miss it.
 #: `research run` gives every job the same (research.result's ONEDNN_ISA).
@@ -2343,13 +2343,13 @@ SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 STOP_GRACE_S = 30.0
 
 
-#: the memory `research run --mem-gb` reserved for the run (remote.py), which on a CPU node is no cgroup cap
+#: the memory `research run --mem-gb` reserved for the run (remote.py), which on a CPU node is no cgroup limit
 RUN_MEM_ENV = "RESEARCH_RUN_MEM_GB"
 
 
 def slot_mem_gb() -> float | None:
-    """The memory this run may use: its check slot's, else its `research run --mem-gb` reservation's, else its cgroup's cap: a
-    suite sized to the whole node outgrows a slot or a reservation that nothing else caps."""
+    """The memory this run may use: its check slot's, else its `research run --mem-gb` reservation's, else its cgroup's limit: a
+    suite sized to the whole node outgrows a slot or a reservation that nothing else bounds."""
     for env in (SLOT_MEM_ENV, RUN_MEM_ENV):
         v = SETTINGS.get(env) or ""
         if v.replace(".", "", 1).isdigit():

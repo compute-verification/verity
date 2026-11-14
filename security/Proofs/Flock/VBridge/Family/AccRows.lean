@@ -29,8 +29,8 @@ of its name. So:
 * `eq_of_port_eq`: two registered reads of one sampled proof block at one registered port are reads of one port of the circuit;
   `not_colKeyed_pair`, `not_endKeys`: `EndKeys` fails at a sampled algebra unit whose `acc0` and `acc1` columns are keyed
   by two ports (rec_residuals.py:101), as V*'s are;
-* `colKeyed_drawn`: a keyed column of a sampled proof block names its port in `own` and its position in the port's reads, so
-  `OpenKeys` puts one port, with one name and one list of positions, in every level's reads file (`openKeys_drawn`),
+* `colKeyed_sampled`: a keyed column of a sampled proof block names its port in `own` and its position in the port's reads, so
+  `OpenKeys` puts one port, with one name and one list of positions, in every level's reads file (`openKeys_sampled`),
   which V*'s files are not (each level's `acc` reads that level's positions).
 
 The restatement keys a read by its registration (`site`: value, root, leaf count, row width, domain, leaf schema; not its
@@ -70,7 +70,7 @@ def site (p : Flock.Registered.Port) : RegFields := (p.value, p.root, p.leaves, 
 section Drawn
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **Two registered reads of a sampled proof block at one registered port read one port of the circuit** (`hown`: each read's
 port is the circuit's port of its name, `OwnReads`). -/
@@ -107,7 +107,7 @@ theorem not_colKeyed_pair {ω : Lv.Ω} {R' : Reg'} {o}
 
 /-- **A keyed column of a sampled proof block names its registered port in `own`, by the name of its key's port, and its
 position among the port's reads** (`hown`, `OwnReads`). -/
-theorem colKeyed_drawn {ω : Lv.Ω} {R' : Reg'} {o}
+theorem colKeyed_sampled {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv} (hu : u ∈ Lv.draw ω)
     (hread : ∀ q : Fin c.ports.size, (∃ pt ∈ zo.own, pt.name = c.ports[q].name) → zo.rd.isRead (.inl (u, q)))
     {col k pos : ℕ} {pa : Flock.Registered.Port} (h : ColKeyed zo u col k pa pos) :
@@ -225,7 +225,7 @@ section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
-variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
@@ -243,10 +243,10 @@ theorem not_endKeys {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
     {sA : Fin 2 → Fin F.stmts.size} {uA : (r : Fin 2) → Fin (F.Vs (sA r)).nv} {col0 col1 : Fin 2 → ℕ → ℕ → ℕ}
     (hk : F.EndKeys dg N k Rw pa sA uA col0 col1) (hreg : F.RowsRegistered dg N k Rw) {R : Reg} {ω : L.Ω}
     {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o} (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (r : Fin 2)
-    {ω' : (F.Vs (sA r)).law.live.Ω} {R' : Reg'} {o'}
+    {ω' : (F.Vs (sA r)).samplingDesign.live.Ω} {R' : Reg'} {o'}
     (hlive : LiveAcceptsZKR (F.zs R ω t R₂ (sA r)).I (F.zs R ω t R₂ (sA r)).own
-      (R', (F.Vs (sA r)).law.live.draw ω', (F.zs R ω t R₂ (sA r)).wr ((F.Vs (sA r)).law.live.draw ω') R' o'))
-    (hu : uA r ∈ (F.Vs (sA r)).law.live.draw ω') {q₀ q₁ b₀ e₀ b₁ e₁ : ℕ} (hne : q₀ ≠ q₁)
+      (R', (F.Vs (sA r)).samplingDesign.live.draw ω', (F.zs R ω t R₂ (sA r)).wr ((F.Vs (sA r)).samplingDesign.live.draw ω') R' o'))
+    (hu : uA r ∈ (F.Vs (sA r)).samplingDesign.live.draw ω') {q₀ q₁ b₀ e₀ b₁ e₁ : ℕ} (hne : q₀ ≠ q₁)
     (hk₀ : Aliased.srcKey (F.Vs (sA r)).c (0 * (Rows.ofNet (F.Vs (sA r)).hU).nIn + col0 r 0 0) = .msg q₀ b₀ e₀)
     (hk₁ : Aliased.srcKey (F.Vs (sA r)).c (0 * (Rows.ofNet (F.Vs (sA r)).hU).nIn + col1 r 0 0) = .msg q₁ b₁ e₁) :
     False :=
@@ -256,20 +256,20 @@ theorem not_endKeys {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
 /-- **`OpenKeys` puts its port in every level's reads file, with every opening's position among its reads**: at an
 accepted outer proof whose level-`ℓ` session accepts at a sample holding opening `j`'s unit, `pa` is one of the
 session's `own`, by the name of the `acc` column's port, and reads the opening's chain position
-(`colKeyed_drawn`). V*'s level files name `rec-acc` as `acc` with that level's positions only (rec_outer.py:236), so no
+(`colKeyed_sampled`). V*'s level files name `rec-acc` as `acc` with that level's positions only (rec_outer.py:236), so no
 one port is in two levels' files with both levels' positions. -/
-theorem openKeys_drawn {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port}
+theorem openKeys_sampled {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port}
     (hk : F.OpenKeys dg N k Rw pa) (hreg : F.RowsRegistered dg N k Rw) {R : Reg} {ω : L.Ω}
     {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o} (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (r : Fin 2)
     {ℓ : ℕ} (hℓ : ℓ < F.sh.sched.levels.size) {j : ℕ} (hj : j < F.q ℓ)
-    {ω' : (F.Vs (F.sessO ℓ)).law.live.Ω} {R' : Reg'} {o'}
+    {ω' : (F.Vs (F.sessO ℓ)).samplingDesign.live.Ω} {R' : Reg'} {o'}
     (hlive : LiveAcceptsZKR (F.zs R ω t R₂ (F.sessO ℓ)).I (F.zs R ω t R₂ (F.sessO ℓ)).own
-      (R', (F.Vs (F.sessO ℓ)).law.live.draw ω',
-        (F.zs R ω t R₂ (F.sessO ℓ)).wr ((F.Vs (F.sessO ℓ)).law.live.draw ω') R' o'))
-    (hu : F.unO ℓ r j ∈ (F.Vs (F.sessO ℓ)).law.live.draw ω') :
+      (R', (F.Vs (F.sessO ℓ)).samplingDesign.live.draw ω',
+        (F.zs R ω t R₂ (F.sessO ℓ)).wr ((F.Vs (F.sessO ℓ)).samplingDesign.live.draw ω') R' o'))
+    (hu : F.unO ℓ r j ∈ (F.Vs (F.sessO ℓ)).samplingDesign.live.draw ω') :
     pa R ω t R₂ ∈ (F.zs R ω t R₂ (F.sessO ℓ)).own ∧
       ∃ i : ℕ, (pa R ω t R₂).reads[i]? = some (some (r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j)) := by
-  obtain ⟨hmem, -, hpos⟩ := colKeyed_drawn _ hlive hu (hreg R ω t R₂ τ o h _ _)
+  obtain ⟨hmem, -, hpos⟩ := colKeyed_sampled _ hlive hu (hreg R ω t R₂ τ o h _ _)
     (hk R ω t R₂ τ o h r ℓ hℓ j hj 0 (by omega)).1
   exact ⟨hmem, hpos⟩
 

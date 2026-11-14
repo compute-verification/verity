@@ -1,4 +1,4 @@
-"""One-stage audit: the demo partition query, the registration record, the sample and proved-block checks, the profile."""
+"""One-stage audit: the demo partition query, the docket, the sample and proved-block checks, the profile."""
 
 from __future__ import annotations
 
@@ -144,7 +144,7 @@ def test_several_templates_one_population():
 
 EPS = bind(CompositeDefinition("OneStageTestEps", 0, ("EPS", "NAME"), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False), EPS=1e-5, NAME='a"b')
-#: the program and registration record digests of `_registration(6, version=0)`: what an old record holds
+#: the program and docket digests of `_registration(6, version=0)`: what an old record holds
 V0_PAIR_6 = ("179416c1470fbf1c1d679826635d18b475dcf5584b94a9249397c22c7c70f986"
              "23f87f33d710c1b58fe2f55824d85af4af52df20fe3f64231046f23549e84355")
 V0_RECORD_6 = ("677e6e684f82c37bb8610bbbfb5732805fc2678b96140443b1f048cb6c35e3b5"
@@ -210,7 +210,7 @@ def test_v1_names_a_template_by_its_descriptor_id_and_decodes_from_its_descripto
 
 
 def test_an_old_v0_record_still_decodes_and_verifies():
-    """A registration made with v0's program, at the digests an old record holds, passes R1-R6 against the verifier's v0
+    """A docket made with v0's program, at the digests an old record holds, passes R1-R6 against the verifier's v0
     copy, built or decoded from its descriptor; v1's program of the same population is another program, which it refuses."""
     old, q, rec = _registration(6, version=0)
     assert (rec["program"], R.digest(rec)) == (V0_PAIR_6, V0_RECORD_6)
@@ -347,7 +347,7 @@ def test_the_window_says_served_or_stand_in():
     assert rec["window"]["kind"] == "stand-in" and _check(rec, prog, q).ok
 
 
-def test_draw_checks():
+def test_sample_checks():
     _, _, rec = _registration(6)
     law = D.parse_design("subset:2")
     assert law == LAW
@@ -384,7 +384,7 @@ def test_the_rate_law_is_its_rate_rounded_up_to_its_tables():
     assert (D.rate_count(1, 3, 4, 20), D.rate_count(1, 5, 4, 12), D.rate_count(1, 3, 2, 60)) == (8, 4, 20)
 
 
-def test_proved_units_are_the_draw():
+def test_proved_units_are_the_sample():
     good = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     assert D.check_proved(good, [1, 4], 2).ok
     assert D.check_proved(good, [1, 5], 2).codes == ("units",)
@@ -439,7 +439,7 @@ def test_the_record_states_the_one_profile_in_its_recorded_bytes():
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, LAW, [1, 4], 2, {}, {"lean": lean}, 0.25)
     assert json.dumps([r["profile"], r["wrong_units"]]) == json.dumps(list(_v0(rec, d, 0.25)))
-    prog, q, rule, srec = _stratified_registration()
+    prog, q, rule, srec = _stratified_docket()
     design = D.derive(prog, q, rule)
     sd = {"law": "stratified", "population": 6, "k": 4, "strata": design["strata"], "units": [1, 3, 4, 5]}
     r = audit.audit_record(srec, R.receipt(srec, "verifier-test"), sd, design, [1, 3, 4, 5], 4, {}, {"lean": lean}, 0.25)
@@ -476,7 +476,7 @@ def test_audit_record_needs_every_check_and_verdict():
 
 
 def _accepted(verdicts: dict) -> dict:
-    """An accepted audit record of the six-block registration over the sample [1, 4], on `verdicts`."""
+    """An accepted audit record of the six-block docket over the sample [1, 4], on `verdicts`."""
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {}, verdicts,
@@ -486,7 +486,7 @@ def _accepted(verdicts: dict) -> dict:
 
 
 def test_the_answer_of_an_accepted_record_says_whether_every_verdict_ran():
-    """`audit.answer` is one-stage's accept of the record's registration, its public outputs the sample, the proved
+    """`audit.answer` is one-stage's accept of the record's docket, its public outputs the sample, the proved
     proof blocks, the bound and the record's own ``complete``: true when every verdict ran, false beside one not of
     record that did not run, on which the record accepts all the same. A record that did not accept has no such answer."""
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
@@ -527,7 +527,7 @@ def test_an_answer_is_complete_only_as_an_accept_that_says_so():
         assert not audit.answer_complete(no_answer), no_answer
 
 
-def test_audit_record_holds_the_served_draw_and_the_sessions_roots():
+def test_audit_record_holds_the_served_sample_and_the_sessions_roots():
     """The sessions must have been served exactly the verifier's sample, and each session's root must be the registered one."""
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
@@ -607,7 +607,7 @@ def test_derive_expands_the_rule_over_the_verifiers_program():
         D.derive(prog, P.template_instance_query(PAIR.id), law)
 
 
-def _stratified_registration():
+def _stratified_docket():
     prog = P.mixed_population_program([(XOR3, 2), (PAIR, 3), (XOR3, 1)])
     q = P.template_instances_query([PAIR.id, XOR3.id])
     ports = _ports(prog, q, 6)
@@ -617,7 +617,7 @@ def _stratified_registration():
 
 
 def test_r1_holds_the_registered_strata_to_the_verifiers_own():
-    prog, q, rule, rec = _stratified_registration()
+    prog, q, rule, rec = _stratified_docket()
     assert rec["law"]["law"] == "stratified" and [s["k"] for s in rec["law"]["strata"]] == [2, 2]
     assert _check(rec, prog, q, law=rule).ok and _check(rec, prog, q, law=rec["law"]).ok
     strata = rec["law"]["strata"]
@@ -637,8 +637,8 @@ def test_r1_holds_the_registered_strata_to_the_verifiers_own():
     assert _check(rec, prog, q, law=LAW).codes == ("R1-law",)
 
 
-def test_stratified_draw_checks():
-    prog, q, rule, rec = _stratified_registration()
+def test_stratified_sample_checks():
+    prog, q, rule, rec = _stratified_docket()
     law = D.derive(prog, q, rule)
     good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
     assert D.check_draw(good, rec, law).ok and D.law_of(good) == law
@@ -661,10 +661,10 @@ def test_stratified_draw_checks():
         assert D.strata_problem({"k": 4, "strata": problem}, 6) is not None
 
 
-def test_one_stratified_draw_splits_over_several_tables():
+def test_one_stratified_sample_splits_over_several_tables():
     """A session of J tables splits one sample (Lean `Draw.tablesWhy`): a stratified sample whose sum of k_s is a positive
     multiple of J, as a subset sample's k must be; a Bernoulli or work sampling design never, whatever its count."""
-    prog, q, rule, rec = _stratified_registration()
+    prog, q, rule, rec = _stratified_docket()
     law = D.derive(prog, q, rule)                                          # k_s = 2, 2
     good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
     assert D.fixed_count(law) == 4
@@ -682,7 +682,7 @@ def test_audit_record_under_the_stratified_law():
     """The bound is core's exact count_bound over the strata, each template's own bound is reported, and the integrity
     profile carries the whole sampling design."""
     from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
-    prog, q, rule, rec = _stratified_registration()
+    prog, q, rule, rec = _stratified_docket()
     law = D.derive(prog, q, rule)
     d = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
@@ -963,7 +963,7 @@ def test_derive_expands_the_work_rule_over_the_verifiers_table():
             D.parse_design(bad)
 
 
-def _work_registration():
+def _work_docket():
     prog, q = _work_program()
     ports = _ports(prog, q, 6)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
@@ -972,7 +972,7 @@ def _work_registration():
 
 
 def test_r1_holds_a_work_law_to_the_verifiers_own_table():
-    prog, q, rule, table, rec = _work_registration()
+    prog, q, rule, table, rec = _work_docket()
     assert rec["law"]["law"] == "work" and [s["k"] for s in rec["law"]["strata"]] == [1, 3]
     assert _check(rec, prog, q, law=rule, work_table=table).ok
     assert _check(rec, prog, q, law=rule, work_table={PAIR.id: 10, XOR3.id: 5}).codes == ("R1-law",)
@@ -980,8 +980,8 @@ def test_r1_holds_a_work_law_to_the_verifiers_own_table():
     assert _check(rec, prog, q, law=D.parse_design("stratified:4")).codes == ("R1-law",)
 
 
-def test_work_draw_checks_and_closures():
-    prog, q, rule, table, rec = _work_registration()
+def test_work_sample_checks_and_closures():
+    prog, q, rule, table, rec = _work_docket()
     law = D.derive(prog, q, rule, table)
     good = {"law": "work", "population": 6, "k": 4, "strata": law["strata"], "units": [2, 3, 4, 5]}
     assert D.check_draw(good, rec, law).ok and D.law_of(good) == law and D.proved(good) == [2, 3, 4, 5]
@@ -1009,7 +1009,7 @@ def test_audit_record_under_the_work_law():
     """The work sampling design is the stratified sampling design at its sizes, so the profile is core's `Stratified` over the same strata at the
     work sizes; the zero-work stratum is bounded by its floor sample."""
     from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
-    prog, q, rule, table, rec = _work_registration()
+    prog, q, rule, table, rec = _work_docket()
     law = D.derive(prog, q, rule, table)
     d = {"law": "work", "population": 6, "k": 4, "strata": law["strata"], "units": [0, 2, 3, 4]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
@@ -1021,7 +1021,7 @@ def test_audit_record_under_the_work_law():
 
 
 def test_work_sizes_are_the_lean_verifiers():
-    """The sizes `verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py::test_work_draw_from_the_verifiers_own_program` pins for
+    """The sizes `verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py::test_work_sample_from_the_verifiers_own_program` pins for
     `verity-verify-proof draw --work K`: strata of 3, 3 and 4 proof blocks doing 3, 1 and 0 (W = 12), and its floor cases."""
     sizes, works = (3, 3, 4), (3, 1, 0)
     total = sum(w * n for w, n in zip(works, sizes))

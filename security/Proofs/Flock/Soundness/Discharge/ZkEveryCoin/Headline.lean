@@ -250,10 +250,10 @@ For an untyped statement (`ht`) whose Δ and regions avoid the mask slot (`avoid
 verifier's D11 refusal in `Net.ofRows` discharges it), and for any prover of Ligerito's levels ≥ 1 (`LigProver`), as
 `Composed.zk_session_view`. -/
 theorem zk_session_view_all (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
-    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)
+    (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
+    (hdm : ∀ (S : Finset (Fin n)) (y : SampleSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
-    ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
+    ∀ (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZK I mPts S (dj S)),
       ZkViewAll (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
   fun S R y => zkViewAll_of_ok _ (coinedOf_setup (Reg := Reg) P I dj y₀ ht hdm S R y).2.2.2.2.2 hKey
 

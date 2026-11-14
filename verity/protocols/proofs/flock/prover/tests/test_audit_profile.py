@@ -23,9 +23,9 @@ AUDIT_COUNT = "L.miss K + εks + δlink"
 RUNS = [(1024, 16, 0.01, 254), (1024, 256, 2.0 ** -20, 46), (344, 128, 2.0 ** -20, 28), (183_680, 256, 2.0 ** -20, 9675)]
 
 
-@pytest.mark.skipif(not (AUDIT / "Law.lean").exists(), reason="the audit layer's Lean is not on this branch")
+@pytest.mark.skipif(not (AUDIT / "SamplingDesign.lean").exists(), reason="the audit layer's Lean is not on this branch")
 def test_the_lean_statements_are_the_ones_the_profile_computes():
-    law = (AUDIT / "Law.lean").read_text()
+    law = (AUDIT / "SamplingDesign.lean").read_text()
     one_stage = (AUDIT / "OneStage.lean").read_text()
     assert "theorem subset_miss" in law and SUBSET_MISS in law
     assert "theorem audit_count" in one_stage and AUDIT_COUNT in one_stage

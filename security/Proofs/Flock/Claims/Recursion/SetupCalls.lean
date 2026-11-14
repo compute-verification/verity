@@ -156,11 +156,11 @@ theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq
       (deployRec Bd.IVStar ivScope b).callsAt H x (Claims.Recursion.fork j t.2.1 t.2.2.1) ws', H p.1 = p.2 := fun p hp =>
     (List.mem_append.1 hp).elim (Claims.Recursion.callsAt_true_of (hT decO x Ω P _ _ _ ws hg₁') p)
       (Claims.Recursion.callsAt_true_of (hT decO x Ω P _ _ _ ws' hg₂') p)
-  have hD₁ := Claims.Recursion.drawCalls_eq hg₁
-  have hD₂ := Claims.Recursion.drawCalls_eq hg₂
-  have htrueV : ∀ p ∈ Claims.Recursion.drawCalls H (deployRecC Bd ivScope b)
+  have hD₁ := Claims.Recursion.sampleCalls_eq hg₁
+  have hD₂ := Claims.Recursion.sampleCalls_eq hg₂
+  have htrueV : ∀ p ∈ Claims.Recursion.sampleCalls H (deployRecC Bd ivScope b)
       (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (t.2.1, t.2.2.2.1) ++
-      Claims.Recursion.drawCalls H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO P x
+      Claims.Recursion.sampleCalls H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO P x
         t.1 (Claims.Recursion.fork j t.2.1 t.2.2.1, t.2.2.2.2), H p.1 = p.2 := by
     rw [hD₁, hD₂]
     intro p hp
@@ -170,9 +170,9 @@ theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq
     · exact Claims.Recursion.callsAt_true_of (hT decO x Ω P _ _ _ ws' hg₂') p hp
     · exact Claims.Recursion.setupCalls_true H _ _ p hp
   have hliftV : ∀ l : List (Msg × Msg),
-      (∀ p ∈ l, p ∈ Claims.Recursion.drawCalls H (deployRecC Bd ivScope b)
+      (∀ p ∈ l, p ∈ Claims.Recursion.sampleCalls H (deployRecC Bd ivScope b)
         (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (t.2.1, t.2.2.2.1) ++
-        Claims.Recursion.drawCalls H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO
+        Claims.Recursion.sampleCalls H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO
           P x t.1 (Claims.Recursion.fork j t.2.1 t.2.2.1, t.2.2.2.2)) →
       (∃ u v, findColl l = some (u, v) ∧ Collision H u v) →
       Claims.Recursion.forkCollV H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO P x

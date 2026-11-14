@@ -10,7 +10,7 @@ import all Init.Data.String.Defs
 # v2's acceptance is the record's, past the sample file round
 
 Where one-stage v2 (`Spot.OneStageZk.checkBlobsAt`) accepts, the record's verifier (`Record.V`) accepts a run
-whose sample file round keeps the run's sample file (`drawOk`) and whose session the blobs show (`acc_of_pass`):
+whose sample file round keeps the run's sample file (`sampleOk`) and whose session the blobs show (`acc_of_pass`):
 
 * **the run walks to the session** (`reach`): the sample rounds answer their coins, and the sample file round, keeping the
   sample file, answers `[]`, so the run goes past both;
@@ -26,9 +26,9 @@ What the record takes beside v2's acceptance:
   the evidence's;
 * `LiveCoins`: live-verifier at the sample (v2's coins are the sample rounds' coins' first bytes) and at the session, as at
   the recursive session (`Verity.Recursive.LiveCoins`);
-* `drawOk` at the run's sample file: its units are the coins' sample, its session has the statement's numbers, and its
+* `sampleOk` at the run's sample file: its units are the coins' sample, its session has the statement's numbers, and its
   statement fits its 8-byte length words (`Fits`). v2 refuses a file or a sample its statement can't hold (`fitsWhy`,
-  `drawFitsWhy`), which bounds every length but three (`lengths_of_accepts`, `fits_of_accepts`): the run's sample file
+  `sampleFitsWhy`), which bounds every length but three (`lengths_of_accepts`, `fits_of_accepts`): the run's sample file
   and `o`'s partition object and registered file, which v2 reads only as the JSON they parse to.
 -/
 
@@ -83,7 +83,7 @@ private theorem mapM_ok_of_getElem {α β ε : Type} (g : α → Except ε β) :
 /-! ## What the record takes -/
 
 /-- **The run's sample file**: the prover's message at the sample file round. -/
-def drawOf (v : Seen) : Msg := (v.msgs.map Prod.fst).getD DRAW_ROUNDS []
+def drawOf (v : Seen) : Msg := (v.msgs.map Prod.fst).getD SAMPLE_ROUNDS []
 
 /-- **v2's inputs at `A`** (`Spot.OneStageZk.inputsOf`): `A`'s statement tags and committed files, the
 parameters' own partition object and program, and the lookup tables the blobs hold. -/
@@ -111,11 +111,11 @@ reads as the link message, and its last `f` as the prover's last, at the session
 `s`'s record is `f`'s; and `s` names each rep stream's file of the session's setup, the proof file `f` carries in its
 place. -/
 def Shows (A : Live) (o : Own) (ev : _root_.Spot.OneStageZk.Evidence) (bs : Core.Blobs) (v : Seen) : Prop :=
-  (DRAW_ROUNDS < v.msgs.length → ∀ s ∈ ev.sessions, ∃ rec : String,
+  (SAMPLE_ROUNDS < v.msgs.length → ∀ s ∈ ev.sessions, ∃ rec : String,
     bs.get s.record "a session's record" = .ok rec.toUTF8 ∧
     ∃ J, FlockDeploy.jsonOf "draw" ⟨(drawOf v).toArray⟩ = .ok J ∧ Flock.Witness.recordDraw rec = some (Flock.norm J)) ∧
-  (DRAW_ROUNDS + 1 < v.msgs.length → ∀ s ∈ ev.sessions,
-    (∃ m link, v.msgs[DRAW_ROUNDS + 1]? = some m ∧ FlockDeploy.linkOf m.1 = some link) ∧
+  (SAMPLE_ROUNDS + 1 < v.msgs.length → ∀ s ∈ ev.sessions,
+    (∃ m link, v.msgs[SAMPLE_ROUNDS + 1]? = some m ∧ FlockDeploy.linkOf m.1 = some link) ∧
     ∃ f, v.msgs.getLast?.bind (fun m => FlockDeploy.finalOf m.1) = some f ∧ f.stmt = sessStmt A o (drawOf v) ∧
       bs.get s.record "a session's record" = .ok f.record.toUTF8 ∧
       ∀ si spec sts, FlockDeploy.setupOf true (sessStmt A o (drawOf v)) = some (si, spec, sts) →
@@ -124,15 +124,15 @@ def Shows (A : Live) (o : Own) (ev : _root_.Spot.OneStageZk.Evidence) (bs : Core
           ∃ hk' : k < f.proofs.size, bs.get d "session files" = .ok f.proofs[k])
 
 /-- **live-verifier** at the sample and at the session. At the sample: the bytes `ξ` v2 samples from, the challenger's coins,
-are the first bytes of the sample rounds' coins (`drawBytes`). At the session: wherever verity-verify-proof `--zk` decides on the
+are the first bytes of the sample rounds' coins (`sampleBytes`). At the session: wherever verity-verify-proof `--zk` decides on the
 run's session (its messages after the sample file round, at the coins `cs` after it), the live session the record shows is
 the session's link message, first coin and round messages with their coins (`FlockDeploy.custody`), as at the recursive
 session (`Verity.Recursive.LiveCoins`). -/
 def LiveCoins (A : Live) (o : Own) (ξ : ByteArray) (v : Seen) (cs : List Coin) : Prop :=
-  (∃ t, drawBytes (cs.take DRAW_ROUNDS) = ξ ++ t) ∧
+  (∃ t, sampleBytes (cs.take SAMPLE_ROUNDS) = ξ ++ t) ∧
   ∀ si spec sts link c₁ mids f,
-    FlockDeploy.act true (sessStmt A o (drawOf v)) ((v.msgs.map Prod.fst).drop (DRAW_ROUNDS + 1))
-        (cs.drop (DRAW_ROUNDS + 1)) = .decide si spec sts link c₁ mids f →
+    FlockDeploy.act true (sessStmt A o (drawOf v)) ((v.msgs.map Prod.fst).drop (SAMPLE_ROUNDS + 1))
+        (cs.drop (SAMPLE_ROUNDS + 1)) = .decide si spec sts link c₁ mids f →
       (do FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids : Flock.V Unit) = .ok ()
 
 /-! ## The run's walk -/
@@ -164,8 +164,8 @@ theorem run_answer {i : ℕ} (h : i < (run H P (V A o) (xOf A o) ω r).msgs.leng
     simp only [Option.toList_some, List.map_append, List.map_cons, List.map_nil]
   rw [htake, V_next_xOf]
 
-/-- The run's rounds are `DRAW_ROUNDS + 1 + kS A o`, at least one past the sample file round. -/
-theorem k_gt : DRAW_ROUNDS + 1 < (V A o).k (xOf A o) := by
+/-- The run's rounds are `SAMPLE_ROUNDS + 1 + kS A o`, at least one past the sample file round. -/
+theorem k_gt : SAMPLE_ROUNDS + 1 < (V A o).k (xOf A o) := by
   rw [V_k_xOf]
   have : 1 ≤ kS A o := by
     unfold kS
@@ -188,7 +188,7 @@ theorem run_acc_out {i : ℕ} {a : Msg} (h : (run H P (V A o) (xOf A o) ω r).ms
     ⟨[], [], [], .rej⟩ a (by simpa using h)
 
 /-- **The run reaches the sample file round**: the sample rounds answer their coins, so the prover sends a sample file. -/
-theorem reach_draw : DRAW_ROUNDS < (run H P (V A o) (xOf A o) ω r).msgs.length := by
+theorem reach_sample : SAMPLE_ROUNDS < (run H P (V A o) (xOf A o) ω r).msgs.length := by
   have hk := k_gt (A := A) (o := o)
   have hpos : 0 < (run H P (V A o) (xOf A o) ω r).msgs.length := by
     rw [run_eq_stepWith]
@@ -199,7 +199,7 @@ theorem reach_draw : DRAW_ROUNDS < (run H P (V A o) (xOf A o) ω r).msgs.length 
   obtain ⟨a, b, hab, hb⟩ := run_answer H P ω r
     (i := (run H P (V A o) (xOf A o) ω r).msgs.length - 1) (by omega)
   have hlen : ((((run H P (V A o) (xOf A o) ω r).msgs.take
-      ((run H P (V A o) (xOf A o) ω r).msgs.length - 1 + 1)).map Prod.fst)).length ≤ DRAW_ROUNDS := by
+      ((run H P (V A o) (xOf A o) ω r).msgs.length - 1 + 1)).map Prod.fst)).length ≤ SAMPLE_ROUNDS := by
     simp only [List.length_map, List.length_take]
     omega
   unfold nextAt at hb
@@ -210,27 +210,27 @@ theorem reach_draw : DRAW_ROUNDS < (run H P (V A o) (xOf A o) ω r).msgs.length 
 
 /-- **The run goes past the sample file round** where that round keeps the run's sample file: the sample rounds answer their
 coins and the sample file round answers `[]`. -/
-theorem reach (hpass : drawOk A o (drawOf (run H P (V A o) (xOf A o) ω r).seen) (coinsAt r)) :
-    DRAW_ROUNDS + 1 < (run H P (V A o) (xOf A o) ω r).msgs.length := by
+theorem reach (hpass : sampleOk A o (drawOf (run H P (V A o) (xOf A o) ω r).seen) (coinsAt r)) :
+    SAMPLE_ROUNDS + 1 < (run H P (V A o) (xOf A o) ω r).msgs.length := by
   have hk := k_gt (A := A) (o := o)
-  have h64 := reach_draw H P ω r
-  obtain ⟨a, b, hab, hb⟩ := run_answer H P ω r (i := DRAW_ROUNDS) h64
-  have hl : (((run H P (V A o) (xOf A o) ω r).msgs.take (DRAW_ROUNDS + 1)).map Prod.fst).length =
-      DRAW_ROUNDS + 1 := by
+  have h64 := reach_sample H P ω r
+  obtain ⟨a, b, hab, hb⟩ := run_answer H P ω r (i := SAMPLE_ROUNDS) h64
+  have hl : (((run H P (V A o) (xOf A o) ω r).msgs.take (SAMPLE_ROUNDS + 1)).map Prod.fst).length =
+      SAMPLE_ROUNDS + 1 := by
     simp only [List.length_map, List.length_take]
     omega
-  have hnl : ¬ (((run H P (V A o) (xOf A o) ω r).msgs.take (DRAW_ROUNDS + 1)).map Prod.fst).length ≤
-      DRAW_ROUNDS := by
+  have hnl : ¬ (((run H P (V A o) (xOf A o) ω r).msgs.take (SAMPLE_ROUNDS + 1)).map Prod.fst).length ≤
+      SAMPLE_ROUNDS := by
     rw [hl]
     omega
-  have hd : (((run H P (V A o) (xOf A o) ω r).msgs.take (DRAW_ROUNDS + 1)).map Prod.fst).getD DRAW_ROUNDS [] =
+  have hd : (((run H P (V A o) (xOf A o) ω r).msgs.take (SAMPLE_ROUNDS + 1)).map Prod.fst).getD SAMPLE_ROUNDS [] =
       drawOf (run H P (V A o) (xOf A o) ω r).seen := by
     unfold drawOf
     simp only [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_take, Transcript.seen,
       Nat.lt_add_one, ↓reduceIte]
-  have hc : ((List.range (DRAW_ROUNDS + 1)).map (coinSeq r)).take DRAW_ROUNDS = coinsAt r := by
+  have hc : ((List.range (SAMPLE_ROUNDS + 1)).map (coinSeq r)).take SAMPLE_ROUNDS = coinsAt r := by
     unfold coinsAt
-    rw [← List.map_take, List.take_range, Nat.min_eq_left (Nat.le_add_right DRAW_ROUNDS 1)]
+    rw [← List.map_take, List.take_range, Nat.min_eq_left (Nat.le_add_right SAMPLE_ROUNDS 1)]
   unfold nextAt at hb
   rw [ite_eq_right hnl, ite_eq_left hl, hd, hc, ite_eq_left hpass] at hb
   simp only [Claims.OC.eval] at hb
@@ -562,7 +562,7 @@ theorem read_sess (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
     ∃ si J, si.read = r ∧ SessionMatch si (inputsAt A p bs) rd ∧
       FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J ∧ r.draw = some (Flock.norm J) := by
   obtain ⟨si, hsi, rfl⟩ := readOf_sess hfits h
-  obtain ⟨draw, hdm, -⟩ := FlockDeploy.Raw.ins_draw hsi
+  obtain ⟨draw, hdm, -⟩ := FlockDeploy.Raw.ins_sample hsi
   change (some (⟨d.toArray⟩ : ByteArray)).mapM (FlockDeploy.jsonOf "draw") = .ok draw at hdm
   rw [Option.mapM_some] at hdm
   cases hJ : FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ with
@@ -646,7 +646,7 @@ theorem setupAt_of_verdictOf {I : Flock.Witness.Inputs} {scope ksFiles populatio
 /-- **v2's acceptance is the record's verifier's**, at a run whose sample file round keeps its sample file: where
 one-stage v2 accepts on the blobs `bs` reading `A`'s and `o`'s inputs (`Names`), the run of the record's verifier
 against `sha512` accepts, given that the blobs show the run's session (`Shows`), live-verifier at it (`LiveCoins`), and
-the sample file round keeps the run's sample file (`drawOk`, whose statement then fits its length words). -/
+the sample file round keeps the run's sample file (`sampleOk`, whose statement then fits its length words). -/
 theorem acc_of_pass (A : Live) (o : Own) {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {bs : Core.Blobs}
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
@@ -655,9 +655,9 @@ theorem acc_of_pass (A : Live) (o : Own) {p : _root_.Spot.OneStageZk.Params}
     (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
     (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen
       ((List.range (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.length).map (coinSeq r)))
-    (hpass : drawOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) (coinsAt r)) :
+    (hpass : sampleOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) (coinsAt r)) :
     (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).out = .acc := by
-  have hfits := fits_of_drawOk hpass
+  have hfits := fits_of_sampleOk hpass
   obtain ⟨s, rd, B, record, ksFiles, population, hs, hpl, hrd, hB, hu, hv⟩ := verdict_of_accepts hacc hn
   have hreach := reach FlockDeploy.sha512 P ω r hpass
   have hsm : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs =
@@ -685,19 +685,19 @@ theorem acc_of_pass (A : Live) (o : Own) {p : _root_.Spot.OneStageZk.Params}
   obtain ⟨hnp, hreps⟩ := hfiles si spec sts hso
   have hfl := filesOf_eq (bs := bs) (s := s) hst hreps hnp
   obtain ⟨mL, hmL, hfL⟩ := Option.bind_eq_some_iff.1 hfin
-  have hlen1 : DRAW_ROUNDS + 1 < ((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.map Prod.fst).length := by
+  have hlen1 : SAMPLE_ROUNDS + 1 < ((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.map Prod.fst).length := by
     rw [List.length_map]
     exact hreach
-  have hlenc : DRAW_ROUNDS + 1 <
+  have hlenc : SAMPLE_ROUNDS + 1 <
       ((List.range (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.length).map (coinSeq r)).length := by
     rw [List.length_map, List.length_range]
     exact hreach
   obtain ⟨hm1l, hm1'⟩ := List.getElem?_eq_some_iff.1 hm1
   obtain ⟨c₁, mids, hact⟩ : ∃ c₁ mids, FlockDeploy.act true
       (sessStmt A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen))
-      (((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs.map Prod.fst).drop (DRAW_ROUNDS + 1))
+      (((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs.map Prod.fst).drop (SAMPLE_ROUNDS + 1))
       (((List.range (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.length).map (coinSeq r)).drop
-        (DRAW_ROUNDS + 1)) = .decide si spec sts link c₁ mids f := by
+        (SAMPLE_ROUNDS + 1)) = .decide si spec sts link c₁ mids f := by
     rw [hsm, List.drop_eq_getElem_cons hlen1, List.drop_eq_getElem_cons hlenc]
     refine ⟨_, _, act_decide_of hso _ _ _ _ (a := mL.1) ?_ hfL ?_⟩
     · rw [← List.drop_eq_getElem_cons hlen1, List.getLast?_drop, ite_eq_right (Nat.not_le.2 hlen1),
@@ -708,7 +708,7 @@ theorem acc_of_pass (A : Live) (o : Own) {p : _root_.Spot.OneStageZk.Params}
   have hdec := decide_of_verdictOf hv hact hm hdraw hstmt hrec hfl
     (hlive.2 si spec sts link c₁ mids f hact)
   have hdraw0 : drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen =
-      ((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.map Prod.fst).getD DRAW_ROUNDS [] := by
+      ((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.map Prod.fst).getD SAMPLE_ROUNDS [] := by
     unfold drawOf
     rw [hsm]
   rw [hsm] at hdec
@@ -718,10 +718,10 @@ theorem acc_of_pass (A : Live) (o : Own) {p : _root_.Spot.OneStageZk.Params}
   have hL : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.length - 1 + 1 =
       (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.length := by omega
   rw [hL, List.take_length] at hb
-  have h1 : ¬ ((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.map Prod.fst).length ≤ DRAW_ROUNDS := by
+  have h1 : ¬ ((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.map Prod.fst).length ≤ SAMPLE_ROUNDS := by
     rw [List.length_map]
     omega
-  have h2 : ¬ ((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.map Prod.fst).length = DRAW_ROUNDS + 1 := by
+  have h2 : ¬ ((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.map Prod.fst).length = SAMPLE_ROUNDS + 1 := by
     rw [List.length_map]
     omega
   unfold nextAt at hb

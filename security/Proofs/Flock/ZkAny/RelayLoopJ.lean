@@ -21,9 +21,9 @@ public import Proofs.Flock.Claims.ZK.FrameZK
   them at the model's history so far.
 * `nextAt`: the model's next round's rep stream and its index there. `SeenAt`: the rep streams seen are those with a
   round before the model's next. `seenAt_nil`: none before the model's first round.
-* `BuiltAt`: every level 0 bound to the session the one the loop drew for its table, `Level0.ofDraws` on what the
+* `BuiltAt`: every level 0 bound to the session the one the loop drew for its table, `Level0.ofSamples` on what the
   host and the operating system handed it for the table's rep 0 (`LoopModel.src`). `builtAt_stays`: kept where the
-  session's tables' level 0 stay. `build_of_ofDraws`, `cap_of_drawn`: such a level 0 is a `build`, so its table's
+  session's tables' level 0 stay. `build_of_ofSamples`, `cap_of_sampled`: such a level 0 is a `build`, so its table's
   commitment's cap is its root. `builtAt_commit`: past the session's `Commit`, where the loop drew those level 0s.
 * `LoopJ`: the session stopped in the loop's frames exactly where its `Hello` left and an earlier round of the model's
   run failed; no stream seen before the `Hello` left; `RepJ` at each rep stream seen; the session's plan the setup's
@@ -154,13 +154,13 @@ theorem seenAt_nil {spec : SessionSpec} {sts : Array Stmt} {h : List (Claims.Msg
   exact absurd h0 (Nat.lt_irrefl 0)
 
 /-- **Every level 0 the slots `L0` bind to session `sid` is the one the loop drew for its table**, against the model's
-run `M`: bound for the table `name`, it is `Level0.ofDraws` at table `j`'s statement's `m` on what the host and the
+run `M`: bound for the table `name`, it is `Level0.ofSamples` at table `j`'s statement's `m` on what the host and the
 operating system handed the loop for rep stream `2j` (`LoopModel.src`), `name` being table `j`'s. -/
 def BuiltAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Array Stmt)
     (L0 : _root_.Flock.ZkServer.Level0.Slots) (sid : Nat) : Prop :=
   ∀ name l0, _root_.Flock.ZkServer.Level0.ofSession L0 sid name = some l0 →
     ∃ j g d hi, spec.tables[j]? = some name ∧ M.src (2 * j) = .ok (g, d, hi) ∧
-      _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok l0
+      _root_.Flock.ZkServer.Level0.ofSamples sts[j]!.wideLeaf sts[j]!.m g d = .ok l0
 
 /-- `BuiltAt` is kept where the session's tables' level 0 stay (`Stays`). -/
 theorem builtAt_stays {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {sid : Nat}
@@ -169,11 +169,11 @@ theorem builtAt_stays {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {s
   rw [hs.1 name] at hl
   exact h name l0 hl
 
-/-- **A level 0 `Level0.ofDraws` gives is a `Level0.build`.** -/
-theorem build_of_ofDraws {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
-    (h : _root_.Flock.ZkServer.Level0.ofDraws wideLeaf m g d = .ok l) :
+/-- **A level 0 `Level0.ofSamples` gives is a `Level0.build`.** -/
+theorem build_of_ofSamples {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
+    (h : _root_.Flock.ZkServer.Level0.ofSamples wideLeaf m g d = .ok l) :
     ∃ lv tPad extra pads salts, l = _root_.Flock.ZkServer.Level0.build wideLeaf m lv tPad g extra pads salts := by
-  unfold _root_.Flock.ZkServer.Level0.ofDraws at h
+  unfold _root_.Flock.ZkServer.Level0.ofSamples at h
   cases hz : _root_.Flock.Zk.schedule wideLeaf m with
   | error e => rw [hz] at h; cases h
   | ok p =>
@@ -184,11 +184,11 @@ theorem build_of_ofDraws {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.
     injection h with h
     exact ⟨_, _, _, _, _, h.symm⟩
 
-/-- **The table of a level 0 `Level0.ofDraws` gave has its commitment's cap at the level 0's root**:
+/-- **The table of a level 0 `Level0.ofSamples` gave has its commitment's cap at the level 0's root**:
 `Finish.tabOfLevel0` commits it as `commitOf` does, and a `build`'s cap is its root (`cap_root_build`). -/
-theorem cap_of_drawn {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
+theorem cap_of_sampled {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
     {st : _root_.Flock.Setup} {t : _root_.Flock.ZkServer.Finish.Tab}
-    (hl : _root_.Flock.ZkServer.Level0.ofDraws wideLeaf m g d = .ok l)
+    (hl : _root_.Flock.ZkServer.Level0.ofSamples wideLeaf m g d = .ok l)
     (ht : _root_.Flock.ZkServer.Finish.tabOfLevel0 st l = .ok t) :
     _root_.Flock.ZkServer.Finish.flat t.cm0.cap = l.root := by
   have hcm : t.cm0 = _root_.Flock.ZkServer.Finish.commitOf l := by
@@ -209,20 +209,20 @@ theorem cap_of_drawn {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Floc
       simp only [pure, Except.pure, Except.ok.injEq] at ht
       subst ht
       rfl
-  obtain ⟨lv, tPad, extra, pads, salts, hb⟩ := build_of_ofDraws hl
+  obtain ⟨lv, tPad, extra, pads, salts, hb⟩ := build_of_ofSamples hl
   rw [hcm]
   exact cap_root_build hb
 
 /-- **Past the session's `Commit` each level 0 bound to it is the one the loop drew for its table**: where the loop drew
-`ls` for the session (`DrawInv`: none bound to it yet, and the level 0s sampled for it `ls`'s), table `j`'s being
-`Level0.ofDraws` at its statement's `m` on what the host and the operating system handed the loop for rep stream `2j`,
+`ls` for the session (`SampleInv`: none bound to it yet, and the level 0s sampled for it `ls`'s), table `j`'s being
+`Level0.ofSamples` at its statement's `m` on what the host and the operating system handed the loop for rep stream `2j`,
 the level 0 the slots `commitRead` leaves bind to the session's table `name` is the one sampled for the table the
 `Commit` binds as `name`, the setup's table of that name (`commit_inv`). -/
 theorem builtAt_commit {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt}
     {R : _root_.Flock.ZkServer.Level0.Slots} {sid : Nat} {ls : Array _root_.Flock.ZkServer.Level0.Level0}
-    {f : ByteArray} (hd : DrawInv sid ls R)
+    {f : ByteArray} (hd : SampleInv sid ls R)
     (hdr : ∀ j (hj : j < ls.size), ∃ g d hi, M.src (2 * j) = .ok (g, d, hi) ∧
-      _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) :
+      _root_.Flock.ZkServer.Level0.ofSamples sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) :
     BuiltAt M spec sts (commitRead R sid (spec.tables.zip (sts.map (·.m))) f).2 sid := by
   have hR : ∀ name l0, _root_.Flock.ZkServer.Level0.ofSession R sid name = some l0 → False := by
     intro name l0 h
@@ -619,7 +619,7 @@ theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : S
   have hbuilt : BuiltAt M spec sts σ'.L0 sid := by
     intro name l0 hl
     rw [hL0 name] at hl
-    exact builtAt_commit (afterDraw_inv hda) hdr name l0 hl
+    exact builtAt_commit (afterSample_inv hda) hdr name l0 hl
   have hc1 : σ.c = 1 := by
     have := hF.count hs1
     omega

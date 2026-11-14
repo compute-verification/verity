@@ -40,7 +40,7 @@ with the gaps inside its span. Without timings files a load is one busy period. 
 
 The trace doesn't see the HTTP side and the client, anything after a load's last step but a
 window's on-loop close (the seal runs off the loop; the verdict pieces run after serving), or anything before the first
-arrival (the model load, the weights registration).
+arrival (the model load, the weights docket).
 
 `table` takes each composed run's first load and each stock run's first load (the first load after its endpoint listens, as
 the composed run's one load is), refuses runs whose engines differ (`identity`, except a key ``--allow`` names), and writes

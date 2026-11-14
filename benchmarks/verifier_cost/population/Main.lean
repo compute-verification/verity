@@ -47,7 +47,7 @@ def popOkLayout (p : Program) (q : Json) (n : Nat) : Bool :=
 alone and a record that names the population `n`: whether it held. -/
 def popHeldOk (p : Program) (q : Json) (n : Nat) : Bool :=
   let v : Registration.Verifier :=
-    { program := p, query := q, law := .null, workTable := none, scheme := "", ports := #[], leafLayer := none,
+    { program := p, query := q, samplingDesign := .null, workTable := none, scheme := "", ports := #[], leafLayer := none,
       anchors := #[], log := #[], partition := none }
   (OneStageZk.popHeld v (Json.mkObj [("population", toJson n)])).toBool
 

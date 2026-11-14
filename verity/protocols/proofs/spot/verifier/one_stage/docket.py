@@ -1,4 +1,4 @@
-"""The registration record (README "The registration record"): what a window is committed to, fixed before the verifier samples.
+"""The docket (README "The registration record"): what a window is committed to, fixed before the verifier samples.
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
@@ -31,7 +31,7 @@
     its own leaves and a value several read comes as a registered value; and the verdict publishes the query's fan-out F
     on the verifier's program (`partition.fanout`, `Verdict.fanout`), the N at which the capped two-stage form charges a
     replay block (`plancheck.two`'s `fanout`). A run Input a parameter the verifier names `tied` holds is let through:
-    the network period check ties its rows to the registrations that computed them, which this check doesn't, so the
+    the network period check ties its rows to the dockets that computed them, which this check doesn't, so the
     verdict publishes each tied name it let through (`Verdict.rests_on_period_check`), and with any its acceptance is
     none on its own; it refuses a tied name that isn't a run Input of the program's own, or that it expects registered
     or holds (`R8-tied`).
@@ -112,7 +112,7 @@
   it: `pin` is then a reused value, the previous record's `pout` in `pout`'s row format (`pool_values`), so its entry
   takes that entry's domain and root, whatever the verifier made of that window. The chain restarts from the empty
   pool, `pin` a supplied value filled from `genesis`, the empty pool's root, so its root is fixed:
-  - by the public rule, which takes no advice: at a registration's first window, at a registration boundary (the log's
+  - by the public rule, which takes no advice: at a docket's first window, at a docket boundary (the log's
     last record registered another program), and after the verifier refused the window `lag` windows of record before
     this one (`pool_refused`), `lag` the fixed public lag at which serving learns a verdict. Whether it did is read
     from the verifier's own verdict log (`verdicts`: each earlier record's digest and whether its run accepted), so
@@ -200,7 +200,7 @@ def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], s
 
 
 def record_digest(tag: str, canon: bytes) -> bytes:
-    """The one registration digest, `SHA-512(tag || 0 || canon)`, over a record's canonical bytes: `digest`'s, and PoUW's
+    """The one docket digest, `SHA-512(tag || 0 || canon)`, over a record's canonical bytes: `digest`'s, and PoUW's
     over the bytes it was handed (`pouw.core_check.digest`)."""
     return hashlib.sha512(tag.encode() + b"\0" + canon).digest()
 
@@ -213,7 +213,7 @@ def digest(rec: Mapping[str, Any]) -> str:
 
 def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
     """`{(value, domain): root}` for every value an earlier record of the log registered, the root of its first
-    registration under that domain: R7 holds a value to the root registered under the domain it takes now, so a
+    docket under that domain: R7 holds a value to the root registered under the domain it takes now, so a
     per-window value, whose domain binds its window, is held to none of another window's."""
     held: dict[tuple[str, str], str] = {}
     for rec in log:
@@ -237,7 +237,7 @@ class HistoryRefused(ValueError):
 
 
 def resolved(supplied: Any, history: Mapping[str, Any] | None) -> Any:
-    """``supplied`` as `check` read it under the history tables ``history``, for a registration `check` accepted: each
+    """``supplied`` as `check` read it under the history tables ``history``, for a docket `check` accepted: each
     source ``{"history": "H/root"}`` or ``{"history": "H/domain"}`` the bytes of table ``H``'s root or domain id
     (`history.resolve`), as the Lean's params hold them. It computes no table's root: `check` held each registered
     root to its table (`history.roots_of`), so the root is the registered one and the domain id the table's own."""
@@ -302,7 +302,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     ``{"history": "H/root"}`` or ``{"history": "H/domain"}`` is then the bytes of the root or domain id it computed for
     table ``H`` (`history.resolve`).  History tables it can't read or hold to their roots raise `HistoryRefused`, which
     the verifier reports as `HISTORY` where its Lean refuses them too.  `certified`: the entries the verifier built from
-    registrations it read under the deployment's key, of values that are none of its program's parameters (the
+    dockets it read under the deployment's key, of values that are none of its program's parameters (the
     certified rows of a link), ``{value: {"root", "leaves", "words", "domain"}}``, with `word_bits` when its leaves
     are not 16 bits (`_certified`).  With any, it expects a v2 record though it expects no parameter registered, R7
     holds the record's registered values to be the ones it expects registered and the certified ones, each once, a
@@ -313,7 +313,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     reads them.  Under a template query R8 refuses a run Input node the proof blocks don't each read alone, unless it
     is a parameter's that `registered` names (`partition.shared_inputs`) or one of `tied`'s, and the verdict carries the
     fan-out F of `query` on `program` (`partition.fanout`), which it publishes whatever its codes; under any other query it
-    carries none.  `tied`: parameters, run Inputs, whose rows a later check ties to the registrations that computed them
+    carries none.  `tied`: parameters, run Inputs, whose rows a later check ties to the dockets that computed them
     (the scan's slot entries, which the network period check ties to the blocks that registered them), which R8 lets
     through though several proof blocks read them, on that later check alone: the verdict publishes the ones it let
     through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
@@ -885,7 +885,7 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
         if not (isinstance(e["root"], str) and len(e["root"]) == 128 and _HEX.fullmatch(e["root"])):
             c.fail("R7-root", v)
         # a count is an int, never a float or bool equal to it, and 16 is named by leaving word_bits out: one record
-        # digest per registration
+        # digest per docket
         for k in ("leaves", "words", "domain"):
             if e[k] != want[k] or (k != "domain" and type(e[k]) is not int):
                 c.fail(f"R7-{k}", {"value": v, "registered": e[k], "verifier": want[k]})
@@ -912,11 +912,50 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             c.fail("R7-supplied", {"value": v, "registered": e["root"], "verifier": root})
 
 
+#: `OneStageZk.TABLE_PORT`, the port a registration names a window's row tables' root at
+TABLE_PORT = "row-table"
+#: `OneStageZk.ROW_TABLES`
+ROW_TABLES = ("roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member "
+              "form is refused on a window with row tables until its guarantee covers a root every member reads")
+#: `OneStageZk.NOT_ONE_MEMBER`
+NOT_ONE_MEMBER = ("public file: the registration's roots are not one member's: the one statement's public file is held to "
+                  "a registration whose ports are bare, or are all one window member's, <member>/<port>")
+
+
+def public_ports(rec: Mapping[str, Any]) -> dict[str, Any]:
+    """`OneStageZk.publicPorts`: the record's roots by port as v2's one statement's public file names them (bare): its
+    own where no root's port holds a ``/``; else, where every root's port is ``<member>/<port>`` of one member, whose own
+    port names hold no ``/``, that member's roots with its name and the ``/`` taken off. Raises `ValueError` with v2's
+    refusal where the roots are two members' or more, or bare and a member's (`NOT_ONE_MEMBER`), or one is a row tables'
+    (`ROW_TABLES`) or names no port."""
+    roots = rec["roots"]
+    ports = [r["port"] for r in roots if isinstance(r.get("port"), str)]
+    if all("/" not in p for p in ports):
+        return {r["port"]: r for r in roots if isinstance(r.get("port"), str)}
+    names = {p.rsplit("/", 1)[0] if "/" in p else None for p in ports}
+    if None in names or len(names) != 1:
+        raise ValueError(NOT_ONE_MEMBER)
+    name, = names
+    out: dict[str, Any] = {}
+    for r in roots:
+        port = r.get("port")
+        if not isinstance(port, str):
+            raise ValueError("roots: a root of the registration names no port")
+        if port == TABLE_PORT:
+            raise ValueError(ROW_TABLES)
+        bare = port[len(name) + 1:]
+        out.pop(bare, None)
+        out[bare] = {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": bare, "root": r.get("root")}
+    return out
+
+
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],
-                   population: int) -> Verdict:
-    """The verifier's own public file (its scheme, roots, their domains and its instance count) against the record."""
+                   population: int, reg: Mapping[str, Any] | None = None) -> Verdict:
+    """The verifier's own public file (its scheme, roots, their domains and its instance count) against the record, at
+    the record's roots by port ``reg`` (`Record.matchesPublicBy`; the record's own by default, `Record.matchesPublic`,
+    or v2's one statement's, `public_ports`)."""
     c = _Collect()
-    reg = {r["port"]: r for r in rec["roots"]}
+    reg = {r["port"]: r for r in rec["roots"]} if reg is None else reg
     if scheme != rec["scheme"]:
         c.fail("scheme", {"registered": rec["scheme"], "public": scheme})
     if {p: r["root"] for p, r in reg.items()} != dict(roots):
@@ -930,7 +969,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "POOL_KEYS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest",
-           "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused", "pool_spent_before",
-           "pool_values", "query_digest", "receipt", "record", "record_digest", "refuse_unwindowed",
-           "registered_entries", "unwindowed", "window_domain"]
+__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "NOT_ONE_MEMBER", "POOL_KEYS", "PROTOCOL", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
+           "WINDOW_DOMAIN", "check", "digest", "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused",
+           "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt", "record", "record_digest",
+           "refuse_unwindowed", "registered_entries", "unwindowed", "window_domain"]

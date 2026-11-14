@@ -155,7 +155,7 @@ section Chain
 open Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL Composed
   ZkReg
 
-variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : Law n} {Reg Cm : Type} {I : Inner}
+variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {I : Inner}
 
 /-- **A trial at one of `σ`'s leaves at the sample `ω` decodes to `d`**: `InnerForkRec`'s trial, run from the root. -/
 def LeafRun (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')

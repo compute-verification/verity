@@ -37,14 +37,14 @@ piece at that table, where the three are theorems, and with them the statements'
 * `StmtsFixed` is `stmtsFixed_of_each` (`StmtsRound.lean`), from `StmtsCount`, `StmtAtFixed` and each case being the
   one sent (`CaseIsSent`).
 * `StmtAtFixed` is `stmtAtFixed_of` (`FormStmts.lean`), from `StmtsRead`, `StmtsCount`, `CaseIsSent`, and
-  `MemberAtFixed` and `DrawAtFixed`.
+  `MemberAtFixed` and `SampleAtFixed`.
 * `MemberAtFixed` is `memberAtFixed_of_coins` (`FormMember.lean`), from `StmtsRead`, `StmtsCount`,
   `SessionCoins.StmtsFit`, `StageCoinsOne` and `MembersApart`: the model's check holds the two plays' statements'
   public files to one part of the second stage's population at one pair of stage coins, the form's check holds each
   member's public file to the member's units, and no two members of the parameters have the same units.
 * `MembersApart` is `membersApart` (`FormMember.lean`), with no hypothesis: the parameters' reading refuses a member
   with no unit and a unit in two members' ranges.
-* `DrawAtFixed` is `drawAtFixed_of_coins` (`FormDraw.lean`), from `StmtsRead`, `StmtsCount`,
+* `SampleAtFixed` is `sampleAtFixed_of_coins` (`FormDraw.lean`), from `StmtsRead`, `StmtsCount`,
   `SessionCoins.StmtsFit` and `StageCoinsOne`: the model's check holds the two plays' samples to one canonical
   text at one pair of stage coins, and a record's sample is fixed by its canonical text.
 * `StageCoinsOne` is `stageCoinsOne_of_play` (`FormDraw.lean`), from the join's fields and `PlayCoinsOne`: an
@@ -52,7 +52,7 @@ piece at that table, where the three are theorems, and with them the statements'
   (`stmtOk_form`).
 * `PlayCoinsOne` is `playCoinsOne_of_shown` (`FormBytes.lean`), at the run's locator, which puts only openings past
   the second stage's last round (`opensFrom_run`): from `FirstShownEarly` and `SecondShown`, each stage's sample
-  being its family's after one digest (`CoinMap.StageDraws`) and `SessionCoins.InteriorLogged`. Each stage's bytes
+  being its family's after one digest (`CoinMap.StageSamples`) and `SessionCoins.InteriorLogged`. Each stage's bytes
   start the coins the log before the statements' round shows, so one of two plays' bytes starts the other's.
 * `FirstShownEarly` is `firstShownEarly` (`FirstEarly.lean`), from `CaseIsSent` and `Good` holding the check to
   have read a log of both sessions and found it the device's (`ReadIsDevice`): the form refuses an interior audit on
@@ -89,7 +89,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 /-- **The replaying provers' messages are the ones the check read, at the form** (`SessionMsgs` at
 `SessionMsgs.replayProver`): `sessionMsgs_replay` where the statements' count, their fit and the sessions' verdicts
 are the form's (`stmtsCount_of`, `SessionCoins.stmtsFit_of`, `SessionCoins.verdictsAt_of`), at every play. -/
-theorem sessionMsgs_form {A : Live₂} {C : CaseOf} {S : SessionReading}
+theorem sessionMsgs_form {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j) (hof : HeldOfAt A C)
     (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S)
@@ -110,7 +110,7 @@ record is its session's, accepted at its statement's setup (`SessionCoins.msgsOf
 statement prints of the member reading back (`stmtsPrint_of`). The evidence holds one statement a template
 (`stmtsCount_of`), so the statements' message is fixed where each template's statement is (`stmtsFixed_of_each`),
 which it is where the member it names and the sample its record prints are (`stmtAtFixed_of`), both where
-one pair of stage coins carries the bytes both plays' samples read (`memberAtFixed_of_coins`, `drawAtFixed_of_coins`,
+one pair of stage coins carries the bytes both plays' samples read (`memberAtFixed_of_coins`, `sampleAtFixed_of_coins`,
 `stageCoinsOne_of_play`), which one does where each stage's bytes start the coins the log shows before every
 opening (`playCoinsOne_of_shown`), as the first stage's do at the cut's read (`firstShownEarly`); and where its
 statement is fixed, a session's first message is fixed by the string shown at its first round (`linkFixed_of`) and
@@ -118,14 +118,14 @@ its last by its evidence (`lastFixed_of`). The replaying provers send each sessi
 them (`sessionMsgs_form`). The frame's run on agreeing coins, its messages the check's wherever it has one, has
 every message (`reaches_frame`), as the replaying provers' run does. -/
 theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading)
+    (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (ℓ₁ ℓ₂ : String) (Good : Verity.Exchange → Prop)
     (L : CoinMap.Locate)
     (hL : L = SessionCoins.runLocate A (CoinMap.stageLocate ℓ₁ ℓ₂) fun _ => Flock.Tags.circuit.table) (q : ℕ)
     (hne : ℓ₁ ≠ ℓ₂) (hG : ∀ o, Good o → ReadIsDevice o)
-    (hDraw₁ : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind firstDraw) ℓ₁)
+    (hDraw₁ : CoinMap.StageSamples (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind firstDraw) ℓ₁)
     (hSecond : SecondShown C Good)
-    (hDraw : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
+    (hDraw : CoinMap.StageSamples (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
     (hlog : SessionCoins.InteriorLogged C Good) (hθ : ∀ o, FormAccepts C o → Good o → o.params = θ)
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j)
@@ -145,7 +145,7 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     exact playCoinsOne_of_shown (opensFrom_run A _ _) hof hparts (firstShownEarly C Good hG hsent) hDraw₁ hSecond hDraw
       hlog
   have hone : StageCoinsOne A C S Good L := stageCoinsOne_of_play hparts hof hst hrounds hscope hpin hcoins
-  have hdraw : DrawAtFixed A C Good L := drawAtFixed_of_coins hS hst hcount hfit hone
+  have hdraw : SampleAtFixed A C Good L := sampleAtFixed_of_coins hS hst hcount hfit hone
   have hmemb : MemberAtFixed A C Good L := memberAtFixed_of_coins hS hst hcount hfit hone (membersApart C)
   have hfix : StmtAtFixed A C Good L := stmtAtFixed_of A C S Good L hS hsent hst hcount hmemb hdraw
   have hcov : SessionCoins.RecordsCover A C Good := SessionCoins.recordsCover_of hsz hS hst hcount

@@ -1,4 +1,4 @@
-"""Registered values: a program's table committed once under hiding leaves (`one_stage.registered`), the registration's
+"""Registered values: a program's table committed once under hiding leaves (`one_stage.registered`), the docket's
 R7, the verifier's read map from its own program, the read check, and the audit record's link to the registered roots."""
 from __future__ import annotations
 
@@ -44,10 +44,10 @@ LAW = {"law": "subset", "k": 2}
 #: the sample the audit record's tests hand it: units 1 and 4 of six
 SAMPLE = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
 SERVED = {"kind": "served", "row": 7, "run": "r-registered"}
-#: a 16-bit registration's root: three 64-word rows, salts 01.., 02.., 03..
+#: a 16-bit docket's root: three 64-word rows, salts 01.., 02.., 03..
 ROOT_16 = ("511a71aa555f05f2b992997f7d6fe2af8e225c2a378ace51d54c18642f73193e"
            "5f4a2e5773666a0fc342aa1911db7806cdbcb3d144a6fd8ffd0d9c6b0426d557")
-#: a 32-bit registration's root: one row of eps and the softmax scale at D = 64, salt 09..
+#: a 32-bit docket's root: one row of eps and the softmax scale at D = 64, salt 09..
 ROOT_32 = ("c0263747d89040d789185af524ea46e535071948299eb60851799b78fd3a9168"
            "c5e79be456e606dd9eaa5516e6d5b6013536c24f1fe17ba13dd09a37150a62b0")
 
@@ -132,7 +132,7 @@ def test_a_16_bit_value_binds_only_the_five_keys():
 
 def test_a_32_bit_value_is_its_u16_words_low_first_under_its_own_domain():
     """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and Flock's `values` row): its
-    domain names `word_bits`, so a 32-bit registration is never a 16-bit one's, and the entry carries it."""
+    domain names `word_bits`, so a 32-bit docket is never a 16-bit one's, and the entry carries it."""
     prog = P.program_digest(_program(w=32))
     assert G.row_words([0x3727C5AC, 0x3E38AA3B], 32) == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, *[0] * 60]
     assert G.domain(prog, "W", 2, 5, 32).domain_id != G.domain(prog, "W", 2, 5).domain_id
@@ -270,7 +270,7 @@ def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, wo
 def test_a_row_seg_table_one_token_a_row_is_what_the_embedding_read_opens():
     """`gates.embedding`'s read at a hidden position (`EmbeddingRead_v1`) reads a table registered here under
     ``hm96-sha512/row-seg/v1`` with one token a row (``words = H``): each row opens at its token's position under the
-    registration's root and domain id, and at no other token's."""
+    docket's root and domain id, and at no other token's."""
     from verity.commitments.gates import embedding as E
 
     V, H = 5, 3
@@ -305,8 +305,8 @@ def test_the_verifiers_reads_file_names_a_bit_row_values_format():
 
 def test_bind_ports_binds_each_port_the_file_leaves_out_at_the_registrations_root():
     """`bind_ports` (`Flock.RegBound`): a v1 file's ports the statement has and the file names no registered port for are
-    bound at the registration's root and domain of their rows, its registered ports left as they are; a file with no
-    other port, or of v0, is returned as it is (Lean holds it to name every port); a port the registration holds no root
+    bound at the docket's root and domain of their rows, its registered ports left as they are; a file with no
+    other port, or of v0, is returned as it is (Lean holds it to name every port); a port the docket holds no root
     for is refused."""
     w = {"value": "W", "root": "aa" * 64, "leaves": 2, "domain": "bb" * 64, "reads": [0, 1]}
     roots = {p: {"root": f"{i}" * 128, "domain": f"{i + 4}" * 128, "leaves": 2} for i, p in enumerate(("w", "x", "out"))}
@@ -481,7 +481,7 @@ def test_a_parameter_of_several_rows_that_are_not_whole_rows_of_one_value_is_ref
 
 
 def test_the_verifiers_reads_file():
-    """Everything in the file but the root is the verifier's own, from its program: a registration that named another leaf
+    """Everything in the file but the root is the verifier's own, from its program: a docket that named another leaf
     count or domain would change nothing here."""
     prog = _program()
     reg = _registered(prog)
@@ -516,7 +516,7 @@ def test_registration_v2_names_the_registered_values_and_r7_holds_them():
     for change, code in cases:
         assert code in R.check({**rec, **change}, prog, Q, **kw, registered={"W": 2}).codes, code
     assert "R7-registered" in R.check(rec, prog, Q, **kw, registered={"W": 3}).codes
-    # a count equal to the verifier's is still refused as a bool: True would give the registration a second digest
+    # a count equal to the verifier's is still refused as a bool: True would give the docket a second digest
     one = _program(pos=(0, 0), rows=1)
     rec1, ports1 = _record(one, G.Registered.commit(P.program_digest(one), "W", TABLE[:1]))
     kw1 = {"law": LAW, "scheme": SCHEME, "ports": ports1}
@@ -541,8 +541,8 @@ def test_an_r7_root_of_127_hex_digits_and_a_newline_is_refused():
 
 
 def test_r7_holds_a_32_bit_value_to_the_verifiers_width():
-    """The verifier's program says the table's leaves are 32 bits: a 32-bit registration of it passes R7, and one that
-    names another width, or none (16), is refused, as is a 32-bit registration of a 16-bit table."""
+    """The verifier's program says the table's leaves are 32 bits: a 32-bit docket of it passes R7, and one that
+    names another width, or none (16), is refused, as is a 32-bit docket of a 16-bit table."""
     prog = _program(w=32)
     reg = G.Registered.commit(P.program_digest(prog), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32)
     rec, ports = _record(prog, reg)
@@ -700,7 +700,7 @@ def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
 def test_a_session_bound_domain_binds_the_session_alone():
     """A value whose root the window's open root contains (PoUW's round-0 input-ids table) binds the window's session in
     the open root's place: its domain differs from the unbound one, the window-bound one and another session's, and a
-    domain binds at most one of a window, a registration and a session."""
+    domain binds at most one of a window, a docket and a session."""
     prog = P.program_digest(_program())
     rec = G.Registered.commit(prog, "x", X_ROWS, session="s-1")
     doms = {G.domain(prog, "x", 2, len(X_ROWS), **kw).domain_id for kw in
@@ -725,7 +725,7 @@ def _prefixed(prefix: str) -> Program:
 
 
 def test_the_window_prefixed_form_still_verifies():
-    """A registration whose names carry their window's prefix is still accepted, with or without the window's
+    """A docket whose names carry their window's prefix is still accepted, with or without the window's
     root: each window's values are other names, so nothing in the log holds them. (It holds nothing across windows
     either, the weights included, which is what the window's root in the domain gives back.)"""
     for windowed in (False, True):
@@ -1047,7 +1047,7 @@ def test_a_history_source_is_the_root_the_verifier_computes():
     root is that root, it fills the rows `{"port": "x"}` fills, in both verifiers. A body the leaf layer doesn't bind, a
     registered root that is not the one computed, a table or field the verifier computed none of, or a `history`
     without the verifier's leaf layer refuses the parameters in both, and the verifier's verdict is `R7-history`. For
-    an accepted registration `registration.resolved` gives the same bytes without a second pass over the table."""
+    an accepted docket `registration.resolved` gives the same bytes without a second pass over the table."""
     hist, leaf, root = _history()
     rec, check, _, _ = _seeded_case(x_root=root, leaf_layer=leaf)
     check = {**check, "leaf_layer": leaf}
@@ -1088,9 +1088,9 @@ def test_a_history_source_is_the_root_the_verifier_computes():
 
 
 def test_the_run_of_record_takes_each_registrations_history_tables(monkeypatch):
-    """`run` hands the Lean's run (`Run.run`) the history tables of each registration it parses, the boundary's and,
-    under a two-stage design, the interior's, as the parameters `check` hands the Lean's registration, so a reader's
-    `{"history": ...}` source resolves in the run as it does at registration."""
+    """`run` hands the Lean's run (`Run.run`) the history tables of each docket it parses, the boundary's and,
+    under a two-stage design, the interior's, as the parameters `check` hands the Lean's docket, so a reader's
+    `{"history": ...}` source resolves in the run as it does at docket."""
     hist, leaf, root = _history()
     rec, check, _, _ = _seeded_case(x_root=root, leaf_layer=leaf)
     other = {**hist, "registered": {"k_hist": "11" * 64}}
@@ -1308,7 +1308,7 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     assert {e["domain"] for e in G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64})["ports"].values()} == {reg.entry()["domain"]}
 
 
-#: The entry and root a verifier built from a registration it read under the deployment's key: a link's certified rows,
+#: The entry and root a verifier built from a docket it read under the deployment's key: a link's certified rows,
 #: a value that is none of the program's parameters
 CERTIFIED = {"link-0/in/7": {"root": "cd" * 64, "leaves": 3, "words": 64, "domain": "ef" * 64}}
 
@@ -1576,7 +1576,7 @@ def _entry(rec, value: str) -> dict:
 
 
 def test_a_window_opens_the_pool_the_previous_window_of_record_left():
-    """Pool chain: a registration's first window opens the empty pool by the public rule, with no reset of its own,
+    """Pool chain: a docket's first window opens the empty pool by the public rule, with no reset of its own,
     `pin` filled from `genesis` under a fixed domain, and each next window the pool the previous window of record left,
     `pin` the previous record's `pout` entry, its domain and root (the window's open root binds `pout`'s domain, so no
     other window's pool opens under it), whatever the verifier made of that window. A wrong `pin` is refused by name
@@ -1607,7 +1607,7 @@ def test_a_window_opens_the_pool_the_previous_window_of_record_left():
 
 def test_the_public_rule_restarts_the_pool_with_no_advice():
     """The public rule opens the empty pool, `pin` filled from `genesis`, where there is no pool to carry, at a
-    registration's first window and past a registration boundary (a previous record of another program), and after the
+    docket's first window and past a docket boundary (a previous record of another program), and after the
     verifier refused the window the public lag back, as its own verdict log names it (`verdicts`, `pool_refused`), with
     no reset of serving's: the records name none, so the rule costs no advice. Where it restarts, the previous window's
     pool is refused by name (`R7-pool-chain`). Where the verdict log names that window's run accepted, or holds no
@@ -1985,7 +1985,7 @@ def test_r7_reuses_a_pearl_plus_entry_under_its_own_domain():
             assert codes({}, w)[0] == "R7-output", (name, w)
 
 
-#: an AROW row table's port (`verity.commitments.windows.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
+#: an AROW row table's port (`verity.commitments.periods.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
 ROW_TABLE = "row-table/3/model.layers.0.mlp.down_proj"
 
 
