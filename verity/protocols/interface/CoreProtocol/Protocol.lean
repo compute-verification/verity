@@ -1,4 +1,9 @@
-/-
+module
+
+public import Base.Canon
+public import Lean.Data.Json.Parser
+
+/-!
 The interface every core protocol implements (PoUW, PoUS, the network certificate check, sampled proofs' one-stage
 audit, the composition).
 
@@ -12,10 +17,6 @@ audit, the composition).
 parameters, runs the check, and turns every decoding failure into a rejection, so every input gets a verdict.
 `Answer.toJson` is the outcome's one canonical form, the one the difftests compare and a composition reads.
 -/
-module
-
-public import Base.Canon
-public import Lean.Data.Json.Parser
 
 @[expose] public section
 set_option backward.privateInPublic true

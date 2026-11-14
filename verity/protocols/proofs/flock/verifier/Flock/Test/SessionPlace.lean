@@ -1,14 +1,15 @@
-/-
+module
+
+public import Flock.Firewall.Session
+meta import Flock.Firewall.Session
+
+/-!
 `Session.State.request`, the session loop's decision on each request after the prover's `Register` and `Hello`, at a
 session of two rep streams: along the honest prover's order (the first rep stream's `Open`, `Commit`, `Link`, its rounds,
 the second's `Open` and rounds, `Finish`) each leaves once, at its place; a second `Register`, `Hello`, `Link` or `Open`,
 and each of them out of its place, is refused; after a refusal every request is refused for its reason; and a `Commit`
 or `Round` the auditor answers without coins stops the session (`Session.State.answer`), so it never leaves again.
 -/
-module
-
-public import Flock.Firewall.Session
-meta import Flock.Firewall.Session
 
 @[expose] public section
 

@@ -1,13 +1,3 @@
-/-
-The integrity profile: what an accepted check established, as `verity.core.protocols.profile.IntegrityProfile`
-records it. These are the facts checked exhaustively, the verifier's sampling design over named levels of a partition
-hierarchy (coarse to fine; the finest level is the checked one), the members sampled at each level, and δ. The JSON is
-`IntegrityProfile.to_json`'s, except that δ is an exact ratio string (`Core.Ratio`) and not a float.
-
-A protocol whose acceptance is not a sampling design over proof blocks (a timed storage audit, a certificate check) declares
-its own profile type; this one is shared by the protocols that sample. `Integrity.ofJson` reads it back, for a protocol
-that consumes another's answer.
--/
 module
 
 public import Base.Canon
@@ -17,6 +7,17 @@ meta import Lean.Data.Json
 meta import Base.Canon
 meta import Commitments.Draw
 meta import CoreProtocol.Ratio
+
+/-!
+The integrity profile: what an accepted check established, as `verity.core.protocols.profile.IntegrityProfile`
+records it. These are the facts checked exhaustively, the verifier's sampling design over named levels of a partition
+hierarchy (coarse to fine; the finest level is the checked one), the members sampled at each level, and δ. The JSON is
+`IntegrityProfile.to_json`'s, except that δ is an exact ratio string (`Core.Ratio`) and not a float.
+
+A protocol whose acceptance is not a sampling design over proof blocks (a timed storage audit, a certificate check) declares
+its own profile type; this one is shared by the protocols that sample. `Integrity.ofJson` reads it back, for a protocol
+that consumes another's answer.
+-/
 
 @[expose] public section
 set_option backward.privateInPublic true

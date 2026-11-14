@@ -1,12 +1,13 @@
-/-
+module
+
+public import Flock.Proof
+
+/-!
 A `--zk` proof file (live PROTOCOL.md, `flock-circuit --zk`): `bincode 1.3` of `(Commitment, R1csProofLigerito, InnerProof)`.
 The pair is `Flock.Proof`'s with three differences: `matrix_evals` is empty, every level-0 row carries four more lanes (the extra lanes,
 a pair per rep), and the Ligerito proof ends with level 0's hiding messages (`zk_level0`, an `Option`). The inner proof
 follows the pair. A byte after it is refused, as after `Flock.Proof`'s pair (`Reader.runAll`).
 -/
-module
-
-public import Flock.Proof
 
 @[expose] public section
 

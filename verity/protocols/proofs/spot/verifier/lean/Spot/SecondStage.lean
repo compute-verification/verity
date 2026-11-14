@@ -1,4 +1,15 @@
-/-
+module
+
+public import Flock.FV3
+public import Flock.Program
+public import Spot.Record
+public import Spot.Schedule
+meta import Flock.FV3
+meta import Flock.Program
+meta import Spot.Record
+meta import Spot.Schedule
+
+/-!
 **Round 2's statement check**: a two-stage run's second-stage sessions held, each by its statement, to the interior
 registration and to the second sample's cells (`check`). `Run.run` adds it to the interior registration's audit record as
 `checks.statements` (`attach`), and `service.Stream` runs its mirror (`second_stage`), held to it by difftest
@@ -123,16 +134,6 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
 * **The form**: once every check passes, the run is refused last (`two-stage-form`) unless `FORM` allows it; while it
   doesn't, no run passes (`check_refused`).
 -/
-module
-
-public import Flock.FV3
-public import Flock.Program
-public import Spot.Record
-public import Spot.Schedule
-meta import Flock.FV3
-meta import Flock.Program
-meta import Spot.Record
-meta import Spot.Schedule
 
 @[expose] public section
 set_option backward.privateInPublic true

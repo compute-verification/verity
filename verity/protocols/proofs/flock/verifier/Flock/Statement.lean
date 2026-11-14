@@ -1,9 +1,3 @@
-/-
-The circuit statement (its file: `Flock.Circuit`), set up from its `Tags`, its row leaf (`RowLeaf`), the pinned
-circuit file and the public file: Δ, the regions and their claims, the lincheck fold, the statement digest, Σ and `Hello`.
-Nothing here evaluates the computation: the region values are the layout's constants, the public digests and outputs, and
-hashes of pinned padding constants.
--/
 module
 
 public import Flock.RowLeaf
@@ -11,6 +5,13 @@ public import Flock.Piop
 public import Flock.Merkle
 public import Flock.Record
 public import Flock.TmplSplit
+
+/-!
+The circuit statement (its file: `Flock.Circuit`), set up from its `Tags`, its row leaf (`RowLeaf`), the pinned
+circuit file and the public file: Δ, the regions and their claims, the lincheck fold, the statement digest, Σ and `Hello`.
+Nothing here evaluates the computation: the region values are the layout's constants, the public digests and outputs, and
+hashes of pinned padding constants.
+-/
 
 @[expose] public section
 

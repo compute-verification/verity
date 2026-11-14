@@ -1,12 +1,13 @@
-/-
-`Registered.checkComplete`, which `flock-verify` runs whenever `--registered` is given: a lane statement whose index row
-`pub` its public file states, committed afresh (no registered read), passes `Registered.check` on its other ports and is
-refused by `checkComplete`; with `pub` among the verifier's ports, it passes.
--/
 module
 
 public import Flock.Test.RegFormats
 meta import Flock.Test.RegFormats
+
+/-!
+`Registered.checkComplete`, which `flock-verify` runs whenever `--registered` is given: a lane statement whose index row
+`pub` its public file states, committed afresh (no registered read), passes `Registered.check` on its other ports and is
+refused by `checkComplete`; with `pub` among the verifier's ports, it passes.
+-/
 
 @[expose] public section
 

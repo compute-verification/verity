@@ -1,4 +1,10 @@
-/-
+module
+
+public import Flock.Firewall
+public import Flock.WitnessZk
+public import Flock.Firewall.Coins
+
+/-!
 # The session's `Hello`, made in Lean (live PROTOCOL.md §9, §10)
 
 A `--zk` session's first message is the prover's `Hello`: the verifier's own session parameters (`Stmt.helloOf`, at the
@@ -12,11 +18,6 @@ files, and never by the prover's workers.
 
 The analysis holds these to the coin layer's `Hello` (`Claims.ZKMal.CoinLayer.helloD`, `Claims/ZK/HelloLean.lean`).
 -/
-module
-
-public import Flock.Firewall
-public import Flock.WitnessZk
-public import Flock.Firewall.Coins
 
 @[expose] public section
 

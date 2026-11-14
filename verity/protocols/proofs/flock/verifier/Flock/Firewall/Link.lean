@@ -1,4 +1,11 @@
-/-
+module
+
+public import Flock.Firewall.Coins
+public import Flock.Ligerito
+public import Flock.Merkle
+public import Flock.Zk
+
+/-!
 # The ZK server's level-0 recheck (live PROTOCOL.md §10): a table's level-0 root from its witness and level 0's hiding
 
 Before anything of a firewalled table leaves, the ZK server commits the table's level 0 again from the host's witness, the
@@ -23,12 +30,6 @@ and `flock-firewall finish`'s `table` request (`Flock.Firewall.Finish.commit0`, 
 leaves is one of these, and the finish keeps the table's tree for its reps' openings (`Finish.openLive`): Rust commits
 nothing of level 0 under the ZK server.
 -/
-module
-
-public import Flock.Firewall.Coins
-public import Flock.Ligerito
-public import Flock.Merkle
-public import Flock.Zk
 
 @[expose] public section
 

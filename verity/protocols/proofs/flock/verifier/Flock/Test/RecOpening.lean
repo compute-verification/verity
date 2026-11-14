@@ -1,12 +1,13 @@
-/-
-`RecOpening.check` on a unit named `rec-opening/m22-c2-p0` (m = 22 has a `fast100` schedule, claims 2): any number of
-units per VU but one is refused, before the structure is computed or any net built; at one it goes on to the part's bits
-(this unit has no input bits, so its claims exceed them). A unit of another name passes at any number.
--/
 module
 
 public import Flock.RecOpening
 meta import Flock.RecOpening
+
+/-!
+`RecOpening.check` on a unit named `rec-opening/m22-c2-p0` (m = 22 has a `fast100` schedule, claims 2): any number of
+units per VU but one is refused, before the structure is computed or any net built; at one it goes on to the part's bits
+(this unit has no input bits, so its claims exceed them). A unit of another name passes at any number.
+-/
 
 @[expose] public section
 

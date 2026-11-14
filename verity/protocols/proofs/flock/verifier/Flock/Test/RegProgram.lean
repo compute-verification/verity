@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.Test.RegComplete
+meta import Flock.Test.RegComplete
+
+/-!
 `Registered.checkProgram`: a verifier whose own program has a `RegisteredInput<w>_v1` node refuses a statement without its own
 registered reads (`--registered`), whatever the public file's header names; with them, `Registered.check` opens the
 verifier's ports and refuses a statement whose header was stripped. The programs are `TMin(x, r) = x + r`
 (`test_format_spec`'s primitives), with `r` bound per run or at registration.
 -/
-module
-
-public import Flock.Test.RegComplete
-meta import Flock.Test.RegComplete
 
 @[expose] public section
 

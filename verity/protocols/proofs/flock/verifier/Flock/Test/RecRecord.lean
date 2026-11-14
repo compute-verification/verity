@@ -1,14 +1,15 @@
-/-
+module
+
+public import Flock.RecRecord
+meta import Flock.RecRecord
+
+/-!
 The challenger's live-coin part's record reader (`Flock.RecRecord.readRecord`) on an honest record: the plain session's (fixture
 `rec-coins/16-16-8-n64/inner-honest`) first three rounds and its first round that commits tops (round 63), with the
 record's fields after the rounds, as `rec_live.record_bytes` writes them. It reads each round's index, coin count,
 coins, commit strings and tops, and `recordW` writes those rounds back to the same bytes, so the reader that
 `RecDeploy.ksLin2_deployed_rec` reads the transcript with accepts what the honest live-coin part writes.
 -/
-module
-
-public import Flock.RecRecord
-meta import Flock.RecRecord
 
 @[expose] public section
 

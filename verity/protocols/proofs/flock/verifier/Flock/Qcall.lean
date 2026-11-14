@@ -1,4 +1,13 @@
-/-
+module
+
+public import Std.Data.HashMap
+public import Flock.Program
+public import Flock.Partition
+public import Flock.Canon
+public import Flock.Hash
+public import Flock.JsonParse
+
+/-!
 `Flock.Partition`: `Q_call` v1 (core's `verity/ir/PROTOCOL.md` §11, `verity.ir.cut`'s "Q_call v1", `partition_object.CallPartition`)
 over the verifier's own copy of the program (`Flock.Program`): each Call's gates (`CallGates`), its cut (`call_units`), owners and
 derived committed set, and its cut checked as `partition_object.verify` checks it (`check_call_cut`: the invariant with recomputes
@@ -9,14 +18,6 @@ Definition's own gates follow at `L` (its parameter leaves), and a gate's local 
 when its primitive has parameters; Input gates and constants are inputs, in no unit and outside the committed set. Every operand of
 every gate is read: no wiring, no constant folding, no wide fan-in rule.
 -/
-module
-
-public import Std.Data.HashMap
-public import Flock.Program
-public import Flock.Partition
-public import Flock.Canon
-public import Flock.Hash
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

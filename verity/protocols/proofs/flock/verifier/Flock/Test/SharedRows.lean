@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+/-!
 `RecVStar.checkShared` (`SharedOwnRoot`): a session's port reading a value the verifier's shared rows (`--rec-rows`)
 register passes only at that registration (the first entry reading the value; the reads may differ), and a port reading
 R's tops `rec-top-stacked-L<l>` passes only where the shared rows register them. A port reading a value the shared rows
 do not register, other than R's tops, is not checked here.
 -/
-module
-
-public import Flock.RecVStar
-meta import Flock.RecVStar
 
 @[expose] public section
 

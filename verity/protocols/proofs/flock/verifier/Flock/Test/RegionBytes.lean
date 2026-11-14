@@ -1,11 +1,12 @@
-/-
-`checkRegionBytes`, the setup's region-size check: a region of four free bits carries two bytes in each of the `2^nbl`
-blocks. A region one byte short, or one block's bytes short, is refused; so is a region one byte long.
--/
 module
 
 public import Flock.Statement
 meta import Flock.Statement
+
+/-!
+`checkRegionBytes`, the setup's region-size check: a region of four free bits carries two bytes in each of the `2^nbl`
+blocks. A region one byte short, or one block's bytes short, is refused; so is a region one byte long.
+-/
 
 @[expose] public section
 

@@ -1,12 +1,13 @@
-/-
+module
+
+public import Flock.Firewall.Assumptions
+
+/-!
 # What an accepted session lets out, under D8 (a)
 
 With `holds_fixed`, the ZK server's own values that leave an accepted session are the specified ones once
 `FirewallComputes` holds: whatever the workers do, what leaves is honest output or nothing.
 -/
-module
-
-public import Flock.Firewall.Assumptions
 
 @[expose] public section
 

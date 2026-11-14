@@ -1,12 +1,13 @@
-/-
-`Zk.maskLogOf` reads `mask_log` from the circuit file's second line, the META line, whether or not a line follows it, and
-is 14 when the file has one line, when META names no `mask_log` or isn't JSON, and when the META line isn't UTF-8. Bytes
-past the META line are never read, so a file that isn't UTF-8 there still gives its META's `mask_log`.
--/
 module
 
 public import Flock.Zk
 meta import Flock.Zk
+
+/-!
+`Zk.maskLogOf` reads `mask_log` from the circuit file's second line, the META line, whether or not a line follows it, and
+is 14 when the file has one line, when META names no `mask_log` or isn't JSON, and when the META line isn't UTF-8. Bytes
+past the META line are never read, so a file that isn't UTF-8 there still gives its META's `mask_log`.
+-/
 
 @[expose] public section
 

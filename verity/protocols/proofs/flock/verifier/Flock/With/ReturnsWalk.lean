@@ -1,10 +1,11 @@
-/-
-`returns_walk`: walks a do block of `V` to prove `Returns` (`Flock.With.Returns`). A macro is code run while compiling, so
-it is alone here, the module `compile_time` lists, apart from the proofs that use it (`Flock.With.Deployed`, `FlockVerify`).
--/
 module
 
 public import Flock.With.Returns
+
+/-!
+`returns_walk`: walks a do block of `V` to prove `Returns` (`Flock.With.Returns`). A macro is code run while compiling, so
+it is alone here, the module `compile_time` lists, apart from the proofs that use it (`Flock.With.Deployed`, `FlockVerify`).
+-/
 
 @[expose] public section
 

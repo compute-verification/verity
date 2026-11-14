@@ -1,10 +1,11 @@
-/-
-Statement binding, zerocheck, lincheck, and the claims handed to the opening.
--/
 module
 
 public import Flock.Transcript
 public import Flock.Proof
+
+/-!
+Statement binding, zerocheck, lincheck, and the claims handed to the opening.
+-/
 
 @[expose] public section
 
