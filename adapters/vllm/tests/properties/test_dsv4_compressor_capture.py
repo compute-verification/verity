@@ -20,7 +20,7 @@ from verity.definitions.numerics import flashmla_twin as FT
 from tests import fake_vllm
 from tests.properties import dsv4_compressor_capture_gpu as X
 from tests.properties import dsv4_flashmla_capture_gpu as FX
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 LAYERS = list(X.LAYERS)
 

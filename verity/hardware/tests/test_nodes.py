@@ -142,7 +142,7 @@ def test_every_number_is_sourced_as_a_cards_is(kind: str) -> None:
 
 @pytest.mark.parametrize("kind", S.node_kinds())
 def test_a_node_file_names_no_machine_address_or_provider(kind: str) -> None:
-    """The node files are in the public tree, and a kind of node is not a machine: a file says "a VM of this kind" and
+    """The node files are public, and a kind of node is not a machine: a file says "a VM of this kind" and
     "the node", and cites what read it by its `art:` id."""
     text = (S.NODES / f"{kind}.toml").read_text(encoding="utf-8")
     assert not NAMED.findall(text), (f"{kind}.toml names {sorted(set(NAMED.findall(text)))}; name the node by its "
