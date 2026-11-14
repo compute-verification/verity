@@ -107,19 +107,21 @@ why (`LIMITS_V2`, `LEVELS`): a field of `FIELDS` at K 2 or 3, masked or not; a 4
 at most `LEVELS`' bound for its rows: 64 levels at 1 to 16 rows, 52 at 17 to 64. Every binding in it is one Flock block
 within K_MAX: its unit's useful cells are below its 2^26 slot. Each static only adds cells as it grows, and the other fields'
 decodes cost less, so the costliest bindings are p1024/k3/masked at LEAF 16 and each bound's most rows, 16 and 64, and the
-limits are chosen there, from its parts' lowerings summed (an upper bound on the whole lowering's ANDs). A tree level costs
-235,800 to 239,300 cells (three compressions and its sibling's 512 input bits), the more the more bytes its node's index
-takes, so a deeper tree's upper levels cost the most and a level count's costliest split fills one tree to its 32 levels
-before another. At 16 rows and a whole node's depths (DR 24, DP 28, DV 1: up to 2^28 blocks, among them the 789 GB store's
-192,626,953) the unit has at most 63,989,121 useful cells, 3,119,743 short of 2^26: room for 13 levels past those 53.
+limits are chosen there, from its parts' lowerings summed (above the whole lowering wherever both are taken). A tree level
+costs 235,800 to 239,300 cells (three compressions and its sibling's 512 input bits), the more the more bytes its node's
+index takes, so a deeper tree's upper levels cost the most and a level count's costliest split fills one tree to its 32
+levels before another. At 16 rows and a whole node's depths (DR 24, DP 28, DV 1: up to 2^28 blocks, among them the 789 GB
+store's 192,626,953) the unit has at most 63,989,121 useful cells, 3,119,743 short of 2^26: room for 13 levels past those 53.
 `LEVELS` takes 11 and keeps two: the costliest 16-row binding it admits, DR 1, DP 31, DV 32, has at most 66,615,297, 493,567
 short, and every 16-row binding of at most 66 levels fits. 64 rows are about 3.1M cells more (a row is 56,605 ANDs and 4,096
 sign bits, and every 32 rows take the receipt a compression more): the costliest 64-row binding of 52 levels, DR 1, DP 19,
-DV 32, has at most 66,898,177, 210,687 short, and the costliest of 53 is 26,881 past. So a 64-row binding admits a store of
-up to 2^27 blocks (DR 23, DP 27, with DV 1 or 2), among them a whole node's 130,023,424, and none past it: the 789 GB store's
-needs 53. At 17 to 63 rows the unit costs less than at 64. p512's and the toy's 16-row units fit at every depth the width
-limits admit. A fourth round (32 more word rounds, about 15.1M ANDs) takes the masked p1024 unit past 2^26 even at
-DR = DP = DV = 1.
+DV 32, has at most 66,898,177, 210,687 short, and the costliest of 53 is 26,881 past. Lowered whole, as a unit is staged,
+that binding of 52 levels has 66,852,225 useful cells, 256,639 short, and a whole node's at 64 rows, DR 23, DP 27, DV 1, has
+66,608,769, each about 46,000 below its parts' sum; every other figure here is the parts' sum. So a 64-row binding admits a
+store of up to 2^27 blocks (DR 23, DP 27, with DV 1 or 2), among them a whole node's 130,023,424, and none past it: the
+789 GB store's needs 53. At 17 to 63 rows the unit costs less than at 64. p512's and the toy's 16-row units fit at every
+depth the width limits admit. A fourth round (32 more word rounds, about 15.1M ANDs) takes the masked p1024 unit past 2^26
+even at DR = DP = DV = 1.
 """
 from __future__ import annotations
 
