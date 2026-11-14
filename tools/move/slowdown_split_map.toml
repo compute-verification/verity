@@ -12,6 +12,8 @@ files = ["*"]
 [words_in.words]
 "InferenceOnly.Guarantees.Inference" = "Slowdown.Guarantees.Inference"
 "InferenceOnly.SecurityProofs.Inference" = "Slowdown.SecurityProofs.Inference"
+"InferenceOnly.SecurityProofs.threaded_reads_by" = "Slowdown.SecurityProofs.threaded_reads_by"
+"InferenceOnly.slowdown" = "Slowdown.slowdown"
 
 [rewrite]
 exclude = ["tools/move/**", "**/lean-audit.json"]
