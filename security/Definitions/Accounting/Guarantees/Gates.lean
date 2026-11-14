@@ -181,7 +181,7 @@ bits of that (63 at p1024), not units. The claimed instance is p1024 with `d₀ 
 **`d₀` is not absolute, so the floor.** A circuit with no budgeted gate (`a`'s bytes as coin inputs declared `[0, D_l]`,
 `a²`'s column sums as s8-family steps, folded mod `p`) is exact on every `a` whose column sums don't carry, and such
 families grow with `L` faster than any fixed `d₀` covers: `2^33.30` members at `p = 256^27 − 377` (`d₀ ≥ 4.16`),
-`2^101.85` at p1024 (`d₀ ≥ 12.73`), and, sampled, at least `2^159.4` at p1024 (64 digits from a geometric law;
+`2^101.85` at p1024 (`d₀ ≥ 12.73`), and, sampled, at least `2^159.4` at p1024 (64 digits from a geometric distribution;
 `d₀ ≥ 19.9`), which refutes the slope `1/7` too (`d = 4 + log₂(1/ε)/7` allows at most `2^156`). Every one sits at
 `ε ≤ 2^−182`, and none can reach the floor at p1024: a column holds `a_l²`, so a non-carrying `a` has digits below 16
 and `ε ≤ 16^L/p ≈ 2^−512`. Above the floor every family found is within `d₀ = 4`: the exhaustive toy fields (implied

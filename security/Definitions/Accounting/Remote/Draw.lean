@@ -106,7 +106,7 @@ at least 4 for `N < 2^64`.
   have, and on uniform blocks each lands with probability at most its bound given the windows before.
 * `cont t ω ζ`: **window `t`'s continuation** of coins `ω` on `ζ`, the run that shares `ω`'s cut (its other coins,
   the prover's, the world's and every salt, and its openings coins before window `t`'s) and continues on `ζ`'s openings
-  coins from window `t`'s on. It has `Accounting.TS.spliceAt`'s two laws, so the sampled window's forking lemma reads
+  coins from window `t`'s on. It has `Accounting.TS.spliceAt`'s two identities, so the sampled window's forking lemma reads
   it.
 * `Receipts`: **the receipts as the window's roots hold them.** Window `t` registers its receipts as
   `hm96-sha512/row/v2` leaves, 16 receipts a leaf, in frame-v3-sha512 trees, and sends their roots before its coin is

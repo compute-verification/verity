@@ -43,7 +43,7 @@ import Proofs.Pous.Prob
 # The receipts' binding bound: the proof
 
 Fix window `t` and a receipt `p`, and read a cut of coins and its continuations `cont t` (the other coins and the
-earlier windows' openings coins kept, window `t`'s and the later ones fresh), which have `spliceAt`'s two laws
+earlier windows' openings coins kept, window `t`'s and the later ones fresh), which have `spliceAt`'s two identities
 (`Binding.cont_left`, `Binding.cont_swap`).
 
 * **The held row** (`Binding.held_cont`, `Binding.tally_le_held`). `Receipts.held` is the plurality of the rows the
