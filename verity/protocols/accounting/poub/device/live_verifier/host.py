@@ -66,7 +66,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/protocols/accounting/pous/verifier/wipe_party.py`, port 47611) and its block challenger
-  (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--minutes M]` PoUB's P2
+  (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--minutes M]` the remote bandwidth audit's P2
   party (`verity/protocols/accounting/poub/verifier/p2_party.py`, port 47612, with the registration the host names), as
   `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
   and the signed report on its stdout, as a lane's `--challenger-command` expects

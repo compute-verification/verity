@@ -100,7 +100,7 @@ def collect(out: Path, window: int) -> dict[str, Any] | None:
     a, summary = (json.loads(f.read_text()) for f in files)
     S.check_answer(a)
     if a.get("protocol") != p2_party.PROTOCOL:
-        raise ValueError(f"the answer in {out} is {a.get('protocol')!r}'s, not PoUB's")
+        raise ValueError(f"the answer in {out} is {a.get('protocol')!r}'s, not the remote bandwidth audit's")
     if summary.get("window") != window:
         a = {"commitment": None, "profile": None, "protocol": p2_party.PROTOCOL, "public": None,
              "reason": f"the bandwidth answer in {out} is window {summary.get('window')}'s, not window {window}'s: the "

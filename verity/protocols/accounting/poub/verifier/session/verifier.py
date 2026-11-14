@@ -49,8 +49,8 @@ the one in flight unended.
 
 The payload's salts are the verifier's: its first message (`payload-key`) carries a fresh key, and the prover salts its
 payload tree's leaves under it (`store.store_salt`). With `--model ROLE --checkpoint DIR --pin FILE
---arena-blocks A [--engines E]` the registered store is bound to a pinned model (`store.Binding`,
-PoUB's own code, so the circuit a period commits to names it): at startup
+--arena-blocks A [--engines E]` the registered store is bound to a pinned model (`store.Binding`, the
+remote audit's own code, so the circuit a period commits to names it): at startup
 every file the pin names is held to its SHA-512 and the arena the checkpoint lays out is digested; a hello's store is
 then E arenas of A blocks, weights and zero filler each, and the rest host filler, and its payload root must be that
 store's under the key sent, else the hello is refused with the reason before the registry samples anything. The

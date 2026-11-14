@@ -12,7 +12,7 @@
 # log records its pin as main's, and the verifier bound the store to the pinned model; every line says it is conditional
 # on NoOutsideCompute, and `--boundary` (off by default) holds each session's credit to the network certifiers' records
 # of the gate node's boundary. That store, what a pinned
-# checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are PoUB's own
+# checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are the remote audit's own
 # (`verity/protocols/accounting/poub/verifier/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
