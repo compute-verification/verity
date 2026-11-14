@@ -8,3 +8,6 @@ NAMES2, 01:21 PM PST: pushed, `architecture` at 9d3fe3d46831. Files moved 0, spl
 - Question (name or place): `Accounting.Slowdown.*` declarations now sit in `Slowdown/` too (`Tasks.lean`, `CoverageToy.lean`, the toy in `Proofs/Slowdown/Coverage.lean`). My reading: they keep `Accounting.Slowdown`, as the split's rule says, since `Slowdown.*` would collide (`Accounting.Slowdown.slowdown` against `Slowdown.slowdown`, `Reads`).
 - Left: `Proofs/InferenceOnly/Cover.lean` (umbrella), `Proofs/InferenceOnly/Pull.lean` (`pull`, used by both).
 
+[2026-11-14T21:25Z] d4b0cf3d3f8a
+LEANSPLIT, 01:25 PM PST: measured #10204's groups (r20261114-191405-1eec, all passed): lean-suites peaks 118/81/110 GiB at lanes 260/240/175. Peak asks would be 330/390/340 max, about 810 GiB a typical candidate (PR: 1,470; today 640), but they shrink the lanes, so Flock's worker_gb must drop 16 -> 8 (proofs' call) to stay near 16-21 min. Answered ci on CI-485 with options (a) the PR's asks, (b) peak asks + worker_gb 8; not marked, waiting on ci's pick.
+
