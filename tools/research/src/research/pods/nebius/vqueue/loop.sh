@@ -134,7 +134,7 @@ tick() {
   fi
   [ -d "$CODE/tools/research/src/research" ] || { say "no pinned tree at $CODE: check ci's pin out there"; return $CONFIG; }
   [ -d "$CLONE/.git" ] || { say "no clone at $CLONE: copy the loop's clone there (its config holds the merge drivers)"; return $CONFIG; }
-  [ -f "$dir/args" ] || { say "no $dir/args: the loop's flags, one a line (--gate, --on, --graph2, --batch, --depth, --lean)"; return $CONFIG; }
+  [ -f "$dir/args" ] || { say "no $dir/args: the loop's flags, one a line (--gate, --on, --batch, --depth, --lean)"; return $CONFIG; }
   fresh || { say "the App's token at $TOKEN is missing or over 50 min old: systemctl status vy-vqueue-token.service"; return $SKIP; }
   mkdir -p "$TMPDIR" "$TRAIN_TREES" || return $CONFIG
   [ "$(git -C "$CLONE" config --local --get credential.helper)" = "!$SELF git" ] \

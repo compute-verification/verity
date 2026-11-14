@@ -406,6 +406,11 @@ def test_a_node_missing_the_clone_the_pin_or_the_args_says_which_and_runs_nothin
         assert r.returncode == CONFIG and fix in r.stderr and not node.ticks(), gone
         kept.rename(gone)
     assert node.loop("once").returncode == 0 and len(node.ticks()) == 1
+    # what args is told to hold is no flag the tick passes itself, which would lose to the tick's
+    own = {a for a in node.ticks()[0]["argv"] if a.startswith("--")} - {"--gate", "--on"}
+    (node.home / "live" / "args").unlink()
+    told = set(re.findall(r"--[a-z][-a-z0-9]*", node.loop("once").stderr))
+    assert told and not told & own, told & own
 
 
 def test_a_missing_or_old_token_skips_the_tick_and_the_loop_goes_on(node):
