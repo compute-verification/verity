@@ -56,6 +56,16 @@ order = [
 directory = "verity/protocols/proofs/flock"
 owner = "proofs"
 reason = "Flock's distribution (`verity_flock`) and its verifier's scripts"
+# the files of `verity` that load it, each by its path, until `known_reason`'s day; the list only shrinks
+known = [
+    "verity/protocols/proofs/spot/prover/audit/compose_circuit.py",
+    "verity/protocols/proofs/spot/prover/audit/prove_bundle.py",
+    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
+    "verity/protocols/proofs/spot/prover/audit/template_audit.py",
+    "verity/protocols/proofs/spot/prover/audit/two_stage.py",
+    "verity/protocols/proofs/spot/prover/audit/window_audit.py",
+]
+known_reason = "SPOT's prover audit runs Flock's prover; owner proofs; goes the day `verity_flock` joins `verity`"
 
 [[distribution]]
 directory = "verity/protocols/accounting/pous/verifier/check"
@@ -801,6 +811,7 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/tests/test_stream_zk_server.py",
     "verity/protocols/proofs/flock/prover/tests/test_tmpl_statement.py",
     "verity/protocols/proofs/flock/prover/tests/tmpl_statement.py",
+    "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
 ]
 
 [[place]]

@@ -9,9 +9,9 @@ from collections.abc import Sequence
 
 import pytest
 import torch
-from verity_vllm.definitions.registry.dsa_topk import waksman_switches
 
 from verity_vllm.commit.committer.run_values import RunValues
+from verity_vllm.definitions.registry.dsa_topk import waksman_switches
 from verity_vllm.program.predict import dsa as D
 from verity_vllm.query.manifest.format import RUN_FAMILY
 

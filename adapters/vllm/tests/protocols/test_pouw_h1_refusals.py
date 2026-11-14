@@ -76,8 +76,30 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
+import verity.protocols.accounting.pouw.prover.serving.h1.answers as AN
+import verity.protocols.accounting.pouw.prover.serving.h1.challenger as PHC
+import verity.protocols.accounting.pouw.prover.serving.h1.commit as CT
+import verity.protocols.accounting.pouw.prover.serving.h1.draw as PHD
+import verity.protocols.accounting.pouw.prover.serving.h1.drawn as DN
+import verity.protocols.accounting.pouw.prover.serving.h1.drawn_rows as DR
+import verity.protocols.accounting.pouw.prover.serving.h1.handoff as HO
+import verity.protocols.accounting.pouw.prover.serving.h1.kept as KP
+import verity.protocols.accounting.pouw.prover.serving.h1.live as LV
+import verity.protocols.accounting.pouw.prover.serving.h1.model_key as MK
+import verity.protocols.accounting.pouw.prover.serving.h1.prover as PV
+import verity.protocols.accounting.pouw.prover.serving.h1.registered as NR
+import verity.protocols.accounting.pouw.prover.serving.h1.requests as RQ
+import verity.protocols.accounting.pouw.prover.serving.h1.served as SV
+import verity.protocols.accounting.pouw.prover.serving.h1.served_files as SF
+import verity.protocols.accounting.pouw.prover.serving.h1.static as ST
+import verity.protocols.accounting.pouw.prover.serving.h1.window as PHW
+import verity.protocols.accounting.pouw.prover.serving.h1.words as W
+import verity_torch.pouw.h1.receipts as RC
+import verity_torch.pouw.h1.registered_device as RGD
+import verity_torch.pouw.h1.tables_device as TBD
 from verity.circuits.codec import canonical_json
 from verity.circuits.refs import Affine, Strided
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 from verity.protocols.accounting.pouw.verifier import salt as PS
@@ -93,29 +115,8 @@ from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device import remote as R
 from verity.protocols.proofs.spot.device.challenger import CoinError, LiveRecord
 
-import verity.protocols.accounting.pouw.prover.serving.h1.answers as AN
-import verity.protocols.accounting.pouw.prover.serving.h1.challenger as PHC
-import verity.protocols.accounting.pouw.prover.serving.h1.commit as CT
-import verity.protocols.accounting.pouw.prover.serving.h1.draw as PHD
-import verity.protocols.accounting.pouw.prover.serving.h1.drawn as DN
-import verity.protocols.accounting.pouw.prover.serving.h1.drawn_rows as DR
-import verity.protocols.accounting.pouw.prover.serving.h1.handoff as HO
 import verity_vllm.protocols.pouw.h1_hooks as PHK
-import verity.protocols.accounting.pouw.prover.serving.h1.kept as KP
-import verity.protocols.accounting.pouw.prover.serving.h1.live as LV
-import verity.protocols.accounting.pouw.prover.serving.h1.model_key as MK
-import verity.protocols.accounting.pouw.prover.serving.h1.prover as PV
 import verity_vllm.protocols.pouw.h1_ranks as PHR
-import verity_torch.pouw.h1.receipts as RC
-import verity.protocols.accounting.pouw.prover.serving.h1.registered as NR
-import verity_torch.pouw.h1.registered_device as RGD
-import verity.protocols.accounting.pouw.prover.serving.h1.requests as RQ
-import verity.protocols.accounting.pouw.prover.serving.h1.served as SV
-import verity.protocols.accounting.pouw.prover.serving.h1.served_files as SF
-import verity.protocols.accounting.pouw.prover.serving.h1.static as ST
-import verity_torch.pouw.h1.tables_device as TBD
-import verity.protocols.accounting.pouw.prover.serving.h1.window as PHW
-import verity.protocols.accounting.pouw.prover.serving.h1.words as W
 from tests.protocols import challenger_host as CH
 from tests.protocols import pouw_h1_circuits as PC
 from tests.protocols import test_pouw_h1_commit as TC
@@ -147,7 +148,6 @@ from tests.protocols.test_pouw_h1 import (
 from verity_vllm import protocols as PO
 from verity_vllm.errors import Refused
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 
 #: what `LiveOpening.from_json` says of a coin that is no opening
 NO_OPENING = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, lowercase hex and "
@@ -337,12 +337,11 @@ def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
     other = {"pouw": {"coins": Challenger(0, CH.entropy(0))}}
     period = {"period": "p1", "lane": "vllm"}
     for entry, settings in ((_entry(), _settings()), ("pouw:ncp-v1", other)):
-        scheme = entry.partition(":")[2]
         assert refused(entry, settings) == ()
-        no_window = (f"{entry}: {scheme}: the pouw setting 'draw_session' is the draw session of H1's window "
+        no_window = (f"{entry}: the pouw setting 'draw_session' is the draw session of H1's window "
                      f"({PH.SCHEME}) on the challenger at 'challenger'")
         assert refused(entry, {"pouw": {**settings["pouw"], "draw_session": {"session": CH.session_id(0xd)}}}) == (no_window,)
-        no_install = (f"{entry}: {scheme}: the pouw setting 'period' is the lane's open period that a Pearl-C install's "
+        no_install = (f"{entry}: the pouw setting 'period' is the lane's open period that a Pearl-C install's "
                       "reserved session joins, so it goes with 'challenger' and 'session', for pearl-c-sm120-v1-h3, "
                       "pearl-c-sm120-unpromoted-v1-h3, pearl-c-h100-v1-h3 only")
         assert refused(entry, {"pouw": {**settings["pouw"], "period": period}}) == (no_install,)
