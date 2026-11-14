@@ -63,6 +63,7 @@ from typing import Any
 from verity.protocols.accounting.certifier.verifier import charge_chain as CC
 from verity.protocols.accounting.certifier.verifier import compile_slice as CS
 from verity.protocols.accounting.certifier.verifier import served_rows as SRW
+from verity.protocols.proofs.spot.verifier.workload import FILES
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.engine.served_seed import SeedCoins, param_of
 from verity_vllm.errors import Refused
@@ -111,7 +112,7 @@ REQUEST_USERS = "request_users.jsonl"
 
 #: the records mirrored into the run's $OUT, none of them private (`research_outputs.private`): requests.jsonl and the step
 #: traces, which hold request values, stay in the serve dir with the served rows' salts, and what reads them runs there
-MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json",
+MIRRORED = (FILES["Settings"], REQUEST_USERS, FILES["Window"], "seals.jsonl", "pauses.jsonl", FILES["Summary"], "remote_session.json",
             "memory_map.jsonl")
 
 
@@ -596,7 +597,7 @@ class CommitWindows:
             if self.pool is not None:
                 rec["pool_row"] = self._pool_out.pop(rec["window"], None)
             self.records.append(rec)
-            with open(self.out / "windows.jsonl", "a") as fh:
+            with open(self.out / FILES["Window"], "a") as fh:
                 fh.write(json.dumps(rec) + "\n")
 
     def _served_rows(self, rec: dict[str, Any], com: Any) -> dict[str, Any]:
@@ -754,7 +755,7 @@ class CommitWindows:
     def _check_finished(self, finished: Sequence[LiveRequest]) -> None:
         """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl, and its
         engine id and ``user`` a line of `REQUEST_USERS`."""
-        with open(self.out / "requests.jsonl", "a") as fh, open(self.out / REQUEST_USERS, "a") as fu:
+        with open(self.out / FILES["Io"], "a") as fh, open(self.out / REQUEST_USERS, "a") as fu:
             for led in finished:
                 eid = led.engine_id
                 rr = self.record.requests.get(eid)

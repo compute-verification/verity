@@ -66,6 +66,7 @@ from pathlib import Path
 from typing import Any
 
 import verity.protocols.accounting.certifier.verifier.advice as I1
+from verity.protocols.proofs.spot.verifier.workload import FILES
 from verity.hardware import registration as REG
 from verity.commitments.windows import interface as IF
 from verity_vllm.config import UsageError, option
@@ -487,7 +488,7 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
         trace = next((p for p in (run / ST.SERVED, run / "step_trace.jsonl") if p.exists()), run / "step_trace.jsonl")
     trace = Path(trace)
     if io is None:
-        io = next((p for p in (run / "requests.jsonl", run / "windows.jsonl") if p.exists()), None)
+        io = next((p for p in (run / FILES["Io"], run / FILES["Window"]) if p.exists()), None)
     recs = ST.load(trace)
     compiler = compiler if compiler is not None else registered_compiler()
     out = Path(out) if out else run / "advice"
@@ -513,7 +514,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
     io_all = io_record(io)
     final = stopped(run)
     commits: dict[int, dict[str, Any]] = {}
-    for name in ("seals.jsonl", "windows.jsonl"):       # a window's line waits for its H1 release; its seal's comes first
+    for name in ("seals.jsonl", FILES["Window"]):       # a window's line waits for its H1 release; its seal's comes first
         lines = (run / name).read_text().splitlines() if (run / name).exists() else []
         commits.update({int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
                         for d in (json.loads(line) for line in lines if line.strip())})
@@ -560,7 +561,7 @@ def stopped(run: Path) -> bool:
     """Whether ``run``'s server has stopped with every Commit record written: its ``summary.json`` says ``final`` (one without
     the key is from a server that wrote each window's records on its engine loop, before any summary)."""
     try:
-        return json.loads((run / "summary.json").read_text()).get("final", True) is True
+        return json.loads((run / FILES["Summary"]).read_text()).get("final", True) is True
     except (OSError, ValueError):
         return False
 
@@ -584,7 +585,7 @@ def _written(run: Path, out: Path, b: Built, recs: list[dict[str, Any]], trace: 
     private = out / "private"
     private.mkdir(parents=True, exist_ok=True)
     (out / "registration.json").write_text(json.dumps(public, indent=1) + "\n")
-    (private / "advice.bin").write_bytes(data)
+    (private / FILES["Advice"]).write_bytes(data)
     (private / "advice.json").write_text(json.dumps(WA.to_json(a), separators=(",", ":")) + "\n")
     (private / "opening.json").write_text(json.dumps(opened) + "\n")
     steps = ST.steps(recs)
@@ -655,7 +656,7 @@ def main(a: Options) -> int:
     try:
         roots = None
         if a.weights_of_record:
-            serve = Path(a.run) / "serve.json"
+            serve = Path(a.run) / FILES["Settings"]
             roots = registered_weights(json.loads(Path(a.weights_of_record).read_text()),
                                        json.loads(serve.read_text()) if serve.exists() else None)
         rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau, window=a.window,

@@ -135,6 +135,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.proofs.spot.verifier.workload import FILES
 from verity_vllm import settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
@@ -740,7 +741,7 @@ def main(opts: Options) -> int:
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
-    (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
+    (out / FILES["Settings"]).write_text(json.dumps(record, indent=1, default=str))
     if mirror is not None:
         mirror()
     print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}", flush=True)
@@ -758,7 +759,7 @@ def main(opts: Options) -> int:
                    "release": draws.summary() if draws is not None else None,
                    "mirror_errors": mirror.errors[:10] if mirror else None,
                    "remote_session": session.end() if session is not None else None}
-            (out / "summary.json").write_text(json.dumps(got, indent=1))
+            (out / FILES["Summary"]).write_text(json.dumps(got, indent=1))
             if mirror is not None:
                 mirror()
             return got

@@ -23,6 +23,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+#: the serve dir's files read here, by the names the list of messages states (tests/test_workload_messages.py)
+REQUESTS_FILE, SERVE_FILE = "requests.jsonl", "serve.json"
+
 
 def _lines(path: Path) -> list[dict[str, Any]]:
     return [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
@@ -90,9 +93,9 @@ def inversions(first: Mapping[str, tuple[int, int, int]], requests: Sequence[Map
 
 def check(serve_dir: str | Path) -> dict[str, Any]:
     d = Path(serve_dir)
-    reqs = _lines(d / "requests.jsonl")
+    reqs = _lines(d / REQUESTS_FILE)
     first, layout = trace_first_rows(_lines(d / "advice_trace.jsonl"))
-    serve = json.loads((d / "serve.json").read_text()) if (d / "serve.json").exists() else {}
+    serve = json.loads((d / SERVE_FILE).read_text()) if (d / SERVE_FILE).exists() else {}
     trace, committed = inversions(first, reqs), inversions(committed_first_rows(reqs), reqs)
     runs: dict[str, list[int]] = {}
     for q in sorted((q for q in reqs if q.get("release")), key=lambda q: q["admitted"]):

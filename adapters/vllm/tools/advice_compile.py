@@ -43,8 +43,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity.protocols.proofs.spot.verifier.workload import FILES
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.program.predict import phi as P
+
+#: a run of `tools/advice_run.py` keeps its own record of that name, which is no message of the list
+RUN_REQUESTS = "requests.jsonl"
 
 MANIFEST = "verity-vllm/served-window-programs/v1"
 
@@ -55,9 +59,9 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
     count: a run can serve a user again in another window."""
     adv = run / "advice" / f"w{window}"
     reg = json.loads((adv / "registration.json").read_text())
-    serve = json.loads((run / "serve.json").read_text())
+    serve = json.loads((run / FILES["Settings"]).read_text())
     bodies = {}
-    for line in (run / "requests.jsonl").read_text().splitlines():
+    for line in (run / FILES["Io"]).read_text().splitlines():
         if line.strip():
             d = json.loads(line)
             if int(window) not in (d.get("windows") or ()):
@@ -69,7 +73,7 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
     meta = {"model": serve["model"], "revision": serve["revision"], "target": serve["target"],
             "execution": serve.get("execution") or (serve.get("engine") or {}).get("execution"),
             "default_seed": serve.get("default_seed"), "engine_record": serve.get("engine")}
-    return adv / "private" / "advice.bin", meta, bodies, reg
+    return adv / "private" / FILES["Advice"], meta, bodies, reg
 
 
 def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
@@ -93,7 +97,7 @@ def window_coin(run: Path, window: int) -> dict | None:
     """Window K's seed coin as its ``windows.jsonl`` line names it (``seed_coin``: its hex, its index and its source), which
     `compile_steps` takes as the window's seed salt (``salt``) and derives an unseeded stochastic request's seed from, as serving
     did; None when the line names none (a server that filled a seed in), and the compile then refuses such a request by name."""
-    path = run / "windows.jsonl"
+    path = run / FILES["Window"]
     lines = path.read_text().splitlines() if path.exists() else []
     got = [d for d in map(json.loads, filter(str.strip, lines)) if int(d["window"]) == int(window)]
     return (got[-1].get("seed_coin") or None) if got else None
@@ -117,10 +121,10 @@ def carry_of(run: Path, window: int, data: bytes) -> dict:
     from verity_vllm.pipeline import window_advice as WA
 
     a = WA.decode(data)
-    lines = (run / "windows.jsonl").read_text().splitlines() if (run / "windows.jsonl").exists() else []
+    lines = (run / FILES["Window"]).read_text().splitlines() if (run / FILES["Window"]).exists() else []
     before = [int(d["window"]) for d in map(json.loads, filter(str.strip, lines)) if not d.get("empty") and int(d["window"]) < window]
     last = max(before, default=None)
-    path = None if last is None else run / "advice" / f"w{last}" / "private" / "advice.bin"
+    path = None if last is None else run / "advice" / f"w{last}" / "private" / FILES["Advice"]
     carry = {"in": [q.id for q in a.requests[:len(a.carried)]], "out": [a.requests[c.request].id for c in WA.close(a) if c.must],
              "follows": None}
     if path is not None and path.exists():
@@ -176,9 +180,9 @@ def main() -> int:
             print(f"[advice-compile] the advice's carry is refused: {e}", flush=True)
             return 2
     else:
-        data = Path(a.advice or run / "advice" / "private" / "advice.bin").read_bytes()
+        data = Path(a.advice or run / "advice" / "private" / FILES["Advice"]).read_bytes()
         meta = json.loads((run / "run.json").read_text())
-        recs = [d for d in map(json.loads, (run / "requests.jsonl").read_text().splitlines()) if d]
+        recs = [d for d in map(json.loads, (run / RUN_REQUESTS).read_text().splitlines()) if d]
         user = {d["request"]: d["user"] for d in recs}
         prompt = {d["user"]: d.get("prompt_ids") or d.get("prompt") for d in recs}
         # TODO: read each request's body from the Commit's ingress record once advice_run records it; the step trace's arrive

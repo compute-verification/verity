@@ -295,16 +295,8 @@ SPELLED_BY_PROGRAMS: dict[str, tuple[str, ...]] = {
 PROGRAMS_MAX = 14
 
 #: The same for the files under ``adapters/``, with ``ADAPTERS_MAX``.
-SPELLED_BY_ADAPTERS: dict[str, tuple[str, ...]] = {
-    "adapters/vllm/tools/admit_rows_check.py": ("Settings", "Io"),
-    "adapters/vllm/tools/advice_compile.py": ("Settings", "Window", "Io", "Advice"),
-    "adapters/vllm/tools/retain_device_gpu.py": ("Window", "Summary"),
-    "adapters/vllm/tools/retain_device_gpu.sh": ("Settings", "Window", "Io", "Summary"),
-    "adapters/vllm/verity_vllm/pipeline/advice.py": ("Settings", "Window", "Io", "Summary", "Advice"),
-    "adapters/vllm/verity_vllm/pipeline/serve_commit.py": ("Window", "Io"),
-    "adapters/vllm/verity_vllm/pipeline/serve_openai.py": ("Settings", "Summary"),
-}
-ADAPTERS_MAX = 7
+SPELLED_BY_ADAPTERS: dict[str, tuple[str, ...]] = {}
+ADAPTERS_MAX = 0
 
 
 def declarations() -> dict[str, Any]:

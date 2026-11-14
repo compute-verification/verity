@@ -25,6 +25,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.proofs.spot.verifier.workload import FILES
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.commit.opened import ORDINAL_SEP, OpenedReader
 from verity_vllm.pipeline import replay_bundle as RB
@@ -86,7 +87,7 @@ def draw(a: argparse.Namespace) -> int:
     done: set[int] = set()
     while True:
         stop = Path(a.stop).exists()
-        new = [w["window"] for w in lines(serve / "windows.jsonl") if w["window"] not in done]
+        new = [w["window"] for w in lines(serve / FILES["Window"]) if w["window"] not in done]
         if stop and not new:
             return 0
         for k in new:
@@ -161,8 +162,8 @@ def _raw(doc: dict[str, Any]) -> int:
 def compare(a: argparse.Namespace) -> int:
     dev, host, rd = Path(a.serve), Path(a.host), Path(a.reads)
     seals = {s["window"]: s for s in lines(dev / "seals.jsonl")}
-    roots = {w["window"]: w.get("run_root") for w in lines(dev / "windows.jsonl")}
-    summary = json.loads((dev / "summary.json").read_text()) if (dev / "summary.json").exists() else {}
+    roots = {w["window"]: w.get("run_root") for w in lines(dev / FILES["Window"])}
+    summary = json.loads((dev / FILES["Summary"]).read_text()) if (dev / FILES["Summary"]).exists() else {}
     rel = summary.get("release") or {}
     out: list[dict[str, Any]] = []
     for k, s in sorted(seals.items()):

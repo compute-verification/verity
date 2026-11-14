@@ -18,6 +18,8 @@
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=$PWD
+# The serve dir's files that carry a message, by the names the list states (tests/test_workload_messages.py).
+F_SETTINGS=serve.json F_WINDOW=windows.jsonl F_IO=requests.jsonl F_SUMMARY=summary.json
 H=/workspace/research/vllm-composed-h200int8
 ROW=${ROW:-$H/r20261026-185144-3ccb/llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 HIDDEN_SO=${HIDDEN_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so} NORM_TAP_SO=${NORM_TAP_SO:-$H/norm_tap/build/verity_norm_tap.so}
@@ -75,16 +77,16 @@ serve() {  # NAME RETAIN-ARGS...: one endpoint, ROUNDS rounds of the fixed load,
     say "REQUESTS $name round $r (exit $rc): $(tail -1 "$OUT/$name/load-r$r.log" | cut -c1-200)"
   done
   for _ in $(seq 1 600); do
-    c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
+    c=$(count "$D/$F_WINDOW"); s=$(count "$D/seals.jsonl")
     [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break
     kill -0 "$srv" 2>/dev/null || break
     sleep 2
   done
   kill -TERM "$srv" 2>/dev/null; wait "$srv"; local ex=$?
   touch "$D/.stop"                                  # the drawer drew every window the stop closed: the stop's seals waited on it
-  c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
-  for f in serve.json summary.json windows.jsonl seals.jsonl requests.jsonl step_trace.jsonl; do cp "$D/$f" "$OUT/$name/" 2>/dev/null; done
-  say "SERVE $name stopped (exit $ex): $c window(s) closed, $s sealed; $(grep -o '"release": {[^}]*' "$D/summary.json" 2>/dev/null | cut -c1-400)"
+  c=$(count "$D/$F_WINDOW"); s=$(count "$D/seals.jsonl")
+  for f in "$F_SETTINGS" "$F_SUMMARY" "$F_WINDOW" seals.jsonl "$F_IO" step_trace.jsonl; do cp "$D/$f" "$OUT/$name/" 2>/dev/null; done
+  say "SERVE $name stopped (exit $ex): $c window(s) closed, $s sealed; $(grep -o '"release": {[^}]*' "$D/$F_SUMMARY" 2>/dev/null | cut -c1-400)"
   [ "$rc" = 0 ] && [ "$c" -gt 0 ] && [ "$s" -ge "$c" ]
 }
 
