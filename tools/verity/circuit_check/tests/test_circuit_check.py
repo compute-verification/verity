@@ -1926,11 +1926,12 @@ def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
     stored must count in another, while a variable that can change what a check computes still keys it."""
     from circuit_check import cache as CC
 
+    monkeypatch.delenv("VERITY_REGRESSION", raising=False)
     monkeypatch.setenv("VERITY_TEST_CACHE", "/home/research/.cache/verity/tests-slot-a")
     here = CC.key({"target": "F32Mul_v1"})
     monkeypatch.setenv("VERITY_TEST_CACHE", "/home/research/.cache/verity/tests-slot-b")
     assert CC.key({"target": "F32Mul_v1"}) == here
-    monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
+    monkeypatch.setenv("VERITY_REGRESSION", "1")
     assert CC.key({"target": "F32Mul_v1"}) != here
 
 
