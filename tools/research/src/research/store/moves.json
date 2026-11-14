@@ -2452,6 +2452,32 @@
       "paths": {
         "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/edited_gemm/": "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/",
+        "benchmarks/pouw/masked_gemm/": "verity/protocols/accounting/pouw/prover/kernels/masked_gemm/",
+        "benchmarks/pouw/floored_gemm/": "verity/protocols/accounting/pouw/prover/kernels/floored_gemm/",
+        "benchmarks/pouw/gpu_kit/": "verity/protocols/accounting/pouw/prover/kernels/gpu_kit/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/torch_gpu/sha512_rows/engine.py": "verity/commitments/cuda/sha512_rows/engine.py",
+        "benchmarks/torch_gpu/sha512_rows/rows.cu": "verity/commitments/cuda/sha512_rows/rows.cu",
+        "benchmarks/torch_gpu/sha512_rows/rows.cuh": "verity/commitments/cuda/sha512_rows/rows.cuh",
+        "benchmarks/torch_gpu/sha512_rows/rows_host.cpp": "verity/commitments/cuda/sha512_rows/rows_host.cpp",
+        "benchmarks/torch_gpu/sha512_rows/settings.py": "verity/commitments/cuda/sha512_rows/settings.py",
+        "benchmarks/torch_gpu/sha512_rows/check.py": "verity/commitments/cuda/sha512_rows/check.py",
+        "benchmarks/torch_gpu/sha512_rows/README.md": "verity/commitments/cuda/sha512_rows/README.md",
+        "benchmarks/torch_gpu/sha512_rows/pyproject.toml": "verity/commitments/cuda/sha512_rows/pyproject.toml",
+        "benchmarks/torch_gpu/sha512_rows/tests/": "verity/commitments/cuda/sha512_rows/tests/",
+        "benchmarks/torch_gpu/commit_slots/slots.py": "verity/commitments/cuda/commit_slots/slots.py",
+        "benchmarks/torch_gpu/commit_slots/slots_gpu.py": "verity/commitments/cuda/commit_slots/slots_gpu.py",
+        "benchmarks/torch_gpu/commit_slots/README.md": "verity/commitments/cuda/commit_slots/README.md",
+        "benchmarks/torch_gpu/commit_slots/pyproject.toml": "verity/commitments/cuda/commit_slots/pyproject.toml",
+        "benchmarks/torch_gpu/commit_slots/tests/": "verity/commitments/cuda/commit_slots/tests/"
+      }
     }
   ]
 }
