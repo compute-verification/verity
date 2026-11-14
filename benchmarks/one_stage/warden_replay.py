@@ -43,6 +43,7 @@ sys.path.insert(0, str(TRACES))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 from benchmarks.network_traces import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 
 
 def served_requests(run: str | Path, window: int) -> list[dict]:
@@ -192,7 +193,7 @@ def rehearse(args) -> int:
             if proc.poll() is None:
                 proc.terminate()
         shutil.rmtree(scratch)
-    result = ws.check(out) | {"served": {"run": str(args.serve_run), "window": args.serve_window, "requests": len(sent)},
+    result = RC.check(out) | {"served": {"run": str(args.serve_run), "window": args.serve_window, "requests": len(sent)},
                               "upstream": list(upstream), "model": sent[0]["body"]["model"],
                               "exit": {"serve": serve_exit, "client": client_exit}}
     (out / "check.json").write_text(json.dumps(result, indent=1))

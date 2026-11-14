@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 
 from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
+from verity.protocols.accounting.certifier.verifier import relay_check as RC
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import VirtualClock
 from verity.protocols.accounting.certifier.verifier.io_tie import TRAILER
@@ -844,13 +845,13 @@ def test_a_run_of_two_execution_phases_is_counted_across_both_phases_records(tmp
                                            for k, r in enumerate(requests)]
     # the bytes each phase's record holds, in each direction: some in each, and the requests' and responses' in all
     ingress, egress = ([sum(len(read_cell(frame, PARAMS.cell_bytes)[2]) for row in r.grid for frame in row if frame)
-                        for r in sorted(ws.read_records(out, PARAMS)[name], key=lambda r: r.window)]
-                       for name in (ws.INGRESS, ws.EGRESS))
+                        for r in sorted(RC.read_records(out, PARAMS)[name], key=lambda r: r.window)]
+                       for name in (RC.INGRESS, RC.EGRESS))
     assert len(ingress) == len(egress) == 2 and all(ingress) and all(egress)
     assert (sum(ingress), sum(egress)) == (sum(map(len, requests)), sum(map(len, responses)))
     record = cf.record_counts(out)
     phases = json.loads((out / "deployment.json").read_text())["windows"]
-    assert phases == 2 and record["phase_records"] == {"certified": 6, "of": len(ws.CERTIFIED) * phases}
+    assert phases == 2 and record["phase_records"] == {"certified": 6, "of": len(RC.CERTIFIED) * phases}
     assert record["connections"] == [
         *({"connection": k + 1, "release": logged[k + 1][0], "exact": True, "why": None, "to_server": len(_sent(s)),
            "from_server": len(r)} for k, (s, r) in enumerate(zip(servers, responses))),
@@ -904,8 +905,8 @@ def test_a_run_in_the_id_egress_form_at_the_id_fronts_cell_agrees_in_each_direct
     deployment = json.loads((out / "deployment.json").read_text())
     assert deployment["params"]["egress"] == "id"
     assert deployment["digest"] == params.digest.hex() != dataclasses.replace(params, egress="bytes").digest.hex()
-    records = ws.read_records(out, params)
-    device = audit(params, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])
+    records = RC.read_records(out, params)
+    device = audit(params, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])
     assert device["accepted"], device["windows"]
     assert [c["egress_cells"] for c in device["connections"]] == [n + 1 for n in tokens]
     release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in relay.log}

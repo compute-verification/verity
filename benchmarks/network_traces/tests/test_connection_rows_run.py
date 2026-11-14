@@ -21,8 +21,13 @@ from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier.warden import Released, WardenParams
 
 from test_warden_serve import _run, ws
+import connection_rows_run
+from verity.protocols.accounting.certifier.verifier import link_frame, warden_rows as WR
+import runner_parts as rp
+from verity.protocols.accounting.certifier.verifier import (connection_rows_check as CRC, record_files as RF,
+    relay_check as RC)
 
-crr = ws.crr
+crr = connection_rows_run
 #: a schedule with lengths rows and three classes, two of one size: 16 buckets an execution phase, a slot stride of 2
 PLAIN = WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=6, window=16, ingress_cells=4,
                      ingress_buckets=3, egress_cells=9, every=2)
@@ -44,7 +49,7 @@ ANSWERS = ((11, 22, 33), tuple(range(8)), (), (7,), (5, 6), (9,))
 
 def schedule_of(argv: list[str]) -> WardenParams:
     args = ws.parser().parse_args(argv)
-    return crr.schedule(ws._params(args), args)
+    return rp.schedule(ws._params(args), args)
 
 
 def test_the_connection_rows_are_schedule_flags_rehearse_passes_to_serve():
@@ -58,16 +63,16 @@ def test_the_connection_rows_are_schedule_flags_rehearse_passes_to_serve():
     pairs = ["--content", *(",".join(map(str, c[:2])) for c in CLASSES)]
     got = schedule_of(REHEARSE + SCHEDULE + rows)
     assert got == ROWS and got.digest != PLAIN.digest
-    assert crr.flags_of(got) == rows and schedule_of(SERVE + SCHEDULE + crr.flags_of(got)) == got
+    assert rp.flags_of(got) == rows and schedule_of(SERVE + SCHEDULE + rp.flags_of(got)) == got
     lengths = schedule_of(REHEARSE + SCHEDULE + ["--lengths", "1"])
-    assert (lengths.lengths, lengths.content) == (1, None) and crr.flags_of(lengths) == ["--lengths", "1"]
+    assert (lengths.lengths, lengths.content) == (1, None) and rp.flags_of(lengths) == ["--lengths", "1"]
     ends = schedule_of(REHEARSE + SCHEDULE + ["--lengths", "2", *pairs])
     assert ends == ENDS and ends.digest not in (ROWS.digest, PLAIN.digest)
-    assert crr.flags_of(ends) == ["--lengths", "2", *pairs]
-    assert schedule_of(SERVE + SCHEDULE + crr.flags_of(ends)) == ends
+    assert rp.flags_of(ends) == ["--lengths", "2", *pairs]
+    assert schedule_of(SERVE + SCHEDULE + rp.flags_of(ends)) == ends
     for argv in (REHEARSE, SERVE):
         plain = schedule_of(argv + SCHEDULE)
-        assert plain == ws._params(ws.parser().parse_args(argv + SCHEDULE)) and crr.flags_of(plain) == []
+        assert plain == ws._params(ws.parser().parse_args(argv + SCHEDULE)) and rp.flags_of(plain) == []
         assert plain.digest == PLAIN.digest
     for bad in (["--content", "4"], ["--content", "4,4,2,1"], ["--content", "4,4,x"], ["--lengths", "3"],
                 ["--lengths", "0"]):
@@ -93,11 +98,11 @@ def test_the_request_words_are_a_schedule_flag_rehearse_passes_to_serve():
     bound = ["--max-tokens-cap", "8"]
     got = schedule_of(REHEARSE + SCHEDULE + bound + pairs + ["--request-words"])
     assert got == WORDED and got.digest not in (ENDS.digest, dataclasses.replace(ENDS, max_tokens_cap=8).digest)
-    assert crr.flags_of(got) == [*pairs, "--request-words"]
-    assert schedule_of(SERVE + SCHEDULE + bound + crr.flags_of(got)) == got
+    assert rp.flags_of(got) == [*pairs, "--request-words"]
+    assert schedule_of(SERVE + SCHEDULE + bound + rp.flags_of(got)) == got
     without = schedule_of(REHEARSE + SCHEDULE + bound + pairs)
     assert without == dataclasses.replace(ENDS, max_tokens_cap=8) and without.request_words is None
-    assert crr.flags_of(without) == pairs and schedule_of(REHEARSE + SCHEDULE + pairs) == ENDS
+    assert rp.flags_of(without) == pairs and schedule_of(REHEARSE + SCHEDULE + pairs) == ENDS
     rows = ["--lengths", "1", "--content", *(",".join(map(str, c)) for c in CLASSES)]
     for bad in (pairs, bound + rows, bound + ["--lengths", "2"], bound):
         with pytest.raises(ValueError, match="a schedule with request words has content rows under the lengths rows' "
@@ -111,14 +116,14 @@ def test_a_hand_is_queued_a_slot_stride_an_item_and_kept_whole():
     without releases is its close alone, with no count, and is kept as none: not as one that released nothing."""
     a, b, c = (Released(n, 20 + n, 2, False, bytes([n + 1]) * (20 + n), bytes(8)) for n in range(3))
     strides = ((), (a, b), (), (c,), (), (), (), ())
-    items = list(crr.hand(3, strides))
-    assert items == [(crr.HAND, (3, 1), (a, b)), (crr.HAND, (3, 3), (c,)), (crr.HAND, (3, None), 8)]
-    assert list(crr.hand(4, ((),) * 8)) == [(crr.HAND, (4, None), 8)]
-    assert list(crr.hand(5, None)) == [(crr.HAND, (5, None), None)]
+    items = list(rp.hand(3, strides))
+    assert items == [(rp.HAND, (3, 1), (a, b)), (rp.HAND, (3, 3), (c,)), (rp.HAND, (3, None), 8)]
+    assert list(rp.hand(4, ((),) * 8)) == [(rp.HAND, (4, None), 8)]
+    assert list(rp.hand(5, None)) == [(rp.HAND, (5, None), None)]
     kept = []
-    keeper = crr.Keeper(None, None, ROWS, ws.LINK)
+    keeper = rp.Keeper(None, None, ROWS, RC.LINK)
     keeper.keep = lambda window, got: kept.append((window, got))
-    for _, at, data in [*items[:2], *crr.hand(4, ((),) * 8), *crr.hand(5, None), items[2]]:
+    for _, at, data in [*items[:2], *rp.hand(4, ((),) * 8), *rp.hand(5, None), items[2]]:
         keeper(at, data)
     assert kept == [(4, ((),) * 8), (5, None), (3, strides)] and keeper.open == {}
 
@@ -140,7 +145,7 @@ def refused(out, edit) -> list[str]:
     saved = {p: p.read_bytes() for p in out.iterdir()}
     edit()
     try:
-        return ws.check(out)["problems"]
+        return RC.check(out)["problems"]
     finally:
         for p in set(out.iterdir()) - set(saved):
             p.unlink()
@@ -150,13 +155,13 @@ def refused(out, edit) -> list[str]:
 
 def edit_rows(out, change) -> None:
     """`rows.jsonl`'s lines and `rows.salts`' blobs as `change(lines, salts)` leaves them."""
-    lines = [json.loads(x) for x in (out / crr.ROWS).read_text().splitlines()]
-    salts = ws.bf.read_blobs(out / crr.SALTS)
+    lines = [json.loads(x) for x in (out / CRC.ROWS).read_text().splitlines()]
+    salts = ws.bf.read_blobs(out / CRC.SALTS)
     change(lines, salts)
-    (out / crr.ROWS).write_text("".join(json.dumps(x) + "\n" for x in lines))
-    (out / crr.SALTS).unlink()
+    (out / CRC.ROWS).write_text("".join(json.dumps(x) + "\n" for x in lines))
+    (out / CRC.SALTS).unlink()
     for blob in salts:
-        ws.bf.write_blobs(out / crr.SALTS, blob)
+        ws.bf.write_blobs(out / CRC.SALTS, blob)
 
 
 @pytest.mark.parametrize("process", [False, True])
@@ -169,7 +174,7 @@ def test_a_run_keeps_each_handed_execution_phases_rows_and_the_check_holds_them_
     device, requests = served(out, tmp_path / "key", process=process)
     assert len(device.log) == len(PROMPTS) and all(c["failed"] is None and not c["cut"] for c in device.log)
     assert max(device.lateness) == 0
-    kept = crr.read(out, ROWS)
+    kept = CRC.read(out, ROWS)
     assert [doc["registration"]["window"] for doc, _ in kept] == [0, 1, 2]
     listed = CR.tables_of(ROWS)
     assert [name for name, _, _ in listed] == [CR.LENGTHS, CR.FAILS, *(n for i in range(3) for n in CT.names(i))]
@@ -178,7 +183,7 @@ def test_a_run_keeps_each_handed_execution_phases_rows_and_the_check_holds_them_
         assert doc["cost"]["tables"] == len(listed) and doc["cost"]["rows"] == sum(rows for _, rows, _ in listed)
         assert doc["cost"]["row_bytes"] == sum(rows * size for _, rows, size in listed)
         assert {name: len(s) for name, s in salts.items()} == {name: rows for name, rows, _ in listed}
-    records = ws.read_records(out, ROWS)
+    records = RC.read_records(out, ROWS)
     held = CR.of_records(ROWS, records["requests"], records["responses"])
     releases = [r for w in sorted(held) for stride in held[w] for r in stride]
     order = sorted(range(len(PROMPTS)), key=lambda j: device.log[j]["release"])
@@ -186,7 +191,7 @@ def test_a_run_keeps_each_handed_execution_phases_rows_and_the_check_holds_them_
     assert [(r.request, CT.ids_of(r.ids), r.failed) for r in releases] == \
         [(requests[j], ANSWERS[j], False) for j in order]
     assert len({w for w in held if any(held[w])}) == 2
-    result = ws.check(out)
+    result = RC.check(out)
     assert result["accepted"], result["problems"]
     s = result["summary"]["connection_rows"]
     assert (s["registered"], s["of"], s["tables"], s["rows"]) == (3, 3, [len(listed)], [sum(r for _, r, _ in listed)])
@@ -200,7 +205,7 @@ def test_the_check_refuses_rows_that_arent_the_runs(tmp_path):
     execution phase it names."""
     out = tmp_path / "run"
     served(out, tmp_path / "key")
-    assert ws.check(out)["accepted"]
+    assert RC.check(out)["accepted"]
 
     def other_root(lines, salts) -> None:
         lines[1]["registration"]["tables"][3]["root"] = "00" * 64
@@ -228,17 +233,17 @@ def test_the_check_refuses_rows_that_arent_the_runs(tmp_path):
     assert any("connection rows: " in p and "don't read" in p for p in edited(lambda lines, salts: salts.pop()))
 
     def other_id() -> None:
-        records = ws.read_records(out, ROWS)["responses"]
+        records = RC.read_records(out, ROWS)["responses"]
         record = records[0]
-        row = next(b for b, r in enumerate(record.grid) if any(f is not None and f[0] == ws.DATA for f in r))
+        row = next(b for b, r in enumerate(record.grid) if any(f is not None and f[0] == link_frame.DATA for f in r))
         frames = list(record.grid[row])
-        k = next(i for i, f in enumerate(frames) if f is not None and f[0] == ws.DATA)
+        k = next(i for i, f in enumerate(frames) if f is not None and f[0] == link_frame.DATA)
         read = ws.IT.parse_cell(frames[k])
         frames[k] = ws.IT.data_cell(read.id + 1, read.stream, ROWS.cell_bytes)
         grid = record.grid[:row] + (tuple(frames),) + record.grid[row + 1:]
         (out / "responses.records").unlink()
         for r in (ws.replace(record, grid=grid), *records[1:]):
-            ws.bf.write_blobs(out / "responses.records", ws.pack_record(r))
+            ws.bf.write_blobs(out / "responses.records", RF.pack_record(r))
 
     assert "execution phase 0's connection rows aren't its records' releases" in refused(out, other_id)
 
@@ -252,8 +257,8 @@ def test_an_execution_phase_that_isnt_handed_has_no_rows(tmp_path, process):
     out = tmp_path / "run"
     device, _ = served(out, tmp_path / "key", process=process, params=dataclasses.replace(ROWS, queue=5))
     assert (device.refused, device.refused_windows, len(device.log)) == (1, {0}, 5)
-    assert [doc["registration"]["window"] for doc, _ in crr.read(out, dataclasses.replace(ROWS, queue=5))] == [1, 2]
-    result = ws.check(out)
+    assert [doc["registration"]["window"] for doc, _ in CRC.read(out, dataclasses.replace(ROWS, queue=5))] == [1, 2]
+    result = RC.check(out)
     s = result["summary"]["connection_rows"]
     assert (s["registered"], s["of"]) == (2, 2)
     assert not any("connection rows" in p for p in result["problems"]) and not result["accepted"]
@@ -261,14 +266,14 @@ def test_an_execution_phase_that_isnt_handed_has_no_rows(tmp_path, process):
 
 def phases_of(out, params) -> list[tuple[int, str]]:
     """Each line of the run's `rows.jsonl` in order: its execution phase and what it holds."""
-    return [(crr._phase(doc), next(k for k in ("registration", crr.NO_HEAD, "refused") if k in doc))
-            for doc, _ in crr.read(out, params)]
+    return [(CRC._phase(doc), next(k for k in ("registration", CRC.NO_HEAD, "refused") if k in doc))
+            for doc, _ in CRC.read(out, params)]
 
 
 def device_key(out):
     """The key and the session of the run's deployment record."""
     dep = json.loads((out / "deployment.json").read_text())
-    return ws.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    return RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
 
 
 @pytest.mark.parametrize("process", [False, True])
@@ -285,12 +290,12 @@ def test_under_form_2_every_execution_phase_has_one_line_and_the_runs_last_its_h
     assert phases_of(out, ENDS) == [(w, "registration") for w in range(4)]
     listed = CR.tables_of(ENDS)
     assert [rows for _, rows, _ in listed[2:]] == [ENDS.phase_releases] * 9
-    records = ws.read_records(out, ENDS)
+    records = RC.read_records(out, ENDS)
     held = CR.of_records(ENDS, records["requests"], records["responses"])
     assert sorted(held) == [0, 1, 2, 3] and sorted(w for w in held if any(held[w])) == [0, 1]
     assert sum(len(stride) for w in held for stride in held[w]) == len(PROMPTS)
     counts = []
-    for w, (doc, salts) in enumerate(crr.read(out, ENDS)):
+    for w, (doc, salts) in enumerate(CRC.read(out, ENDS)):
         filed = [CT.file(ENDS, r) for stride in held[w] for r in stride]
         counts.append([filed.count(i) for i in range(3)])
         want = [(name, rows) for name, rows, _ in listed[:2]]
@@ -302,10 +307,10 @@ def test_under_form_2_every_execution_phase_has_one_line_and_the_runs_last_its_h
         assert all((t["root"] == CR.NO_ROWS_ROOT.hex()) == (not t["rows"]) for t in entries)
     assert [sum(c) for c in counts] == [sum(map(len, held[w])) for w in range(4)] and counts[2:] == [[0, 0, 0]] * 2
     assert len({tuple(c) for c in counts}) == 3
-    result = ws.check(out)
+    result = RC.check(out)
     assert result["accepted"], result["problems"]
     s = result["summary"]["connection_rows"]
-    assert (s["registered"], s["of"], s[crr.NO_HEAD]) == (4, 4, {"signed": 0, "of": 0})
+    assert (s["registered"], s["of"], s[CRC.NO_HEAD]) == (4, 4, {"signed": 0, "of": 0})
     assert s["sign_ms"]["n"] == 4 and result["summary"]["certified_windows"] == 12
 
 
@@ -320,11 +325,11 @@ def test_a_run_with_request_words_keeps_each_classes_words_table_and_the_check_h
     device, requests = served(out, tmp_path / "key", process=process, params=WORDED)
     assert len(device.log) == len(PROMPTS) and all(c["failed"] is None and not c["cut"] for c in device.log)
     assert phases_of(out, WORDED) == [(w, "registration") for w in range(4)]
-    records = ws.read_records(out, WORDED)
+    records = RC.read_records(out, WORDED)
     held = CR.of_records(WORDED, records["requests"], records["responses"])
     words = {request: (8, len(prompt)) for request, prompt in zip(requests, PROMPTS)}
     seen = 0
-    for w, (doc, salts) in enumerate(crr.read(out, WORDED)):
+    for w, (doc, salts) in enumerate(CRC.read(out, WORDED)):
         releases = [r for stride in held[w] for r in stride]
         filed = [CT.file(WORDED, r) for r in releases]
         entries = {t["name"]: t for t in doc["registration"]["tables"]}
@@ -339,7 +344,7 @@ def test_a_run_with_request_words_keeps_each_classes_words_table_and_the_check_h
                                                                 if f == i]
             seen += len(laid[name])
     assert seen == len(PROMPTS)
-    result = ws.check(out)
+    result = RC.check(out)
     assert result["accepted"], result["problems"]
     assert result["summary"]["connection_rows"]["registered"] == 4
 
@@ -363,20 +368,20 @@ def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_an
     device, _ = served(out, tmp_path / "key", process=process, params=params, prompts=(*PROMPTS, (14,), (15, 16)),
                        answers=(*ANSWERS[:5], (3,), (4, 5)), arrive={6: T + 2, 7: 2 * T + 2})
     assert (device.refused, device.refused_windows, len(device.log)) == (1, {0}, 7)
-    assert phases_of(out, params) == [(0, crr.NO_HEAD), (1, crr.NO_HEAD), (2, "registration"), (3, "registration")]
+    assert phases_of(out, params) == [(0, CRC.NO_HEAD), (1, CRC.NO_HEAD), (2, "registration"), (3, "registration")]
     key, session = device_key(out)
-    for w, (doc, salts) in enumerate(crr.read(out, params)[:2]):
-        assert sorted(doc) == ["cost", crr.NO_HEAD] and sorted(doc["cost"]) == ["sign_ms"] and salts == {}
-        CR.check_no_head(doc[crr.NO_HEAD], key, session, params, ws.LINK, w)
+    for w, (doc, salts) in enumerate(CRC.read(out, params)[:2]):
+        assert sorted(doc) == ["cost", CRC.NO_HEAD] and sorted(doc["cost"]) == ["sign_ms"] and salts == {}
+        CR.check_no_head(doc[CRC.NO_HEAD], key, session, params, RC.LINK, w)
         with pytest.raises(ValueError, match="the word's window"):
-            CR.check_no_head(doc[crr.NO_HEAD], key, session, params, ws.LINK, 1 - w)
-    assert ws.bf.read_blobs(out / crr.SALTS)[:2] == [b"", b""]
-    records = ws.read_records(out, params)
+            CR.check_no_head(doc[CRC.NO_HEAD], key, session, params, RC.LINK, 1 - w)
+    assert ws.bf.read_blobs(out / CRC.SALTS)[:2] == [b"", b""]
+    records = RC.read_records(out, params)
     held = CR.of_records(params, records["requests"], records["responses"])
     assert [sum(map(len, held[w])) for w in range(4)] == [5, 1, 1, 0]
-    result = ws.check(out)
+    result = RC.check(out)
     s = result["summary"]["connection_rows"]
-    assert (s["registered"], s["of"], s[crr.NO_HEAD]) == (2, 2, {"signed": 2, "of": 2})
+    assert (s["registered"], s["of"], s[CRC.NO_HEAD]) == (2, 2, {"signed": 2, "of": 2})
     assert not any("connection rows" in p or "no head" in p for p in result["problems"]) and not result["accepted"]
 
 
@@ -407,21 +412,21 @@ def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_du
 
     def word_for_head(lines, salts) -> None:
         del lines[2], salts[2]
-        lines[0][crr.NO_HEAD]["window"] = 2
+        lines[0][CRC.NO_HEAD]["window"] = 2
 
     def twice(lines, salts) -> None:
         lines.append(lines[1])
         salts.append(salts[1])
 
     def of_another(lines, salts) -> None:
-        lines[1][crr.NO_HEAD] = lines[0][crr.NO_HEAD] | {"window": 1}
+        lines[1][CRC.NO_HEAD] = lines[0][CRC.NO_HEAD] | {"window": 1}
 
     def other_signature(lines, salts) -> None:
-        signed = lines[1][crr.NO_HEAD]["certificate"]
+        signed = lines[1][CRC.NO_HEAD]["certificate"]
         signed["signature"] = signed["signature"][:-2] + ("00" if signed["signature"][-2:] != "00" else "01")
 
     def refusal(lines, salts) -> None:
-        lines[1] = {"refused": [ws.LINK, "egress", 1], "cost": lines[1]["cost"]}
+        lines[1] = {"refused": [RC.LINK, "egress", 1], "cost": lines[1]["cost"]}
 
     assert edited(lost) == [neither.format(1)]
     assert edited(head_for_word) == [unhanded.format(0), unregistered.format(3)]
@@ -434,9 +439,9 @@ def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_du
     assert edited(refusal) == [neither.format(1)]
 
     def salted(lines, salts) -> None:
-        salts[1] = bytes(crr.WR.SALT_BYTES)
+        salts[1] = bytes(WR.SALT_BYTES)
 
-    word = f"execution phase 1 has the network certifier's word that it has no head, and {crr.WR.SALT_BYTES} bytes"
+    word = f"execution phase 1 has the network certifier's word that it has no head, and {WR.SALT_BYTES} bytes"
     assert any("don't read" in p and word in p for p in edited(salted))
 
 
@@ -448,8 +453,8 @@ def test_under_form_2_the_check_reads_a_tables_salts_by_the_rows_its_registratio
     releases."""
     out = tmp_path / "run"
     served(out, tmp_path / "key", params=ENDS)
-    assert ws.check(out)["accepted"]
-    size = crr.WR.SALT_BYTES
+    assert RC.check(out)["accepted"]
+    size = WR.SALT_BYTES
 
     def edited(change) -> list[str]:
         return [p for p in refused(out, lambda: edit_rows(out, change)) if "connection rows" in p]
@@ -490,7 +495,7 @@ def test_under_form_2_the_keep_refuses_a_hand_that_files_more_than_the_bound_in_
     def hand(releases: list) -> tuple:
         return tuple(tuple(releases[j * K:(j + 1) * K]) for j in range(strides))
 
-    keeper = crr.Keeper(tmp_path, None, ENDS, ws.LINK)
+    keeper = rp.Keeper(tmp_path, None, ENDS, RC.LINK)
     with pytest.raises(ValueError, match=f"release {R} is filed in class 0 past the class's {R} rows: R = {R} "):
         keeper.keep(0, hand(many))
     assert list(tmp_path.iterdir()) == []
@@ -516,17 +521,17 @@ def test_the_check_reads_the_release_order_past_an_execution_phase_that_isnt_com
     log = {c["ordinal"]: c for c in device.log}
     assert [log[k]["release"] for k in (1, 2, 3, 4)] == [0, 1, 2, 3] and all(not c["cut"] for c in device.log)
     assert T + 3 < log[2]["ingress_end"] < 2 * T
-    records = ws.read_records(out, params)
+    records = RC.read_records(out, params)
     assert [r.status.complete for r in records["requests"]] == [True, False, True, True, True]
     handed = {1: [2, 3], 2: [3, 4]}[form]
     lines = phases_of(out, params)
     assert [w for w, kind in lines if kind == "registration"] == handed
-    assert [w for w, kind in lines if kind == crr.NO_HEAD] == {1: [], 2: [0, 1, 2]}[form]
+    assert [w for w, kind in lines if kind == CRC.NO_HEAD] == {1: [], 2: [0, 1, 2]}[form]
     short = CR.of_records(params, records["requests"], records["responses"])
     assert sorted(short) == [0, 1]
 
     def rows_problems() -> list[str]:
-        result = ws.check(out)
+        result = RC.check(out)
         assert not result["accepted"]
         return [p for p in result["problems"] if "connection rows" in p or "no head" in p]
 
@@ -534,9 +539,9 @@ def test_the_check_reads_the_release_order_past_an_execution_phase_that_isnt_com
     assert rows_problems() == unregistered
     (out / "warden.json").write_text(json.dumps({"connections": device.log}))
     assert rows_problems() == []
-    s = ws.check(out)["summary"]["connection_rows"]
+    s = RC.check(out)["summary"]["connection_rows"]
     assert (s["registered"], s["of"]) == (2, 2)
-    assert s.get(crr.NO_HEAD) == {1: None, 2: {"signed": 3, "of": 3}}[form]
+    assert s.get(CRC.NO_HEAD) == {1: None, 2: {"signed": 3, "of": 3}}[form]
     held = CR.of_records(params, records["requests"], records["responses"],
                          {c["ordinal"]: c["release"] for c in device.log})
     assert [(w, r.order) for w in sorted(held) for stride in held[w] for r in stride] == [(0, 0), (2, 2), (3, 3)]
@@ -552,12 +557,12 @@ def test_a_run_without_lengths_rows_writes_and_checks_what_it_did(tmp_path):
     has no entry for them; rows found beside it are no part of its check."""
     out = tmp_path / "run"
     served(out, tmp_path / "key", windows=2, params=PLAIN)
-    assert not (out / crr.ROWS).exists() and not (out / crr.SALTS).exists()
-    result = ws.check(out)
+    assert not (out / CRC.ROWS).exists() and not (out / CRC.SALTS).exists()
+    result = RC.check(out)
     assert result["accepted"], result["problems"]
     assert "connection_rows" not in result["summary"]
     assert len((out / "certified.jsonl").read_text().splitlines()) == 6
-    assert crr.check(out, {}, PLAIN, [], [], [], ws.LINK) == (None, [])
+    assert CRC.check(out, {}, PLAIN, [], [], [], RC.LINK) == (None, [])
 
 
 #: the cost command's flags of a small schedule

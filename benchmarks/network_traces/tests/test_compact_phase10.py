@@ -27,6 +27,7 @@ import pytest
 
 # test_certifier_serve puts the benchmark on the path
 from test_certifier_serve import VARIED_TOKENS, _no_sleep, _Varied, _varied_runs, ar, cs
+from verity.protocols.accounting.certifier.verifier import record_files as RF
 import compact_render as cr  # noqa: E402
 from test_compact_render import FIXTURE, VOCAB  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import active
@@ -46,8 +47,8 @@ def run(tmp_path_factory):
                                                     ("honest",))
     setup = ar.Setup(report)
     e, i = setup.egress_params, setup.ingress_params
-    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(tmp / "honest" / "requests.records")]
-    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(tmp / "honest" / "responses.records")]
+    ins = [RF.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(tmp / "honest" / "requests.records")]
+    outs = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(tmp / "honest" / "responses.records")]
     return SimpleNamespace(plan=plan, setup=setup, ins=ins, outs=outs, check=runs["honest"]["check"])
 
 

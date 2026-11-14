@@ -439,7 +439,7 @@ def record_counts(run: Path) -> dict:
     they are `exact`, and `why` not (then the first is a ceiling and the second a floor); the watermark stream's where
     `warden.json` has one, its `release` and `from_server` None; and how many of the records it read, each execution
     phase's ingress, egress and reasons, are certified under the deployment's key."""
-    from benchmarks.network_traces import warden_serve as ws
+    from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
     from verity.protocols.accounting.certifier.verifier.active import DATA
     from verity.protocols.accounting.certifier.verifier.certificate import record_head
     from verity.protocols.accounting.certifier.verifier.grid import row_count
@@ -449,12 +449,12 @@ def record_counts(run: Path) -> dict:
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
     run_id = bytes.fromhex(dep["run_id"]) if dep.get("run_id") else None
-    records = ws.read_records(run, params)
-    key, session = ws.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    certified, _ = ws.read_certified(run / "certified.jsonl")
+    records = RC.read_records(run, params)
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    certified, _ = RC.read_certified(run / "certified.jsonl")
     windows = 0
-    for name, (link, direction) in ws.CERTIFIED.items():
-        grid = params.fails_grid if name == ws.FAILS else params.grid
+    for name, (link, direction) in RC.CERTIFIED.items():
+        grid = params.fails_grid if name == RC.FAILS else params.grid
         for record in records[name]:
             c = certified.get((link, direction, record.window))
             windows += bool(c is not None and c.verify(key, session) and c.head == record_head(
@@ -464,7 +464,7 @@ def record_counts(run: Path) -> dict:
     # records' order, and that cell's bucket
     released: dict[int, tuple[int, int]] = {}
     ends = 0
-    for record in sorted(records[ws.INGRESS], key=lambda r: r.window):
+    for record in sorted(records[RC.INGRESS], key=lambda r: r.window):
         for b, row in enumerate(record.grid):
             for frame in row[:row_count(row)]:
                 try:
@@ -476,7 +476,7 @@ def record_counts(run: Path) -> dict:
                 if kind == END:
                     released.setdefault(ordinal, (ends, record.window * params.window + b))
                     ends += 1
-    connections = audit(params, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])["connections"]
+    connections = audit(params, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])["connections"]
     log = json.loads((run / "warden.json").read_text()) if (run / "warden.json").exists() else {}
     mark = log.get("watermark") or {}
     lost = set(mark.get("lost") or ())
@@ -502,7 +502,7 @@ def record_counts(run: Path) -> dict:
         out.append({"connection": "watermark", "release": None, "exact": stopped is None,
                     "why": stopped and f"stopped ({stopped})",
                     "to_server": size + (0 if stopped else len(WATERMARK_END)), "from_server": None})
-    return {"phase_records": {"certified": windows, "of": len(ws.CERTIFIED) * dep["windows"]}, "connections": out}
+    return {"phase_records": {"certified": windows, "of": len(RC.CERTIFIED) * dep["windows"]}, "connections": out}
 
 
 def _signed(n: int) -> str:

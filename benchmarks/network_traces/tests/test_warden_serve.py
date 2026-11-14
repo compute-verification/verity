@@ -29,6 +29,7 @@ from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
 from verity.protocols.accounting.certifier.verifier.warden import (END, REFUSED, Shim, Warden, WardenParams, cells, read_cell,
                                                     reason_frame)
+from verity.protocols.accounting.certifier.verifier import load_check as LK, relay_check as RC, record_files as RF
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
@@ -53,18 +54,17 @@ def _load():
 
 
 ws = _load()
+import runner_parts as rp  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import warden as warden_, link_frame  # noqa: E402
 
 
 async def _no_sleep(_: float) -> None:
     pass
 
 
-#: what the relay's runner still imports from the older form's files, by the file: the certificate's JSON and the
-#: endpoint's model from the older runner, a record's bytes on disk and its process's runtime and usage from its replay,
-#: and nothing from the older form's protocol file. Each leaves its file in a change of its own, so this only shrinks.
-OLDER_FORM_READS = {"certifier_serve": {"certified_from_json", "certified_json", "served_model"},
-                    "active_replay": {"_quiet_runtime", "_usage", "pack_record", "unpack_record"},
-                    "active": set()}
+#: what the relay's runner still imports from the older form's files, by the file: nothing. The keys stay so that a
+#: read of one comes back only by a line here, and the list only shrinks.
+OLDER_FORM_READS = {"certifier_serve": set(), "active_replay": set(), "active": set()}
 
 
 def _imports(path: Path) -> dict[Path, set[str]]:
@@ -170,9 +170,9 @@ def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_
     without = A.warden_command({k: v for k, v in req.items() if k != "load"}, tmp_path, "http://127.0.0.1:40001")
     assert argv[:len(without)] == without and ws.parser().parse_args(without[2:]).load_store is None
     assert args.ids and ws._params(args) == ws._params(ws.parser().parse_args(without[2:]))
-    assert set(A.LOAD_SHAPES) == set(ws.lr.SHAPES)
+    assert set(A.LOAD_SHAPES) == set(LK.SHAPES)
     for shape in A.LOAD_SHAPES:
-        values = ws.lr.manifest(ws.lr.SHAPES[shape])
+        values = LK.manifest(LK.SHAPES[shape])
         link = values[-1].offset + values[-1].nbytes + ws.lr.SALT_BYTES * sum(v.leaves for v in values)
         assert A.load_minutes(shape) * 60 >= link / A.LOAD_RATE + A.LOAD_READY_S > (A.load_minutes(shape) - 1) * 60
     assert (A.load_minutes("h200"), A.load_minutes("tiny")) == (46, 16)
@@ -481,7 +481,7 @@ def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_grou
         assert len(warden.log) == p.lanes and all(c["failed"] is None and not c["cut"] for c in warden.log)
         assert {c["ended"] - c["admitted"] for c in warden.log} == {p.delay + tokens // p.slots}
         assert all(c["admitted"] + 2 + p.delay + tokens // p.slots < G * p.window for c in warden.log)
-        result = ws.check(out)
+        result = RC.check(out)
         assert result["accepted"], result["problems"]
         assert (result["summary"]["ended"], result["summary"]["windows"]) == (p.lanes, G)
     assert (ws.group_windows(p, 2), ws.group_windows(p, 64)) == (1, 2)
@@ -523,7 +523,7 @@ def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_a
         fields = D.warden_request(sent)
         assert release_of(sent)[0] == j and fields["user"] == f"user-{j}" and D.refusal(fields) is None
         assert D.answer(fields["prompt"]) == response
-    result = ws.check(out)
+    result = RC.check(out)
     assert result["accepted"], result["problems"]
     assert (result["summary"]["ended"], result["summary"]["windows"]) == (4, G)
 
@@ -556,7 +556,7 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
         server = await asyncio.start_server(lambda r, w: ws.fake_endpoint(r, w, sleep=_no_sleep), "127.0.0.1", 0)
         port = server.sockets[0].getsockname()[1]
         try:
-            return await asyncio.to_thread(ws.served_model, f"http://127.0.0.1:{port}")
+            return await asyncio.to_thread(rp.served_model, f"http://127.0.0.1:{port}")
         finally:
             server.close()
 
@@ -615,7 +615,7 @@ def test_serve_releases_the_id_form_unless_told_and_rehearse_names_its_traffics_
     assert [(c["failed"], c["failed_at"]) for c in warden.log] == [("format", 0)]
     deployment = json.loads((out / "deployment.json").read_text())
     assert deployment["params"]["egress"] == "id" and deployment["digest"] == gated.digest.hex() != PARAMS.digest.hex()
-    problems = ws.check(out)["problems"]
+    problems = RC.check(out)["problems"]
     assert any("connection 1 failed closed (format) at egress cell 0" in p for p in problems), problems
 
 
@@ -732,7 +732,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         issuer = ws.Issuer(signer, SESSION)
         publisher = ws.Publisher(out, issuer, params, commit or WR.Cells.of)
         hooks, public = {"publish": publisher, "withhold": publisher.withhold,
-                         "lengths": ws.crr.Keeper(out, issuer, params, ws.LINK).keep}, signer.public_key()
+                         "lengths": rp.Keeper(out, issuer, params, RC.LINK).keep}, signer.public_key()
     answers = iter(responses)
 
     async def connect():
@@ -815,7 +815,7 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     assert [b"".join(d for _, d in s.writes) for s in servers] == \
         [with_release(r, release[k + 1][0], warden.run_id, release[k + 1][1]) for k, r in enumerate(requests)]
     assert json.loads((out / "deployment.json").read_text())["run_id"] == warden.run_id.hex()
-    result = ws.check(out)
+    result = RC.check(out)
     assert result["accepted"], result["problems"]
     s = result["summary"]
     assert (s["requests"], s["ended"], s["certified_windows"], s["completion_tokens"]) == (3, 3, 3, 42)
@@ -831,13 +831,13 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         saved = {p: p.read_bytes() for p in out.iterdir()}
         edit()
         try:
-            return ws.check(out)["problems"]
+            return RC.check(out)["problems"]
         finally:
             for p, data in saved.items():
                 p.write_bytes(data)
 
     def flip_record() -> None:
-        records = ws.read_records(out, PARAMS)
+        records = RC.read_records(out, PARAMS)
         record = records["responses"][0]
         row = next(b for b, r in enumerate(record.grid) if any(f is not None and f[0] == DATA for f in r))
         frames = list(record.grid[row])
@@ -845,7 +845,7 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         frames[k] = frames[k][:-1] + bytes([frames[k][-1] ^ 1])
         grid = record.grid[:row] + (tuple(frames),) + record.grid[row + 1:]
         (out / "responses.records").unlink()
-        ws.bf.write_blobs(out / "responses.records", ws.pack_record(ws.replace(record, grid=grid)))
+        ws.bf.write_blobs(out / "responses.records", RF.pack_record(ws.replace(record, grid=grid)))
 
     problems = refused(flip_record)
     assert "responses window 0 isn't certified" in problems and "responses window 0's cells aren't registered" in problems
@@ -872,10 +872,10 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         assert "responses window 0's cells aren't registered" in refused(lambda: edit_cells(change))
 
     def forge_reason() -> None:
-        (record,) = ws.read_records(out, PARAMS)["fails"]
+        (record,) = RC.read_records(out, PARAMS)["fails"]
         grid = ((reason_frame(0, "late", PARAMS.cell_bytes),) + record.grid[0][1:],) + record.grid[1:]
         (out / "fails.records").unlink()
-        ws.bf.write_blobs(out / "fails.records", ws.pack_record(ws.replace(record, grid=grid)))
+        ws.bf.write_blobs(out / "fails.records", RF.pack_record(ws.replace(record, grid=grid)))
 
     assert "fails window 0 isn't certified" in refused(forge_reason)
 
@@ -891,7 +891,7 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     assert any(p.startswith("connection 2:") and "'in_bucket'" in p for p in problems)
     problems = refused(lambda: edit_client(lambda c: c.update(data_sha256="0" * 64)))
     assert any(p.startswith("connection 2:") and "'response_certified': False" in p for p in problems)
-    assert ws.check(out)["accepted"]
+    assert RC.check(out)["accepted"]
 
 
 @pytest.mark.parametrize("process", [False, True])
@@ -909,13 +909,13 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
     certified = [json.loads(x) for x in (out / "certified.jsonl").read_text().splitlines()]
     cells_ = [json.loads(x) for x in (out / "cells.jsonl").read_text().splitlines()]
     assert [(x["refused"][2], x["withheld"]) for x in certified if "refused" in x] == [(0, True)] * 3
-    assert [ws.certified_from_json(x).window for x in certified if "refused" not in x] == [1] * 3
+    assert [RF.certified_from_json(x).window for x in certified if "refused" not in x] == [1] * 3
     assert [("refused" in x, x.get("withheld")) for x in cells_] == [(True, True)] * 2 + [(False, None)] * 2
-    result = ws.check(out)
+    result = RC.check(out)
     s = result["summary"]
     assert (s["refused"], s["ended"], s["certified_windows"], s["cell_rows"]["registered"]) == (1, 4, 3, 2)
     assert {p for p in result["problems"] if "window" in p} == \
-        {f"{name} window 0 isn't certified" for name in ws.CERTIFIED} | {
+        {f"{name} window 0 isn't certified" for name in RC.CERTIFIED} | {
             f"{name} window 0's cells aren't registered" for name in ("requests", "responses")}
 
 
@@ -986,19 +986,19 @@ def test_a_session_serves_its_length_to_clients_not_its_own_and_its_check_accept
     assert (s["cell_rows"]["registered"], s["cell_rows"]["of"]) == (6, 6)
     assert s["data_bytes"] == {"ingress": sum(map(len, requests)), "egress": sum(map(len, responses))}
 
-    records = ws.read_records(out, p)
+    records = RC.read_records(out, p)
     audited = {c["ordinal"]: c for c in
-               ws.audit(p, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])["connections"]}
-    schedule = ws.egress_cells(records[ws.EGRESS], p)
+               warden_.audit(p, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])["connections"]}
+    schedule = RC.egress_cells(records[RC.EGRESS], p)
     assert len(own["connections"]) == len(audited) == len(arrive)
     for conn in own["connections"]:
         o = conn["ordinal"]
         assert conn["outcome"] == "end" and audited[o]["ended"] is not None, o
         assert (audited[o]["ingress_sha256"], audited[o]["egress_sha256"]) == \
             (conn["request_sha256"], conn["data_sha256"]), o
-        assert "".join(ws.KIND_CHARS[k] for _, k in schedule[o]) == conn["kinds"], o
+        assert "".join(RC.KIND_CHARS[k] for _, k in schedule[o]) == conn["kinds"], o
     (out / "client.json").write_text(json.dumps(own))
-    theirs = ws.check(out)
+    theirs = RC.check(out)
     assert theirs["accepted"] and (theirs["summary"]["requests"], theirs["summary"]["ended"]) == (8, 8)
     assert theirs["summary"]["cells_in_their_bucket"][0] == theirs["summary"]["cells_in_their_bucket"][1] > 0
 
@@ -1169,8 +1169,8 @@ def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_
                      id_payload=p.payload, arrive=dict(enumerate(arrive)))
         own = json.loads((out / "client.json").read_text())["connections"]
         (out / "client.json").unlink()
-        records = ws.read_records(out, p)
-        return relay, own, ws.check(out), ws.audit(p, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])
+        records = RC.read_records(out, p)
+        return relay, own, RC.check(out), warden_.audit(p, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])
 
     relay, own, result, audit_ = run("ends", [end - p.span - 1])
     assert result["accepted"] and relay.log[0]["ended"] == end - 1 and not relay.log[0]["cut"]
@@ -1178,7 +1178,7 @@ def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_
 
     relay, own, result, audit_ = run("late", [end - p.span])
     assert relay.log[0]["cut"] and relay.log[0]["ended"] is None and [c["outcome"] for c in own] == ["cut"]
-    assert own[0]["kinds"].count(ws.KIND_CHARS[DATA]) == p.slots and ws.KIND_CHARS[END] not in own[0]["kinds"]
+    assert own[0]["kinds"].count(RC.KIND_CHARS[DATA]) == p.slots and RC.KIND_CHARS[END] not in own[0]["kinds"]
     assert not result["accepted"] and result["problems"] == [
         "audit: connection 1: its egress isn't padding to s + D, data in every slot, one END or FAIL, padding"]
     assert [(w["window"], w["accepted"]) for w in audit_["windows"]] == [(0, True), (1, False)]
@@ -1193,7 +1193,7 @@ def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_
         [(o, early, None, 0) for o in range(1, p.lanes + 1)]
     assert all(c["ingress_bytes"] > 0 for c in audit_["connections"])
     assert [c["outcome"] for c in own] == ["cut"] * (p.lanes + 1)
-    assert [set(c["kinds"]) for c in own] == [{ws.KIND_CHARS[ws.PAD]}] * p.lanes + [set()]
+    assert [set(c["kinds"]) for c in own] == [{RC.KIND_CHARS[link_frame.PAD]}] * p.lanes + [set()]
     assert result["summary"]["data_bytes"] == {"ingress": sum(map(len, load(p.lanes)[0])), "egress": 0}
     assert result["summary"]["certified_windows"] == 6
 
@@ -1209,9 +1209,9 @@ def test_one_connection_failed_closed_refuses_a_sessions_whole_run_whichever_cli
     relay = _run(out, tmp_path / "key", requests, responses[:3] + [_response([" a"])], windows=args.windows,
                  params=p, id_payload=p.payload, arrive=dict(enumerate([0, 0, 1, 2])))
     (out / "client.json").unlink()
-    records = ws.read_records(out, p)
-    audit_ = ws.audit(p, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])
-    result = ws.check(out)
+    records = RC.read_records(out, p)
+    audit_ = warden_.audit(p, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])
+    result = RC.check(out)
     assert sorted(e["failed"] or "" for e in relay.log) == ["", "", "", "format"]
     assert [(c["failed"], c["ended"] is not None) for c in audit_["connections"]] == \
         [(None, True)] * 3 + [("format", True)]
@@ -1234,7 +1234,7 @@ def test_the_check_names_each_execution_phase_the_audit_refused_and_why_uncut(tm
         _run(out, tmp_path / f"key-{name}", requests, answers, windows=args.windows, params=p, id_payload=p.payload,
              arrive=dict(enumerate([0, 0, 1, p.window])))
         (out / "client.json").unlink()
-        return ws.check(out)
+        return RC.check(out)
 
     result = run("ends", responses)
     assert result["accepted"] and result["audit_windows"] == [
@@ -1246,7 +1246,7 @@ def test_the_check_names_each_execution_phase_the_audit_refused_and_why_uncut(tm
     assert result["audit_windows"] == [
         {"window": 0, "accepted": True, "problems": []}, {"window": 1, "accepted": False, "problems": [why]}]
 
-    audit = ws.audit
+    audit = warden_.audit
 
     def many(*records) -> dict:
         verdict = audit(*records)
@@ -1254,7 +1254,7 @@ def test_the_check_names_each_execution_phase_the_audit_refused_and_why_uncut(tm
         return verdict
 
     monkeypatch.setattr(ws, "audit", many)
-    result = ws.check(tmp_path / "fails")
+    result = RC.check(tmp_path / "fails")
     assert len(result["problems"]) == 50 and result["problems"][:2] == [f"audit: {why}", "audit: problem 0"]
     assert result["audit_windows"][1]["problems"] == [why] + [f"problem {i}" for i in range(60)]
 
@@ -1275,16 +1275,16 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
     inline = _run(runs["inline"], tmp_path / "inline-key", requests, responses, windows=2, commit=slow_commit)
     late = [t for t, x in enumerate(inline.lateness) if x > inline.slack]
     assert late[0] == PARAMS.window and max(inline.lateness) > SLOW_COMMIT_S
-    result = ws.check(runs["inline"])
-    assert {f"{name} window 1 isn't certified" for name in ws.CERTIFIED} <= set(result["problems"])
+    result = RC.check(runs["inline"])
+    assert {f"{name} window 1 isn't certified" for name in RC.CERTIFIED} <= set(result["problems"])
     assert {(x["record"], x["status"]) for x in result["windows"] if x["window"] == 1} == \
-        {(name, Reason.MONITOR_UNAVAILABLE.value) for name in ws.CERTIFIED}
-    assert sorted(w for *_, w in result["summary"]["signer_refused"]) == [1] * len(ws.CERTIFIED)
+        {(name, Reason.MONITOR_UNAVAILABLE.value) for name in RC.CERTIFIED}
+    assert sorted(w for *_, w in result["summary"]["signer_refused"]) == [1] * len(RC.CERTIFIED)
 
     process = _run(runs["process"], tmp_path / "process-key", requests, responses, windows=2, commit=slow_commit,
                    process=True)
     assert len(process.lateness) == 2 * PARAMS.window and max(process.lateness) == 0
-    result = ws.check(runs["process"])
+    result = RC.check(runs["process"])
     assert result["accepted"], result["problems"]
     s = result["summary"]
     assert (s["certified_windows"], s["cell_rows"]["registered"], s["ended"], s["signer_refused"]) == (6, 4, 3, [])
@@ -1306,20 +1306,20 @@ def test_the_load_is_signed_by_the_serving_publisher_in_the_runs_session_before_
     store.mkdir()
     out.mkdir()
     lr, program = ws.lr, hashlib.sha512(b"the reading program").hexdigest()
-    lr.write_store(store, lr.TINY)
+    lr.write_store(store, LK.TINY)
     sink = subprocess.Popen([sys.executable, str(ROOT / "benchmarks/network_traces/load_relay.py"), "sink",
                              "--listen", "127.0.0.1:0",
                              "--weights", str(tmp_path / "weights.bin"), "--witness", str(tmp_path / "witness.bin")],
                             stdout=subprocess.PIPE, text=True)
     port = json.loads(sink.stdout.readline())["listening"][1]
-    lr.relay_load(store, lr.TINY, [("127.0.0.1", port)] * 4, program, out)
+    lr.relay_load(store, LK.TINY, [("127.0.0.1", port)] * 4, program, out)
     assert json.loads(sink.communicate()[0].splitlines()[-1])["accepted"] and sink.returncode == 0
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 30)]
     _run(out, tmp_path / "key", requests, [_response([" a", " b"]), _response([])], process=True,
          load_heads=out / "load-heads.json")
-    result = ws.check(out)
+    result = RC.check(out)
     assert result["accepted"], result["problems"]
-    n = len(lr.manifest(lr.TINY))
+    n = len(LK.manifest(LK.TINY))
     assert result["summary"]["load"] == {"values": n, "registered": n, "relayed": True}
     assert ws.table(result).startswith(f"ACCEPTED: load {n}/{n} values registered; 2/2 ended")
     doc, dep = (json.loads((out / f).read_text()) for f in ("load.json", "deployment.json"))
@@ -1332,7 +1332,7 @@ def test_the_load_is_signed_by_the_serving_publisher_in_the_runs_session_before_
         saved = (out / name).read_text()
         edit(out / name)
         try:
-            return ws.check(out)["problems"]
+            return RC.check(out)["problems"]
         finally:
             (out / name).write_text(saved)
 

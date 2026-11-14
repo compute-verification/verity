@@ -208,8 +208,9 @@ from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, registration as RG  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.scan_answer import _found, window_answer  # noqa: E402
 
 _TRAFFIC = HERE.parents[1] / "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py"
 _spec = importlib.util.spec_from_file_location("scan_traffic", _TRAFFIC)
@@ -591,15 +592,6 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
                            fail_buckets=[], failed_why=[])
 
 
-def _found(run: Path, name: str) -> Path:
-    """A network certifier run's file: in the run's directory (`warden_serve.py serve --out`), else its ``witness/``
-    (the gate's `warden-rehearse --scan`)."""
-    for d in (run, run / "witness"):
-        if (d / name).is_file():
-            return d / name
-    raise SystemExit(f"--warden-run {run}: no {name} there or in its witness/ (warden_serve.py serve writes it)")
-
-
 def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> SimpleNamespace:
     """A warden_serve run's execution phases `windows` as the verifier reads them, refused by name where they don't
     hold: the deployment's schedule (its digest, and the class serving it) and public key; each link's registration of
@@ -612,6 +604,7 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     and ``failed_why`` the run's ``check.json`` problems that name a connection failed closed). The tampered round's
     re-signed execution phase is signed by a key of the driver's own (``out``), under which the verifier reads it."""
     from benchmarks.network_traces import warden_serve as WS
+    from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
 
     dep = json.loads(_found(run, "deployment.json").read_text())
     params = W.WardenParams(**dep["params"])
@@ -622,44 +615,44 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     except ValueError as e:
         raise SystemExit(f"--warden-run {run}: {e} (warden_serve.py rehearse at scan_zk's schedule, PARAMS, or the "
                          "gate's warden-rehearse --scan)")
-    key, session = WS.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    records = {name: [WS.unpack_record(b, params.cell_bytes) for b in WS.bf.read_blobs(_found(run, f"{name}.records"))]
-               for name in WS.CERTIFIED}
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    records = {name: [RF.unpack_record(b, params.cell_bytes) for b in WS.bf.read_blobs(_found(run, f"{name}.records"))]
+               for name in RC.CERTIFIED}
     lines = [json.loads(x) for x in _found(run, "cells.jsonl").read_text().splitlines()]
     salts = WS.bf.read_blobs(_found(run, "cells.salts"))
     if len(salts) != len(lines):
         raise SystemExit(f"--warden-run {run}: cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
     sides = {}
-    for side, name, direction in (("ingress", WS.INGRESS, Direction.INGRESS), ("egress", WS.EGRESS, Direction.EGRESS)):
+    for side, name, direction in (("ingress", RC.INGRESS, Direction.INGRESS), ("egress", RC.EGRESS, Direction.EGRESS)):
         sides[side] = []
         for w in windows:
             got = [(doc["registration"], blob) for doc, blob in zip(lines, salts) if "registration" in doc and
                    (doc["registration"]["link"], doc["registration"]["direction"], doc["registration"]["window"])
-                   == (WS.LINK, direction.value, w)]
+                   == (RC.LINK, direction.value, w)]
             record = next((r for r in records[name] if r.window == w), None)
             if not got or record is None:
                 raise SystemExit(f"--warden-run {run}: {side} link-window {w} has no registration or no record (the "
                                  "signer refused it, or the run ended before it)")
             registration, blob = got[0]
             try:
-                head, dom = WR.check_registration(registration, key, session, params, WS.LINK, direction, w)
+                head, dom = WR.check_registration(registration, key, session, params, RC.LINK, direction, w)
             except ValueError as e:
                 raise SystemExit(f"--warden-run {run}: {side} link-window {w}'s registration doesn't verify under the "
                                  f"deployment's key and session: {e}")
             row_salts, wiring_salt = WR.read_witness(blob)
-            cells = WR.Cells.of(WS.LINK, direction, record, params, session, row_salts, wiring_salt)
+            cells = WR.Cells.of(RC.LINK, direction, record, params, session, row_salts, wiring_salt)
             if cells.head != head:
                 raise SystemExit(f"--warden-run {run}: {side} link-window {w}'s record under cells.salts isn't the rows "
                                  "whose root the warden signed")
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
     fails = [((r.window - windows[0]) * params.window + t, sum(f is not None for f in row))
-             for r in records[WS.FAILS] if r.window in windows for t, row in enumerate(r.grid)]
+             for r in records[RC.FAILS] if r.window in windows for t, row in enumerate(r.grid)]
     fail_buckets = sorted(t for t, n in fails if n)
     check = next((d / "check.json" for d in (run, run / "witness", run / "out") if (d / "check.json").is_file()), None)
     named = [p.removeprefix("audit: ") for p in (json.loads(check.read_text()).get("problems") or [])
              if "failed closed" in p] if fail_buckets and check else []
     B, outputs = params.cell_bytes, {}
-    for rec in sorted(records[WS.EGRESS], key=lambda r: r.window):
+    for rec in sorted(records[RC.EGRESS], key=lambda r: r.window):
         for t, row in enumerate(WR.window_rows(rec, params)):
             for s in range(params.lanes * params.slots):
                 if row[s * B] == W.FAIL:
@@ -1652,30 +1645,6 @@ def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
                              for x, v in (("prove_s", tm.get("prove_total_s")), ("session_s", t.get("session_s")),
                                           ("lean_verify_s", t.get("lean_verify_s")))}}
     return out
-
-
-def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, rests: Sequence[str] = ()) -> dict:
-    """One-stage's answer for the group's registration ``reg`` as a period check reads an execution phase's scan answer
-    (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
-    `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on incorrect proof
-    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit sampled, the bound 0), and the tied values
-    its registration's R8 let through when there are any (``rests``, the registration verdict's
-    ``rests_on_period_check``), on whose period check the acceptance rests; else a reject naming ``reason``."""
-    commitment = RG.digest(reg)
-    if record is None:
-        return {"commitment": commitment, "profile": None, "protocol": RG.PROTOCOL, "public": None, "reason": reason,
-                "verdict": "reject"}
-    if record.get("accepted") is not True or RG.digest(record["registration"]) != commitment:
-        raise SystemExit("an accepted scan's audit record is for another registration, or not accepted")
-    draw = record["draw"]
-    profile = AU.profile(reg, draw, delta).to_json()
-    profile["delta"] = str(delta)
-    wrong = AU.wrong_units(reg, draw, delta)
-    return {"commitment": commitment, "profile": profile, "protocol": RG.PROTOCOL,
-            "public": {"bound": wrong["bound"], "drawn": sorted(draw["units"]),
-                       "per_template": wrong.get("per_template"), "proved": sorted(record["proved_units"]),
-                       **({"rests_on_period_check": list(rests)} if rests else {})},
-            "reason": None, "verdict": "accept"}
 
 
 def _answer(out: Path, name: str, res: dict, delta: Fraction, what: str) -> tuple[dict, dict]:

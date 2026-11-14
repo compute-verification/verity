@@ -203,7 +203,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import http.client
 import json
 import math
 import multiprocessing
@@ -226,15 +225,18 @@ from fractions import Fraction
 from pathlib import Path
 
 import active_replay as ar
-from certifier_key import HEIGHT, KEYGEN_WORKERS, load_key, public_json, read_public, signer  # noqa: F401 - re-exported
+import runner_parts as rp
+from verity.protocols.accounting.certifier.verifier import record_files as RF
+from certifier_key import HEIGHT, KEYGEN_WORKERS, load_key, signer  # noqa: F401 - re-exported
+from verity.protocols.accounting.certifier.verifier.record_files import public_json, read_public
 from runner_cli import PACED_MS, _address, _announce
 from verity.protocols.accounting.certifier.verifier import calibration, out_commit
 from verity.protocols.accounting.certifier.verifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
     Events, Proxy, CertifierClient, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
-from verity.protocols.accounting.certifier.verifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
-    Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, parameters_digest
-from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, Reason, Status, occupancy, row_count
+from verity.protocols.accounting.certifier.verifier.certificate import (CertifiedClock, CertifiedRecord, Direction,
+    Issuer, LmsKey, LmsSigner, SignerRefused, parameters_digest)
+from verity.protocols.accounting.certifier.verifier.grid import occupancy, row_count
 from verity.protocols.accounting.certifier.verifier.audit import certificate_refusals
 from verity.protocols.accounting.certifier.verifier.lean_audit import DISAGREEMENT, Audit
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, expected_grids, handing_buckets
@@ -242,6 +244,10 @@ from verity.protocols.accounting.certifier.verifier.served import Admission, Ser
 from verity.protocols.accounting.certifier.verifier.service import LinkWindows
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
+from runner_parts import _call, served_model
+from verity.protocols.accounting.certifier.verifier.record_files import (certificate_from_json, certificate_json,
+    certified_from_json, certified_json)
+from verity.protocols.accounting.certifier.verifier.relay_check import PROOF_DEADLINE_S
 
 HERE = Path(__file__).resolve().parent
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
@@ -251,7 +257,6 @@ CLIENT = "client"
 PROMPT = "Count from one to one hundred in words, separated by commas:"
 FILLER = " one, two, three, four, five, six, seven, eight, nine, ten,"
 REVEAL_MARGIN_S = 300.0
-PROOF_DEADLINE_S = 600.0
 DELTA = 2.0 ** -40
 STRATEGIES = ("honest", "late", "extra")
 TAMPERS = ("late", *ar.LIVE_TAMPERS)
@@ -289,46 +294,6 @@ NO_N2 = ("no verdict on the advice profile: the egress counts derive from the in
 
 # Certified records on disk: one JSON line each, the head's and the certificate's fields and the certifier's salt for
 # the head (`salt_c`), bytes in hex.
-
-_BYTES = {"parameters", "root", "key_id", "digest", "signature"}
-
-
-def _enc(value):
-    if isinstance(value, bytes):
-        return value.hex()
-    if isinstance(value, Direction):
-        return value.value
-    if isinstance(value, Status):
-        return None if value.reason is None else value.reason.value
-    return list(value) if isinstance(value, tuple) else value
-
-
-def _dec(field: str, value):
-    if field in _BYTES:
-        return bytes.fromhex(value)
-    if field == "direction":
-        return Direction(value)
-    if field == "status":
-        return COMPLETE if value is None else Status(Reason(value))
-    return tuple(value) if field == "counts" else value
-
-
-def certificate_json(c: Certificate) -> dict:
-    return {f: _enc(getattr(c, f)) for f in Certificate.__slots__}
-
-
-def certificate_from_json(doc: dict) -> Certificate:
-    return Certificate(**{f: _dec(f, doc[f]) for f in Certificate.__slots__})
-
-
-def certified_json(record: CertifiedRecord) -> dict:
-    return {"salt_c": record.salt.hex(), "head": {f: _enc(getattr(record.head, f)) for f in RecordHead.__slots__},
-            "certificate": certificate_json(record.certificate)}
-
-
-def certified_from_json(doc: dict) -> CertifiedRecord:
-    return CertifiedRecord(RecordHead(**{f: _dec(f, v) for f, v in doc["head"].items()}), bytes.fromhex(doc["salt_c"]),
-                           certificate_from_json(doc["certificate"]))
 
 
 def clock_json(clock: CertifiedClock) -> dict:
@@ -583,38 +548,6 @@ def bearer(api_key_env: str | None) -> str | None:
     """The endpoint's bearer key: the value of the environment variable `api_key_env` names, which must be set; None
     when it names none. The one place the key is read."""
     return os.environ[api_key_env] if api_key_env else None
-
-
-def _call(url: str, path: str, body: dict | None = None, key: str | None = None) -> dict:
-    """The JSON the endpoint at `url` (`http(s)://HOST[:PORT][/PREFIX]`) answers at `path`: to a GET, or to a POST of
-    `body` as JSON, sent `key` as the bearer key when there is one. A `url` of any other form is refused by name
-    before anything is opened, so only HTTP is spoken. An answer that isn't a 2xx raises `OSError`, as a connection
-    that fails does; a redirect is such an answer."""
-    u = urllib.parse.urlsplit(url)
-    if u.scheme not in ("http", "https") or not u.hostname:
-        raise SystemExit(f"an endpoint is http(s)://HOST[:PORT][/PREFIX], not {url!r}")
-    headers = {"content-type": "application/json", "connection": "close"}
-    if key:
-        headers["authorization"] = f"Bearer {key}"
-    connect = http.client.HTTPSConnection if u.scheme == "https" else http.client.HTTPConnection
-    connection = connect(u.hostname, u.port, timeout=60)
-    try:
-        connection.request("GET" if body is None else "POST", u.path.rstrip("/") + path,
-                           None if body is None else json.dumps(body).encode(), headers)
-        answer = connection.getresponse()
-        if not 200 <= answer.status < 300:
-            raise OSError(f"{url.rstrip('/')}{path} answered {answer.status} {answer.reason}")
-        return json.loads(answer.read())
-    finally:
-        connection.close()
-
-
-def served_model(url: str, key: str | None = None) -> str:
-    """The one model the endpoint serves (`/v1/models`), asked with the bearer key `key` when there is one."""
-    ids = [m["id"] for m in _call(url, "/v1/models", key=key)["data"]]
-    if len(ids) != 1:
-        raise SystemExit(f"{url} serves {ids}: name the model (--model)")
-    return ids[0]
 
 
 def prompt_tokens(url: str, model: str, n: int, api_key_env: str | None = None) -> list[int]:
@@ -1409,8 +1342,8 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
     client = run / CLIENT if (run / CLIENT / "peer.json").exists() else run
     audited = ar.audit_configuration(plan, report, run, audit=audit, client=client)
     e, i = setup.egress_params, setup.ingress_params
-    in_records = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
-    out_records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    in_records = [RF.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
+    out_records = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     server = json.loads((run / "server.json").read_text())
     salt = ar.audit_salt(setup, salts, in_records, out_records, server, windows, audit())
     io = None
@@ -1726,7 +1659,7 @@ def main(argv=None) -> int:
         session = bytes.fromhex(args.session)
         if len(session) != 32:
             raise SystemExit("--session is 32 bytes in hex")
-        ar._quiet_runtime()
+        rp._quiet_runtime()
         log = asyncio.run(serve(json.loads(args.plan.read_text()), json.loads(args.calibration.read_text()), args.out,
                                 url=args.upstream, upstream=upstream_params(args.upstream, args.api_key_env),
                                 link=args.link, reveal=args.reveal, key=args.key,
@@ -1736,7 +1669,7 @@ def main(argv=None) -> int:
                                 paced_ms=args.paced_ms))
         return 1 if "error" in log else 0
     if args.command == "client":
-        ar._quiet_runtime()
+        rp._quiet_runtime()
         refused = asyncio.run(client(json.loads(args.plan.read_text()), json.loads(args.calibration.read_text()),
                                      json.loads(args.deployment.read_text()), args.out, args.link))
         print(json.dumps({"certificates_refused": refused}), flush=True)

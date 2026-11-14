@@ -82,6 +82,7 @@ sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
 import leak_scan as LS  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import head_check as HC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import service as SVC  # noqa: E402
@@ -133,9 +134,9 @@ def link(run: Path) -> tuple[LinkWindows, dict]:
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json", "deployment.json"))
     setup = cs.ar.Setup(report)
     profile = plan.get("occupancy") or {}
-    lw = LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, cs.read_public(dep["certifier_key"]),
+    lw = LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, RF.read_public(dep["certifier_key"]),
                      dep["run_id"], bytes.fromhex(dep["session"]), ingress=setup.ingress_params,
-                     proof_deadline=cs.PROOF_DEADLINE_S, occupancy=(profile.get("egress"), profile.get("ingress")),
+                     proof_deadline=RC.PROOF_DEADLINE_S, occupancy=(profile.get("egress"), profile.get("ingress")),
                      served=cs.served_profile(plan))
     return lw, plan
 

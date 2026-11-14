@@ -101,7 +101,9 @@ sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import active_replay as ar  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
 from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import audit as host_audit, head_check as HC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.active import CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES, compact_finish_violations, compact_record_data, decode_frame, encode_frame, id_event_data  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
@@ -152,7 +154,7 @@ def copy_run(src: Path, dst: Path) -> Path:
 def write_certified(path: Path, records: dict[tuple[Direction, int], CertifiedRecord], refused: list) -> None:
     """`certified.jsonl` as `certifier_serve.CertifyingPublisher` writes it: one line per record, by window and end,
     then the execution phases the signer refused."""
-    lines = [cs.certified_json(records[k]) for k in sorted(records, key=lambda k: (k[1], k[0].code))]
+    lines = [RF.certified_json(records[k]) for k in sorted(records, key=lambda k: (k[1], k[0].code))]
     lines += [{"refused": r} for r in refused]
     path.write_text("".join(json.dumps(x) + "\n" for x in lines))
 
@@ -220,15 +222,15 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
         WS = importlib.import_module("benchmarks.network_traces.warden_serve")
     except ModuleNotFoundError as err:
         raise NotApplicable(f"no warden cells: {err.name} isn't in this tree") from None
-    link, direction = WS.CERTIFIED[WS.EGRESS]
-    if missing := [f for f in ("cells.salts", f"{WS.EGRESS}.records") if not (run / f).is_file()]:
+    link, direction = RC.CERTIFIED[RC.EGRESS]
+    if missing := [f for f in ("cells.salts", f"{RC.EGRESS}.records") if not (run / f).is_file()]:
         raise NotApplicable(f"{run}: no {' or '.join(missing)}: the run kept its registrations only (public), so "
                             "no unit can open its cells")
     dep = json.loads((run / "deployment.json").read_text())
     params = WS.WardenParams(**dep["params"])
-    key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    records = {r.window: r for r in WS.read_records(run, params)[WS.EGRESS]}
-    regs = {r["window"]: (r, salts, wiring_salt) for d, salts, wiring_salt in WS.read_cells(run)
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    records = {r.window: r for r in RC.read_records(run, params)[RC.EGRESS]}
+    regs = {r["window"]: (r, salts, wiring_salt) for d, salts, wiring_salt in RC.read_cells(run)
             if (r := d.get("registration")) and (r["link"], r["direction"]) == (link, direction.value)}
     B = params.cell_bytes
     for w in sorted(set(regs) & set(records)):
@@ -691,9 +693,9 @@ def link(run: Path) -> tuple[LinkWindows, dict]:
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json", "deployment.json"))
     setup = ar.Setup(report)
     profile = plan.get("occupancy") or {}
-    lw = LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, cs.read_public(dep["certifier_key"]),
+    lw = LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, RF.read_public(dep["certifier_key"]),
                      dep["run_id"], bytes.fromhex(dep["session"]), ingress=setup.ingress_params,
-                     proof_deadline=cs.PROOF_DEADLINE_S, occupancy=(profile.get("egress"), profile.get("ingress")),
+                     proof_deadline=RC.PROOF_DEADLINE_S, occupancy=(profile.get("egress"), profile.get("ingress")),
                      served=cs.served_profile(plan))
     return lw, plan
 
@@ -1300,10 +1302,10 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
                          for f in ("plan.json", "calibration.json", "deployment.json"))
     setup = ar.Setup(report)
     e, i = setup.egress_params, setup.ingress_params
-    key, session, link = cs.read_public(dep["certifier_key"]), bytes.fromhex(dep["session"]), dep["links"]["n2"]
+    key, session, link = RF.read_public(dep["certifier_key"]), bytes.fromhex(dep["session"]), dep["links"]["n2"]
     certified, _ = cs.read_certified(run / "certified.jsonl")
-    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
-    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    ins = [RF.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
+    outs = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     windows, egress = plan["windows"], {r.window: r for r in outs}
     ends = {Direction.EGRESS: (egress, e), Direction.INGRESS: ({r.window: r for r in ins}, i)}
     held = {d.value: [w for w in range(windows)
