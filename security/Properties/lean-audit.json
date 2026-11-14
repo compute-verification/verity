@@ -946,6 +946,11 @@
    "issue": "TOP-415",
    "due": "2026-11-17",
    "owner": "@proofs"
+  },
+  "Properties.Poub.Remote.HonestLog": {
+   "issue": "MEM-332",
+   "due": "2026-11-30",
+   "owner": "@memory-accounting"
   }
  },
  "trust": {
@@ -1240,6 +1245,14 @@
   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
    "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest"],
    "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial"
+  },
+  "Properties.Poub.Line.SecurityProofs.lineHeld": {
+   "honest": ["Properties.Poub.Line.SecurityProofs.lineHeld_honest"],
+   "nontrivial": "Properties.Poub.Line.SecurityProofs.lineHeld_nontrivial"
+  },
+  "Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
+   "honest": ["Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol_honest"],
+   "nontrivial": "Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol_nontrivial"
   },
   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
    "honest": ["Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest"],
@@ -1846,10 +1859,6 @@
    "type_hash": "9e643a105f5704513bd184fa62a05149067300421a23658f5650e0bfc18672ee",
    "unfolded_hash": "6b7801a129aedd402418b6cc8784f9501f344c5eb25caff5b7789d70fdb57464"
   },
-  "Properties.Poub.Line.SecurityProofs.lineHeld": {
-   "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
-   "unfolded_hash": "9762a44cb58c6f1e9ae64739d962b25ad9b113c8c68d5da7e77c94585ccda73b"
-  },
   "Properties.Poub.Line.lineChecked": {
    "type_hash": "92521b24e4953445a0d2e7c4dec1648b2bb5b0afc4b6894f08334057afa8cf9a",
    "unfolded_hash": "1054dea1f96fdd78d6440a0af7180567849b86eb124ccd8bdb0a0a360ab5794c"
@@ -1885,10 +1894,6 @@
   "Properties.Poub.Shared.sampleIsSubset": {
    "type_hash": "81b4778b5eef399a2b7a2a9155eb39837e6465aca5124393f34925da36670bd8",
    "unfolded_hash": "fa62d7398f5ce5bcd07c5792a9727b22de1d49848fd9b79a03050dd737c0789b"
-  },
-  "Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
-   "type_hash": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
-   "unfolded_hash": "130b62b9ff377c7d29e5c5f798b34de7cbb618fc758228069136a0c771011bb4"
   },
   "Properties.Poub.Subprotocol.acceptIsVerified": {
    "type_hash": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9",
@@ -2258,6 +2263,9 @@
    "type_hash": "0f8b2d89ec524d62964511f87a23864eacc612e51d9b331978880e16cfe01502",
    "unfolded_hash": "1f21b6df5fa96097fb3a6c6c3364bd53addbd00548769bc4ed2429919ffb7ede"
   }
+ },
+ "witnesses_assumed": {
+  "Properties.Poub.Subprotocol.HonestLogAccepted": "not an assumption about the world but an unproved fact about code: the compiled check (`poub-protocol`) and the Python verifier both accept the honest one-window log `HonestLog.Case` holds (`test_honest_log.py`), and the kernel doesn't evaluate it, since `Flock.unhex` is quadratic on a list-backed array and `Session.close`'s `receiptSample` fails `decide +kernel` for a cause not yet found; until Lean proves it, the honest witnesses of `lineHeld` and `lineHeldAtSubprotocol` take it."
  },
  "layers": {
   "Properties.Pouw": {
@@ -6784,6 +6792,18 @@
    },
    "type_hash": "d9536d7f99148ae2590b8bd756deb5d4237e2a692047bc12bb1837705825db5b",
    "unfolded_hash": "9940c1479617061f62b0bd7f0ca26c834106f74f810d8d6aa292ce9f424939cb"
+  },
+  "Properties.Poub.Line.SecurityProofs.lineHeld_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.Line.SecurityProofs.lineHeld_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Properties.Pouw.Check.acceptMeans": {
    "owner": "@compute-accounting",
