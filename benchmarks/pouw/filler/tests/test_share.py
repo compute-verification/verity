@@ -33,9 +33,9 @@ def test_the_counts_are_llama_3_1_8bs():
 
 
 def test_a_is_the_frozen_vectors_and_the_ladder_rises_from_it_to_one():
-    assert S.A_V99 == pytest.approx(0.2068, abs=5e-5)  # 0.2424 u a MAC over 1.1722 u a MAC at tensor peak
     ladder = [a for _, a in S.A_LADDER]
     assert ladder[0] == S.A_V99 and ladder[-1] == 1.0 and ladder == sorted(ladder)
+    assert ladder[0] == pytest.approx(0.2068, abs=5e-5)  # 0.2424 u a MAC over 1.1722 u a MAC at tensor peak
     assert dict(S.A_LADDER)["product routes only, A = 256/R*"] == pytest.approx(0.8531, abs=5e-5)
 
 
