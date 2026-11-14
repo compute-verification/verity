@@ -94,7 +94,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
 ADVERSARY, DEPLOYMENTS, HARDWARE = ("benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
                                     "benchmarks/census/hardware.json")
-RHO, RHO_HARDWARE = "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml"
+SLOWDOWN, SLOWDOWN_HARDWARE = "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml"
 WORLD, DATACENTER, CENSUS_WORLD = "world-h200", "dc-12500-machines-600s", "world-inference-2027"
 #: the H200's dense FP8 peak is the H100 SXM5's (one die, one clock)
 PEAK = "h100-sxm5-80gb/e4m3"
@@ -158,7 +158,7 @@ TRUST = ("Every bound is soundness alone, resting on SHA-512's collision resista
 RATIO_BUDGET = 0.01
 SCHEMA = "spot-figure1/v1"
 #: the slowdown calculator's reference model, whose pretraining run, optimizer step and SparseLoCo syncs its references are
-REF_MODEL, RHO_MODEL = "DeepSeek-V4-Pro", "deepseek-v4-pro"
+REF_MODEL, SLOWDOWN_MODEL = "DeepSeek-V4-Pro", "deepseek-v4-pro"
 #: the reference objects the slowdown calculator's reference rules, as cards: (table, key, field)
 REFERENCES = {"ref_sparseloco": ("exfil", "sparseloco-1000", "bits"), "ref_rollouts": ("exfil", "rl-rollouts", "bits"),
               "ref_pretrain": ("work", "v4-pretrain", "flops"), "ref_step": ("work", "v4-step", "flops")}
@@ -237,12 +237,12 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
                                       ("ranks", "tokens", "strata", "served_macs_per_token")}, "", "strata")}
     census, dc = _entry(ADVERSARY, CENSUS_WORLD), _entry(DEPLOYMENTS, DATACENTER)
     peak = _entry(HARDWARE, PEAK)
-    rho = _toml(RHO)
-    fleet = rho["fleet"][WORLD]
-    devices = _toml(RHO_HARDWARE)["location"][fleet["location"]]["devices"]["value"]
+    registry = _toml(SLOWDOWN)
+    fleet = registry["fleet"][WORLD]
+    devices = _toml(SLOWDOWN_HARDWARE)["location"][fleet["location"]]["devices"]["value"]
 
-    def from_rho(name: str, value, unit: str, where: str, entry: dict) -> None:
-        out[name] = InputCard(value, unit, "modeled", f"{RHO} {where}: {entry['source']}")
+    def from_registry(name: str, value, unit: str, where: str, entry: dict) -> None:
+        out[name] = InputCard(value, unit, "modeled", f"{SLOWDOWN} {where}: {entry['source']}")
 
     pin, coordinate = AND_PIN
     ands = json.loads((ROOT / pin).read_text())["definitions"][coordinate]["and"]
@@ -263,16 +263,16 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
                                   f"{pin} {coordinate}: {ands:,} ANDs over its K MACs, the pinned Boolean lowering "
                                   "nearest GLM-5.3's FP8 MoE coordinates, taken for every MAC"),
     }
-    session = rho["policy"]["v4-pro-session"]["k"]
-    from_rho("output_cap", session["value"], "bit", "policy.v4-pro-session.k", session)
-    from_rho("world_gpus", fleet["count"]["value"] * devices, "GPU", f"fleet.{WORLD}, its locations' devices",
+    session = registry["policy"]["v4-pro-session"]["k"]
+    from_registry("output_cap", session["value"], "bit", "policy.v4-pro-session.k", session)
+    from_registry("world_gpus", fleet["count"]["value"] * devices, "GPU", f"fleet.{WORLD}, its locations' devices",
              fleet["count"])
-    from_rho("mfu_serve", fleet["mfu_serve"]["value"], "", f"fleet.{WORLD}.mfu_serve", fleet["mfu_serve"])
+    from_registry("mfu_serve", fleet["mfu_serve"]["value"], "", f"fleet.{WORLD}.mfu_serve", fleet["mfu_serve"])
     for name, (table, key, field) in REFERENCES.items():
-        entry = rho[table][key][field]
-        from_rho(name, entry["value"], entry["unit"], f"{table}.{key}", entry)
-    basis = rho["model"][RHO_MODEL]["n_total"]
-    from_rho("ref_params", basis["value"], "param", f"model.{RHO_MODEL}.n_total, the reference model's", basis)
+        entry = registry[table][key][field]
+        from_registry(name, entry["value"], entry["unit"], f"{table}.{key}", entry)
+    basis = registry["model"][SLOWDOWN_MODEL]["n_total"]
+    from_registry("ref_params", basis["value"], "param", f"model.{SLOWDOWN_MODEL}.n_total, the reference model's", basis)
     if work["value"].get("params") is not None:
         out["params"] = _card(work, work["value"]["params"], "param", "params")
     elif model == REF_MODEL:
