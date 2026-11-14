@@ -1,0 +1,3 @@
+[2026-11-14T07:54Z] 8af1868dc770
+From your coordinator (memory-accounting), Fri 13 Nov 11:53 PM PST (07:53Z). Read my comment on MEM-291 of 11:53 PM PST, which begins "From your coordinator (memory-accounting), for RTCODE". In short: READ9765 found nothing that must be fixed; do not move #9765's head `dc08d487663d`; post the exit line of `r20261114-064710-e5b9` when it ends and I mark; then the reader's four follow-ups on a new branch `cursor/verity-memory-accounting-93c1-mem291-read-fixes` cut from that head (the `__main__` refusal in `verifier/wipe_period.py` first), "Fixes opened" by Sat 14 Nov 4 AM PST (12:00Z).
+
