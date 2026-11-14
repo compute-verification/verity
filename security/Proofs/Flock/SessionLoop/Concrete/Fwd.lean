@@ -10,11 +10,12 @@ public meta import Lean
 
 `fwd_walk [rules] block [consts]` proves `m = r` for a computation `m : Except ε γ`, `r` usually `.ok ?v`, by stepping
 through `m` in order: a `let` goes into the context (a value with a free variable of the goal is substituted instead,
-after the rules rewrite it), a jump to a join point takes the join point's body, a bind's computation is evaluated (by a
-rule, by the kernel's `whnf`, or by walking it), an `if` takes the branch its condition decides, a `match` the branch its
-discriminants' values select, and the walk ends at `pure a`, with `?v := a`. Each step's proof is a term the kernel
-rechecks; nothing is unfolded into both arms of a branch. A constant in `block`, or one whose definition reads one, is
-never handed to the kernel's `whnf`: its application is unfolded and walked instead.
+after the rules rewrite it; a `let` applied to arguments, a state's computation for one, takes them into its body), a
+jump to a join point takes the join point's body, a bind's computation is evaluated (by a rule, by the kernel's `whnf`,
+or by walking it), an `if` takes the branch its condition decides, a `match` the branch its discriminants' values
+select, and the walk ends at `pure a`, with `?v := a`. Each step's proof is a term the kernel rechecks; nothing is
+unfolded into both arms of a branch. A constant in `block`, or one whose definition reads one, is never handed to the
+kernel's `whnf`: its application is unfolded and walked instead.
 -/
 
 namespace Fwd
@@ -525,6 +526,9 @@ meta partial def step (g : MVarId) : M (Option MVarId) := do
       throwError "fwd: evaluates to an error{indentExpr v}"
   if let some e' ← withTransparency .all (unfoldDefinition? lhs) then
     return some (← g.replaceTargetDefEq (eqT e' rhs))
+  if let .letE n t v b nd := fn then
+    let args := lhs.getAppArgs.map (·.liftLooseBVars 0 1)
+    return some (← g.replaceTargetDefEq (eqT (.letE n t v (mkAppN b args) nd) rhs))
   let why ← taintReason lhs
   throwError "fwd: stuck at{indentExpr lhs}\ntainted by {why}"
 
