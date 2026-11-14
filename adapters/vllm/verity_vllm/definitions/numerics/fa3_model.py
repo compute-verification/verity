@@ -12,7 +12,7 @@ Hopper computes differently (REPORT §2 W4d) —
 Everything else is FA2's recurrence read from ``hopper/softmax.h`` / ``mainloop_fwd_sm90_tma_gmma_ws.hpp`` at
 vllm-flash-attn 506341a1: blocks visited last -> first, ``scores_scale = exp2((m_prev - m_cur) * scale_log2)``,
 ``row_sum = row_sum * scores_scale`` contracted by nvcc into the first FADD of the block (one FFMA — the FA2
-finding, *assumed* for FA3 and confirmed only through the production correspondence below), ``p = exp2(fma(s,
+finding, *assumed* for FA3 and confirmed only through the serving correspondence below), ``p = exp2(fma(s,
 scale_log2, -m * scale_log2))``, per-thread partial sums in accumulator-fragment order (cols ``8*nj + 2*(lane%4) +
 j``, j fastest — the wgmma accumulator layout is the ``mma.sync`` one), ``O = O * scores_scale`` then the P.V
 wgmma chain, ``sum = (l0 + l2) + (l1 + l3)`` (``Allreduce<4>``), ``out = bf16(O * inv)``; FTZ everywhere
@@ -35,7 +35,7 @@ with ``num_splits = 0``: :func:`num_splits` says which sequences the heuristic s
 those run the Split kernel and ``FlashAttnFwdCombine``, which ``registry.fa3_split`` states and this model does not.  Not yet measured on an H200 (``MEASURED``; the capture is
 ``tests/properties/glm53_fa3_prefill_capture_gpu.py``).
 
-Measured (typed program `AttentionFA3@1` = this arithmetic gate for gate, correspondence against the H100 production
+Measured (typed program `AttentionFA3@1` = this arithmetic gate for gate, correspondence against the H100 serving
 capture, request 917b9faa, positions 0..526, layers 0/1/13/27).  Exactness
 against this module is checked by tests/test_fa3_model.py (model vs the typed composite on random operands).
 """
@@ -307,7 +307,7 @@ def attention_call(
 
 
 MEASURED = {
-    # what AttentionFA3@1 (= this arithmetic) was measured bit-exact against: the H100 production capture of the
+    # what AttentionFA3@1 (= this arithmetic) was measured bit-exact against: the H100 serving capture of the
     # standard workload, request 917b9faa (prompt 512 + 16 decode), layers 0/1/13/27
     "arch": ("sm_90",),
     "head_dim": (128,),
