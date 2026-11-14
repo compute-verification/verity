@@ -15,7 +15,7 @@ from verity.commitments.crypto import chacha20
 from verity.commitments.hm96 import batch as hm96_batch
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import sha512_row_v2_digest
-from verity.hardware import registration as Reg
+from verity.protocols.accounting.registration.verifier import registration as Reg
 from verity.protocols.accounting.pouw.verifier import audit, core_check
 from verity.protocols.accounting.pouw.verifier import weights as Wt
 from verity.protocols.accounting.pouw.verifier.audit import chacha20_block, hm96_salt
