@@ -48,10 +48,11 @@ member's file, at a play the sampled verdict accepts, whose log v2 read is the d
 pinned table and each member's file at its registered file, and whose sample answers `after`, every release of
 the parameters' family answering `after` precedes every opening, and the play has the sessions of the window's
 sample, each with the evidence sent for it and the proof files decoded from that evidence. -/
-theorem executionPhaseRead_members {V : Vocab d α} {k : Verity.Registration.Composite} (hF : FormAccepts)
+theorem executionPhaseRead_members {V : Vocab d α} {T : PinnedTables} {k : Verity.Registration.Composite}
+    (hF : FormAccepts)
     (hR : RegisteredHolds V) {F : Array ByteArray} {W : ExecutionPhase} {x : Verity.Exchange}
-    (hset : MembersSetUp V x.params F W) (hv : V.Verdict k .sampled x)
-    (hl : Binding.Logged Binding.readsV2 x) (ht : TablesSent x.sent) (hfs : FilesSent V x) {after : ByteArray}
+    (hset : MembersSetUp V T x.params F W) (hv : V.Verdict k .sampled x)
+    (hl : Binding.Logged Binding.readsV2 x) (ht : TablesSent T x.sent) (hfs : FilesSent V x) {after : ByteArray}
     (hsd : SampledDigest k x.sent after) :
     ExecutionPhaseRead W W.table sentEvidenceAt (statementFiles statementTable) (labelAt x.params) after
       _root_.Spot.Challenger.MAX_COINS x := by
