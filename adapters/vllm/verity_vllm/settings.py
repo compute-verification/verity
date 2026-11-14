@@ -195,6 +195,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_INT8_FUSED_PRODUCERS", flag, True, VALUE, "the int8 linears' norms and silu-and-mul quantize their outputs in the "
       "same launch (`engine.int8_producers`)"),
     S("VERITY_INT8_PARTS", csv, (), VALUE, "the int8 parts a rank registers when it starts (`engine.int8_ranks`)"),
+    S("VERITY_MOE_CAPTURE", json.loads, None, VALUE, "the requests and MoE modules whose launches each rank's worker captures "
+      "from before its warm-up (`engine.moe_capture.register`), a JSON object of requests and modules; unset, none"),
     S("VERITY_POOL_ROW", int_or_zero, 0, VALUE, "the carried pool's token width CTW: the engine keys its blocks by BlockKey_v1 "
       "for tokens of CTW bits and each window's close exports its pool row (`engine.pool_row`); 0, off"),
     S("VERITY_ROPE_CACHE_FUSED", flag, True, VALUE, "the rope and the KV-cache write run as one launch a layer "
