@@ -20,14 +20,17 @@ the names, by the one map from a Definition's parameters to a file's gates, `Spo
   key program's gate there. The key program has the circuit's gates, gate for gate.
 * `laidOutAs`: whether the file is laid out as that Definition's template, as `Spot.Bits.check` decides it, and its
   unit is the record's.
-* `portsOf`: a read unit's gates (`Accounting.ReadUnit.Ports`) at the roles: the gates of the key, the root, the
-  domain id and the three opened parameters, of the output row the unit returns and of the first bit of its verdict's
-  row. None where a bit of one of them has no gate.
+* `readRows`: whether a Definition's rows are a table read's: six parameters, the key's two words, the root's and the
+  domain id's 32 each, then the witness row, its salt and its path, a digest a level, each named once; and two output
+  rows, the row returned and then the verdict's one word.
+* `portsOf`: a read unit's gates (`Accounting.ReadUnit.Ports`) at the roles, where the Definition's rows are a table
+  read's: the gates of the key, the root, the domain id and the three opened parameters, of the output row the unit
+  returns and of the first bit of its verdict's row. None where a bit of one of them has no gate.
 
 **What they do not say.** `rowGate` reads no row of the file: that an input port's gate holds the bit the registered
 row commits is the proof block's. `portsOf` reads `rowGate` and `outRowGate` alone, so its gates are a unit's ports
 only where `laidOutAs` holds. Which output row a reader returns is no role of `Roles`: `portsOf` takes its name, and
-the table's count, its row's words and its leaves' positions, which the reader's template fixes.
+the table's count and its row's words, which the reader's template fixes. A table's leaves sit each at its own rank.
 -/
 
 @[expose] public section
@@ -73,13 +76,13 @@ noncomputable def gatesOf (N k : ℕ) (gate : ℕ → Option ℕ) : Option (Fin 
   if h : ∀ i : Fin k, ∃ g : Fin N, gate i.val = some g.val then some fun i => Classical.choose (h i) else none
 
 /-- **A read unit's gates at the roles `ro`**, in a circuit `C` whose gate on bit `b` of parameter `p` is `inG p b`
-and on bit `b` of output row `o` is `outG o b`, for a table of `count` rows of `words` 16-bit words whose leaves sit at
-`position`. The index is the key parameter's first 32 bits, the root and the domain id are the root and domain
+and on bit `b` of output row `o` is `outG o b`, for a table of `count` rows of `words` 16-bit words, each leaf at its
+own rank. The index is the key parameter's first 32 bits, the root and the domain id are the root and domain
 parameters' 512; the opened parameters are three, in order the witness row, its salt and its path, a digest a level;
 the row returned is the output row `out`'s; and the verdict is the first bit of the verdict's row. None where the
 opened parameters are not three, or a bit of one of these has no gate. -/
 noncomputable def portsAtGates (C : Verity.Circuit) (inG outG : String → ℕ → Option ℕ) (ro : Roles) (out : String)
-    (count words : ℕ) (position : ℕ → ℕ) : Option (ReadUnit.Ports C) :=
+    (count words : ℕ) : Option (ReadUnit.Ports C) :=
   if ro.opened.length = 3 then
     (gatesOf C.N 32 (inG ro.key)).bind fun (tok : Fin 32 → Fin C.N) =>
     (gatesOf C.N 512 (inG ro.root)).bind fun (root : Fin 512 → Fin C.N) =>
@@ -91,20 +94,34 @@ noncomputable def portsAtGates (C : Verity.Circuit) (inG outG : String → ℕ �
       fun (pathG : Fin (Hash.Tree.depth count * 512) → Fin C.N) =>
     (gatesOf C.N (16 * words) (outG out)).bind fun (hG : Fin (16 * words) → Fin C.N) =>
     (gatesOf C.N 1 (outG ro.verdict)).map fun (okG : Fin 1 → Fin C.N) =>
-      ({ count := count, words := words, position := position, tok := tok, root := root, domain := domain,
+      ({ count := count, words := words, position := fun r => r, tok := tok, root := root, domain := domain,
          row := rowG, salt := saltG,
          path := fun (l : Fin (Hash.Tree.depth count)) (i : Fin 512) =>
            pathG ⟨512 * l.val + i.val, by have := l.isLt; have := i.isLt; omega⟩,
          h := hG, ok := okG ⟨0, Nat.one_pos⟩ } : ReadUnit.Ports C)
   else none
 
+/-- **Whether the Definition `d`'s rows are a table read's**, for a table of `count` rows of `words` 16-bit words, at
+the roles `ro` and the output row `out`. Its parameters are six, in order: the key on two words, the root and the
+domain id on 32 each, then the opened three, the witness row on `words`, its salt on half its bytes and its path on
+32 a level. Its output rows are two: `out` on `words`, then the verdict's on one. No two parameters share a name, and
+`out` is not the verdict's row. -/
+def readRows (d : Defn) (ro : Roles) (out : String) (count words : ℕ) : Bool :=
+  decide (paramWords d = [(ro.key, 2), (ro.root, 32), (ro.domain, 32), (ro.opened.getD 0 "", words),
+    (ro.opened.getD 1 "", Hash.Hm96.SALT_BYTES / 2), (ro.opened.getD 2 "", 32 * Hash.Tree.depth count)]) &&
+  decide (outWords d = [(out, words), (ro.verdict, 1)]) &&
+  decide ([ro.key, ro.root, ro.domain, ro.opened.getD 0 "", ro.opened.getD 1 "", ro.opened.getD 2 ""].Nodup) &&
+  decide ([out, ro.verdict].Nodup)
+
 /-- **The read unit's gates of unit `un` of the templated file `ct`**, at the roles `ro` of the Definition `d` and the
-output row `out`, in the circuit of `n` units the file describes: `portsAtGates` at `rowGate` and `outRowGate` of the
-circuit the file unrolls to. -/
+output row `out`, in the circuit of `n` units the file describes: where `d`'s rows are a table read's (`readRows`),
+`portsAtGates` at `rowGate` and `outRowGate` of the circuit the file unrolls to; none otherwise. -/
 noncomputable def portsOf (ct : Flock.Circuit) (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
-    (d : Defn) (un : ℕ) (ro : Roles) (out : String) (count words : ℕ) (position : ℕ → ℕ) :
+    (d : Defn) (un : ℕ) (ro : Roles) (out : String) (count words : ℕ) :
     Option (ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n)) :=
-  portsAtGates (Flock.Bridge.circuitOf (.tmpl ct) hB n) (rowGate (Flock.Desc.tmpl ct).unroll d n un)
-    (outRowGate (Flock.Desc.tmpl ct).unroll d n un) ro out count words position
+  if readRows d ro out count words then
+    portsAtGates (Flock.Bridge.circuitOf (.tmpl ct) hB n) (rowGate (Flock.Desc.tmpl ct).unroll d n un)
+      (outRowGate (Flock.Desc.tmpl ct).unroll d n un) ro out count words
+  else none
 
 end NciCheck.Properties.Record
