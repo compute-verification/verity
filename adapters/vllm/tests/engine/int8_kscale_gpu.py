@@ -7,8 +7,9 @@ against `windows.lock.json`), each a one-token greedy request.  Writes `<out>/k_
 `<out>/int8-k-scales.json` (the registered table with that entry in place: a job copies it over its clone's
 `manifests/int8-k-scales.json` before `int8_exact_gpu.py`).
 
-    cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
-    $PY tests/engine/int8_kscale_gpu.py --out DIR --data DIR_WITH_C4 --at ISO_TIME --by LANE
+    ROOT=$(git rev-parse --show-toplevel); cd "$ROOT/adapters/vllm"; PY=/workspace/jobs/venv312/bin/python3
+    PYTHONPATH="$ROOT/adapters/vllm:$ROOT:$ROOT/tools/research/src" \
+      $PY "$ROOT/adapters/vllm/tests/engine/int8_kscale_gpu.py" --out DIR --data DIR_WITH_C4 --at ISO_TIME --by LANE
 """
 from __future__ import annotations
 
