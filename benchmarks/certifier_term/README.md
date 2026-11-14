@@ -156,6 +156,9 @@ from the signed head of an execution phase and the verdict records on a class of
   charged its whole schedule on every row; a verdict without `complete` reads as not complete;
 - so it is where the class's records on that head name two serves or two registrations: the head holds the network
   certifier's rows to a serve, and these two names hold the values the verdicts judge to it;
+- so it is where the rule is not handed the schedule the head names, or that schedule can't be tied (each P listed
+  once, one O for every class and a response cap): with no schedule handed that word was not asked, and the line
+  says the schedule was not handed;
 - a class with a count of 0 owes none.
 
 `benchmarks/network_traces/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).
@@ -179,6 +182,11 @@ The records are in the evidence store, in the run files of the runs that carry
 - `out/serve-registrations.jsonl`: each registration record the verdict records name by its digest: the one a serve
   registered its class under (`registration`), and the one of a verdict's own stream (`stream_registration`),
   which follows it and registers the rate that stream's population is sampled at.
+
+The reader is handed no schedule and asks the rule without one. So as it stands it holds no execution phase,
+whatever a run's files hold: each class that holds a row is charged its whole schedule, and its line and the
+answer's first line say the schedule was not handed. The rest of this section is what the reader holds of a class
+the rule charges below.
 
 The reader holds what the rule charges below to two more things, which the rule doesn't read:
 

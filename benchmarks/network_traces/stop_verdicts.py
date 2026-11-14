@@ -8,6 +8,12 @@ the rate the serve registered, the one serve of an execution phase, a verdict un
 runs; each below), and hands the calculator the answer (`leak_bounds.Stop`).
 Nothing but a run's files moves the answer.
 
+**No schedule.** The rule charges a class below its schedule only where it is handed the schedule the class's head
+names, one that can be tied (`class_charge`'s "The schedule's word"). This reader is handed no schedule and asks
+the rule without one. So every class that holds a row is at its whole schedule whatever its verdicts say, no
+execution phase is held, each class's line says the schedule was not handed, and so does the answer's first line
+(`NO_SCHEDULE`). What follows is what the reader holds of a class the rule charges below.
+
 **Where they are.** In the evidence store, in the run files of the runs that carry `run_of_record=RECORD`, which the
 caller names, every one of them, with those another run replaces (`read`'s ``runs`` and ``superseded``; the label's
 readers are the harness's). A run holds, each one JSON object a line:
@@ -241,6 +247,9 @@ SERVE_NAMED = ("an execution phase is one serve's, and a head's serve is the one
                f"{LB.RUN_NOT_PROVED}")
 #: what the answer's first line says where each of the four verdicts was read and they are not one class's
 NOT_ONE_CLASS = "not one class: unchecked"
+#: what the answer's first line ends with where the rule charged no class below its schedule for want of the
+#: schedule (`class_charge.NOT_HANDED`)
+NO_SCHEDULE = "this reader is handed no schedule and asks the rule without one"
 #: where a verdict says it is, and what four verdicts that are not one class's can differ in, each with its fields:
 #: of a verdict where no class has all four on its head, and of a record (`class_charge.ONE`) where one has
 PLACE = (CC.LINK, CC.WINDOW, CC.CLASS, CC.HEAD)
@@ -635,6 +644,11 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
             how = f"has all of them on its head: {_not_one(by_verdict)}"
         first = (f"each connection is charged its whole schedule: {NOT_ONE_CLASS}: each of the {len(CC.VERDICTS)} "
                  f"verdicts was read, and no class that holds a row in the {of} {how}")
+    elif not ruled and (unasked := sum(1 for c in with_rows if c.untied == CC.NOT_HANDED)):
+        short = sum(1 for c in with_rows if c.owed or c.differ)
+        first = (f"each connection is charged its whole schedule: {CC.NOT_HANDED} for {unasked} of the "
+                 f"{len(with_rows)} class(es) that hold a row in the {of}, so the rule charges none of those below "
+                 f"it, and {short} of the {len(with_rows)} lack a verdict: {NO_SCHEDULE}")
     elif not ruled:
         lacking = sum(1 for c in with_rows if not c.below)
         first = (f"each connection is charged its whole schedule: {lacking} of the {len(with_rows)} class(es) that "

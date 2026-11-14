@@ -27,7 +27,7 @@ from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_class_charge import four
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_class_charge import ONCE, TIED, four
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import (B, LEN, PLAIN, PLAIN_DIGEST, P,
                                                                                       T, answer, id_req, response,
                                                                                       traffic)
@@ -483,36 +483,32 @@ def test_a_request_longer_than_the_largest_class_holds_is_refused_at_ingress_and
 
 def test_an_execution_phase_a_longer_request_reached_releases_only_what_its_classes_count(monkeypatch):
     """What the ingress bound is for, at the rule that charges a class (`class_charge.charge`). Under form 2 a head
-    counts each class's held rows, and the rule charges a class below its schedule on that class's four verdicts. A
-    release filed in no class is in no count and no verdict is of it, so an execution phase holding one would be
-    charged nothing for it. With the bound, the execution phase a longer request reached releases only what its
-    classes count: its head's counts add up to its releases, so the verdicts that charge it no schedule are of
-    every release it holds. With ingress at its cells' bound alone, as it was, the same traffic's execution phase
-    holds a release more than its head counts, and the rule charges it no schedule on the same verdicts."""
+    counts each class's held rows, and the rule, handed a schedule that can be tied, charges a class below its
+    schedule on that class's four verdicts. A release filed in no class is in no count and no verdict is of it, so
+    an execution phase holding one would be charged nothing for it. With the bound, the execution phase a longer
+    request reached releases only what its classes count: its head's counts add up to its releases, so the
+    verdicts that charge it no schedule are of every release it holds. With ingress at its cells' bound alone, as
+    it was, the same traffic's execution phase holds a release more than its head counts, and the rule charges it
+    no schedule on the same verdicts."""
     arrivals = {0: [cells(id_req(2, 129), B)], 1: [cells(id_req(1, 128), B)]}
 
     def phases() -> list[tuple[int, list[int], int]]:
         """Each execution phase that released: its releases, its head's count of each class, and how many of its
         connections the rule charges their whole schedule with every class's four verdicts accepted and complete."""
-        device, _, _ = run([answer((5,)), answer((7, 8))], arrivals, params=HELD, windows=3)
+        device, _, _ = run([answer((5,)), answer((7, 8))], arrivals, params=TIED, windows=3)
         out = []
         for phase, strides in device.lengths:
             if not strides or not any(strides):
                 continue
-            head = CR.Rows.commit(LINK, phase, CR.tables(HELD, strides), HELD, signers.SESSION).head
-            charges = [CC.charge(head, i, four(i, head)) for i in range(len(HELD.content))]
+            head = CR.Rows.commit(LINK, phase, CR.tables(TIED, strides), TIED, signers.SESSION).head
+            charges = [CC.charge(head, i, four(i, head), TIED) for i in range(len(TIED.content))]
             assert [c.below for c in charges] == [bool(c.count) for c in charges]
             out.append((sum(map(len, strides)), [c.count for c in charges], sum(c.schedules for c in charges)))
         return out
 
-    assert phases() == [(1, [0, 0, 1, 0], 0)]
-    monkeypatch.setattr(type(HELD), "request_bound", property(lambda self: self.ingress_cells * self.payload))
-    assert phases() == [(2, [0, 0, 1, 0], 0)]
-
-
-#: the form-2 schedule with each P listed once, one O for every class and a response cap: one that can be tied
-ONCE = ((4, 8), (16, 8), (128, 8))
-TIED = dataclasses.replace(HELD, content=ONCE, max_tokens_cap=8)
+    assert phases() == [(1, [0, 0, 1], 0)]
+    monkeypatch.setattr(type(TIED), "request_bound", property(lambda self: self.ingress_cells * self.payload))
+    assert phases() == [(2, [0, 0, 1], 0)]
 
 
 def test_a_schedule_can_be_tied_with_each_p_once_one_o_and_a_response_cap_and_is_a_schedule_without_them():
@@ -556,9 +552,10 @@ def test_a_ties_shape_is_taken_only_from_a_schedule_that_can_be_tied_and_is_its_
 
 def test_a_class_of_a_schedule_that_cant_be_tied_is_charged_its_whole_schedule_where_the_schedule_is_handed(loads):
     """`class_charge.charge` reads the word where it is handed the head's schedule. A class of a schedule that can
-    be tied is charged below its schedule on its four verdicts, as it is with no schedule handed. A class of one
-    that can't be is at its whole schedule on the same four, and the line says what keeps the schedule from it. A
-    schedule that is not the head's is refused, by the parameters' digest the head holds."""
+    be tied is charged below its schedule on its four verdicts. A class of one that can't be is at its whole
+    schedule on the same four, and the line says what keeps the schedule from it. With no schedule handed the
+    class is at its whole schedule on the same four, whichever its schedule is, and the line says the schedule was
+    not handed. A schedule that is not the head's is refused, by the parameters' digest the head holds."""
     for schedule, why in ((TIED, ""), (HELD, CT.untied(HELD)), (dataclasses.replace(TIED, max_tokens_cap=None),
                                                                 "it has no response cap (max_tokens_cap), so a "
                                                                 "released request may ask for more ids than a class "
@@ -566,7 +563,9 @@ def test_a_class_of_a_schedule_that_cant_be_tied_is_charged_its_whole_schedule_w
         head = CR.Rows.commit(LINK, 0, CR.tables(schedule, loads["first"]), schedule, signers.SESSION).head
         cls = next(i for i in range(len(schedule.content)) if CC.count(head, i))
         got, bare = CC.charge(head, cls, four(cls, head), schedule), CC.charge(head, cls, four(cls, head))
-        assert (bare.below, bare.untied) == (True, "")
+        assert (bare.below, bare.untied, bare.owed, bare.differ) == (False, CC.NOT_HANDED, (), ())
+        assert bare.schedules == bare.count and bare.why() == (
+            f"class {cls}: charged its whole schedule on each of its {bare.count} rows: the schedule was not handed")
         assert (got.below, got.untied, got.owed, got.differ) == (not why, why, (), ())
         assert got.schedules == (got.count if why else 0) and got.read == bare.read
         if why:

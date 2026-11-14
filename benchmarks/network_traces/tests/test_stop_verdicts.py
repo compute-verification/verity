@@ -7,10 +7,13 @@ a registration that doesn't read, or no record at all, holds none, with a line t
 rule charges below is held only where each verifier that accepted refused its negative control at the same commit
 and the serve's registration registers every block of both sampled populations, as each of their verdicts says it
 ran; each verdict read is handed on under the mark of a run that is no proof; and the run files are read from the
-store as the harness reads it."""
+store as the harness reads it. As it stands the reader lists no format and asks the rule without a schedule, so it
+holds nothing, and a test pins each; the others ask what it holds with a format listed and the rule handed the
+schedule (`listed`, `handed`)."""
 
 from __future__ import annotations
 
+import dataclasses
 import fnmatch
 import json
 import sys
@@ -49,8 +52,36 @@ def schedule() -> WardenParams:
     return CR.costed(CR.parser().parse_args(["cost", "--out", "x"]))
 
 
-def head(window: int, *counts: int, parameters: bytes = ZEROS, domain: bytes = ZEROS) -> C.Head:
-    """A head of an execution phase with a class of each count; ``domain`` is each table's, which is a session's."""
+def tied() -> WardenParams:
+    """The cost runner's schedule made one that can be tied (`content_rows.can_be_tied`): its largest O for every
+    class, and that O its response cap."""
+    own = schedule()
+    width = max(O for _, O, _ in own.content)
+    return dataclasses.replace(own, content=tuple((P, width, rows) for P, _, rows in own.content),
+                               max_tokens_cap=width)
+
+
+#: the schedule the tests' heads name, by its digest
+TIED = tied()
+
+
+@pytest.fixture(autouse=True)
+def handed():
+    """The reader is handed no schedule and asks the rule without one, so as it stands it holds nothing
+    (`test_the_reader_asks_the_rule_without_a_schedule_and_holds_nothing`, which undoes this). The other tests are
+    of what the reader holds of a class the rule charges below, so here the rule is handed the schedule a head
+    names wherever a caller hands none and the head names `TIED`: a stand-in for the reader being handed the
+    schedule, as `listed` is for a format being listed."""
+    rule = CC.charge
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(CC, "charge", lambda of, cls, records, schedule=None: rule(
+            of, cls, records, TIED if schedule is None and of.parameters == TIED.digest else schedule))
+        yield patch
+
+
+def head(window: int, *counts: int, parameters: bytes = TIED.digest, domain: bytes = ZEROS) -> C.Head:
+    """A head of an execution phase with a class of each count, under `TIED`; ``domain`` is each table's, which is
+    a session's."""
     listed = [("lengths", 4, 8), ("fails", 4, 8)] + [(name, n, 16) for i, n in enumerate(counts) for name in CT.names(i)]
     return C.Head(LINK, window, parameters, tuple(C.Entry(name, rows, size, domain, ZEROS) for name, rows, size in listed))
 
@@ -792,16 +823,17 @@ def test_an_execution_phase_is_one_serves_and_a_heads_serve_is_the_one_its_recor
     assert (got.held, got.verdicts, got.why) == (0, (), (TWO_HEADS + one_domain("end.0"),))
     # one such table is enough: the others' domains are another session's
     for table in ("lengths", "request.0", "end.1"):
-        mixed = C.Head(LINK, 3, ZEROS, tuple(C.Entry(e.name, e.rows, e.row_bytes, ZEROS if e.name == table else e.domain,
-                                                     e.root) for e in theirs.tables))
+        mixed = C.Head(LINK, 3, theirs.parameters, tuple(C.Entry(
+            e.name, e.rows, e.row_bytes, ZEROS if e.name == table else e.domain, e.root) for e in theirs.tables))
         for registrations in ([registration(ours), registration(mixed)], [registration(mixed), registration(ours)]):
             got = stop(registrations, four(ours) + of_serve("another serve", four(mixed)))
             assert (got.held, got.why) == (0, (TWO_HEADS + one_domain(table),)), table
     # and a domain shared by tables of two names is no table's in both
-    crossed = C.Head(LINK, 3, ZEROS, tuple(C.Entry(e.name, e.rows, e.row_bytes, bytes([i + 1]) * 64, e.root)
-                                           for i, e in enumerate(ours.tables)))
-    turned = C.Head(LINK, 3, ZEROS, tuple(C.Entry(e.name, e.rows, e.row_bytes, bytes([len(ours.tables) - i]) * 64, e.root)
-                                          for i, e in enumerate(ours.tables)))
+    crossed = C.Head(LINK, 3, ours.parameters, tuple(
+        C.Entry(e.name, e.rows, e.row_bytes, bytes([i + 1]) * 64, e.root) for i, e in enumerate(ours.tables)))
+    turned = C.Head(LINK, 3, ours.parameters, tuple(
+        C.Entry(e.name, e.rows, e.row_bytes, bytes([len(ours.tables) - i]) * 64, e.root)
+        for i, e in enumerate(ours.tables)))
     assert {e.domain for e in crossed.tables} == {e.domain for e in turned.tables} and len(ours.tables) % 2 == 0
     assert stop([registration(crossed), registration(turned)],
                 four(crossed) + of_serve("another serve", four(turned))).held == 2
@@ -891,6 +923,63 @@ def test_a_verdict_whose_format_is_not_listed_reads_as_missing(monkeypatch):
         assert stop([registration(first)], [tie]).verdicts == ()
 
 
+def test_the_reader_asks_the_rule_without_a_schedule_and_holds_nothing(handed, monkeypatch, tmp_path):
+    """The reader is handed no schedule, so it asks the rule without one, and the rule charges no class below a
+    schedule it was not handed. With the four verdicts' records of every class that holds a row, their controls
+    and their serves' registrations, each as its verifier would write it and in a format that is listed, no
+    execution phase is held: each class that holds a row is at its whole schedule, its line and the answer's first
+    line say the schedule was not handed, and the verdicts read are handed on as they are. The same records hold
+    both execution phases where the rule is handed the schedule their heads name, which is what this file's other
+    tests ask (`handed`). A class short of a verdict is counted in the first line and its line names the verdict
+    beside the schedule. From a store's run files it is the same answer. As the reader stands it lists no format
+    either, and then each verdict is missing too."""
+    first, second = head(3, 5, 0), head(4, 5, 2)
+    registrations, records = [registration(first), registration(second)], four(first) + four(second) + four(second, 1)
+    files = {SV.REGISTRATIONS_FILE: jsonl(registrations), "out/the-verdicts.jsonl": jsonl(records),
+             "out/the-controls.jsonl": jsonl(the_controls()),
+             SV.SERVES_FILE: jsonl(with_streams(SERVED, rows=counts_of(registrations)))}
+    store = Store(tmp_path, {"r1": files})
+    asked = stop(registrations, records)
+    assert asked.held == 2 == SV.of_runs(store, ["r1"]).held and asked.why[0].startswith(
+        "2 of the 2 execution phase(s) read are charged below their schedule")
+    handed.undo()
+    got = stop(registrations, records)
+    assert (got.held, got.verdicts) == (0, asked.verdicts) and len(got.verdicts) == 12
+    assert CC.NOT_HANDED == "the schedule was not handed"
+    assert SV.NO_SCHEDULE == "this reader is handed no schedule and asks the rule without one"
+    whole = "charged its whole schedule on each of its"
+    assert got.why == (
+        "each connection is charged its whole schedule: the schedule was not handed for 3 of the 3 class(es) that "
+        "hold a row in the 2 execution phase(s) read, so the rule charges none of those below it, and 0 of the 3 "
+        "lack a verdict: this reader is handed no schedule and asks the rule without one",
+        SV.SERVE_NAMED,
+        f"the link {LINK}, execution phase 3, class 0: {whole} 5 rows: the schedule was not handed",
+        f"the link {LINK}, execution phase 3, class 1: a count of 0, so no connection is charged and no verdict is "
+        "owed",
+        f"the link {LINK}, execution phase 4, class 0: {whole} 5 rows: the schedule was not handed",
+        f"the link {LINK}, execution phase 4, class 1: {whole} 2 rows: the schedule was not handed")
+    assert SV.of_runs(store, ["r1"]) == got
+    less = stop(registrations, four(first) + four(second))
+    assert less.held == 0 and less.why[0] == got.why[0].replace("0 of the 3 lack", "1 of the 3 lack")
+    assert less.why[5] == (
+        f"the link {LINK}, execution phase 4, class 1: {whole} 2 rows: the stop record is missing; the response tie "
+        "is missing; the certified read is missing; the compute audit is missing; the schedule was not handed")
+    # the calculator's rows follow: no row of the stop class is below its schedule
+    doc = LB.document(LB.inputs(), stop=got, only=["node"], periods=["week"])
+    at = {r["row"]: r for r in doc["rows"]}
+    assert (doc["stop"]["held_phases"], doc["stop"]["below"]) == (0, False)
+    assert at["design"]["term"] == at["design, no stop block"]["term"]
+    # as the reader stands: no format is listed either
+    monkeypatch.undo()
+    assert SV.FORMATS == {}
+    bare = stop(registrations, records)
+    assert (bare.held, bare.verdicts) == (0, ()) and bare == SV.of_runs(store, ["r1"])
+    assert bare.why[0] == got.why[0].replace("0 of the 3 lack", "3 of the 3 lack")
+    assert bare.why[2] == (
+        f"the link {LINK}, execution phase 3, class 0: {whole} 5 rows: the stop record is missing; the response tie "
+        "is missing; the certified read is missing; the compute audit is missing; the schedule was not handed")
+
+
 NO_RECORD = ("a verdict record is an object with the fields run, serve, registration, verifier, verdict, proved_by, "
              "its verdict an object, its run, serve, registration named, its verifier by its module and commit, and "
              "its proved_by a name or null; of one read, ")
@@ -938,8 +1027,8 @@ def test_anything_less_is_the_whole_schedule_with_a_line_that_says_why():
     tampered["tables"][2]["rows"] = 0
     got = stop([tampered], four(first))
     assert got.held == 0 and got.why[0] == whole + "the registration's certificate doesn't name its head's digest"
-    uneven = C.Head(LINK, 3, ZEROS, tuple(C.Entry(e.name, 6 if e.name == "request.0" else e.rows, e.row_bytes, e.domain,
-                                                  e.root) for e in first.tables))
+    uneven = C.Head(LINK, 3, first.parameters, tuple(C.Entry(
+        e.name, 6 if e.name == "request.0" else e.rows, e.row_bytes, e.domain, e.root) for e in first.tables))
     got = stop([registration(uneven)], four(uneven))
     assert got.held == 0 and got.why[0].startswith(whole + "the head states [5, 6] rows for class 0's three tables")
     # the same head given twice is one head, and one execution phase
