@@ -427,6 +427,43 @@ def test_a_prover_state_or_weights_key_other_than_the_served_ones_is_refused(ser
     assert "is not the tree the window registered" in capsys.readouterr().err
 
 
+@pytest.mark.slow
+def test_a_windows_calls_are_staged_only_on_the_circuit_files_its_period_committed(served, monkeypatch, capsys):
+    """`stage` holds --circuits to the window before it stages a sampled call. A manifest for another Program, one
+    with no file for the call's K, and a K file that is not the one the manifest commits are each refused by name.
+    So are a window whose template at K is not J10-R's on a K file (here the served window's shape with that flag
+    cleared) and a window that registers no root for credit's registered file to read (here the served window with
+    its roots taken out). No plan is written."""
+    DR, d, tmp = served
+    path, plan = tmp / "circuits" / DR.MANIFEST, tmp / "work" / DR.PLAN
+    committed = json.loads(path.read_text())
+    win = DR.window_of(d, 0)
+    pin, tiles = committed["files"][f"k{K}"], win["shape"]["tiles"]
+    assert committed["program"] == win["program"] and tiles[K]["j10r"] is True and win["roots"]
+
+    def refusal(manifest=committed, window=win):
+        path.write_text(json.dumps(manifest))
+        monkeypatch.setattr(DR, "window_of", lambda *a: window)
+        assert _stage(DR, d, tmp, weights_key=tmp / "wkey") == 1 and not plan.exists()
+        return capsys.readouterr().err
+
+    assert refusal({**committed, "program": "00" * 64}) == (f"REFUSED: --circuits' manifest is for Program {'00' * 8}"
+                                                            f"..., not the window's {win['program'][:16]}...\n")
+    assert refusal({**committed, "files": {}}) == (f"REFUSED: --circuits has no k{K} file: build it (pouw_h1_circuits "
+                                                   f"--strata {K})\n")
+    assert refusal({**committed, "files": {f"k{K}": "00" * 64}}) == (
+        f"REFUSED: K = {K}'s statement circuit (SHA-512 {pin[:16]}...) is not --circuits' k{K} file ({'00' * 8}...), "
+        "the one the period-open committed\n")
+    v1 = {**win, "shape": {**win["shape"], "tiles": {**tiles, K: {**tiles[K], "j10r": False}}}}
+    assert refusal(window=v1) == (f"REFUSED: K = {K}'s template is not J10-R's: drawn stages J10-R units on a k<K> "
+                                  f"file, and a v1 unit as its lanes (pouw_h1_circuits --lanes {K})\n")
+    call = min(DR.drawn_calls(win, _PeriodAuditor.K))
+    _file, why = CR.registered_file(win["program"], win["layout"], win["shape"], call, {}, win["root"], win["steps"],
+                                    win["salt"])
+    assert why is not None
+    assert refusal(window={**win, "roots": {}}) == f"REFUSED: call {call}: credit builds no registered file: {why[1]}\n"
+
+
 def test_a_call_statements_port_that_is_no_registered_read_is_refused_by_name():
     """`drawn.complete` is the Lean verifier's ``registered reads (complete)``: every port of the statement's circuit is
     a port of credit's ``--registered`` file. o0, the receipt, is refused with the serving flag that registers it."""
