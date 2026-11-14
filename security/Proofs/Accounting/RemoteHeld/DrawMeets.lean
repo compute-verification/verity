@@ -447,4 +447,179 @@ theorem heldOverTimeLinksSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blo
   norm_num at h
   linarith
 
+/-! ## The witnesses' instances -/
+
+/-- W2's window: `130,023,424` receipts, under the cap `2^64 − 1`. -/
+def w2Window : Fin 1 → Fin (18446744073709551615 + 1) := fun _ => ⟨130023424, by norm_num⟩
+
+/-- W2's session: its one window, every receipt correct, sampled `33,273` times, on 256-bit keys. -/
+abbrev w2Session : Remote.Draw.Run 1 18446744073709551615 (fun _ => 33273) 256 Unit :=
+  honest (fun _ => 33273) 256 Unit w2Window
+
+/-- The all-zero coin stream. The honest premises hold at every stream (`honest_meets`). -/
+abbrev zeroStream : Fin 1 → Pous.Bits 256 → Blocks 18446744073709551615 := fun _ _ _ _ => false
+
+/-- W2's receipts, fixed arbitrarily: `Refused` holds at the honest session for every receipts structure. -/
+def w2Receipts : Receipts 1 256 Unit where
+  hash _ _ := 0
+  verifier _ _ _ := ⟨⟨fun _ => 0, 0, fun _ => 0⟩, [], .v2⟩
+  root _ _ _ _ := 0
+  rank _ _ _ := 0
+  opened _ _ _ := ⟨[], [], []⟩
+
+/-- W2's node on the session's coins (`Meets.burst` at W2's numbers), with `Bl` link blocks. -/
+abbrev w2Draw (Bl : ℕ) : Trace (DrawCoins 1 256 Unit) := burstOn 1 256 Unit 130023424 85000000 0 743590 1054688 Bl
+
+/-- The toy's coin stream, all zero. -/
+abbrev toyStream : Fin 1 → Pous.Bits 1 → Blocks 1 := fun _ _ _ _ => false
+
 end Accounting.SecurityProofs.Remote.DrawMeets
+
+/-! ## The witnesses
+
+Each guarantee `G` of `RemoteHeld.Draw` has two closed statements, the witnesses its lock lists. `G_honest`: every
+hypothesis of `G` holds at W2's session (`w2Session` over `w2Draw`, at W2's rates and `δ = δc = 2^-40`, `δs = 0`).
+`G_nontrivial`: `G`'s conclusion is false at the toy on the audit that accepts everything, at `δ = δc = 2^-40` and
+`δs = 0`, the last conjunct of `G`'s `*_nontrivial` lemma. -/
+
+namespace Accounting.SecurityProofs.Remote
+
+open Finset Accounting.Rate.Pooled
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
+  Accounting.Remote.Draw.Assumptions Accounting.SecurityProofs.Remote.Meets Accounting.SecurityProofs.Remote.DrawMeets
+
+/-- **`PooledSample`'s hypotheses hold** at W2's session, at `δ = 2^-40`. -/
+theorem PooledSample_honest :
+    (0 : ℝ) ≤ 1 / 1099511627776 ∧ 18446744073709551615 < 18446744073709551616 ∧ Live w2Session ∧
+      Refused w2Session zeroStream (fun _ _ _ => 0) (w2Draw 1536) w2Receipts ∧ Counted w2Session (w2Draw 1536) := by
+  obtain ⟨hL, hR, hC, -⟩ := pooledSample_honest (k := fun _ => 33273) w2Window zeroStream (w2Draw 1536) w2Receipts
+    fun ω _ => burst_incorrect ω
+  exact ⟨by norm_num, by norm_num, hL, hR, hC⟩
+
+/-- **`PooledSample`'s conclusion is false** at the toy on the audit that accepts everything, at `δ = 2^-40`. -/
+theorem PooledSample_nontrivial :
+    ¬ acceptAll.Holds ((1 / 1099511627776 : ℝ) + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
+        (∑ t, Pous.StreamedWipe.prfAdvantage (toyStream t)
+          (toy.distinguisher toyStream (1 / 1099511627776) t)).toReal +
+        (unsalted.binding toy toyStream fun _ _ _ => 0).toReal)
+      (fun ω => (acceptAll.incorrect ω : ℝ) ≤ toy.pooled (1 / 1099511627776) ω) :=
+  (pooledSample_nontrivial toyStream (fun _ _ _ => 0) (by norm_num)).2.2.2
+
+/-- **`LiveCoinsSampled`'s hypotheses hold** at W2's session, at `δ = 2^-40` and `W` its pooled bound. -/
+theorem LiveCoinsSampled_honest :
+    (0 : ℝ) ≤ 1 / 1099511627776 ∧ 18446744073709551615 < 18446744073709551616 ∧ Live w2Session ∧
+      Refused w2Session zeroStream (fun _ _ _ => 0) (w2Draw 1536) w2Receipts ∧ Counted w2Session (w2Draw 1536) ∧
+      ∀ ω, (w2Draw 1536).accepts ω →
+        w2Session.pooled (1 / 1099511627776) ω ≤
+          pooled 1 (fun t => (w2Window t : ℕ)) (fun t => min 33273 (w2Window t : ℕ)) (1 / 1099511627776) := by
+  obtain ⟨hL, hR, hC, hW⟩ := liveCoinsSampled_honest (k := fun _ => 33273) w2Window zeroStream (w2Draw 1536)
+    w2Receipts (fun ω _ => burst_incorrect ω) (1 / 1099511627776)
+  exact ⟨by norm_num, by norm_num, hL, hR, hC, hW⟩
+
+/-- **`LiveCoinsSampled`'s conclusion is false** at the toy on the audit that accepts everything, at `δ = 2^-40` and
+`W = 0`. -/
+theorem LiveCoinsSampled_nontrivial :
+    ¬ LiveCoins acceptAll 0 ((1 / 1099511627776 : ℝ) + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
+        (∑ t, Pous.StreamedWipe.prfAdvantage (toyStream t)
+          (toy.distinguisher toyStream (1 / 1099511627776) t)).toReal +
+        (unsalted.binding toy toyStream fun _ _ _ => 0).toReal) :=
+  (liveCoinsSampled_nontrivial toyStream (fun _ _ _ => 0) (by norm_num)).2.2.2.2
+
+/-- **`HeldSampled`'s hypotheses hold** at W2's session with no link block, at W2's rates, `δs = 0` and
+`δc = 2^-40`. -/
+theorem HeldSampled_honest :
+    (0 : ℝ) < 98016 ∧ (0 : ℝ) ≤ 191.5 ∧ (0 : ℝ) ≤ 4.32e9 / 4096 / 1e9 ∧ (0 : ℝ) ≤ 1 / 1099511627776 ∧
+      18446744073709551615 < 18446744073709551616 ∧ Identity (w2Draw 0) ∧
+      SquaringCeiling (w2Draw 0) 191.5 98016 (743590 : ℕ) ∧ Disks (w2Draw 0) (4.32e9 / 4096 / 1e9) (1054688 : ℕ) ∧
+      ChipCeiling (w2Draw 0) 743590 ∧ Routed (w2Draw 0) ∧ Causal (w2Draw 0) 0 (2 * 85000000) ∧
+      SketchBound (w2Draw 0) 0 ∧ Live w2Session ∧ Refused w2Session zeroStream (fun _ _ _ => 0) (w2Draw 0) w2Receipts ∧
+      Counted w2Session (w2Draw 0) := by
+  obtain ⟨hI, hsq, hd, hS, hr, hc, hk, hL, hR, hC⟩ :=
+    heldSampled_honest (k := fun _ => 33273) (N := 130023424) (D := 85000000) (t₁ := 0) (Br := 743590)
+      (Bd := 1054688) (S := 743590) (s := 191.5) (E := 98016) (β := 4.32e9 / 4096 / 1e9) w2Window zeroStream
+      w2Receipts (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  exact ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, hI, hsq, hd, hS, hr, hc, hk, hL, hR, hC⟩
+
+/-- **`HeldSampled`'s conclusion is false** at the toy on the audit that accepts everything, at no rates, bursts or
+chip blocks, `δs = 0` and `δc = 2^-40`. -/
+theorem HeldSampled_nontrivial :
+    ¬ acceptAll.Holds (0 + ((1 / 1099511627776 : ℝ) + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
+        (∑ t, Pous.StreamedWipe.prfAdvantage (toyStream t)
+          (toy.distinguisher toyStream (1 / 1099511627776) t)).toReal +
+        (unsalted.binding toy toyStream fun _ _ _ => 0).toReal)) fun ω =>
+      (acceptAll.planned ω : ℝ) - toy.pooled (1 / 1099511627776) ω -
+          (((0 : ℝ) / 1 + 0) * (((0 : ℕ) : ℝ) - (0 : ℕ)) + (0 + 0)) - acceptAll.passes * (0 : ℕ) ≤
+        acceptAll.held ω := by
+  obtain ⟨-, -, -, -, -, -, -, -, h⟩ :=
+    heldSampled_nontrivial toyStream (fun _ _ _ => 0) (δs := 0) (δc := 1 / 1099511627776) (by norm_num)
+  exact h
+
+/-- **`HeldOverTimeSampled`'s hypotheses hold** at W2's session with no link block, paced by `Meets.burstPace`, at
+W2's rates, `δs = 0` and `δc = 2^-40`. -/
+theorem HeldOverTimeSampled_honest :
+    (0 : ℝ) < 98016 ∧ (0 : ℝ) ≤ 191.5 ∧ (0 : ℝ) ≤ 4.32e9 / 4096 / 1e9 ∧ (0 : ℝ) ≤ 1 / 1099511627776 ∧
+      18446744073709551615 < 18446744073709551616 ∧ Identity (w2Draw 0) ∧
+      SquaringCeiling (w2Draw 0) 191.5 98016 (743590 : ℕ) ∧ Disks (w2Draw 0) (4.32e9 / 4096 / 1e9) (1054688 : ℕ) ∧
+      ChipCeiling (w2Draw 0) 743590 ∧ Routed (w2Draw 0) ∧ Paced (w2Draw 0) (burstPace 85000000) ∧
+      Covers (w2Draw 0) ∧ SketchBound (w2Draw 0) 0 ∧ Live w2Session ∧
+      Refused w2Session zeroStream (fun _ _ _ => 0) (w2Draw 0) w2Receipts ∧ Counted w2Session (w2Draw 0) := by
+  obtain ⟨hI, hsq, hd, hS, hr, hp, hcov, hk, hL, hR, hC⟩ :=
+    heldOverTimeSampled_honest (k := fun _ => 33273) (N := 130023424) (D := 85000000) (t₁ := 0) (Br := 743590)
+      (Bd := 1054688) (S := 743590) (s := 191.5) (E := 98016) (β := 4.32e9 / 4096 / 1e9) w2Window zeroStream
+      w2Receipts (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  exact ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, hI, hsq, hd, hS, hr, hp, hcov, hk, hL, hR,
+    hC⟩
+
+/-- **`HeldOverTimeSampled`'s conclusion is false** at the toy on the audit that accepts everything, over the span
+`[0, 1)` (`toyPace`), at no rates, bursts or chip blocks, `δs = 0` and `δc = 2^-40`. -/
+theorem HeldOverTimeSampled_nontrivial :
+    ¬ acceptAll.Holds (0 + ((1 / 1099511627776 : ℝ) + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
+        (∑ t, Pous.StreamedWipe.prfAdvantage (toyStream t)
+          (toy.distinguisher toyStream (1 / 1099511627776) t)).toReal +
+        (unsalted.binding toy toyStream fun _ _ _ => 0).toReal)) fun ω =>
+      ((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) * ((acceptAll.blocks : ℝ) - (0 : ℕ))
+          - 2 * toyPace.longest ω * (((0 : ℝ) / 1 + 0) * (((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) +
+            2 * toyPace.longest ω) + (0 + 0))
+          - toyPace.fill ω acceptAll.blocks (toy.pooled (1 / 1099511627776) ω)
+        ≤ acceptAll.heldOver ω (toyPace.start ω) (toyPace.stop ω) := by
+  obtain ⟨-, -, -, -, -, -, -, -, h⟩ :=
+    heldOverTimeSampled_nontrivial toyStream (fun _ _ _ => 0) (δs := 0) (δc := 1 / 1099511627776) (by norm_num)
+  exact h
+
+/-- **`HeldOverTimeLinksSampled`'s hypotheses hold** at W2's session, its node bringing blocks back by rebuilds, disk
+reads and links at once, paced by `Meets.burstPace`, at W2's rates, `δs = 0` and `δc = 2^-40`. -/
+theorem HeldOverTimeLinksSampled_honest :
+    (0 : ℝ) < 98016 ∧ (0 : ℝ) ≤ 191.5 ∧ (0 : ℝ) ≤ 4.32e9 / 4096 / 1e9 ∧ (0 : ℝ) ≤ 50e9 / 4096 / 1e9 ∧
+      (0 : ℝ) ≤ 1 / 1099511627776 ∧ 18446744073709551615 < 18446744073709551616 ∧
+      Links (w2Draw 1536) (50e9 / 4096 / 1e9) (1536 : ℕ) ∧
+      SquaringCeiling (w2Draw 1536) 191.5 98016 (743590 : ℕ) ∧
+      Disks (w2Draw 1536) (4.32e9 / 4096 / 1e9) (1054688 : ℕ) ∧ ChipCeiling (w2Draw 1536) 743590 ∧
+      Routed (w2Draw 1536) ∧ Paced (w2Draw 1536) (burstPace 85000000) ∧ Covers (w2Draw 1536) ∧
+      SketchBound (w2Draw 1536) 0 ∧ Live w2Session ∧
+      Refused w2Session zeroStream (fun _ _ _ => 0) (w2Draw 1536) w2Receipts ∧ Counted w2Session (w2Draw 1536) := by
+  obtain ⟨hl, hsq, hd, hS, hr, hp, hcov, hk, hL, hR, hC⟩ :=
+    heldOverTimeLinksSampled_honest (k := fun _ => 33273) (N := 130023424) (D := 85000000) (t₁ := 0)
+      (Br := 743590) (Bd := 1054688) (Bl := 1536) (S := 743590) (s := 191.5) (E := 98016)
+      (β := 4.32e9 / 4096 / 1e9) (βl := 50e9 / 4096 / 1e9) w2Window zeroStream w2Receipts (by norm_num)
+      (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  exact ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, hl, hsq, hd, hS, hr, hp, hcov,
+    hk, hL, hR, hC⟩
+
+/-- **`HeldOverTimeLinksSampled`'s conclusion is false** at the toy on the audit that accepts everything, as
+`HeldOverTimeSampled_nontrivial`, with no link rate or burst either, `δs = 0` and `δc = 2^-40`. -/
+theorem HeldOverTimeLinksSampled_nontrivial :
+    ¬ acceptAll.Holds (0 + ((1 / 1099511627776 : ℝ) + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
+        (∑ t, Pous.StreamedWipe.prfAdvantage (toyStream t)
+          (toy.distinguisher toyStream (1 / 1099511627776) t)).toReal +
+        (unsalted.binding toy toyStream fun _ _ _ => 0).toReal)) fun ω =>
+      ((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) * ((acceptAll.blocks : ℝ) - (0 : ℕ))
+          - 2 * toyPace.longest ω * (((0 : ℝ) / 1 + 0 + 0) * (((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) +
+            2 * toyPace.longest ω) + (0 + 0 + 0))
+          - toyPace.fill ω acceptAll.blocks (toy.pooled (1 / 1099511627776) ω)
+        ≤ acceptAll.heldOver ω (toyPace.start ω) (toyPace.stop ω) := by
+  obtain ⟨-, -, -, -, -, -, -, -, h⟩ :=
+    heldOverTimeLinksSampled_nontrivial toyStream (fun _ _ _ => 0) (δs := 0) (δc := 1 / 1099511627776)
+      (by norm_num)
+  exact h
+
+end Accounting.SecurityProofs.Remote
