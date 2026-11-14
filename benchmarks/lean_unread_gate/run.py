@@ -6,7 +6,7 @@ It judges ``HEAD`` against ``MAIN`` as a ready mark's preflight runs the gate (`
 with the time of each stage (`STAGES`, each inclusive of the stages it calls) and the count of git calls by subcommand. Each
 gate starts from an empty cache (`CHECK_CACHE` in a temporary directory), as on an agent VM that never ran it. With
 ``--against REV`` it judges the same change again with the gate as it is at ``REV`` and compares: the guard holds when both
-print the same `--json` and exit the same. It writes `unread-gate.json` under ``--out`` (`$OUT` under `research run`) and
+exit the same and print the same `--json`, or, when neither can judge, say the same why. It writes `unread-gate.json` under ``--out`` (`$OUT` under `research run`) and
 exits 1 when the guard fails.
 """
 from __future__ import annotations
@@ -141,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
             rows["against"] = judge(old, a.main, a.head, "against") | {"rev": a.against}
     result = {"main": a.main, "head": a.head, **rows}
     if a.against:
-        result["same"] = (rows["gate"]["exit"], rows["gate"]["doc"]) == (rows["against"]["exit"], rows["against"]["doc"])
+        result["same"] = all(rows["gate"][k] == rows["against"][k] for k in ("exit", "doc", "said"))
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "unread-gate.json").write_text(json.dumps(result, indent=1) + "\n")
     for k, r in rows.items():
