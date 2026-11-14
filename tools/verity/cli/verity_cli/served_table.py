@@ -45,7 +45,7 @@ from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
 from verity.channel import Refused
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 SERVED_WINDOW, GATE, CHECK = "served-window", "gate", "check"
 RUNS = (SERVED_WINDOW, GATE, CHECK)
 RUNNER = "benchmarks/one_stage/served_verdicts.sh"
@@ -160,7 +160,7 @@ PINS = {"pous": "39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a
                 "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
 HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys",
           "the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings",
-          "FILE` (demos/onsite_served/README.md); the deploy bindings hold every host and address, this file none.",
+          "FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.",
           "`verity run THIS --dry-run` resolves it all.")
 
 

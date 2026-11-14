@@ -241,7 +241,7 @@ class OnsiteVerifier(Verifier):
 
 MS = CHAL_LINK.lat // 1_000_000
 MANIFEST = Manifest(
-    ID, 1, "demos/lifecycle/onsite.py:MANIFEST",
+    ID, 1, "tools/verity/cli/tests/lifecycle/onsite.py:MANIFEST",
     parties=(Role(DEVELOPER, "developer", needs=("coins", "clock")), Role(VERIFIER, "auditor", needs=("coins",)),
              Role(CERTIFIER, "auditor", per="link", needs=("coins",)),
              Role(CHALLENGER, "auditor", needs=("coins", "clock"))),
