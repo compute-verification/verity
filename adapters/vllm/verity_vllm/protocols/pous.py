@@ -447,6 +447,7 @@ class PousOption(Option):
         id it answers under (a test signer's in tests)."""
         from verity.protocols.accounting.pous.device import challenger_session as CS
         from verity.protocols.accounting.pous.device import memory_challenger as mc
+        from verity.protocols.accounting.pous.prover import challenger_prover as CR
         from verity.protocols.accounting.pous.verifier import period
 
         doc = json.loads((Path(period_dir) / "period.json").read_text())
@@ -455,7 +456,8 @@ class PousOption(Option):
         where = CS.placement(node, party.host)
         fresh, answered = self.periods == 0, self.answered
         t = time.monotonic()
-        got = self.audit(node, secrets.token_bytes(64), party=party, schemes=mc.SCHEMES if schemes is None else schemes,
+        got = self.audit(node, secrets.token_bytes(64), party=party, session=CR.session,
+                         schemes=mc.SCHEMES if schemes is None else schemes,
                          protocol=period.PROTOCOL if protocol is None else protocol)
         seconds = round(time.monotonic() - t, 2)
         self.periods += 1

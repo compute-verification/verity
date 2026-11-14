@@ -25,6 +25,7 @@ from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period, setup
+from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
 from verity_vllm import config
 from verity_vllm import protocols as PO
@@ -222,9 +223,9 @@ def test_an_int8_linear_with_its_scales_is_served_not_refused(toy):
 
 
 def _in_process_party(signer, log):
-    """`challenger_session.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
+    """`challenger_prover.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
     test signer, a counter clock, its own coins each session) and the prover's over a socket pair
-    (`challenger_session.answer`)."""
+    (`challenger_prover.answer`)."""
     calls = []
 
     def session(party, request, respond):
@@ -239,7 +240,7 @@ def _in_process_party(signer, log):
             served = pool.submit(challenger)
             try:
                 with a, a.makefile("rwb") as f:
-                    rounds = CS.answer(f, request["block_bytes"], respond)
+                    rounds = CR.answer(f, request["block_bytes"], respond)
             finally:
                 sid, served_session = served.result()
         calls.append((party, request))
@@ -260,7 +261,7 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
     """`PousOption.leg`: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
     the setup case and its check; an accepted period says plainly that this point certifies 0 bits."""
     session, calls = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
-    monkeypatch.setattr(CS, "session", session)
+    monkeypatch.setattr(CR, "session", session)
 
     def side_of(doc, node, key, local, what=None):
         assert (key, what) == ("pous", None), "PoUS's side is period.json's challenger.pous"
