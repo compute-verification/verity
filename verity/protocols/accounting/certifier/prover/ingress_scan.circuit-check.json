@@ -1,4 +1,14 @@
 {
+ "definitions": {
+  "IngressScanStart_v1{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=2,WITHIN=3,D=5,KO=8,KI=100}": {
+   "and": 0,
+   "type": "3c16aad889fbec504490abd7705514f9a4d25620e44e5df29a84048b7f377a9614fd7ca769233c88a5fdc6851d5498aab2ea0b36231d11876e9ba6c7c6828cdf"
+  },
+  "IngressScanStart_v1{B=512,r=4,lanes=4,C=47,IDB=17,EVERY=16,WITHIN=12,D=27,KO=4,KI=32}": {
+   "and": 0,
+   "type": "c2e4df34a6e672c72f87ee630974986429d0e60f97a78f47cc2845d3d328aa30da4fc2c4b92fcd7971c395cfe26e5a8bb411c7f981d1bca9292901cb26f881ce"
+  }
+ },
  "digests": {
   "IngressScanBucket_v3{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=2,WITHIN=3,D=5,KO=8,KI=100}": {
    "sha512": "8a674fa2e9e7634420d8bffb5087afa658d32b9c04804ee7327e85bf26afa15959aacc5fde4eff6fd215eba3474c3ebbc73347050b0a33140ecdffd6c5c045f1"
