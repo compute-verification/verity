@@ -16,9 +16,9 @@ from typing import Any
 
 import pytest
 
+import verity_vllm.acquire.fa2_tap_src.build_ext as FA2
+import verity_vllm.acquire.fa3_tap_src.build_fa3_ext as FA3
 from verity_vllm import settings
-from verity_vllm.acquire.fa2_tap_src import build_ext as FA2
-from verity_vllm.acquire.fa3_tap_src import build_fa3_ext as FA3
 
 NAME = "verity_fa_tap_builds_test"
 NVCC = "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) NVIDIA\nCuda compilation tools, release 0.0\nBuild a.b\n"
