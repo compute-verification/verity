@@ -88,9 +88,8 @@ else: the functions `load_card`, `skus`, `rate`, `number` (an entry's value as a
 (the rule `load_card` holds a card to, for another file that states numbers as entries), and the constants
 `CARD_KINDS` (a card's kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit
 word) and `CARDS` (the directory the card files are in, found from the `verity` package's directory). The module
-imports the standard library, the wire and `verity.errors` only. The package file, `verity/hardware/__init__.py`,
-holds a docstring and nothing else: no import and no re-export. Importing the Site or the wire, in a verifier too,
-reads no card file and no node file: the readers run only when called. `../verity/tests/tests/test_imports.py` holds both.
+imports the standard library, the wire and `verity.errors` only. Importing the Site or the wire, in a verifier too,
+reads no card file and no node file: the readers run only when called (`../verity/tests/tests/test_imports.py`).
 
 `load_card(sku) -> dict` returns the parsed file and refuses a number without its unit, mark and source, and a card without
 its kind. `skus(kind=None)` lists the cards, or those of one kind.
