@@ -2793,6 +2793,11 @@
       "paths": {
         "benchmarks/hash/maxtput/build_job.sh": "adapters/vllm/verity_vllm/ops/served_build.sh"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/commit_gpu/": "verity/commitments/cuda/commit_gpu/"
+      }
     }
   ]
 }
