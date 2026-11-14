@@ -529,7 +529,7 @@ def test_frame_on_a_warden_run_reads_its_data_cells_row_and_refuses_the_changed_
     and not with a payload byte changed; a run that kept no salts is not applicable."""
     pytest.importorskip(NG.WARDEN_ROWS_MODULE)
     sys.path.insert(0, str(HERE / "tests"))
-    import test_warden_serve as tws
+    from verity.protocols.accounting.certifier.device.tests import test_warden_serve as tws
 
     run, key = tmp_path / "run", tmp_path / "key"
     run.mkdir()
