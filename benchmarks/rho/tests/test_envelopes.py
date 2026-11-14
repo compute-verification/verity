@@ -240,7 +240,7 @@ def test_the_links_form_is_what_windows_proves():
 def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest_delta_form():
     """The per-server bound at W63 (`regime.onsite-w63`: B 512, r 4, 4 lanes, C 47, IDB 17, D 27, KO 64, τ_b 100 ms,
     32-bucket link-windows), its `requestBits`, `bucketBits`, `windowRequests` and `windowBits`
-    (`Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`). A request's head leaves 988 bits free
+    (`draft:per-server-ingress`). A request's head leaves 988 bits free
     (the ordinal, content-length, `max_tokens` and `seed` at 32 each, `temperature` and `top_p` at 24, `model` and
     `user` at 406), and its prompt is K0 + (C − 1) K = 12 + 46 · 45 = 2,082 ids: 36,382 bits in. A bucket is
     4 ⌈log₂ 6⌉ = 12 bits, and a request 1,095 out (1,088 id bits and the count). A link-window holds `4 ⌈32 / 28⌉ = 8`
