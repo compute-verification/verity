@@ -31,6 +31,7 @@ src/research/
 ├── checkview.py    `research status RUN` on a check run; tools/verity/check's live view reads its targets
 ├── goals.py        `research goals`: the Goals page (the writing-goals skill)
 ├── linear.py       asks as Linear issues, and the audit the control pod's top watch runs
+├── response.py     `research msg linear response`: the minutes each lane takes to answer a Linear comment that rings it
 ├── flags.py        renamed(): an old flag kept as a hidden alias of its new name; infra/ops uses it
 ├── store/          the evidence store (`research data`); README.md there is the contract and names its modules
 ├── telemetry/      the recorded-attempt harness (below)
