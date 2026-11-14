@@ -60,7 +60,7 @@ The kernel runs most of `decode` on a closed text, and the walk's rules are the 
 * the definitions by well-founded recursion on `Json` or `Ty` (`domainError`, by the fuelled check `cleanF`;
   `Ty.ofJson` and `Ty.leaves`, by one unfolding each);
 * the lookups in hash maps keyed by strings, whose hash the kernel does not compute (`ddefs_rule`, `index_rule`,
-  `busy_rule`);
+  `busy_rule`), and the duplicate-name check on the root's empty parameter list (`dup_rule`);
 * the string calls `contains`, `all`, `splitOn` and `toNat!`;
 * the decoder's state monad applied to its state (`st_bind` and the rest).
 -/
