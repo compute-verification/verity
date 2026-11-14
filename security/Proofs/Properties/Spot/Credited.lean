@@ -4,7 +4,7 @@ public import Proofs.Properties.Spot
 public import Proofs.Properties.Spot.Units
 public import Proofs.Core.QSort
 public import Proofs.Properties.Pous.MemoryChallenger.Sort
-public import Proofs.Properties.Compose.Remote.Sort
+public import Proofs.Properties.Poub.Remote.Sort
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Stmt
 public import Proofs.Flock.SpotFlock.SampleInts

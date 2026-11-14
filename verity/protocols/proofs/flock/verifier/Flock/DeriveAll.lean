@@ -375,8 +375,8 @@ def line (xs : List String) : String := " ".intercalate xs
 
 def sideStr (l : List Nat) : List String := toString l.length :: l.map toString
 
-/-- A layout's rows as `derive.netlist` writes them: the header, then rows `0 .. size - 1`. -/
-def netlist (d : D) (name : String) : String :=
+/-- A layout's rows as `derive.circuit_description` writes them: the header, then rows `0 .. size - 1`. -/
+def circuitDescription (d : D) (name : String) : String :=
   let side := fun (gs : Array (Nat × Nat × Array Nat)) =>
     toString gs.size :: gs.toList.flatMap fun (w, ws, bits) => ([w, ws, bits.size] ++ bits.toList).map toString
   let head := line (["flock-ir-unit/v2", name, toString d.size, toString d.const] ++ side d.inGroups ++ side d.outGroups)

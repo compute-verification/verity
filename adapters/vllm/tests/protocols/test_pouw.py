@@ -50,7 +50,7 @@ from verity.protocols.accounting.pouw.prover.serving import ncp as NCP
 from verity.protocols.accounting.pouw.prover.serving import operands as OPS
 from verity.protocols.accounting.pouw.prover.serving import lead as pouw_lead
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PPK
 
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n

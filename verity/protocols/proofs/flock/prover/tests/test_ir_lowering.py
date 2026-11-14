@@ -526,7 +526,7 @@ def test_silu_v2_circuit_units_are_a_power_of_two():
 
 
 @pytest.mark.parametrize("which", ["gemm-tc-step", "silu-mul"])
-def test_a_units_nonzeros_are_its_netlist_rows_inside_its_slot(which):
+def test_a_units_nonzeros_are_its_circuit_description_rows_inside_its_slot(which):
     """`LoweredUnit.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)
     pairs of every row of the unit's ``flock-ir-unit/v2`` text, which the block places in the unit's slot, each below
     ``useful``."""
@@ -654,7 +654,7 @@ def test_a_flipped_witness_bit_leaves_its_lane_unsatisfied():
         assert ok == ((1 << 4) - 1) & ~(1 << 2)
 
 
-def test_a_mutated_netlist_is_caught_by_the_ir_comparison():
+def test_a_mutated_circuit_description_is_caught_by_the_ir_comparison():
     """Negating one output row, or dropping one term of one AND row, changes the unit's function on the stratified words. A
     few AND rows sit in logic this composition cannot reach (RoPE's fma addend is RN(y*s), never more than 16 significant
     bits; the pieces' NaN is already the torch word, so the cast's NaN select is a no-op), so mutating them is not
