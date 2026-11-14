@@ -35,7 +35,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 import run as R  # noqa: E402
-from verity.hardware import registration  # noqa: E402
+from verity.protocols.accounting.registration.verifier import registration  # noqa: E402
 from verity.device import OUTSIDE, TICK, Link, Loc  # noqa: E402
 from verity_bench import kit  # noqa: E402
 
@@ -142,7 +142,7 @@ def test_the_result_is_the_kits_and_nothing_else_is_written(tmp_path, capsys, mo
     written = []
     measurement = kit.Writer.measurement
     monkeypatch.setattr(kit.Writer, "measurement", lambda self, **m: written.append(measurement(self, **m)) or written[-1])
-    fields = set(kit.writer(tmp_path / "another").measurement(name="a measurement", value=1, unit="bit"))
+    fields = set(kit.writer(tmp_path / "another").measurement(name="a measurement", value=1, unit="bit", mark="modeled"))
     for at, argv in enumerate((GIVEN, UNBOUNDED)):
         out = tmp_path / str(at)
         del written[:]
@@ -161,6 +161,7 @@ def test_the_names_are_regular_and_every_one_says_modeled(tmp_path, capsys):
                          *(f"certifier_term/modeled/{scope}/{period}/{amount}"
                            for scope in LB.SCOPES for period in LB.PERIODS for amount in AMOUNTS)]
     assert all(name.split("/")[:2] == ["certifier_term", "modeled"] for name in got)
+    assert all(m["mark"] == "modeled" and m["inputs"][0].startswith("modeled") for m in got.values())
     assert all(m["unit"] == AMOUNTS.get(name.rsplit("/", 1)[1], "GB") for name, m in got.items())
     # the shared fields' last words, the error's among them
     assert R.ERROR == "error"
@@ -276,9 +277,9 @@ def test_capacity_is_read_from_the_registered_uplink_and_verified_is_capacity_le
             # each machine's one certified boundary link, the host's side of its uplink, over the period's nanoseconds
             assert capacity["value"] == scope.machines * BETA * seconds * 10 ** 9 and type(capacity["value"]) is int
             assert verified["value"] == capacity["value"] - free["value"]
-            assert verified["inputs"] == [f"{name}/capacity", f"{name}/free", *basis]
+            assert verified["inputs"] == ["modeled", f"{name}/capacity", f"{name}/free", *basis]
             assert capacity["inputs"] == [
-                f"registration {registration.head(composite, entries)}, read as given: host node0's certified boundary "
+                "modeled", f"registration {registration.head(composite, entries)}, read as given: host node0's certified boundary "
                 f"link(s) uplink0 at beta {BETA}, in bits each way a tick of 1/1000000000 s (verity.device)",
                 R.SCALED, f"modeled: benchmarks/network_traces/leak_bounds.py's row scan at D_j = 2, scope {scope.name}, "
                 f"period {period}, request count given", *basis]
@@ -300,10 +301,11 @@ def test_with_no_registration_capacity_and_verified_have_no_value_and_say_why(tm
         for period in LB.PERIODS:
             name = f"certifier_term/modeled/{scope}/{period}"
             capacity, verified = got[f"{name}/capacity"], got[f"{name}/verified"]
-            assert (capacity["value"], capacity["inputs"][0], capacity["inputs"][2:]) == (None, R.NO_REGISTRATION, basis)
-            assert capacity["inputs"][1].startswith("modeled: benchmarks/network_traces/leak_bounds.py's row scan at ")
+            assert (capacity["value"], capacity["inputs"][:2], capacity["inputs"][3:]) == (
+                None, ["modeled", R.NO_REGISTRATION], basis)
+            assert capacity["inputs"][2].startswith("modeled: benchmarks/network_traces/leak_bounds.py's row scan at ")
             assert verified["value"] is None
-            assert verified["inputs"] == [f"{name}/capacity", f"{name}/free", R.NO_REGISTRATION, *basis]
+            assert verified["inputs"] == ["modeled", f"{name}/capacity", f"{name}/free", R.NO_REGISTRATION, *basis]
     assert R.NO_REGISTRATION.startswith("absent: no registration is given")
     assert sum(m["value"] is None for m in got.values()) == 2 * len(LB.SCOPES) * len(LB.PERIODS)
 
