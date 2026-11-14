@@ -189,8 +189,10 @@ def _serving(tmp_path, runner, coins=None):
     s = Serving(tmp_path, window_steps=CLASS.outputs, runner=runner,
                 arm=lambda r: SPL.PearlWindows(runner.model, r, None, out=tmp_path, config=CONFIG, run_id="t", coins=coins,
                                                clock=lambda: 0.0))
-    s.windows.arm.com = s.windows.com
-    s.windows.arm.ready()
+    windows = s.windows
+    assert windows is not None, "a serving that commits has its windows"
+    windows.arm.com = windows.com
+    windows.arm.ready()
     return s
 
 

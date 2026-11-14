@@ -18,15 +18,15 @@ import numpy as np
 import pytest
 from verity.circuits import boolean as BL
 from verity.circuits import codec
+from verity.circuits import word as QW
 from verity.circuits.boolean import trace as TR
+from verity.circuits.cross_call import members_check
 from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
-from verity.circuits import word as QW
-from verity.definitions.boolean import boolean_version
-from verity.circuits.cross_call import members_check
 from verity.circuits.ops.boolean import mufu as MU
+from verity.definitions.boolean import boolean_version
 from verity.definitions.registry import boolean_dense as BD
 from verity.definitions.registry import boolean_dense_norm as DN
 from verity.definitions.registry import boolean_norms as BN
