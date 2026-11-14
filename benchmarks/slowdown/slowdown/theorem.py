@@ -90,8 +90,8 @@ class Cut:
     blocks: tuple[Blocks, ...] = ()
     uncertified: Mapping[str, float] = field(default_factory=dict)
     cites: tuple[str, ...] = ()
-    #: `k` of the boundary term `ω_max μ k`: the unregistered input bits of the cut's one block, each read by at most
-    #: `μ` operations counted inside it with a gate outside it, which its cap doesn't count (`ServingBlockBound`)
+    #: `k` of the boundary term `ω_max μ k`: the fresh input bits of the cut's one block, each read by at most
+    #: `μ` operations counted inside it with a gate outside it, which its yield doesn't count (`ServingBlockBound`)
     boundary: float = 0.0
 
 

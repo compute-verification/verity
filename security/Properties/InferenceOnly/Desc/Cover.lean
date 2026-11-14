@@ -55,8 +55,8 @@ def CoverTrained (j out : Json) : Prop :=
 
 /-- **A verdict of compliance of the check of record carries the cover theorem's factor**, for every reference training
 circuit the declaration contains, under the cover theorem's premises on its bit view and its registered information free
-of the reference circuit's fresh input. On every verdict of `InferenceOnlyCheck.Theta.evaluate`, the verdict is `CoverTrained`
-on every expansion. -/
+of the reference training circuit's fresh input. On every verdict of `InferenceOnlyCheck.Theta.evaluate`, the verdict is
+`CoverTrained` on every expansion. -/
 def CheckedCoverTraining : Prop :=
   ∀ (j tr out : Json), Theta.evaluate j tr = .ok out → OnExpansions CoverTrained j out
 

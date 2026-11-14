@@ -1,4 +1,4 @@
-"""Reference circuits: the declared Boolean circuits the properties are measured on, and the designation of their counted
+"""The measured circuits: the registered Boolean circuits the properties are measured on, and the designation of their counted
 products.
 
 * `boolean_gemm`: `Gemm_v3{K,N,DOT=AmpereBF16TcDot16_v3}` (`verity.circuits.ops.boolean.gemm`), one GEMM on bits.
