@@ -12,6 +12,7 @@ comes, so only the API server's process does, and it needs ``verity``, this pack
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import queue
@@ -21,8 +22,8 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline.serve_admit import (RELEASE_HEADER, WATERMARK_PATH, Tick, TickGate, Watermark, install, open_watermark,
-                                              release_of)
+from verity_vllm.pipeline.serve_admit import (LOST, RELEASE_HEADER, WATERMARK_PATH, Tick, TickGate, Watermark, install,
+                                              open_watermark, release_of)
 
 __all__ = ["OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader", "TickFeed", "register", "route_of", "tick_config",
            "unseeded"]
@@ -134,7 +135,20 @@ class TickFeed:
     before the engine sees it. So is a completions or chat request sampled without a seed (`unseeded`): serve-openai fills
     such a request's seed with the public default its registration fixes (`engine.served_seed`); this path has no
     registered default, so it refuses instead. A refused numbered request is fed as passed. Without the variable it
-    passes everything."""
+    passes everything.
+
+    A request of a release a watermark line names lost is this middleware's to end: the gate keeps it from the
+    scheduler, so vLLM never answers it. One that is in the server when its line comes is given its disconnect, the next
+    message its ``receive`` returns, on which vLLM's server aborts it as it does on its connection's close. Where the
+    server had begun no response, nothing it sends after that goes on, and once its call returns the middleware answers
+    400 with `serve_admit.LOST`. Where a stream's head had gone, nothing more of the stream goes on and the middleware
+    ends it with no body, since a middleware writes no event in the server's stream. A response whose head gave its
+    length is the server's whole answer, which only an open gate lets it have, and is left to finish: a shorter body
+    would break the length it declared. One whose line has come by the time its body is read, so every one that comes
+    after its line, is answered 400 with that sentence, and reaches neither the server nor the feed. A watermark that
+    breaks forgets its run's lost releases: the gate is open then, and adds every request at once. What the middleware
+    keeps for this is its process's own: among several API server processes, a line ends only the requests of the
+    process its stream reached, and only that process refuses the later ones."""
 
     def __init__(self, app: Any) -> None:
         self.app = app
@@ -142,9 +156,26 @@ class TickFeed:
         self.fd = None if cfg is None else os.open(cfg["feed"], os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
         self.seen: dict[str, set[int]] = {}
         self.streams: set[str] = set()              # the runs whose watermark stream has come
+        self.lost: dict[str, set[int]] = {}         # run -> the N its watermark named lost
+        self.served: dict[tuple[str, int], asyncio.Future[None]] = {}   # (run, N) in the server -> done once N is named lost
 
     def write(self, rec: dict[str, Any]) -> None:
         os.write(self.fd, (json.dumps(rec, separators=(",", ":")) + "\n").encode())
+
+    def _record(self, rec: dict[str, Any]) -> None:
+        """One watermark record, to the feed: before it a line's lost releases are marked, so that a request of one that
+        comes later is refused, and after it each request of them that is in the server is given its disconnect."""
+        run = rec["run"]
+        lost = [int(n) for n in rec.get("lost") or ()]
+        if lost:
+            self.lost.setdefault(run, set()).update(lost)
+        if "error" in rec:
+            self.lost.pop(run, None)
+        self.write(rec)
+        for n in lost:
+            gone = self.served.get((run, n))
+            if gone is not None and not gone.done():
+                gone.set_result(None)
 
     async def __call__(self, scope: dict[str, Any], receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
         if self.fd is None or scope.get("type") not in ("http", "websocket"):
@@ -163,7 +194,7 @@ class TickFeed:
         why = None
         if route == WATERMARK_PATH:
             try:
-                w = open_watermark(headers, self.streams, self.write)
+                w = open_watermark(headers, self.streams, self._record)
             except ValueError as e:
                 why = str(e)
             else:
@@ -174,6 +205,8 @@ class TickFeed:
         elif route not in OTHER_PATHS:
             why = (f"under the certified tick this server serves only {', '.join(sorted(SAMPLED_PATHS | OTHER_PATHS))}, "
                    f"not {route[:80]!r}")
+        if rel is not None and rel[1] in self.lost.get(rel[0], ()):      # read here: its line may come while its body does
+            return await _answer(send, 400, LOST.format(n=rel[1], run=rel[0]))
         if why is not None:
             if rel is not None:
                 self.seen[rel[0]].add(rel[1])
@@ -188,19 +221,44 @@ class TickFeed:
             key = f"verity-{run}-{n}"
             scope = {**scope, "headers": [*scope.get("headers", ()), (b"x-request-id", key.encode())]}
         self.write({"key": key, "run": run, "n": n, "bucket": bucket})
-        began = False
+        gone = self.served[run, n] = asyncio.get_running_loop().create_future()
+        began = started = sized = ended = False
+
+        async def heard() -> Any:
+            """The request's next message, or its disconnect once a line has named its release lost."""
+            if gone.done():
+                return {"type": "http.disconnect"}
+            message = asyncio.ensure_future(receive())
+            try:
+                await asyncio.wait({message, gone}, return_when=asyncio.FIRST_COMPLETED)
+                if message.done():
+                    return message.result()
+            finally:
+                message.cancel()
+            return {"type": "http.disconnect"}
 
         async def watched(message: dict[str, Any]) -> None:
-            nonlocal began
-            if message.get("type") == "http.response.start" and message.get("status") == 200:
-                began = True
+            nonlocal began, started, sized, ended
+            if gone.done() and not sized:
+                return
+            kind = message.get("type")
+            if kind == "http.response.start":
+                started, began = True, began or message.get("status") == 200
+                sized = any(k.lower() == b"content-length" for k, _ in message.get("headers") or ())
+            elif kind == "http.response.body" and not message.get("more_body", False):
+                ended = True
             await send(message)
 
         try:
-            await self.app(scope, receive, watched)
+            await self.app(scope, heard, watched)
         finally:
+            del self.served[run, n]
             if not began:
                 self.write({"run": run, "n": n, "passed": True})
+        if gone.done() and not started:
+            await _answer(send, 400, LOST.format(n=n, run=run))
+        elif gone.done() and not sized and not ended:
+            await send({"type": "http.response.body", "body": b""})
 
     async def _watermark(self, w: Watermark, receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
         while True:
