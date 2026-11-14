@@ -20,6 +20,7 @@ else:
     torch = pytest.importorskip("torch")
 
 from tests.commit import test_native_collect_plan_cache as P
+from verity_vllm.commit.committer import identity_check
 
 RUNS = 3                                                       # the third run retires the first run's plans
 BASE = P.step_tensors
@@ -43,7 +44,7 @@ def counted(monkeypatch, count: int) -> dict[str, list[int]]:
     of each run's steps, and those the layouts and the cache (both generations) keep after its `finalize`."""
     monkeypatch.setattr(P, "step_tensors", step_tensors(count))
     com = P.committer(monkeypatch)
-    modules = sorted({com._module_of(n) for n, _t in P.step_tensors((40, 45))} - {"fa2.m1"})
+    modules = sorted({identity_check.module_of(n) for n, _t in P.step_tensors((40, 45))} - {"fa2.m1"})
     com.expected_manifest = lambda: {"modules": modules, "attention_layers": [], "fa2_hidden_per_layer": 0, "sampler_ids": 1}
     seen: dict[str, list[int]] = {"cache": [], "steps": [], "finalized": [], "plans": []}
     finalize = com.finalize
@@ -71,7 +72,6 @@ def test_a_record_answers_its_readers_as_its_metas_do_without_building_them():
     `scan()` (the layout digest, the step's sequences) get what the plan's `TensorMeta`s give, and the record builds none;
     iterating it builds them once, so every pass sees the same objects."""
     from verity_vllm.commit import step_rows
-    from verity_vllm.commit.committer.native_host import NativeHostCommitter as NH
 
     record, metas = _record(), list(_record())
     ranges = P.NC._excluded_chunk_ranges(record, {"fa2_hidden_m1"}, 256)
@@ -79,7 +79,7 @@ def test_a_record_answers_its_readers_as_its_metas_do_without_building_them():
     assert record.summary() == [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas]
     assert list(record.names) == [m.name for m in metas] and record.nbytes == sum(m.nbytes for m in metas)
     assert step_rows.layout_digest(record.scan()) == step_rows.layout_digest(metas)
-    assert repr(NH._step_sequences(P.SimpleNamespace(), 0, record.scan())) == repr(NH._step_sequences(P.SimpleNamespace(), 0, metas))
+    assert repr(identity_check.step_sequences(None, 0, record.scan())) == repr(identity_check.step_sequences(None, 0, metas))
     assert record._metas is None
     assert [id(m) for m in record] == [id(m) for m in record] and record[2] is record.scan()[2] and len(record) == len(metas)
 

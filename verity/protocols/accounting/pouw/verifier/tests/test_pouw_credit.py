@@ -952,13 +952,13 @@ def test_an_entry_whose_root_is_not_the_sessions_refuses(seed):
 def test_a_round_log_the_challenger_never_received_refuses(seed):
     """The composed check's counterexample: a round log the challenger never received, its coins carried as if opened
     after its roots and the sample root over it, has every credit bit fixed before the sampling coin (`_credited` credits its
-    calls) and its A trees tied to its roots (`_a_link` accepts). Only `core_check.rounds` holds the log's roots to the
+    calls) and its A trees tied to its roots (`_a_link` accepts). Only `core_check.rounds_twin` holds the log's roots to the
     ones the challenger received, and `window` runs it, so the window, and the period it's in, earn nothing."""
     d = cases.window_instance(random.Random(f"never-received/{seed}"), "never-received")
     got, refused = Cr._credited(*cases.credit_args(d))
     assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
     assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
-    rounds = CC.rounds(d["key"], d["ledger"], d["pins"], d["main"], d["window"], d["session"],
+    rounds = CC.rounds_twin(d["key"], d["ledger"], d["pins"], d["main"], d["window"], d["session"],
                        [x["root"] for x in d["rounds"]], [x["coin"] for x in d["rounds"]], rc.lms_verify)
     assert rounds == ("rounds", NOT_RECEIVED)
     assert Cr._window_outcomes(*cases.window_args(d)) == (None, rounds)

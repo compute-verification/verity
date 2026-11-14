@@ -18,8 +18,6 @@ from tests.observe.test_fold_synthetic import (
     REQ,
     SAMPLED,
     C,
-    _real_memory_available,
-    install_stub_memory,
     toy_log,
     toy_profile,
 )
@@ -31,8 +29,6 @@ TOKENS = [int(t) for t in SAMPLED]
 
 @pytest.fixture(scope="module")
 def folded() -> FoldResult:
-    if not _real_memory_available():
-        install_stub_memory()
     return fold(toy_log(), toy_profile(), strict=True)
 
 
