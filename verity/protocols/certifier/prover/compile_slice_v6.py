@@ -107,14 +107,14 @@ from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any, Sequence
 
-from verity.definitions.circuits.boolean import memcheck as MC
+from verity.circuits.boolean import memcheck as MC
 from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce
 from verity.circuits.boolean.gf128 import mul_forms
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments import pool_row as PR
-from verity.definitions.commitments.gates import block_key as BK
+from verity.commitments.gates import block_key as BK
 from verity.commitments.gates import rowleaf as RG
 from verity.protocols.certifier.verifier import cache_step as CST, compile_slice as CS, replay_chain as RC
 from verity.protocols.certifier.verifier import replay_step as RS
