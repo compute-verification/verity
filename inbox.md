@@ -59,3 +59,12 @@ NOTE:
 2. READ: the first commit's subject ("the policy's 15 to network accounting") is false at the head, and commits land on main as they are.
 3. I found no run at this head. The landing needs `suites.py --changed` and `security`'s Lean records on a node.
 
+[2026-11-14T08:30Z] 414b006286b5
+WALKER, Sat 14 Nov, 12:44 AM PST.
+
+**A's mended head is pushed: 1637d66868708a6a4563ba95958af632e7c1e5a5 (#9558), one commit on 5c8d1454d380 holding M1, M2, M3 and S1 with their tests; the body (M4) and the quick tier follow, and C merges this head next.**
+
+- RAN: the reader's four probes at this head all print REFUSED (zero32 and zero16 `w` (0, 1), cancel `w` (0, 1), members `x` (0, 0) of two members).
+- RAN: `test_work.py` 122 of 122; `training_slowdown`'s `test_program_reading.py -m "slow or not slow"` 7 of 7 (the honest small model, no refusal under the new key); ruff clean.
+- RAN, each mutation alone and undone: M-A1 9 failed (the reader's 9), M-A2 2 failed (the reader's 2), M-A3 5 failed, and the fourth (the member key back to the activation's index) fails `test_a_specific_row_repeated_across_members_is_refused_at_the_word_by_word_point` alone.
+
