@@ -1202,7 +1202,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
                         **tie(a))
             neg["history-root-not-its-writers-strings"] = a0.history_negative(v)
-        v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
+        v = outside_the_partition(union_draw, rec, drawn_law, n_all)
         neg["draw-outside-the-partition"] = a0.negative(v)
         neg.update(wiring_negatives(mine.members, publics))
         if proved:
@@ -1238,6 +1238,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         shown["coins"] = {x: summary["coins"].get(x) for x in ("source", "coins_reason", "outcome", "run")}
     print("A5 " + json.dumps(shown, sort_keys=True, default=str))
     return summary, ok
+
+
+def outside_the_partition(sample: dict, rec: dict, design: dict, n: int) -> V.Verdict:
+    """The verifier on ``sample`` with its last unit made ``n``, the first index past the ``n`` units the registration
+    ``rec`` partitions, under the sampling design ``design``."""
+    return V.check_draw({**sample, "units": sample["units"][:-1] + [n]}, rec, design)
 
 
 def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.Binding, want: dict, leaf_layer: str, draw: dict,

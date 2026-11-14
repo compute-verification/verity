@@ -67,6 +67,19 @@ def _window(d: Path, n: int = 4):
     return win.window, doc, rec, {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}, table
 
 
+def _verifier(mine, rec: dict):
+    """The verifier on the window, as a5 holds it: -> its check of the registration ``rec`` at given ports, leaf layer
+    and history tables (`verifier.check`), and the sampling design it derives for the window's program and query from
+    the window's own (`derive`), which R1 holds the registered one to."""
+    own = mine.law
+
+    def check(ports: dict, leaf_layer: str, history: dict | None = None) -> V.Verdict:
+        return V.check(rec, mine.program, mine.query, own, CS.SCHEME, ports, leaf_layer=leaf_layer,
+                       work_table=mine.work_table, history=history)
+
+    return check, D.derive(mine.program, mine.query, own, mine.work_table)
+
+
 def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers_bodies(tmp_path):
     mine, doc, rec, publics, table = _window(tmp_path / "w")
     roots = I.registered_roots(rec["window"])
@@ -75,10 +88,10 @@ def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers
     hist = HW.params(doc, mine, publics, HW.pins(doc, roots))
     a = argparse.Namespace(rule=RULE, session_timeout=1, window_root=mine.run, delta=0.5)
     assert A5.rated(mine, RULE) == mine
+    verify, _ = _verifier(mine, rec)
 
     def check(h: dict | None) -> V.Verdict:
-        return V.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, want, leaf_layer=leaf,
-                       work_table=mine.work_table, history=h)
+        return verify(want, leaf, h)
 
     def register(h: dict | None) -> S.WindowCommitmentRecord:
         stream, counts = A5.stream_of(a, mine, [{"defn": G8, "m": m} for m in mine.members], want, leaf,
@@ -106,28 +119,25 @@ def _negatives(mine, doc: dict, rec: dict, publics: dict) -> tuple[bool, dict[st
     a5 alters it: the registration held to ports bound to another run (R3) and to a leaf layer over a changed public
     body (R4), the history root with a bit flipped, a sample naming a unit outside the partition, a proved set short of
     the sample, and the audit record's own (`a0.audit_negatives`), on the record of two units sampled and proved.
+    The sampling design is the verifier's own for the window (`_verifier`), as a5 takes it.
     -> (whether that record accepts, each negative's row)."""
     leaf, want = CS.leaf_layer(publics), CS.expected_ports(mine)
     hist = HW.params(doc, mine, publics, HW.pins(doc, I.registered_roots(rec["window"])))
-
-    def check(ports: dict = want, leaf_layer: str = leaf, history: dict | None = None) -> V.Verdict:
-        return V.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, ports, leaf_layer=leaf_layer,
-                       work_table=mine.work_table, history=history)
-
+    check, design = _verifier(mine, rec)
     first = mine.members[0].key
     flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
     root = hist["registered"]["latent"]
     wrong = {**hist, "registered": {"latent": root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
-    n, design = rec["population"], rec["law"]
+    n = rec["population"]
     sample = {**design, "population": n, "units": [0, 1]}
     registered = {r["port"]: r["root"] for r in rec["roots"]}
     record = V.audit_record(rec, R.receipt(rec, "verifier-test", received="0"), sample, design, sample["units"], 2,
                             {"statement": "stub"}, VERDICTS, 0.5, sessions=[SESSION], session_roots=registered)
     return record["accepted"], {
-        "R3": a0.negative(check(ports=CS.expected_ports(replace(mine, run="00" * 64)))),
-        "R4": a0.negative(check(leaf_layer=CS.leaf_layer(flipped))),
-        "history-root": a0.history_negative(check(history=wrong)),
-        "sample": a0.negative(V.check_draw({**sample, "units": [0, n]}, rec, design)),
+        "R3": a0.negative(check(CS.expected_ports(replace(mine, run="00" * 64)), leaf)),
+        "R4": a0.negative(check(want, CS.leaf_layer(flipped))),
+        "history-root": a0.history_negative(check(want, leaf, wrong)),
+        "sample": a0.negative(A5.outside_the_partition(sample, rec, design, n)),
         "proved": a0.negative(V.check_proved(sample, sample["units"][1:], 1)),
         **a0.audit_negatives(record, design, 0.5, registered)}
 
