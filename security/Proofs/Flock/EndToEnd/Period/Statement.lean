@@ -14,16 +14,16 @@ incorrect proof blocks in the committed transcript fixed at its registration (`i
 and whether a sampled proof block is one of them.
 
 * `IntegrityMonitoringPeriod`: the probability that some sampling block is accepted with at least its `K₀` units incorrect is at most
-  `Σ_w (miss_w + ε_ks,w + δ_link,w)`, each sampling block's `EndToEndHidden` bound. So outside that probability, if
+  `Σ_w (miss_w + ε_ks,w + ε_bind,w)`, each sampling block's `EndToEndHidden` bound. So outside that probability, if
   verity-verify-proof accepts every sampling block, every sampling block has fewer than its `K₀` units incorrect.
 * `IntegrityMonitoringPeriodLog`: `IntegrityMonitoringPeriod` with each sampling block's threshold `K₀ ≥ ln(1/δ)/q`, where its sample covers a
   fraction `q` of its units, so each sampling block's sampling term is at most `δ`.
 * `IntegrityPooled`: over `T` sampling blocks whose samples each cover at least a fraction `q` of their units, the
   probability that every sampling block is accepted and the incorrect proof blocks total at least `ln(1/δ)/q` is at most
-  `δ + Σ_w (ε_ks,w + δ_link,w)`.
+  `δ + Σ_w (ε_ks,w + ε_bind,w)`.
 
 `ε_ks,w` is the sampling block's knowledge term at the worst registration (`SamplingBlock.ks`), since the registration
-is the prover's; `miss_w` and `δ_link,w` are `EndToEndHidden`'s. The named assumptions are `EndToEndHidden`'s, at every
+is the prover's; `miss_w` and `ε_bind,w` are `EndToEndHidden`'s. The named assumptions are `EndToEndHidden`'s, at every
 sampling block: A3 (`uniform/io-getrandombytes`) for the sampling block's sample bytes, `live-verifier`
 (`SamplingBlock.hCust`), and `cr/sha-512` and `ecr/sha-512` (`TableCRZ` and `LinkCRZC`) at every strategy the period's
 prover plays the sampling block with on some run (`Period.Plays`), stated flat as `EndToEndHidden` states them. The
@@ -145,7 +145,7 @@ noncomputable def miss : ℝ≥0∞ := ((w.n - w.K₀).choose w.kd : ℝ≥0∞)
 /-- The knowledge term `ε_ks`, `ksAvgStrictZ` at the worst registration. -/
 noncomputable def ks : ℝ≥0∞ := ⨆ R : w.Reg, ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS R
 
-/-- The binding error `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in `EndToEndHidden`. -/
+/-- The binding error `ε_bind = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in `EndToEndHidden`. -/
 noncomputable def link : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ p : w.vb.Pos,
       (Fintype.card (ΩcZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb w.L p) : ℝ) / Fintype.card w.L.Ω) *

@@ -133,7 +133,7 @@ the JSON `dj S` (`x₀` one sample it sets up with `Stmt.setupHidden`). Let the 
 session be the live-coin part's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`,
 verity-verify-proof accepts with at least `K` incorrect proof blocks of the proving program `Placed.keyProg c hU n`, at the simulated
 prover's committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with
-probability at most `miss(K) + ε_ks + δ_link`.
+probability at most `miss(K) + ε_ks + ε_bind`.
 
 Its hypotheses, past the session's inputs, are `flock_headline_exec`'s at the hidden tables:
 * the circuit is in `rs`'s scope, `hscope : Layout.scopeOkH c = true`: the plain headline's, or its rows each a

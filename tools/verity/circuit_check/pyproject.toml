@@ -139,6 +139,8 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/certifier/prover/ingress_scan.circuit-check.json", "verity/protocols/accounting/certifier/prover/ingress_scan.circuit-check.unkeyed.json",
           "verity/protocols/accounting/certifier/verifier/head_check.py", "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.py",
           "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.json", "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.unkeyed.json",
+          # the compiler's package, which importing any of its Definitions below runs
+          "adapters/vllm/verity_vllm/compiler/__init__.py",
           "adapters/vllm/verity_vllm/compiler/replay_step.py", "adapters/vllm/verity_vllm/compiler/replay_step.circuit-check.py",
           "adapters/vllm/verity_vllm/compiler/replay_step.circuit-check.json",
           "verity/protocols/accounting/certifier/verifier/advice.py",

@@ -163,7 +163,7 @@ def served(tmp_path, *, outcome=WITHHELD, held=True, verdicts=None, units=(2,), 
 
     verdicts = verdicts or {"lean-verify/m0": True, "lean-verify/m1": True, "lean-draw/m0": True, "lean-draw/m1": True,
                             "m0-verifier/m0": True, "m0-verifier/m1": {"accepted": True}}
-    stage1 = {"commit": layout, "registration": REGISTRATION, "rule": {"replay": "rate:1/8"},
+    handoff = {"commit": layout, "registration": REGISTRATION, "rule": {"replay": "rate:1/8"},
               "draw": {"k": 1, "law": "subset", "population": 8, "units": list(units)}}
     summary = {
         "first_stage": {"registration": REGISTRATION, "units": [2]}, "unlinked": False, "held": held, "outcome": outcome,
@@ -179,7 +179,7 @@ def served(tmp_path, *, outcome=WITHHELD, held=True, verdicts=None, units=(2,), 
         "second": run_dir(tmp_path, "r20261113-000004-0004", {"out/second.json": summary,
                                                              "out/machine.txt": "30\nMem: 251\n" + "d" * 40 + "\nsecond rc=0\n"}),
         "first": run_dir(tmp_path, "r20261113-000002-0002", {
-            "out/stage1/p4-o2/stage1.json": stage1,
+            "out/stage1/p4-o2/stage1.json": handoff,
             "out/check.txt": json.dumps({"registration": REGISTRATION[:16], "error": None, "session_error": None,
                                          "coins_reason": None}, indent=1) + "\nFIRST: ACCEPTED\n"}),
         "serve": run_dir(tmp_path, "r20261113-000001-0001", {"out/boundary/w1/p4-o2/commit.json": layout,
