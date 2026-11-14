@@ -144,6 +144,11 @@ def use_h1(provider: Callable[[], H1Device]) -> None:
     _h1 = provider
 
 
+def has_tensors() -> bool:
+    """Whether a workload has handed its buffers in (`use`)."""
+    return _tensors is not None
+
+
 def tensors() -> Tensors:
     if _tensors is None:
         raise NotImplementedError(f"{GOAL}: no tensors handed in; the workload that serves the model calls `tensors.use` first")
@@ -157,4 +162,4 @@ def h1_device() -> H1Device:
     return _h1()
 
 
-__all__ = ["GOAL", "H1Device", "Tensors", "dtype_name", "h1_device", "tensors", "use", "use_h1"]
+__all__ = ["GOAL", "H1Device", "Tensors", "dtype_name", "h1_device", "has_tensors", "tensors", "use", "use_h1"]

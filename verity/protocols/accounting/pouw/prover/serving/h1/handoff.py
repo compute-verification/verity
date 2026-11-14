@@ -43,7 +43,7 @@ from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
-from verity.protocols.accounting.pouw.prover.serving.tensors import Tensors, tensors
+from verity.protocols.accounting.pouw.prover.serving.tensors import Tensors, has_tensors, tensors
 
 #: a suspended window's hand-off state's schema, which `suspend` writes and `resume` refuses any other than
 SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
@@ -104,10 +104,7 @@ class _HostOnly(pickle.Pickler):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        try:
-            self._buffers: Tensors | None = tensors()
-        except NotImplementedError:
-            self._buffers = None
+        self._buffers: Tensors | None = tensors() if has_tensors() else None
 
     def persistent_id(self, obj: Any) -> None:
         if self._buffers is not None and self._buffers.is_buffer(obj):
