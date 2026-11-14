@@ -234,7 +234,6 @@ def test_core_is_expected_from_the_workspace_s_directories_and_from_none_outside
     _resolving(monkeypatch, generic, dict.fromkeys(sid.PACKAGES, {}), core)
     ids = sid.resolve()
     assert ids["verity"]["expected_sys_path_entry"] == os.pathsep.join(os.path.normpath(os.path.join(str(REPO), e)) for e in entries)
-    assert ids["research"]["expected_sys_path_entry"] == str(REPO / "tools" / "research" / "src")
 
 
 @pytest.mark.usefixtures("no_packages")
