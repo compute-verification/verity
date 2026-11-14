@@ -1071,7 +1071,7 @@ for old, new in WHOLE.items():
     for rel in sorted({r for r in named if r} | {r for r in CHANGED if old in CHANGED[r]}
                       | {r for r in new_modules if old in new_modules[r]}):
         text = new_modules.get(rel) or text_after(rel)
-        if rel.startswith(LISTS) or rel in WHOLE or text is None or old not in text:
+        if rel.startswith(LISTS) or rel.startswith("tools/move/") or rel in WHOLE or text is None or old not in text:
             continue
         line = text[:text.index(old)].count("\n") + 1
         problems.append(f"{rel}:{line}: names {old}, which moves whole to {new}: write what it should name after the cut "

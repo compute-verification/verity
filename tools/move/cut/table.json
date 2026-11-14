@@ -36,6 +36,12 @@
      "_counted",
      "_phase",
      "_spread",
+     "CHECKED",
+     "UNHANDED",
+     "key_sha512",
+     "not_under",
+     "open_registrations",
+     "keep_registrations",
      "check"
     ]
    }
@@ -61,6 +67,11 @@
      "check_cells",
      "egress_cells",
      "check_load",
+     "ADDRESSES",
+     "ENDPOINTS",
+     "CELLS_TIMING",
+     "TIMINGS",
+     "cell_timing",
      "check"
     ]
    }
