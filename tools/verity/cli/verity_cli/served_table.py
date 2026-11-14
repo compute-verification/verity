@@ -614,12 +614,25 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
             "verdict": "undecided" if verdict == "accept" and absent else verdict}
 
 
+#: what an unwritten registration raises with: the goal that brings it
+REGISTRATION_GOAL = "memory-accounting/architecture-on-branch"
+
+
 def registration(cfg: Mapping[str, Any], state: Path) -> str:
-    """The digest of the run's registration, the VERDICT line's ``registration``: a registration log
-    (`verity.protocols.accounting.registration`) whose entries name the configuration's hash, ``K.digest(cfg)``, the
-    ``configuration`` of ``state``'s ``run.json``, which `verity run` writes before any party starts and so before any
-    coin; a ``run.json`` under another hash is refused. Until it is written the line's ``registration`` is ``None``."""
-    raise NotImplementedError("MEM-300")
+    """The head of the run's registration log, the VERDICT line's ``registration``, once an information entry of it
+    registers the configuration's hash (the item ``{"kind": "configuration", "digest": K.digest(cfg)}``), before any
+    party starts and so before any coin: `live` calls it after it has prepared the parties here and before it starts
+    one. The hash is ``state``'s ``run.json``'s ``configuration``, which `verity run` writes first; a ``run.json`` under
+    another hash, or none, is refused (``registration``). The log's items are θ and the builder alone
+    (`verity.protocols.accounting.registration.verifier.registration.item_of`, `Core.Registration`): no item names a
+    configuration yet, so it raises `NotImplementedError` (`REGISTRATION_GOAL`), and the line's ``registration`` is
+    ``None``."""
+    f, digest = state / "run.json", K.digest(cfg)
+    run = json.loads(f.read_text()) if f.is_file() else {}
+    if run.get("configuration") != digest:
+        raise Refused("registration", f"{f} names configuration {str(run.get('configuration'))[:16]}…, not this "
+                                      f"configuration's {digest[:16]}…: the registration names the run's own hash")
+    raise NotImplementedError(REGISTRATION_GOAL)
 
 
 def coins_of(cfg: Mapping[str, Any]) -> str:
@@ -641,6 +654,8 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
             k for x in runtime for k in x.unbound(bindings))):
         raise Refused("unbound", f"the deploy bindings (verity run --bindings) don't bind {', '.join(missing)}")
     ready = [(x, prepare(cfg, state, bindings, x)) for x in runtime]
+    if ready:
+        registration(cfg, state)
     out: dict[str, dict[str, Any]] = {}
 
     def done(x: Piece, got: Mapping[str, Any]) -> None:
@@ -680,6 +695,6 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     return Result(out)
 
 
-__all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "SERVED", "WORKLOADS", "Held",
-           "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "placement", "prepare", "served_window",
-           "unbound", "variables"]
+__all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL", "SERVED",
+           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "placement",
+           "prepare", "registration", "served_window", "unbound", "variables"]
