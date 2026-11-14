@@ -50,7 +50,9 @@ SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC HB_H1U_KC_B DITHER_H1C_K
 COINS_PKGS=$(python3 -c 'import json, os, sys; p = sys.argv[1]; print(p, *(os.path.normpath(os.path.join(p, x["dir"]))
   for x in json.load(open(os.path.join(p, "lake-manifest.json")))["packages"] if x["type"] == "path"))' "$COINS_PKG")
 ship_key() {
-  git ls-tree -r HEAD -- benchmarks/hash/dither verity/circuits/kernels/sha512.cuh | grep -E '\.(cu|cuh)$'
+  git ls-tree -r HEAD -- benchmarks/hash/dither/h1c.cu benchmarks/hash/dither/h1f.cu benchmarks/hash/dither/h1o.cu \
+    benchmarks/hash/dither/h1r.cu benchmarks/hash/dither/h1sha.cuh benchmarks/hash/dither/h1u.cu \
+    verity/circuits/kernels/sha512.cuh
   for p in $COINS_PKGS; do echo "lean $p $(git rev-parse "HEAD:$p")"; done
   echo "arms $(for t in dither-a-kh dither-a-hbk dither-a-hbr dither-a-hbc; do case " $* " in *$t*) printf '%s ' $t ;; esac; done)"
   echo "CUDA=$CUDA ARCH=$ARCH HB_KC_FLAGS=${HB_KC_FLAGS:-} HB_KC_H1C_FLAGS=${HB_KC_H1C_FLAGS:-}${HB_KC_FLAGS_B:+ HB_KC_FLAGS_B=$HB_KC_FLAGS_B}"
@@ -72,9 +74,10 @@ if [ -n "${SBENCH_SHIP:-}" ]; then
          exit 17; }
   echo "sbench: shipped ($(tail -1 "$S/key"))"
 else
-for lib in h1c h1f h1o; do
+for src in benchmarks/hash/dither/h1c.cu benchmarks/hash/dither/h1f.cu benchmarks/hash/dither/h1o.cu; do
+  lib=$(basename "$src" .cu)
   nvcc -O3 -std=c++17 -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
-    -o "$S/lib$lib.so" "benchmarks/hash/dither/$lib.cu" > "$OUT/build-$lib.log" 2>&1 \
+    -o "$S/lib$lib.so" "$src" > "$OUT/build-$lib.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL $lib"; grep -v "^ptxas info" "$OUT/build-$lib.log" | tail -30; exit 11; }
 done
 grep -B1 -A2 "h1f_k\|h1r_units" "$OUT/build-h1f.log" | grep -i "registers\|spill" | head -6
