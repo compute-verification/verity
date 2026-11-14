@@ -114,6 +114,17 @@ def test_an_unknown_check_knob_is_refused_by_name_and_a_debug_one_in_a_run_of_re
     assert S.refusals({"VERITY_SKIP_STORE": "", "RESEARCH_RUN_ID": "r1"}) == []
 
 
+def test_what_the_verified_queue_names_to_a_launch_is_refused_by_no_tree_that_predates_it() -> None:
+    """The verified queue sets `TRAIN_CARRY_FROM` and `TRAIN_SUITES_FROM` in the environment of a candidate's launch, and
+    the candidate's tree may predate either.  Only a variable of an owned prefix is refused when undeclared (`OWNED`), and
+    theirs is none: a tree that doesn't declare such a name, as this one doesn't the stand-in here, runs as if it were unset."""
+    for name in ("TRAIN_CARRY_FROM", "TRAIN_SUITES_FROM"):
+        assert name in S.SETTINGS and not name.startswith(S.OWNED)
+    later = {"TRAIN_NAMED_LATER": "0123abcd"}
+    assert "TRAIN_NAMED_LATER" not in S.SETTINGS and S.unknown(later) == []
+    assert S.refusals(later) == S.refusals({**later, "RESEARCH_RUN_ID": "r1"}) == S.refusals(later, of_record=True) == []
+
+
 def _cli(env: dict[str, str], *args: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(HERE / "settings.py"), *args], env=env, capture_output=True, text=True)
 

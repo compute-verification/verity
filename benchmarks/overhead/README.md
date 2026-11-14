@@ -15,6 +15,11 @@ verity bench overhead run --record RUN                        label RUN a run of
 verity bench overhead table [--json]                          γ per scheme, point and card, from runs of record alone
 ```
 
+Under a research run, `table` also writes the numbers `metrics.toml` holds it to into the run's result: Pearl+'s γ of
+record at the H200's C and L (`run.py`'s `METRICS`, `overhead_records.record`), each with the scheme gate as its target.
+Today's run of record times no commitment of the output (each layer's output hash isn't counted, the note below), so
+their titles say so until a run of record whose arm commits y is labelled.
+
 A run takes one GPU of its node through the node's `gpu-lease`, which waits for it and holds it for the run's bound
 (`research run --on NODE -- gpu-lease 1 --wait --max-min M -- bash benchmarks/harness/overhead_node.sh ...`; `research run
 --gpus` is refused on a node whose GPUs gpu-lease doesn't hand out). The H200's node is `vy-dc-h200`. Its outputs are `out/points.json` or `out/overhead.json` and `out/busy.json`, beside each

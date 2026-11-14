@@ -20,7 +20,7 @@ key; the reference hm96 salt is 192 fresh OS bytes a leaf, which this replaces b
 from __future__ import annotations
 
 import hashlib
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 

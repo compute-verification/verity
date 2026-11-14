@@ -24,7 +24,11 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("SparseMlaHeadScores_v1", lambda: bind(sparse_mla.SparseMlaHeadScores, DR=16, DV=16, NVIS=16, FIRST=False, BN=16,
                                                 DOT=sparse_mla.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625)),
         ("SparseMlaHeadValues_v1", lambda: bind(sparse_mla.SparseMlaHeadValues, NVIS=16, FIRST=False, BN=16,
-                                                DOT=sparse_mla.SPARSE_MLA_GLM53["DOT"], G=8)),
+                                                DOT=sparse_mla.SPARSE_MLA_GLM53["DOT"], G=8, C=1)),
+        # the scores unit on its key rows' column blocks of 8, and the writer of one of them
+        ("SparseMlaHeadScoresCols_v1", lambda: bind(sparse_mla.SparseMlaHeadScoresCols, DR=16, DV=16, NVIS=16, FIRST=False,
+                                                    BN=16, DOT=sparse_mla.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625, G=8)),
+        ("SparseMlaHeadKeysWire_v1", lambda: bind(sparse_mla.SparseMlaHeadKeysWire, NVIS=16, W=8, C=0)),
         ("SparseMlaHeadEnd_v1", lambda: bind(sparse_mla.SparseMlaHeadEnd, DV=sparse_mla.SPARSE_MLA_GLM53["DV"],
                                              INV=sparse_mla.SPARSE_MLA_GLM53["INV"])),
         ("SparseMla_v1", lambda: bind(sparse_mla.SparseMla, T=65, **sparse_mla.SPARSE_MLA_GLM53)),

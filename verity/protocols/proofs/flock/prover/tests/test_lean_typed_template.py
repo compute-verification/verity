@@ -31,7 +31,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 @pytest.fixture(scope="module")
 def gemm(tmp_path_factory):
     sys.path.insert(0, str(VERIFIER))
-    import ci  # noqa: PLC0415
+    import ci
 
     store = tmp_path_factory.mktemp("store")
     try:

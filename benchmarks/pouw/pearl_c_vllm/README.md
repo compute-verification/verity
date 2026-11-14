@@ -27,10 +27,12 @@ before.
 | `served_inputs` | CPUs, after a pass | a retained pass's inert work per input against the scheme's bound, by census or sample, or by fresh trials | a directory of `inputs.json` and the tiles' lines, which `served_table.py` reads |
 | `served_step` | one leased GPU, then CPUs | where a served decode step's time goes, one engine process an arm, under Nsight Systems or not (`served_step.py`) | a directory an arm and `breakdown.md` |
 | `served_profile` | one leased GPU, then CPUs | `e2e.py`'s own run with a range on every generate and forward, profiled (`served_profile.py`) | `served-profile.json` |
+| `retain_profile` | the node's CPUs for the kernel's build, then one leased GPU (an H100 or H200) for the probe and for each serve | what retaining every pass costs a served run and where its time goes: the node's copy and write rates, then each load served with no pass retained and with every pass retained under timers (`retain_profile.py`) | each load's served JSON, its profile and the logs |
 | `noise_sweep` | leased GPUs, a point a lease | the served decode overhead over stock FP8 across a list of points, untimed screens (`noise_sweep.py` summarizes) | `points/<point>/`, `progress.jsonl`, `sweep.json` and `sweep.md` |
 | `forming_domain` | CPUs, after a pass | whether a retained pass's credited rows meet the forming lemma's domain conditions (`forming_domain.py`) | one JSON file |
 
-`flashinfer_env.sh` is sourced by `setup`, `window` and `served_profile`; it is not a job.
+`flashinfer_env.sh` is sourced by `setup`, `window` and `served_profile`, and by `benchmarks/vllm_encoded/stack.sh`;
+it is not a job.
 
 ## The scripts with no job of their own
 
@@ -43,11 +45,15 @@ before.
 | `h3_screen.py` | the device path's calls against the reference: `capture` on one GPU, `check` on CPUs after |
 | `profile_decode.py` | an untimed profile of the arm, which `window` runs under `MODE=profile` |
 | `panel_rows.py` | a window's result and its verify verdicts as the kernel panel's rows |
+| `volunteer_pass.py` | the honest remedy on a retained pass before its sampling coin: every tile's inert work replayed, the rows that leave a tile or a credited row over its inert-work bound given up, and the manifest's records rewritten |
 | `bench_arm.py` | Pearl-C as an arm of the `verity-bench` harness (`--arm-module pearl_c_vllm.bench_arm:PEARL_C`) |
 
 ## Who reads it
 
 `../pearl_c_sm90/` and `../served_zk/` load this directory's Python by path, and `../served_zk/`'s jobs start
-`window.sh`; the harness loads `bench_arm.py` by its module name with `benchmarks/pouw` on `PYTHONPATH`; the tests in
-`../tests/` run the arm on a stand-in driver. A replay here opens rows and words in the clear, a development shortcut:
-its ACCEPT is never the protocol's verdict, which is a zero-knowledge proof. Nothing here is read by a verifier.
+`window.sh`; `benchmarks/vllm_encoded/stack.sh` sources `flashinfer_env.sh`; the harness loads `bench_arm.py` by its
+module name, `pearl_c_vllm.bench_arm` with `benchmarks/pouw` on `PYTHONPATH` and
+`benchmarks.pouw.pearl_c_vllm.bench_arm` from the repository's root (its two Pearl-C specs under
+`benchmarks/harness/specs/`, its vLLM runner and its tests); the tests in `../tests/` run the arm on a stand-in driver.
+A replay here opens rows and words in the clear, a development shortcut: its ACCEPT is never the protocol's verdict,
+which is a zero-knowledge proof. Nothing here is read by a verifier.

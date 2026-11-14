@@ -325,6 +325,55 @@ def test_the_slots_row_says_which_free_slots_a_run_sent_with_on_auto_can_take(mo
     assert out["pools"] is None and {r["name"]: r for r in out["rows"]}[SLOTS_ROW]["now"] == qt.PAST
 
 
+def test_reds_name_each_candidate_being_checked_its_members_above_main_and_only_its_gating_reds():
+    """A by-hand watch ssh'd to every check node, read each run's launch.json with regular expressions and dropped circuit-check
+    by name: `reds` ties the shards `collect` already reads to the loop's candidates, and leaves out every step off the gate."""
+    def row(action, hhmm, sha, **kw):
+        return {"action": action, "at": at(hhmm), "sha": sha * 40, "shadow": False, "done": True, "why": "", "failed": [],
+                "ids": [], "verdict": None, **kw}
+
+    d = doc()
+    d["off_gate"] = ["circuit-check", "ratchet-gate"]
+    d["control"]["decisions"] = [
+        row("build", "01:00", "a", members=[1, 2], heads=["h1", "h2"]),
+        row("advance", "01:50", "a", members=[1, 2], heads=["h1", "h2"]),
+        row("build", "02:00", "e", base="a" * 40, members=[7], heads=["h7"]),
+        row("build", "02:10", "f", base="e" * 40, members=[8, 9], heads=["h8", "h9"]),
+        row("slim", "02:12", "f", ids=["r20261110-021200-ffff", "r20261110-021200-fff2"]),
+    ]
+    took = qt.ts(at("02:13"))
+    d["nodes"]["vy-nebius-cpu-1"]["runs"] = [
+        {"id": "r20261110-021200-ffff", "kind": "shard", "shard": "1/2", "sha": "f" * 12, "took": took, "end": None, "rc": None,
+         "state": "running", "failed": [["tools/research", took + 600]],
+         "steps": [{"step": "pytest", "state": "running", "seconds": 700}, {"step": "ratchet-gate", "state": "failed", "seconds": 30},
+                   {"step": "lean-audit", "state": "pending"}]},
+        {"id": "r20261110-021200-fff2", "kind": "shard", "shard": "2/2", "sha": "f" * 12, "took": took, "end": took + 900, "rc": 1,
+         "state": "failed", "failed": [],
+         "steps": [{"step": "lean-suites", "state": "failed", "seconds": 880}, {"step": "circuit-check", "state": "failed", "seconds": 5}]},
+    ]
+    rows = qt.reds(d)
+    assert [(r["sha"], r["base"], r["members"], r["build_min"]) for r in rows] == [
+        ("e" * 12, "a" * 12, [7], 60.0), ("f" * 12, "e" * 12, [7, 8, 9], 50.0)]
+    assert rows[0]["shards"] == []
+    assert rows[1]["shards"] == [
+        {"shard": "1/2", "node": "vy-nebius-cpu-1", "id": "r20261110-021200-ffff", "state": "running", "rc": None,
+         "steps": [{"step": "pytest", "state": "running", "seconds": 700}], "reds": ["suite tools/research"]},
+        {"shard": "2/2", "node": "vy-nebius-cpu-1", "id": "r20261110-021200-fff2", "state": "failed", "rc": 1,
+         "steps": [{"step": "lean-suites", "state": "failed", "seconds": 880}], "reds": ["step lean-suites"]}]
+    text = qt.render_reds(rows, d).splitlines()
+    assert text[1:] == [
+        f"queue/{'e' * 12} on {'a' * 12}, built 60 min ago, above `main`: #7",
+        "  no shard run found",
+        f"queue/{'f' * 12} on {'e' * 12}, built 50 min ago, above `main`: #7 #8 #9",
+        "  1/2 cpu-1 r20261110-021200-ffff running: pytest running 700 s",
+        "    RED: suite tools/research",
+        "  2/2 cpu-1 r20261110-021200-fff2 failed rc 1: lean-suites failed 880 s",
+        "    RED: step lean-suites"], text
+    assert "those off it (circuit-check, ratchet-gate) are left out" in text[0]
+    del d["off_gate"]
+    assert qt.OFF_GATE == ("circuit-check", "ratchet-gate") and qt.reds(d) == rows
+
+
 def test_a_round_is_plain_only_when_its_candidate_is_known_to_change_no_lean():
     d = doc()
     d["lean"] = {"a" * 12: [qt.COMPARE_FILES, 0]}       # the compare's list was full, so a Lean file may be past its end

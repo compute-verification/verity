@@ -199,20 +199,20 @@ static void each_instruction(const uint64_t *pool, int n, Emit emit, void *ctx) 
 typedef struct {
     uint64_t *k0, *k1;
     uint32_t *gen;
-    uint32_t g, cap;
+    uint32_t g, slots;
 } Set;
 
-static Set set_new(uint32_t cap) {
-    Set s = {calloc(cap, 8), calloc(cap, 8), calloc(cap, 4), 1, cap};
+static Set set_new(uint32_t slots) {
+    Set s = {calloc(slots, 8), calloc(slots, 8), calloc(slots, 4), 1, slots};
     return s;
 }
 
 static int set_add(Set *s, uint64_t a, uint64_t b) {
     uint64_t h = (a * 0x9E3779B97F4A7C15ULL) ^ (b * 0xC2B2AE3D27D4EB4FULL);
-    uint32_t i = (uint32_t)(h >> 40) & (s->cap - 1);
+    uint32_t i = (uint32_t)(h >> 40) & (s->slots - 1);
     while (s->gen[i] == s->g) {
         if (s->k0[i] == a && s->k1[i] == b) return 0;
-        i = (i + 1) & (s->cap - 1);
+        i = (i + 1) & (s->slots - 1);
     }
     s->gen[i] = s->g; s->k0[i] = a; s->k1[i] = b;
     return 1;
@@ -253,7 +253,7 @@ static int new_words(const Ins *x, const uint64_t *pool, int n, uint64_t *k0, ui
 
 typedef struct {
     Ins *v;
-    size_t n, cap;
+    size_t n, room;
     Set set;
     const uint64_t *pool;
     int np;
@@ -264,13 +264,13 @@ static void collect(const Ins *x, void *ctx) {
     uint64_t k0, k1;
     int nw = new_words(x, L->pool, L->np, &k0, &k1);
     if (!nw || !set_add(&L->set, k0, k1)) return;
-    if (L->n >= L->set.cap / 2) {
-        fprintf(stderr, "set over half full (%zu of %u): raise set_new's capacity\n", L->n, L->set.cap);
+    if (L->n >= L->set.slots / 2) {
+        fprintf(stderr, "set over half full (%zu of %u): raise set_new's capacity\n", L->n, L->set.slots);
         exit(4);
     }
-    if (L->n == L->cap) {
-        L->cap = L->cap ? 2 * L->cap : 4096;
-        L->v = realloc(L->v, L->cap * sizeof(Ins));
+    if (L->n == L->room) {
+        L->room = L->room ? 2 * L->room : 4096;
+        L->v = realloc(L->v, L->room * sizeof(Ins));
     }
     Ins y = *x;
     y.nw = nw;
@@ -454,10 +454,10 @@ int main(void) {
     {
         List seconds = {0};
         seconds.set = set_new(1u << 21);
-        int npre = 0, cap = 4 * MAXJ * MAXN * MAXN;
-        uint64_t *pre_lo = malloc(cap * 8), *pre_hi = malloc(cap * 8);
-        uint8_t *pre_in = malloc(cap), (*pre_m)[5] = malloc(cap * 5);
-        int *hits = malloc(cap * sizeof(int));
+        int npre = 0, maxpre = 4 * MAXJ * MAXN * MAXN;
+        uint64_t *pre_lo = malloc(maxpre * 8), *pre_hi = malloc(maxpre * 8);
+        uint8_t *pre_in = malloc(maxpre), (*pre_m)[5] = malloc(maxpre * 5);
+        int *hits = malloc(maxpre * sizeof(int));
         /* IADD.64: b_lo for each a_lo of the first's pool, and where it is in that pool (-1: not) */
         uint64_t *blo = malloc(MAXN * 4 * MAXJ * 2 * 8);
         int *blo_at = malloc(MAXN * 4 * MAXJ * 2 * sizeof(int));

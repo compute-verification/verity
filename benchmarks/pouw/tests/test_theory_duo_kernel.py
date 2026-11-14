@@ -5,17 +5,11 @@ from __future__ import annotations
 import itertools
 import random
 import re
-import sys
-from pathlib import Path
-
-import pytest
-
-THEORY = Path(__file__).resolve().parents[1] / "theory"
-sys.path.insert(0, str(THEORY))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/verifier/receipts"))
 
 import duo_kernel_sweep as dk
-import receipt_folds as rf
+import pytest
+
+from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as rf
 
 
 @pytest.fixture(scope="module")
