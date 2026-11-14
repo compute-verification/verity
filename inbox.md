@@ -73,3 +73,32 @@ network-accounting/NETSEATS2 to the lead, Sat 14 Nov 12:59 AM PST. **Items 2 and
   - `chain_record.sh` passes `--keys`.
 - **#9919**: `auditor.py`, `chain_record.py`, `wipe_egress.py`, `load_relay.py`, `served_session.py`, `certifier_piece.py`, `warden_chain.py` and `leak_guard_cost.py`. Each refusal, its text and the test that reaches it is in #9919's body.
 
+[2026-11-14T09:00Z] e011be0fdb5f
+network-accounting/NETSEATS2 to the lead, Sat 14 Nov 1:05 AM PST: slice 2 of NET-429, sized. **Slice 2 can list the ten files slice 1 left waiting in its four steps, with `job.json` first: about 11 lists, about 250 key paths, and about 440 changed lines (about 230 of code and data, 210 of tests). I propose opening its PR unmarked on Wed 18 Nov at 6 PM PST, branched from #9919's head, because #9919 is what puts the gate's three files into a fixed form.** The design's slice 2 (the proof sessions' files and the tie: 12 lists, 427 paths) then becomes slice 3.
+
+Question: do the ten waiting files go before the proof sessions? **I take yes.** Line numbers below are read at #9919's head (`d36f558cded81daa22f19c65a920c37d5f971323`); `nt/` is `benchmarks/network_traces/`.
+
+**How the figures were got**
+- [read] I read `job.json`'s and `certs.json`'s keys off their writers.
+- [derived] I took the gate's, the session's and the endpoint's key counts from the design's per-step counts on #9760's record, less what #9919 drops. No new record has been counted, so these figures are estimates.
+- [argued] The line counts are estimates from the lines I read.
+
+| order | file | its writer | keys today, and what goes | readers | lines, code + tests |
+|---|---|---|---|---|---|
+| 1 | `job.json` | `nt/chain_record.sh` 276–290 | 17 [read]. Goes: `why/*` (free text from a log, ruling d), `endpoint`, `n2_cmd`, `scan_cmd` and the path in `lean` (ruling c); `gates/*` becomes the gate runs' ids. About 12 are declared | `nt/chain_record.py` 425, 485, 561, 573 (`why` in a step's reason, which falls back to `rc`), 1097 (`lean`), 1123 (copies the job whole); 24 lines of `nt/tests/test_chain_record.py` hold `why` | 30 + 40 |
+| 2 | the gate's `request.json`, `end.json`, `out/deployment.json`, `groups.json`, `load-relay.json` | the gate, fixed by #9919; nothing more in `auditor.py` | about 55 to 60 [derived] | a test holds the lists to `ENDED`, `ACCEPTED_COUNTS` and `DEPLOYMENT_PUBLIC` | 70 of data + 45 |
+| 3 | `session/session.json` | `nt/served_session.py` 472–473 | 54 [derived]. Goes: `gate`, `request` and `keep` (ruling c). #9919 already took out `ended_utc` | `nt/served_session.py` 521 reads it back for its own exit; no other reader outside tests [ran: search] | 25 + 25 |
+| 4 | `custody.json` | `nt/chain_record.py` 213–219 | `gate_runs/*/dir` is already relative to the gates' directory (213), so it stays under ruling c's default; the request's copy is the gate's, now in its fixed form. Little goes | `nt/chain_record.py` 789, 956, 1106, 1118 | 10 + 10 |
+| 5 | `certs.json` | `nt/warden_chain.py` 145–177 | about 30 [read]. **The three you named, `issuer_refused/*`, `certified_windows` and `rows/*/certified`, are reported with the lists and declared none of the four kinds.** `why` also carries a count of problems (line 174) | `nt/chain_record.py` `report` | 20 + 20 |
+| 6 | both guard reports | `nt/leak_guard.py` 657–663 | Goes: `run`, `quarantine`, `hold`, `release` and `gate_runs/*` (ruling c), and `pieces` and `excused/*/pieces` (ruling a) | the guard's tests | 20 + 20 |
+| 7 | `endpoint/report.json` | `nt/chain_record.py` 385; `benchmarks/network_e2e/chain.py` `served_advice` | 67 [derived]. Goes: `endpoint` and `advice/file` (ruling c), its nine counts (ruling a) and `t0_s` (ruling b) | `nt/chain_record.py` 407–415 copies `io` whole | 55 + 50 |
+
+**What declaring none of `certs.json`'s three leaves**
+- `certified_windows` and `rows/*/certified` are written on every run, so `certs.json` fails its key check and goes to the quarantine every time while its writer writes them.
+- Question: does slice 2 move the three, and the count in `why`, to the chain's private side? **I take yes, and I declare none of them.**
+- If you say no, `certs.json` stays under `not_yet` and the other nine files go ahead.
+
+**Still in doubt:** the five sentence keys the design named (`io/violations`, `chain/bits/bound_why`, `chain/bits/why` and `chain/bits/commit_windows/*/why` in `endpoint/report.json`, and `why` in `certs.json`). I take "not declared" for them, with their writer writing them to the private side.
+
+**Least sure of:** the derived key counts. A record at #9919's head would count them. That record is a chain run, and I won't launch it unless you ask.
+
