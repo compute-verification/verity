@@ -4,8 +4,8 @@ than experts, ids no expert takes, an expert map); the same schedule the align D
 index; any output vLLM's atomic order can give canonicalizes to it; the Marlin experts' wrapper allocates as vLLM's does, is what
 the experts' function reaches, is refused where that function would bypass it, and is installed once, armed before vLLM's
 module is imported, by the driver, every rank and the distribution's vLLM plugin; every call launches the program that
-writes the total, 0 pairs included; and, where Triton is importable, the kernels (in Triton's interpreter) write the
-reference on both paths and at 0 pairs."""
+writes the total, 0 pairs included; and, where Triton is installed, the kernels write the reference on both paths and at 0
+pairs in Triton's interpreter, in a pytest of their own (`moe_align_interpreter_cases.py`)."""
 from __future__ import annotations
 
 import ast
@@ -14,6 +14,7 @@ import importlib.util
 import inspect
 import os
 import random
+import subprocess
 import sys
 import tomllib
 import types
@@ -325,58 +326,32 @@ def test_every_call_launches_the_program_that_writes_the_total_even_at_zero_pair
     assert align.calls == {"one": 3, "chunked": 1}
 
 
-def run_kernels(torch, align, ids, num_experts, block, expert_map=None, dtype=None):
-    t = torch.tensor(ids, dtype=dtype or torch.int32).reshape(-1, 1)
-    L = moe_align.sorted_len(len(ids), num_experts, block)
-    s = torch.full((L,), -7, dtype=torch.int32)
-    b = torch.full((moe_align.cdiv(L, block),), -7, dtype=torch.int32)
-    n = torch.full((1,), -7, dtype=torch.int32)
-    m = None if expert_map is None else torch.tensor(expert_map, dtype=torch.int32)
-    align(t, num_experts, block, s, b, n, m)
-    return s.tolist(), b.tolist(), int(n[0])
+INTERPRETER_CASES = "tests/engine/moe_align_interpreter_cases.py"
 
 
 @pytest.fixture(scope="module")
-def interpreted():
-    # Triton builds its own library's kernels (tl.sum, tl.cumsum) for the interpreter only when this is set at its first import,
-    # and `triton.jit` reads it when it decorates a kernel
-    if "triton" in sys.modules and os.environ.get("TRITON_INTERPRET") != "1":
-        pytest.skip("Triton was imported before TRITON_INTERPRET could be set")
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setenv("TRITON_INTERPRET", "1")
-        pytest.importorskip("triton")
-        torch = pytest.importorskip("torch")
-        from verity_vllm.engine import moe_align_kernels
+def interpreter(tmp_path_factory) -> subprocess.CompletedProcess[str]:
+    """`moe_align_interpreter_cases.py` in a pytest of their own, once for this module, wherever Triton is installed.  Triton
+    takes `TRITON_INTERPRET` at its first import (the cases' docstring), and this process made that import before any test:
+    `conftest.py` imports `torch._inductor.config`, which loads Triton.  So the variable is in the child's environment from its
+    start, and in no other test's."""
+    absent = [name for name in ("triton", "torch") if importlib.util.find_spec(name) is None]
+    if absent:
+        pytest.skip(f"not installed: {', '.join(absent)}")
+    return subprocess.run([sys.executable, "-m", "pytest", INTERPRETER_CASES, "-rA", "-p", "no:cacheprovider",
+                           f"--basetemp={tmp_path_factory.mktemp('interpreter') / 'b'}"], cwd=ROOT,
+                          env={**os.environ, "TRITON_INTERPRET": "1"}, capture_output=True, text=True)
 
-        importlib.reload(moe_align_kernels)
-        mp.setattr(moe_align, "_KERNELS", {})
-        yield torch
-        mp.undo()
-        importlib.reload(moe_align_kernels)
+
+def passed_in_interpreter(run: subprocess.CompletedProcess[str], case: str) -> None:
+    """The child ran `case` and passed it, and nothing else of the child failed."""
+    assert run.returncode == 0 and f"PASSED {INTERPRETER_CASES}::{case}" in run.stdout.splitlines(), run.stdout + run.stderr
 
 
 @pytest.mark.parametrize("path", ["one", "chunked"])
-def test_kernels_write_the_reference_in_interpreter(interpreted, path):
-    torch = interpreted
-    small = 1 << 20 if path == "one" else 0
-    align = moe_align.Align(small_max=small, chunk=64, tile=16, long_tile=32, cols=16)
-    rng = random.Random(path)
-    cases = [([2, 3, 4, 1, 2, 4, 1, 3, 4, 1, 2, 3], 5, 4, None), ([1, 3, 1, 1, 1], 4, 2, None), ([5, 0], 8, 4, None),
-             ([-1, 2, 3, 7, -9, 1], 3, 2, None), ([0, 1, 2, 1], 3, 2, [-1, 0, 2]), ([2, 0, 2, 2, 0], 3, 1, None)]
-    cases += [([rng.randrange(-1, 9) for _ in range(rng.randrange(1, 70))], 8, bm, None) for bm in (1, 2, 3, 8, 16)]
-    cases += [([rng.randrange(0, 2) for _ in range(100)], 3, 4, None), ([2] * 50, 3, 8, [0, 1, 2])]
-    cases += [([rng.randrange(0, 5) for _ in range(90)], 5, 37, None)]
-    cases += [(routing(rng, rows, how), E, 8, None) for rows, how in ((1, "uniform"), (7, "skew"), (11, "same6"))]
-    for ids, ne, bm, mp in cases:
-        assert run_kernels(torch, align, ids, ne, bm, mp) == reference(ids, ne, bm, mp), (ids, ne, bm, mp)
-    ids = [1 << 32 | 1, 2, -1, 1, 0, 1 << 33]
-    assert run_kernels(torch, align, ids, 3, 2, dtype=torch.int64) == reference(ids, 3, 2)
-    assert align.calls[path] == len(cases) + 1
+def test_kernels_write_the_reference_in_interpreter(interpreter, path):
+    passed_in_interpreter(interpreter, f"test_kernels_write_the_reference_in_interpreter[{path}]")
 
 
-def test_kernels_write_the_total_at_zero_pairs_in_interpreter(interpreted):
-    torch = interpreted
-    align = moe_align.Align()
-    for ne, bm, mp in ((E, 8, None), (5, 4, None), (3, 2, [-1, 0, 2])):
-        assert run_kernels(torch, align, [], ne, bm, mp) == reference([], ne, bm, mp) == ([], [], 0)
-    assert align.calls == {"one": 3, "chunked": 0}
+def test_kernels_write_the_total_at_zero_pairs_in_interpreter(interpreter):
+    passed_in_interpreter(interpreter, "test_kernels_write_the_total_at_zero_pairs_in_interpreter")

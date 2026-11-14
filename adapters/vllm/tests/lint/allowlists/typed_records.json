@@ -5,14 +5,7 @@
     {"file": "verity/definitions/numerics/fa2_relation.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity/definitions/numerics/gemm_relation.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity/definitions/numerics/rms_relation.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
-    {"file": "verity_vllm/acquire/install.py", "kind": "schema-literal", "symbol": "OccurrenceSink.to_json", "detail": "verity-vllm/acquisition-observed/v1"},
-    {"file": "verity_vllm/acquire/served.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/served-required-manifest/v1"},
-    {"file": "verity_vllm/check/replay/driver.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
-    {"file": "verity_vllm/check/replay/opening.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 7},
-    {"file": "verity_vllm/check/replay/population.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/commit/capture_map.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/capture-map/v0"},
-    {"file": "verity_vllm/engine/build.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
-    {"file": "verity_vllm/engine/code_identity.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/meta-inventory/v1"},
     {"file": "verity_vllm/engine/step_trace.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/step-trace/v1"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
@@ -63,10 +56,8 @@
     {"file": "verity_vllm/program/predict/build.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/greedy-request/v1"},
     {"file": "verity_vllm/program/predict/build.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/stochastic-engine-step/v1"},
     {"file": "verity_vllm/program/predict/build.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/stochastic-request/v1"},
-    {"file": "verity_vllm/program/predict/dsa.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/predict/node_registration.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 10},
     {"file": "verity_vllm/program/predict/steps.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/compiled-steps/v2"},
-    {"file": "verity_vllm/program/predict/steps.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/prefix_plan.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
     {"file": "verity_vllm/program/workload.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/workload-program/v1"},
     {"file": "verity_vllm/properties/admission.py", "kind": "schema-literal", "symbol": "check", "detail": "verity-gen/difftest/v1"},
@@ -89,7 +80,6 @@
     {"file": "verity_vllm/program/mla_capture.py", "kind": "schema-literal", "symbol": "produce", "detail": "verity-vllm/mla-capture/v1"},
     {"file": "verity/definitions/registry/ref_prims.py", "kind": "schema-literal", "symbol": "ref_vocab_manifest", "detail": "verity-ir/ref-vocab/v0"},
     {"file": "verity/definitions/registry/sparse_mla_split.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/mufu-lg2-quadratic/v1"},
-    {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"},
-    {"file": "verity_vllm/pipeline/spans.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"}
+    {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"}
   ]
 }
