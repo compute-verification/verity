@@ -78,6 +78,11 @@ worker_gb = 6
 # circuit under a φ (`prove_path.registered_of_serve`), which refuses a BF16 checkpoint under the int8 serve's.
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
+# network_e2e's endpoint advice: `verity-vllm advice`'s output, which advice_charge's tests read.
+# `benchmarks/census/adversary.json`: onsite_record's world cells (`leak_bounds.world_links`).
+# `security/lean-audit.json` and `security/Properties/lean-audit.json`: onsite_record's guarantees the tight K rests on
+# and the discharges of its premises, each at the statement whose hypotheses and antecedents it names (`RESTS_ON`,
+# `DISCHARGES`), which the locks record by digest and no other way.
 inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover/clear", "benchmarks/pouw/pearl_c",
           "benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm",
           "benchmarks/pouw/tests/test_pearl_c_vllm.py", "benchmarks/pouw/tests/test_pearl_c_hash_decode.py",
@@ -95,7 +100,9 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json",
-          "benchmarks/census/deployments.json",
+          "benchmarks/census/deployments.json", "benchmarks/census/adversary.json",
+          "security/lean-audit.json", "security/Properties/lean-audit.json",
+          "benchmarks/network_e2e/tests/data/endpoint/advice",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
