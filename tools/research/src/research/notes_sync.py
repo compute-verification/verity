@@ -370,7 +370,8 @@ MINT_FAILED = "mint: the GitHub broker gave no notes token"
 
 
 def rewrite(root: Path, url: str) -> str:
-    """Which `url.<base>.insteadOf` rule git applies to `url` in `root`, said with the credential in its base masked; '' when none
+    """Which `url.<base>.insteadOf` rule git applies to `url` in `root`, said with the user part of its base and of the prefix it
+    rewrites (a user, or a user and a token) masked; '' when none
     does.  git takes the longest matching prefix, and of equally long ones the first in its configuration: on a cloud VM that
     keeps one rule per token refresh, the oldest token.  Read past the agent guard's git, which strips credentials from what
     `git config` prints and so would hide whether the base carries one."""
@@ -382,8 +383,8 @@ def rewrite(root: Path, url: str) -> str:
         return ""
     best = max(len(p) for _, p in rules)
     alike = [(base, p) for base, p in rules if len(p) == best]
-    base = re.sub(r"//[^/@]*@", "//<credential>@", alike[0][0])
-    return f"url.{base}.insteadOf rewrites {alike[0][1]}" + (
+    base, prefix = (re.sub(r"(^|//)[^/\s]*@", r"\1<credential>@", s) for s in alike[0])
+    return f"url.{base}.insteadOf rewrites {prefix}" + (
         f"; {len(alike)} rules rewrite it alike, and git takes the first, the oldest" if len(alike) > 1 else "")
 
 

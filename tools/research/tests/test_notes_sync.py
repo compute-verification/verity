@@ -1168,6 +1168,22 @@ def test_a_brokers_token_github_refuses_once_is_minted_afresh_and_the_sync_gets_
     assert len(refused) == 1 and broker["waits"] == [NS.MINT_WAIT_S] and NS.os.environ[NS.TOKEN_ENV] == "broker-token-2"
 
 
+def test_a_refused_brokers_token_is_not_sent_again_when_the_fresh_mint_gives_none(cloud_vm, broker, monkeypatch):
+    """A fresh mint that fails leaves `notes_token` with the token GitHub just refused: the request is not made again with it,
+    and the failure does not say a fresh one was minted."""
+    _, a, _ = cloud_vm
+    assert NS.notes_token() == "broker-token-1"
+    broker["status"] = 503
+    refused = _github_refuses(monkeypatch, "fetch", 401, token=None)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["attempts"]) == (1, 1) and rep["error"].startswith("git fetch origin failed: remote: Invalid username"), rep
+    assert (len(refused), len(broker["seen"]), broker["waits"]) == (1, 2, [NS.MINT_WAIT_S]), "the refused token is sent once"
+    assert rep["error"].endswith(" -> helper: the mint worked, and GitHub refused the broker's token as the credential helper "
+                                 "passed it: the agents' GitHub App may have lost research-notes from its repository access "
+                                 "(`research doctor`)") and "broker-token" not in str(rep)
+
+
 @pytest.fixture
 def identity(tmp_path, monkeypatch):
     """This machine has a Cursor agent's identity socket (a cloud VM), unlike conftest's laptop."""
@@ -1247,6 +1263,20 @@ def test_the_rewrite_git_uses_is_the_first_of_equally_long_rules_and_its_credent
     assert NS.rewrite(repo, NS.NOTES_URL) == ("url.https://<credential>@github.com/.insteadOf rewrites https://github.com/; 3 rules "
                                              "rewrite it alike, and git takes the first, the oldest")
     assert NS.rewrite(repo, EXPLICIT) == "", "the explicit-user URL is never rewritten"
+
+
+def test_the_rewrite_masks_a_user_and_token_in_the_prefix_it_rewrites_too(tmp_path, monkeypatch):
+    """A clone whose remote carries a user and a token matches a rule whose insteadOf value carries them too: neither the base
+    nor the value is said with them."""
+    repo = tmp_path / "r"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    _git(tmp_path, "config", "--file", str(tmp_path / "gitconfig"), "url.https://other:dummy-base@github.com/.insteadOf",
+         "https://user:dummy-tok@github.com/")
+    said = NS.rewrite(repo, "https://user:dummy-tok@github.com/compute-verification/research-notes.git")
+    assert said == "url.https://<credential>@github.com/.insteadOf rewrites https://<credential>@github.com/"
+    assert not any(s in said for s in ("dummy", "user", "other"))
 
 
 def test_a_pull_and_a_clone_whose_given_token_github_refuses_go_on_with_the_brokers_too(cloud_vm, broker, tmp_path, monkeypatch, capsys):
