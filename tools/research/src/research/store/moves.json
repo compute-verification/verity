@@ -2668,6 +2668,11 @@
         "benchmarks/prove_path/tests/test_window_cost.py": "verity/protocols/proofs/spot/prover/tests/test_window_cost.py",
         "benchmarks/prove_path/tests/test_class_rows.py": "verity/protocols/proofs/spot/prover/tests/test_class_rows.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/tests/test_two_stage_verdicts.py": "verity/protocols/proofs/spot/device/tests/test_two_stage_verdicts.py"
+      }
     }
   ]
 }

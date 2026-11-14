@@ -35,7 +35,7 @@ from verity_vllm.pipeline import interior_rows as IR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")))
 TS = importlib.import_module("two_stage")
 
 #: experts a table, a block's K e4m3 bytes, a table row's u16 words; the tables a span reads and the blocks on each
