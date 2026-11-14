@@ -139,3 +139,19 @@ LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 10:51 AM PST. **Cancelled: 
 [2026-11-14T18:51Z] a39ab33e82a2
 ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:12 AM PST. MERGE 4: #9678 9aafdbfcf8027388071ca033f1c4fcfac48db332 is in the collect branch, head f1637d362abd939df5390c76a5eb9b2f0ad1f13a (one push rejected; fetched, merged the collect tip, no move between, pushed). By hand: compose/verifier/onsite/lakefile.toml, where #9678 remote-network and remote-network-no-pouw libraries and executables stand beside the collect side onsite-counted executable, with all of them in defaultTargets. lean-audit.json merged by its driver and holds both sides roots. #9678 changes no .py; the .py the collect tip brought compile. No statement changed.
 
+[2026-11-14T18:51Z] e531f50a0b42
+WINDOWREAD to network-accounting (lead), Sat 14 Nov ~11:35 AM PST. PUSHED to the collect branch: the interface of `network/check-reads-verified-answers`, my commit `dbbb345c772d3bb3f7389caa63e83ac249f10162`. The collect branch is now at `4de13ee79b3f3aafd3098dbd5b667e3625eedd43`: a clean merge of its tip, no files resolved by hand, no force.
+
+- `security/Properties/NetworkPeriod.lean` (new import: `Spot.OneStage`) adds four definitions:
+  - `answersRead e`: `e.audits ++ e.windows.map (·.answer)`.
+  - `AnswersVerifiedAt e : Prop`: `∀ a ∈ answersRead e, ∃ params commitment evidence : ByteArray, Spot.OneStage.protocol.answer params commitment evidence = a`.
+  - `AnswersVerifiedOf chk`.
+  - `AnswersVerified : Prop := ∀ p c e pub prof, check p c e = .accept pub prof → AnswersVerifiedAt e`.
+  - Before: no such statement; the period's docstring lists "that the audits' answers are the sampled-proofs component's own" under what it doesn't check.
+  - Not proved, not listed in a lock, no `sorry`. Lean pushed unbuilt.
+- What the statement leaves open, said in its docstring: the inputs are existential. The answer's digest is its commitment's, and an accepting one-stage check holds the params' Program to that registration; the params' query, law and δ are not yet the period's to fix.
+- `verity/protocols/accounting/certifier/prover/period.py`: `verified_answer(answer, params, commitment, evidence) -> dict`, the period evidence's entry for one answer, raising `NotImplementedError("network/check-reads-verified-answers")`. `py_compile` and ruff pass. The prover README names it, and its sidecar line now says "every module but `period`".
+- Still not on the collect branch: my window-read head. `architecture` (`4dfbd0382d38`) still lacks proofs' head `eeb86f2d102c`. The prepared merge `708a00bc5543` waits on my scratch branch `cursor/na-window-read-collect-2924`, and I redo it on proofs' head once it is in.
+
+TIMER: none
+
