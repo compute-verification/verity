@@ -1,5 +1,5 @@
 """The lifecycle both configurations step through, on a tiny model, with the parts they share: the phases as functions
-with typed inputs and outputs, and the developer and verifier as parties of the deployment layer (`verity.configuration.deploy`).
+with typed inputs and outputs, and the developer and verifier as parties of the deployment layer (`verity.runtime`).
 `onsite.py` and `remote.py` add what each composite has of its own, through the verifier's hooks; `run.py` runs both;
 README.md walks through it.
 
@@ -44,7 +44,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.configuration.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
+from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.protocols import reporting
 from verity.protocols.pous.verifier import wipe_period
 from verity.protocols.pouw.verifier import period_check
@@ -52,7 +52,7 @@ from verity.protocols.pouw.verifier import window as pouw_window_rules
 from verity.protocols.spot.verifier import parties
 from verity.protocols.spot.device.coins import OwnRandomness, draw_first
 from verity.protocols.spot.verifier.one_stage import registered as R
-from verity.configuration.wire import Body, Int, Message, Schema
+from verity.channel import Body, Int, Message, Schema
 from verity.circuits import boolean as BL
 from verity.circuits import codec
 from verity.circuits.boolean import trace
