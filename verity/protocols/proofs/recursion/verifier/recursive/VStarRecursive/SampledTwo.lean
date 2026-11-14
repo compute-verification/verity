@@ -44,6 +44,9 @@ package's audit builds and reads it.
   evidence is never `null` (`FIRST_COINS_NULL`): a two-stage audit's first stage reads coins. The statements are
   fewer than `2^64` (`stmtsFit`, `STMTS_COUNT`), the most a list's 8-byte length word counts.
 * **check** (`checkBlobsAt`), in order:
+  0. each second-stage session's statement is under `2^64` bytes (`statementsFit`, `STATEMENT_BYTES`): the sum of the
+     lengths a session's statement holds, which v2 holds each under `2^64` (`OneStageZk.fitsWhy`,
+     `OneStageZk.drawFitsWhy`), so a list of the sessions' statements holds each after its length in an 8-byte word;
   1. the interior audit's commitment (`OneStage.commitmentOf` of the interior record) and its coins
      (`OneStageZk.coinsOf`);
   2. the second stage's sessions, as v2's per-member form runs them (`OneStageZk.membersRun`: the statements held as
@@ -663,12 +666,69 @@ def secondCheck (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.C
     | some why => .reject s!"draw: coins: {why}"
     | none => secondChecked { v with law := subsetLaw m } delta c m law e
 
+/-- The refusal of a second-stage session whose statement is `2^64` bytes or more (`statementsFit`). -/
+def STATEMENT_BYTES (session : String) : String :=
+  s!"session {session}'s statement is 2^64 bytes or more, past the 8-byte word a list of statements holds each " ++
+    "statement's length in"
+
+/-- A bound on the bytes of a session's statement that are no file's or printed value's: its format and statement
+names, its flags and count, each optional field's tag, and the 8-byte length word of each field but a lookup table's. -/
+def STATEMENT_HEAD : Nat := 256
+
+/-- The lookup tables' bytes in a session's statement: each table's name (in UTF-8) and bytes, each after its 8-byte
+length word. -/
+def tablesSize (tables : List (String × ByteArray)) : Nat :=
+  (tables.map fun t => 16 + t.1.utf8ByteSize + t.2.size).sum
+
+/-- **A bound on the bytes of a member's session statement** at its record's sample `draw` and lookup tables of
+`tables` bytes (`tablesSize`): `STATEMENT_HEAD`, the circuit and public files, the tables, the program, and the
+partition object, the registered reads and the sample as `Flock.RecordText.printT` prints them
+(`OneStageZk.printedSize`). These are the fields `OneStageZk.fitsWhy` and `OneStageZk.drawFitsWhy` hold each under
+`2^64`; this is their sum. -/
+def statementSize (o : OneStageZk.Own) (circuit pub : ByteArray) (tables : Nat) (draw : Option Json) : Nat :=
+  STATEMENT_HEAD + circuit.size + pub.size + tables + o.program.size + OneStageZk.printedSize o.partition +
+    (o.registered.map OneStageZk.printedSize).getD 0 + (draw.map OneStageZk.printedSize).getD 0
+
+/-- `statementSize` of the session `s` of the statement `st` on the blobs: its member's (the member of the parameters
+the statement names), at the member's circuit and public files and the session's record's sample. None where the
+statement names no member of the parameters, or the blobs hold no such record, circuit or public file: the sessions'
+run refuses each (`inputAt`). -/
+def statementSizeAt (p : Params) (bs : Core.Blobs) (tables : Nat) (st : OneStageZk.StatementFiles)
+    (s : OneStageZk.RunFiles) : Option Nat := do
+  let name ← st.member
+  let m ← p.members.find? (·.name == name)
+  let record ← (bs.get s.record "record").toOption.bind String.fromUTF8?
+  let circuit ← (bs.get m.own.circuit "circuit").toOption
+  let pub ← (bs.get m.own.pub "public file").toOption
+  pure (statementSize m.own circuit pub tables (Flock.Witness.recordDraw record))
+
+/-- **A statement's bytes fit a word** (`STATEMENT_BYTES`): the size `n`, where there is one, is under `limit`. -/
+def statementFits (limit : Nat) (session : String) : Option Nat → V Unit
+  | some n => if limit ≤ n then .error (STATEMENT_BYTES session) else .ok ()
+  | none => .ok ()
+
+#guard (statementFits 300 "s" (some 299)).toOption.isSome
+#guard (statementFits 300 "s" (some 300)).toOption.isNone
+#guard (statementFits 300 "s" none).toOption.isSome
+#guard statementSize ⟨.null, ⟨#[1, 2]⟩, .null, "", "", none⟩ ⟨#[3]⟩ .empty 7 none == STATEMENT_HEAD + 1 + 7 + 2 + 4
+#guard statementSize ⟨.null, .empty, .null, "", "", some (.str "ab")⟩ .empty .empty 0 (some .null) ==
+  STATEMENT_HEAD + 4 + 4 + 4
+#guard tablesSize [("ab", ⟨#[1, 2, 3]⟩), ("", .empty)] == 16 + 2 + 3 + 16
+
+/-- **Every second-stage session's statement fits a word** (check, 0): each statement's sessions, in the statements'
+order, their statements' bytes under `2^64` (`statementFits` of `statementSizeAt`, at `OneStageZk.WORD`). A list of
+the sessions' statements holds each after its length in an 8-byte word, as a statement holds each of its fields. -/
+def statementsFit (p : Params) (e : Evidence) (bs : Core.Blobs) : V Unit :=
+  let tables := tablesSize (OneStageZk.tablesOf bs)
+  (e.statements.toList.flatMap fun st => st.sessions.toList.map fun s => (st, s)).forM fun (st, s) =>
+    statementFits OneStageZk.WORD s.name (statementSizeAt p bs tables st s)
+
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its second-stage
 statement check at the switch `form`, neither stage's bytes past one coin's, its first stage having read every byte of
 `ξ`, the first session releasing none of the second stage's coins, the stages' sessions in order on one ledger, the
 first session's log holding no coin tree's line, the second session's log opening each coin tree's rounds stream by
 stream. -/
-def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+def prepareRun (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
   stagesFit ξ ξ₂
@@ -680,6 +740,51 @@ def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray
   repStreamsOrdered p e
   let law ← secondLawOf p run
   pure (secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ { e.interior.base with verdicts := r.out }, run)
+
+/-- Check steps 0 to 5: the sessions' statements' bytes (`statementsFit`), then `prepareRun`. -/
+def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+    V (Core.Outcome OneStage.Public Core.Integrity × Json) :=
+  match statementsFit p e bs with
+  | .error err => .error err
+  | .ok () => prepareRun form p c ξ e bs
+
+theorem statementFits_ok {limit : Nat} {session : String} {n : Nat}
+    (h : statementFits limit session (some n) = .ok ()) : n < limit := by
+  by_cases hn : limit ≤ n
+  · simp [statementFits, hn] at h
+  · exact Nat.lt_of_not_le hn
+
+/-- **A run of `f` over a list returns only where `f` returns on each of its elements.** -/
+theorem forM_ok {α : Type} {f : α → V Unit} : ∀ {l : List α}, l.forM f = .ok () → ∀ a ∈ l, f a = .ok ()
+  | [], _, a, ha => by cases ha
+  | b :: l, h, a, ha => by
+    change (f b >>= fun _ => l.forM f) = .ok () at h
+    cases hb : f b with
+    | error err => rw [hb] at h; cases h
+    | ok u =>
+      rw [hb] at h
+      cases ha with
+      | head => exact hb
+      | tail _ ha => exact forM_ok (l := l) h a ha
+
+/-- **Where every session's statement fits, each session's statement's size is under `2^64`.** -/
+theorem statementsFit_at {p : Params} {e : Evidence} {bs : Core.Blobs} (h : statementsFit p e bs = .ok ())
+    {st : OneStageZk.StatementFiles} {s : OneStageZk.RunFiles} {n : Nat}
+    (hm : (st, s) ∈ e.statements.toList.flatMap fun st => st.sessions.toList.map fun s => (st, s))
+    (hn : statementSizeAt p bs (tablesSize (OneStageZk.tablesOf bs)) st s = some n) : n < 2 ^ 64 := by
+  have h' := forM_ok h (st, s) hm
+  dsimp only at h'
+  rw [hn] at h'
+  exact statementFits_ok h'
+
+/-- **Steps 0 to 5 return only where `prepareRun` returns the same and every session's statement fits.** -/
+theorem prepare_ok {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {r : Core.Outcome OneStage.Public Core.Integrity × Json}
+    (h : prepare form p c ξ e bs = .ok r) : prepareRun form p c ξ e bs = .ok r ∧ statementsFit p e bs = .ok () := by
+  unfold prepare at h
+  split at h
+  · cases h
+  · next hw => exact ⟨h, hw⟩
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
 does, the run of record must accept, and then the form is refused while `form` is off. -/

@@ -7,8 +7,8 @@ audit's decoders are the one-stage difftest's mirrors of them (`_rule` for `Sele
 `OneStage.paramsParsed`, `template_circuits` for `Run.templateCircuits`), which that difftest holds to the Lean by
 verdict; `reason_mirrored` says which reasons are the form's own. Past the template circuits (the replay program, the
 members' audit, the refusal of an interior audit on the boundary registration's window, `ONE_WINDOW`, the evidence, its
-refusal of `2^64` statements or more, `STMTS_COUNT`, and the check, its refusals of a stage's bytes past one coin's,
-`STAGE_PAST`, of first-stage bytes past what the run read, `SOURCE_READ`, of a first session showing second-stage coins
+refusal of `2^64` statements or more, `STMTS_COUNT`, and the check, its refusals of a session's statement of `2^64`
+bytes or more, `STATEMENT_BYTES`, of a stage's bytes past one coin's, `STAGE_PAST`, of first-stage bytes past what the run read, `SOURCE_READ`, of a first session showing second-stage coins
 on two windows, `INTERIOR_SHOWN`, or a coin tree's line there, `FIRST_TREE`, of a registration's record its canonical
 text does not read back, `RECORD_READ`, of a boundary record so read without the commitment's digest, `RECORD_DIGEST`,
 of an interior record, as given or so read, without the interior commitment's digest, `INTERIOR_DIGEST`, and of a second
