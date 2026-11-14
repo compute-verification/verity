@@ -129,6 +129,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import NamedTuple, Sequence
 
+import numpy as np
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import is_input, is_registered
 from verity.circuits.refs import Affine, Concat, Strided
@@ -412,11 +413,75 @@ def _fields(t, at: int = 0) -> list[tuple[int, int]]:
     return out
 
 
-def returned(parts, t, source, words: list) -> Profile:
-    """References of type ``t`` as runs, each part (`Reader.parts`) at its source's status over its leaves; an array of
-    ``t`` that reads a word twice (of ``words``, the references' words), or whose parts come from more than one node
-    or parameter, has no rows shown distinct, since two of them may then be one array's words, or computed one to one
-    from them."""
+def reads_once(refs) -> bool:
+    """Whether ``refs`` reads no word twice, from its structure: each source's runs (an `Affine`, a row of a `Strided`
+    whose inner stride is 1) pairwise disjoint, and its other leaves (the rest of a `Strided`'s grid, an `Explicit`'s)
+    distinct and outside them. It builds arrays of leaf numbers and of run ends, never a list of the references."""
+    runs: dict = {}
+    points: dict = {}
+
+    def walk(r) -> None:
+        if not r.count:
+            return
+        if isinstance(r, Affine):
+            runs.setdefault((r.space, r.idx), []).append((np.array([r.base]), np.array([r.base + r.count])))
+        elif isinstance(r, Strided):
+            rows, rem = divmod(r.count, r.inner)
+            starts = r.base + np.arange(rows, dtype=np.int64) * r.outer_stride
+            tail = r.base + rows * r.outer_stride
+            if r.inner_stride == 1 or r.inner == 1:
+                los = np.append(starts, tail) if rem else starts
+                lens = np.full(len(los), r.inner, dtype=np.int64)
+                if rem:
+                    lens[-1] = rem
+                runs.setdefault((r.space, r.idx), []).append((los, los + lens))
+            else:
+                inner = np.arange(r.inner, dtype=np.int64) * r.inner_stride
+                points.setdefault((r.space, r.idx), []).extend(
+                    [(starts[:, None] + inner[None, :]).ravel(), tail + inner[:rem]])
+        elif isinstance(r, Concat):
+            for p in r.parts:
+                walk(p)
+        else:
+            by: dict = {}
+            for space, idx, leaf in r:
+                by.setdefault((space, idx), []).append(leaf)
+            for key, leaves in by.items():
+                points.setdefault(key, []).append(np.array(leaves, dtype=np.int64))
+
+    walk(refs)
+    for key in runs.keys() | points.keys():
+        lo = hi = None
+        if key in runs:
+            lo = np.concatenate([a for a, _b in runs[key]])
+            hi = np.concatenate([b for _a, b in runs[key]])
+            order = np.argsort(lo, kind="stable")
+            lo, hi = lo[order], hi[order]
+            if (lo[1:] < hi[:-1]).any():
+                return False
+        if key in points:
+            p = np.sort(np.concatenate(points[key]))
+            if (p[1:] == p[:-1]).any():
+                return False
+            if lo is not None:
+                at = np.searchsorted(lo, p, side="right") - 1
+                if ((at >= 0) & (p < hi[np.maximum(at, 0)])).any():
+                    return False
+    return True
+
+
+def one_word(refs) -> bool:
+    """Whether ``refs`` reads one word, and every reference is that word."""
+    if not len(refs):
+        return False
+    first = refs[0]
+    return all(r == first for r in refs)
+
+
+def returned(parts, t, source, refs) -> Profile:
+    """References ``refs`` of type ``t`` as runs, each part (`Reader.parts`) at its source's status over its leaves; an
+    array of ``t`` that reads a word twice, or whose parts come from more than one node or parameter, has no rows shown
+    distinct, since two of them may then be one array's words, or computed one to one from them."""
     parts = list(parts)
     fields = _fields(t)
     starts = [lo for lo, _hi in fields]
@@ -429,7 +494,7 @@ def returned(parts, t, source, words: list) -> Profile:
         for j in over(a, b):
             sources[j].add((s, i))
     for j, (lo, hi) in enumerate(fields):
-        if len(set(words[lo:hi])) < hi - lo:
+        if not reads_once(refs.slice(lo, hi)):
             sources[j].add(None)
     out = []
     for a, b, s, i, lo, hi in parts:
@@ -699,7 +764,7 @@ class Reader:
             return ctx[idx] if space == "p" else prof[idx]
 
         def arg_profile(a) -> Profile:
-            return returned(self.parts(a.refs), a.type, source, words(a)) or ((a.refs.count, THETA),)
+            return returned(self.parts(a.refs), a.type, source, a.refs) or ((a.refs.count, THETA),)
 
         def arg_status(a) -> Status:
             """``a``'s status as one array: its rows distinct only where one node or parameter gives them all and no
@@ -753,21 +818,17 @@ class Reader:
             n = a.refs.count
             return (rate / n, bits / n) if n else (0.0, 0.0)
 
-        words_of: dict = {}
-
-        def words(a) -> list:
-            if id(a) not in words_of:
-                words_of[id(a)] = (a, list(a.refs))
-            return words_of[id(a)][1]
+        once_of: dict = {}
 
         def one_to_one(a) -> bool:
-            w = words(a)
-            return len(set(w)) == len(w)
+            if id(a) not in once_of:
+                once_of[id(a)] = (a, reads_once(a.refs))
+            return once_of[id(a)][1]
 
-        def member_words(nd, i: int, m: int) -> list:
-            """The words member ``m`` of node ``nd`` reads of its argument ``i``."""
-            w, per = words(nd.args[i]), nd.fn.signature()[0][i][1].leaves
-            return w[m * per:(m + 1) * per] if nd.form == "batch" and nd.axes[i] is not None else w
+        def member_words(nd, i: int, m: int):
+            """The words member ``m`` of node ``nd`` reads of its argument ``i``, as references."""
+            w, per = nd.args[i].refs, nd.fn.signature()[0][i][1].leaves
+            return w.slice(m * per, (m + 1) * per) if nd.form == "batch" and nd.axes[i] is not None else w
 
         value_of: dict = {}
 
@@ -889,9 +950,9 @@ class Reader:
             the mask makes differ, through selects whose conditions are false: each slice a row `masked_rows` finds
             differs, every slice another; or each slice one column of one sequence of a product's rows, every slice
             another column and the mask's columns there pairwise different, each with a finite word."""
-            if not words(a) or len(words(a)) != n * K or not one_to_one(a):
+            if not len(a.refs) or len(a.refs) != n * K or not one_to_one(a):
                 return False
-            got = [unselected(*w) for w in words(a)]
+            got = [unselected(*w) for w in a.refs]
             if None in got or {s_ for s_, _j, _l in got} != {"n"}:
                 return False
             width = {}
@@ -930,8 +991,8 @@ class Reader:
                 return one_to_one(a)
             if not may_repeat(st):
                 return not st.stated and not unknown(st)
-            w = words(a)
-            if not w or len(w) % K or {s_ for s_, _j, _l in w} != {"n"} or len({j_ for _s, j_, _l in w}) != 1:
+            w = a.refs
+            if not len(w) or len(w) % K or {s_ for s_, _j, _l in w} != {"n"} or len({j_ for _s, j_, _l in w}) != 1:
                 return False
             src = body.nodes[w[0][1]]
             p = self.product(src.fn)
@@ -941,7 +1002,7 @@ class Reader:
             if arg_status(src.args[names.index(p.w)]).data:
                 return False
             n_out = src.out.leaves // src.n
-            cols = [leaf % n_out for _s, _j, leaf in w[::K]]
+            cols = [w[j][2] % n_out for j in range(0, len(w), K)]
             return len(set(cols)) == len(cols)
 
         def product_status(nd, ix: int, iw: int, base: Status) -> Status:
@@ -967,19 +1028,19 @@ class Reader:
                 for i, s in enumerate(sts))
             for i, s in enumerate(sts):
                 if ok and s.stated:
-                    cs = [value(*w) for w in words(nd.args[i])]
-                    ok = all(isinstance(c, tuple) and INJECTIVE[f.name](c[1]) for c in cs)
+                    ok = all(isinstance(c, tuple) and INJECTIVE[f.name](c[1])
+                             for c in (value(*w) for w in nd.args[i].refs))
             return base if ok else unspecific(base, sts)
 
         def constants_pass(f, sts: list, nd) -> bool:
-            return all(all(isinstance(c, tuple) and INJECTIVE[f.name](c[1]) for c in (value(*w) for w in words(a)))
+            return all(all(isinstance(c, tuple) and INJECTIVE[f.name](c[1]) for c in (value(*w) for w in a.refs))
                        for s, a in zip(sts, nd.args) if s.stated)
 
         def zero(a) -> bool:
             """Whether argument ``a`` is a stated 0 in every word (`INJECTIVE`'s constant test fails on a finite word),
             so that a multiply by it gives 0 whatever its other argument holds."""
-            cs = [value(*w) for w in words(a)]
-            return bool(cs) and all(isinstance(c, tuple) and _finite(c[1]) and not _nonzero(c[1]) for c in cs)
+            return bool(len(a.refs)) and all(isinstance(c, tuple) and _finite(c[1]) and not _nonzero(c[1])
+                                             for c in (value(*w) for w in a.refs))
 
         def distinct_status(f, nd, sts: list, st: Status) -> Status:
             """``st`` with `Status.distinct` where an op reads one to one (a batch maps it) an argument whose rows are
@@ -994,7 +1055,7 @@ class Reader:
                 return not batch or (nd.axes[i] is not None and one_to_one(nd.args[i]))
 
             def multiplier(j: int, o: Status) -> bool:
-                return not o.reach or o.distinct or (o.fixed and len(set(words(nd.args[j]))) == 1)
+                return not o.reach or o.distinct or (o.fixed and one_word(nd.args[j].refs))
 
             if f.name in ROUNDINGS:
                 def keeps(i: int) -> bool:
@@ -1085,7 +1146,7 @@ class Reader:
                 prof.append(capped(self.scan(S, k, nd, depth, arg_profile, arg_status, bindings), rate, bits))
             else:
                 raise ValueError(f"{fn.id} node {k}: form {nd.form!r}")
-        S.ret = returned(self.parts(body.ret), fn.signature()[1], source, list(body.ret)) or \
+        S.ret = returned(self.parts(body.ret), fn.signature()[1], source, body.ret) or \
             ((body.ret.count, THETA),)
         S.sid = len(self.memo)
         self.memo[key] = S
