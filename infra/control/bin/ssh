@@ -1,4 +1,10 @@
 #!/bin/sh
 # ssh for the watchers' loops (watchers.toml puts this directory first on their PATH): the node aliases agent VMs have (n1, n2,
-# cpu1..cpu3) and the RunPod key, which the Nebius VMs accept, from watchers_ssh_config beside it
-exec /usr/bin/ssh -F "$(dirname "$0")/../watchers_ssh_config" "$@"
+# cpu1..cpu3) and the RunPod key, which the Nebius VMs accept, from the config `research deploy` makes of watchers_ssh_config
+# and the register of machines. The tree holds no address, so without that file no loop reaches a node: it says how to make it.
+CONFIG=${WATCHERS_SSH_CONFIG:-/data/watchers/ssh_config}
+if [ ! -r "$CONFIG" ]; then
+  echo "ssh: no $CONFIG: \`research deploy install vy-control-verity $CONFIG --by WHO --apply\` writes it from the register of machines" >&2
+  exit 255
+fi
+exec /usr/bin/ssh -F "$CONFIG" "$@"

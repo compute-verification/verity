@@ -76,7 +76,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
            "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*", "/etc/vy/verifier.json"]
 
-# the control pod (RunPod, not a Nebius node): only its door is deploy's there so far; its loops are copied as
+# the control pod (RunPod, not a Nebius node): its door and its watchers' ssh config are deploy's there so far; its loops are copied as
 # infra/control/README.md's Deploy section says. Root there is the admin key's and the registry's entry is the gated account's,
 # whose gate takes no deploy, so the relays' drift skips it (`admin`), and infra's lead runs `research deploy drift|install --on
 # vy-control-verity` from a machine that holds the admin key and whose own machines.toml binds the name to root at the same host.
@@ -371,15 +371,20 @@ src = "tools/research/src/research/pods/nebius/runs-via-slot"
 nodes = ["vy-nebius-cpu-1"]
 owner = "infra"
 
-# ---- the shared nodes: how each reaches the others, for a check's twins (`check.py --on auto`, slot.py --twin); cpu-1's
-# authorized_keys takes the vy-cluster key from n1, n3, n2, cpu-2 and cpu-3 only (from="10.80.0.18,10.80.0.1,10.80.0.42,10.80.0.140,
-# 10.80.0.193"); cpu-2 and cpu-3 (train slots) get theirs by hand until they are deploy.toml nodes;
-# cpu-4 and cpu-5 by n1_replacement.sh's L3, taking it from every node's public egress address
+# ---- the shared nodes: how each reaches the others, for a check's twins (`check.py --on auto`, slot.py --twin). The list
+# is made from the register of machines at each install (`register`: its template names the machines by pattern, and holds no
+# address), so every node's is the same, and each node takes the vy-cluster key from the address of every machine its list
+# names (`accept`). A machine that joined is put into every node's list by `research deploy roll /etc/vy/peers`
 
 [[file]]
 path = "/etc/vy/peers"
 src = "tools/research/src/research/pods/nebius/peers"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+register = true
+accept = "/home/research/.ssh/vy-cluster.pub"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-3",
+         "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12",
+         "vy-nebius-cpu-13", "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
 owner = "infra"
 
 [[file]]  # a oneshot each minute (vy-slot-only.timer on cpu-1, vy-direct-nice.timer on node 1) reads it fresh: nothing to restart
@@ -512,9 +517,12 @@ nodes = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
 run = ["systemd:vy-auditor-only.timer"]
 owner = "infra"
 
+# the auditor host's own list, made from the register too: its template names each serving node, and the host's own line asks
+# the register for its private address
 [[file]]
 path = "/etc/vy/peers"
 src = "tools/research/src/research/pods/nebius/peers-challenger"
+register = true
 nodes = ["vy-challenger-1"]
 owner = "infra"
 
@@ -539,6 +547,16 @@ owner = "infra"
 [[file]]
 path = "/usr/local/sbin/vy-control-gate"
 by = "infra/control/door_setup.sh"
+nodes = ["vy-control-verity"]
+owner = "infra"
+
+# ---- the control pod's watchers: ssh's config for their loops (infra/control/bin/ssh reads this path), each HostName the
+# register of machines'. Install it before a watchers tree whose bin/ssh reads it (infra/control/README.md's Deploy)
+
+[[file]]
+path = "/data/watchers/ssh_config"
+src = "infra/control/watchers_ssh_config"
+register = true
 nodes = ["vy-control-verity"]
 owner = "infra"
 
@@ -598,9 +616,11 @@ src = "tools/research/src/research/pods/nebius/verifier/12-vy-verifier.conf"
 nodes = ["vy-auditor-1", "vy-auditor-2"]
 owner = "infra"
 
+# the challenger's address in it is the register's (`register`)
 [[file]]
 path = "/etc/vy/verifier.json"
 src = "tools/research/src/research/pods/nebius/verifier/verifier.json"
+register = true
 nodes = ["vy-auditor-1", "vy-auditor-2"]
 owner = "infra"
 

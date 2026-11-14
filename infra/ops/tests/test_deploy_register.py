@@ -373,3 +373,54 @@ def test_register_is_a_copied_files_and_accept_a_register_made_files(tmp_path):
     e = deploy.load(text=head.format(kind="file") + 'src = "f"\nregister = true\naccept = "/k.pub"\n')["n"].entries[0]
     assert (e.register, e.accept) == (True, "/k.pub")
 
+
+MADE = {"/etc/vy/peers": {"tools/research/src/research/pods/nebius/peers", "tools/research/src/research/pods/nebius/peers-challenger"},
+        "/etc/vy/verifier.json": {"tools/research/src/research/pods/nebius/verifier/verifier.json"},
+        "/data/watchers/ssh_config": {"infra/control/watchers_ssh_config"}}
+
+
+def _stand_in(tmp_path: Path, private: bool) -> deploy.Register:
+    """A register holding every machine the manifest's templates name, each at a documentation address."""
+    asked = {w for srcs in MADE.values() for s in srcs for w, _ in deploy.PLACE.findall((deploy.SRC / s).read_text())}
+    names = {w for w in asked if not deploy.WILD.search(w)} | {"vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-10"}
+    for i, n in enumerate(sorted(names)):
+        machine(tmp_path, n, f"192.0.2.{i + 1}", **({"private_host": f"10.0.0.{i + 1}"} if private else {}))
+    machine(tmp_path, "vy-nebius-1", None)
+    return deploy.register({"RESEARCH_MACHINES_D": str(tmp_path)})
+
+
+def test_the_manifests_address_files_are_made_from_the_register_and_each_reads_as_its_reader_reads_it(tmp_path):
+    entries = {(e.path, e.src): e for node in deploy.load().values() for e in node.entries if e.register}
+    assert {p: {s for q, s in entries if q == p} for p in MADE} == MADE and {p for p, _ in entries} == set(MADE)
+    reg = _stand_in(tmp_path, private=True)
+    text = {s: deploy.fill((deploy.SRC / s).read_text(), reg, s) for srcs in MADE.values() for s in srcs}
+    assert all("{{" not in t for t, _ in text.values())
+
+    peers, names = text["tools/research/src/research/pods/nebius/peers"]
+    lines = [ln.split() for ln in peers.splitlines() if ln and not ln.startswith("#")]
+    cpus = sorted(int(n.rsplit("-", 1)[1]) for n in reg.live if n.startswith("vy-nebius-cpu-"))
+    assert {1, 2, 10} <= set(cpus) and [ln[0] for ln in lines] == ["vy-nebius-2", *(f"vy-nebius-cpu-{i}" for i in cpus)] == names
+    assert all(ln[-1] == f"research@{reg.live[ln[0]]['host']}" and "/home/research/.ssh/vy-cluster" in ln for ln in lines)
+    shared = {n for n, node in deploy.load().items() for e in node.entries if e.src and e.src.endswith("/peers")}
+    assert {f"vy-nebius-cpu-{i}" for i in range(1, 18)} | {"vy-nebius-2"} <= shared
+    assert {e.accept for e in entries.values() if e.src.endswith("/peers")} == {"/home/research/.ssh/vy-cluster.pub"}
+
+    challenger, names = text["tools/research/src/research/pods/nebius/peers-challenger"]
+    lines = [ln.split() for ln in challenger.splitlines() if ln and not ln.startswith("#")]
+    assert lines[0] == ["vy-challenger-1", f"research@{reg.live['vy-challenger-1']['private_host']}"]
+    assert all(ln[-1].endswith(f"@{reg.live[ln[0]]['host']}") for ln in lines[1:]) and len(lines) == len(names) > 5
+
+    verifier = json.loads(text["tools/research/src/research/pods/nebius/verifier/verifier.json"][0])
+    assert verifier["challenger"]["ssh"].endswith(f"research@{reg.live['vy-challenger-1']['host']}")
+
+    config = text["infra/control/watchers_ssh_config"][0].splitlines()
+    hosts = {ln.split()[1:][1]: nxt.split()[1] for ln, nxt in zip(config, config[1:]) if ln.startswith("Host ") and "*" not in ln}
+    assert hosts and all(reg.live[n]["host"] == h for n, h in hosts.items())
+
+
+def test_the_challengers_list_is_not_made_until_the_register_holds_its_hosts_private_address(tmp_path):
+    """Its own line names the host by the address its interface has, which no register file holds: the fact isn't invented."""
+    reg = _stand_in(tmp_path, private=False)
+    src = "tools/research/src/research/pods/nebius/peers-challenger"
+    with pytest.raises(deploy.NoRegister, match=r"vy-challenger-1.toml has no `private_host`, which .*peers-challenger:\d+ asks"):
+        deploy.fill((deploy.SRC / src).read_text(), reg, src)
