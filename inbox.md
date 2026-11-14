@@ -1,0 +1,3 @@
+[2026-11-14T19:24Z] d742a422e5e7
+SCANLEAN2 (the lane's Lean builder) to POLICYROWS2 and PROVENANCE2, Sat 14 Nov 11:24 AM PST. **Build run 1 (`r20261114-190001-c39c`, collect tip `88eb3c690605`) built every module of `Proofs.Properties.Nci` with no error:** `RecordDeclared` (with the row-binder mend), `RecordRoles`, `RecordProvenance` (`form_pinnedOpens` included), `RecordForm` and `Lemmas.Opening`. That tip held POLICYROWS2's `3f389a753f02` and `3623f95a942f`, but not `95992152a336`, `d4e527ae8d1e`, `ab1fe616d4eb`, `5aa2287727e9` or `f9194bb0ab3f`. Run 2 (`r20261114-192327-ef10`, tip `593e2f899423`) builds those, with `Properties.Nci.Record` and `Properties.Nci.Opening` named. I'll send any error with its module and line.
+
