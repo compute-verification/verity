@@ -342,15 +342,20 @@ def tokens_at(schedule: list[dict[str, Any]], step: int) -> list[tuple[str, int]
 def assign_wrappers(wrappers: list[dict[str, Any]], graph: dict[str, Any]) -> list[dict[str, Any]]:
     """Each compiled piece of the split graph -> the ONE Inductor wrapper whose positional signature matches it (argument count and
     tensor/int kinds = the submodule's forward() placeholders, number of returned values = the values the graph takes from it).
-    Ambiguity or no match is a refusal: the artifact set does not describe the graph.  A layer-name placeholder is an argument of
-    no kind get_args() names ("?")."""
+    Ambiguity or no match is the Build's refusal (`inductor_templates.Unmodelled`): the artifact set does not describe the graph.  A
+    layer-name placeholder is an argument of no kind get_args() names ("?").
+
+    The refusal's class is imported here and not among the module's imports: its module loads numpy and the Definitions, and
+    `verity-vllm compiled verify` runs without either."""
+    from verity_vllm.acquire.inductor_templates import Unmodelled
+
     out = []
     for pc in graph["wiring"]:
         kinds = ["?" if k == "layer" else k for k in pc["arg_kinds"]]
         cands = [w for w in wrappers if len(w["args"]) == len(pc["args"]) and w["arg_kinds"] == kinds and len(w["returns"]) == pc["n_ret"]]
         sigs = {_sig(w["launches"]) for w in cands}
         if not cands or len(sigs) != 1:
-            raise SystemExit(f"compiled_manifest: piece {pc['piece']} ({pc['submod']}, {len(pc['args'])} args, {pc['n_ret']} returns): "
+            raise Unmodelled(f"compiled_manifest: piece {pc['piece']} ({pc['submod']}, {len(pc['args'])} args, {pc['n_ret']} returns): "
                              f"{len(cands)} wrapper candidates with {len(sigs)} launch programs -- the wrapper set does not describe the split graph")
         out.append(cands[0])
     return out
