@@ -8,13 +8,15 @@ import hashlib
 
 from verity.channel import Message
 from verity.party import Received
+from verity.protocol import ProtocolDef
 from verity.protocols.accounting.pouw.verifier import coins as Co
 from verity.protocols.accounting.pouw.verifier import parties as P
 from verity.runtime import sources as S
-from verity.runtime.runner import ProtocolDef, run
+from verity.runtime.runner import run
 
 SEED = b"pouw parties"
 ALL = [P.CHALLENGER, P.PROVER, P.VERIFIER]
+(ASK,) = S.ASKS["coins"].types
 
 
 def h(*parts: bytes) -> bytes:
@@ -64,7 +66,7 @@ VERIFIER_MACHINE = {"registered": registered, "sample": sample, "check": check}
 
 
 def simulated(tmp_path, phases=2, prover=None, challenger=P.ChallengerParty, verifier=P.Verifier, prover_party=P.Prover):
-    proto = ProtocolDef(P.MANIFEST, {P.CHALLENGER: challenger, P.PROVER: prover_party, P.VERIFIER: verifier})
+    proto = ProtocolDef(P.MANIFEST, {P.CHALLENGER: lambda: challenger(ASK), P.PROVER: prover_party, P.VERIFIER: verifier})
     return run({"protocol": P.ID, "params": P.params_of(phases)}, ALL, "simulated", tmp_path, protocols={P.ID: proto},
                seed=SEED, authenticate=False,
                capabilities={P.PROVER: prover or prover_machine(), P.VERIFIER: VERIFIER_MACHINE})
@@ -72,7 +74,7 @@ def simulated(tmp_path, phases=2, prover=None, challenger=P.ChallengerParty, ver
 
 def challengers(phases: int) -> list[Co.Challenger]:
     """The challenger's challenges as its seeded `coins` need gives them, one `coins.Challenger` a phase."""
-    src, ask = S.seeded(SEED, P.CHALLENGER, "coins"), Received("coins", Message(P.ASK, {"n": P.PHASE_COINS}))
+    src, ask = S.seeded(SEED, P.CHALLENGER, "coins"), Received("coins", Message(ASK, {"n": P.PHASE_COINS}))
     return [Co.Challenger(i, P._Stream(src.on(ask)[0].message.body)) for i in range(phases)]
 
 
@@ -93,6 +95,11 @@ def test_each_phase_is_decided_on_coins_opened_after_what_they_follow(tmp_path) 
         want += [{"phase": c.epoch, "label": P.SALT, "after": root(c.epoch).hex()},
                  {"phase": c.epoch, "label": P.SAMPLING, "after": digest.hex()}]
     assert r.outcomes[P.CHALLENGER] == {"outcome": {"opened": want}, "refused": None}
+
+
+def test_the_protocol_hands_its_challenger_the_ask_it_is_given() -> None:
+    proto = P.protocol(ASK)
+    assert proto.manifest is P.MANIFEST and proto.parties[P.CHALLENGER]().ask == ASK
 
 
 def test_a_wrong_proof_rejects_its_phase_and_the_next_is_still_decided(tmp_path) -> None:
