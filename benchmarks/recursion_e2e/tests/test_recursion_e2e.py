@@ -166,6 +166,18 @@ def test_cpu_steps_over_their_repeats(tmp_path: Path) -> None:
     assert row(doc, "lean step")["wall_s"]["values"] == [70.0, 80.0]
 
 
+def test_v_stars_hashing_reference_is_a_row_only_of_a_run_that_timed_it(tmp_path: Path) -> None:
+    """V*'s verdict is Lean's, so icheck times no Python reference now; a run recorded while it did keeps that row."""
+    o = job(tmp_path / "now")
+    name, (path, _) = RP.RECORDED_VSTAR
+    assert not [r for r in RP.read(o)["rows"] if r["stage"] == name]
+    o = job(tmp_path / "recorded")
+    for n in (1, 2):
+        (o / "steps" / "icheck" / f"r{n}" / "out" / path).write_text(timev("0:03.00"))
+    r = row(RP.read(o), name)
+    assert r["step"] == "icheck" and r["wall_s"]["values"] == [3.0, 3.0] and r["ok"] is None
+
+
 def test_a_repeat_still_running_is_no_refusal(tmp_path: Path) -> None:
     o = job(tmp_path)
     r3 = o / "steps" / "lean" / "r3" / "out" / "lean"

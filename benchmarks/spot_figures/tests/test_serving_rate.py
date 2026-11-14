@@ -1,4 +1,4 @@
-"""The `serving_rate` card and the two readings of serving's rate: the default, rho's fleet utilization, reads no card
+"""The `serving_rate` card and the two readings of serving's rate: the default, the slowdown calculator's fleet utilization, reads no card
 and prices every line as before the card; `serving="measured"` converts the card's tokens a GPU-second with a
 request's own tokens and leaves the scope's GPUs alone."""
 import json

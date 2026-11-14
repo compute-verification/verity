@@ -591,7 +591,7 @@ PARTITION_PORT = DT.Port("verity-evaluate", "partition", reference=partition_ref
 
 
 @pytest.mark.slow
-def test_layout_gates_drawn(server):
+def test_layout_gates_sampled(server):
     stats = DT.run(GATE_PORT, examples=400, seed=0, server=server)
     assert stats.outputs >= 200 and stats.rejects >= 20, stats
 
@@ -608,7 +608,7 @@ def test_every_gate_of_some_programs(server):
     assert n >= 200, n
 
 
-def test_partitions_drawn(server):
+def test_partitions_sampled(server):
     stats = DT.run(PARTITION_PORT, examples=300, seed=0, server=server)
     assert stats.outputs >= 150 and stats.rejects >= 20, stats
 
@@ -698,7 +698,7 @@ def test_scalar_primitives_on_their_edge_grids(server):
 
 
 @pytest.mark.slow
-def test_scalar_primitives_drawn(server):
+def test_scalar_primitives_sampled(server):
     stats = DT.run(SCALAR_PORT, examples=2000, seed=0, server=server)
     assert stats.outputs >= 1000 and stats.rejects >= 100, stats
 
@@ -897,7 +897,7 @@ FLOAT_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference
 
 
 @pytest.mark.slow
-def test_float_primitives_drawn(server):
+def test_float_primitives_sampled(server):
     stats = DT.run(FLOAT_PORT, examples=2000, seed=0, server=server)
     assert stats.outputs >= 1500 and stats.rejects >= 100, stats
 
@@ -1128,7 +1128,7 @@ TC_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, i
 
 
 @pytest.mark.slow
-def test_tc_steps_drawn(server):
+def test_tc_steps_sampled(server):
     stats = DT.run(TC_PORT, examples=1000, seed=0, server=server)
     assert stats.outputs >= 800 and stats.rejects >= 50, stats
 
@@ -1518,7 +1518,7 @@ WORD_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference,
 
 
 @pytest.mark.slow
-def test_word_primitives_drawn(server):
+def test_word_primitives_sampled(server):
     stats = DT.run(WORD_PORT, examples=2000, seed=0, server=server)
     assert stats.outputs >= 1500 and stats.rejects >= 100, stats
 
@@ -1582,7 +1582,7 @@ def test_sampler_primitives_on_their_grids(server):
 
 
 @pytest.mark.slow
-def test_the_logs_on_drawn_words(server):
+def test_the_logs_on_sampled_words(server):
     """`NvLogf_v1` and `_v2` on 2^18 seeded samples of the whole 32-bit range, in requests of 2^16."""
     rng = random.Random("logs")
     words = [rng.getrandbits(32) for _ in range(1 << 18)]
@@ -1697,7 +1697,7 @@ SAMPLER_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_referen
 
 
 @pytest.mark.slow
-def test_sampler_primitives_drawn(server):
+def test_sampler_primitives_sampled(server):
     stats = DT.run(SAMPLER_PORT, examples=1000, seed=0, server=server)
     assert stats.outputs >= 800 and stats.rejects >= 50, stats
 
@@ -1811,7 +1811,7 @@ MUFU_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference,
 
 
 @pytest.mark.slow
-def test_mufu_primitives_drawn(server):
+def test_mufu_primitives_sampled(server):
     stats = DT.run(MUFU_PORT, examples=1000, seed=0, server=server)
     assert stats.outputs >= 800 and stats.rejects >= 50, stats
 
@@ -1869,7 +1869,7 @@ DECIMAL_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_referen
 
 
 @pytest.mark.slow
-def test_decimal_primitives_drawn(server):
+def test_decimal_primitives_sampled(server):
     stats = DT.run(DECIMAL_PORT, examples=1000, seed=0, server=server)
     assert stats.outputs >= 800 and stats.rejects >= 50, stats
 
@@ -1961,7 +1961,7 @@ ACT_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, 
 
 
 @pytest.mark.slow
-def test_activations_drawn(server):
+def test_activations_sampled(server):
     stats = DT.run(ACT_PORT, examples=1000, seed=0, server=server)
     assert stats.outputs >= 800 and stats.rejects >= 50, stats
 

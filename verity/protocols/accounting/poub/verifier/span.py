@@ -3,7 +3,7 @@
 `Session.verifySpan`). This module decides nothing: it computes no verdict and holds no row to a commitment.
 
 A span is one or more statements of the sampled proof system's one-stage audit (`verity/sampled-proofs/one-stage/v2`),
-every unit proved: each its public file's SHA-512, its registration record and evidence, and per instance, in the
+every unit proved: each its public file's SHA-512, its docket and evidence, and per instance, in the
 public file's order, its verdict word and the salts of its ``pub``, ``signs`` and ``o0`` rows (`statement`); with the
 blobs its evidence names (`span`). The statements' instances in order are the window's draws in order, one each. The
 auditor's own side is the audit's parameters and the registered opening circuit's ports in order, each with its row's
@@ -24,21 +24,25 @@ from verity.protocols.accounting.poub.verifier.commitments.gates import (
 
 from . import audit, receipts
 
-ROWS = receipts.SKETCH_ROWS
 #: the opening unit's rows the verifier opens: its public rows and its verdict
 OPENED = ("pub", "signs", "o0")
 
 
-def public_rows(d: audit.PositionSample, codec_seed: bytes, S) -> dict[str, list[int]]:
-    """Draw ``d``'s ``pub`` and ``signs`` rows as u16 words at the unit's statics ``S``: block j = p of a pass whose plan
-    is the identity, registered (``coin`` None)."""
+def public_v2(d: audit.PositionSample, codec_seed: bytes, S) -> dict[str, list[int]]:
+    """Draw ``d``'s public parameters as u16 words at the unit's statics ``S`` (`BC.opening_public_v2`, its sign rows
+    among them): block j = p of a pass whose plan is the identity, registered (``coin`` None)."""
     if d.coin is not None or d.block != d.position:
         raise ValueError("a span's unit opens a registered block at its own position: the pass's plan is the identity")
     rdom = receipts.domain(d.seed, d.plan)
     first = d.domain.positions.start
-    a = BC.opening_public_v2(S, codec_seed, d.block, None, receipts.sketch_prefix(d.seed), receipts.sign_bits(d.seed, ROWS),
-                             (d.root, rdom.domain_id, merkle_depth(rdom.count)),
-                             (d.commitment.root, d.domain.domain_id, d.block - first, merkle_depth(d.domain.count)), None)
+    return BC.opening_public_v2(S, codec_seed, d.block, None, receipts.sketch_prefix(d.seed),
+                                receipts.sign_bits(d.seed, S.ROWS), (d.root, rdom.domain_id, merkle_depth(rdom.count)),
+                                (d.commitment.root, d.domain.domain_id, d.block - first, merkle_depth(d.domain.count)), None)
+
+
+def public_rows(d: audit.PositionSample, codec_seed: bytes, S) -> dict[str, list[int]]:
+    """Draw ``d``'s ``pub`` and ``signs`` rows as u16 words at the unit's statics ``S`` (`public_v2`)."""
+    a = public_v2(d, codec_seed, S)
     pub = BC.opening_rows_v2(S)[0][2]
     return {"pub": [w for p in pub for w in a[p]], "signs": a["signs"]}
 
@@ -61,7 +65,7 @@ def instance(verdict: int, salts: dict[str, bytes]) -> dict:
 
 
 def statement(public: bytes, record: bytes, evidence: bytes, instances: Sequence[dict]) -> dict:
-    """One statement: its public file's SHA-512, its registration record's and evidence's bytes, its instances in order."""
+    """One statement: its public file's SHA-512, its docket's and evidence's bytes, its instances in order."""
     return {"evidence": evidence.hex(), "instances": list(instances), "pub": hashlib.sha512(public).hexdigest(),
             "record": record.hex()}
 
@@ -71,4 +75,4 @@ def span(statements: Sequence[dict], blobs: Sequence[bytes]) -> dict:
     return {"blobs": [b.hex() for b in blobs], "statements": list(statements)}
 
 
-__all__ = ["OPENED", "auditor", "instance", "layout", "public_rows", "span", "statement"]
+__all__ = ["OPENED", "auditor", "instance", "layout", "public_rows", "public_v2", "span", "statement"]

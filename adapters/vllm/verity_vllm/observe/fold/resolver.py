@@ -365,7 +365,6 @@ class Profile:
     config: dict
     weight_field: Any                           # callable(name: str) -> tuple[str | int, ...] | None  (weights Record path)
     accepted: bool = False
-    kernel_allowlist: tuple[str, ...] = ()      # device kernels accounted for by Transparent/infra (census)
     notes: dict = field(default_factory=dict)
     # step passes: `pass(resolutions, ctx, roots) -> resolutions`, applied in order to a resolved step (one resolution per root kept)
     step_passes: tuple = ()

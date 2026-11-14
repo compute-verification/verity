@@ -55,19 +55,19 @@ FULL = "VERITY_FLOCK_SAME_SHAPE_FULL"
 pytestmark = pytest.mark.slow
 
 
-def _description(rng: random.Random, G: int, N_IN: int, N_OUT: int, any_index: bool) -> U.Netlist:
+def _description(rng: random.Random, G: int, N_IN: int, N_OUT: int, any_index: bool) -> U.PrivateCircuit:
     """The bench's description (3/4 of the gates over 3/4 of the inputs, in range, padded to the class), or any bit string of
     the class: every index any K-bit value."""
     if any_index:
         k = U.index_bits(G, N_IN)
-        return U.Netlist(N_IN, tuple((rng.randrange(4), rng.randrange(1 << k), rng.randrange(1 << k)) for _ in range(G)),
+        return U.PrivateCircuit(N_IN, tuple((rng.randrange(4), rng.randrange(1 << k), rng.randrange(1 << k)) for _ in range(G)),
                          tuple(rng.randrange(1 << k) for _ in range(N_OUT)))
     g0, n0 = max(1, 3 * G // 4), max(1, 3 * N_IN // 4)
     gates = tuple((rng.randrange(4), rng.randrange(n0 + g), rng.randrange(n0 + g)) for g in range(g0))
-    return U.pad(U.Netlist(n0, gates, tuple(rng.randrange(n0 + g0) for _ in range(N_OUT))), G, N_IN)
+    return U.pad(U.PrivateCircuit(n0, gates, tuple(rng.randrange(n0 + g0) for _ in range(N_OUT))), G, N_IN)
 
 
-def _lanes(units, cl, net: U.Netlist, xs: list[list[int]]):
+def _lanes(units, cl, net: U.PrivateCircuit, xs: list[list[int]]):
     """The bench's `universal.lanes`: (inputs, outputs, row identities), the description's sources one row for every instance,
     x one row per instance."""
     act, uc = units.activation(cl.definition), cl.representative
@@ -88,7 +88,7 @@ def _lanes(units, cl, net: U.Netlist, xs: list[list[int]]):
     return ins, want, rows
 
 
-def _stage(cls: tuple[int, int, int], xs: list[list[int]], net: U.Netlist, d: Path, key: bytes) -> dict:
+def _stage(cls: tuple[int, int, int], xs: list[list[int]], net: U.PrivateCircuit, d: Path, key: bytes) -> dict:
     """One staging from scratch: the Program, its units and partition, the lanes and `class_statement.stage`."""
     fn = bind(U.UniversalUnit, G=cls[0], N_IN=cls[1], N_OUT=cls[2])
     program = PU.one_call(fn)

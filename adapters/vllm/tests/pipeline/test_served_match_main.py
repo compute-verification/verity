@@ -237,9 +237,14 @@ def _the_check(run: _Run, rows: int = 16) -> list[tuple[Any, ...]]:
             ("uninstall",)]
 
 
-def _lines(*said: str) -> str:
-    """The command's lines as printed: the clock's reading since its start, a second and a half more at each line."""
-    return "".join(f"[served-match {1.5 * (i + 1):7.1f}s] {s}\n" for i, s in enumerate(said))
+def _lines(*said: str) -> list[str]:
+    """The command's lines as logged: the clock's reading since its start, a second and a half more at each line."""
+    return [f"[served-match {1.5 * (i + 1):7.1f}s] {s}" for i, s in enumerate(said)]
+
+
+def _said(caplog) -> list[str]:
+    """What `served_match` logged."""
+    return [r.getMessage() for r in caplog.records if r.name == sm.__name__]
 
 
 #: the engine's line shows the first 400 characters of what the engine runs with
@@ -248,7 +253,7 @@ SERVED_LINE = "served 2 requests, 3 steps committed, root 0001020304050607, link
 BUILD_LINE = "Build: program pppppppppppppppp manifest mmmmmmmmmmmmmmmm identities 3 complete True"
 
 
-def test_a_match_that_passes_asks_each_part_in_order_writes_three_files_and_exits_0(monkeypatch, tmp_path, capsys):
+def test_a_match_that_passes_asks_each_part_in_order_writes_three_files_and_exits_0(monkeypatch, tmp_path, caplog):
     run = _Run(monkeypatch, tmp_path)
     assert run.main() == 0
     assert run.log == [*_before_the_committer(run), *_the_serve(run), *_the_check(run)]
@@ -259,7 +264,7 @@ def test_a_match_that_passes_asks_each_part_in_order_writes_three_files_and_exit
              "build_of_record": None, "check": REPORT, "facts": run.facts(served=True)}
     assert (run.out / "match.json").read_text() == json.dumps(match, indent=1)
     assert len(ENGINE_LINE) == len("engine A-CASE: ") + 400
-    assert capsys.readouterr().out == _lines(ENGINE_LINE, SERVED_LINE, BUILD_LINE, "a line of the check", 'Match PASS: tally {"gemm": [5, 5]}')
+    assert _said(caplog) == _lines(ENGINE_LINE, SERVED_LINE, BUILD_LINE, "a line of the check", 'Match PASS: tally {"gemm": [5, 5]}')
 
 
 def test_the_process_has_its_own_compile_dirs_under_the_out_dir_before_the_hooks_go_in(monkeypatch, tmp_path):
@@ -296,17 +301,17 @@ def test_a_committer_that_commits_in_windows_has_them_sized_by_the_arena_before_
     assert run.log == [*_before_the_committer(run), *_the_serve(run, windowed=True), *_the_check(run)]
 
 
-def test_served_switches_with_a_problem_refuse_the_build_before_a_committer_is_made(monkeypatch, tmp_path, capsys):
+def test_served_switches_with_a_problem_refuse_the_build_before_a_committer_is_made(monkeypatch, tmp_path, caplog):
     run = _Run(monkeypatch, tmp_path, problems=("rank 0: a problem", "rank 1: another"))
     assert run.main() == 3
     assert run.log == _before_the_committer(run)
     refused = "served switches: rank 0: a problem; rank 1: another"
     assert run.files() == ["match.json"]
     assert (run.out / "match.json").read_text() == json.dumps({"ok": False, "build_refused": refused, "facts": run.facts()}, indent=1)
-    assert capsys.readouterr().out == _lines(ENGINE_LINE, f"Build refused: {refused}")
+    assert _said(caplog) == _lines(ENGINE_LINE, f"Build refused: {refused}")
 
 
-def test_a_device_no_card_is_registered_for_refuses_the_build_before_a_committer_is_made(monkeypatch, tmp_path, capsys):
+def test_a_device_no_card_is_registered_for_refuses_the_build_before_a_committer_is_made(monkeypatch, tmp_path, caplog):
     facts = {**FACTS, "device": "NVIDIA H100 80GB HBM3"}
     with pytest.raises(Unmodelled) as why:
         sm.device_of(facts)
@@ -315,7 +320,7 @@ def test_a_device_no_card_is_registered_for_refuses_the_build_before_a_committer
     assert run.log == _before_the_committer(run)
     assert "NVIDIA H100 80GB HBM3" in str(why.value)
     assert run.read("match.json") == {"ok": False, "build_refused": str(why.value), "facts": {**run.facts(), "device": "NVIDIA H100 80GB HBM3"}}
-    assert capsys.readouterr().out == _lines(ENGINE_LINE, f"Build refused: {why.value}")
+    assert _said(caplog) == _lines(ENGINE_LINE, f"Build refused: {why.value}")
 
 
 def test_a_committer_that_does_not_retain_on_the_host_is_refused_before_the_source_is_attached(monkeypatch, tmp_path):
@@ -328,14 +333,14 @@ def test_a_committer_that_does_not_retain_on_the_host_is_refused_before_the_sour
     assert run.files() == []
 
 
-def test_a_build_refused_after_the_serve_is_written_with_the_run_s_facts_and_exits_3(monkeypatch, tmp_path, capsys):
+def test_a_build_refused_after_the_serve_is_written_with_the_run_s_facts_and_exits_3(monkeypatch, tmp_path, caplog):
     run = _Run(monkeypatch, tmp_path, build=Unmodelled("no split graph"))
     assert run.main() == 3
     assert run.log == [*_before_the_committer(run), *_the_serve(run)]
     assert run.files() == ["match.json"]
     assert (run.out / "match.json").read_text() == json.dumps({"ok": False, "build_refused": "no split graph", "facts": run.facts(served=True)},
                                                              indent=1)
-    assert capsys.readouterr().out == _lines(ENGINE_LINE, SERVED_LINE, "Build refused: no split graph")
+    assert _said(caplog) == _lines(ENGINE_LINE, SERVED_LINE, "Build refused: no split graph")
 
 
 @pytest.mark.parametrize(("change", "ok"), [
@@ -343,7 +348,7 @@ def test_a_build_refused_after_the_serve_is_written_with_the_run_s_facts_and_exi
     ({"report": {"ok": False, "tally": {"gemm": [4, 5]}}}, False),
     ({"build": {**BUILD, "complete": False}}, False),
     ({"extra": {"errors": ["a value was not committed"]}}, False)])
-def test_the_match_passes_when_the_check_does_the_build_is_complete_and_the_run_had_no_error(monkeypatch, tmp_path, capsys, change, ok):
+def test_the_match_passes_when_the_check_does_the_build_is_complete_and_the_run_had_no_error(monkeypatch, tmp_path, caplog, change, ok):
     run = _Run(monkeypatch, tmp_path, **change)
     build, report = change.get("build", BUILD), change.get("report", REPORT)
     assert run.main() == (0 if ok else 1)
@@ -352,7 +357,7 @@ def test_the_match_passes_when_the_check_does_the_build_is_complete_and_the_run_
     assert (match["ok"], match["check"], match["build"]["complete"], match["facts"]) == (ok, report, build["complete"], run.facts(served=True))
     assert run.read("facts.json") == run.facts(served=True) and run.read("build.json") == build
     tally = json.dumps(report["tally"])
-    assert capsys.readouterr().out.splitlines()[-1] == f"[served-match     7.5s] Match {'PASS' if ok else 'FAIL'}: tally {tally}"
+    assert _said(caplog)[-1] == f"[served-match     7.5s] Match {'PASS' if ok else 'FAIL'}: tally {tally}"
 
 
 def _of_record(tmp_path: Path, **over: Any) -> dict[str, Any]:
@@ -380,7 +385,7 @@ MANY = SA.artifact_of({f"sha-{i:02d}": {"config": {"num_warps": i}} for i in ran
      ["kernels sha-a: pinned {'num_warps': 4}, loaded {'num_warps': 2}"]),
     ({}, {**BUILD, "artifact": MANY},
      [f"kernels sha-{i:02d}: pinned absent, loaded {{'num_warps': {i}}}" for i in range(20)])])
-def test_a_build_with_another_program_or_another_artifact_than_the_build_of_record_fails(monkeypatch, tmp_path, capsys, of_record, build,
+def test_a_build_with_another_program_or_another_artifact_than_the_build_of_record_fails(monkeypatch, tmp_path, caplog, of_record, build,
                                                                                          differences):
     run = _Run(monkeypatch, tmp_path, build=build)
     assert run.main(**_of_record(tmp_path, **of_record)) == 1
@@ -388,7 +393,7 @@ def test_a_build_with_another_program_or_another_artifact_than_the_build_of_reco
     assert match["build_of_record"] == {"program_digest": of_record.get("program_digest", "p" * 128), "artifact": ARTIFACT["digest"],
                                         "artifact_differences": differences, "equal": False}
     assert (match["ok"], match["check"], match["build"]["artifact"]) == (False, REPORT, build["artifact"]["digest"])
-    assert capsys.readouterr().out.splitlines()[-1] == '[served-match     7.5s] Match FAIL: tally {"gemm": [5, 5]}'
+    assert _said(caplog)[-1] == '[served-match     7.5s] Match FAIL: tally {"gemm": [5, 5]}'
 
 
 def test_a_build_of_record_that_pins_no_artifact_is_refused_before_anything_is_asked(monkeypatch, tmp_path):

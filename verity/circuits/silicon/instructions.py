@@ -297,7 +297,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
         # --- BF16 Hopper wgmma -----------------------------------------------------------------------------------
         _i(
             # The instruction vLLM's H100 BF16 GEMMs (cuBLAS, CUTLASS, Triton) and FA3 issue.  Same parameters as the mma.sync
-            # path's model, a separate entry so that a subcircuit names the instruction production runs.
+            # path's model, a separate entry so that a subcircuit names the instruction serving runs.
             id="sm90.wgmma.m64n8k16.bf16",
             sm="sm_90",
             ptx="wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16",

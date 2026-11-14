@@ -4,7 +4,7 @@ store in this process; `run`, which plays every party of the period in one proce
 side as a party of its own (`verifier_party`), over its JSON lines; and `leg`, bandwidth's leg of
 `benchmarks/all_protocols` on a period's records.
 
-`leg`'s store is the period's records (`pous.period.records`, every copy of the auditor's ledger in them cut to the
+`leg`'s store is the period's records (`pous.period_prover.records`, every copy of the auditor's ledger in them cut to the
 entries their window cites). The verifier and its challenger are a party of their own (`verifier_party`) on
 `period.json`'s `challenger_host`, with coins fresh from that host's OS, and the prover runs on the node.
 `trusted-device`'s premise, that they run on a machine the developer doesn't control, holds only when the challenger
@@ -24,7 +24,7 @@ from typing import Any, BinaryIO, Protocol, TypeVar
 
 from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, receipts, wire
-from verity.protocols.accounting.pous.verifier.period import records
+from verity.protocols.accounting.pous.prover.period_prover import records
 from verity.protocols.accounting.poub.verifier import coins as C
 from verity.protocols.accounting.poub.verifier import period as P
 from verity.protocols.accounting.poub.verifier.verifier_party import _recv, _send

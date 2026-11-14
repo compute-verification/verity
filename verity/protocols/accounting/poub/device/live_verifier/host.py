@@ -190,7 +190,7 @@ COMPOSE_BYTES = 64 << 30
 """The most a hand-off may carry, in bytes, over all its files."""
 COMPOSE_ANSWER_BYTES = 64 << 20
 """The most of its $OUT a compose answers with, in bytes; a larger file is named with its size, not sent."""
-SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock/verifier/lean/.lake/build/bin/vstar-recursive")
+SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock_recursion/verifier/lean/.lake/build/bin/vstar-recursive")
 """Sampled proofs' Lean verifier in the pinned tree, as its pin built it: the record runs it rather than building one."""
 SUM_LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
@@ -794,7 +794,7 @@ def gate_party_log(rest: list[str], host: Host) -> dict:
     return {"party": rest[0], "log": rest[1], "lines": lines}
 
 
-KEYGEN = "import sys; from verity.protocols.accounting.pous.verifier import period; print(period.challenger(sys.argv[1]).public_key.hex())"
+KEYGEN = "import sys; from verity.protocols.accounting.pous.device import onsite; print(onsite.device_key(sys.argv[1]).public_key.hex())"
 
 
 def gate_party_key(rest: list[str], host: Host, *, own: Callable[[Path], None],
