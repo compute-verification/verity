@@ -912,14 +912,14 @@ class NativeCollectCommitter(NativeHostCommitter):
     def _window_root(self, step: int, state: dict[str, Any], padded: int, side: Any) -> tuple[list[Any], bytes, float]:
         """The step's tree levels, Merkle root and tree ms from its absorbed windows (`state`, cleared): the upper tree over the per-window
         top nodes (level n_levels-1 of the step), its levels to pinned host too when the step keeps levels."""
-        H, rows = self._hasher, self.rows
+        H = self._hasher
         if not padded:
             return [], self._row_domain(step, 0).empty_root(), 0.0
         top_span = 1 << (state["n_levels"] - 1)
         n_tops = state["width"] // top_span
-        if rows and state.get("leaves"):
+        if state.get("leaves"):
             self._fold_leaves(state, side)
-        if rows and self._copy is not None:
+        if self._copy is not None:
             side.wait_stream(self._copy)                                        # rows_tree's sync covers the window levels' copies
         if sum(int(t.shape[0]) for t in state["tops"]) != n_tops:
             raise RuntimeError(f"windowed absorb: {len(state['tops'])} window subtrees for {state['n_total']} leaves (expected {n_tops})")
@@ -1026,12 +1026,10 @@ class NativeCollectCommitter(NativeHostCommitter):
         t0 = time.perf_counter()
         plan_used = int(getattr(job, "plan_used", -1))
         inplace = plan_used >= 0
-        m_words = (-(-plan_used // C) * C) // 4
         host_wins: list[tuple[int, Any, int]] = []                              # (k, pinned host view, bytes)
         transient: list[int] = []                                               # windows on host only for the re-hash (retain none|sample)
         j = self.win_log2_chunks                                                # W = C * 2^j: window k holds leaves [k 2^j, (k+1) 2^j)
         state: dict[str, Any] = {}                                              # per-step subtree state (reset when the plan length was wrong)
-        rows = self.rows
         ks = self._row_key(job.step)
         tn = self._row_table()
 
@@ -1062,24 +1060,10 @@ class NativeCollectCommitter(NativeHostCommitter):
             return H.rows_leaves(rs, src, nbytes, first, min(1 << j, state["width"] - first), state["n_total"], tn, side.cuda_stream)[0]
 
         def absorb(k: int, lv_k: Any) -> None:
-            """Subtree of window k (lv_k = its leaves, device) -> host level slices + top node kept on device; under rows-sha512 the
-            leaves are held and fold with later windows'."""
-            n_k = int(lv_k.shape[0])
-            views, n_levels = state["views"], state["n_levels"]
-            if rows:
-                # the window's leaves (64 B a row) wait on the device and fold with the next windows' (_hold_leaves): a window's own
-                # subtree is two launches of a few blocks each, bound by latency and by waiting for SMs
-                state["absorbed"].append(k)
-                self._hold_leaves(state, lv_k, side)
-                return
-            if views is None:
-                state["tops"].append(H.tree_window_top(lv_k, n_levels, side.cuda_stream))
-                return
-            dsts = []
-            for L in range(n_levels):
-                s0 = k << (j - L)
-                dsts.append(views[L][s0:s0 + -(-n_k // (1 << L))])
-            state["tops"].append(H.tree_window(lv_k, n_levels, side.cuda_stream, dsts))
+            """Window k's leaves (`lv_k`, on the device, 64 B a row) wait there and fold with the next windows' (`_hold_leaves`): a
+            window's own subtree is two launches of a few blocks each, bound by latency and by waiting for SMs."""
+            state["absorbed"].append(k)
+            self._hold_leaves(state, lv_k, side)
 
         # host copy of the raw window: retention (retain=host) and/or the re-upload source for learning steps
         keep_set = self.retain_windows if self.retain == "sample" else None     # retain=sample: only these (step, k) windows are kept
@@ -1208,10 +1192,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 # in-place hashing only while the step stays inside the plan's length: a window running past it means the plan changed
                 # mid-step (learning) -> the frame domain (the step's row count) is wrong -> the step is re-hashed from the host windows below
                 if inplace and padded_k and state and (k << j) + padded_k // C <= state["n_total"]:
-                    if rows:
-                        lv_k = row_leaves(st, padded_k, k)
-                    else:
-                        lv_k = H.leaves_window(st, padded_k, (k * W) // C, job.step, self.GPU_TREE_SRC, C, m_words, side.cuda_stream)
+                    lv_k = row_leaves(st, padded_k, k)
                     absorb(k, lv_k)                                             # the slot's release below is ordered after its reads (side stream)
                     del lv_k
             if fault_lifetime:
