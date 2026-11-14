@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.protocol import ProtocolDef
 from verity.party import Finish, Identity, Received, Send
+from verity.protocol import ProtocolDef
 from verity.channel import Message, Phase, Refused
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier.wipe_parties import CHALLENGER, MANIFEST, PROVER
