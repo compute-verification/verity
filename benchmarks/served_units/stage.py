@@ -50,7 +50,8 @@ AND limits, which keep it within the GPU prover's slot types, a form ``verify --
 its unit name, so the statement is the served one but for its binding: its ``class_sha512`` is the served composer's. The
 circuit is streamed to circuit.txt once, every input's outputs checked against the Program's reference (``twin`` null).
 ``census:NAME`` stages any other block type of the serving rows the same way, its values seeded by the same rule and its
-seeds keyed by the name.
+seeds keyed by the name. One whose statement is templated (a table read's, ``census:EmbeddingRead_v1{V,H}``) writes its
+template and layout mode beside the circuit as a READS type does, and stage.json's ``statement.id`` names it.
 
 A type of `READS` is a table read, ``EmbeddingRead_v1{V, H}`` on its served rows (`interface.unit_rows`), staged as serving
 stages a read (`chunk_rows.statement`): the templated statement at the read layout on the verifier's own read template
@@ -456,11 +457,14 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: P
         bound_files(out, st.pin, n)
     if stmt.get("reads") == "slots":
         FC.IL.write_tables(out / "tables")
+    if st.meta.get("statement") == FC.TMPL_STATEMENT:
+        (out / "unit.tmpl").write_text(FC.template_of(st.text))
+        (out / "unit.layout").write_text(st.meta["layout"])
     meta = got["meta"]
     return {**({"bind": bound} if bind else {}),
             "unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id, "word": tp.word, "census": cen.name(S),
             "in_rows": [[r, s, b, ps] for r, s, b, ps in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
-            "statement": stmt, "net_and_limits": getattr(st.low, "caps", None), "nets": nets(st.low), "lookups": meta.get("lookups"),
+            "statement": {**stmt, "id": st.meta.get("statement")}, "net_and_limits": getattr(st.low, "caps", None), "nets": nets(st.low), "lookups": meta.get("lookups"),
             "slot_types": len({r["net"] for r in meta.get("ranges", ())}),
             "unit_nnz": got["unit_nnz"], "k_log": meta["k_log"], "unit_log": meta.get("unit_log"),
             "vus_per_block": meta.get("vus_per_block"), "row_schemas": meta.get("row_schemas"),

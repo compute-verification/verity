@@ -26,8 +26,8 @@ sys.path.insert(0, str(HERE.parent / "hidden_zk"))
 
 from verity.commitments.rowleaf import ROLE_W, ROLE_X  # noqa: E402
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import window as Wd  # noqa: E402
 from verity.protocols.accounting.pouw.prover.circuit import pc8  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import window as Wd  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 from verity_flock import ir_lower as IL  # noqa: E402

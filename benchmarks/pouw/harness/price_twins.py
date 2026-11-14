@@ -2,7 +2,7 @@
 rational, keyed by what an attempt ran, so the attempt ledger (`ledger.py`) looks the gap up at both FP32 prices instead of
 anyone typing it. A row's `gamma` field is that gap.
 
-A twin is one pinned theorem: the GGap statement of a device record at a cast (FP8 v1 and v2), or the value lemma of the
+A twin is one guarantee: the GGap statement of a device record at a cast (FP8 v1 and v2), or the value lemma of the
 gap's function (v1-hot, v2-hot, Pearl-C4 v1 and v2). The Lean store's pins keep their names from before the gap's rename
 (`pearlCGamma…`, `gammaHot…`, `gammaFp4…`, stating `εPearlC`), so both spellings are read, and `_short` gives one key for
 both. Its key is
