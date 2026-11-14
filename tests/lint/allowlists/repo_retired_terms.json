@@ -3048,8 +3048,6 @@
     {"file": "verity/commitments/attest/__init__.py", "count": 17},
     {"file": "verity/commitments/attest/lean/Attest.lean", "count": 2},
     {"file": "verity/commitments/attest/tests/test_attest.py", "count": 13},
-    {"file": "verity/claims/__init__.py", "count": 62},
-    {"file": "verity/claims/tests/test_claims_registry.py", "count": 8},
     {"file": "verity/config.py", "count": 25},
     {"file": "verity/runtime/runner.py", "count": 1},
     {"file": "verity/runtime/sources.py", "count": 7},
