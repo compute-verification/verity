@@ -25,7 +25,7 @@ hands its implementations in when it is imported.
   ``site`` is the linear's ordinal in the forward pass. Beside the calls are the names a serve loop needs to manage a
   window (its coins, salt session, gate, draw and outcome), the schemes' names, settings and refusals, the hand-ins
   (`use_int8_arm`, `use_tensors`, `use_h1_device`), and the row-table kernels' build and table helpers the adapter's
-  step-root and history tables run (`RowTableLibrary`, `row_table_nvcc`, `row_table_host_lib`, `hm_tables`,
+  step-root and history tables run (`row_table_nvcc`, `row_table_host_lib`, `hm_tables`,
   `leaf_prefixes`, `table_width`, `u64_words`, …). The package defines the calls, their types and four wrappers that
   look up their targets at each call (`in_process_coins`, `verifier_coins`, `lead_in_process_certifier`,
   `ready_verifier`). Every other exported name is read from its module at each lookup, never cached, and a function
