@@ -40,7 +40,8 @@ test stays archived.
 
 AN EMPTIED PACKAGE LEVEL. The `__init__.py` of a package level the moves empty (every other file under it leaves, and
 none arrives) stays where it is and gets no row, whichever component it is in and whether or not the assignment
-archives it; the script names each one, for a commit that deletes them after the moves. A row to `archive/` would
+archives it; the script names each one. `layout.py` deletes one that holds nothing but whitespace and comments with its
+package, and refuses the move over one that holds more, which a commit before the moves deletes. A row to `archive/` would
 rename the package, and every mention of it that is left, to `archive.…`; a row that took it along by the rule would
 rename the package under the modules other rows take out of it.
 
@@ -916,7 +917,8 @@ def main():
     if unsuited:
         die("test files that no suite collects after the moves (a suite moves whole, with its pyproject.toml):\n  " + "\n  ".join(unsuited))
     for p in emptied:
-        notes.append(f"stays, the `__init__.py` of a package level the moves empty, for a commit that deletes it after them: {p}")
+        notes.append(f"gets no row, the `__init__.py` of a package level the moves empty (layout.py deletes it if it holds "
+                     f"only comments, and refuses the move if it holds more): {p}")
 
     # ---- the maps
     tracked_dirs = collections.defaultdict(lambda: ([], set()))
