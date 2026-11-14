@@ -133,3 +133,54 @@ def test_the_verifier_reads_the_verdict_at_its_value_and_never_at_the_blocks_own
     assert own[SS.OPENING_VERDICT]["value"] == window.held(m, SS.OPENING_VERDICT) != o1["value"]
     with pytest.raises(ValueError, match=f"'o1' reads {KEY}/root/opened, which the interior registration doesn't register"):
         TS.verifier_reads(d, window, _interior(d, window, verdicts=False), {"roots": []}, SAMPLE)
+
+
+def _pinned_round_two(pins: dict, boundary: dict | None = None) -> SS.Own:
+    """What round 2 holds of the fused block's read (`second_stage.Own`, as `two_stage.round_two` builds it): its key
+    an index the verifier supplies, its root and domain the tables' entries it pinned (`interior_rows.sources`), its
+    verdict ``o1`` the value it fills with 1 (`two_stage.verdict_sources`), and the block's other operands at round 1's
+    ports, which the interior registers none of. The interior registers the read's values; the auditor's params record
+    the template as a read of the tables' E rows and pin ``pins`` (`service.pinned_tables`); round 1's record registers
+    ``boundary``'s tables, none by default."""
+    key = IR.Supply(TID, "tok", f"{KEY}/tok", CELLS, tuple(range(CELLS)), index=tuple(range(CELLS)))
+    read = (*SUPPLIES, key, *(IR.Operand(TID, p, f"{KEY}/{p}", CELLS, tuple(range(CELLS)), w)
+                              for p, w in _member().rows if p in ("row", "salt", "path")))
+    (v,) = TS.verdicts([_member()], read)
+    supplied = {**IR.sources(read, Q, pins=pins), **TS.verdict_sources((v,), Q)}
+    links = (*(SS.Link(TID, x.port, x.value) for x in read),
+             *(SS.Link(TID, p, f"b.{p}") for p, _w in _member().rows if p in ("xq", "sx", "ws")))
+    runs = tuple(SS.Run(j, W, t, 0) for j, t in zip(range(0, CELLS, W), range(T)))
+    return SS.Own(SAMPLE, (), {"registered": [{"value": x.value} for x in read] + [{"value": v.value}]},
+                  boundary or {"roots": []}, (), links, supplied=SS.supplied_of(supplied),
+                  ref_reads=((TID, {"ports": {SS.OPENING_VERDICT: {"value": v.value}}}),),
+                  rows=tuple(SS.Rows(TID, p, T, runs) for p in IR.TABLE), reads=((TID, E),),
+                  tables=tuple((p, e) for p, e in sorted(pins.items())))
+
+
+#: The tables' entries the auditor pins (`verity-vllm/expert-tables/v1`'s ``values``), each of E rows of H words.
+PINS = {p: {"value": p, "root": f"{k + 1:02x}" * 64, "leaves": E, "words": H, "domain": f"{k + 0xd1:02x}" * 64}
+        for k, p in enumerate(PARAMS)}
+
+
+def test_round_two_takes_a_fused_blocks_tables_from_the_auditors_pins():
+    """`second-inputs` at round 2: a fused block's row, salt and path pass where its root and domain are the tables the
+    auditor's params pin, round 1's record registering none of them. They are refused, with `second_stage.INPUTS_WHY`
+    and the row named, where the params pin no table or one of the two, where the pin's root or domain id is another
+    than the one the verifier filled from the tables' registration, or where it pins the table at another count of
+    rows; the same entries registered by round 1's record instead pass as before. The run is refused either way: no
+    statement is given here, so ``second-statements`` or the design's own codes refuse it before the form's."""
+    own = _pinned_round_two(PINS)
+    assert SS.inputs_failure(own) is None
+    first = SS.check(SS.FORM, own, None)
+    assert "second-inputs" not in first.codes and not first.ok
+    for changed in (replace(own, tables=()),
+                    replace(own, tables=tuple((p, {**e, "root": "ee" * 64}) for p, e in own.tables)),
+                    replace(own, tables=tuple((p, {**e, "domain": "ee" * 64}) for p, e in own.tables)),
+                    replace(own, tables=tuple((p, {**e, "leaves": 2 * E}) for p, e in own.tables)),
+                    replace(own, tables=own.tables[:1])):
+        assert SS.inputs_failure(changed) == f"{KEY}/row"
+        assert dict(SS._interior_failures(changed))["second-inputs"] == {"value": f"{KEY}/row", "why": SS.INPUTS_WHY}
+        assert "second-inputs" in SS.check(SS.FORM, changed, None).codes
+    recorded = {"roots": [{"port": f"t{k}", **{x: e[x] for x in ("root", "domain", "leaves")}}
+                          for k, e in enumerate(PINS.values())]}
+    assert SS.inputs_failure(replace(own, boundary=recorded, tables=())) is None

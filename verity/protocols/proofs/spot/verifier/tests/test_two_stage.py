@@ -757,13 +757,14 @@ TWO_TABLES = {**READ_FILLED, "root": [[{"bytes": T_ROOT}], [{"bytes": U_ROOT}]],
 
 
 def _holding(registered, links=READ_LINKS, wires=(), supplied=None, fixed=(), ref_reads=READ_REF,
-             rows=READ_ROWS, boundary=READ_RECORD, reads=READ_SIZES) -> SS.Own:
+             rows=READ_ROWS, boundary=READ_RECORD, reads=READ_SIZES, tables=()) -> SS.Own:
     """What round 2 holds (`second_stage.Own`) of an interior registration registering values `registered`, with the
     design's `links`, `wires` and `rows`, the verifier's own `supplied` values and `fixed` names, the reference
-    reads, round 1's record `boundary`, and the templates the params record as `reads`."""
+    reads, round 1's record `boundary`, the templates the params record as `reads`, and the tables they pin."""
     return SS.Own((0,), (), {"registered": [{"value": v} for v in registered]}, boundary, (), tuple(links),
                   wires=tuple(wires), supplied=SS.supplied_of(READ_FILLED if supplied is None else supplied),
-                  fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows), reads=tuple(reads))
+                  fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows), reads=tuple(reads),
+                  tables=tuple(tables))
 
 
 READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
@@ -846,6 +847,62 @@ def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(
     assert SS.inputs_failure(own) == value
     found = dict(SS._interior_failures(own)).get("second-inputs")
     assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
+
+
+#: The tables' registration's entries for tables ``t`` and ``u``, as the auditor's params pin them (`service.pinned_tables`).
+PINNED = (("t", {"value": "t", "root": T_ROOT, "leaves": 8, "words": 2, "domain": T_DOMAIN}),
+          ("u", {"value": "u", "root": U_ROOT, "leaves": 8, "words": 2, "domain": U_DOMAIN}))
+NO_RECORD = {"roots": []}
+
+
+@pytest.mark.parametrize("own,value", [
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED[:1]), None),
+    (_holding(READ_VALUES, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD, supplied=TWO_TABLES, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary={"roots": READ_RECORD["roots"][1:]}, supplied=TWO_TABLES, tables=PINNED[:1]), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED[1:]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, supplied=TWO_TABLES, tables=PINNED[:1]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "root": "c3" * 64}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "domain": U_DOMAIN}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "leaves": 16}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "leaves": "8"}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED, rows=READ_ROWS[:1]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED, reads=()), "row"),
+    (_holding(READ_VALUES[1:], READ_LINKS[1:], boundary=NO_RECORD, tables=PINNED), "row"),
+])
+def test_round_two_takes_a_reads_table_from_the_tables_the_auditors_params_pin(own, value):
+    """`second_stage._one_table` beside round 1's record: a read's root and domain may be one table's of the tables
+    the auditor's params pin before any coin (`Own.tables`, the tables' registration's entries), so a read's row,
+    salt and path pass with round 1's record registering no table, or with it registering one of two tables filled
+    row by row and the params pinning the other. Refused, the row named, with `second_stage.INPUTS_WHY`: a table
+    neither pinned nor registered, a pin whose root, domain id or count of leaves is another than the one the verifier
+    filled, and a pin that leaves the read's other conditions unmet (its rows, its record as a read, its key)."""
+    assert SS.inputs_failure(own) == value
+    found = dict(SS._interior_failures(own)).get("second-inputs")
+    assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
+
+
+def test_the_params_pin_registered_tables_beside_the_circuit_files():
+    """`template_circuits` and `pinned_tables`: the auditor's params may add ``"tables"``, the tables' registration's
+    entries by parameter, which it pinned before any coin; the verifier takes them in the parameters' order and the
+    circuit files as without them, and refuses an entry not exactly the registration's form (`service._table_entry`)
+    and tables that are not an object."""
+    entry = dict(PINNED[0][1])
+    pinned = {**_circuits(), "tables": {"u": {**entry, "value": "u"}, "t": entry}}
+    assert S.template_circuits(pinned, WINDOW_QUERY) == S.template_circuits(_circuits(), WINDOW_QUERY)
+    assert S.pinned_tables(pinned) == (("t", entry), ("u", {**entry, "value": "u"}))
+    assert S.pinned_tables(_circuits()) == () == S.pinned_tables(None)
+    assert S.template_circuits({**_circuits(), "tables": {"t": {**entry, "word_bits": 8}}}, WINDOW_QUERY)
+    for bad in ({**entry, "value": "u"}, {**entry, "root": "AB" * 64}, {**entry, "domain": "ab" * 32},
+                {**entry, "leaves": 0}, {**entry, "words": True}, {**entry, "word_bits": 0}, {**entry, "x": 1},
+                {k: v for k, v in entry.items() if k != "words"}, [entry]):
+        with pytest.raises(ValueError, match="a pinned table's entry is exactly"):
+            S.template_circuits({**_circuits(), "tables": {"t": bad}}, WINDOW_QUERY)
+    for bad in ([entry], "t", None):
+        with pytest.raises(ValueError, match="the params' proofs are"):
+            S.template_circuits({**_circuits(), "tables": bad}, WINDOW_QUERY)
 
 
 def test_a_read_at_a_key_the_block_computes_is_refused_and_says_so():

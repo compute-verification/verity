@@ -84,7 +84,7 @@ run's challenger key and its copy of main's history (`Input.key`, `Input.main`: 
 record's proved units, instances, served units and session roots, the second-stage sessions' statements
 (`SecondStage.Stmt`), and the circuit file each template's sessions verify against, by SHA-512, with the reference
 header and registered reads round 2 holds their statements to (`SecondStage.headerOk`, `SecondStage.valuesOk`), as the
-auditor's params name them (`templateCircuits`). The design's links and wires, their rows and the names of what the
+auditor's params name them (`templateCircuits`), and the registered tables they pin (`pinnedTables`). The design's links and wires, their rows and the names of what the
 block returns are the verifier's own, from the replay block's Definition in the boundary program
 (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`, `SecondStage.replayReturns`), and
 never part of it. -/
@@ -104,6 +104,7 @@ structure Interior where
   statements : Option (Array Json) := none
   circuits : Array (String × String × Json × Json) := #[]
   reads : Array (String × Nat) := #[]
+  tables : Array (String × Json) := #[]
 
 /-- `values` are the Spec's values, a two-stage rule's boundary values. `key` is the verifier's challenger key and
 `main` its copy of main's first-parent history, which the coins' evidence is read under (`coinsCode`): they are the
@@ -150,23 +151,44 @@ def readOf? (j : Json) : Option (Nat × Nat) :=
   | some #["H", "V"], some v, some h => if 0 < v && 0 < h then some (v, h) else none
   | _, _, _ => none
 
+/-- `service._table_entry`: a pinned table's entry under parameter `p`, the entry the tables' registration names for
+it: exactly `value`, `root`, `leaves`, `words` and `domain`, and `word_bits` where its words are not 16-bit; `value` is
+`p`, `root` and `domain` 128 lowercase hex digits, and `leaves`, `words` and `word_bits` positive integers. -/
+def tableEntry? (p : String) (e : Json) : Bool :=
+  let hex := fun (j : Json) => match j with | .str s => s.length == 128 && s.all hexDigit | _ => false
+  let pos := fun (j : Json) => (nat? j).any (0 < ·)
+  ((keys? e) == some #["domain", "leaves", "root", "value", "words"] ||
+    ((keys? e) == some #["domain", "leaves", "root", "value", "word_bits", "words"] && pos (getD e "word_bits"))) &&
+  jeq (getD e "value") (.str p) && hex (getD e "root") && hex (getD e "domain") && pos (getD e "leaves") &&
+  pos (getD e "words")
+
 /-- `service.template_circuits`: the auditor's params naming each template's circuit file and its registered reference
 statement's header and registered reads, a two-stage run's `interior.params.proofs`, `{"templates": [{"template":
 <descriptor id>, "circuit": <SHA-512, lowercase hex>, "header": <the registered reference statement's header>,
 "registered": <the registered reads it reads, null for none>}, ...]}`, as (template, circuit, header,
 registered) in the order the check's template query `query` names the templates (`Select.templateIds`), which is
 REPLAY_c's first-instance order (`Select.replayCells`); `null` names no file and gives none. An entry may also record
-its template as a table read, `"read": {"V": <rows>, "H": <words a row>}` (`templateReads`). An error for any other
-form, a circuit that isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object
-nor null, a read that isn't two positive counts, and a list that doesn't name each of the check's templates once, in
-its order. -/
+its template as a table read, `"read": {"V": <rows>, "H": <words a row>}` (`templateReads`), and the params may add
+`"tables": {<parameter>: <entry>, ...}`, the registered tables the auditor pinned before any coin, each the entry the
+tables' registration names for it (`tableEntry?`, `pinnedTables`). An error for any other form, a circuit that isn't
+128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor null, a read that
+isn't two positive counts, a pinned table that isn't such an entry, and a list that doesn't name each of the check's
+templates once, in its order. -/
 def templateCircuits (proofs query : Json) : V (Array (String × String × Json × Json)) := do
   if proofs matches .null then return #[]
   let ids ← Select.templateIds query
   let form := "the params' proofs are {\"templates\": [{\"template\": <descriptor id>, \"circuit\": <SHA-512>, " ++
     "\"header\": <object>, \"registered\": <object or null>}, ...]}, an entry's \"read\" {\"V\": <rows>, " ++
-    "\"H\": <words>}"
-  let (some #["templates"], .arr es) := (keys? proofs, getD proofs "templates") | throw form
+    "\"H\": <words>}, and \"tables\" {<parameter>: <the tables' registration's entry>}"
+  let (true, .arr es) := (keys? proofs == some #["templates"] || keys? proofs == some #["tables", "templates"],
+      getD proofs "templates") | throw form
+  if let some ts := field? proofs "tables" then
+    let .obj _ := ts | throw form
+    for (p, e) in entries ts do
+      unless tableEntry? p e do
+        throw s!"{form}: a pinned table's entry is exactly value (its parameter), root, leaves, words and domain, and " ++
+          s!"word_bits where its words are not 16-bit, root and domain SHA-512s in lowercase hex and the counts positive " ++
+          s!"integers: {p} {e.compress}"
   let named ← es.mapM fun e =>
     let bad := s!"{form}, each circuit a SHA-512 in lowercase hex, each header an object, each registered " ++
       s!"an object or null and each read two positive counts: {e.compress}"
@@ -192,6 +214,14 @@ def templateReads (proofs : Json) : Array (String × Nat) :=
     match getD e "template", (field? e "read").bind readOf? with
     | .str t, some (v, _) => some (t, v)
     | _, _ => none
+
+/-- `service.pinned_tables`: the registered tables the auditor's params `proofs` pin, `(parameter, entry)` each, for
+params `templateCircuits` accepted: the entries the tables' registration names, which the auditor pinned before any
+coin and round 2 takes a read's table from beside round 1's record (`SecondStage.Own.tables`, `SecondStage.oneTable`). -/
+def pinnedTables (proofs : Json) : Array (String × Json) :=
+  match getD proofs "tables" with
+  | ts@(.obj _) => entries ts
+  | _ => #[]
 
 /-- The receipt the stream writes for an accepted registration: its digest, the challenger and its place in the log. -/
 def receipt (record : Json) (challenger received : String) : V Json := do
@@ -303,7 +333,7 @@ def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
         returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
         supplied := it.params.verifier.supplied,
         fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1),
-        reads := it.reads }
+        reads := it.reads, tables := it.tables }
     let rec_ := SecondStage.attach rec_ (SecondStage.check form own it.statements)
       (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),

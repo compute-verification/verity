@@ -1053,7 +1053,8 @@ def select_second(j):
 def template_circuits(j):
     """A two-stage run's params naming each template's circuit file and its statements' reference header and registered
     reads (`service.template_circuits`), in the order the check's template query names the templates, and the templates
-    they record as table reads, each with its table's rows (`service.template_reads`); a missing `proofs` names none."""
+    they record as table reads, each with its table's rows (`service.template_reads`), and the registered tables they
+    pin (`service.pinned_tables`); a missing `proofs` names none."""
     j = _json(j)
     proofs, query = (j.get("proofs"), j.get("query")) if isinstance(j, dict) else (None, None)
     try:
@@ -1061,7 +1062,8 @@ def template_circuits(j):
     except ValueError as e:
         raise D.Reject(str(e)) from None
     return {"circuits": [[t, c, h, r] for t, c, h, r in named],
-            "reads": [[t, v] for t, v in service.template_reads(proofs)]}
+            "reads": [[t, v] for t, v in service.template_reads(proofs)],
+            "tables": [[p, e] for p, e in service.pinned_tables(proofs)]}
 
 
 def slots(j):
@@ -3610,7 +3612,25 @@ _PARAMS_CHANGES = {
     "another version": lambda p, q: (p, {**q, "version": 1}),
     "no version": lambda p, q: (p, {k: v for k, v in q.items() if k != "version"}),
     "no query": lambda p, q: (p, None),
+    "a pinned table": lambda p, q: ({**p, "tables": {"w": _PINNED}}, q),
+    "a pinned table of other words": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "word_bits": 8}}}, q),
+    "a pinned table of 0-bit words": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "word_bits": 0}}}, q),
+    "a pinned table under another parameter": lambda p, q: ({**p, "tables": {"v": _PINNED}}, q),
+    "a pinned table without its domain": lambda p, q: ({**p, "tables": {"w": {
+        k: v for k, v in _PINNED.items() if k != "domain"}}}, q),
+    "a pinned table with another key": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "rows": 8}}}, q),
+    "a pinned table's root uppercase": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "root": "AA" * 64}}}, q),
+    "a pinned table's root short": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "root": "aa" * 32}}}, q),
+    "a pinned table of no leaves": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "leaves": 0}}}, q),
+    "a pinned table's words a boolean": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "words": True}}}, q),
+    "a pinned table a list": lambda p, q: ({**p, "tables": {"w": [_PINNED]}}, q),
+    "pinned tables a list": lambda p, q: ({**p, "tables": [_PINNED]}, q),
+    "pinned tables empty": lambda p, q: ({**p, "tables": {}}, q),
 }
+
+
+#: A registered table's entry the auditor pins (`service._table_entry`): the tables' registration's for parameter ``w``.
+_PINNED = {"value": "w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}
 
 
 @st.composite
@@ -3636,6 +3656,9 @@ def template_circuit_cases(draw) -> dict:
     recorded = draw(st.lists(st.sampled_from(_READ_RECORDS), min_size=len(ids), max_size=len(ids)))
     proofs = {"templates": [{"template": t, "circuit": c, "header": h, "registered": r, **x}
                             for t, c, h, r, x in zip(ids, circuits, headers, reads, recorded)]}
+    if draw(st.booleans()):
+        proofs["tables"] = {"w": _PINNED, **({"x": {**_PINNED, "value": "x", "root": "ef" * 64}} if draw(st.booleans())
+                                              else {})}
     if draw(st.booleans()):
         proofs, query = _PARAMS_CHANGES[draw(st.sampled_from(sorted(_PARAMS_CHANGES)))](proofs, query)
     return {"query": query} if proofs is None else {"proofs": proofs, "query": query}
@@ -4550,8 +4573,9 @@ def _second_own(j):
     for none) and the registered reads the params give it, taken as given (`ref_reads`, `{template: registered}`, each
     null for none, null for no template's), and its own copies of the interior registration's values it fills, with
     their sources (`supplied`, `second_stage.supplied_of`), and the names of those it pinned or holds to an earlier
-    record (`fixed`), each null for none, and the templates the auditor's params record as table reads with their
-    tables' rows (`reads`, `{template: V}`, null for none)."""
+    record (`fixed`), each null for none, the templates the auditor's params record as table reads with their
+    tables' rows (`reads`, `{template: V}`, null for none), and the registered tables they pin (`tables`,
+    `{parameter: entry}`, `service.pinned_tables`, null for none)."""
     j = _json(j)
     if not (isinstance(j, dict) and isinstance(j.get("allow"), bool)):
         raise D.Reject("allow is not a boolean")
@@ -4595,10 +4619,13 @@ def _second_own(j):
     reads = j.get("reads")
     if not (reads is None or (isinstance(reads, dict) and all(map(_nat, reads.values())))):
         raise D.Reject("reads is null or an object of naturals")
+    tables = j.get("tables")
+    if not (tables is None or (isinstance(tables, dict) and all(isinstance(e, dict) for e in tables.values()))):
+        raise D.Reject("tables is null or an object of entries, each an object")
     own = SS.Own(tuple(j["sample"]), SS.parts(len(j["sample"]), strata), j.get("interior"), j.get("boundary"),
                  tuple(j["drawn"]), links, audit.session_registered(verdicts), SS.verified_of(verdicts),
                  tuple((refs or {}).items()), tuple((ref_reads or {}).items()), wires, rows, returns, supplied,
-                 tuple(fixed or ()), tuple((reads or {}).items()))
+                 tuple(fixed or ()), tuple((reads or {}).items()), tuple(sorted((tables or {}).items())))
     return j["allow"], own, statements
 
 
@@ -5057,7 +5084,7 @@ OPENING_PORTS = ("tok", "root", "domain", "row", "salt", "path")
 
 
 #: How many cases `_read_opening` has.
-OPENINGS = 36
+OPENINGS = 41
 #: The roots and domain ids of the two tables `_read_opening` has round 1's record register.
 OPENING_TABLES = {"t": ("a1" * 64, "a2" * 64), "u": ("b1" * 64, "b2" * 64)}
 
@@ -5081,7 +5108,9 @@ def _read_opening(c: dict, x: int) -> dict:
     differently; its root and domain are of two tables, filled alike row by row; round 1's record registers neither
     table; its root is left as a table's name, which is none of the verifier's bytes; round 1's record registers
     the root under another domain; the params record no read, the read at another count of rows, or another template
-    alone as one; or round 1's record registers the table at another count of leaves."""
+    alone as one; round 1's record registers the table at another count of leaves; or the auditor's params pin the
+    tables (`Own.tables`, the tables' registration's entries) and round 1's record registers none, or both do, or the
+    pin's root, domain id or count of leaves is another than the one the verifier fills."""
     rec, links, wires, refs, rows = (c.get(k) for k in ("interior", "links", "wires", "ref_reads", "rows"))
     b = c.get("boundary")
     if not (isinstance(rec, dict) and isinstance(links, list) and isinstance(wires, list) and isinstance(rows, list)
@@ -5097,6 +5126,9 @@ def _read_opening(c: dict, x: int) -> dict:
     tables = [{**like, "port": f"{OPENING}/table-{n}", "root": r, "domain": d, "leaves": OPENING_ROWS}
               for n, (r, d) in OPENING_TABLES.items()]
     recorded: dict | None = {OPENING: OPENING_ROWS}
+    pins = {f"{OPENING}/table-{n}": {"value": f"{OPENING}/table-{n}", "root": r, "leaves": OPENING_ROWS, "words": 2,
+                                     "domain": d} for n, (r, d) in OPENING_TABLES.items()}
+    pinned: dict | None = c.get("tables") if isinstance(c.get("tables"), dict) else None
     mine = {names["tok"]: [[{"bytes": "00000002"}]], names["root"]: [[{"bytes": t_root}]],
             names["domain"]: [[{"bytes": t_domain}]], one: [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
     linked = [{"template": OPENING, "port": p, "value": v} for p, v in names.items()]
@@ -5184,12 +5216,19 @@ def _read_opening(c: dict, x: int) -> dict:
         recorded = {"other": OPENING_ROWS}
     elif kind == 35:
         tables = [{**e, "leaves": 2 * OPENING_ROWS} for e in tables]
+    elif kind == 36:
+        tables, pinned = [], pins
+    elif kind == 37:
+        pinned = pins
+    elif kind in (38, 39, 40):
+        k = {38: "root", 39: "domain", 40: "leaves"}[kind]
+        tables, pinned = [], {v: {**e, k: 2 * OPENING_ROWS if k == "leaves" else "c3" * 64} for v, e in pins.items()}
     supplied = c.get("supplied") if isinstance(c.get("supplied"), dict) else {}
     entries = [{**INTERIOR_VALUES[0], "value": v} for v in registered]
     return {**c, "interior": {**rec, "registered": [*held, *entries]}, "links": [*links, *linked], "wires": wired,
             "boundary": {**b, "roots": [*b["roots"], *tables]},
             "rows": [*rows, *placed], "supplied": {**supplied, **mine}, "fixed": fixed,
-            "ref_reads": {**(refs or {}), **more, at: ref}, "reads": recorded}
+            "ref_reads": {**(refs or {}), **more, at: ref}, "reads": recorded, "tables": pinned}
 
 #: A change to a second_statements input, its `x` sampled: a statement changed (`_restated`), reversed, one dropped, none,
 #: a slot sampled more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
@@ -5271,7 +5310,7 @@ def second_statement_runs(draw) -> dict:
             ("ref_reads", "r"), ("supplied", []), ("supplied", {"v": 5}), ("supplied", {"v": [5]}),
             ("supplied", {"v": [[5]]}), ("supplied", {"v": [[{"bytes": 5}]]}),
             ("supplied", {"v": [[{"bytes": "00", "port": "x"}]]}), ("supplied", {"v": [[{}]]}), ("fixed", 5),
-            ("fixed", [5]), ("fixed", "v"), (None, None)]))
+            ("fixed", [5]), ("fixed", "v"), ("tables", 5), ("tables", []), ("tables", {"v": 5}), (None, None)]))
         drop = draw(st.sampled_from(sorted(c)))
         c = {k: v for k, v in c.items() if k != drop} if key is None else {**c, key: value}
     return c

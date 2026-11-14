@@ -210,8 +210,8 @@ def INPUTS_WHY : String :=
   "the interior registration registers a value that is neither one the verifier holds without the prover (one " ++
   "it pinned, one it holds to an earlier record, or one it fills from its own bytes) nor the opened row of a " ++
   "read the auditor's params record, whose root and domain it fills from one table of the read's rows that " ++
-  "round 1's record registers, whose key is a port of round 1's record or a value it holds, and whose " ++
-  "verdict it holds to 1"
+  "round 1's record registers or its params pin, whose key is a port of round 1's record or a value it holds, " ++
+  "and whose verdict it holds to 1"
 
 def KEY_WHY : String :=
   "the interior registration registers the opened row of a read at a key the block computes (the read's key is " ++
@@ -408,8 +408,10 @@ wires (`replayWires`, none when the Definition makes none), the rows of the port
 (`replayRows`), the names the replay block's return has in the boundary registration's record (`replayReturns`), and,
 of the values the interior registration registers, the verifier's own copies of those it holds without the prover:
 each one it fills itself, with its rows of sources (`Registration.Verifier.supplied`, `Supplied.Rows`), and the names
-of those it pinned or holds to an earlier record (`fixed`: `Registration.Verifier.pinned` and `outputs`); and the
-templates the auditor's params record as reads, each with its table's rows, `(template, V)` (`Run.templateReads`). -/
+of those it pinned or holds to an earlier record (`fixed`: `Registration.Verifier.pinned` and `outputs`); the
+templates the auditor's params record as reads, each with its table's rows, `(template, V)` (`Run.templateReads`);
+and the registered tables the auditor's params pin before any coin (`tables`: `Registration.Verifier.tables`),
+`(parameter, entry)` each, the entry the tables' registration names. -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
@@ -427,6 +429,7 @@ structure Own where
   supplied : Array (String × Array (Array (String × String))) := #[]
   fixed : Array String := #[]
   reads : Array (String × Nat) := #[]
+  tables : Array (String × Json) := #[]
 
 /-- `second_stage.supplied_of`: the verifier's supplied values from their JSON, `{value: [[source, ...], ...]}`, a
 row a list of sources, each `{kind: name}` of two strings, as `(value, rows)` each, a row its `(kind, name)` sources;
@@ -1204,30 +1207,32 @@ def bytesOf (row : Array (String × String)) : Option String :=
 template's first); none for a template they record none for. -/
 def readSize (own : Own) (t : String) : Option Nat := (own.reads.find? (·.1 == t)).map (·.2)
 
-/-- Values `root` and `domain`, which template `t`'s root and domain ports read, are one table's of round 1's record
-at every unit, a table of as many leaves as the read has rows. `t` is a read of `V` rows (`readSize`). Each value has
-at least one row and as many as the other; row `i` of each is one `bytes` source (`bytesOf`), and some port of round
-1's record (`Record.byPort`) registers row `i` of `root` as its root under row `i` of `domain` as its domain id, at
-`V` leaves; and the two ports' rows place each unit alike (`Own.rows`: one `per` and the same runs). So a unit reads
-the root and the domain id of one table of `V` leaves that round 1's record registers. -/
+/-- Values `root` and `domain`, which template `t`'s root and domain ports read, are one table's at every unit, of
+round 1's record or of the tables the auditor's params pin (`Own.tables`), a table of as many leaves as the read has
+rows. `t` is a read of `V` rows (`readSize`). Each value has at least one row and as many as the other; row `i` of each
+is one `bytes` source (`bytesOf`), and some port of round 1's record (`Record.byPort`) or some pinned table's entry
+names row `i` of `root` as its root and row `i` of `domain` as its domain id, at `V` leaves; and the two ports' rows
+place each unit alike (`Own.rows`: one `per` and the same runs). So a unit reads the root and the domain id of one
+table of `V` leaves that round 1's record registers or the auditor pinned before any coin. -/
 def oneTable (own : Own) (mine : Array (String × Array (Array (String × String)))) (t root domain : String) : Bool :=
   let a := ((ownRows mine root).getD #[]).map bytesOf
   let b := ((ownRows mine domain).getD #[]).map bytesOf
-  let ports := Record.byPort own.boundary
   let size := readSize own t
   let place := fun (p : String) => (rowsOf own t p).map fun r => (r.per, r.runs)
+  let isTable := fun (e : Json) (r d : String) => match getD e "root", getD e "domain" with
+    | .str x, .str y => x == r && y == d && nat? (getD e "leaves") == size
+    | _, _ => false
   size.isSome && !a.isEmpty && a.size == b.size &&
     (a.zip b).all (fun (r, d) => match r, d with
-      | some r, some d => ports.any fun (_, e) => (match getD e "root", getD e "domain" with
-        | .str x, .str y => x == r && y == d && nat? (getD e "leaves") == size
-        | _, _ => false)
+      | some r, some d => (Record.byPort own.boundary).any (fun (_, e) => isTable e r d) ||
+          own.tables.any (fun (_, e) => isTable e r d)
       | _, _ => false) &&
     (place OPENING_ROOT).isSome && place OPENING_ROOT == place OPENING_DOMAIN
 
 /-- **An opened row**: link `x` names the opened row of a read against a root round 1 committed. Its template is a
 read (`readSize`) and its port the row, its salt or its path (`OPENING_ROW`); the read's root and domain
 (`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which are one table's
-of round 1's record at every unit, of the read's rows (`oneTable`); its key (`OPENING_KEY`) is no wire, and is linked
+of round 1's record or of the tables its params pin at every unit, of the read's rows (`oneTable`); its key (`OPENING_KEY`) is no wire, and is linked
 at values the interior registration doesn't register (`registered`: a port of round 1's record then, by
 `second-links`) or the verifier holds (`own.fixed`, `mine`); and its verdict (`OPENING_VERDICT`) reads, in its
 template's reference statement's reads (`Own.refReads`, the template's first), a value the verifier fills, of at least
@@ -1270,7 +1275,7 @@ from its own bytes (`ownValues`). Any other passes only as the opened row of a r
 at least one link names it, each link that does is such a row's (`openedRow`), and no template's reference statement
 reads it at a port no link names it at (`readUnlinked`), so nothing reads the row but its opening. So every input of
 a replay block the prover gives after the first stage's sample is a row a read opens under the root of a table round
-1's record registers, at a key round 1's record or the verifier fixes, and the prover's choice of it is SHA-512's
+1's record registers or the auditor's params pin, at a key round 1's record or the verifier fixes, and the prover's choice of it is SHA-512's
 collision: the links at round 1's ports, the wires and the values the verifier holds are the block's other inputs,
 none the interior registration's to choose. That the circuit a session proves under a read's id is the read's is the
 template check's (`Flock.ReadNet.check`). -/

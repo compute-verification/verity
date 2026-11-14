@@ -811,6 +811,12 @@ private def exTwoTables : Array (String × Array (Array (String × String))) :=
   exRefilled "domain" #[#[("bytes", exRoot 8)], #[("bytes", exRoot 3)]]
     (exRefilled "root" #[#[("bytes", exRoot 7)], #[("bytes", exRoot 9)]])
 
+/-- The tables' registration's entry for table `p`, as the auditor's params pin it: root `exRoot r`, domain id
+`exRoot d`, `leaves` rows of two words. -/
+private def exPinned (p : String) (r d leaves : Nat) : String × Json :=
+  (p, Json.mkObj [("value", Json.str p), ("root", Json.str (exRoot r)), ("leaves", Lean.toJson leaves),
+    ("words", Lean.toJson 2), ("domain", Json.str (exRoot d))])
+
 /-- The read's root's rows placed as `exTableRows` places them, its domain's `per` rows a block. -/
 private def exRowsPer (per : Nat) : Array Rows :=
   #[⟨exRead, "root", 1, #[⟨0, 1, 0, 0⟩]⟩, ⟨exRead, "domain", per, #[⟨0, 1, 0, 0⟩]⟩]
@@ -870,6 +876,23 @@ private def exRowsPer (per : Nat) : Array Rows :=
 #guard inputsFailure { exOpening with refReads := exOpening.refReads.push (exRefRead "Other_v1" "x" "salt") } ==
   some "salt"
 #guard inputsFailure { exOpening with refReads := exOpening.refReads.push (exRefRead exRead "row" "row") } == none
+-- or one table's of the tables the auditor's params pin before any coin, its root, domain id and leaves the
+-- verifier's, with round 1's record registering it or not; a table neither pinned nor registered is refused
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, tables := #[exPinned "t" 7 8 4] } == none
+#guard inputsFailure { exOpening with tables := #[exPinned "t" 7 8 4] } == none
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, tables := #[exPinned "u" 9 3 4] } == some "row"
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, tables := #[exPinned "t" 6 8 4] } == some "row"
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, tables := #[exPinned "t" 7 3 4] } == some "row"
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, tables := #[exPinned "t" 7 8 8] } == some "row"
+#guard inputsWhy { exOpening with boundary := exOwn.boundary } "row" == INPUTS_WHY
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, supplied := exTwoTables,
+                                      tables := #[exPinned "t" 7 8 4, exPinned "u" 9 3 4] } == none
+#guard inputsFailure { exOpening with boundary := exRec 4 [("u", 9, 3)], supplied := exTwoTables,
+                                      tables := #[exPinned "t" 7 8 4] } == none
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, supplied := exTwoTables,
+                                      tables := #[exPinned "t" 7 8 4] } == some "row"
+#guard inputsFailure { exOpeningUnkeyed with boundary := exOwn.boundary, tables := #[exPinned "t" 7 8 4] } ==
+  some "row"
 -- the code is reported beside the others, whatever else fails or passes
 #guard (check true (exHolding #["logits"]) none).codes == #["second-inputs", "second-statements"]
 #guard (exCheck true (exHolding #["logits"]) #[exHonest]).codes == #["second-inputs"]

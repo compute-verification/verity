@@ -944,7 +944,8 @@ def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Bindi
     (`second_stage.replay_rows`) and the names of what the block returns (`second_stage.replay_returns`), the reads
     the audit record's verdicts of record report, what they name of each session they accepted
     (`second_stage.verified_of`), each template's reference header and registered reads the params ``proofs`` give,
-    the templates they record as table reads (`service.template_reads`), and, of the challenger's copies the interior
+    the templates they record as table reads (`service.template_reads`) and the registered tables they pin
+    (`service.pinned_tables`), and, of the challenger's copies the interior
     registration was held to (``tie``), the values it fills itself
     (``supplied``, a history table's root and domain id as the bytes its ``history`` registers:
     `registration.resolved`) and those it pinned or holds to an earlier record (``pinned``, ``outputs``), as the
@@ -959,7 +960,8 @@ def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Bindi
                  wires=SS.replay_wires(replay, key), rows=SS.replay_rows(replay, key),
                  returns=SS.replay_returns(replay, key, brec),
                  supplied=SS.supplied_of(RG.resolved(tie.get("supplied"), tie.get("history"))),
-                 fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())), reads=S.template_reads(proofs))
+                 fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())), reads=S.template_reads(proofs),
+                 tables=S.pinned_tables(proofs))
     return SS.check(True, own, stmts).to_json()
 
 
