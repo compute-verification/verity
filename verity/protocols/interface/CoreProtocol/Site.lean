@@ -534,6 +534,8 @@ def GENESIS : String := "verity/registration/genesis/v1"
 def tagged (tag : String) (j : Json) : String :=
   Flock.hexOf (Flock.Sha512.hash (tag.toUTF8.push 0 ++ ((Flock.canon j).toOption.getD "").toUTF8))
 
+/-- A kind's word in the site format (`SITE`, `verity/registration/site/v1`). `.accelerator`'s word stays `"device"`: it
+is the format's, and every registration's digest covers it. -/
 def Kind.name : Kind → String
   | .site => "site" | .host => "host" | .accelerator => "device" | .memory => "memory" | .certifier => "certifier"
   | .challenger => "challenger" | .outside => "outside"
