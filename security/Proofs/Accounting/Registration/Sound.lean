@@ -24,7 +24,9 @@ public import Proofs.Core.Site
   (`Registration.Valid.days_nodup`).
 
 At the same witness site, its GPU's memory, which no memory leaf registers, is unaccounted whatever the protocols
-answer (`Registration.Witness.accountedFor_names_gpu`), and the site is accounted for with it named
+answer (`Registration.Witness.accountedFor_names_gpu`); an answer under a key no device holds credits nothing, so the
+uplink is then charged (`Registration.Witness.accountedFor_charges_unheld`); and the site is accounted for with
+nothing charged, PoUW's answer under no witness and the certifier's under its key, and the GPU's memory named
 (`Registration.Witness.accountedFor`).
 
 `RegistrationSound_honest` and `RegistrationSound_nontrivial`, at the witness site of
@@ -285,35 +287,59 @@ namespace Witness
 /-! ### Accounted for, at the witness site
 
 Its GPU's sheet has 64·2^30 bytes of memory and no memory leaf is registered under it, so whatever the protocols
-answer, all of it is unaccounted and `AccountedFor` names it; with PoUW covering the GPU and the network certifier the
-uplink, that is all it needs. -/
+answer, all of it is unaccounted and `AccountedFor` names it. PoUW's account names no witness, so its answer counts
+against the whole site and credits the GPU's compute; the network certifier's answer names the certifier's key, whose
+device reaches the uplink, its link to the host. An answer under a key no device holds credits nothing, so the uplink
+is then charged. -/
 
 /-- PoUW and the network certifier, onsite and remote. -/
 def lists : Lists := ⟨fun _ => {.pouw, .certifier}⟩
 
-/-- PoUW's answer covers the GPU, and the network certifier's the uplink. -/
-def answers : Answers
-  | .pouw => {"gpu0"}
-  | .certifier => {"uplink0"}
-  | _ => ∅
+/-- PoUW's answer, under no witness, and the network certifier's, under the certifier's key. -/
+def answers : List Answer := [(.pouw, none), (.certifier, some "key0")]
+
+/-- The witness Site's one auditor's device holding `key0` is the certifier. -/
+theorem holder_key0 : (view digests .onsite log).site.holder "key0" =
+    some { id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key := "key0" } := by
+  decide +kernel
 
 /-- **The witness GPU's memory is all unaccounted**: no memory leaf is under it. -/
-theorem unaccounted_gpu (L : Lists) (a : Answers) :
-    (view digests .onsite log).unaccounted digests L a .onsite gpu = 64 * 2 ^ 30 := by
+theorem unaccounted_gpu (L : Lists) (as : List Answer) :
+    (view digests .onsite log).unaccounted digests L as .onsite gpu = 64 * 2 ^ 30 := by
   simp [View.unaccounted, view, log, entry, gpu, sheet, digests, Site.ofLog, Site.sheet?, Entry.added]
 
-/-- **`AccountedFor` at the witness site names the GPU's 64·2^30 bytes unaccounted**, whatever the lists and
-answers. -/
-theorem accountedFor_names_gpu {L : Lists} {a : Answers} {u : List (String × ℕ)}
-    (h : AccountedFor digests L a (view digests .onsite log) .onsite u) : ("gpu0", 64 * 2 ^ 30) ∈ u := by
-  have hg := h.2 gpu (by simp [view, log, entry, Site.ofLog, Entry.added]) rfl
+/-- **`AccountedFor` at the witness site names the GPU's 64·2^30 bytes unaccounted**, whatever the lists, answers and
+charges. -/
+theorem accountedFor_names_gpu {L : Lists} {as : List Answer} {ch : List (String × Site.Accountable)}
+    {u : List (String × ℕ)} (h : AccountedFor digests L as (view digests .onsite log) .onsite ch u) :
+    ("gpu0", 64 * 2 ^ 30) ∈ u := by
+  have hg := h.2.2 gpu (by simp [view, log, entry, Site.ofLog, Entry.added]) rfl
   rw [unaccounted_gpu] at hg
   exact hg (by norm_num)
 
-/-- **The witness site is accounted for** with PoUW covering the GPU, the network certifier the uplink, and the GPU's
-memory named unaccounted. -/
-theorem accountedFor : AccountedFor digests lists answers (view digests .onsite log) .onsite [("gpu0", 64 * 2 ^ 30)] := by
-  refine ⟨?_, fun x hx hd hu => ?_⟩
+/-- The uplink is a boundary link of the witness Site, so its egress is a part. -/
+theorem uplink_part : ("uplink0", Site.Accountable.egress) ∈ (view digests .onsite log).site.parts :=
+  Or.inr (Or.inr ⟨uplink, by simp [view, log, entry, Site.ofLog, Entry.added], by decide +kernel, rfl⟩)
+
+/-- **An answer under a key no device holds credits nothing**: with the network certifier's answer under `key9`,
+which no location of the witness Site holds, `AccountedFor` charges the uplink. -/
+theorem accountedFor_charges_unheld {ch : List (String × Site.Accountable)} {u : List (String × ℕ)}
+    (h : AccountedFor digests lists [(.certifier, some "key9")] (view digests .onsite log) .onsite ch u) :
+    ("uplink0", Site.Accountable.egress) ∈ ch := by
+  rcases h.2.1 _ _ uplink_part with ⟨a, ha, -, -, hc⟩ | hc
+  · simp only [List.mem_singleton] at ha
+    subst ha
+    obtain ⟨y, hy, -⟩ := hc
+    have : (view digests .onsite log).site.holder "key9" = none := by decide +kernel
+    rw [this] at hy
+    cases hy
+  · exact hc
+
+/-- **The witness site is accounted for** with nothing charged: PoUW's answer, under no witness, credits the GPU's
+compute; the certifier's, under its key, the uplink; and the GPU's memory is named unaccounted. -/
+theorem accountedFor :
+    AccountedFor digests lists answers (view digests .onsite log) .onsite [] [("gpu0", 64 * 2 ^ 30)] := by
+  refine ⟨List.nodup_nil, ?_, fun x hx hd hu => ?_⟩
   · rintro x r (⟨y, hy, hk, he⟩ | ⟨y, hy, hk, -⟩ | ⟨l, hl, hb, he⟩)
     · simp only [view, log, entry, Site.ofLog, Entry.added, List.flatMap_cons, List.flatMap_nil, List.append_nil,
         List.mem_cons, List.not_mem_nil, or_false] at hy
@@ -321,7 +347,7 @@ theorem accountedFor : AccountedFor digests lists answers (view digests .onsite 
       · cases hk
       · cases hk
       · obtain ⟨rfl, rfl⟩ := Prod.mk.inj he
-        exact ⟨.pouw, by simp [lists], rfl, by simp [answers, gpu]⟩
+        exact Or.inl ⟨(.pouw, none), by simp [answers], by simp [lists], rfl, trivial⟩
       · cases hk
     · simp only [view, log, entry, Site.ofLog, Entry.added, List.flatMap_cons, List.flatMap_nil, List.append_nil,
         List.mem_cons, List.not_mem_nil, or_false] at hy
@@ -330,7 +356,8 @@ theorem accountedFor : AccountedFor digests lists answers (view digests .onsite 
         List.mem_cons, List.not_mem_nil, or_false] at hl
       rcases hl with rfl | rfl
       · obtain ⟨rfl, rfl⟩ := Prod.mk.inj he
-        exact ⟨.certifier, by simp [lists], rfl, by simp [answers, uplink]⟩
+        refine Or.inl ⟨(.certifier, some "key0"), by simp [answers], by simp [lists], rfl, ?_⟩
+        exact ⟨_, holder_key0, Or.inl ⟨rfl, by decide +kernel⟩⟩
       · exact absurd hb (by decide +kernel)
   · simp only [view, log, entry, Site.ofLog, Entry.added, List.flatMap_cons, List.flatMap_nil, List.append_nil,
       List.mem_cons, List.not_mem_nil, or_false] at hx
