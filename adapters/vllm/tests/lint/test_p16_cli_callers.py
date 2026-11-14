@@ -6,8 +6,7 @@ A command in ``verity_vllm.pipeline.cli.COMMANDS`` is called when one of these r
   a module starts, its own module included), or a stage driver's ``cli("NAME", ...)``;
 * a script: a line of a ``.sh``, ``.toml`` or ``.yaml`` file that isn't a comment, or a string in another module's code (not
   a docstring), reading ``verity-vllm NAME`` or ``verity_vllm.pipeline.cli NAME``, options allowed in between;
-* a public command: one run from outside ``adapters/vllm``, which this suite doesn't read, or only from a file of it the
-  public export doesn't copy, which the exported tree's run of this suite can't read, that the ``public`` table of
+* a public command: one run from outside ``adapters/vllm``, which this suite doesn't read, that the ``public`` table of
   ``allowlists/p16_cli_callers.json`` names with the file that runs it.  It is a declaration rather than an exception, as the
   environment-read lint's settings-registry marks are, so no ratchet counts it: the ratchet gate
   (``adapters/vllm/tools/ratchet_gate.py``) accepts one a change adds, or gives another caller, when that file, in the
@@ -39,8 +38,7 @@ PUBLIC = "public"
 
 @cache
 def public_commands() -> dict[str, str]:
-    """The list's ``public`` table: each command run from outside adapters/vllm, or only from a file the public export
-    doesn't copy, with the file that runs it."""
+    """The list's ``public`` table: each command run from outside adapters/vllm, with the file that runs it."""
     table = json.loads((R.ALLOWLISTS / f"{NAME}.json").read_text(encoding="utf-8")).get(PUBLIC, {})
     assert isinstance(table, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in table.items()), \
         f"allowlists/{NAME}.json: {PUBLIC!r} is a table of command -> the file that runs it: {table}"
@@ -132,8 +130,8 @@ def scan() -> tuple[R.Violation, ...]:
 def test_no_new_violations() -> None:
     R.assert_no_new(NAME, scan(), RULE,
                     "A command nothing runs is dead: delete it from COMMANDS (and its module, if nothing else imports it), "
-                    "or run it from the stage or script it belongs to. A command run from outside adapters/vllm, or "
-                    f"only from a file the public export doesn't copy, goes in the {PUBLIC!r} table of "
+                    "or run it from the stage or script it belongs to. A command run from outside adapters/vllm goes "
+                    f"in the {PUBLIC!r} table of "
                     f"tests/lint/allowlists/{NAME}.json with the file that runs it, which the ratchet gate checks.")
 
 

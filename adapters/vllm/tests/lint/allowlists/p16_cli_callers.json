@@ -14,7 +14,6 @@
     "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
     "tp-register-tables": "benchmarks/one_stage/expert_tables_tp.sh",
     "workload": "benchmarks/stacked_share/job.sh",
-    "topp-pin-check": "adapters/vllm/tools/topp_pin_gpu.sh",
     "ids-front": "benchmarks/network_e2e/traces/ids.sh",
     "weights-tie": "benchmarks/prove_path/run.sh"
   },
