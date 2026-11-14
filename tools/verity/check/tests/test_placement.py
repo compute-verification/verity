@@ -131,6 +131,89 @@ def test_a_shard_of_lean_alone_asks_a_train_slot_and_neither_takes_nor_twins_on_
     assert CHECK.choose([N1, N2], {N1: small, N2: beside}, True)[0] == N1           # a light run takes the free small one
 
 
+#: two machines' train slots as plain data: cpu-10's 234 GiB user slice and cpu-8's 468 (`slot.slice_gib`), both mem=300
+SMALL, BIG = "vy-nebius-cpu-10", "vy-nebius-cpu-8"
+
+
+def sliced(gib, holder: dict | None = None) -> dict:
+    return machine([{**slot("t", holder), "mem": 300, "trains": True}]) | {"slice_gib": gib}
+
+
+@pytest.mark.parametrize("names,gib", CHECK.SHARD_ASKS_GIB, ids=[",".join(n) for n, _ in CHECK.SHARD_ASKS_GIB])
+def test_each_shard_kind_goes_only_where_its_slice_holds_its_ask(names, gib):
+    """slot.py raises a slot's mem= to the shard's ask and waits for that much free, so a shard placed where its machine's slice
+    is under its ask never starts: with the smaller machine listed first and free, a shard whose ask is over its slice goes to
+    the bigger one, and one whose ask fits takes the first, as before. A held bigger machine gets it in line, never a twin on
+    the small one."""
+    ask = CHECK.shard_ask_gib(list(names), ["lean-agreement"])
+    assert ask == gib
+    docs = {SMALL: sliced(234), BIG: sliced(468)}
+    got, _, skipped = CHECK.choose([SMALL, BIG], docs, True, CHECK.TRAIN_GB, ask)
+    assert got == (BIG if ask > 234 else SMALL)
+    assert skipped == ([f"{SMALL}: its slice is 234 GiB, under this shard's {ask} GiB ask, so it would never start there"]
+                       if ask > 234 else [])
+    docs |= {BIG: sliced(468, HOLDER), "m3": sliced(None, HOLDER)}
+    got, _, _ = CHECK.choose([SMALL, BIG, "m3"], docs, True, CHECK.TRAIN_GB, ask)
+    assert got == (BIG if ask > 234 else SMALL)
+    assert CHECK.twins([SMALL, BIG, "m3"], docs, got, True, CHECK.TRAIN_GB, ask) == ([BIG, "m3"] if ask > 234 else [])
+
+
+def test_with_no_slice_that_holds_the_ask_the_refusal_names_it_and_the_largest_slice():
+    docs = {SMALL: sliced(234), "vy-nebius-cpu-7": sliced(300), BIG: sliced(468)}
+    got, why, skipped = CHECK.choose([SMALL, "vy-nebius-cpu-7", BIG], docs, True, CHECK.TRAIN_GB, 500)
+    assert got is None and len(skipped) == 3
+    assert why == (f"no machine's slice holds this shard's 500 GiB ask (the largest is {BIG}'s, 468 GiB): name one whose slice "
+                   "(its user slice's memory.max) holds 500 GiB with --on")
+    docs["m4"] = {**sliced(None), "deadline_in_s": 0}                 # unlimited but skipped for its deadline: that reason stands
+    got, why, skipped = CHECK.choose([*docs], docs, True, CHECK.TRAIN_GB, 500)
+    assert got is None and why == "no machine's slots could be read" and skipped[-1].startswith("m4: its deadline")
+
+
+def test_a_slice_that_can_t_be_read_skips_only_a_shard_with_an_ask_and_no_limit_fits_any():
+    """A whole check (parts None) and a run with no ask go where they went, whatever the slice says; a shard with an ask skips
+    a machine whose slice is missing or unread, by that reason; a slice with no limit (null) holds any ask."""
+    unread = {SMALL: machine([{**slot("t"), "mem": 300, "trains": True}]), BIG: sliced({"error": "PermissionError: memory.max"})}
+    for name in (SMALL, BIG):
+        assert CHECK.choose([name], unread, True, CHECK.TRAIN_GB)[0] == name
+        assert CHECK.choose([name], unread, True)[0] == name
+    assert CHECK.choose([SMALL, BIG], {SMALL: sliced(10), BIG: sliced(468)}, True, CHECK.TRAIN_GB)[0] == SMALL
+    got, why, skipped = CHECK.choose([SMALL, BIG], unread, True, CHECK.TRAIN_GB, 390)
+    assert got is None and why == "no machine's slots could be read"
+    assert skipped == [f"{SMALL}: its slice can't be read (its slots documents carry no slice_gib), and this shard asks 390 GiB",
+                       f"{BIG}: its slice can't be read (PermissionError: memory.max), and this shard asks 390 GiB"]
+    assert CHECK.choose([SMALL, BIG], {SMALL: sliced(None), BIG: sliced(468)}, True, CHECK.TRAIN_GB, 9999)[0] == SMALL
+
+
+def test_record_places_a_shard_by_the_ask_it_books_and_refuses_where_none_holds_it(monkeypatch, capsys):
+    """`record` works out the shard's ask before it places it, and books what it placed by: the reused audit's shard (330 GiB)
+    skips the free 234 GiB machine listed first, and asks 330 there; a whole train check takes the small one, as before."""
+    docs = {SMALL: sliced(234), BIG: sliced(468)}
+    monkeypatch.setattr(CHECK, "read_slots", lambda names: json.loads(json.dumps({n: docs[n] for n in names})))
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    real, launched = subprocess.run, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(CHECK.subprocess, "run", run)
+    shard = ["--base", "HEAD", "--on", f"{SMALL},{BIG}", "--priority", "--deferred", "lean-audit"]
+    assert CHECK.record(shard) == 0
+    head = launched[-1][:launched[-1].index("--", launched[-1].index("--on"))]
+    assert head[head.index("--on") + 1] == BIG and f"{CHECK.SLOT.RUN_MEM_ENV}={CHECK.ask_gb(330)}" in head
+    assert f"check: --on {SMALL},{BIG}: skipping {SMALL}: its slice is 234 GiB, under this shard's 330 GiB ask" in capsys.readouterr().out
+    assert CHECK.record(["--base", "HEAD", "--on", f"{SMALL},{BIG}", "--priority"]) == 0
+    assert launched[-1][launched[-1].index("--on") + 1] == SMALL
+    docs[BIG] = sliced(300)
+    launched.clear()
+    assert CHECK.record(shard) == 2 and launched == []
+    assert (f"check: --on {SMALL},{BIG} refused: no machine's slice holds this shard's 330 GiB ask (the largest is {BIG}'s, "
+            f"300 GiB)") in capsys.readouterr().err
+
+
 def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
     free = machine([slot("d")])
     docs = {N1: "exit 255: ssh: connect to host 192.0.2.11 port 22: Connection timed out", N2: free}
@@ -162,7 +245,7 @@ def test_with_no_machine_readable_auto_refuses_and_launches_nothing(monkeypatch,
     calls = []
     monkeypatch.setattr(CHECK.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     assert CHECK.choose([N1, N2], {N1: "x", N2: "y"})[0] is None
-    assert CHECK.record(["--on", "auto"]) == 2 and [c for c in calls if c[:2] != ["git", "rev-parse"]] == []
+    assert CHECK.record(["--on", "auto"]) == 2 and [c for c in calls if c[0] != "git"] == []
     out = capsys.readouterr()
     assert f"check: --on auto: skipping {N1}: exit 255: no route to host" in out.out
     assert f"check: --on auto refused: no machine's slots could be read ({N1}, {N2}); nothing launched" in out.err
@@ -314,6 +397,7 @@ def test_the_payload_reads_both_files_from_stdin_where_neither_script_is_on_disk
     r = subprocess.run([sys.executable, "-"], input=payload, cwd=tmp_path, env=env, capture_output=True, check=True)
     doc = json.loads(r.stdout)
     doc["deadline_in_s"] = None             # the payload reads the machine's own /etc/research/deadline, which this test can't set
+    assert doc["slice_gib"] is None or type(doc["slice_gib"]) is int     # and this host's cgroups (`slot.slice_gib`'s own test)
     assert [(s["name"], s["holder"]["pid"] if s["holder"] else None, s["blocked"]) for s in doc["check"]["slots"]] == [
         ("c", os.getpid(), None), ("a", None, None)]
     pools = doc["lean"]["pools"]

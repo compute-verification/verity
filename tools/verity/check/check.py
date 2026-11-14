@@ -519,17 +519,17 @@ def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
 
 
 def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bool = False,
-          min_mem: int | None = None) -> list[str]:
+          min_mem: int | None = None, ask: int | None = None) -> list[str]:
     """The machines among ``names`` to launch twins of a check on (`slot.py --twin`), ``home`` first: every one a check can run
     on (`placement` refuses none) when ``home``, `choose`'s pick, has no slot free for it; else none, and it runs on ``home``."""
     def runs(name: str) -> bool:
         try:
-            placement(docs[name], priority, min_mem)
+            placement(docs[name], priority, min_mem, ask)
         except (ValueError, KeyError, TypeError, AttributeError):
             return False
         return True
 
-    if placement(docs[home], priority, min_mem)[0]:
+    if placement(docs[home], priority, min_mem, ask)[0]:
         return []
     out = [home, *(n for n in names if n != home and runs(n))]
     return out if len(out) > 1 else []
@@ -549,7 +549,8 @@ FULL_CHECK_S = 9000
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
-#: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
+#: each `{"error": ...}` when it can't be read there, the seconds left until the machine's DEADLINE (null without one) and its
+#: slice's GiB (`slot.slice_gib`: null without a limit, `{"error": ...}` when it can't be read)
 SLOTS_PROGRAM = '''
 import json, sys, time, types
 from datetime import datetime, timezone
@@ -577,7 +578,8 @@ try:
     left = int(open("/etc/research/deadline").read().split()[0]) - time.time()
 except (OSError, ValueError, IndexError):
     left = None
-print(json.dumps({"check": doc(lambda: slot.status_doc(now)), "lean": doc(lambda: lean.status_doc(now)), "deadline_in_s": left}))
+print(json.dumps({"check": doc(lambda: slot.status_doc(now)), "lean": doc(lambda: lean.status_doc(now)), "deadline_in_s": left,
+                  "slice_gib": doc(slot.slice_gib)}))
 '''
 SLOT = _load("slot")
 
@@ -628,19 +630,27 @@ def read_slots(names: list[str], reach=reach, run=_ssh) -> dict[str, dict | str]
         return dict(zip(names, ex.map(one, names)))
 
 
-def placement(doc: dict, priority: bool = False, min_mem: int | None = None) -> tuple[bool, int, str]:
+def placement(doc: dict, priority: bool = False, min_mem: int | None = None, ask: int | None = None) -> tuple[bool, int, str]:
     """A check's prospects on a machine whose `read_slots` documents are ``doc``: whether a check slot and a Lean `check` slot
     are free for it (more free than live waiters ahead of it), how many live waiters are ahead of it in the check line (with
     ``priority``, a train check's, only the priority ones), and the state in a few words; with ``min_mem`` (`train_gb`), only
     the slots whose mem= holds it count. ValueError when no check can run there: a document has an error, the slots file lists
-    no slot (or none that holds ``min_mem``), the Lean slots file grants check's lean-audit step none, or the machine's deadline
-    is nearer than FULL_CHECK_S."""
+    no slot (or none that holds ``min_mem``), the Lean slots file grants check's lean-audit step none, the machine's deadline
+    is nearer than FULL_CHECK_S, or, for a shard with an ``ask`` (`shard_ask_gib`), its slice (`slot.slice_gib`) can't be read
+    or is under the ask: slot.py raises a slot's mem= to the ask and waits for that much free, which such a slice never has."""
     check, lean = doc["check"], doc["lean"]
     for d, what in ((check, "check slots"), (lean, "Lean audit slots")):
         if "error" in d:
             raise ValueError(f"its {what} can't be read: {d['error']}")
     if (left := doc.get("deadline_in_s")) is not None and left < FULL_CHECK_S:
         raise ValueError(f"its deadline is {max(left, 0) / 60:.0f} min away, under the {FULL_CHECK_S / 60:.0f} min a full check takes")
+    if ask:
+        have = doc.get("slice_gib", {"error": "its slots documents carry no slice_gib"})
+        if not (have is None or type(have) is int):
+            raise ValueError(f"its slice can't be read ({have.get('error') if isinstance(have, dict) else repr(have)}), and this "
+                             f"shard asks {ask} GiB")
+        if have is not None and have < ask:
+            raise ValueError(f"its slice is {have} GiB, under this shard's {ask} GiB ask, so it would never start there")
     ahead = len([w for w in check["waiters"] if w["priority"] or not priority])
     waiting = f"{ahead} waiting ahead" + (" with priority" if priority else "")
     if check["slots"] is None:
@@ -671,18 +681,19 @@ def placement(doc: dict, priority: bool = False, min_mem: int | None = None) -> 
 
 
 def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False,
-           min_mem: int | None = None) -> tuple[str | None, str, list[str]]:
+           min_mem: int | None = None, ask: int | None = None) -> tuple[str | None, str, list[str]]:
     """`--on auto`'s machine among ``names``, its reason, and each machine skipped with why. The first machine where a check slot
     with no window blocking it and a Lean `check` slot are free for this request (`placement`); else the one with the fewest
     live waiters ahead of it, the first listed among those tied. A machine whose documents can't be read is skipped; with none
-    left, no machine (the caller refuses: a guess could put a check into a timed window)."""
+    left, no machine (the caller refuses: a guess could put a check into a timed window), and where no machine read has a
+    slice that holds the shard's ``ask``, the reason names the ask and the largest slice."""
     ranked, skipped = [], []
     for i, name in enumerate(names):
         doc = docs.get(name)
         try:
             if not isinstance(doc, dict):
                 raise ValueError(doc or "not read")
-            room, ahead, why = placement(doc, priority, min_mem)
+            room, ahead, why = placement(doc, priority, min_mem, ask)
         except ValueError as e:
             skipped.append(f"{name}: {e}")
             continue
@@ -691,6 +702,12 @@ def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False
             continue
         ranked.append(((0, 0, i) if room else (1, ahead, i), name, room, why))
     if not ranked:
+        read = [(d.get("slice_gib"), n) for n in names if isinstance(d := docs.get(n), dict) and "slice_gib" in d]
+        sized = [(s, n) for s, n in read if type(s) is int]
+        if ask and sized and not any(s is None or (type(s) is int and s >= ask) for s, _ in read):
+            most, where = max(sized, key=lambda x: x[0])
+            return None, (f"no machine's slice holds this shard's {ask} GiB ask (the largest is {where}'s, {most} GiB): name "
+                          f"one whose slice (its user slice's memory.max) holds {ask} GiB with --on"), skipped
         return None, "no machine's slots could be read", skipped
     _, name, room, why = min(ranked)
     lead = ("a check slot and a Lean check slot are free" if room else
@@ -715,8 +732,8 @@ def _trees(doc: dict) -> set[str]:
 
 
 def place(names: list[str], commit: str, priority: bool = False, read=None, path: Path | None = None,
-          now=time.time, min_mem: int | None = None,
-          shard: str | None = None) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
+          now=time.time, min_mem: int | None = None, shard: str | None = None,
+          ask: int | None = None) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
     """`read_slots` and `choose` for ``commit``, one launcher process at a time, with the other checks this launcher placed and
     no machine shows yet (PLACED) as waiters on theirs; ``commit`` (with ``shard``, its `--shard` spec: a candidate's shards
     are launched together, and each must count the others) is recorded on its pick."""
@@ -737,7 +754,7 @@ def place(names: list[str], commit: str, priority: bool = False, read=None, path
             if isinstance(d := docs.get(p["on"]), dict) and isinstance((d.get("check") or {}).get("waiters"), list):
                 d["check"]["waiters"].append({"priority": True, "pid": 0, "since": time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime(p["at"])),
                                               "minutes": int((t - p["at"]) // 60), "tree": c, "by": "a launch placed here"})
-        got, why, skipped = choose(names, docs, priority, min_mem)
+        got, why, skipped = choose(names, docs, priority, min_mem, ask)
         if got:
             placed[commit] = {"on": got, "at": t}
             path.write_text(json.dumps(placed))
@@ -1388,32 +1405,12 @@ def record(argv: list[str]) -> int:
     except DECLARATION.DeclarationError as e:
         print(f"check: {e}", file=sys.stderr)
         return 2
-    min_mem = train_gb(priority, pool, parts, combining)
-    pair, both = None, []
-    if on == "auto" or (on and "," in on):
-        names = list(AUTO) if on == "auto" else on.split(",")
-        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
-        docs, got, why, skipped = place(names, head, priority, min_mem=min_mem, shard=spec)
-        for s in skipped:
-            print(f"check: --on {on}: skipping {s}", flush=True)
-        if got is None:
-            print(f"check: --on {on} refused: {why} ({', '.join(names)}); nothing launched", file=sys.stderr, flush=True)
-            return 2
-        print(f"check: --on {on}: {got}: {why}", flush=True)
-        on = got
-        if both := twins(names, docs, got, priority, min_mem):
-            pair = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.urandom(2).hex()}"
-            print(f"check: --on: twins {pair} on {', '.join(both)}: the first to take a check slot runs, and the others leave "
-                  f"their line (exit {SLOT.NOT_STARTED}, not started)", flush=True)
-    spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
-    tool = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(tool)
+    tool_spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(tool_spec)
+    tool_spec.loader.exec_module(tool)
     if base is None:
         subprocess.run(["git", "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main"], cwd=ROOT, capture_output=True)
         base = "origin/main"
-    if not landable(base):
-        print(f"check: this commit can't land as is; the train's check is the merge check (merging it into {base} gives a tree "
-              f"other than its own, so `research merge` won't take this check)")
     changed = [p for p in subprocess.run(["git", "diff", "--no-renames", "--name-only", "-z", base, "HEAD"], cwd=ROOT, capture_output=True,
                                          text=True, errors="surrogateescape", check=True).stdout.split("\0") if p]   # a rename names its source too
     from research.merge import rule_touches
@@ -1421,13 +1418,34 @@ def record(argv: list[str]) -> int:
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
+    min_mem = train_gb(priority, pool, parts, combining)
+    ask = shard_ask_gib(parts, need) if min_mem else None
+    pair, both = None, []
+    if on == "auto" or (on and "," in on):
+        names = list(AUTO) if on == "auto" else on.split(",")
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        docs, got, why, skipped = place(names, head, priority, min_mem=min_mem, shard=spec, ask=ask)
+        for s in skipped:
+            print(f"check: --on {on}: skipping {s}", flush=True)
+        if got is None:
+            print(f"check: --on {on} refused: {why} ({', '.join(names)}); nothing launched", file=sys.stderr, flush=True)
+            return 2
+        print(f"check: --on {on}: {got}: {why}", flush=True)
+        on = got
+        if both := twins(names, docs, got, priority, min_mem, ask):
+            pair = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.urandom(2).hex()}"
+            print(f"check: --on: twins {pair} on {', '.join(both)}: the first to take a check slot runs, and the others leave "
+                  f"their line (exit {SLOT.NOT_STARTED}, not started)", flush=True)
+    if not landable(base):
+        print(f"check: this commit can't land as is; the train's check is the merge check (merging it into {base} gives a tree "
+              f"other than its own, so `research merge` won't take this check)")
     # an after-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
     # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake,
     # so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None and not records else []), "--project", "verity",
            "--cwd", "clone" if on else "source", *(x for p in DECLARED for x in ("--declared-output", p)), *pooled,
            *(["--env", f"{SLOT.MIN_MEM_ENV}={min_mem}"] if on and min_mem else []),
-           *(["--env", f"{SLOT.RUN_MEM_ENV}={ask_gb(ask)}"] if on and min_mem and (ask := shard_ask_gib(parts, need)) else [])]
+           *(["--env", f"{SLOT.RUN_MEM_ENV}={ask_gb(ask)}"] if on and ask else [])]
     env = dict(os.environ)
     d = Path(tempfile.mkdtemp(prefix="check-lean-deps-"))
     if "lean-agreement" in need:
