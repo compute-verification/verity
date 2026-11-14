@@ -265,9 +265,9 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   and per proof-block Definition its count in the prefill step and the decode steps, output bits
   and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
-  `benchmarks/sampling_plan/glm53.py`). `block_recut.sh ART` cuts a stored census's sized families (its
-  `sized-rank<r>.json`) again with this tree's `block_census.py`, for a change to the cut alone, and writes `compare.json`
-  against the planner's card.
+  `benchmarks/sampling_plan/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
+  `census-rank<r>.json`) with this tree's unit templates, sizing and `block_census.py`, for a change to the cut or to a
+  family's units that needs no Commit Build, and writes `compare.json` against the planner's card.
   `m1_unit.py` builds one family's unit through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
   `m1_forms.sh` runs it on one Definition per form, side by side, with the Lean call's seconds and peak memory beside each
