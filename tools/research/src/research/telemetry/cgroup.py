@@ -6,6 +6,7 @@ what the cgroup namespace hides is recorded as a visibility limitation, not sile
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -261,7 +262,8 @@ def session_cap(dropins: Path | None = None) -> str | None:
     cap = None
     try:
         files = sorted((dropins or SESSION_DROPINS).glob("*.conf"))
-    except OSError:
+    except OSError as e:
+        print(f"tele: {dropins or SESSION_DROPINS} unlisted, so no session MemoryMax is known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     for f in files:
         raw, _ = _read(f)

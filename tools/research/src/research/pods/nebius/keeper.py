@@ -179,9 +179,12 @@ def parse_target(doc: Any, name: str) -> dict[str, Any]:
 # ---- files ------------------------------------------------------------------------------------------------------------------------------
 
 def read_json(p: Path) -> Any:
+    if not p.exists():
+        return None
     try:
         return json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"keeper: {p} unread, read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -302,7 +305,8 @@ def grants() -> dict[str, float]:
         try:
             kv = dict(f.split("=", 1) for f in p.read_text().split(" cmd=", 1)[0].split() if "=" in f)
             since = utc(kv.get("since"), "since")
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"keeper: {p.name} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if kv.get("run", "-") != "-":
             out[kv["run"]] = min(since, out.get(kv["run"], since))
@@ -411,7 +415,8 @@ def manual_cancel(run_dir: Path) -> bool:
     for line in text(run_dir / "events.jsonl").splitlines():
         try:
             rec = json.loads(line)
-        except ValueError:
+        except ValueError as e:
+            print(f"keeper: a line of {run_dir / 'events.jsonl'} is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
         if isinstance(rec, dict) and rec.get("kind") == "cancel_intent" and rec.get("actor") == "manual":
             return True

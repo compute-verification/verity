@@ -90,7 +90,8 @@ def attempts_on(st: LocalStore, machine: str | None, pod_id: str | None = None, 
     for aid, mj in st.index.sql("SELECT id, manifest_json FROM attempts"):
         try:
             doc = json.loads(mj)
-        except ValueError:
+        except ValueError as e:
+            print(f"drain: attempt {aid}'s manifest is not JSON, so it is not matched ({e})", file=sys.stderr)
             continue
         ex, conds, cost = doc.get("execution") or {}, doc.get("conditions") or {}, doc.get("cost") or {}
         if machine:
@@ -110,7 +111,8 @@ def ended_epoch(st: LocalStore, ids: list[str]) -> dict[str, float]:
     def epoch(utc: str | None) -> float | None:
         try:
             return calendar.timegm(time.strptime(utc[:19], "%Y-%m-%dT%H:%M:%S")) if utc else None
-        except ValueError:
+        except ValueError as e:
+            print(f"drain: time {utc[:40]!r} does not parse, read as none ({e})", file=sys.stderr)
             return None
 
     want, out = set(ids), {}
@@ -119,7 +121,8 @@ def ended_epoch(st: LocalStore, ids: list[str]) -> dict[str, float]:
             continue
         try:
             end = ((json.loads(mj) or {}).get("execution") or {}).get("end_utc")
-        except ValueError:
+        except ValueError as e:
+            print(f"drain: attempt {aid}'s manifest is not JSON, so its end is its start plus wall time ({e})", file=sys.stderr)
             end = None
         s = epoch(start)
         if (t := epoch(end) or (s + wall if s is not None and wall else s)) is not None:

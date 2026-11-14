@@ -98,7 +98,8 @@ def _sha256_file(p: str) -> str | None:
             for chunk in iter(lambda: f.read(1 << 20), b""):
                 h.update(chunk)
         return h.hexdigest()
-    except OSError:
+    except OSError as e:
+        print(f"source identity: {p} not hashed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 

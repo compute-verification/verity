@@ -60,7 +60,8 @@ def ts(s: str) -> datetime:
 def ts_or_none(s: str | None) -> datetime | None:
     try:
         return ts(s) if s else None
-    except ValueError:
+    except ValueError as e:
+        print(f"publish_pool: {s[:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -88,7 +89,8 @@ def tail_records(files: list[Path], since: datetime) -> list[dict]:
                 r = json.loads(line)
                 if ts(r["t"]) >= since:
                     out.append(r)
-            except (ValueError, KeyError):
+            except (ValueError, KeyError) as e:
+                print(f"publish_pool: a sample line skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 continue
     return sorted(out, key=lambda r: r["t"])
 
@@ -98,7 +100,8 @@ def header(p: Path) -> dict:
     try:
         with open(p, errors="replace") as fh:
             lines = [next(fh, "") for _ in range(20)]
-    except OSError:
+    except OSError as e:
+        print(f"publish_pool: {p}'s header unread, so it takes the defaults ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return h
     for line in lines:
         m = re.match(r"#\s*fill:\s*(.*)", line)
@@ -191,8 +194,9 @@ def monitors(r5: list[dict], now: datetime, known: dict[str, dict]) -> list[dict
 
 def alert(found: list[dict], now: datetime) -> None:
     try:
-        state = json.loads(STATE.read_text())
-    except (OSError, ValueError):
+        state = json.loads(STATE.read_text()) if STATE.exists() else {}
+    except (OSError, ValueError) as e:
+        print(f"publish_pool: {STATE} unread, so every finding alerts again ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         state = {}
     t = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     new = [a for a in found if a["key"] not in state or ts(state[a["key"]]) <= now - timedelta(seconds=REALERT_S)]
@@ -208,16 +212,20 @@ def alert(found: list[dict], now: datetime) -> None:
 def kinds(now: datetime, known: dict[str, dict]) -> list[dict]:
     """Each kind's leases that ended in the last 24 h, the most idle first."""
     since, out = now - timedelta(days=1), {}
+    if not USAGE.exists():
+        return []
     try:
         lines = USAGE.read_text(errors="replace").splitlines()
-    except OSError:
+    except OSError as e:
+        print(f"publish_pool: {USAGE} unread, so no lease kind is listed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     for line in lines[-20000:]:
         try:
             r = json.loads(line)
             if (ts_or_none(r.get("end")) or since) < since:
                 continue
-        except (ValueError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError) as e:
+            print(f"publish_pool: a line of {USAGE.name} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         lease = f"who={r.get('who')} {'timed=1 ' if r.get('timed') else ''}cmd={r.get('cmd') or ''}"
         k = kind_of(lease, known)
@@ -250,14 +258,16 @@ def delivered_by_hour(now: datetime, known: dict[str, dict], last: dict) -> list
                 rows[h]["guest_gpu_s"] += s * gpus if guest else 0
 
     try:
-        lines = USAGE.read_text(errors="replace").splitlines()[-20000:]
-    except OSError:
+        lines = USAGE.read_text(errors="replace").splitlines()[-20000:] if USAGE.exists() else []
+    except OSError as e:
+        print(f"publish_pool: {USAGE} unread, so no lease counts toward the hours ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         lines = []
     for line in lines:
         try:
             r = json.loads(line)
             start, end = ts(r["since"]), ts(r["end"])
-        except (ValueError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError) as e:
+            print(f"publish_pool: a line of {USAGE.name} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if end < h0:
             continue
@@ -352,7 +362,8 @@ def fetch_other() -> dict | None:
         r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", DEST_HOST, f"cat {OTHER}"],
                            capture_output=True, text=True, timeout=30)
         return json.loads(r.stdout) if r.returncode == 0 else None
-    except (subprocess.SubprocessError, ValueError):
+    except (subprocess.SubprocessError, ValueError) as e:
+        print(f"publish_pool: the other node's pool not fetched ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
 
 

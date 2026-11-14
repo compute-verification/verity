@@ -159,8 +159,8 @@ def load_state(path: Path, now: float, log: Callable[[str], None]) -> dict[str, 
     aside = path.with_name(f"{path.name}.corrupt-{int(now)}")
     try:
         path.replace(aside)
-    except OSError:
-        aside = path
+    except OSError as e:
+        aside, why = path, f"{why}; not moved aside ({type(e).__name__}: {e})"
     log(f"STATE {path.name} {why}: kept as {aside.name}; new tallies start now")
     state = new_state(now)
     state["tally_restarted"] = {"at": iso(now), "why": why, "kept": str(aside)}
@@ -260,7 +260,9 @@ def refresh(cfg: Config, state: dict[str, Any], current: B.Budgets | None, now: 
 def budgets_from_state(state: dict[str, Any]) -> B.Budgets | None:
     try:
         return B.parse((state.get("budgets") or {})["text"])
-    except (KeyError, TypeError, B.BudgetError):
+    except (KeyError, TypeError, B.BudgetError) as e:
+        print(f"research pods guard: the state holds no budgets that parse, so none are carried over ({type(e).__name__}: "
+              f"{e})", file=sys.stderr)
         return None
 
 
@@ -414,9 +416,12 @@ def _alive(pid: int) -> bool:
 
 
 def recorded_pid(pid_path: Path) -> int | None:
+    if not pid_path.exists():
+        return None
     try:
         return int(pid_path.read_text().split()[0])
-    except (OSError, ValueError, IndexError):
+    except (OSError, ValueError, IndexError) as e:
+        print(f"research pods guard: {pid_path} unread, so no guard is recorded ({type(e).__name__}: {e})", file=sys.stderr)
         return None
 
 
@@ -609,8 +614,11 @@ def main(argv: list[str]) -> int:
         return supervise([sys.executable, "-m", "research", "pods", "guard", *[a for a in argv if a != "--supervise"]], ns.poll)
     if not os.environ.get(SUPERVISED_ENV):
         try:
-            prior = budgets_from_state(json.loads(paths(ns.dry_run)["state"].read_text()))
-        except (OSError, ValueError):
+            state_path = paths(ns.dry_run)["state"]
+            prior = budgets_from_state(json.loads(state_path.read_text())) if state_path.exists() else None
+        except (OSError, ValueError) as e:
+            print(f"research pods guard: {paths(ns.dry_run)['state']} unread, so no budgets are carried over ({type(e).__name__}: "
+                  f"{e})", file=sys.stderr)
             prior = None
         try:
             B.load(cfg.source)

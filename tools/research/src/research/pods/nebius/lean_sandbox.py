@@ -282,7 +282,8 @@ def verdict(stdout: str) -> list[dict] | None:
         if ln.startswith(MARK):
             try:
                 return json.loads(ln[len(MARK):])
-            except ValueError:
+            except ValueError as e:
+                log(f"the probe unit's result line is not JSON, so it counts as not started ({e})")
                 return None
     return None
 
@@ -407,6 +408,7 @@ def prepare(ns: argparse.Namespace, geteuid=os.geteuid, getpwnam=pwd.getpwnam, g
     try:
         verity = sorted(os.path.join("/etc/verity", n) for n in listdir("/etc/verity"))
     except FileNotFoundError:
+        log("no /etc/verity on this host, so none of it is hidden")
         verity = []
     hidden = list(HIDDEN)
     leases = sorted(glob.glob("/run/gpu-lease*"))
@@ -415,8 +417,8 @@ def prepare(ns: argparse.Namespace, geteuid=os.geteuid, getpwnam=pwd.getpwnam, g
         try:
             st = host(d)
             private[d] = [st.st_dev, st.st_ino]
-        except OSError:
-            pass
+        except OSError as e:
+            log(f"{d} not found on the host, so the probes don't check it is private ({type(e).__name__}: {e})")
     ro_in = [dst for _, dst in (*ro, *deps)]
     unwritable = sorted({*UNWRITABLE, tree_in, str(Path(tree_in).parent), *ro_in})
     gids = sorted({groups[n].gr_gid for n in FORBIDDEN_GROUPS if n in groups})
@@ -651,8 +653,8 @@ def take(slots: Path, who: dict, wait_s: float | None = None, now=lambda: dateti
         while True:
             try:
                 n = pools(slots)[POOL]
-            except (OSError, Refused):
-                pass                                            # mid-rewrite: the last N it read
+            except (OSError, Refused) as e:
+                log(f"{slots} unread, so the build pool keeps the last size read, {n} ({type(e).__name__}: {e})")
             ahead = _ahead(line, ticket)
             got = None if ahead else next(((i, fd) for i in range(n) if (fd := _try(d, i)) is not None), None)
             if got:
