@@ -45,7 +45,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
     null, as the policy's check reads them. It has three sources, tried in this order, and the first that is there is
     the whole log, none filled in from another: (1) ``--log``, a file the caller hands; (2) with ``--serve-dir``, the
     serve's H1 log through R's ``previous``, `h1_log`, each window's docket W and record R up to the window's W;
-    (3) the serve's own docket records, walked back from R's ``previous`` by digest to a record whose
+    (3) the serve's own records, walked back from R's ``previous`` by digest to a record whose
     ``previous`` is null, `pearl_log`: on a serve whose window record is Pearl+'s, that W and before it the serve's
     first registration record, W from Pearl+'s case's parts on the served node and, on a copy of the compose hand-off,
     which holds no part of Pearl+'s case, from the files the hand-off lists (`RECORDS`, `DEPLOYMENT`). Whoever handed
