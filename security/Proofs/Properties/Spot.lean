@@ -900,6 +900,34 @@ theorem certifiedHeld_iff (rec : Json) (v : Registration.Verifier) :
   refine forall_congr' fun x => imp_congr_right fun _ => ?_
   rcases he : Registration.entryOf rec x.1.value with _ | e <;> simp [he]
 
+/-- The verdict log names the record `d` refused (`Registration.refusedIn`) exactly when it holds `(d, false)`. -/
+theorem refusedIn_iff (verdicts : Array (String × Bool)) (d : String) :
+    Registration.refusedIn verdicts d = true ↔ (d, false) ∈ verdicts := by
+  unfold Registration.refusedIn
+  rw [Array.any_eq_true']
+  constructor
+  · rintro ⟨⟨r, a⟩, hm, h⟩
+    simp only [Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true'] at h
+    obtain ⟨rfl, rfl⟩ := h
+    exact hm
+  · exact fun hm => ⟨(d, false), hm, by simp⟩
+
+/-- The caller's verdicts (`Registration.portsAccepted`) hold exactly when `OutputPortsAccepted` does. -/
+theorem portsAccepted_iff (v : Registration.Verifier) :
+    Registration.portsAccepted v = true ↔ OutputPortsAccepted v := by
+  unfold Registration.portsAccepted OutputPortsAccepted
+  rw [Array.all_eq_true']
+  refine forall_congr' fun o => imp_congr_right fun _ => ?_
+  rcases o with ⟨u, d, e | e⟩
+  · show (!Registration.refusedIn v.verdicts d) = true ↔
+      ∀ p, Registration.Earlier.port e = .port p → (d, false) ∉ v.verdicts
+    have hr := refusedIn_iff v.verdicts d
+    cases h : Registration.refusedIn v.verdicts d <;> rw [h] at hr
+    · exact ⟨fun _ _ _ hm => Bool.false_ne_true (hr.2 hm), fun _ => rfl⟩
+    · exact ⟨fun hf => by simp at hf, fun hp => absurd (hr.1 rfl) (hp e rfl)⟩
+  · show true = true ↔ ∀ p, Registration.Earlier.value e = .port p → (d, false) ∉ v.verdicts
+    exact ⟨fun _ _ hp => (nomatch hp), fun _ => rfl⟩
+
 theorem linkRefused_false_iff (v : Registration.Verifier) : Registration.linkRefused v = false ↔ RL v := by
   unfold Registration.linkRefused RL
   cases v.members.isEmpty
