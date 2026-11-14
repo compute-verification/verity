@@ -3,7 +3,7 @@ the gate's fetch, witness and all, 0700 under the serve dir's private/certifier,
 and its outcome. The piece, on a serve dir whose window was the network certifier's synthetic run's certified requests
 (the run `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when `network-rows` accepted the run's records, the chain accepted and the window's
-requests are certified ones in the scan's link-window: the period mirror's certifier/v0 accept (`period_case`), its
+requests are certified ones in the scan's execution phase: the period mirror's certifier/v0 accept (`period_case`), its
 profile with the placement (the certifier on the kept gate's host, the checks on the developer's node), then goes
 through `served_verdicts.py record` into the window
 report and the block record's certifier leg, which `block_record.check` holds and its schema admits. Its case.json is
@@ -11,11 +11,11 @@ the three files `network-period` read, as `composite.py` reads a piece's case: w
 private/pieces/certifier with no answer beside it, and at no time under the pieces' directory, which gets
 certificates.json, the five certificates of the case's evidence, each with its own fields alone and each the network
 certifier's signature under the run's public key. The chain's endpoint report, with each Commit window's counts, and
-the scan's answers stay in the kept run. A window request the warden didn't certify, and network certifier
+the scan's answers stay in the kept run. A window request the certifier didn't certify, and network certifier
 records that `network-rows` refuses, are rejected before any chain runs (`network-rows` itself accepts the synthetic
 run's records and refuses them with cells re-cut, re-clocked or reordered, a certificate of another key, a record
-changed under its head and a schedule with a response cap); a chain that refused, requests outside the scan's
-link-window and a period the check rejects are rejects; a rehearsal the gate's check failed (each request late) and
+changed under its head and a schedule with a `max_tokens_cap`); a chain that refused, requests outside the scan's
+execution phase and a period the check rejects are rejects; a rehearsal the gate's check failed (each request late) and
 a step that can't run (no kept run, no report, no build, the time limit) refuse, which leaves the certifier missing, and no process of a step's group outlives
 the piece, the time limit's SIGTERM included, whenever it comes. Of the chain, DIR gets only `PUBLIC`'s key paths,
 which hold none of the window's counts or advice bits; the leak guard reads the piece's DIR against the run's witness
@@ -684,10 +684,10 @@ def test_network_rows_accepts_the_network_certifiers_records_and_refuses_cells_c
     assert (got["protocol"], got["verdict"], got["reason"]) == (CP.ROWS, "accept", None), got
     assert got["profile"] == {"link": WS.LINK, "windows": sz.W63.windows} and got["public"] == {}
     assert CP.rows_check(rows_exe, honest, record) is None
-    capped = {**case, "params": {**case["params"], "schedule": {**case["params"]["schedule"], "max_tokens_cap": 4}}}
-    got = SP.lean_check(rows_exe, capped, tmp_path / "case-capped")
-    assert (got["verdict"], got["reason"]) == ("reject", "params: schedule: the rows audit reads no response cap, so a "
-                                               "run under one isn't audited as rows"), got
+    limited = {**case, "params": {**case["params"], "schedule": {**case["params"]["schedule"], "max_tokens_cap": 4}}}
+    got = SP.lean_check(rows_exe, limited, tmp_path / "case-limited")
+    assert (got["verdict"], got["reason"]) == ("reject", "params: schedule: the rows audit reads no max_tokens_cap, so "
+                                               "a run under one isn't audited as rows"), got
     for name, edit, why in (("re-cut", _recut, "egress bucket 27 isn't the schedule's"),
                             ("re-clocked", _reclock, "egress bucket 26 isn't the schedule's"),
                             ("reordered", _reorder, "egress bucket 2: not r cells a connection in ordinal order")):

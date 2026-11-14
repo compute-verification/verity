@@ -29,7 +29,7 @@ certifier path none of its records enters the chain.
   `verity/network-rows/v1`): the auditor's record's key, link, schedule, session and windows (`deployment_of`), and
   each execution phase's three records (`warden_serve.CERTIFIED`'s order), each raw (`lean_audit.encode` of its grid)
   and then certified. The schedule is the period check's (`scan_period.rows_case`'s: the id egress form's integer
-  fields, and the response cap when the run has one, which the rows audit refuses by name).
+  fields, and `max_tokens_cap` when the run has one, which the rows audit refuses by name).
 """
 from __future__ import annotations
 
@@ -271,8 +271,8 @@ def rows_audit_case(run: Path, record: dict) -> dict:
             body += [LA.encode(r), LA.encode(c)]
     p = key.params
     lms = {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy}
-    cap = params.max_tokens_cap
-    schedule = {k: dep["params"][k] for k in W.INTEGER_FIELDS} | ({} if cap is None else {"max_tokens_cap": cap})
+    limit = params.max_tokens_cap
+    schedule = {k: dep["params"][k] for k in W.INTEGER_FIELDS} | ({} if limit is None else {"max_tokens_cap": limit})
     return {"params": {"key": key.public.hex(), "link": dep["link"], "lms": lms, "schedule": schedule,
                        "session": dep["session"], "windows": dep["windows"]},
             "commitment": b"".join(body).hex(), "evidence": b"{}".hex()}
