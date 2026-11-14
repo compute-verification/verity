@@ -9,7 +9,7 @@ public import Proofs.Properties.Accounting.Remote.Lifetime
 public import Proofs.Properties.Accounting.Remote.Pooled
 
 /-!
-# The remote bandwidth audit's verifier: its properties, proved (`Properties.Accounting.Remote`)
+# PoUB's verifier: its properties, proved (`Properties.Accounting.Remote`)
 
 `Window`: an accepted window checks every sampled opening (`acceptChecksOpenings`, `acceptOpensSamples`), and the
 verifier's process's chunked check is the whole window's (`chunkedIsWhole`). `Draw`: the draws

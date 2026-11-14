@@ -6,8 +6,7 @@ and cplane's buffers that the kernel read: the plane (tile column tn's words, wo
 c(tn 128 + row, 128 kt + 32 j + 4 w + b), c on tag 8 in the patch layout) and UB = U + 64 (row r's 32 bytes). Wp_formula
 checks the kernel's byte arithmetic, ((W + 64) + (U + 64) + c) ^ 0x80 = W + c + U, on the tile. One JSON line a gate
 directory; exit 1 on any difference, on a device mismatch or on a control the device didn't reject.
-    uv run --no-project --with numpy --with python-sat --with-editable benchmarks/pouw/exact_kit \
-      python3 verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cwgemm_ref.py GATE_DIR...
+    PYTHONPATH=. uv run --no-project --with numpy python3 verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cwgemm_ref.py GATE_DIR...
 """
 from __future__ import annotations
 
@@ -18,8 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import cgemm_ref as cr
+from verity.protocols.accounting.pouw.prover.kernels.edited_gemm import cgemm_ref as cr
 
 T = cr.T
 

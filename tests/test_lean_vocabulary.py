@@ -164,10 +164,10 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     f"{SITE_PY}::Link": (f"{SITE_LEAN}::Core.Site.Link", "site-difftest", "the Site's port reads the Python's links"),
     f"{SITE_PY}::Registration": (f"{SITE_LEAN}::Core.Site.Registration", "site-difftest",
                                  "the Site's port checks the Python's logs, refusal for refusal"),
-    f"{RA_PY}::Opening": (f"{RA}Window.lean::RemoteAudit.Opening", "remote-audit-difftest", "the remote audit's port"),
-    f"{RA_PY}::Registration": (f"{RA}Window.lean::RemoteAudit.Registration", "remote-audit-difftest", "the remote audit's port"),
-    f"{RA_PY}::Registry": (f"{RA}Registry.lean::RemoteAudit.Registry", "remote-audit-difftest", "the remote audit's port"),
-    f"{RA_PY}::Verdict": (f"{RA}Window.lean::RemoteAudit.Verdict", "remote-audit-difftest", "the remote audit's port"),
+    f"{RA_PY}::Opening": (f"{RA}Window.lean::RemoteAudit.Opening", "remote-audit-difftest", "PoUB's port"),
+    f"{RA_PY}::Registration": (f"{RA}Window.lean::RemoteAudit.Registration", "remote-audit-difftest", "PoUB's port"),
+    f"{RA_PY}::Registry": (f"{RA}Registry.lean::RemoteAudit.Registry", "remote-audit-difftest", "PoUB's port"),
+    f"{RA_PY}::Verdict": (f"{RA}Window.lean::RemoteAudit.Verdict", "remote-audit-difftest", "PoUB's port"),
     f"{MC_PY}device/memory_challenger.py::CoinTree": (f"{MC}Records.lean::MemoryChallenger.CoinTree", "memory-challenger-difftest",
                                                "the memory challenger's port"),
     f"{MC_PY}device/memory_challenger.py::Verdict": (f"{MC}Verdict.lean::MemoryChallenger.Verdict", "memory-challenger-difftest",
@@ -471,7 +471,7 @@ KNOWN: dict[str, str] = {
     "security/Definitions/Accounting/Remote/Draw.lean::Accounting.Remote.Draw.Session":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (memory-accounting)",
     "security/Definitions/Accounting/Remote/Held.lean::Accounting.Remote.Held.Trace":
-        "homonym, a remote audit session's record of the registered blocks in node memory: rename (memory-accounting)",
+        "homonym, a PoUB session's record of the registered blocks in node memory: rename (memory-accounting)",
     "security/Definitions/Accounting/Remote/Node.lean::Accounting.Remote.Node":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: a node's projection (memory-accounting)",
     "security/Definitions/Accounting/Remote/Sketch.lean::Accounting.Remote.Sketch.Coins":
@@ -640,7 +640,7 @@ KNOWN: dict[str, str] = {
     # security/Properties/
     "security/Properties/Attest.lean::MemoryChallenger.Attest.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
-    "security/Properties/Pous/Period.lean::Pous.Period.Strategy":
+    "security/Properties/Pous/Period/Audits.lean::Pous.Period.Strategy":
         "homonym, a PoUS prover in the ring model (what survives setup, and each round's answer): rename (lean)",
     "security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
@@ -759,9 +759,9 @@ KNOWN: dict[str, str] = {
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes it (deleted) (vllm)",
     "verity/protocols/accounting/pouw/prover/serving/h1/window.py::Window":
         "duplicate of the execution block (no canonical yet): becomes a client of it (vllm)",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Layout":
+    "verity/protocols/accounting/poub/prover/node_store/interface.py::Layout":
         "duplicate of the Site (`Verity.Site`): becomes its memory leaves by tier (vllm)",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Registration":
+    "verity/protocols/accounting/poub/prover/node_store/interface.py::Registration":
         "duplicate of the registration log (`Verity.Registration`, not yet in Core): becomes a view of its head (vllm)",
     "adapters/vllm/verity_vllm/query/units.py::Program": "homonym, what a query reads: rename (circuits)",
     # tools/

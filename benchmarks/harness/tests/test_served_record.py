@@ -219,8 +219,10 @@ def test_what_the_audit_showed_is_counted_from_the_four_runs_files(tmp_path):
                                     "check": {"error": None, "session_error": None, "coins_reason": None,
                                               "said": "FIRST: ACCEPTED"}}
     assert [t["holds"] for t in shown["ties"]] == [True, True, True, True, True]
-    # what a verdict of this audit is of: the class as the second stage names it, and the registration it read
-    assert (shown["class"], shown["registration"]) == ("p4-o2", REGISTRATION)
+    # what a verdict of this audit is of: the class as the second stage names it, as the serve filed it (window and
+    # all, the name the command's verdicts are held to), and the registration it read
+    assert (shown["class"], shown["served_class"], shown["registration"]) == ("p4-o2", "w1/p4-o2", REGISTRATION)
+    assert E.CLASS_NAME.match(shown["served_class"])
     # the one-stage record over the interior is kept apart: it is not the stream's outcome
     assert shown["one_stage_record"] == {"accepted": False, "record": {"failed": ["registered"]}}
 
@@ -234,6 +236,8 @@ def test_files_that_are_not_one_runs_are_said_not_to_hold(tmp_path):
     alone, _ = R.read(dirs["second"])
     assert [t["holds"] for t in alone["audit"]["ties"]] == [None, None, None, None, None]
     assert (alone["audit"]["class"], alone["audit"]["registration"]) == ("p4-o2", REGISTRATION)
+    # without the serve, and where the serve published no file equal to the first stage's, the window is not known
+    assert alone["audit"]["served_class"] is None and record["audit"]["served_class"] is None
     # a first stage of another class is not the one the second stage names, and the class stays the second stage's
     (dirs["first"] / "out/stage1/p4-o2").rename(dirs["first"] / "out/stage1/p8-o2")
     other, _ = R.read(**dirs)

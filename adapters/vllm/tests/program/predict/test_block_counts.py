@@ -23,7 +23,7 @@ from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import REGISTRY
 from verity.circuits.population import population_program
 from verity.commitments.periods import interface as IF
-from verity.definitions.boolean import gate_table
+from verity_vllm.definitions.boolean import gate_table
 
 from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.records import block_counts as RBC
@@ -48,7 +48,7 @@ def asked(fid):
         return None
 
 
-loaded = sorted(m for m in sys.modules if m.startswith("verity.definitions.registry"))
+loaded = sorted(m for m in sys.modules if m.startswith("verity_vllm.definitions.registry"))
 before = asked(sys.argv[1])
 BC.resolve(sys.argv[2])
 print(json.dumps({"loaded": loaded, "before": before, "after": asked(sys.argv[1])}))
@@ -207,7 +207,7 @@ def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k():
 
 
 def test_the_import_alone_loads_no_registry_module():
-    """A process that has imported the module and called nothing has loaded no module of `verity.definitions.registry`, so
+    """A process that has imported the module and called nothing has loaded no module of `verity_vllm.definitions.registry`, so
     `codec` holds none of the catalog's on-demand families and refuses an id of one (`ON_DEMAND`); `resolve` loads the
     catalog on its first call, and the same id then answers."""
     r = subprocess.run([sys.executable, "-c", ALONE, ON_DEMAND, ROPE], capture_output=True, text=True, check=False,

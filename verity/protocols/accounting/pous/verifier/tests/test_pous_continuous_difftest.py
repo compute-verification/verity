@@ -50,7 +50,7 @@ from verity.protocols.accounting.pous.verifier.audit import (
     run_timed,
 )
 from verity.protocols.accounting.pous.verifier.codec import encode_segments
-from verity.protocols.accounting.pous.verifier.continuous import (
+from verity.protocols.accounting.pous.device.continuous import (
     ContinuousMemoryChallenger,
     Reply,
     run_continuous,

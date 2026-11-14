@@ -850,8 +850,8 @@ impl = "hashcat 7.1.2 sha512crypt (mode 1800, 5,000 rounds, each one compression
 form = "generic"
 gps = 7.894
 card = "RTX PRO 6000 Blackwell Server Edition"
-sms = 188
-mhz = 2430
+sms = { card = "sm.count" }
+mhz = { card = "clock.sm" }
 source = "gist.github.com/blurbdust/5f7c8e07f8b0015c187e69f438e2e664: 'Hash-Mode 1800 (sha512crypt $6$, SHA512 (Unix)) [Iterations: 5000] Speed.#01: 1578.8 kH/s'; 1578.8e3 · 5,000 rounds, each one block (the 64-B digest, the salt and the password, at most 111 B together at hashcat's benchmark lengths); read at the 2,430 MHz fmax"
 
 [[public]]
@@ -859,8 +859,8 @@ impl = "hashcat 7.1.2 SHA2-512 (mode 1700, -O: one-block short messages, early e
 form = "structured"
 gps = 9.432
 card = "RTX PRO 6000 Blackwell Server Edition"
-sms = 188
-mhz = 2430
+sms = { card = "sm.count" }
+mhz = { card = "clock.sm" }
 source = "gist.github.com/blurbdust/5f7c8e07f8b0015c187e69f438e2e664: 'Hash-Mode 1700 (SHA2-512) Speed.#01: 9432.0 MH/s'"
 
 [[public]]

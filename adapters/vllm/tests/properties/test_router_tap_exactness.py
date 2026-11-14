@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.registry import moe
+from verity_vllm.definitions.registry import moe
 
 from tests.properties import router_tap_exactness as X
 from tests.properties.router_tap_exactness_gpu import edge_rows, rows_of

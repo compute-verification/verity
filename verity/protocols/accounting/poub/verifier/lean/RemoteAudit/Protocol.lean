@@ -10,11 +10,12 @@ meta import CoreProtocol.Ratio
 meta import RemoteAudit.Difftest
 
 /-!
-# A remote bandwidth session as a core protocol
+# A PoUB session as a core protocol
 
-The verifier's session (`Shared.run g`, which `audit.Session` is held to) behind the core interface (`Core.Protocol`),
-the bandwidth component of onsite Verity (`verity/core/protocols/onsite`). Its bytes are canonical JSON, in the forms
-the difftest's `session` reads (`Difftest.sessionFn`):
+The verifier's session (`Shared.run g`, which `audit.Session` is held to) behind the core interface (`Core.Protocol`).
+No composite lists it: onsite's bandwidth component is `RemoteAudit.P2Protocol.protocol` (`Core.Onsite.components`,
+`verity/protocols/compose/verifier/onsite`). Its bytes are canonical JSON, in the forms the difftest's `session` reads
+(`Difftest.sessionFn`):
 
 * params `{"not_before_ns": n, "params": {...}}`: the session's parameters (`Difftest.sessionOf`'s, its windows a
   draw's openings coin `groups_per_coin` g among them) and the verifier's clock floor. The check refuses what no
@@ -56,8 +57,8 @@ open Flock
 
 def ID : String := "verity/remote-bandwidth/v0"
 
-/-- `audit.DELTA`: the pooled bound's δ, `2^-40`. -/
-def DELTA : Rat := 1 / (2 ^ 40 : Nat)
+/-- `audit.DELTA`: PoUB's δ, the pooled bound's, `2^-101`. -/
+def DELTA : Rat := 1 / (2 ^ 101 : Nat)
 
 private def natJ (n : Nat) : Json := .num (JsonNumber.fromNat n)
 
@@ -187,9 +188,9 @@ def account : Core.Account :=
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason ==
   some "params: params: the keys must be [not_before_ns, params], not []"
 #guard account.Formed ∧ account.protocol = protocol.id
-#guard (ratio DELTA).toString == "1/1099511627776"
+#guard (ratio DELTA).toString == "1/2535301200456458802993406410752"
 private def three : Session.Params :=
   { deadlineNs := 0, windows := 3, samples := 5, minPasses := 1, windowNs := 0, lifetime := 1 }
-#guard (ratio (eps three 2)).toString == "8388613/9223372036854775808"
+#guard (ratio (eps three 2)).toString == "1374389534721/2535301200456458802993406410752"
 
 end RemoteAudit.Protocol

@@ -10,9 +10,10 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1
-from verity.definitions.registry import sampling as _sampling
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import sampling as _sampling
 
+from verity_vllm.errors import Refused
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, sub_rows
 from verity_vllm.observe.fold.patterns.ops import (
@@ -305,7 +306,7 @@ class TokenSelectGumbelTopP:
         Compute(GumbelTopPTokenSelect_v1{V}, 1, (PerRow(logits_bf16[r]), Const32[top_p], Param(seed of rid), Const64[pos], Const32[T], Const32[S]),
                 (PerRow(sampled[r]),))
 
-    -- the registry composite (`verity/definitions/registry/sampling.py`: TemperatureScale -> TopPMask{V} (topp_split model) -> GumbelSelectF32),
+    -- the registry composite (`adapters/vllm/verity_vllm/definitions/registry/sampling.py`: TemperatureScale -> TopPMask{V} (topp_split model) -> GumbelSelectF32),
     the same instance the derived Program's `GumbelTopPTokenSelect[vllm]` rule emits: temperature / top_p / pos are Program constants
     (the fold emits their `Const` instances in operand order right before the select), the seed is the request's `seed` PARAMETER.  S
     (the 6th operand, `Const32[S]` "splits") is read from the split kernels' constexpr, must agree across the three kernels, and is
@@ -570,7 +571,7 @@ class TokenSelectGumbelTopP:
             return unsupported(node, "sampled ids are not an integer [R] view", out=repr(out))
         if out.rank == 1:
             out = ViewDesc(out.alloc, out.offset, (R, 1), (out.strides[0], 1), out.dtype, out.device)
-        from verity.definitions.registry import sampling_vocab
+        from verity_vllm.definitions.registry import sampling_vocab
         construction = self.construction or target_of(ctx)[0].effective_sampler_construction()
         spec = bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, construction), V=V)
         S = int(s2["S"])        # the split kernels' constexpr: the launch's S -> the 6th operand (held to the Program's Const32[S])
@@ -650,5 +651,5 @@ def with_sampler_construction(profile, construction: str | None):
     if construction is None:
         return profile
     if construction not in TargetProfile.SAMPLER_CONSTRUCTIONS:
-        raise SystemExit(f"sampler construction {construction!r} is not one of {list(TargetProfile.SAMPLER_CONSTRUCTIONS)}")
+        raise Refused(f"sampler construction {construction!r} is not one of {list(TargetProfile.SAMPLER_CONSTRUCTIONS)}")
     return replace(profile, patterns=[replace(p, construction=construction) if isinstance(p, TokenSelectGumbelTopP) else p for p in profile.patterns])
