@@ -103,7 +103,7 @@ uses.  -h3 (``pearl-c-nvfp4-v0-h3``, not registered) keys each row's E_A on its 
 does; no device path forms it yet.
 The domain (`PearlC4.check`), B-OVF's credit discount (`B_OVF`), D-SK (`seed_b`) and the accounting
 (`wref`, `credit_of`) are stated where they are coded.  The reference replay (`benchmarks/pouw/pearl_c4/replay.py`) opens
-rows and is a development shortcut: the protocol checks a sampled tile by a zero-knowledge proof of `circuit.pc4`'s hiding
+rows and is a development shortcut: the protocol checks a sampled tile by a zero-knowledge proof of `pc4`'s hiding
 Programs, which opens nothing.
 
 **Stand-ins.**  The atoms are the RTX 5090 pins (`BLACKWELL_SM120_NVF4`, `_MXF4`, `HOPPER_BF16_M16N8K16`), pending GPU 4's

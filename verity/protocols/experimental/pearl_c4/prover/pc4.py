@@ -1,4 +1,4 @@
-"""`pearl-c-nvfp4-v0`'s tile check as a Program: Pearl-C4's forming, chain and clean-up (`schemes.pearl_c4`) cut into
+"""`pearl-c-nvfp4-v0`'s tile check as a Program: Pearl-C4's forming, chain and clean-up (`pearl_c4`) cut into
 proof blocks, so SPOT can establish a sampled tile's checked words (C̃ and U) and its rows' admission without the
 verifier reading a row.
 
@@ -31,7 +31,7 @@ public input region that `PORTS` names with its recomputation (`DERIVATIONS`).
 
 A row unit computes the row's statistics, its noise atoms, block scales and casts (the forming), Ẽ, and its half of the
 clean-up: P_A,i = [Ẽ_A,i ‖ RNE_bf16(A′_i·F_B)], P_B,j = [RNE_bf16(Ẽ_B,j·G − B̃_j·F_A) ‖ −Ẽ_B,j].  ``ok`` is the row's
-admission (`schemes.pearl_c4.row_passes`: every BF16 word finite and D-NF), one bit per row that an honest prover's tile
+admission (`pearl_c4.row_passes`: every BF16 word finite and D-NF), one bit per row that an honest prover's tile
 always sets, returned as its ok row's one word with bits 1-15 zero in gates (`ok_word`).  Every operation is the scheme's
 own, in its order: core's FP32 add, mul, FMA and divide (``_v2``), its casts and its sm_120 NVF4 and BF16 steps, and three
 PoUW primitives (`words`: sqrt.rn, Ẽ's exact decode, BF16 negation).
