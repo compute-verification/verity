@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Challenger.CanonRead
+public import Proofs.Flock.Claims.CanonRead
 public import Proofs.Flock.Claims.JsonNorm
 import all Init.Data.Ord.String
 
