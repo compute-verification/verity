@@ -9,7 +9,7 @@ declared registered, ingress or free and counted from the description, the verif
 reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads, and a history table's
 writer commits each row as the table's leaf, whose root the verifier pins from the public bodies. A window written under
 core's registration, and `of_records` against it, are the records audit's tests
-(`benchmarks/prove_path/tests/test_records_audit.py`), since these may not import core."""
+(`verity/protocols/proofs/spot/verifier/tests/test_records_audit.py`), since these may not import core."""
 from __future__ import annotations
 
 import copy
