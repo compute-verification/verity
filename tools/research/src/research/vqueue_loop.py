@@ -115,7 +115,11 @@ suites keyed in the base's tree as in its own (`Loop._suites_from`, `suites.py -
 only while the check of `main` passed both suite steps and the base's is judged on them under the policy of its own base
 (`vqueue_slim.lends_suites`).  It passes only once its base's check passed both suite steps (`vqueue_slim.borrowed`), so
 its pass of a suite it left out is that check's, and where its base landed on a check that didn't, it is started again on
-`main` and runs them (`Loop._unanswered`).  A failed step
+`main` and runs them (`Loop._unanswered`); where its base landed on the quick tier, that check is `main`'s own of that
+tip.  `main`'s own check leaves suites the same way to the check of an earlier tip of `main` that is running or passed
+them (`Loop._tip_lender`, `vqueue_slim.lends_onward`): until that one passed both suite steps it reads as a check still
+running, neither green nor red, and where that one never will it is started again and runs them (`Loop._below`,
+`Loop._answered`), so a red of `main`'s check is always of suites that check ran.  A failed step
 is inherited by its failing tests, those the run beside its base's check failed too.  A shard that failed a step it is
 judged on, or a suite of one, fails it while the other shards still run (an early red, `vqueue_slim.judge`), decided as a
 finished fail is: on the lowest candidate at once, on one above it once its base's check has ended (`vqueue_slim.based`),
@@ -2631,6 +2635,8 @@ class Loop:
         #: their heads (`_plain`)
         self.red: MainRed | None = None
         self.plain: dict[int, str] = {}
+        #: the tick, and the commits below `main`'s tip whose own check it has judged (`_judge_below`): each once a tick
+        self._judged_below: tuple[int, set[str]] = (0, set())
         #: the ready PRs this tick's snapshot holds for that red, as `World.held_out` names one: {number: (head, cause, why)}
         self.held: dict[int, tuple[str, str, str]] = {}
         if world is not None:
@@ -2833,9 +2839,17 @@ class Loop:
         one started here on ``main`` against itself, so lean-agreement never runs (at startup, each time ``main`` moves, and
         once more when it ended in infra).  Judged each tick, its record logged per ``main`` (to ``wrote`` too) whenever it
         changed, and never cancelled; past the window, read from the whole log (``whole``, where the snapshot read it).
-        None with --dry-run, which starts nothing."""
+        None with --dry-run, which starts nothing.
+
+        One started here leaves to the check of an earlier tip of `main` the suites keyed there as in ``main``'s tree
+        (`_tip_lender`, `vqueue_slim.start`'s ``suites_from``), and then says nothing of its own until that check passed
+        both suite steps (`_answered`): until then it reads as a check still running, its record handed on without the
+        pass or the fail it keeps, so that no candidate on ``main`` is judged against a pass or a fail of suites it didn't
+        run, and `main` is read neither green nor red on it (`_main_red`).  Where that check never will pass them (it failed one, ended in
+        infra or was cancelled), ``main``'s is started again, its runs cancelled, with no lender: it runs every suite."""
         if self.slim is None or self.dry_run:
             return None, None
+        of = self._on_line(past, whole, n, main, origin, wrote)
         if not past.slim(main)[0]:
             past = whole if whole is not past else Past.read(self.log_path, 0)
         (started, rec), (starts, since) = past.slim(main), past.slim_started(
@@ -2843,22 +2857,95 @@ class Loop:
         line = dict(sha=main, base=main, members=(), heads=())
         if self.gate == VERDICT_GATE and isinstance(rec, dict) and rec.get("gate") == self.slim.QUICK and not starts:
             self.write(got := self._started(n, main, origin, line, "started beside `main` after a landing on the quick tier: "
-                                            "`main`'s own check, of every landing since it last passed"))
+                                            "`main`'s own check, of every landing since it last passed",
+                                            tip_from=self._tip_lender(main, of)))
             wrote.append(got)
             return got["record"], self.now()
+        again = "started again beside `main`" if starts else "started beside `main`"
         if started and not self._other(rec):
             was = json.dumps(rec, sort_keys=True)
             v = self.slim.judge(self.world.slim_driver(), rec)
+            took = rec.get("suites_from") if isinstance(rec, dict) and rec.get("tip") == rec.get("base") else None
+            theirs = self._answered(of(took), of) if took and not rec.get("suites_passed") else True
+            if theirs and took:
+                rec["suites_passed"] = True
             if json.dumps(rec, sort_keys=True) != was:
                 self.write(got := self._line(n, main, origin, "slim", **line, why=f"judged {v.state} beside `main`", record=rec,
                                              done=True))
                 wrote.append(got)
+            if theirs is False:
+                again, stopped = f"started again beside `main`: {took[:12]}'s check, which it left suites to, didn't pass " \
+                                 "them: it runs them itself", {}
+                if "verdict" not in rec and not self.shadow and (ids := list(rec.get("ids") or ())):
+                    failed = self.world.cancel_runs(ids, f"vqueue: `main`'s check at {main[:12]} is {again}")
+                    stopped = {"beside_cancelled": ids, **({"beside_cancel_failed": failed} if failed else {})}
+                self.write(got := self._started(n, main, origin, {**line, **stopped}, again))
+                wrote.append(got)
+                return got["record"], self.now()
             if v.state != INFRA or starts > 1:
-                return rec, since
-        self.write(got := self._started(n, main, origin, line, "started again beside `main`" if starts else
-                                        "started beside `main`"))
+                said = theirs is None and (rec.get("verdict") or {}).get("state") in (PASS, FAIL)
+                return ({k: x for k, x in rec.items() if k != "verdict"} if said else rec), since
+        self.write(got := self._started(n, main, origin, line, again, tip_from=self._tip_lender(main, of)))
         wrote.append(got)
         return got["record"], self.now()
+
+    def _on_line(self, past: Past, whole: Past, n: int, main: str, origin: str,
+                 wrote: list[dict]) -> Callable[[str], dict | None]:
+        """What reads the record of the check of a commit on `main`'s line below its tip: the newest in the window, else in
+        the whole log where the snapshot read it, `main`'s own check there that keeps no verdict judged first
+        (`_judge_below`)."""
+        def of(sha: str) -> dict | None:
+            rec = past.slim(sha)[1] or (whole.slim(sha)[1] if whole is not past else None)
+            if isinstance(rec, dict):
+                self._judge_below(n, main, origin, sha, rec, wrote)
+            return rec
+        return of
+
+    def _judge_below(self, n: int, main: str, origin: str, sha: str, rec: dict, wrote: list[dict]) -> None:
+        """`main`'s own check of ``sha``, a commit below its tip, judged where its record ``rec`` keeps no verdict, once a
+        tick, the record logged (to ``wrote`` too) when it changed: no candidate is built on it, so nothing else judges
+        it."""
+        if self._judged_below[0] != n:
+            self._judged_below = (n, set())
+        if "verdict" in rec or rec.get("gate") != CHECK_GATE or rec.get("tip") != rec.get("base") or sha in self._judged_below[1]:
+            return
+        self._judged_below[1].add(sha)
+        was = json.dumps(rec, sort_keys=True)
+        v = self.slim.judge(self.world.slim_driver(), rec)
+        if json.dumps(rec, sort_keys=True) != was:
+            self.write(got := self._line(n, main, origin, "slim", sha=sha, base=sha, why=f"judged {v.state} beside `main`'s "
+                                         "line, below its tip", record=rec, done=True))
+            wrote.append(got)
+
+    def _answered(self, rec: dict | None, of: Callable[[str], dict | None]) -> bool | None:
+        """Whether the check ``rec`` records, of a commit on `main`'s line (``of`` reads another's), passed both suite steps,
+        the suites it left out among them: as `vqueue_slim.answers_suites` reads its own verdict, and, for `main`'s own
+        check that left suites to an earlier tip's (``suites_from``), only once that one is so answered in turn, which its
+        record then keeps (``suites_passed``).  None while one of them may yet; False once one never will, a check with no
+        record among them.  A candidate's check that landed is read by its own verdict: it landed only on its lender's
+        pass (`vqueue_slim.borrowed`)."""
+        if rec is None:
+            return False
+        own, took = self.slim.answers_suites(rec), rec.get("suites_from")
+        if own is False or not took or rec.get("tip") != rec.get("base") or rec.get("suites_passed"):
+            return own
+        if (theirs := self._answered(of(took), of)) is False:
+            return False
+        return own if theirs else None
+
+    def _tip_lender(self, main: str, of: Callable[[str], dict | None]) -> str | None:
+        """The earlier tip of `main` whose check the check of ``main``'s own tip leaves suites to (`vqueue_slim.start`'s
+        ``suites_from``), where the check gates: the newest commit below ``main`` on its first-parent line (`MAIN_WALK`
+        commits) whose check lends them (`vqueue_slim.lends_onward`) and is running or passed both suite steps
+        (`_answered`: not one that failed one, ended in infra, or left them to one that did).  None else: ``main``'s check
+        runs every suite it has no pass of."""
+        if self.gate not in CHECKS:
+            return None
+        d = self.world.slim_driver()
+        for c in _out(self.world.repo, "rev-list", "--first-parent", f"-n{MAIN_WALK}", main).split()[1:]:
+            if self.slim.lends_onward(d, rec := of(c), main) and self._answered(rec, of) is not False:
+                return c
+        return None
 
     def _main_red(self, past: Past, whole: Past, n: int, main: str, origin: str, below: dict | None,
                   wrote: list[dict]) -> MainRed | None:
@@ -2866,13 +2953,15 @@ class Loop:
         ``main`` (``below``, its record as `_below` judged it) down to the newest commit whose check ended: each commit's
         check is the one `_below` started on it, or its candidate's whole check when that passed (a candidate's that failed
         and landed, its failures inherited, says nothing new); a commit's own check still running below ``main`` is judged
-        here, its record logged per commit (to ``wrote`` too) whenever it changed.  Every landing gets its own check and none
-        is cancelled; the newest ended one answers for every landing at or below it.  None when that one passed, or none
-        ended; else its fail (or `main`'s own infra, once started again), the PRs landed since the newest that passed, the
-        one it names (`vqueue.culprit`; none when it landed in more than one merge or the check ended in infra) with its
-        revert when one is on `main` already, and, once a tick acted on it, that tick's line (`revert` or `fallback`, read
-        from the whole log past the window)."""
-        w = self.world
+        here, its record logged per commit (to ``wrote`` too) whenever it changed (`_judge_below`).  Every landing gets its
+        own check and none is cancelled but one whose lender failed (`_below`); the newest ended one answers for every landing
+        at or below it.  One that left suites to an earlier tip's check passes only once that check passed them
+        (`_answered`): until then its pass says nothing, and a fail of it is of suites it ran itself.  None when that one
+        passed, or none ended; else its fail (or `main`'s own infra, once started again), the PRs landed since the newest
+        that passed, the one it names (`vqueue.culprit`; none when it landed in more than one merge or the check ended in
+        infra) with its revert when one is on `main` already, and, once a tick acted on it, that tick's line (`revert` or
+        `fallback`, read from the whole log past the window)."""
+        w, of = self.world, self._on_line(past, whole, n, main, origin, wrote)
         recs = {r.get("sha"): r.get("record") for r in past.of("slim")}
         tip = passed = None
         for c in _out(w.repo, "rev-list", "--first-parent", f"-n{MAIN_WALK}", main).split():
@@ -2880,14 +2969,17 @@ class Loop:
             if not isinstance(rec, dict) or rec.get("gate") != CHECK_GATE:
                 continue
             own = rec.get("tip") == rec.get("base")
-            if "verdict" not in rec and own and c != main and tip is None:
-                was = json.dumps(rec, sort_keys=True)
-                v = self.slim.judge(w.slim_driver(), rec)
-                if json.dumps(rec, sort_keys=True) != was:
-                    self.write(got := self._line(n, main, origin, "slim", sha=c, base=c, why=f"judged {v.state} beside `main`'s "
-                                                 "line, below its tip", record=rec, done=True))
-                    wrote.append(got)
+            if own and c != main and tip is None:
+                self._judge_below(n, main, origin, c, rec, wrote)
             state = (rec.get("verdict") or {}).get("state")
+            if state == PASS and own and c != main and rec.get("suites_from") and not rec.get("suites_passed"):
+                if not self._answered(rec, of):              # it left suites to an earlier tip's check, which hasn't passed
+                    continue                                 # them: it says nothing of them, so `main` isn't green here
+                rec["suites_passed"] = True
+                self.write(got := self._line(n, main, origin, "slim", sha=c, base=c, why=f"judged {state} beside `main`'s "
+                                             f"line, below its tip: {rec['suites_from'][:12]}'s check passed the suites it "
+                                             "left to it", record=rec, done=True))
+                wrote.append(got)
             if state == PASS:
                 passed = c
                 break
@@ -3443,7 +3535,7 @@ class Loop:
                               _lent(t.judged, t.below, t.main, t.advanced), avoid)]
 
     def _started(self, n: int, main: str, origin: str, line: dict, why: str = "started", below: dict | None = None,
-                 lent: Lent | None = None, avoid: Iterable[str] = ()) -> dict:
+                 lent: Lent | None = None, avoid: Iterable[str] = (), tip_from: str | None = None) -> dict:
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
         if self._quick(line):
             try:
@@ -3456,7 +3548,7 @@ class Loop:
         heavy = self._heavy_on(line) if self.gate in CHECKS else ""
         try:
             audit = self._audit_from(d, main, line, below, lent)
-            suites = self._suites_from(d, main, line, below, lent)
+            suites = tip_from or self._suites_from(d, main, line, below, lent)
             after = self.slim.replaced(Past.read(self.log_path, self.now() - self.slim.CARRY_WAIT_S).lines,
                                        line.get("members") or (), self.now()) if self.gate in CHECKS else {}
             with self.steps("launch"):
@@ -3514,10 +3606,11 @@ class Loop:
 
     def _suites_from(self, d: Landing, main: str, line: dict, below: dict | None, lent: Lent | None) -> str | None:
         """The candidate whose check answers for the suites of the check of ``line`` that are keyed there as here
-        (`vqueue_slim.start`'s ``suites_from``): its base, where the check gates and the base is a candidate in flight
-        (``below``, its record) whose check lends them (`vqueue_slim.lends_suites`, on the record of the check of ``main``,
-        ``lent``).  None else: the check runs every suite it has no pass of."""
-        if self.gate != CHECK_GATE or below is None or lent is None:
+        (`vqueue_slim.start`'s ``suites_from``): its base, where the check gates, or the land verdicts with the check for
+        a candidate that isn't plain, and the base is a candidate in flight (``below``, its record) whose check lends them
+        (`vqueue_slim.lends_suites`, on the record of the check of ``main``, ``lent``; a quick tier's record lends none).
+        None else: the check runs every suite it has no pass of."""
+        if self.gate not in CHECKS or below is None or lent is None:
             return None
         return line["base"] if self.slim.lends_suites(d, below, lent(main)[0]) else None
 

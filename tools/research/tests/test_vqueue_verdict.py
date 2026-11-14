@@ -315,6 +315,178 @@ def test_under_gate_verdict_a_red_of_main_s_check_naming_no_one_pr_reverts_none_
     assert started["record"]["gate"] == vqueue_slim.QUICK                      # `main`'s check passed: plain again
 
 
+def _two_tips(env: Env, monkeypatch, first: dict[str, str], **kw) -> tuple[L.Loop, Runs, Quick, str, str, str, dict]:
+    """#1 (``first``) and then #2 landed on the quick tier, one tick apart, so that two of `main`'s own checks run at once:
+    the loop, its fakes, the `main` they landed on (its check passed), the two tips, and the line that started the newer
+    tip's check."""
+    loop, runs, quick, below, one = _landed(env, monkeypatch, {1: first}, **kw)
+    env.put(2, {"a.txt": "1\n"})
+    built = next(r for r in loop.tick() if r["action"] == "build")
+    quick.end(two := built["sha"])
+    assert "advance" in _acts(loop.tick()) and env.main() == two
+    [started] = loop.tick()
+    return loop, runs, quick, below, one, two, started
+
+
+@pytest.mark.parametrize("earlier", ["still runs", "passed"])
+def test_under_gate_verdict_main_s_check_leaves_suites_to_an_earlier_tip_s_and_says_nothing_until_that_one_passed_them(
+        env, monkeypatch, earlier):
+    """Two landings on the quick tier a tick apart: the newer tip's own check starts while the earlier tip's still runs, and
+    leaves to it the suites keyed there as here (``suites_from``, as the earlier left its to the passed check below it).
+    Its own shards pass.  While the earlier check runs it is read as a check still running: its record keeps its verdict but
+    no ``suites_passed``, `main` isn't red, and a candidate stacked on a candidate on it is lent no suite, which only a
+    `main` whose check passed both suite steps allows.  Once the earlier check passed, judged below the tip, the record
+    says so and the stacked candidate's check leaves its suites to its base's."""
+    loop, runs, quick, below, one, two, started = _two_tips(env, monkeypatch, {"b.txt": "1\n"}, batch=1, depth=2)
+    assert [r["record"].get("suites_from") for r in env.lines() if r["action"] == "slim" and r["sha"] == one][-1] == below
+    assert started["why"].startswith("started beside `main` after a landing on the quick tier")
+    assert (started["sha"], started["record"]["suites_from"], started["record"]["gate"]) == (two, one, "check")
+    assert len(_shards_of(runs, two)) == 3
+    runs.end(two)
+    if earlier == "passed":
+        runs.end(one)
+    logged = loop.tick()
+    mine = [r for r in logged if r["action"] == "slim" and r["sha"] == two][-1]["record"]
+    assert mine["verdict"]["state"] == "pass" and mine.get("suites_passed", False) is (earlier == "passed")
+    assert [r["why"] for r in logged if r["sha"] == one] == (
+        ["judged pass beside `main`'s line, below its tip"] if earlier == "passed" else [])
+    assert loop.red is None and loop.tick() == []
+    env.put(3, {"verity/core/v.py": "x = 1\n"})
+    env.put(4, {"verity/core/w.py": "x = 1\n"})
+    for _ in range(2):
+        loop.tick()
+    on, top = [r for r in env.lines() if r["action"] == "slim" and r.get("members") in ([3], [4])]
+    assert (on["base"], top["base"], on["record"]["gate"], top["record"]["gate"]) == (two, on["sha"], "check", "check")
+    assert "suites_from" not in on["record"]
+    assert top["record"].get("suites_from") == (on["sha"] if earlier == "passed" else None)
+    assert not [r for r in env.lines() if r["action"] in ("revert", "fallback")] and len(_shards_of(runs, two)) == 3
+
+
+@pytest.mark.parametrize("newer", ["still runs", "passed its own steps"])
+def test_under_gate_verdict_a_red_of_the_earlier_tip_s_check_is_its_own_and_the_newer_tip_s_check_runs_its_suites_itself(
+        env, monkeypatch, newer):
+    """The earlier tip's check fails suite pkg's new test, which #1 added, after the newer tip's check left its suites to
+    it.  The red is the earlier check's, of a suite it ran: read at the earlier tip over the landings up to it, it names #1,
+    whose change its failure meets, and #2, which landed above it and changed no input of a suite the newer check left out,
+    is no suspect.  The newer tip's check never reads as passed: it is started again, its runs cancelled where they still
+    ran, with no lender, and runs every suite itself; the revert's own check leaves its suites to that one."""
+    loop, runs, quick, below, one, two, started = _two_tips(env, monkeypatch, FAILING)
+    assert started["record"]["suites_from"] == one and started["record"]["ids"] == ["c-7", "c-8", "c-9"]
+    if newer == "passed its own steps":
+        runs.end(two)
+        assert [r["why"] for r in loop.tick()] == ["judged pass beside `main`"] and loop.red is None
+    runs.end(one, 2, "pytest", rows=(_row(NEW),))
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "revert"] and [r["sha"] for r in logged[:2]] == [one, two]
+    assert logged[0]["why"] == "judged fail beside `main`'s line, below its tip"
+    again, rev = logged[1:]
+    assert again["why"] == (f"started again beside `main`: {one[:12]}'s check, which it left suites to, didn't pass them: it "
+                            "runs them itself")
+    assert "suites_from" not in again["record"] and again["record"]["ids"] == ["c-10", "c-11", "c-12"]
+    assert again.get("beside_cancelled") == (None if newer == "passed its own steps" else ["c-7", "c-8", "c-9"])
+    assert [ids for ids, _ in env.cancelled] == ([] if newer == "passed its own steps" else [["c-7", "c-8", "c-9"]])
+    assert (rev["red"], rev["passed"], rev["number"], rev["landed"]) == (one, below, 1, [1])
+    assert rev["why"] == "#1's change meets what step pytest read, and no other's landed since" and env.main() == rev["sha"]
+    [after] = [r for r in loop.tick() if r["action"] == "slim" and r["sha"] == rev["sha"]]
+    assert after["record"]["suites_from"] == two                              # the one that runs every suite lends them
+
+
+def test_under_gate_verdict_a_red_of_an_earlier_tip_s_check_is_not_hidden_by_the_pass_of_one_above_that_left_suites_to_it(
+        env, monkeypatch):
+    """Three landings.  The second tip's check left its suites to the first's and passed its own steps; the third's left
+    its to the second's.  Then the first tip's check fails suite pkg's new test.  The second's pass, below the tip now,
+    says nothing of the suites it left out, so `main` is not read green there: the red is read at the first tip and names
+    #1, alone landed up to it.  The tip's check, whose chain of lenders ends in that fail, is started again with none."""
+    loop, runs, quick, below, one, two, _ = _two_tips(env, monkeypatch, FAILING)
+    runs.end(two)
+    assert [r["why"] for r in loop.tick()] == ["judged pass beside `main`"]
+    env.put(3, {"c.txt": "1\n"})
+    built = next(r for r in loop.tick() if r["action"] == "build")
+    quick.end(three := built["sha"])
+    assert "advance" in _acts(loop.tick()) and env.main() == three
+    started = loop.tick()[0]
+    assert (started["sha"], started["record"]["suites_from"]) == (three, two) and loop.red is None
+    runs.end(one, 2, "pytest", rows=(_row(NEW),))
+    logged = loop.tick()
+    assert [(r["action"], r["sha"]) for r in logged[:2]] == [("slim", one), ("slim", three)]
+    assert logged[1]["why"].startswith(f"started again beside `main`: {two[:12]}'s check, which it left suites to, didn't")
+    assert "suites_from" not in logged[1]["record"]
+    [rev] = [r for r in logged if r["action"] == "revert"]
+    assert (rev["red"], rev["passed"], rev["number"], rev["landed"]) == (one, below, 1, [1])
+    assert not any(r["record"].get("suites_passed") for r in env.lines() if r["action"] == "slim" and r["sha"] == two)
+
+
+def test_under_gate_verdict_an_earlier_tip_s_check_that_ended_in_infra_leaves_the_newer_tip_s_to_run_its_suites_itself(
+        env, monkeypatch):
+    """The earlier tip's check is lost (a shard killed by a signal: infra) after the newer tip's check left its suites to it.
+    Below the tip it is not started again, so nothing will have run those suites: the newer tip's check is started again
+    with no lender and runs them itself.  No red: an infra names no PR below the tip, and the check that passes is one that
+    ran every suite."""
+    loop, runs, quick, below, one, two, started = _two_tips(env, monkeypatch, {"b.txt": "1\n"})
+    runs.end(two)
+    loop.tick()
+    runs.end(one, 2, "pytest", "error: no\n")
+    runs.state["c-5"] = ("done", 137, None)
+    logged = loop.tick()
+    assert [(r["sha"], r["why"].split(":")[0]) for r in logged if r["action"] == "slim"] == [
+        (one, "judged infra beside `main`'s line, below its tip"), (two, "started again beside `main`")]
+    assert "suites_from" not in logged[1]["record"] and len(_shards_of(runs, two)) == 6 and env.cancelled == []
+    assert loop.red is None and loop.tick() == []
+    runs.end(two)
+    [judged] = loop.tick()
+    assert judged["why"] == "judged pass beside `main`" and "suites_passed" not in judged["record"] and loop.red is None
+    assert not [r for r in env.lines() if r["action"] in ("revert", "fallback")]
+
+
+@pytest.mark.parametrize("then", ["`main`'s check passes them", "`main`'s check fails one"])
+def test_under_gate_verdict_a_candidate_that_left_suites_to_a_base_that_landed_on_the_quick_tier_waits_for_main_s_check(
+        env, monkeypatch, then):
+    """#1 has no land verdict yet, so its candidate takes the whole check, and the candidate of #2 on it, never plain,
+    leaves its suites to that check.  The check is lost (infra); #1's land verdict has arrived, so its candidate is started
+    again on the quick tier and lands on it: its whole check judged no suite.  #2's candidate, its own steps passed, doesn't
+    land with it, nor after: it waits for `main`'s own check of that tip, which runs the suites it left out or leaves them
+    in turn to a passed check below.  Once that passed both suite steps it lands; where that fails one, its check is started
+    again with no lender and runs them itself."""
+    main = env.main()
+    head = env.put(1, FAILING if then.endswith("fails one") else {"a.txt": "1\n"})
+    env.labels.verdicts[1, head] = []
+    env.put(2, {"verity/core/v.py": "x = 1\n", "tools/verity/check/common.py": "# the auditor imports this\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, batch=1, depth=2)
+    loop.tick()
+    runs.end(main)
+    loop.tick()
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started" and r["sha"] != main}
+    (one, base), (top, lent) = started.items()
+    assert (base["record"]["gate"], lent["record"]["gate"], lent["record"]["suites_from"], lent["base"]) == (
+        "check", "check", one, one)
+    assert "lean_audit_from" not in lent["record"]                  # it audits itself: it waits on no other verdict
+    runs.end(one, 2, "pytest", "error: no\n")
+    runs.state["c-5"] = ("done", 137, None)
+    del env.labels.verdicts[1, head]
+    again = [r for r in loop.tick() if r["action"] == "slim" and r["sha"] == one][-1]
+    assert again["why"].startswith("started again") and again["record"]["gate"] == vqueue_slim.QUICK
+    runs.end(top)
+    quick.end(one)
+    assert _acts(loop.tick()).count("advance") == 1 and env.main() == one       # only its base lands
+    logged = loop.tick()
+    own = next(r for r in logged if r["action"] == "slim" and r["sha"] == one)
+    assert (own["why"], own["record"]["gate"], own["record"]["suites_from"]) == ("started again beside `main`", "check", main)
+    assert env.main() == one and _acts(loop.tick()) == ["slim"] and loop.tick() == [] and env.main() == one     # it waits
+    assert not [r for r in env.lines() if r["sha"] == top and r["why"].startswith("started again")]
+    if then.endswith("passes them"):
+        runs.end(one)
+        assert "advance" in _acts(loop.tick()) and env.main() == top
+        assert "suites_from" in [r for r in env.lines() if r["action"] == "slim" and r["sha"] == top][-1]["record"]
+        return
+    runs.end(one, 2, "pytest", rows=(_row(NEW),))
+    logged = loop.tick()
+    [redo] = [r for r in logged if r["action"] == "slim" and r["sha"] == top]
+    assert redo["why"] == (f"started again: {one[:12]}'s check, which it left suites to, landed without passing them: it runs "
+                           "them itself")
+    assert "suites_from" not in redo["record"] and "beside_cancelled" not in redo
+    assert top not in _git(env.o.origin, "rev-list", env.main()).split()
+
+
 def test_under_gate_check_a_red_of_main_s_check_reverts_nothing_holds_nothing_and_quick_tiers_nothing(env, monkeypatch):
     """The flag off: under `--gate check` the same PRs take the whole check, land on it, and a red of `main`'s own check after is
     what it is today: no revert, no fallback, no hold, no quick tier, `main` unmoved, and the PR meeting the failure built."""
