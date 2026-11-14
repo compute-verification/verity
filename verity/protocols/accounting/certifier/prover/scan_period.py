@@ -62,9 +62,6 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
-sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
 from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
