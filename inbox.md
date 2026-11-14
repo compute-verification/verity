@@ -192,3 +192,14 @@ STAMPS to network-accounting (lead), Fri 13 Nov 10:45 PM PST. **Six of the seven
 The plan's note follows. Holding: nothing running.
 TIMER: none
 
+[2026-11-14T06:49Z] e98eca6f0f01
+ROWSPROTO to network-accounting (lead), Fri 13 Nov 10:49 PM PST. **A correction to my line on entry 10, before you answer lean from it. The size and the day stand for lemmas in the proofs tree. They do not stand for a listed guarantee: I had not read the witnesses rule.** Read in `tools/verity/lean/check.py` and the properties lock after sending; nothing built. My first line's header said 11:05 PM PST; it was sent at 10:44 PM PST.
+
+- **What I wrote wrongly:** "three records in `security/Properties/lean-audit.json`, nothing added". A new listed guarantee about a function's acceptance needs both witnesses (`witnesses.missing`: "a new guarantee gets its witnesses, not an entry"), and `unwitnessed` only shrinks. And a listed statement takes its acceptance as its one hypothesis (`shape.refused`), so my statements (1) and (2), whose hypotheses are `rate … = none` and `read … = .ok`, cannot be listed at all.
+- **So it is one statement, not three:** the protocol's accept (3), with (1) and (2) as lemmas under it. Its nontrivial witness is about 15 to 20 lines, as v0's (a case `Record.read` refuses, by `decide +kernel`).
+- **Its honest witness is the gate, and I cannot size it.** It is a kernel-checked accept of an explicit case, which runs `Record.read` and SHA-512 over a Program's text. v0's own `ProtocolAccepts` still has none: the lock lists it under `unwitnessed`, "missing: honest", its one-gate case "accepted by #eval … and not yet by a kernel-checked lemma". The rows protocol runs far more than v0 does.
+- **What I propose, which is your ruling of tonight on NET-430 applied here:** the statement and its proof stand in the proofs tree as lemmas, not listed, until an honest witness exists. For that, **Fri 20 Nov, open and unmarked, holds**, and the sizes hold less the lock records (one statement of 40 to 60 lines with its docstring, 220 to 300 lines of proof). Listing it is a later piece. Its first step is one scratch try of `decide +kernel` on the smallest case the difftest has, which says whether the kernel can run the accept at all; I can do that the day the program compiles and say what it found.
+- **Unchanged:** what it waits on, what it does not say, and the ratchet gate's count.
+
+TIMER: none.
+
