@@ -1,9 +1,8 @@
 """The messages between the workload and the prover are one list: each protocol declares its own in its
-`verifier/workload.py`, in `verity.protocol`'s and `verity.channel`'s types, and this test holds them together. Every
-message is declared once, named in the Glossary's words, and carried on one channel, its writer the channel's sender and
-its reader its receiver. `workload_messages.toml` beside this test lists today's writers and readers of each message, by
-lane. Retired words in a name are the retired-terms lint's to refuse.
-"""
+`prover/workload.py`, the developer's side, in `verity.protocol`'s and `verity.channel`'s types, and this test holds
+them together. Every message is declared once, named in the Glossary's words, and carried on one channel, its writer the
+channel's sender and its reader its receiver. `workload_messages.toml` beside this test lists today's writers and
+readers of each message, by lane. Retired words in a name are the retired-terms lint's to refuse."""
 
 from __future__ import annotations
 

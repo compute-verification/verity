@@ -1,5 +1,5 @@
 # Today's writers and readers of each message between the workload and the prover, by lane, as they stand before
-# the adapter reaches them through the declarations (`verity/protocols/*/*/verifier/workload.py`). One entry a form a
+# the adapter reaches them through the declarations (`verity/protocols/*/*/prover/workload.py`). One entry a form a
 # message takes today: `second = true` marks a second form of a message already listed. `find` is a regular
 # expression for the site in its file. `tests/test_workload_messages.py` holds the list to the declarations.
 
