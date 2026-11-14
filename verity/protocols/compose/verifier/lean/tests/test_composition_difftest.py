@@ -641,10 +641,10 @@ def test_spot_refuses_the_recursive_form(name, request):
 def _two_stage_evidence(a: dict) -> dict:
     """Evidence under the two-stage form that its Lean reads in full (`SampledTwo.evidenceOf`): v2's evidence of `a` as
     the interior audit's, in the per-member form (`OneStageZk.membersEvidenceOf`) with its sessions one member's
-    statement, and the form's other keys each of its type."""
+    statement, and the form's other keys each of its type, the first stage's coins never null (`FIRST_COINS_NULL`)."""
     interior = {**_without(a["evidence"], "proofs"),
                 "proofs": {"statements": [{"member": "m", "sessions": a["evidence"]["proofs"]["sessions"]}]}}
-    return {"form": TWO.T.TWO_STAGE, "coins": None, "interior": interior, "received": "", "record": {}, "source": "00",
+    return {"form": TWO.T.TWO_STAGE, "coins": {}, "interior": interior, "received": "", "record": {}, "source": "00",
             "statements": []}
 
 
