@@ -39,20 +39,20 @@ OFF = ("circuit-check", "ratchet-gate")
 #: what `step_paths` finds of `LINT_LOG`, a failed preflight-lints: its failing test and the path its failure names
 LINT_PATHS = frozenset({"tests/test_repository.py", "tools/research/src/research/store/README.md"})
 #: a graph build family declaring lean-agreement's reads in the shape the tree's does
-BUILD_SRC = ('VERIFIER = "verity/protocols/flock/prover/agreement"\nLEAN = "verity/protocols/flock/verifier"\n'
+BUILD_SRC = ('VERIFIER = "verity/protocols/proofs/flock/prover/agreement"\nLEAN = "verity/protocols/proofs/flock/verifier"\n'
              'CHECK_READS = (*(f"tools/verity/check/{m}" for m in ("check.py", "settings.py")),\n'
              '               ".agents/skills/using-slack/registry.json")\n')
 ART = "art:" + "ab" * 32
 #: a `main` whose files each bounded step reads, beside one none of them does (docs/notes.md)
 KEYED = {BUILD: BUILD_SRC, "tools/verity/check/check.py": "# check\n", "tools/verity/check/settings.py": "# settings\n",
          ".agents/skills/using-slack/registry.json": "{}\n", "uv.lock": "version = 1\n", "pyproject.toml": "[project]\n",
-         "tools/x/pyproject.toml": "[project]\n", "verity/protocols/flock/prover/agreement/ci.py": "# ci\n",
-         "verity/protocols/flock/verifier/Main.lean": "-- main\n", "artifacts.json": json.dumps({ART: "fixtures/golden/a.json"}),
+         "tools/x/pyproject.toml": "[project]\n", "verity/protocols/proofs/flock/prover/agreement/ci.py": "# ci\n",
+         "verity/protocols/proofs/flock/verifier/Main.lean": "-- main\n", "artifacts.json": json.dumps({ART: "fixtures/golden/a.json"}),
          "fixtures/golden/a.json": "{}\n", "docs/notes.md": "notes\n"}
 #: each step the run judges whose reads are bounded, with files of `KEYED` it reads and files it doesn't
 BOUNDED = {"preflight-lock": (("uv.lock", "tools/x/pyproject.toml", "tools/verity/check/check.py", ".python-version"),
-                              ("verity/protocols/flock/prover/agreement/ci.py", "fixtures/golden/a.json")),
-           "lean-agreement": (("verity/protocols/flock/prover/agreement/ci.py", "verity/protocols/flock/verifier/Main.lean",
+                              ("verity/protocols/proofs/flock/prover/agreement/ci.py", "fixtures/golden/a.json")),
+           "lean-agreement": (("verity/protocols/proofs/flock/prover/agreement/ci.py", "verity/protocols/proofs/flock/verifier/Main.lean",
                                "tools/verity/check/settings.py", ".agents/skills/using-slack/registry.json", "uv.lock"),
                               ("tools/x/pyproject.toml", "fixtures/golden/a.json", "tools/verity/check/other.py")),
            "preflight-fixtures": (("artifacts.json", "fixtures/golden/a.json", "tools/research/src/research/x.py",
@@ -84,7 +84,7 @@ def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple
     _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate), **(tree or {})})
     asked: list[tuple[str, str, str]] = []
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
-        {"lean-agreement": ["verity/protocols/flock/prover/"]} if agreement else {}))
+        {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]} if agreement else {}))
     h = Beside(world, monkeypatch, **kw)
     h.q._clone()
     base, sha = _main(world), world.change(change or {"f.txt": "1\n"})
@@ -1257,7 +1257,7 @@ tests/test_boundaries.py:796: AssertionError
 =============================== warnings summary ===============================
 tests/lint/test_lean_bar.py::test_no_new_findings
   {TREE}/tests/lint/test_lean_bar.py:261: Stale: 1 of tests/lint/allowlists/lean_bar.json's entries allow more than the tree holds:
-    verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean [module-doc]: 1 allowed, 0 found: delete the entry
+    verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZk.lean [module-doc]: 1 allowed, 0 found: delete the entry
     held(scan(), allowed(), SOFT)
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
@@ -1367,7 +1367,7 @@ ERROR tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth
 def test_a_suite_whose_tests_pytest_could_give_no_temporary_directory_is_failed_by_its_machine():
     """A full disk reaches a suite's tests as pytest's own error, which drops the errno: `mktemp` could not create its numbered
     directory under the basetemp after its tries.  That is the machine's (or its shared scratch's) fault, never the change's."""
-    row = _row("verity/protocols/certifier/verifier", "verity/protocols/certifier/verifier",
+    row = _row("verity/protocols/accounting/certifier/verifier", "verity/protocols/accounting/certifier/verifier",
                "tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]", step="lean-suites")
     assert suite_kind(row, NUMBERED_DIR_LOG) == "infra"
     assert suite_kind(row, NUMBERED_DIR_LOG.replace("could not create numbered dir", "could not parse its config")) == "own"
@@ -1611,7 +1611,7 @@ def test_a_lean_package_s_lean_file_and_its_lock_are_lean_inputs_and_its_prose_a
     `include_str`, as pouw's `check/models.json`, a script, the vectors its tests read, and those of a package nested in it.
     Its README, its pytest files and their settings and its .gitignore, which no audit reads, are not, nor a file beside or
     above the package or in a directory named like it."""
-    pouw, rand, pous = ("verity/protocols/pouw/verifier/lean/check", "verity/commitments/randomness",
+    pouw, rand, pous = ("verity/protocols/accounting/pouw/verifier/lean/check", "verity/commitments/randomness",
                         "tools/pous_grader")
     lean = [f"{pouw}/lakefile.toml", f"{pouw}/lake-manifest.json", f"{pouw}/lean-toolchain", f"{pouw}/PouwCheck/Credit.lean",
             f"{pouw}/models.json", f"{pouw}/tests/pouw_check_cases.py", f"{pouw}/inner/lakefile.toml", f"{pouw}/inner/data.json",
@@ -1619,8 +1619,8 @@ def test_a_lean_package_s_lean_file_and_its_lock_are_lean_inputs_and_its_prose_a
             f"{pous}/lean-audit.json", f"{pous}/Grader.lean", f"{pous}/check.sh", f"{pous}/TRUSTED.sha256"]
     other = [f"{pouw}/README.md", f"{pouw}/tests/test_pouw_check.py", f"{pouw}/tests/conftest.py", f"{pouw}/pyproject.toml",
              f"{pouw}/.gitignore", f"{pouw}/inner/README.md", f"{rand}/tests/test_vectors.py", f"{pous}/DESIGN.md",
-             "verity/protocols/README.md", "verity/protocols/pouw/models.json", "verity/commitments/randomness2/x.py",
-             "verity/protocols/pous/leaner/x.json", "a.txt"]
+             "verity/protocols/README.md", "verity/protocols/accounting/pouw/models.json", "verity/commitments/randomness2/x.py",
+             "verity/protocols/accounting/pous/leaner/x.json", "a.txt"]
     assert _lean([*lean, *other], [*lean, *other]) == lean
     assert meets(("a.txt",), lean_inputs(["lakefile.toml", "a.txt"])) and not meets(("a.txt",), lean_inputs(["a.txt"]))
 
@@ -1641,7 +1641,7 @@ def test_a_path_a_change_deletes_is_a_lean_input_of_the_tree_listed_with_it():
     """The audit's declaration says of a path what it says of a file there, and the tree a change leaves no longer lists a
     file it deletes: a package's deleted file is a Lean input of that tree listed with the path, as a change is judged, and
     a deleted README of it still isn't."""
-    pkg = "verity/protocols/pouw/verifier/lean/check"
+    pkg = "verity/protocols/accounting/pouw/verifier/lean/check"
     left = [f"{pkg}/lakefile.toml", f"{pkg}/PouwCheck/Credit.lean"]
     gone = [f"{pkg}/models.json", f"{pkg}/README.md"]
     assert _lean(left, gone) == [] and _lean([*left, *gone], gone) == [f"{pkg}/models.json"]
