@@ -12,6 +12,7 @@ public import Proofs.Slowdown.Witnesses
 public import Proofs.Slowdown.Formalism
 public import Proofs.Slowdown.Cover.Training
 public import Proofs.Slowdown.Lemmas
+public import Proofs.Slowdown.ReadsBy
 public import Proofs.Core
 /-!
 # Proofs of the slowdown bound's guarantees
