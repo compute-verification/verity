@@ -151,7 +151,7 @@ execution phase:
 How it is run: the difftests run the Lean against the Python on generated cases
 (`uv run tools/verity/check/suites.py verity/protocols/accounting/pouw/verifier/lean/check`, and likewise `lean/window` and
 `lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside SPOT's
-(`verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`); `benchmarks/pouw/served_zk/of_record.py` runs
+(`verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`); `verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py` runs
 each check of a served execution phase through the Lean and its Python reference and records the Lean's verdict.
 
 ## Schemes

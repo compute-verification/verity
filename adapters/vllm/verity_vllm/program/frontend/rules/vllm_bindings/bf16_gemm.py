@@ -88,7 +88,7 @@ class CublasLinearRule(OpRule):
         from verity_vllm.program.frontend import targets
 
         x, w = node.args[:2]
-        N, K = shape(ctx, w)
+        N, K = known(shape(ctx, w))
         rows, lead = rows_of(ctx.coll(x))
         M = launch_tokens_of(node, len(rows))
         kernel, statics = bf16_gemm_check.default_cublas_route("linear", M, K, N)
@@ -149,8 +149,8 @@ class LlBf16GemmRule(OpRule):
         from verity_vllm.program.frontend import targets
 
         x, w = node.args
-        rows_n, K = shape(ctx, x)
-        M, N = launch_tokens_of(node, rows_n), shape(ctx, w)[0]
+        rows_n, K = known(shape(ctx, x))
+        M, N = launch_tokens_of(node, rows_n), known(shape(ctx, w))[0]
         kernel, statics = bf16_gemm_check.dispatch_sm90(M, K, N)
         if kernel == "dotprod":
             fn = ctx.kind(

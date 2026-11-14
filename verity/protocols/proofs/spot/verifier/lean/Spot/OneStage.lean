@@ -29,10 +29,10 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `challenger`, `{"key", "label"}`: the auditor's challenger the sample's coins come from (its LMS key,
   `ChallengerKey.ofJson`) and the family they are sampled from, which needs `window_root`, refused in any other form; and
   it may add `day` and `declarations`, both or neither: the window's day (a natural number) and the registration log's
-  declarations, each exactly `{"blocks", "day", "program"}` with a natural day and a string program, which R2 holds the
-  record's program to (`Registration.declaredCode`), refused in any other form; and it may add `seed_salt`: the window's
+  declarations, each exactly `{"blocks", "day", "program"}` with a natural day and a string program, which the caller's
+  check holds the record's program to (`VStar.Recursive.Caller.declaredCode`), refused in any other form; and it may add `seed_salt`: the window's
   seed salt it read from the challenger's log (`Challenger.seedSaltOf`), lowercase hex of 64 bytes, which needs
-  `window_root` and which R6 holds the record's window to name (`R6-seed-salt`), refused in any other form; and it may
+  `window_root` and which the caller's check holds the record's window to name (`R6-seed-salt`), refused in any other form; and it may
   add `compiler`: the registration log's registered compiler as its view publishes it (`RegistrationLog`'s
   item), null when the log registers none, the digest lowercase hex of 64 bytes and the length ℓ a natural, whose digest
   R6 holds the record's window's compiler to and ℓ its advice's bits (`Registration.compilerOk`,

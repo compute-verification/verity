@@ -178,9 +178,11 @@ def test_each_primitive_declares_the_tables_its_evaluator_reads(monkeypatch):
     assert len(prims) >= 8
     for p in prims:
         read.clear()
+        unmeasured = []
         for ws in itertools.product(_TABLE_WORDS, repeat=len(p.params)):
             try:
                 p.evaluate(*ws)
-            except M.MufuTanhUnmeasured:
-                pass
+            except M.MufuTanhUnmeasured as e:
+                unmeasured.append(e)
+        assert len(unmeasured) < len(_TABLE_WORDS) ** len(p.params), f"{p.id}: every word is in an unmeasured region"
         assert {(n, L.LIBRARY) for n in read} == set(p.tables), p.id

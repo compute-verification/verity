@@ -83,11 +83,11 @@ their floor.
   `served_window.md`.
 
 ```text
-uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
-uv run python benchmarks/sampling_plan/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
-uv run python benchmarks/sampling_plan/transformer.py --out DIR [--model large] [--share S] [--delta D]
-uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad] [--card h200]
-uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
+uv run python verity/protocols/proofs/spot/prover/cost/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
+uv run python verity/protocols/proofs/spot/prover/cost/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
+uv run python verity/protocols/proofs/spot/prover/cost/transformer.py --out DIR [--model large] [--share S] [--delta D]
+uv run python verity/protocols/proofs/spot/prover/cost/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad] [--card h200]
+uv run python verity/protocols/proofs/spot/prover/cost/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
 ```
 
 - `glm53.py`: GLM-5.3 as served (vLLM, H200, TP8, FP8) as the planner's candidates, from its proof-block census
@@ -103,7 +103,7 @@ uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [-
   where every block is proved (`charged`, which gives a smaller sample its count bound's). These rows read no verdict.
 
 ```text
-uv run python benchmarks/sampling_plan/glm53.py [--requests N] [--stop T [--delta D]]
+uv run python verity/protocols/proofs/spot/prover/cost/glm53.py [--requests N] [--stop T [--delta D]]
 ```
 
 - `cpu_budget.py`: the block's sample sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
@@ -113,7 +113,7 @@ uv run python benchmarks/sampling_plan/glm53.py [--requests N] [--stop T [--delt
   and each block, at δ = 1% and 1e-6 (`cpu-budget.json`, `cpu-budget.md`).
 
 ```text
-uv run python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 --out DIR
+uv run python verity/protocols/proofs/spot/prover/cost/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 --out DIR
 ```
 
 - `recursion.py`: one recursive session's cost per monitoring period. It reads a `benchmarks/recursion_e2e` result's
@@ -124,5 +124,5 @@ uv run python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17
   (`recursion-periods.json`, `recursion-periods.md`).
 
 ```text
-uv run python benchmarks/sampling_plan/recursion.py --result recursion_e2e.json [--sessions-per-window 1] --out DIR
+uv run python verity/protocols/proofs/spot/prover/cost/recursion.py --result recursion_e2e.json [--sessions-per-window 1] --out DIR
 ```
