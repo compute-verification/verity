@@ -16,7 +16,8 @@
 # - `Core`, `Hash`, `Claims`, `Assumptions` and `Properties/Verity` are the one vocabulary and the whole protocol's
 #   statements, no protocol's area.
 # Declarations keep their place in the locks' records: `rename.py --moves` prints the renames `check.py --update
-# --moved` takes.
+# --moved` takes. Not a move, so by hand beside it: `tests/test_boundaries.py`'s globs `security/*/NetworkCertifier`,
+# which `move_check.py` reads as no moved path, and GLOSSARY.md's "the `NetworkCertifier` Lean".
 
 [words]
 "Definitions/NetworkCertifier" = "Definitions/Certifier"
@@ -25,12 +26,6 @@
 "Definitions.NetworkCertifier" = "Definitions.Certifier"
 "Properties.NetworkCertifier" = "Properties.Certifier"
 "Proofs.NetworkCertifier" = "Proofs.Certifier"
-
-[[words_in]]
-# the boundary test's globs over the area's directories
-files = ["tests/test_boundaries.py"]
-[words_in.words]
-"*/NetworkCertifier" = "*/Certifier"
 
 [rewrite]
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
