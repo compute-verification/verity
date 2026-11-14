@@ -78,6 +78,6 @@ strings = ["prove-leg verifier (prove_leg.py)", "leg_s=round", "ProveLegRegister
 # digest pins and lock files; the retired-terms table and the architecture's mention of the word; the lints that name the
 # word and their fixtures (`tests/test_retired_terms.py`, `RETIRED_NAMES`, research's vocabulary test, the move check's
 # fixture paths).
-exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+exclude = ["tests/lint/test_repo_retired_terms.py", "tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
            "**/*.lock", "GLOSSARY.md", "ARCHITECTURE.md", "tests/test_retired_terms.py", "tests/test_lean_packages.py",
            "tools/research/tests/test_slack.py", "**/check/tests/test_move_check.py"]

@@ -290,8 +290,8 @@ private theorem forIn'_fix {α σ : Type} (l : List α) (f : (a : α) → a ∈ 
     rw [List.forIn'_cons, hf a List.mem_cons_self]
     exact ih (fun a' m b => f a' (List.mem_cons_of_mem _ m) b) (fun a' m => hf a' _)
 
-private theorem pre_empty_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedSession}
-    {c : SessionCommitment} {p : Lms.Params} {m : ByteArray} (hp : schemes.lookup s.scheme = some p)
+private theorem pre_empty_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedChallengePhase}
+    {c : ChallengePhaseCommitment} {p : Lms.Params} {m : ByteArray} (hp : schemes.lookup s.scheme = some p)
     (ht : trusted.contains s.publicKey = true) (hm : s.message = .ok m)
     (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) (hc : (s.commitment == c) = true)
     (he : s.ended = COMPLETE) (hn : s.rounds.size = c.k) : pre schemes trusted s c = #[] := by
@@ -300,7 +300,7 @@ private theorem pre_empty_of {schemes : Schemes} {trusted : List ByteArray} {s :
   simp [hp, ht', hm, hv, hc, he, hn, bind, Except.bind, Id.run]
   rfl
 
-private theorem tail_accepted_of {expected : Nat → Option ByteArray} {s : SignedSession} {c : SessionCommitment}
+private theorem tail_accepted_of {expected : Nat → Option ByteArray} {s : SignedChallengePhase} {c : ChallengePhaseCommitment}
     {openings : Array CoinOpening}
     (h : ∀ j (hj : j < s.rounds.size),
       (∃ o, openings.findRev? (·.j == j) = some o ∧ s.rounds[j].j = j ∧ o.index = s.rounds[j].index ∧
@@ -324,7 +324,7 @@ names, a trusted key whose signature over the session's message verifies, the co
 rounds, and each round's index its committed coin (the last opening for its `j`), its digest the expected one, on
 time. -/
 theorem verdict_accepted_of {schemes : Schemes} {trusted : List ByteArray} {expected : Nat → Option ByteArray}
-    {s : SignedSession} {c : SessionCommitment} {openings : Array CoinOpening} {p : Lms.Params} {m : ByteArray}
+    {s : SignedChallengePhase} {c : ChallengePhaseCommitment} {openings : Array CoinOpening} {p : Lms.Params} {m : ByteArray}
     (hp : schemes.lookup s.scheme = some p) (ht : trusted.contains s.publicKey = true) (hm : s.message = .ok m)
     (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) (hc : (s.commitment == c) = true)
     (he : s.ended = COMPLETE) (hn : s.rounds.size = c.k)
