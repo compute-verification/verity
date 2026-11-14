@@ -158,14 +158,14 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
         panel: dict = {"title": title, "gates": gates, "classes": {}, "attacks": {}, "outside": {}}
         for i, arg in enumerate((*s.bounds, *s.attacks)):
             try:
-                cap = per_block(arg.allowance(p), units)
+                block_yield = per_block(arg.allowance(p), units)
             except Outside as e:
                 panel["outside"][arg.name] = str(e)
                 continue
 
-            def overhead(k: float, cap: Any = cap, gates: float = gates, full: float = full,
+            def overhead(k: float, block_yield: Any = block_yield, gates: float = gates, full: float = full,
                          per_bit: float = per_bit if arg.side == "bound" else 0.0) -> float:
-                n = cap(Budget(gates, k)) + per_bit * k
+                n = block_yield(Budget(gates, k)) + per_bit * k
                 return full / n if n > 0 else math.inf
 
             ys = [overhead(k) for k in ks]

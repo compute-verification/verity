@@ -110,8 +110,8 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remot
     assert pad <= 1 / (s + (1 - s) * u) and pad == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
 
 
-#: `InferenceOnly.Slowdown.remoteSlowdown` as security/Definitions/InferenceOnly/Remote.lean defines it, and the conclusion of
-#: `InferenceOnly.Guarantees.SlowdownRemote` (security/Definitions/InferenceOnly/Guarantees/Remote.lean), which bounds the slowdown by it
+#: `InferenceOnly.Slowdown.remoteSlowdown` as security/Definitions/Slowdown/Remote.lean defines it, and the conclusion of
+#: `InferenceOnly.Guarantees.SlowdownRemote` (security/Definitions/Slowdown/Guarantees/Remote.lean), which bounds the slowdown by it
 REMOTE_SLOWDOWN = "noncomputable def remoteSlowdown (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
 REMOTE_CONCLUSION = "remoteSlowdown mfu (unregisteredShare C U)"
 
@@ -139,7 +139,7 @@ def test_the_remote_overhead_is_lean_remote_slowdown_at_the_references_mfu():
     # tiers counts no unregistered share (s = 0) where the slowdown calculator's fleet has 0.1%
     for reg, ref, want in ((REG, True, 3.040), (peak, False, 1.218)):
         lo = evaluate_named(reg, "remote-tiers-kimi").lo
-        assert lo == pytest.approx(multiple_bound(T.DEFAULTS["mfu"], t1["unmonitored"], x, ref), rel=5e-3)
+        assert lo == pytest.approx(multiple_bound(T.DEFAULTS["mfu"], t1["unregistered"], x, ref), rel=5e-3)
         assert lo == pytest.approx(want, abs=1e-3)
     hosts = peak.override({"regime.remote.host": 1.0})
     assert evaluate_named(hosts, "remote-tiers-kimi").lo == 1.0
