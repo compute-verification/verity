@@ -1,6 +1,0 @@
-[2026-11-14T06:43Z] 417382a8e383
-Coordinator, 10:46 PM PST: proofs decided on CMP-370: (a), the serve commits the formed rows roots before the draw coin, and each of the tile three sessions reads them as public roots (not the two-stage form). Open until proofs worker reads the verifier (exact conditions by Sat noon PST): whether the shared root is a registered port read (preferred) or a bare public input. So: keep the three sessions root inputs in ONE place of the Program, so switching to a port read is a one-line change.
-
-[2026-11-14T07:12Z] 16f3574db5ad
-Coordinator, 11:15 PM PST, CORRECTION from proofs (CMP-370, 11:11 PM PST): flock-verify refuses ANY public input port (Flock/ProvedScope.lean:305-313). So the tile Program has NO public row: every input, the live salt included, is a registered read through --registered at positions the Program fixes (Flock/Registered.lean:256-375); the salt as a supplied or known-content row, ok as known content. The formed rows roots are registered values reused from the serve record (R7, Spot/Registration.lean:319-371). Model on how benchmarks/pouw/h1_prove proves H1 statements with flock-verify --zk --registered: that is the route we take for the one-tile measurement. Adjust the Definition and its tests accordingly; keep the shared root reads in one place.
-
