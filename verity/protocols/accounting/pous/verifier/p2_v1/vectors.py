@@ -1,6 +1,6 @@
 """P2 v4's conformance vectors, all of them, from one command:
 
-    cd benchmarks/pous && uv run python -m p2_v1.vectors
+    uv run python -m verity.protocols.accounting.pous.verifier.p2_v1.vectors
 
 writes `vectors.json` (the maps and keys), `audit-vectors.json` (a complete two-round w = 64 setup and audit, and
 one full-width response), `audit-negative-vectors.json` (31 failing or boundary transcripts, each self-checked against
@@ -26,7 +26,7 @@ from . import reference as R
 from . import wire as Wi
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
+ROOT = Path(__file__).resolve().parents[6]
 AUDIT_VECTORS, NEGATIVE_VECTORS = R.AUDIT_VECTORS, R.NEGATIVE_VECTORS
 KEYS_FIXTURE = ROOT / "verity/protocols/accounting/pous/verifier/tests/fixtures/p2-v4-keys.json"
 PINNED_TEXT = (HERE / "reference.py", KEYS_FIXTURE.parent.parent / "test_pous_protocol.py")
@@ -312,7 +312,7 @@ def negative_vectors(vector: dict) -> dict:
 
 def keys_fixture(maps: dict, maps_sha512: str) -> dict:
     keep = ("id", "w", "c0", "model_commitment", "setup_salt", "segment", "block", "K", "t", "t_rejection_index")
-    return {"source": "benchmarks/pous/p2_v1/vectors.json, P2 v4's p2-test-vectors/v4 (the spec's section 7)",
+    return {"source": "verity/protocols/accounting/pous/verifier/p2_v1/vectors.json, P2 v4's p2-test-vectors/v4 (the spec's section 7)",
             "source_sha512": maps_sha512, "randomness": maps["randomness"],
             "vectors": [{k: v[k] for k in keep} for v in maps["vectors"]]}
 
