@@ -8,7 +8,7 @@ public import Definitions.Accounting.Bandwidth.Game
 PoUB bounds each pass's reads by this statement, the bandwidth audit v0's game read for one pass. The game is
 `Security/Definitions/Accounting/Bandwidth/Game.lean`; the proof is in `Security/Proofs/Accounting/Bandwidth/`.
 No named assumption: the device's bounds (on-chip state `S`, side-source bits `c`, regenerations `G`, oracle queries
-`q`) define the class of devices the guarantee quantifies over, and the claims registry names, for a deployed device,
+`q`) define the class of devices the guarantee quantifies over, and deployment premises name, for a deployed device,
 the measurement that falsifies each (`bandwidth-s-chip`, `bandwidth-side-cap`, `bandwidth-regen-time`) and what the
 model takes on trust (`random-oracle` for the tag, `bandwidth-instantiation` for the stored blocks).
 -/
